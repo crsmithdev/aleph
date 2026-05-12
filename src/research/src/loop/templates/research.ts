@@ -27,6 +27,8 @@
  * production passes `OpenRouterProvider` constructed by `run.ts` from env.
  */
 
+import type { Sqlite } from '@construct/data';
+import { emitDecisionEvent, recordDecision } from '../decisions.js';
 import type {
   Template,
   LoopState,
@@ -34,6 +36,7 @@ import type {
   OutputShape,
   IterationCheckPayload,
   PostMortemPayload,
+  DecisionPayload,
 } from '../types.js';
 import type { LLMProvider } from '../llm.js';
 import { readScheduleFromArtifacts, validateShape, type ShapeMissing } from '../shape.js';
@@ -59,6 +62,18 @@ export interface ResearchTemplateOptions {
 
 export interface ResearchTemplateDeps {
   llm: LLMProvider;
+  /**
+   * Optional sqlite handle. When supplied, the derivation hook's
+   * `followup_pick` decisions are appended to the loop's `decision_log`
+   * artifact in addition to firing on the event bus. Without it the
+   * decisions are event-only — they still flow through the SSE stream and
+   * land in the NDJSON log, but the post-hoc artifact is incomplete.
+   *
+   * `run.ts` (production) currently passes only `{ llm }`; the orchestrator
+   * needs to thread sqlite through `buildDeps` for derivation-side artifact
+   * appends to land in prod. Tests pass it explicitly.
+   */
+  sqlite?: Sqlite;
 }
 
 /** Default models. Phase 5 will move per-loop model selection onto the
@@ -88,10 +103,39 @@ interface DerivationOutput {
   followups: string[];
 }
 
+/**
+ * Per-source extraction status. Plumbed so the Activity > Source Extraction
+ * panel can show failure rates and top failing domains — even when richer
+ * per-URL failure data isn't available yet from the websearch provider.
+ *
+ *   - `extracted`    — fetch succeeded and the source returned with metadata.
+ *   - `snippet_only` — partial: source came back without title/snippet
+ *                      (websearch.ts doesn't surface this case today, but
+ *                      the field is plumbed for when it does).
+ *   - `failed`       — URL was attempted but didn't make it into the
+ *                      processor's `source_meta`. v0 signal: any URL in
+ *                      `proc.source_urls` missing from `proc.source_meta`
+ *                      is marked failed with reason 'no metadata returned'.
+ */
+export type SourceExtractionStatus = 'extracted' | 'snippet_only' | 'failed';
+
+export interface RenderSourceEntry {
+  url: string;
+  title: string;
+  extraction_status: SourceExtractionStatus;
+  /** Number of fetch attempts. v0 always 1 — websearch.ts has no retry
+   *  loop. Field exists so a future provider with retry can populate it
+   *  without a schema migration. */
+  attempts: number;
+  /** Human-readable failure reason. Set when `extraction_status === 'failed'`;
+   *  undefined for the success path. */
+  error?: string;
+}
+
 interface RenderOutput {
   kind: 'render';
   findings: Array<{ cycle: number; query: string; text: string }>;
-  sources: Array<{ url: string; title: string }>;
+  sources: RenderSourceEntry[];
   cycles_rendered: number;
   /**
    * Phase 3 — the renderer is the gate. It validates the accumulated findings
@@ -137,15 +181,21 @@ export function makeResearchTemplate(
       };
     },
 
-    async derivation(_state, processor_output) {
+    async derivation(state, processor_output) {
       const completion = await deps.llm.complete(
         completeModel,
         buildFollowupPrompt(prompt, processor_output),
         300,
       );
-      const followups = parseFollowups(completion.text, processor_output.query);
+      const parsed = parseFollowupsRich(completion.text, processor_output.query);
+      // Emit one `followup_pick` decision per parsed follow-up. The first
+      // entry is the one pickQuery will use on the next cycle — accepted;
+      // the rest are bookkept for the UI / future use — not accepted. When
+      // the parser fell back (malformed response), the single returned
+      // entry is the reused query with `reason: 'fallback'`.
+      emitFollowupDecisions(state, parsed, deps);
       return {
-        output: { kind: 'research_deriv', followups },
+        output: { kind: 'research_deriv', followups: parsed.followups },
         cost_usd: completion.cost_usd,
       };
     },
@@ -153,7 +203,7 @@ export function makeResearchTemplate(
     async renderer(state) {
       const findings: RenderOutput['findings'] = [];
       const seen = new Set<string>();
-      const sources: RenderOutput['sources'] = [];
+      const sources: RenderSourceEntry[] = [];
       const cycleOutputs = state.artifacts
         .filter(a => a.kind === 'cycle_output')
         .sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -161,10 +211,40 @@ export function makeResearchTemplate(
         const proc = art.payload.processor as ProcessorOutput | undefined;
         if (!proc || proc.kind !== 'research_proc') continue;
         findings.push({ cycle: findings.length, query: proc.query, text: proc.text });
+        // Every URL the processor returned metadata for is a successful
+        // extraction. v0 sets attempts=1 because websearch.ts has no retry
+        // loop — when it grows one, attempts can climb without breaking the
+        // wire format.
+        const metaByUrl = new Map<string, { title: string; snippet: string }>();
+        for (const m of proc.source_meta) {
+          metaByUrl.set(m.url, { title: m.title, snippet: m.snippet });
+        }
         for (const m of proc.source_meta) {
           if (seen.has(m.url)) continue;
           seen.add(m.url);
-          sources.push({ url: m.url, title: m.title });
+          sources.push({
+            url: m.url,
+            title: m.title,
+            extraction_status: 'extracted',
+            attempts: 1,
+          });
+        }
+        // URLs the processor *attempted* but the provider didn't return
+        // metadata for. v0 signal: any source_urls entry missing from
+        // source_meta is a failed extraction with reason 'no metadata
+        // returned'. When websearch.ts grows per-URL failure data the
+        // reason string can carry it through.
+        for (const url of proc.source_urls) {
+          if (metaByUrl.has(url)) continue;
+          if (seen.has(url)) continue;
+          seen.add(url);
+          sources.push({
+            url,
+            title: '',
+            extraction_status: 'failed',
+            attempts: 1,
+            error: 'no metadata returned',
+          });
         }
       }
       const shape = readShape(state);
@@ -285,6 +365,17 @@ function buildFollowupPrompt(prompt: string, proc: ProcessorOutput): string {
   ].join('\n');
 }
 
+/**
+ * Parse-result envelope. `followups` is what the derivation hook hands the
+ * engine; `from_fallback` tells the decision emitter whether the LLM
+ * produced something usable or we degraded to the prior query — which the
+ * UI surfaces as `reason: 'fallback'` on the decision event.
+ */
+interface ParsedFollowups {
+  followups: string[];
+  from_fallback: boolean;
+}
+
 /** Parse a JSON array of strings from the model response. Tolerant: strips
  *  code fences, accepts 1-or-more entries, falls back to the previous query
  *  on any failure so a malformed response never tanks the loop.
@@ -292,24 +383,67 @@ function buildFollowupPrompt(prompt: string, proc: ProcessorOutput): string {
  *  Commandment 1: the fallback is now observable on stderr — a regression
  *  here looks like "every cycle searches the same query," which used to be
  *  invisible because both the planner and this parser silently degraded. */
-function parseFollowups(text: string, fallbackQuery: string): string[] {
+function parseFollowupsRich(text: string, fallbackQuery: string): ParsedFollowups {
   const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
   try {
     const parsed = JSON.parse(cleaned);
     if (Array.isArray(parsed)) {
       const strings = parsed.filter((s): s is string => typeof s === 'string' && s.length > 0);
-      if (strings.length > 0) return strings.slice(0, 2);
+      if (strings.length > 0) {
+        return { followups: strings.slice(0, 2), from_fallback: false };
+      }
     }
   } catch (err) {
     const sample = text.slice(0, 200).replace(/\s+/g, ' ').trim();
     process.stderr.write(`[research-template] derivation parse failed, reusing query. err=${(err as Error).message} text="${sample}"\n`);
-    return [fallbackQuery];
+    return { followups: [fallbackQuery], from_fallback: true };
   }
   // Reached the bottom without returning — response wasn't a non-empty array
   // of strings. Log the shape we did get so the fall-back is observable.
   const sample = text.slice(0, 200).replace(/\s+/g, ' ').trim();
   process.stderr.write(`[research-template] derivation returned unusable shape, reusing query. text="${sample}"\n`);
-  return [fallbackQuery];
+  return { followups: [fallbackQuery], from_fallback: true };
+}
+
+/**
+ * Emit one `followup_pick` decision per parsed follow-up. The first wins
+ * the next-cycle seat (`accepted: true`); the rest are bookkept
+ * (`accepted: false`). When the parser fell back (malformed response), the
+ * single entry carries `reason: 'fallback'` so the UI can flag it.
+ *
+ * sqlite-when-available: deps.sqlite enables the persisted decision_log
+ * artifact append. Without it the decisions are event-only — see the
+ * comment on `ResearchTemplateDeps.sqlite`.
+ */
+function emitFollowupDecisions(
+  state: LoopState,
+  parsed: ParsedFollowups,
+  deps: ResearchTemplateDeps,
+): void {
+  const cycle = findRunningCycle(state);
+  if (!cycle) return;  // derivation called outside a cycle — defensive, shouldn't happen.
+  const loop_id = state.loop.id;
+  const total = parsed.followups.length;
+  parsed.followups.forEach((query, index) => {
+    const decision: DecisionPayload = {
+      type: 'followup_pick',
+      query,
+      accepted: index === 0,
+      index,
+      total,
+      cycle_id: cycle.id,
+      ...(parsed.from_fallback ? { reason: 'fallback' as const } : {}),
+    };
+    if (deps.sqlite) recordDecision(deps.sqlite, loop_id, decision);
+    else emitDecisionEvent(loop_id, decision);
+  });
+}
+
+/** The cycle the engine is mid-flight on when derivation runs is the only
+ *  one in `running` state. Returns null defensively (the hook itself would
+ *  short-circuit). */
+function findRunningCycle(state: LoopState) {
+  return state.cycles.find(c => c.status === 'running') ?? null;
 }
 
 /** Strip ```json fences / trailing prose and return a parsed JSON object, or

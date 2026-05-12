@@ -55,6 +55,14 @@ interface RenderFinding {
 interface RenderSource {
   url: string;
   title: string;
+  /** Per-source extraction status — populated by the research template's
+   *  renderer (see `RenderSourceEntry` in templates/research.ts). Optional
+   *  here because the polish pass only reads `url` + `title`; the field
+   *  ships so future polish-side filtering (e.g. skip `failed` sources
+   *  from the references list) doesn't need a schema change. */
+  extraction_status?: 'extracted' | 'snippet_only' | 'failed';
+  attempts?: number;
+  error?: string;
 }
 interface RenderPayload {
   kind: 'render';

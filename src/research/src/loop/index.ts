@@ -16,7 +16,10 @@ export type {
   LoopState, StopDecision, Template,
   OutputShape, SchedulePayload,
   Branch, LoopSchedule,
+  DecisionPayload, DecisionLogPayload, DecisionLogEntry,
 } from './types.js';
+
+export { emitDecisionEvent, recordDecision, readDecisionLog } from './decisions.js';
 
 export { detectOutputShape, ensureScheduleArtifact, readScheduleFromArtifacts } from './shape.js';
 export { planLoop } from './planner.js';

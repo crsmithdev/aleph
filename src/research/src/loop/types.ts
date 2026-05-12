@@ -196,6 +196,88 @@ export interface SchedulePayload {
   plan: LoopSchedule;
 }
 
+// ---- Decisions ---------------------------------------------------------------
+
+/**
+ * One unit of observable engine decision-making. Emitted by the planner
+ * (canon + branch picks) and the research template's derivation hook
+ * (follow-up accept/reject) so the UI's Activity > Decisions panel can show
+ * what the engine *chose* in addition to what it *did*.
+ *
+ * Storage is dual:
+ *   1. Live event — `emitResearchEvent(loop_id, 'decision', DecisionPayload)`.
+ *   2. Persisted artifact — a single `kind: 'decision_log'` artifact per loop
+ *      (cycle_id = null), whose payload accumulates entries across the run.
+ *      The append-as-new-row pattern in db.ts means each decision creates a
+ *      new artifact row that supersedes the previous (latest wins for reads).
+ *
+ * The discriminator is the `type` field; each variant carries the minimum
+ * data the UI needs to render the decision in context. Future variants
+ * (e.g. perturbation pick, milestone re-plan) extend the union without
+ * touching the helper API in `decisions.ts`.
+ */
+export type DecisionPayload =
+  | {
+      type: 'canon_pick';
+      /** The canon entity the planner chose. */
+      entity: string;
+      /** Index in the planner's canon array (0-based) so the UI can show
+       *  "1st of N picks". */
+      index: number;
+      /** Total canon size from this planning round. */
+      total: number;
+      /** Optional human-readable rationale — the planner's prompt doesn't
+       *  emit one yet, but the field is plumbed for v1.1. */
+      rationale?: string;
+    }
+  | {
+      type: 'branch_pick';
+      /** Branch.id from the schedule. */
+      branch_id: string;
+      /** The seed query the branch will run. */
+      query: string;
+      /** Index in the planner's branches array. */
+      index: number;
+      /** Total branches from this planning round. */
+      total: number;
+      /** Optional per-branch budget override. */
+      budget?: number;
+      rationale?: string;
+    }
+  | {
+      type: 'followup_pick';
+      /** The follow-up query the derivation parsed from the LLM response. */
+      query: string;
+      /** True when this follow-up wins the next-cycle seat (i.e. the first
+       *  in the parsed array); false when it was returned but bookkept (the
+       *  second/Nth follow-up in the array). */
+      accepted: boolean;
+      /** Index in the parsed-follow-ups array (0-based). */
+      index: number;
+      /** Total follow-ups parsed in this derivation round. */
+      total: number;
+      /** Cycle id this derivation belongs to — lets the UI co-locate the
+       *  decision with its cycle in the timeline. */
+      cycle_id: CycleId;
+      /** Optional reason for the accept/reject classification (e.g.
+       *  "fallback reused query" when the LLM response was malformed). */
+      reason?: string;
+    };
+
+/**
+ * Persisted artifact payload for `kind: 'decision_log'`. One artifact per
+ * append: re-fetch the latest, push a new entry, write a new artifact.
+ * Latest-by-created_at is the authoritative log.
+ */
+export interface DecisionLogPayload {
+  entries: DecisionLogEntry[];
+}
+
+export interface DecisionLogEntry {
+  decision: DecisionPayload;
+  recorded_at: string;
+}
+
 // ---- Cycle ledger ------------------------------------------------------------
 
 /**

@@ -18,8 +18,10 @@
  * Phase 4 ships the structural slice. Phase 5 collapses envelope, models,
  * perturbation_config, flags, and mode metadata onto the same artifact.
  */
+import type { Sqlite } from '@construct/data';
+import { emitDecisionEvent, recordDecision } from './decisions.js';
 import type { LLMProvider } from './llm.js';
-import type { Branch, LoopSchedule, OutputShape } from './types.js';
+import type { Branch, LoopId, LoopSchedule, OutputShape } from './types.js';
 
 // Non-reasoning cheap JSON-friendly model. Reasoning models like
 // openai/gpt-5-nano exhaust their max_tokens on hidden reasoning and return
@@ -156,23 +158,58 @@ function fallbackPlan(prompt: string): LoopSchedule {
 }
 
 /**
+ * Optional context the planner uses to emit `decision` events for canon /
+ * branch picks. Both fields are optional so unit tests that call `planLoop`
+ * directly (without a loop) keep working — the planner emits no events and
+ * appends no artifact in that case, which is fine for a unit-of-parsing
+ * test.
+ *
+ *   - `loop_id` enables event emission (events carry session_id = loop_id).
+ *   - `sqlite` enables artifact persistence — without it, decisions are
+ *     event-only. `ensureScheduleArtifact` always passes both in
+ *     production, so the prod path persists fully.
+ */
+export interface PlannerObservability {
+  loop_id?: LoopId;
+  sqlite?: Sqlite;
+}
+
+/**
  * Run the adaptive planner. Always returns a valid `LoopSchedule`:
  * - LLM call throws → fallback
  * - Response unparseable → fallback
  * - Response missing branches → fallback (a planner output with zero branches
  *   would produce a no-op loop, which the renderer can't gate against)
  * - Otherwise the parsed plan, with optional fields filled by defaults.
+ *
+ * When `obs.loop_id` is supplied, the planner emits one `decision` event per
+ * canon entity (`canon_pick`) and one per branch (`branch_pick`) so the
+ * Activity > Decisions panel can show what the planner *chose*, not just
+ * what the artifact carried. When `obs.sqlite` is also supplied, each
+ * decision is also appended to the loop's `decision_log` artifact.
  */
 export async function planLoop(
   prompt: string,
   output_shape: OutputShape,
   llm: LLMProvider,
   model: string = DEFAULT_PLAN_MODEL,
+  obs: PlannerObservability = {},
+): Promise<LoopSchedule> {
+  const plan = await runPlanner(prompt, output_shape, llm, model);
+  emitPlanDecisions(plan, obs);
+  return plan;
+}
+
+async function runPlanner(
+  prompt: string,
+  output_shape: OutputShape,
+  llm: LLMProvider,
+  model: string,
 ): Promise<LoopSchedule> {
   try {
     const result = await llm.complete(model, buildPlannerPrompt(prompt, output_shape), PLAN_MAX_TOKENS);
-    const plan = parsePlan(result.text);
-    if (plan) return plan;
+    const parsed = parsePlan(result.text);
+    if (parsed) return parsed;
     // Commandment 1: surface silent fallbacks. Log a one-liner and a sample
     // of the response so a regression is greppable from stderr.
     const sample = result.text.slice(0, 200).replace(/\s+/g, ' ').trim();
@@ -182,4 +219,40 @@ export async function planLoop(
     process.stderr.write(`[planner] LLM call failed, using fallback plan. model=${model} err=${(err as Error).message}\n`);
     return fallbackPlan(prompt);
   }
+}
+
+/**
+ * Fan the resolved plan out as `decision` events (and optionally artifact
+ * appends). One event per canon entry, one per branch — Phase 4's planner
+ * is the source of truth for both, so they're the natural unit. No events
+ * fire when `loop_id` is absent (unit-test mode).
+ */
+function emitPlanDecisions(plan: LoopSchedule, obs: PlannerObservability): void {
+  if (!obs.loop_id) return;
+  const loop_id = obs.loop_id;
+  const sqlite = obs.sqlite;
+
+  plan.canon.forEach((entity, index) => {
+    const decision = {
+      type: 'canon_pick' as const,
+      entity,
+      index,
+      total: plan.canon.length,
+    };
+    if (sqlite) recordDecision(sqlite, loop_id, decision);
+    else emitDecisionEvent(loop_id, decision);
+  });
+
+  plan.branches.forEach((branch, index) => {
+    const decision = {
+      type: 'branch_pick' as const,
+      branch_id: branch.id,
+      query: branch.query,
+      index,
+      total: plan.branches.length,
+      ...(branch.budget !== undefined ? { budget: branch.budget } : {}),
+    };
+    if (sqlite) recordDecision(sqlite, loop_id, decision);
+    else emitDecisionEvent(loop_id, decision);
+  });
 }

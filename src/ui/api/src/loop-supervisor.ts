@@ -24,7 +24,7 @@ const MAX_RESPAWNS = 5;
 
 const KNOWN_EVENT_TYPES = new Set<ResearchEventType>([
   'thread', 'job', 'step', 'finding', 'source', 'concept', 'concept_link', 'query',
-  'loop', 'cycle', 'cycle_step', 'milestone', 'artifact',
+  'loop', 'cycle', 'cycle_step', 'milestone', 'artifact', 'decision',
 ]);
 
 export interface SpawnOptions {

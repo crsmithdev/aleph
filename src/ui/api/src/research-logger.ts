@@ -22,7 +22,7 @@ import { onResearchEvent, type ResearchEvent } from '@construct/research';
 const logsDir = join(process.env.HOME!, '.construct', 'research-logs');
 
 export interface LoggedEvent {
-  type: 'loop' | 'cycle' | 'cycle_step' | 'milestone' | 'artifact';
+  type: 'loop' | 'cycle' | 'cycle_step' | 'milestone' | 'artifact' | 'decision';
   payload: unknown;
   logged_at: string;
 }

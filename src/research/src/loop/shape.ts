@@ -175,7 +175,10 @@ export async function ensureScheduleArtifact(
   // completions per loop) consumes real USD invisibly.
   const tracker = withCostTracker(llm);
   const output_shape = await detectOutputShape(prompt, tracker.llm, detectModel);
-  const plan = await planLoop(prompt, output_shape, tracker.llm, planModel);
+  // Pass loop_id + sqlite so the planner emits `decision` events for each
+  // canon entry / branch pick AND appends them to the loop's decision_log
+  // artifact. Without these, the planner stays event-silent (unit-test mode).
+  const plan = await planLoop(prompt, output_shape, tracker.llm, planModel, { loop_id, sqlite });
   if (tracker.total() > 0) bumpUsage(sqlite, loop_id, { cost_usd: tracker.total() });
   const payload: SchedulePayload = { output_shape, plan };
   createArtifact(sqlite, {
