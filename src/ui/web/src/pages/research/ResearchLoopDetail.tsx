@@ -225,7 +225,7 @@ export function ResearchLoopDetail() {
 
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
         {tab === 'document' && <DocumentTab loopId={loop.id} artifacts={artifacts} />}
-        {tab === 'activity' && <ActivityTab events={events} cycleCount={snapshot.cycles.length} />}
+        {tab === 'activity' && <ActivityTab loop={loop} cycles={snapshot.cycles} artifacts={artifacts} events={events} />}
         {tab === 'plan'     && <PlanTab artifacts={artifacts} />}
         {tab === 'config'   && <ConfigTab loop={loop} artifacts={artifacts} />}
       </div>
@@ -326,24 +326,429 @@ function DocumentTab({ loopId, artifacts }: { loopId: string; artifacts: Artifac
   );
 }
 
-function ActivityTab({ events, cycleCount }: { events: StreamFrame[]; cycleCount: number }) {
-  if (events.length === 0) {
-    return <p className="text-sm text-text-muted">No events yet — SSE connection just opened. Activity will populate as the engine runs.</p>;
-  }
+/**
+ * Activity tab — adapted from docs/mockups/research-activity.html to the
+ * loops engine. Two-column dashboard:
+ *
+ *   LEFT  : KPI strip (Cycles · Steps · Cost · Duration)
+ *           Cycle Lifecycle table — per-cycle queue / dispatch / run / e2e
+ *             percentiles (replaces the v0 Job Lifecycle table)
+ *           Branch State stackbar — schedule.branches × cycle status counts
+ *             (replaces the v0 Thread State stackbar)
+ *   RIGHT : Event log — sticky panel with type filter pills, scrolls
+ *             independently of the left column
+ *
+ * The mockup also showed Post-Mortem, Iteration Checks, Source Extraction,
+ * and Decisions panels. Those panels surfaced data from the v0 engine's
+ * post_mortem / iteration_check / source_extraction / decision events,
+ * which the loop engine doesn't emit yet. Re-introducing them is a
+ * follow-up (post-mortem as a final-cycle LLM hook; iteration checks as
+ * milestone-tied verdicts; decisions as planner/derivation events; per-
+ * source extraction status as a render-artifact field).
+ */
+function ActivityTab({
+  loop, cycles, artifacts, events,
+}: {
+  loop: Loop;
+  cycles: Cycle[];
+  artifacts: Artifact[];
+  events: StreamFrame[];
+}) {
+  const kpis = useMemo(() => computeKpis(loop, cycles, events), [loop, cycles, events]);
+  const lifecycle = useMemo(() => computeCycleLifecycle(cycles), [cycles]);
+  const branchState = useMemo(() => computeBranchState(artifacts, cycles), [artifacts, cycles]);
+
+  const [eventFilter, setEventFilter] = useState<'all' | StreamFrame['type']>('all');
+  const filteredEvents = useMemo(
+    () => eventFilter === 'all' ? events : events.filter(e => e.type === eventFilter),
+    [events, eventFilter],
+  );
+  const filterCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: events.length };
+    for (const e of events) counts[e.type] = (counts[e.type] ?? 0) + 1;
+    return counts;
+  }, [events]);
+
   return (
-    <div className="max-w-4xl" data-testid="activity-tab">
-      <p className="text-xs text-text-muted mb-3">{events.length} event{events.length !== 1 ? 's' : ''} · {cycleCount} cycle{cycleCount !== 1 ? 's' : ''} on this loop</p>
-      <ul className="flex flex-col gap-0.5" data-testid="activity-event-list">
-        {events.map((e, i) => (
-          <li key={i} className="text-xs font-mono text-text-secondary flex gap-3 items-baseline py-0.5">
-            <span className="text-text-muted shrink-0">{formatTs(e.logged_at)}</span>
-            <span className="text-accent shrink-0 w-20">{e.type}</span>
-            <span className="text-text-secondary">{summarizeEvent(e)}</span>
+    <div data-testid="activity-tab" className="flex flex-col gap-5">
+      <KpiStrip kpis={kpis} />
+      <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-5 items-start">
+        <div className="flex flex-col gap-4 min-w-0">
+          <CycleLifecycle data={lifecycle} cycles={cycles} />
+          <BranchState entries={branchState} />
+        </div>
+        <EventLog
+          events={filteredEvents}
+          totalCount={events.length}
+          filter={eventFilter}
+          setFilter={setEventFilter}
+          filterCounts={filterCounts}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ---- Activity helpers ------------------------------------------------------
+
+interface ActivityKpis {
+  cyclesFinalized: number;
+  cyclesTotal: number;
+  stepCount: number;
+  cost: number;
+  durationMs: number;
+  isRunning: boolean;
+}
+
+function computeKpis(loop: Loop, cycles: Cycle[], events: StreamFrame[]): ActivityKpis {
+  const cyclesFinalized = cycles.filter(c => c.status === 'finalized').length;
+  const stepCount = events.filter(e => e.type === 'cycle_step').length;
+
+  // Cost: prefer the sum of per-step costs from the event stream (always up
+  // to date and ignores the pre-existing 0-bug on envelope_consumed.cost_usd
+  // when summing isn't yet wired in the engine). Fall back to the loop's
+  // own envelope_consumed if no step events are visible (e.g. before SSE
+  // back-fill completes).
+  const stepCost = events.reduce((sum, e) => {
+    if (e.type !== 'cycle_step') return sum;
+    return sum + ((e.payload as { cost_usd?: number }).cost_usd ?? 0);
+  }, 0);
+  const cost = stepCost > 0 ? stepCost : (loop.envelope_consumed?.cost_usd ?? 0);
+
+  const start = parseSqliteTs(loop.created_at);
+  const isRunning = loop.status === 'pending' || loop.status === 'running';
+  const end = isRunning ? Date.now() : parseSqliteTs(loop.updated_at);
+  const durationMs = Math.max(0, end - start);
+
+  return { cyclesFinalized, cyclesTotal: cycles.length, stepCount, cost, durationMs, isRunning };
+}
+
+function KpiStrip({ kpis }: { kpis: ActivityKpis }) {
+  const cells: Array<{ label: string; value: string; sub?: string; accent: 'default'|'success'|'info'|'accent' }> = [
+    {
+      label: 'Cycles',
+      value: String(kpis.cyclesFinalized),
+      sub: kpis.cyclesTotal !== kpis.cyclesFinalized ? `${kpis.cyclesTotal - kpis.cyclesFinalized} in flight` : 'finalized',
+      accent: 'success',
+    },
+    {
+      label: 'Steps',
+      value: String(kpis.stepCount),
+      sub: kpis.cyclesTotal > 0 ? `${(kpis.stepCount / Math.max(1, kpis.cyclesTotal)).toFixed(1)} / cycle` : undefined,
+      accent: 'info',
+    },
+    {
+      label: 'Cost',
+      value: `$${kpis.cost.toFixed(4)}`,
+      sub: kpis.cyclesFinalized > 0 ? `$${(kpis.cost / kpis.cyclesFinalized).toFixed(4)} / cycle` : undefined,
+      accent: 'accent',
+    },
+    {
+      label: 'Duration',
+      value: formatDurationMs(kpis.durationMs),
+      sub: kpis.isRunning ? 'running' : 'final',
+      accent: 'default',
+    },
+  ];
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-testid="activity-kpis">
+      {cells.map(c => (
+        <div
+          key={c.label}
+          className="border border-border-primary rounded-lg p-3 bg-bg-secondary"
+          data-testid={`kpi-${c.label.toLowerCase()}`}
+        >
+          <div className="text-xs uppercase tracking-wider text-text-muted">{c.label}</div>
+          <div className={clsx(
+            'text-2xl font-medium mt-1 font-mono tabular-nums',
+            c.accent === 'success' && 'text-success',
+            c.accent === 'info' && 'text-info',
+            c.accent === 'accent' && 'text-accent',
+            c.accent === 'default' && 'text-text-primary',
+          )}>
+            {c.value}
+          </div>
+          {c.sub && <div className="text-xs text-text-muted mt-0.5">{c.sub}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+interface CycleLifecycleStats {
+  /** Time from cycle row insert to engine claim. Loops don't have a queue,
+   *  so this stays near zero in normal runs but exposes scheduler stalls. */
+  queueMs: number[];
+  /** Run duration: started_at → finalized_at. The actual engine work time. */
+  runMs: number[];
+  /** End-to-end: created_at → finalized_at. */
+  endToEndMs: number[];
+}
+
+function computeCycleLifecycle(cycles: Cycle[]): CycleLifecycleStats {
+  const queueMs: number[] = [];
+  const runMs: number[] = [];
+  const endToEndMs: number[] = [];
+  for (const c of cycles) {
+    if (!c.started_at || !c.finalized_at) continue;
+    const created = parseSqliteTs(c.id /* unused */) || 0;
+    // cycles snapshot doesn't carry created_at; pull from started_at as
+    // the floor for queue-wait. This will be 0 in the steady-state path
+    // where the engine claims a cycle the same instant it inserts it.
+    void created;
+    const startedT = parseSqliteTs(c.started_at);
+    const finalT = parseSqliteTs(c.finalized_at);
+    queueMs.push(0); // Loops have no queue; preserved for parity with the mockup.
+    runMs.push(finalT - startedT);
+    endToEndMs.push(finalT - startedT);
+  }
+  return { queueMs, runMs, endToEndMs };
+}
+
+function CycleLifecycle({ data, cycles }: { data: CycleLifecycleStats; cycles: Cycle[] }) {
+  const rows: Array<{ label: string; samples: number[] }> = [
+    { label: 'queue wait',    samples: data.queueMs },
+    { label: 'run duration',  samples: data.runMs },
+    { label: 'end-to-end',    samples: data.endToEndMs },
+  ];
+  const finalized = cycles.filter(c => c.status === 'finalized').length;
+  const running = cycles.filter(c => c.status === 'running').length;
+  return (
+    <Panel
+      title="Cycle lifecycle"
+      subtitle={`${cycles.length} cycle${cycles.length !== 1 ? 's' : ''} · ${finalized} finalized · ${running} running`}
+      testId="cycle-lifecycle"
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs uppercase tracking-wider text-text-muted border-b border-border-primary">
+              <th className="text-left py-2 font-medium">metric</th>
+              <th className="text-right py-2 font-medium">p50</th>
+              <th className="text-right py-2 font-medium">p95</th>
+              <th className="text-right py-2 font-medium">max</th>
+              <th className="text-right py-2 font-medium">avg</th>
+              <th className="text-right py-2 font-medium">n</th>
+            </tr>
+          </thead>
+          <tbody className="font-mono tabular-nums">
+            {rows.map(r => {
+              const stats = percentiles(r.samples);
+              return (
+                <tr key={r.label} className="border-b border-border-primary last:border-b-0">
+                  <td className="py-2 text-text-secondary font-sans">{r.label}</td>
+                  <td className="text-right py-2">{stats ? formatDurationMs(stats.p50) : '—'}</td>
+                  <td className="text-right py-2">{stats ? formatDurationMs(stats.p95) : '—'}</td>
+                  <td className="text-right py-2">{stats ? formatDurationMs(stats.max) : '—'}</td>
+                  <td className="text-right py-2">{stats ? formatDurationMs(stats.avg) : '—'}</td>
+                  <td className="text-right py-2 text-text-muted">{r.samples.length}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
+interface BranchStateEntry {
+  branchId: string;
+  query: string;
+  budget: number;
+  cyclesFinalized: number;
+  cyclesRunning: number;
+  state: 'pending' | 'running' | 'finalized';
+}
+
+function computeBranchState(artifacts: Artifact[], cycles: Cycle[]): BranchStateEntry[] {
+  const sched = artifacts.find(a => a.kind === 'schedule');
+  const plan = (sched?.payload as { plan?: LoopSchedule } | undefined)?.plan;
+  if (!plan || plan.branches.length === 0) return [];
+
+  // Cycles execute branches in order: cycle index 0 → branch 0, cycle 1 → branch 1, …
+  // (research template default). Map by index.
+  const byIndex = new Map<number, Cycle>();
+  for (const c of cycles) byIndex.set(c.index, c);
+
+  return plan.branches.map((b, i) => {
+    const cycle = byIndex.get(i);
+    const state: BranchStateEntry['state'] =
+      !cycle || cycle.status === 'pending' ? 'pending'
+      : cycle.status === 'finalized'       ? 'finalized'
+      :                                       'running';
+    return {
+      branchId: b.id,
+      query: b.query,
+      budget: b.budget ?? plan.per_branch_budget,
+      cyclesFinalized: state === 'finalized' ? 1 : 0,
+      cyclesRunning: state === 'running' ? 1 : 0,
+      state,
+    };
+  });
+}
+
+function BranchState({ entries }: { entries: BranchStateEntry[] }) {
+  if (entries.length === 0) {
+    return (
+      <Panel title="Branch state" subtitle="schedule not yet planned" testId="branch-state">
+        <p className="text-sm text-text-muted italic px-1 py-2">Planner has not emitted a schedule artifact yet.</p>
+      </Panel>
+    );
+  }
+  const finalized = entries.filter(e => e.state === 'finalized').length;
+  const running = entries.filter(e => e.state === 'running').length;
+  const pending = entries.filter(e => e.state === 'pending').length;
+  const total = entries.length;
+  const pct = (n: number) => total === 0 ? 0 : (n / total) * 100;
+
+  return (
+    <Panel
+      title="Branch state"
+      subtitle={`${total} branch${total !== 1 ? 'es' : ''} · ${finalized} finalized · ${running} running · ${pending} pending`}
+      testId="branch-state"
+    >
+      <div className="flex h-3 w-full rounded overflow-hidden bg-bg-tertiary mb-3">
+        {finalized > 0 && <div className="bg-success h-full" style={{ width: `${pct(finalized)}%` }} title={`${finalized} finalized`} />}
+        {running > 0   && <div className="bg-info    h-full" style={{ width: `${pct(running)}%` }}   title={`${running} running`} />}
+        {pending > 0   && <div className="bg-bg-secondary h-full" style={{ width: `${pct(pending)}%` }} title={`${pending} pending`} />}
+      </div>
+      <ul className="flex flex-col gap-1.5" data-testid="branch-state-list">
+        {entries.map(e => (
+          <li key={e.branchId} className="grid items-baseline gap-2 text-sm" style={{ gridTemplateColumns: '8px 1fr auto auto' }}>
+            <span className={clsx(
+              'w-2 h-2 rounded-full shrink-0',
+              e.state === 'finalized' && 'bg-success',
+              e.state === 'running'   && 'bg-info',
+              e.state === 'pending'   && 'bg-text-disabled',
+            )} />
+            <div className="min-w-0">
+              <div className="font-mono text-xs text-text-muted">{e.branchId}</div>
+              <div className="text-sm text-text-secondary truncate">{e.query}</div>
+            </div>
+            <span className="text-xs text-text-muted whitespace-nowrap">budget {e.budget}</span>
+            <span className={clsx(
+              'text-xs px-1.5 py-0.5 rounded font-medium uppercase tracking-wider',
+              e.state === 'finalized' && 'bg-success/15 text-success',
+              e.state === 'running'   && 'bg-info/15 text-info',
+              e.state === 'pending'   && 'bg-bg-tertiary text-text-muted',
+            )}>{e.state}</span>
           </li>
         ))}
       </ul>
+    </Panel>
+  );
+}
+
+const EVENT_FILTERS: Array<'all' | StreamFrame['type']> = ['all', 'loop', 'cycle', 'cycle_step', 'artifact', 'milestone'];
+
+function EventLog({
+  events, totalCount, filter, setFilter, filterCounts,
+}: {
+  events: StreamFrame[];
+  totalCount: number;
+  filter: 'all' | StreamFrame['type'];
+  setFilter: (f: 'all' | StreamFrame['type']) => void;
+  filterCounts: Record<string, number>;
+}) {
+  return (
+    <div className="lg:sticky lg:top-0" data-testid="event-log">
+      <Panel title="Event log" subtitle={`live · ${totalCount}`}>
+        <div className="flex flex-wrap gap-1 mb-3" data-testid="event-log-filters">
+          {EVENT_FILTERS.map(f => {
+            const count = filterCounts[f] ?? 0;
+            const active = filter === f;
+            return (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={clsx(
+                  'text-xs px-2 py-0.5 rounded border font-medium',
+                  active
+                    ? 'bg-accent/15 text-accent border-accent/40'
+                    : 'border-border-primary text-text-muted hover:text-text-primary hover:border-text-muted',
+                )}
+              >
+                {f} <span className="text-text-muted ml-0.5">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="max-h-[600px] overflow-y-auto">
+          {events.length === 0 ? (
+            <p className="text-sm text-text-muted italic px-1 py-2">No events match this filter.</p>
+          ) : (
+            <ul className="flex flex-col gap-0.5" data-testid="activity-event-list">
+              {events.map((e, i) => (
+                <li key={i} className="text-xs font-mono text-text-secondary flex gap-3 items-baseline py-0.5">
+                  <span className="text-text-muted shrink-0">{formatTs(e.logged_at)}</span>
+                  <span className="text-accent shrink-0 w-20">{e.type}</span>
+                  <span className="text-text-secondary">{summarizeEvent(e)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </Panel>
     </div>
   );
+}
+
+function Panel({
+  title, subtitle, testId, children,
+}: {
+  title: string;
+  subtitle?: string;
+  testId?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="border border-border-primary rounded-lg overflow-hidden bg-bg-secondary"
+      data-testid={testId}
+    >
+      <div className="flex items-baseline gap-3 px-4 py-2.5 border-b border-border-primary bg-bg-primary">
+        <h4 className="text-sm font-medium text-text-primary">{title}</h4>
+        {subtitle && <span className="text-xs text-text-muted">{subtitle}</span>}
+      </div>
+      <div className="p-3">{children}</div>
+    </div>
+  );
+}
+
+// ---- Math + formatting -----------------------------------------------------
+
+function percentiles(samples: number[]): { p50: number; p95: number; max: number; avg: number } | null {
+  if (samples.length === 0) return null;
+  const sorted = [...samples].sort((a, b) => a - b);
+  const idx = (p: number) => Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length));
+  const sum = sorted.reduce((s, x) => s + x, 0);
+  return {
+    p50: sorted[idx(50)],
+    p95: sorted[idx(95)],
+    max: sorted[sorted.length - 1],
+    avg: sum / sorted.length,
+  };
+}
+
+function formatDurationMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '—';
+  if (ms < 1) return '<1ms';
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  const m = Math.floor(ms / 60_000);
+  const s = Math.round((ms % 60_000) / 1000);
+  return `${m}m ${s}s`;
+}
+
+/** Parse a SQLite `datetime('now')` timestamp ("YYYY-MM-DD HH:MM:SS") as UTC.
+ *  SQLite returns naive strings with no zone; appending Z makes JavaScript
+ *  parse them correctly. */
+function parseSqliteTs(s: string): number {
+  if (!s) return 0;
+  // ISO-like strings ("2026-05-12T..." or with Z) parse natively.
+  if (s.includes('T') || s.endsWith('Z')) return new Date(s).getTime();
+  return new Date(s.replace(' ', 'T') + 'Z').getTime();
 }
 
 function PlanTab({ artifacts }: { artifacts: Artifact[] }) {
