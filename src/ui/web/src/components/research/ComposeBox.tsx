@@ -1,22 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
-import {
-  useCreateResearchQuery,
-  useResearchQuery,
-  useUpdateResearchQuery,
-  TOPIC_CLUSTERS,
-  type QuestionShape,
-  type ShapeAnalysis,
-  type ShapeLens,
-  type TopicCluster,
-  type TopicClusterAnalysis,
-} from '../../api/research-hooks';
-import { InferredPanel } from './InferredPanel';
-
-const ALL_SHAPES: QuestionShape[] = [
-  'survey', 'timeline', 'list', 'dynamics', 'comparison', 'lookup', 'audit',
-];
 
 const TEMPLATES: { label: string; prompt: string }[] = [
   { label: 'timeline', prompt: 'Timeline of ' },
@@ -58,64 +42,46 @@ function pickPlaceholder(): string {
   return PLACEHOLDER_SAMPLES[Math.floor(Math.random() * PLACEHOLDER_SAMPLES.length)];
 }
 
-/** Hero compose box on the research landing page. Submits the prompt
- *  immediately, then polls the new query until shape + topic detection
- *  populate. Shape detection happens fire-and-forget on the server at
- *  query creation. The user can keep editing or just navigate to the
- *  detail page; either way the run is already created. */
+/** Hero compose box on the research landing page. Submits the prompt to the
+ *  loops engine (`POST /api/loops/start`, research template) and navigates to
+ *  `/research/{slug}` on success — the detail page picks up shape/output_shape
+ *  detection + the planner's schedule artifact, surfaces them there. */
 export function ComposeBox() {
   const [prompt, setPrompt] = useState('');
-  const [createdId, setCreatedId] = useState<string | null>(null);
-  type EditingMode = null | 'shape' | 'lenses' | 'topic';
-  const [editing, setEditing] = useState<EditingMode>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   // Frozen on mount so the placeholder doesn't shuffle on every keystroke.
   const [placeholder] = useState(pickPlaceholder);
   const navigate = useNavigate();
-  const createQuery = useCreateResearchQuery();
-  const updateQuery = useUpdateResearchQuery();
 
-  // Poll the created query until shape and topic populate. Shape detector
-  // is fire-and-forget at session creation, so we poll instead of SSE
-  // (consistent with the existing detail-page pattern).
-  const { data: createdQuery } = useResearchQuery(createdId ?? '');
-  const shape = createdQuery?.question_shape ?? null;
-  const topic = createdQuery?.topic_cluster ?? null;
-
-  // Once both shape and topic land, the inferred panel is fully populated;
-  // the user can act on it or open the detail page. We don't auto-navigate —
-  // some users will want to tweak the prompt and re-submit before opening
-  // the run; ⌘↵ is the explicit "open detail" gesture.
-  const isDetecting = createdId != null && (!shape || !topic);
-
-  function reset() {
-    setPrompt('');
-    setCreatedId(null);
-    setEditing(null);
-  }
-
-  function handleSubmit(e: React.FormEvent | undefined, openDetail = false) {
+  async function handleSubmit(e: React.FormEvent | undefined) {
     if (e) e.preventDefault();
     const trimmed = prompt.trim();
-    if (!trimmed || createQuery.isPending) return;
-    createQuery.mutate(
-      { prompt: trimmed },
-      {
-        onSuccess: q => {
-          if (openDetail) {
-            navigate(`/research/${q.id}`);
-            reset();
-          } else {
-            setCreatedId(q.id);
-          }
-        },
-      },
-    );
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/loops/start', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ template_id: 'research', prompt: trimmed }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const { id } = await res.json() as { id: string };
+      navigate(`/research/${id}`);
+    } catch (err) {
+      setError((err as Error).message);
+      setSubmitting(false);
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(undefined, e.metaKey || e.ctrlKey);
+      handleSubmit(undefined);
     }
   }
 
@@ -130,273 +96,51 @@ export function ComposeBox() {
         'bg-gradient-to-b from-accent/[0.08] to-bg-secondary',
       )}
     >
-      <form onSubmit={e => handleSubmit(e, false)}>
+      <form onSubmit={handleSubmit}>
         <textarea
           value={prompt}
           onChange={e => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className="w-full min-h-[120px] bg-bg-primary border border-border-primary rounded-lg px-4 py-3.5 text-base text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent resize-y leading-relaxed"
-          disabled={createQuery.isPending || createdId !== null}
+          disabled={submitting}
         />
 
-        {/* Inferred panel: appears once a query is created. While shape/topic
-            haven't landed yet, the panel itself shows the "Detecting…" line. */}
-        {createdId !== null && createdQuery && (
-          editing === 'shape' && shape ? (
-            <ShapeEditorInline
-              initial={shape}
-              onCancel={() => setEditing(null)}
-              onSave={next => {
-                updateQuery.mutate({ id: createdQuery.id, question_shape: next });
-                setEditing(null);
-              }}
-            />
-          ) : editing === 'lenses' && shape ? (
-            <LensesEditorInline
-              initial={shape}
-              onCancel={() => setEditing(null)}
-              onSave={next => {
-                updateQuery.mutate({ id: createdQuery.id, question_shape: next });
-                setEditing(null);
-              }}
-            />
-          ) : editing === 'topic' && topic ? (
-            <TopicEditorInline
-              initial={topic}
-              onCancel={() => setEditing(null)}
-              onSave={next => {
-                updateQuery.mutate({ id: createdQuery.id, topic_cluster: next });
-                setEditing(null);
-              }}
-            />
-          ) : (
-            <InferredPanel
-              shape={shape}
-              topic={topic}
-              onEditShape={shape ? () => setEditing('shape') : undefined}
-              onEditLenses={shape ? () => setEditing('lenses') : undefined}
-              onEditTopic={topic ? () => setEditing('topic') : undefined}
-            />
-          )
+        {error && (
+          <div
+            className="mt-3 text-sm text-error border border-error/40 bg-error/10 rounded px-3 py-2"
+            data-testid="compose-error"
+          >
+            {error}
+          </div>
         )}
 
         <div className="flex items-center gap-3 mt-3.5 flex-wrap">
-          {createdId === null ? (
-            <>
-              <span className="inline-flex rounded-md overflow-hidden">
-                <button
-                  type="submit"
-                  className="bg-accent text-bg-primary border-0 pl-5 pr-4 py-2 text-sm font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={!prompt.trim() || createQuery.isPending}
-                >
-                  {createQuery.isPending ? 'Starting…' : 'Start research →'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSubmit(undefined, true)}
-                  className="bg-accent text-bg-primary border-0 border-l border-bg-primary/20 px-2 py-2 text-sm font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={!prompt.trim() || createQuery.isPending}
-                  title="Start and open detail"
-                  aria-label="Start research and open detail"
-                >
-                  »
-                </button>
-              </span>
-              <span className="text-xs text-text-muted">
-                ↵ start · Ctrl/⌘↵ start &amp; open detail
-              </span>
-              <span className="ml-auto flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-[11px] uppercase tracking-wider text-text-muted self-center">
-                  Shape:
-                </span>
-                {TEMPLATES.map(t => (
-                  <button
-                    key={t.label}
-                    type="button"
-                    onClick={() => applyTemplate(t)}
-                    className="text-xs px-2.5 py-1 border border-dashed border-border-secondary rounded text-text-secondary hover:text-text-primary hover:border-accent capitalize"
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </span>
-            </>
-          ) : (
-            <>
+          <button
+            type="submit"
+            className="bg-accent text-bg-primary border-0 px-5 py-2 text-sm font-semibold rounded-md hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!prompt.trim() || submitting}
+          >
+            {submitting ? 'Starting…' : 'Start research →'}
+          </button>
+          <span className="text-xs text-text-muted">↵ start</span>
+          <span className="ml-auto flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-[11px] uppercase tracking-wider text-text-muted self-center">
+              Shape:
+            </span>
+            {TEMPLATES.map(t => (
               <button
+                key={t.label}
                 type="button"
-                onClick={() => createdId && navigate(`/research/${createdId}`)}
-                className="bg-accent text-bg-primary border-0 px-5 py-2 text-sm font-semibold rounded-md hover:bg-accent-hover"
+                onClick={() => applyTemplate(t)}
+                className="text-xs px-2.5 py-1 border border-dashed border-border-secondary rounded text-text-secondary hover:text-text-primary hover:border-accent capitalize"
               >
-                Open detail →
+                {t.label}
               </button>
-              <button
-                type="button"
-                onClick={reset}
-                className="text-sm text-text-muted hover:text-text-primary px-3 py-2"
-              >
-                + New query
-              </button>
-              {isDetecting && (
-                <span className="text-xs text-text-muted">Detection in progress…</span>
-              )}
-            </>
-          )}
+            ))}
+          </span>
         </div>
       </form>
     </section>
   );
 }
-
-interface ShapeEditorInlineProps {
-  initial: ShapeAnalysis;
-  onSave: (next: ShapeAnalysis) => void;
-  onCancel: () => void;
-}
-
-/** Inline shape editor matching QuestionShapeBar's ShapeEditor — lets the
- *  user toggle which shapes apply. Reused here so the override UI is
- *  identical on both surfaces (landing compose + detail page). */
-function ShapeEditorInline({ initial, onSave, onCancel }: ShapeEditorInlineProps) {
-  const [selected, setSelected] = useState<Set<QuestionShape>>(new Set(initial.shapes));
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    containerRef.current?.scrollIntoView({ block: 'nearest' });
-  }, []);
-
-  function toggle(s: QuestionShape) {
-    const next = new Set(selected);
-    if (next.has(s)) next.delete(s); else next.add(s);
-    setSelected(next);
-  }
-
-  function handleSave() {
-    const lensByShape = new Map(initial.lenses.map(l => [l.shape, l]));
-    const lenses: ShapeLens[] = Array.from(selected).map(s =>
-      lensByShape.get(s) ?? { shape: s, criterion: '' }
-    );
-    onSave({ shapes: Array.from(selected), lenses, confidence: initial.confidence });
-  }
-
-  return (
-    <div ref={containerRef} className="mt-3 flex flex-col gap-2 border border-border-primary rounded-lg p-3 bg-bg-secondary">
-      <div className="flex flex-wrap items-center gap-1.5 text-sm">
-        <span className="text-text-muted">Shapes:</span>
-        {ALL_SHAPES.map(s => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => toggle(s)}
-            className={clsx(
-              'inline-flex items-center gap-1 px-2 py-0.5 rounded text-sm font-medium border capitalize transition-colors',
-              selected.has(s)
-                ? 'bg-accent/10 text-accent border-accent/30'
-                : 'bg-bg-tertiary text-text-muted border-border-primary',
-              'hover:bg-accent/15 cursor-pointer',
-            )}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-      <EditorActions onSave={handleSave} onCancel={onCancel} />
-    </div>
-  );
-}
-
-function EditorActions({ onSave, onCancel }: { onSave: () => void; onCancel: () => void }) {
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={onSave}
-        className="px-3 py-1 rounded bg-accent text-bg-primary text-sm hover:bg-accent-hover"
-      >
-        Save
-      </button>
-      <button
-        type="button"
-        onClick={onCancel}
-        className="px-3 py-1 rounded text-sm text-text-muted hover:text-text-primary"
-      >
-        Cancel
-      </button>
-    </div>
-  );
-}
-
-interface LensesEditorInlineProps {
-  initial: ShapeAnalysis;
-  onSave: (next: ShapeAnalysis) => void;
-  onCancel: () => void;
-}
-
-function LensesEditorInline({ initial, onSave, onCancel }: LensesEditorInlineProps) {
-  const [criteria, setCriteria] = useState<Record<QuestionShape, string>>(() => {
-    const out = {} as Record<QuestionShape, string>;
-    for (const l of initial.lenses) out[l.shape] = l.criterion;
-    return out;
-  });
-
-  function handleSave() {
-    const lenses: ShapeLens[] = initial.lenses.map(l => ({
-      shape: l.shape,
-      criterion: criteria[l.shape] ?? l.criterion,
-    }));
-    onSave({ ...initial, lenses });
-  }
-
-  return (
-    <div className="mt-3 flex flex-col gap-2 border border-border-primary rounded-lg p-3 bg-bg-secondary">
-      <span className="text-xs uppercase tracking-wider text-text-muted font-mono">Lens criteria</span>
-      {initial.lenses.map(l => (
-        <label key={l.shape} className="flex items-center gap-2 text-sm">
-          <span className="capitalize text-text-secondary w-24 shrink-0">{l.shape}</span>
-          <input
-            type="text"
-            value={criteria[l.shape] ?? ''}
-            onChange={e => setCriteria(c => ({ ...c, [l.shape]: e.target.value }))}
-            className="flex-1 bg-bg-primary border border-border-primary rounded px-2 py-1 text-sm text-text-primary focus:outline-none focus:border-accent"
-          />
-        </label>
-      ))}
-      <EditorActions onSave={handleSave} onCancel={onCancel} />
-    </div>
-  );
-}
-
-interface TopicEditorInlineProps {
-  initial: TopicClusterAnalysis;
-  onSave: (next: TopicClusterAnalysis) => void;
-  onCancel: () => void;
-}
-
-function TopicEditorInline({ initial, onSave, onCancel }: TopicEditorInlineProps) {
-  const [cluster, setCluster] = useState<TopicCluster>(initial.cluster);
-  return (
-    <div className="mt-3 flex flex-col gap-2 border border-border-primary rounded-lg p-3 bg-bg-secondary">
-      <span className="text-xs uppercase tracking-wider text-text-muted font-mono">Topic cluster</span>
-      <div className="flex flex-wrap items-center gap-1.5 text-sm">
-        {TOPIC_CLUSTERS.map(c => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setCluster(c)}
-            className={clsx(
-              'inline-flex items-center px-2 py-0.5 rounded text-sm border',
-              cluster === c
-                ? 'bg-accent/10 text-accent border-accent/30'
-                : 'bg-bg-tertiary text-text-muted border-border-primary hover:bg-accent/15',
-            )}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-      <EditorActions onSave={() => onSave({ cluster, confidence: 1.0 })} onCancel={onCancel} />
-    </div>
-  );
-}
-

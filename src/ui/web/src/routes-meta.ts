@@ -55,19 +55,21 @@ export const ROUTE_META: readonly RouteMeta[] = [
   {
     path: '/research/:id',
     smoke: {
+      // The ResearchDetail wrapper probes /api/loops/:id first then
+      // /api/research/queries/:id — smoke allows 404s on both so the
+      // not-found error state can settle.
       testid: 'page-research-detail',
       pathFor: '/research/__smoke_none__',
-      allowedApi404: [/\/api\/research\/queries\/__smoke_none__(\?|$|\/)/],
+      allowedApi404: [
+        /\/api\/loops\/__smoke_none__(\?|$|\/)/,
+        /\/api\/research\/queries\/__smoke_none__(\?|$|\/)/,
+      ],
       expectErrorState: true,
     },
   },
   { path: '/research/:id/plan' },
   { path: '/research/workers', smoke: { testid: 'page-research-workers', heading: /^Workers$/ } },
   { path: '/research/config', smoke: { testid: 'page-research-config', heading: /^Research Config$/ } },
-
-  // Loops (v1 engine — temporary; absorbed by Phase 6)
-  { path: '/loops/new', smoke: { testid: 'loop-new-form' } },
-  { path: '/loops/:id' },
 
   // Observability
   { path: '/observability', smoke: { testid: 'page-observability-overview' } },

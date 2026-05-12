@@ -7,6 +7,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Sqlite } from '@construct/data';
+import { generateId } from '../services/id.js';
 import { EMPTY_USAGE } from './envelope.js';
 import type {
   Artifact, ArtifactId, ArtifactKind, Cycle, CycleId, Envelope, EnvelopeUsage,
@@ -15,11 +16,19 @@ import type {
 
 // ---- Loops -------------------------------------------------------------------
 
+/**
+ * Loop IDs are slugs (e.g. `white-mist-mist-4e8a`) produced by the same
+ * `generateId()` the legacy research-queries pipeline uses. This keeps the
+ * `/research/:id` URL scheme consistent across both systems — a `:id` segment
+ * resolves to either a loop or a research_queries row by trying both tables.
+ * Cycles, artifacts, and milestones stay on UUIDs — they're internal references
+ * that never appear in URLs.
+ */
 export function createLoop(
   sqlite: Sqlite,
   args: { id?: LoopId; template_id: string; envelope?: Envelope; prompt?: string },
 ): Loop {
-  const id = args.id ?? randomUUID();
+  const id = args.id ?? generateId();
   sqlite.prepare(
     'INSERT INTO loops (id, template_id, envelope, prompt) VALUES (?, ?, ?, ?)'
   ).run(id, args.template_id, JSON.stringify(args.envelope ?? {}), args.prompt ?? '');

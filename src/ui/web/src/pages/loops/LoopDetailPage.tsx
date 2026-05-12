@@ -121,7 +121,7 @@ export function LoopDetailPage() {
   return (
     <div className="flex flex-col gap-5" data-testid="page-loop-detail">
       <div>
-        <Link to="/loops/new" className="text-sm text-accent hover:underline">&larr; New loop</Link>
+        <Link to="/research" className="text-sm text-accent hover:underline">&larr; New research</Link>
         <PageHeader
           title={title}
           subtitle={<>{loop.template_id} · <span className="font-mono">{idShort}</span> · status <span data-testid="loop-status">{loop.status}</span> · {cycles.length} cycles</>}
