@@ -15,43 +15,38 @@ import type { FastifyPluginAsync } from 'fastify';
 import { createReadStream, existsSync } from 'fs';
 import {
   createLoop, getLoop, listArtifacts, listCycles, listMilestones, readState,
-  runLoop, makeNoopTemplate, onResearchEvent,
-  type Envelope, type Template,
+  onResearchEvent,
+  buildTemplate, listTemplateIds,
+  type Envelope,
 } from '@construct/research';
 import { sessionLogPath } from '../research-logger.js';
-
-// Template registry. Phase 2 lands `research` and `monitor` templates here.
-function makeTemplate(template_id: string, _prompt: string): Template | null {
-  if (template_id === 'noop') return makeNoopTemplate({ cycles_target: 5 });
-  return null;
-}
+import { spawnLoopChild } from '../loop-supervisor.js';
 
 interface StartBody {
   template_id: string;
   prompt?: string;
   envelope?: Envelope;
+  // Test/dev knobs forwarded to the child as CLI args. Not persisted.
+  processor_delay_ms?: number;
+  cycles_target?: number;
 }
 
 export const loopRoutes: FastifyPluginAsync = async (app) => {
   app.post<{ Body: StartBody }>('/start', async (req, reply) => {
-    const { template_id, prompt, envelope } = req.body ?? {};
+    const { template_id, prompt, envelope, processor_delay_ms, cycles_target } = req.body ?? {};
     if (!template_id || typeof template_id !== 'string') {
       return reply.status(400).send({ error: 'template_id required' });
     }
-    const template = makeTemplate(template_id, prompt ?? '');
-    if (!template) {
+    if (!listTemplateIds().includes(template_id)) {
       return reply.status(400).send({ error: `unknown template_id: ${template_id}` });
     }
+    // Verify the template actually builds — guards against partial registry.
+    if (!buildTemplate(template_id, prompt ?? '', {})) {
+      return reply.status(400).send({ error: `template ${template_id} failed to build` });
+    }
+
     const loop = createLoop(app.sqlite, { template_id, prompt, envelope });
-
-    // Fire-and-forget. The supervisor (step 4) will replace this with a
-    // real child process so the loop survives the API restarting.
-    setImmediate(() => {
-      void runLoop(app.sqlite, template, loop.id).catch(err => {
-        app.log?.error({ err, loop_id: loop.id }, 'runLoop failed');
-      });
-    });
-
+    spawnLoopChild(app.sqlite, loop.id, { processor_delay_ms, cycles_target });
     return reply.status(201).send({ id: loop.id });
   });
 

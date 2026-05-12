@@ -4,19 +4,24 @@
  * + CI smoke tests + the Dev mode preset.
  *
  * Runs `cycles_target` cycles (default 5), producing canned outputs each cycle.
- * stop_rule fires once that many cycle_output artifacts exist.
+ * stop_rule fires once that many cycle_output artifacts exist. `processor_delay_ms`
+ * lets tests slow the run down enough to reliably kill the child mid-cycle.
  */
 
 import type { Template } from '../types.js';
 
-export function makeNoopTemplate(opts: { cycles_target?: number } = {}): Template {
+export function makeNoopTemplate(
+  opts: { cycles_target?: number; processor_delay_ms?: number } = {},
+): Template {
   const target = opts.cycles_target ?? 5;
+  const delay = opts.processor_delay_ms ?? 0;
 
   return {
     id: 'noop',
 
     async processor(input, _state) {
       const i = (input as { cycle_index: number }).cycle_index;
+      if (delay > 0) await new Promise(r => setTimeout(r, delay));
       return { kind: 'noop_proc', cycle: i, fact: `fact ${i}` };
     },
 

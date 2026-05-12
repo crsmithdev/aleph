@@ -37,3 +37,5 @@ export {
 } from './envelope.js';
 
 export { makeNoopTemplate } from './templates/noop.js';
+export { buildTemplate, listTemplateIds } from './templates/registry.js';
+export type { TemplateOverrides } from './templates/registry.js';

@@ -27,6 +27,7 @@ import { resolve } from 'path';
 import { createLogStream, log } from './logger.js';
 import { WorkerSupervisor } from './worker-supervisor.js';
 import { startResearchLogger } from './research-logger.js';
+import { stopAllChildren } from './loop-supervisor.js';
 import { getSystemInfo } from './system-info.js';
 
 declare module 'fastify' {
@@ -181,6 +182,7 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
   });
 
   app.addHook('onClose', async () => {
+    await stopAllChildren();
     await supervisor.stop();
     sqlite.close();
   });

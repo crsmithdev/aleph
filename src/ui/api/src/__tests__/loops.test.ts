@@ -27,7 +27,7 @@ beforeAll(async () => {
   // research-logger writes to $HOME/.construct/research-logs — point HOME at tmp
   // so the test is hermetic.
   process.env.HOME = tmp;
-  const dbUrl = `file:${join(tmp, 'db.sqlite')}`;
+  const dbUrl = join(tmp, 'db.sqlite');
   app = await createApp({ dbUrl, workerCount: 0, skipStatic: true });
   await app.ready();
   await app.listen({ port: 0, host: '127.0.0.1' });
