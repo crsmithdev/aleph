@@ -10,7 +10,20 @@ Track status here as items land. Each item lists the trigger files / mockups / a
 
 ## 1. Document / Plan / Config tabs — mockup parity
 
-**Status:** ⏳ in progress (Agent A in worktree).
+**Status:** ✅ done — landed on main 2026-05-12 (commits `2096383` + `dbf861f`).
+
+### What shipped
+- **Document tab** — two-column layout with sticky References rail; meta strip with polished/raw pill, model, source count, regenerate button; numbered citations with per-source extraction-status pills.
+- **Plan tab** — summary cell strip (output_shape, branches, budget, milestones); branch cards with effective budget + override dot + "ran" pill; canon / branches / sources wrapped in shared Panel.
+- **Config tab** — Loop / Schedule / Envelope / Models panels using shared CfgRow; **Models** is new — surfaces `iteration_check_model` and `post_mortem_model` from `research_defaults` via `/api/research/defaults`.
+
+### Verification
+196/0 `bun test.ts`, 134/0 loop suite, UI build clean, 17/0 `e2e/activity-panels.test.ts` (no regression), 30/0 new `e2e/tab-parity.test.ts` gate.
+
+### Carveouts (deliberately deferred)
+- **Config models are global, not per-loop snapshot.** Engine reads them at startup from `research_defaults`; not echoed into the loop row. Phase 5's `SchedulePayload` collapse will fix this — at which point Config should read from the artifact.
+- **TOC column** on Document tab not added — polish prompt doesn't emit stable `<h2>` structure.
+- **Tree view of branches** on Plan tab not added — loops engine plans flat `branches[]`; Phase 5 `predecessor_id` would make a tree view meaningful.
 
 The Activity tab was the only one that got a mockup-driven rebuild this cycle. The other three live in `src/ui/web/src/pages/research/ResearchLoopDetail.tsx` (`DocumentTab`, `PlanTab`, `ConfigTab`) and were ported from the v0 page structurally — they have not been audited against `docs/mockups/research/query-detail.html` (or whichever mockup is canonical for the tab in question).
 
