@@ -1,40 +1,58 @@
 ---
 name: design-conform
-description: Apply a UI pattern from one file across peers — layout, component composition, state coverage, tokens. Use when the user points at a page or component and wants other UI surfaces to match — table formatting, page-header alignment, loading/empty/error states, typography, density, spacing rhythm. Triggers on phrases like "make these pages match", "align the layouts", "same loading state", "match the table headers", "make the components consistent", or "/design-conform".
+description: >
+  Apply fixes for peer-drift findings in UI surfaces — propagate a layout, component
+  composition, state coverage, token usage, or microcopy pattern from one reference
+  file to peer files. Takes SARIF findings (with `tag: peer-drift` from design-audit,
+  design-standards, or design-type) as input or runs an inline audit pass first.
+  Verifies with `gate("design")` (resolves to `bun run ui:smoke`). Triggers on
+  "make the pages match", "align the layouts", "same loading state", "match the
+  table headers", "make the components consistent", "apply this design pattern",
+  or `/design-conform`. Renamed `design-fix` in a later phase.
+verb: fix
+domain: design
+modes: [fix]
 ---
 
 # Design Conform
 
-Take a UI reference (a page, component, or recently-polished layout), find peer surfaces that should look like it, and align them. Ad-hoc — no registry, no design system spec file. The reference *is* the spec.
+Applies edits derived from `peer-drift` findings on UI surfaces. Each finding describes the canonical reference (`relatedLocations`) and the drifted peer (`locations`); this skill executes the propagation minimally and verifies with `gate("design")`.
+
+Pure leaf: no `Skill()` calls. The omnibus chains audit → approval → fix.
 
 ## When to use
 
-- User points at a polished page and asks to align peer pages.
-- User notices visual drift between similar surfaces (tables, detail pages, headers, empty states).
-- User finishes refining one screen and wants peer screens to match.
-- User invokes `/design-conform`.
+- After `design-audit` (or `design-standards` / `design-type`) produced `tag: peer-drift` findings and the user approved them.
+- User invokes `/design-conform` against a saved SARIF report, or `/fix design` via the omnibus.
+- User invokes `/design-conform <reference>` directly — runs an inline audit pass against that reference (no SARIF input), then asks for approval before applying.
 
 ## When NOT to use
 
-- Logic / behavior / data-flow drift — that's `code-conform`.
+- Logic/data drift — that's `code-conform`.
 - Full UI audit with no specific reference — that's `design-audit`.
-- Pure typography correctness (smart quotes, em dashes, character entities) — that's `design-type`.
+- Pure typography correctness (smart quotes, em dashes, character entities) — `design-type` handles it; this skill only propagates *patterns*, not individual character substitutions.
 - Single-page polish with no peers — just edit directly.
+- Net-new features (this skill propagates *patterns*, not roadmap items).
 
 ## Inputs
 
-The user gives some combination of:
-
-1. **Reference** (required) — a file path, component name, or description of recent work ("the way the new SettingsPage looks"). Always something concrete you can read and load in a browser.
-2. **Scope** (optional) — a directory, glob, or list of files. Defaults to auto-detected peers.
-3. **Notes** (optional) — what dimensions to focus on or ignore. Free-form trailing text.
-4. **Mode flags** (optional) — `--report` for audit-only (no fixes), `--all` to include legacy pages (default: only files Claude is touching this session).
+1. **Findings** (preferred path, omnibus dispatch) — SARIF v2.1.0 with `tag: peer-drift`. Each finding's `locations[0]` is the drifted peer; `relatedLocations[0]` is the canonical reference.
+2. **Reference** (required for direct invocation) — file path, component name, or description of recent work. Always something concrete you can read and load in a browser.
+3. **Scope** — inherited from the findings; for direct invocation defaults to auto-detected peers in the current session's diff.
+4. **Notes** (optional) — which dimensions to focus on or ignore.
+5. **Mode flags** (optional) — `--report` for audit-only (no fixes; emits SARIF and stops), `--all` to include legacy pages (default: only files in the current session's diff).
 
 ## Process
 
-### 1. Resolve the reference
+### 1. Resolve findings
 
-Read the reference file. If the user pointed at a section or recent edit, locate the exact lines. If the reference is ambiguous, ask before proceeding.
+If findings provided (omnibus path), parse the SARIF and group by reference (multiple peers may point at the same canonical surface). Otherwise run an inline audit pass:
+
+1. Read the reference file. If the user pointed at a section or recent edit, locate the exact lines. If the reference is ambiguous, ask before proceeding.
+2. Identify what's distinctive — see step 2.
+3. Find peers — see step 3.
+4. Compare and emit `peer-drift` findings — see step 4.
+5. Gate on user approval before applying.
 
 ### 2. Identify what's distinctive
 
@@ -48,7 +66,7 @@ Extract the *pattern* — not the whole file. Five dimensions:
 
 If the user gave notes ("only the header"), narrow to that. Otherwise default to *everything that looks like an intentional pattern* — skip incidental differences (specific text content, page-specific data shapes).
 
-For the full taxonomy with concrete sub-bullets, see `references/dimensions.md`.
+For the full taxonomy, see `references/dimensions.md`.
 
 ### 3. Find peers
 
@@ -64,13 +82,23 @@ If the user gave an explicit scope, use that as a filter on the candidates.
 
 **Always present the peer list before doing any work.** "Found 7 peers: A, B, C, D, E, F, G. Trim or proceed?" Let the user remove false positives.
 
-### 4. Compare and report
+### 4. Plan the edits
 
-For each peer, diff against the reference along the chosen dimensions. Rank by severity:
+For each peer + dimension, compute the minimal `Edit` to bring it in line with the reference. Group edits by file so the patch lands atomically per file.
+
+Rank severity:
 
 - **Major** — pattern is missing entirely (no `<PageHeader>`, missing empty state, hand-rolled `<h1>` instead of `<PageTitle>`)
 - **Minor** — pattern is present but degraded (font size off, padding inconsistent, header missing breadcrumb slot)
 - **Stylistic** — pattern matches but small surface differences (icon size, hover color)
+
+**Hard rules:**
+
+- **Never rewrite a file wholesale** unless the user explicitly authorizes it and the finding's `properties.fix` says "rewrite".
+- **Never enforce a dimension the user didn't ask for** when notes are present.
+- **Never trigger on legacy files in default mode.** Diff-only by default.
+- **No scope creep.** If a fix surfaces an adjacent issue, log it as a new finding for the next audit — don't fix it in this pass.
+- **Removed code goes completely.** Per Commandment 7: no `// removed` markers, no orphaned imports.
 
 ### 5. Reference-as-outlier check
 
@@ -80,19 +108,35 @@ Before proposing fixes, sanity-check: if the reference differs from a *majority*
 
 User can confirm "reference wins" (proceed) or flip the anchor.
 
-### 6. Apply fixes (after approval)
+### 6. Show the plan
 
-For each approved peer:
+Output the planned edits as a unified diff or per-file edit list. For omnibus-dispatched runs with prior approval, proceed directly to step 7. For direct invocation, stop and wait for the user.
 
-- Read the peer file
-- Compute the minimal `Edit` to bring it in line with the reference *for the chosen dimensions*
-- Use shared primitives over hand-rolled markup (replace inline `<h1 class="...">` with `<PageHeader>`)
-- Preserve domain content, page-specific data shapes, and incidental differences
-- **Do not** import unused things; **do not** add visual elements (icons, badges) the peer didn't already have
+### 7. Apply edits
 
-Verify with `bun run ui:smoke` (required — per project rule), then eyeball the affected route in the browser. See `references/verification.md` for the exact workflow.
+- Read each peer file.
+- Compute the minimal `Edit` to bring it in line with the reference *for the chosen dimensions*.
+- Use shared primitives over hand-rolled markup (replace inline `<h1 class="...">` with `<PageHeader>`).
+- Preserve domain content, page-specific data shapes, and incidental differences.
+- **Do not** import unused things; **do not** add visual elements (icons, badges) the peer didn't already have.
 
-### 7. Summarize
+### 8. Verify
+
+Run `gate("design")` from `VERIFICATION.md`. For Construct that resolves to `bun run ui:smoke` (loads every route in a real browser; asserts no render errors or 5xx). The skill MUST NOT claim done until the gate is green and the affected routes have been eyeballed.
+
+`bun run build` alone is not sufficient — per `feedback_ui_done_requires_page_load`, build pass ≠ feature works. For any rendering bug, drive a real browser and measure the element.
+
+For changes that touch shared types or API contracts, also run `gate("code")` (resolves to `bun test.ts`).
+
+If `gate("design")` fails:
+
+- Identify which peer change broke the render.
+- Either revert that change and surface a new finding, OR adjust the fix and re-run the gate.
+- Never silence a failing assertion to make the gate pass.
+
+See `references/verification.md` for the full verification workflow.
+
+### 9. Summarize
 
 One paragraph: which peers were aligned, which were skipped and why, and what (if anything) the user should still review by eye.
 
@@ -122,37 +166,58 @@ This prevents drowning the user in legacy drift. Use `--all` to include every pe
   → no fixed anchor; skill picks the cleanest, asks for confirmation
 
 /design-conform --report
-  → audit only, no fixes
+  → audit only, no fixes; emits SARIF with tag: peer-drift
 ```
 
-For three fully worked cases (with reference, peers, diff, and verification), see `examples/`:
+For three fully worked cases, see `examples/`:
 
-- `examples/table-consistency.md` — column typing, formatting, sortability across DataTable consumers
-- `examples/page-header-alignment.md` — title font/size/breadcrumb consistency across page headers
-- `examples/typography-floor.md` — minimum font size and consistent role mapping across the UI
+- `examples/table-consistency.md`
+- `examples/page-header-alignment.md`
+- `examples/typography-floor.md`
 
-## Guardrails
-
-- **Never propose fixes without showing the peer list first.** The user must be able to trim false positives before any edits.
-- **Never rewrite a file wholesale** unless the user explicitly approves it. Minimal edits.
-- **Never enforce a dimension the user didn't ask for** when notes are present.
-- **Never trigger on legacy files in default mode.** Diff-only by default.
-- **Surface intentional divergence.** If a peer has `// conform:exempt` or an obvious comment indicating intentional difference, skip it and note in the report.
-- **One reference, one pass.** Don't try to enforce multiple unrelated patterns in a single invocation — ask the user to run again with a different reference.
-- **`bun run ui:smoke` is non-negotiable.** Every UI conform pass must run it before claiming done. Build alone is not sufficient (per `feedback_ui_done_requires_page_load`).
-
-## Output format
+## Output
 
 ```
+[plan]
 Reference: <path>[:section]
 Pattern dimensions: <list, derived from reference + notes>
 Peers considered: <count>
 Drift: Major <n> / Minor <n> / Aligned <n>
 
-[detailed list]
+... edit list ...
+[/plan]
 
-Proposed edits: <count> across <count> files
-[show diffs, gate on approval]
+[applying]
+... per-edit lines ...
+[/applying]
 
-After fix: ui:smoke result + eyeballed routes
+[verify]
+scope:      <files edited>
+method:     bun run ui:smoke (gate("design"))
+assertions: every route renders, no 5xx, no console errors; eyeballed <list>
+[/verify]
+
+# Summary
+- <N> peers aligned
+- <M> files edited
+- <K> peers skipped (with reasons)
+- Manual review suggested: <files>
 ```
+
+## Guardrails
+
+- **Verification is non-negotiable.** Never claim done without a green `gate("design")` result in the turn's tool output. `bun run build` alone is insufficient.
+- **Approved findings only.** No fix without an approved finding (inline audit + user approval, or omnibus-passed approved SARIF).
+- **Never propose fixes without showing the peer list first.** The user must be able to trim false positives before any edits.
+- **Surface intentional divergence.** If a peer has `// conform:exempt` or an obvious comment indicating intentional difference, skip it and note in the report.
+- **One reference, one pass.** Don't try to enforce multiple unrelated patterns in a single invocation.
+- **No `Skill()` calls.** The omnibus dispatches; we apply.
+
+## Cross-references
+
+- Rule source: `src/rules/design/RULES.md`
+- Finding contract: `src/skills/_shared/finding.md`
+- Audit counterparts: `src/skills/design-audit/SKILL.md`, `src/skills/design-standards/SKILL.md`, `src/skills/design-type/SKILL.md`
+- Orchestrator: `src/skills/omnibus/SKILL.md`
+- Verification gate table: `VERIFICATION.md`
+- Progressive-disclosure detail: `references/dimensions.md`, `references/verification.md`, `examples/`
