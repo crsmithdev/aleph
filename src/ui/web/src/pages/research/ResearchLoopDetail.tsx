@@ -943,21 +943,23 @@ function summarizeDecision(d: DecisionPayload): string {
 }
 
 function findLatestRenderPayload(artifacts: Artifact[]): RenderPayload | null {
-  let best: { ts: string; payload: RenderPayload } | null = null;
+  // SQLite created_at is second-precision; cycles that finalize within the
+  // same second share a timestamp. The API returns artifacts in insertion
+  // order (ORDER BY created_at, with ROWID tie-break), so the LAST eligible
+  // entry in this array is the freshest render — pick by walking forward
+  // and overwriting `best` unconditionally, NOT by strict-greater timestamp.
+  let best: RenderPayload | null = null;
   for (const a of artifacts) {
     if (a.kind === 'render') {
-      const p = a.payload as unknown as RenderPayload;
-      if (!best || a.created_at > best.ts) best = { ts: a.created_at, payload: p };
+      best = a.payload as unknown as RenderPayload;
       continue;
     }
     if (a.kind === 'cycle_output') {
       const render = (a.payload as { render?: RenderPayload }).render;
-      if (render && Array.isArray(render.findings)) {
-        if (!best || a.created_at > best.ts) best = { ts: a.created_at, payload: render };
-      }
+      if (render && Array.isArray(render.findings)) best = render;
     }
   }
-  return best?.payload ?? null;
+  return best;
 }
 
 const EVENT_FILTERS: Array<'all' | StreamFrame['type']> = ['all', 'loop', 'cycle', 'cycle_step', 'artifact', 'milestone', 'decision'];
