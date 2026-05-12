@@ -82,6 +82,7 @@ Each item below could plausibly be in v1 — they're called out so the boundary 
 | Pre-flight clarification flow | The InferredPanel already does most of what this is for. Promote only if needed. | maybe v2, maybe never |
 | Recursive sub-loops via `parent_loop_id` | Opt-in per template. Add when a template demands it. | v4 |
 | Code-dev / image-iteration / long-form writing templates | After the engine is proven stable on research + monitor. | v4 |
+| Related-runs panel, cross-run concept/source indexes, knowledge graph view | Cross-run features intentionally deferred to the end — per-run engine must be solid first. | v5 |
 | LangGraph / MCP adoption | Skip entirely. Bespoke is right for Construct. | never |
 
 ---
@@ -257,6 +258,37 @@ Each new template is roughly 200–500 LOC under the four-hook contract. No engi
 
 ---
 
+## v5 — Cross-run knowledge layer (deferred to the end)
+
+Cross-run features intentionally land after every per-run feature is solid. The per-run engine has to be trustworthy before relationships *between* runs are useful — surfacing "related runs" on top of a flaky engine surfaces flaky relatedness. Three layered features, smallest first.
+
+**v5.1 — Related-runs panel on the loop-detail page.**
+- At session create, run the existing concept extraction (already in `services/concepts.ts`), compute Jaccard overlap against the concept sets of the N most recent prior queries, surface the top 3–5 most-related as links on the loop-detail page.
+- Cheap (~150 LOC) because it reuses extraction that already runs per-finding. Just needs a cross-session join and a small UI panel.
+- Does *not* auto-merge prior context into the new run; it's purely a navigational link.
+
+**v5.2 — Cross-run concept and source indexes.**
+- New tables (or materialized views) keyed by `concept` → `[query_ids]` and `source_url` → `[query_ids]`. Updated on session completion.
+- Powers richer relatedness — "queries that share this exact source," "queries about this concept" — without indexing the underlying findings text.
+- Enables the v5.3 graph view; on its own, also useful for backend telemetry and post-hoc analytics.
+
+**v5.3 — Knowledge graph view.**
+- New top-level sidebar entry alongside Research / Monitors / Telemetry.
+- Visual graph: query nodes + concept nodes + source nodes, edges = "shares concept" / "cites source" / "directly references."
+- Explorable, filterable. The graph data is the v5.2 indexes rendered.
+- Implementation note: this is a UI-heavy feature. The data layer (v5.2) is the load-bearing part; the visualization is interchangeable.
+
+**Cross-session continuity remains opt-in.** The v5 features surface related prior runs to the user as navigation; they do not auto-merge prior context into the new run's prompt. Carrying prior context into a new run is a separate opt-in (still deferred — no plan element pushes for it).
+
+### v5 acceptance criteria
+
+- From any loop-detail page, the user sees up to 5 related prior queries based on shared concepts.
+- A concept page (or filter) shows every query that mentioned that concept; a source page shows every query that cited that URL.
+- The knowledge graph view loads in under 2 s for the user's full query history (target — adjust after measurement).
+- v5 features add zero cost to the per-run pipeline (cross-run indexing runs at session completion, not during the loop).
+
+---
+
 ## Risk register
 
 The three things to watch across v1.
@@ -293,7 +325,7 @@ Worth restating since the comparison doc surveyed them and decided no:
 
 **v1 ships:** loop engine + 4-hook template interface · research template · monitor template · cycle ledger · envelope · milestones · child-process per loop · output-shape enforcement · adaptive planner (replaces shape × topic lookup; URL-grounded; emits typed `LoopSchedule`) · **plan-as-artifact rendered as an explorable Schedule view in the UI** · **live Activity view as a first-class surface (real-time event/cycle/decision stream)** · per-role model selection · InferredPanel (preserved + `output_shape` editor added) · envelope presets · mockable LLM boundary · typed failure-mode identifiers · cost-as-observable · event-triggered background work · two real-LLM e2e tests.
 
-**v1 does NOT ship:** Schedule view *editing* (read-only in v1; editing comes in v2) · pause/resume control · directive (nudge) channel · adaptive stop · per-cycle redundancy detector · narrative post-mortem content · self-healing remediation · forkable runs · source-type specialized processors · context compression · charts in renderer · heavy-modality cycles · pre-flight clarification flow · recursive sub-loops · new templates (code/writing/image).
+**v1 does NOT ship:** Schedule view *editing* (read-only in v1; editing comes in v2) · pause/resume control · directive (nudge) channel · adaptive stop · per-cycle redundancy detector · narrative post-mortem content · self-healing remediation · forkable runs · source-type specialized processors · context compression · charts in renderer · heavy-modality cycles · pre-flight clarification flow · recursive sub-loops · new templates (code/writing/image) · cross-run features (related-runs panel, concept/source indexes, knowledge graph view — all v5).
 
 ### Roadmap
 
@@ -303,5 +335,6 @@ Worth restating since the comparison doc surveyed them and decided no:
 | **v2** | Stabilize and steer | **Strong mid-run steerability** (pause + edit + free-form directive channel), adaptive stop, redundancy detector, narrative post-mortems, planner prompt tuning, self-healing layer, forkable runs. | v1 plan-as-artifact + Schedule view + typed failure modes |
 | **v3** | Extend | Source-type processors, context compression at milestones, charts in renderer, heavy-modality cycles, cross-template evaluator. | v2 stability |
 | **v4** | New templates | Code-dev, long-form writing, image-iteration. Recursive sub-loops if needed. | v3 surface extensions |
+| **v5** | Cross-run knowledge layer | Related-runs panel, cross-run concept and source indexes, knowledge graph view. Deferred to the end — per-run engine must be solid first. | per-run features stable across v1–v3 |
 
-v1 is the cutover. v2 finishes what v1 lays down. v3 grows the surface. v4 proves the abstraction across genuinely different work shapes.
+v1 is the cutover. v2 finishes what v1 lays down. v3 grows the surface. v4 proves the abstraction across genuinely different work shapes. v5 lifts the system from per-run to cross-run, once per-run is solid enough to be worth connecting.

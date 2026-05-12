@@ -270,15 +270,17 @@ How the system stores cycles, artifacts, and history.
 | Current system | Relational database (SQLite) with typed tables for threads, findings, sources, post-mortems |
 | Current plan | Consolidated relational schema: loops, cycles, artifacts, cycle ledger, milestones |
 
-**The current system is the only comparator with a real relational query layer.** Every other system stores state as files, in-memory dicts, or framework-specific state objects. The advantage is queryability: "find me every query that mentioned topic X" is trivial; "did this run produce findings similar to a prior run" is trivial. None of the other comparators can answer those without a full scan.
+**The current system is the only comparator with a real relational store.** Every other system stores state as files, in-memory dicts, or framework-specific state objects. The value of the relational store, however, is *not* ad-hoc text-searchability of accumulated runs ("find every query that mentioned X" is not a needed operation). The value is **structural linkability**: relations between queries, concepts (already extracted per-run via `services/concepts.ts`), and sources are explicit foreign keys, not full-text matches. That makes a cross-run knowledge layer — surfacing related prior runs to the user, exploring connections through shared concepts — cheap to build on top.
 
-**Impact on observed failures.** F5 (post-mortem misses obvious failures) is the most direct target. A relational store lets the post-mortem cross-reference accumulated history — has this query been re-run? Did prior runs produce different artifacts? — which is exactly what's missing when the system marks a clearly-failed run as "pass." F3 (silent re-submission) is detectable only with cross-session memory; the current schema can detect it, but no current hook acts on it.
+**Impact on observed failures.** F3 (silent re-submission) is detectable through the relational layer: a small concept-overlap query at session create can surface "we have 3 prior runs with overlapping concepts" before the user re-submits the same thing for the third time. F5 (post-mortem misses) benefits more weakly — the introspection LLM call described in §11 doesn't need cross-session SQL to work; it just needs the run's own artifacts and a re-read of the prompt.
 
-The trade-off most comparators take (file-based or state-object storage) trades query power for flexibility. For a tool that benefits from accumulating learning over many runs, the trade goes the other way.
+The trade-off most comparators take (file-based or state-object storage) trades structural linkability for setup simplicity. For a tool that accumulates many runs over time, the trade goes the other way.
 
-**For the system.** Relational store, with payloads typed as opaque JSON only at the artifact-content level. Templates own artifact payloads; the engine never introspects them. The schema is small and stable (loops, cycles, artifacts, cycle ledger, milestones, plans). The query layer is essential to making cross-session reasoning cheap.
+**For the system.** Relational store, with payloads typed as opaque JSON only at the artifact-content level. Templates own artifact payloads; the engine never introspects them. The schema is small and stable (loops, cycles, artifacts, cycle ledger, milestones, plans). The store's value is structural — concept and source rows link across queries through foreign keys — not text-queryability of content. **No full-text index over findings is required.**
 
-Cross-session continuity (the EDR pattern) should be available but off by default: a query can opt into prior context from related runs, but doesn't by default — most queries are not continuations.
+**Cross-run knowledge layer is deferred to the end of the roadmap.** Three layered features, smallest first: (1) a "related runs" panel on the loop-detail page based on concept overlap, (2) cross-run concept and source indexes, (3) a knowledge graph view as a top-level surface. All three reuse the existing per-run concept extraction; the per-run engine just needs to be trustworthy first. See `research-engine-build-plan.md` §v5.
+
+**Cross-session continuity remains opt-in and distinct.** The cross-run layer surfaces related prior runs *as navigation* (clickable links, graph nodes). It does **not** auto-merge prior context into the new run's prompt. Carrying prior context into a new run's working memory is a separate opt-in that no plan element currently pushes for — most queries are not continuations.
 
 ---
 
@@ -436,7 +438,7 @@ A research system characterized by:
 
 - *Output-shape enforcement at the renderer*. Final-render gate rejects "done" if the shape isn't satisfied. Multimodal output is reserved for templates that need it.
 
-- *Relational state model* with opaque artifact payloads. Cross-session continuity is opt-in, off by default.
+- *Relational state model* with opaque artifact payloads. Value is *structural linkability* (concept and source foreign keys across queries), not text-search queryability — no full-text index required. A cross-run knowledge layer (related-runs panel, concept/source indexes, knowledge graph view) is deferred to the end of the roadmap (v5). Cross-session *context-carrying* into a new run is a separate opt-in, off by default.
 
 - *Subprocess-per-loop process model*, cycle-ledger crash recovery, no worker pool. OS schedules.
 
