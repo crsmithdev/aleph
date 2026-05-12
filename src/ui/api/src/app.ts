@@ -109,7 +109,7 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
 
   // Start background research event logger (only in non-test environments)
   if (opts?.dbUrl !== ':memory:') {
-    startResearchLogger(sqlite);
+    startResearchLogger();
   }
 
   await app.register(cors, {
