@@ -49,6 +49,10 @@
       "keywords": ["code fix", "fix the findings", "apply the audit fixes", "apply the fixes", "/fix.{0,10}(code|findings)/", "/code.{0,10}fix/"]
     },
     {
+      "skill": "omnibus",
+      "keywords": ["/audit", "/fix", "/suggest", "omnibus", "audit everything", "audit all", "review everything", "check all the things", "fix everything", "fix the findings", "full audit", "full review", "comprehensive audit", "audit the codebase", "review the codebase", "/(audit|fix|suggest).{0,10}(code|design|docs|skills|hooks|agents|config|security|everything|all)/"]
+    },
+    {
       "skill": "code-refactor",
       "keywords": ["refactor", "reorganize files", "restructure code", "move files", "update imports", "break down this file", "split this module", "break it up", "too big", "reorganize", "restructure", "/break.{0,15}(up|apart|out|down)/", "/(too|really).{0,10}(big|long|monolithic)/"]
     },
