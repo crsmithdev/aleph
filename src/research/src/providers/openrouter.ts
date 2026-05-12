@@ -97,54 +97,112 @@ export class OpenRouterProvider implements LLMProvider {
     };
   }
 
+  /**
+   * Single chat-completion call with retry-with-exponential-backoff on
+   * transient upstream failures. Retries on 429 (rate-limit), 502/503/504
+   * (upstream errors), and network aborts. Honors a `Retry-After` header
+   * when the server provides one. Errors persist to stderr so the loop's
+   * supervisor log shows the retry sequence; previously a single 429
+   * marked the whole loop as failed.
+   *
+   *   - max attempts: 4 (1 initial + 3 retries)
+   *   - backoff: 1s, 2s, 4s with ±20% jitter; capped by Retry-After if larger
+   *   - per-attempt timeout: 120s (existing)
+   *
+   * The bumpUsage cost-attribution at the caller still fires only for the
+   * eventual success — retries don't double-bill since they share the same
+   * request body.
+   */
   private async fetchWithRetry(
     model: string,
     messages: Array<{ role: string; content: string }>,
     maxTokens: number,
     plugins?: Array<{ id: string; max_results?: number }>
   ): Promise<OpenRouterResponse> {
-    const abort = new AbortController();
-    const timeout = setTimeout(() => abort.abort(), 120_000);
-    let res: Response;
-    try {
-      res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
-        method: 'POST',
-        signal: abort.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.config.apiKey}`,
-          ...(this.config.siteUrl ? { 'HTTP-Referer': this.config.siteUrl } : {}),
-          ...(this.config.siteName ? { 'X-Title': this.config.siteName } : {}),
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          max_tokens: maxTokens,
-          ...(plugins ? { plugins } : {}),
-        }),
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
+    const TRANSIENT = new Set([429, 502, 503, 504]);
+    const MAX_ATTEMPTS = 4;
+    // Backoff base is overridable so tests don't wait the production 1s+2s+4s.
+    // Production default is 1000ms (→ ~7s of waiting before final attempt fails);
+    // tests pass `OPENROUTER_RETRY_BACKOFF_BASE_MS=1` to shrink it to ~7ms total.
+    const BACKOFF_BASE_MS = Number(process.env.OPENROUTER_RETRY_BACKOFF_BASE_MS) || 1000;
+    let lastErr: Error | null = null;
 
-    if (!res.ok) {
-      const body = await res.text();
-      // Try to surface the upstream error message clearly (502 wraps upstream 400/5xx)
-      if (res.status === 502) {
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const abort = new AbortController();
+      const timeout = setTimeout(() => abort.abort(), 120_000);
+      let res: Response;
+      try {
         try {
-          const parsed = JSON.parse(body);
-          const upstream = parsed?.error?.message ?? body;
-          throw new Error(`OpenRouter 502 (upstream error): ${upstream}`);
-        } catch { /* fall through to generic */ }
-      }
-      throw new Error(`OpenRouter ${res.status}: ${body}`);
-    }
+          res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+            method: 'POST',
+            signal: abort.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.config.apiKey}`,
+              ...(this.config.siteUrl ? { 'HTTP-Referer': this.config.siteUrl } : {}),
+              ...(this.config.siteName ? { 'X-Title': this.config.siteName } : {}),
+            },
+            body: JSON.stringify({
+              model,
+              messages,
+              max_tokens: maxTokens,
+              ...(plugins ? { plugins } : {}),
+            }),
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
 
-    const data = await res.json() as OpenRouterResponse;
-    if (!data.choices || !Array.isArray(data.choices)) {
-      throw new Error(`OpenRouter bad response (no choices): ${JSON.stringify(data).slice(0, 300)}`);
+        if (res.ok) {
+          const data = await res.json() as OpenRouterResponse;
+          if (!data.choices || !Array.isArray(data.choices)) {
+            throw new Error(`OpenRouter bad response (no choices): ${JSON.stringify(data).slice(0, 300)}`);
+          }
+          return data;
+        }
+
+        // Non-2xx: decide retry vs. fail. For transient codes we loop; for
+        // the rest we throw immediately so callers see the real error.
+        const body = await res.text();
+        let err: Error;
+        if (res.status === 502) {
+          try {
+            const parsed = JSON.parse(body);
+            err = new Error(`OpenRouter 502 (upstream error): ${parsed?.error?.message ?? body}`);
+          } catch {
+            err = new Error(`OpenRouter ${res.status}: ${body}`);
+          }
+        } else {
+          err = new Error(`OpenRouter ${res.status}: ${body}`);
+        }
+
+        if (!TRANSIENT.has(res.status) || attempt === MAX_ATTEMPTS) {
+          throw err;
+        }
+
+        const retryAfterSec = Number(res.headers.get('retry-after'));
+        const baseMs = BACKOFF_BASE_MS * 2 ** (attempt - 1);
+        const jitter = baseMs * (0.8 + Math.random() * 0.4);
+        const waitMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
+          ? Math.max(retryAfterSec * 1000, jitter)
+          : jitter;
+        process.stderr.write(`[openrouter] ${model} attempt ${attempt}/${MAX_ATTEMPTS} got ${res.status}; retrying in ${Math.round(waitMs)}ms\n`);
+        lastErr = err;
+        await new Promise(r => setTimeout(r, waitMs));
+      } catch (err) {
+        // Fetch-level failures (abort, DNS, network) are retryable.
+        const e = err as Error;
+        const isAbort = e.name === 'AbortError' || /aborted/i.test(e.message);
+        const isNetwork = isAbort || /fetch failed|ECONN|ETIMEDOUT|ENOTFOUND/i.test(e.message);
+        if (!isNetwork || attempt === MAX_ATTEMPTS) throw err;
+        const baseMs = BACKOFF_BASE_MS * 2 ** (attempt - 1);
+        const waitMs = baseMs * (0.8 + Math.random() * 0.4);
+        process.stderr.write(`[openrouter] ${model} attempt ${attempt}/${MAX_ATTEMPTS} network err "${e.message}"; retrying in ${Math.round(waitMs)}ms\n`);
+        lastErr = e;
+        await new Promise(r => setTimeout(r, waitMs));
+      }
     }
-    return data;
+    throw lastErr ?? new Error('OpenRouter retry loop exited without success or error');
   }
 }
 

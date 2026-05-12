@@ -270,7 +270,15 @@ describe('getQueuedThreadsForNewJobs: retry_after filtering', () => {
 
 // ─── OpenRouterProvider model rotation ──────────────────────────────────────
 
-describe('OpenRouterProvider: fail-fast on errors', () => {
+describe('OpenRouterProvider: retry policy', () => {
+  beforeEach(() => {
+    // Shrink the production 1s+2s+4s backoff so tests run in ~ms not seconds.
+    // The retry math is the same; only the absolute wait shrinks.
+    process.env.OPENROUTER_RETRY_BACKOFF_BASE_MS = '1';
+  });
+  afterEach(() => {
+    delete process.env.OPENROUTER_RETRY_BACKOFF_BASE_MS;
+  });
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
@@ -300,19 +308,47 @@ describe('OpenRouterProvider: fail-fast on errors', () => {
     expect(result.text).toBe('answer');
   });
 
-  test('throws immediately on 429', async () => {
+  test('retries 429 up to MAX_ATTEMPTS=4 then throws', async () => {
     let calls = 0;
     globalThis.fetch = async () => { calls++; return makeErrorResponse(429, 'rate limited'); };
     const provider = new OpenRouterProvider({ apiKey: 'test', models: ['model-a'] });
     await expect(provider.complete('model-a', 'prompt', 100)).rejects.toThrow('429');
-    expect(calls).toBe(1);
+    expect(calls).toBe(4);
   });
 
-  test('throws immediately on 500', async () => {
+  test('retries 502/503/504 the same way', async () => {
+    let calls = 0;
+    globalThis.fetch = async () => { calls++; return makeErrorResponse(503, 'service unavailable'); };
+    const provider = new OpenRouterProvider({ apiKey: 'test', models: ['model-a'] });
+    await expect(provider.complete('model-a', 'prompt', 100)).rejects.toThrow('503');
+    expect(calls).toBe(4);
+  });
+
+  test('429 → 200 succeeds on retry', async () => {
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls++;
+      return calls < 3 ? makeErrorResponse(429, 'rate limited') : makeOkResponse('model-a');
+    };
+    const provider = new OpenRouterProvider({ apiKey: 'test', models: ['model-a'] });
+    const result = await provider.complete('model-a', 'prompt', 100);
+    expect(result.text).toBe('answer');
+    expect(calls).toBe(3);
+  });
+
+  test('throws immediately on 500 (not in transient set)', async () => {
     let calls = 0;
     globalThis.fetch = async () => { calls++; return makeErrorResponse(500, 'internal server error'); };
     const provider = new OpenRouterProvider({ apiKey: 'test', models: ['model-a'] });
     await expect(provider.complete('model-a', 'prompt', 100)).rejects.toThrow('500');
+    expect(calls).toBe(1);
+  });
+
+  test('throws immediately on 401 (not retryable)', async () => {
+    let calls = 0;
+    globalThis.fetch = async () => { calls++; return makeErrorResponse(401, 'unauthorized'); };
+    const provider = new OpenRouterProvider({ apiKey: 'test', models: ['model-a'] });
+    await expect(provider.complete('model-a', 'prompt', 100)).rejects.toThrow('401');
     expect(calls).toBe(1);
   });
 });
