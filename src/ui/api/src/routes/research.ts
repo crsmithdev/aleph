@@ -1,19 +1,17 @@
 /**
- * Research routes — Phase 7 slimmed surface.
+ * Research routes — config + defaults only.
  *
- * Only the two endpoints the surviving UI still consumes:
- *   - GET / PATCH /api/research/config   → provider config (file-backed at
- *                                          ~/.construct/research-config.json,
- *                                          plus mirrored API keys on env vars
- *                                          so the loops engine + provider
- *                                          modules pick them up at boot).
- *   - GET / PUT  /api/research/defaults  → persisted SessionConfig defaults
- *   - POST /api/research/defaults/reset
+ *   - GET / PATCH /api/research/config        → provider config (file-backed
+ *                                               at ~/.construct/research-config.json,
+ *                                               plus mirrored API keys on env
+ *                                               vars so the loops engine and
+ *                                               provider modules pick them up
+ *                                               at boot).
+ *   - GET / PUT   /api/research/defaults      → persisted SessionConfig defaults.
+ *   - POST        /api/research/defaults/reset
  *
- * Everything else (queries / threads / findings / jobs / concepts / sources /
- * workers / monitors / metrics / hooks / agent endpoints) lived in the v0
- * engine and was removed when the loops engine took over. See `/api/loops/*`
- * for the loop-engine HTTP surface.
+ * Run / step / finding / thread / job / concept / source / monitor endpoints
+ * live on `/api/loops/*` — see `routes/loops.ts`.
  */
 import type { FastifyPluginAsync } from 'fastify';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
@@ -71,10 +69,9 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     return {
       llm_provider: cfg.llm_provider ?? (process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'openrouter'),
       model: cfg.model ?? '',
-      // recent_models was sourced from research_steps which is gone with Phase 7.
-      // The Providers page renders the field as an autocomplete on manual entry —
-      // empty is a fine starting state until we instrument a model column on
-      // cycle_ledger or similar.
+      // Autocomplete suggestions on the Providers page. Empty until we
+      // surface a model column on `cycle_ledger` or similar; the UI handles
+      // [] fine (manual entry).
       recent_models: [],
       search_provider: cfg.search_provider ?? (process.env.TAVILY_API_KEY ? 'tavily' : process.env.BRAVE_SEARCH_API_KEY ? 'brave' : 'duckduckgo'),
       fulltext_provider: cfg.fulltext_provider ?? (process.env.JINA_API_KEY ? 'jina' : 'local'),

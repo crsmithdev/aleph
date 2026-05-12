@@ -1,27 +1,26 @@
 /**
- * Research hooks — the slimmed-down post-Phase-7 surface.
+ * Research hooks — the data layer for the History / Landing / Config pages.
  *
- * The loops engine replaced every legacy hook that touched research_queries
- * / research_findings / research_threads / research_jobs etc. What's left
- * here is the surface the surviving UI still consumes:
- *
- *   - useResearchQueries → adapts /api/loops into the legacy ResearchQuery
- *     shape so the History/Landing rendering still works unchanged.
- *   - useResearchStats   → /api/loops/stats; KPI strip on Landing.
- *   - useProviderConfig / useUpdateProviderConfig → /research/config (the
- *     two endpoints that survive Phase 7 deletion of routes/research.ts).
+ *   - useResearchQueries → `/api/loops`, adapted to the `ResearchQuery` shape
+ *     the History/Landing pages render against (every loop-irrelevant field
+ *     surfaces as null; the table renders em-dashes).
+ *   - useResearchStats   → `/api/loops/stats`; powers the KPI strip on Landing.
+ *   - useProviderConfig / useUpdateProviderConfig → `/api/research/config`.
  *   - useResearchDefaults / useUpdateResearchDefaults / useResetResearchDefaults
- *     → /research/defaults (likewise survives).
+ *     → `/api/research/defaults`.
  *
- * The legacy types (PromptHints, ShapeAnalysis, QueryStats, etc.) stay
- * because ResearchQuery embeds them; loops adapt to null-valued versions
- * so the History table's columns gracefully render dashes.
+ * `QueryStats`, `PromptHints`, `ShapeAnalysis`, `TopicClusterAnalysis` are
+ * never populated by the loops adapter — they're typed nulls so the History
+ * table's shape/topic/findings/cost/verdict columns can render dashes without
+ * per-row branching. Folding the History/Landing pages onto a native loops
+ * shape is a future migration; the adapter is the seam that keeps it from
+ * blocking everything else.
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
-// ---- ResearchQuery legacy shape (kept so History/Landing render unchanged) ----
+// ---- ResearchQuery — UI render shape for History/Landing rows ----
 
 export interface QueryStats {
   findings: number;
@@ -132,7 +131,7 @@ export function useResearchStats(range: string, granularity: string) {
   });
 }
 
-// ---- Provider config (surviving /research/config endpoint) ----------------
+// ---- Provider config (/api/research/config) -----------------------------
 
 export interface ProviderKeyInfo {
   set: boolean;
@@ -176,7 +175,7 @@ export function useUpdateProviderConfig() {
   });
 }
 
-// ---- Research defaults (surviving /research/defaults endpoint) -----------
+// ---- Research defaults (/api/research/defaults) -------------------------
 
 export interface ResearchDefaults {
   budget_daily_usd: number;
@@ -232,7 +231,7 @@ export function useResetResearchDefaults() {
   });
 }
 
-// ---- Queries (loops-only, adapted to ResearchQuery shape) ----------------
+// ---- Queries (loops adapted to ResearchQuery shape) ---------------------
 
 interface LoopRow {
   id: string;
@@ -285,11 +284,10 @@ function loopAsQuery(loop: LoopRow): ResearchQuery {
 }
 
 export function useResearchQueries(_status?: string) {
-  // Loops are the only research backend post-Phase 7. The `_status` argument
-  // is preserved on the hook signature so existing call sites still type-check
+  // `_status` is accepted on the signature so old call sites still type-check
   // but is currently ignored — the loops endpoint doesn't support status
-  // filtering and the in-memory filter the surviving UI does is fine for the
-  // small loop counts we have.
+  // filtering and the in-memory filter the UI does is fine for the small
+  // loop counts we have.
   return useQuery({
     queryKey: ['research-queries'],
     queryFn: async () => {

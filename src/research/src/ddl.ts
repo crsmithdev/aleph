@@ -2,19 +2,17 @@ import type { Sqlite } from '@construct/data';
 import { seedDefaults } from './services/defaults.js';
 
 /**
- * DDL for the @construct/research package — post-Phase 7.
+ * DDL for the @construct/research package.
  *
- * Three surviving tables:
- *   - `research_defaults`  — persisted SessionConfig (config store, not v0
- *                            work-tracking; backs /api/research/defaults).
- *   - `loops` / `cycles` / `artifacts` / `cycle_ledger` / `milestones` — the
+ *   - `research_defaults`  — persisted SessionConfig (backs `/api/research/defaults`).
+ *   - `loops` / `cycles` / `artifacts` / `cycle_ledger` / `milestones`  — the
  *                            loop engine's full table set.
  *
- * Every other research_* table from the v0 engine (queries, threads, findings,
- * steps, plans, jobs, sources, concepts, monitors, iteration_checks, post_mortems,
- * perturbation_state, …) is dropped by `dropLegacyTables()` below on first boot
- * after the Phase 7 cutover. The drop is idempotent — re-running on an already-
- * clean DB is a no-op.
+ * `dropLegacyTables()` below runs on every boot to drop the pre-loops engine's
+ * tables (queries, threads, findings, steps, plans, jobs, sources, concepts,
+ * monitors, iteration_checks, post_mortems, perturbation_state, …). The drop
+ * is idempotent — a no-op on already-clean DBs — and exists as a safety net
+ * for dev installs that still carry the old schema.
  */
 export function applyResearchDDL(sqlite: Sqlite): void {
   dropLegacyTables(sqlite);
@@ -90,9 +88,9 @@ export function applyResearchDDL(sqlite: Sqlite): void {
 }
 
 /**
- * Idempotent drop of every legacy v0 research table. Runs on every boot —
+ * Idempotent drop of every pre-loops research table. Runs on every boot —
  * a no-op on already-clean DBs (CI, fresh installs), drops the lot on dev
- * DBs that still carry the v0 schema.
+ * DBs that still carry the old schema.
  *
  * Order matters: drop child tables before parents to avoid FK cascade
  * surprises. PRAGMA foreign_keys = OFF makes the order moot but explicit

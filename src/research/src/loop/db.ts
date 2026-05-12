@@ -18,12 +18,11 @@ import type {
 // ---- Loops -------------------------------------------------------------------
 
 /**
- * Loop IDs are slugs (e.g. `white-mist-mist-4e8a`) produced by the same
- * `generateId()` the legacy research-queries pipeline uses. This keeps the
- * `/research/:id` URL scheme consistent across both systems — a `:id` segment
- * resolves to either a loop or a research_queries row by trying both tables.
- * Cycles, artifacts, and milestones stay on UUIDs — they're internal references
- * that never appear in URLs.
+ * Loop IDs are slugs (e.g. `white-mist-mist-4e8a`) produced by `generateId()`,
+ * the same memorable-id helper the older research-queries pipeline used. The
+ * shared slug scheme means a `/research/:id` URL stays meaningful across the
+ * transition. Cycles, artifacts, and milestones stay on UUIDs — internal
+ * references that never appear in URLs.
  */
 export function createLoop(
   sqlite: Sqlite,
@@ -37,10 +36,9 @@ export function createLoop(
 }
 
 /**
- * List all loops, newest-first. Backs `GET /api/loops` so the
- * `/research/history` page can show new-engine runs alongside legacy
- * research_queries. No pagination yet — Phase 6 / Phase 7 will collapse
- * the two lists into one paginated table.
+ * List all loops, newest-first. Backs `GET /api/loops`; the `/research/history`
+ * page renders these rows via the `loopAsQuery` adapter. No pagination yet —
+ * the page filters in-memory and that's fine for the current loop counts.
  */
 export function listLoops(sqlite: Sqlite, opts: { limit?: number } = {}): Loop[] {
   const limit = opts.limit ?? 200;

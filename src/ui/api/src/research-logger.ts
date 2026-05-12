@@ -1,5 +1,5 @@
 /**
- * Background research event logger — loop-engine only post-Phase 7.
+ * Background research event logger — loop-engine only.
  *
  * Subscribes to the global event bus (`onResearchEvent`) and writes each
  * event as one line to `~/.construct/research-logs/{session_id}.ndjson`.

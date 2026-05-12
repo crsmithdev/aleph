@@ -22,10 +22,8 @@
  *     can re-fire the polish on demand — useful after a milestone re-plan
  *     adds new branches, or just to retry with a different model later.
  *
- * The prompt is ported verbatim from the legacy `generateDocumentLegacy`
- * (engine.ts:2704) so the article style stays consistent across the engine
- * cutover; the only difference is the source-of-truth shifted from
- * `research_findings` rows to the `render` artifact's findings + sources.
+ * The polish prompt reads from the latest `render` artifact's findings +
+ * sources — the single source of truth for what got synthesised this run.
  */
 import type { Sqlite } from '@construct/data';
 import { bumpUsage, createArtifact, listArtifacts } from './db.js';
@@ -101,10 +99,9 @@ function findLatestRender(artifacts: Artifact[]): RenderPayload | null {
 }
 
 /**
- * Build the encyclopedia-editor prompt. Mirrors `generateDocumentLegacy`'s
- * prompt structure so article style stays consistent across the cutover.
- * The source material is laid out as `[Cycle N: <query>]\n<text>` blocks,
- * paralleling the legacy `[Thread: <q>]` format.
+ * Build the encyclopedia-editor prompt. Source material is laid out as
+ * `[Cycle N: <query>]\n<text>` blocks — one per cycle, separated by
+ * dividers, followed by a numbered source list for citations.
  */
 function buildPolishPrompt(prompt: string, render: RenderPayload): string {
   const material = render.findings

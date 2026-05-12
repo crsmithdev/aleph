@@ -36,10 +36,7 @@ interface StartBody {
 
 export const loopRoutes: FastifyPluginAsync = async (app) => {
   /**
-   * List loops, newest-first. Backs `/research/history`'s unified table —
-   * the page merges this list with `/api/research/queries` so a user sees
-   * every research run regardless of which engine produced it. Phase 7
-   * removes the legacy queries endpoint and this becomes the sole source.
+   * List loops, newest-first. Sole source for the `/research/history` table.
    */
   app.get<{ Querystring: { limit?: string } }>('/', async (req) => {
     const raw = Number(req.query.limit);
@@ -54,9 +51,9 @@ export const loopRoutes: FastifyPluginAsync = async (app) => {
    * envelope_consumed.cost_usd, total findings = COUNT(cycle_output artifacts),
    * grouped by day. Honors `?range=7d|30d|90d|all` for the window.
    *
-   * Replaces the legacy `/api/research/stats` which read from research_queries
-   * et al; the legacy pass/flag/halt verdict aggregates are dropped (no
-   * equivalent in the new system yet).
+   * `passRate / flagRate / haltRate` ship as zero — no loop-side equivalent
+   * of the old pass/flag/halt verdict yet; the History summary strip renders
+   * them as dashes.
    */
   app.get<{ Querystring: { range?: string } }>('/stats', async (req) => {
     const range = req.query.range ?? '30d';
