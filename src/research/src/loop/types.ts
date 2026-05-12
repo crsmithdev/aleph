@@ -268,13 +268,61 @@ export interface HookResult<T> {
 }
 
 /**
- * Four-hook template interface. Each hook is async to allow LLM / network /
- * fs calls, but pure-function templates (like noop) are fine too.
+ * Iteration-check verdict written at each milestone (25/50/75% envelope).
  *
- * - processor   — runs the unit of work for this cycle (e.g. one search round).
- * - derivation  — decides what to spawn / explore next based on processor output.
- * - renderer    — produces the in-progress artifact (`kind: 'render'` etc.).
- * - stop_rule   — returns { done: true, reason } when the loop should finish.
+ * An LLM call asks "is the loop on track or drifting?" given accumulated
+ * findings. The Activity tab's Iteration Checks panel renders these in order.
+ * Persisted as a `kind: 'iteration_check'` artifact and emitted via the
+ * existing `artifact` event (createArtifact handles that). Optional hook —
+ * templates that opt in implement `Template.iterationCheck`.
+ *
+ * `correction` is the planner-facing payload: when verdict is
+ * `'needs_correction'` future planner re-plans may consume this to bias the
+ * next round of branches. Phase-current uses only `verdict` + `notes`; the
+ * field is present so the contract doesn't change when re-plans land.
+ */
+export interface IterationCheckPayload {
+  at_envelope_pct: 25 | 50 | 75;
+  verdict: 'on_track' | 'drifting' | 'needs_correction';
+  notes: string;
+  correction?: Record<string, unknown>;
+  model: string;
+}
+
+/**
+ * Post-mortem summary written once on natural completion of a loop.
+ *
+ * One LLM call analyses the terminal state and produces a final verdict for
+ * the Activity tab's Post-Mortem panel. Persisted as a `kind: 'post_mortem'`
+ * artifact and emitted via the existing `artifact` event. Optional hook;
+ * fires from `run.ts` only when the loop ended with `result.status ===
+ * 'completed'` (envelope_exhausted does not trigger). Failure here does not
+ * fail the loop — observable via stderr per Commandment 1.
+ */
+export interface PostMortemPayload {
+  verdict: 'success' | 'partial' | 'failure';
+  flags: string[];
+  recommendations: string[];
+  metrics_snapshot: Record<string, unknown>;
+  model: string;
+}
+
+/**
+ * Four-hook template interface plus two OPTIONAL observability hooks.
+ *
+ * Required hooks:
+ *  - processor   — runs the unit of work for this cycle (e.g. one search round).
+ *  - derivation  — decides what to spawn / explore next based on processor output.
+ *  - renderer    — produces the in-progress artifact (`kind: 'render'` etc.).
+ *  - stop_rule   — returns { done: true, reason } when the loop should finish.
+ *
+ * Optional hooks:
+ *  - iterationCheck — fires at each milestone after the renderer. Writes an
+ *    `iteration_check` artifact with a drift verdict. Templates that don't
+ *    implement it skip the LLM call entirely. Failure does NOT fail the loop.
+ *  - postMortem     — fires once on natural completion (run.ts). Writes a
+ *    `post_mortem` artifact with the final verdict. Templates that don't
+ *    implement it skip the call. Failure does NOT fail the loop.
  *
  * Templates are pure TypeScript modules; ship-as-code, not as data.
  */
@@ -284,4 +332,6 @@ export interface Template<P = unknown, D = unknown, R = unknown> {
   derivation: (state: LoopState, processor_output: P) => Promise<HookResult<D>>;
   renderer: (state: LoopState) => Promise<HookResult<R>>;
   stop_rule: (state: LoopState) => Promise<StopDecision>;
+  iterationCheck?: (state: LoopState, milestonePct: 25 | 50 | 75) => Promise<HookResult<IterationCheckPayload>>;
+  postMortem?: (state: LoopState) => Promise<HookResult<PostMortemPayload>>;
 }

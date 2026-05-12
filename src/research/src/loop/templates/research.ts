@@ -27,7 +27,14 @@
  * production passes `OpenRouterProvider` constructed by `run.ts` from env.
  */
 
-import type { Template, LoopState, Artifact, OutputShape } from '../types.js';
+import type {
+  Template,
+  LoopState,
+  Artifact,
+  OutputShape,
+  IterationCheckPayload,
+  PostMortemPayload,
+} from '../types.js';
 import type { LLMProvider } from '../llm.js';
 import { readScheduleFromArtifacts, validateShape, type ShapeMissing } from '../shape.js';
 
@@ -35,6 +42,10 @@ export interface ResearchTemplateOptions {
   cycles_target?: number;
   search_model?: string;
   complete_model?: string;
+  /** Model for the optional milestone iteration-check hook. */
+  iteration_check_model?: string;
+  /** Model for the optional natural-completion post-mortem hook. */
+  post_mortem_model?: string;
   /**
    * Hard cap on cycles. The stop_rule gates "done" on (cycles_target reached
    * AND shape_satisfied); if the shape gate never satisfies — e.g. the LLM
@@ -57,6 +68,10 @@ export interface ResearchTemplateDeps {
  *  prompts over ~200 chars, which silently kills the follow-up parser. */
 const DEFAULT_SEARCH_MODEL = 'google/gemini-2.0-flash-001';
 const DEFAULT_COMPLETE_MODEL = 'google/gemini-2.0-flash-001';
+const DEFAULT_ITERATION_CHECK_MODEL = 'google/gemini-2.0-flash-001';
+const DEFAULT_POST_MORTEM_MODEL = 'google/gemini-2.0-flash-001';
+const ITERATION_CHECK_MAX_TOKENS = 400;
+const POST_MORTEM_MAX_TOKENS = 800;
 
 interface ProcessorOutput {
   kind: 'research_proc';
@@ -98,6 +113,8 @@ export function makeResearchTemplate(
   const maxCycles = opts.max_cycles ?? target * 2;
   const searchModel = opts.search_model ?? DEFAULT_SEARCH_MODEL;
   const completeModel = opts.complete_model ?? DEFAULT_COMPLETE_MODEL;
+  const iterationCheckModel = opts.iteration_check_model ?? DEFAULT_ITERATION_CHECK_MODEL;
+  const postMortemModel = opts.post_mortem_model ?? DEFAULT_POST_MORTEM_MODEL;
 
   return {
     id: 'research',
@@ -190,6 +207,26 @@ export function makeResearchTemplate(
       }
       return { done: false };
     },
+
+    async iterationCheck(state, milestonePct) {
+      const completion = await deps.llm.complete(
+        iterationCheckModel,
+        buildIterationCheckPrompt(prompt, state, milestonePct),
+        ITERATION_CHECK_MAX_TOKENS,
+      );
+      const verdict = parseIterationCheck(completion.text, milestonePct, iterationCheckModel);
+      return { output: verdict, cost_usd: completion.cost_usd };
+    },
+
+    async postMortem(state) {
+      const completion = await deps.llm.complete(
+        postMortemModel,
+        buildPostMortemPrompt(prompt, state),
+        POST_MORTEM_MAX_TOKENS,
+      );
+      const verdict = parsePostMortem(completion.text, state, postMortemModel);
+      return { output: verdict, cost_usd: completion.cost_usd };
+    },
   };
 }
 
@@ -273,4 +310,140 @@ function parseFollowups(text: string, fallbackQuery: string): string[] {
   const sample = text.slice(0, 200).replace(/\s+/g, ' ').trim();
   process.stderr.write(`[research-template] derivation returned unusable shape, reusing query. text="${sample}"\n`);
   return [fallbackQuery];
+}
+
+/** Strip ```json fences / trailing prose and return a parsed JSON object, or
+ *  null if the body isn't recoverable. Shared by both iteration-check and
+ *  post-mortem parsers. */
+function tryParseJsonObject(text: string): Record<string, unknown> | null {
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // fall through to brace-extraction
+  }
+  // Last-ditch: find the outermost { ... } in the text and try that.
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    try {
+      const parsed = JSON.parse(cleaned.slice(start, end + 1));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // fall through
+    }
+  }
+  return null;
+}
+
+function summariseFindings(state: LoopState): string {
+  const cycleOutputs = state.artifacts
+    .filter(a => a.kind === 'cycle_output')
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  if (cycleOutputs.length === 0) return '(no findings yet)';
+  return cycleOutputs.map((art, i) => {
+    const proc = art.payload.processor as ProcessorOutput | undefined;
+    const query = proc?.query ?? '(unknown)';
+    const text = (proc?.text ?? '').slice(0, 400);
+    return `[cycle ${i}] query=${query}\n${text}`;
+  }).join('\n\n');
+}
+
+function buildIterationCheckPrompt(prompt: string, state: LoopState, milestonePct: 25 | 50 | 75): string {
+  return [
+    `Original research prompt: ${prompt}`,
+    ``,
+    `The loop has consumed approximately ${milestonePct}% of its envelope.`,
+    `Accumulated findings so far:`,
+    summariseFindings(state),
+    ``,
+    `Decide whether the loop is on track to answer the original prompt.`,
+    `Return JSON only, matching this shape:`,
+    `{`,
+    `  "verdict": "on_track" | "drifting" | "needs_correction",`,
+    `  "notes": "1-3 sentence rationale visible to the user"`,
+    `}`,
+    `No prose, no markdown — JSON only.`,
+  ].join('\n');
+}
+
+function parseIterationCheck(
+  text: string,
+  milestonePct: 25 | 50 | 75,
+  model: string,
+): IterationCheckPayload {
+  const parsed = tryParseJsonObject(text);
+  if (parsed) {
+    const verdict = parsed.verdict;
+    const notes = typeof parsed.notes === 'string' ? parsed.notes : '';
+    const correction = (parsed.correction && typeof parsed.correction === 'object' && !Array.isArray(parsed.correction))
+      ? parsed.correction as Record<string, unknown>
+      : undefined;
+    if (verdict === 'on_track' || verdict === 'drifting' || verdict === 'needs_correction') {
+      return { at_envelope_pct: milestonePct, verdict, notes, correction, model };
+    }
+  }
+  const sample = text.slice(0, 200).replace(/\s+/g, ' ').trim();
+  process.stderr.write(`[research-template] iteration_check parse failed at ${milestonePct}%, defaulting to on_track. text="${sample}"\n`);
+  return {
+    at_envelope_pct: milestonePct,
+    verdict: 'on_track',
+    notes: '(LLM response unparseable)',
+    model,
+  };
+}
+
+function buildPostMortemPrompt(prompt: string, state: LoopState): string {
+  const cycleCount = state.artifacts.filter(a => a.kind === 'cycle_output').length;
+  return [
+    `Original research prompt: ${prompt}`,
+    ``,
+    `The loop completed naturally after ${cycleCount} cycles.`,
+    `Envelope consumed: ${JSON.stringify(state.envelope_consumed)}.`,
+    ``,
+    `Accumulated findings:`,
+    summariseFindings(state),
+    ``,
+    `Produce a post-mortem verdict for the user. Return JSON only:`,
+    `{`,
+    `  "verdict": "success" | "partial" | "failure",`,
+    `  "flags": ["short", "actionable", "issues"],`,
+    `  "recommendations": ["concrete", "next", "steps"]`,
+    `}`,
+    `No prose, no markdown — JSON only.`,
+  ].join('\n');
+}
+
+function parsePostMortem(text: string, state: LoopState, model: string): PostMortemPayload {
+  const metricsSnapshot: Record<string, unknown> = {
+    cycles_completed: state.artifacts.filter(a => a.kind === 'cycle_output').length,
+    envelope_consumed: state.envelope_consumed,
+  };
+  const parsed = tryParseJsonObject(text);
+  if (parsed) {
+    const verdict = parsed.verdict;
+    const flags = Array.isArray(parsed.flags)
+      ? parsed.flags.filter((s): s is string => typeof s === 'string')
+      : [];
+    const recommendations = Array.isArray(parsed.recommendations)
+      ? parsed.recommendations.filter((s): s is string => typeof s === 'string')
+      : [];
+    if (verdict === 'success' || verdict === 'partial' || verdict === 'failure') {
+      return { verdict, flags, recommendations, metrics_snapshot: metricsSnapshot, model };
+    }
+  }
+  const sample = text.slice(0, 200).replace(/\s+/g, ' ').trim();
+  process.stderr.write(`[research-template] post_mortem parse failed, defaulting to partial. text="${sample}"\n`);
+  return {
+    verdict: 'partial',
+    flags: ['llm_response_unparseable'],
+    recommendations: [],
+    metrics_snapshot: metricsSnapshot,
+    model,
+  };
 }

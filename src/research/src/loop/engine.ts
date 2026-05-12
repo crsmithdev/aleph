@@ -113,6 +113,26 @@ export async function runLoop(
         at_envelope_pct: pct,
         artifact_id: artifact.id,
       });
+
+      // Optional iteration_check hook — Activity tab's "is the loop on track?"
+      // panel. createArtifact emits an `artifact` event with the kind, so the
+      // event stream sees it without a new ResearchEventType. Failure here
+      // must NOT fail the loop (Commandment 1 — log to stderr, observable).
+      if (template.iterationCheck) {
+        try {
+          const stateForCheck = readState(sqlite, loop_id);
+          const check = await template.iterationCheck(stateForCheck, pct);
+          if (check.cost_usd > 0) bumpUsage(sqlite, loop_id, { cost_usd: check.cost_usd });
+          createArtifact(sqlite, {
+            loop_id,
+            cycle_id: cycle.id,
+            kind: 'iteration_check',
+            payload: check.output as unknown as Record<string, unknown>,
+          });
+        } catch (err) {
+          process.stderr.write(`[engine] iteration_check failed at ${pct}% for loop ${loop_id}: ${(err as Error).message}\n`);
+        }
+      }
     }
 
     // Stop rule — policy, runs fresh every iteration.

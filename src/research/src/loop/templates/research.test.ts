@@ -418,3 +418,148 @@ describe('research template — crash resume via ledger', () => {
     expect(llm.searchCalls).toBe(callsAfterFirst);
   });
 });
+
+describe('research template — iteration_check hook (Activity tab)', () => {
+  let sqlite: ReturnType<typeof newDb>;
+  beforeEach(() => { sqlite = newDb(); });
+
+  test('milestone fires write a kind:"iteration_check" artifact with the LLM verdict', async () => {
+    const checkPrompts: string[] = [];
+    const llm = new FakeLLMProvider({
+      searchWeb: (_model, query) => ({
+        text: `result for ${query}`,
+        sources: [{ url: 'https://x.test/1', title: 't', snippet: 's' }],
+      }),
+      complete: (_model, prompt) => {
+        // Iteration-check prompt asks for a verdict in JSON. Other complete
+        // calls (derivation follow-ups) ask for a JSON array — we keep them
+        // happy with `[]` so the loop doesn't die on derivation failure.
+        if (prompt.includes('Decide whether the loop is on track')) {
+          checkPrompts.push(prompt);
+          return JSON.stringify({ verdict: 'drifting', notes: 'topic wandered into adjacent areas' });
+        }
+        return JSON.stringify(['fu-1', 'fu-2']);
+      },
+    });
+
+    // cycles envelope=8 with cycles_target=100 forces milestones at 2/4/6 cycles
+    // (25/50/75% of 8 = 2/4/6). Mirrors the engine.events.test.ts harness.
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'origin', envelope: { cycles: { count: 8 } } });
+    const template = makeResearchTemplate('origin', { cycles_target: 100 }, { llm });
+    await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    // Three milestones (25/50/75) — three iteration_check artifacts.
+    const checks = listArtifacts(sqlite, loop.id, 'iteration_check');
+    expect(checks).toHaveLength(3);
+    expect(checks.map(c => (c.payload as { at_envelope_pct: number }).at_envelope_pct))
+      .toEqual([25, 50, 75]);
+    expect(checks.every(c => (c.payload as { verdict: string }).verdict === 'drifting')).toBe(true);
+    expect(checks.every(c => (c.payload as { notes: string }).notes === 'topic wandered into adjacent areas')).toBe(true);
+    // Sanity: the LLM saw three iteration-check prompts.
+    expect(checkPrompts).toHaveLength(3);
+  });
+
+  test('iteration_check LLM failure does NOT fail the loop — defaults verdict to on_track', async () => {
+    const llm = new FakeLLMProvider({
+      searchWeb: (_model, query) => ({
+        text: `result for ${query}`,
+        sources: [{ url: 'https://x.test/1', title: 't', snippet: 's' }],
+      }),
+      complete: (_model, prompt) => {
+        if (prompt.includes('Decide whether the loop is on track')) {
+          return 'not json at all, garbage prose';
+        }
+        return JSON.stringify(['fu-1', 'fu-2']);
+      },
+    });
+
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'origin', envelope: { cycles: { count: 8 } } });
+    const template = makeResearchTemplate('origin', { cycles_target: 100 }, { llm });
+    const result = await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    expect(result.status).toBe('envelope_exhausted');
+    // Three artifacts still written with the unparseable-fallback verdict.
+    const checks = listArtifacts(sqlite, loop.id, 'iteration_check');
+    expect(checks).toHaveLength(3);
+    expect(checks.every(c => (c.payload as { verdict: string }).verdict === 'on_track')).toBe(true);
+    expect(checks.every(c => (c.payload as { notes: string }).notes === '(LLM response unparseable)')).toBe(true);
+  });
+});
+
+describe('research template — post_mortem hook (Activity tab)', () => {
+  let sqlite: ReturnType<typeof newDb>;
+  beforeEach(() => { sqlite = newDb(); });
+
+  test('postMortem returns a typed verdict; payload carries metrics snapshot', async () => {
+    const llm = new FakeLLMProvider({
+      searchWeb: (_model, query) => ({
+        text: `result for ${query}`,
+        sources: [{ url: 'https://x.test/1', title: 't', snippet: 's' }],
+      }),
+      complete: (_model, prompt) => {
+        if (prompt.includes('post-mortem verdict')) {
+          return JSON.stringify({
+            verdict: 'partial',
+            flags: ['shallow_coverage'],
+            recommendations: ['expand canon', 'add depth on topic Y'],
+          });
+        }
+        return JSON.stringify(['fu-1', 'fu-2']);
+      },
+    });
+
+    // Run the template's hooks directly — run.ts wires the post-mortem fire,
+    // but the template-level contract is what we're testing here.
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    const template = makeResearchTemplate('p', { cycles_target: 2 }, { llm });
+    await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    const state = readState(sqlite, loop.id);
+    const pm = await template.postMortem!(state);
+    expect(pm.output.verdict).toBe('partial');
+    expect(pm.output.flags).toEqual(['shallow_coverage']);
+    expect(pm.output.recommendations).toEqual(['expand canon', 'add depth on topic Y']);
+    expect(pm.output.metrics_snapshot.cycles_completed).toBe(2);
+    expect(typeof pm.output.metrics_snapshot.envelope_consumed).toBe('object');
+  });
+
+  test('postMortem unparseable response falls back to partial verdict with llm_response_unparseable flag', async () => {
+    const llm = new FakeLLMProvider({
+      searchWeb: () => ({
+        text: 'r', sources: [{ url: 'https://x.test/1', title: 't', snippet: 's' }],
+      }),
+      complete: (_m, prompt) => prompt.includes('post-mortem verdict') ? 'definitely not json' : JSON.stringify(['fu']),
+    });
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    const template = makeResearchTemplate('p', { cycles_target: 1 }, { llm });
+    await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    const state = readState(sqlite, loop.id);
+    const pm = await template.postMortem!(state);
+    expect(pm.output.verdict).toBe('partial');
+    expect(pm.output.flags).toEqual(['llm_response_unparseable']);
+  });
+
+  test('createArtifact("post_mortem") emits an artifact event so the panel can subscribe live', async () => {
+    // The post-mortem fires from run.ts in production; here we exercise the
+    // contract directly — calling createArtifact with kind:'post_mortem' must
+    // emit on the bus exactly like every other artifact.
+    const { onResearchEvent, clearResearchListeners } = await import('../../services/events');
+    const events: Array<{ type: string; payload: unknown }> = [];
+    const unsubscribe = onResearchEvent(e => { events.push({ type: e.type, payload: e.payload }); });
+    try {
+      const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+      createArtifact(sqlite, {
+        loop_id: loop.id,
+        cycle_id: null,
+        kind: 'post_mortem',
+        payload: { verdict: 'success', flags: [], recommendations: [], metrics_snapshot: {}, model: 'fake' },
+      });
+      const pmEvents = events.filter(e => e.type === 'artifact' && (e.payload as { kind: string }).kind === 'post_mortem');
+      expect(pmEvents).toHaveLength(1);
+    } finally {
+      unsubscribe();
+      clearResearchListeners();
+    }
+  });
+});

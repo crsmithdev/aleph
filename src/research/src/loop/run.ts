@@ -21,7 +21,8 @@ import { createDb } from '@construct/data';
 import { applyResearchDDL } from '../ddl.js';
 import { OpenRouterProvider } from '../providers/openrouter.js';
 import { onResearchEvent, type ResearchEvent } from '../services/events.js';
-import { getLoop, updateLoopStatus } from './db.js';
+import { getDefaults } from '../services/defaults.js';
+import { bumpUsage, createArtifact, getLoop, readState, updateLoopStatus } from './db.js';
 import { generateDocument } from './document.js';
 import { runLoop } from './engine.js';
 import type { LLMProvider } from './llm.js';
@@ -99,6 +100,21 @@ async function main() {
     process.exit(2);
     return;
   }
+  // Pull model defaults from research_defaults so the user's persisted choice
+  // for iteration_check_model / post_mortem_model wins over the template's
+  // baked-in default. CLI flags (parseArgs) still override these.
+  try {
+    const defaults = getDefaults(sqlite);
+    if (overrides.iteration_check_model === undefined) {
+      overrides.iteration_check_model = defaults.iteration_check_model;
+    }
+    if (overrides.post_mortem_model === undefined) {
+      overrides.post_mortem_model = defaults.post_mortem_model;
+    }
+  } catch (err) {
+    process.stderr.write(`[run] getDefaults failed, using template baked-in models: ${(err as Error).message}\n`);
+  }
+
   let template;
   try {
     template = buildTemplate(loop.template_id, loop.prompt, overrides, deps);
@@ -150,6 +166,26 @@ async function main() {
         }
       } catch (err) {
         process.stderr.write(`[document] generateDocument failed for ${loop_id}: ${(err as Error).message}\n`);
+      }
+
+      // Optional post-mortem hook — fires once on natural completion only
+      // (envelope_exhausted doesn't trigger). Writes a `post_mortem` artifact
+      // that createArtifact also emits as an `artifact` event. Failure must
+      // NOT propagate (Commandment 1 — log to stderr, loop stays completed).
+      if (template.postMortem) {
+        try {
+          const finalState = readState(sqlite, loop_id);
+          const pm = await template.postMortem(finalState);
+          if (pm.cost_usd > 0) bumpUsage(sqlite, loop_id, { cost_usd: pm.cost_usd });
+          createArtifact(sqlite, {
+            loop_id,
+            cycle_id: null,
+            kind: 'post_mortem',
+            payload: pm.output as unknown as Record<string, unknown>,
+          });
+        } catch (err) {
+          process.stderr.write(`[post_mortem] failed for ${loop_id}: ${(err as Error).message}\n`);
+        }
       }
     }
 

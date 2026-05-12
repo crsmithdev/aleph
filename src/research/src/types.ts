@@ -125,6 +125,14 @@ export interface SessionConfig {
    *  titles, perturbation query gen). Defaults to model when null. Step rows
    *  record the actual model used so the events view shows fast vs primary. */
   model_fast?: string | null;
+  /** Model for the milestone iteration-check hook ("is the loop on track or
+   *  drifting?"). One cheap call per milestone (25/50/75% envelope). Defaults
+   *  to gemini-2.0-flash-001 to match the document-polish pass. */
+  iteration_check_model: string;
+  /** Model for the post-mortem hook fired once on natural completion. One
+   *  cheap call producing a final verdict + recommendations. Defaults to
+   *  gemini-2.0-flash-001 to match the document-polish pass. */
+  post_mortem_model: string;
   providers: {
     primary: 'openrouter';
     openrouter_models: string[];
@@ -211,6 +219,8 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   // and adds a hidden reasoning-token tax — not safe as a drop-in.
   model: 'deepseek/deepseek-v3.2',
   model_fast: 'google/gemini-2.0-flash-001',
+  iteration_check_model: 'google/gemini-2.0-flash-001',
+  post_mortem_model: 'google/gemini-2.0-flash-001',
   providers: {
     primary: 'openrouter',
     openrouter_models: [

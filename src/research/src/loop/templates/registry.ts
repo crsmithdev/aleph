@@ -28,6 +28,14 @@ export interface TemplateOverrides {
   processor_delay_ms?: number;
   search_model?: string;
   complete_model?: string;
+  /** Model passed to the research template's optional `iterationCheck` hook.
+   *  `run.ts` reads this from `research_defaults.iteration_check_model` and
+   *  threads it through at spawn time. */
+  iteration_check_model?: string;
+  /** Model passed to the research template's optional `postMortem` hook.
+   *  `run.ts` reads this from `research_defaults.post_mortem_model` and
+   *  threads it through at spawn time. */
+  post_mortem_model?: string;
   poll_every?: number;
 }
 
@@ -57,6 +65,8 @@ export function buildTemplate(
         cycles_target: overrides.cycles_target,
         search_model: overrides.search_model,
         complete_model: overrides.complete_model,
+        iteration_check_model: overrides.iteration_check_model,
+        post_mortem_model: overrides.post_mortem_model,
       },
       { llm: deps.llm },
     ) as Template;
