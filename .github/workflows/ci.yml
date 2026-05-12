@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: src/dashboard
+        working-directory: src/ui
     steps:
       - uses: actions/checkout@v4
 
@@ -42,7 +42,7 @@ jobs:
         run: npm run build
 
       - name: Test
-        run: npm test
+        run: npm run typecheck
 
   validate:
     runs-on: ubuntu-latest
@@ -54,14 +54,14 @@ jobs:
           bun-version: latest
 
       - name: Settings JSON valid
-        run: jq . dotclaude/settings.json > /dev/null
+        run: jq . .claude/settings.json > /dev/null
 
       - name: Skill rules JSON valid
         run: jq . src/skills/skill-rules.json > /dev/null
 
       - name: Check hook files exist
         run: |
-          jq -r '.. | .command? // empty' dotclaude/settings.json \
+          jq -r '.. | .command? // empty' .claude/settings.json \
             | grep -v ccstatusline \
             | sed 's/^bun //' \
             | while read -r path; do

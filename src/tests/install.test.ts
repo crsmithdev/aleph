@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { execSync } from "child_process";
-import { readFileSync, writeFileSync, unlinkSync, existsSync } from "fs";
+import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync } from "fs";
 import { resolve } from "path";
 import { check, createResults, printAndExit } from "../eval/harness.ts";
 
@@ -14,6 +14,7 @@ console.log("--- install preservation ---");
 
 const sentinelPath = resolve(Bun.env.HOME!, ".claude/construct/core/identity/TEST_SENTINEL.md");
 const sentinelContent = "# Test Sentinel\n\nThis file tests upgrade preservation.\n";
+mkdirSync(resolve(Bun.env.HOME!, ".claude/construct/core/identity"), { recursive: true });
 writeFileSync(sentinelPath, sentinelContent);
 check(r, "install: sentinel file created", existsSync(sentinelPath));
 
