@@ -45,10 +45,10 @@ function failLoop(sqlite: Sqlite, loop_id: string, reason: string): void {
 }
 
 function buildDeps(template_id: string): TemplateDeps {
-  if (template_id === 'research') {
+  if (template_id === 'research' || template_id === 'monitor') {
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
-      throw new Error('research template requires OPENROUTER_API_KEY in the environment');
+      throw new Error(`${template_id} template requires OPENROUTER_API_KEY in the environment`);
     }
     const llm: LLMProvider = new OpenRouterProvider({ apiKey, models: [] });
     return { llm };
@@ -64,6 +64,8 @@ function parseArgs(argv: string[]): { db_path: string; loop_id: string; override
       overrides.processor_delay_ms = Number(arg.split('=')[1]);
     } else if (arg.startsWith('--cycles-target=')) {
       overrides.cycles_target = Number(arg.split('=')[1]);
+    } else if (arg.startsWith('--poll-every=')) {
+      overrides.poll_every = Number(arg.split('=')[1]);
     } else {
       positional.push(arg);
     }

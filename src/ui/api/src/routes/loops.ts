@@ -29,11 +29,12 @@ interface StartBody {
   // Test/dev knobs forwarded to the child as CLI args. Not persisted.
   processor_delay_ms?: number;
   cycles_target?: number;
+  poll_every?: number;
 }
 
 export const loopRoutes: FastifyPluginAsync = async (app) => {
   app.post<{ Body: StartBody }>('/start', async (req, reply) => {
-    const { template_id, prompt, envelope, processor_delay_ms, cycles_target } = req.body ?? {};
+    const { template_id, prompt, envelope, processor_delay_ms, cycles_target, poll_every } = req.body ?? {};
     if (!template_id || typeof template_id !== 'string') {
       return reply.status(400).send({ error: 'template_id required' });
     }
@@ -42,7 +43,7 @@ export const loopRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const loop = createLoop(app.sqlite, { template_id, prompt, envelope });
-    spawnLoopChild(app.sqlite, loop.id, { processor_delay_ms, cycles_target });
+    spawnLoopChild(app.sqlite, loop.id, { processor_delay_ms, cycles_target, poll_every });
     return reply.status(201).send({ id: loop.id });
   });
 

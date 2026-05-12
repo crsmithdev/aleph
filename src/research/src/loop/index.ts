@@ -39,6 +39,8 @@ export {
 export { makeNoopTemplate } from './templates/noop.js';
 export { makeResearchTemplate } from './templates/research.js';
 export type { ResearchTemplateOptions, ResearchTemplateDeps } from './templates/research.js';
+export { makeMonitorTemplate } from './templates/monitor.js';
+export type { MonitorTemplateOptions, MonitorTemplateDeps } from './templates/monitor.js';
 export { buildTemplate, listTemplateIds } from './templates/registry.js';
 export type { TemplateOverrides, TemplateDeps } from './templates/registry.js';
 

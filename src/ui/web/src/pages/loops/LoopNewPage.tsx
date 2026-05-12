@@ -52,6 +52,7 @@ export function LoopNewPage() {
           >
             <option value="noop">noop (5 cycles, canned outputs — Phase 1 smoke)</option>
             <option value="research">research (search + extract — Phase 2)</option>
+            <option value="monitor">monitor (poll + diff — Phase 2)</option>
           </select>
         </label>
 

@@ -68,6 +68,51 @@ async function poll<T>(fn: () => Promise<T | null>, predicate: (v: T) => boolean
   throw new Error('poll timeout');
 }
 
+describe('Loops API — monitor end-to-end', () => {
+  it('start monitor loop with poll_every=2 → run-cycles call LLM, wait-cycles don\'t', async () => {
+    const baseSearchCount = fake.searchCount();
+
+    const startRes = await fetch(`http://127.0.0.1:${port}/api/loops/start`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        template_id: 'monitor',
+        prompt: 'how does a sourdough starter develop?',
+        cycles_target: 4,
+        poll_every: 2,
+      }),
+    });
+    expect(startRes.status).toBe(201);
+    const { id } = await startRes.json() as { id: string };
+
+    const finalState = await poll(
+      async () => {
+        const res = await fetch(`http://127.0.0.1:${port}/api/loops/${id}`);
+        if (res.status !== 200) return null;
+        return await res.json() as {
+          loop: { status: string; template_id: string };
+          cycles: Array<{ status: string }>;
+          artifacts: Array<{ kind: string; payload: Record<string, unknown> }>;
+        };
+      },
+      v => v.loop.status === 'completed' || v.loop.status === 'failed',
+      30_000,
+    );
+
+    expect(finalState.loop.status).toBe('completed');
+    expect(finalState.loop.template_id).toBe('monitor');
+    expect(finalState.cycles).toHaveLength(4);
+
+    const cycleOutputs = finalState.artifacts.filter(a => a.kind === 'cycle_output');
+    expect(cycleOutputs).toHaveLength(4);
+    const procKinds = cycleOutputs.map(o => (o.payload.processor as { kind: string }).kind);
+    expect(procKinds).toEqual(['monitor_run', 'monitor_wait', 'monitor_run', 'monitor_wait']);
+
+    // Only run-cycles hit the LLM provider.
+    expect(fake.searchCount() - baseSearchCount).toBe(2);
+  }, 60_000);
+});
+
 describe('Loops API — research end-to-end', () => {
   it('start research loop → child hits fake LLM → completes through ledger', async () => {
     const baseSearchCount = fake.searchCount();

@@ -21,12 +21,14 @@ import type { Template } from '../types.js';
 import type { LLMProvider } from '../llm.js';
 import { makeNoopTemplate } from './noop.js';
 import { makeResearchTemplate } from './research.js';
+import { makeMonitorTemplate } from './monitor.js';
 
 export interface TemplateOverrides {
   cycles_target?: number;
   processor_delay_ms?: number;
   search_model?: string;
   complete_model?: string;
+  poll_every?: number;
 }
 
 export interface TemplateDeps {
@@ -59,9 +61,23 @@ export function buildTemplate(
       { llm: deps.llm },
     ) as Template;
   }
+  if (template_id === 'monitor') {
+    if (!deps.llm) {
+      throw new Error('monitor template requires deps.llm — supply an LLMProvider');
+    }
+    return makeMonitorTemplate(
+      prompt,
+      {
+        cycles_target: overrides.cycles_target,
+        poll_every: overrides.poll_every,
+        search_model: overrides.search_model,
+      },
+      { llm: deps.llm },
+    ) as Template;
+  }
   return null;
 }
 
 export function listTemplateIds(): string[] {
-  return ['noop', 'research'];
+  return ['noop', 'research', 'monitor'];
 }

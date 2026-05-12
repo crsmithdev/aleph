@@ -30,6 +30,7 @@ const KNOWN_EVENT_TYPES = new Set<ResearchEventType>([
 export interface SpawnOptions {
   processor_delay_ms?: number;
   cycles_target?: number;
+  poll_every?: number;
 }
 
 interface ActiveChild {
@@ -50,6 +51,7 @@ export function spawnLoopChild(
   const args: string[] = ['bun', RUN_TS_PATH, sqlite.filename, loop_id];
   if (opts.processor_delay_ms !== undefined) args.push(`--processor-delay-ms=${opts.processor_delay_ms}`);
   if (opts.cycles_target !== undefined) args.push(`--cycles-target=${opts.cycles_target}`);
+  if (opts.poll_every !== undefined) args.push(`--poll-every=${opts.poll_every}`);
 
   // Explicit env pass: Bun.spawn snapshots env at runtime startup and does NOT
   // pick up later process.env mutations unless the env object is passed
