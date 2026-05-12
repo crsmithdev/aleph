@@ -25,8 +25,10 @@ import { crossedThresholds, exhaustedLimit } from './envelope.js';
 import { runOnce } from './ledger.js';
 import {
   bumpUsage, createArtifact, createCycle, createMilestone, findInProgressCycle,
-  listCycles, markCycleFinalized, markCycleRunning, readState, updateLoopStatus,
+  getCycle, getLoop, listCycles, markCycleFinalized, markCycleRunning, readState,
+  updateLoopStatus,
 } from './db.js';
+import { emitResearchEvent } from '../services/events.js';
 import type { Cycle, LoopId, LoopState, StopDecision, Template } from './types.js';
 
 export interface LoopRunResult {
@@ -59,6 +61,7 @@ export async function runLoop(
   }
 
   updateLoopStatus(sqlite, loop_id, 'running');
+  emitLoop(sqlite, loop_id);
 
   for (let iter = 0; iter < maxIter; iter++) {
     const state = readState(sqlite, loop_id);
@@ -67,9 +70,11 @@ export async function runLoop(
     const limit = exhaustedLimit(state.loop.envelope, state.envelope_consumed);
     if (limit) {
       updateLoopStatus(sqlite, loop_id, 'completed');
+      const reason = `envelope:${limit}`;
+      emitLoop(sqlite, loop_id, { terminal: { status: 'envelope_exhausted', reason, cycles_run: cyclesRun, milestones_fired: [...milestonesFired] } });
       return {
         status: 'envelope_exhausted',
-        reason: `envelope:${limit}`,
+        reason,
         cycles_run: cyclesRun,
         milestones_fired: [...milestonesFired],
       };
@@ -98,8 +103,15 @@ export async function runLoop(
         kind: 'milestone',
         payload: { at_envelope_pct: pct, summary: summary as unknown },
       });
-      createMilestone(sqlite, { loop_id, at_envelope_pct: pct, artifact_id: artifact.id });
+      const milestone = createMilestone(sqlite, { loop_id, at_envelope_pct: pct, artifact_id: artifact.id });
       milestonesFired.add(pct);
+      emitResearchEvent(loop_id, 'milestone', {
+        id: milestone.id,
+        loop_id,
+        cycle_id: cycle.id,
+        at_envelope_pct: pct,
+        artifact_id: artifact.id,
+      });
     }
 
     // Stop rule — policy, runs fresh every iteration.
@@ -107,9 +119,11 @@ export async function runLoop(
     const decision: StopDecision = await template.stop_rule(newState);
     if (decision.done) {
       updateLoopStatus(sqlite, loop_id, 'completed');
+      const reason = decision.reason ?? 'stop_rule';
+      emitLoop(sqlite, loop_id, { terminal: { status: 'completed', reason, cycles_run: cyclesRun, milestones_fired: [...milestonesFired] } });
       return {
         status: 'completed',
-        reason: decision.reason ?? 'stop_rule',
+        reason,
         cycles_run: cyclesRun,
         milestones_fired: [...milestonesFired],
       };
@@ -118,7 +132,31 @@ export async function runLoop(
 
   // Safety belt tripped — shouldn't happen if stop_rule / envelope are well-formed.
   updateLoopStatus(sqlite, loop_id, 'failed');
+  emitLoop(sqlite, loop_id, { terminal: { status: 'failed', reason: `max_iterations:${maxIter}`, cycles_run: cyclesRun, milestones_fired: [...milestonesFired] } });
   throw new Error(`runLoop ${loop_id}: max_iterations (${maxIter}) reached without stop_rule`);
+}
+
+/**
+ * Emit a `loop` event reflecting current DB state plus optional terminal
+ * summary. Subscribers (research-logger → NDJSON + SSE) treat these as the
+ * authoritative loop status timeline.
+ */
+function emitLoop(
+  sqlite: Sqlite,
+  loop_id: LoopId,
+  extra?: { terminal?: { status: 'completed' | 'envelope_exhausted' | 'failed'; reason: string; cycles_run: number; milestones_fired: Array<25 | 50 | 75> } },
+): void {
+  const loop = getLoop(sqlite, loop_id);
+  if (!loop) return;
+  emitResearchEvent(loop_id, 'loop', {
+    id: loop.id,
+    template_id: loop.template_id,
+    status: loop.status,
+    envelope: loop.envelope,
+    envelope_consumed: loop.envelope_consumed,
+    updated_at: loop.updated_at,
+    ...extra?.terminal,
+  });
 }
 
 /**
@@ -132,6 +170,7 @@ async function runCycle(
   cycle: Cycle,
 ): Promise<void> {
   markCycleRunning(sqlite, cycle.id);
+  emitCycle(sqlite, cycle.id);
 
   const procInput = { cycle_index: cycle.index, prompt: state.loop.prompt };
   const proc = await runOnce(
@@ -139,6 +178,10 @@ async function runCycle(
     { loop_id: cycle.loop_id, cycle_id: cycle.id, step: 'processor', input: procInput },
     async () => ({ output: await template.processor(procInput, state), cost_usd: 0 }),
   );
+  emitResearchEvent(cycle.loop_id, 'cycle_step', {
+    loop_id: cycle.loop_id, cycle_id: cycle.id, cycle_index: cycle.index,
+    step: 'processor', cached: proc.cached, cost_usd: proc.cost_usd,
+  });
 
   const stateAfterProc = readState(sqlite, cycle.loop_id);
   const deriv = await runOnce(
@@ -146,6 +189,10 @@ async function runCycle(
     { loop_id: cycle.loop_id, cycle_id: cycle.id, step: 'derivation', input: { processor_output: proc.output } },
     async () => ({ output: await template.derivation(stateAfterProc, proc.output), cost_usd: 0 }),
   );
+  emitResearchEvent(cycle.loop_id, 'cycle_step', {
+    loop_id: cycle.loop_id, cycle_id: cycle.id, cycle_index: cycle.index,
+    step: 'derivation', cached: deriv.cached, cost_usd: deriv.cost_usd,
+  });
 
   const stateAfterDeriv = readState(sqlite, cycle.loop_id);
   const render = await runOnce(
@@ -153,6 +200,10 @@ async function runCycle(
     { loop_id: cycle.loop_id, cycle_id: cycle.id, step: 'renderer', input: { cycle_index: cycle.index } },
     async () => ({ output: await template.renderer(stateAfterDeriv), cost_usd: 0 }),
   );
+  emitResearchEvent(cycle.loop_id, 'cycle_step', {
+    loop_id: cycle.loop_id, cycle_id: cycle.id, cycle_index: cycle.index,
+    step: 'renderer', cached: render.cached, cost_usd: render.cost_usd,
+  });
 
   // Cycle output stored as an artifact for the template's record.
   createArtifact(sqlite, {
@@ -163,4 +214,19 @@ async function runCycle(
   });
 
   markCycleFinalized(sqlite, cycle.id);
+  emitCycle(sqlite, cycle.id);
+}
+
+function emitCycle(sqlite: Sqlite, cycle_id: string): void {
+  const cycle = getCycle(sqlite, cycle_id);
+  if (!cycle) return;
+  emitResearchEvent(cycle.loop_id, 'cycle', {
+    id: cycle.id,
+    loop_id: cycle.loop_id,
+    index: cycle.index,
+    priority: cycle.priority,
+    status: cycle.status,
+    started_at: cycle.started_at,
+    finalized_at: cycle.finalized_at,
+  });
 }
