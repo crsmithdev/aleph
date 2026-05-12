@@ -2,26 +2,31 @@
  * Loop detail page — the rich session detail UI for the new (loops) engine.
  *
  * Mounted at `/research/:id`. Four tabs covering everything previously
- * spread across the legacy ResearchQueryDetailPage (which is going away in
- * Phase 7):
+ * spread across the legacy ResearchQueryDetailPage:
  *
  *   Document   — the latest polished `kind: 'document'` artifact, Markdown.
- *                Auto-fires on loop completion (run.ts); user can manually
- *                regenerate via the button. Falls back to the raw `render`
- *                artifact's findings while the polish is pending.
- *   Activity   — live event stream from /api/loops/:id/stream (loop /
- *                cycle / cycle_step / milestone / artifact frames) + the
- *                persisted events.ndjson replayed on connect. Engine-emit
- *                timestamps, not page-load.
- *   Plan       — the schedule artifact's canon[] + branches[], each branch
- *                expandable to show its cycle_output's processor text +
- *                source list. Plus aggregate sources at the bottom.
- *   Config     — the schedule payload (output_shape, plan summary,
- *                milestone_plan, perturbation_weights), envelope state,
- *                loop status / template / child pid / timestamps.
+ *                Two-column: article body + sticky References rail with
+ *                per-source extraction-status pills. Metadata strip surfaces
+ *                model, generated_at, rendered_cycles, source_count.
+ *                Falls back to the raw `render` artifact's findings while
+ *                the polish is pending. Regenerate button hits
+ *                POST /api/loops/:id/regenerate-document.
+ *   Activity   — live event stream from /api/loops/:id/stream + persisted
+ *                events replayed on connect. KPI strip, Cycle Lifecycle,
+ *                Post-Mortem, Iteration Checks, Source Extraction, Branch
+ *                State, Decisions, filterable Event Log.
+ *   Plan       — schedule artifact summary (output_shape · branches ·
+ *                budget · milestones), canon chips, expandable branch cards
+ *                with per-branch cycle_output text, aggregate unique sources.
+ *   Config     — read-only configuration surface: loop chrome (id/template/
+ *                status/pid/timestamps), schedule (output_shape, milestones,
+ *                perturbation weights), envelope (configured vs consumed),
+ *                effective models (primary / fast / iteration_check /
+ *                post_mortem, read from /api/research/defaults).
  *
- * Phase 5 will collapse envelope/models/perturbation_config/flags onto the
- * schedule payload itself; Config will surface those when they land.
+ * Phase 5 will collapse envelope / models / perturbation_config / flags
+ * onto the schedule payload itself; Config will then read them off the
+ * artifact directly instead of via the defaults endpoint.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -269,6 +274,17 @@ export function ResearchLoopDetail() {
 
 // ---- Tab content ----------------------------------------------------------
 
+/**
+ * Document tab — adapted from docs/mockups/research/query-detail.html
+ * (panel-doc layout). The mockup's 3-column "TOC · article · bibliography"
+ * grid translates to article + bibliography here; the loops engine doesn't
+ * pre-section the document so the TOC column is omitted. The metadata strip
+ * (model · generated_at · rendered_cycles · source_count) sits above the
+ * article and is the canonical surface for the document artifact's payload.
+ *
+ * Falls back to the raw `render` artifact's findings + sources when no
+ * polished document exists yet (early in a run, or polish failure).
+ */
 function DocumentTab({ loopId, artifacts }: { loopId: string; artifacts: Artifact[] }) {
   const doc = useMemo(() => {
     const docs = artifacts
@@ -300,63 +316,166 @@ function DocumentTab({ loopId, artifacts }: { loopId: string; artifacts: Artifac
   }
 
   if (!doc && !fallbackRender) {
-    return <p className="text-sm text-text-muted">No output yet — waiting for the first cycle to render.</p>;
+    return (
+      <div data-testid="document-tab">
+        <p className="text-sm text-text-muted">No output yet — waiting for the first cycle to render.</p>
+      </div>
+    );
   }
 
+  // Sources rail — prefer the polish artifact's source_count by way of the
+  // latest render's source list (the polish step doesn't carry sources of
+  // its own; it cites the render's set). When polish hasn't happened yet,
+  // the same render list still drives the rail.
+  const railSources = fallbackRender?.sources ?? [];
+
   return (
-    <div className="max-w-4xl">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="text-xs text-text-muted">
-          {doc ? (
-            <>Polished document · {new Date(doc.payload.generated_at).toLocaleString()} · {doc.payload.source_count} sources · <span className="font-mono">{doc.payload.model}</span></>
-          ) : (
-            <>Raw render — polish pending</>
-          )}
-        </div>
-        <button
-          onClick={regenerate}
-          disabled={regenerating}
-          className="text-xs px-3 py-1.5 border border-border-primary rounded text-text-secondary hover:text-text-primary hover:border-accent disabled:opacity-50"
-          data-testid="document-regenerate"
-        >
-          {regenerating ? 'Regenerating…' : (doc ? 'Regenerate' : 'Generate now')}
-        </button>
-      </div>
+    <div className="flex flex-col gap-4" data-testid="document-tab">
+      <DocumentMetaStrip
+        doc={doc?.payload ?? null}
+        fallback={fallbackRender}
+        regenerating={regenerating}
+        onRegenerate={regenerate}
+      />
 
       {regenError && (
-        <div className="text-sm text-error border border-error/40 bg-error/10 rounded px-3 py-2 mb-3">{regenError}</div>
+        <div className="text-sm text-error border border-error/40 bg-error/10 rounded px-3 py-2">{regenError}</div>
       )}
 
-      <article
-        className="prose prose-sm max-w-none prose-headings:text-text-primary prose-p:text-text-secondary prose-li:text-text-secondary prose-table:text-text-secondary prose-strong:text-text-primary prose-a:text-accent"
-        data-testid="document-body"
-      >
-        {doc ? (
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.payload.text}</ReactMarkdown>
-        ) : fallbackRender ? (
-          <>
-            {fallbackRender.findings.map((f, i) => (
-              <section key={i} className="mb-6">
-                <h3 className="!mt-0">Cycle {f.cycle}: {f.query}</h3>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{f.text}</ReactMarkdown>
-              </section>
-            ))}
-            {fallbackRender.sources.length > 0 && (
-              <>
-                <h2>References</h2>
-                <ol>
-                  {fallbackRender.sources.map((s, i) => (
-                    <li key={i}>
-                      <a href={s.url} target="_blank" rel="noreferrer">{s.title || s.url}</a>
-                    </li>
-                  ))}
-                </ol>
-              </>
-            )}
-          </>
-        ) : null}
-      </article>
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
+        <article
+          className="prose prose-sm max-w-3xl prose-headings:text-text-primary prose-p:text-text-secondary prose-li:text-text-secondary prose-table:text-text-secondary prose-strong:text-text-primary prose-a:text-accent"
+          data-testid="document-body"
+        >
+          {doc ? (
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.payload.text}</ReactMarkdown>
+          ) : fallbackRender ? (
+            <>
+              {fallbackRender.findings.map((f, i) => (
+                <section key={i} className="mb-6">
+                  <h3 className="!mt-0">Cycle {f.cycle}: {f.query}</h3>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{f.text}</ReactMarkdown>
+                </section>
+              ))}
+            </>
+          ) : null}
+        </article>
+
+        <ReferencesRail sources={railSources} />
+      </div>
     </div>
+  );
+}
+
+function DocumentMetaStrip({
+  doc, fallback, regenerating, onRegenerate,
+}: {
+  doc: DocumentPayload | null;
+  fallback: RenderPayload | null;
+  regenerating: boolean;
+  onRegenerate: () => void;
+}) {
+  const sourceCount = doc?.source_count ?? fallback?.sources.length ?? 0;
+  const renderedCycles = doc?.rendered_cycles ?? fallback?.cycles_rendered ?? 0;
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-4 gap-y-2 border border-border-primary rounded-lg bg-bg-secondary px-4 py-2.5"
+      data-testid="document-meta"
+    >
+      <div className="flex items-center gap-2">
+        <span className={clsx(
+          'text-xs px-1.5 py-0.5 rounded font-medium uppercase tracking-wider',
+          doc ? 'bg-success/15 text-success' : 'bg-amber-500/15 text-amber-400',
+        )}>
+          {doc ? 'polished' : 'raw render'}
+        </span>
+        {!doc && fallback && (
+          <span className="text-xs text-text-muted italic">polish pending</span>
+        )}
+      </div>
+      {doc && (
+        <div className="text-xs text-text-muted">
+          generated · <span className="font-mono tabular-nums text-text-secondary">{new Date(doc.generated_at).toLocaleString()}</span>
+        </div>
+      )}
+      <div className="text-xs text-text-muted">
+        cycles · <span className="font-mono tabular-nums text-text-secondary" data-testid="document-rendered-cycles">{renderedCycles}</span>
+      </div>
+      <div className="text-xs text-text-muted">
+        sources · <span className="font-mono tabular-nums text-text-secondary" data-testid="document-source-count">{sourceCount}</span>
+      </div>
+      {doc && (
+        <div className="text-xs text-text-muted">
+          model · <span className="font-mono text-text-secondary" data-testid="document-model">{doc.model}</span>
+        </div>
+      )}
+      <button
+        onClick={onRegenerate}
+        disabled={regenerating}
+        className="ml-auto text-xs px-3 py-1.5 border border-border-primary rounded text-text-secondary hover:text-text-primary hover:border-accent disabled:opacity-50"
+        data-testid="document-regenerate"
+      >
+        {regenerating ? 'Regenerating…' : (doc ? 'Regenerate' : 'Generate now')}
+      </button>
+    </div>
+  );
+}
+
+const EXTRACTION_PILL: Record<SourceExtractionStatus, string> = {
+  extracted:    'bg-success/15 text-success',
+  snippet_only: 'bg-bg-tertiary text-text-muted',
+  failed:       'bg-red-500/15 text-red-400',
+};
+
+function ReferencesRail({ sources }: { sources: RenderSourceEntry[] }) {
+  return (
+    <aside
+      className="lg:sticky lg:top-0 border border-border-primary rounded-lg bg-bg-secondary"
+      data-testid="document-references"
+    >
+      <div className="px-3 py-2 border-b border-border-primary bg-bg-primary">
+        <h4 className="text-xs uppercase tracking-wider text-text-muted font-medium">
+          References · {sources.length}
+        </h4>
+      </div>
+      {sources.length === 0 ? (
+        <p className="text-sm text-text-muted italic px-3 py-3">No sources fetched yet.</p>
+      ) : (
+        <ol className="flex flex-col" data-testid="document-references-list">
+          {sources.map((s, i) => {
+            const domain = safeDomain(s.url);
+            return (
+              <li
+                key={s.url + i}
+                className="px-3 py-2.5 border-b border-border-primary last:border-b-0 flex flex-col gap-1"
+              >
+                <div className="flex items-baseline gap-2 text-sm">
+                  <span className="text-accent font-mono text-xs shrink-0">[{i + 1}]</span>
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-text-primary hover:text-accent line-clamp-2 leading-snug"
+                    title={s.title || s.url}
+                  >
+                    {s.title || s.url}
+                  </a>
+                </div>
+                <div className="flex items-center justify-between gap-2 pl-7">
+                  <span className="text-xs font-mono text-text-muted truncate">{domain}</span>
+                  <span className={clsx(
+                    'text-xs px-1.5 py-0.5 rounded font-medium uppercase tracking-wider shrink-0',
+                    EXTRACTION_PILL[s.extraction_status],
+                  )} title={s.error ? `${s.extraction_status} · ${s.error}` : s.extraction_status}>
+                    {s.extraction_status === 'snippet_only' ? 'snippet' : s.extraction_status}
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </aside>
   );
 }
 
@@ -1075,10 +1194,23 @@ function parseSqliteTs(s: string): number {
   return new Date(s.replace(' ', 'T') + 'Z').getTime();
 }
 
+/**
+ * Plan tab — the schedule artifact made visible. Top header carries the
+ * planner's overall shape (output_shape · branch count · per-branch budget
+ * · milestone plan), then canon as accent chips, then each branch as an
+ * expandable card revealing its cycle_output text, then aggregated unique
+ * sources at the bottom.
+ *
+ * Mirrors the structural-plan surface from docs/mockups/research/query-detail.html
+ * (Process panel's intent — "how the session was decomposed") collapsed
+ * into a flatter, mockup-styled card list because the loops engine plans
+ * a flat branch set rather than the tree the mockup illustrated.
+ */
 function PlanTab({ artifacts }: { artifacts: Artifact[] }) {
   const schedule = artifacts.find(a => a.kind === 'schedule');
   const payload = schedule?.payload as unknown as SchedulePayload | undefined;
   const plan = payload?.plan;
+  const shape = payload?.output_shape;
 
   const branchOutputs = useMemo(() => {
     const map = new Map<string, ProcessorOutput>();
@@ -1105,35 +1237,56 @@ function PlanTab({ artifacts }: { artifacts: Artifact[] }) {
   }, [artifacts]);
 
   if (!plan) {
-    return <p className="text-sm text-text-muted">No schedule artifact yet — the planner runs at loop start.</p>;
+    return (
+      <div data-testid="plan-tab">
+        <p className="text-sm text-text-muted">No schedule artifact yet — the planner runs at loop start.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-4xl flex flex-col gap-6" data-testid="plan-tab">
-      <section>
-        <h3 className="text-xs uppercase tracking-wide text-text-muted mb-2">Canon ({plan.canon.length})</h3>
+    <div className="max-w-4xl flex flex-col gap-5" data-testid="plan-tab">
+      <PlanSummary plan={plan} shape={shape} />
+
+      <Panel title="Canon" subtitle={`${plan.canon.length} entries`} testId="plan-canon">
         {plan.canon.length === 0 ? (
           <p className="text-sm text-text-muted italic">No canon entries — planner emitted the fallback schedule.</p>
         ) : (
-          <ul className="flex flex-wrap gap-1.5">
+          <ul className="flex flex-wrap gap-1.5" data-testid="plan-canon-list">
             {plan.canon.map((c, i) => (
-              <li key={i} className="text-sm px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/30">{c}</li>
+              <li
+                key={i}
+                className="text-sm px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/30"
+              >
+                {c}
+              </li>
             ))}
           </ul>
         )}
-      </section>
+      </Panel>
 
-      <section>
-        <h3 className="text-xs uppercase tracking-wide text-text-muted mb-2">Branches ({plan.branches.length})</h3>
-        <div className="flex flex-col gap-2">
-          {plan.branches.map((b) => (
-            <BranchCard key={b.id} branch={b} output={branchOutputs.get(b.id)} />
+      <Panel
+        title="Branches"
+        subtitle={`${plan.branches.length} branch${plan.branches.length !== 1 ? 'es' : ''} · default budget ${plan.per_branch_budget}`}
+        testId="plan-branches"
+      >
+        <div className="flex flex-col gap-2" data-testid="plan-branches-list">
+          {plan.branches.map(b => (
+            <BranchCard
+              key={b.id}
+              branch={b}
+              defaultBudget={plan.per_branch_budget}
+              output={branchOutputs.get(b.id)}
+            />
           ))}
         </div>
-      </section>
+      </Panel>
 
-      <section>
-        <h3 className="text-xs uppercase tracking-wide text-text-muted mb-2">Sources ({allSources.length})</h3>
+      <Panel
+        title="Sources"
+        subtitle={`${allSources.length} unique${allSources.length === 0 ? '' : ' across all branches'}`}
+        testId="plan-sources"
+      >
         {allSources.length === 0 ? (
           <p className="text-sm text-text-muted italic">No web sources fetched yet.</p>
         ) : (
@@ -1141,36 +1294,102 @@ function PlanTab({ artifacts }: { artifacts: Artifact[] }) {
             {allSources.map((s, i) => (
               <li key={i}>
                 <a href={s.url} target="_blank" rel="noreferrer" className="text-accent hover:underline">{s.title}</a>
-                <span className="text-text-muted text-xs ml-2">{new URL(s.url).hostname}</span>
+                <span className="text-text-muted text-xs ml-2">{safeDomain(s.url)}</span>
               </li>
             ))}
           </ol>
         )}
-      </section>
+      </Panel>
     </div>
   );
 }
 
-function BranchCard({ branch, output }: { branch: Branch; output?: ProcessorOutput }) {
+function PlanSummary({ plan, shape }: { plan: LoopSchedule; shape: OutputShape | undefined }) {
+  const totalBudget = plan.branches.reduce(
+    (sum, b) => sum + (b.budget ?? plan.per_branch_budget),
+    0,
+  );
+  const perturbationKeys = Object.keys(plan.perturbation_weights);
+  return (
+    <div
+      className="grid grid-cols-2 md:grid-cols-4 gap-3"
+      data-testid="plan-summary"
+    >
+      <SummaryCell label="Output shape" value={shape ? formatShape(shape) : '—'} tone="info" />
+      <SummaryCell label="Branches" value={String(plan.branches.length)} tone="default" />
+      <SummaryCell label="Cycle budget" value={String(totalBudget)} sub={`per branch ${plan.per_branch_budget}`} tone="accent" />
+      <SummaryCell
+        label="Milestones"
+        value={plan.milestone_plan.length === 0
+          ? 'none'
+          : plan.milestone_plan.map(m => `${Math.round(m * 100)}%`).join(' · ')}
+        sub={perturbationKeys.length > 0 ? `${perturbationKeys.length} perturbation weight${perturbationKeys.length !== 1 ? 's' : ''}` : 'no perturbation overrides'}
+        tone="default"
+      />
+    </div>
+  );
+}
+
+function SummaryCell({
+  label, value, sub, tone,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone: 'default' | 'info' | 'accent';
+}) {
+  return (
+    <div className="border border-border-primary rounded-lg p-3 bg-bg-secondary">
+      <div className="text-xs uppercase tracking-wider text-text-muted">{label}</div>
+      <div className={clsx(
+        'mt-1 font-mono tabular-nums break-words text-sm',
+        tone === 'info'    && 'text-info',
+        tone === 'accent'  && 'text-accent',
+        tone === 'default' && 'text-text-primary',
+      )}>{value}</div>
+      {sub && <div className="text-xs text-text-muted mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+function BranchCard({
+  branch, defaultBudget, output,
+}: {
+  branch: Branch;
+  defaultBudget: number;
+  output?: ProcessorOutput;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const effectiveBudget = branch.budget ?? defaultBudget;
+  const overridden = branch.budget != null && branch.budget !== defaultBudget;
   return (
     <details
-      className="border border-border-primary rounded bg-bg-secondary"
+      className="border border-border-primary rounded bg-bg-primary"
       open={expanded}
       onToggle={e => setExpanded((e.target as HTMLDetailsElement).open)}
+      data-testid="plan-branch-card"
     >
       <summary className="cursor-pointer px-3 py-2 text-sm flex items-center gap-3">
-        <span className="font-mono text-xs text-text-muted">{branch.id}</span>
+        <span className="font-mono text-xs text-text-muted shrink-0">{branch.id}</span>
         <span className="text-text-secondary flex-1 truncate">{branch.query}</span>
-        {branch.budget != null && (
-          <span className="text-xs text-text-muted">budget={branch.budget}</span>
+        <span className="text-xs text-text-muted whitespace-nowrap flex items-center gap-1">
+          {overridden && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Overrides default budget" />}
+          budget <span className="font-mono tabular-nums text-text-secondary">{effectiveBudget}</span>
+        </span>
+        {output && (
+          <span className={clsx(
+            'text-xs px-1.5 py-0.5 rounded font-medium uppercase tracking-wider',
+            'bg-success/15 text-success',
+          )}>ran</span>
         )}
       </summary>
       {output ? (
         <div className="px-3 py-3 border-t border-border-primary text-sm">
-          <div className="text-xs text-text-muted mb-2">
-            Query: <span className="font-mono">{output.query}</span>
-            {output.source_meta && <> · {output.source_meta.length} sources</>}
+          <div className="text-xs text-text-muted mb-2 flex flex-wrap gap-x-3 gap-y-1">
+            <span>query · <span className="font-mono text-text-secondary">{output.query}</span></span>
+            {output.source_meta && (
+              <span>sources · <span className="font-mono tabular-nums text-text-secondary">{output.source_meta.length}</span></span>
+            )}
           </div>
           <div className="prose prose-sm max-w-none prose-headings:text-text-primary prose-p:text-text-secondary prose-li:text-text-secondary">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{output.text ?? ''}</ReactMarkdown>
@@ -1185,51 +1404,201 @@ function BranchCard({ branch, output }: { branch: Branch; output?: ProcessorOutp
   );
 }
 
+/**
+ * Effective-models surface for the Config tab. The loops engine doesn't
+ * snapshot SessionConfig onto the loop row — model selection lives in
+ * `research_defaults` until a per-loop override slice lands. Fetching the
+ * defaults here is the lightest selector: a single GET keeps the Config
+ * tab honest about what model the engine is actually invoking for the
+ * primary, fast, iteration-check, and post-mortem calls. Returns null
+ * while pending so the panel can render a muted "loading…" placeholder.
+ */
+interface EffectiveModels {
+  model: string;
+  model_fast: string | null;
+  iteration_check_model: string;
+  post_mortem_model: string;
+}
+
+function useEffectiveModels(): EffectiveModels | null {
+  const [models, setModels] = useState<EffectiveModels | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void fetch('/api/research/defaults')
+      .then(r => r.ok ? r.json() : null)
+      .then((cfg: Partial<EffectiveModels> | null) => {
+        if (cancelled || !cfg) return;
+        setModels({
+          model: cfg.model ?? '—',
+          model_fast: cfg.model_fast ?? null,
+          iteration_check_model: cfg.iteration_check_model ?? '—',
+          post_mortem_model: cfg.post_mortem_model ?? '—',
+        });
+      })
+      .catch(() => { /* fall through to muted placeholder */ });
+    return () => { cancelled = true; };
+  }, []);
+  return models;
+}
+
+/**
+ * Config tab — surfaces the loop's frozen configuration. Mirrors the
+ * "Per-session overrides" panel from docs/mockups/research/query-detail.html
+ * (panel-config), but the loops engine doesn't snapshot SessionConfig onto
+ * the loop row, so we render four sections instead of editable cfg-rows:
+ *
+ *   - Loop          — id / template / status / pid / timestamps (chrome)
+ *   - Schedule      — output_shape · branches · per-branch budget ·
+ *                     milestone_plan · perturbation_weights (artifact)
+ *   - Envelope      — configured / consumed (loop row)
+ *   - Models        — effective model / model_fast / iteration_check_model /
+ *                     post_mortem_model (research_defaults)
+ *
+ * Anything mid-flight is read-only here; persistent defaults live at
+ * /research/config and apply to *new* loops only.
+ */
 function ConfigTab({ loop, artifacts }: { loop: Loop; artifacts: Artifact[] }) {
   const schedule = artifacts.find(a => a.kind === 'schedule');
   const payload = schedule?.payload as unknown as SchedulePayload | undefined;
+  const models = useEffectiveModels();
 
   return (
-    <div className="max-w-3xl flex flex-col gap-6" data-testid="config-tab">
-      <section>
-        <h3 className="text-xs uppercase tracking-wide text-text-muted mb-2">Loop</h3>
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
-          <Row label="ID"><span className="font-mono">{loop.id}</span></Row>
-          <Row label="Template">{loop.template_id}</Row>
-          <Row label="Status"><StatusBadge status={loop.status} /></Row>
-          <Row label="Child PID">{loop.child_pid ?? <span className="text-text-muted italic">none</span>}</Row>
-          <Row label="Created">{new Date(loop.created_at).toLocaleString()}</Row>
-          <Row label="Updated">{new Date(loop.updated_at).toLocaleString()}</Row>
-        </dl>
-      </section>
+    <div className="max-w-4xl flex flex-col gap-5" data-testid="config-tab">
+      <Panel title="Loop" subtitle="immutable identity & lifecycle" testId="config-loop">
+        <CfgRow label="ID" hint="Slug + hex tail" testId="config-loop-id">
+          <span className="font-mono text-xs text-text-secondary">{loop.id}</span>
+        </CfgRow>
+        <CfgRow label="Template" testId="config-loop-template">
+          <span className="font-mono text-text-secondary">{loop.template_id}</span>
+        </CfgRow>
+        <CfgRow label="Status" testId="config-loop-status">
+          <StatusBadge status={loop.status} />
+        </CfgRow>
+        <CfgRow label="Child PID" hint="OS pid of the engine worker; null when stopped">
+          {loop.child_pid != null
+            ? <span className="font-mono tabular-nums text-text-secondary">{loop.child_pid}</span>
+            : <span className="text-text-muted italic text-xs">none</span>}
+        </CfgRow>
+        <CfgRow label="Created">
+          <span className="font-mono text-xs text-text-secondary">{new Date(loop.created_at).toLocaleString()}</span>
+        </CfgRow>
+        <CfgRow label="Updated" last>
+          <span className="font-mono text-xs text-text-secondary">{new Date(loop.updated_at).toLocaleString()}</span>
+        </CfgRow>
+      </Panel>
 
-      <section>
-        <h3 className="text-xs uppercase tracking-wide text-text-muted mb-2">Envelope</h3>
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
-          <Row label="Configured"><pre className="font-mono text-xs">{JSON.stringify(loop.envelope, null, 2)}</pre></Row>
-          <Row label="Consumed"><pre className="font-mono text-xs">{JSON.stringify(loop.envelope_consumed, null, 2)}</pre></Row>
-        </dl>
-      </section>
-
-      <section>
-        <h3 className="text-xs uppercase tracking-wide text-text-muted mb-2">Schedule</h3>
+      <Panel
+        title="Schedule"
+        subtitle={payload ? 'planner artifact' : 'awaiting planner'}
+        testId="config-schedule"
+      >
         {payload ? (
-          <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
-            <Row label="Output shape">{formatShape(payload.output_shape)}</Row>
-            <Row label="Branches"><span className="font-mono">{payload.plan.branches.length}</span></Row>
-            <Row label="Per-branch budget"><span className="font-mono">{payload.plan.per_branch_budget}</span></Row>
-            <Row label="Milestones"><span className="font-mono">{payload.plan.milestone_plan.join(', ')}</span></Row>
-            <Row label="Perturbation weights">
+          <>
+            <CfgRow label="Output shape" hint="Target structure for the final document">
+              <span className="font-mono text-text-secondary">{formatShape(payload.output_shape)}</span>
+            </CfgRow>
+            <CfgRow label="Branches" hint="Decomposed investigation threads">
+              <span className="font-mono tabular-nums text-text-secondary">{payload.plan.branches.length}</span>
+            </CfgRow>
+            <CfgRow label="Per-branch budget" hint="Default cycle ceiling for each branch">
+              <span className="font-mono tabular-nums text-text-secondary">{payload.plan.per_branch_budget}</span>
+            </CfgRow>
+            <CfgRow label="Milestones" hint="Envelope fractions at which iteration-check fires" testId="config-milestones">
+              {payload.plan.milestone_plan.length === 0
+                ? <span className="text-text-muted italic text-xs">none</span>
+                : <span className="font-mono text-text-secondary">{payload.plan.milestone_plan.map(m => `${Math.round(m * 100)}%`).join(' · ')}</span>}
+            </CfgRow>
+            <CfgRow label="Perturbation weights" hint="Planner's strategy-menu preferences" last testId="config-perturbation">
               {Object.keys(payload.plan.perturbation_weights).length === 0
-                ? <span className="text-text-muted italic">defaults</span>
-                : <pre className="font-mono text-xs">{JSON.stringify(payload.plan.perturbation_weights, null, 2)}</pre>}
-            </Row>
-          </dl>
+                ? <span className="text-text-muted italic text-xs">defaults</span>
+                : <pre className="font-mono text-xs text-text-secondary whitespace-pre-wrap m-0">{JSON.stringify(payload.plan.perturbation_weights, null, 2)}</pre>}
+            </CfgRow>
+          </>
         ) : (
-          <p className="text-sm text-text-muted italic">No schedule artifact written yet.</p>
+          <p className="text-sm text-text-muted italic px-1 py-2">No schedule artifact written yet — the planner runs at loop start.</p>
         )}
-      </section>
+      </Panel>
+
+      <Panel title="Envelope" subtitle="cycles / cost / time caps" testId="config-envelope">
+        <CfgRow label="Configured" hint="Hard ceilings set at loop creation">
+          {renderJsonValue(loop.envelope)}
+        </CfgRow>
+        <CfgRow label="Consumed" hint="Live counters; refreshed via the event stream" last testId="config-envelope-consumed">
+          {renderJsonValue(loop.envelope_consumed)}
+        </CfgRow>
+      </Panel>
+
+      <Panel
+        title="Models"
+        subtitle="effective LLM selection for this loop"
+        testId="config-models"
+      >
+        {models ? (
+          <>
+            <CfgRow label="Primary" hint="Answer-voice synthesis + extraction" testId="config-model-primary">
+              <span className="font-mono text-xs text-text-secondary">{models.model}</span>
+            </CfgRow>
+            <CfgRow label="Fast" hint="Short utility calls — judges, dedup, perturbation queries" testId="config-model-fast">
+              {models.model_fast
+                ? <span className="font-mono text-xs text-text-secondary">{models.model_fast}</span>
+                : <span className="text-text-muted italic text-xs">falls back to primary</span>}
+            </CfgRow>
+            <CfgRow label="Iteration check" hint="Fires once per milestone (25 / 50 / 75 %)" testId="config-model-iteration-check">
+              <span className="font-mono text-xs text-text-secondary">{models.iteration_check_model}</span>
+            </CfgRow>
+            <CfgRow label="Post-mortem" hint="Fires once on natural completion" last testId="config-model-post-mortem">
+              <span className="font-mono text-xs text-text-secondary">{models.post_mortem_model}</span>
+            </CfgRow>
+          </>
+        ) : (
+          <p className="text-sm text-text-muted italic px-1 py-2">Loading model defaults…</p>
+        )}
+      </Panel>
+
+      <p className="text-xs text-text-muted">
+        In-flight loops are read-only. Global defaults — including the models above — live at{' '}
+        <Link to="/research/config" className="text-accent hover:underline">/research/config</Link> and apply to new loops only.
+      </p>
     </div>
+  );
+}
+
+function CfgRow({
+  label, hint, children, last, testId,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+  last?: boolean;
+  testId?: string;
+}) {
+  return (
+    <div
+      className={clsx(
+        'grid gap-3 items-center py-2.5',
+        !last && 'border-b border-border-primary',
+      )}
+      style={{ gridTemplateColumns: 'minmax(180px, 260px) 1fr' }}
+      data-testid={testId}
+    >
+      <div className="text-sm">
+        <div className="text-text-primary font-medium">{label}</div>
+        {hint && <div className="text-xs text-text-muted mt-0.5 leading-snug">{hint}</div>}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 min-w-0 text-sm">{children}</div>
+    </div>
+  );
+}
+
+function renderJsonValue(value: Record<string, unknown>): React.ReactNode {
+  const keys = Object.keys(value);
+  if (keys.length === 0) {
+    return <span className="text-text-muted italic text-xs">empty</span>;
+  }
+  return (
+    <pre className="font-mono text-xs text-text-secondary whitespace-pre-wrap m-0 max-w-full overflow-x-auto">
+      {JSON.stringify(value, null, 2)}
+    </pre>
   );
 }
 
