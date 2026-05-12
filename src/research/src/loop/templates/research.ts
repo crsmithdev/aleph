@@ -268,22 +268,38 @@ export function makeResearchTemplate(
       const shape = readShape(state);
       const satisfied = validateShape(state, shape).satisfied;
 
-      // Best-effort escape hatch: if the loop has burned through max_cycles
-      // without satisfying the shape, accept the partial result and stop
-      // (`shape_unreachable`). Without this the engine's max_iterations
-      // safety belt would eventually trip — but as a `failed` status, not
-      // a graceful `completed`. The render artifact still records
-      // shape_satisfied=false so the UI can flag the incomplete output.
-      if (completed >= maxCycles) {
+      // Effective target floors at branches.length so every planned branch
+      // gets a cycle. Without this, a 6-branch plan against the API's
+      // default cycles_target=3 would stop after 3 cycles — leaving half the
+      // planner's investigation threads unran. Surfaced by the V8 dogfood
+      // loop where the `predecessor-comparison` and `memory-management`
+      // branches never executed; the polished document was rated misleading
+      // by omission as a direct consequence.
+      // Defensive option-chaining: shape-only schedule artifacts (used in
+      // some tests and in degenerate prod paths where the planner didn't
+      // emit a plan) omit `plan`, so branches is treated as zero.
+      const schedule = readScheduleFromArtifacts(state.artifacts);
+      const branchCount = schedule?.plan?.branches?.length ?? 0;
+      const effectiveTarget = Math.max(target, branchCount);
+      const effectiveMaxCycles = Math.max(maxCycles, effectiveTarget * 2);
+
+      // Best-effort escape hatch: if the loop has burned through the
+      // effective max_cycles without satisfying the shape, accept the
+      // partial result and stop (`shape_unreachable`). Without this the
+      // engine's max_iterations safety belt would eventually trip — but as
+      // a `failed` status, not a graceful `completed`. The render artifact
+      // still records shape_satisfied=false so the UI can flag the
+      // incomplete output.
+      if (completed >= effectiveMaxCycles) {
         return {
           done: true,
           reason: satisfied
-            ? `research_target_reached:${target}`
-            : `shape_unreachable:${shape.kind}:${maxCycles}`,
+            ? `research_target_reached:${effectiveTarget}`
+            : `shape_unreachable:${shape.kind}:${effectiveMaxCycles}`,
         };
       }
-      if (completed >= target && satisfied) {
-        return { done: true, reason: `research_target_reached:${target}` };
+      if (completed >= effectiveTarget && satisfied) {
+        return { done: true, reason: `research_target_reached:${effectiveTarget}` };
       }
       return { done: false };
     },

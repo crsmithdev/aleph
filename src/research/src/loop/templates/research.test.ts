@@ -401,6 +401,32 @@ describe('research template — adaptive planner branches (Phase 4.2)', () => {
       'from-derivation-1',
     ]);
   });
+
+  test('stop_rule floors at branches.length: a 6-branch plan with cycles_target=3 runs all 6 branches', async () => {
+    // Reproducer for the V8 dogfood failure: planner emitted 6 branches but
+    // the API's default cycles_target=3 clipped the loop to 3 cycles, so the
+    // predecessor-comparison and memory-management branches never ran. The
+    // fix is in stop_rule: effective target = max(cycles_target, branchCount).
+    const { llm, seenQueries } = recordingFake();
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'origin prompt' });
+    writeScheduleWithPlan(loop.id, [
+      { id: 'b1', query: 'q1' },
+      { id: 'b2', query: 'q2' },
+      { id: 'b3', query: 'q3' },
+      { id: 'b4', query: 'q4' },
+      { id: 'b5', query: 'q5' },
+      { id: 'b6', query: 'q6' },
+    ]);
+    const template = makeResearchTemplate('origin prompt', { cycles_target: 3 }, { llm });
+
+    const result = await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    // Every branch ran.
+    expect(seenQueries).toEqual(['q1', 'q2', 'q3', 'q4', 'q5', 'q6']);
+    expect(result.cycles_run).toBe(6);
+    // Reason reflects the effective target, not the user-supplied 3.
+    expect(result.reason).toBe('research_target_reached:6');
+  });
 });
 
 describe('research template — crash resume via ledger', () => {
