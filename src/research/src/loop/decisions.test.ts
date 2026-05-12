@@ -30,6 +30,7 @@ import { runLoop } from './engine';
 import { FakeLLMProvider } from './llm';
 import { ensureScheduleArtifact } from './shape';
 import { makeResearchTemplate } from './templates/research';
+import { buildTemplate } from './templates/registry';
 import type { DecisionPayload, DecisionLogPayload } from './types';
 
 function newDb() {
@@ -256,12 +257,37 @@ describe('research template — derivation emits followup_pick decisions', () =>
     });
 
     const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
-    // Notice: no sqlite in deps — mirrors the current run.ts prod path.
+    // No sqlite in deps — mirrors the path tests of makeResearchTemplate
+    // directly. buildTemplate (the prod path) propagates sqlite when it's
+    // present in TemplateDeps; the next test covers that.
     const template = makeResearchTemplate('p', { cycles_target: 1 }, { llm });
     await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
 
     expect(events.filter(e => e.type === 'decision')).toHaveLength(2);
     expect(listArtifacts(sqlite, loop.id, 'decision_log')).toHaveLength(0);
+  });
+
+  test('via buildTemplate (prod path): TemplateDeps.sqlite reaches the derivation hook and decision_log persists', async () => {
+    const llm = new FakeLLMProvider({
+      searchWeb: (_m, q) => ({
+        text: `findings for ${q}`,
+        sources: [{ url: `https://e.test/${encodeURIComponent(q)}`, title: 't', snippet: 's' }],
+      }),
+      complete: () => JSON.stringify(['next-q', 'alt-q']),
+    });
+
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    // Go through the registry the way run.ts does in production: pass sqlite
+    // via TemplateDeps. Before #4, this didn't carry through — buildTemplate
+    // only forwarded { llm } to the research template factory.
+    const template = buildTemplate('research', 'p', { cycles_target: 2 }, { llm, sqlite });
+    await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    const log = readDecisionLog(listArtifacts(sqlite, loop.id))!;
+    expect(log).not.toBeNull();
+    const followups = log.entries.map(e => e.decision).filter(d => d.type === 'followup_pick');
+    // 2 cycles × 2 follow-ups = 4 persisted decisions.
+    expect(followups).toHaveLength(4);
   });
 });
 

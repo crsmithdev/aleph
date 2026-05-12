@@ -100,6 +100,11 @@ async function main() {
     process.exit(2);
     return;
   }
+  // The research template's derivation hook appends to a `decision_log`
+  // artifact when sqlite is available. buildDeps doesn't have the handle, so
+  // we attach it here. Without this, follow-up picks emit as live events but
+  // don't survive a page reload (decision_log stays planner-only).
+  deps.sqlite = sqlite;
   // Pull model defaults from research_defaults so the user's persisted choice
   // for iteration_check_model / post_mortem_model wins over the template's
   // baked-in default. CLI flags (parseArgs) still override these.

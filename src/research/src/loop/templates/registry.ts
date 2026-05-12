@@ -17,6 +17,7 @@
  *
  * Phase 2 lands `research`. Phase 2.6 lands `monitor`.
  */
+import type { Sqlite } from '@construct/data';
 import type { Template } from '../types.js';
 import type { LLMProvider } from '../llm.js';
 import { makeNoopTemplate } from './noop.js';
@@ -41,6 +42,12 @@ export interface TemplateOverrides {
 
 export interface TemplateDeps {
   llm?: LLMProvider;
+  /** SQLite handle for templates that persist out-of-band artifacts. The
+   *  research template uses it to append to the `decision_log` artifact from
+   *  inside its derivation hook (so follow-up picks survive a page reload —
+   *  events alone are live-only). Optional: tests that don't care about
+   *  persistence omit it; the helper falls back to event-only emission. */
+  sqlite?: Sqlite;
 }
 
 export function buildTemplate(
@@ -68,7 +75,7 @@ export function buildTemplate(
         iteration_check_model: overrides.iteration_check_model,
         post_mortem_model: overrides.post_mortem_model,
       },
-      { llm: deps.llm },
+      { llm: deps.llm, sqlite: deps.sqlite },
     ) as Template;
   }
   if (template_id === 'monitor') {
