@@ -58,9 +58,13 @@ export function LoopDetailPage() {
   }, [id]);
 
   // SSE — appends every event to the activity list and patches the snapshot
-  // for loop/cycle status changes.
+  // for loop/cycle status changes. When the loop reaches a terminal status,
+  // re-fetch the snapshot once so cycles/artifacts/milestones reflect final state
+  // (the engine only emits loop/cycle/cycle_step/milestone — artifact rows
+  // are written but not pushed as events to keep the bus narrow).
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     const source = new EventSource(`/api/loops/${id}/stream`);
     source.onmessage = e => {
       try {
@@ -68,11 +72,19 @@ export function LoopDetailPage() {
         const ts = new Date().toISOString();
         setEvents(prev => [...prev, { ...frame, ts }]);
         if (frame.type === 'loop') {
-          setSnapshot(prev => prev ? { ...prev, loop: { ...prev.loop, ...(frame.payload as Partial<Loop>) } } : prev);
+          const incoming = frame.payload as Partial<Loop>;
+          setSnapshot(prev => prev ? { ...prev, loop: { ...prev.loop, ...incoming } } : prev);
+          const status = incoming.status;
+          if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+            void fetch(`/api/loops/${id}`)
+              .then(r => r.ok ? r.json() : null)
+              .then(data => { if (data && !cancelled) setSnapshot(data as typeof snapshot); })
+              .catch(() => { /* ignore */ });
+          }
         }
       } catch { /* skip malformed */ }
     };
-    return () => { source.close(); };
+    return () => { cancelled = true; source.close(); };
   }, [id]);
 
   if (loadError) return <ErrorState message={loadError} />;
