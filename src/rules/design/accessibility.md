@@ -2,7 +2,7 @@
 
 Review files for compliance. Output concise but comprehensive — sacrifice grammar for brevity. High signal-to-noise.
 
-For typography/character correctness, defer to the **design-type** skill.
+For typography/character correctness, see `typography.md` (typography rules are covered by `design-audit` section B).
 
 ## Rules
 

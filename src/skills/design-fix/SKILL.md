@@ -1,20 +1,19 @@
 ---
-name: design-conform
+name: design-fix
 description: >
   Apply fixes for peer-drift findings in UI surfaces — propagate a layout, component
   composition, state coverage, token usage, or microcopy pattern from one reference
-  file to peer files. Takes SARIF findings (with `tag: peer-drift` from design-audit,
-  design-standards, or design-type) as input or runs an inline audit pass first.
-  Verifies with `gate("design")` (resolves to `bun run ui:smoke`). Triggers on
-  "make the pages match", "align the layouts", "same loading state", "match the
-  table headers", "make the components consistent", "apply this design pattern",
-  or `/design-conform`. Renamed `design-fix` in a later phase.
+  file to peer files. Takes SARIF findings (with `tag: peer-drift` from design-audit)
+  as input or runs an inline audit pass first. Verifies with `gate("design")`
+  (resolves to `bun run ui:smoke`). Triggers on "make the pages match",
+  "align the layouts", "same loading state", "match the table headers",
+  "make the components consistent", "apply this design pattern", or `/design-fix`.
 verb: fix
 domain: design
 modes: [fix]
 ---
 
-# Design Conform
+# Design Fix
 
 Applies edits derived from `peer-drift` findings on UI surfaces. Each finding describes the canonical reference (`relatedLocations`) and the drifted peer (`locations`); this skill executes the propagation minimally and verifies with `gate("design")`.
 
@@ -22,15 +21,15 @@ Pure leaf: no `Skill()` calls. The omnibus chains audit → approval → fix.
 
 ## When to use
 
-- After `design-audit` (or `design-standards` / `design-type`) produced `tag: peer-drift` findings and the user approved them.
-- User invokes `/design-conform` against a saved SARIF report, or `/fix design` via the omnibus.
-- User invokes `/design-conform <reference>` directly — runs an inline audit pass against that reference (no SARIF input), then asks for approval before applying.
+- After `design-audit` produced `tag: peer-drift` findings and the user approved them.
+- User invokes `/design-fix` against a saved SARIF report, or `/fix design` via the omnibus.
+- User invokes `/design-fix <reference>` directly — runs an inline audit pass against that reference (no SARIF input), then asks for approval before applying.
 
 ## When NOT to use
 
 - Logic/data drift — that's `code-conform`.
 - Full UI audit with no specific reference — that's `design-audit`.
-- Pure typography correctness (smart quotes, em dashes, character entities) — `design-type` handles it; this skill only propagates *patterns*, not individual character substitutions.
+- Pure typography correctness (smart quotes, em dashes, character entities) — `design-audit` flags these as `tag: typography` findings citing `design/RULES.md#B`; this skill only propagates *patterns*, not individual character substitutions.
 - Single-page polish with no peers — just edit directly.
 - Net-new features (this skill propagates *patterns*, not roadmap items).
 
@@ -153,19 +152,19 @@ This prevents drowning the user in legacy drift. Use `--all` to include every pe
 ## Worked invocations
 
 ```
-/design-conform src/ui/web/src/components/data/DataTable.tsx
+/design-fix src/ui/web/src/components/data/DataTable.tsx
   → peers = consumers of DataTable; align column-typing patterns
 
-/design-conform src/ui/web/src/components/layout/PageHeader.tsx
+/design-fix src/ui/web/src/components/layout/PageHeader.tsx
   → peers = consumers of PageHeader; align title font and breadcrumb usage
 
-/design-conform src/ui/web/src/pages/system/observability/EvalsPage.tsx — table only
+/design-fix src/ui/web/src/pages/system/observability/EvalsPage.tsx — table only
   → narrow to the table; ignore page-level chrome
 
-/design-conform the loading state across all detail pages
+/design-fix the loading state across all detail pages
   → no fixed anchor; skill picks the cleanest, asks for confirmation
 
-/design-conform --report
+/design-fix --report
   → audit only, no fixes; emits SARIF with tag: peer-drift
 ```
 
@@ -217,7 +216,7 @@ assertions: every route renders, no 5xx, no console errors; eyeballed <list>
 
 - Rule source: `src/rules/design/RULES.md`
 - Finding contract: `src/skills/_shared/finding.md`
-- Audit counterparts: `src/skills/design-audit/SKILL.md`, `src/skills/design-standards/SKILL.md`, `src/skills/design-type/SKILL.md`
+- Audit counterpart: `src/skills/design-audit/SKILL.md` (walks all 18 sections of `design/RULES.md`, including typography at B and accessibility/forms/perf at L-R)
 - Orchestrator: `src/skills/omnibus/SKILL.md`
 - Verification gate table: `VERIFICATION.md`
 - Progressive-disclosure detail: `references/dimensions.md`, `references/verification.md`, `examples/`

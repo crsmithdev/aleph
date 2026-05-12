@@ -19,7 +19,7 @@ metadata:
 
 # Design Audit
 
-Walks UI surfaces in scope, evaluates each rule in `src/rules/design/RULES.md`, and emits findings in SARIF format. Does **not** apply fixes — that's `design-conform` (renamed `design-fix` in a later phase).
+Walks UI surfaces in scope, evaluates each rule in `src/rules/design/RULES.md`, and emits findings in SARIF format. Does **not** apply fixes — that's `design-fix`.
 
 This skill is a pure leaf: no `Skill()` calls. The omnibus chains us; we report.
 
@@ -31,9 +31,8 @@ This skill is a pure leaf: no `Skill()` calls. The omnibus chains us; we report.
 ## When NOT to use
 
 - Logic/feature work — out of scope.
-- Pattern-propagation across peers — `design-conform`.
-- Code-level a11y, forms, perf rules are folded into `src/rules/design/accessibility.md` and run as part of this audit (no separate `design-standards` invocation needed).
-- Typography correctness is folded into `src/rules/design/typography.md` and run as part of this audit (no separate `design-type` invocation needed).
+- Pattern-propagation across peers — `design-fix`.
+- Applying audit findings — `design-fix` (consumes the SARIF this skill emits).
 
 ## Inputs
 
@@ -102,7 +101,7 @@ Single SARIF v2.1.0 run, `tool.driver.name = "design-audit"`. Each `result`:
 
 `confidence` is provisional; the omnibus validation pass refines it.
 
-When proposing `praise`, the bar is concrete: the surface solves a common visual anti-pattern with a clean solution worth propagating. Praise must (a) cite a specific RULES.md rule the surface exemplifies the opposite of, and (b) carry "use this as a reference for: <pattern>" in `fix` so `design-conform` can use it as the anchor for aligning peers.
+When proposing `praise`, the bar is concrete: the surface solves a common visual anti-pattern with a clean solution worth propagating. Praise must (a) cite a specific RULES.md rule the surface exemplifies the opposite of, and (b) carry "use this as a reference for: <pattern>" in `fix` so `design-fix` can use it as the anchor for aligning peers.
 
 If no surface qualifies, omit praise. Don't manufacture it.
 
@@ -135,13 +134,13 @@ For the exact phased output template (when run standalone, not via omnibus), see
 
 ### 7. Wait for approval
 
-Present the SARIF + phased prose. Do not implement anything — `design-conform` applies approved fixes.
+Present the SARIF + phased prose. Do not implement anything — `design-fix` applies approved fixes.
 
 ## Scope discipline
 
 - **Read-only.** No `Edit`, `Write`, or mutating `Bash`. Bash for `git diff`, `grep`, `find`, screenshot capture only.
 - **No `Skill()` calls.** The omnibus chains; we audit.
-- **No verification gate.** Audit is non-mutating; `gate("design")` runs only when `design-conform` finishes applying changes.
+- **No verification gate.** Audit is non-mutating; `gate("design")` runs only when `design-fix` finishes applying changes.
 - **Design only, not logic.** If a finding requires a functional change, flag it and surface — outside this skill's scope.
 
 ## Output template
@@ -173,5 +172,5 @@ When invoked by the omnibus, return the SARIF as the structured result; the omni
 - Reference sub-rules: `src/rules/design/accessibility.md`, `src/rules/design/typography.md`
 - Finding contract: `src/skills/_shared/finding.md`
 - Progressive-disclosure detail: `design-principles.md`, `audit-template.md`
-- Fix counterpart: `src/skills/design-conform/SKILL.md` (renamed `design-fix` in a later phase)
+- Fix counterpart: `src/skills/design-fix/SKILL.md`
 - Orchestrator: `src/skills/omnibus/SKILL.md`

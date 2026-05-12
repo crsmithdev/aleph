@@ -14,8 +14,10 @@ src/rules/
 │   └── ...
 ├── design/
 │   ├── RULES.md
-│   ├── typography.md      # from former design-type
-│   ├── accessibility.md   # from former design-standards
+│   ├── typography.md      # walked by design-audit (section B); was former design-type
+│   ├── accessibility.md   # walked by design-audit (sections L-R); was former design-standards
+│   ├── css-templates.md   # baseline CSS / responsive / OpenType
+│   ├── html-entities.md   # entity substitution reference
 │   └── ...
 ├── docs/
 │   ├── RULES.md           # canonical doc rule set (moved from docs-author-v2/)
@@ -47,7 +49,7 @@ This directory is currently scaffolding. The skill-architecture migration (`docs
 | Domain | Legacy source | Migration status |
 |---|---|---|
 | `code` | `src/skills/code-review/SKILL.md` §1-8, `src/skills/code-simplify/SKILL.md` slop patterns, CLAUDE.md commandments | **Populated** |
-| `design` | `src/skills/design-audit/` (qualitative dims), `design-standards/REFERENCE.md` (moved to `accessibility.md`), `design-type/REFERENCE.md` (moved to `typography.md`) | **Populated** (umbrella + 2 reference files) |
+| `design` | `src/skills/design-audit/` (qualitative dims); `design-standards` folded into `accessibility.md`; `design-type` folded into `typography.md` (+ `css-templates.md`, `html-entities.md`) | **Populated + consolidated** (umbrella + 4 reference files) |
 | `docs` | (moved from `src/skills/docs-author-v2/RULES.md`) | **Populated** |
 | `skills` | `src/skills/skill-creator/` (rules buried in process) | Stub |
 | `hooks` | `src/skills/config-audit/SKILL.md` Phase 2 + Construct-specific hook conventions | Stub |

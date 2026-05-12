@@ -2,7 +2,7 @@
 description: Apply a UI pattern from one file across peers — layout, component composition, state coverage, tokens.
 ---
 
-Apply the `design-conform` skill using: $ARGUMENTS
+Apply the `design-fix` skill using: $ARGUMENTS
 
 Parse `$ARGUMENTS` into:
 
@@ -15,7 +15,7 @@ If `$ARGUMENTS` is empty, look at the most recent git diff and offer the most-re
 
 ## Execution
 
-Activate the `design-conform` skill (`Skill(skill="design-conform")`) and follow its process:
+Activate the `design-fix` skill (`Skill(skill="design-fix")`) and follow its process:
 
 1. Resolve the reference (read it; load it in the browser if helpful).
 2. Identify the distinctive pattern across the five dimensions (Layout, Composition, State coverage, Tokens, Microcopy).
@@ -41,9 +41,9 @@ Activate the `design-conform` skill (`Skill(skill="design-conform")`) and follow
 
 ## Notes
 
-- This is the slash-command entry point for *design* conformance. For logic / behavior / data-flow drift, use `/code-conform`. For pure typography correctness (smart quotes, em dashes), use `/design-type`. For full UI audits with no specific reference, use `/design-audit`.
+- This is the slash-command entry point for *design* conformance. For logic / behavior / data-flow drift, use `/code-conform`. For pure typography correctness (smart quotes, em dashes), `/design-audit` flags violations as `tag: typography` findings citing `design/RULES.md#B`. For full UI audits with no specific reference, use `/design-audit`.
 - Conversational invocations like *"make the other detail pages match X"* or *"same loading state everywhere"* trigger the skill directly via keyword rules.
 - Always diff-only by default; `--all` opens the floodgates.
 - The skill does not write a registry or config — every invocation is independent.
 - `bun run ui:smoke` is the required verification gate. Build alone is not sufficient (per `feedback_ui_done_requires_page_load`).
-- For deep dimension definitions, see `src/skills/design-conform/references/dimensions.md`. For three worked cases, see `src/skills/design-conform/examples/`.
+- For deep dimension definitions, see `src/skills/design-fix/references/dimensions.md`. For three worked cases, see `src/skills/design-fix/examples/`.

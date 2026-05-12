@@ -120,9 +120,8 @@ Full skills and commands: [docs/specs/SKILLS.md](docs/specs/SKILLS.md)
 | `code-review` | Dead code, issues, quality scan |
 | `code-simplify` | Remove over-engineering and slop |
 | `context-compact` | Guide context compaction |
-| `design-audit` | UI/UX design review |
-| `design-standards` | Web interface best practices |
-| `design-type` | Typography rules |
+| `design-audit` | UI/UX design review (covers all 18 dimensions: hierarchy, typography, a11y, forms, perf, hydration, etc.) |
+| `design-fix` | Apply approved design audit findings — peer-drift propagation |
 | `docs-author` | Create/update documentation |
 | `docs-optimize` | Optimize docs for LLM discoverability |
 | `eval-harness` | Define and run evals |

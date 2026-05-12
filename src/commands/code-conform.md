@@ -40,7 +40,7 @@ Activate the `code-conform` skill (`Skill(skill="code-conform")`) and follow its
 
 ## Notes
 
-- This is the slash-command entry point for *code* conformance. For UI / layout / typography drift, use `/design-conform`. For pure typography correctness (smart quotes, em dashes), use `/design-type`.
+- This is the slash-command entry point for *code* conformance. For UI / layout / typography drift, use `/design-fix`. For pure typography correctness (smart quotes, em dashes), `/design-audit` flags violations as `tag: typography` findings.
 - Conversational invocations like *"align the route handlers in app.ts"* trigger the skill directly via keyword rules.
 - Always diff-only by default; `--all` opens the floodgates.
 - The skill does not write a registry or config — every invocation is independent.

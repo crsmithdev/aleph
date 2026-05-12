@@ -49,7 +49,7 @@ When working in a worktree (`.worktrees/<name>`):
 
 ## Non-gates
 
-These do **not** count as verification for a design-conform pass:
+These do **not** count as verification for a design-fix pass:
 
 - `bun run --cwd src/ui build` alone — catches type errors, not render errors.
 - "Diff looks right by eye" — needs `ui:smoke` + browser load.

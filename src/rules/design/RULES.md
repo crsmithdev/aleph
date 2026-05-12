@@ -2,10 +2,8 @@
 
 Canonical rule set for the design domain. Read by:
 
-- `src/skills/design-audit/SKILL.md` — qualitative + checkable audit of UI surfaces
-- `src/skills/design-standards/SKILL.md` — checkable subset focused on accessibility/forms/perf (uses `accessibility.md`)
-- `src/skills/design-type/SKILL.md` — typography enforcement + audit (uses `typography.md`)
-- `src/skills/design-conform/SKILL.md` — peer-drift fixes (the fix verb for the design domain)
+- `src/skills/design-audit/SKILL.md` — qualitative + checkable audit of UI surfaces (covers all 18 sections, including typography at B via `typography.md` and accessibility/forms/perf at L-R via `accessibility.md`)
+- `src/skills/design-fix/SKILL.md` — peer-drift fixes (the fix verb for the design domain)
 - CLAUDE.md (project-local + global) — applied silently at write-time
 
 Every checkable rule below can be evaluated against a real file and produce a SARIF finding (per `src/skills/_shared/finding.md`). Qualitative rules (hierarchy, motion, rhythm) require visual reasoning and are run by `design-audit` against rendered surfaces.
@@ -30,7 +28,7 @@ These rules require seeing the rendered page; `design-audit` checks them, not gr
 
 *See `typography.md` for the complete rule set.* Lifted verbatim from Matthew Butterick's *Practical Typography*.
 
-Checkable highlights `design-audit` and `design-type` greppable on:
+Checkable highlights `design-audit` is greppable on:
 
 - **B.1** Curly quotes only — straight `"`/`'` in JSX text is forbidden. *Detect:* grep for `"` or `'` between `>` and `<` in JSX. *Severity:* `nit`. *Tag:* `typography`.
 - **B.2** Em/en dash discipline — `--` and `---` in rendered text are forbidden. *Detect:* same as B.1. *Severity:* `nit`. *Tag:* `typography`.

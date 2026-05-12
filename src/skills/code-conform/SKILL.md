@@ -22,7 +22,7 @@ Ad-hoc — no registry, no config. The reference *is* the spec.
 
 ## When NOT to use
 
-- Visual / layout / typography drift — that's `design-conform`.
+- Visual / layout / typography drift — that's `design-fix`.
 - General code quality / slop removal — that's `code-simplify`.
 - Architecture review with no specific reference — that's `code-architect`.
 - Single-file refactors with no peers — just edit directly.

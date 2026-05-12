@@ -2,7 +2,7 @@
 
 The five axes the skill compares peer docs against. SKILL.md keeps the short
 list; this file is the deep reference, loaded only when the comparison needs
-more nuance. Modeled on `design-conform/references/dimensions.md`, adapted
+more nuance. Modeled on `design-fix/references/dimensions.md`, adapted
 for prose/markdown rather than UI code.
 
 ## 1. Structure

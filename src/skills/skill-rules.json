@@ -86,15 +86,7 @@
     },
     {
       "skill": "design-audit",
-      "keywords": ["design audit", "audit the design", "audit the ui", "audit ui", "design review", "make this feel professional", "make this look professional", "polish the interface", "ux audit", "go through the ui", "review the ui", "the ui needs work", "clean up the ui", "/(review|audit|go through).{0,15}(ui|design|interface|ux)/"]
-    },
-    {
-      "skill": "design-type",
-      "keywords": ["typography", "fix typography", "em dash", "en dash", "text hierarchy", "review layout", "fix the font", "change the font", "font size", "font is wrong", "/(fix|change|update|wrong).{0,15}font/", "/font.{0,15}(wrong|bad|ugly|small|big|size)/"]
-    },
-    {
-      "skill": "design-standards",
-      "keywords": ["web standards", "check accessibility", "accessibility audit", "a11y", "best practices", "review ux"]
+      "keywords": ["design audit", "audit the design", "audit the ui", "audit ui", "design review", "make this feel professional", "make this look professional", "polish the interface", "ux audit", "go through the ui", "review the ui", "the ui needs work", "clean up the ui", "typography", "fix typography", "em dash", "en dash", "text hierarchy", "review layout", "fix the font", "change the font", "font size", "font is wrong", "web standards", "check accessibility", "accessibility audit", "a11y", "best practices", "review ux", "/(review|audit|go through).{0,15}(ui|design|interface|ux)/", "/(fix|change|update|wrong).{0,15}font/", "/font.{0,15}(wrong|bad|ugly|small|big|size)/"]
     },
     {
       "skill": "config-audit",
@@ -105,8 +97,8 @@
       "keywords": ["code-conform", "conform", "make the others", "make the other", "apply this pattern", "apply the pattern", "align with", "match the way", "match this pattern", "fix drift", "standardize", "make them consistent", "make consistent", "same pattern", "propagate this", "align the routes", "align the handlers", "match this handler", "make the providers consistent", "fix drift in the schemas", "consolidate", "single source of truth", "deduplicate", "/(handlers|providers|routes|schemas|hooks|helpers).{0,30}(consistent|match|same|like)/", "/(make|fix|align).{0,30}(consistent|match|same|like)/"]
     },
     {
-      "skill": "design-conform",
-      "keywords": ["design-conform", "conform", "make the pages match", "make the others", "align the layouts", "same loading state", "same empty state", "match the table headers", "make the components consistent", "same shape", "apply to all", "/(pages|tables|layouts|components|cards|forms).{0,30}(match|like|same|consistent)/", "/(make|fix|align).{0,30}(consistent|match|same|like)/"]
+      "skill": "design-fix",
+      "keywords": ["design-fix", "design-conform", "conform", "make the pages match", "make the others", "align the layouts", "same loading state", "same empty state", "match the table headers", "make the components consistent", "same shape", "apply to all", "/(pages|tables|layouts|components|cards|forms).{0,30}(match|like|same|consistent)/", "/(make|fix|align).{0,30}(consistent|match|same|like)/"]
     },
     {
       "skill": "design-construct",

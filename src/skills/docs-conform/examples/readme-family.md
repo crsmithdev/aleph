@@ -57,7 +57,7 @@ Returns 8 module READMEs. Presents the list:
 > - src/skills/code-debug/README.md
 > - src/skills/code-conform/README.md
 > - src/skills/design-audit/README.md
-> - src/skills/design-conform/README.md
+> - src/skills/design-fix/README.md
 > - src/skills/docs-author/README.md
 > - src/skills/docs-optimize/README.md
 > - src/skills/skill-creator/README.md
@@ -76,7 +76,7 @@ User: "proceed".
 | `code-debug/README.md` | **Major**: missing Files section |
 | `code-conform/README.md` | **Aligned** |
 | `design-audit/README.md` | **Minor**: H1 uses "Design Audit Skill" instead of "design-audit" |
-| `design-conform/README.md` | **Minor**: Cross-references section is at the top, not bottom |
+| `design-fix/README.md` | **Minor**: Cross-references section is at the top, not bottom |
 | `docs-author/README.md` | **Major**: no README (skill has only SKILL.md) — not applicable, skip |
 | `docs-optimize/README.md` | **Major**: uses "## About" instead of "## Purpose" |
 | `skill-creator/README.md` | **Stylistic**: uses gerund voice ("Creating skills") instead of imperative |
@@ -96,7 +96,7 @@ User approves Phase 1 (Major drift only). `docs-conform` produces:
 User approves Phase 2 (Minor + Stylistic). `docs-conform` produces:
 
 - `design-audit/README.md`: change H1 from "Design Audit Skill" to "design-audit"
-- `design-conform/README.md`: move Cross-references section to the bottom
+- `design-fix/README.md`: move Cross-references section to the bottom
 - `skill-creator/README.md`: rewrite gerund constructions to imperative
 
 ## Step 6: Verify
@@ -118,7 +118,7 @@ reference. All five align.
 > 2 were already aligned.
 >
 > Major: code-debug (added Files section), docs-optimize (renamed Purpose)
-> Minor: design-audit (H1), design-conform (section order)
+> Minor: design-audit (H1), design-fix (section order)
 > Stylistic: skill-creator (voice)
 >
 > Reference-as-outlier check: reference confirmed canonical (5/7 peers
