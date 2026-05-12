@@ -27,13 +27,23 @@
  * production passes `OpenRouterProvider` constructed by `run.ts` from env.
  */
 
-import type { Template, LoopState, Artifact } from '../types.js';
+import type { Template, LoopState, Artifact, OutputShape } from '../types.js';
 import type { LLMProvider } from '../llm.js';
+import { readScheduleFromArtifacts, validateShape, type ShapeMissing } from '../shape.js';
 
 export interface ResearchTemplateOptions {
   cycles_target?: number;
   search_model?: string;
   complete_model?: string;
+  /**
+   * Hard cap on cycles. The stop_rule gates "done" on (cycles_target reached
+   * AND shape_satisfied); if the shape gate never satisfies — e.g. the LLM
+   * can't produce a table for a table-shape query — the loop terminates
+   * anyway at this many cycles with `shape_unreachable` as the reason.
+   * Default = 2 * cycles_target. Phase 5 will replace this with the
+   * marginal-value-stop check.
+   */
+  max_cycles?: number;
 }
 
 export interface ResearchTemplateDeps {
@@ -67,6 +77,15 @@ interface RenderOutput {
   findings: Array<{ cycle: number; query: string; text: string }>;
   sources: Array<{ url: string; title: string }>;
   cycles_rendered: number;
+  /**
+   * Phase 3 — the renderer is the gate. It validates the accumulated findings
+   * against the schedule's detected output_shape and surfaces the result on
+   * the render artifact for the UI + stop_rule. Defaults to `prose` shape
+   * (always satisfied) when no schedule artifact exists.
+   */
+  shape_kind: OutputShape['kind'];
+  shape_satisfied: boolean;
+  shape_missing: ShapeMissing;
 }
 
 export function makeResearchTemplate(
@@ -75,6 +94,7 @@ export function makeResearchTemplate(
   deps: ResearchTemplateDeps,
 ): Template<ProcessorOutput, DerivationOutput, RenderOutput> {
   const target = opts.cycles_target ?? 3;
+  const maxCycles = opts.max_cycles ?? target * 2;
   const searchModel = opts.search_model ?? DEFAULT_SEARCH_MODEL;
   const completeModel = opts.complete_model ?? DEFAULT_COMPLETE_MODEL;
 
@@ -123,12 +143,39 @@ export function makeResearchTemplate(
           sources.push({ url: m.url, title: m.title });
         }
       }
-      return { kind: 'render', findings, sources, cycles_rendered: findings.length };
+      const shape = readShape(state);
+      const validation = validateShape(state, shape);
+      return {
+        kind: 'render',
+        findings,
+        sources,
+        cycles_rendered: findings.length,
+        shape_kind: validation.shape_kind,
+        shape_satisfied: validation.satisfied,
+        shape_missing: validation.missing,
+      };
     },
 
     async stop_rule(state) {
       const completed = countCycleOutputs(state);
-      if (completed >= target) {
+      const shape = readShape(state);
+      const satisfied = validateShape(state, shape).satisfied;
+
+      // Best-effort escape hatch: if the loop has burned through max_cycles
+      // without satisfying the shape, accept the partial result and stop
+      // (`shape_unreachable`). Without this the engine's max_iterations
+      // safety belt would eventually trip — but as a `failed` status, not
+      // a graceful `completed`. The render artifact still records
+      // shape_satisfied=false so the UI can flag the incomplete output.
+      if (completed >= maxCycles) {
+        return {
+          done: true,
+          reason: satisfied
+            ? `research_target_reached:${target}`
+            : `shape_unreachable:${shape.kind}:${maxCycles}`,
+        };
+      }
+      if (completed >= target && satisfied) {
         return { done: true, reason: `research_target_reached:${target}` };
       }
       return { done: false };
@@ -138,6 +185,13 @@ export function makeResearchTemplate(
 
 function countCycleOutputs(state: LoopState): number {
   return state.artifacts.filter(a => a.kind === 'cycle_output').length;
+}
+
+/** Pull the detected output_shape off the schedule artifact, defaulting to
+ *  `prose` (always-satisfied gate) when none exists — e.g. unit tests that
+ *  construct the template directly without going through `ensureScheduleArtifact`. */
+function readShape(state: LoopState): OutputShape {
+  return readScheduleFromArtifacts(state.artifacts)?.output_shape ?? { kind: 'prose' };
 }
 
 /** Cycle 0 searches the original prompt. Cycle N uses the first follow-up

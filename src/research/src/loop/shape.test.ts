@@ -15,9 +15,9 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { applyResearchDDL } from '../ddl';
-import { createLoop, listArtifacts } from './db';
+import { createArtifact, createCycle, createLoop, listArtifacts, readState } from './db';
 import { FakeLLMProvider } from './llm';
-import { detectOutputShape, ensureScheduleArtifact, readScheduleFromArtifacts } from './shape';
+import { detectOutputShape, ensureScheduleArtifact, readScheduleFromArtifacts, validateShape } from './shape';
 
 function newDb() {
   const sqlite = new Database(':memory:');
@@ -163,5 +163,125 @@ describe('ensureScheduleArtifact — idempotent persistence', () => {
     const loop = createLoop(sqlite, { template_id: 'noop', prompt: 'p' });
     const all = listArtifacts(sqlite, loop.id);
     expect(readScheduleFromArtifacts(all)).toBeNull();
+  });
+});
+
+// ---- Validator unit tests ---------------------------------------------------
+
+function seedCycleOutput(sqlite: ReturnType<typeof newDb>, loop_id: string, text: string) {
+  const cycle = createCycle(sqlite, { loop_id, idx: 0 });
+  createArtifact(sqlite, {
+    loop_id,
+    cycle_id: cycle.id,
+    kind: 'cycle_output',
+    payload: {
+      processor: { kind: 'research_proc', query: 'q', text, source_urls: [], source_meta: [], tokens: { prompt: 0, completion: 0 }, model: 'fake' },
+      derivation: { kind: 'research_deriv', followups: [] },
+      render: { kind: 'render', findings: [], sources: [], cycles_rendered: 0 },
+    },
+  });
+}
+
+describe('validateShape — prose', () => {
+  test('always satisfied', () => {
+    const sqlite = newDb();
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, 'just some prose without structure');
+    const state = readState(sqlite, loop.id);
+    expect(validateShape(state, { kind: 'prose' })).toEqual({
+      satisfied: true, shape_kind: 'prose', missing: null,
+    });
+  });
+});
+
+describe('validateShape — table', () => {
+  let sqlite: ReturnType<typeof newDb>;
+  beforeEach(() => { sqlite = newDb(); });
+
+  test('Markdown table with all required columns + data row → satisfied', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, [
+      'Comparison:',
+      '',
+      '| transmission | symptoms | treatment | vaccine |',
+      '|---|---|---|---|',
+      '| Direct | Sores | Antivirals | No |',
+      '| Sexual | Warts | Removal | Gardasil |',
+      '',
+      'End.',
+    ].join('\n'));
+    const state = readState(sqlite, loop.id);
+    const result = validateShape(state, {
+      kind: 'table',
+      columns: ['transmission', 'symptoms', 'treatment', 'vaccine'],
+    });
+    expect(result).toEqual({ satisfied: true, shape_kind: 'table', missing: null });
+  });
+
+  test('case-insensitive header matching', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, [
+      '| Transmission | Symptoms | Treatment | Vaccine |',
+      '|---|---|---|---|',
+      '| a | b | c | d |',
+    ].join('\n'));
+    const state = readState(sqlite, loop.id);
+    expect(validateShape(state, {
+      kind: 'table',
+      columns: ['transmission', 'symptoms', 'treatment', 'vaccine'],
+    }).satisfied).toBe(true);
+  });
+
+  test('no table at all → unsatisfied, all columns reported missing', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, 'just prose, definitely no table syntax here at all');
+    const state = readState(sqlite, loop.id);
+    const result = validateShape(state, { kind: 'table', columns: ['a', 'b', 'c'] });
+    expect(result.satisfied).toBe(false);
+    expect(result.missing).toEqual({ columns: ['a', 'b', 'c'] });
+  });
+
+  test('table missing one required column → unsatisfied, that column reported', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, [
+      '| a | b | c |',
+      '|---|---|---|',
+      '| 1 | 2 | 3 |',
+    ].join('\n'));
+    const state = readState(sqlite, loop.id);
+    const result = validateShape(state, { kind: 'table', columns: ['a', 'b', 'c', 'd'] });
+    expect(result.satisfied).toBe(false);
+    expect(result.missing).toEqual({ columns: ['d'] });
+  });
+
+  test('header without divider line is not a table → unsatisfied', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, '| a | b | c |\nthen some prose, no divider');
+    const state = readState(sqlite, loop.id);
+    expect(validateShape(state, { kind: 'table', columns: ['a', 'b'] }).satisfied).toBe(false);
+  });
+
+  test('table header but no data row → unsatisfied', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, '| a | b |\n|---|---|\n');
+    const state = readState(sqlite, loop.id);
+    expect(validateShape(state, { kind: 'table', columns: ['a', 'b'] }).satisfied).toBe(false);
+  });
+
+  test('table accumulates across cycles — second cycle adds the missing column', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    // Cycle 0: incomplete table missing 'vaccine'.
+    seedCycleOutput(sqlite, loop.id, '| transmission | symptoms |\n|---|---|\n| direct | sores |');
+    // Cycle 1: now produces the complete table.
+    seedCycleOutput(sqlite, loop.id, [
+      '| transmission | symptoms | treatment | vaccine |',
+      '|---|---|---|---|',
+      '| direct | sores | antivirals | none |',
+    ].join('\n'));
+    const state = readState(sqlite, loop.id);
+    expect(validateShape(state, {
+      kind: 'table',
+      columns: ['transmission', 'symptoms', 'treatment', 'vaccine'],
+    }).satisfied).toBe(true);
   });
 });

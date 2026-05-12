@@ -83,6 +83,82 @@ export function startFakeProviderServer(): FakeServerHandle {
 function pickResponse(prompt: string): string {
   const p = prompt.toLowerCase();
 
+  // ---------------- Phase 3 output_shape detection ----------------
+  // The Phase 3 detector sends "Classify the output shape this research
+  // prompt is asking for...". The detection prompt embeds the user prompt
+  // on a `Target prompt:` line; route off that line ONLY so the few-shot
+  // example text (which mentions HSV/Berkeley/etc.) can't false-trigger.
+  if (p.includes('classify the output shape')) {
+    const targetMatch = prompt.match(/^Target prompt:\s*(.+)$/m);
+    const target = (targetMatch?.[1] ?? '').toLowerCase();
+    if (target.includes('hsv') || target.includes('hpv')) {
+      return JSON.stringify({
+        kind: 'table',
+        columns: ['transmission', 'symptoms', 'treatment', 'vaccine'],
+      });
+    }
+    if (target.includes('berkeley') || target.includes('volunteer')) {
+      return JSON.stringify({ kind: 'list', min_items: 5 });
+    }
+    if (target.includes('smashed-burger') || target.includes('best places to get')) {
+      return JSON.stringify({
+        kind: 'mixed',
+        components: [{ kind: 'prose' }, { kind: 'list', min_items: 5 }],
+      });
+    }
+    return JSON.stringify({ kind: 'prose' });
+  }
+
+  // ---------------- Phase 3 shape-appropriate synthesis ----------------
+  // OpenRouterProvider.searchWeb wraps the engine's query in a "You are a
+  // research assistant. Based on the following web pages, answer this
+  // research query: ..." prompt. Branch on the embedded query to return
+  // content the renderer's shape-gate will accept.
+  if (p.includes('research assistant') && (p.includes('hsv') || p.includes('hpv'))) {
+    return [
+      'Comparison of HSV and HPV:',
+      '',
+      '| transmission | symptoms | treatment | vaccine |',
+      '|---|---|---|---|',
+      '| Direct skin/mucosal contact | Cold/genital sores | Antivirals (acyclovir) | No vaccine |',
+      '| Sexual contact | Genital warts; can cause cancers | Removal, monitoring | Yes (Gardasil) |',
+      '',
+      'Both require medical follow-up.',
+    ].join('\n');
+  }
+  if (p.includes('research assistant') && (p.includes('berkeley') || p.includes('volunteer'))) {
+    return [
+      'Best places to volunteer in Berkeley:',
+      '',
+      '1. Berkeley Food Network — food distribution to families in need.',
+      '2. The Berkeley Free Clinic — community health services.',
+      '3. Habitat for Humanity East Bay — home-building for low-income families.',
+      '4. Berkeley Animal Care Services — animal shelter operations.',
+      '5. Bay Area Outreach & Recreation Program — adaptive sports.',
+      '6. Berkeley Public Library — literacy and tutoring programs.',
+      '7. Cal Hiking & Outdoor Society — trail maintenance + cleanups.',
+      '',
+      'All accept new volunteers year-round.',
+    ].join('\n');
+  }
+  if (p.includes('research assistant') && (p.includes('smashed-burger') || p.includes('best places to get'))) {
+    return [
+      'History and recommendations:',
+      '',
+      'The smashed-burger style traces to White Manna Hamburger in Hackensack, NJ, where cooks pressed thin patties on a screaming-hot griddle to create the crisp Maillard crust that defines the style. The technique spread through diner culture across the Northeast and saw a modern revival in the late 2010s.',
+      '',
+      'Five best places to get one today:',
+      '',
+      '1. Brooklyn Hamburger Inn (NYC) — classic smashed double.',
+      '2. Au Cheval (Chicago) — among the most acclaimed of the modern revival.',
+      '3. Smashburger (national chain) — broad availability.',
+      '4. Burgerville (West Coast) — local sourcing, double-stack.',
+      '5. In-N-Out animal-style — a smashed cousin.',
+      '',
+      'All exhibit the crisp-edge crust the style is known for.',
+    ].join('\n');
+  }
+
   // pickAgentRole — JSON {label, prompt}
   if (p.includes('picking a domain expert')) {
     return JSON.stringify({

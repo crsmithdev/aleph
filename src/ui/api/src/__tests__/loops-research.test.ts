@@ -181,3 +181,58 @@ describe('Loops API — research end-to-end', () => {
     expect((terminal.payload as { status: string }).status).toBe('completed');
   }, 60_000);
 });
+
+describe('Loops API — Phase 3 output-shape enforcement', () => {
+  it('table-shape prompt (HSV vs HPV) → schedule artifact + table render + gate satisfied', async () => {
+    const startRes = await fetch(`http://127.0.0.1:${port}/api/loops/start`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        template_id: 'research',
+        // Prompt mentions HSV/HPV — the fake server's Phase 3 detection
+        // branch returns the four-column table classification; the synthesis
+        // branch produces a Markdown table that the gate accepts.
+        prompt: 'Compare HSV and HPV: transmission, symptoms, treatment, vaccine.',
+        cycles_target: 2,
+      }),
+    });
+    expect(startRes.status).toBe(201);
+    const { id } = await startRes.json() as { id: string };
+
+    const finalState = await poll(
+      async () => {
+        const res = await fetch(`http://127.0.0.1:${port}/api/loops/${id}`);
+        if (res.status !== 200) return null;
+        return await res.json() as {
+          loop: { status: string };
+          artifacts: Array<{ kind: string; payload: Record<string, unknown> }>;
+        };
+      },
+      v => v.loop.status === 'completed' || v.loop.status === 'failed',
+      30_000,
+    );
+
+    expect(finalState.loop.status).toBe('completed');
+
+    // Schedule artifact carries the detected table shape with the right columns.
+    const schedule = finalState.artifacts.find(a => a.kind === 'schedule');
+    expect(schedule).toBeDefined();
+    expect(schedule!.payload).toEqual({
+      output_shape: {
+        kind: 'table',
+        columns: ['transmission', 'symptoms', 'treatment', 'vaccine'],
+      },
+    });
+
+    // Every cycle_output's render payload reflects the table gate. The final
+    // cycle's render asserts shape_satisfied=true with no missing columns.
+    const cycleOutputs = finalState.artifacts.filter(a => a.kind === 'cycle_output');
+    expect(cycleOutputs).toHaveLength(2);
+    const lastRender = cycleOutputs[cycleOutputs.length - 1].payload.render as {
+      shape_kind: string; shape_satisfied: boolean; shape_missing: unknown;
+    };
+    expect(lastRender.shape_kind).toBe('table');
+    expect(lastRender.shape_satisfied).toBe(true);
+    expect(lastRender.shape_missing).toBeNull();
+  }, 60_000);
+});

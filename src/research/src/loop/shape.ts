@@ -28,7 +28,7 @@
 import type { Sqlite } from '@construct/data';
 import { createArtifact, listArtifacts } from './db.js';
 import type { LLMProvider } from './llm.js';
-import type { Artifact, LoopId, OutputShape, SchedulePayload } from './types.js';
+import type { Artifact, LoopId, LoopState, OutputShape, SchedulePayload } from './types.js';
 
 const DEFAULT_DETECT_MODEL = 'openai/gpt-5-nano';
 const DEFAULT_LIST_MIN_ITEMS = 5;
@@ -51,23 +51,16 @@ function buildDetectionPrompt(userPrompt: string): string {
     '  { "kind": "timeline", "min_events": N }                     // N >= 1',
     '  { "kind": "mixed", "components": [<shape>, <shape>, ...] }  // 2+ inner shapes',
     '',
-    'Examples:',
-    '  Prompt: "How does a sourdough starter develop?"',
-    '  → {"kind":"prose"}',
+    'Examples (illustrative — do not classify these):',
+    '  Example -> {"kind":"prose"}',
+    '  Example -> {"kind":"list","min_items":5}',
+    '  Example -> {"kind":"table","columns":["col1","col2","col3","col4"]}',
+    '  Example -> {"kind":"mixed","components":[{"kind":"prose"},{"kind":"list","min_items":5}]}',
+    '  Example -> {"kind":"timeline","min_events":3}',
     '',
-    '  Prompt: "What are the best places in Berkeley to volunteer?"',
-    '  → {"kind":"list","min_items":5}',
-    '',
-    '  Prompt: "Compare HSV and HPV: transmission, symptoms, treatment, vaccine."',
-    '  → {"kind":"table","columns":["transmission","symptoms","treatment","vaccine"]}',
-    '',
-    '  Prompt: "Major events in the development of the smashed-burger style, plus 5 best places to get one."',
-    '  → {"kind":"mixed","components":[{"kind":"prose"},{"kind":"list","min_items":5}]}',
-    '',
-    '  Prompt: "Major events in the history of the printing press"',
-    '  → {"kind":"timeline","min_events":3}',
-    '',
-    `Prompt: ${JSON.stringify(userPrompt)}`,
+    // Use a unique marker so HTTP-fake test infrastructure can extract the
+    // target prompt without false matches against any earlier text.
+    `Target prompt: ${userPrompt}`,
     'Return only the JSON object — no prose, no markdown.',
   ].join('\n');
 }
@@ -183,4 +176,204 @@ export function readScheduleFromArtifacts(artifacts: Artifact[]): SchedulePayloa
   const schedule = artifacts.find(a => a.kind === 'schedule');
   if (!schedule) return null;
   return schedule.payload as unknown as SchedulePayload;
+}
+
+// ---- Shape validation (renderer-as-gate) -------------------------------------
+
+/**
+ * Outcome of validating findings against the detected output shape. `missing`
+ * carries shape-specific diagnostic structure so the renderer can surface
+ * what's blocking the gate; null when satisfied. The renderer attaches this
+ * to the render artifact and stop_rule consults it before declaring "done".
+ *
+ * For diagnostic structure per variant:
+ *   - prose:    null (always satisfied)
+ *   - list:     { needed_items: N, found_items: M }
+ *   - table:    { columns: string[] } — names not found in any table header
+ *   - timeline: { needed_events: N, found_events: M }
+ *   - mixed:    { components: ShapeValidation[] }  // one per component
+ */
+export type ShapeMissing =
+  | null
+  | { columns: string[] }
+  | { needed_items: number; found_items: number }
+  | { needed_events: number; found_events: number }
+  | { components: ShapeValidation[] };
+
+export interface ShapeValidation {
+  satisfied: boolean;
+  shape_kind: OutputShape['kind'];
+  missing: ShapeMissing;
+}
+
+/**
+ * Validate the loop's findings against the detected output shape.
+ *
+ * Findings text = the concatenation of every `cycle_output[].payload.processor.text`
+ * in artifact creation order. Templates that store synthesized prose elsewhere
+ * would need a different collector; the research template stores text on the
+ * processor output so this works directly.
+ *
+ * Validators are heuristic-default — Markdown table syntax, list-marker
+ * counting, date-prefix detection. The design doc's principle (§6, §11) is
+ * heuristic-first with optional LLM modulation later. Phase 3 ships the
+ * heuristics; an opt-in LLM validator can swap in via the schedule artifact
+ * in a later phase if cases reveal false positives/negatives.
+ */
+export function validateShape(state: LoopState, shape: OutputShape): ShapeValidation {
+  const findingsText = collectFindingsText(state);
+  return validateAgainstText(findingsText, shape);
+}
+
+function validateAgainstText(text: string, shape: OutputShape): ShapeValidation {
+  switch (shape.kind) {
+    case 'prose':
+      return { satisfied: true, shape_kind: 'prose', missing: null };
+    case 'table':
+      return validateTable(text, shape.columns);
+    case 'list':
+      return validateList(text, shape.min_items ?? 5);
+    case 'timeline':
+      return validateTimeline(text, shape.min_events ?? 3);
+    case 'mixed':
+      return validateMixed(text, shape.components);
+  }
+}
+
+function collectFindingsText(state: LoopState): string {
+  return state.artifacts
+    .filter(a => a.kind === 'cycle_output')
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map(a => {
+      const proc = a.payload.processor as { text?: string } | undefined;
+      return proc?.text ?? '';
+    })
+    .join('\n\n');
+}
+
+/**
+ * Table validation — find a Markdown table whose header row contains every
+ * required column (case-insensitive) AND has at least one data row beneath
+ * the divider. Tolerates extra columns and varying whitespace. Reports the
+ * required columns not found in the best-matched header as `missing.columns`.
+ */
+function validateTable(text: string, columns: string[]): ShapeValidation {
+  const required = columns.map(c => c.toLowerCase().trim()).filter(c => c.length > 0);
+  if (required.length === 0) {
+    return { satisfied: true, shape_kind: 'table', missing: null };
+  }
+
+  const lines = text.split('\n');
+  let bestMatched = new Set<string>();
+  let satisfied = false;
+
+  for (let i = 0; i < lines.length - 1; i++) {
+    const headerLine = lines[i];
+    const dividerLine = lines[i + 1];
+    if (!isTableHeader(headerLine) || !isTableDivider(dividerLine)) continue;
+
+    const headers = parseCells(headerLine);
+    const matched = new Set<string>();
+    for (const r of required) if (headers.includes(r)) matched.add(r);
+
+    if (matched.size > bestMatched.size) bestMatched = matched;
+
+    if (matched.size === required.length) {
+      // Header covers every required column — check for at least one data row.
+      const dataRow = lines[i + 2];
+      if (dataRow && isTableHeader(dataRow) && parseCells(dataRow).some(c => c.length > 0)) {
+        satisfied = true;
+        break;
+      }
+    }
+  }
+
+  if (satisfied) return { satisfied: true, shape_kind: 'table', missing: null };
+  const missing = required.filter(c => !bestMatched.has(c));
+  return { satisfied: false, shape_kind: 'table', missing: { columns: missing } };
+}
+
+function isTableHeader(line: string): boolean {
+  return line.trim().includes('|');
+}
+
+function isTableDivider(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.includes('|') || !trimmed.includes('-')) return false;
+  return /^[\s|\-:]+$/.test(trimmed);
+}
+
+function parseCells(line: string): string[] {
+  return line
+    .split('|')
+    .map(c => c.trim().toLowerCase())
+    .filter(c => c.length > 0);
+}
+
+/**
+ * List validation — count list markers in the findings text. Recognises
+ * Markdown unordered (`- `, `* `, `+ `) and ordered (`1. `, `2. `, ...)
+ * markers at the start of a line. Satisfied when count >= min_items.
+ *
+ * Phase 3.3 implements + tests this surface; Phase 3.2 ships it as part of
+ * the validator API so the renderer signature can stabilise.
+ */
+function validateList(text: string, min_items: number): ShapeValidation {
+  const count = countListItems(text);
+  if (count >= min_items) {
+    return { satisfied: true, shape_kind: 'list', missing: null };
+  }
+  return {
+    satisfied: false,
+    shape_kind: 'list',
+    missing: { needed_items: min_items, found_items: count },
+  };
+}
+
+function countListItems(text: string): number {
+  const lines = text.split('\n');
+  let count = 0;
+  for (const line of lines) {
+    if (/^\s*(?:[-*+]\s+|\d+\.\s+)\S/.test(line)) count++;
+  }
+  return count;
+}
+
+/**
+ * Timeline validation — count date-prefixed events. Recognises common
+ * patterns: leading year (`1750`, `**1750**`, `1750:`), or `Date: ` prefix.
+ * Not in the deliverable case list, but the gate ships for completeness.
+ */
+function validateTimeline(text: string, min_events: number): ShapeValidation {
+  const count = countTimelineEvents(text);
+  if (count >= min_events) {
+    return { satisfied: true, shape_kind: 'timeline', missing: null };
+  }
+  return {
+    satisfied: false,
+    shape_kind: 'timeline',
+    missing: { needed_events: min_events, found_events: count },
+  };
+}
+
+function countTimelineEvents(text: string): number {
+  const lines = text.split('\n');
+  let count = 0;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^\*{0,2}\d{3,4}\*{0,2}\s*[-:–—]/.test(trimmed)) count++;
+    else if (/^date:\s*\d/i.test(trimmed)) count++;
+  }
+  return count;
+}
+
+/**
+ * Mixed validation — AND-combine each component's validation. Phase 3.4
+ * exercises this with the smashed-burgers deliverable case (prose + list).
+ */
+function validateMixed(text: string, components: OutputShape[]): ShapeValidation {
+  const compResults = components.map(c => validateAgainstText(text, c));
+  const allSatisfied = compResults.every(r => r.satisfied);
+  if (allSatisfied) return { satisfied: true, shape_kind: 'mixed', missing: null };
+  return { satisfied: false, shape_kind: 'mixed', missing: { components: compResults } };
 }

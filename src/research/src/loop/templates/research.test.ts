@@ -19,7 +19,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { applyResearchDDL } from '../../ddl';
-import { createLoop, listArtifacts, listCycles, readState } from '../db';
+import { createArtifact, createLoop, listArtifacts, listCycles, readState } from '../db';
 import { runLoop } from '../engine';
 import { FakeLLMProvider } from '../llm';
 import { makeResearchTemplate } from './research';
@@ -170,6 +170,124 @@ describe('research template — registry dispatch', () => {
     const t = buildTemplate('noop', 'q', {}, {});
     expect(t).not.toBeNull();
     expect(t!.id).toBe('noop');
+  });
+});
+
+describe('research template — shape-gated stop_rule (Phase 3.2 table case)', () => {
+  let sqlite: ReturnType<typeof newDb>;
+  beforeEach(() => { sqlite = newDb(); });
+
+  function writeSchedule(loop_id: string, shape: { kind: string; [k: string]: unknown }) {
+    createArtifact(sqlite, {
+      loop_id,
+      cycle_id: null,
+      kind: 'schedule',
+      payload: { output_shape: shape },
+    });
+  }
+
+  function tableSearchFake() {
+    return new FakeLLMProvider({
+      searchWeb: (_model, query) => ({
+        // Returns a complete Markdown table matching the HSV/HPV column spec.
+        text: [
+          `Comparison results for "${query}":`,
+          '',
+          '| transmission | symptoms | treatment | vaccine |',
+          '|---|---|---|---|',
+          '| Direct contact | Cold/genital sores | Antivirals | No |',
+          '| Sexual transmission | Genital warts | Removal | Yes (Gardasil) |',
+        ].join('\n'),
+        sources: [{ url: 'https://example.test/t', title: 't', snippet: 's' }],
+      }),
+      complete: () => JSON.stringify(['next q', 'alt q']),
+    });
+  }
+
+  function proseOnlyFake() {
+    return new FakeLLMProvider({
+      searchWeb: (_model, query) => ({
+        text: `Just prose about "${query}". No table content whatsoever.`,
+        sources: [{ url: 'https://example.test/p', title: 'p', snippet: 's' }],
+      }),
+      complete: () => JSON.stringify(['next q', 'alt q']),
+    });
+  }
+
+  test('table shape + LLM produces table → loop completes at cycles_target', async () => {
+    const llm = tableSearchFake();
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'Compare HSV and HPV' });
+    writeSchedule(loop.id, {
+      kind: 'table',
+      columns: ['transmission', 'symptoms', 'treatment', 'vaccine'],
+    });
+    const template = makeResearchTemplate(
+      'Compare HSV and HPV',
+      { cycles_target: 2 },
+      { llm },
+    );
+    const result = await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    expect(result.status).toBe('completed');
+    expect(result.reason).toBe('research_target_reached:2');
+    expect(result.cycles_run).toBe(2);
+    // The final render artifact records shape_satisfied=true.
+    const state = readState(sqlite, loop.id);
+    const render = await template.renderer(state);
+    expect(render.shape_kind).toBe('table');
+    expect(render.shape_satisfied).toBe(true);
+    expect(render.shape_missing).toBeNull();
+  });
+
+  test('table shape + LLM produces only prose → loop runs to max_cycles with shape_unreachable', async () => {
+    const llm = proseOnlyFake();
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'Compare HSV and HPV' });
+    writeSchedule(loop.id, {
+      kind: 'table',
+      columns: ['transmission', 'symptoms', 'treatment', 'vaccine'],
+    });
+    // target=2, max_cycles=2*2=4. After 4 cycles without a table, give up.
+    const template = makeResearchTemplate(
+      'Compare HSV and HPV',
+      { cycles_target: 2 },
+      { llm },
+    );
+    const result = await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    expect(result.status).toBe('completed');
+    expect(result.reason).toBe('shape_unreachable:table:4');
+    expect(result.cycles_run).toBe(4);
+
+    const state = readState(sqlite, loop.id);
+    const render = await template.renderer(state);
+    expect(render.shape_satisfied).toBe(false);
+    expect(render.shape_missing).toEqual({
+      columns: ['transmission', 'symptoms', 'treatment', 'vaccine'],
+    });
+  });
+
+  test('prose shape (default fallback) → backwards-compatible with Phase 2 behavior', async () => {
+    const llm = proseOnlyFake();
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'how does sourdough develop?' });
+    // No schedule artifact written — readShape falls back to prose, always satisfied.
+    const template = makeResearchTemplate('how does sourdough develop?', { cycles_target: 2 }, { llm });
+    const result = await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    expect(result.status).toBe('completed');
+    expect(result.reason).toBe('research_target_reached:2');
+    expect(result.cycles_run).toBe(2);
+  });
+
+  test('explicit max_cycles override caps the escape hatch', async () => {
+    const llm = proseOnlyFake();
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    writeSchedule(loop.id, { kind: 'table', columns: ['a', 'b'] });
+    // target=1 but max_cycles=3 — overrides the default 2*target=2.
+    const template = makeResearchTemplate('p', { cycles_target: 1, max_cycles: 3 }, { llm });
+    const result = await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    expect(result.cycles_run).toBe(3);
+    expect(result.reason).toBe('shape_unreachable:table:3');
   });
 });
 
