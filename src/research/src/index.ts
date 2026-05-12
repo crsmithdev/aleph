@@ -9,8 +9,6 @@ export type { CallContext } from './services/llm.js';
 export type { EngineOptions, LLMProvider, LLMResult, WebSearchResult } from './engine.js';
 export * from './services/queries.js';
 export { getDefaults, updateDefaults, resetDefaults } from './services/defaults.js';
-export { suggestRunPlan, TOPIC_CLUSTERS, QUESTION_SHAPES } from './services/run-plan.js';
-export type { RunPlan } from './services/run-plan.js';
 export * from './services/threads.js';
 export * from './services/findings.js';
 export * from './services/steps.js';

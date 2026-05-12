@@ -4,11 +4,9 @@ import { clsx } from 'clsx';
 import {
   useCreateResearchQuery,
   useResearchQuery,
-  useSuggestedRunPlan,
   useUpdateResearchQuery,
   TOPIC_CLUSTERS,
   type QuestionShape,
-  type RunPlan,
   type ShapeAnalysis,
   type ShapeLens,
   type TopicCluster,
@@ -68,7 +66,7 @@ function pickPlaceholder(): string {
 export function ComposeBox() {
   const [prompt, setPrompt] = useState('');
   const [createdId, setCreatedId] = useState<string | null>(null);
-  type EditingMode = null | 'shape' | 'lenses' | 'topic' | 'run-plan';
+  type EditingMode = null | 'shape' | 'lenses' | 'topic';
   const [editing, setEditing] = useState<EditingMode>(null);
   // Frozen on mount so the placeholder doesn't shuffle on every keystroke.
   const [placeholder] = useState(pickPlaceholder);
@@ -82,11 +80,6 @@ export function ComposeBox() {
   const { data: createdQuery } = useResearchQuery(createdId ?? '');
   const shape = createdQuery?.question_shape ?? null;
   const topic = createdQuery?.topic_cluster ?? null;
-  const primaryShape: QuestionShape | null = shape?.shapes[0] ?? null;
-  const { data: runPlan = null } = useSuggestedRunPlan(
-    primaryShape,
-    topic?.cluster ?? null,
-  );
 
   // Once both shape and topic land, the inferred panel is fully populated;
   // the user can act on it or open the detail page. We don't auto-navigate —
@@ -177,24 +170,13 @@ export function ComposeBox() {
                 setEditing(null);
               }}
             />
-          ) : editing === 'run-plan' && runPlan ? (
-            <RunPlanEditorInline
-              initial={runPlan}
-              onCancel={() => setEditing(null)}
-              onSave={patch => {
-                updateQuery.mutate({ id: createdQuery.id, config: patch });
-                setEditing(null);
-              }}
-            />
           ) : (
             <InferredPanel
               shape={shape}
               topic={topic}
-              runPlan={runPlan}
               onEditShape={shape ? () => setEditing('shape') : undefined}
               onEditLenses={shape ? () => setEditing('lenses') : undefined}
               onEditTopic={topic ? () => setEditing('topic') : undefined}
-              onEditRunPlan={runPlan ? () => setEditing('run-plan') : undefined}
             />
           )
         )}
@@ -418,62 +400,3 @@ function TopicEditorInline({ initial, onSave, onCancel }: TopicEditorInlineProps
   );
 }
 
-interface RunPlanEditorInlineProps {
-  initial: RunPlan;
-  onSave: (config: { model_fast: string; budget_total_usd: number; max_thread_depth: number }) => void;
-  onCancel: () => void;
-}
-
-function RunPlanEditorInline({ initial, onSave, onCancel }: RunPlanEditorInlineProps) {
-  const [model, setModel] = useState(initial.model_fast);
-  const [budget, setBudget] = useState(String(initial.budget_total_usd));
-  const [depth, setDepth] = useState(String(initial.max_thread_depth));
-
-  function handleSave() {
-    const b = parseFloat(budget);
-    const d = parseInt(depth, 10);
-    onSave({
-      model_fast: model.trim() || initial.model_fast,
-      budget_total_usd: Number.isFinite(b) && b > 0 ? b : initial.budget_total_usd,
-      max_thread_depth: Number.isFinite(d) && d > 0 ? d : initial.max_thread_depth,
-    });
-  }
-
-  return (
-    <div className="mt-3 flex flex-col gap-2 border border-border-primary rounded-lg p-3 bg-bg-secondary">
-      <span className="text-xs uppercase tracking-wider text-text-muted font-mono">Run plan</span>
-      <label className="flex items-center gap-2 text-sm">
-        <span className="text-text-muted w-24 shrink-0">Model</span>
-        <input
-          type="text"
-          value={model}
-          onChange={e => setModel(e.target.value)}
-          className="flex-1 bg-bg-primary border border-border-primary rounded px-2 py-1 font-mono text-text-primary focus:outline-none focus:border-accent"
-        />
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <span className="text-text-muted w-24 shrink-0">Budget (USD)</span>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={budget}
-          onChange={e => setBudget(e.target.value)}
-          className="w-32 bg-bg-primary border border-border-primary rounded px-2 py-1 font-mono tabular-nums text-text-primary focus:outline-none focus:border-accent"
-        />
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <span className="text-text-muted w-24 shrink-0">Max depth</span>
-        <input
-          type="number"
-          step="1"
-          min="1"
-          value={depth}
-          onChange={e => setDepth(e.target.value)}
-          className="w-20 bg-bg-primary border border-border-primary rounded px-2 py-1 font-mono tabular-nums text-text-primary focus:outline-none focus:border-accent"
-        />
-      </label>
-      <EditorActions onSave={handleSave} onCancel={onCancel} />
-    </div>
-  );
-}
