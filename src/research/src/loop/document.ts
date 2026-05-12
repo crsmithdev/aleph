@@ -123,8 +123,23 @@ function buildPolishPrompt(prompt: string, render: RenderPayload): string {
     `Available sources for citation (${render.sources.length}):`,
     sourceList,
     '',
-    'Write the full article in Markdown.',
+    'Output the article body as raw Markdown — do NOT wrap your response in ```markdown ... ``` or any other code fence. Start with the lead section directly.',
   ].join('\n');
+}
+
+/** Strip a single leading + trailing markdown code fence if the model
+ *  wrapped its response despite the prompt asking it not to. Mirrors the
+ *  tolerant-parse helpers in shape.ts and planner.ts. */
+function stripCodeFence(text: string): string {
+  const trimmed = text.trim();
+  // Match an opening fence with optional language tag.
+  const openMatch = /^```(?:[a-z]+)?\s*\n/i.exec(trimmed);
+  if (!openMatch) return trimmed;
+  const body = trimmed.slice(openMatch[0].length);
+  // Find the matching closing fence, or strip-and-keep-content if absent
+  // (the response may have been truncated before the close).
+  const closeIdx = body.lastIndexOf('```');
+  return closeIdx === -1 ? body : body.slice(0, closeIdx).trim();
 }
 
 /**
@@ -151,7 +166,7 @@ export async function generateDocument(
   const result = await llm.complete(model, buildPolishPrompt(prompt, render), DOCUMENT_MAX_TOKENS);
 
   const payload: DocumentPayload = {
-    text: result.text,
+    text: stripCodeFence(result.text),
     source_count: render.sources.length,
     generated_at: new Date().toISOString(),
     model: result.model || model,

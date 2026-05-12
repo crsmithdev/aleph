@@ -150,6 +150,60 @@ describe('generateDocument — top-level render artifact (non-cycle_output)', ()
   });
 });
 
+describe('generateDocument — strips code fences from LLM output', () => {
+  test('``markdown wrapper is stripped from the persisted text', async () => {
+    const sqlite = newDb();
+    // Gemini Flash sometimes wraps Markdown output in a ```markdown fence
+    // despite the prompt asking it not to; the polish path strips it so the
+    // document artifact stores clean Markdown the renderer can render.
+    const llm = new FakeLLMProvider({
+      complete: () => '```markdown\n# Title\n\nLead paragraph.\n\n## Body\n\nMore prose.\n```',
+    });
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedRenderInCycleOutput(sqlite, loop.id, {
+      findings: [{ cycle: 0, query: 'q', text: 't' }],
+      sources: [],
+      cycles_rendered: 1,
+    });
+
+    const doc = await generateDocument(sqlite, loop.id, 'p', llm);
+
+    const text = (doc!.payload as unknown as DocumentPayload).text;
+    expect(text).toBe('# Title\n\nLead paragraph.\n\n## Body\n\nMore prose.');
+    expect(text).not.toContain('```');
+  });
+
+  test('truncated fence (no closing ```) still strips the opening', async () => {
+    const sqlite = newDb();
+    const llm = new FakeLLMProvider({
+      complete: () => '```\n# Title\n\nContent that got cut',
+    });
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedRenderInCycleOutput(sqlite, loop.id, {
+      findings: [{ cycle: 0, query: 'q', text: 't' }],
+      sources: [],
+      cycles_rendered: 1,
+    });
+
+    const doc = await generateDocument(sqlite, loop.id, 'p', llm);
+    const text = (doc!.payload as unknown as DocumentPayload).text;
+    expect(text).toBe('# Title\n\nContent that got cut');
+  });
+
+  test('un-fenced output is returned unchanged', async () => {
+    const sqlite = newDb();
+    const llm = new FakeLLMProvider({ complete: () => '# Heading\n\nProse.' });
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedRenderInCycleOutput(sqlite, loop.id, {
+      findings: [{ cycle: 0, query: 'q', text: 't' }],
+      sources: [],
+      cycles_rendered: 1,
+    });
+    const doc = await generateDocument(sqlite, loop.id, 'p', llm);
+    expect((doc!.payload as unknown as DocumentPayload).text).toBe('# Heading\n\nProse.');
+  });
+});
+
 describe('readLatestDocument — picks freshest', () => {
   test('returns null when no document artifact exists', () => {
     const sqlite = newDb();
