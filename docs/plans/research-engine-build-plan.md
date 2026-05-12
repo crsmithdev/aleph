@@ -21,6 +21,14 @@ Inherits from `research-system-principles.md` (single-operator scale, AI-maintai
 
 ---
 
+## Verification gates per phase
+
+Every phase closes on the gates from `research-system-principles.md` §Verification — coverage ≥ 80%, telemetry-exists test, event-log-source-of-truth test, whole-workflow Playwright e2e, phase-specific e2e validation. Each phase's *Deliverable* below **is** its phase-specific gate; the gate is satisfied by observing the deliverable in a browser via Playwright, not by inferring from code.
+
+**Phase progression authority.** When all gates pass at the end of a phase, Phases 1–4 advance without per-phase approval. Phase 5 onward requires explicit go-ahead — Phase 5 collapses `SessionConfig` into the schedule artifact (schema change), Phase 6 is the UI rewrite, Phase 7 is the single-pass cutover. The standing rule for Phases 1–4: *do the tests exist and do they run.*
+
+---
+
 ## Feature inventory
 
 ### v1 (MVP) — IN
@@ -172,7 +180,8 @@ Acceptance checks (below) pass. v2 work can begin.
 - Cost per run trends downward (extractor on cheap model).
 - Monitor template works against the same engine — proves the abstraction is honest.
 - **Live Activity view streams events, cycle starts/ends, planner decisions, perturbation firings, extraction outcomes, and errors in real time during a running loop — no refresh required, no dev tools needed.** Parity with today's Activity tab is the floor, not the ceiling.
-- `bun test.ts` + `bun run build` + `bun run ui:smoke` all green.
+- **Per-phase verification gates** (coverage ≥ 80%, telemetry test, event-log-source-of-truth test, whole-workflow Playwright e2e, phase-specific e2e validation) green at every phase before progression. See `## Verification gates per phase`.
+- `bun test.ts` + `bun run build` + `bun run ui:smoke` + Playwright e2e suite all green.
 
 ---
 

@@ -15,10 +15,17 @@ Using research-system-design.md as the reference, suggest features for the next 
 - Module boundaries are explicit; cross-module coupling is visible from types alone.
 
 # Verification
-- The system is verified by exercising it through the UI the way a user would, end-to-end. Automated UI flows count; backend-only tests are necessary but not sufficient.
-- New UI and UI changes follow the existing reference designs.
-- Mockable LLM boundary: the system runs end-to-end against a fake or recorded LLM for tests and UI verification. Real model calls go through one provider abstraction. This is what makes "verify through the UI" cheap in CI.
-- At least two full end-to-end tests run against real LLMs: one with the cheapest models that produce usable output (smoke / basic correctness), one with optimal selections (quality evaluation).
+
+Every phase (v1 through v5) closes on the same gates. None are satisfiable by code inspection; none are skippable; all run in CI.
+
+- **Coverage ≥ 80%** across unit + integration. Bias toward integration tests that exercise as much of the system together as possible — mock only external services (LLM provider, search provider), never internal modules.
+- **Telemetry-exists test per phase.** Each phase's introduced jobs produce telemetry rows; the API surfaces them; at least one test asserts both. See `docs/specs/TELEMETRY.md`.
+- **Event-log-source-of-truth test per phase.** At least one test asserts the live Activity view and the downloadable post-mortem render from the same event log — no important events missed; every event captures full inputs, outputs, choices, and cost.
+- **Whole-workflow e2e via the UI per phase (Playwright).** At least one test drives a real query through the UI and asserts (a) basic functioning — returns an answer, options respected, no console errors / 5xx — and (b) the result makes sense given the prompt (qualitative, calibrated for cheap-model output in CI).
+- **Phase-specific validation gates are themselves e2e via Playwright.** A phase isn't complete until its deliverable can be observed in a browser; reading the diff doesn't count, passing a unit test alone doesn't count, inferring from "it should work" doesn't count.
+- **Mockable LLM boundary** — all real model calls go through one provider abstraction; tests run against a fake or recorded LLM by default. This is what makes "verify through the UI" cheap in CI.
+- **Two real-LLM e2e tests** — one with the cheapest models that produce usable output (smoke / basic correctness), one with optimal selections (quality evaluation).
+- **New UI and UI changes follow the existing reference designs.**
 
 # Observability
 
