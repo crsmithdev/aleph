@@ -22,7 +22,7 @@ export { detectOutputShape, ensureScheduleArtifact, readScheduleFromArtifacts } 
 export { planLoop } from './planner.js';
 
 export {
-  createLoop, getLoop, updateLoopStatus, updateLoopChildPid,
+  createLoop, getLoop, listLoops, updateLoopStatus, updateLoopChildPid,
   bumpUsage, readState,
   createCycle, getCycle, listCycles, findInProgressCycle,
   markCycleRunning, markCycleFinalized,

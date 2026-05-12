@@ -35,6 +35,29 @@ export function createLoop(
   return getLoop(sqlite, id)!;
 }
 
+/**
+ * List all loops, newest-first. Backs `GET /api/loops` so the
+ * `/research/history` page can show new-engine runs alongside legacy
+ * research_queries. No pagination yet — Phase 6 / Phase 7 will collapse
+ * the two lists into one paginated table.
+ */
+export function listLoops(sqlite: Sqlite, opts: { limit?: number } = {}): Loop[] {
+  const limit = opts.limit ?? 200;
+  const rows = sqlite.prepare(
+    'SELECT id, template_id, status, envelope, envelope_consumed, child_pid, prompt, created_at, updated_at FROM loops ORDER BY created_at DESC LIMIT ?'
+  ).all(limit) as Array<{
+    id: string; template_id: string; status: string; envelope: string;
+    envelope_consumed: string; child_pid: number | null; prompt: string;
+    created_at: string; updated_at: string;
+  }>;
+  return rows.map(row => ({
+    ...row,
+    status: row.status as LoopStatus,
+    envelope: JSON.parse(row.envelope) as Envelope,
+    envelope_consumed: JSON.parse(row.envelope_consumed) as EnvelopeUsage,
+  }));
+}
+
 export function getLoop(sqlite: Sqlite, id: LoopId): Loop | null {
   const row = sqlite.prepare(
     'SELECT id, template_id, status, envelope, envelope_consumed, child_pid, prompt, created_at, updated_at FROM loops WHERE id = ?'

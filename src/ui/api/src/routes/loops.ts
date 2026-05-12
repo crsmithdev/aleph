@@ -14,7 +14,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { createReadStream, existsSync } from 'fs';
 import {
-  createLoop, getLoop, listArtifacts, listCycles, listMilestones, readState,
+  createLoop, getLoop, listArtifacts, listCycles, listLoops, listMilestones, readState,
   onResearchEvent,
   listTemplateIds,
   type Envelope,
@@ -33,6 +33,19 @@ interface StartBody {
 }
 
 export const loopRoutes: FastifyPluginAsync = async (app) => {
+  /**
+   * List loops, newest-first. Backs `/research/history`'s unified table —
+   * the page merges this list with `/api/research/queries` so a user sees
+   * every research run regardless of which engine produced it. Phase 7
+   * removes the legacy queries endpoint and this becomes the sole source.
+   */
+  app.get<{ Querystring: { limit?: string } }>('/', async (req) => {
+    const raw = Number(req.query.limit);
+    const limit = Number.isFinite(raw) && raw > 0 ? Math.min(Math.floor(raw), 1000) : 200;
+    const rows = listLoops(app.sqlite, { limit });
+    return rows;
+  });
+
   app.post<{ Body: StartBody }>('/start', async (req, reply) => {
     const { template_id, prompt, envelope, processor_delay_ms, cycles_target, poll_every } = req.body ?? {};
     if (!template_id || typeof template_id !== 'string') {

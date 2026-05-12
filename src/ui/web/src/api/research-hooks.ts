@@ -528,11 +528,77 @@ export function useResetResearchDefaults() {
 }
 
 // --- Queries ---
+
+/** Loops engine row shape (subset; matches what `GET /api/loops` returns). */
+interface LoopRow {
+  id: string;
+  template_id: string;
+  status: string;
+  prompt: string;
+  envelope: Record<string, unknown>;
+  envelope_consumed: Record<string, number>;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Map a loop's engine status onto `ResearchQuery`'s status union so the
+ *  history table's status filters / badges / dots still resolve. Phase 7
+ *  collapses both into one shared status enum. */
+function mapLoopStatus(s: string): ResearchQuery['status'] {
+  switch (s) {
+    case 'pending':
+    case 'running':   return 'active';
+    case 'paused':    return 'paused';
+    case 'completed': return 'completed';
+    case 'failed':
+    case 'cancelled': return 'halted';
+    default:          return 'active';
+  }
+}
+
+/** Adapter: present a `loops` row as if it were a `ResearchQuery` so the
+ *  unified `/research/history` table can render it with no per-row branching.
+ *  Loops don't carry pre-detected shape/topic (those live on the schedule
+ *  artifact, lazily) — surfaced as null here; the table renders the dash.
+ *  Config / summary / document / user_notes are stubbed (loops haven't
+ *  collapsed them onto the schedule yet — Phase 5 work). */
+function loopAsQuery(loop: LoopRow): ResearchQuery {
+  return {
+    id: loop.id,
+    title: loop.prompt || loop.id,
+    prompt: loop.prompt,
+    prompt_short: null,
+    prompt_super_short: null,
+    prompt_hints: {} as PromptHints,
+    question_shape: null,
+    topic_cluster: null,
+    status: mapLoopStatus(loop.status),
+    config: {},
+    summary: '',
+    document: '',
+    user_notes: '',
+    created_at: loop.created_at,
+    updated_at: loop.updated_at,
+  };
+}
+
 export function useResearchQueries(status?: string) {
   const params = status ? `?status=${status}` : '';
   return useQuery({
     queryKey: ['research-queries', status],
-    queryFn: () => api.get<ResearchQuery[]>(`/research/queries${params}`),
+    queryFn: async () => {
+      // Fetch both legacy research_queries and new loops in parallel; merge
+      // newest-first. Loops are adapted to ResearchQuery shape via loopAsQuery
+      // so the existing 600-line history table renders them unchanged.
+      const [legacy, loops] = await Promise.all([
+        api.get<ResearchQuery[]>(`/research/queries${params}`).catch(() => []),
+        api.get<LoopRow[]>(`/loops`).catch(() => []),
+      ]);
+      const adapted = loops.map(loopAsQuery);
+      const all = [...adapted, ...legacy];
+      all.sort((a, b) => b.created_at.localeCompare(a.created_at));
+      return all;
+    },
   });
 }
 
