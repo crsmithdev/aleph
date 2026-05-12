@@ -45,6 +45,10 @@
       "keywords": ["code audit", "audit the code", "audit the diff", "audit my code", "/audit.{0,10}(code|diff|branch)/", "/code.{0,10}audit/"]
     },
     {
+      "skill": "code-fix",
+      "keywords": ["code fix", "fix the findings", "apply the audit fixes", "apply the fixes", "/fix.{0,10}(code|findings)/", "/code.{0,10}fix/"]
+    },
+    {
       "skill": "code-refactor",
       "keywords": ["refactor", "reorganize files", "restructure code", "move files", "update imports", "break down this file", "split this module", "break it up", "too big", "reorganize", "restructure", "/break.{0,15}(up|apart|out|down)/", "/(too|really).{0,10}(big|long|monolithic)/"]
     },
