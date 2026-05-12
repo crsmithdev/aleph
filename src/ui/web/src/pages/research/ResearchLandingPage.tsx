@@ -8,7 +8,6 @@ import {
 import {
   useResearchQueries,
   useResearchStats,
-  useAllJobs,
   type ResearchQuery,
 } from '../../api/research-hooks';
 import { ComposeBox } from '../../components/research/ComposeBox';
@@ -47,19 +46,12 @@ export function ResearchLandingPage() {
 
   const { data: queries = [] } = useResearchQueries();
   const { data: stats } = useResearchStats(range, granularity);
-  const { data: pendingJobs = [] } = useAllJobs({ status: 'pending', limit: 50 });
 
   const visible = queries.filter(q => q.status !== 'archived');
   const running = visible.filter(q => q.status === 'active');
-
-  // "Queued": queries with at least one pending job, that aren't already running.
-  const pendingByQueryId = useMemo(() => {
-    const set = new Set<string>();
-    for (const j of pendingJobs) set.add(j.session_id);
-    return set;
-  }, [pendingJobs]);
-  const queued = visible.filter(q => pendingByQueryId.has(q.id) && q.status !== 'active');
-  const inFlight = [...running, ...queued];
+  // Loops don't have a separate pending-job queue — the engine spawns the
+  // child process at /start time. "In flight" is just whatever is running.
+  const inFlight = running;
 
   // Recent: terminal status in the last 24h, sorted newest-first.
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
@@ -130,11 +122,7 @@ export function ResearchLandingPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel
           title="In flight"
-          subtitle={
-            inFlight.length === 0
-              ? 'nothing running or queued'
-              : `${running.length} running · ${queued.length} queued`
-          }
+          subtitle={inFlight.length === 0 ? 'nothing running' : `${running.length} running`}
           right={
             <Link to="/research/queries" className="text-text-muted hover:text-accent text-sm">
               view all →
@@ -145,12 +133,7 @@ export function ResearchLandingPage() {
             <EmptyRow>No runs in flight. Submit a prompt above to start one.</EmptyRow>
           ) : (
             inFlight.map(q => (
-              <JobRow
-                key={q.id}
-                query={q}
-                pulse={q.status === 'active'}
-                queued={pendingByQueryId.has(q.id) && q.status !== 'active'}
-              />
+              <JobRow key={q.id} query={q} pulse={q.status === 'active'} />
             ))
           )}
         </Panel>
@@ -323,7 +306,7 @@ function EmptyRow({ children }: { children: React.ReactNode }) {
   );
 }
 
-function JobRow({ query, pulse, queued }: { query: ResearchQuery; pulse?: boolean; queued?: boolean }) {
+function JobRow({ query, pulse }: { query: ResearchQuery; pulse?: boolean }) {
   const stripe = STRIPE_BY_STATUS[query.status];
   const shape = query.question_shape?.shapes[0] ?? null;
   const topic = query.topic_cluster?.cluster ?? null;
@@ -364,10 +347,6 @@ function JobRow({ query, pulse, queued }: { query: ResearchQuery; pulse?: boolea
             style={{ animation: 'pulse 1.6s ease-in-out infinite' }}
           />
           {query.status}
-        </span>
-      ) : queued ? (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-warning/15 text-warning">
-          queued
         </span>
       ) : verdict ? (
         <span
