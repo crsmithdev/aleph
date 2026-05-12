@@ -45,15 +45,49 @@ Inherits from `research-system-principles.md` (single-operator scale, AI-maintai
 
 - **Output-shape enforcement.** `output_shape` field populated at session create (one LLM call). Renderer gates the run on shape satisfaction. `stop_rule` becomes `schedule_complete OR envelope_consumed OR shape_satisfied`.
 - **Adaptive planner.** Replaces today's `(question_shape × topic_cluster) → RunPlan` lookup in `run-plan.ts` with an LLM call that takes `(prompt, question_shape, output_shape, envelope)` and produces a typed `LoopSchedule` artifact. The 6-cluster topic taxonomy and the `SHAPE_DEFAULTS` budget table are deleted entirely. The planner produces seed canon, branch decomposition, per-branch budgets, and which perturbation strategies to favor. URL detection in the prompt feeds the planner (it grounds canon on URL contents) rather than running as a switch around a fixed lookup. The typed `question_shape` enum is retained as a planner *input* and renderer *constraint*, not as a lookup key.
-- **Plan as a first-class artifact, visible and explorable in the UI** (`kind: 'schedule'`). Diffable. Re-plans at milestones produce new schedule artifacts with `predecessor_id`. Rendered on the loop-detail page as a tree/list: canon items, branches (with their queries, expected depth/cycles/budget, perturbation weights), and the milestone plan. Read-only while running; the same inline-editor pattern already in `InferredPanel` makes each field editable when paused (the editing UX itself ships in v2). Schedule payload shape: `{ canon[], branches[], milestone_plan[], predecessor_id?, directives_consumed?, rationale }`.
+- **Schedule as the universal loop configuration**, a first-class artifact (`kind: 'schedule'`) that is **the complete editable surface** for every per-loop setting. No separate advanced/expert UI — every knob is a field on the schedule, every change is a schedule edit. The schedule artifact's payload covers the structural plan AND the run-level config:
+    ```ts
+    type SchedulePayload = {
+      // structural plan
+      canon: Array<{ id, query, rationale?, locked? }>;
+      branches: Array<{
+        id, seed_canon_id?, query,
+        expected_depth, expected_cycles, budget_usd, priority,
+        perturbation_weights, locked?,
+      }>;
+      milestone_plan: Array<{ at_envelope_pct, expected_state, replan_policy }>;
+      // promoted from SessionConfig / mode preset
+      envelope: { time?, cost?, cycles?, sources? };
+      models: { planner, extractor, synthesizer };
+      perturbation_config: { p_serendipity, max_p, depth_scaling,
+        chain_length, strategy_cooldown, forced_diversity_threshold };
+      flags: { fake_llm?, cached_planner?, watcher_mode?, /* etc. */ };
+      // provenance
+      predecessor_id?;                // links to prior schedule on re-plan
+      created_with_mode?: string;      // metadata only — "default", "deep", "roam", …
+      directives_consumed?;
+      rationale: string;
+    };
+    ```
+- **Schedule view** on the loop-detail page renders this artifact and is the **only** editor for it. Does triple duty: pre-run editing (in Custom mode, or after pausing a not-yet-started loop), mid-run editing (when paused), and historical viewing + fork-from-cycle (on completed runs). Same component, three states.
+- **Locked-field mechanic.** Every schedule field has an implicit `locked` flag set when a non-planner author edits it. Milestone re-planner respects locks — it won't overwrite user-edited fields. Schedule view shows lock state visually.
+- **Mode preset = named starting template.** Picking a mode at submit time selects which template constructs the initial schedule. After that, modes have no runtime presence — the schedule is what runs, and the mode label survives only as `created_with_mode` metadata. The v1 mode set:
+    - **Quick** — small envelope, cheap models throughout, perturbation suppressed. "5-minute answer."
+    - **Default** — balanced envelope and models, perturbation slightly above today's baseline (`p_serendipity ≈ 0.22`). The default for most queries.
+    - **Deep** — large envelope, premium models, Default's perturbation profile. Super-high effort.
+    - **Roam** — Default envelope + heavy perturbation (`p_serendipity ≈ 0.45`, near-zero cooldown, weighting on perspective-shifts + network-walking + second-order). Chaotic + savant; high signal aim.
+    - **Bonkers** — fully unhinged perturbation (`p_serendipity ≥ 0.6`, no cooldown, maximum weirdness; LLM temperature nudged up at framing). Entertainment-grade variance.
+    - **Dev** — tiny envelope, fake/recorded LLM, for CI and UI testing.
+    - **Eval** — Default-ish envelope, cached planner output (replays first-recorded planner response for reproducibility), intent-alignment introspection on. Runs against the v1 acceptance corpus.
+    - **Custom** — opens the Schedule view immediately on a Default-template draft; user edits whatever they want before hitting Start. No separate UI; it's just "edit the schedule before running."
+- **Modes always visible.** No developer-mode toggle gating Dev / Eval. The full row is in the compose box for everyone.
 - **Per-role model selection.** `model_planner` / `model_extractor` / `model_synth` config fields. Default: strong on planning + synthesis, cheap on extraction.
 
 **UX (from the design doc's configurability section):**
 
-- **Keep the `InferredPanel`.** Carry it across the rewrite. Existing editors (shape, topic, run-plan) preserved.
-- **Add `output_shape` editor** to the InferredPanel as a fourth inferred-then-editable field.
-- **Envelope presets** as the entry surface (30 min / overnight / custom), sitting *alongside* the InferredPanel, not replacing it.
-- **Sidebar IA:** `Research`, `Monitors`, `Telemetry`. `WorkersPage` removed. Reviews tab folded into the report + a `Debug` tab.
+- **Compose box: prompt textarea + mode-button row.** The mode row contains the 8 modes above (Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom). Default is selected when nothing else is, but the mode can also be **inferred from the prompt** at session-create time (cheap LLM call; user can override).
+- **`InferredPanel` preserved**, with editors for `question_shape`, `output_shape` (new in v1), `topic` (note: 6-cluster taxonomy deleted; this becomes a free-text label or removed entirely — see Phase 4), `mode`, and `role` (new in v1 — `pickAgentRole` already runs, just expose its output for editing). The InferredPanel covers the *query classification* fields; the **Schedule view covers everything else**, including model / budget / perturbation / canon / branches / milestones.
+- **Sidebar IA:** `Research`, `Monitors`, `Telemetry`. `WorkersPage` removed. Reviews tab folded into the report + a Debug tab.
 
 **Foundational infrastructure (from `research-system-principles.md`):**
 
@@ -107,13 +141,13 @@ Detect `output_shape` at session create. Renderer-as-gate: if shape unsatisfied,
 Delete `run-plan.ts`'s `(shape × topic) → RunPlan` lookup, the 6-cluster `TOPIC_CLUSTERS` constant, and the `SHAPE_DEFAULTS` budget table. Add a planner LLM call that emits a typed `LoopSchedule`: `{ canon[], branches[], per_branch_budget, perturbation_weights, milestone_plan }`. Inputs: the prompt, detected `question_shape`, detected `output_shape`, and the envelope. URL detection in the prompt feeds the planner as a grounding signal (contents fetched, supplied as canon seed) rather than as a separate code path.
 *Deliverable:* Awesome-Deep-Research-style queries don't pull AlphaFold/Adam optimizer — the planner sees the GitHub URL and grounds canon on the listed projects.
 
-**Phase 5 — Plan as artifact + UI exploration + per-role model selection.**
-`LoopSchedule` persists as `kind: 'schedule'` (initial + each milestone re-plan, chained by `predecessor_id`). New "Schedule" view on the loop-detail page renders the current schedule as a tree: canon → branches → per-branch budget + perturbation weights, plus the milestone plan. Read-only in v1 (editing comes with v2's pause/resume). `SessionConfig` gains `model_planner` / `model_extractor` / `model_synth` fields.
-*Deliverable:* the user can see what the planner decided for a running or completed loop and diff against prior plans. Cheap model runs extraction; cost-per-run drops.
+**Phase 5 — Schedule as the universal loop config + Schedule view editor.**
+`LoopSchedule` persists as `kind: 'schedule'` with the full payload (canon, branches, milestone plan, **plus envelope, models, perturbation_config, flags, mode metadata**). Re-plans at milestones produce chained schedule artifacts via `predecessor_id`. The Schedule view on the loop-detail page is the **only** editor for this artifact — does triple duty: pre-run editing (Custom mode opens here; other modes can also pause-before-start to edit), mid-run editing (when paused, v2), and historical viewing + fork-from-cycle (completed runs). Locked-field mechanic: every field has an implicit `locked` flag set when a non-planner author edits it; the milestone re-planner respects locks. `SessionConfig`'s scattered per-loop fields collapse into the schedule payload.
+*Deliverable:* the user can see and (in Custom or paused state) edit every per-loop knob in one place. No advanced/expert panel anywhere in the system. Cost-per-run drops because the extractor runs on a cheap model.
 
 **Phase 6 — UI rewrite.**
-Keep `InferredPanel`. Add envelope presets. Add `output_shape` editor. Add the explorable Schedule view (Phase 5 deliverable). **Keep the Activity tab as a first-class live view** — real-time stream of cycles, events, decisions, intermediate outputs, and errors. Per `research-system-principles.md`, live inspectability is essential and not relegated to a debug surface. Drop `WorkersPage` and the Reviews tab. Sidebar IA: Research / Monitors / Telemetry.
-*Deliverable:* the entry experience is the existing InferredPanel + envelope presets. The loop-detail page shows three co-equal surfaces during a live run — Activity (live event stream), Schedule (current plan artifact), and Artifact (the report-in-progress). No regression on the existing Activity-tab pattern.
+Compose box: prompt textarea + 8-button mode row (Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom). `InferredPanel` preserved with editors for question_shape, output_shape, mode, role, topic-as-free-text. Schedule view from Phase 5 wired up as the universal editor. **Activity tab as a first-class live view** — real-time stream of cycles, events, decisions, intermediate outputs, and errors; co-equal with the Schedule and Artifact views, not relegated to a debug surface. Drop `WorkersPage` and the Reviews tab. Sidebar IA: Research / Monitors / Telemetry.
+*Deliverable:* the loop-detail page shows three co-equal surfaces during a live run — **Activity** (live event stream), **Schedule** (current plan artifact, editable when paused or in Custom mode), **Artifact** (the report-in-progress). Mode buttons always visible. No advanced/expert panel anywhere.
 
 **Phase 7 — Cutover.**
 Delete in one pass: `research_jobs`, `worker.ts`, `services/jobs.ts`, `scheduler.ts`, `research_perturbation_state` table, `research_monitor_*` tables, `WorkersPage`, `ResearchReviewsView`. Drop `schedule.mode = 'default'|'scheduled'|'priority'`.
@@ -135,72 +169,79 @@ Acceptance checks (below) pass. v2 work can begin.
 
 ---
 
-## v2 — Stabilize and steer
+## v2 — Stabilize and steer (organized around the Check primitive)
 
-Immediately after v1 cutover. Theme: turn v1's foundations into the steerable, self-aware engine the survey pointed toward. Each item depends on something v1 lays down.
+Immediately after v1 cutover. v2 unifies what was previously a handful of separate features (pause/edit, directives, adaptive stop, redundancy detection, self-healing, forks, watcher) under a single **Check** abstraction. A check is `(state, trigger) → action[]` — that one shape subsumes "AI watching and proposing edits," "user typing a directive," "heuristic noticing a stop condition," and "post-run introspection deciding what flagged" all in the same vocabulary.
 
-**v2.1 — Strong mid-run steerability: pause, edit, nudge, resume.**
-v1's schedule-as-artifact + Schedule view + InferredPanel editors do most of the work. v2 turns pause into an authoring mode and adds a free-form directive channel.
+```ts
+type Check = {
+  trigger: 'cycle_boundary' | 'event' | 'milestone' | 'on_finish' | 'on_user_action';
+  scope:   'cycle' | 'branch' | 'loop' | 'run';
+  author:  'heuristic' | 'llm' | 'user';
+  condition: (state) => boolean;
+  action: (state) => Action[];
+};
 
-*Pause / edit / resume:*
-- `paused` state on the loop row (cooperative cancellation point in the processor — checks between cycles)
-- API: `POST /loops/:id/pause`, `POST /loops/:id/resume`, `PATCH /loops/:id/schedule`
-- UI: "Pause" button in the live surface; while paused, the Schedule view becomes editable (every canon item, branch, budget, perturbation weight); "Resume" re-spawns with the edited schedule
+type Action =
+  | { kind: 'schedule_edit', patch }                  // amend the schedule artifact
+  | { kind: 'directive', text, scope }                // nudge for next replan
+  | { kind: 'stop', reason }                           // trigger stop_rule
+  | { kind: 'perturbation_trigger', strategy }         // force a specific perturbation
+  | { kind: 'flag', failure_mode: TypedFailureMode }   // emit telemetry
+  | { kind: 'noop' };
+```
 
-*Directive channel (the "nudge" capability):*
-- New artifact kind `directive` with payload `{ text, scope: 'next_replan' | 'permanent', author, consumed_by_schedule_id? }`
-- API: `POST /loops/:id/directives` (works whether running or paused)
-- UI: "Send directive" text box on the live surface — free-form input like "focus on the Bay Area portion" or "skip the history, dig into the places themselves"
-- The planner sees recent unconsumed directives on its next re-plan and incorporates them; `permanent` directives stick around for subsequent re-plans, `next_replan` directives burn on use
-- Directives appear in the schedule view's "directives consumed" trail so the user can see which nudges the planner took on
+Every author of change goes through this. Schedule edits and directives are actions, not separate APIs. The check log is the audit trail; the Schedule view's "edits applied" trail shows provenance per change.
 
-*Three modes the user can move between:*
-- AI-led: no intervention, default
-- AI-led with nudges: drop directives, planner adapts on next re-plan
-- Human-led: pause, edit schedule directly, resume
+### v2-A. Check framework (the primitive)
 
-*Empirical case:* the universal observed failure mode (Appendix A). Highest single-feature ROI. Closes the "fire-and-forget" gap that ResearStudio's paper identifies as the single biggest difference between controllable and uncontrollable deep-research systems.
+- The `Check` and `Action` types; check registry; event-stream subscription so any check can react to logged events.
+- One API surface: `POST /loops/:id/checks` (for user-authored checks: pause-edits, directives, fork requests). Built-in checks register themselves via code.
+- Schedule view shows "edits applied" trail keyed by check-author and action kind.
+- Cooperative cancellation at cycle boundaries — the prerequisite for any check that wants to apply `schedule_edit` or `stop` mid-run.
 
-**v2.2 — Adaptive value-based stop-rule.**
-- Cheap heuristic over accumulated artifacts: `(last-N findings similarity, last-N citation novelty, last-N planner confidence)`
-- Wired into `stop_rule` as a fourth clause: `... OR value_stalled`
-- Default OFF, A/B against fixed envelope on the existing query corpus, default ON when it wins
-- *Empirical case:* CRDT re-runs (Appendix A) — most ran into yield walls before the envelope was full.
+### v2-B. Built-in checks (ship with the framework)
 
-**v2.3 — Per-cycle redundancy detector** (HiPRAG-style).
-- Per-cycle classifier: was this cycle redundant with prior cycles? Was a needed cycle skipped?
-- Output fed back into the derivation hook (`should we run another cycle on this branch or pivot?`) and exposed in telemetry
-- Refines the existing perturbation strategy selector with a quality signal
+| Check | Trigger | Author | Typical action | Replaces what was previously called |
+|---|---|---|---|---|
+| **Marginal-value stop** | milestone | heuristic | `{ stop }` when last-N cycles show no new sources / no novel findings / no planner-confidence movement | v2.2 adaptive stop-rule |
+| **Redundancy detector** | cycle_boundary | heuristic or cheap LLM | `{ perturbation_trigger }` or `{ schedule_edit: pivot_branch }` when a cycle's output is highly similar to prior cycles | v2.3 per-cycle redundancy |
+| **Post-mortem with narrative** | on_finish | LLM | `{ flag }` with `failure_mode` + a human-readable narrative on the artifact, e.g. "47 of 60 threads explored cooking technique; only 13 on Bay Area restaurants" | v2.4 post-mortem narrative |
+| **Intent-alignment** | on_finish | LLM | `{ flag: topic_drift / shape_mismatch }` when the produced document doesn't answer the original prompt in the requested form | new (was implicit in self-healing) |
+| **Self-healing remediations** | event (on typed failure flag) | heuristic | `{ schedule_edit }` for known failure modes (`topic_drift` → re-plan canon; `shape_mismatch` → force renderer gate; `yield_collapse` → escalate stop) | v2.6 self-healing layer |
+| **Continuous watcher** | event (any of interest) | LLM (suggest-only by default) | `{ directive }` (suggest-only) or `{ schedule_edit }` (autonomous, opt-in per loop) | v2.8 watcher |
 
-**v2.4 — Post-mortem narrative content.**
-- Fill the empty `content` field on the post-mortem row with an actual LLM-generated narrative explaining each flag
-- Surface in the InferredPanel after a run paused/failed: "the engine flagged thread_skew because 47 of 60 threads explored cooking technique vs. only 13 on Bay Area restaurants — want to rebalance?"
-- *Empirical case:* the universal `low_finding_yield + thread_skew` flag pattern (Appendix A). The flags exist; the user can't see why.
+Default behavior: built-in checks are on by default. Each can be disabled per-loop via the schedule's `flags` field. The continuous watcher defaults to **suggest-only** — emits proposed edits as low-priority directives; user confirms or ignores. Autonomous mode is an opt-in toggle (likely on by default for Deep + Overnight runs since the user isn't watching).
 
-**v2.5 — Planner prompt tuning.**
-- v1's adaptive planner is fully LLM-driven. v2 evaluates planner outputs across the historical query corpus and tunes the prompt + few-shot examples for systematic failures
-- Adds a small set of "canonical good plans" for representative shape × topic combinations as in-prompt examples (closing the loop on what the deleted lookup table used to encode)
-- *Empirical case:* the long tail of historically-bucketed `Misc` queries — verify the adaptive planner handles them at least as well as the old lookup
+### v2-C. User-authored checks (the universal intervention path)
 
-**v2.6 — Self-healing layer** (from principles doc).
-- The system evaluates its own outputs against the design goals declared for each run (shape, coverage, intent alignment) and flags when they aren't met — using the typed failure-mode IDs from v1
-- Auto-remediation for a small set of failure modes: `topic_drift` → re-plan canon; `shape_mismatch` → force renderer gate; `yield_collapse` → trigger adaptive stop
-- *Empirical case:* the universal `low_finding_yield + thread_skew` pattern (Appendix A) — the system already detects, doesn't act
+The user produces checks too. Three ways:
 
-**v2.7 — Forkable runs** (from principles doc).
-- Any completed or paused run can be branched from any cycle: "what if the plan had been different here"
-- Cheap because v1 made the schedule a first-class artifact and the cycle ledger keys by input hash
-- UI: a "fork from cycle N" action on the loop-detail page; produces a new loop with `parent_loop_id` and the prior cycles as seed context
-- *Empirical case:* today's silent re-runs (Appendix A) — the user is doing this manually by re-submitting the same prompt
+| User action | Stored as | Effect |
+|---|---|---|
+| **Pause + edit schedule** | A user-authored check, trigger = `on_user_action`, action = `{ schedule_edit }` with the user's patch | The loop pauses, the patch is applied, the loop resumes from the edited schedule |
+| **Send directive** ("focus on Bay Area places") | A user-authored check, trigger = `on_user_action`, action = `{ directive, scope: next_replan | permanent }` | The planner sees unconsumed directives on its next re-plan and incorporates them. Doesn't require pause. |
+| **Fork from cycle N** | A user-authored check on a *completed* run, action = `{ schedule_edit }` plus loop-spawn with `parent_loop_id` and prior cycles as seed context | Produces a new loop branching from any historical cycle |
+
+All three flow through the same API (`POST /loops/:id/checks`) and the same audit trail. The "directive channel" isn't a special concept — it's a check whose author is the user.
+
+*Three intervention postures the user can move between:* AI-led (no checks posted), AI-led with nudges (occasional directive checks), human-led (pause + schedule_edit checks). The system stays autonomous by default; controls are always present in the UI without forcing a mode choice up front.
+
+### v2.5 — Planner prompt tuning (separate from checks)
+
+- v1's adaptive planner is fully LLM-driven. v2 evaluates planner outputs across the historical query corpus and tunes the prompt + few-shot examples for systematic failures.
+- Adds a small set of "canonical good plans" for representative `(shape, topic_label)` situations as in-prompt examples — closing the loop on what the deleted lookup table used to encode.
+- *Empirical case:* the long tail of historically-bucketed `Misc` queries — verify the adaptive planner handles them at least as well as the old lookup. Standalone from the check framework; pure planner-quality work.
 
 ### v2 acceptance criteria
 
-- A user can pause a 20-minute run, edit the schedule (e.g., add a sub-question or kill a wandering thread), and resume — without losing any completed cycles.
-- A user can send a free-form directive ("focus on Bay Area places, less history") to a running loop and observe the next re-plan incorporate it. The schedule view shows which directives the planner consumed.
-- A user can fork any completed run from cycle N, producing a new loop with the schedule editable from that point.
-- The adaptive stop-rule's A/B on the historical corpus shows ≥ 80% agreement with "shape satisfied" outcomes and saves cost on ≥ 30% of runs (target — adjust after measurement).
-- Every paused/failed run has a human-readable narrative explaining what flagged.
-- The system auto-flags `topic_drift` on the Awesome-Deep-Research-style historical case (would have caught it).
+- A user can pause a 20-minute run, edit the schedule (via the Schedule view's editor — same UI as Custom mode's pre-run editor), and resume — without losing any completed cycles. The edit is recorded as a user-authored check with action `{ schedule_edit }`.
+- A user can send a free-form directive ("focus on Bay Area places, less history") to a running loop. The next re-plan incorporates it; the Schedule view's edit-trail shows which directives the planner consumed.
+- A user can fork any completed run from cycle N — same `POST /loops/:id/checks` API, action produces a new loop with `parent_loop_id`.
+- The marginal-value-stop check's A/B on the historical corpus shows ≥ 80% agreement with "shape satisfied" outcomes and saves cost on ≥ 30% of runs (target — adjust after measurement).
+- Every paused/failed run has a human-readable narrative on its post-mortem flag explaining what triggered.
+- The intent-alignment check fires `topic_drift` on the Awesome-Deep-Research-style historical case (would have caught it).
+- The continuous watcher emits at least one useful suggestion on a representative re-run of a historical multi-stage query (qualitative — verifies the watcher is wired up and reading the event stream).
 
 ---
 
@@ -323,16 +364,16 @@ Worth restating since the comparison doc surveyed them and decided no:
 
 ### Feature inventory at a glance
 
-**v1 ships:** loop engine + 4-hook template interface · research template · monitor template · cycle ledger · envelope · milestones · child-process per loop · output-shape enforcement · adaptive planner (replaces shape × topic lookup; URL-grounded; emits typed `LoopSchedule`) · **plan-as-artifact rendered as an explorable Schedule view in the UI** · **live Activity view as a first-class surface (real-time event/cycle/decision stream)** · per-role model selection · InferredPanel (preserved + `output_shape` editor added) · envelope presets · mockable LLM boundary · typed failure-mode identifiers · cost-as-observable · event-triggered background work · two real-LLM e2e tests.
+**v1 ships:** loop engine + 4-hook template interface · research template · monitor template · cycle ledger · envelope · milestones · child-process per loop · output-shape enforcement · adaptive planner (replaces shape × topic lookup; URL-grounded; emits typed `LoopSchedule`) · **schedule as the universal loop config** (every per-loop knob is a field on the schedule artifact) · **Schedule view = universal editor** (pre-run / mid-run / historical) · **8-mode set** (Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom; all visible, no dev gating) · **live Activity view as a first-class surface** · locked-field mechanic on schedule edits · per-role model selection · `InferredPanel` (shape, output_shape, mode, role, free-text topic) · mockable LLM boundary · typed failure-mode identifiers · cost-as-observable · event-triggered background work · two real-LLM e2e tests.
 
-**v1 does NOT ship:** Schedule view *editing* (read-only in v1; editing comes in v2) · pause/resume control · directive (nudge) channel · adaptive stop · per-cycle redundancy detector · narrative post-mortem content · self-healing remediation · forkable runs · source-type specialized processors · context compression · charts in renderer · heavy-modality cycles · pre-flight clarification flow · recursive sub-loops · new templates (code/writing/image) · cross-run features (related-runs panel, concept/source indexes, knowledge graph view — all v5).
+**v1 does NOT ship:** mid-run *editing* of the Schedule view (read-only while running; editing only in Custom mode pre-run or paused state — pause itself is v2) · the **Check framework** and all checks built on it (marginal-value stop, redundancy detector, continuous watcher, self-healing remediations, intent-alignment, narrative post-mortems, user-authored checks for pause/directive/fork — all v2) · source-type specialized processors · engine-side context compression (digest artifact) · charts in renderer · heavy-modality cycles · pre-flight clarification flow · recursive sub-loops · new templates (code/writing/image) · cross-run features (related-runs panel, concept/source indexes, knowledge graph view — all v5).
 
 ### Roadmap
 
 | Version | Theme | Headline features | Depends on |
 |---|---|---|---|
-| **v1 (MVP)** | Cutover with empirical fixes | Loop engine, research + monitor templates, output-shape enforcement, **adaptive planner** (replaces shape × topic lookup), plan-as-artifact, per-role model selection. Keep `InferredPanel`. Mockable LLM, typed failure modes, real-LLM CI. | — |
-| **v2** | Stabilize and steer | **Strong mid-run steerability** (pause + edit + free-form directive channel), adaptive stop, redundancy detector, narrative post-mortems, planner prompt tuning, self-healing layer, forkable runs. | v1 plan-as-artifact + Schedule view + typed failure modes |
+| **v1 (MVP)** | Cutover with empirical fixes | Loop engine, research + monitor templates, output-shape enforcement, **adaptive planner**, **schedule as universal loop config** with Schedule view as universal editor, **8-mode set** (incl. Custom), live Activity view, per-role models. `InferredPanel` preserved + extended. Mockable LLM, typed failure modes, real-LLM CI. | — |
+| **v2** | Stabilize and steer (Check framework) | **Check primitive** unifying schedule edits, directives, stops, perturbation triggers, flags. Built-in checks (marginal-value stop, redundancy detector, intent-alignment, narrative post-mortems, self-healing, continuous watcher — suggest-only by default). User-authored checks (pause-edit, directive, fork-from-cycle) through one API. Planner prompt tuning. | v1 schedule-as-config + typed failure modes + event log |
 | **v3** | Extend | Source-type processors, context compression at milestones, charts in renderer, heavy-modality cycles, cross-template evaluator. | v2 stability |
 | **v4** | New templates | Code-dev, long-form writing, image-iteration. Recursive sub-loops if needed. | v3 surface extensions |
 | **v5** | Cross-run knowledge layer | Related-runs panel, cross-run concept and source indexes, knowledge graph view. Deferred to the end — per-run engine must be solid first. | per-run features stable across v1–v3 |

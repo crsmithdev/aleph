@@ -59,7 +59,9 @@ How the system decides what to investigate, when it commits, and when it re-plan
 
 **Impact on observed failures.** Deterministic table-driven planning is faster, cheaper, and reproducible: the same query yields the same plan, which matters for diagnosing failures. Its weakness is its dependence on the routing being right — F1 (topic/canon drift) is a direct consequence of a too-narrow topic taxonomy. Adaptive LLM planning sidesteps this by re-deciding from scratch every cycle, but pays for it with cost and irreproducibility, and doesn't directly help with F2 (output-shape) or F5 (post-mortem misses). Plan-as-artifact is the foundation for F5 and F6 — a post-mortem can diff executed cycles against a planned schedule, and a user can edit a visible plan but not an internal struct.
 
-**For the system.** Adopt adaptive LLM planning. The reproducibility benefit of table-driven planning was honestly attractive but isn't worth the F1 cost: the 6-cluster taxonomy is the root of the topic drift, and widening it to 20 clusters or making it free-text doesn't fix the deeper problem (a lookup table can only encode what its author anticipated). Replace `run-plan.ts`'s `(shape × topic) → RunPlan` lookup with a planner LLM call that takes `(prompt, question_shape, output_shape, envelope)` and emits a typed `LoopSchedule`. The planner produces canon, branch decomposition, per-branch budgets, and which perturbation strategies to favor. Same prompt twice may produce different plans — that's the trade. Two properties survive: (1) **engine-layer determinism** — input-hash dedup, dispatch order, and render-from-artifacts stay deterministic, which is what makes crash-resume, forkable runs, and stable replay possible; (2) **typed `question_shape` and `output_shape`** — kept as planner *inputs* and renderer *constraints*, not as lookup keys. URL detection in the prompt feeds the planner as a grounding signal rather than a separate code path. Promote the plan to a first-class persisted artifact (`kind: 'schedule'`) so it's diffable and editable.
+**For the system.** Adopt adaptive LLM planning. The reproducibility benefit of table-driven planning was honestly attractive but isn't worth the F1 cost: the 6-cluster taxonomy is the root of the topic drift, and widening it to 20 clusters or making it free-text doesn't fix the deeper problem (a lookup table can only encode what its author anticipated). Replace `run-plan.ts`'s `(shape × topic) → RunPlan` lookup with a planner LLM call that takes `(prompt, question_shape, output_shape, envelope, mode_preset, role)` and emits a typed `LoopSchedule`. The planner produces canon, branch decomposition, per-branch budgets, perturbation weights, and the milestone plan. Same prompt twice may produce different plans — that's the trade. Two properties survive: (1) **engine-layer determinism** — input-hash dedup, dispatch order, and render-from-artifacts stay deterministic, which is what makes crash-resume, forkable runs, and stable replay possible; (2) **typed `question_shape` and `output_shape`** — kept as planner *inputs* and renderer *constraints*, not as lookup keys. URL detection in the prompt feeds the planner as a grounding signal rather than a separate code path.
+
+**Schedule as the universal loop configuration.** Promote the plan to a first-class persisted artifact (`kind: 'schedule'`) — and grow its payload to cover every per-loop setting, not just the structural plan. Canon, branches, milestones, **plus envelope, models, perturbation config, run flags, and mode metadata** all live on the schedule. The Schedule view in the UI is the universal editor for this artifact (pre-run via Custom mode; mid-run via pause; historical via fork-from-cycle). No separate "advanced" panel exists. **Modes** are named starting templates: picking Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom selects which template constructs the initial schedule; after construction the mode label is just metadata, and the schedule is what runs. Locked-field mechanic: every field gets an implicit `locked` flag when a non-planner author edits it, so milestone re-plans respect user edits.
 
 ---
 
@@ -82,11 +84,18 @@ Whether and how a user can intervene during a running query.
 
 The lesser frequency of mid-run controls in the survey is partly explained by the comparators being academic prototypes optimizing for benchmark scores, where human intervention is methodologically inconvenient. For a tool meant to be used, the absence is harder to defend.
 
-**For the system.** Ship both the structural and the natural-language intervention paths — they're complementary rather than alternatives. **The structural path:** pause-and-edit at any cycle boundary, applied to the same `schedule` artifact the planner produces. The user sees the plan, edits it (canon, branches, budgets, perturbation weights, depth, milestones), and resumes. Pause is a cooperative-cancellation point between cycles; the artifact-based plan is the resumable handle. **The natural-language path:** a `directive` artifact kind — free-form text from the user ("focus on the Bay Area portion," "skip the history, dig into the places," "use academic sources for this"). The planner reads unconsumed directives on its next re-plan and incorporates them. Directives don't require pause — they queue. Scope flag distinguishes `next_replan` (one-shot) from `permanent` (sticks across re-plans). The Schedule view shows which directives the planner consumed and what changed as a result, so the user gets visible feedback on whether their nudge landed.
+**For the system.** Treat the schedule as a *living artifact* with multiple edit sources. Every author of change — planner, user, AI watcher, self-healing remediation, fork-from-history — produces edits on the same artifact, through the same Schedule view, recorded in the same audit trail. All edits are **checks** (§11) — `(state, trigger) → action[]` with `action: { schedule_edit }` — so the system stays symmetric: a user directive is just a check authored by the user; a watcher's proposed edit is a check authored by an LLM observing the event stream; a self-healing remediation is a check whose condition pattern-matches on a typed failure flag.
 
-Two failure modes the two paths address differently: structural edits are for hard pivots where the user knows exactly what should change (kill these branches, raise that budget, replace this canon item). Directives are for nudges where the user has a felt sense but not a structural change in mind ("less history, more places"). Most observed F1/F2 failures could be addressed by either; having both means the user picks the cheaper tool for the situation.
+The structural-vs-natural-language distinction lives at the *action* level, not the API level. Structural edits surface as `action: schedule_edit` (patch the schedule directly). Natural-language nudges surface as `action: directive` (free-form text the planner reads on its next re-plan). Both flow through `POST /loops/:id/checks`. The Schedule view shows which checks consumed which inputs, so the user sees what their nudge or edit changed.
 
-**Render the plan in the UI from v1.** The plan being visible is a precondition for it being editable. Even before pause/edit/resume ships (v2), users benefit from seeing what the adaptive planner decided — both as transparency on a paid LLM call and as preparation for the steering features that come next. The Schedule view in v1 is read-only; the same component becomes editable in v2 when paused.
+**Three intervention postures the user can move between** — without a mode picker forcing the choice up front:
+- AI-led: no user-authored checks posted; the engine runs autonomously.
+- AI-led with nudges: occasional `directive` checks; planner adapts on next re-plan.
+- Human-led: `schedule_edit` checks via pause + edit in the Schedule view; user drives, AI executes.
+
+The system is autonomous by default; controls are always present in the UI; the user grabs the wheel when they want to.
+
+**Render the plan in the UI from v1.** The plan being visible is a precondition for it being editable. v1 ships the Schedule view in read-only-during-execution mode + editable in Custom mode (pre-run) and on completed runs (for inspection / fork). v2 turns on the same editor when paused, and lights up user-authored checks. Even without mid-run controls in v1, transparency on what the adaptive planner decided is valuable in its own right.
 
 ---
 
@@ -325,25 +334,25 @@ What knobs the user can set, and when.
 | Tongyi DeepResearch | Query; mode (ReAct / Heavy) | None |
 | WebWeaver / WebResearcher / ReSum | Query; max iterations; model | None |
 | Current system | Query; shape and topic editable post-submit; budget, model, max depth editable post-submit before run; 5 shape-template buttons that pre-fill prompt | None |
-| Current plan | Envelope preset (3 choices) + template picker; envelope custom panel reveals time, cost, cycles, source list | None |
+| Current plan | **8-mode set** (Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom — all visible). Mode is a named starting template. `InferredPanel` exposes question_shape, output_shape, mode, role, free-text topic. **Schedule view is the universal editor** for every per-loop knob (envelope, models, perturbation, canon, branches, milestones, flags) — no separate advanced panel | Pause / edit schedule / send directive / fork from cycle — all in v2 as user-authored checks through one API |
 
-**Per-query knobs are universally minimal.** Most comparators have one to three fields. The current system's "engine guesses, user corrects" pattern (inferred shape and topic, with editable fields) is uncommon in the survey — no other system has anything like it. ResearStudio's three-mode toggle is the closest analog. Open Deep Search exposes the most configuration but it's setup-time, not per-query.
+**Per-query knobs are universally minimal across the survey.** Most comparators expose one to three fields. "Mode" in the survey papers means very different things on different axes: compute pipeline (Tongyi ReAct vs. Heavy), search depth (ODS default vs. pro), output template (WriteHERE fiction vs. technical), intervention level (ResearStudio AI-led vs. human-led), or envelope (Construct's earlier presets). The current plan's mode is on a different axis again: **mode = named starting template for the schedule artifact**, with no runtime presence after construction.
 
-The current plan's UX direction would reduce the per-query surface (lose the inferred-then-editable fields, keep only envelope presets). This is at odds with the survey: the inferred-then-editable pattern is one of the current system's actual differentiators.
+**For the system.** Radical simplification by collapsing two surfaces into one. The Schedule view that already renders the plan during a run becomes the **universal editor** for every per-loop knob, with three roles: pre-run editing (in Custom mode, or after pausing a not-yet-started loop), mid-run editing (when paused, v2), and historical viewing + fork-from-cycle (completed runs). The schedule artifact's payload grows to contain everything that's currently scattered across `SessionConfig`: envelope, models, perturbation config, run flags, plus the structural plan (canon, branches, milestones). No separate "advanced" panel exists or is needed; advanced controls are just the deeper fields of the same view.
 
-**Impact on observed failures.** F2 (output shape) is the most direct target — exposing output shape as an inferred-then-editable field would have fixed the HSV/HPV, burger, and volunteering failures. F1 (topic drift) is partly addressable here too — if the topic field is editable and the user sees an unhelpful cluster routing, they can correct it before the run starts.
+Mode presets are demoted to **named starting templates** — Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom. Each constructs an initial schedule with a coherent bundle of envelope + models + perturbation profile + flags. After construction the mode label is metadata (`created_with_mode` on the schedule artifact); the actual behavior is whatever the schedule currently says. The `InferredPanel` keeps the inferred-then-editable pattern for the *query classification* fields (`question_shape`, `output_shape`, `mode`, `role`, free-text `topic`) — those describe the query, not the loop.
 
-F6 (no mid-run intervention) is the larger gap, but the configurability surface and the mid-run surface should reuse the same UI: the editors for shape, topic, budget, and so on should be available both pre-run and during pause. That makes pause/edit/resume a natural extension of the entry surface rather than a separate UI to build.
+Mid-run intervention reuses the same Schedule view editor (when paused) plus a free-form directive channel that doesn't require pause. Both flow through the unified Check primitive described in §11, not as separate APIs.
 
-**For the system.** Keep the inferred-then-editable pattern; extend it with output shape as a first-class field. Add envelope presets (quick / deep / custom) for the budget/duration row. Reuse the same field editors for the pause/edit/resume flow. Surface a small "advanced" expander for the perturbation strategy weights and similar internals; users who understand them benefit from access, users who don't get good defaults.
+**Locked-field mechanic.** Every schedule field has an implicit `locked` flag set when a non-planner author edits it. Milestone re-plans respect locks — the planner won't overwrite user-edited fields. The Schedule view shows lock state visually.
 
-A few internal fields that today are not user-touchable but probably should be: branching factor, derivation strategy weights, source-list overrides. None of these need to be prominent; they should be reachable.
+**Impact on observed failures.** F2 (output shape) is addressed by exposing `output_shape` as an inferred-then-editable field in the InferredPanel. F1 (topic drift) is addressed by removing the lookup-based topic taxonomy entirely (per §1's adaptive planner) and by making the Schedule view editable so users can correct canon at any time. F6 (no mid-run intervention) collapses into "the user posts a check" — every intervention is the same shape.
 
 ---
 
-## 11. Quality evaluation
+## 11. Checks (unified evaluation, intervention, and steering)
 
-How the system decides whether a run succeeded.
+How the system decides whether something should change — at any granularity, from any author.
 
 | System | Approach |
 |---|---|
@@ -353,21 +362,58 @@ How the system decides whether a run succeeded.
 | RAG-Gym | "Critic axis" — separate scorer over completed artifacts |
 | Most others | None at the framework level; quality measured externally on benchmarks |
 | Current system | Post-mortem hook runs after each job; iteration-check hook detects stuck states mid-run |
-| Current plan | Post-mortems retained for development feedback; reviews surface folded away |
+| Current plan | **Unified Check primitive.** A check is `(state, trigger) → action[]`. The same shape subsumes intra-run heuristics, post-run introspection, mid-run user nudges, the watcher agent, and self-healing remediations |
 
-**Two distinct ideas conflated.** *Evaluation as scoring* (CORAL's grader, RAG-Gym's critic) is for benchmark-style quality measurement — was the answer right? *Evaluation as introspection* (EDR's reflection, the current system's post-mortem and iteration check) is for run-internal quality control — should we continue, did this work, what went wrong?
+### The Check primitive
 
-The current system has both forms but the introspection version is the weaker one. Iteration-check looks at yield and stuck-ness via similarity heuristics; post-mortem looks at yield, balance, and shape-completeness shallowly. Neither measures alignment with user intent.
+```ts
+type Check = {
+  trigger: 'cycle_boundary' | 'event' | 'milestone' | 'on_finish' | 'on_user_action';
+  scope:   'cycle' | 'branch' | 'loop' | 'run';
+  author:  'heuristic' | 'llm' | 'user';
+  condition: (state) => boolean;
+  action: (state) => Action[];
+};
 
-**Impact on observed failures.** F5 is the direct failure of this feature area. The clearly-wrong topic-drift run was marked "pass" because the post-mortem doesn't ask "did this answer the question that was asked?" It asks lower-order questions (did we find findings, was thread time balanced, did the shape get filled). All of those can be "yes" while the answer is wrong.
+type Action =
+  | { kind: 'schedule_edit', patch }
+  | { kind: 'directive', text, scope }
+  | { kind: 'stop', reason }
+  | { kind: 'perturbation_trigger', strategy }
+  | { kind: 'flag', failure_mode: TypedFailureMode }
+  | { kind: 'noop' };
+```
 
-A useful introspection step is a single LLM call at post-mortem time that re-reads the original prompt and the produced document and answers "did this answer the question asked, in the form requested?" It's one cheap call per run, but it's the missing piece — it's the only thing that would catch F5.
+Every place where the system decides "something needs to change" is a check. Adaptive stop, redundancy detection, intent-alignment, self-healing remediation, the continuous watcher, the user's pause-and-edit, the user's directive, the user's fork-from-cycle — all express the same way. One audit trail (the event log); one API for user-authored checks (`POST /loops/:id/checks`); one provenance surface (the Schedule view's "edits applied" trail keyed by check-author).
 
-CORAL-style leaderboards don't help here: they're designed for competitive coding tasks where attempts are directly comparable. Research queries aren't comparable that way.
+**Conceptual unification:** a user directive is just *a check authored by the user* — same vocabulary as a watcher's suggestion (a check authored by the LLM watching the event stream). The directive channel isn't a special API; it's a check with `author: 'user'` and `action: { directive }`.
 
-**For the system.** Two-tier evaluation. *Intra-run* checks (yield, balance, novelty) drive the marginal-value clause of the stopping rule (section 5). *Post-run* introspection includes an intent-alignment check via a single dedicated LLM call: re-reads the prompt, reads the document, returns a structured judgment with flags. This is also where F3 (silent re-submission) is detectable — if the same prompt has been re-run within a short window, the intent-check has cross-session signal to consider.
+### Built-in checks (ship in v2)
 
-A continuous evaluator agent (Open Deep Search's pattern) was considered: per-cycle critic LLM calls. Skipped — the same signal at post-mortem time is sufficient for the observed failures, and the per-cycle cost is significant.
+| Built-in check | Trigger | Author | Typical action |
+|---|---|---|---|
+| Marginal-value stop | milestone | heuristic | `{ stop }` when last-N cycles produce no new sources / no novel findings / no planner-confidence movement |
+| Redundancy detector | cycle_boundary | heuristic or cheap LLM | `{ perturbation_trigger }` or `{ schedule_edit }` when a cycle's output is highly similar to prior cycles |
+| Post-mortem with narrative | on_finish | LLM | `{ flag, failure_mode }` plus a human-readable narrative explaining what triggered |
+| Intent-alignment | on_finish | LLM | `{ flag: topic_drift / shape_mismatch }` when the produced document doesn't answer the original prompt in the requested form |
+| Self-healing remediations | event (on typed failure flag) | heuristic | `{ schedule_edit }` for known failure modes — `topic_drift` → re-plan canon; `shape_mismatch` → force renderer gate; `yield_collapse` → escalate stop |
+| Continuous watcher | event (any of interest) | LLM (suggest-only by default) | `{ directive }` suggestions; or `{ schedule_edit }` in autonomous mode (opt-in) |
+
+### User-authored checks (the universal intervention path)
+
+| User action | Stored as | Effect |
+|---|---|---|
+| Pause + edit schedule | Check with `action: schedule_edit`, `author: user` | Loop pauses, patch applied, loop resumes from edited schedule |
+| Send directive | Check with `action: directive`, `author: user` | Planner reads on next re-plan; doesn't require pause |
+| Fork from cycle N | Check on completed run, action produces a new loop with `parent_loop_id` | Branches a new loop from any historical cycle |
+
+### Impact on observed failures
+
+F5 (post-mortem misses obvious failures) is the direct target of the intent-alignment check — re-reads prompt and produced document, returns a structured judgment with typed flags. F3 (silent re-submission) is detectable here too with cross-session signal once v5 indexes are available.
+
+F6 (no mid-run intervention) collapses into "the user can post a check at any time." Every intervention — structural edit, free-form nudge, fork — is the same operation, recorded the same way.
+
+The previous two-tier framing ("intra-run checks vs. post-run introspection") was a useful first cut but disappears once the Check primitive is named — both tiers are checks with different triggers. A continuous evaluator agent (Open Deep Search's pattern) was considered for per-cycle critic LLM calls; that's just a `cycle_boundary` check with `author: 'llm'`, and the cost-benefit suggests reserving LLM-authored checks for milestones and on-finish rather than every cycle.
 
 ---
 

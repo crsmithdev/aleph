@@ -38,7 +38,12 @@ Using research-system-design.md as the reference, suggest features for the next 
 - Background work is event-triggered, not time-triggered. Monitors, cleanups, and periodic tasks fire in response to logged triggers. No opaque cron schedules. "What is the system doing right now?" is always answerable from the event log.
 
 # Configurability
-- Per-run knobs are inferred from the question by default, exposed in the UI for manual tuning, and recorded in the event log when they take effect.
+
+- Modes are named starting templates for the schedule artifact, not runtime config bundles. A mode at submit time selects which template constructs the initial schedule; after construction the schedule is what runs, and the mode label survives as metadata only.
+- The schedule artifact is the **complete editable surface** for every per-loop setting (envelope, models, perturbation, run flags, canon, branches, milestones). The Schedule view in the UI is the universal editor — no separate "advanced" / "expert" / "power-user" panel exists or is needed.
+- Per-run knobs are inferred from the question by default (`question_shape`, `output_shape`, `mode`, `role`, free-text topic), exposed in the `InferredPanel` for manual tuning, and recorded in the event log when they take effect.
+- Controls are always present in the UI regardless of mode. Mode affects default *prominence* of the Activity / Schedule / Artifact views, not their availability.
+- User interventions during a run (pause-and-edit, free-form directives, fork-from-cycle) flow through one unified API as user-authored checks — same vocabulary as the system's own evaluation, remediation, and watcher mechanisms.
 
 # Perturbation as a core mechanism
 - The system takes non-deterministic leaps in how it answers, where it searches, and how it branches. Deliberate exploration is a primary engine behavior, not a defensive fallback — diversity of approach is a core feature.
