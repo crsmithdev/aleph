@@ -15,13 +15,14 @@ import type { FastifyPluginAsync } from 'fastify';
 import { createReadStream, existsSync } from 'fs';
 import {
   createLoop, getLoop, generateDocument, listLoops, listMilestones, readState,
+  updateLoopStatus, updateLoopChildPid,
   onResearchEvent,
   listTemplateIds,
   OpenRouterProvider,
   type Envelope,
 } from '@construct/research';
 import { readSessionLog, sessionLogPath } from '../research-logger.js';
-import { spawnLoopChild } from '../loop-supervisor.js';
+import { spawnLoopChild, killLoopChild } from '../loop-supervisor.js';
 
 interface StartBody {
   template_id: string;
@@ -145,6 +146,29 @@ export const loopRoutes: FastifyPluginAsync = async (app) => {
    * `kind: 'document'` artifact — `readLatestDocument` always returns the
    * freshest so the UI seamlessly picks it up.
    */
+  /**
+   * Cancel a running loop. Sends SIGTERM to the supervisor child (which
+   * marks the loop 'cancelled' on graceful exit) or falls back to flipping
+   * the row to 'cancelled' directly if no child is registered (e.g. an
+   * orphaned 'running' status from a stale supervisor crash).
+   *
+   * Backs the Workers page Kill button.
+   */
+  app.post<{ Params: { id: string } }>('/:id/cancel', async (req, reply) => {
+    const loop = getLoop(app.sqlite, req.params.id);
+    if (!loop) return reply.status(404).send({ error: 'loop not found' });
+    if (loop.status === 'completed' || loop.status === 'cancelled' || loop.status === 'failed') {
+      return reply.status(409).send({ error: `loop is already terminal: ${loop.status}` });
+    }
+    const killed = killLoopChild(loop.id, 'SIGTERM');
+    if (!killed) {
+      // No active child — orphaned status. Flip the row directly.
+      updateLoopStatus(app.sqlite, loop.id, 'cancelled');
+      updateLoopChildPid(app.sqlite, loop.id, null);
+    }
+    return reply.status(202).send({ id: loop.id, killed_child: killed });
+  });
+
   app.post<{ Params: { id: string } }>('/:id/regenerate-document', async (req, reply) => {
     const loop = getLoop(app.sqlite, req.params.id);
     if (!loop) return reply.status(404).send({ error: 'loop not found' });

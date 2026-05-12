@@ -24,7 +24,6 @@ import { SummaryPage } from './pages/life/SummaryPage';
 import { ResearchLandingPage } from './pages/research/ResearchLandingPage';
 import { ResearchHistoryPage } from './pages/research/ResearchHistoryPage';
 import { ResearchLoopDetail } from './pages/research/ResearchLoopDetail';
-import { ResearchPlanPage } from './pages/research/ResearchPlanPage';
 import { ResearchWorkersPage } from './pages/research/ResearchWorkersPage';
 import { ResearchConfigPage } from './pages/research/ResearchConfigPage';
 
@@ -63,7 +62,6 @@ const ELEMENTS: Record<string, ReactNode> = {
   '/research': <ResearchLandingPage />,
   '/research/history': <ResearchHistoryPage />,
   '/research/:id': <ResearchLoopDetail />,
-  '/research/:id/plan': <ResearchPlanPage />,
   '/research/workers': <ResearchWorkersPage />,
   '/research/config': <ResearchConfigPage />,
 
