@@ -110,6 +110,9 @@ check(r, "rating: standalone 8", ratingTest("8").rating === 8);
 check(r, "rating: standalone 10", ratingTest("10").rating === 10);
 check(r, "rating: 7/10 pattern", ratingTest("7/10").rating === 7);
 check(r, "rating: 'I rate this 9'", ratingTest("I rate this 9").rating === 9);
+check(r, "rating: 'rate 6'", ratingTest("rate 6").rating === 6);
+check(r, "rating: 'rating: 8'", ratingTest("rating: 8").rating === 8);
+check(r, "rating: 'I rated it 10'", ratingTest("I rated it 10").rating === 10);
 
 check(r, "rating: ignores 'hello'", ratingTest("hello world").rating === null);
 check(r, "rating: ignores '42'", ratingTest("42").rating === null);
@@ -117,6 +120,22 @@ check(r, "rating: ignores 'there are 3 files'", ratingTest("there are 3 files to
 check(r, "rating: 'deploy to 3 servers' → no match", ratingTest("deploy to 3 servers").rating === null);
 check(r, "rating: '8 files changed' → no match", ratingTest("8 files changed in the PR").rating === null);
 check(r, "rating: 'rate this' alone → no match", ratingTest("rate this").rating === null);
+
+// False-positive regressions from 2026-05-12: rate-keyword in the middle of prose
+check(r, "rating: 'rate-limit ... 2 findings' → no match",
+  ratingTest("Excluded: rate-limit / DoS — 2 findings out of scope").rating === null);
+check(r, "rating: 'did not intend to rate you 2/5' → no match",
+  ratingTest("if it's feedback, that's probably an error on my part, did not intend to rate you 2/5").rating === null);
+check(r, "rating: 'the rating system fired 3 times' → no match",
+  ratingTest("the rating system fired 3 times today").rating === null);
+check(r, "rating: '8/100 not a rating' → no match",
+  ratingTest("8/100 score on the eval").rating === null);
+
+// Skip system-event injections (UserPromptSubmit fires on these too)
+check(r, "rating: skips <task-notification> prompt",
+  ratingTest("<task-notification>\n<task-id>abc</task-id>\nresult contains rate-limit and 2 findings\n</task-notification>").rating === null);
+check(r, "rating: skips <system-reminder> prompt",
+  ratingTest("<system-reminder>UserPromptSubmit hook success: stuff mentioning rate and 2</system-reminder>").rating === null);
 
 const lowResult = ratingTest("2");
 check(r, "rating: low rating warns", lowResult.rating === 2 && lowResult.output.includes("Low rating"));
