@@ -26,8 +26,8 @@ Do not produce a before/after.
 
 If the user wants violations flagged in existing docs → `docs-audit`.
 If they want one doc's structure propagated across peers → `docs-conform`.
-If the user wants LLM-readability optimization → invoke `docs-optimize`
-(this skill calls it automatically at Phase 3b).
+If the user wants LLM-readability optimization → `docs-optimize`
+(this skill emits `c7score`-tagged findings; the omnibus routes them).
 
 Canonical rules: `src/rules/docs/RULES.md`. Suggested-but-not-yet-enforced additions:
 `src/rules/docs/SUGGESTIONS.md`.
@@ -56,18 +56,21 @@ Canonical rules: `src/rules/docs/RULES.md`. Suggested-but-not-yet-enforced addit
 - Add diagrams where visual representation helps
 - Match the style of existing documentation in the project
 
-### Phase 3b: Optimization pass
+### Phase 3b: LLM-optimization pass
 
-After the initial draft, invoke `Skill('docs-optimize')` to apply
-c7score-relevant transformations to the new or edited doc:
+Walk c7score-style criteria against the doc(s) just written, sourcing the
+methodology from `src/skills/docs-optimize/REFERENCE.md` and
+`src/skills/docs-optimize/references/c7score_metrics.md` as reference files.
+Emit a finding for each violation, tagged `c7score`:
 - Question-coverage check: do snippets answer concrete "How do I X?" questions?
 - Self-contained examples: every snippet runnable, with imports
 - Language tags on every code block
-- Remove metadata snippets (licensing, directory trees, citations)
-- Combine import-only snippets with usage
+- Metadata snippet pollution (licensing, directory trees, citations)
+- Import-only / install-only fragments
 
-The c7score methodology lives in `docs-optimize/REFERENCE.md` and
-`docs-optimize/references/c7score_metrics.md`. Do not duplicate it here.
+The omnibus routes `c7score`-tagged findings to `docs-optimize` for the fix
+pass. This skill does not call it directly (per architecture R1: only the
+omnibus chains skills).
 
 ### Phase 4: QA
 

@@ -38,16 +38,17 @@ Before dispatching:
 2. **Read `omnibus.yml`** — load `defaults`, `active`, `leaves`, `verification`, `approval` blocks.
 3. **Resolve registry** — for each (verb, domain) cell requested, look up the leaf skill name. Cells with no leaf are skipped silently with a "Skipped: <domain> — no leaf installed" line in the final report.
 
-Today's registry (v1, only the code domain is wired):
+Registry (current — all audit + fix cells populated, suggest pending):
 
 | Verb | code | design | docs | skills | hooks | agents | config | security |
 |---|---|---|---|---|---|---|---|---|
-| audit | `code-audit` | — | `docs-audit`¹ | — | — | — | `config-audit`¹ | — |
-| fix | `code-fix` | — | — | — | — | — | — | — |
+| audit | `code-audit` | `design-audit` | `docs-audit` | `skills-audit` | `hooks-audit` | `agents-audit` | `config-audit` | `security-audit` |
+| fix | `code-fix` | `design-fix` | `docs-fix` | `skills-fix` | `hooks-fix` | `agents-fix` | —¹ | `security-fix` |
 | suggest | — | — | — | — | — | — | — | — |
-| author | — | — | `docs-author-v2`¹ | `skill-creator`¹ | — | — | — | — |
 
-¹ Pre-existing skill, not yet adapted to the SARIF-emitting contract. The omnibus invokes them and adapts their output into SARIF as a passthrough; per-leaf migration to the new contract follows in later phases.
+All audit and fix leaves emit SARIF natively per `src/skills/_shared/finding.md`. The `author` verb (`docs-author-v2`, `skill-creator`) is invoked directly per artifact creation rather than orchestrated through the matrix.
+
+¹ `config-fix` is intentionally omitted: config writes are schema-driven and `agnix --fix-safe` handles structural lint. See architecture doc §8.
 
 ## Phase 1: Fan out (parallel)
 
@@ -145,9 +146,9 @@ Skipped:
 Re-audit suggested: <reason>
 ```
 
-## Today's limitations (v1)
+## Today's limitations
 
-- Only `code-audit` and `code-fix` are SARIF-native. Other leaves (`docs-audit`, `docs-author-v2`, `config-audit`, `skill-creator`) work via passthrough adaptation — the omnibus invokes them, captures their prose output, and synthesizes minimal SARIF on their behalf. Per-leaf migration to native SARIF happens in later phases.
+- `suggest` cells are declared in `omnibus.yml` but not yet wired — the proactive-suggestion variant of audit is post-v1 work.
 - No persistence — findings live for the duration of the conversation. A `/audit` followed an hour later by `/fix` requires re-running the audit.
 - No graph-index for cross-file checks. Per-file scans only. Graph-index audit (Greptile v3 pattern) is post-v1 work.
 - Approval gates use AskUserQuestion or simple chat prompts; no UI surface yet.

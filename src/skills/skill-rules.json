@@ -66,7 +66,7 @@
     },
     {
       "skill": "docs-audit",
-      "keywords": ["docs audit", "audit docs", "audit the docs", "doc audit", "documentation audit", "/(audit|review|check).{0,15}(docs|documentation)/"]
+      "keywords": ["docs-audit", "docs audit", "audit docs", "audit the docs", "doc audit", "documentation audit", "/(audit|review|check).{0,15}(docs|documentation)/"]
     },
     {
       "skill": "docs-conform",
@@ -86,11 +86,11 @@
     },
     {
       "skill": "design-audit",
-      "keywords": ["design audit", "audit the design", "audit the ui", "audit ui", "design review", "make this feel professional", "make this look professional", "polish the interface", "ux audit", "go through the ui", "review the ui", "the ui needs work", "clean up the ui", "typography", "fix typography", "em dash", "en dash", "text hierarchy", "review layout", "fix the font", "change the font", "font size", "font is wrong", "web standards", "check accessibility", "accessibility audit", "a11y", "best practices", "review ux", "/(review|audit|go through).{0,15}(ui|design|interface|ux)/", "/(fix|change|update|wrong).{0,15}font/", "/font.{0,15}(wrong|bad|ugly|small|big|size)/"]
+      "keywords": ["design-audit", "design audit", "audit the design", "audit the ui", "audit ui", "design review", "make this feel professional", "make this look professional", "polish the interface", "ux audit", "go through the ui", "review the ui", "the ui needs work", "clean up the ui", "typography", "fix typography", "em dash", "en dash", "text hierarchy", "review layout", "fix the font", "change the font", "font size", "font is wrong", "web standards", "check accessibility", "accessibility audit", "a11y", "best practices", "review ux", "/(review|audit|go through).{0,15}(ui|design|interface|ux)/", "/(fix|change|update|wrong).{0,15}font/", "/font.{0,15}(wrong|bad|ugly|small|big|size)/"]
     },
     {
       "skill": "config-audit",
-      "keywords": ["audit hooks", "hook audit", "audit my hooks", "check hooks", "are my hooks", "hook outputs", "dead hooks", "unused hooks", "audit skills", "skill audit", "audit my skills", "check skills", "audit config", "config audit", "audit my config", "audit agents", "agent audit", "audit my agents", "audit setup", "audit agent", "audit claude.md", "check agent config", "go through the hooks", "go through the skills", "unused skills", "/(audit|check|review).{0,15}(hook|skill|config|agent|setup)/", "/unused.{0,10}(hook|skill)/", "/(hook|skill).{0,10}(unused|dead|broken|working)/"]
+      "keywords": ["config-audit", "audit hooks", "hook audit", "audit my hooks", "check hooks", "are my hooks", "hook outputs", "dead hooks", "unused hooks", "audit skills", "skill audit", "audit my skills", "check skills", "audit config", "config audit", "audit my config", "audit agents", "agent audit", "audit my agents", "audit setup", "audit agent", "audit claude.md", "check agent config", "go through the hooks", "go through the skills", "unused skills", "/(audit|check|review).{0,15}(hook|skill|config|agent|setup)/", "/unused.{0,10}(hook|skill)/", "/(hook|skill).{0,10}(unused|dead|broken|working)/"]
     },
     {
       "skill": "code-conform",
