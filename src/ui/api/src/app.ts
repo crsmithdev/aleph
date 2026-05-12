@@ -17,6 +17,7 @@ import { summaryRoutes } from './routes/summary.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { observabilityRoutes } from './routes/observability.js';
 import { researchRoutes } from './routes/research.js';
+import { loopRoutes } from './routes/loops.js';
 import { publicRoutes } from './routes/public.js';
 import { EventBus, HistoryService, applyDDL } from '@construct/goals';
 import { applyResearchDDL } from '@construct/research';
@@ -143,6 +144,7 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
     await api.register(webhookRoutes, { prefix: '/webhooks' });
     await api.register(observabilityRoutes, { prefix: '/observability' });
     await api.register(researchRoutes, { prefix: '/research' });
+    await api.register(loopRoutes, { prefix: '/loops' });
 
     api.get('/system/info', async function () {
       return getSystemInfo(app.sqlite.filename);

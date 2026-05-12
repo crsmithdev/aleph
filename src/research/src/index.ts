@@ -62,3 +62,6 @@ export {
   recordPostMortem, getPostMortem, listPostMortems,
 } from './services/post-mortems.js';
 export type { PostMortemRecord } from './services/post-mortems.js';
+
+// v1 loop engine — public surface for the new dispatcher (Phase 1+).
+export * from './loop/index.js';
