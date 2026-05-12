@@ -282,4 +282,53 @@ describe('Loops API — Phase 3 output-shape enforcement', () => {
     expect(lastRender.shape_satisfied).toBe(true);
     expect(lastRender.shape_missing).toBeNull();
   }, 60_000);
+
+  it('mixed-shape prompt (smashed-burgers) → schedule artifact + mixed render + gate satisfied', async () => {
+    const startRes = await fetch(`http://127.0.0.1:${port}/api/loops/start`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        template_id: 'research',
+        // "smashed-burger" + "best places to get" → fake detection returns
+        // mixed (prose + list); synthesis returns history paragraph + 5-item list.
+        prompt: 'Tell me about the smashed-burger style, plus the 5 best places to get one.',
+        cycles_target: 2,
+      }),
+    });
+    expect(startRes.status).toBe(201);
+    const { id } = await startRes.json() as { id: string };
+
+    const finalState = await poll(
+      async () => {
+        const res = await fetch(`http://127.0.0.1:${port}/api/loops/${id}`);
+        if (res.status !== 200) return null;
+        return await res.json() as {
+          loop: { status: string };
+          artifacts: Array<{ kind: string; payload: Record<string, unknown> }>;
+        };
+      },
+      v => v.loop.status === 'completed' || v.loop.status === 'failed',
+      30_000,
+    );
+
+    expect(finalState.loop.status).toBe('completed');
+
+    const schedule = finalState.artifacts.find(a => a.kind === 'schedule');
+    expect(schedule).toBeDefined();
+    expect(schedule!.payload).toEqual({
+      output_shape: {
+        kind: 'mixed',
+        components: [{ kind: 'prose' }, { kind: 'list', min_items: 5 }],
+      },
+    });
+
+    const cycleOutputs = finalState.artifacts.filter(a => a.kind === 'cycle_output');
+    expect(cycleOutputs).toHaveLength(2);
+    const lastRender = cycleOutputs[cycleOutputs.length - 1].payload.render as {
+      shape_kind: string; shape_satisfied: boolean; shape_missing: unknown;
+    };
+    expect(lastRender.shape_kind).toBe('mixed');
+    expect(lastRender.shape_satisfied).toBe(true);
+    expect(lastRender.shape_missing).toBeNull();
+  }, 60_000);
 });

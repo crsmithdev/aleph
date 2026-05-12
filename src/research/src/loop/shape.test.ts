@@ -357,3 +357,63 @@ describe('validateShape — list', () => {
     expect(result.missing).toEqual({ needed_items: 1, found_items: 0 });
   });
 });
+
+describe('validateShape — mixed', () => {
+  let sqlite: ReturnType<typeof newDb>;
+  beforeEach(() => { sqlite = newDb(); });
+
+  test('prose+list with both components satisfied', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, [
+      'Some narrative prose covering the history of the thing.',
+      '',
+      '1. First',
+      '2. Second',
+      '3. Third',
+      '4. Fourth',
+      '5. Fifth',
+    ].join('\n'));
+    const state = readState(sqlite, loop.id);
+    const result = validateShape(state, {
+      kind: 'mixed',
+      components: [{ kind: 'prose' }, { kind: 'list', min_items: 5 }],
+    });
+    expect(result).toEqual({ satisfied: true, shape_kind: 'mixed', missing: null });
+  });
+
+  test('prose+list with list under-count fails with per-component diagnostic', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, 'Prose paragraph here.\n\n1. one\n2. two');
+    const state = readState(sqlite, loop.id);
+    const result = validateShape(state, {
+      kind: 'mixed',
+      components: [{ kind: 'prose' }, { kind: 'list', min_items: 5 }],
+    });
+    expect(result.satisfied).toBe(false);
+    expect(result.shape_kind).toBe('mixed');
+    // missing.components surfaces each child's validation result.
+    expect(result.missing).toEqual({
+      components: [
+        { satisfied: true, shape_kind: 'prose', missing: null },
+        { satisfied: false, shape_kind: 'list', missing: { needed_items: 5, found_items: 2 } },
+      ],
+    });
+  });
+
+  test('prose+table — table half blocks the gate', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, 'Some prose. No table at all.');
+    const state = readState(sqlite, loop.id);
+    const result = validateShape(state, {
+      kind: 'mixed',
+      components: [{ kind: 'prose' }, { kind: 'table', columns: ['x', 'y'] }],
+    });
+    expect(result.satisfied).toBe(false);
+    expect(result.missing).toEqual({
+      components: [
+        { satisfied: true, shape_kind: 'prose', missing: null },
+        { satisfied: false, shape_kind: 'table', missing: { columns: ['x', 'y'] } },
+      ],
+    });
+  });
+});
