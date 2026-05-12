@@ -97,6 +97,10 @@
       "keywords": ["design-conform", "conform", "make the pages match", "make the others", "align the layouts", "same loading state", "same empty state", "match the table headers", "make the components consistent", "same shape", "apply to all", "/(pages|tables|layouts|components|cards|forms).{0,30}(match|like|same|consistent)/", "/(make|fix|align).{0,30}(consistent|match|same|like)/"]
     },
     {
+      "skill": "design-construct",
+      "keywords": ["design system", "construct design", "design tokens", "color tokens", "surface tokens", "type scale", "design reference", "design kit", "material symbols", "construct ui pattern"]
+    },
+    {
       "skill": "dogfood",
       "keywords": ["dogfood", "try this as a user", "use it like a user", "use it like a real user", "pretend you don't know the internals", "how does this feel to use", "/dogfood\\s+\\S+/"]
     }

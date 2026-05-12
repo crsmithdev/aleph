@@ -235,4 +235,4 @@ Place in `.env` at repo root; sourced automatically on dev start.
 | [docs/specs/RESEARCH.md](docs/specs/RESEARCH.md) | Research module spec |
 | [docs/specs/EVAL.md](docs/specs/EVAL.md) | Eval harness spec |
 | [docs/AGENTS.md](docs/AGENTS.md) | Agent definitions |
-| [docs/design/](docs/design/) | Design system tokens, kits, previews |
+| [src/skills/design-construct/](src/skills/design-construct/) | Design system tokens, kits, previews (registered as the `design-construct` skill) |
