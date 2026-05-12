@@ -115,6 +115,18 @@
     {
       "skill": "dogfood",
       "keywords": ["dogfood", "try this as a user", "use it like a user", "use it like a real user", "pretend you don't know the internals", "how does this feel to use", "/dogfood\\s+\\S+/"]
+    },
+    {
+      "skill": "hooks-audit",
+      "keywords": ["hooks-audit", "audit hooks only", "check hook safety", "audit just the hooks", "find dead hook outputs", "audit hook scripts", "/hooks-audit", "/(audit|check).{0,10}hooks?$/"]
+    },
+    {
+      "skill": "skills-audit",
+      "keywords": ["skills-audit", "audit the skill registry", "audit my skills", "audit the skills", "find orphaned skills", "audit SKILL.md files", "/skills-audit", "/(audit|check).{0,10}(skill|registry)/"]
+    },
+    {
+      "skill": "agents-audit",
+      "keywords": ["agents-audit", "audit subagents", "audit my agents", "audit the agents", "find agent drift", "check agent dispatch", "agent routing collision", "/agents-audit", "/(audit|check).{0,10}(agent|subagent)/"]
     }
   ]
 }
