@@ -285,3 +285,75 @@ describe('validateShape — table', () => {
     }).satisfied).toBe(true);
   });
 });
+
+describe('validateShape — list', () => {
+  let sqlite: ReturnType<typeof newDb>;
+  beforeEach(() => { sqlite = newDb(); });
+
+  test('ordered list with N items satisfies min_items=N', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, [
+      'Best places to volunteer:',
+      '',
+      '1. First org',
+      '2. Second org',
+      '3. Third org',
+      '4. Fourth org',
+      '5. Fifth org',
+    ].join('\n'));
+    const state = readState(sqlite, loop.id);
+    expect(validateShape(state, { kind: 'list', min_items: 5 })).toEqual({
+      satisfied: true, shape_kind: 'list', missing: null,
+    });
+  });
+
+  test('unordered list with mixed bullets (-, *, +) all count', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, [
+      '- One',
+      '* Two',
+      '+ Three',
+      '- Four',
+      '* Five',
+    ].join('\n'));
+    const state = readState(sqlite, loop.id);
+    expect(validateShape(state, { kind: 'list', min_items: 5 }).satisfied).toBe(true);
+  });
+
+  test('list with fewer than min_items reports the count', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, '- one\n- two\n- three');
+    const state = readState(sqlite, loop.id);
+    const result = validateShape(state, { kind: 'list', min_items: 5 });
+    expect(result.satisfied).toBe(false);
+    expect(result.missing).toEqual({ needed_items: 5, found_items: 3 });
+  });
+
+  test('prose with no list markers → 0 items', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, 'There are many great places. Many things to discuss. No actual list here.');
+    const state = readState(sqlite, loop.id);
+    const result = validateShape(state, { kind: 'list', min_items: 3 });
+    expect(result.satisfied).toBe(false);
+    expect(result.missing).toEqual({ needed_items: 3, found_items: 0 });
+  });
+
+  test('list items accumulate across cycles', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    seedCycleOutput(sqlite, loop.id, '1. one\n2. two\n3. three');
+    seedCycleOutput(sqlite, loop.id, '4. four\n5. five');
+    const state = readState(sqlite, loop.id);
+    expect(validateShape(state, { kind: 'list', min_items: 5 }).satisfied).toBe(true);
+  });
+
+  test('numbered prose like "1990s" or "1. Introduction" — only line-start markers count', () => {
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    // The "in the 1990s, " phrase looks like "1. " mid-line but our regex
+    // anchors at start-of-line (with leading whitespace allowed).
+    seedCycleOutput(sqlite, loop.id, 'The story begins in the 1990s, and then in the 2000s things changed.');
+    const state = readState(sqlite, loop.id);
+    const result = validateShape(state, { kind: 'list', min_items: 1 });
+    expect(result.satisfied).toBe(false);
+    expect(result.missing).toEqual({ needed_items: 1, found_items: 0 });
+  });
+});

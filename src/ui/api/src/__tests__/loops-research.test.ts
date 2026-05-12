@@ -235,4 +235,51 @@ describe('Loops API — Phase 3 output-shape enforcement', () => {
     expect(lastRender.shape_satisfied).toBe(true);
     expect(lastRender.shape_missing).toBeNull();
   }, 60_000);
+
+  it('list-shape prompt (Berkeley volunteering) → schedule artifact + list render + gate satisfied', async () => {
+    const startRes = await fetch(`http://127.0.0.1:${port}/api/loops/start`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        template_id: 'research',
+        // Prompt mentions Berkeley + volunteer → fake's detection returns
+        // list classification; synthesis returns a 7-item numbered list
+        // (above the 5-item minimum).
+        prompt: 'What are the best places in Berkeley to volunteer?',
+        cycles_target: 2,
+      }),
+    });
+    expect(startRes.status).toBe(201);
+    const { id } = await startRes.json() as { id: string };
+
+    const finalState = await poll(
+      async () => {
+        const res = await fetch(`http://127.0.0.1:${port}/api/loops/${id}`);
+        if (res.status !== 200) return null;
+        return await res.json() as {
+          loop: { status: string };
+          artifacts: Array<{ kind: string; payload: Record<string, unknown> }>;
+        };
+      },
+      v => v.loop.status === 'completed' || v.loop.status === 'failed',
+      30_000,
+    );
+
+    expect(finalState.loop.status).toBe('completed');
+
+    const schedule = finalState.artifacts.find(a => a.kind === 'schedule');
+    expect(schedule).toBeDefined();
+    expect(schedule!.payload).toEqual({
+      output_shape: { kind: 'list', min_items: 5 },
+    });
+
+    const cycleOutputs = finalState.artifacts.filter(a => a.kind === 'cycle_output');
+    expect(cycleOutputs).toHaveLength(2);
+    const lastRender = cycleOutputs[cycleOutputs.length - 1].payload.render as {
+      shape_kind: string; shape_satisfied: boolean; shape_missing: unknown;
+    };
+    expect(lastRender.shape_kind).toBe('list');
+    expect(lastRender.shape_satisfied).toBe(true);
+    expect(lastRender.shape_missing).toBeNull();
+  }, 60_000);
 });
