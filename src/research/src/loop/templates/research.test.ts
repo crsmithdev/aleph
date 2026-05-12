@@ -291,6 +291,118 @@ describe('research template — shape-gated stop_rule (Phase 3.2 table case)', (
   });
 });
 
+describe('research template — adaptive planner branches (Phase 4.2)', () => {
+  let sqlite: ReturnType<typeof newDb>;
+  beforeEach(() => { sqlite = newDb(); });
+
+  /**
+   * Seed a schedule artifact directly. Mirrors what `ensureScheduleArtifact`
+   * writes in production, but skips the LLM round-trip so the test pins the
+   * exact `branches[]` we want pickQuery to consume.
+   */
+  function writeScheduleWithPlan(loop_id: string, branches: Array<{ id: string; query: string }>) {
+    createArtifact(sqlite, {
+      loop_id,
+      cycle_id: null,
+      kind: 'schedule',
+      payload: {
+        output_shape: { kind: 'prose' },
+        plan: {
+          canon: [],
+          branches,
+          per_branch_budget: 3,
+          perturbation_weights: {},
+          milestone_plan: [0.25, 0.5, 0.75, 1.0],
+        },
+      },
+    });
+  }
+
+  function recordingFake() {
+    const seenQueries: string[] = [];
+    const llm = new FakeLLMProvider({
+      searchWeb: (_model, query) => {
+        seenQueries.push(query);
+        return { text: `result for "${query}"`, sources: [{ url: 'https://x.test/1', title: 't', snippet: 's' }] };
+      },
+      complete: () => JSON.stringify(['from-derivation-1', 'from-derivation-2']),
+    });
+    return { llm, seenQueries };
+  }
+
+  test('multi-branch plan: each cycle queries the matching branch, ignoring derivation follow-ups', async () => {
+    const { llm, seenQueries } = recordingFake();
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'origin prompt' });
+    writeScheduleWithPlan(loop.id, [
+      { id: 'b1', query: 'branch-1 query' },
+      { id: 'b2', query: 'branch-2 query' },
+      { id: 'b3', query: 'branch-3 query' },
+    ]);
+    const template = makeResearchTemplate('origin prompt', { cycles_target: 3 }, { llm });
+
+    await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    // Each cycle's processor called searchWeb with the branch.query verbatim.
+    // The derivation follow-ups ('from-derivation-*') are ignored because the
+    // planner owns thread topology when branches exist.
+    expect(seenQueries).toEqual(['branch-1 query', 'branch-2 query', 'branch-3 query']);
+  });
+
+  test('exhausted branches: cycles past branches.length fall back to derivation follow-ups', async () => {
+    const { llm, seenQueries } = recordingFake();
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'origin prompt' });
+    writeScheduleWithPlan(loop.id, [
+      { id: 'b1', query: 'branch-1 query' },
+    ]);
+    const template = makeResearchTemplate('origin prompt', { cycles_target: 3 }, { llm });
+
+    await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    // Cycle 0: branch-1 query (planner). Cycles 1+2: derivation pickup —
+    // the FakeLLM returns ['from-derivation-1', 'from-derivation-2'], so the
+    // first follow-up wins.
+    expect(seenQueries).toEqual([
+      'branch-1 query',
+      'from-derivation-1',
+      'from-derivation-1',
+    ]);
+  });
+
+  test('fallback plan (single branch on the prompt) reproduces Phase 2 behavior', async () => {
+    const { llm, seenQueries } = recordingFake();
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'origin prompt' });
+    // What planLoop.fallbackPlan emits when the LLM call fails — a single
+    // branch with the prompt verbatim. Loop should still chain via derivation
+    // from cycle 1 onward.
+    writeScheduleWithPlan(loop.id, [{ id: 'main', query: 'origin prompt' }]);
+    const template = makeResearchTemplate('origin prompt', { cycles_target: 3 }, { llm });
+
+    await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    expect(seenQueries).toEqual([
+      'origin prompt',
+      'from-derivation-1',
+      'from-derivation-1',
+    ]);
+  });
+
+  test('no schedule artifact at all: Phase 2 chaining behavior preserved', async () => {
+    const { llm, seenQueries } = recordingFake();
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'origin prompt' });
+    // No writeScheduleWithPlan call — readScheduleFromArtifacts returns null,
+    // pickQuery falls through to the Phase-2 pickup path.
+    const template = makeResearchTemplate('origin prompt', { cycles_target: 3 }, { llm });
+
+    await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    expect(seenQueries).toEqual([
+      'origin prompt',
+      'from-derivation-1',
+      'from-derivation-1',
+    ]);
+  });
+});
+
 describe('research template — crash resume via ledger', () => {
   test('a second runLoop on a completed loop is a no-op', async () => {
     const sqlite = newDb();

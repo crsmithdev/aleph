@@ -194,12 +194,25 @@ function readShape(state: LoopState): OutputShape {
   return readScheduleFromArtifacts(state.artifacts)?.output_shape ?? { kind: 'prose' };
 }
 
-/** Cycle 0 searches the original prompt. Cycle N uses the first follow-up
- *  from the previous cycle's derivation. If derivation didn't surface any
- *  follow-ups, fall back to the prompt — the loop degrades to "re-search
- *  the same thing" rather than crashing, and the stop_rule still terminates
- *  on cycles_target. */
+/** Pick the seed query for the cycle.
+ *
+ *  Phase 4: when the schedule artifact carries a planner-emitted
+ *  `branches[]`, cycle `N` uses `branches[N].query` directly — the planner
+ *  owns thread topology, not the derivation chain. Branches are exhausted
+ *  once `cycle_index >= branches.length`, at which point the loop falls
+ *  through to the Phase-2 derivation pickup.
+ *
+ *  Phase-2 fallback (also used when no schedule exists, e.g. unit tests
+ *  that instantiate the template directly): cycle 0 searches the prompt;
+ *  cycle N walks the most recent derivation output for its first follow-up.
+ *  If neither path produces a query, the prompt is the safe default —
+ *  re-searching the same thing degrades the loop rather than crashing it,
+ *  and the stop_rule still terminates on `cycles_target`. */
 function pickQuery(prompt: string, cycle_index: number, artifacts: Artifact[]): string {
+  const plan = readScheduleFromArtifacts(artifacts)?.plan;
+  if (plan && cycle_index < plan.branches.length) {
+    return plan.branches[cycle_index].query;
+  }
   if (cycle_index === 0) return prompt;
   const cycleOutputs = artifacts
     .filter(a => a.kind === 'cycle_output')
