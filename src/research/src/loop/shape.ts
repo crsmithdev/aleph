@@ -26,8 +26,9 @@
  */
 
 import type { Sqlite } from '@construct/data';
-import { createArtifact, listArtifacts } from './db.js';
+import { bumpUsage, createArtifact, listArtifacts } from './db.js';
 import type { LLMProvider } from './llm.js';
+import { withCostTracker } from './cost.js';
 import { planLoop } from './planner.js';
 import type { Artifact, LoopId, LoopState, OutputShape, SchedulePayload } from './types.js';
 
@@ -169,8 +170,13 @@ export async function ensureScheduleArtifact(
   if (existing.length > 0) {
     return existing[0].payload as unknown as SchedulePayload;
   }
-  const output_shape = await detectOutputShape(prompt, llm, detectModel);
-  const plan = await planLoop(prompt, output_shape, llm, planModel);
+  // Wrap the LLM so detectOutputShape + planLoop's LLM calls accumulate cost
+  // into the loop's envelope. Without this, the detect+plan pair (~2 cheap
+  // completions per loop) consumes real USD invisibly.
+  const tracker = withCostTracker(llm);
+  const output_shape = await detectOutputShape(prompt, tracker.llm, detectModel);
+  const plan = await planLoop(prompt, output_shape, tracker.llm, planModel);
+  if (tracker.total() > 0) bumpUsage(sqlite, loop_id, { cost_usd: tracker.total() });
   const payload: SchedulePayload = { output_shape, plan };
   createArtifact(sqlite, {
     loop_id,

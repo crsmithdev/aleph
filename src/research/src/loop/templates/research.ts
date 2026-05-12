@@ -107,13 +107,16 @@ export function makeResearchTemplate(
       const query = pickQuery(prompt, cycle_index, state.artifacts);
       const result = await deps.llm.searchWeb(searchModel, query);
       return {
-        kind: 'research_proc',
-        query,
-        text: result.text,
-        source_urls: result.sourceUrls,
-        source_meta: result.sourceUrlMeta ?? [],
-        tokens: { prompt: result.promptTokens, completion: result.completionTokens },
-        model: result.model,
+        output: {
+          kind: 'research_proc',
+          query,
+          text: result.text,
+          source_urls: result.sourceUrls,
+          source_meta: result.sourceUrlMeta ?? [],
+          tokens: { prompt: result.promptTokens, completion: result.completionTokens },
+          model: result.model,
+        },
+        cost_usd: result.cost_usd,
       };
     },
 
@@ -124,7 +127,10 @@ export function makeResearchTemplate(
         300,
       );
       const followups = parseFollowups(completion.text, processor_output.query);
-      return { kind: 'research_deriv', followups };
+      return {
+        output: { kind: 'research_deriv', followups },
+        cost_usd: completion.cost_usd,
+      };
     },
 
     async renderer(state) {
@@ -147,13 +153,16 @@ export function makeResearchTemplate(
       const shape = readShape(state);
       const validation = validateShape(state, shape);
       return {
-        kind: 'render',
-        findings,
-        sources,
-        cycles_rendered: findings.length,
-        shape_kind: validation.shape_kind,
-        shape_satisfied: validation.satisfied,
-        shape_missing: validation.missing,
+        output: {
+          kind: 'render',
+          findings,
+          sources,
+          cycles_rendered: findings.length,
+          shape_kind: validation.shape_kind,
+          shape_satisfied: validation.satisfied,
+          shape_missing: validation.missing,
+        },
+        cost_usd: 0,
       };
     },
 

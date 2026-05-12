@@ -403,17 +403,7 @@ interface ActivityKpis {
 function computeKpis(loop: Loop, cycles: Cycle[], events: StreamFrame[]): ActivityKpis {
   const cyclesFinalized = cycles.filter(c => c.status === 'finalized').length;
   const stepCount = events.filter(e => e.type === 'cycle_step').length;
-
-  // Cost: prefer the sum of per-step costs from the event stream (always up
-  // to date and ignores the pre-existing 0-bug on envelope_consumed.cost_usd
-  // when summing isn't yet wired in the engine). Fall back to the loop's
-  // own envelope_consumed if no step events are visible (e.g. before SSE
-  // back-fill completes).
-  const stepCost = events.reduce((sum, e) => {
-    if (e.type !== 'cycle_step') return sum;
-    return sum + ((e.payload as { cost_usd?: number }).cost_usd ?? 0);
-  }, 0);
-  const cost = stepCost > 0 ? stepCost : (loop.envelope_consumed?.cost_usd ?? 0);
+  const cost = loop.envelope_consumed?.cost_usd ?? 0;
 
   const start = parseSqliteTs(loop.created_at);
   const isRunning = loop.status === 'pending' || loop.status === 'running';

@@ -27,6 +27,10 @@ export interface LLMResult {
   promptTokens: number;
   completionTokens: number;
   model: string;
+  /** USD cost of this call, derived from token counts × the model's pricing.
+   *  Providers compute this so the engine can bump envelope_consumed.cost_usd
+   *  without re-implementing a pricing table at the call site. */
+  cost_usd: number;
 }
 
 export interface SourceMeta {
@@ -42,6 +46,8 @@ export interface WebSearchResult {
   promptTokens: number;
   completionTokens: number;
   model: string;
+  /** USD cost of this call. See LLMResult.cost_usd. */
+  cost_usd: number;
 }
 
 export interface LLMProvider {
@@ -88,7 +94,7 @@ export class FakeLLMProvider implements LLMProvider {
     this.completeCalls++;
     this.lastCompletePrompt = prompt;
     const text = this.handlers.complete?.(model, prompt, maxTokens, systemPrompt) ?? '[]';
-    return { text, promptTokens: 100, completionTokens: 50, model };
+    return { text, promptTokens: 100, completionTokens: 50, model, cost_usd: 0 };
   }
 
   async searchWeb(model: string, query: string, _options?: SearchOptions): Promise<WebSearchResult> {
@@ -105,6 +111,7 @@ export class FakeLLMProvider implements LLMProvider {
       promptTokens: 120,
       completionTokens: 80,
       model,
+      cost_usd: 0,
     };
   }
 }

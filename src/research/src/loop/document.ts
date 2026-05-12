@@ -28,7 +28,7 @@
  * `research_findings` rows to the `render` artifact's findings + sources.
  */
 import type { Sqlite } from '@construct/data';
-import { createArtifact, listArtifacts } from './db.js';
+import { bumpUsage, createArtifact, listArtifacts } from './db.js';
 import type { LLMProvider } from './llm.js';
 import type { Artifact, LoopId } from './types.js';
 
@@ -164,6 +164,7 @@ export async function generateDocument(
   if (!render || render.findings.length === 0) return null;
 
   const result = await llm.complete(model, buildPolishPrompt(prompt, render), DOCUMENT_MAX_TOKENS);
+  if (result.cost_usd > 0) bumpUsage(sqlite, loop_id, { cost_usd: result.cost_usd });
 
   const payload: DocumentPayload = {
     text: stripCodeFence(result.text),

@@ -88,20 +88,21 @@ export async function runLoop(
     }
 
     const usageBefore = state.envelope_consumed;
-    await runCycle(sqlite, template, state, cycle);
+    const cycleCost = await runCycle(sqlite, template, state, cycle);
     cyclesRun++;
-    const usageAfter = bumpUsage(sqlite, loop_id, { cycles_count: 1 });
+    const usageAfter = bumpUsage(sqlite, loop_id, { cycles_count: 1, cost_usd: cycleCost });
 
     // Milestone hooks: fire each threshold at-most-once.
     for (const pct of crossedThresholds(state.loop.envelope, usageBefore, usageAfter)) {
       if (milestonesFired.has(pct)) continue;
       const milestoneState = readState(sqlite, loop_id);
       const summary = await template.renderer(milestoneState);
+      if (summary.cost_usd > 0) bumpUsage(sqlite, loop_id, { cost_usd: summary.cost_usd });
       const artifact = createArtifact(sqlite, {
         loop_id,
         cycle_id: cycle.id,
         kind: 'milestone',
-        payload: { at_envelope_pct: pct, summary: summary as unknown },
+        payload: { at_envelope_pct: pct, summary: summary.output as unknown },
       });
       const milestone = createMilestone(sqlite, { loop_id, at_envelope_pct: pct, artifact_id: artifact.id });
       milestonesFired.add(pct);
@@ -162,13 +163,17 @@ function emitLoop(
 /**
  * Run one cycle's three deterministic steps via the ledger. stop_rule is NOT
  * here — it's policy and runs fresh after the cycle finalizes.
+ *
+ * Returns the sum of cost_usd across the three steps. The caller bumps
+ * loops.envelope_consumed.cost_usd by this amount once per cycle, so the
+ * envelope cap fires correctly and the UI's Cost KPI matches real spend.
  */
 async function runCycle(
   sqlite: Sqlite,
   template: Template,
   state: LoopState,
   cycle: Cycle,
-): Promise<void> {
+): Promise<number> {
   markCycleRunning(sqlite, cycle.id);
   emitCycle(sqlite, cycle.id);
 
@@ -176,7 +181,7 @@ async function runCycle(
   const proc = await runOnce(
     sqlite,
     { loop_id: cycle.loop_id, cycle_id: cycle.id, step: 'processor', input: procInput },
-    async () => ({ output: await template.processor(procInput, state), cost_usd: 0 }),
+    () => template.processor(procInput, state),
   );
   emitResearchEvent(cycle.loop_id, 'cycle_step', {
     loop_id: cycle.loop_id, cycle_id: cycle.id, cycle_index: cycle.index,
@@ -187,7 +192,7 @@ async function runCycle(
   const deriv = await runOnce(
     sqlite,
     { loop_id: cycle.loop_id, cycle_id: cycle.id, step: 'derivation', input: { processor_output: proc.output } },
-    async () => ({ output: await template.derivation(stateAfterProc, proc.output), cost_usd: 0 }),
+    () => template.derivation(stateAfterProc, proc.output),
   );
   emitResearchEvent(cycle.loop_id, 'cycle_step', {
     loop_id: cycle.loop_id, cycle_id: cycle.id, cycle_index: cycle.index,
@@ -198,7 +203,7 @@ async function runCycle(
   const render = await runOnce(
     sqlite,
     { loop_id: cycle.loop_id, cycle_id: cycle.id, step: 'renderer', input: { cycle_index: cycle.index } },
-    async () => ({ output: await template.renderer(stateAfterDeriv), cost_usd: 0 }),
+    () => template.renderer(stateAfterDeriv),
   );
   emitResearchEvent(cycle.loop_id, 'cycle_step', {
     loop_id: cycle.loop_id, cycle_id: cycle.id, cycle_index: cycle.index,
@@ -215,6 +220,7 @@ async function runCycle(
 
   markCycleFinalized(sqlite, cycle.id);
   emitCycle(sqlite, cycle.id);
+  return proc.cost_usd + deriv.cost_usd + render.cost_usd;
 }
 
 function emitCycle(sqlite: Sqlite, cycle_id: string): void {

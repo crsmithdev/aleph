@@ -93,22 +93,25 @@ export function makeMonitorTemplate(
       const { cycle_index } = input as { cycle_index: number };
       const isRunCycle = cycle_index % pollEvery === 0;
       if (!isRunCycle) {
-        return { kind: 'monitor_wait', cycle: cycle_index };
+        return { output: { kind: 'monitor_wait', cycle: cycle_index }, cost_usd: 0 };
       }
       const result = await deps.llm.searchWeb(searchModel, prompt);
       return {
-        kind: 'monitor_run',
-        query: prompt,
-        text: result.text,
-        source_urls: result.sourceUrls,
-        polled_at: new Date().toISOString(),
-        model: result.model,
+        output: {
+          kind: 'monitor_run',
+          query: prompt,
+          text: result.text,
+          source_urls: result.sourceUrls,
+          polled_at: new Date().toISOString(),
+          model: result.model,
+        },
+        cost_usd: result.cost_usd,
       };
     },
 
     async derivation(state, processor_output) {
       if (processor_output.kind === 'monitor_wait') {
-        return { kind: 'monitor_skipped' };
+        return { output: { kind: 'monitor_skipped' }, cost_usd: 0 };
       }
       const prior = findPriorRun(state.artifacts);
       const currentLen = processor_output.text.length;
@@ -119,7 +122,10 @@ export function makeMonitorTemplate(
       const summary = priorLen === null
         ? `first poll: ${currentLen} chars`
         : `${priorLen} -> ${currentLen} chars${changed ? ' (changed)' : ' (unchanged)'}`;
-      return { kind: 'monitor_diff', changed, current_length: currentLen, prior_length: priorLen, summary };
+      return {
+        output: { kind: 'monitor_diff', changed, current_length: currentLen, prior_length: priorLen, summary },
+        cost_usd: 0,
+      };
     },
 
     async renderer(state) {
@@ -147,7 +153,10 @@ export function makeMonitorTemplate(
         priorRunCycleIdx = idx;
       });
 
-      return { kind: 'monitor_report', polls, diffs, total_polls: polls.length };
+      return {
+        output: { kind: 'monitor_report', polls, diffs, total_polls: polls.length },
+        cost_usd: 0,
+      };
     },
 
     async stop_rule(state) {

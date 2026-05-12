@@ -115,7 +115,7 @@ describe('research template — happy path', () => {
 
     // Run a final render against the terminal state.
     const state = readState(sqlite, loop.id);
-    const render = await template.renderer(state);
+    const render = (await template.renderer(state)).output;
 
     expect(render.kind).toBe('render');
     expect(render.cycles_rendered).toBe(3);
@@ -233,7 +233,7 @@ describe('research template — shape-gated stop_rule (Phase 3.2 table case)', (
     expect(result.cycles_run).toBe(2);
     // The final render artifact records shape_satisfied=true.
     const state = readState(sqlite, loop.id);
-    const render = await template.renderer(state);
+    const render = (await template.renderer(state)).output;
     expect(render.shape_kind).toBe('table');
     expect(render.shape_satisfied).toBe(true);
     expect(render.shape_missing).toBeNull();
@@ -259,7 +259,7 @@ describe('research template — shape-gated stop_rule (Phase 3.2 table case)', (
     expect(result.cycles_run).toBe(4);
 
     const state = readState(sqlite, loop.id);
-    const render = await template.renderer(state);
+    const render = (await template.renderer(state)).output;
     expect(render.shape_satisfied).toBe(false);
     expect(render.shape_missing).toEqual({
       columns: ['transmission', 'symptoms', 'treatment', 'vaccine'],

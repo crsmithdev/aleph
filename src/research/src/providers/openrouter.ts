@@ -56,11 +56,15 @@ export class OpenRouterProvider implements LLMProvider {
     if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
     messages.push({ role: 'user', content: truncatedPrompt });
     const response = await this.fetchWithRetry(model, messages, maxTokens);
+    const promptTokens = response.usage?.prompt_tokens ?? 0;
+    const completionTokens = response.usage?.completion_tokens ?? 0;
+    const actualModel = response.model ?? model;
     return {
       text: response.choices[0]?.message?.content ?? '',
-      promptTokens: response.usage?.prompt_tokens ?? 0,
-      completionTokens: response.usage?.completion_tokens ?? 0,
-      model: response.model ?? model,
+      promptTokens,
+      completionTokens,
+      model: actualModel,
+      cost_usd: computeCost(actualModel, promptTokens, completionTokens),
     };
   }
 
@@ -86,14 +90,17 @@ export class OpenRouterProvider implements LLMProvider {
 
     const text = response.choices[0]?.message?.content ?? '';
 
+    const promptTokens = response.usage?.prompt_tokens ?? 0;
+    const completionTokens = response.usage?.completion_tokens ?? 0;
     return {
       text,
       sourceTexts: [],
       sourceUrls,
       sourceUrlMeta: searchResults.map(r => ({ url: r.url, title: r.title, snippet: r.snippet.slice(0, displayChars) })),
-      promptTokens: response.usage?.prompt_tokens ?? 0,
-      completionTokens: response.usage?.completion_tokens ?? 0,
+      promptTokens,
+      completionTokens,
       model: actualModelUsed,
+      cost_usd: computeCost(actualModelUsed, promptTokens, completionTokens),
     };
   }
 
@@ -230,6 +237,14 @@ interface OpenRouterResponse {
 export function getOpenRouterPricing(model: string): { input: number; output: number } {
   const m = OPENROUTER_MODELS[model];
   return m ? { input: m.input, output: m.output } : { input: 0.50, output: 1.00 };
+}
+
+/** USD cost of one call. Pricing is per 1M tokens, so divide. Unknown models
+ *  fall through to getOpenRouterPricing's conservative default ($0.50 in /
+ *  $1.00 out per 1M). */
+function computeCost(model: string, promptTokens: number, completionTokens: number): number {
+  const p = getOpenRouterPricing(model);
+  return (promptTokens * p.input + completionTokens * p.output) / 1_000_000;
 }
 
 export function getContextWindow(model: string): number {

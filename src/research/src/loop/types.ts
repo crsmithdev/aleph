@@ -255,6 +255,19 @@ export interface StopDecision {
 }
 
 /**
+ * Result envelope for the three cost-bearing hooks. Each hook returns its
+ * `output` plus the USD cost of any LLM calls it made. The engine sums
+ * cost_usd into `loops.envelope_consumed.cost_usd` via bumpUsage so the
+ * envelope cap fires correctly and the UI's Cost KPI reflects real spend.
+ * stop_rule has no `output` and is currently pure policy (no LLM call),
+ * so it doesn't use this shape.
+ */
+export interface HookResult<T> {
+  output: T;
+  cost_usd: number;
+}
+
+/**
  * Four-hook template interface. Each hook is async to allow LLM / network /
  * fs calls, but pure-function templates (like noop) are fine too.
  *
@@ -267,8 +280,8 @@ export interface StopDecision {
  */
 export interface Template<P = unknown, D = unknown, R = unknown> {
   id: string;
-  processor: (input: unknown, state: LoopState) => Promise<P>;
-  derivation: (state: LoopState, processor_output: P) => Promise<D>;
-  renderer: (state: LoopState) => Promise<R>;
+  processor: (input: unknown, state: LoopState) => Promise<HookResult<P>>;
+  derivation: (state: LoopState, processor_output: P) => Promise<HookResult<D>>;
+  renderer: (state: LoopState) => Promise<HookResult<R>>;
   stop_rule: (state: LoopState) => Promise<StopDecision>;
 }

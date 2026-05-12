@@ -79,7 +79,7 @@ describe('monitor template — diff renderer', () => {
     await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
 
     const state = readState(sqlite, loop.id);
-    const report = await template.renderer(state);
+    const report = (await template.renderer(state)).output;
 
     expect(report.kind).toBe('monitor_report');
     expect(report.total_polls).toBe(2);
@@ -100,7 +100,7 @@ describe('monitor template — diff renderer', () => {
     await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
 
     const state = readState(sqlite, loop.id);
-    const report = await template.renderer(state);
+    const report = (await template.renderer(state)).output;
 
     expect(report.diffs[0].changed).toBe(false);
     expect(report.diffs[0].summary).toMatch(/unchanged/);

@@ -22,19 +22,19 @@ export function makeNoopTemplate(
     async processor(input, _state) {
       const i = (input as { cycle_index: number }).cycle_index;
       if (delay > 0) await new Promise(r => setTimeout(r, delay));
-      return { kind: 'noop_proc', cycle: i, fact: `fact ${i}` };
+      return { output: { kind: 'noop_proc', cycle: i, fact: `fact ${i}` }, cost_usd: 0 };
     },
 
     async derivation(_state, processor_output) {
       const proc = processor_output as { cycle: number; fact: string };
-      return { kind: 'noop_deriv', from_cycle: proc.cycle, next_query: `query for cycle ${proc.cycle + 1}` };
+      return { output: { kind: 'noop_deriv', from_cycle: proc.cycle, next_query: `query for cycle ${proc.cycle + 1}` }, cost_usd: 0 };
     },
 
     async renderer(state) {
       const facts = state.artifacts
         .filter(a => a.kind === 'cycle_output')
         .map(a => ((a.payload.processor as { fact: string } | undefined)?.fact ?? ''));
-      return { kind: 'noop_render', facts_so_far: facts, count: facts.length };
+      return { output: { kind: 'noop_render', facts_so_far: facts, count: facts.length }, cost_usd: 0 };
     },
 
     async stop_rule(state) {
