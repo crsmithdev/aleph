@@ -353,7 +353,7 @@ Cross-run features intentionally land after every per-run feature is solid. The 
 
 ## Risk register
 
-The three things to watch across v1.
+The four things to watch across v1.
 
 1. **`output_shape` detection accuracy.**
    - *Risk:* the LLM misdetects "table" when the user wanted prose. Renderer forces a table for everyone.
@@ -367,6 +367,11 @@ The three things to watch across v1.
 3. **Schema cutover blast radius.**
    - *Risk:* the single Phase-7 migration touches 4+ tables. If something goes wrong, the entire research surface is down.
    - *Mitigation:* migration script runs against a copy of the dev DB first; diff outputs of 5 representative historical queries between old and new engine before production cutover; keep the old tables as `_legacy_*` for one release in case rollback is needed.
+
+4. **Default perturbation profile regresses historically-stable queries.**
+   - *Risk:* the new Default profile (`p_serendipity` 0.15 → 0.35 — a 2.3× increase — plus relaxed cooldowns, lower forced-diversity threshold, and small-leap weight bias) overshoots and reduces output quality on queries that did well under the conservative baseline.
+   - *Mitigation:* before Phase 7 cutover, replay the ~35-query historical corpus through the new engine in Default mode (fake/recorded LLM for cost). **Block the cutover if more than 10% of runs regress** — symmetric with Risk 2's planner-regression bar. Regression criteria (any one trips it): `output_shape` no longer satisfied where it was before, OR `topic_drift` flag fires where it didn't before, OR cost-per-novel-finding rises by more than 50%.
+   - *Loss accepted:* perturbation firings are non-deterministic by design — measurement is on the distribution of outcomes across the corpus, not per-run byte-equivalence. Same prompt twice may explore differently; that's intentional.
 
 ---
 
