@@ -47,7 +47,7 @@ This directory is currently scaffolding. The skill-architecture migration (`docs
 | Domain | Legacy source | Migration status |
 |---|---|---|
 | `code` | `src/skills/code-review/SKILL.md` §1-8, `src/skills/code-simplify/SKILL.md` slop patterns, CLAUDE.md commandments | **Populated** |
-| `design` | `src/skills/design-audit/`, `design-standards/`, `design-type/` | Stub |
+| `design` | `src/skills/design-audit/` (qualitative dims), `design-standards/REFERENCE.md` (moved to `accessibility.md`), `design-type/REFERENCE.md` (moved to `typography.md`) | **Populated** (umbrella + 2 reference files) |
 | `docs` | (moved from `src/skills/docs-author-v2/RULES.md`) | **Populated** |
 | `skills` | `src/skills/skill-creator/` (rules buried in process) | Stub |
 | `hooks` | `src/skills/config-audit/SKILL.md` Phase 2 + Construct-specific hook conventions | Stub |

@@ -60,7 +60,7 @@ Unicode escapes (`\u2019`) do NOT work in JSX text content -- they render litera
 
 For detailed coverage, read these files:
 
-- **`REFERENCE.md`** -- Complete rules: characters, spacing, formatting, layout, responsive, dark mode, maxims
+- **`src/rules/design/typography.md`** -- Complete rules: characters, spacing, formatting, layout, responsive, dark mode, maxims
 - **`css-templates.md`** -- CSS baseline template, responsive patterns, OpenType features, dark mode
 - **`html-entities.md`** -- Complete entity/character table with substitution rules and usage patterns
 

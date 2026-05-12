@@ -19,7 +19,7 @@ Audit UI code against web interface best practices. This skill covers correctnes
 ## Process
 
 1. Read the specified files (or ask user for files/pattern)
-2. Check against all rules in `REFERENCE.md`
+2. Check against all rules in `src/rules/design/accessibility.md`
 3. Output findings in `file:line` format
 
 ## Output Format
@@ -49,7 +49,7 @@ pass
 
 ## Deep Reference
 
-For the complete checklist, read `REFERENCE.md`. It covers:
+For the complete checklist, read `src/rules/design/accessibility.md`. It covers:
 
 - Accessibility, focus states, forms
 - Content handling, images, performance
