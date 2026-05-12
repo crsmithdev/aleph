@@ -31,7 +31,9 @@ import type { LLMProvider } from './llm.js';
 import { planLoop } from './planner.js';
 import type { Artifact, LoopId, LoopState, OutputShape, SchedulePayload } from './types.js';
 
-const DEFAULT_DETECT_MODEL = 'openai/gpt-5-nano';
+// See planner.ts for why we don't use a reasoning model here — same issue
+// (empty content when max_tokens is consumed by reasoning).
+const DEFAULT_DETECT_MODEL = 'google/gemini-2.0-flash-001';
 const DEFAULT_LIST_MIN_ITEMS = 5;
 const DEFAULT_TIMELINE_MIN_EVENTS = 3;
 
@@ -130,8 +132,15 @@ export async function detectOutputShape(
   try {
     const result = await llm.complete(model, buildDetectionPrompt(prompt), 300);
     const shape = parseShape(result.text);
-    return shape ?? { kind: 'prose' };
-  } catch {
+    if (shape) return shape;
+    // Commandment 1: detection falling back to prose is observable now —
+    // the renderer's prose gate is a no-op so a regression here looks like
+    // "loop completes but shape never satisfies." Logging fixes that.
+    const sample = result.text.slice(0, 200).replace(/\s+/g, ' ').trim();
+    process.stderr.write(`[shape] detector returned unparseable response, defaulting to prose. model=${model} text="${sample}"\n`);
+    return { kind: 'prose' };
+  } catch (err) {
+    process.stderr.write(`[shape] detector LLM call failed, defaulting to prose. model=${model} err=${(err as Error).message}\n`);
     return { kind: 'prose' };
   }
 }

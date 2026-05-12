@@ -50,12 +50,13 @@ export interface ResearchTemplateDeps {
   llm: LLMProvider;
 }
 
-/** Default models for Phase 2. The Phase 4+ adaptive planner will override
- *  these per-loop; Phase 2 just needs sensible defaults so the template runs
- *  out of the box. Cheap-but-usable selections — Gemini Flash for synthesis
- *  (cheap + decent web search), gpt-5-nano for the JSON follow-up call. */
+/** Default models. Phase 5 will move per-loop model selection onto the
+ *  schedule artifact; until then these are the engine-wide defaults. Both
+ *  point at Gemini Flash — reasoning models (openai/gpt-5-nano, o1-mini)
+ *  exhaust max_tokens on hidden reasoning and return empty content for
+ *  prompts over ~200 chars, which silently kills the follow-up parser. */
 const DEFAULT_SEARCH_MODEL = 'google/gemini-2.0-flash-001';
-const DEFAULT_COMPLETE_MODEL = 'openai/gpt-5-nano';
+const DEFAULT_COMPLETE_MODEL = 'google/gemini-2.0-flash-001';
 
 interface ProcessorOutput {
   kind: 'research_proc';
@@ -240,7 +241,11 @@ function buildFollowupPrompt(prompt: string, proc: ProcessorOutput): string {
 
 /** Parse a JSON array of strings from the model response. Tolerant: strips
  *  code fences, accepts 1-or-more entries, falls back to the previous query
- *  on any failure so a malformed response never tanks the loop. */
+ *  on any failure so a malformed response never tanks the loop.
+ *
+ *  Commandment 1: the fallback is now observable on stderr — a regression
+ *  here looks like "every cycle searches the same query," which used to be
+ *  invisible because both the planner and this parser silently degraded. */
 function parseFollowups(text: string, fallbackQuery: string): string[] {
   const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
   try {
@@ -249,8 +254,14 @@ function parseFollowups(text: string, fallbackQuery: string): string[] {
       const strings = parsed.filter((s): s is string => typeof s === 'string' && s.length > 0);
       if (strings.length > 0) return strings.slice(0, 2);
     }
-  } catch {
-    // intentional — heuristic fallback
+  } catch (err) {
+    const sample = text.slice(0, 200).replace(/\s+/g, ' ').trim();
+    process.stderr.write(`[research-template] derivation parse failed, reusing query. err=${(err as Error).message} text="${sample}"\n`);
+    return [fallbackQuery];
   }
+  // Reached the bottom without returning — response wasn't a non-empty array
+  // of strings. Log the shape we did get so the fall-back is observable.
+  const sample = text.slice(0, 200).replace(/\s+/g, ' ').trim();
+  process.stderr.write(`[research-template] derivation returned unusable shape, reusing query. text="${sample}"\n`);
   return [fallbackQuery];
 }

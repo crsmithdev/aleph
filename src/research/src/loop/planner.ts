@@ -21,7 +21,12 @@
 import type { LLMProvider } from './llm.js';
 import type { Branch, LoopSchedule, OutputShape } from './types.js';
 
-const DEFAULT_PLAN_MODEL = 'openai/gpt-5-nano';
+// Non-reasoning cheap JSON-friendly model. Reasoning models like
+// openai/gpt-5-nano exhaust their max_tokens on hidden reasoning and return
+// empty `content` for prompts longer than ~200 chars — the planner prompt
+// is well over that, so the planner would silently fall back every run.
+// Gemini Flash produces direct JSON output reliably.
+const DEFAULT_PLAN_MODEL = 'google/gemini-2.0-flash-001';
 const DEFAULT_PER_BRANCH_BUDGET = 3;
 const DEFAULT_MILESTONES: readonly number[] = [0.25, 0.5, 0.75, 1.0];
 const PLAN_MAX_TOKENS = 1500;
@@ -167,8 +172,14 @@ export async function planLoop(
   try {
     const result = await llm.complete(model, buildPlannerPrompt(prompt, output_shape), PLAN_MAX_TOKENS);
     const plan = parsePlan(result.text);
-    return plan ?? fallbackPlan(prompt);
-  } catch {
+    if (plan) return plan;
+    // Commandment 1: surface silent fallbacks. Log a one-liner and a sample
+    // of the response so a regression is greppable from stderr.
+    const sample = result.text.slice(0, 200).replace(/\s+/g, ' ').trim();
+    process.stderr.write(`[planner] LLM response unparseable, using fallback plan. model=${model} text="${sample}"\n`);
+    return fallbackPlan(prompt);
+  } catch (err) {
+    process.stderr.write(`[planner] LLM call failed, using fallback plan. model=${model} err=${(err as Error).message}\n`);
     return fallbackPlan(prompt);
   }
 }
