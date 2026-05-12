@@ -42,9 +42,22 @@ The Activity tab was the only one that got a mockup-driven rebuild this cycle. T
 
 ## 2. Legacy concession sweep (80+ items)
 
-**Status:** ⏳ in progress (Agent B in worktree).
+**Status:** ✅ done — landed on main 2026-05-12 (commits `1b05891` → `883a83b`, six in sequence).
 
-The prior session's Explore subagent cataloged 80+ legacy v0 concepts surviving in v1 code. They're grouped by category but the SARIF/JSON findings were not persisted, so the sweep needs to re-discover them first, then delete each unused trace per CLAUDE.md commandment 7 ("when removing something, remove it completely").
+### What shipped
+- **Deletes**: `src/research/src/perturbation.ts` (-267), `src/research/src/similarity.ts` (-163), `src/research/src/providers/router.ts` (-64), `src/ui/web/src/api/monitor-hooks.ts` (-106).
+- **Type purge**: `src/research/src/types.ts` 650 → 178 lines (-473) — removed `ResearchQuery`, `ResearchThread`, `ResearchFinding`, `Concept`, `Source`, `ResearchStep`, `Monitor*`, `JobStatus`, `PerturbationStrategy`, and dead `SessionConfig` subfields; `defaults.ts` merge fan-out shrunk to match.
+- **Event-type purge**: dropped the v0 union (`thread/job/step/finding/source/concept/concept_link/query`) from `services/events.ts`.
+- **Comment rewords**: 7 files updated to describe the v1 path rather than the v0 path.
+- **Net**: 16 files, +180 / -1170 lines.
+
+### Verification
+196/0 `bun test.ts`, 134/0 loop suite, UI build clean, 17/0 `e2e/activity-panels.test.ts`, 30/0 `e2e/tab-parity.test.ts`.
+
+### KEEP rationale (not deleted)
+`SessionConfig` + most of its subfields (live in `defaults.ts` + `/api/research/defaults` + `config-schema.tsx`); `topic_coherence`, `follow_up`, `gap_analysis`, `role_priming_*`, `iteration_check_model`, `post_mortem_model`, `model_fast` (live in UI schema or loop templates); `MODEL_PRICING` (cost telemetry); UI mirror types in `research-hooks.ts` and the History/Landing pages (kept as graceful-degradation shim — folding those pages onto a native loops shape is a separate UX migration); `ddl.ts:dropLegacyTables()` (idempotent dev safety net); `ResearchWorkersPage.tsx` + `planner.ts` comments that describe architectural shifts.
+
+The prior session's Explore subagent cataloged 80+ legacy v0 concepts surviving in v1 code. They're grouped by category but the SARIF/JSON findings were not persisted, so the sweep re-discovered them first, then deleted each unused trace per CLAUDE.md commandment 7 ("when removing something, remove it completely").
 
 **Categories (from the original audit)**
 
