@@ -300,19 +300,9 @@
   table.t .title-cell .t2 { color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   table.t svg.spark-mini { width: 100%; height: 24px; display: block; }
 
-  /* Section divider in the table: "Active" vs "Past" */
-  .section-row td {
-    background: var(--bg-contrast);
-    color: var(--text-muted);
-    font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase;
-    padding: 8px 12px;
-    border-left: 0 !important;
-  }
-  .section-row td .ct { color: var(--text-secondary); margin-left: 8px; }
-  .section-row td .pulse {
-    display: inline-flex; align-items: center; gap: 5px; color: var(--success); margin-left: 10px;
-  }
-  .section-row td .pulse .dot {
+  /* "Live" indicator pulse for the toolbar */
+  .pulse-mini { display: inline-flex; align-items: center; gap: 5px; color: var(--success); }
+  .pulse-mini .dot {
     width: 6px; height: 6px; border-radius: 50%; background: var(--success);
     animation: pulse 1.6s ease-in-out infinite;
   }
@@ -600,6 +590,8 @@
             <div class="left">
               <span>38 results</span>
               <span>·</span>
+              <span class="pulse-mini"><span class="dot"></span>2 running · live · auto-refresh 2s</span>
+              <span>·</span>
               <span>sorted by</span>
               <span class="seg">
                 <button class="on">started ↓</button>
@@ -642,14 +634,6 @@
               </tr>
             </thead>
             <tbody>
-              <!-- Active section (replaces the "Running now" panel from the old Overview) -->
-              <tr class="section-row">
-                <td colspan="9">
-                  Active
-                  <span class="ct">2 running</span>
-                  <span class="pulse"><span class="dot"></span>live · auto-refresh 2s</span>
-                </td>
-              </tr>
               <tr class="row is-active">
                 <td>
                   <div class="title-cell">
@@ -683,10 +667,6 @@
                 <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#82aaff" stroke-width="1.4" points="0,22 16,21 32,20 48,18 64,15 80,12 96,9 100,8"/></svg></td>
               </tr>
 
-              <!-- Past section -->
-              <tr class="section-row">
-                <td colspan="9">Past <span class="ct">36 in range</span></td>
-              </tr>
               <tr class="row">
                 <td>
                   <div class="title-cell">
