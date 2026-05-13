@@ -82,6 +82,7 @@
     font: 500 11px/1 var(--font-mono); letter-spacing: 0.04em;
     padding: 4px 7px; border-radius: 3px; border: 1px solid var(--border);
     background: var(--bg-tertiary); color: var(--text-secondary);
+    white-space: nowrap;
   }
   .chip.ok      { color: var(--success); background: var(--success-soft); border-color: rgba(195,232,141,0.32); }
   .chip.warn    { color: var(--warning); background: var(--warning-soft); border-color: rgba(255,203,107,0.32); }
@@ -273,19 +274,21 @@
   .archive-toolbar .left { display: flex; gap: 10px; align-items: center; color: var(--text-muted); font-size: 12px; }
   .archive-toolbar .right { margin-left: auto; display: flex; gap: 8px; }
 
-  table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.t th, table.t td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  table.t { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  table.t th, table.t td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
   table.t th {
     font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase;
     color: var(--text-muted); background: var(--bg-secondary); white-space: nowrap;
   }
   table.t td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.t td.nowrap { white-space: nowrap; }
   table.t tr.row { cursor: pointer; }
   table.t tr.row:hover td { background: var(--bg-tertiary); }
   table.t tr.row.is-active td { background: rgba(195,232,141,0.04); }
   table.t .title-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  table.t .title-cell .t1 { color: var(--text-primary); font-weight: 500; }
-  table.t .title-cell .t2 { color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 480px; }
+  table.t .title-cell .t1 { color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.t .title-cell .t2 { color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.t svg.spark-mini { width: 100%; height: 24px; display: block; }
 
   /* Section divider in the table: "Active" vs "Past" */
   .section-row td {
@@ -603,6 +606,17 @@
           </div>
 
           <table class="t">
+            <colgroup>
+              <col style="width: auto;">           <!-- Query -->
+              <col style="width: 120px;">          <!-- Shape -->
+              <col style="width: 116px;">          <!-- Started -->
+              <col style="width: 116px;">          <!-- Status -->
+              <col style="width: 84px;">           <!-- Findings -->
+              <col style="width: 72px;">           <!-- Cost -->
+              <col style="width: 80px;">           <!-- Duration -->
+              <col style="width: 168px;">          <!-- Verdict -->
+              <col style="width: 124px;">          <!-- Activity sparkline -->
+            </colgroup>
             <thead>
               <tr>
                 <th>Query</th>
@@ -633,13 +647,13 @@
                   </div>
                 </td>
                 <td><span class="shape-chip" style="font-size: 11px;">timeline</span></td>
-                <td><span class="muted small mono">26m ago</span></td>
-                <td><span class="chip ok"><span class="dot-i ok"></span>active</span></td>
-                <td class="num"><span style="color: var(--success);">147</span></td>
+                <td class="nowrap"><span class="muted small mono">26m ago</span></td>
+                <td><span class="chip ok small"><span class="dot-i ok"></span>active</span></td>
+                <td class="num">147</td>
                 <td class="num">$0.84</td>
                 <td class="num">26.4m</td>
                 <td><span class="chip ok small">on track · iter 25</span></td>
-                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.4" points="0,22 8,20 16,18 24,16 32,14 40,12 48,10 56,8 64,7 72,5 80,4 88,3 96,2 100,2"/></svg></td>
+                <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#c3e88d" stroke-width="1.4" points="0,22 8,20 16,18 24,16 32,14 40,12 48,10 56,8 64,7 72,5 80,4 88,3 96,2 100,2"/></svg></td>
               </tr>
               <tr class="row is-active">
                 <td>
@@ -649,13 +663,13 @@
                   </div>
                 </td>
                 <td><span class="shape-chip" style="font-size: 11px;">audit</span></td>
-                <td><span class="muted small mono">4m ago</span></td>
-                <td><span class="chip ok"><span class="dot-i ok"></span>active</span></td>
-                <td class="num"><span style="color: var(--success);">9</span></td>
+                <td class="nowrap"><span class="muted small mono">4m ago</span></td>
+                <td><span class="chip ok small"><span class="dot-i ok"></span>active</span></td>
+                <td class="num">9</td>
                 <td class="num">$0.07</td>
                 <td class="num">4.1m</td>
                 <td><span class="chip info small">priming · iter 3</span></td>
-                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#82aaff" stroke-width="1.4" points="0,22 16,21 32,20 48,18 64,15 80,12 96,9 100,8"/></svg></td>
+                <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#82aaff" stroke-width="1.4" points="0,22 16,21 32,20 48,18 64,15 80,12 96,9 100,8"/></svg></td>
               </tr>
 
               <!-- Past section -->
@@ -670,13 +684,13 @@
                   </div>
                 </td>
                 <td><span class="shape-chip" style="font-size: 11px;">survey</span></td>
-                <td><span class="muted small mono">2h ago</span></td>
+                <td class="nowrap"><span class="muted small mono">2h ago</span></td>
                 <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">214</td>
                 <td class="num">$1.42</td>
                 <td class="num">28.0m</td>
                 <td><span class="chip ok small">pass</span></td>
-                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 12,18 24,14 36,9 48,6 60,4 72,3 84,3 96,3 100,3"/></svg></td>
+                <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 12,18 24,14 36,9 48,6 60,4 72,3 84,3 96,3 100,3"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
@@ -686,13 +700,13 @@
                   </div>
                 </td>
                 <td><span class="shape-chip" style="font-size: 11px;">comparison</span></td>
-                <td><span class="muted small mono">6h ago</span></td>
+                <td class="nowrap"><span class="muted small mono">6h ago</span></td>
                 <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">86</td>
                 <td class="num">$0.61</td>
                 <td class="num">19.2m</td>
                 <td><span class="chip warn small">flag · low yield</span></td>
-                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#ffcb6b" stroke-width="1.2" points="0,22 12,20 24,17 36,15 48,14 60,13 72,13 84,12 96,12 100,12"/></svg></td>
+                <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#ffcb6b" stroke-width="1.2" points="0,22 12,20 24,17 36,15 48,14 60,13 72,13 84,12 96,12 100,12"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
@@ -702,13 +716,13 @@
                   </div>
                 </td>
                 <td><span class="shape-chip" style="font-size: 11px;">survey</span></td>
-                <td><span class="muted small mono">9h ago</span></td>
+                <td class="nowrap"><span class="muted small mono">9h ago</span></td>
                 <td><span class="chip err small"><span class="dot-i err"></span>halted</span></td>
                 <td class="num">42</td>
                 <td class="num">$1.50</td>
                 <td class="num">42.0m</td>
                 <td><span class="chip err small">halt · budget cap</span></td>
-                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#f07178" stroke-width="1.2" points="0,22 12,20 24,17 36,16 48,15 60,15 72,14 84,14 96,14 100,14"/></svg></td>
+                <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#f07178" stroke-width="1.2" points="0,22 12,20 24,17 36,16 48,15 60,15 72,14 84,14 96,14 100,14"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
@@ -718,13 +732,13 @@
                   </div>
                 </td>
                 <td><span class="shape-chip" style="font-size: 11px;">timeline</span></td>
-                <td><span class="muted small mono">yesterday 16:22</span></td>
+                <td class="nowrap"><span class="muted small mono">yesterday 16:22</span></td>
                 <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">98</td>
                 <td class="num">$0.74</td>
                 <td class="num">22.6m</td>
                 <td><span class="chip ok small">pass</span></td>
-                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 14,17 28,12 42,8 56,5 70,4 84,3 98,3 100,3"/></svg></td>
+                <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 14,17 28,12 42,8 56,5 70,4 84,3 98,3 100,3"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
@@ -734,13 +748,13 @@
                   </div>
                 </td>
                 <td><span class="shape-chip" style="font-size: 11px;">dynamics</span></td>
-                <td><span class="muted small mono">2 days ago</span></td>
+                <td class="nowrap"><span class="muted small mono">2 days ago</span></td>
                 <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
                 <td class="num">61</td>
                 <td class="num">$0.42</td>
                 <td class="num">14.3m</td>
                 <td><span class="chip ok small">pass</span></td>
-                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 16,18 32,12 48,8 64,6 80,5 96,5 100,5"/></svg></td>
+                <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 16,18 32,12 48,8 64,6 80,5 96,5 100,5"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
@@ -753,13 +767,13 @@
                   <span class="shape-chip" style="font-size: 11px;">timeline</span>
                   <span class="shape-chip" style="font-size: 11px;">list</span>
                 </td>
-                <td><span class="muted small mono">3 days ago</span></td>
+                <td class="nowrap"><span class="muted small mono">3 days ago</span></td>
                 <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">186</td>
                 <td class="num">$1.18</td>
                 <td class="num">31.4m</td>
                 <td><span class="chip warn small">flag · stuck threads</span></td>
-                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#ffcb6b" stroke-width="1.2" points="0,22 12,18 24,14 36,11 48,9 60,8 72,8 84,8 96,8 100,8"/></svg></td>
+                <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#ffcb6b" stroke-width="1.2" points="0,22 12,18 24,14 36,11 48,9 60,8 72,8 84,8 96,8 100,8"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
@@ -769,13 +783,13 @@
                   </div>
                 </td>
                 <td><span class="shape-chip" style="font-size: 11px;">survey</span></td>
-                <td><span class="muted small mono">4 days ago</span></td>
+                <td class="nowrap"><span class="muted small mono">4 days ago</span></td>
                 <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
                 <td class="num">73</td>
                 <td class="num">$0.38</td>
                 <td class="num">12.8m</td>
                 <td><span class="chip ok small">pass</span></td>
-                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 18,15 36,9 54,5 72,3 90,2 100,2"/></svg></td>
+                <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 18,15 36,9 54,5 72,3 90,2 100,2"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
@@ -785,13 +799,13 @@
                   </div>
                 </td>
                 <td><span class="shape-chip" style="font-size: 11px;">audit</span></td>
-                <td><span class="muted small mono">5 days ago</span></td>
+                <td class="nowrap"><span class="muted small mono">5 days ago</span></td>
                 <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
                 <td class="num">112</td>
                 <td class="num">$0.69</td>
                 <td class="num">18.1m</td>
                 <td><span class="chip ok small">pass</span></td>
-                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 14,17 28,11 42,7 56,5 70,4 84,3 98,3 100,3"/></svg></td>
+                <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 14,17 28,11 42,7 56,5 70,4 84,3 98,3 100,3"/></svg></td>
               </tr>
             </tbody>
           </table>
