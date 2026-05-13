@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research — Combined Overview + History</title>
+<style>
+  :root {
+    --bg-primary: #292d3e;
+    --bg-secondary: #2f3347;
+    --bg-tertiary: #34394f;
+    --bg-contrast: #232637;
+    --text-primary: #babed8;
+    --text-secondary: #8796b0;
+    --text-muted: #676e95;
+    --text-disabled: #4b5168;
+    --border: #383c50;
+    --border-strong: #4b5168;
+    --accent: #c792ea;
+    --accent-soft: rgba(199, 146, 234, 0.16);
+    --accent-strong: rgba(199, 146, 234, 0.30);
+    --success: #c3e88d;
+    --success-soft: rgba(195, 232, 141, 0.16);
+    --warning: #ffcb6b;
+    --warning-soft: rgba(255, 203, 107, 0.16);
+    --error: #f07178;
+    --error-soft: rgba(240, 113, 120, 0.16);
+    --info: #82aaff;
+    --info-soft: rgba(130, 170, 255, 0.16);
+    --orange: #f78c6c;
+
+    --font-sans: 'Noto Sans', -apple-system, system-ui, sans-serif;
+    --font-mono: 'Noto Sans Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+    --font-heading: 'Merriweather', Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font: 14px/1.45 var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration: none; }
+
+  .page { max-width: 1480px; margin: 0 auto; padding: 56px 32px 120px; }
+  .lede { color: var(--text-secondary); max-width: 70ch; margin: 0 0 8px; }
+  .eyebrow { font: 500 11px/1 var(--font-mono); letter-spacing: 0.16em; color: var(--text-muted); text-transform: uppercase; margin: 0 0 12px; }
+  h1 { font: 600 32px/1.2 var(--font-heading); margin: 0 0 14px; letter-spacing: -0.005em; }
+  h4 { font: 600 14px/1 var(--font-sans); margin: 0; color: var(--text-primary); letter-spacing: 0.01em; }
+
+  /* Frame */
+  .frame {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+    box-shadow: 0 12px 40px -12px rgba(0,0,0,0.5);
+    margin-top: 28px;
+  }
+  .frame-bar {
+    display: flex; align-items: center; gap: 18px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 0 18px;
+    height: 44px;
+    font-size: 13px;
+  }
+  .frame-bar .crumbs { display: flex; gap: 8px; align-items: center; color: var(--text-muted); }
+  .frame-bar .crumbs .here { color: var(--text-primary); font-weight: 500; }
+  .frame-bar .right { margin-left: auto; display: flex; gap: 12px; align-items: center; color: var(--text-muted); font: 500 12px/1 var(--font-mono); }
+  .frame-body { padding: 22px 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* Atoms */
+  .row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .muted { color: var(--text-muted); }
+  .mono  { font-family: var(--font-mono); }
+  .small { font-size: 12px; }
+  .xs    { font-size: 11px; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font: 500 11px/1 var(--font-mono); letter-spacing: 0.04em;
+    padding: 4px 7px; border-radius: 3px; border: 1px solid var(--border);
+    background: var(--bg-tertiary); color: var(--text-secondary);
+  }
+  .chip.ok      { color: var(--success); background: var(--success-soft); border-color: rgba(195,232,141,0.32); }
+  .chip.warn    { color: var(--warning); background: var(--warning-soft); border-color: rgba(255,203,107,0.32); }
+  .chip.err     { color: var(--error);   background: var(--error-soft);   border-color: rgba(240,113,120,0.32); }
+  .chip.info    { color: var(--info);    background: var(--info-soft);    border-color: rgba(130,170,255,0.32); }
+  .chip.accent  { color: var(--accent);  background: var(--accent-soft);  border-color: rgba(199,146,234,0.32); }
+
+  .shape-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font: 500 13px/1 var(--font-sans); letter-spacing: 0.01em;
+    padding: 4px 9px; border-radius: 4px;
+    background: var(--accent-soft); color: var(--accent);
+    border: 1px solid rgba(199,146,234,0.32);
+    text-transform: capitalize;
+  }
+  .shape-chip.suggested {
+    background: var(--bg-tertiary); color: var(--text-muted);
+    border: 1px dashed var(--border-strong);
+  }
+
+  .seg {
+    display: inline-flex; gap: 0;
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px;
+  }
+  .seg button {
+    background: transparent; border: 0; color: var(--text-muted); cursor: pointer;
+    padding: 6px 12px; font: 500 12px/1 var(--font-sans);
+    border-radius: 4px; letter-spacing: 0.02em;
+  }
+  .seg button.on { background: var(--bg-tertiary); color: var(--text-primary); }
+
+  /* Compose */
+  .compose {
+    background: linear-gradient(180deg, rgba(199,146,234,0.08), var(--bg-secondary) 60%);
+    border: 1px solid var(--accent-strong);
+    border-radius: 12px;
+    padding: 22px 24px 16px;
+  }
+  .compose .title { font: 600 18px/1.3 var(--font-heading); margin: 0 0 14px; color: var(--text-primary); }
+  .compose textarea {
+    width: 100%; min-height: 100px;
+    background: var(--bg-primary); border: 1px solid var(--border);
+    color: var(--text-primary); padding: 13px 16px; border-radius: 8px;
+    font: 15px/1.55 var(--font-sans); resize: vertical;
+  }
+  .compose textarea::placeholder { color: var(--text-muted); }
+  .inferred {
+    margin-top: 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .inferred .row-line {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    min-height: 40px;
+  }
+  .inferred .row-line:last-child { border-bottom: 0; }
+  .inferred .row-line .lbl {
+    font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em;
+    color: var(--text-muted); text-transform: uppercase;
+    flex: 0 0 76px;
+  }
+  .inferred .row-line .val { color: var(--text-primary); flex: 1; min-width: 0; }
+  .inferred .row-line .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  .inferred .row-line .conf {
+    font: 500 11px/1 var(--font-mono); color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .inferred .row-line a.edit { color: var(--text-muted); font-size: 12px; }
+  .inferred .row-line a.edit:hover { color: var(--accent); }
+  .compose .actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+  .compose .submit {
+    background: var(--accent); color: #1a1c2c; border: 0; cursor: pointer;
+    padding: 9px 20px; font: 600 13px/1 var(--font-sans);
+    border-radius: 6px; letter-spacing: 0.02em;
+  }
+  .compose .hint { color: var(--text-muted); font-size: 12px; }
+  .compose .templates { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+  .compose .templates .t {
+    font-size: 12px; padding: 5px 10px; border: 1px dashed var(--border-strong);
+    border-radius: 5px; color: var(--text-secondary);
+    text-transform: capitalize;
+  }
+
+  /* KPI strip */
+  .kpi-strip {
+    display: grid; gap: 14px; grid-template-columns: repeat(6, minmax(0,1fr));
+  }
+  .kpi {
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px; min-width: 0;
+  }
+  .kpi .label { font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; }
+  .kpi .val { font: 600 24px/1.1 var(--font-sans); font-variant-numeric: tabular-nums; margin-top: 8px; letter-spacing: -0.005em; }
+  .kpi .sub { font-size: 12px; color: var(--text-muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .kpi.success .val { color: var(--success); }
+  .kpi.accent .val  { color: var(--accent); }
+  .kpi.info .val    { color: var(--info); }
+  .delta-up   { color: var(--success); }
+  .delta-down { color: var(--error); }
+  .stackbar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--bg-tertiary); margin-top: 8px; }
+  .stackbar .seg-fill { height: 100%; }
+  .stackbar .ok   { background: var(--success); }
+  .stackbar .warn { background: var(--warning); }
+  .stackbar .err  { background: var(--error); }
+
+  /* Trend triplet */
+  .trends { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px; }
+  .panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; }
+  .panel-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+  }
+  .panel-head h4 { font-size: 13px; }
+  .panel-head .sub { color: var(--text-muted); font-size: 12px; }
+  .panel-head .right { margin-left: auto; }
+  .panel-body { padding: 14px 16px; }
+  .spark { width: 100%; height: 84px; }
+
+  /* Pie via conic-gradient (no SVG needed) */
+  .pie-row { display: flex; gap: 14px; align-items: center; padding: 12px 16px; }
+  .pie {
+    width: 96px; height: 96px; border-radius: 50%;
+    background: conic-gradient(
+      var(--success) 0 36%,         /* completed */
+      var(--info)    36% 60%,        /* exhausted */
+      var(--accent)  60% 81%,        /* active */
+      var(--warning) 81% 92%,        /* paused */
+      var(--error)   92% 100%        /* halted */
+    );
+    position: relative; flex-shrink: 0;
+  }
+  .pie::after {
+    content: ""; position: absolute; inset: 28%;
+    background: var(--bg-secondary); border-radius: 50%;
+  }
+  .legend { display: flex; flex-direction: column; gap: 4px; font-size: 12px; min-width: 0; }
+  .legend .l { display: flex; align-items: center; gap: 6px; }
+  .legend .sw { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .legend .n  { color: var(--text-secondary); flex: 1; }
+  .legend .c  { color: var(--text-muted); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  /* Verdict stack */
+  .verdict-bars { display: flex; gap: 4px; align-items: flex-end; height: 84px; padding: 0 4px; }
+  .vb { flex: 1; display: flex; flex-direction: column-reverse; gap: 1px; }
+  .vb i { display: block; }
+  .vb i.p { background: var(--success); }
+  .vb i.f { background: var(--warning); }
+  .vb i.h { background: var(--error); }
+
+  /* Filter + table block */
+  .archive { display: grid; grid-template-columns: 232px 1fr; gap: 14px; }
+  .filter-rail {
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 0; height: max-content;
+    position: sticky; top: 16px;
+  }
+  .filter-rail .group { padding: 0 14px 14px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+  .filter-rail .group:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+  .filter-rail .label { font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; }
+  .filter-rail input[type="text"] {
+    width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border);
+    color: var(--text-primary); font-size: 13px; padding: 6px 10px; border-radius: 4px;
+    font-family: var(--font-sans);
+  }
+  .filter-rail .opt {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 8px; border-radius: 4px; color: var(--text-secondary); font-size: 13px;
+    cursor: pointer;
+  }
+  .filter-rail .opt:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+  .filter-rail .opt.on { background: var(--bg-tertiary); color: var(--text-primary); }
+  .filter-rail .opt .ct { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+  .archive-table-wrap {
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+  }
+  .archive-toolbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+  }
+  .archive-toolbar .left { display: flex; gap: 10px; align-items: center; color: var(--text-muted); font-size: 12px; }
+  .archive-toolbar .right { margin-left: auto; display: flex; gap: 8px; }
+
+  table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.t th, table.t td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  table.t th {
+    font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-muted); background: var(--bg-secondary); white-space: nowrap;
+  }
+  table.t td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.t tr.row { cursor: pointer; }
+  table.t tr.row:hover td { background: var(--bg-tertiary); }
+  table.t tr.row.is-active td { background: rgba(195,232,141,0.04); }
+  table.t .title-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  table.t .title-cell .t1 { color: var(--text-primary); font-weight: 500; }
+  table.t .title-cell .t2 { color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 480px; }
+
+  /* Section divider in the table: "Active" vs "Past" */
+  .section-row td {
+    background: var(--bg-contrast);
+    color: var(--text-muted);
+    font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 8px 12px;
+  }
+  .section-row td .ct { color: var(--text-secondary); margin-left: 8px; }
+  .section-row td .pulse {
+    display: inline-flex; align-items: center; gap: 5px; color: var(--success); margin-left: 10px;
+  }
+  .section-row td .pulse .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--success);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  .dot-i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; vertical-align: middle; margin-right: 6px; }
+  .dot-i.ok    { background: var(--success); }
+  .dot-i.warn  { background: var(--warning); }
+  .dot-i.err   { background: var(--error); }
+  .dot-i.info  { background: var(--info); }
+  .dot-i.gray  { background: var(--text-disabled); }
+  .dot-i.accent{ background: var(--accent); }
+
+  .pager {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; border-top: 1px solid var(--border);
+    color: var(--text-muted); font-size: 12px;
+  }
+
+  .takeaway {
+    margin-top: 18px; padding: 12px 14px;
+    background: var(--bg-secondary); border: 1px dashed var(--border-strong);
+    border-radius: 6px; color: var(--text-secondary); font-size: 13px;
+  }
+  .takeaway strong { color: var(--text-primary); font-weight: 600; }
+  .takeaway code { color: var(--accent); font-family: var(--font-mono); font-size: 12px; }
+
+  hr.gap { border: 0; border-top: 1px solid var(--border); margin: 18px 0; }
+  .footer-note { color: var(--text-muted); font-size: 12px; margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <p class="eyebrow">Research · navigation</p>
+  <h1>Research — combined overview &amp; history</h1>
+  <p class="lede">
+    Single page that replaces the separate Overview and History routes. Compose at the top, KPI strip, a
+    compact trend triplet (activity · verdicts · status mix), then the unified archive — filter rail plus a
+    sortable ledger where active runs appear as a pinned section above the historical rows.
+  </p>
+
+  <div class="frame">
+    <div class="frame-bar">
+      <div class="crumbs">
+        <span>Research</span>
+        <span class="muted">›</span>
+        <span class="here">Overview</span>
+      </div>
+      <div class="right">
+        <span class="muted small">range</span>
+        <span class="seg">
+          <button>24h</button>
+          <button>7d</button>
+          <button class="on">30d</button>
+          <button>90d</button>
+          <button>all</button>
+        </span>
+        <span class="chip ok" style="margin-left: 6px;"><span class="dot-i ok"></span>2 running</span>
+        <span class="mono">$3.42 today</span>
+      </div>
+    </div>
+
+    <div class="frame-body">
+
+      <!-- ─── Compose ─── -->
+      <div class="compose">
+        <h2 class="title">What do you want to investigate?</h2>
+        <textarea>A timeline of how Detroit techno crossed the Atlantic — labels, DJs, pivotal venues 1986–94. Compare the Berlin and Frankfurt feedback loops; ignore later commercial trance.</textarea>
+
+        <div class="inferred">
+          <div class="row-line">
+            <span class="lbl">Shape</span>
+            <span class="val">
+              <span class="shape-chip">timeline</span>
+              <span class="shape-chip">comparison</span>
+              <span class="shape-chip suggested">+ list</span>
+            </span>
+            <span class="right">
+              <span class="conf">conf 0.84</span>
+              <a class="edit" href="#">edit</a>
+            </span>
+          </div>
+          <div class="row-line">
+            <span class="lbl">Topic</span>
+            <span class="val">
+              <span style="color: var(--accent);">Music history &amp; subcultures</span>
+              <span class="muted small" style="margin-left: 8px;">cluster · 9 prior runs · last "Origins of acid house" (yesterday)</span>
+            </span>
+            <span class="right"><a class="edit" href="#">change</a></span>
+          </div>
+          <div class="row-line">
+            <span class="lbl">Run plan</span>
+            <span class="val small">
+              <span class="muted">model</span> <span class="mono" style="color: var(--text-secondary);">sonnet-4-6</span>
+              <span class="muted" style="margin-left: 12px;">budget</span> <span class="mono" style="color: var(--text-secondary);">$1.50</span>
+              <span class="muted" style="margin-left: 12px;">depth</span> <span class="mono" style="color: var(--text-secondary);">5 hops</span>
+              <span class="muted" style="margin-left: 12px;">role</span> <span class="mono" style="color: var(--text-secondary);">music historian</span>
+            </span>
+            <span class="right"><a class="edit" href="#">tune</a></span>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="submit">Start research →</button>
+          <span class="hint">↵ to start · ⌘↵ to start &amp; open detail</span>
+          <span class="templates">
+            <span class="muted xs mono" style="align-self: center;">START FROM:</span>
+            <span class="t">timeline</span>
+            <span class="t">comparison</span>
+            <span class="t">survey</span>
+            <span class="t">dynamics</span>
+            <span class="t">audit</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- ─── KPI strip (single source of truth — formerly duplicated on both pages) ─── -->
+      <div class="kpi-strip">
+        <div class="kpi accent">
+          <div class="label">Runs · 30d</div>
+          <div class="val">38</div>
+          <div class="sub"><span class="delta-up">▲ 12</span> vs prior 30d</div>
+        </div>
+        <div class="kpi success">
+          <div class="label">Findings · 30d</div>
+          <div class="val">2,148</div>
+          <div class="sub">avg 56.5 / run</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Spend · 30d</div>
+          <div class="val">$32.18</div>
+          <div class="sub">$0.85 / run</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Pass rate</div>
+          <div class="val">71%</div>
+          <div class="stackbar">
+            <i class="seg-fill ok"   style="width: 71%;"></i>
+            <i class="seg-fill warn" style="width: 21%;"></i>
+            <i class="seg-fill err"  style="width: 8%;"></i>
+          </div>
+        </div>
+        <div class="kpi">
+          <div class="label">Avg duration</div>
+          <div class="val">22.4 m</div>
+          <div class="sub">p95 1h 14m</div>
+        </div>
+        <div class="kpi info">
+          <div class="label">Active now</div>
+          <div class="val">2</div>
+          <div class="sub">1 burst · 1 default</div>
+        </div>
+      </div>
+
+      <!-- ─── Trend triplet ─── -->
+      <div class="trends">
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Activity</h4>
+            <span class="sub">findings (filled) · runs (dashed)</span>
+            <span class="right small muted">last 30d</span>
+          </div>
+          <div class="panel-body">
+            <svg class="spark" viewBox="0 0 800 84" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%"   stop-color="#c3e88d" stop-opacity="0.55"/>
+                  <stop offset="100%" stop-color="#c3e88d" stop-opacity="0.05"/>
+                </linearGradient>
+              </defs>
+              <path d="M 0 70 L 26 64 52 54 78 58 104 44 130 48 156 38 182 41 208 30 234 34 260 26 286 22 312 29 338 19 364 24 390 13 416 18 442 9 468 16 494 7 520 12 546 5 572 14 598 7 624 20 650 24 676 15 702 28 728 19 754 32 780 25 800 30 L 800 84 L 0 84 Z" fill="url(#g1)"/>
+              <polyline fill="none" stroke="#c3e88d" stroke-width="1.4"
+                points="0,70 26,64 52,54 78,58 104,44 130,48 156,38 182,41 208,30 234,34 260,26 286,22 312,29 338,19 364,24 390,13 416,18 442,9 468,16 494,7 520,12 546,5 572,14 598,7 624,20 650,24 676,15 702,28 728,19 754,32 780,25"/>
+              <polyline fill="none" stroke="#c792ea" stroke-width="1.2" stroke-dasharray="2 2"
+                points="0,76 26,74 52,70 78,76 104,66 130,72 156,64 182,70 208,58 234,66 260,53 286,55 312,62 338,51 364,57 390,45 416,49 442,43 468,49 494,41 520,47 546,38 572,49 598,43 624,55 650,57 676,49 702,61 728,53 754,63 780,57"/>
+            </svg>
+            <div class="row small muted" style="margin-top: 4px; font-variant-numeric: tabular-nums;">
+              <span>Apr 12</span><span>Apr 26</span><span>May 12 (today)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Verdicts</h4>
+            <span class="sub">pass · flag · halt</span>
+          </div>
+          <div class="panel-body">
+            <div class="verdict-bars">
+              <div class="vb"><i class="p" style="height: 18px;"></i><i class="f" style="height: 6px;"></i></div>
+              <div class="vb"><i class="p" style="height: 22px;"></i></div>
+              <div class="vb"><i class="p" style="height: 14px;"></i><i class="h" style="height: 8px;"></i></div>
+              <div class="vb"><i class="p" style="height: 30px;"></i><i class="f" style="height: 10px;"></i></div>
+              <div class="vb"><i class="p" style="height: 26px;"></i></div>
+              <div class="vb"><i class="p" style="height: 36px;"></i><i class="f" style="height: 6px;"></i></div>
+              <div class="vb"><i class="p" style="height: 42px;"></i><i class="f" style="height: 8px;"></i><i class="h" style="height: 4px;"></i></div>
+              <div class="vb"><i class="p" style="height: 40px;"></i><i class="f" style="height: 14px;"></i></div>
+              <div class="vb"><i class="p" style="height: 54px;"></i><i class="f" style="height: 10px;"></i></div>
+              <div class="vb"><i class="p" style="height: 48px;"></i><i class="f" style="height: 12px;"></i></div>
+              <div class="vb"><i class="p" style="height: 60px;"></i><i class="f" style="height: 6px;"></i></div>
+              <div class="vb"><i class="p" style="height: 52px;"></i><i class="f" style="height: 18px;"></i></div>
+              <div class="vb"><i class="p" style="height: 64px;"></i><i class="h" style="height: 8px;"></i></div>
+              <div class="vb"><i class="p" style="height: 58px;"></i><i class="f" style="height: 12px;"></i></div>
+            </div>
+            <div class="row small muted" style="margin-top: 4px;">
+              <span><span class="dot-i ok"></span>27 pass</span>
+              <span><span class="dot-i warn"></span>8 flag</span>
+              <span><span class="dot-i err"></span>3 halt</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Status mix</h4>
+            <span class="sub">all queries · now</span>
+          </div>
+          <div class="pie-row">
+            <div class="pie" aria-label="status mix donut"></div>
+            <div class="legend" style="flex: 1;">
+              <div class="l"><span class="sw" style="background: var(--success);"></span><span class="n">Completed</span><span class="c">22</span></div>
+              <div class="l"><span class="sw" style="background: var(--info);"></span><span class="n">Exhausted</span><span class="c">11</span></div>
+              <div class="l"><span class="sw" style="background: var(--accent);"></span><span class="n">Active</span><span class="c">2</span></div>
+              <div class="l"><span class="sw" style="background: var(--warning);"></span><span class="n">Paused</span><span class="c">0</span></div>
+              <div class="l"><span class="sw" style="background: var(--error);"></span><span class="n">Halted</span><span class="c">3</span></div>
+              <div class="l" style="border-top: 1px solid var(--border); padding-top: 4px; margin-top: 2px;">
+                <span class="sw" style="background: transparent;"></span><span class="n muted">total</span><span class="c">38</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Unified archive: filter rail + table (active runs pinned at top) ─── -->
+      <div class="archive">
+        <aside class="filter-rail">
+          <div class="group">
+            <div class="label">Search</div>
+            <input type="text" placeholder="title or prompt…">
+          </div>
+          <div class="group">
+            <div class="label">Status</div>
+            <div class="opt"><span><span class="dot-i ok"></span>Active</span><span class="ct">2</span></div>
+            <div class="opt"><span><span class="dot-i info"></span>Completed</span><span class="ct">22</span></div>
+            <div class="opt"><span><span class="dot-i gray"></span>Exhausted</span><span class="ct">11</span></div>
+            <div class="opt"><span><span class="dot-i warn"></span>Paused</span><span class="ct">0</span></div>
+            <div class="opt"><span><span class="dot-i err"></span>Halted</span><span class="ct">3</span></div>
+          </div>
+          <div class="group">
+            <div class="label">Shape</div>
+            <div class="opt"><span>Survey</span><span class="ct">10</span></div>
+            <div class="opt"><span>Timeline</span><span class="ct">9</span></div>
+            <div class="opt"><span>Comparison</span><span class="ct">7</span></div>
+            <div class="opt"><span>Dynamics</span><span class="ct">5</span></div>
+            <div class="opt"><span>List</span><span class="ct">4</span></div>
+            <div class="opt"><span>Audit</span><span class="ct">2</span></div>
+            <div class="opt"><span>Lookup</span><span class="ct">1</span></div>
+          </div>
+          <div class="group">
+            <div class="label">Verdict</div>
+            <div class="opt"><span><span class="dot-i ok"></span>Pass</span><span class="ct">27</span></div>
+            <div class="opt"><span><span class="dot-i warn"></span>Flag</span><span class="ct">8</span></div>
+            <div class="opt"><span><span class="dot-i err"></span>Halt</span><span class="ct">3</span></div>
+          </div>
+          <div class="group">
+            <div class="label">Topic cluster</div>
+            <div class="opt"><span><span class="dot-i accent"></span>AI / LLM tooling</span><span class="ct">14</span></div>
+            <div class="opt"><span><span class="dot-i info"></span>Music history</span><span class="ct">9</span></div>
+            <div class="opt"><span><span class="dot-i ok"></span>Databases</span><span class="ct">6</span></div>
+            <div class="opt"><span><span class="dot-i warn"></span>Audio &amp; DSP</span><span class="ct">5</span></div>
+            <div class="opt"><span><span class="dot-i" style="background: var(--orange);"></span>Personal infra</span><span class="ct">4</span></div>
+          </div>
+          <div class="group">
+            <div class="label">Cost band</div>
+            <div class="opt"><span>under $0.25</span><span class="ct">9</span></div>
+            <div class="opt"><span>$0.25 – $1.00</span><span class="ct">21</span></div>
+            <div class="opt"><span>$1.00 – $2.00</span><span class="ct">6</span></div>
+            <div class="opt"><span>over $2.00</span><span class="ct">2</span></div>
+          </div>
+        </aside>
+
+        <div class="archive-table-wrap">
+          <div class="archive-toolbar">
+            <div class="left">
+              <span>38 results</span>
+              <span>·</span>
+              <span>sorted by</span>
+              <span class="seg">
+                <button class="on">started ↓</button>
+                <button>cost</button>
+                <button>findings</button>
+                <button>duration</button>
+                <button>verdict</button>
+              </span>
+            </div>
+            <div class="right">
+              <span class="chip small">Group by shape</span>
+              <span class="chip small">Compare 2 →</span>
+              <span class="chip small">Export CSV</span>
+            </div>
+          </div>
+
+          <table class="t">
+            <thead>
+              <tr>
+                <th>Query</th>
+                <th>Shape</th>
+                <th>Started</th>
+                <th>Status</th>
+                <th class="num">Findings</th>
+                <th class="num">Cost</th>
+                <th class="num">Duration</th>
+                <th>Verdict</th>
+                <th>Activity</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Active section (replaces the "Running now" panel from the old Overview) -->
+              <tr class="section-row">
+                <td colspan="9">
+                  Active
+                  <span class="ct">2 running</span>
+                  <span class="pulse"><span class="dot"></span>live · auto-refresh 2s</span>
+                </td>
+              </tr>
+              <tr class="row is-active">
+                <td>
+                  <div class="title-cell">
+                    <span class="t1">Emergence of EDM as a pop genre · 1985–95</span>
+                    <span class="t2">seed: "give me an overview and timeline of the emergence of EDM…"</span>
+                  </div>
+                </td>
+                <td><span class="shape-chip" style="font-size: 11px;">timeline</span></td>
+                <td><span class="muted small mono">26m ago</span></td>
+                <td><span class="chip ok"><span class="dot-i ok"></span>active</span></td>
+                <td class="num"><span style="color: var(--success);">147</span></td>
+                <td class="num">$0.84</td>
+                <td class="num">26.4m</td>
+                <td><span class="chip ok small">on track · iter 25</span></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.4" points="0,22 8,20 16,18 24,16 32,14 40,12 48,10 56,8 64,7 72,5 80,4 88,3 96,2 100,2"/></svg></td>
+              </tr>
+              <tr class="row is-active">
+                <td>
+                  <div class="title-cell">
+                    <span class="t1">How GPT-Researcher generates sub-questions internally</span>
+                    <span class="t2">prompts, planner, agent.py implementation</span>
+                  </div>
+                </td>
+                <td><span class="shape-chip" style="font-size: 11px;">audit</span></td>
+                <td><span class="muted small mono">4m ago</span></td>
+                <td><span class="chip ok"><span class="dot-i ok"></span>active</span></td>
+                <td class="num"><span style="color: var(--success);">9</span></td>
+                <td class="num">$0.07</td>
+                <td class="num">4.1m</td>
+                <td><span class="chip info small">priming · iter 3</span></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#82aaff" stroke-width="1.4" points="0,22 16,21 32,20 48,18 64,15 80,12 96,9 100,8"/></svg></td>
+              </tr>
+
+              <!-- Past section -->
+              <tr class="section-row">
+                <td colspan="9">Past <span class="ct">36 in range</span></td>
+              </tr>
+              <tr class="row">
+                <td>
+                  <div class="title-cell">
+                    <span class="t1">Best practices for Anthropic prompt caching at scale</span>
+                    <span class="t2">structured outputs, cache hits, multi-turn agents</span>
+                  </div>
+                </td>
+                <td><span class="shape-chip" style="font-size: 11px;">survey</span></td>
+                <td><span class="muted small mono">2h ago</span></td>
+                <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
+                <td class="num">214</td>
+                <td class="num">$1.42</td>
+                <td class="num">28.0m</td>
+                <td><span class="chip ok small">pass</span></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 12,18 24,14 36,9 48,6 60,4 72,3 84,3 96,3 100,3"/></svg></td>
+              </tr>
+              <tr class="row">
+                <td>
+                  <div class="title-cell">
+                    <span class="t1">Compare DuckDB vs ClickHouse for embedded analytics</span>
+                    <span class="t2">single-node, OLAP, ergonomics, column store</span>
+                  </div>
+                </td>
+                <td><span class="shape-chip" style="font-size: 11px;">comparison</span></td>
+                <td><span class="muted small mono">6h ago</span></td>
+                <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
+                <td class="num">86</td>
+                <td class="num">$0.61</td>
+                <td class="num">19.2m</td>
+                <td><span class="chip warn small">flag · low yield</span></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#ffcb6b" stroke-width="1.2" points="0,22 12,20 24,17 36,15 48,14 60,13 72,13 84,12 96,12 100,12"/></svg></td>
+              </tr>
+              <tr class="row">
+                <td>
+                  <div class="title-cell">
+                    <span class="t1">Survey of B-format ambisonic encoders for live audio</span>
+                    <span class="t2">spatial audio, livestream pipelines, latency budgets</span>
+                  </div>
+                </td>
+                <td><span class="shape-chip" style="font-size: 11px;">survey</span></td>
+                <td><span class="muted small mono">9h ago</span></td>
+                <td><span class="chip err small"><span class="dot-i err"></span>halted</span></td>
+                <td class="num">42</td>
+                <td class="num">$1.50</td>
+                <td class="num">42.0m</td>
+                <td><span class="chip err small">halt · budget cap</span></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#f07178" stroke-width="1.2" points="0,22 12,20 24,17 36,16 48,15 60,15 72,14 84,14 96,14 100,14"/></svg></td>
+              </tr>
+              <tr class="row">
+                <td>
+                  <div class="title-cell">
+                    <span class="t1">Origins of acid house · Chicago 1985–87</span>
+                    <span class="t2">TR-303, Phuture, Trax records, Knuckles lineage</span>
+                  </div>
+                </td>
+                <td><span class="shape-chip" style="font-size: 11px;">timeline</span></td>
+                <td><span class="muted small mono">yesterday 16:22</span></td>
+                <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
+                <td class="num">98</td>
+                <td class="num">$0.74</td>
+                <td class="num">22.6m</td>
+                <td><span class="chip ok small">pass</span></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 14,17 28,12 42,8 56,5 70,4 84,3 98,3 100,3"/></svg></td>
+              </tr>
+              <tr class="row">
+                <td>
+                  <div class="title-cell">
+                    <span class="t1">When to mock the database vs hit a real one</span>
+                    <span class="t2">integration tests, migrations, fixtures</span>
+                  </div>
+                </td>
+                <td><span class="shape-chip" style="font-size: 11px;">dynamics</span></td>
+                <td><span class="muted small mono">2 days ago</span></td>
+                <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
+                <td class="num">61</td>
+                <td class="num">$0.42</td>
+                <td class="num">14.3m</td>
+                <td><span class="chip ok small">pass</span></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 16,18 32,12 48,8 64,6 80,5 96,5 100,5"/></svg></td>
+              </tr>
+              <tr class="row">
+                <td>
+                  <div class="title-cell">
+                    <span class="t1">Berlin techno scene 1989–1994 · venues, labels, transmissions</span>
+                    <span class="t2">Tresor, UR, Mayday, Hard Wax</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="shape-chip" style="font-size: 11px;">timeline</span>
+                  <span class="shape-chip" style="font-size: 11px;">list</span>
+                </td>
+                <td><span class="muted small mono">3 days ago</span></td>
+                <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
+                <td class="num">186</td>
+                <td class="num">$1.18</td>
+                <td class="num">31.4m</td>
+                <td><span class="chip warn small">flag · stuck threads</span></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#ffcb6b" stroke-width="1.2" points="0,22 12,18 24,14 36,11 48,9 60,8 72,8 84,8 96,8 100,8"/></svg></td>
+              </tr>
+              <tr class="row">
+                <td>
+                  <div class="title-cell">
+                    <span class="t1">Survey of Claude Code hooks ecosystem</span>
+                    <span class="t2">settings.json, lifecycle events, common patterns</span>
+                  </div>
+                </td>
+                <td><span class="shape-chip" style="font-size: 11px;">survey</span></td>
+                <td><span class="muted small mono">4 days ago</span></td>
+                <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
+                <td class="num">73</td>
+                <td class="num">$0.38</td>
+                <td class="num">12.8m</td>
+                <td><span class="chip ok small">pass</span></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 18,15 36,9 54,5 72,3 90,2 100,2"/></svg></td>
+              </tr>
+              <tr class="row">
+                <td>
+                  <div class="title-cell">
+                    <span class="t1">Reverse-engineer Storm's outline-driven research loop</span>
+                    <span class="t2">prompts, retrieval, write phase, eval harness</span>
+                  </div>
+                </td>
+                <td><span class="shape-chip" style="font-size: 11px;">audit</span></td>
+                <td><span class="muted small mono">5 days ago</span></td>
+                <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
+                <td class="num">112</td>
+                <td class="num">$0.69</td>
+                <td class="num">18.1m</td>
+                <td><span class="chip ok small">pass</span></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 14,17 28,11 42,7 56,5 70,4 84,3 98,3 100,3"/></svg></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="pager">
+            <span>showing 10 of 38</span>
+            <span style="margin-left: auto;">page 1 / 4</span>
+            <span class="seg" style="margin-left: 0;">
+              <button>‹</button>
+              <button class="on">1</button>
+              <button>2</button>
+              <button>3</button>
+              <button>4</button>
+              <button>›</button>
+            </span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="takeaway">
+    <strong>Replaces</strong> <code>/research</code> (the old Overview) and <code>/research/history</code> (the old Queries → History page) with a single route. KPI strip lives once, not twice. Active runs are a pinned section at the top of the same ledger that holds the rest of the archive — same row schema, same sort/filter affordances. Trend triplet (activity · verdicts · status mix) replaces the four full-width charts that used to sit between Overview's panels and the user's actual work. Compose remains the unambiguous top of the page.
+  </div>
+
+  <hr class="gap">
+  <p class="footer-note">
+    Mockup uses Material Palenight palette and the app's Noto Sans / Merriweather / Noto Sans Mono stack. Counts and dates illustrative.
+  </p>
+</div>
+</body>
+</html>
