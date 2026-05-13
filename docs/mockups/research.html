@@ -104,11 +104,14 @@
   }
   /* In the archive table, shape reads as a column value (plain accent text),
      not a chip floating in its cell — same visual weight as "26m ago". */
+  /* Fixed-width display so every shape tag occupies the same horizontal slot —
+     left edges line up AND right edges line up, regardless of word length. */
   .shape-tag {
+    display: inline-block;
+    min-width: 72px;
     font: 500 12px/1 var(--font-mono); letter-spacing: 0.04em;
     color: var(--accent); text-transform: lowercase;
   }
-  .shape-tag + .shape-tag { margin-left: 8px; color: var(--text-muted); }
 
   .seg {
     display: inline-flex; gap: 0;
@@ -621,8 +624,8 @@
 
           <table class="t">
             <colgroup>
-              <col style="width: auto;">           <!-- Query (gets remainder) -->
-              <col style="width: 88px;">           <!-- Shape -->
+              <col style="width: 320px;">          <!-- Query -->
+              <col style="width: 104px;">          <!-- Shape -->
               <col style="width: 92px;">           <!-- Started -->
               <col style="width: 108px;">          <!-- Status -->
               <col style="width: 76px;">           <!-- Findings -->
