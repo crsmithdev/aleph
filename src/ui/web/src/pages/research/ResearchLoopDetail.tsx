@@ -485,26 +485,26 @@ function DocumentMetaStrip({
           'text-xs px-1.5 py-0.5 rounded font-medium uppercase tracking-wider',
           doc ? 'bg-success/15 text-success' : 'bg-amber-500/15 text-amber-400',
         )}>
-          {doc ? 'polished' : 'raw render'}
+          {doc ? 'final' : 'draft'}
         </span>
         {!doc && fallback && (
-          <span className="text-xs text-text-muted italic">polish pending</span>
+          <span className="text-xs text-text-muted italic">finalizing…</span>
         )}
       </div>
       {doc && (
         <div className="text-xs text-text-muted">
-          generated · <span className="font-mono tabular-nums text-text-secondary">{new Date(doc.generated_at).toLocaleString()}</span>
+          <span className="font-mono tabular-nums text-text-secondary">{new Date(doc.generated_at).toLocaleString()}</span>
         </div>
       )}
       <div className="text-xs text-text-muted">
-        cycles · <span className="font-mono tabular-nums text-text-secondary" data-testid="document-rendered-cycles">{renderedCycles}</span>
+        <span className="font-mono tabular-nums text-text-secondary" data-testid="document-rendered-cycles">{renderedCycles}</span> cycles
       </div>
       <div className="text-xs text-text-muted">
-        sources · <span className="font-mono tabular-nums text-text-secondary" data-testid="document-source-count">{sourceCount}</span>
+        <span className="font-mono tabular-nums text-text-secondary" data-testid="document-source-count">{sourceCount}</span> sources
       </div>
       {doc && (
         <div className="text-xs text-text-muted">
-          model · <span className="font-mono text-text-secondary" data-testid="document-model">{doc.model}</span>
+          <span className="font-mono text-text-secondary" data-testid="document-model">{doc.model}</span>
         </div>
       )}
       <button

@@ -195,7 +195,7 @@ dialog::backdrop {
 .md-content.article-view hr { margin: 2rem 0; }
 .md-content.article-view table { font-size: 0.9375rem; }
 .md-content.article-view th, .md-content.article-view td { padding: 0.5rem 0.75rem; }
-.md-content.article-view a.cite { color: var(--c-accent); text-decoration: none; font-family: var(--font-sans); font-size: 0.85em; vertical-align: baseline; padding: 0 0.1em; }
+.md-content.article-view a.cite { color: var(--c-accent); text-decoration: none; font-family: var(--font-sans); font-size: 0.92em; vertical-align: 0.06em; padding: 0 0.1em; }
 .md-content.article-view a.cite:hover { text-decoration: underline; }
 /* References section: each entry is a paragraph starting [N]; the anchor
  * target is on the <p>. Show the leading [N] in mono so the entry list
