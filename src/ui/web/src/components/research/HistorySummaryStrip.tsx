@@ -26,26 +26,20 @@ export function HistorySummaryStrip({ stats, totalRuns, byStatus, avgDurationMs,
   const avgSpendPerRun = totalRuns > 0 ? spend / totalRuns : 0;
 
   return (
-    <div
-      className="grid gap-4 px-6 py-4 border-b border-border-primary bg-bg-secondary"
-      style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' }}
-    >
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       <StatCard
-        compact
         accent={totalRuns > 0 ? 'default' : 'neutral'}
         label={`Runs · ${rangeLabel}`}
         value={totalRuns > 0 ? String(totalRuns) : EMPTY}
         detail={totalRuns > 0 ? `${byStatus.active ?? 0} active · ${byStatus.completed ?? 0} done · ${byStatus.halted ?? 0} halted` : undefined}
       />
       <StatCard
-        compact
         accent={findings > 0 ? 'success' : 'neutral'}
         label={`Findings · ${rangeLabel}`}
         value={findings > 0 ? fmtCount(findings) : EMPTY}
         detail={findings > 0 ? `avg ${avgFindingsPerRun.toFixed(1)} / run` : undefined}
       />
       <StatCard
-        compact
         accent="neutral"
         label={`Spend · ${rangeLabel}`}
         value={hasSpend ? fmtCurrency(spend) : EMPTY}
@@ -53,13 +47,11 @@ export function HistorySummaryStrip({ stats, totalRuns, byStatus, avgDurationMs,
       />
       <PassRateCell pass={passRate} flag={flagRate} halt={haltRate} hasData={hasVerdicts} />
       <StatCard
-        compact
         accent="neutral"
         label="Avg duration"
         value={avgDurationMs > 0 ? fmtDuration(avgDurationMs) : EMPTY}
       />
       <StatCard
-        compact
         accent={activeNow > 0 ? 'default' : 'neutral'}
         label="Active now"
         value={activeNow > 0 ? String(activeNow) : EMPTY}
@@ -71,14 +63,13 @@ export function HistorySummaryStrip({ stats, totalRuns, byStatus, avgDurationMs,
 
 function PassRateCell({ pass, flag, halt, hasData }: { pass: number; flag: number; halt: number; hasData: boolean }) {
   if (!hasData) {
-    return <StatCard compact accent="neutral" label="Pass rate" value={EMPTY} />;
+    return <StatCard accent="neutral" label="Pass rate" value={EMPTY} />;
   }
   const pctPass = Math.round(pass * 100);
   const pctFlag = Math.round(flag * 100);
   const pctHalt = Math.round(halt * 100);
   return (
     <StatCard
-      compact
       accent="neutral"
       label="Pass rate"
       value={`${pctPass}%`}

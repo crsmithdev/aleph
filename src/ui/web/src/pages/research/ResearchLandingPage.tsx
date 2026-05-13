@@ -1,10 +1,11 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer,
+  ComposedChart, Area, BarChart, Bar, XAxis, YAxis,
+  CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer,
 } from 'recharts';
+import { curveCardinal } from 'd3-shape';
 import {
   useResearchQueries,
   useResearchStats,
@@ -28,10 +29,9 @@ import {
   type CostBand,
 } from '../../components/research/HistoryFilterRail';
 import { HistorySummaryStrip } from '../../components/research/HistorySummaryStrip';
-import { ChartContainer } from '../../components/charts/ChartContainer';
 import {
   tooltipStyle, gridProps, axisProps, CHART_PALETTE,
-  legendProps, labelFormatter, xAxisDateProps,
+  labelFormatter, xAxisDateProps,
 } from '../../components/charts/chartTheme';
 
 const SEG_BTN = 'px-2 py-0.5 text-sm rounded transition-colors whitespace-nowrap';
@@ -95,6 +95,8 @@ export function ResearchLandingPage() {
   const [filters, setFilters] = useState<HistoryFilters>(initialFilters);
   const [sortKey, setSortKey] = useState<SortKey>('started');
   const [groupByShape, setGroupByShape] = useState(false);
+  const [activityType, setActivityType] = useState<'line' | 'bar'>('line');
+  const [statusType, setStatusType] = useState<'donut' | 'bar'>('donut');
 
   const { data: queries = [], isLoading, isError } = useResearchQueries();
   const { data: stats } = useResearchStats(range, 'day');
@@ -176,113 +178,7 @@ export function ResearchLandingPage() {
         <div className="px-6"><ErrorState message="Failed to load research queries." /></div>
       ) : (
         <>
-          {/* Trend triplet — activity area | verdict bar | status mix donut */}
-          <div className="px-6 grid gap-4" style={{ gridTemplateColumns: '2fr 1fr 1fr' }}>
-            {stats && stats.byDay.length > 0 ? (
-              <ChartContainer title={`Activity · ${range}`} height={140}>
-                <AreaChart data={stats.byDay}>
-                  <CartesianGrid {...gridProps} />
-                  <XAxis dataKey="date" {...xAxisDateProps} />
-                  <YAxis {...axisProps} />
-                  <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                  <Legend {...legendProps} />
-                  <Area
-                    isAnimationActive={false}
-                    type="monotone"
-                    dataKey="findings"
-                    stackId="activity"
-                    stroke={CHART_PALETTE[0]}
-                    fill={CHART_PALETTE[0]}
-                    fillOpacity={0.3}
-                    name="Findings"
-                  />
-                  <Area
-                    isAnimationActive={false}
-                    type="monotone"
-                    dataKey="sessions"
-                    stackId="activity"
-                    stroke={CHART_PALETTE[1]}
-                    fill={CHART_PALETTE[1]}
-                    fillOpacity={0.3}
-                    name="Runs"
-                  />
-                </AreaChart>
-              </ChartContainer>
-            ) : (
-              <ChartContainer title={`Activity · ${range}`} raw>
-                <EmptyChart>No activity in the selected range.</EmptyChart>
-              </ChartContainer>
-            )}
-
-            {stats && stats.byVerdict.length > 0 ? (
-              <ChartContainer title="Verdicts" height={140}>
-                <BarChart data={stats.byVerdict}>
-                  <CartesianGrid {...gridProps} />
-                  <XAxis dataKey="date" {...xAxisDateProps} />
-                  <YAxis {...axisProps} allowDecimals={false} />
-                  <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                  <Bar isAnimationActive={false} dataKey="pass" stackId="v" fill="var(--success)" name="Pass" />
-                  <Bar isAnimationActive={false} dataKey="flag" stackId="v" fill="var(--warning)" name="Flag" />
-                  <Bar isAnimationActive={false} dataKey="halt" stackId="v" fill="var(--error)" name="Halt" />
-                </BarChart>
-              </ChartContainer>
-            ) : (
-              <ChartContainer title="Verdicts" raw>
-                <EmptyChart>No verdicts yet.</EmptyChart>
-              </ChartContainer>
-            )}
-
-            <ChartContainer title="Status mix" raw>
-              {statusMix.length === 0 ? (
-                <EmptyChart>No queries yet.</EmptyChart>
-              ) : (
-                <div className="flex gap-3 h-[140px]">
-                  <div className="flex-1 min-w-0 flex items-center">
-                    <ResponsiveContainer width="100%" height={140}>
-                      <PieChart>
-                        <Pie
-                          isAnimationActive={false}
-                          data={statusMix}
-                          dataKey="count"
-                          nameKey="status"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius="42%"
-                          outerRadius="90%"
-                        >
-                          {statusMix.map((entry) => (
-                            <Cell key={entry.status} fill={STATUS_COLOR[entry.status]} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={tooltipStyle}
-                          formatter={(v, n) => [String(v), String(n)]}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex flex-col gap-1.5 justify-center shrink-0 w-28">
-                    {statusMix.map((row) => (
-                      <div key={row.status} className="flex items-center gap-1.5 text-xs min-w-0">
-                        <span
-                          className="w-2 h-2 rounded-full shrink-0"
-                          style={{ background: STATUS_COLOR[row.status] }}
-                        />
-                        <span className="text-text-secondary capitalize truncate flex-1">
-                          {row.status}
-                        </span>
-                        <span className="text-text-muted font-mono shrink-0 w-6 text-right tabular-nums">
-                          {row.count}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </ChartContainer>
-          </div>
-
-          <div className="border border-border-primary rounded-lg overflow-hidden mx-6 mb-6 bg-bg-primary">
+          <div className="px-6">
             <HistorySummaryStrip
               stats={stats}
               totalRuns={inRangeQueries.length}
@@ -291,7 +187,21 @@ export function ResearchLandingPage() {
               activeNow={activeNow}
               rangeLabel={range}
             />
+          </div>
 
+          <div className="px-6">
+            <ActivityPanel
+              range={range}
+              byDay={stats?.byDay ?? []}
+              statusMix={statusMix}
+              activityType={activityType}
+              onActivityType={setActivityType}
+              statusType={statusType}
+              onStatusType={setStatusType}
+            />
+          </div>
+
+          <div className="border border-border-primary rounded-lg overflow-hidden mx-6 mb-6 bg-bg-primary">
             <div className="flex">
               <HistoryFilterRail filters={filters} onChange={setFilters} counts={counts} />
 
@@ -340,6 +250,164 @@ function RangeSelector({ value, onChange }: { value: Range; onChange: (r: Range)
           >
             {r}
           </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface ActivityPanelProps {
+  range: Range;
+  byDay: Array<{ date: string; findings: number; sessions: number }>;
+  statusMix: Array<{ status: ResearchQuery['status']; count: number }>;
+  activityType: 'line' | 'bar';
+  onActivityType: (t: 'line' | 'bar') => void;
+  statusType: 'donut' | 'bar';
+  onStatusType: (t: 'donut' | 'bar') => void;
+}
+
+const ACTIVITY_LEGEND = [
+  { name: 'Findings', color: CHART_PALETTE[0] },
+  { name: 'Runs', color: CHART_PALETTE[1] },
+];
+
+const TOGGLE_BTN = 'px-2 py-0.5 text-xs rounded transition-colors';
+
+function ActivityPanel({
+  range, byDay, statusMix,
+  activityType, onActivityType, statusType, onStatusType,
+}: ActivityPanelProps) {
+  const hasActivity = byDay.length > 0;
+  const hasStatus = statusMix.length > 0;
+
+  return (
+    <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[280px] flex flex-col">
+      <div className="flex-1 min-h-0 flex">
+        {/* Left: Activity time series */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex items-center justify-between mb-2 shrink-0">
+            <h3 className="font-heading text-lg font-medium text-text-secondary">{`Activity · ${range}`}</h3>
+            <div className="flex gap-1">
+              {(['line', 'bar'] as const).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => onActivityType(t)}
+                  className={clsx(
+                    TOGGLE_BTN,
+                    activityType === t
+                      ? 'bg-bg-tertiary text-text-primary shadow-sm'
+                      : 'text-text-muted hover:text-text-secondary',
+                  )}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 min-h-0">
+            {hasActivity ? (
+              <ResponsiveContainer width="100%" height="100%">
+                {activityType === 'bar' ? (
+                  <BarChart data={byDay}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...xAxisDateProps} />
+                    <YAxis {...axisProps} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                    <Bar isAnimationActive={false} dataKey="findings" stackId="a" fill={CHART_PALETTE[0]} name="Findings" radius={[0, 0, 0, 0]} />
+                    <Bar isAnimationActive={false} dataKey="sessions" stackId="a" fill={CHART_PALETTE[1]} name="Runs" radius={[2, 2, 0, 0]} />
+                  </BarChart>
+                ) : (
+                  <ComposedChart data={byDay}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...xAxisDateProps} />
+                    <YAxis {...axisProps} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                    <Area isAnimationActive={false} type={curveCardinal.tension(0.5) as never} dataKey="findings" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Findings" />
+                    <Area isAnimationActive={false} type={curveCardinal.tension(0.5) as never} dataKey="sessions" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Runs" />
+                  </ComposedChart>
+                )}
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-text-muted text-sm">
+                No activity in the selected range.
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="w-px bg-border-primary shrink-0 mx-5" />
+
+        {/* Right: Status mix */}
+        <div className="w-[280px] shrink-0 flex flex-col">
+          <div className="flex items-center justify-between mb-2 shrink-0">
+            <h3 className="font-heading text-lg font-medium text-text-secondary">Status mix</h3>
+            <div className="flex gap-1">
+              {(['donut', 'bar'] as const).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => onStatusType(t)}
+                  className={clsx(
+                    TOGGLE_BTN,
+                    statusType === t
+                      ? 'bg-bg-tertiary text-text-primary shadow-sm'
+                      : 'text-text-muted hover:text-text-secondary',
+                  )}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 min-h-0">
+            {hasStatus ? (
+              <ResponsiveContainer width="100%" height="100%">
+                {statusType === 'donut' ? (
+                  <PieChart>
+                    <Pie isAnimationActive={false} data={statusMix} dataKey="count" nameKey="status" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                      {statusMix.map(entry => (
+                        <Cell key={entry.status} fill={STATUS_COLOR[entry.status]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [String(v), String(n)]} />
+                  </PieChart>
+                ) : (
+                  <BarChart layout="vertical" data={statusMix}>
+                    <CartesianGrid {...gridProps} horizontal={false} />
+                    <XAxis type="number" {...axisProps} allowDecimals={false} />
+                    <YAxis type="category" dataKey="status" {...axisProps} width={80} tick={{ fontSize: 10 }} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [String(v), String(n)]} />
+                    <Bar isAnimationActive={false} dataKey="count" name="Count" radius={[0, 2, 2, 0]}>
+                      {statusMix.map(entry => (
+                        <Cell key={entry.status} fill={STATUS_COLOR[entry.status]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                )}
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-text-muted text-sm">
+                No queries yet.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Shared legend */}
+      <div className="flex items-center justify-center gap-x-5 gap-y-[5px] mt-3 mb-1 text-xs shrink-0 flex-wrap">
+        {ACTIVITY_LEGEND.map(({ name, color }) => (
+          <span key={name} className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+            <span className="font-mono text-text-secondary">{name}</span>
+          </span>
+        ))}
+        {statusMix.map(row => (
+          <span key={row.status} className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: STATUS_COLOR[row.status] }} />
+            <span className="font-mono text-text-secondary capitalize">{row.status}</span>
+          </span>
         ))}
       </div>
     </div>
@@ -558,14 +626,6 @@ function VerdictCell({ verdict, status }: { verdict: 'pass' | 'flag' | 'halt' | 
   if (verdict === 'flag') return <span className="text-sm text-warning">flag</span>;
   if (verdict === 'halt') return <span className="text-sm text-error">halt</span>;
   return <span className="text-text-muted text-xs">—</span>;
-}
-
-function EmptyChart({ children }: { children: ReactNode }) {
-  return (
-    <div className="h-[140px] flex items-center justify-center text-text-muted text-sm">
-      {children}
-    </div>
-  );
 }
 
 function Sparkline({ values, active }: { values: number[]; active: boolean }) {

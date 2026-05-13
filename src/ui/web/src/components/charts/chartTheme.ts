@@ -50,7 +50,7 @@ export const xAxisDateProps = {
 };
 
 export const legendProps = {
-  wrapperStyle: { fontSize: 12, display: 'flex', flexWrap: 'wrap' as const, justifyContent: 'center', columnGap: 8, rowGap: 2, paddingLeft: 0 },
+  wrapperStyle: { fontSize: 12, display: 'flex', flexWrap: 'wrap' as const, justifyContent: 'center', columnGap: 20, rowGap: 2, paddingLeft: 0 },
 };
 
 export function labelFormatter(label: unknown): string {
