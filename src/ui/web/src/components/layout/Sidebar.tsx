@@ -29,8 +29,8 @@ const navGroups: NavGroup[] = [
   {
     label: 'Research',
     items: [
-      { to: '/research', label: 'Overview', icon: 'dashboard' },
-      { to: '/research/workers', label: 'Workers', icon: 'engineering' },
+      { to: '/research', label: 'Research', icon: 'dashboard' },
+      { to: '/research/monitors', label: 'Monitors', icon: 'visibility' },
       { to: '/research/config', label: 'Providers', icon: 'tune' },
     ],
   },

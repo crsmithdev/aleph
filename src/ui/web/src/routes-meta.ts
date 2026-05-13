@@ -61,7 +61,7 @@ export const ROUTE_META: readonly RouteMeta[] = [
       expectErrorState: true,
     },
   },
-  { path: '/research/workers', smoke: { testid: 'page-research-workers', heading: /^Workers$/ } },
+  { path: '/research/monitors', smoke: { testid: 'page-research-monitors', heading: /^Monitors$/ } },
   { path: '/research/config', smoke: { testid: 'page-research-config', heading: /^Research Config$/ } },
 
   // Observability
