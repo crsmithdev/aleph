@@ -2,13 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 
-const TEMPLATES: { label: string; prompt: string }[] = [
-  { label: 'timeline', prompt: 'Timeline of ' },
-  { label: 'comparison', prompt: 'Compare ' },
-  { label: 'survey', prompt: 'Overview of ' },
-  { label: 'dynamics', prompt: 'How does ' },
-  { label: 'audit', prompt: 'Is ' },
-];
+// Modes are named starting templates for the schedule artifact — see
+// docs/plans/research-system-design.md §1. After submit the mode label
+// survives as metadata; the schedule artifact is what runs.
+const MODES = ['quick', 'default', 'deep', 'roam', 'bonkers', 'dev', 'eval', 'custom'] as const;
+type Mode = typeof MODES[number];
+const DEFAULT_MODE: Mode = 'default';
 
 // Rotated on every page load (not on every render — see useState init below).
 const PLACEHOLDER_SAMPLES = [
@@ -48,6 +47,7 @@ function pickPlaceholder(): string {
  *  detection + the planner's schedule artifact, surfaces them there. */
 export function ComposeBox() {
   const [prompt, setPrompt] = useState('');
+  const [mode, setMode] = useState<Mode>(DEFAULT_MODE);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Frozen on mount so the placeholder doesn't shuffle on every keystroke.
@@ -64,7 +64,7 @@ export function ComposeBox() {
       const res = await fetch('/api/loops/start', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ template_id: 'research', prompt: trimmed }),
+        body: JSON.stringify({ template_id: 'research', prompt: trimmed, mode }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as { error?: string };
@@ -83,10 +83,6 @@ export function ComposeBox() {
       e.preventDefault();
       handleSubmit(undefined);
     }
-  }
-
-  function applyTemplate(t: { label: string; prompt: string }) {
-    setPrompt(p => (p ? p : t.prompt));
   }
 
   return (
@@ -126,16 +122,22 @@ export function ComposeBox() {
           <span className="text-xs text-text-muted">↵ start</span>
           <span className="ml-auto flex items-center gap-2 flex-wrap">
             <span className="font-mono text-[11px] uppercase tracking-wider text-text-muted self-center">
-              Shape:
+              Mode:
             </span>
-            {TEMPLATES.map(t => (
+            {MODES.map(m => (
               <button
-                key={t.label}
+                key={m}
                 type="button"
-                onClick={() => applyTemplate(t)}
-                className="text-xs px-2.5 py-1 border border-dashed border-border-secondary rounded text-text-secondary hover:text-text-primary hover:border-accent capitalize"
+                onClick={() => setMode(m)}
+                aria-pressed={mode === m}
+                className={clsx(
+                  'text-xs px-2.5 py-1 border rounded capitalize transition-colors',
+                  mode === m
+                    ? 'border-accent bg-accent/10 text-text-primary'
+                    : 'border-dashed border-border-secondary text-text-secondary hover:text-text-primary hover:border-accent',
+                )}
               >
-                {t.label}
+                {m}
               </button>
             ))}
           </span>
