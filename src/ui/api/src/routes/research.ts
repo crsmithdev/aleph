@@ -68,7 +68,6 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     const cfg = loadProviderConfig();
     return {
       llm_provider: cfg.llm_provider ?? (process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'openrouter'),
-      model: cfg.model ?? '',
       // Autocomplete suggestions on the Providers page. Empty until we
       // surface a model column on `cycle_ledger` or similar; the UI handles
       // [] fine (manual entry).
@@ -82,12 +81,6 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         brave: { set: !!process.env.BRAVE_SEARCH_API_KEY, masked: maskKey(process.env.BRAVE_SEARCH_API_KEY) },
         jina: { set: !!process.env.JINA_API_KEY, masked: maskKey(process.env.JINA_API_KEY) },
       },
-      max_thread_depth: cfg.max_thread_depth ?? 9,
-      min_searches: cfg.min_searches ?? 2,
-      fetch_source_text: cfg.fetch_source_text ?? false,
-      gap_analysis: cfg.gap_analysis ?? true,
-      max_gap_searches: cfg.max_gap_searches ?? 3,
-      daily_limit: cfg.daily_limit ?? '',
     };
   });
 

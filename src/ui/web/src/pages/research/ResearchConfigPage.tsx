@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useId } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { clsx } from 'clsx';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Icon } from '../../components/ui/Icon';
@@ -112,135 +112,6 @@ function KeyField({
   );
 }
 
-// Known good models to show when there's no history yet
-const SUGGESTED_MODELS: Record<string, string[]> = {
-  openrouter: [
-    'deepseek/deepseek-v3.2',
-    'deepseek/deepseek-chat',
-    'google/gemini-2.0-flash-001',
-    'google/gemini-2.5-flash',
-    'meta-llama/llama-3.3-70b-instruct',
-    'openai/gpt-4.1-mini',
-    'anthropic/claude-haiku-4.5',
-    'deepseek/deepseek-r1-0528:free',
-  ],
-  anthropic: [
-    'claude-sonnet-4-6',
-    'claude-haiku-4-5-20251001',
-    'claude-opus-4-6',
-  ],
-};
-
-function ModelCombobox({
-  value,
-  provider,
-  recentModels,
-  onChange,
-}: {
-  value: string;
-  provider: string;
-  recentModels: string[];
-  onChange: (model: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listId = useId();
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Keep draft in sync when external value changes (e.g. provider switch reset)
-  useEffect(() => { setDraft(value); }, [value]);
-
-  // Build option list: recent first, then suggestions not already in recent
-  const suggestions = SUGGESTED_MODELS[provider] ?? [];
-  const options = [
-    ...recentModels,
-    ...suggestions.filter(s => !recentModels.includes(s)),
-  ].filter(m => m.toLowerCase().includes(draft.toLowerCase()) || draft === value);
-
-  function commit(model: string) {
-    setDraft(model);
-    setOpen(false);
-    if (model !== value) onChange(model);
-    inputRef.current?.blur();
-  }
-
-  function handleBlur(e: React.FocusEvent) {
-    // Close only if focus leaves the whole container
-    if (!containerRef.current?.contains(e.relatedTarget as Node)) {
-      setOpen(false);
-      const trimmed = draft.trim();
-      if (trimmed !== value) onChange(trimmed);
-    }
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Escape') { setOpen(false); setDraft(value); }
-    if (e.key === 'Enter') { commit(draft.trim()); }
-    if (e.key === 'ArrowDown') { setOpen(true); }
-  }
-
-  const visibleOptions = draft
-    ? options.filter(m => m !== draft)
-    : options;
-
-  return (
-    <div ref={containerRef} className="relative" onBlur={handleBlur}>
-      <div className="relative">
-        <input
-          ref={inputRef}
-          type="text"
-          value={draft}
-          onChange={(e) => { setDraft(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={handleKeyDown}
-          placeholder={provider === 'anthropic' ? 'claude-sonnet-4-6' : 'deepseek/deepseek-chat'}
-          className={clsx(inputCls, 'pr-8')}
-          aria-autocomplete="list"
-          aria-expanded={open}
-          aria-controls={listId}
-        />
-        <button
-          tabIndex={-1}
-          onMouseDown={(e) => { e.preventDefault(); setOpen(o => !o); inputRef.current?.focus(); }}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
-          aria-label="Show model options"
-        >
-          <Icon name={open ? 'expand_less' : 'expand_more'} size="sm" />
-        </button>
-      </div>
-
-      {open && visibleOptions.length > 0 && (
-        <ul
-          id={listId}
-          role="listbox"
-          className="absolute z-50 w-full mt-1 bg-bg-secondary border border-border-primary rounded-md shadow-lg overflow-hidden"
-        >
-          {visibleOptions.map((model) => (
-            <li
-              key={model}
-              role="option"
-              aria-selected={model === value}
-              onMouseDown={(e) => { e.preventDefault(); commit(model); }}
-              className={clsx(
-                'flex items-center justify-between px-2.5 py-2 text-sm cursor-pointer select-none',
-                model === value
-                  ? 'text-accent bg-accent/10'
-                  : 'text-text-primary hover:bg-bg-primary'
-              )}
-            >
-              <span className="font-mono truncate">{model}</span>
-              {recentModels.includes(model) && (
-                <span className="text-sm text-text-muted ml-2 shrink-0">used</span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 function ProviderButton({
   label,
   selected,
@@ -342,17 +213,6 @@ function ProvidersPanel() {
             />
           </div>
 
-          <div>
-            <label className={labelCls}>Model <span className="text-text-muted/60">(blank = default)</span></label>
-            <ModelCombobox
-              key={`model-${config.llm_provider}`}
-              value={config.model}
-              provider={config.llm_provider}
-              recentModels={config.recent_models ?? []}
-              onChange={(model) => autoSave({ model })}
-            />
-          </div>
-
           {/* Only show key for selected provider */}
           {config.llm_provider === 'anthropic' && (
             <KeyField label="Anthropic" keyInfo={config.keys.anthropic} configKey="anthropic_api_key" onSave={handleKeySave} />
@@ -424,39 +284,6 @@ function ProvidersPanel() {
         </Card>
       </div>
 
-      {/* Gap Analysis */}
-      <div>
-        <SectionLabel>Gap Analysis</SectionLabel>
-        <Card>
-          <label className="flex items-center gap-3 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={config.gap_analysis}
-              onChange={(e) => autoSave({ gap_analysis: e.target.checked })}
-              className="w-4 h-4 accent-accent"
-            />
-            <span className="text-sm text-text-primary">Enable gap analysis</span>
-          </label>
-
-          {config.gap_analysis && (
-            <div>
-              <label className={labelCls}>Max gap searches per thread</label>
-              <input
-                key={`gap-${config.max_gap_searches}`}
-                type="number"
-                min={1}
-                max={10}
-                defaultValue={config.max_gap_searches}
-                onBlur={(e) => {
-                  const v = Number(e.target.value);
-                  if (v !== config.max_gap_searches) autoSave({ max_gap_searches: v });
-                }}
-                className={clsx(inputCls, 'max-w-32')}
-              />
-            </div>
-          )}
-        </Card>
-      </div>
 
       <div className="flex justify-end">
         <SaveIndicator visible={saved} />

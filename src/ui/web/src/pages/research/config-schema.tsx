@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { Icon } from '../../components/ui/Icon';
 
-export type FieldGroup = 'budget' | 'depth' | 'quality' | 'generation' | 'extraction' | 'models';
+export type FieldGroup = 'models';
 
 export interface FieldSchema {
   path: string;
@@ -20,60 +20,27 @@ export interface FieldSchema {
   isNew?: boolean;
 }
 
+/**
+ * Slimmed schema after Phase 7 cutover. Only the two SessionConfig fields
+ * the loops engine still reads at run time are surfaced. Everything else
+ * (budget, depth, perturbation, follow_up, topic_coherence, gap_analysis,
+ * generation, …) was pre-loops executor scaffolding — the loop engine
+ * ignores those keys, and `mergeWithCodeDefaults` discards them on load.
+ *
+ * Per-loop tuning rides on the schedule artifact (envelope, models, flags
+ * from mode preset) — see `SchedulePayload` in
+ * `src/research/src/loop/types.ts`.
+ */
 export const SCHEMA: FieldSchema[] = [
-  // Budget
-  { path: 'budget_daily_usd',        label: 'Daily budget',     hint: 'Hard cap — dispatcher halts when exceeded', unit: '$', kind: 'number', min: 0,  step: 0.5,  group: 'budget' },
-  { path: 'budget_total_usd',        label: 'Total budget',     hint: 'Blank = unlimited',                          unit: '$', kind: 'number', min: 0,  step: 1,    group: 'budget', nullable: true },
-  { path: 'budget_alert_threshold',  label: 'Alert threshold',  hint: 'Warn at fraction of budget (0–1)',          kind: 'number', min: 0, max: 1, step: 0.05, group: 'budget' },
-
-  // Depth & Breadth
-  { path: 'max_thread_depth',        label: 'Max thread depth',        kind: 'number', min: 1,  step: 1, group: 'depth' },
-  { path: 'max_total_threads',       label: 'Max total threads',       kind: 'number', min: 1,  step: 10, group: 'depth' },
-  { path: 'min_searches_per_thread', label: 'Min searches per thread', kind: 'number', min: 1,  step: 1, group: 'depth' },
-  { path: 'burst_iterations',        label: 'Burst iterations',        hint: 'Iterations per burst run', kind: 'number', min: 1, step: 1, group: 'depth' },
-  { path: 'max_concurrent_threads',  label: 'Max concurrent threads',  kind: 'number', min: 1,  step: 1, group: 'depth' },
-
-  // Quality
-  { path: 'novelty_threshold',            label: 'Novelty threshold',    hint: 'Discard findings below this',     kind: 'number', min: 0, max: 1, step: 0.05, group: 'quality' },
-  { path: 'dedup_similarity_threshold',   label: 'Dedup similarity',                                             kind: 'number', min: 0, max: 1, step: 0.05, group: 'quality' },
-  { path: 'diminishing_returns_threshold',label: 'Diminishing returns',  hint: 'Stop when avg novelty drops below',kind: 'number', min: 0, max: 1, step: 0.05, group: 'quality' },
-  { path: 'diminishing_returns_window',   label: 'Diminishing window',   hint: 'Findings considered in window',    kind: 'number', min: 1,  step: 5, group: 'quality' },
-  { path: 'follow_up.min_count',          label: 'Follow-ups min',                                                  kind: 'number', min: 0, step: 1, group: 'quality' },
-  { path: 'follow_up.max_count',          label: 'Follow-ups max',                                                  kind: 'number', min: 1, step: 1, group: 'quality' },
-  { path: 'follow_up.similarity_threshold',label:'Follow-up dedup sim',                                             kind: 'number', min: 0, max: 1, step: 0.05, group: 'quality' },
-
-  // Generation (3 new)
-  { path: 'llm_max_output_tokens',   label: 'LLM max output tokens', hint: 'Per LLM call ceiling',       kind: 'number', min: 512, step: 512,  group: 'generation', isNew: true },
-  { path: 'snippet_synthesis_chars', label: 'Synthesis chars / source', hint: 'Passed to per-thread synthesis', kind: 'number', min: 200, step: 100, group: 'generation', isNew: true },
-  { path: 'snippet_display_chars',   label: 'Display snippet chars', hint: 'Stored for citation UI',     kind: 'number', min: 50,  step: 50,   group: 'generation', isNew: true },
-
-  // Extraction
-  { path: 'fetch_source_text',           label: 'Fetch source text',     hint: 'Queue extraction for sources', kind: 'bool',   group: 'extraction' },
-  { path: 'gap_analysis.enabled',        label: 'Gap analysis',          hint: 'Spawn searches to fill gaps',  kind: 'bool',   group: 'extraction' },
-  { path: 'gap_analysis.max_gap_searches', label: 'Max gap searches',    kind: 'number', min: 0, max: 10, step: 1, group: 'extraction' },
-
-  // Models
-  { path: 'model', label: 'Primary model', kind: 'text', group: 'models' },
-
-  // Advanced
-  { path: 'p_serendipity',              label: 'Serendipity probability', hint: 'Chance a query wanders off-topic', kind: 'number', min: 0, max: 1, step: 0.05, group: 'quality', advanced: true },
-  { path: 'max_perturbation_probability', label: 'Max perturbation prob',                                          kind: 'number', min: 0, max: 1, step: 0.05, group: 'quality', advanced: true },
-  { path: 'topic_coherence.seed_similarity_min', label: 'Seed similarity min', hint: '0 disables',                 kind: 'number', min: 0, max: 1, step: 0.05, group: 'quality', advanced: true },
-  { path: 'topic_coherence.hop_similarity_min',  label: 'Hop similarity min',  hint: '0 disables',                 kind: 'number', min: 0, max: 1, step: 0.05, group: 'quality', advanced: true },
-  { path: 'min_delay_between_steps_ms', label: 'Min delay between steps', unit: 'ms',  kind: 'number', min: 0, step: 1000, group: 'depth', advanced: true },
-  { path: 'max_steps_per_hour',         label: 'Max steps per hour',                   kind: 'number', min: 1, step: 1,    group: 'depth', advanced: true },
+  { path: 'iteration_check_model', label: 'Iteration-check model', hint: 'Drives the milestone "is the loop on track?" hook (25/50/75 % envelope).', kind: 'text', group: 'models' },
+  { path: 'post_mortem_model',     label: 'Post-mortem model',     hint: 'Drives the natural-completion post-mortem hook.', kind: 'text', group: 'models' },
 ];
 
 export const GROUP_META: Record<FieldGroup, { title: string; sub: string }> = {
-  budget:     { title: 'Budget',         sub: 'spend ceilings' },
-  depth:      { title: 'Depth & Breadth', sub: 'search exploration' },
-  quality:    { title: 'Quality',        sub: 'novelty & dedup' },
-  generation: { title: 'Generation',     sub: 'LLM output shape' },
-  extraction: { title: 'Extraction',     sub: 'full-text fetching' },
-  models:     { title: 'Models',         sub: 'primary provider' },
+  models: { title: 'Models', sub: 'per-hook model selection (iteration check + post-mortem)' },
 };
 
-export const CARD_ORDER: FieldGroup[] = ['budget', 'depth', 'quality', 'generation', 'extraction', 'models'];
+export const CARD_ORDER: FieldGroup[] = ['models'];
 
 export function getByPath(obj: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((acc, key) => {

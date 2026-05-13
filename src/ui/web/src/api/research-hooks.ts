@@ -116,7 +116,6 @@ export interface ProviderKeyInfo {
 
 export interface ProviderConfig {
   llm_provider: string;
-  model: string;
   recent_models: string[];
   search_provider: string;
   fulltext_provider: string;
@@ -127,12 +126,6 @@ export interface ProviderConfig {
     brave: ProviderKeyInfo;
     jina: ProviderKeyInfo;
   };
-  max_thread_depth: number;
-  min_searches: number;
-  fetch_source_text: boolean;
-  gap_analysis: boolean;
-  max_gap_searches: number;
-  daily_limit: string;
 }
 
 export function useProviderConfig() {
@@ -153,33 +146,15 @@ export function useUpdateProviderConfig() {
 
 // ---- Research defaults (/api/research/defaults) -------------------------
 
+/**
+ * Persisted SessionConfig — slimmed in Phase 7 cutover to the two model
+ * selections the loops engine actually consumes. Everything else (budget,
+ * depth, perturbation, follow_up, topic_coherence, gap_analysis, …) was
+ * pre-loops executor scaffolding that the loops engine doesn't read.
+ */
 export interface ResearchDefaults {
-  budget_daily_usd: number;
-  budget_total_usd: number | null;
-  budget_alert_threshold: number;
-  max_thread_depth: number;
-  max_total_threads: number;
-  p_serendipity: number;
-  max_perturbation_probability: number;
-  novelty_threshold: number;
-  dedup_similarity_threshold: number;
-  diminishing_returns_threshold: number;
-  diminishing_returns_window: number;
-  min_delay_between_steps_ms: number;
-  max_steps_per_hour: number;
-  max_concurrent_threads: number;
-  model: string;
-  providers: { primary: 'openrouter'; openrouter_models: string[] };
-  schedule: { mode: string; active_windows: unknown[]; timezone: string };
-  topic_coherence: { seed_similarity_min: number; hop_similarity_min: number };
-  follow_up: { min_count: number; max_count: number; max_retries: number; similarity_threshold: number };
-  burst_iterations: number;
-  min_searches_per_thread: number;
-  fetch_source_text: boolean;
-  gap_analysis: { enabled: boolean; max_gap_searches: number };
-  llm_max_output_tokens: number;
-  snippet_synthesis_chars: number;
-  snippet_display_chars: number;
+  iteration_check_model: string;
+  post_mortem_model: string;
 }
 
 export function useResearchDefaults() {

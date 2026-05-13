@@ -2,15 +2,16 @@ import type { Sqlite } from '@construct/data';
 import type { SessionConfig } from '../types.js';
 import { DEFAULT_SESSION_CONFIG } from '../types.js';
 
+/**
+ * Merge a stored partial config onto the code-defined defaults. The slimmed
+ * `SessionConfig` is two flat fields (no nested objects), so the merge
+ * collapses to a plain spread. Unknown keys in the stored JSON are
+ * discarded — useful when migrating off the legacy ~25-field shape.
+ */
 function mergeWithCodeDefaults(partial: Partial<SessionConfig>): SessionConfig {
   return {
-    ...DEFAULT_SESSION_CONFIG,
-    ...partial,
-    providers: { ...DEFAULT_SESSION_CONFIG.providers, ...(partial.providers ?? {}) },
-    schedule: { ...DEFAULT_SESSION_CONFIG.schedule, ...(partial.schedule ?? {}) },
-    follow_up: { ...DEFAULT_SESSION_CONFIG.follow_up, ...(partial.follow_up ?? {}) },
-    topic_coherence: { ...DEFAULT_SESSION_CONFIG.topic_coherence, ...(partial.topic_coherence ?? {}) },
-    gap_analysis: { ...DEFAULT_SESSION_CONFIG.gap_analysis, ...(partial.gap_analysis ?? {}) },
+    iteration_check_model: partial.iteration_check_model ?? DEFAULT_SESSION_CONFIG.iteration_check_model,
+    post_mortem_model: partial.post_mortem_model ?? DEFAULT_SESSION_CONFIG.post_mortem_model,
   };
 }
 
@@ -30,15 +31,7 @@ export function getDefaults(sqlite: Sqlite): SessionConfig {
 
 export function updateDefaults(sqlite: Sqlite, updates: Partial<SessionConfig>): SessionConfig {
   const current = getDefaults(sqlite);
-  const merged: SessionConfig = {
-    ...current,
-    ...updates,
-    providers: { ...current.providers, ...(updates.providers ?? {}) },
-    schedule: { ...current.schedule, ...(updates.schedule ?? {}) },
-    follow_up: { ...current.follow_up, ...(updates.follow_up ?? {}) },
-    topic_coherence: { ...current.topic_coherence, ...(updates.topic_coherence ?? {}) },
-    gap_analysis: { ...current.gap_analysis, ...(updates.gap_analysis ?? {}) },
-  };
+  const merged: SessionConfig = mergeWithCodeDefaults({ ...current, ...updates });
   sqlite.prepare("UPDATE research_defaults SET config = ?, updated_at = datetime('now') WHERE id = 1").run(JSON.stringify(merged));
   return merged;
 }
