@@ -14,7 +14,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { createReadStream, existsSync } from 'fs';
 import {
-  createLoop, getLoop, generateDocument, listLoops, listMilestones, readState,
+  createLoop, getLoop, generateDocument, listLoopsWithStats, listMilestones, readState,
   updateLoopStatus, updateLoopChildPid,
   onResearchEvent,
   listTemplateIds,
@@ -37,11 +37,14 @@ interface StartBody {
 export const loopRoutes: FastifyPluginAsync = async (app) => {
   /**
    * List loops, newest-first. Sole source for the `/research/history` table.
+   * Rows carry a `stats` object (cost, cycles, sources, last_step_at,
+   * latest_post_mortem) joined from artifacts so the UI adapter can populate
+   * the verdict / cost / findings columns without N+1 follow-up requests.
    */
   app.get<{ Querystring: { limit?: string } }>('/', async (req) => {
     const raw = Number(req.query.limit);
     const limit = Number.isFinite(raw) && raw > 0 ? Math.min(Math.floor(raw), 1000) : 200;
-    const rows = listLoops(app.sqlite, { limit });
+    const rows = listLoopsWithStats(app.sqlite, { limit });
     return rows;
   });
 

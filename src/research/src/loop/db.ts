@@ -57,6 +57,98 @@ export function listLoops(sqlite: Sqlite, opts: { limit?: number } = {}): Loop[]
   }));
 }
 
+/**
+ * Per-loop summary the History/Landing page needs to render cost / verdict /
+ * findings without a follow-up round-trip per row.
+ *
+ *   - `cost`             — `envelope_consumed.cost_usd` (already on the row).
+ *   - `cycles`           — `envelope_consumed.cycles_count` (proxy for findings
+ *                          in the loops engine — one cycle = one cycle_output).
+ *   - `sources`          — `envelope_consumed.sources_count`.
+ *   - `last_step_at`     — `updated_at`. Refined later if step granularity matters.
+ *   - `latest_post_mortem` — joined from the freshest `kind: 'post_mortem'`
+ *                          artifact per loop. `verdict` uses the engine's
+ *                          `success | partial | failure` vocab; the UI adapter
+ *                          maps that onto `pass | flag | halt`.
+ */
+export interface LoopRowStats {
+  cost: number;
+  cycles: number;
+  sources: number;
+  last_step_at: string | null;
+  latest_post_mortem: { verdict: 'success' | 'partial' | 'failure'; flags: string[]; created_at: string } | null;
+}
+
+export interface LoopWithStats extends Loop {
+  stats: LoopRowStats;
+}
+
+/**
+ * List loops with per-row summary stats. One SQL query joins each loop to its
+ * latest post_mortem via a correlated subquery (no PARTITION OVER — better-sqlite3
+ * supports it but the subquery form keeps the SQL readable). Loops without a
+ * post-mortem yield `latest_post_mortem: null`; loops that fired one carry the
+ * engine's typed verdict.
+ */
+export function listLoopsWithStats(sqlite: Sqlite, opts: { limit?: number } = {}): LoopWithStats[] {
+  const limit = opts.limit ?? 200;
+  const rows = sqlite.prepare(
+    `SELECT
+       l.id, l.template_id, l.status, l.envelope, l.envelope_consumed,
+       l.child_pid, l.prompt, l.created_at, l.updated_at,
+       pm.payload AS pm_payload, pm.created_at AS pm_created_at
+     FROM loops l
+     LEFT JOIN artifacts pm
+       ON pm.id = (
+         SELECT a.id FROM artifacts a
+         WHERE a.loop_id = l.id AND a.kind = 'post_mortem'
+         ORDER BY a.created_at DESC LIMIT 1
+       )
+     ORDER BY l.created_at DESC
+     LIMIT ?`
+  ).all(limit) as Array<{
+    id: string; template_id: string; status: string; envelope: string;
+    envelope_consumed: string; child_pid: number | null; prompt: string;
+    created_at: string; updated_at: string;
+    pm_payload: string | null; pm_created_at: string | null;
+  }>;
+  return rows.map(row => {
+    const consumed = JSON.parse(row.envelope_consumed) as EnvelopeUsage;
+    let latest_post_mortem: LoopRowStats['latest_post_mortem'] = null;
+    if (row.pm_payload && row.pm_created_at) {
+      try {
+        const payload = JSON.parse(row.pm_payload) as { verdict?: string; flags?: unknown };
+        const v = payload.verdict;
+        if (v === 'success' || v === 'partial' || v === 'failure') {
+          latest_post_mortem = {
+            verdict: v,
+            flags: Array.isArray(payload.flags) ? payload.flags.filter((f): f is string => typeof f === 'string') : [],
+            created_at: row.pm_created_at,
+          };
+        }
+      } catch { /* corrupt payload — surface as no post-mortem */ }
+    }
+    return {
+      id: row.id,
+      template_id: row.template_id,
+      status: row.status as LoopStatus,
+      envelope: JSON.parse(row.envelope) as Envelope,
+      envelope_consumed: consumed,
+      child_pid: row.child_pid,
+      prompt: row.prompt,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      stats: {
+        cost: consumed.cost_usd,
+        cycles: consumed.cycles_count,
+        sources: consumed.sources_count,
+        last_step_at: row.updated_at,
+        latest_post_mortem,
+      },
+    };
+  });
+}
+
 export function getLoop(sqlite: Sqlite, id: LoopId): Loop | null {
   const row = sqlite.prepare(
     'SELECT id, template_id, status, envelope, envelope_consumed, child_pid, prompt, created_at, updated_at FROM loops WHERE id = ?'

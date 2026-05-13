@@ -27,13 +27,15 @@ export { generateDocument, readLatestDocument } from './document.js';
 export type { DocumentPayload } from './document.js';
 
 export {
-  createLoop, getLoop, listLoops, updateLoopStatus, updateLoopChildPid,
+  createLoop, getLoop, listLoops, listLoopsWithStats,
+  updateLoopStatus, updateLoopChildPid,
   bumpUsage, readState,
   createCycle, getCycle, listCycles, findInProgressCycle,
   markCycleRunning, markCycleFinalized,
   createArtifact, getArtifact, listArtifacts,
   createMilestone, listMilestones,
 } from './db.js';
+export type { LoopRowStats, LoopWithStats } from './db.js';
 
 export { runLoop } from './engine.js';
 export type { LoopRunResult } from './engine.js';

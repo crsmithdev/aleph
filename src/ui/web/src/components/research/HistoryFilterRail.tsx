@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import type { QuestionShape, TopicCluster } from '../../api/research-hooks';
+import type { QuestionShape } from '../../api/research-hooks';
 
 export type StatusValue = 'active' | 'paused' | 'exhausted' | 'halted' | 'completed';
 export type VerdictValue = 'pass' | 'flag' | 'halt';
@@ -38,21 +38,11 @@ const STARTED_OPTIONS: { value: StartedFilter; label: string }[] = [
 
 export type StartedFilter = 'all' | '24h' | '7d' | '30d' | '90d';
 
-const TOPIC_DOTS: Record<TopicCluster, string> = {
-  'AI / LLM tooling': 'bg-accent',
-  'Music history': 'bg-blue-400',
-  'Databases': 'bg-success',
-  'Audio & DSP': 'bg-warning',
-  'Personal infra': 'bg-orange-400',
-  'Misc': 'bg-text-muted',
-};
-
 export interface HistoryFilters {
   search: string;
   status: Set<StatusValue>;
   shape: Set<QuestionShape>;
   verdict: Set<VerdictValue>;
-  topic: Set<TopicCluster>;
   costBand: Set<CostBand>;
   started: StartedFilter;
 }
@@ -62,7 +52,6 @@ export const initialFilters: HistoryFilters = {
   status: new Set(),
   shape: new Set(),
   verdict: new Set(),
-  topic: new Set(),
   costBand: new Set(),
   started: 'all',
 };
@@ -75,7 +64,6 @@ interface Props {
     status: Record<StatusValue, number>;
     shape: Partial<Record<QuestionShape, number>>;
     verdict: Record<VerdictValue, number>;
-    topic: Map<TopicCluster, number>;
     costBand: Record<CostBand, number>;
   };
 }
@@ -151,24 +139,6 @@ export function HistoryFilterRail({ filters, onChange, counts }: Props) {
             onClick={() => onChange({ ...filters, verdict: toggle(filters.verdict, o.value) })}
           />
         ))}
-      </Group>
-
-      <Group label="Topic cluster">
-        {Array.from(counts.topic.entries())
-          .sort((a, b) => b[1] - a[1])
-          .map(([cluster, count]) => (
-            <Option
-              key={cluster}
-              label={cluster}
-              dot={TOPIC_DOTS[cluster]}
-              count={count}
-              active={filters.topic.has(cluster)}
-              onClick={() => onChange({ ...filters, topic: toggle(filters.topic, cluster) })}
-            />
-          ))}
-        {counts.topic.size === 0 && (
-          <div className="text-xs text-text-muted italic px-2">No clusters yet</div>
-        )}
       </Group>
 
       <Group label="Cost band" last>

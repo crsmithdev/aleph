@@ -11,7 +11,6 @@ import {
   useResearchStats,
   type ResearchQuery,
   type QuestionShape,
-  type TopicCluster,
 } from '../../api/research-hooks';
 import { ComposeBox } from '../../components/research/ComposeBox';
 import { PageHeader, PageTitle } from '../../components/layout/PageHeader';
@@ -671,10 +670,6 @@ function applyFilters(rows: ResearchQuery[], f: HistoryFilters): ResearchQuery[]
       const v = deriveVerdict(q);
       if (!v || !f.verdict.has(v)) return false;
     }
-    if (f.topic.size > 0) {
-      const c = q.topic_cluster?.cluster ?? null;
-      if (!c || !f.topic.has(c)) return false;
-    }
     if (f.costBand.size > 0) {
       if (!f.costBand.has(costBandFor(q.stats?.cost ?? 0))) return false;
     }
@@ -744,7 +739,6 @@ function computeCounts(rows: ResearchQuery[]) {
   };
   const shape: Partial<Record<QuestionShape, number>> = {};
   const verdict: Record<VerdictValue, number> = { pass: 0, flag: 0, halt: 0 };
-  const topic = new Map<TopicCluster, number>();
   const costBand: Record<CostBand, number> = { lt_25: 0, '25_to_100': 0, '100_to_200': 0, gt_200: 0 };
 
   for (const q of rows) {
@@ -754,19 +748,16 @@ function computeCounts(rows: ResearchQuery[]) {
     }
     const v = deriveVerdict(q);
     if (v) verdict[v]++;
-    const c = q.topic_cluster?.cluster;
-    if (c) topic.set(c, (topic.get(c) ?? 0) + 1);
     costBand[costBandFor(q.stats?.cost ?? 0)]++;
   }
-  return { status, shape, verdict, topic, costBand };
+  return { status, shape, verdict, costBand };
 }
 
 function exportCsv(rows: ResearchQuery[]): void {
-  const header = ['id', 'title', 'prompt', 'shape', 'topic', 'status', 'started', 'findings', 'cost_usd', 'duration_ms', 'verdict'];
+  const header = ['id', 'title', 'prompt', 'shape', 'status', 'started', 'findings', 'cost_usd', 'duration_ms', 'verdict'];
   const lines: string[] = [header.join(',')];
   for (const q of rows) {
     const shapes = (q.question_shape?.shapes ?? []).join('|');
-    const topic = q.topic_cluster?.cluster ?? '';
     const verdict = deriveVerdict(q) ?? '';
     const dur = computeDurationMs(q) ?? '';
     const fields = [
@@ -774,7 +765,6 @@ function exportCsv(rows: ResearchQuery[]): void {
       csvEscape(q.title),
       csvEscape(q.prompt),
       shapes,
-      csvEscape(topic),
       q.status,
       q.created_at,
       String(q.stats?.findings ?? 0),

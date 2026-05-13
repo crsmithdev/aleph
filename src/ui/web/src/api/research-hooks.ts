@@ -9,12 +9,13 @@
  *   - useResearchDefaults / useUpdateResearchDefaults / useResetResearchDefaults
  *     → `/api/research/defaults`.
  *
- * `QueryStats`, `PromptHints`, `ShapeAnalysis`, `TopicClusterAnalysis` are
- * never populated by the loops adapter — they're typed nulls so the History
- * table's shape/topic/findings/cost/verdict columns can render dashes without
- * per-row branching. Folding the History/Landing pages onto a native loops
- * shape is a future migration; the adapter is the seam that keeps it from
- * blocking everything else.
+ * `PromptHints` and `ShapeAnalysis` are loop-irrelevant — they're surfaced as
+ * null so the History table's shape column renders dashes without per-row
+ * branching. `QueryStats` is populated by the loops list endpoint: cost +
+ * cycles_count come straight from `envelope_consumed`; `latest_post_mortem`
+ * is joined from the latest `kind: 'post_mortem'` artifact per loop and its
+ * verdict is mapped from the engine's `success | partial | failure` vocab
+ * onto the UI's `pass | flag | halt` triad.
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -30,7 +31,7 @@ export interface QueryStats {
   cost: number;
   last_step_at: string | null;
   findings_by_day: number[];
-  latest_post_mortem: { verdict: 'pass' | 'flag'; flags: string[]; created_at: string } | null;
+  latest_post_mortem: { verdict: 'pass' | 'flag' | 'halt'; flags: string[]; created_at: string } | null;
 }
 
 export type PromptShape = 'answer' | 'list' | 'table' | 'brief' | 'dataset';
@@ -60,30 +61,6 @@ export interface ShapeAnalysis {
   confidence: number;
 }
 
-/** Coarse subject-matter cluster paired with classifier confidence.
- *  Distinct from `ShapeAnalysis` (structural). */
-export interface TopicClusterAnalysis {
-  cluster: TopicCluster;
-  confidence: number;
-}
-
-export type TopicCluster =
-  | 'AI / LLM tooling'
-  | 'Music history'
-  | 'Databases'
-  | 'Audio & DSP'
-  | 'Personal infra'
-  | 'Misc';
-
-export const TOPIC_CLUSTERS: readonly TopicCluster[] = [
-  'AI / LLM tooling',
-  'Music history',
-  'Databases',
-  'Audio & DSP',
-  'Personal infra',
-  'Misc',
-] as const;
-
 export interface ResearchQuery {
   id: string;
   title: string;
@@ -92,7 +69,6 @@ export interface ResearchQuery {
   prompt_super_short: string | null;
   prompt_hints: PromptHints;
   question_shape: ShapeAnalysis | null;
-  topic_cluster: TopicClusterAnalysis | null;
   status: 'active' | 'paused' | 'exhausted' | 'halted' | 'completed' | 'archived';
   config: Record<string, unknown>;
   summary: string;
@@ -233,6 +209,13 @@ export function useResetResearchDefaults() {
 
 // ---- Queries (loops adapted to ResearchQuery shape) ---------------------
 
+/**
+ * What `/api/loops` returns per row. `stats` is the per-loop summary the
+ * server computes by joining envelope_consumed (cost / cycles) and the
+ * latest post_mortem artifact (verdict / flags). Absent when no post-mortem
+ * has fired yet — the adapter degrades to "stats present, latest_post_mortem
+ * null" so verdict rendering still works.
+ */
 interface LoopRow {
   id: string;
   template_id: string;
@@ -242,6 +225,17 @@ interface LoopRow {
   envelope_consumed: Record<string, number>;
   created_at: string;
   updated_at: string;
+  stats?: {
+    cost: number;
+    cycles: number;
+    sources: number;
+    last_step_at: string | null;
+    latest_post_mortem: {
+      verdict: 'success' | 'partial' | 'failure';
+      flags: string[];
+      created_at: string;
+    } | null;
+  };
 }
 
 /** Map a loop's engine status onto `ResearchQuery`'s status union so the
@@ -258,12 +252,42 @@ function mapLoopStatus(s: string): ResearchQuery['status'] {
   }
 }
 
+/** Engine post-mortem vocab (success / partial / failure) → UI verdict
+ *  triad (pass / flag / halt). The UI's third bucket — halt — is otherwise
+ *  derived from `status === 'halted'` (see ResearchLandingPage.deriveVerdict);
+ *  here it captures a post-mortem that explicitly returned `failure`. */
+function mapVerdict(v: 'success' | 'partial' | 'failure'): 'pass' | 'flag' | 'halt' {
+  switch (v) {
+    case 'success': return 'pass';
+    case 'partial': return 'flag';
+    case 'failure': return 'halt';
+  }
+}
+
 /** Adapter: present a `loops` row as if it were a `ResearchQuery` so the
  *  unified `/research/history` table can render it with no per-row branching.
- *  Loops don't carry pre-detected shape/topic — surfaced as null here; the
- *  table renders the dash. Config / summary / document / user_notes are
- *  stubbed (loops haven't collapsed them onto the schedule yet). */
+ *  Loops don't carry pre-detected question_shape — surfaced as null here; the
+ *  shape column renders the dash. Config / summary / document / user_notes
+ *  are stubbed (loops haven't collapsed them onto the schedule yet). */
 function loopAsQuery(loop: LoopRow): ResearchQuery {
+  const cost = loop.stats?.cost ?? loop.envelope_consumed?.cost_usd ?? 0;
+  const cycles = loop.stats?.cycles ?? loop.envelope_consumed?.cycles_count ?? 0;
+  const sources = loop.stats?.sources ?? 0;
+  const pm = loop.stats?.latest_post_mortem ?? null;
+  const stats: QueryStats = {
+    findings: cycles,
+    concepts: 0,
+    sources,
+    threads: 0,
+    cost,
+    last_step_at: loop.stats?.last_step_at ?? loop.updated_at,
+    findings_by_day: [],
+    latest_post_mortem: pm ? {
+      verdict: mapVerdict(pm.verdict),
+      flags: pm.flags,
+      created_at: pm.created_at,
+    } : null,
+  };
   return {
     id: loop.id,
     title: loop.prompt || loop.id,
@@ -272,7 +296,6 @@ function loopAsQuery(loop: LoopRow): ResearchQuery {
     prompt_super_short: null,
     prompt_hints: {} as PromptHints,
     question_shape: null,
-    topic_cluster: null,
     status: mapLoopStatus(loop.status),
     config: {},
     summary: '',
@@ -280,6 +303,7 @@ function loopAsQuery(loop: LoopRow): ResearchQuery {
     user_notes: '',
     created_at: loop.created_at,
     updated_at: loop.updated_at,
+    stats,
   };
 }
 
