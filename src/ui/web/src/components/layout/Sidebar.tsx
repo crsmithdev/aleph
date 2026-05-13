@@ -144,7 +144,7 @@ export function Sidebar() {
           className="flex items-center p-1 text-text-muted hover:text-text-primary hover:bg-bg-tertiary rounded transition-colors"
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          <Icon name={collapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'} size="sm" />
+          <span className="font-heading text-2xl font-bold leading-tight" aria-hidden>{collapsed ? '»' : '«'}</span>
         </button>
       </div>
 
