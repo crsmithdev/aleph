@@ -150,10 +150,10 @@ Eight phases. Phases 1–6 additive (old engine still runs). Phase 7 single-pass
 | 2 — Research + monitor templates | ✅ Landed | Both templates run end-to-end via the loop engine. |
 | 3 — Output-shape enforcement | ✅ Landed | `output_shape` detected at session create; renderer gates "done" via `validateShape`. |
 | 4 — Adaptive planner | ✅ Landed | `planner.ts` ships `{canon, branches, per_branch_budget, perturbation_weights, milestone_plan}`; `(shape × topic)` lookup and 6-cluster taxonomy deleted. |
-| 5 — Schedule as universal loop config + editor | 🟡 Partial | Schedule artifact persists `{output_shape, plan, created_with_mode?}`; envelope / models / perturbation_config / flags / predecessor_id / locked-field mechanic still on `SessionConfig`. Schedule view is read-only. |
-| 6 — UI rewrite | 🟡 Partial | Compose-box mode row, Activity tab as first-class live view, History stats, mode plumbing all landed. InferredPanel, Schedule editor, sidebar IA rename, WorkersPage deletion, Monitors page all still pending. |
-| 7 — Cutover | 🟡 Partial | `dropLegacyTables` wipes the pre-loops schema on every boot; `TopicCluster` deleted from UI. WorkersPage / `/api/research/defaults` legacy SessionConfig surface / `/api/research/config` legacy knobs still alive. |
-| 8 — v1 complete | ⬜ Not started | Gated on Phases 5–7. |
+| 5 — Schedule as universal loop config + editor | 🟡 Partial (5a landed) | Schedule artifact carries `envelope`, `models`, `flags`, `created_with_mode`. run.ts reads models from schedule (replaces SessionConfig path). Schedule view editor (5b), milestone re-planning + predecessor_id chaining (5c), and the locked-field mechanic remain. |
+| 6 — UI rewrite | 🟡 Partial | Compose-box mode row, Activity tab as first-class live view, History stats, mode plumbing, sidebar IA reorganization (Research / Monitors / Providers), WorkersPage deletion, Monitors page all landed. InferredPanel and the Schedule view editor (depends on 5b) remain. |
+| 7 — Cutover | ✅ Landed | `dropLegacyTables` wipes the pre-loops schema on every boot; `TopicCluster` deleted; `SessionConfig` collapsed from 25 fields to 2 (`iteration_check_model`, `post_mortem_model`); `/api/research/config` slimmed to provider keys; `ResearchDefaultsPanel` / `ResearchConfigPage` collapse to the residual surface; `ResearchWorkersPage` deleted. |
+| 8 — v1 complete | ⬜ Not started | Gated on 5b / 5c + the remaining Phase 6 InferredPanel work. |
 
 **Phase 1 — Schema + engine skeleton.** ✅ Landed.
 DDL for `loops`, `cycles`, `artifacts`, `cycle_ledger`, `milestones`. Engine core: envelope ticking, cycle dispatch, ledger reads, milestone hook, child-process spawn from API. No templates yet.
