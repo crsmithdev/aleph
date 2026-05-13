@@ -22,13 +22,14 @@ import { applyResearchDDL } from '../ddl.js';
 import { OpenRouterProvider } from '../providers/openrouter.js';
 import { onResearchEvent, type ResearchEvent } from '../services/events.js';
 import { getDefaults } from '../services/defaults.js';
-import { bumpUsage, createArtifact, getLoop, readState, updateLoopStatus } from './db.js';
+import { bumpUsage, createArtifact, getLoop, listArtifacts, readState, updateLoopStatus } from './db.js';
 import { generateDocument } from './document.js';
 import { runLoop } from './engine.js';
 import type { LLMProvider } from './llm.js';
 import type { Sqlite } from '@construct/data';
-import { ensureScheduleArtifact } from './shape.js';
+import { ensureScheduleArtifact, readScheduleFromArtifacts } from './shape.js';
 import { buildTemplate, type TemplateDeps, type TemplateOverrides } from './templates/registry.js';
+import type { ScheduleModels } from './types.js';
 
 /**
  * Wire production deps for the given template. Honours OPENROUTER_API_KEY +
@@ -105,19 +106,51 @@ async function main() {
   // we attach it here. Without this, follow-up picks emit as live events but
   // don't survive a page reload (decision_log stays planner-only).
   deps.sqlite = sqlite;
-  // Pull model defaults from research_defaults so the user's persisted choice
-  // for iteration_check_model / post_mortem_model wins over the template's
-  // baked-in default. CLI flags (parseArgs) still override these.
+
+  // Phase 5a — schedule.models is the canonical per-loop model record.
+  // research_defaults supplies the initial values when a loop is first
+  // planned; once the schedule artifact exists, its `models` field wins
+  // over defaults. CLI flags (parseArgs) still override schedule choices.
+  let plannedModels: ScheduleModels | undefined;
   try {
     const defaults = getDefaults(sqlite);
-    if (overrides.iteration_check_model === undefined) {
-      overrides.iteration_check_model = defaults.iteration_check_model;
-    }
-    if (overrides.post_mortem_model === undefined) {
-      overrides.post_mortem_model = defaults.post_mortem_model;
-    }
+    plannedModels = {
+      iteration_check: defaults.iteration_check_model,
+      post_mortem: defaults.post_mortem_model,
+    };
   } catch (err) {
     process.stderr.write(`[run] getDefaults failed, using template baked-in models: ${(err as Error).message}\n`);
+  }
+
+  // Phase 3/4 — detect output_shape, run the planner, and persist on a
+  // schedule artifact before the engine runs. Idempotent: a respawn after
+  // crash skips re-detection. Templates with no schedule (noop) skip this
+  // entirely.
+  if (deps.llm) {
+    try {
+      await ensureScheduleArtifact(
+        sqlite, loop_id, loop.prompt, deps.llm,
+        undefined, undefined, loop.mode, plannedModels,
+      );
+    } catch (err) {
+      failLoop(sqlite, loop_id, `ensureScheduleArtifact: ${(err as Error).message}`);
+      process.exit(2);
+      return;
+    }
+  }
+
+  // Phase 5a — read scheduled models back onto template overrides. The
+  // schedule artifact is now the source of truth; if the loop has one,
+  // its `models.iteration_check` / `models.post_mortem` win over CLI
+  // overrides that came in empty.
+  const sched = readScheduleFromArtifacts(listArtifacts(sqlite, loop_id, 'schedule'));
+  if (sched?.models) {
+    if (overrides.iteration_check_model === undefined && sched.models.iteration_check) {
+      overrides.iteration_check_model = sched.models.iteration_check;
+    }
+    if (overrides.post_mortem_model === undefined && sched.models.post_mortem) {
+      overrides.post_mortem_model = sched.models.post_mortem;
+    }
   }
 
   let template;
@@ -132,19 +165,6 @@ async function main() {
     failLoop(sqlite, loop_id, `unknown template_id: ${loop.template_id}`);
     process.exit(2);
     return;
-  }
-
-  // Phase 3 — detect output_shape and persist on a schedule artifact before
-  // the engine runs. Idempotent: a respawn after crash skips re-detection.
-  // Templates with no schedule (noop) skip this entirely.
-  if (deps.llm) {
-    try {
-      await ensureScheduleArtifact(sqlite, loop_id, loop.prompt, deps.llm, undefined, undefined, loop.mode);
-    } catch (err) {
-      failLoop(sqlite, loop_id, `ensureScheduleArtifact: ${(err as Error).message}`);
-      process.exit(2);
-      return;
-    }
   }
 
   // Pipe every event to stdout. The supervisor re-emits these in the API

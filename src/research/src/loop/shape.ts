@@ -26,11 +26,15 @@
  */
 
 import type { Sqlite } from '@construct/data';
-import { bumpUsage, createArtifact, listArtifacts } from './db.js';
+import { bumpUsage, createArtifact, getLoop, listArtifacts } from './db.js';
 import type { LLMProvider } from './llm.js';
 import { withCostTracker } from './cost.js';
 import { planLoop } from './planner.js';
-import type { Artifact, LoopId, LoopState, OutputShape, SchedulePayload } from './types.js';
+import { MODE_PROFILES, isMode } from './modes.js';
+import type {
+  Artifact, LoopId, LoopState, OutputShape,
+  ScheduleModels, SchedulePayload,
+} from './types.js';
 
 // See planner.ts for why we don't use a reasoning model here — same issue
 // (empty content when max_tokens is consumed by reasoning).
@@ -166,6 +170,7 @@ export async function ensureScheduleArtifact(
   detectModel?: string,
   planModel?: string,
   mode?: string | null,
+  models?: ScheduleModels,
 ): Promise<SchedulePayload> {
   const existing = listArtifacts(sqlite, loop_id, 'schedule');
   if (existing.length > 0) {
@@ -181,9 +186,21 @@ export async function ensureScheduleArtifact(
   // artifact. Without these, the planner stays event-silent (unit-test mode).
   const plan = await planLoop(prompt, output_shape, tracker.llm, planModel, { loop_id, sqlite });
   if (tracker.total() > 0) bumpUsage(sqlite, loop_id, { cost_usd: tracker.total() });
+
+  // Phase 5a — capture envelope + models + flags onto the schedule payload.
+  // The engine still reads envelope from `loops.envelope` at runtime (fast path);
+  // this is the durable record of "what was configured when the schedule was
+  // built." Mode-derived flags (e.g. `dev` → `fake_llm: true`) come from
+  // MODE_PROFILES so the engine has a single read path for opt-in behaviours.
+  const loop = getLoop(sqlite, loop_id);
+  const envelope = loop?.envelope;
+  const modeFlags = mode && isMode(mode) ? MODE_PROFILES[mode].flags : undefined;
   const payload: SchedulePayload = {
     output_shape,
     plan,
+    ...(envelope ? { envelope } : {}),
+    ...(models ? { models } : {}),
+    ...(modeFlags ? { flags: modeFlags } : {}),
     ...(mode ? { created_with_mode: mode } : {}),
   };
   createArtifact(sqlite, {

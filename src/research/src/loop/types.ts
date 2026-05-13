@@ -189,19 +189,58 @@ export interface LoopSchedule {
 }
 
 /**
+ * Per-hook model selection. Phase 5 promotes these from a mix of template
+ * options + `SessionConfig.{iteration_check_model,post_mortem_model}` to a
+ * single field on the schedule artifact so the user can see and (eventually)
+ * edit per-loop model assignments in one place.
+ *
+ *   - `planner`        — drives `planLoop` (canon + branches + budget).
+ *   - `extractor`      — drives the research template's `processor` hook
+ *                        (search + synthesis) and `derivation` (follow-up
+ *                        framing). Phase-5 deliverable: "Cost-per-run drops
+ *                        because the extractor runs on a cheap model."
+ *   - `synthesizer`    — drives the document polish pass.
+ *   - `iteration_check`— milestone iteration-check hook.
+ *   - `post_mortem`    — natural-completion post-mortem hook.
+ *
+ * All fields are optional — `undefined` means "fall back to the template's
+ * baked-in default." This keeps the v1 default profile working while letting
+ * future Mode profiles populate per-mode model bundles without a schema bump.
+ */
+export interface ScheduleModels {
+  planner?: string;
+  extractor?: string;
+  synthesizer?: string;
+  iteration_check?: string;
+  post_mortem?: string;
+}
+
+/**
  * Payload of the `kind: 'schedule'` artifact written once at session-create
- * time. Phase 3 carries `output_shape`; Phase 4 adds `plan`. Phase 5 collapses
- * the rest of the per-loop knobs (envelope, models, perturbation_config,
- * flags, mode metadata) onto this same payload — anticipating that move now
- * avoids a DDL migration when the universal-config slice lands.
+ * time. Phase 3 carries `output_shape`; Phase 4 adds `plan`. Phase 5 adds
+ * `envelope`, `models`, `flags`, and `created_with_mode` so the schedule is
+ * the durable record of every per-loop knob — making it the single surface
+ * the Schedule view will edit in Phase 6.
+ *
+ * `loops.envelope` (DB column) remains the runtime fast-path the engine
+ * tracks consumption against; `envelope` here is the snapshot captured when
+ * the schedule was constructed — so re-plans can record what the envelope
+ * looked like at each version, and the locked-field mechanic (deferred) has
+ * a stable referent.
  */
 export interface SchedulePayload {
   output_shape: OutputShape;
   plan: LoopSchedule;
+  /** Envelope snapshot at construction time. Engine read path stays on
+   *  `loops.envelope`; this field is the audit / re-plan referent. */
+  envelope?: Envelope;
+  /** Per-hook model selection. `undefined` per field → template default. */
+  models?: ScheduleModels;
+  /** Forward-looking per-loop boolean opt-ins (e.g. `cached_planner`,
+   *  `fake_llm`). Engine ignores unknown keys. */
+  flags?: Record<string, boolean>;
   /** The mode preset that constructed the initial schedule. Metadata only —
-   *  the engine doesn't re-derive behaviour from this. Phase 5 will collapse
-   *  envelope / models / perturbation_config onto this payload too; for now
-   *  the mode label is the durable record of what the user picked. */
+   *  the engine doesn't re-derive behaviour from this. */
   created_with_mode?: string | null;
 }
 
