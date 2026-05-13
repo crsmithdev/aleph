@@ -31,6 +31,7 @@ import type { LLMProvider } from './llm.js';
 import { withCostTracker } from './cost.js';
 import { planLoop } from './planner.js';
 import { MODE_PROFILES, isMode } from './modes.js';
+import { buildGroundedPrompt, extractUrls, fetchUrlContents, type UrlFetcher } from './url-grounding.js';
 import type {
   Artifact, LoopId, LoopState, OutputShape, QuestionShape,
   ScheduleModels, SchedulePayload,
@@ -255,6 +256,7 @@ export async function ensureScheduleArtifact(
   planModel?: string,
   mode?: string | null,
   models?: ScheduleModels,
+  urlFetcher?: UrlFetcher,
 ): Promise<SchedulePayload> {
   const existing = listArtifacts(sqlite, loop_id, 'schedule');
   if (existing.length > 0) {
@@ -264,15 +266,26 @@ export async function ensureScheduleArtifact(
   // cost into the loop's envelope. Without this, the four cheap completions
   // per loop consume real USD invisibly.
   const tracker = withCostTracker(llm);
-  const [output_shape, question_shape, role] = await Promise.all([
+  // Phase 4 URL grounding — fetch any URLs in the prompt in parallel with
+  // the three classifiers, then splice page text into the planner's input.
+  // Detectors keep the original prompt; they classify the question itself,
+  // not the URL contents.
+  const urls = extractUrls(prompt);
+  const [output_shape, question_shape, role, fetchedUrls] = await Promise.all([
     detectOutputShape(prompt, tracker.llm, detectModel),
     detectQuestionShape(prompt, tracker.llm, detectModel),
     detectRole(prompt, tracker.llm, detectModel),
+    urls.length > 0 ? fetchUrlContents(urls, urlFetcher) : Promise.resolve([]),
   ]);
+  if (urls.length > 0) {
+    const useful = fetchedUrls.filter(f => f.text.length >= 100).length;
+    process.stderr.write(`[shape] grounding ${useful}/${urls.length} URL${urls.length > 1 ? 's' : ''} in prompt\n`);
+  }
+  const plannerPrompt = buildGroundedPrompt(prompt, fetchedUrls);
   // Pass loop_id + sqlite so the planner emits `decision` events for each
   // canon entry / branch pick AND appends them to the loop's decision_log
   // artifact. Without these, the planner stays event-silent (unit-test mode).
-  const plan = await planLoop(prompt, output_shape, tracker.llm, planModel, { loop_id, sqlite });
+  const plan = await planLoop(plannerPrompt, output_shape, tracker.llm, planModel, { loop_id, sqlite });
   if (tracker.total() > 0) bumpUsage(sqlite, loop_id, { cost_usd: tracker.total() });
 
   // Phase 5a — capture envelope + models + flags onto the schedule payload.

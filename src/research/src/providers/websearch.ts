@@ -203,7 +203,7 @@ async function fetchViaJina(url: string, apiKey: string): Promise<{ page: PageCo
   }
 }
 
-async function fetchViaReadability(url: string): Promise<string> {
+export async function fetchViaReadability(url: string): Promise<string> {
   try {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(10_000),

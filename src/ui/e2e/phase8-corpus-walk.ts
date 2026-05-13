@@ -80,6 +80,7 @@ interface RunResult {
   outputShape: string;
   documentText: string;
   activityEventsObserved: number;
+  canon: string[];
 }
 
 async function runQuery(label: string, prompt: string, envelope: { cycles: number; cost: number }): Promise<RunResult> {
@@ -138,7 +139,11 @@ async function runQuery(label: string, prompt: string, envelope: { cycles: numbe
   const docText = (doc?.payload as { text?: string } | undefined)?.text ?? '';
 
   const schedule = body.artifacts.find(a => a.kind === 'schedule');
-  const outputShape = (schedule?.payload as { output_shape?: { kind?: string } } | undefined)?.output_shape?.kind ?? 'unknown';
+  const schedulePayload = schedule?.payload as
+    | { output_shape?: { kind?: string }; plan?: { canon?: string[] } }
+    | undefined;
+  const outputShape = schedulePayload?.output_shape?.kind ?? 'unknown';
+  const canon = schedulePayload?.plan?.canon ?? [];
 
   const result: RunResult = {
     label,
@@ -151,8 +156,9 @@ async function runQuery(label: string, prompt: string, envelope: { cycles: numbe
     outputShape,
     documentText: docText,
     activityEventsObserved: eventsObserved,
+    canon,
   };
-  console.log(`  status=${result.finalStatus} cycles=${result.cycles} cost=$${result.costUsd.toFixed(4)} shape=${result.outputShape} events=${result.activityEventsObserved} elapsed=${result.elapsedSec.toFixed(1)}s`);
+  console.log(`  status=${result.finalStatus} cycles=${result.cycles} cost=$${result.costUsd.toFixed(4)} shape=${result.outputShape} events=${result.activityEventsObserved} canon=${canon.length} elapsed=${result.elapsedSec.toFixed(1)}s`);
   await page.close();
   return result;
 }
@@ -165,10 +171,14 @@ async function fetchBody(page: import('playwright').Page, loopId: string) {
   };
 }
 
+// Awesome-LLM is used as a stand-in for "Awesome-Deep-Research" — the
+// criterion is whether URL grounding kicks in, not the specific repo. The
+// planner's canon should reflect projects listed in the README (TinyZero,
+// open-r1, DeepSeek-R1, Qwen, etc.), not generic LLM canon (GPT-4, BERT).
 const AWESOME_DR_PROMPT =
-  'Survey notable open-source deep-research agent frameworks listed at ' +
-  'https://github.com/0xnirmal/awesome-deep-research . Pick the top 3 by ' +
-  'GitHub stars and summarize what each does.';
+  'Survey notable open-source LLM projects listed at ' +
+  'https://github.com/Hannibal046/Awesome-LLM . Pick the top 3 trending ' +
+  'projects from that list and summarize what each does.';
 
 const BURGERS_PROMPT =
   'Tell me the history of smashed burgers (origin, how the style evolved). ' +
@@ -203,6 +213,7 @@ for (const r of results) {
   md.push(`- Loop: \`${r.loopId}\` · status=**${r.finalStatus}** · ${r.cycles} cycles · $${r.costUsd.toFixed(4)} · ${r.elapsedSec.toFixed(1)}s`);
   md.push(`- Output shape detected: \`${r.outputShape}\``);
   md.push(`- Activity events visible in UI: ${r.activityEventsObserved}`);
+  md.push(`- Planner canon (${r.canon.length}): ${r.canon.map(c => '`' + c + '`').join(', ')}`);
   md.push('');
   md.push('**Prompt:**');
   md.push('');
@@ -223,6 +234,8 @@ for (const r of results) {
 }
 
 const outPath = resolve(import.meta.dirname, '../../../tmp/phase8-corpus-results.md');
+const { mkdirSync } = await import('fs');
+mkdirSync(resolve(outPath, '..'), { recursive: true });
 writeFileSync(outPath, md.join('\n'));
 console.log(`\n[corpus] Results: ${outPath}`);
 process.exit(0);

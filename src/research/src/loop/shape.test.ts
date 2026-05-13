@@ -140,6 +140,76 @@ describe('readScheduleFromArtifacts — payload roundtrip', () => {
   });
 });
 
+// ---- URL grounding integration ----------------------------------------------
+
+describe('ensureScheduleArtifact — URL grounding', () => {
+  let sqlite: ReturnType<typeof newDb>;
+  beforeEach(() => { sqlite = newDb(); });
+
+  function llmDispatch(planJson: string): FakeLLMProvider {
+    return new FakeLLMProvider({
+      complete: (_model, prompt) => {
+        if (prompt.startsWith('Plan a research loop')) return planJson;
+        if (prompt.startsWith('Classify the structural shape')) return '{"shape":"survey"}';
+        if (prompt.startsWith('Pick a 1-4 word professional role')) return '{"role":"Researcher"}';
+        return '{"kind":"prose"}';
+      },
+    });
+  }
+
+  test('prompt without URLs leaves planner prompt unchanged', async () => {
+    const llm = llmDispatch('{"canon":[],"branches":[]}');
+    const fetcher = async () => 'should not be called';
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'plain question, no URLs' });
+    await ensureScheduleArtifact(
+      sqlite, loop.id, loop.prompt, llm,
+      undefined, undefined, undefined, undefined, fetcher,
+    );
+    // Last complete call is the planner. Its prompt should NOT contain the
+    // grounding marker if no URLs were detected.
+    expect(llm.lastCompletePrompt).toContain('Plan a research loop');
+    expect(llm.lastCompletePrompt).not.toContain('Referenced URL contents');
+  });
+
+  test('prompt with a URL augments only the planner prompt', async () => {
+    const llm = llmDispatch('{"canon":["repo-listed-project"],"branches":[]}');
+    const loop = createLoop(sqlite, {
+      template_id: 'research',
+      prompt: 'Survey frameworks at https://github.com/x/awesome-list . Top 3 by stars.',
+    });
+    const fetcher = async (url: string) => {
+      expect(url).toBe('https://github.com/x/awesome-list');
+      return 'AwesomeFrameworkA — Foo. AwesomeFrameworkB — Bar. AwesomeFrameworkC — Baz.'.repeat(5);
+    };
+    await ensureScheduleArtifact(
+      sqlite, loop.id, loop.prompt, llm,
+      undefined, undefined, undefined, undefined, fetcher,
+    );
+    // Planner is the last complete call by construction; assert it sees
+    // the augmented prompt.
+    expect(llm.lastCompletePrompt).toContain('Plan a research loop');
+    expect(llm.lastCompletePrompt).toContain('Referenced URL contents');
+    expect(llm.lastCompletePrompt).toContain('AwesomeFrameworkA');
+  });
+
+  test('failed URL fetch silently degrades — planner sees original prompt', async () => {
+    const llm = llmDispatch('{"canon":[],"branches":[]}');
+    const loop = createLoop(sqlite, {
+      template_id: 'research',
+      prompt: 'Survey the projects at https://offline.invalid/x . Top 3.',
+    });
+    const fetcher = async () => { throw new Error('synthetic network failure'); };
+    const payload = await ensureScheduleArtifact(
+      sqlite, loop.id, loop.prompt, llm,
+      undefined, undefined, undefined, undefined, fetcher,
+    );
+    // Loop didn't crash; schedule artifact landed; planner prompt sees no
+    // grounding block because all fetches came back empty.
+    expect(payload).toBeDefined();
+    expect(llm.lastCompletePrompt).not.toContain('Referenced URL contents');
+  });
+});
+
 // ---- Validator unit tests ---------------------------------------------------
 
 function seedCycleOutput(sqlite: ReturnType<typeof newDb>, loop_id: string, text: string) {

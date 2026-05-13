@@ -12,6 +12,10 @@ src/memory/signals/
 src/eval/results/
 docs/SCRATCH.md
 
+# One-off scratch / test output
+tmp/
+src/ui/tmp/
+
 # Dashboard
 node_modules/
 dist/

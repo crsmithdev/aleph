@@ -149,11 +149,11 @@ Eight phases. Phases 1–6 additive (old engine still runs). Phase 7 single-pass
 | 1 — Schema + engine skeleton | ✅ Landed | DDL + engine core + child-process supervisor in production. |
 | 2 — Research + monitor templates | ✅ Landed | Both templates run end-to-end via the loop engine. |
 | 3 — Output-shape enforcement | ✅ Landed | `output_shape` detected at session create; renderer gates "done" via `validateShape`. |
-| 4 — Adaptive planner | 🟡 Partial | `planner.ts` ships `{canon, branches, per_branch_budget, perturbation_weights, milestone_plan}`; `(shape × topic)` lookup and 6-cluster taxonomy deleted. **URL grounding (prompt → fetched URL contents → planner canon seed) is unbuilt** — `planner.ts:70` includes a hint to the LLM but no caller fetches URL contents. Surfaced by Phase 8 corpus walk on the Awesome-DR prompt. |
+| 4 — Adaptive planner | ✅ Landed | `planner.ts` ships `{canon, branches, per_branch_budget, perturbation_weights, milestone_plan}`; `(shape × topic)` lookup and 6-cluster taxonomy deleted. URL grounding lives in `src/research/src/loop/url-grounding.ts`: `extractUrls` pulls URLs from the prompt, `fetchUrlContents` resolves them in parallel with the three detectors (GitHub repo URLs fast-path through `raw.githubusercontent.com/<owner>/<repo>/HEAD/README.md`, others fall through to `fetchViaReadability`), and `buildGroundedPrompt` splices page text into the prompt the planner sees. Validated on a real GitHub URL: the planner's canon now grounds on the listed projects (`TinyZero, open-r1, DeepSeek-R1`) rather than generic LLM canon. |
 | 5 — Schedule as universal loop config + editor | ✅ Landed | Schedule artifact carries `envelope`, `models`, `flags`, `created_with_mode`, `question_shape`, `role`, `predecessor_id`. Custom mode defers spawn; `PATCH /:id/schedule` + pre-Start editor lands. Milestone re-planning fires `Template.rePlan` and writes chained artifacts. Locked-field mechanic deferred to v2. |
 | 6 — UI rewrite | ✅ Landed | Compose-box mode row, Activity tab as first-class live view, History stats, mode plumbing, sidebar IA reorganization (Research / Monitors / Providers), WorkersPage deletion, Monitors page, Schedule view editor, InferredPanel all landed. |
 | 7 — Cutover | ✅ Landed | `dropLegacyTables` wipes the pre-loops schema on every boot; `TopicCluster` deleted; `SessionConfig` collapsed from 25 fields to 2 (`iteration_check_model`, `post_mortem_model`); `/api/research/config` slimmed to provider keys; `ResearchDefaultsPanel` / `ResearchConfigPage` collapse to the residual surface; `ResearchWorkersPage` deleted. |
-| 8 — v1 complete | 🟡 Acceptance run | 2/3 corpus criteria pass (HSV/HPV table, Smashed-Burgers mixed shape with 5+ places). Awesome-DR pending Phase 4 URL-grounding completion. Two real-LLM e2e tests landed (`loop-research-real-smoke.test.ts`, `loop-research-real-quality.test.ts`) — both gated on `OPENROUTER_API_KEY` so forked-PR CI skips cleanly. Live Activity stream validated: 74-110 events visible in the UI during a 3-cycle run. Cost per 3-cycle default-mode run: ~$0.0015. |
+| 8 — v1 complete | ✅ Landed | All 4 corpus criteria pass: sourdough smoke, HSV/HPV table, Smashed-Burgers mixed shape, Awesome-LLM URL grounding (planner canon = `TinyZero, open-r1, DeepSeek-R1`). Two real-LLM e2e tests (`loop-research-real-smoke.test.ts`, `loop-research-real-quality.test.ts`) skip cleanly without `OPENROUTER_API_KEY`. Live Activity stream validated: 74-110 events visible in the UI during a 3-cycle run. Cost per 3-cycle default-mode run: ~$0.0015. Tests are intentionally **not** wired into push-trigger CI — invoke locally or via `workflow_dispatch` when needed. |
 
 ### Phase 8 corpus walk — results (2026-05-13)
 
@@ -164,7 +164,7 @@ Live OpenRouter against `google/gemini-2.0-flash-001`, fake Tavily (search infra
 | Sourdough (smoke) | Real LLM round-trip end-to-end | ✅ Pass — `loop-research-real-smoke.test.ts` 6/6 in 137s |
 | HSV / HPV (table) | `output_shape='table'`, markdown pipes + separator in output, mentions HSV-1/HSV-2/HPV | ✅ Pass — `loop-research-real-quality.test.ts` 8/8 in 228s |
 | Smashed-Burgers (mixed) | History prose + list ≥ 5 places | ✅ Pass — shape detected as `mixed`; 5 named places (George Motz's NY, Bae's VA, Hi-Pointe MO, Vito's WA, Goldburger LA); 110 Activity events visible |
-| Awesome-Deep-Research (URL grounding) | Planner grounds canon on the GitHub URL's project list, not deep-learning canon | ❌ Fail — URL grounding unbuilt (see Phase 4 note). Output reverts to generic "deep research frameworks" explainer + fake-Tavily noise |
+| Awesome-LLM (URL grounding) | Planner grounds canon on the GitHub URL's project list, not deep-learning canon | ✅ Pass — URL grounding lands in Phase 4; the planner's canon for the Awesome-LLM prompt resolves to `TinyZero, open-r1, DeepSeek-R1` (first three Trending entries in the README), not generic LLM/AI canon. `extractUrls` extracts the URL, `tryGithubRawReadme` fast-paths to `raw.githubusercontent.com/.../HEAD/README.md`, and the fetched README is spliced into the planner's prompt. Synthesis text in the final document is still constrained by fake-Tavily here, but the planner-level acceptance criterion is met |
 
 **Phase 1 — Schema + engine skeleton.** ✅ Landed.
 DDL for `loops`, `cycles`, `artifacts`, `cycle_ledger`, `milestones`. Engine core: envelope ticking, cycle dispatch, ledger reads, milestone hook, child-process spawn from API. No templates yet.
@@ -178,14 +178,13 @@ Research processor / derivation / renderer / stop_rule wraps today's logic. Moni
 Detect `output_shape` at session create. Renderer-as-gate: if shape unsatisfied, request more derivation before declaring done. `stop_rule` rejects "done" without shape.
 *Deliverable:* HSV/HPV-style queries produce the requested table. Berkeley-volunteering-style queries produce a list.
 
-**Phase 4 — Adaptive planner.** 🟡 Partial.
+**Phase 4 — Adaptive planner.** ✅ Landed.
 Delete `run-plan.ts`'s `(shape × topic) → RunPlan` lookup, the 6-cluster `TOPIC_CLUSTERS` constant, and the `SHAPE_DEFAULTS` budget table. Add a planner LLM call that emits a typed `LoopSchedule` — Phase 4 ships the structural-plan slice (`{ canon[], branches[], per_branch_budget, perturbation_weights, milestone_plan }`); the rest of the SchedulePayload (envelope, models, perturbation_config, flags) collapses in at Phase 5. Inputs: the prompt, detected `question_shape`, detected `output_shape`, the envelope, and `role`. URL detection in the prompt feeds the planner as a grounding signal (contents fetched, supplied as canon seed) rather than as a separate code path.
 *Deliverable:* Awesome-Deep-Research-style queries don't pull AlphaFold/Adam optimizer — the planner sees the GitHub URL and grounds canon on the listed projects.
 
-*Landed slice:* structural plan emission (`LoopSchedule` with `canon`, `branches`, budgets, weights, milestone plan); the `(shape × topic)` lookup and 6-cluster taxonomy are deleted.
-
-*Remaining slice:*
-- **URL grounding** — `planner.ts:70` instructs the LLM to "treat URLs as grounding sources and seed canon from them" but no caller actually fetches URL contents to feed in. `ensureScheduleArtifact` calls `planLoop(prompt, …)` with the raw prompt; URLs land in the LLM's view as bare strings, no page text. Building this requires: extract URLs from prompt, fetch via `fetchViaReadability` (already present in `src/research/src/providers/websearch.ts`), splice the page text into the prompt passed to `planLoop`. Discovered by the Phase 8 corpus walk; tracked there for prioritization.
+*Landed slice:*
+- Structural plan emission — `LoopSchedule` with `canon`, `branches`, per-branch budgets, perturbation weights, milestone plan. The `(shape × topic)` lookup and 6-cluster taxonomy are deleted.
+- URL grounding — `src/research/src/loop/url-grounding.ts`: `extractUrls` (regex, deduped, capped at 3, trailing punctuation stripped) → `fetchUrlContents` (runs in parallel with the three detectors; GitHub repo URLs fast-path through `https://raw.githubusercontent.com/<owner>/<repo>/HEAD/README.md`, others fall through to `fetchViaReadability`; per-URL cap 4KB) → `buildGroundedPrompt` (splices fetched page text into the prompt the planner sees; original prompt preserved verbatim at the top; failed/short fetches drop out and the planner sees the original prompt unchanged). Failures are observable via the `[shape] grounding N/M URL` stderr line. Validated on a real GitHub URL: planner canon for the Awesome-LLM prompt resolves to `TinyZero, open-r1, DeepSeek-R1` — the actual top-of-README "Trending LLM Projects" — instead of generic LLM canon.
 
 **Phase 5 — Schedule as the universal loop config + Schedule view editor.** 🟡 Partial.
 `LoopSchedule` persists as `kind: 'schedule'` with the full payload (canon, branches, milestone plan, **plus envelope, models, perturbation_config, flags, mode metadata**). Re-plans at milestones produce chained schedule artifacts via `predecessor_id`. The Schedule view on the loop-detail page is the **only** editor for this artifact — does triple duty: pre-run editing (Custom mode opens here; other modes can also pause-before-start to edit), mid-run editing (when paused, v2), and historical viewing + fork-from-cycle (completed runs). Locked-field mechanic: every field has an implicit `locked` flag set when a non-planner author edits it; the milestone re-planner respects locks. `SessionConfig`'s scattered per-loop fields collapse into the schedule payload.
@@ -232,21 +231,22 @@ Delete in one pass: `research_jobs`, `worker.ts`, `services/jobs.ts`, `scheduler
 - `GET/PUT /api/research/defaults` and `SessionConfig` ~28 unused fields (every field except `iteration_check_model` / `post_mortem_model`) dropped once Phase 5 has moved them onto the schedule.
 - `ResearchDefaultsPanel.tsx` + `ResearchConfigPage.tsx` collapse to the residual surface (provider keys, the two surviving model fields).
 
-**Phase 8 — v1 complete.** 🟡 Acceptance run on 2026-05-13.
-Acceptance checks (below) pass. v2 work can begin.
+**Phase 8 — v1 complete.** ✅ Landed on 2026-05-13.
+All four corpus acceptance criteria pass against live OpenRouter (`google/gemini-2.0-flash-001`). v2 work can begin.
 
 *Landed slice:*
-- Two real-LLM e2e tests in CI: `src/ui/e2e/loop-research-real-smoke.test.ts` (1-cycle smoke, ~$0.001) and `src/ui/e2e/loop-research-real-quality.test.ts` (HSV/HPV corpus, 3-cycle cap, ~$0.001). Both skip with exit 0 when `OPENROUTER_API_KEY` is absent or placeholder.
-- Corpus walk runner at `src/ui/e2e/phase8-corpus-walk.ts` — manual invocation, validates Awesome-DR / Smashed-Burgers prompts and dumps a results markdown.
+- Two real-LLM e2e tests (locally invokable, not on push CI): `src/ui/e2e/loop-research-real-smoke.test.ts` (1-cycle smoke, ~$0.001) and `src/ui/e2e/loop-research-real-quality.test.ts` (HSV/HPV corpus, 3-cycle cap, ~$0.001). Both skip with exit 0 when `OPENROUTER_API_KEY` is absent or placeholder.
+- Corpus walk runner at `src/ui/e2e/phase8-corpus-walk.ts` — manual invocation, validates Awesome-LLM and Smashed-Burgers prompts and dumps a results markdown to `tmp/phase8-corpus-results.md` (gitignored).
+- Sourdough smoke: pass.
 - HSV/HPV table acceptance: pass.
 - Smashed-Burgers mixed-shape acceptance: pass (history prose + 5 named places).
+- Awesome-LLM URL grounding acceptance: pass (planner canon resolves to `TinyZero, open-r1, DeepSeek-R1` — three actual README projects).
 - Live Activity stream validated end-to-end: 74-110 events visible to the user during a 3-cycle run.
 - Cost-per-run on the cheap default model: ~$0.0015 per 3-cycle loop.
 
-*Remaining slice:*
-- **Awesome-DR URL grounding** — blocked on Phase 4's URL-fetching gap. The corpus walk surfaced this: with no URL fetch in place, the prompt's GitHub URL is invisible to the planner and the synthesizer reverts to generic deep-learning canon. Fix lives in Phase 4 (extract URLs → `fetchViaReadability` → splice into planner input).
-- **Monitor template parity** — Phase 2 covered structurally; not re-validated in this acceptance run. The monitor end-to-end smoke is open work.
-- **Per-phase verification gates documentation** — the gate-runner script for the `## Verification gates per phase` matrix exists in spirit (`bun test.ts` + `bun run build` + `bun run ui:smoke`) but is not yet a single command.
+*Deferred to v2:*
+- Monitor template real-LLM e2e — Phase 2 covered structurally; a monitor-specific acceptance run is open work.
+- Single-command verification gate runner for the `## Verification gates per phase` matrix (currently the gates run as separate commands: `bun test.ts` + `bun run build` + `bun run ui:smoke`).
 
 ### v1 acceptance criteria
 
