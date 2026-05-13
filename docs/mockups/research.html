@@ -282,10 +282,7 @@
   .archive-toolbar .right { margin-left: auto; display: flex; gap: 8px; }
 
   table.t { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
-  table.t th, table.t td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  /* Vertical column dividers — make each cell read as "in a column" even when
-     the title is short and the rest of the cell is empty space. */
-  table.t th + th, table.t td + td { border-left: 1px solid var(--border); }
+  table.t th, table.t td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
   table.t th {
     font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase;
     color: var(--text-muted); background: var(--bg-secondary); white-space: nowrap;
@@ -294,7 +291,21 @@
   table.t td.nowrap { white-space: nowrap; }
   table.t tr.row { cursor: pointer; }
   table.t tr.row:hover td { background: var(--bg-tertiary); }
-  table.t tr.row.is-active td { background: rgba(195,232,141,0.04); }
+  /* Plain-text status — matches the sessions table aesthetic (colored dot + text,
+     no chip background). */
+  .status-cell { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .status-cell.active    { color: var(--success); }
+  .status-cell.exhausted { color: var(--text-secondary); }
+  .status-cell.completed { color: var(--info); }
+  .status-cell.halted    { color: var(--error); }
+  /* Verdict mirrors the .title-cell pattern — primary on top, muted reason below,
+     so row heights stay uniform across rows with and without a reason. */
+  .verdict-cell { display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.3; }
+  .verdict-cell.pass { color: var(--success); }
+  .verdict-cell.flag { color: var(--warning); }
+  .verdict-cell.halt { color: var(--error); }
+  .verdict-cell.info { color: var(--info); }
+  .verdict-cell .reason { color: var(--text-muted); font-size: 12px; }
   table.t .title-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   table.t .title-cell .t1 { color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   table.t .title-cell .t2 { color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -634,7 +645,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr class="row is-active">
+              <tr class="row">
                 <td>
                   <div class="title-cell">
                     <span class="t1">Emergence of EDM as a pop genre · 1985–95</span>
@@ -643,14 +654,14 @@
                 </td>
                 <td><span class="shape-tag">timeline</span></td>
                 <td class="nowrap"><span class="muted small mono">26m ago</span></td>
-                <td><span class="chip ok small"><span class="dot-i ok"></span>active</span></td>
+                <td><span class="status-cell active"><span class="dot-i ok"></span>active</span></td>
                 <td class="num">147</td>
                 <td class="num">$0.84</td>
                 <td class="num">26.4m</td>
-                <td><span class="chip ok small">on track · iter 25</span></td>
+                <td><span class="verdict-cell pass">on track <span class="reason">iter 25</span></span></td>
                 <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#c3e88d" stroke-width="1.4" points="0,22 8,20 16,18 24,16 32,14 40,12 48,10 56,8 64,7 72,5 80,4 88,3 96,2 100,2"/></svg></td>
               </tr>
-              <tr class="row is-active">
+              <tr class="row">
                 <td>
                   <div class="title-cell">
                     <span class="t1">How GPT-Researcher generates sub-questions internally</span>
@@ -659,11 +670,11 @@
                 </td>
                 <td><span class="shape-tag">audit</span></td>
                 <td class="nowrap"><span class="muted small mono">4m ago</span></td>
-                <td><span class="chip ok small"><span class="dot-i ok"></span>active</span></td>
+                <td><span class="status-cell active"><span class="dot-i ok"></span>active</span></td>
                 <td class="num">9</td>
                 <td class="num">$0.07</td>
                 <td class="num">4.1m</td>
-                <td><span class="chip info small">priming · iter 3</span></td>
+                <td><span class="verdict-cell info">priming <span class="reason">iter 3</span></span></td>
                 <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#82aaff" stroke-width="1.4" points="0,22 16,21 32,20 48,18 64,15 80,12 96,9 100,8"/></svg></td>
               </tr>
 
@@ -676,11 +687,11 @@
                 </td>
                 <td><span class="shape-tag">survey</span></td>
                 <td class="nowrap"><span class="muted small mono">2h ago</span></td>
-                <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
+                <td><span class="status-cell exhausted"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">214</td>
                 <td class="num">$1.42</td>
                 <td class="num">28.0m</td>
-                <td><span class="chip ok small">pass</span></td>
+                <td><span class="verdict-cell pass">pass</span></td>
                 <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 12,18 24,14 36,9 48,6 60,4 72,3 84,3 96,3 100,3"/></svg></td>
               </tr>
               <tr class="row">
@@ -692,11 +703,11 @@
                 </td>
                 <td><span class="shape-tag">comparison</span></td>
                 <td class="nowrap"><span class="muted small mono">6h ago</span></td>
-                <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
+                <td><span class="status-cell exhausted"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">86</td>
                 <td class="num">$0.61</td>
                 <td class="num">19.2m</td>
-                <td><span class="chip warn small">flag · low yield</span></td>
+                <td><span class="verdict-cell flag">flag <span class="reason">low yield</span></span></td>
                 <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#ffcb6b" stroke-width="1.2" points="0,22 12,20 24,17 36,15 48,14 60,13 72,13 84,12 96,12 100,12"/></svg></td>
               </tr>
               <tr class="row">
@@ -708,11 +719,11 @@
                 </td>
                 <td><span class="shape-tag">survey</span></td>
                 <td class="nowrap"><span class="muted small mono">9h ago</span></td>
-                <td><span class="chip err small"><span class="dot-i err"></span>halted</span></td>
+                <td><span class="status-cell halted"><span class="dot-i err"></span>halted</span></td>
                 <td class="num">42</td>
                 <td class="num">$1.50</td>
                 <td class="num">42.0m</td>
-                <td><span class="chip err small">halt · budget cap</span></td>
+                <td><span class="verdict-cell halt">halt <span class="reason">budget cap</span></span></td>
                 <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#f07178" stroke-width="1.2" points="0,22 12,20 24,17 36,16 48,15 60,15 72,14 84,14 96,14 100,14"/></svg></td>
               </tr>
               <tr class="row">
@@ -724,11 +735,11 @@
                 </td>
                 <td><span class="shape-tag">timeline</span></td>
                 <td class="nowrap"><span class="muted small mono">1 day ago</span></td>
-                <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
+                <td><span class="status-cell exhausted"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">98</td>
                 <td class="num">$0.74</td>
                 <td class="num">22.6m</td>
-                <td><span class="chip ok small">pass</span></td>
+                <td><span class="verdict-cell pass">pass</span></td>
                 <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 14,17 28,12 42,8 56,5 70,4 84,3 98,3 100,3"/></svg></td>
               </tr>
               <tr class="row">
@@ -740,11 +751,11 @@
                 </td>
                 <td><span class="shape-tag">dynamics</span></td>
                 <td class="nowrap"><span class="muted small mono">2 days ago</span></td>
-                <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
+                <td><span class="status-cell completed"><span class="dot-i info"></span>completed</span></td>
                 <td class="num">61</td>
                 <td class="num">$0.42</td>
                 <td class="num">14.3m</td>
-                <td><span class="chip ok small">pass</span></td>
+                <td><span class="verdict-cell pass">pass</span></td>
                 <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 16,18 32,12 48,8 64,6 80,5 96,5 100,5"/></svg></td>
               </tr>
               <tr class="row">
@@ -756,11 +767,11 @@
                 </td>
                 <td><span class="shape-tag">timeline</span></td>
                 <td class="nowrap"><span class="muted small mono">3 days ago</span></td>
-                <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
+                <td><span class="status-cell exhausted"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">186</td>
                 <td class="num">$1.18</td>
                 <td class="num">31.4m</td>
-                <td><span class="chip warn small">flag · stuck</span></td>
+                <td><span class="verdict-cell flag">flag <span class="reason">stuck</span></span></td>
                 <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#ffcb6b" stroke-width="1.2" points="0,22 12,18 24,14 36,11 48,9 60,8 72,8 84,8 96,8 100,8"/></svg></td>
               </tr>
               <tr class="row">
@@ -772,11 +783,11 @@
                 </td>
                 <td><span class="shape-tag">survey</span></td>
                 <td class="nowrap"><span class="muted small mono">4 days ago</span></td>
-                <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
+                <td><span class="status-cell completed"><span class="dot-i info"></span>completed</span></td>
                 <td class="num">73</td>
                 <td class="num">$0.38</td>
                 <td class="num">12.8m</td>
-                <td><span class="chip ok small">pass</span></td>
+                <td><span class="verdict-cell pass">pass</span></td>
                 <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 18,15 36,9 54,5 72,3 90,2 100,2"/></svg></td>
               </tr>
               <tr class="row">
@@ -788,11 +799,11 @@
                 </td>
                 <td><span class="shape-tag">audit</span></td>
                 <td class="nowrap"><span class="muted small mono">5 days ago</span></td>
-                <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
+                <td><span class="status-cell completed"><span class="dot-i info"></span>completed</span></td>
                 <td class="num">112</td>
                 <td class="num">$0.69</td>
                 <td class="num">18.1m</td>
-                <td><span class="chip ok small">pass</span></td>
+                <td><span class="verdict-cell pass">pass</span></td>
                 <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 14,17 28,11 42,7 56,5 70,4 84,3 98,3 100,3"/></svg></td>
               </tr>
             </tbody>
