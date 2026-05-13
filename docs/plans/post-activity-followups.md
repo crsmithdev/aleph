@@ -241,7 +241,13 @@ Coverage of canonical V8 innovations: roughly **5/14 major items** — and zero 
 
 ## 4. Persist decision_log in prod derivation
 
-**Status:** 🟡 deferred.
+**Status:** ✅ done — landed on main 2026-05-12 (commit `74c4a05`).
+
+### What shipped
+Added `sqlite?: Sqlite` to `TemplateDeps`; forwarded via `buildTemplate` to `makeResearchTemplate`; attached the handle in `run.ts:main` right after `buildDeps` returns. Locked the prod path with a new `decisions.test.ts` test that exercises `buildTemplate` (not `makeResearchTemplate` directly).
+
+### Verification (end-to-end on dev server)
+Loop `quiet-tide-bay-533f` ran with the new code. The persisted `decision_log` artifact contains **14 followup_pick entries** (previously: 0 in prod). Total entries: 6 canon + 7 branches + 14 follow-ups = 27 — the Activity tab's Decisions panel renders all 27 rows.
 
 Agent A caveat from the Decisions/Source-Extraction work: `run.ts:buildDeps` builds `{ llm }` only for the research template. The derivation hook's `followup_pick` decisions emit as `decision` events (UI sees them live) but don't append to the `decision_log` artifact in prod because `deps.sqlite` is undefined there. Planner-side decisions DO persist because `ensureScheduleArtifact` had sqlite already.
 
@@ -260,7 +266,40 @@ Agent A caveat from the Decisions/Source-Extraction work: `run.ts:buildDeps` bui
 
 ## 5. Stop-rule planning gap
 
-**Status:** 🟡 deferred (explicitly out of scope this session).
+**Status:** ✅ done — landed on main 2026-05-12 (commit `6c8b24d`).
+
+### What shipped
+`stop_rule` now computes `effectiveTarget = max(cycles_target, branchCount)` from the schedule artifact, with a corresponding `effectiveMaxCycles = max(maxCycles, effectiveTarget * 2)` for the shape-unreachable escape hatch. Defensive option-chaining for shape-only schedule fixtures. Reason string reports the effective target so a 6-branch run logs `research_target_reached:6`.
+
+### Test (regression-pinned)
+New test in `research.test.ts`: a 6-branch plan with `cycles_target=3` now runs all 6 branches and reports `research_target_reached:6`.
+
+### Verification (V8 regrade on dev server)
+Fresh loop `quiet-tide-bay-533f` ran with the new code. Planner emitted **7 branches**; engine ran **all 7 cycles** (vs. the original `late-sky-peak-5c06` which clipped to 3). Cost: $0.0029.
+
+**Coverage delta — original (3 cycles) vs. regrade (7 cycles)**
+
+| Topic | Original | Regrade |
+|---|---|---|
+| JIT compilation | ✅ | ✅ |
+| Hidden classes | ✅ | ✅ (better) |
+| Inline caching | ✅ | ✅ (better) |
+| TurboFan | ✅ | ✅ |
+| Crankshaft (predecessor) | ❌ | ❌ (still missing) |
+| **Ignition** (baseline interpreter) | ❌ | ✅ |
+| **Sparkplug** (baseline JIT, 2021) | ❌ | ✅ |
+| **Maglev** (mid-tier JIT, 2023) | ❌ | ✅ |
+| **Multi-tier pipeline** explicitly named | ❌ | ✅ |
+| GC framing | ⚠️ "stop-the-world" (misleading) | ✅ Incremental + young/old heap |
+| **Predecessor comparison** (SpiderMonkey, JavaScriptCore) | ❌ | ✅ |
+| Smi pointer tagging | ❌ | ✅ |
+| Pointer compression | ❌ | ❌ |
+| Snapshot startup | ❌ | ❌ |
+| WebAssembly (Liftoff) | ❌ (1 line) | ❌ (1 line) |
+
+Coverage: **9/14 → up from 5/14**. The three branches that previously never ran (`early-js-engines`, `v8-garbage-collection`, `js-engines-comparison`) directly produced the new content. Verdict shifts from **misleading by omission** to **substantially accurate**, addressing the literal question.
+
+Activity tab screenshot at `/tmp/v8-regrade-activity.png` — Branch State now shows 7 branches all finalized (vs. original's 3 finalized + 3 pending).
 
 In an earlier dogfood, the planner planned 4 branches but the engine stopped at 3 cycles with `reason=research_target_reached:3`, never executing the `lifetime-annotations` branch. The polished document was rated "Misleading" as a result. This is a planner/stop-rule design bug.
 
