@@ -54,7 +54,18 @@ interface LoopSchedule {
   perturbation_weights: Record<string, number>;
   milestone_plan: number[];
 }
-interface SchedulePayload { output_shape: OutputShape; plan: LoopSchedule; created_with_mode?: string | null }
+type QuestionShape = 'survey' | 'timeline' | 'list' | 'dynamics' | 'comparison' | 'lookup' | 'audit';
+interface SchedulePayload {
+  output_shape: OutputShape;
+  plan: LoopSchedule;
+  question_shape?: QuestionShape;
+  role?: string;
+  created_with_mode?: string | null;
+  predecessor_id?: string;
+}
+const QUESTION_SHAPES: readonly QuestionShape[] = [
+  'survey', 'timeline', 'list', 'dynamics', 'comparison', 'lookup', 'audit',
+] as const;
 
 interface Loop {
   id: string;
@@ -1283,7 +1294,10 @@ function PlanTab({ loop, artifacts }: { loop: Loop; artifacts: Artifact[] }) {
   return (
     <div className="max-w-4xl flex flex-col gap-5" data-testid="plan-tab">
       {editable && payload && (
-        <SchedulePreStartEditor loop={loop} payload={payload} />
+        <>
+          <InferredPanel loop={loop} payload={payload} />
+          <SchedulePreStartEditor loop={loop} payload={payload} />
+        </>
       )}
       <PlanSummary plan={plan} shape={shape} mode={payload?.created_with_mode ?? null} />
 
@@ -1339,6 +1353,116 @@ function PlanTab({ loop, artifacts }: { loop: Loop; artifacts: Artifact[] }) {
           </ol>
         )}
       </Panel>
+    </div>
+  );
+}
+
+/**
+ * InferredPanel — Phase 6 deliverable. Surfaces the three classifier outputs
+ * (`question_shape`, `output_shape`, `role`) as editable fields pre-Start.
+ * Engine reads `output_shape` (renderer gate) + `question_shape` (planner
+ * input via the prompt) off the schedule artifact; `role` is metadata only
+ * in v1 (template integration is later work).
+ */
+function InferredPanel({ loop, payload }: { loop: Loop; payload: SchedulePayload }) {
+  const [questionShape, setQuestionShape] = useState<QuestionShape>(payload.question_shape ?? 'survey');
+  const [outputShapeKind, setOutputShapeKind] = useState<OutputShape['kind']>(payload.output_shape.kind);
+  const [role, setRole] = useState(payload.role ?? '');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setQuestionShape(payload.question_shape ?? 'survey');
+    setOutputShapeKind(payload.output_shape.kind);
+    setRole(payload.role ?? '');
+  }, [payload]);
+
+  async function persist(patch: Partial<SchedulePayload>) {
+    setError(null);
+    try {
+      const res = await fetch(`/api/loops/${loop.id}/schedule`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  function onQuestionShape(next: QuestionShape) {
+    setQuestionShape(next);
+    void persist({ question_shape: next });
+  }
+
+  function onOutputShapeKind(next: OutputShape['kind']) {
+    setOutputShapeKind(next);
+    // Build the simplest valid payload per kind — user can refine via the
+    // Schedule editor below for table columns / list min_items.
+    const output_shape: OutputShape =
+      next === 'list' ? { kind: 'list', min_items: 5 }
+      : next === 'table' ? { kind: 'table', columns: ['col1', 'col2'] }
+      : next === 'timeline' ? { kind: 'timeline', min_events: 3 }
+      : next === 'mixed' ? { kind: 'mixed', components: [{ kind: 'prose' }, { kind: 'list', min_items: 5 }] }
+      : { kind: 'prose' };
+    void persist({ output_shape });
+  }
+
+  return (
+    <div
+      className="border border-info/40 rounded-lg p-4 bg-info/[0.04]"
+      data-testid="inferred-panel"
+    >
+      <div className="flex items-baseline justify-between mb-3">
+        <div>
+          <h3 className="font-medium text-text-primary">Inferred</h3>
+          <p className="text-xs text-text-muted mt-0.5">
+            Classifier output — edit before start. Question shape drives the planner; output shape gates the renderer.
+          </p>
+        </div>
+        {error && <span className="text-xs text-error">{error}</span>}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label className="block text-xs uppercase tracking-wider text-text-muted mb-1.5">Question shape</label>
+          <select
+            value={questionShape}
+            onChange={(e) => onQuestionShape(e.target.value as QuestionShape)}
+            className="w-full bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary capitalize focus:outline-none focus:border-accent"
+            data-testid="inferred-question-shape"
+          >
+            {QUESTION_SHAPES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs uppercase tracking-wider text-text-muted mb-1.5">Output shape</label>
+          <select
+            value={outputShapeKind}
+            onChange={(e) => onOutputShapeKind(e.target.value as OutputShape['kind'])}
+            className="w-full bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary capitalize focus:outline-none focus:border-accent"
+            data-testid="inferred-output-shape"
+          >
+            {(['prose', 'list', 'table', 'timeline', 'mixed'] as const).map(k => (
+              <option key={k} value={k}>{k}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs uppercase tracking-wider text-text-muted mb-1.5">Role</label>
+          <input
+            type="text"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            onBlur={() => persist({ role })}
+            placeholder="e.g. Software engineer"
+            className="w-full bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent"
+            data-testid="inferred-role"
+          />
+        </div>
+      </div>
     </div>
   );
 }

@@ -130,6 +130,28 @@ export type OutputShape =
   | { kind: 'timeline'; min_events?: number }
   | { kind: 'mixed'; components: OutputShape[] };
 
+/**
+ * Structural classification of the *question* the user asked — distinct from
+ * the *output shape* the renderer must produce. Surfaced in the InferredPanel
+ * as a planner input + the History page's Shape column. Seven canonical
+ * shapes per the design doc:
+ *
+ *   - survey      — "what's the landscape of X"
+ *   - timeline    — "how did X evolve"
+ *   - list        — "what are some X" (enumerable answer)
+ *   - dynamics    — "how does X work" (mechanism)
+ *   - comparison  — "X vs Y vs Z"
+ *   - lookup      — "what is X" / specific-fact question
+ *   - audit       — "is X true" / verification question
+ *
+ * The detector falls back to `survey` (the broadest catchall) on malformed
+ * LLM responses — matching the "broad investigation" default the engine
+ * already handles best.
+ */
+export type QuestionShape =
+  | 'survey' | 'timeline' | 'list' | 'dynamics'
+  | 'comparison' | 'lookup' | 'audit';
+
 // ---- Adaptive planner (Phase 4) ----------------------------------------------
 
 /**
@@ -247,6 +269,16 @@ export interface SchedulePayload {
    *  schedule. The engine reads the **latest** schedule artifact at runtime
    *  (`readScheduleFromArtifacts`); this field is the audit trail. */
   predecessor_id?: string;
+  /** Structural classification of the question. Detected at session-create
+   *  time; editable pre-Start via the InferredPanel. Planner input;
+   *  templates may also use it to tune their hooks. Falls back to `'survey'`
+   *  when detection fails. */
+  question_shape?: QuestionShape;
+  /** Optional human-readable domain role label ("Software engineer",
+   *  "Music historian", …). Detected at session-create time; editable
+   *  pre-Start. v1 stores the label only; threading a `role_prompt` through
+   *  template LLM calls is Phase 6+ work. */
+  role?: string;
 }
 
 // ---- Decisions ---------------------------------------------------------------

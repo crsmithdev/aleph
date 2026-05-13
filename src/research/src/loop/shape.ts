@@ -32,9 +32,14 @@ import { withCostTracker } from './cost.js';
 import { planLoop } from './planner.js';
 import { MODE_PROFILES, isMode } from './modes.js';
 import type {
-  Artifact, LoopId, LoopState, OutputShape,
+  Artifact, LoopId, LoopState, OutputShape, QuestionShape,
   ScheduleModels, SchedulePayload,
 } from './types.js';
+
+const QUESTION_SHAPES: readonly QuestionShape[] = [
+  'survey', 'timeline', 'list', 'dynamics',
+  'comparison', 'lookup', 'audit',
+] as const;
 
 // See planner.ts for why we don't use a reasoning model here — same issue
 // (empty content when max_tokens is consumed by reasoning).
@@ -151,16 +156,95 @@ export async function detectOutputShape(
 }
 
 /**
+ * Classify the question's structural shape via one LLM call. Used as a
+ * planner input + a History-table dimension. Falls back to `'survey'` on
+ * malformed LLM output — the broadest catchall.
+ */
+export async function detectQuestionShape(
+  prompt: string,
+  llm: LLMProvider,
+  model: string = DEFAULT_DETECT_MODEL,
+): Promise<QuestionShape> {
+  const promptBody = [
+    'Classify the structural shape of this research question.',
+    '',
+    'Return JSON with one field: { "shape": "<one of the values below>" }',
+    '',
+    'Shapes:',
+    '  survey      — "what\'s the landscape of X"',
+    '  timeline    — "how did X evolve"',
+    '  list        — "what are some X" (enumerable answer)',
+    '  dynamics    — "how does X work" (mechanism)',
+    '  comparison  — "X vs Y vs Z"',
+    '  lookup      — "what is X" / specific-fact question',
+    '  audit       — "is X true" / verification question',
+    '',
+    `Target prompt: ${prompt}`,
+    'Return only the JSON object — no prose, no markdown.',
+  ].join('\n');
+
+  try {
+    const result = await llm.complete(model, promptBody, 80);
+    const cleaned = result.text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    const value = JSON.parse(cleaned) as { shape?: string };
+    if (typeof value.shape === 'string' && (QUESTION_SHAPES as readonly string[]).includes(value.shape)) {
+      return value.shape as QuestionShape;
+    }
+    process.stderr.write(`[question-shape] unparseable response, defaulting to survey. model=${model} text="${result.text.slice(0, 120)}"\n`);
+    return 'survey';
+  } catch (err) {
+    process.stderr.write(`[question-shape] LLM call failed, defaulting to survey. model=${model} err=${(err as Error).message}\n`);
+    return 'survey';
+  }
+}
+
+/**
+ * Pick a domain role label for the prompt — one short LLM call returning a
+ * 1-4 word role title (e.g. "Software engineer", "Music historian"). v1
+ * stores the label only; threading a `role_prompt` through template LLM
+ * calls is later work. Empty string on failure so the InferredPanel renders
+ * "no role" gracefully.
+ */
+export async function detectRole(
+  prompt: string,
+  llm: LLMProvider,
+  model: string = DEFAULT_DETECT_MODEL,
+): Promise<string> {
+  const promptBody = [
+    'Pick a 1-4 word professional role label most relevant to this research prompt.',
+    '',
+    'Return JSON with one field: { "role": "<role title>" }',
+    'Examples: "Software engineer", "Music historian", "Data scientist", "Legal analyst".',
+    '',
+    `Target prompt: ${prompt}`,
+    'Return only the JSON object — no prose, no markdown.',
+  ].join('\n');
+
+  try {
+    const result = await llm.complete(model, promptBody, 60);
+    const cleaned = result.text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    const value = JSON.parse(cleaned) as { role?: string };
+    if (typeof value.role === 'string' && value.role.length > 0 && value.role.length <= 64) {
+      return value.role.trim();
+    }
+    return '';
+  } catch (err) {
+    process.stderr.write(`[role] LLM call failed, defaulting to empty. model=${model} err=${(err as Error).message}\n`);
+    return '';
+  }
+}
+
+/**
  * Idempotent: returns the existing schedule artifact's payload if one is
- * already on the loop; otherwise runs `detectOutputShape` AND `planLoop` and
- * writes a new `kind: 'schedule'` artifact carrying both. Called at child-
- * process start so that crash resume doesn't re-run either step (and doesn't
- * risk a different shape or plan on the second LLM pass). Returns the
- * SchedulePayload either way.
+ * already on the loop; otherwise runs `detectOutputShape`, `detectQuestionShape`,
+ * `detectRole`, AND `planLoop` and writes a new `kind: 'schedule'` artifact
+ * carrying all four. Called at child-process start so crash resume doesn't
+ * re-run any step (and doesn't risk a different inference on a second pass).
+ * Returns the SchedulePayload either way.
  *
- * Two sequential LLM calls — detection feeds planning, so they don't
- * parallelise. Both target the cheap nano model by default; per-step
- * overrides are available for tests.
+ * Three detectors fire in parallel — they're independent — then `planLoop`
+ * runs sequentially since it consumes the shape. All target the cheap
+ * Gemini Flash model by default.
  */
 export async function ensureScheduleArtifact(
   sqlite: Sqlite,
@@ -176,11 +260,15 @@ export async function ensureScheduleArtifact(
   if (existing.length > 0) {
     return existing[0].payload as unknown as SchedulePayload;
   }
-  // Wrap the LLM so detectOutputShape + planLoop's LLM calls accumulate cost
-  // into the loop's envelope. Without this, the detect+plan pair (~2 cheap
-  // completions per loop) consumes real USD invisibly.
+  // Wrap the LLM so the three detectors + planLoop's LLM calls accumulate
+  // cost into the loop's envelope. Without this, the four cheap completions
+  // per loop consume real USD invisibly.
   const tracker = withCostTracker(llm);
-  const output_shape = await detectOutputShape(prompt, tracker.llm, detectModel);
+  const [output_shape, question_shape, role] = await Promise.all([
+    detectOutputShape(prompt, tracker.llm, detectModel),
+    detectQuestionShape(prompt, tracker.llm, detectModel),
+    detectRole(prompt, tracker.llm, detectModel),
+  ]);
   // Pass loop_id + sqlite so the planner emits `decision` events for each
   // canon entry / branch pick AND appends them to the loop's decision_log
   // artifact. Without these, the planner stays event-silent (unit-test mode).
@@ -198,6 +286,8 @@ export async function ensureScheduleArtifact(
   const payload: SchedulePayload = {
     output_shape,
     plan,
+    question_shape,
+    ...(role ? { role } : {}),
     ...(envelope ? { envelope } : {}),
     ...(models ? { models } : {}),
     ...(modeFlags ? { flags: modeFlags } : {}),
@@ -238,6 +328,7 @@ export function createDraftSchedule(
       perturbation_weights: {},
       milestone_plan: [0.25, 0.5, 0.75, 1.0],
     },
+    question_shape: 'survey',
     ...(envelope ? { envelope } : {}),
     ...(modeFlags ? { flags: modeFlags } : {}),
     ...(mode ? { created_with_mode: mode } : {}),
@@ -269,6 +360,12 @@ export function updateScheduleArtifact(
     plan: patch.plan
       ? { ...prior.plan, ...patch.plan }
       : prior.plan,
+    ...(patch.question_shape ?? prior.question_shape
+      ? { question_shape: patch.question_shape ?? prior.question_shape }
+      : {}),
+    ...(patch.role !== undefined
+      ? (patch.role ? { role: patch.role } : {})
+      : (prior.role ? { role: prior.role } : {})),
     ...(patch.envelope ?? prior.envelope ? { envelope: patch.envelope ?? prior.envelope } : {}),
     ...(patch.models ?? prior.models ? { models: patch.models ?? prior.models } : {}),
     ...(patch.flags ?? prior.flags ? { flags: patch.flags ?? prior.flags } : {}),

@@ -36,10 +36,17 @@ function newDb() {
  * are unambiguous — detection starts with "Classify the output shape", the
  * planner starts with "Plan a research loop".
  */
-function llmFor({ shape, plan }: { shape?: string; plan?: string }): FakeLLMProvider {
+function llmFor({ shape, plan, question_shape, role }: {
+  shape?: string;
+  plan?: string;
+  question_shape?: string;
+  role?: string;
+}): FakeLLMProvider {
   return new FakeLLMProvider({
     complete: (_model, prompt) => {
       if (prompt.startsWith('Plan a research loop')) return plan ?? '';
+      if (prompt.startsWith('Classify the structural shape')) return question_shape ?? '{"shape":"survey"}';
+      if (prompt.startsWith('Pick a 1-4 word professional role')) return role ?? '{"role":"Researcher"}';
       return shape ?? '';
     },
   });
@@ -263,8 +270,8 @@ describe('ensureScheduleArtifact — planner integration (Phase 4)', () => {
       perturbation_weights: {},
       milestone_plan: [0.5, 1.0],
     });
-    // Two LLM calls: detection then planning.
-    expect(llm.completeCalls).toBe(2);
+    // Four LLM calls: output_shape + question_shape + role (parallel) + plan.
+    expect(llm.completeCalls).toBe(4);
 
     // The artifact carries the full payload, not just the shape.
     const artifacts = listArtifacts(sqlite, loop.id, 'schedule');
@@ -283,7 +290,7 @@ describe('ensureScheduleArtifact — planner integration (Phase 4)', () => {
 
     await ensureScheduleArtifact(sqlite, loop.id, loop.prompt, llm);
     const callsAfterFirst = llm.completeCalls;
-    expect(callsAfterFirst).toBe(2);
+    expect(callsAfterFirst).toBe(4);  // output_shape + question_shape + role + plan
 
     const second = await ensureScheduleArtifact(sqlite, loop.id, loop.prompt, llm);
     expect(llm.completeCalls).toBe(callsAfterFirst);                     // no extra calls
