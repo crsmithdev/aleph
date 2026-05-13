@@ -309,9 +309,17 @@
   .verdict-cell.halt { color: var(--error); }
   .verdict-cell.info { color: var(--info); }
   .verdict-cell .reason { color: var(--text-muted); font-size: 12px; }
-  table.t .title-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  table.t .title-cell .t1 { color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  table.t .title-cell .t2 { color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Title cell: two block-level lines, both clipped with ellipsis. No flex
+     (it interferes with table-layout:fixed width clamping in some browsers). */
+  table.t .title-cell .t1,
+  table.t .title-cell .t2 {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  table.t .title-cell .t1 { color: var(--text-primary); font-weight: 500; }
+  table.t .title-cell .t2 { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
   table.t svg.spark-mini { width: 100%; height: 24px; display: block; }
 
   /* "Live" indicator pulse for the toolbar */
