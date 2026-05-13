@@ -283,6 +283,9 @@
 
   table.t { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
   table.t th, table.t td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  /* Vertical column dividers — make each cell read as "in a column" even when
+     the title is short and the rest of the cell is empty space. */
+  table.t th + th, table.t td + td { border-left: 1px solid var(--border); }
   table.t th {
     font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase;
     color: var(--text-muted); background: var(--bg-secondary); white-space: nowrap;
@@ -303,6 +306,7 @@
     color: var(--text-muted);
     font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase;
     padding: 8px 12px;
+    border-left: 0 !important;
   }
   .section-row td .ct { color: var(--text-secondary); margin-left: 8px; }
   .section-row td .pulse {
@@ -770,10 +774,7 @@
                     <span class="t2">Tresor, UR, Mayday, Hard Wax</span>
                   </div>
                 </td>
-                <td>
-                  <span class="shape-tag">timeline</span>
-                  <span class="shape-tag">list</span>
-                </td>
+                <td><span class="shape-tag">timeline</span></td>
                 <td class="nowrap"><span class="muted small mono">3 days ago</span></td>
                 <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">186</td>
