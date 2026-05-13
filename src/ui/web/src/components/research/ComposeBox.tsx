@@ -71,7 +71,10 @@ export function ComposeBox() {
         throw new Error(body.error ?? `HTTP ${res.status}`);
       }
       const { id } = await res.json() as { id: string };
-      navigate(`/research/${id}`);
+      // Custom mode defers child spawn — land on the Plan tab so the
+      // pre-Start editor is immediately visible.
+      const dest = mode === 'custom' ? `/research/${id}#tab=plan` : `/research/${id}`;
+      navigate(dest);
     } catch (err) {
       setError((err as Error).message);
       setSubmitting(false);

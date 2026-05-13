@@ -21,7 +21,10 @@ export type {
 
 export { emitDecisionEvent, recordDecision, readDecisionLog } from './decisions.js';
 
-export { detectOutputShape, ensureScheduleArtifact, readScheduleFromArtifacts } from './shape.js';
+export {
+  detectOutputShape, ensureScheduleArtifact, readScheduleFromArtifacts,
+  rePlanSchedule, createDraftSchedule, updateScheduleArtifact,
+} from './shape.js';
 export { planLoop } from './planner.js';
 export { generateDocument, readLatestDocument } from './document.js';
 export type { DocumentPayload } from './document.js';

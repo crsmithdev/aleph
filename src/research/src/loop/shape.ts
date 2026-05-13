@@ -213,6 +213,75 @@ export async function ensureScheduleArtifact(
 }
 
 /**
+ * Pre-write a minimal schedule artifact at session-create time for Custom
+ * mode — no LLM calls. The user lands on the Plan tab with an editable
+ * draft (prose shape, fallback single-branch, no canon) and clicks Start
+ * once they're happy. `ensureScheduleArtifact` is idempotent, so the
+ * child's run.ts loop respects the draft (or whatever the user edited it
+ * into) without re-running detection/planning.
+ */
+export function createDraftSchedule(
+  sqlite: Sqlite,
+  loop_id: LoopId,
+  prompt: string,
+  mode?: string | null,
+): SchedulePayload {
+  const loop = getLoop(sqlite, loop_id);
+  const envelope = loop?.envelope;
+  const modeFlags = mode && isMode(mode) ? MODE_PROFILES[mode].flags : undefined;
+  const payload: SchedulePayload = {
+    output_shape: { kind: 'prose' },
+    plan: {
+      canon: [],
+      branches: [{ id: 'main', query: prompt }],
+      per_branch_budget: 3,
+      perturbation_weights: {},
+      milestone_plan: [0.25, 0.5, 0.75, 1.0],
+    },
+    ...(envelope ? { envelope } : {}),
+    ...(modeFlags ? { flags: modeFlags } : {}),
+    ...(mode ? { created_with_mode: mode } : {}),
+  };
+  createArtifact(sqlite, {
+    loop_id, cycle_id: null, kind: 'schedule',
+    payload: payload as unknown as Record<string, unknown>,
+  });
+  return payload;
+}
+
+/**
+ * Overwrite the latest schedule artifact's payload — Phase 5b's edit path.
+ * Append-as-new-row so the change is auditable; the latest-by-created_at
+ * read semantics in `readScheduleFromArtifacts` pick it up automatically.
+ * Carries forward fields the patch didn't touch.
+ */
+export function updateScheduleArtifact(
+  sqlite: Sqlite,
+  loop_id: LoopId,
+  patch: Partial<SchedulePayload>,
+): SchedulePayload | null {
+  const all = listArtifacts(sqlite, loop_id, 'schedule');
+  if (all.length === 0) return null;
+  const latest = all.reduce((a, b) => a.created_at > b.created_at ? a : b);
+  const prior = latest.payload as unknown as SchedulePayload;
+  const next: SchedulePayload = {
+    output_shape: patch.output_shape ?? prior.output_shape,
+    plan: patch.plan
+      ? { ...prior.plan, ...patch.plan }
+      : prior.plan,
+    ...(patch.envelope ?? prior.envelope ? { envelope: patch.envelope ?? prior.envelope } : {}),
+    ...(patch.models ?? prior.models ? { models: patch.models ?? prior.models } : {}),
+    ...(patch.flags ?? prior.flags ? { flags: patch.flags ?? prior.flags } : {}),
+    ...(prior.created_with_mode ? { created_with_mode: prior.created_with_mode } : {}),
+  };
+  createArtifact(sqlite, {
+    loop_id, cycle_id: null, kind: 'schedule',
+    payload: next as unknown as Record<string, unknown>,
+  });
+  return next;
+}
+
+/**
  * Read the schedule payload off a LoopState's artifact list. Templates call
  * this from inside their renderer / stop_rule so they don't need a separate
  * DB read — the engine already loads all artifacts into LoopState.

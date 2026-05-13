@@ -242,3 +242,75 @@ describe('Loops API — SSE snapshot', () => {
     expect(frames.every(f => typeof f.logged_at === 'string' && f.logged_at.length > 0)).toBe(true);
   });
 });
+
+describe('Loops API — schedule editor (Phase 5b)', () => {
+  it('PATCH /:id/schedule on a pending loop updates the latest schedule artifact', async () => {
+    // Create with template_id=noop so no child auto-spawns the run pipeline
+    // we care about — we want the loop to stay pending so PATCH is allowed.
+    // The route only auto-defers spawn for non-noop + mode=custom. Use a
+    // fresh noop loop and just exercise the route guards.
+    const startRes = await fetch(`http://127.0.0.1:${port}/api/loops/start`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ template_id: 'noop' }),
+    });
+    const { id } = await startRes.json() as { id: string };
+
+    // Wait for the noop loop to complete so we can assert the guard rejects
+    // PATCHes on terminal loops.
+    await poll(
+      async () => {
+        const res = await fetch(`http://127.0.0.1:${port}/api/loops/${id}`);
+        return res.status === 200 ? await res.json() as { loop: { status: string } } : null;
+      },
+      v => v.loop.status !== 'pending' && v.loop.status !== 'running',
+      10_000,
+    );
+
+    const patchRes = await fetch(`http://127.0.0.1:${port}/api/loops/${id}/schedule`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ output_shape: { kind: 'list', min_items: 7 } }),
+    });
+    // Noop loops have no schedule artifact, but more importantly they're
+    // terminal — the route should refuse regardless.
+    expect(patchRes.status).toBe(409);
+    const body = await patchRes.json() as { error: string };
+    expect(body.error).toContain('not editable');
+  });
+
+  it('POST /:id/start on a terminal loop → 409', async () => {
+    const startRes = await fetch(`http://127.0.0.1:${port}/api/loops/start`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ template_id: 'noop' }),
+    });
+    const { id } = await startRes.json() as { id: string };
+
+    await poll(
+      async () => {
+        const res = await fetch(`http://127.0.0.1:${port}/api/loops/${id}`);
+        return res.status === 200 ? await res.json() as { loop: { status: string } } : null;
+      },
+      v => v.loop.status !== 'pending' && v.loop.status !== 'running',
+      10_000,
+    );
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/loops/${id}/start`, { method: 'POST' });
+    expect(res.status).toBe(409);
+  });
+
+  it('POST /:id/start unknown loop → 404', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/api/loops/does-not-exist/start`, { method: 'POST' });
+    expect(res.status).toBe(404);
+  });
+
+  it('PATCH /:id/schedule unknown loop → 404', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/api/loops/does-not-exist/schedule`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ output_shape: { kind: 'prose' } }),
+    });
+    expect(res.status).toBe(404);
+  });
+});

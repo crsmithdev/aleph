@@ -20,7 +20,8 @@ import {
   listTemplateIds,
   OpenRouterProvider,
   applyModeEnvelope, isMode,
-  type Envelope,
+  createDraftSchedule, updateScheduleArtifact,
+  type Envelope, type SchedulePayload,
 } from '@construct/research';
 import { readSessionLog, sessionLogPath } from '../research-logger.js';
 import { spawnLoopChild, killLoopChild } from '../loop-supervisor.js';
@@ -150,8 +151,51 @@ export const loopRoutes: FastifyPluginAsync = async (app) => {
       envelope: mergedEnvelope,
       mode: resolvedMode ?? null,
     });
+
+    // Phase 5b — Custom mode: defer child spawn so the user can edit the
+    // schedule before the loop runs. Write a draft schedule artifact (no LLM
+    // calls) so the Plan tab has something to render and edit; ensureScheduleArtifact
+    // is idempotent so the child process will use the (possibly edited) draft
+    // verbatim once `/start` fires.
+    if (resolvedMode === 'custom' && template_id !== 'noop') {
+      createDraftSchedule(app.sqlite, loop.id, prompt ?? '', resolvedMode);
+      return reply.status(201).send({ id: loop.id, deferred: true });
+    }
+
     spawnLoopChild(app.sqlite, loop.id, { processor_delay_ms, cycles_target, poll_every });
     return reply.status(201).send({ id: loop.id });
+  });
+
+  /**
+   * Manually spawn the supervised child for a deferred loop (Custom mode).
+   * Idempotent in spirit — refuses if the loop is already past `pending`.
+   */
+  app.post<{ Params: { id: string } }>('/:id/start', async (req, reply) => {
+    const loop = getLoop(app.sqlite, req.params.id);
+    if (!loop) return reply.status(404).send({ error: 'loop not found' });
+    if (loop.status !== 'pending') {
+      return reply.status(409).send({ error: `loop is not pending: ${loop.status}` });
+    }
+    spawnLoopChild(app.sqlite, loop.id, {});
+    return reply.status(202).send({ id: loop.id });
+  });
+
+  /**
+   * Update the latest schedule artifact. Only allowed pre-Start (status =
+   * `pending`); once cycles have dispatched the loop is locked. v2 will
+   * re-open this for paused loops once cooperative cancellation lands.
+   * Body is a `Partial<SchedulePayload>`; fields not present are carried
+   * forward from the prior payload.
+   */
+  app.patch<{ Params: { id: string }; Body: Partial<SchedulePayload> }>('/:id/schedule', async (req, reply) => {
+    const loop = getLoop(app.sqlite, req.params.id);
+    if (!loop) return reply.status(404).send({ error: 'loop not found' });
+    if (loop.status !== 'pending') {
+      return reply.status(409).send({ error: `loop not editable: ${loop.status}` });
+    }
+    const next = updateScheduleArtifact(app.sqlite, loop.id, req.body ?? {});
+    if (!next) return reply.status(404).send({ error: 'no schedule artifact to update' });
+    return reply.status(200).send(next);
   });
 
   /**

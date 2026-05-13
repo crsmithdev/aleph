@@ -265,7 +265,7 @@ export function ResearchLoopDetail() {
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
         {tab === 'document' && <DocumentTab loopId={loop.id} artifacts={artifacts} />}
         {tab === 'activity' && <ActivityTab loop={loop} cycles={snapshot.cycles} artifacts={artifacts} events={events} />}
-        {tab === 'plan'     && <PlanTab artifacts={artifacts} />}
+        {tab === 'plan'     && <PlanTab loop={loop} artifacts={artifacts} />}
         {tab === 'config'   && <ConfigTab loop={loop} artifacts={artifacts} />}
       </div>
     </div>
@@ -1235,11 +1235,18 @@ function parseSqliteTs(s: string): number {
  * into a flatter, mockup-styled card list because the loops engine plans
  * a flat branch set rather than the tree the mockup illustrated.
  */
-function PlanTab({ artifacts }: { artifacts: Artifact[] }) {
-  const schedule = artifacts.find(a => a.kind === 'schedule');
+function PlanTab({ loop, artifacts }: { loop: Loop; artifacts: Artifact[] }) {
+  // Latest schedule (Phase 5c re-plans append new artifacts).
+  const schedule = useMemo(() => {
+    const all = artifacts.filter(a => a.kind === 'schedule');
+    if (all.length === 0) return undefined;
+    return all.reduce((a, b) => a.created_at > b.created_at ? a : b);
+  }, [artifacts]);
   const payload = schedule?.payload as unknown as SchedulePayload | undefined;
   const plan = payload?.plan;
   const shape = payload?.output_shape;
+  const isPending = loop.status === 'pending';
+  const editable = isPending && payload != null;
 
   const branchOutputs = useMemo(() => {
     const map = new Map<string, ProcessorOutput>();
@@ -1275,6 +1282,9 @@ function PlanTab({ artifacts }: { artifacts: Artifact[] }) {
 
   return (
     <div className="max-w-4xl flex flex-col gap-5" data-testid="plan-tab">
+      {editable && payload && (
+        <SchedulePreStartEditor loop={loop} payload={payload} />
+      )}
       <PlanSummary plan={plan} shape={shape} mode={payload?.created_with_mode ?? null} />
 
       <Panel title="Canon" subtitle={`${plan.canon.length} entries`} testId="plan-canon">
@@ -1329,6 +1339,173 @@ function PlanTab({ artifacts }: { artifacts: Artifact[] }) {
           </ol>
         )}
       </Panel>
+    </div>
+  );
+}
+
+/**
+ * Pre-Start schedule editor. Lets the user edit the prompt, canon list, and
+ * per-branch queries on a pending loop before kicking off the supervised
+ * child. `Start` POSTs to `/api/loops/:id/start`. Re-rendered as the user
+ * types; debounced PATCH to `/api/loops/:id/schedule` on blur.
+ */
+function SchedulePreStartEditor({ loop, payload }: { loop: Loop; payload: SchedulePayload }) {
+  const [draft, setDraft] = useState<SchedulePayload>(payload);
+  const [saving, setSaving] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Keep draft in sync if the server pushes a new schedule (e.g. live SSE).
+  useEffect(() => { setDraft(payload); }, [payload]);
+
+  async function persist(next: SchedulePayload) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/loops/${loop.id}/schedule`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(next),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleStart() {
+    setStarting(true);
+    setError(null);
+    try {
+      // Flush any unsaved draft first so the child reads the latest schedule.
+      await persist(draft);
+      const res = await fetch(`/api/loops/${loop.id}/start`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+      setStarting(false);
+    }
+  }
+
+  function setCanon(text: string) {
+    const canon = text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+    setDraft(prev => ({ ...prev, plan: { ...prev.plan, canon } }));
+  }
+
+  function setBranch(index: number, field: 'id' | 'query', value: string) {
+    setDraft(prev => {
+      const branches = prev.plan.branches.map((b, i) => i === index ? { ...b, [field]: value } : b);
+      return { ...prev, plan: { ...prev.plan, branches } };
+    });
+  }
+
+  function addBranch() {
+    setDraft(prev => ({
+      ...prev,
+      plan: {
+        ...prev.plan,
+        branches: [...prev.plan.branches, { id: `branch-${prev.plan.branches.length + 1}`, query: '' }],
+      },
+    }));
+  }
+
+  function removeBranch(index: number) {
+    setDraft(prev => ({
+      ...prev,
+      plan: { ...prev.plan, branches: prev.plan.branches.filter((_, i) => i !== index) },
+    }));
+  }
+
+  return (
+    <div
+      className="border border-accent/40 rounded-lg p-4 bg-accent/[0.04]"
+      data-testid="schedule-editor"
+    >
+      <div className="flex items-baseline justify-between mb-3">
+        <div>
+          <h3 className="font-medium text-text-primary">Edit before start</h3>
+          <p className="text-xs text-text-muted mt-0.5">
+            Loop is pending — tweak the canon and branches, then start. Changes save on blur.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {saving && <span className="text-xs text-text-muted">saving…</span>}
+          {error && (
+            <span className="text-xs text-error" data-testid="schedule-editor-error">{error}</span>
+          )}
+          <button
+            type="button"
+            onClick={handleStart}
+            disabled={starting}
+            className="bg-accent text-bg-primary px-4 py-1.5 text-sm font-semibold rounded-md hover:bg-accent-hover disabled:opacity-50"
+            data-testid="schedule-start"
+          >
+            {starting ? 'Starting…' : 'Start research →'}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        <div>
+          <label className="block text-xs uppercase tracking-wider text-text-muted mb-1.5">
+            Canon <span className="text-text-muted/60 normal-case">(one per line or comma-separated)</span>
+          </label>
+          <textarea
+            value={draft.plan.canon.join('\n')}
+            onChange={(e) => setCanon(e.target.value)}
+            onBlur={() => persist(draft)}
+            rows={3}
+            className="w-full bg-bg-primary border border-border-primary rounded px-2.5 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent"
+            data-testid="schedule-canon"
+          />
+        </div>
+
+        <div>
+          <div className="flex items-baseline justify-between mb-1.5">
+            <label className="text-xs uppercase tracking-wider text-text-muted">Branches</label>
+            <button
+              type="button"
+              onClick={addBranch}
+              className="text-xs text-accent hover:text-accent-hover"
+            >+ Add branch</button>
+          </div>
+          <div className="flex flex-col gap-1.5" data-testid="schedule-branches">
+            {draft.plan.branches.map((b, i) => (
+              <div key={i} className="grid items-center gap-2 text-sm" style={{ gridTemplateColumns: '160px 1fr auto' }}>
+                <input
+                  value={b.id}
+                  onChange={(e) => setBranch(i, 'id', e.target.value)}
+                  onBlur={() => persist(draft)}
+                  placeholder="branch-id"
+                  className="bg-bg-primary border border-border-primary rounded px-2 py-1 text-xs font-mono text-text-primary focus:outline-none focus:border-accent"
+                />
+                <input
+                  value={b.query}
+                  onChange={(e) => setBranch(i, 'query', e.target.value)}
+                  onBlur={() => persist(draft)}
+                  placeholder="seed search query for this branch"
+                  className="bg-bg-primary border border-border-primary rounded px-2 py-1 text-sm text-text-primary focus:outline-none focus:border-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => { removeBranch(i); persist({ ...draft, plan: { ...draft.plan, branches: draft.plan.branches.filter((_, j) => j !== i) } }); }}
+                  className="text-text-muted hover:text-error text-xs px-1.5"
+                  aria-label="Remove branch"
+                  disabled={draft.plan.branches.length <= 1}
+                >×</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
