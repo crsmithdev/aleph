@@ -39,7 +39,7 @@ import type {
   DecisionPayload,
 } from '../types.js';
 import type { LLMProvider } from '../llm.js';
-import { readScheduleFromArtifacts, validateShape, type ShapeMissing } from '../shape.js';
+import { readScheduleFromArtifacts, rePlanSchedule, validateShape, type ShapeMissing } from '../shape.js';
 
 export interface ResearchTemplateOptions {
   cycles_target?: number;
@@ -312,6 +312,33 @@ export function makeResearchTemplate(
       );
       const verdict = parseIterationCheck(completion.text, milestonePct, iterationCheckModel);
       return { output: verdict, cost_usd: completion.cost_usd };
+    },
+
+    /**
+     * Milestone re-planner. Fires the planner with the prior schedule's
+     * output_shape (kept stable across re-plans) and the accumulated
+     * findings; splices the result so finished branches stay at their
+     * original positions and only the tail is re-arranged.
+     *
+     * Without sqlite, this is a no-op — unit tests that instantiate the
+     * template directly don't get a re-plan side effect, which matches the
+     * iteration_check / post_mortem pattern.
+     */
+    async rePlan(state) {
+      if (!deps.sqlite) return { output: undefined, cost_usd: 0 };
+      const sched = state.artifacts.find(a => a.kind === 'schedule');
+      if (!sched) return { output: undefined, cost_usd: 0 };
+      const prior = sched.payload as unknown as import('../types.js').SchedulePayload;
+      const completed = countCycleOutputs(state);
+      const before = state.envelope_consumed.cost_usd;
+      await rePlanSchedule(
+        deps.sqlite, state.loop.id, prompt, deps.llm,
+        prior, sched.id, completed,
+      );
+      // rePlanSchedule writes cost via bumpUsage; report 0 here so the engine
+      // doesn't double-count.
+      void before;
+      return { output: undefined, cost_usd: 0 };
     },
 
     async postMortem(state) {

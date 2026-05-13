@@ -242,6 +242,11 @@ export interface SchedulePayload {
   /** The mode preset that constructed the initial schedule. Metadata only —
    *  the engine doesn't re-derive behaviour from this. */
   created_with_mode?: string | null;
+  /** Artifact id of the prior schedule when this is a milestone re-plan.
+   *  Walks the chain backwards for replay; `undefined` on the initial
+   *  schedule. The engine reads the **latest** schedule artifact at runtime
+   *  (`readScheduleFromArtifacts`); this field is the audit trail. */
+  predecessor_id?: string;
 }
 
 // ---- Decisions ---------------------------------------------------------------
@@ -438,7 +443,8 @@ export interface PostMortemPayload {
 }
 
 /**
- * Four-hook template interface plus two OPTIONAL observability hooks.
+ * Four-hook template interface plus three OPTIONAL observability / adaptive
+ * hooks.
  *
  * Required hooks:
  *  - processor   — runs the unit of work for this cycle (e.g. one search round).
@@ -450,6 +456,11 @@ export interface PostMortemPayload {
  *  - iterationCheck — fires at each milestone after the renderer. Writes an
  *    `iteration_check` artifact with a drift verdict. Templates that don't
  *    implement it skip the LLM call entirely. Failure does NOT fail the loop.
+ *  - rePlan         — fires at each milestone after iterationCheck. Re-runs
+ *    the planner with accumulated findings + prior plan as context and
+ *    writes a new `kind: 'schedule'` artifact chained to the prior via
+ *    `predecessor_id`. The next cycle's hooks read the new schedule via
+ *    `readScheduleFromArtifacts`. Failure does NOT fail the loop.
  *  - postMortem     — fires once on natural completion (run.ts). Writes a
  *    `post_mortem` artifact with the final verdict. Templates that don't
  *    implement it skip the call. Failure does NOT fail the loop.
@@ -463,5 +474,6 @@ export interface Template<P = unknown, D = unknown, R = unknown> {
   renderer: (state: LoopState) => Promise<HookResult<R>>;
   stop_rule: (state: LoopState) => Promise<StopDecision>;
   iterationCheck?: (state: LoopState, milestonePct: 25 | 50 | 75) => Promise<HookResult<IterationCheckPayload>>;
+  rePlan?: (state: LoopState, milestonePct: 25 | 50 | 75) => Promise<HookResult<void>>;
   postMortem?: (state: LoopState) => Promise<HookResult<PostMortemPayload>>;
 }

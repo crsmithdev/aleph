@@ -133,6 +133,21 @@ export async function runLoop(
           process.stderr.write(`[engine] iteration_check failed at ${pct}% for loop ${loop_id}: ${(err as Error).message}\n`);
         }
       }
+
+      // Optional rePlan hook — fires after iteration_check so the re-planner
+      // sees the freshest verdict in `state.artifacts`. The hook writes its
+      // own chained `kind: 'schedule'` artifact via rePlanSchedule and
+      // charges its own cost via bumpUsage; the engine just dispatches.
+      // Failure must NOT fail the loop (Commandment 1).
+      if (template.rePlan) {
+        try {
+          const stateForReplan = readState(sqlite, loop_id);
+          const result = await template.rePlan(stateForReplan, pct);
+          if (result.cost_usd > 0) bumpUsage(sqlite, loop_id, { cost_usd: result.cost_usd });
+        } catch (err) {
+          process.stderr.write(`[engine] rePlan failed at ${pct}% for loop ${loop_id}: ${(err as Error).message}\n`);
+        }
+      }
     }
 
     // Stop rule — policy, runs fresh every iteration.

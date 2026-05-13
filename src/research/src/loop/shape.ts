@@ -217,13 +217,82 @@ export async function ensureScheduleArtifact(
  * this from inside their renderer / stop_rule so they don't need a separate
  * DB read — the engine already loads all artifacts into LoopState.
  *
+ * Phase 5c — multiple schedule artifacts may exist on a loop once milestone
+ * re-planning fires. Each re-plan writes a new `kind: 'schedule'` artifact
+ * with `predecessor_id` linking to the prior. This function returns the
+ * **latest** by `created_at` so engine reads automatically pick up the new
+ * plan after a re-plan; replay readers can walk `predecessor_id` to see the
+ * history.
+ *
  * Returns null if no schedule artifact is present (e.g. for the noop
  * template, which doesn't get one written).
  */
 export function readScheduleFromArtifacts(artifacts: Artifact[]): SchedulePayload | null {
-  const schedule = artifacts.find(a => a.kind === 'schedule');
-  if (!schedule) return null;
-  return schedule.payload as unknown as SchedulePayload;
+  const schedules = artifacts.filter(a => a.kind === 'schedule');
+  if (schedules.length === 0) return null;
+  // Latest by created_at; SQLite ROWID ties broken by listArtifacts's ORDER BY created_at.
+  let latest = schedules[0];
+  for (const a of schedules) {
+    if (a.created_at > latest.created_at) latest = a;
+  }
+  return latest.payload as unknown as SchedulePayload;
+}
+
+/**
+ * Re-plan a loop's schedule at a milestone checkpoint. Fires the planner
+ * with the prior plan's output_shape and the accumulated findings (read
+ * indirectly via `planLoop`'s caller-visible prompt), splices the result so
+ * the first `completed_branches` entries are preserved verbatim from the
+ * prior plan (cycle index → branch mapping stays stable for already-finalized
+ * cycles), and writes the new schedule as a `kind: 'schedule'` artifact
+ * chained to the prior via `predecessor_id`.
+ *
+ * `planLoop` is total — on any LLM failure it returns its minimal fallback
+ * plan (single branch on the prompt). The fallback's id may collide with a
+ * preserved branch, in which case the de-dupe drops it and the re-plan
+ * produces zero new branches; that's an acceptable outcome (loop continues
+ * against the preserved prefix).
+ */
+export async function rePlanSchedule(
+  sqlite: Sqlite,
+  loop_id: LoopId,
+  prompt: string,
+  llm: LLMProvider,
+  prior: SchedulePayload,
+  prior_artifact_id: string,
+  completed_branches: number,
+  planModel?: string,
+): Promise<SchedulePayload> {
+  const tracker = withCostTracker(llm);
+  const nextPlan = await planLoop(prompt, prior.output_shape, tracker.llm, planModel, { loop_id, sqlite });
+  if (tracker.total() > 0) bumpUsage(sqlite, loop_id, { cost_usd: tracker.total() });
+
+  // Splice: preserve the first `completed_branches` entries of the prior plan
+  // verbatim so cycle index N (already finalized against prior.branches[N])
+  // continues to map to the same branch. Append the planner's fresh
+  // suggestions after the preserved prefix, de-duped by branch id.
+  const preserved = prior.plan.branches.slice(0, completed_branches);
+  const preservedIds = new Set(preserved.map(b => b.id));
+  const fresh = nextPlan.branches.filter(b => !preservedIds.has(b.id));
+  const splicedBranches = [...preserved, ...fresh];
+
+  const payload: SchedulePayload = {
+    output_shape: prior.output_shape,
+    plan: { ...nextPlan, branches: splicedBranches },
+    ...(prior.envelope ? { envelope: prior.envelope } : {}),
+    ...(prior.models ? { models: prior.models } : {}),
+    ...(prior.flags ? { flags: prior.flags } : {}),
+    ...(prior.created_with_mode ? { created_with_mode: prior.created_with_mode } : {}),
+    predecessor_id: prior_artifact_id,
+  };
+
+  createArtifact(sqlite, {
+    loop_id,
+    cycle_id: null,
+    kind: 'schedule',
+    payload: payload as unknown as Record<string, unknown>,
+  });
+  return payload;
 }
 
 // ---- Shape validation (renderer-as-gate) -------------------------------------
