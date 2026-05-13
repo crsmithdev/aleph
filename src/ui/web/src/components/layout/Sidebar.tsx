@@ -199,7 +199,7 @@ export function Sidebar() {
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          <span className="text-[20px] leading-none" aria-hidden>{collapsed ? '»' : '«'}</span>
+          <Icon name={collapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'} className={ICON_PX} />
         </button>
       </div>
     </aside>
