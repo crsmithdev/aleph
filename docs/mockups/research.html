@@ -102,6 +102,13 @@
     background: var(--bg-tertiary); color: var(--text-muted);
     border: 1px dashed var(--border-strong);
   }
+  /* In the archive table, shape reads as a column value (plain accent text),
+     not a chip floating in its cell — same visual weight as "26m ago". */
+  .shape-tag {
+    font: 500 12px/1 var(--font-mono); letter-spacing: 0.04em;
+    color: var(--accent); text-transform: lowercase;
+  }
+  .shape-tag + .shape-tag { margin-left: 8px; color: var(--text-muted); }
 
   .seg {
     display: inline-flex; gap: 0;
@@ -607,15 +614,15 @@
 
           <table class="t">
             <colgroup>
-              <col style="width: auto;">           <!-- Query -->
-              <col style="width: 120px;">          <!-- Shape -->
-              <col style="width: 116px;">          <!-- Started -->
-              <col style="width: 116px;">          <!-- Status -->
-              <col style="width: 84px;">           <!-- Findings -->
-              <col style="width: 72px;">           <!-- Cost -->
-              <col style="width: 80px;">           <!-- Duration -->
-              <col style="width: 168px;">          <!-- Verdict -->
-              <col style="width: 124px;">          <!-- Activity sparkline -->
+              <col style="width: auto;">           <!-- Query (gets remainder) -->
+              <col style="width: 88px;">           <!-- Shape -->
+              <col style="width: 92px;">           <!-- Started -->
+              <col style="width: 108px;">          <!-- Status -->
+              <col style="width: 76px;">           <!-- Findings -->
+              <col style="width: 64px;">           <!-- Cost -->
+              <col style="width: 76px;">           <!-- Duration -->
+              <col style="width: 176px;">          <!-- Verdict -->
+              <col style="width: 116px;">          <!-- Activity sparkline -->
             </colgroup>
             <thead>
               <tr>
@@ -646,7 +653,7 @@
                     <span class="t2">seed: "give me an overview and timeline of the emergence of EDM…"</span>
                   </div>
                 </td>
-                <td><span class="shape-chip" style="font-size: 11px;">timeline</span></td>
+                <td><span class="shape-tag">timeline</span></td>
                 <td class="nowrap"><span class="muted small mono">26m ago</span></td>
                 <td><span class="chip ok small"><span class="dot-i ok"></span>active</span></td>
                 <td class="num">147</td>
@@ -662,7 +669,7 @@
                     <span class="t2">prompts, planner, agent.py implementation</span>
                   </div>
                 </td>
-                <td><span class="shape-chip" style="font-size: 11px;">audit</span></td>
+                <td><span class="shape-tag">audit</span></td>
                 <td class="nowrap"><span class="muted small mono">4m ago</span></td>
                 <td><span class="chip ok small"><span class="dot-i ok"></span>active</span></td>
                 <td class="num">9</td>
@@ -683,7 +690,7 @@
                     <span class="t2">structured outputs, cache hits, multi-turn agents</span>
                   </div>
                 </td>
-                <td><span class="shape-chip" style="font-size: 11px;">survey</span></td>
+                <td><span class="shape-tag">survey</span></td>
                 <td class="nowrap"><span class="muted small mono">2h ago</span></td>
                 <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">214</td>
@@ -699,7 +706,7 @@
                     <span class="t2">single-node, OLAP, ergonomics, column store</span>
                   </div>
                 </td>
-                <td><span class="shape-chip" style="font-size: 11px;">comparison</span></td>
+                <td><span class="shape-tag">comparison</span></td>
                 <td class="nowrap"><span class="muted small mono">6h ago</span></td>
                 <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">86</td>
@@ -715,7 +722,7 @@
                     <span class="t2">spatial audio, livestream pipelines, latency budgets</span>
                   </div>
                 </td>
-                <td><span class="shape-chip" style="font-size: 11px;">survey</span></td>
+                <td><span class="shape-tag">survey</span></td>
                 <td class="nowrap"><span class="muted small mono">9h ago</span></td>
                 <td><span class="chip err small"><span class="dot-i err"></span>halted</span></td>
                 <td class="num">42</td>
@@ -731,8 +738,8 @@
                     <span class="t2">TR-303, Phuture, Trax records, Knuckles lineage</span>
                   </div>
                 </td>
-                <td><span class="shape-chip" style="font-size: 11px;">timeline</span></td>
-                <td class="nowrap"><span class="muted small mono">yesterday 16:22</span></td>
+                <td><span class="shape-tag">timeline</span></td>
+                <td class="nowrap"><span class="muted small mono">1 day ago</span></td>
                 <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">98</td>
                 <td class="num">$0.74</td>
@@ -747,7 +754,7 @@
                     <span class="t2">integration tests, migrations, fixtures</span>
                   </div>
                 </td>
-                <td><span class="shape-chip" style="font-size: 11px;">dynamics</span></td>
+                <td><span class="shape-tag">dynamics</span></td>
                 <td class="nowrap"><span class="muted small mono">2 days ago</span></td>
                 <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
                 <td class="num">61</td>
@@ -764,15 +771,15 @@
                   </div>
                 </td>
                 <td>
-                  <span class="shape-chip" style="font-size: 11px;">timeline</span>
-                  <span class="shape-chip" style="font-size: 11px;">list</span>
+                  <span class="shape-tag">timeline</span>
+                  <span class="shape-tag">list</span>
                 </td>
                 <td class="nowrap"><span class="muted small mono">3 days ago</span></td>
                 <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">186</td>
                 <td class="num">$1.18</td>
                 <td class="num">31.4m</td>
-                <td><span class="chip warn small">flag · stuck threads</span></td>
+                <td><span class="chip warn small">flag · stuck</span></td>
                 <td><svg class="spark-mini" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="#ffcb6b" stroke-width="1.2" points="0,22 12,18 24,14 36,11 48,9 60,8 72,8 84,8 96,8 100,8"/></svg></td>
               </tr>
               <tr class="row">
@@ -782,7 +789,7 @@
                     <span class="t2">settings.json, lifecycle events, common patterns</span>
                   </div>
                 </td>
-                <td><span class="shape-chip" style="font-size: 11px;">survey</span></td>
+                <td><span class="shape-tag">survey</span></td>
                 <td class="nowrap"><span class="muted small mono">4 days ago</span></td>
                 <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
                 <td class="num">73</td>
@@ -798,7 +805,7 @@
                     <span class="t2">prompts, retrieval, write phase, eval harness</span>
                   </div>
                 </td>
-                <td><span class="shape-chip" style="font-size: 11px;">audit</span></td>
+                <td><span class="shape-tag">audit</span></td>
                 <td class="nowrap"><span class="muted small mono">5 days ago</span></td>
                 <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
                 <td class="num">112</td>
