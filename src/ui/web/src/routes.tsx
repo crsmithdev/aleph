@@ -22,7 +22,6 @@ import { SummaryPage } from './pages/life/SummaryPage';
 
 // Research
 import { ResearchLandingPage } from './pages/research/ResearchLandingPage';
-import { ResearchHistoryPage } from './pages/research/ResearchHistoryPage';
 import { ResearchLoopDetail } from './pages/research/ResearchLoopDetail';
 import { ResearchWorkersPage } from './pages/research/ResearchWorkersPage';
 import { ResearchConfigPage } from './pages/research/ResearchConfigPage';
@@ -51,7 +50,8 @@ import { SettingsPage } from './pages/system/SettingsPage';
 const ELEMENTS: Record<string, ReactNode> = {
   '/': <Navigate to="/summary" replace />,
   '/life': <Navigate to="/summary" replace />,
-  '/research/queries': <Navigate to="/research/history" replace />,
+  '/research/queries': <Navigate to="/research" replace />,
+  '/research/history': <Navigate to="/research" replace />,
 
   '/summary': <SummaryPage />,
   '/goals': <GoalsPage />,
@@ -60,7 +60,6 @@ const ELEMENTS: Record<string, ReactNode> = {
   '/habits': <HabitsPage />,
 
   '/research': <ResearchLandingPage />,
-  '/research/history': <ResearchHistoryPage />,
   '/research/:id': <ResearchLoopDetail />,
   '/research/workers': <ResearchWorkersPage />,
   '/research/config': <ResearchConfigPage />,

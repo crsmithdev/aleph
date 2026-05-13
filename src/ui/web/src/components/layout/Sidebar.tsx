@@ -30,7 +30,6 @@ const navGroups: NavGroup[] = [
     label: 'Research',
     items: [
       { to: '/research', label: 'Overview', icon: 'dashboard' },
-      { to: '/research/history', label: 'History', icon: 'history' },
       { to: '/research/workers', label: 'Workers', icon: 'engineering' },
       { to: '/research/config', label: 'Providers', icon: 'tune' },
     ],

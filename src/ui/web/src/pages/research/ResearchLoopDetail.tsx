@@ -242,7 +242,7 @@ export function ResearchLoopDetail() {
       <div className="border-b border-border-primary bg-bg-primary shrink-0">
         <div className="h-14 flex items-center justify-between px-6">
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            <PageTitleLink to="/research/history">Research</PageTitleLink>
+            <PageTitleLink to="/research">Research</PageTitleLink>
             <PageTitleSeparator />
             <PageTitle>{title}</PageTitle>
           </div>

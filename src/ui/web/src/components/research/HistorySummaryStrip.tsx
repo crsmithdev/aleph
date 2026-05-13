@@ -7,11 +7,12 @@ interface Props {
   totalRuns: number;
   byStatus: Record<string, number>;
   avgDurationMs: number;
-  avgConfidence: number;
+  activeNow: number;
+  rangeLabel: string;
 }
 
-/** Top-of-page strip with 6 cells summarising the active range. */
-export function HistorySummaryStrip({ stats, totalRuns, byStatus, avgDurationMs, avgConfidence }: Props) {
+/** Six-cell KPI strip for the combined Research overview. */
+export function HistorySummaryStrip({ stats, totalRuns, byStatus, avgDurationMs, activeNow, rangeLabel }: Props) {
   const findings = stats?.totalFindings ?? 0;
   const spend = stats?.totalCost ?? 0;
   const passRate = stats?.passRate ?? 0;
@@ -27,24 +28,24 @@ export function HistorySummaryStrip({ stats, totalRuns, byStatus, avgDurationMs,
     >
       <StatCard
         compact
-        accent="neutral"
-        label="Total runs"
+        accent="default"
+        label={`Runs · ${rangeLabel}`}
         value={String(totalRuns)}
         detail={`${byStatus.active ?? 0} active · ${byStatus.completed ?? 0} done · ${byStatus.halted ?? 0} halted`}
       />
       <StatCard
         compact
         accent="success"
-        label="Findings"
+        label={`Findings · ${rangeLabel}`}
         value={fmtCount(findings)}
         detail={totalRuns > 0 ? `avg ${avgFindingsPerRun.toFixed(1)} / run` : '—'}
       />
       <StatCard
         compact
-        accent="default"
-        label="Spend"
+        accent="neutral"
+        label={`Spend · ${rangeLabel}`}
         value={fmtCurrency(spend)}
-        detail={totalRuns > 0 ? `avg ${fmtCurrency(avgSpendPerRun)} / run` : '—'}
+        detail={totalRuns > 0 ? `${fmtCurrency(avgSpendPerRun)} / run` : '—'}
       />
       <PassRateCell pass={passRate} flag={flagRate} halt={haltRate} />
       <StatCard
@@ -55,10 +56,10 @@ export function HistorySummaryStrip({ stats, totalRuns, byStatus, avgDurationMs,
       />
       <StatCard
         compact
-        accent="neutral"
-        label="Avg confidence"
-        value={avgConfidence > 0 ? avgConfidence.toFixed(2) : '—'}
-        detail={stats?.avgNovelty ? `novelty ${stats.avgNovelty.toFixed(2)}` : undefined}
+        accent="default"
+        label="Active now"
+        value={String(activeNow)}
+        detail={activeNow > 0 ? 'running' : 'idle'}
       />
     </div>
   );

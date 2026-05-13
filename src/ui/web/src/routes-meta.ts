@@ -41,6 +41,7 @@ export const ROUTE_META: readonly RouteMeta[] = [
   { path: '/' },
   { path: '/life' },
   { path: '/research/queries' },
+  { path: '/research/history' },
 
   // Life
   { path: '/summary', smoke: { testid: 'page-summary', heading: /^Summary$/ } },
@@ -51,7 +52,6 @@ export const ROUTE_META: readonly RouteMeta[] = [
 
   // Research
   { path: '/research', smoke: { testid: 'page-research-landing' } },
-  { path: '/research/history', smoke: { testid: 'page-research-history' } },
   {
     path: '/research/:id',
     smoke: {
