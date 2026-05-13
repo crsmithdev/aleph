@@ -142,35 +142,81 @@ Each item below could plausibly be in v1 — they're called out so the boundary 
 
 Eight phases. Phases 1–6 additive (old engine still runs). Phase 7 single-pass deletion. Phase 8 marks v1 complete.
 
-**Phase 1 — Schema + engine skeleton.**
+### Phase status as of 2026-05-13
+
+| Phase | Status | Notes |
+|---|---|---|
+| 1 — Schema + engine skeleton | ✅ Landed | DDL + engine core + child-process supervisor in production. |
+| 2 — Research + monitor templates | ✅ Landed | Both templates run end-to-end via the loop engine. |
+| 3 — Output-shape enforcement | ✅ Landed | `output_shape` detected at session create; renderer gates "done" via `validateShape`. |
+| 4 — Adaptive planner | ✅ Landed | `planner.ts` ships `{canon, branches, per_branch_budget, perturbation_weights, milestone_plan}`; `(shape × topic)` lookup and 6-cluster taxonomy deleted. |
+| 5 — Schedule as universal loop config + editor | 🟡 Partial | Schedule artifact persists `{output_shape, plan, created_with_mode?}`; envelope / models / perturbation_config / flags / predecessor_id / locked-field mechanic still on `SessionConfig`. Schedule view is read-only. |
+| 6 — UI rewrite | 🟡 Partial | Compose-box mode row, Activity tab as first-class live view, History stats, mode plumbing all landed. InferredPanel, Schedule editor, sidebar IA rename, WorkersPage deletion, Monitors page all still pending. |
+| 7 — Cutover | 🟡 Partial | `dropLegacyTables` wipes the pre-loops schema on every boot; `TopicCluster` deleted from UI. WorkersPage / `/api/research/defaults` legacy SessionConfig surface / `/api/research/config` legacy knobs still alive. |
+| 8 — v1 complete | ⬜ Not started | Gated on Phases 5–7. |
+
+**Phase 1 — Schema + engine skeleton.** ✅ Landed.
 DDL for `loops`, `cycles`, `artifacts`, `cycle_ledger`, `milestones`. Engine core: envelope ticking, cycle dispatch, ledger reads, milestone hook, child-process spawn from API. No templates yet.
 *Deliverable:* a "noop template" runs a fake loop end-to-end. Cycle ledger survives a kill.
 
-**Phase 2 — Research template + monitor template, together.**
+**Phase 2 — Research template + monitor template, together.** ✅ Landed.
 Research processor / derivation / renderer / stop_rule wraps today's logic. Monitor template (small — wait-cycles, run-cycles, diff-renderer) ships in parallel to keep the engine boundary honest.
 *Deliverable:* both templates run end-to-end against the new engine, in parallel with the old engine.
 
-**Phase 3 — Output-shape enforcement.**
+**Phase 3 — Output-shape enforcement.** ✅ Landed.
 Detect `output_shape` at session create. Renderer-as-gate: if shape unsatisfied, request more derivation before declaring done. `stop_rule` rejects "done" without shape.
 *Deliverable:* HSV/HPV-style queries produce the requested table. Berkeley-volunteering-style queries produce a list.
 
-**Phase 4 — Adaptive planner.**
+**Phase 4 — Adaptive planner.** ✅ Landed.
 Delete `run-plan.ts`'s `(shape × topic) → RunPlan` lookup, the 6-cluster `TOPIC_CLUSTERS` constant, and the `SHAPE_DEFAULTS` budget table. Add a planner LLM call that emits a typed `LoopSchedule` — Phase 4 ships the structural-plan slice (`{ canon[], branches[], per_branch_budget, perturbation_weights, milestone_plan }`); the rest of the SchedulePayload (envelope, models, perturbation_config, flags) collapses in at Phase 5. Inputs: the prompt, detected `question_shape`, detected `output_shape`, the envelope, and `role`. URL detection in the prompt feeds the planner as a grounding signal (contents fetched, supplied as canon seed) rather than as a separate code path.
 *Deliverable:* Awesome-Deep-Research-style queries don't pull AlphaFold/Adam optimizer — the planner sees the GitHub URL and grounds canon on the listed projects.
 
-**Phase 5 — Schedule as the universal loop config + Schedule view editor.**
+**Phase 5 — Schedule as the universal loop config + Schedule view editor.** 🟡 Partial.
 `LoopSchedule` persists as `kind: 'schedule'` with the full payload (canon, branches, milestone plan, **plus envelope, models, perturbation_config, flags, mode metadata**). Re-plans at milestones produce chained schedule artifacts via `predecessor_id`. The Schedule view on the loop-detail page is the **only** editor for this artifact — does triple duty: pre-run editing (Custom mode opens here; other modes can also pause-before-start to edit), mid-run editing (when paused, v2), and historical viewing + fork-from-cycle (completed runs). Locked-field mechanic: every field has an implicit `locked` flag set when a non-planner author edits it; the milestone re-planner respects locks. `SessionConfig`'s scattered per-loop fields collapse into the schedule payload.
 *Deliverable:* the user can see and (in Custom or paused state) edit every per-loop knob in one place. No advanced/expert panel anywhere in the system. Cost-per-run drops because the extractor runs on a cheap model.
 
-**Phase 6 — UI rewrite.**
+*Landed slice:* mode metadata — `SchedulePayload.created_with_mode` is populated by `ensureScheduleArtifact` when a mode preset is picked at submit time; mode also seeds the envelope at `createLoop` via `applyModeEnvelope`.
+
+*Remaining slice:*
+- Schedule payload grows to carry `envelope`, `models`, `perturbation_config`, `flags`, `predecessor_id`, `directives_consumed`, `rationale`, plus the locked-field mechanic.
+- `SessionConfig`'s remaining per-loop fields (everything except `iteration_check_model` / `post_mortem_model`) move onto the schedule payload and the legacy table is dropped.
+- Milestone re-planner produces chained schedule artifacts via `predecessor_id`.
+- Schedule view becomes editable (Custom-mode pre-run + paused mid-run + fork-from-cycle on completed runs).
+- Per-role model selection wires through to the templates (Phase-5 deliverable: "Cost-per-run drops because the extractor runs on a cheap model").
+
+**Phase 6 — UI rewrite.** 🟡 Partial.
 Compose box: prompt textarea + 8-button mode row (Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom). `InferredPanel` preserved with editors for question_shape, output_shape, role. Schedule view from Phase 5 wired up as the universal editor. **Activity tab as a first-class live view** — real-time stream of cycles, events, decisions, intermediate outputs, and errors; co-equal with the Schedule and Artifact views, not relegated to a debug surface. Drop `WorkersPage` and the Reviews tab. Sidebar IA: Research / Monitors / Telemetry.
 *Deliverable:* the loop-detail page shows three co-equal surfaces during a live run — **Activity** (live event stream), **Schedule** (current plan artifact, editable when paused or in Custom mode), **Artifact** (the report-in-progress). Mode buttons always visible. No advanced/expert panel anywhere.
 
-**Phase 7 — Cutover.**
+*Landed slice:*
+- Compose box 8-button mode row with mode plumbed end-to-end (request body → API → loops row → schedule artifact metadata).
+- Activity tab as a first-class live view (Document / Activity / Plan / Config tab layout).
+- History page populates `stats` (cost, cycles, sources, post-mortem verdict) per loop via `listLoopsWithStats`; engine verdict (`success | partial | failure`) maps onto UI verdict (`pass | flag | halt`).
+- Topic-cluster filter group removed from `HistoryFilterRail` and from CSV export.
+
+*Remaining slice:*
+- `InferredPanel` editors for `question_shape`, `output_shape`, `role` (pre-run only in v1; mid-run unlock is v2 once pause/edit lands).
+- Schedule view becomes the universal editor (depends on Phase 5).
+- Sidebar IA rename to `Research / Monitors / Telemetry`; drop `Workers`.
+- New `/research/monitors` page surface (the monitor template ships but has no first-class UI).
+- `WorkersPage` deletion happens in Phase 7 but its sidebar entry + `/research/workers` route go in this pass.
+
+**Phase 7 — Cutover.** 🟡 Partial.
 Delete in one pass: `research_jobs`, `worker.ts`, `services/jobs.ts`, `scheduler.ts`, `research_perturbation_state` table, `research_monitor_*` tables, `WorkersPage`, `ResearchReviewsView`. Drop `schedule.mode = 'default'|'scheduled'|'priority'`.
 *Deliverable:* single PR, single migration script. Old engine code gone.
 
-**Phase 8 — v1 complete.**
+*Landed slice:*
+- `dropLegacyTables` in `src/research/src/ddl.ts` wipes the pre-loops schema on every boot (`research_queries`, `research_threads`, `research_findings`, `research_steps`, `research_plans`, `research_jobs`, `research_monitors`, …).
+- `ResearchReviewsView` removed (not in current source).
+- `TopicCluster` type, `TOPIC_CLUSTERS` constant, and the `topic_cluster` field on `ResearchQuery` deleted from the UI.
+
+*Remaining slice:*
+- `ResearchWorkersPage.tsx` deleted; sidebar `Workers` link and `/research/workers` route removed.
+- `GET/PATCH /api/research/config` legacy knobs (`max_thread_depth`, `min_searches`, `fetch_source_text`, `gap_analysis`, `max_gap_searches`) stripped — keep only provider/key fields.
+- `GET/PUT /api/research/defaults` and `SessionConfig` ~28 unused fields (every field except `iteration_check_model` / `post_mortem_model`) dropped once Phase 5 has moved them onto the schedule.
+- `ResearchDefaultsPanel.tsx` + `ResearchConfigPage.tsx` collapse to the residual surface (provider keys, the two surviving model fields).
+
+**Phase 8 — v1 complete.** ⬜ Not started — gated on Phases 5–7.
 Acceptance checks (below) pass. v2 work can begin.
 
 ### v1 acceptance criteria
