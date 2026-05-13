@@ -177,18 +177,32 @@ dialog::backdrop {
 .md-content hr { border: none; border-top: 1px solid var(--border-primary); margin: 0.5rem 0; }
 .md-content.md-sm h1, .md-content.md-sm h2, .md-content.md-sm h3 { font-size: 0.875rem; }
 
-/* Article view — override compact md-content for long-form reading */
-.md-content.article-view { font-size: 1rem; line-height: 1.85; color: var(--text-primary); }
+/* Article view — Wikipedia-style long-form reading. Serif body via the
+ * project's heading font (Merriweather) for an encyclopedia register;
+ * horizontal rule under h2 mirrors the section-divider look. */
+.md-content.article-view { font-family: var(--font-heading); font-size: 1rem; line-height: 1.8; color: var(--text-primary); }
 .md-content.article-view p { margin-bottom: 1rem; color: var(--text-secondary); }
-.md-content.article-view ul { font-size: 1rem; padding-left: 1.5rem; margin-bottom: 1rem; }
-.md-content.article-view ol { font-size: 1rem; padding-left: 1.5rem; margin-bottom: 1rem; }
-.md-content.article-view li { margin-bottom: 0.25rem; color: var(--text-secondary); }
+.md-content.article-view h2 { font-size: 1.5rem; font-weight: 700; margin-top: 2rem; margin-bottom: 0.75rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border-primary); color: var(--text-primary); }
+.md-content.article-view h2:first-child { margin-top: 0; }
+.md-content.article-view h3 { font-size: 1.15rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--text-primary); }
+.md-content.article-view h4 { font-size: 1rem; font-weight: 600; margin-top: 1rem; margin-bottom: 0.25rem; color: var(--text-primary); }
+.md-content.article-view ul { font-size: 1rem; padding-left: 1.5rem; margin-bottom: 1rem; list-style-type: disc; }
+.md-content.article-view ol { font-size: 1rem; padding-left: 1.5rem; margin-bottom: 1rem; list-style-type: decimal; }
+.md-content.article-view li { margin-bottom: 0.35rem; color: var(--text-secondary); }
 .md-content.article-view blockquote { border-left-width: 3px; padding-left: 1rem; margin: 1.5rem 0; }
-.md-content.article-view code { font-size: 0.9em; }
+.md-content.article-view code { font-size: 0.9em; font-family: var(--font-mono); }
 .md-content.article-view pre { padding: 1rem; margin-bottom: 1rem; }
 .md-content.article-view hr { margin: 2rem 0; }
 .md-content.article-view table { font-size: 0.9375rem; }
 .md-content.article-view th, .md-content.article-view td { padding: 0.5rem 0.75rem; }
+.md-content.article-view a.cite { color: var(--c-accent); text-decoration: none; font-family: var(--font-sans); font-size: 0.85em; vertical-align: baseline; padding: 0 0.1em; }
+.md-content.article-view a.cite:hover { text-decoration: underline; }
+/* References section: each entry is a paragraph starting [N]; the anchor
+ * target is on the <p>. Show the leading [N] in mono so the entry list
+ * reads like a numbered bibliography. */
+.md-content.article-view p.reference-entry { font-family: var(--font-sans); font-size: 0.9375rem; line-height: 1.5; margin-bottom: 0.5rem; padding-left: 2.5rem; text-indent: -2.5rem; }
+.md-content.article-view p.reference-entry::target { background: var(--bg-tertiary); }
+.md-content.article-view p.reference-entry:target { background: rgba(255, 255, 255, 0.04); border-radius: 0.25rem; padding: 0.25rem 0.5rem 0.25rem 3rem; text-indent: -2.5rem; transition: background 0.3s ease; }
 
 /* Recharts legend — override default li margin so legendProps gap controls spacing */
 .recharts-legend-item { margin-right: 0 !important; }

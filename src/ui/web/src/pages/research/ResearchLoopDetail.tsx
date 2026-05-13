@@ -28,7 +28,7 @@
  * onto the schedule payload itself; Config will then read them off the
  * artifact directly instead of via the defaults endpoint.
  */
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import ReactMarkdown from 'react-markdown';
@@ -323,12 +323,6 @@ function DocumentTab({ loopId, artifacts }: { loopId: string; artifacts: Artifac
     );
   }
 
-  // Sources rail — prefer the polish artifact's source_count by way of the
-  // latest render's source list (the polish step doesn't carry sources of
-  // its own; it cites the render's set). When polish hasn't happened yet,
-  // the same render list still drives the rail.
-  const railSources = fallbackRender?.sources ?? [];
-
   return (
     <div className="flex flex-col gap-4" data-testid="document-tab">
       <DocumentMetaStrip
@@ -342,30 +336,123 @@ function DocumentTab({ loopId, artifacts }: { loopId: string; artifacts: Artifac
         <div className="text-sm text-error border border-error/40 bg-error/10 rounded px-3 py-2">{regenError}</div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
-        <article
-          className="prose prose-sm max-w-3xl prose-headings:text-text-primary prose-p:text-text-secondary prose-li:text-text-secondary prose-table:text-text-secondary prose-strong:text-text-primary prose-a:text-accent"
-          data-testid="document-body"
-        >
-          {doc ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.payload.text}</ReactMarkdown>
-          ) : fallbackRender ? (
-            <>
-              {fallbackRender.findings.map((f, i) => (
-                <section key={i} className="mb-6">
-                  <h3 className="!mt-0">Cycle {f.cycle}: {f.query}</h3>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{f.text}</ReactMarkdown>
-                </section>
-              ))}
-            </>
-          ) : null}
-        </article>
-
-        <ReferencesRail sources={railSources} />
-      </div>
+      <article
+        className="md-content article-view mx-auto w-full max-w-[760px]"
+        data-testid="document-body"
+      >
+        {doc ? (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={CITATION_MARKDOWN_COMPONENTS}
+          >{splitReferenceParagraphs(doc.payload.text)}</ReactMarkdown>
+        ) : fallbackRender ? (
+          <>
+            {fallbackRender.findings.map((f, i) => (
+              <section key={i} className="mb-6">
+                <h3>Cycle {f.cycle}: {f.query}</h3>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{f.text}</ReactMarkdown>
+              </section>
+            ))}
+          </>
+        ) : null}
+      </article>
     </div>
   );
 }
+
+// ---- Reference paragraph splitter ----------------------------------------
+//
+// The polish prompt asks the LLM to list references as numbered items, but
+// the model commonly emits them as one block separated by single newlines
+// rather than blank lines. In Markdown that collapses into one <p>, so only
+// the first reference gets an anchor target. Insert a blank line before any
+// `[N]` that begins a new line inside the References section so each
+// reference becomes its own paragraph.
+function splitReferenceParagraphs(text: string): string {
+  const m = text.match(/^## References\s*$/m);
+  if (!m || m.index === undefined) return text;
+  const head = text.slice(0, m.index + m[0].length);
+  const refs = text.slice(m.index + m[0].length);
+  return head + refs.replace(/\n(\[\d+\])/g, '\n\n$1');
+}
+
+// ---- Citation linkifier --------------------------------------------------
+//
+// Polished documents contain inline `[1]`, `[2]` etc. citations referencing
+// a `## References` section at the bottom. By default ReactMarkdown renders
+// these as plain text. We post-process the React tree:
+//   - Body `[N]` → <a href="#ref-N" class="cite">[N]</a>
+//   - Paragraphs starting with `[N]` (reference list entries) get id="ref-N"
+//     and a `.reference-entry` class for hanging-indent layout
+//
+// This keeps the right-side rail removed (it duplicated the in-document
+// References section) and turns clicking a citation into a same-page jump.
+
+const CITATION_PATTERN = /(\[\d+\])/g;
+
+function linkifyCitations(nodes: React.ReactNode): React.ReactNode {
+  if (typeof nodes === 'string') {
+    if (!CITATION_PATTERN.test(nodes)) return nodes;
+    CITATION_PATTERN.lastIndex = 0; // RegExp state — reset since /g is sticky.
+    const parts = nodes.split(CITATION_PATTERN);
+    return parts.map((part, i) => {
+      const m = part.match(/^\[(\d+)\]$/);
+      return m
+        ? <a key={i} href={`#ref-${m[1]}`} className="cite">{part}</a>
+        : part;
+    });
+  }
+  if (Array.isArray(nodes)) return nodes.map((n, i) => <React.Fragment key={i}>{linkifyCitations(n)}</React.Fragment>);
+  if (React.isValidElement(nodes)) {
+    const el = nodes as React.ReactElement<{ children?: React.ReactNode }>;
+    return React.cloneElement(el, undefined, linkifyCitations(el.props.children));
+  }
+  return nodes;
+}
+
+function firstTextOf(children: React.ReactNode): string {
+  if (typeof children === 'string') return children;
+  if (Array.isArray(children)) {
+    for (const c of children) {
+      const s = firstTextOf(c);
+      if (s) return s;
+    }
+    return '';
+  }
+  if (React.isValidElement(children)) {
+    const el = children as React.ReactElement<{ children?: React.ReactNode }>;
+    return firstTextOf(el.props.children);
+  }
+  return '';
+}
+
+const CITATION_MARKDOWN_COMPONENTS = {
+  p({ children }: { children?: React.ReactNode }) {
+    const text = firstTextOf(children);
+    const refMatch = text.match(/^\[(\d+)\]/);
+    if (refMatch) {
+      // Reference list entry: anchor target, no linkification needed (the
+      // leading [N] is just the label).
+      return <p id={`ref-${refMatch[1]}`} className="reference-entry">{children}</p>;
+    }
+    return <p>{linkifyCitations(children)}</p>;
+  },
+  li({ children }: { children?: React.ReactNode }) {
+    // If the LLM emits the References section as a numbered list instead of
+    // paragraphs, each <li> may start with [N]. Same handling.
+    const text = firstTextOf(children);
+    const refMatch = text.match(/^\[(\d+)\]/);
+    if (refMatch) return <li id={`ref-${refMatch[1]}`}>{children}</li>;
+    return <li>{linkifyCitations(children)}</li>;
+  },
+  h2({ children }: { children?: React.ReactNode }) {
+    const text = firstTextOf(children);
+    if (text.trim().toLowerCase() === 'references') {
+      return <h2 id="references">{children}</h2>;
+    }
+    return <h2>{children}</h2>;
+  },
+};
 
 function DocumentMetaStrip({
   doc, fallback, regenerating, onRegenerate,
@@ -418,64 +505,6 @@ function DocumentMetaStrip({
         {regenerating ? 'Regenerating…' : (doc ? 'Regenerate' : 'Generate now')}
       </button>
     </div>
-  );
-}
-
-const EXTRACTION_PILL: Record<SourceExtractionStatus, string> = {
-  extracted:    'bg-success/15 text-success',
-  snippet_only: 'bg-bg-tertiary text-text-muted',
-  failed:       'bg-red-500/15 text-red-400',
-};
-
-function ReferencesRail({ sources }: { sources: RenderSourceEntry[] }) {
-  return (
-    <aside
-      className="lg:sticky lg:top-0 border border-border-primary rounded-lg bg-bg-secondary"
-      data-testid="document-references"
-    >
-      <div className="px-3 py-2 border-b border-border-primary bg-bg-primary">
-        <h4 className="text-xs uppercase tracking-wider text-text-muted font-medium">
-          References · {sources.length}
-        </h4>
-      </div>
-      {sources.length === 0 ? (
-        <p className="text-sm text-text-muted italic px-3 py-3">No sources fetched yet.</p>
-      ) : (
-        <ol className="flex flex-col" data-testid="document-references-list">
-          {sources.map((s, i) => {
-            const domain = safeDomain(s.url);
-            return (
-              <li
-                key={s.url + i}
-                className="px-3 py-2.5 border-b border-border-primary last:border-b-0 flex flex-col gap-1"
-              >
-                <div className="flex items-baseline gap-2 text-sm">
-                  <span className="text-accent font-mono text-xs shrink-0">[{i + 1}]</span>
-                  <a
-                    href={s.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-text-primary hover:text-accent line-clamp-2 leading-snug"
-                    title={s.title || s.url}
-                  >
-                    {s.title || s.url}
-                  </a>
-                </div>
-                <div className="flex items-center justify-between gap-2 pl-7">
-                  <span className="text-xs font-mono text-text-muted truncate">{domain}</span>
-                  <span className={clsx(
-                    'text-xs px-1.5 py-0.5 rounded font-medium uppercase tracking-wider shrink-0',
-                    EXTRACTION_PILL[s.extraction_status],
-                  )} title={s.error ? `${s.extraction_status} · ${s.error}` : s.extraction_status}>
-                    {s.extraction_status === 'snippet_only' ? 'snippet' : s.extraction_status}
-                  </span>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      )}
-    </aside>
   );
 }
 
