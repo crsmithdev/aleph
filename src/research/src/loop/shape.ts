@@ -165,6 +165,7 @@ export async function ensureScheduleArtifact(
   llm: LLMProvider,
   detectModel?: string,
   planModel?: string,
+  mode?: string | null,
 ): Promise<SchedulePayload> {
   const existing = listArtifacts(sqlite, loop_id, 'schedule');
   if (existing.length > 0) {
@@ -180,7 +181,11 @@ export async function ensureScheduleArtifact(
   // artifact. Without these, the planner stays event-silent (unit-test mode).
   const plan = await planLoop(prompt, output_shape, tracker.llm, planModel, { loop_id, sqlite });
   if (tracker.total() > 0) bumpUsage(sqlite, loop_id, { cost_usd: tracker.total() });
-  const payload: SchedulePayload = { output_shape, plan };
+  const payload: SchedulePayload = {
+    output_shape,
+    plan,
+    ...(mode ? { created_with_mode: mode } : {}),
+  };
   createArtifact(sqlite, {
     loop_id,
     cycle_id: null,

@@ -50,6 +50,10 @@ export interface Loop {
   envelope_consumed: EnvelopeUsage;
   child_pid: number | null;
   prompt: string;
+  /** Mode preset picked at session-create time. Pure metadata after the
+   *  schedule is constructed (see `MODE_PROFILES` in `./modes.ts`); engine
+   *  behaviour is governed by the schedule artifact, not the mode label. */
+  mode: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -194,6 +198,11 @@ export interface LoopSchedule {
 export interface SchedulePayload {
   output_shape: OutputShape;
   plan: LoopSchedule;
+  /** The mode preset that constructed the initial schedule. Metadata only —
+   *  the engine doesn't re-derive behaviour from this. Phase 5 will collapse
+   *  envelope / models / perturbation_config onto this payload too; for now
+   *  the mode label is the durable record of what the user picked. */
+  created_with_mode?: string | null;
 }
 
 // ---- Decisions ---------------------------------------------------------------

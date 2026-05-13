@@ -54,7 +54,7 @@ interface LoopSchedule {
   perturbation_weights: Record<string, number>;
   milestone_plan: number[];
 }
-interface SchedulePayload { output_shape: OutputShape; plan: LoopSchedule }
+interface SchedulePayload { output_shape: OutputShape; plan: LoopSchedule; created_with_mode?: string | null }
 
 interface Loop {
   id: string;
@@ -1275,7 +1275,7 @@ function PlanTab({ artifacts }: { artifacts: Artifact[] }) {
 
   return (
     <div className="max-w-4xl flex flex-col gap-5" data-testid="plan-tab">
-      <PlanSummary plan={plan} shape={shape} />
+      <PlanSummary plan={plan} shape={shape} mode={payload?.created_with_mode ?? null} />
 
       <Panel title="Canon" subtitle={`${plan.canon.length} entries`} testId="plan-canon">
         {plan.canon.length === 0 ? (
@@ -1333,7 +1333,7 @@ function PlanTab({ artifacts }: { artifacts: Artifact[] }) {
   );
 }
 
-function PlanSummary({ plan, shape }: { plan: LoopSchedule; shape: OutputShape | undefined }) {
+function PlanSummary({ plan, shape, mode }: { plan: LoopSchedule; shape: OutputShape | undefined; mode: string | null }) {
   const totalBudget = plan.branches.reduce(
     (sum, b) => sum + (b.budget ?? plan.per_branch_budget),
     0,
@@ -1344,9 +1344,9 @@ function PlanSummary({ plan, shape }: { plan: LoopSchedule; shape: OutputShape |
       className="grid grid-cols-2 md:grid-cols-4 gap-3"
       data-testid="plan-summary"
     >
+      <SummaryCell label="Mode" value={mode ? mode : '—'} tone="accent" sub={mode ? 'starting template' : 'no preset'} />
       <SummaryCell label="Output shape" value={shape ? formatShape(shape) : '—'} tone="info" />
-      <SummaryCell label="Branches" value={String(plan.branches.length)} tone="default" />
-      <SummaryCell label="Cycle budget" value={String(totalBudget)} sub={`per branch ${plan.per_branch_budget}`} tone="accent" />
+      <SummaryCell label="Branches" value={String(plan.branches.length)} sub={`cycle budget ${totalBudget} · per branch ${plan.per_branch_budget}`} tone="default" />
       <SummaryCell
         label="Milestones"
         value={plan.milestone_plan.length === 0

@@ -19,6 +19,7 @@ import {
   onResearchEvent,
   listTemplateIds,
   OpenRouterProvider,
+  applyModeEnvelope, isMode,
   type Envelope,
 } from '@construct/research';
 import { readSessionLog, sessionLogPath } from '../research-logger.js';
@@ -28,6 +29,11 @@ interface StartBody {
   template_id: string;
   prompt?: string;
   envelope?: Envelope;
+  /** Mode preset (quick / default / deep / roam / bonkers / dev / eval /
+   *  custom). Seeds the envelope (request fields win over preset) and is
+   *  recorded as `created_with_mode` on the schedule artifact. Unknown
+   *  values are coerced to `default`. */
+  mode?: string;
   // Test/dev knobs forwarded to the child as CLI args. Not persisted.
   processor_delay_ms?: number;
   cycles_target?: number;
@@ -125,7 +131,7 @@ export const loopRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post<{ Body: StartBody }>('/start', async (req, reply) => {
-    const { template_id, prompt, envelope, processor_delay_ms, cycles_target, poll_every } = req.body ?? {};
+    const { template_id, prompt, envelope, mode, processor_delay_ms, cycles_target, poll_every } = req.body ?? {};
     if (!template_id || typeof template_id !== 'string') {
       return reply.status(400).send({ error: 'template_id required' });
     }
@@ -133,7 +139,17 @@ export const loopRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: `unknown template_id: ${template_id}` });
     }
 
-    const loop = createLoop(app.sqlite, { template_id, prompt, envelope });
+    // Validate mode and merge its envelope preset under the request's envelope.
+    // Unknown mode → coerce to default (rather than 400) so client typos don't
+    // block a query; the canonical Mode list lives on the engine.
+    const resolvedMode = mode && isMode(mode) ? mode : (mode ? 'default' : undefined);
+    const mergedEnvelope = applyModeEnvelope(resolvedMode, envelope);
+
+    const loop = createLoop(app.sqlite, {
+      template_id, prompt,
+      envelope: mergedEnvelope,
+      mode: resolvedMode ?? null,
+    });
     spawnLoopChild(app.sqlite, loop.id, { processor_delay_ms, cycles_target, poll_every });
     return reply.status(201).send({ id: loop.id });
   });

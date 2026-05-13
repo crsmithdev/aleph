@@ -32,6 +32,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       envelope_consumed TEXT NOT NULL DEFAULT '{"time_minutes":0,"cost_usd":0,"cycles_count":0,"sources_count":0}',
       child_pid INTEGER,
       prompt TEXT NOT NULL DEFAULT '',
+      mode TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -84,7 +85,18 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     CREATE INDEX IF NOT EXISTS idx_milestones_loop ON milestones(loop_id, at_envelope_pct);
   `);
 
+  // Idempotent column add for existing dev DBs that pre-date the mode column.
+  // CREATE TABLE IF NOT EXISTS above is a no-op when the table already exists,
+  // so it can't introduce a new column on its own.
+  ensureColumn(sqlite, 'loops', 'mode', 'TEXT');
+
   seedDefaults(sqlite);
+}
+
+function ensureColumn(sqlite: Sqlite, table: string, column: string, def: string): void {
+  const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (cols.some(c => c.name === column)) return;
+  sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
 }
 
 /**

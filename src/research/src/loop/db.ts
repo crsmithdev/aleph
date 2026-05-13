@@ -26,12 +26,12 @@ import type {
  */
 export function createLoop(
   sqlite: Sqlite,
-  args: { id?: LoopId; template_id: string; envelope?: Envelope; prompt?: string },
+  args: { id?: LoopId; template_id: string; envelope?: Envelope; prompt?: string; mode?: string | null },
 ): Loop {
   const id = args.id ?? generateId();
   sqlite.prepare(
-    'INSERT INTO loops (id, template_id, envelope, prompt) VALUES (?, ?, ?, ?)'
-  ).run(id, args.template_id, JSON.stringify(args.envelope ?? {}), args.prompt ?? '');
+    'INSERT INTO loops (id, template_id, envelope, prompt, mode) VALUES (?, ?, ?, ?, ?)'
+  ).run(id, args.template_id, JSON.stringify(args.envelope ?? {}), args.prompt ?? '', args.mode ?? null);
   return getLoop(sqlite, id)!;
 }
 
@@ -43,10 +43,11 @@ export function createLoop(
 export function listLoops(sqlite: Sqlite, opts: { limit?: number } = {}): Loop[] {
   const limit = opts.limit ?? 200;
   const rows = sqlite.prepare(
-    'SELECT id, template_id, status, envelope, envelope_consumed, child_pid, prompt, created_at, updated_at FROM loops ORDER BY created_at DESC LIMIT ?'
+    'SELECT id, template_id, status, envelope, envelope_consumed, child_pid, prompt, mode, created_at, updated_at FROM loops ORDER BY created_at DESC LIMIT ?'
   ).all(limit) as Array<{
     id: string; template_id: string; status: string; envelope: string;
     envelope_consumed: string; child_pid: number | null; prompt: string;
+    mode: string | null;
     created_at: string; updated_at: string;
   }>;
   return rows.map(row => ({
@@ -95,7 +96,7 @@ export function listLoopsWithStats(sqlite: Sqlite, opts: { limit?: number } = {}
   const rows = sqlite.prepare(
     `SELECT
        l.id, l.template_id, l.status, l.envelope, l.envelope_consumed,
-       l.child_pid, l.prompt, l.created_at, l.updated_at,
+       l.child_pid, l.prompt, l.mode, l.created_at, l.updated_at,
        pm.payload AS pm_payload, pm.created_at AS pm_created_at
      FROM loops l
      LEFT JOIN artifacts pm
@@ -109,6 +110,7 @@ export function listLoopsWithStats(sqlite: Sqlite, opts: { limit?: number } = {}
   ).all(limit) as Array<{
     id: string; template_id: string; status: string; envelope: string;
     envelope_consumed: string; child_pid: number | null; prompt: string;
+    mode: string | null;
     created_at: string; updated_at: string;
     pm_payload: string | null; pm_created_at: string | null;
   }>;
@@ -136,6 +138,7 @@ export function listLoopsWithStats(sqlite: Sqlite, opts: { limit?: number } = {}
       envelope_consumed: consumed,
       child_pid: row.child_pid,
       prompt: row.prompt,
+      mode: row.mode,
       created_at: row.created_at,
       updated_at: row.updated_at,
       stats: {
@@ -151,10 +154,11 @@ export function listLoopsWithStats(sqlite: Sqlite, opts: { limit?: number } = {}
 
 export function getLoop(sqlite: Sqlite, id: LoopId): Loop | null {
   const row = sqlite.prepare(
-    'SELECT id, template_id, status, envelope, envelope_consumed, child_pid, prompt, created_at, updated_at FROM loops WHERE id = ?'
+    'SELECT id, template_id, status, envelope, envelope_consumed, child_pid, prompt, mode, created_at, updated_at FROM loops WHERE id = ?'
   ).get(id) as {
     id: string; template_id: string; status: string; envelope: string;
     envelope_consumed: string; child_pid: number | null; prompt: string;
+    mode: string | null;
     created_at: string; updated_at: string;
   } | undefined;
   if (!row) return null;

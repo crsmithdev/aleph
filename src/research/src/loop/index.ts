@@ -40,6 +40,9 @@ export type { LoopRowStats, LoopWithStats } from './db.js';
 export { runLoop } from './engine.js';
 export type { LoopRunResult } from './engine.js';
 
+export { MODES, DEFAULT_MODE, MODE_PROFILES, isMode, applyModeEnvelope } from './modes.js';
+export type { Mode, ModeProfile } from './modes.js';
+
 export {
   inputHash, lookupOutput, recordEntry, listEntries, runOnce,
 } from './ledger.js';

@@ -139,7 +139,7 @@ async function main() {
   // Templates with no schedule (noop) skip this entirely.
   if (deps.llm) {
     try {
-      await ensureScheduleArtifact(sqlite, loop_id, loop.prompt, deps.llm);
+      await ensureScheduleArtifact(sqlite, loop_id, loop.prompt, deps.llm, undefined, undefined, loop.mode);
     } catch (err) {
       failLoop(sqlite, loop_id, `ensureScheduleArtifact: ${(err as Error).message}`);
       process.exit(2);
