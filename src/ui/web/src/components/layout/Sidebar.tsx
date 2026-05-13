@@ -129,7 +129,7 @@ export function Sidebar() {
       {/* Header / brand */}
       <div className={clsx(
         'flex items-center border-b border-border-primary',
-        collapsed ? 'flex-col gap-2 justify-center py-3 px-2' : 'h-14 justify-between px-3',
+        collapsed ? 'justify-center py-3 px-2' : 'h-14 px-3',
       )}>
         {collapsed ? (
           <NavLink to="/" title="Construct"><BrandMark /></NavLink>
@@ -139,13 +139,6 @@ export function Sidebar() {
             <span className="font-heading text-2xl font-bold leading-tight text-text-primary truncate">Construct</span>
           </NavLink>
         )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center p-1 text-text-muted hover:text-text-primary hover:bg-bg-tertiary rounded transition-colors"
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          <span className="font-heading text-2xl font-bold leading-tight" aria-hidden>{collapsed ? '»' : '«'}</span>
-        </button>
       </div>
 
       {/* Nav */}
@@ -193,8 +186,21 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-border-primary px-2 py-2">
-        <SidebarLink to={settingsItem.to} label={settingsItem.label} icon={settingsItem.icon} collapsed={collapsed} />
+      <div className={clsx(
+        'border-t border-border-primary px-2 py-2 flex gap-1',
+        collapsed ? 'flex-col items-center' : 'items-center',
+      )}>
+        <div className={collapsed ? '' : 'flex-1 min-w-0'}>
+          <SidebarLink to={settingsItem.to} label={settingsItem.label} icon={settingsItem.icon} collapsed={collapsed} />
+        </div>
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="flex items-center justify-center min-h-[32px] w-8 text-text-muted hover:text-text-primary hover:bg-bg-tertiary rounded transition-colors"
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <span className="text-[20px] leading-none" aria-hidden>{collapsed ? '»' : '«'}</span>
+        </button>
       </div>
     </aside>
   );
