@@ -11,6 +11,8 @@ interface Props {
   rangeLabel: string;
 }
 
+const EMPTY = '—';
+
 /** Six-cell KPI strip for the combined Research overview. */
 export function HistorySummaryStrip({ stats, totalRuns, byStatus, avgDurationMs, activeNow, rangeLabel }: Props) {
   const findings = stats?.totalFindings ?? 0;
@@ -18,6 +20,8 @@ export function HistorySummaryStrip({ stats, totalRuns, byStatus, avgDurationMs,
   const passRate = stats?.passRate ?? 0;
   const flagRate = stats?.flagRate ?? 0;
   const haltRate = stats?.haltRate ?? 0;
+  const hasVerdicts = passRate + flagRate + haltRate > 0;
+  const hasSpend = spend >= 0.005;
   const avgFindingsPerRun = totalRuns > 0 ? findings / totalRuns : 0;
   const avgSpendPerRun = totalRuns > 0 ? spend / totalRuns : 0;
 
@@ -28,44 +32,47 @@ export function HistorySummaryStrip({ stats, totalRuns, byStatus, avgDurationMs,
     >
       <StatCard
         compact
-        accent="default"
+        accent={totalRuns > 0 ? 'default' : 'neutral'}
         label={`Runs · ${rangeLabel}`}
-        value={String(totalRuns)}
-        detail={`${byStatus.active ?? 0} active · ${byStatus.completed ?? 0} done · ${byStatus.halted ?? 0} halted`}
+        value={totalRuns > 0 ? String(totalRuns) : EMPTY}
+        detail={totalRuns > 0 ? `${byStatus.active ?? 0} active · ${byStatus.completed ?? 0} done · ${byStatus.halted ?? 0} halted` : undefined}
       />
       <StatCard
         compact
-        accent="success"
+        accent={findings > 0 ? 'success' : 'neutral'}
         label={`Findings · ${rangeLabel}`}
-        value={fmtCount(findings)}
-        detail={totalRuns > 0 ? `avg ${avgFindingsPerRun.toFixed(1)} / run` : '—'}
+        value={findings > 0 ? fmtCount(findings) : EMPTY}
+        detail={findings > 0 ? `avg ${avgFindingsPerRun.toFixed(1)} / run` : undefined}
       />
       <StatCard
         compact
         accent="neutral"
         label={`Spend · ${rangeLabel}`}
-        value={fmtCurrency(spend)}
-        detail={totalRuns > 0 ? `${fmtCurrency(avgSpendPerRun)} / run` : '—'}
+        value={hasSpend ? fmtCurrency(spend) : EMPTY}
+        detail={hasSpend ? `${fmtCurrency(avgSpendPerRun)} / run` : undefined}
       />
-      <PassRateCell pass={passRate} flag={flagRate} halt={haltRate} />
+      <PassRateCell pass={passRate} flag={flagRate} halt={haltRate} hasData={hasVerdicts} />
       <StatCard
         compact
         accent="neutral"
         label="Avg duration"
-        value={avgDurationMs > 0 ? fmtDuration(avgDurationMs) : '—'}
+        value={avgDurationMs > 0 ? fmtDuration(avgDurationMs) : EMPTY}
       />
       <StatCard
         compact
-        accent="default"
+        accent={activeNow > 0 ? 'default' : 'neutral'}
         label="Active now"
-        value={String(activeNow)}
-        detail={activeNow > 0 ? 'running' : 'idle'}
+        value={activeNow > 0 ? String(activeNow) : EMPTY}
+        detail={activeNow > 0 ? 'running' : undefined}
       />
     </div>
   );
 }
 
-function PassRateCell({ pass, flag, halt }: { pass: number; flag: number; halt: number }) {
+function PassRateCell({ pass, flag, halt, hasData }: { pass: number; flag: number; halt: number; hasData: boolean }) {
+  if (!hasData) {
+    return <StatCard compact accent="neutral" label="Pass rate" value={EMPTY} />;
+  }
   const pctPass = Math.round(pass * 100);
   const pctFlag = Math.round(flag * 100);
   const pctHalt = Math.round(halt * 100);

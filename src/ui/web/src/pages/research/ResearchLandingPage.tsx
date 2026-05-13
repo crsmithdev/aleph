@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
@@ -150,15 +150,9 @@ export function ResearchLandingPage() {
       .map(s => ({ status: s, count: c[s] ?? 0 }))
       .filter(r => r.count > 0);
   }, [visibleQueries]);
-  const statusMixTotal = statusMix.reduce((s, r) => s + r.count, 0);
-
   return (
     <div className="flex flex-col gap-6 -mx-6 -mt-6">
       <div className="px-6 pt-6">
-        <ComposeBox />
-      </div>
-
-      <div className="px-6">
         <PageHeader
           title={
             <>
@@ -172,6 +166,10 @@ export function ResearchLandingPage() {
         />
       </div>
 
+      <div className="px-6">
+        <ComposeBox />
+      </div>
+
       {isLoading ? (
         <div className="px-6"><PageLoading /></div>
       ) : isError ? (
@@ -180,8 +178,8 @@ export function ResearchLandingPage() {
         <>
           {/* Trend triplet — activity area | verdict bar | status mix donut */}
           <div className="px-6 grid gap-4" style={{ gridTemplateColumns: '2fr 1fr 1fr' }}>
-            <ChartContainer title={`Activity · ${range}`} height={140}>
-              {stats && stats.byDay.length > 0 ? (
+            {stats && stats.byDay.length > 0 ? (
+              <ChartContainer title={`Activity · ${range}`} height={140}>
                 <AreaChart data={stats.byDay}>
                   <CartesianGrid {...gridProps} />
                   <XAxis dataKey="date" {...xAxisDateProps} />
@@ -209,15 +207,15 @@ export function ResearchLandingPage() {
                     name="Runs"
                   />
                 </AreaChart>
-              ) : (
-                <div className="h-full flex items-center justify-center text-text-muted text-sm">
-                  No activity in the selected range.
-                </div>
-              )}
-            </ChartContainer>
+              </ChartContainer>
+            ) : (
+              <ChartContainer title={`Activity · ${range}`} raw>
+                <EmptyChart>No activity in the selected range.</EmptyChart>
+              </ChartContainer>
+            )}
 
-            <ChartContainer title="Verdicts" height={140}>
-              {stats && stats.byVerdict.length > 0 ? (
+            {stats && stats.byVerdict.length > 0 ? (
+              <ChartContainer title="Verdicts" height={140}>
                 <BarChart data={stats.byVerdict}>
                   <CartesianGrid {...gridProps} />
                   <XAxis dataKey="date" {...xAxisDateProps} />
@@ -227,18 +225,16 @@ export function ResearchLandingPage() {
                   <Bar isAnimationActive={false} dataKey="flag" stackId="v" fill="var(--warning)" name="Flag" />
                   <Bar isAnimationActive={false} dataKey="halt" stackId="v" fill="var(--error)" name="Halt" />
                 </BarChart>
-              ) : (
-                <div className="h-full flex items-center justify-center text-text-muted text-sm">
-                  No verdicts yet.
-                </div>
-              )}
-            </ChartContainer>
+              </ChartContainer>
+            ) : (
+              <ChartContainer title="Verdicts" raw>
+                <EmptyChart>No verdicts yet.</EmptyChart>
+              </ChartContainer>
+            )}
 
             <ChartContainer title="Status mix" raw>
               {statusMix.length === 0 ? (
-                <div className="h-[140px] flex items-center justify-center text-text-muted text-sm">
-                  No queries yet.
-                </div>
+                <EmptyChart>No queries yet.</EmptyChart>
               ) : (
                 <div className="flex gap-3 h-[140px]">
                   <div className="flex-1 min-w-0 flex items-center">
@@ -265,7 +261,7 @@ export function ResearchLandingPage() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="flex flex-col gap-1 justify-center shrink-0 w-28">
+                  <div className="flex flex-col gap-1.5 justify-center shrink-0 w-28">
                     {statusMix.map((row) => (
                       <div key={row.status} className="flex items-center gap-1.5 text-xs min-w-0">
                         <span
@@ -280,14 +276,6 @@ export function ResearchLandingPage() {
                         </span>
                       </div>
                     ))}
-                    {statusMixTotal > 0 && (
-                      <div className="flex items-center gap-1.5 text-xs min-w-0 pt-1 mt-0.5 border-t border-border-primary">
-                        <span className="text-text-muted flex-1">total</span>
-                        <span className="text-text-secondary font-mono shrink-0 w-6 text-right tabular-nums">
-                          {statusMixTotal}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
@@ -570,6 +558,14 @@ function VerdictCell({ verdict, status }: { verdict: 'pass' | 'flag' | 'halt' | 
   if (verdict === 'flag') return <span className="text-sm text-warning">flag</span>;
   if (verdict === 'halt') return <span className="text-sm text-error">halt</span>;
   return <span className="text-text-muted text-xs">—</span>;
+}
+
+function EmptyChart({ children }: { children: ReactNode }) {
+  return (
+    <div className="h-[140px] flex items-center justify-center text-text-muted text-sm">
+      {children}
+    </div>
+  );
 }
 
 function Sparkline({ values, active }: { values: number[]; active: boolean }) {
