@@ -168,11 +168,22 @@ $env.config.hooks = {
 }
 ```
 
-## `~/.config/starship.toml`
+## Starship — single config drives WSL and PowerShell
+
+Write the config to **both** paths so the same prompt renders in nu (WSL)
+and PowerShell (Windows). They're separate files; chezmoi can manage both
+later.
+
+- WSL: `~/.config/starship.toml`
+- Windows: `/mnt/c/Users/<you>/.config/starship.toml` (PowerShell reads
+  this as `$env:USERPROFILE\.config\starship.toml`)
 
 ```toml
+# Single-line, dense-but-tight prompt.
+# Renders in both WSL nushell and Windows PowerShell from this same file.
+
 add_newline = false
-format = """$os$directory$git_branch$git_status$character"""
+format = """$os$directory$git_branch$git_status$cmd_duration$character"""
 
 [os]
 disabled = false
@@ -180,15 +191,70 @@ disabled = false
 [os.symbols]
 Linux = "🐧 "
 Windows = "🪟 "
+# Starship's OS module reads /etc/os-release inside WSL and returns the
+# specific distro (Ubuntu here), so we map that too. Add others if you
+# distro-hop. Full supported list visible in `starship explain` errors.
+Ubuntu = "🐧 "
 
 [directory]
 truncation_length = 3
 truncate_to_repo = true
+truncation_symbol = "…/"
+read_only = " 🔒"
+
+[git_branch]
+symbol = " "
+style = "bold purple"
+truncation_length = 32
+truncation_symbol = "…"
+
+# Git status: show counts not just symbols — !2 means 2 modified, ?1 means
+# 1 untracked, $ means stashes exist, +3 staged, etc. Renders only when
+# in a repo with non-clean status.
+[git_status]
+format = '([\[$all_status$ahead_behind\]]($style) )'
+style = "bold yellow"
+ahead = "⇡${count}"
+behind = "⇣${count}"
+diverged = "⇕${ahead_count}/${behind_count}"
+untracked = "?${count}"
+stashed = '\$'
+modified = "!${count}"
+staged = "+${count}"
+renamed = "»${count}"
+deleted = "✘${count}"
+conflicted = "="
+
+# Command duration: only shows when a command took > 2s. Useful gauge for
+# "is the agent stuck or just thinking."
+[cmd_duration]
+min_time = 2_000
+format = "[⏱  $duration]($style) "
+style = "yellow"
 
 [character]
-success_symbol = "[❯](bold green)"
-error_symbol = "[❯](bold red)"
+success_symbol = "[❯](bold green) "
+error_symbol = "[❯](bold red) "
+vimcmd_symbol = "[❮](bold green) "
 ```
+
+### PowerShell side
+
+1. `winget install starship` (or just `winget install --id Starship.Starship`)
+2. Append to `$PROFILE` (`notepad $PROFILE` from PowerShell; create if missing):
+   ```powershell
+   Invoke-Expression (&starship init powershell)
+   ```
+3. Close and reopen PowerShell. Same prompt as WSL.
+
+### Config gotchas seen during rollout
+
+- `WSL` is **not** a starship OS variant — map your specific distro
+  (e.g. `Ubuntu`) instead. Wrong key triggers `unknown variant` errors
+  in `starship explain`.
+- `$` in format strings is a variable sigil; for literal `$` (the stash
+  indicator), escape via TOML literal string: `stashed = '\$'`. Plain
+  `stashed = "$"` triggers a parse warning.
 
 ## WezTerm config (Windows-side path)
 
