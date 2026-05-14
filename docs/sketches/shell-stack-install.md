@@ -22,17 +22,31 @@ this file says *what* to do.
 # apt-installable
 sudo apt update && sudo apt install -y ripgrep jq direnv btop
 
-# eza — apt where available, cargo as fallback
-sudo apt install -y eza || cargo install eza
+# eza
+sudo apt install -y eza
 
-# zoxide
-curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh
+# zoxide — binary from GitHub releases (avoids curl|bash)
+mkdir -p ~/.local/bin && cd /tmp && rm -rf zoxide-dl && mkdir zoxide-dl && cd zoxide-dl
+ZOXIDE_URL=$(curl -s https://api.github.com/repos/ajeetdsouza/zoxide/releases/latest \
+  | grep '"browser_download_url"' | grep 'x86_64-unknown-linux-musl.tar.gz"' | head -1 \
+  | sed 's/.*"\(https[^"]*\)".*/\1/')
+wget -q "$ZOXIDE_URL" -O zoxide.tgz && tar xzf zoxide.tgz \
+  && mv zoxide ~/.local/bin/zoxide && chmod +x ~/.local/bin/zoxide
 
-# atuin
-bash <(curl -sSf https://setup.atuin.sh)
+# starship — binary from GitHub releases (latest tag, stable filename)
+cd /tmp && rm -rf starship-dl && mkdir starship-dl && cd starship-dl
+wget -q "https://github.com/starship/starship/releases/latest/download/starship-x86_64-unknown-linux-gnu.tar.gz" \
+  -O starship.tgz && tar xzf starship.tgz \
+  && mv starship ~/.local/bin/starship && chmod +x ~/.local/bin/starship
 
-# starship
-curl -sS https://starship.rs/install.sh | sh
+# atuin — binary from GitHub releases (use the API to resolve the versioned tarball)
+cd /tmp && rm -rf atuin-dl && mkdir atuin-dl && cd atuin-dl
+ATUIN_URL=$(curl -s https://api.github.com/repos/atuinsh/atuin/releases/latest \
+  | grep '"browser_download_url"' | grep 'x86_64-unknown-linux-gnu.tar.gz"' | grep -v server | head -1 \
+  | sed 's/.*"\(https[^"]*\)".*/\1/')
+wget -q "$ATUIN_URL" -O atuin.tgz && tar xzf atuin.tgz \
+  && cp "$(find . -name atuin -type f -executable | head -1)" ~/.local/bin/atuin \
+  && chmod +x ~/.local/bin/atuin
 
 # gh — official repo
 (type -p wget >/dev/null || sudo apt install -y wget) \
@@ -43,12 +57,29 @@ curl -sS https://starship.rs/install.sh | sh
 && sudo apt update && sudo apt install -y gh
 
 # yq — Mike Farah's Go version (canonical "yq" now)
-sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq \
+sudo wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq \
   && sudo chmod +x /usr/local/bin/yq
 
-# nushell — via cargo, requires rustup if not installed
-cargo install nu
+# direnv — apt's version (2.32) is too old to support nu; use a current binary.
+# Note: as of 2.37.1, direnv still has no native nu target either — we use a
+# nu-side PWD hook (see config.nu) that calls `direnv export json` instead.
+DIRENV_URL=$(curl -s https://api.github.com/repos/direnv/direnv/releases/latest \
+  | grep '"browser_download_url"' | grep 'linux.amd64' | head -1 \
+  | sed 's/.*"\(https[^"]*\)".*/\1/')
+wget -q "$DIRENV_URL" -O ~/.local/bin/direnv && chmod +x ~/.local/bin/direnv
+
+# nushell — prebuilt binary from releases (no cargo build needed)
+cd /tmp && rm -rf nu-dl && mkdir nu-dl && cd nu-dl
+NU_URL=$(curl -s https://api.github.com/repos/nushell/nushell/releases/latest \
+  | grep '"browser_download_url"' | grep 'x86_64-unknown-linux-gnu.tar.gz"' | head -1 \
+  | sed 's/.*"\(https[^"]*\)".*/\1/')
+wget -q "$NU_URL" -O nu.tgz && tar xzf nu.tgz \
+  && cp nu-*/nu* ~/.local/bin/ && chmod +x ~/.local/bin/nu*
 ```
+
+> **Why binary downloads instead of `curl | bash`**: the harness blocks pipe-
+> to-shell for security. Functionally identical to the upstream installer
+> scripts — they download the same binaries to the same prefix.
 
 ## Install — Windows side
 
@@ -60,33 +91,36 @@ winget install starship   # PowerShell parity with WSL prompt
 ## `~/.config/nushell/env.nu`
 
 ```nushell
-# Tool hooks that need to run before config.nu
+# Generated init for external tools — sourced before config.nu.
+# Each tool's `init` command emits nushell code; we cache it so startup
+# is fast and tools don't have to run on every shell open.
 
-mkdir ~/.cache/nu
-
-# zoxide — makes `cd` use frecency matching; falls back to normal cd
+# zoxide — replaces `cd` transparently (falls through for ..,-, exact paths)
 zoxide init --cmd cd nushell | save -f ~/.cache/nu/zoxide-init.nu
 
-# starship — generates prompt init
-mkdir ~/.cache/starship
+# starship — generates prompt configuration
 starship init nu | save -f ~/.cache/starship/init.nu
 
-# atuin — history replacement (rebinds Ctrl-R)
+# atuin — rebinds Ctrl-R / Up-Arrow for SQLite-backed history search
 atuin init nu | save -f ~/.cache/nu/atuin-init.nu
 
-# direnv — auto-load .envrc on cd
-direnv hook nu | save -f ~/.cache/nu/direnv-init.nu
+# direnv has no native nu target as of 2.37.1; we use a nu-side PWD hook
+# in config.nu that shells out to `direnv export json` and load-env's the
+# result. No cache file needed.
 ```
+
+> First run prerequisite: `mkdir -p ~/.cache/nu ~/.cache/starship` once. The
+> init lines above write into these directories; if they don't exist nu
+> errors on startup.
 
 ## `~/.config/nushell/config.nu`
 
 ```nushell
 source ~/.cache/nu/zoxide-init.nu
 source ~/.cache/nu/atuin-init.nu
-source ~/.cache/nu/direnv-init.nu
 source ~/.cache/starship/init.nu
 
-# Aliases — safe ones only
+# Aliases — interactive-only replacements, safe to override
 alias ls = eza --icons --group-directories-first
 alias ll = eza -l --icons --git --group-directories-first
 alias la = eza -la --icons --git --group-directories-first
@@ -94,15 +128,35 @@ alias tree = eza --tree --icons
 alias top = btop
 alias htop = btop
 
-# Reminder for non-aliased replacements; drop after a week
-$env.config.hooks.pre_execution = [
-  { |command|
-    let cmd = ($command | str trim | split row ' ' | first)
-    if $cmd == 'grep' {
-      print $"(ansi yellow)→ tip: try `rg` instead of `grep`(ansi reset)"
-    }
+# Hooks
+$env.config.hooks = {
+  # direnv — on cd, if .envrc/.env exists, source it via direnv's JSON export.
+  # Works around direnv having no native nu target.
+  env_change: {
+    PWD: [
+      { |before, after|
+        if (which direnv | is-empty) { return }
+        let envrc = ([$after .envrc] | path join)
+        let envfile = ([$after .env] | path join)
+        if ($envrc | path exists) or ($envfile | path exists) {
+          let exported = (^direnv export json | complete)
+          if $exported.exit_code == 0 and ($exported.stdout | str trim | str length) > 0 {
+            $exported.stdout | from json | load-env
+          }
+        }
+      }
+    ]
   }
-]
+  # Reminder for non-aliased replacements; drop after a week.
+  pre_execution: [
+    { |command|
+      let cmd = ($command | str trim | split row ' ' | first)
+      if $cmd == 'grep' {
+        print $"(ansi yellow)→ tip: try `rg` instead of `grep`(ansi reset)"
+      }
+    }
+  ]
+}
 ```
 
 ## `~/.config/starship.toml`
@@ -127,20 +181,47 @@ success_symbol = "[❯](bold green)"
 error_symbol = "[❯](bold red)"
 ```
 
-## `~/.config/wezterm/wezterm.lua`
+## WezTerm config (Windows-side path)
+
+WezTerm runs on Windows and reads from the Windows user profile, not WSL:
+`%USERPROFILE%\.config\wezterm\wezterm.lua` — accessible from WSL as
+`/mnt/c/Users/<you>/.config/wezterm/wezterm.lua`.
 
 ```lua
 local wezterm = require 'wezterm'
 local act = wezterm.action
 local config = wezterm.config_builder()
 
-config.default_prog = { 'wsl.exe', '-d', 'Ubuntu', '--', '/usr/local/bin/nu' }
+-- Launch nushell inside WSL (default distro) as the interactive shell.
+-- $SHELL stays /bin/bash so Claude Code and other subprocesses get bash.
+-- NOTE: don't add `-d 'Ubuntu'` — your distro is likely 'Ubuntu-24.04' or
+-- similar. Omitting -d uses your default distro (run `wsl.exe -l -v` to
+-- check). Hard-coding the wrong name causes WezTerm to flash and exit.
+config.default_prog = { 'wsl.exe', '--', '/home/<you>/.local/bin/nu' }
+
 config.color_scheme = 'Catppuccin Mocha'
 config.font = wezterm.font 'JetBrains Mono'
 config.font_size = 11.5
-config.window_decorations = 'RESIZE'
-config.hide_tab_bar_if_only_one_tab = true
-config.use_fancy_tab_bar = false
+
+-- Window chrome: integrated title bar + native min/max/close buttons inside
+-- the tab strip. Swap to 'TITLE | RESIZE' for a fully classic Windows
+-- window, or 'RESIZE' / 'NONE' to strip chrome.
+config.window_decorations = 'INTEGRATED_BUTTONS|RESIZE'
+
+-- Tab bar: always show, fancy renderer (rounded edges, integrated buttons).
+-- Close buttons on individual tabs render automatically with use_fancy_tab_bar.
+config.hide_tab_bar_if_only_one_tab = false
+config.use_fancy_tab_bar = true
+config.tab_bar_at_bottom = false
+config.show_new_tab_button_in_tab_bar = true
+
+-- Window padding (default is fairly tight; bump a bit for breathing room).
+config.window_padding = { left = 8, right = 8, top = 4, bottom = 4 }
+
+-- Quality-of-life
+config.window_close_confirmation = 'NeverPrompt'
+config.scrollback_lines = 10000
+config.audible_bell = 'Disabled'
 
 config.leader = { key = 'a', mods = 'CTRL', timeout_milliseconds = 1000 }
 

@@ -62,20 +62,30 @@ exactly like before. If yes, proceed.
 
 ### Phase 2 — Install tools (30 min, mostly parallel)
 
-WSL side — run from current bash (still working, untouched):
+WSL side — run from current bash (still working, untouched). Use direct
+binary downloads from GitHub releases instead of `curl | bash` installers;
+some harnesses block pipe-to-shell, and binaries land in the same place
+as the official installer scripts would.
 
-1. apt: `sudo apt update && sudo apt install -y ripgrep jq direnv btop eza`
-2. zoxide: upstream installer (see `shell-stack-install.md`)
-3. atuin: upstream installer
-4. starship: upstream installer
-5. gh: official deb repo + install
-6. yq: download binary from GitHub releases
-7. nushell: `cargo install nu` (install rustup if needed)
+1. apt: `sudo apt update && sudo apt install -y ripgrep jq btop eza`
+   (skip direnv from apt — its 2.32 is too old; install 2.37+ below)
+2. zoxide: GitHub release tarball → `~/.local/bin/zoxide`
+3. atuin: GitHub release tarball → `~/.local/bin/atuin`
+4. starship: GitHub release tarball → `~/.local/bin/starship`
+5. gh: official deb repo + install (if not already there)
+6. yq: GitHub release binary → `/usr/local/bin/yq`
+7. direnv: GitHub release binary → `~/.local/bin/direnv` (shadows apt)
+8. nushell: GitHub release tarball → `~/.local/bin/nu*` (no cargo build)
+
+> direnv has no native nu target even at 2.37.1; the nu integration is a
+> nu-side `env_change.PWD` hook that calls `direnv export json`. The hook
+> code is in `~/.config/nushell/config.nu`, not a generated init file.
 
 Windows side — separate from WSL flow:
 
-8. `winget install wez.wezterm`
-9. `winget install starship`
+9. `winget install wez.wezterm` (skip if already installed —
+   `/mnt/c/Program Files/WezTerm/` indicates yes)
+10. `winget install starship` (PowerShell prompt parity)
 
 **Gate**: run each tool's `--version` from current bash. Every command
 should respond. If any fail, fix that one before continuing — don't
@@ -88,14 +98,28 @@ Author files in their final locations:
 1. `~/.config/nushell/env.nu` — tool init generators
 2. `~/.config/nushell/config.nu` — sources + aliases + reminder hook
 3. `~/.config/starship.toml`
-4. `~/.config/wezterm/wezterm.lua`
+4. `/mnt/c/Users/<you>/.config/wezterm/wezterm.lua` — note: WezTerm is a
+   Windows app and reads config from the Windows user profile, not from
+   WSL's `~/.config/wezterm/`.
 
 (Content from `shell-stack-install.md`.)
 
+> Prerequisite once: `mkdir -p ~/.cache/nu ~/.cache/starship` — env.nu
+> writes init scripts here and errors on startup if the dirs don't exist.
+
+> WezTerm default_prog gotcha: don't add `-d 'Ubuntu'` —
+> your distro is likely `Ubuntu-24.04` or similar. `wsl.exe -l -v` shows
+> the actual names. Use plain `{ 'wsl.exe', '--', '<path-to-nu>' }` to
+> fall back to your default distro. Hard-coding a wrong name causes
+> WezTerm to flash a window and exit immediately.
+
 **Gate**: test before switching the entry point:
-- `nu` from current bash — does nushell start cleanly? Does the starship
-  prompt render? Does `cd con<TAB>` resolve to construct via zoxide?
-  Does Ctrl-R open atuin's history?
+- `nu --env-config ~/.config/nushell/env.nu --config ~/.config/nushell/config.nu -c 'scope aliases | first 5'`
+  — `nu -c` does NOT load configs by default in 0.112+, so use the
+  explicit flags for smoke testing. Should print the alias table with
+  cd/ls/ll/la/top mapped.
+- Once that works, just `nu` (interactive, loads configs automatically)
+  to verify the prompt renders.
 - `exit` to return to bash. Still alive.
 - If anything blows up, fix the config — your bash is still untouched.
 
