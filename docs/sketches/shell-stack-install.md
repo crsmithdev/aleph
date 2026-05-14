@@ -92,6 +92,15 @@ winget install starship   # PowerShell parity with WSL prompt
 
 ```nushell
 # Generated init for external tools — sourced before config.nu.
+
+# PATH bootstrap: WezTerm launches nu directly via `wsl.exe --`, which
+# skips .bashrc, so ~/.local/bin isn't on PATH by default. Prepend the
+# user/local bin dirs so zoxide / starship / atuin / direnv / yq / nu*
+# all resolve. Without this, env.nu errors on the first `zoxide` call.
+$env.PATH = ($env.PATH
+  | prepend [($env.HOME + '/.local/bin') '/usr/local/bin']
+  | uniq)
+
 # Each tool's `init` command emits nushell code; we cache it so startup
 # is fast and tools don't have to run on every shell open.
 
