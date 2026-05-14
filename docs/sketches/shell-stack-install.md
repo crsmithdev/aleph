@@ -156,15 +156,6 @@ $env.config.hooks = {
       }
     ]
   }
-  # Reminder for non-aliased replacements; drop after a week.
-  pre_execution: [
-    { |command|
-      let cmd = ($command | str trim | split row ' ' | first)
-      if $cmd == 'grep' {
-        print $"(ansi yellow)→ tip: try `rg` instead of `grep`(ansi reset)"
-      }
-    }
-  ]
 }
 ```
 
