@@ -75,28 +75,61 @@ Stack all three for full belt-and-suspenders.
   visual cue.
   ([Starship on Windows Terminal guide](https://www.tskamath.com/starship-on-windows-terminal-the-ultimate-setup-customization-handbook/))
 
-### Nushell — try, but not as `$SHELL`
+### Nushell — interactive surface only, never `$SHELL`
 
-**Recommendation: don't switch your login shell. Run nushell as an
-*interactive* shell, keep bash as the default for tools.**
+**Recommendation: launch nu directly as your interactive shell from
+Windows Terminal and tmux, but keep `$SHELL=/bin/bash` so Claude Code
+and every other subprocess sees bash.**
 
-Concrete reasons:
-- Nushell devs themselves "strongly advise against" setting it as the
-  login shell — too many CLI tools assume POSIX. ([Nushell book](https://www.nushell.sh/book/default_shell.html))
-- Claude Code has an open bug where it injects `< /dev/null` when invoking
-  nu, which nushell rejects.
-  ([anthropics/claude-code#4535](https://github.com/anthropics/claude-code/issues/4535))
-- Many bash one-offs that AI agents emit assume POSIX redirection / pipe
-  semantics; nushell's structured pipelines don't run them verbatim.
+Why `$SHELL` stays bash is load-bearing: Claude Code reads `$SHELL` and
+tries to use nu if it's set there, which triggers the `< /dev/null`
+injection bug.
+([claude-code#4535](https://github.com/anthropics/claude-code/issues/4535),
+[Nushell default-shell warning](https://www.nushell.sh/book/default_shell.html))
 
-Pragmatic setup if you want to try it:
-- `chsh -s /bin/bash` (or leave default).
-- Add a `nu` alias / Windows Terminal profile that launches nushell
-  explicitly when *you* want it interactively.
-- Keep `$SHELL=/bin/bash` so subprocess invocations (Claude Code, scripts,
-  `npm run`, etc.) still get bash.
-- Revisit annually — nushell's CLI-tool compatibility story is improving
-  but isn't there yet for an AI-dev workflow.
+The 3-line setup:
+
+1. **Don't `chsh`.** Leave the login shell as `/bin/bash`. Verify with
+   `echo $SHELL`.
+2. **Windows Terminal WSL profile** — change the command to launch nu
+   directly:
+   ```
+   wsl.exe -d Ubuntu -- /usr/local/bin/nu
+   ```
+   Or, combined with the tmux always-attach pattern:
+   ```
+   wsl.exe -d Ubuntu -- bash -lc "tmux new-session -A -s main"
+   ```
+   (bash loads the login profile, tmux attaches, and tmux's
+   `default-shell` brings up nu — see step 3.)
+3. **`~/.tmux.conf`** — make tmux windows open nu:
+   ```
+   set-option -g default-shell /usr/local/bin/nu
+   ```
+   tmux-local; doesn't change `$SHELL` for anything outside tmux.
+
+What this buys:
+
+- You never type `nu` — WT launches it, tmux windows open it.
+- Claude Code always sees bash because `$SHELL=/bin/bash` and it shells
+  out via `bash`, not your interactive shell.
+- `bash` typed at the nu prompt opens a real interactive bash subshell.
+  `exit` returns to nu. Clean escape hatch.
+- Scripts and tools reading `$SHELL` (sudo `-s`, installers, etc.) all
+  get bash. SSH into the box still lands in bash.
+
+Verify after switching:
+```
+echo $SHELL          # /bin/bash
+ps -p $$             # nu
+bash -c 'echo $SHELL' # /bin/bash
+```
+
+Caveat: `~/.bashrc` won't run inside an nu interactive session — it's
+bash-only. Migrate aliases / env / PATH tweaks you actually use into
+nu's `env.nu` / `config.nu`. Anything that has to stay bash (because
+a `bash -c` consumer depends on it) stays in `.bashrc` and fires when
+bash is invoked.
 
 ### tmux: easier launch / attach + shortcuts
 
@@ -212,8 +245,9 @@ Notifications for long-running agents to your phone:
    ~30 min.
 10. **`ntfy.sh` notifications** wired to Construct's session-complete
     hooks. ~30 min once you have an account.
-11. **Nushell as a non-default interactive shell** (only if you want to
-    learn it). ~1 hour to install + dabble; skip if low interest.
+11. **Nushell as interactive shell** via WT profile + tmux
+    `default-shell`, `$SHELL` stays bash. ~30 min including migrating
+    a few aliases into `env.nu` / `config.nu`.
 12. **WezTerm** — only if tmux ergonomics keep biting. Real switching
     cost; defer.
 
