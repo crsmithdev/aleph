@@ -263,7 +263,9 @@ local config = wezterm.config_builder()
 -- NOTE: don't add `-d 'Ubuntu'` — your distro is likely 'Ubuntu-24.04' or
 -- similar. Omitting -d uses your default distro (run `wsl.exe -l -v` to
 -- check). Hard-coding the wrong name causes WezTerm to flash and exit.
-config.default_prog = { 'wsl.exe', '--', '/home/<you>/.local/bin/nu' }
+-- `--cd ~` makes WSL chdir to the WSL home before launching nu, so panes
+-- don't inherit Windows cwd (e.g. /mnt/c/Users/crsmi).
+config.default_prog = { 'wsl.exe', '--cd', '~', '--', '/home/<you>/.local/bin/nu' }
 
 config.color_scheme = 'Catppuccin Mocha'
 config.font = wezterm.font 'JetBrains Mono'
