@@ -1093,7 +1093,7 @@ function FlatContextItem({ item, onTurnClick }: { item: ContextItem; onTurnClick
     <div className="flex items-center gap-2 py-1.5">
       <span
         className={clsx(
-          'shrink-0 text-xs uppercase font-semibold px-1.5 py-0.5 rounded border',
+          'shrink-0 text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border',
           typeStyle,
         )}
       >

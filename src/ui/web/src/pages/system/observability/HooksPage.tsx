@@ -495,8 +495,8 @@ export function HooksPage() {
               {row.command}
             </span>
             {row.blocking && <span className="text-[10px] px-1 py-0.5 rounded bg-error/15 text-error uppercase tracking-wide shrink-0">blocking</span>}
-            {row.count === 0 && <span className="text-xs text-text-disabled uppercase">unused</span>}
-            {!row.active && row.count > 0 && <span className="text-xs text-warning uppercase">missing</span>}
+            {row.count === 0 && <span className="text-xs text-text-disabled uppercase tracking-wider">unused</span>}
+            {!row.active && row.count > 0 && <span className="text-xs text-warning uppercase tracking-wider">missing</span>}
           </div>
           {row.description && (
             <div className="text-xs text-text-muted pl-0.5">{row.description}</div>

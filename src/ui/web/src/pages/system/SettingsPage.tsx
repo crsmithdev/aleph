@@ -1,7 +1,7 @@
 import { Icon } from '../../components/ui/Icon';
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api/client';
-import { fmtBytes } from '../../utils/format';
+import { fmtBytes, dateTime } from '../../utils/format';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { clsx } from 'clsx';
 import { useTheme, fonts, headingFonts, monoFonts, type FontDef } from '../../theme';
@@ -219,7 +219,7 @@ function BackupSection() {
               <div>
                 <div className="text-sm text-text-primary">{b.filename}</div>
                 <div className="text-xs text-text-muted">
-                  {new Date(b.createdAt).toLocaleString()}
+                  {dateTime(b.createdAt)}
                   {b.size !== undefined && ` · ${fmtBytes(b.size)}`}
                 </div>
               </div>

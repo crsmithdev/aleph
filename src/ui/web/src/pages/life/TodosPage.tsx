@@ -2,10 +2,11 @@ import { useTodos } from '../../api/hooks';
 import { TodoQuickAdd } from '../../components/todos/TodoQuickAdd';
 import { TodoItem } from '../../components/todos/TodoItem';
 import { PageLoading } from '../../components/ui/Spinner';
+import { ErrorState } from '../../components/ui/ErrorState';
 import { PageHeader } from '../../components/layout/PageHeader';
 
 export function TodosPage() {
-  const { data, isLoading } = useTodos();
+  const { data, isLoading, isError } = useTodos();
 
   const active = data?.active ?? [];
   const completed = data?.completed ?? [];
@@ -18,6 +19,8 @@ export function TodosPage() {
 
       {isLoading ? (
         <PageLoading />
+      ) : isError ? (
+        <ErrorState message="Failed to load todos." />
       ) : (
         <div className="space-y-6">
           <section>

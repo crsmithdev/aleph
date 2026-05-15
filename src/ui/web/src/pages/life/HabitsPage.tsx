@@ -128,6 +128,7 @@ function HabitRow({ habit }: { habit: Habit }) {
           onClick={() => deleteHabit.mutate(habit.id)}
           className="text-text-muted hover:text-error text-xl leading-none transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100"
           title="Delete habit"
+          aria-label="Delete habit"
         >
           &times;
         </button>

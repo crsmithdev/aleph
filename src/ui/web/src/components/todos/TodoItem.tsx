@@ -91,6 +91,9 @@ export function TodoItem({ todo }: TodoItemProps) {
               <div
                 className="text-sm text-text-muted cursor-pointer hover:text-text-secondary mt-1 min-h-5"
                 onClick={() => setEditingNote(true)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditingNote(true); } }}
               >
                 {todo.note || 'Click to add note...'}
               </div>
@@ -115,6 +118,7 @@ export function TodoItem({ todo }: TodoItemProps) {
             onClick={() => updateTodo.mutate({ id: todo.id, done: false })}
             className="p-2 rounded-md text-text-secondary hover:text-warning hover:bg-warning/10 transition-colors"
             title="Mark incomplete"
+            aria-label="Mark incomplete"
           >
             <Icon name="undo" size="md" />
           </button>
@@ -124,6 +128,7 @@ export function TodoItem({ todo }: TodoItemProps) {
               onClick={() => promoteTodo.mutate(todo.id)}
               className="p-2 rounded-md text-text-secondary hover:text-accent hover:bg-accent/10 transition-colors"
               title="Promote to goal"
+              aria-label="Promote to goal"
             >
               <Icon name="arrow_upward" size="md" />
             </button>
@@ -131,6 +136,7 @@ export function TodoItem({ todo }: TodoItemProps) {
               onClick={() => updateTodo.mutate({ id: todo.id, done: true })}
               className="p-2 rounded-md text-text-secondary hover:text-success hover:bg-success/10 transition-colors"
               title="Complete"
+              aria-label="Complete"
             >
               <Icon name="check" size="md" />
             </button>
@@ -138,6 +144,7 @@ export function TodoItem({ todo }: TodoItemProps) {
               onClick={() => deleteTodo.mutate(todo.id)}
               className="p-2 rounded-md text-text-secondary hover:text-error hover:bg-error/10 transition-colors"
               title="Delete"
+              aria-label="Delete"
             >
               <Icon name="close" size="md" />
             </button>

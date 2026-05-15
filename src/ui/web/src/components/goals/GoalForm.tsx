@@ -31,8 +31,9 @@ export function GoalForm({ initial, onSubmit, onCancel, loading }: GoalFormProps
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div>
-        <label className="block text-sm text-text-muted mb-1">Title</label>
+        <label htmlFor="goal-title" className="block text-sm text-text-muted mb-1">Title</label>
         <input
+          id="goal-title"
           type="text"
           value={title}
           onChange={(e) => {

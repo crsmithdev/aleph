@@ -224,8 +224,8 @@ export function SkillsPage() {
           {row.type === 'command'
             ? <><span className="text-accent">/</span>{row.skill.replace(/^\//, '')}</>
             : row.skill}
-          {row.unused && <span className="ml-2 text-xs text-text-disabled uppercase">unused</span>}
-          {!row.registered && !row.unused && <span className="ml-2 text-xs text-warning uppercase">missing</span>}
+          {row.unused && <span className="ml-2 text-xs text-text-disabled uppercase tracking-wider">unused</span>}
+          {!row.registered && !row.unused && <span className="ml-2 text-xs text-warning uppercase tracking-wider">missing</span>}
         </span>
       ),
     },

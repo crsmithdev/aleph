@@ -86,7 +86,7 @@ function InlineEdit({
         if (e.key === 'Enter') commit();
         if (e.key === 'Escape') { setDraft(value); setEditing(false); }
       }}
-      className="font-heading text-2xl font-bold bg-transparent border-b border-accent text-text-primary focus:outline-none w-full min-w-0"
+      className="font-heading text-2xl font-bold bg-transparent border-b border-accent text-text-primary focus:outline-none focus:ring-1 focus:ring-accent w-full min-w-0"
     />
   );
 }

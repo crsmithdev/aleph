@@ -31,6 +31,7 @@ export function Modal({
         <h2 className="text-lg font-semibold">{title}</h2>
         <button
           onClick={onClose}
+          aria-label="Close"
           className={clsx(
             'text-text-muted hover:text-text-primary text-xl leading-none',
             'w-7 h-7 flex items-center justify-center rounded hover:bg-bg-tertiary transition-colors'
@@ -39,7 +40,7 @@ export function Modal({
           &times;
         </button>
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-4 overscroll-contain">{children}</div>
     </dialog>
   );
 }
