@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { writeFileSync, unlinkSync } from "fs";
+import { writeFileSync, unlinkSync, readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import {
   createTestEnv, cleanupTestEnv, runHook, check, runAndCheck,
@@ -82,6 +82,66 @@ console.log("\n--- git-require-edit ---");
 runAndCheck(te, r, "core/hooks/git-require-edit.ts", "smoke (no cwd)", "{}");
 runAndCheck(te, r, "core/hooks/git-require-edit.ts", "nonexistent cwd (git fails, swallowed)", '{"cwd":"/nonexistent/path","session_id":"test-smoke"}');
 runAndCheck(te, r, "core/hooks/git-require-edit.ts", "malformed stdin (swallows)", "not json");
+
+// ── Routing classify behavioral ──────────────────────────────────────────────
+
+console.log("\n--- routing-classify-submit behavioral ---");
+
+// < 3 words → skip immediately, no stdout
+const shortResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"fix bug"}');
+check(r, "routing: <3 words exits 0", shortResult.exitCode === 0);
+check(r, "routing: <3 words no stdout", shortResult.stdout.trim() === "");
+
+// QUICK: no arch keywords, < 40 words → no [Construct] Depth line
+const quickResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"update the button color to blue"}');
+check(r, "routing: QUICK — no Depth line", !quickResult.stdout.includes("[Construct] Depth"));
+
+// FULL via architectural keyword
+const archResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"refactor the entire auth module to use JWT tokens"}');
+check(r, "routing: arch keyword → FULL output", archResult.stdout.includes("[Construct] Depth: FULL"));
+
+// FULL via ≥40 words
+const longPrompt = Array(42).fill("word").join(" ");
+const longResult = runHook(te, "core/hooks/routing-classify-submit.ts", JSON.stringify({ prompt: longPrompt }));
+check(r, "routing: ≥40 words → FULL output", longResult.stdout.includes("[Construct] Depth: FULL"));
+
+// Skill matching — verify-completion is triggered by "verify" and "end to end"
+const skillResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"verify that everything is working end to end"}');
+check(r, "routing: skill match emits Matched skills line", skillResult.stdout.includes("[Construct] Matched skills:"));
+check(r, "routing: verify-completion skill matched", skillResult.stdout.includes("verify-completion"));
+
+// Malformed stdin → exit 1
+runAndCheck(te, r, "core/hooks/routing-classify-submit.ts", "routing: malformed stdin", "not json", { expectExit: 1 });
+
+// ── reportHook() telemetry ────────────────────────────────────────────────────
+
+console.log("\n--- hook telemetry (reportHook) ---");
+
+// All hooks run above have written entries. Read the accumulated JSONL.
+const hookEventsPath = resolve(te.tmpBase, "signals/hook-events.jsonl");
+check(r, "hook-events.jsonl exists", existsSync(hookEventsPath));
+
+if (existsSync(hookEventsPath)) {
+  const lines = readFileSync(hookEventsPath, "utf8").trim().split("\n").filter(Boolean);
+  check(r, "hook-events.jsonl has entries", lines.length > 0);
+
+  // Every line must be valid JSON with required fields
+  const entries = lines.map(l => { try { return JSON.parse(l); } catch { return null; } });
+  check(r, "all hook-events lines are valid JSON", entries.every(e => e !== null));
+  check(r, "all entries have ts field", entries.every(e => typeof e?.ts === "string"));
+  check(r, "all entries have hook field", entries.every(e => typeof e?.hook === "string"));
+  check(r, "all entries have event field", entries.every(e => typeof e?.event === "string"));
+
+  // Verify specific hook names appear (proves hooks ran and reported)
+  const hooks = new Set(entries.map(e => e?.hook));
+  check(r, "quality-format-edit appears in telemetry", hooks.has("quality-format-edit"));
+  check(r, "isolation-block-sql appears in telemetry", hooks.has("isolation-block-sql"));
+  check(r, "routing-classify-submit appears in telemetry", hooks.has("routing-classify-submit"));
+
+  // isolation-block-sql only calls reportHook once (on entry), before the block check
+  const sqlEntries = entries.filter(e => e?.hook === "isolation-block-sql");
+  check(r, "isolation-block-sql event=PreToolUse", sqlEntries.every(e => e?.event === "PreToolUse"));
+}
 
 // ── Trace ───────────────────────────────────────────────────────────────────
 
