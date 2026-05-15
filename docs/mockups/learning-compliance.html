@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Learning &amp; Compliance — Mockup</title>
+<style>
+  :root {
+    --bg-primary: #282a36;
+    --bg-secondary: #21222c;
+    --bg-tertiary: #343746;
+    --bg-contrast: #191a21;
+    --text-primary: #f8f8f2;
+    --text-secondary: #a9b1d6;
+    --text-muted: #6272a4;
+    --text-disabled: #44475a;
+    --border: #44475a;
+    --accent: #bd93f9;
+    --success: #50fa7b;
+    --warning: #f1fa8c;
+    --error: #ff5555;
+    --chart-1: #bd93f9;
+    --chart-2: #8be9fd;
+    --chart-3: #50fa7b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg-contrast);
+    color: var(--text-primary);
+    font-family: 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* ── Layout shell ── */
+  .shell { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 220px; flex-shrink: 0;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    padding: 16px 0;
+  }
+  .sidebar-section { padding: 4px 0 8px; }
+  .sidebar-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+    color: var(--text-disabled); text-transform: uppercase;
+    padding: 0 16px; margin-bottom: 2px;
+  }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 16px; font-size: 13px;
+    color: var(--text-muted); cursor: pointer;
+    border-left: 2px solid transparent;
+    text-decoration: none;
+  }
+  .sidebar-item:hover { color: var(--text-secondary); background: var(--bg-tertiary); }
+  .sidebar-item.active {
+    color: var(--text-primary);
+    border-left-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+  .sidebar-icon { font-size: 16px; width: 18px; text-align: center; opacity: 0.8; }
+
+  .main { flex: 1; overflow-y: auto; }
+
+  /* ── Page ── */
+  .page { padding: 24px 28px; max-width: 1200px; }
+
+  /* ── Control bar ── */
+  .control-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .page-title {
+    font-family: 'Merriweather', Georgia, serif;
+    font-size: 18px; font-weight: 700;
+    color: var(--text-primary);
+  }
+  .control-right { display: flex; align-items: center; gap: 8px; }
+  .select-pill {
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    color: var(--text-secondary); border-radius: 6px;
+    padding: 5px 10px; font-size: 12px; cursor: pointer;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .select-pill select { background: none; border: none; color: inherit; font-size: 12px; outline: none; cursor: pointer; }
+  .btn-ghost {
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    color: var(--text-muted); border-radius: 6px;
+    padding: 5px 10px; font-size: 12px; cursor: pointer;
+  }
+  .btn-ghost:hover { color: var(--text-secondary); }
+
+  /* ── Stat cards ── */
+  .stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 28px; }
+  .stat-card {
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px;
+  }
+  .stat-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; letter-spacing: 0.03em; }
+  .stat-value { font-size: 22px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .stat-value.success { color: var(--success); }
+  .stat-value.warning { color: var(--warning); }
+  .stat-value.error { color: var(--error); }
+  .stat-value.accent { color: var(--accent); }
+  .stat-sub { font-size: 11px; color: var(--text-disabled); margin-top: 2px; }
+
+  /* ── Section ── */
+  .section { margin-bottom: 32px; }
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .section-title {
+    font-family: 'Merriweather', Georgia, serif;
+    font-size: 14px; font-weight: 600;
+    color: var(--text-secondary);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-title .icon { font-size: 16px; opacity: 0.7; }
+  .section-count {
+    font-size: 12px; color: var(--text-disabled);
+  }
+  .section-actions { display: flex; gap: 8px; align-items: center; }
+
+  /* ── Table ── */
+  .table-wrap {
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: var(--bg-tertiary); }
+  th {
+    text-align: left; padding: 8px 14px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+    color: var(--text-disabled); text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+  th.right { text-align: right; }
+  td {
+    padding: 10px 14px; font-size: 13px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: color-mix(in srgb, var(--bg-tertiary) 40%, transparent); }
+
+  /* ── Type badges ── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 7px; border-radius: 4px;
+    font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+  .badge-correction { background: color-mix(in srgb, var(--error) 15%, transparent); color: var(--error); }
+  .badge-validated  { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+  .badge-friction   { background: color-mix(in srgb, var(--warning) 15%, transparent); color: var(--warning); }
+  .badge-session    { background: color-mix(in srgb, var(--chart-2) 15%, transparent); color: var(--chart-2); }
+  .badge-rating     { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+  .badge-pass       { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+  .badge-block      { background: color-mix(in srgb, var(--error) 15%, transparent); color: var(--error); }
+  .badge-skip       { background: color-mix(in srgb, var(--warning) 15%, transparent); color: var(--warning); }
+  .badge-advisory   { background: color-mix(in srgb, #ffb86c 15%, transparent); color: #ffb86c; }
+  .badge-neutral    { background: var(--bg-tertiary); color: var(--text-muted); }
+
+  /* ── Text helpers ── */
+  .mono { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; }
+  .text-muted { color: var(--text-muted); }
+  .text-secondary { color: var(--text-secondary); }
+  .text-primary { color: var(--text-primary); }
+  .text-xs { font-size: 11px; }
+  .text-sm { font-size: 13px; }
+  .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
+  .nowrap { white-space: nowrap; }
+
+  /* ── Memory chip ── */
+  .memory-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    border-radius: 4px; padding: 2px 8px;
+    font-size: 11px; color: var(--accent);
+    max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .memory-chip .icon { font-size: 12px; }
+
+  /* ── Rating delta ── */
+  .delta { font-size: 12px; font-weight: 600; }
+  .delta.up { color: var(--success); }
+  .delta.down { color: var(--error); }
+
+  /* ── Pattern alert ── */
+  .pattern-alert {
+    background: color-mix(in srgb, var(--warning) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+    border-radius: 8px; padding: 10px 14px;
+    display: flex; align-items: flex-start; gap: 10px;
+    margin-bottom: 12px;
+  }
+  .pattern-alert .alert-icon { font-size: 16px; flex-shrink: 0; color: var(--warning); margin-top: 1px; }
+  .pattern-alert .alert-body { flex: 1; min-width: 0; }
+  .pattern-alert .alert-title { font-size: 13px; font-weight: 600; color: var(--warning); margin-bottom: 2px; }
+  .pattern-alert .alert-detail { font-size: 12px; color: var(--text-muted); }
+  .pattern-alert .alert-count {
+    flex-shrink: 0; font-size: 20px; font-weight: 700; color: var(--warning);
+    font-variant-numeric: tabular-nums; line-height: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+  }
+  .pattern-alert .alert-count span { font-size: 10px; font-weight: 400; color: var(--text-muted); }
+
+  /* ── Insight column ── */
+  .insight-text {
+    font-size: 12px; color: var(--text-secondary);
+    font-style: italic; max-width: 280px;
+  }
+
+  /* ── Compliance meter ── */
+  .compliance-bar-wrap { display: flex; align-items: center; gap: 8px; min-width: 160px; }
+  .compliance-bar-bg {
+    flex: 1; height: 6px; border-radius: 3px;
+    background: var(--bg-tertiary);
+    overflow: hidden;
+  }
+  .compliance-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .compliance-pct { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ── Divider ── */
+  .divider { height: 1px; background: var(--border); margin: 24px 0; opacity: 0.5; }
+
+  /* ── Filter row ── */
+  .filter-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+  .filter-chip {
+    padding: 3px 10px; border-radius: 12px; font-size: 11px; cursor: pointer;
+    border: 1px solid var(--border); color: var(--text-muted);
+    background: var(--bg-secondary);
+  }
+  .filter-chip.active {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+    color: var(--accent);
+  }
+  .filter-spacer { flex: 1; }
+  .search-input {
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    color: var(--text-secondary); border-radius: 6px;
+    padding: 4px 10px; font-size: 12px; outline: none; width: 200px;
+  }
+  .search-input::placeholder { color: var(--text-disabled); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Observability</div>
+      <a class="sidebar-item" href="#"><span class="sidebar-icon">⬡</span> Overview</a>
+      <a class="sidebar-item" href="#"><span class="sidebar-icon">◈</span> Sessions</a>
+      <a class="sidebar-item" href="#"><span class="sidebar-icon">⚙</span> Hooks</a>
+      <a class="sidebar-item" href="#"><span class="sidebar-icon">⚡</span> Skills</a>
+      <a class="sidebar-item" href="#"><span class="sidebar-icon">⊛</span> Tools</a>
+      <a class="sidebar-item active" href="#"><span class="sidebar-icon">⟳</span> Learning</a>
+      <a class="sidebar-item" href="#"><span class="sidebar-icon">◎</span> Signals</a>
+      <a class="sidebar-item" href="#"><span class="sidebar-icon">⬡</span> Memory</a>
+      <a class="sidebar-item" href="#"><span class="sidebar-icon">◉</span> Evals</a>
+      <a class="sidebar-item" href="#"><span class="sidebar-icon">≋</span> Events</a>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <main class="main">
+    <div class="page">
+
+      <!-- Control bar -->
+      <div class="control-bar">
+        <div class="page-title">Learning &amp; Compliance</div>
+        <div class="control-right">
+          <div class="select-pill">
+            <span>⏱</span>
+            <select><option>Last 30 days</option><option>Last 7 days</option><option>Last 90 days</option></select>
+          </div>
+          <div class="select-pill">
+            <select><option>Daily</option><option>Weekly</option></select>
+          </div>
+          <button class="btn-ghost">↺ Refresh</button>
+        </div>
+      </div>
+
+      <!-- Aggregate stats -->
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-label">Memories Stored</div>
+          <div class="stat-value accent">47</div>
+          <div class="stat-sub">+12 this week</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg Rating</div>
+          <div class="stat-value success">7.4</div>
+          <div class="stat-sub">of 10 · 23 ratings</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Gate Pass Rate</div>
+          <div class="stat-value success">81%</div>
+          <div class="stat-sub">34 pass · 8 block</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Circumventions</div>
+          <div class="stat-value warning">6</div>
+          <div class="stat-sub">2 patterns detected</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Directive Compliance</div>
+          <div class="stat-value success">88%</div>
+          <div class="stat-sub">4 directives tracked</div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════
+           SECTION 1: LEARNING LOOP
+      ════════════════════════════════════════════════════════════ -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="icon">⟳</span>
+            Learning Loop
+          </div>
+          <div class="section-count">47 memories · 2 paths</div>
+        </div>
+
+        <div class="filter-row">
+          <div class="filter-chip active">All</div>
+          <div class="filter-chip">Correction</div>
+          <div class="filter-chip">Validated</div>
+          <div class="filter-chip">Friction</div>
+          <div class="filter-chip">Session</div>
+          <div class="filter-spacer"></div>
+          <input class="search-input" placeholder="Filter memories…" />
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:130px">Time</th>
+                <th style="width:100px">Type</th>
+                <th style="width:240px">Trigger</th>
+                <th>Insight</th>
+                <th>Memory Stored</th>
+                <th style="width:90px">Session</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Path 1: correction -->
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-15 23:41</td>
+                <td><span class="badge badge-correction">Correction</span></td>
+                <td>
+                  <div class="text-sm text-secondary truncate" title="no don't use worktrees for that, just edit main directly">"no don't use worktrees for that, just edit main directly"</div>
+                </td>
+                <td>
+                  <div class="insight-text">Claude proposed a worktree for a trivial doc fix — user corrected</div>
+                </td>
+                <td>
+                  <div class="memory-chip" title="Trivial in-place edits to main (doc fix, one-line config) don't need a worktree">
+                    <span class="icon">◈</span>
+                    Trivial edits to main don't need a worktree
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">a3f9b1c2</td>
+              </tr>
+              <!-- Path 1: validated -->
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-15 22:18</td>
+                <td><span class="badge badge-validated">Validated</span></td>
+                <td>
+                  <div class="text-sm text-secondary truncate" title="great, now do the same for hooks">"great, now do the same for hooks"</div>
+                </td>
+                <td>
+                  <div class="insight-text">User confirmed: parallel agent dispatch for independent audit tasks</div>
+                </td>
+                <td>
+                  <div class="memory-chip" title="Validated approach: parallel agents on Edit+Read on src/skills/, src/core/hooks/">
+                    <span class="icon">◈</span>
+                    Parallel agents on independent audits — confirmed
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">a3f9b1c2</td>
+              </tr>
+              <!-- Path 2: friction -->
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-14 18:04</td>
+                <td><span class="badge badge-friction">Friction</span></td>
+                <td>
+                  <div class="text-sm text-secondary truncate" title="stop editing it again, I already told you">re-edit × 4 on CompactionPage.tsx + "stop editing it again"</div>
+                </td>
+                <td>
+                  <div class="insight-text">4 edits to same file, user pushed back — approach friction</div>
+                </td>
+                <td>
+                  <div class="memory-chip" title="Approach friction on src/ui/web/src/pages/system/observability/CompactionPage.tsx: 4+ edits, user pushed back">
+                    <span class="icon">◈</span>
+                    Re-edit friction: CompactionPage (4×)
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">c7d2e4a1</td>
+              </tr>
+              <!-- Path 1: correction -->
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-14 11:30</td>
+                <td><span class="badge badge-correction">Correction</span></td>
+                <td>
+                  <div class="text-sm text-secondary truncate" title="don't add comments explaining what the code does">"don't add comments explaining what the code does"</div>
+                </td>
+                <td>
+                  <div class="insight-text">Claude added inline comments — user prefers no explanatory comments</div>
+                </td>
+                <td>
+                  <div class="memory-chip">
+                    <span class="icon">◈</span>
+                    No explanatory comments in code
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">b8f1a3d9</td>
+              </tr>
+              <!-- Session summary -->
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-13 09:15</td>
+                <td><span class="badge badge-session">Session</span></td>
+                <td>
+                  <div class="text-sm text-secondary truncate" title="Session summary: Invoke the omnibus skill with verb=audit">Session: audit tests — coverage, gaps, e2e vs unit</div>
+                </td>
+                <td>
+                  <div class="insight-text">Session summary extracted — intent → outcome mapping</div>
+                </td>
+                <td>
+                  <div class="memory-chip">
+                    <span class="icon">◈</span>
+                    Session: omnibus audit tests → 435 tests, 100% pass
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">e9a2c5f0</td>
+              </tr>
+              <!-- Path 1: validated -->
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-12 16:44</td>
+                <td><span class="badge badge-validated">Validated</span></td>
+                <td>
+                  <div class="text-sm text-secondary truncate" title="yes exactly, keep doing that">"yes exactly, keep doing that"</div>
+                </td>
+                <td>
+                  <div class="insight-text">User confirmed single bundled PR approach for this refactor type</div>
+                </td>
+                <td>
+                  <div class="memory-chip">
+                    <span class="icon">◈</span>
+                    Bundled PR preferred for cross-domain refactors
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">d4f8b2e1</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ═══════════════════════════════════════════════════════════
+           SECTION 2: FEEDBACK
+      ════════════════════════════════════════════════════════════ -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="icon">★</span>
+            Feedback &amp; Ratings
+          </div>
+          <div class="section-count">23 events · avg 7.4 / 10</div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:130px">Time</th>
+                <th style="width:240px">Trigger / Sentence</th>
+                <th style="width:90px">Rating</th>
+                <th>Effect</th>
+                <th style="width:110px right">Rolling Avg</th>
+                <th style="width:90px">Session</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-15 23:41</td>
+                <td>
+                  <div class="text-sm text-secondary truncate">"great, now do the same for hooks"</div>
+                  <div class="text-xs text-muted">positive · trigger: "great"</div>
+                </td>
+                <td>
+                  <span class="badge badge-validated" style="font-size:13px">👍 pos.</span>
+                </td>
+                <td>
+                  <div class="memory-chip">
+                    <span class="icon">◈</span>
+                    Validated: parallel agents on audits
+                  </div>
+                </td>
+                <td>
+                  <div class="compliance-bar-wrap" style="justify-content:flex-end">
+                    <span class="delta up">+0.1 → 7.4</span>
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">a3f9b1c2</td>
+              </tr>
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-15 21:10</td>
+                <td>
+                  <div class="text-sm text-secondary truncate">"8"</div>
+                  <div class="text-xs text-muted">explicit · numeric 8 / 10</div>
+                </td>
+                <td>
+                  <span class="badge badge-rating" style="font-size:14px;font-weight:700">8</span>
+                </td>
+                <td>
+                  <span class="text-muted text-xs">no memory stored</span>
+                </td>
+                <td>
+                  <div class="compliance-bar-wrap" style="justify-content:flex-end">
+                    <span class="delta up">+0.3 → 7.4</span>
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">a3f9b1c2</td>
+              </tr>
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-14 18:04</td>
+                <td>
+                  <div class="text-sm text-secondary truncate">"stop editing it again, I already told you"</div>
+                  <div class="text-xs text-muted">negative · trigger: "stop"</div>
+                </td>
+                <td>
+                  <span class="badge badge-block" style="font-size:13px">👎 neg.</span>
+                </td>
+                <td>
+                  <div class="memory-chip">
+                    <span class="icon">◈</span>
+                    Friction: CompactionPage re-edit × 4
+                  </div>
+                </td>
+                <td>
+                  <div class="compliance-bar-wrap" style="justify-content:flex-end">
+                    <span class="delta down">−0.4 → 7.1</span>
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">c7d2e4a1</td>
+              </tr>
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-14 14:22</td>
+                <td>
+                  <div class="text-sm text-secondary truncate">"6"</div>
+                  <div class="text-xs text-muted">explicit · numeric 6 / 10</div>
+                </td>
+                <td>
+                  <span class="badge badge-warning" style="background:color-mix(in srgb,#f1fa8c 15%,transparent);color:#f1fa8c;font-size:14px;font-weight:700">6</span>
+                </td>
+                <td>
+                  <span class="text-muted text-xs">low rating — memory prompt shown</span>
+                </td>
+                <td>
+                  <div class="compliance-bar-wrap" style="justify-content:flex-end">
+                    <span class="delta down">−0.6 → 7.5</span>
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">c7d2e4a1</td>
+              </tr>
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-13 11:08</td>
+                <td>
+                  <div class="text-sm text-secondary truncate">"perfect"</div>
+                  <div class="text-xs text-muted">positive · trigger: "perfect"</div>
+                </td>
+                <td>
+                  <span class="badge badge-validated" style="font-size:13px">👍 pos.</span>
+                </td>
+                <td>
+                  <div class="memory-chip">
+                    <span class="icon">◈</span>
+                    Validated: bun test.ts before committing
+                  </div>
+                </td>
+                <td>
+                  <div class="compliance-bar-wrap" style="justify-content:flex-end">
+                    <span class="delta up">+0.2 → 8.1</span>
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">e9a2c5f0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ═══════════════════════════════════════════════════════════
+           SECTION 3: DIRECTIVE COMPLIANCE
+      ════════════════════════════════════════════════════════════ -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="icon">⊟</span>
+            Directive Compliance
+          </div>
+          <div class="section-count">4 directives · 88% overall</div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Directive</th>
+                <th style="width:80px">Sessions</th>
+                <th style="width:80px">Followed</th>
+                <th style="width:80px">Missed</th>
+                <th style="width:200px">Compliance</th>
+                <th style="width:130px">Last Checked</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div class="text-sm text-secondary">Always push to origin before switching context</div>
+                </td>
+                <td class="mono text-sm" style="color:var(--text-muted)">18</td>
+                <td class="mono text-sm" style="color:var(--success)">18</td>
+                <td class="mono text-sm" style="color:var(--text-disabled)">0</td>
+                <td>
+                  <div class="compliance-bar-wrap">
+                    <div class="compliance-bar-bg">
+                      <div class="compliance-bar-fill" style="width:100%;background:var(--success)"></div>
+                    </div>
+                    <span class="compliance-pct" style="color:var(--success)">100%</span>
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">2026-05-15 23:41</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="text-sm text-secondary">Never write directly to ~/.claude/</div>
+                </td>
+                <td class="mono text-sm" style="color:var(--text-muted)">24</td>
+                <td class="mono text-sm" style="color:var(--success)">23</td>
+                <td class="mono text-sm" style="color:var(--warning)">1</td>
+                <td>
+                  <div class="compliance-bar-wrap">
+                    <div class="compliance-bar-bg">
+                      <div class="compliance-bar-fill" style="width:96%;background:var(--success)"></div>
+                    </div>
+                    <span class="compliance-pct" style="color:var(--success)">96%</span>
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">2026-05-15 21:10</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="text-sm text-secondary">Use worktrees for feature branches, not main checkout</div>
+                </td>
+                <td class="mono text-sm" style="color:var(--text-muted)">11</td>
+                <td class="mono text-sm" style="color:var(--success)">8</td>
+                <td class="mono text-sm" style="color:var(--warning)">3</td>
+                <td>
+                  <div class="compliance-bar-wrap">
+                    <div class="compliance-bar-bg">
+                      <div class="compliance-bar-fill" style="width:73%;background:var(--warning)"></div>
+                    </div>
+                    <span class="compliance-pct" style="color:var(--warning)">73%</span>
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">2026-05-14 18:04</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="text-sm text-secondary">Run bun test.ts before claiming work complete</div>
+                </td>
+                <td class="mono text-sm" style="color:var(--text-muted)">31</td>
+                <td class="mono text-sm" style="color:var(--success)">22</td>
+                <td class="mono text-sm" style="color:var(--error)">9</td>
+                <td>
+                  <div class="compliance-bar-wrap">
+                    <div class="compliance-bar-bg">
+                      <div class="compliance-bar-fill" style="width:71%;background:var(--error)"></div>
+                    </div>
+                    <span class="compliance-pct" style="color:var(--error)">71%</span>
+                  </div>
+                </td>
+                <td class="mono text-xs text-muted">2026-05-15 14:30</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ═══════════════════════════════════════════════════════════
+           SECTION 4: GATES
+      ════════════════════════════════════════════════════════════ -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="icon">⛨</span>
+            Gates &amp; Circumvention
+          </div>
+          <div class="section-count">42 events · 81% pass · 2 patterns</div>
+        </div>
+
+        <!-- Pattern detection summary -->
+        <div class="pattern-alert">
+          <div class="alert-icon">⚠</div>
+          <div class="alert-body">
+            <div class="alert-title">Repeated circumvention — verify gate on src/ui/</div>
+            <div class="alert-detail">User-affirmed skip used 4× in 7 days on UI files (CompactionPage.tsx, SessionTracePage.tsx, ResearchLoopDetail.tsx). All skips: no verify block provided. Gate may be calibrated too aggressively for UI-only changes.</div>
+          </div>
+          <div class="alert-count">4<span>skips</span></div>
+        </div>
+
+        <div class="pattern-alert">
+          <div class="alert-icon">⚠</div>
+          <div class="alert-body">
+            <div class="alert-title">Repeated block then skip — verify gate, session end turns</div>
+            <div class="alert-detail">Block fired 2× in same session (b8f1a3d9) before user said "skip verify". Both blocks on src/core/hooks/ edits. Pattern: Claude coded but didn't include verify block, user bypassed rather than adding one.</div>
+          </div>
+          <div class="alert-count">2<span>in session</span></div>
+        </div>
+
+        <!-- Raw event list -->
+        <div class="filter-row">
+          <div class="filter-chip active">All</div>
+          <div class="filter-chip">Pass</div>
+          <div class="filter-chip">Block</div>
+          <div class="filter-chip">Skip</div>
+          <div class="filter-chip">Advisory</div>
+          <div class="filter-spacer"></div>
+          <input class="search-input" placeholder="Filter by file or hook…" />
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:130px">Time</th>
+                <th style="width:160px">Hook</th>
+                <th style="width:90px">Decision</th>
+                <th>Files / Context</th>
+                <th>Reason / Verify Block</th>
+                <th style="width:90px">Session</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-15 23:41</td>
+                <td>
+                  <div class="text-sm text-secondary">quality-check-stop</div>
+                  <div class="text-xs text-muted">Stop · verify gate</div>
+                </td>
+                <td><span class="badge badge-pass">✓ pass</span></td>
+                <td>
+                  <div class="mono text-xs text-secondary">src/core/hooks/quality-check-stop.ts</div>
+                  <div class="mono text-xs text-muted">src/eval/verify-policy.ts</div>
+                </td>
+                <td>
+                  <div class="text-xs text-secondary">verified · method: <span class="mono">bun test.ts</span></div>
+                  <div class="text-xs text-muted">scope: src/eval · assertions: all tests pass</div>
+                </td>
+                <td class="mono text-xs text-muted">a3f9b1c2</td>
+              </tr>
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-15 21:10</td>
+                <td>
+                  <div class="text-sm text-secondary">quality-check-stop</div>
+                  <div class="text-xs text-muted">Stop · verify gate</div>
+                </td>
+                <td><span class="badge badge-skip">⤸ skip</span></td>
+                <td>
+                  <div class="mono text-xs" style="color:var(--warning)">src/ui/web/src/pages/system/observability/CompactionPage.tsx</div>
+                </td>
+                <td>
+                  <div class="text-xs" style="color:var(--warning)">user-affirmed skip · "skip verify"</div>
+                  <div class="text-xs text-muted">no verify block provided</div>
+                </td>
+                <td class="mono text-xs text-muted">a3f9b1c2</td>
+              </tr>
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-15 19:55</td>
+                <td>
+                  <div class="text-sm text-secondary">quality-check-stop</div>
+                  <div class="text-xs text-muted">Stop · verify gate</div>
+                </td>
+                <td><span class="badge badge-advisory">◈ advisory</span></td>
+                <td>
+                  <div class="mono text-xs text-secondary">src/ui/web/src/api/observability-hooks.ts</div>
+                </td>
+                <td>
+                  <div class="text-xs" style="color:#ffb86c">verify block weak — assertions field empty</div>
+                  <div class="text-xs text-muted">scope: src/api · method: build · assertions: —</div>
+                </td>
+                <td class="mono text-xs text-muted">a3f9b1c2</td>
+              </tr>
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-14 18:04</td>
+                <td>
+                  <div class="text-sm text-secondary">quality-check-stop</div>
+                  <div class="text-xs text-muted">Stop · verify gate</div>
+                </td>
+                <td><span class="badge badge-block">✕ block</span></td>
+                <td>
+                  <div class="mono text-xs" style="color:var(--error)">src/ui/web/src/pages/system/observability/CompactionPage.tsx</div>
+                </td>
+                <td>
+                  <div class="text-xs text-error" style="color:var(--error)">no verify block · class=required</div>
+                  <div class="text-xs text-muted">code edits detected, verify block missing</div>
+                </td>
+                <td class="mono text-xs text-muted">c7d2e4a1</td>
+              </tr>
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-14 17:48</td>
+                <td>
+                  <div class="text-sm text-secondary">quality-check-stop</div>
+                  <div class="text-xs text-muted">Stop · verify gate</div>
+                </td>
+                <td><span class="badge badge-pass">✓ pass</span></td>
+                <td>
+                  <div class="mono text-xs text-secondary">src/memory/extract.ts</div>
+                  <div class="mono text-xs text-muted">src/memory/__tests__/extract.test.ts</div>
+                </td>
+                <td>
+                  <div class="text-xs text-secondary">verified · method: <span class="mono">bun test.ts __tests__/extract</span></div>
+                  <div class="text-xs text-muted">scope: src/memory · assertions: 12 tests pass</div>
+                </td>
+                <td class="mono text-xs text-muted">c7d2e4a1</td>
+              </tr>
+              <tr>
+                <td class="nowrap text-xs mono text-muted">2026-05-13 09:15</td>
+                <td>
+                  <div class="text-sm text-secondary">quality-check-stop</div>
+                  <div class="text-xs text-muted">Stop · verify gate</div>
+                </td>
+                <td><span class="badge badge-pass">✓ pass</span></td>
+                <td>
+                  <div class="mono text-xs text-secondary">src/telemetry/src/adapter.ts</div>
+                  <div class="mono text-xs text-muted">src/telemetry/__tests__/aggregator.test.ts</div>
+                </td>
+                <td>
+                  <div class="text-xs text-secondary">verified · method: <span class="mono">bun test.ts</span></div>
+                  <div class="text-xs text-muted">scope: src/telemetry · assertions: 435 pass</div>
+                </td>
+                <td class="mono text-xs text-muted">e9a2c5f0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /page -->
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Session Trace — Learning &amp; Compliance — Mockup</title>
+<style>
+  :root {
+    --bg-primary: #282a36;
+    --bg-secondary: #21222c;
+    --bg-tertiary: #343746;
+    --bg-contrast: #191a21;
+    --text-primary: #f8f8f2;
+    --text-secondary: #a9b1d6;
+    --text-muted: #6272a4;
+    --text-disabled: #44475a;
+    --border: #44475a;
+    --accent: #bd93f9;
+    --success: #50fa7b;
+    --warning: #f1fa8c;
+    --error: #ff5555;
+    --chart-2: #8be9fd;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg-contrast);
+    color: var(--text-primary);
+    font-family: 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── Layout shell ── */
+  .shell { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 220px; flex-shrink: 0;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    padding: 16px 0;
+  }
+  .sidebar-section { padding: 4px 0 8px; }
+  .sidebar-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+    color: var(--text-disabled); text-transform: uppercase;
+    padding: 0 16px; margin-bottom: 2px;
+  }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 16px; font-size: 13px;
+    color: var(--text-muted); cursor: pointer;
+    border-left: 2px solid transparent;
+  }
+  .sidebar-item:hover { color: var(--text-secondary); background: var(--bg-tertiary); }
+  .sidebar-item.active {
+    color: var(--text-primary);
+    border-left-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+  .sidebar-icon { font-size: 16px; width: 18px; text-align: center; opacity: 0.8; }
+
+  .main { flex: 1; overflow-y: auto; }
+  .page { padding: 24px 28px; }
+
+  /* ── Page header ── */
+  .page-header { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .breadcrumb-link { font-size: 13px; color: var(--text-muted); text-decoration: none; }
+  .breadcrumb-link:hover { color: var(--text-secondary); }
+  .breadcrumb-sep { color: var(--text-disabled); font-size: 13px; }
+  .page-title { font-size: 13px; color: var(--text-secondary); font-family: monospace; }
+
+  /* ── Stat row ── */
+  .stat-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 20px; }
+  .stat-card {
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px;
+  }
+  .stat-label { font-size: 10px; color: var(--text-muted); margin-bottom: 3px; letter-spacing: 0.03em; }
+  .stat-value { font-size: 18px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.success { color: var(--success); }
+  .stat-value.warning { color: var(--warning); }
+  .stat-value.error { color: var(--error); }
+
+  /* ── Turn card ── */
+  .turn-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .turn-header {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 14px; cursor: pointer;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  }
+  .turn-header:hover { background: color-mix(in srgb, var(--bg-tertiary) 30%, transparent); }
+  .turn-index {
+    flex-shrink: 0; width: 22px; height: 22px;
+    background: var(--bg-tertiary); border-radius: 4px;
+    font-size: 11px; font-weight: 700; color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 1px;
+  }
+  .turn-user-msg {
+    flex: 1; min-width: 0;
+    font-size: 13px; color: var(--text-primary);
+    line-height: 1.4;
+  }
+  .turn-user-msg .truncated {
+    overflow: hidden; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .turn-meta {
+    flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
+    font-size: 11px; color: var(--text-muted);
+  }
+  .turn-meta .time { white-space: nowrap; font-family: monospace; }
+  .turn-meta .dur { white-space: nowrap; color: var(--text-disabled); }
+  .turn-meta .cost { white-space: nowrap; }
+
+  /* ── Signal pills in turn header ── */
+  .turn-signals { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 5px; }
+  .sig-pill {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 1px 6px; border-radius: 3px;
+    font-size: 10px; font-weight: 600; white-space: nowrap;
+  }
+  .sig-pill.gate-pass     { background: color-mix(in srgb, var(--success) 12%, transparent); border: 1px solid color-mix(in srgb, var(--success) 25%, transparent); color: var(--success); }
+  .sig-pill.gate-block    { background: color-mix(in srgb, var(--error) 12%, transparent); border: 1px solid color-mix(in srgb, var(--error) 25%, transparent); color: var(--error); }
+  .sig-pill.gate-skip     { background: color-mix(in srgb, var(--warning) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 25%, transparent); color: var(--warning); }
+  .sig-pill.gate-advisory { background: color-mix(in srgb, #ffb86c 12%, transparent); border: 1px solid color-mix(in srgb, #ffb86c 25%, transparent); color: #ffb86c; }
+  .sig-pill.learning      { background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); color: var(--accent); }
+  .sig-pill.feedback-pos  { background: color-mix(in srgb, var(--success) 12%, transparent); border: 1px solid color-mix(in srgb, var(--success) 25%, transparent); color: var(--success); }
+  .sig-pill.feedback-neg  { background: color-mix(in srgb, var(--error) 12%, transparent); border: 1px solid color-mix(in srgb, var(--error) 25%, transparent); color: var(--error); }
+  .sig-pill.rating        { background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); color: var(--accent); }
+
+  /* ── Span rows ── */
+  .spans { background: var(--bg-primary); }
+  .span-row {
+    display: grid;
+    grid-template-columns: 4.5rem 9rem 1fr auto;
+    align-items: center; gap: 12px;
+    padding: 6px 14px;
+    font-size: 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 20%, transparent);
+  }
+  .span-row:last-child { border-bottom: none; }
+  .span-row:hover { background: color-mix(in srgb, var(--bg-tertiary) 40%, transparent); }
+
+  /* span separators within a turn */
+  .span-group-label {
+    padding: 5px 14px 3px;
+    font-size: 10px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-disabled);
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 20%, transparent);
+    background: color-mix(in srgb, var(--bg-tertiary) 20%, transparent);
+  }
+
+  /* ── Span kind badges ── */
+  .kind-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 2px 6px; border-radius: 3px; border: 1px solid;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase; white-space: nowrap;
+  }
+  .kind-tool      { background: color-mix(in srgb, var(--accent) 10%, transparent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--accent); }
+  .kind-hook-pass { background: color-mix(in srgb, var(--success) 10%, transparent); border-color: color-mix(in srgb, var(--success) 30%, transparent); color: var(--success); }
+  .kind-hook-block{ background: color-mix(in srgb, var(--error) 10%, transparent); border-color: color-mix(in srgb, var(--error) 30%, transparent); color: var(--error); }
+  .kind-hook-adv  { background: color-mix(in srgb, #ffb86c 10%, transparent); border-color: color-mix(in srgb, #ffb86c 30%, transparent); color: #ffb86c; }
+  .kind-hook-skip { background: color-mix(in srgb, var(--warning) 10%, transparent); border-color: color-mix(in srgb, var(--warning) 30%, transparent); color: var(--warning); }
+  .kind-hook-gen  { background: color-mix(in srgb, #ff79c6 10%, transparent); border-color: color-mix(in srgb, #ff79c6 30%, transparent); color: #ff79c6; }
+  .kind-learning  { background: color-mix(in srgb, var(--accent) 10%, transparent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--accent); }
+  .kind-feedback  { background: color-mix(in srgb, var(--success) 10%, transparent); border-color: color-mix(in srgb, var(--success) 30%, transparent); color: var(--success); }
+  .kind-feedback-n{ background: color-mix(in srgb, var(--error) 10%, transparent); border-color: color-mix(in srgb, var(--error) 30%, transparent); color: var(--error); }
+  .kind-rating    { background: color-mix(in srgb, var(--accent) 10%, transparent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--accent); }
+
+  .span-name { font-family: monospace; font-size: 12px; truncate: true; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .span-name.tool { color: #8be9fd; }
+  .span-name.hook-pass { color: var(--success); }
+  .span-name.hook-block { color: var(--error); }
+  .span-name.hook-skip { color: var(--warning); }
+  .span-name.hook-adv { color: #ffb86c; }
+  .span-name.hook-gen { color: #ff79c6; }
+  .span-name.learning { color: var(--accent); }
+  .span-name.feedback { color: var(--success); }
+  .span-name.feedback-n { color: var(--error); }
+  .span-name.rating { color: var(--accent); }
+
+  .span-detail { color: var(--text-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .span-right { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .span-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+  .span-dot.err { background: var(--error); }
+  .span-dur { font-family: monospace; font-size: 11px; color: color-mix(in srgb, var(--success) 70%, transparent); }
+
+  /* ── Memory chip inline ── */
+  .mem-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    border-radius: 3px; padding: 1px 6px;
+    font-size: 11px; color: var(--accent);
+    max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: sans-serif;
+  }
+
+  /* ── Annotation: new span types callout ── */
+  .annotation {
+    background: color-mix(in srgb, var(--chart-2) 6%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--chart-2) 30%, transparent);
+    border-radius: 6px; padding: 10px 14px;
+    margin-bottom: 8px; font-size: 12px;
+    color: var(--chart-2);
+  }
+  .annotation strong { color: #8be9fd; font-weight: 600; }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px;
+    margin-bottom: 20px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+  .legend-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 1px 6px; border-radius: 3px; border: 1px solid;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .mono { font-family: monospace; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Observability</div>
+      <a class="sidebar-item" href="#">⬡ Overview</a>
+      <a class="sidebar-item active" href="#">◈ Sessions</a>
+      <a class="sidebar-item" href="#">⚙ Hooks</a>
+      <a class="sidebar-item" href="#">⚡ Skills</a>
+      <a class="sidebar-item" href="#">⊛ Tools</a>
+      <a class="sidebar-item" href="#">⟳ Learning</a>
+      <a class="sidebar-item" href="#">◎ Signals</a>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="page">
+
+      <!-- Breadcrumb -->
+      <div class="page-header">
+        <a class="breadcrumb-link" href="#">Sessions</a>
+        <span class="breadcrumb-sep">›</span>
+        <span class="page-title mono">a3f9b1c2-…</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="page-title">Trace</span>
+      </div>
+
+      <!-- Stat row (existing + new) -->
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-label">Turns</div>
+          <div class="stat-value">14</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Tool Calls</div>
+          <div class="stat-value">47</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Duration</div>
+          <div class="stat-value">38m</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Gate Result</div>
+          <div class="stat-value success">pass</div>
+        </div>
+        <!-- NEW: learning/feedback summary stat cards -->
+        <div class="stat-card" style="border-color:color-mix(in srgb,var(--accent) 25%,transparent)">
+          <div class="stat-label">Memories Stored</div>
+          <div class="stat-value accent">3</div>
+        </div>
+        <div class="stat-card" style="border-color:color-mix(in srgb,var(--success) 25%,transparent)">
+          <div class="stat-label">Rating</div>
+          <div class="stat-value success">👍</div>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="legend">
+        <strong style="font-size:11px;color:var(--text-muted);align-self:center;margin-right:4px">NEW SPANS</strong>
+        <div class="legend-item">
+          <span class="legend-badge" style="background:color-mix(in srgb,var(--accent) 10%,transparent);border-color:color-mix(in srgb,var(--accent) 30%,transparent);color:var(--accent)">memory</span>
+          Learning loop — memory stored this turn
+        </div>
+        <div class="legend-item">
+          <span class="legend-badge" style="background:color-mix(in srgb,var(--success) 10%,transparent);border-color:color-mix(in srgb,var(--success) 30%,transparent);color:var(--success)">feedback</span>
+          Positive feedback captured
+        </div>
+        <div class="legend-item">
+          <span class="legend-badge" style="background:color-mix(in srgb,var(--error) 10%,transparent);border-color:color-mix(in srgb,var(--error) 30%,transparent);color:var(--error)">feedback</span>
+          Negative feedback / correction captured
+        </div>
+        <div class="legend-item">
+          <span class="legend-badge" style="background:color-mix(in srgb,var(--accent) 10%,transparent);border-color:color-mix(in srgb,var(--accent) 30%,transparent);color:var(--accent)">rating</span>
+          Numeric rating captured
+        </div>
+      </div>
+
+      <!-- ─────────────────────────────────────────────────────────
+           TURN 4 — positive feedback → validated memory
+      ──────────────────────────────────────────────────────────── -->
+      <div class="turn-card">
+        <div class="turn-header">
+          <div class="turn-index">4</div>
+          <div class="turn-user-msg">
+            <div class="truncated">great, now do the same for hooks — I want the same parallel approach you used on the skills audit</div>
+            <div class="turn-signals">
+              <span class="sig-pill feedback-pos">👍 positive</span>
+              <span class="sig-pill learning">◈ memory stored</span>
+              <span class="sig-pill gate-pass">⛨ gate pass</span>
+            </div>
+          </div>
+          <div class="turn-meta">
+            <span class="time">22:18:04</span>
+            <span class="dur">4m 12s</span>
+            <span class="cost">$0.041</span>
+          </div>
+        </div>
+        <div class="spans">
+          <!-- existing tool spans -->
+          <div class="span-row">
+            <span class="kind-badge kind-tool">tool</span>
+            <span class="span-name tool">Read</span>
+            <span class="span-detail">src/core/hooks/settings-hooks.json</span>
+            <div class="span-right"><span class="span-dot"></span><span class="span-dur">42ms</span></div>
+          </div>
+          <div class="span-row">
+            <span class="kind-badge kind-tool">tool</span>
+            <span class="span-name tool">Agent</span>
+            <span class="span-detail">hooks-audit — parallel dispatch × 3</span>
+            <div class="span-right"><span class="span-dot"></span><span class="span-dur">3m 28s</span></div>
+          </div>
+          <div class="span-row">
+            <span class="kind-badge kind-tool">tool</span>
+            <span class="span-name tool">Edit</span>
+            <span class="span-detail">src/core/hooks/quality-check-stop.ts</span>
+            <div class="span-right"><span class="span-dot"></span><span class="span-dur">18ms</span></div>
+          </div>
+
+          <!-- separator: signals group -->
+          <div class="span-group-label">Signals &amp; Learning</div>
+
+          <!-- NEW: feedback span -->
+          <div class="span-row" style="background:color-mix(in srgb,var(--success) 3%,transparent)">
+            <span class="kind-badge kind-feedback">feedback</span>
+            <span class="span-name feedback">feedback-capture</span>
+            <span class="span-detail">positive · trigger "great" · prior tools: Agent, Edit</span>
+            <div class="span-right"><span class="span-dot"></span></div>
+          </div>
+
+          <!-- NEW: memory span -->
+          <div class="span-row" style="background:color-mix(in srgb,var(--accent) 3%,transparent)">
+            <span class="kind-badge kind-learning">memory</span>
+            <span class="span-name learning">memory_store</span>
+            <span class="span-detail">
+              <span class="mem-chip">◈ Validated: parallel agents on independent audits — Agent+Edit on src/core/hooks/</span>
+            </span>
+            <div class="span-right"><span class="span-dot"></span><span class="span-dur">11ms</span></div>
+          </div>
+
+          <!-- existing hook span -->
+          <div class="span-group-label">Gates</div>
+          <div class="span-row" style="background:color-mix(in srgb,var(--success) 3%,transparent)">
+            <span class="kind-badge kind-hook-pass">pass</span>
+            <span class="span-name hook-pass">quality-check-stop</span>
+            <span class="span-detail">verified · method: bun test.ts · scope: src/core/hooks/</span>
+            <div class="span-right"><span class="span-dot"></span><span class="span-dur">380ms</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─────────────────────────────────────────────────────────
+           TURN 7 — numeric rating
+      ──────────────────────────────────────────────────────────── -->
+      <div class="turn-card">
+        <div class="turn-header">
+          <div class="turn-index">7</div>
+          <div class="turn-user-msg">
+            <div class="truncated">8</div>
+            <div class="turn-signals">
+              <span class="sig-pill rating">★ 8 / 10</span>
+            </div>
+          </div>
+          <div class="turn-meta">
+            <span class="time">21:10:33</span>
+            <span class="dur">0.3s</span>
+            <span class="cost">$0.001</span>
+          </div>
+        </div>
+        <div class="spans">
+          <div class="span-group-label">Signals &amp; Learning</div>
+          <!-- NEW: rating span -->
+          <div class="span-row" style="background:color-mix(in srgb,var(--accent) 3%,transparent)">
+            <span class="kind-badge kind-rating">rating</span>
+            <span class="span-name rating">rating-capture</span>
+            <span class="span-detail">explicit · 8 / 10 · rolling avg: 7.1 → 7.4 (+0.3)</span>
+            <div class="span-right"><span class="span-dot"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─────────────────────────────────────────────────────────
+           TURN 9 — gate advisory + correction
+      ──────────────────────────────────────────────────────────── -->
+      <div class="turn-card">
+        <div class="turn-header">
+          <div class="turn-index">9</div>
+          <div class="turn-user-msg">
+            <div class="truncated">no not that — don't use a worktree here, just edit main directly for a one-line config change</div>
+            <div class="turn-signals">
+              <span class="sig-pill feedback-neg">👎 correction</span>
+              <span class="sig-pill learning">◈ memory stored</span>
+              <span class="sig-pill gate-advisory">⚠ advisory</span>
+            </div>
+          </div>
+          <div class="turn-meta">
+            <span class="time">19:55:11</span>
+            <span class="dur">1m 48s</span>
+            <span class="cost">$0.018</span>
+          </div>
+        </div>
+        <div class="spans">
+          <div class="span-row">
+            <span class="kind-badge kind-tool">tool</span>
+            <span class="span-name tool">Bash</span>
+            <span class="span-detail">git worktree add .worktrees/config-fix -b config-fix main</span>
+            <div class="span-right"><span class="span-dot"></span><span class="span-dur">210ms</span></div>
+          </div>
+          <div class="span-row">
+            <span class="kind-badge kind-tool">tool</span>
+            <span class="span-name tool">Edit</span>
+            <span class="span-detail">.worktrees/config-fix/src/core/settings.ts</span>
+            <div class="span-right"><span class="span-dot"></span><span class="span-dur">12ms</span></div>
+          </div>
+
+          <div class="span-group-label">Signals &amp; Learning</div>
+
+          <!-- NEW: correction/feedback span -->
+          <div class="span-row" style="background:color-mix(in srgb,var(--error) 3%,transparent)">
+            <span class="kind-badge kind-feedback-n">feedback</span>
+            <span class="span-name feedback-n">feedback-capture</span>
+            <span class="span-detail">negative · trigger "no" · prior tools: Bash+Edit · prior files: settings.ts</span>
+            <div class="span-right"><span class="span-dot err"></span></div>
+          </div>
+
+          <!-- NEW: memory from correction -->
+          <div class="span-row" style="background:color-mix(in srgb,var(--accent) 3%,transparent)">
+            <span class="kind-badge kind-learning">memory</span>
+            <span class="span-name learning">memory_store</span>
+            <span class="span-detail">
+              <span class="mem-chip">◈ Trivial one-line edits to main don't need a worktree</span>
+            </span>
+            <div class="span-right"><span class="span-dot"></span><span class="span-dur">9ms</span></div>
+          </div>
+
+          <div class="span-group-label">Gates</div>
+
+          <!-- advisory gate -->
+          <div class="span-row" style="background:color-mix(in srgb,#ffb86c 3%,transparent)">
+            <span class="kind-badge kind-hook-adv">advisory</span>
+            <span class="span-name hook-adv">quality-check-stop</span>
+            <span class="span-detail">verify block weak — assertions empty · scope: src/core · method: build</span>
+            <div class="span-right"><span class="span-dot" style="background:#ffb86c"></span><span class="span-dur">290ms</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─────────────────────────────────────────────────────────
+           TURN 11 — gate block + user-affirmed skip
+      ──────────────────────────────────────────────────────────── -->
+      <div class="turn-card">
+        <div class="turn-header">
+          <div class="turn-index">11</div>
+          <div class="turn-user-msg">
+            <div class="truncated">skip verify — I'll test it manually, just ship it</div>
+            <div class="turn-signals">
+              <span class="sig-pill gate-skip">⤸ skip verify</span>
+            </div>
+          </div>
+          <div class="turn-meta">
+            <span class="time">18:04:22</span>
+            <span class="dur">0.4s</span>
+            <span class="cost">$0.001</span>
+          </div>
+        </div>
+        <div class="spans">
+          <div class="span-group-label">Gates</div>
+
+          <!-- Previous turn's block (context) -->
+          <div class="span-row" style="opacity:0.6">
+            <span class="kind-badge kind-hook-block">block</span>
+            <span class="span-name hook-block">quality-check-stop</span>
+            <span class="span-detail">turn 10 — no verify block · class=required · CompactionPage.tsx</span>
+            <div class="span-right"><span class="span-dot err"></span><span class="span-dur">320ms</span></div>
+          </div>
+
+          <!-- This turn: skip -->
+          <div class="span-row" style="background:color-mix(in srgb,var(--warning) 4%,transparent)">
+            <span class="kind-badge kind-hook-skip">skip</span>
+            <span class="span-name hook-skip">quality-check-stop</span>
+            <span class="span-detail">user-affirmed skip · "skip verify" · CompactionPage.tsx</span>
+            <div class="span-right"><span class="span-dot" style="background:var(--warning)"></span><span class="span-dur">285ms</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─────────────────────────────────────────────────────────
+           TURN 14 — clean gate pass, session end
+      ──────────────────────────────────────────────────────────── -->
+      <div class="turn-card">
+        <div class="turn-header">
+          <div class="turn-index">14</div>
+          <div class="turn-user-msg">
+            <div class="truncated">looks good, run the tests and commit</div>
+            <div class="turn-signals">
+              <span class="sig-pill gate-pass">⛨ gate pass</span>
+              <span class="sig-pill learning">◈ session summary</span>
+            </div>
+          </div>
+          <div class="turn-meta">
+            <span class="time">23:41:07</span>
+            <span class="dur">2m 05s</span>
+            <span class="cost">$0.022</span>
+          </div>
+        </div>
+        <div class="spans">
+          <div class="span-row">
+            <span class="kind-badge kind-tool">tool</span>
+            <span class="span-name tool">Bash</span>
+            <span class="span-detail">bun test.ts</span>
+            <div class="span-right"><span class="span-dot"></span><span class="span-dur">48s</span></div>
+          </div>
+          <div class="span-row">
+            <span class="kind-badge kind-tool">tool</span>
+            <span class="span-name tool">Bash</span>
+            <span class="span-detail">git commit -m "feat(observability): add learning & compliance page"</span>
+            <div class="span-right"><span class="span-dot"></span><span class="span-dur">1.2s</span></div>
+          </div>
+
+          <div class="span-group-label">Signals &amp; Learning</div>
+
+          <!-- session summary memory -->
+          <div class="span-row" style="background:color-mix(in srgb,var(--accent) 3%,transparent)">
+            <span class="kind-badge kind-learning">memory</span>
+            <span class="span-name learning">session-extract</span>
+            <span class="span-detail">
+              <span class="mem-chip">◈ Session: grill-me on learning page design → HTML mockups + grilled decisions</span>
+            </span>
+            <div class="span-right"><span class="span-dot"></span><span class="span-dur">22ms</span></div>
+          </div>
+
+          <div class="span-group-label">Gates</div>
+
+          <!-- clean pass -->
+          <div class="span-row" style="background:color-mix(in srgb,var(--success) 3%,transparent)">
+            <span class="kind-badge kind-hook-pass">pass</span>
+            <span class="span-name hook-pass">quality-check-stop</span>
+            <span class="span-detail">verified · method: bun test.ts · scope: src/ · assertions: 435 pass, 0 fail</span>
+            <div class="span-right"><span class="span-dot"></span><span class="span-dur">410ms</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /page -->
+  </main>
+</div>
+</body>
+</html>
