@@ -16,7 +16,7 @@ import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { CodeBlock } from '../../../components/data/CodeBlock';
 
-type InvocationRow = { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; decision?: "pass" | "block" | "crash"; isError?: boolean; errorMessage?: string };
+type InvocationRow = { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; decision?: "pass" | "block" | "crash"; isError?: boolean; errorMessage?: string; isSubagent?: boolean; subagentType?: string; parentSessionId?: string };
 type Dataset = 'status' | 'latency';
 
 const DATASETS: { key: Dataset; label: string }[] = [
@@ -164,6 +164,14 @@ export function HookDetailPage() {
           {row.sessionId.slice(0, 8)}
         </Link>
       ),
+    },
+    {
+      key: 'isSubagent',
+      label: 'Via',
+      shrink: true,
+      render: (row) => row.isSubagent && row.parentSessionId
+        ? <Link to={`/observability/sessions/${row.parentSessionId}`} onClick={(e) => e.stopPropagation()} className="font-mono text-xs text-text-muted hover:text-accent-primary whitespace-nowrap">↳ {row.subagentType || 'subagent'}</Link>
+        : <span className="text-text-muted">—</span>,
     },
     {
       key: 'output',

@@ -169,6 +169,13 @@ export function SessionsPage() {
 
   const activeFilterCount = (includeChildSubagents ? 1 : 0) + (onlyWithSubagents ? 1 : 0);
 
+  const subagentTypeBySessionId = new Map<string, string>();
+  for (const inv of subagents.data?.recent ?? []) {
+    if (inv.subagentSessionId && inv.subagentType) {
+      subagentTypeBySessionId.set(inv.subagentSessionId, inv.subagentType);
+    }
+  }
+
   const sessionColumns: Column<SessionRow>[] = [
     {
       key: 'project',
@@ -176,7 +183,7 @@ export function SessionsPage() {
       sortable: true,
       render: (row) => (
         <div className="flex flex-col gap-0.5 min-w-0">
-          {row.parentSessionId && <span className="text-text-muted text-xs">↳ subagent</span>}
+          {row.parentSessionId && <span className="text-text-muted text-xs">↳ {subagentTypeBySessionId.get(row.sessionId) || 'subagent'}</span>}
           {(() => {
             const SKIP_INTENTS = new Set(['unknown task', '[request interrupted by user]']);
             const meaningfulIntent = row.intent

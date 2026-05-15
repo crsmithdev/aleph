@@ -216,7 +216,7 @@ export function useObsToolDetail(name: string, range: TimeRange) {
     sessionCount: number;
     byDay: Array<{ date: string; count: number; byHour: Record<number, number>; errors: number; errorRate: number; sessions: number; linesAdded: number; linesRemoved: number; p50Ms?: number; p95Ms?: number; avgMs?: number }>;
     skills: Array<{ name: string; count: number }>;
-    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; durationMs?: number; isError?: boolean; errorMessage?: string; errorFull?: string; skill?: string; linesAdded?: number; linesRemoved?: number }>;
+    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; durationMs?: number; isError?: boolean; errorMessage?: string; errorFull?: string; skill?: string; linesAdded?: number; linesRemoved?: number; isSubagent?: boolean; subagentType?: string; parentSessionId?: string }>;
     queryTimeMs: number;
   }>({
     queryKey: ['observability', 'tool-detail', name, range],
@@ -255,7 +255,7 @@ export function useObsHookDetail(name: string, range: TimeRange) {
     description?: string;
     gating?: HookGatingStat | null;
     byDay: Array<{ date: string; count: number; avgMs: number }>;
-    invocations: Array<{ timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; decision?: "pass" | "block" | "crash"; isError?: boolean; errorMessage?: string }>;
+    invocations: Array<{ timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; decision?: "pass" | "block" | "crash"; isError?: boolean; errorMessage?: string; isSubagent?: boolean; subagentType?: string; parentSessionId?: string }>;
     queryTimeMs: number;
   }>({
     queryKey: ['observability', 'hook-detail', name, range],
@@ -270,7 +270,7 @@ export function useObsSkillDetail(name: string, range: TimeRange) {
     totalCount: number;
     errorCount: number;
     byDay: Array<{ date: string; count: number }>;
-    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string }>;
+    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string; isSubagent?: boolean; subagentType?: string; parentSessionId?: string }>;
     sourceContent?: string;
     type?: 'command' | 'skill';
     queryTimeMs: number;

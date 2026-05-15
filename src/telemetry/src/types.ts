@@ -294,7 +294,7 @@ export interface ToolDetailData {
     avgMs?: number;
   })[];
   skills: { name: string; count: number }[];
-  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; durationMs?: number; isError?: boolean; errorMessage?: string; errorFull?: string; skill?: string; linesAdded?: number; linesRemoved?: number }[];
+  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; durationMs?: number; isError?: boolean; errorMessage?: string; errorFull?: string; skill?: string; linesAdded?: number; linesRemoved?: number; isSubagent?: boolean; subagentType?: string; parentSessionId?: string }[];
 }
 
 export interface HookDetailData {
@@ -308,14 +308,14 @@ export interface HookDetailData {
   crashes: number;
   fullCommand?: string;
   byDay: { date: string; count: number; avgMs: number }[];
-  invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; decision?: "pass" | "block" | "crash"; isError?: boolean; errorMessage?: string }[];
+  invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; decision?: "pass" | "block" | "crash"; isError?: boolean; errorMessage?: string; isSubagent?: boolean; subagentType?: string; parentSessionId?: string }[];
 }
 
 export interface SkillDetailData {
   skill: string;
   totalCount: number;
   byDay: TimeBucket[];
-  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string }[];
+  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string; isSubagent?: boolean; subagentType?: string; parentSessionId?: string }[];
 }
 
 export interface MemoryUsageData {

@@ -740,10 +740,59 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
 }
 
 // ---------------------------------------------------------------------------
+// Subagent type lookup (shared by detail reducers)
+// ---------------------------------------------------------------------------
+
+function buildSubagentTypeMap(events: TelemetryEvent[]): Map<string, string> {
+  // Build subagent session time windows by parent
+  const subSessionMap = new Map<string, Map<string, { firstTs: number; lastTs: number }>>();
+  for (const e of events) {
+    const parentId = e.data?.parentSessionId as string | undefined;
+    if (!parentId || e.sid === parentId) continue;
+    const ts = new Date(e.ts).getTime();
+    let parentMap = subSessionMap.get(parentId);
+    if (!parentMap) { parentMap = new Map(); subSessionMap.set(parentId, parentMap); }
+    const existing = parentMap.get(e.sid);
+    if (!existing) parentMap.set(e.sid, { firstTs: ts, lastTs: ts });
+    else { if (ts < existing.firstTs) existing.firstTs = ts; if (ts > existing.lastTs) existing.lastTs = ts; }
+  }
+
+  // Build duration map from tool_result events
+  const durationMap = new Map<string, number>();
+  for (const e of events) {
+    if (e.kind === "tool_result" && e.data?.useId && e.ms != null) {
+      durationMap.set(e.data.useId as string, e.ms);
+    }
+  }
+
+  // Match each Agent call to a subagent session by ±2s time proximity
+  const typeMap = new Map<string, string>();
+  for (const e of events) {
+    if (e.kind !== "tool" || (e.data?.tool as string) !== "Agent") continue;
+    const params = (e.data?.params as Record<string, unknown>) ?? {};
+    const subagentType = (params.subagent_type as string | undefined) || "claude";
+    const useId = e.data?.useId as string | undefined;
+    const durationMs = useId ? durationMap.get(useId) : undefined;
+    if (!durationMs || durationMs <= 0) continue;
+    const parentChildren = subSessionMap.get(e.sid);
+    if (!parentChildren) continue;
+    const toolStart = new Date(e.ts).getTime();
+    const toolEnd = toolStart + durationMs;
+    for (const [sid, times] of parentChildren) {
+      if (times.firstTs >= toolStart - 2000 && times.firstTs <= toolEnd + 2000) {
+        typeMap.set(sid, subagentType); break;
+      }
+    }
+  }
+  return typeMap;
+}
+
+// ---------------------------------------------------------------------------
 // Tool Detail
 // ---------------------------------------------------------------------------
 
 export function reduceToolDetail(events: TelemetryEvent[], toolName: string): ToolDetailData {
+  const subagentTypeMap = buildSubagentTypeMap(events);
   const useIdToTimestamp = new Map<string, string>();
   const errorByUseId = new Map<string, string | undefined>();
   const errorFullByUseId = new Map<string, string>();
@@ -853,6 +902,8 @@ export function reduceToolDetail(events: TelemetryEvent[], toolName: string): To
       dayDurations.get(day)!.push(durationMs);
     }
 
+    const parentSessionId = e.data?.parentSessionId as string | undefined;
+    const isSubagent = !!parentSessionId;
     invocations.push({
       timestamp: e.ts, sessionId: e.sid, project: (e.data?.project as string) || "",
       params: e.data?.params as Record<string, unknown> | undefined,
@@ -863,6 +914,9 @@ export function reduceToolDetail(events: TelemetryEvent[], toolName: string): To
       skill: skill || undefined,
       linesAdded: added || undefined,
       linesRemoved: removed || undefined,
+      isSubagent: isSubagent || undefined,
+      subagentType: isSubagent ? (subagentTypeMap.get(e.sid) || "claude") : undefined,
+      parentSessionId: parentSessionId || undefined,
     });
   }
 
@@ -909,6 +963,7 @@ export function reduceToolDetail(events: TelemetryEvent[], toolName: string): To
 // ---------------------------------------------------------------------------
 
 export function reduceHookDetail(events: TelemetryEvent[], hookName: string): HookDetailData {
+  const subagentTypeMap = buildSubagentTypeMap(events);
   const durations: number[] = [];
   let event = "", blocks = 0, crashes = 0, fullCommand = "";
   const dayMap = new Map<string, { durations: number[]; count: number }>();
@@ -930,6 +985,8 @@ export function reduceHookDetail(events: TelemetryEvent[], hookName: string): Ho
       const dm = dayMap.get(day)!;
       dm.durations.push(dur); dm.count++;
 
+      const parentSessionId = e.data?.parentSessionId as string | undefined;
+      const isSubagent = !!parentSessionId;
       invocations.push({
         timestamp: e.ts, sessionId: e.sid, durationMs: dur,
         exitCode: e.data?.exitCode as number | undefined,
@@ -937,6 +994,9 @@ export function reduceHookDetail(events: TelemetryEvent[], hookName: string): Ho
         decision: decision as "pass" | "block" | "crash",
         isError: decision === "crash" || undefined,
         errorMessage: e.err,
+        isSubagent: isSubagent || undefined,
+        subagentType: isSubagent ? (subagentTypeMap.get(e.sid) || "claude") : undefined,
+        parentSessionId: parentSessionId || undefined,
       });
     }
 
@@ -952,7 +1012,9 @@ export function reduceHookDetail(events: TelemetryEvent[], hookName: string): Ho
         const trigger = (e.data?.hookName as string)?.includes(":")
           ? (e.data?.hookName as string).split(":").slice(1).join(":")
           : undefined;
-        invocations.push({ timestamp: e.ts, sessionId: e.sid, durationMs: 0, trigger, decision: "pass" });
+        const parentSessionId = e.data?.parentSessionId as string | undefined;
+        const isSubagent = !!parentSessionId;
+        invocations.push({ timestamp: e.ts, sessionId: e.sid, durationMs: 0, trigger, decision: "pass", isSubagent: isSubagent || undefined, subagentType: isSubagent ? (subagentTypeMap.get(e.sid) || "claude") : undefined, parentSessionId: parentSessionId || undefined });
         const day = dateKey(e.ts);
         if (!dayMap.has(day)) dayMap.set(day, { durations: [], count: 0 });
         dayMap.get(day)!.count++;
@@ -985,6 +1047,7 @@ export function reduceHookDetail(events: TelemetryEvent[], hookName: string): Ho
 // ---------------------------------------------------------------------------
 
 export function reduceSkillDetail(events: TelemetryEvent[], skillName: string): SkillDetailData {
+  const subagentTypeMap = buildSubagentTypeMap(events);
   const matched = events.filter((e) => e.kind === "tool" && (e.data?.skill as string) === skillName);
   const dayMap = new Map<string, number>();
   const invocations: SkillDetailData["invocations"] = [];
@@ -992,10 +1055,15 @@ export function reduceSkillDetail(events: TelemetryEvent[], skillName: string): 
   for (const e of matched) {
     const day = dateKey(e.ts);
     dayMap.set(day, (dayMap.get(day) || 0) + 1);
+    const parentSessionId = e.data?.parentSessionId as string | undefined;
+    const isSubagent = !!parentSessionId;
     invocations.push({
       timestamp: e.ts, sessionId: e.sid, project: (e.data?.project as string) || "",
       params: e.data?.params as Record<string, unknown> | undefined,
       userRequest: e.data?.userRequest as string | undefined,
+      isSubagent: isSubagent || undefined,
+      subagentType: isSubagent ? (subagentTypeMap.get(e.sid) || "claude") : undefined,
+      parentSessionId: parentSessionId || undefined,
     });
   }
 

@@ -15,7 +15,7 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 
-type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; durationMs?: number; isError?: boolean; errorMessage?: string; errorFull?: string; skill?: string; linesAdded?: number; linesRemoved?: number };
+type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; durationMs?: number; isError?: boolean; errorMessage?: string; errorFull?: string; skill?: string; linesAdded?: number; linesRemoved?: number; isSubagent?: boolean; subagentType?: string; parentSessionId?: string };
 type Dataset = 'status' | 'projects' | 'latency' | 'churn' | 'sessions' | 'errors' | 'skills';
 
 const DATASETS: { key: Dataset; label: string }[] = [
@@ -388,6 +388,14 @@ export function ToolDetailPage() {
           {row.sessionId.slice(0, 8)}
         </Link>
       ),
+    },
+    {
+      key: 'isSubagent',
+      label: 'Via',
+      shrink: true,
+      render: (row) => row.isSubagent && row.parentSessionId
+        ? <Link to={`/observability/sessions/${row.parentSessionId}`} onClick={(e) => e.stopPropagation()} className="font-mono text-xs text-text-muted hover:text-accent-primary whitespace-nowrap">↳ {row.subagentType || 'subagent'}</Link>
+        : <span className="text-text-muted">—</span>,
     },
     {
       key: 'params',
