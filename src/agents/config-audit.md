@@ -10,10 +10,10 @@ Two-phase workflow: audit first, fix after approval.
 
 ### Step 1 — Run agnix
 
-Run agnix on the project root (it is installed):
+Run agnix on the project root (it is installed at `/usr/bin/agnix`, v0.17.0). Use `--target claude-code` to activate Claude Code-specific rule families (CC-AG-*, CC-SK-*, CC-HK-*):
 
 ```bash
-agnix --dry-run --show-fixes .
+agnix --target claude-code --dry-run --show-fixes .
 ```
 
 Collect all errors and warnings. Note which are marked `[fixable]`.
@@ -92,10 +92,10 @@ Do NOT proceed to Phase 2 until the user reviews the report and specifies what t
 
 Apply only the approved fixes:
 
-- **agnix auto-fixable** — run `agnix --fix-safe .`; show diff before applying
+- **agnix auto-fixable** — run `agnix --target claude-code --fix-safe .`; show diff before applying
 - **Broken @-includes** — locate the missing file or remove the reference
 - **Dead hook outputs** — remove the write or add a consumer
 - **Missing SKILL.md** — stub the file or remove the registry entry
 - **Orphaned skills** — add a registry entry with trigger keywords
 
-After fixes, re-run `agnix --dry-run .` to confirm the issue count dropped.
+After fixes, re-run `agnix --target claude-code --dry-run .` to confirm the issue count dropped.

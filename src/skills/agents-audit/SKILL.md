@@ -20,7 +20,7 @@ metadata:
 
 # Agents Audit
 
-Walks subagent definitions in scope, evaluates each rule in `src/rules/agents/RULES.md`, and emits SARIF findings. The semantic complement to agnix's AGM-* / XP-* structural lint families — covers description quality, tool-whitelist sanity, trigger-overlap detection, and output-contract drift.
+Walks subagent definitions in scope, evaluates each rule in `src/rules/agents/RULES.md`, and emits SARIF findings. Runs `agnix` first to collect AGM-* / XP-* / CC-AG-* structural lint, then adds the semantic layer: description quality, tool-whitelist sanity, trigger-overlap detection, and output-contract drift.
 
 Pure leaf: no `Skill()` calls. The omnibus chains us; we report.
 
@@ -42,7 +42,17 @@ Pure leaf: no `Skill()` calls. The omnibus chains us; we report.
 
 ## Process
 
-### 1. Resolve scope
+### 1. Run agnix structural lint
+
+Before the semantic walk, run agnix against the agents directory to collect structural findings. agnix covers rule families AGM-* (agent metadata), XP-* (cross-platform), and CC-AG-* (Claude Code agent rules):
+
+```bash
+agnix --target claude-code --format sarif src/agents/ 2>&1
+```
+
+Collect all errors and warnings. Mark fixable ones `[fixable]`. These will be passed through in the SARIF output citing `agnix/AGM-<n>` / `agnix/XP-<n>` / `agnix/CC-AG-<n>` rule IDs — don't re-report them under your own ruleIds.
+
+### 2. Resolve scope
 
 ```bash
 # --diff
@@ -52,7 +62,7 @@ git diff --name-only origin/main...HEAD -- 'src/agents/*.md' '.claude/agents/*.m
 find src/agents .claude/agents ~/.claude/agents -maxdepth 1 -name '*.md' 2>/dev/null
 ```
 
-### 2. Walk the rules
+### 3. Walk the rules
 
 For each in-scope agent file, evaluate sections A through F in `src/rules/agents/RULES.md`. Concrete checks:
 
@@ -68,22 +78,22 @@ For each in-scope agent file, evaluate sections A through F in `src/rules/agents
 - **E.2 (capability drift):** description references a tool / skill not in the whitelist or not present as a skill.
 - **F.1 (statelessness):** agent body text containing phrases like "as we discussed", "earlier", "previous turn".
 
-### 3. Apply negative-filter list
+### 4. Apply negative-filter list
 
 Per `src/rules/agents/RULES.md` + `src/skills/_shared/finding.md`:
 
 - Style preferences not in `agents/RULES.md` → drop
 - Pre-existing issues outside scope → record under "Pre-existing Issues"
-- Issues agnix AGM-* / XP-* covers → cite agnix's rule, pass through
+- Issues agnix AGM-* / XP-* / CC-AG-* covers → cite agnix's rule, pass through
 - Pedantic nitpicks → drop
 
-### 4. Emit SARIF
+### 5. Emit SARIF
 
 Single SARIF v2.1.0 run, `tool.driver.name = "agents-audit"`. Each `result`:
 
 ```json
 {
-  "ruleId": "agents/RULES.md#<section>.<n>" | "agnix/AGM-<n>" | "agnix/XP-<n>",
+  "ruleId": "agents/RULES.md#<section>.<n>" | "agnix/AGM-<n>" | "agnix/XP-<n>" | "agnix/CC-AG-<n>",
   "level": "error" | "warning" | "note",
   "message": { "text": "<one-line description>" },
   "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "src/agents/<name>.md" }, "region": { "startLine": N, "endLine": N } } }],
@@ -101,7 +111,7 @@ Single SARIF v2.1.0 run, `tool.driver.name = "agents-audit"`. Each `result`:
 
 Praise candidates: agents that exemplify clear scope (description has explicit "when to use" + "when NOT to use"), minimal tool whitelists, and stated output contracts. Mark `severity: praise`, `tag: defense-in-depth`, with a `fix` like "use as reference for: agent description structure".
 
-### 5. Emit a phased prose summary
+### 6. Emit a phased prose summary
 
 ```
 # Agents Audit — <scope>
@@ -138,7 +148,7 @@ N agents audited · N missing frontmatter · N over-privileged · N routing-coll
 - **Read-only.** No `Edit`, `Write`, or mutating `Bash`.
 - **No `Skill()` calls.** The omnibus chains; we audit.
 - **No verification gate.** Audit is non-mutating.
-- **Don't duplicate agnix.** Cite AGM-* / XP-* rules where they apply.
+- **Don't duplicate agnix.** Cite AGM-* / XP-* / CC-AG-* rules where they apply.
 
 ## Output template
 
@@ -154,7 +164,7 @@ N agents audited · N missing frontmatter · N over-privileged · N routing-coll
 ## Guardrails
 
 - **Confidence is provisional.** Omnibus validation refines it.
-- **Cite rules precisely.** `agents/RULES.md#<section>.<n>` or `agnix/AGM-<n>` or `agnix/XP-<n>`.
+- **Cite rules precisely.** `agents/RULES.md#<section>.<n>` or `agnix/AGM-<n>` or `agnix/XP-<n>` or `agnix/CC-AG-<n>`.
 - **Routing-collision is the highest-leverage check** — silent wrong-routing is the dominant failure mode for agent setups; flagging early prevents downstream confusion.
 - **Over-privileged tool grants and `Task` in `tools:` are blocking-leaning** — security and architecture violations respectively.
 

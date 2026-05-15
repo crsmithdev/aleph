@@ -20,7 +20,7 @@ metadata:
 
 # Skills Audit
 
-Walks SKILL.md files in scope, evaluates each rule in `src/rules/skills/RULES.md`, and emits SARIF findings. The semantic complement to agnix's CC-SK-* structural lint family — covers description quality, registry consistency, R1/R2/R4 architecture rule compliance, and trigger-description alignment.
+Walks SKILL.md files in scope, evaluates each rule in `src/rules/skills/RULES.md`, and emits SARIF findings. Runs `agnix` first to collect CC-SK-* / XP-* structural lint, then adds the semantic layer: description quality, registry consistency, R1/R2/R4 architecture rule compliance, and trigger-description alignment.
 
 Pure leaf: no `Skill()` calls. The omnibus chains us; we report.
 
@@ -42,7 +42,17 @@ Pure leaf: no `Skill()` calls. The omnibus chains us; we report.
 
 ## Process
 
-### 1. Resolve scope
+### 1. Run agnix structural lint
+
+Before the semantic walk, run agnix against the skills directory to collect structural findings. agnix covers rule families CC-SK-* (Claude Code skill rules) and XP-* (cross-platform):
+
+```bash
+agnix --target claude-code --format sarif src/skills/ 2>&1
+```
+
+Collect all errors and warnings. Mark fixable ones `[fixable]`. Pass them through in the SARIF output citing `agnix/CC-SK-<n>` / `agnix/XP-<n>` rule IDs — don't re-report them under your own ruleIds.
+
+### 2. Resolve scope
 
 ```bash
 # --diff (against origin/main)
@@ -57,7 +67,7 @@ find src/skills -name 'SKILL.md'
 
 Also include `src/skills/skill-rules.json` in scope by default (registry consistency rules need it).
 
-### 2. Walk the rules
+### 3. Walk the rules
 
 For each in-scope SKILL.md, evaluate sections A through G in `src/rules/skills/RULES.md`. Concrete checks:
 
@@ -73,7 +83,7 @@ For each in-scope SKILL.md, evaluate sections A through G in `src/rules/skills/R
 - **F.1 (R4 — no hardcoded gates):** in fix-flavor SKILL.md files, flag literal `bun test.ts` / `bun run ui:smoke` / `agnix --dry-run` outside Cross-references / example blocks.
 - **G.1 (trigger drift):** parse description, extract quoted trigger phrases, confirm each appears in the corresponding `skill-rules.json` entry's keyword list (literal or regex).
 
-### 3. Apply negative-filter list
+### 4. Apply negative-filter list
 
 Per `src/rules/skills/RULES.md` + `src/skills/_shared/finding.md`:
 
@@ -83,7 +93,7 @@ Per `src/rules/skills/RULES.md` + `src/skills/_shared/finding.md`:
 - Pedantic nitpicks → drop
 - Lint-ignored lines → drop
 
-### 4. Emit SARIF
+### 5. Emit SARIF
 
 Single SARIF v2.1.0 run, `tool.driver.name = "skills-audit"`. Each `result`:
 
@@ -107,7 +117,7 @@ Single SARIF v2.1.0 run, `tool.driver.name = "skills-audit"`. Each `result`:
 
 Praise candidates: SKILL.md files that exemplify the architecture leaf contract (slim, scoped, cite RULES.md, pure leaf, well-named, registry entry matches trigger phrases). Mark `severity: praise`, `tag: defense-in-depth`, with a `fix` like "use as reference for: leaf-skill structure".
 
-### 5. Emit a phased prose summary
+### 6. Emit a phased prose summary
 
 ```
 # Skills Audit — <scope>

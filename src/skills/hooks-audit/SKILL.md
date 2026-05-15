@@ -43,7 +43,17 @@ Pure leaf: no `Skill()` calls. The omnibus chains us; we report.
 
 ## Process
 
-### 1. Resolve scope
+### 1. Run agnix structural lint
+
+Before the semantic walk, run agnix against the hooks registry and related config files to collect structural findings. agnix covers the CC-HK-* family (Claude Code hook rules):
+
+```bash
+agnix --target claude-code --format sarif src/core/hooks/ .claude/settings.json 2>&1
+```
+
+Collect all errors and warnings. Mark fixable ones `[fixable]`. Pass them through in the SARIF output citing `agnix/CC-HK-<n>` rule IDs — don't re-report them under your own ruleIds.
+
+### 2. Resolve scope
 
 ```bash
 # --diff (against origin/main, conventional default)
@@ -59,7 +69,7 @@ find <path> -name '*.ts' -not -path '*/node_modules/*'
 
 **Smart default:** try `--diff` first. If empty, fall back to `--all` (this domain has a small, stable set of files — auditing all of them is cheap).
 
-### 2. Walk the rules
+### 3. Walk the rules
 
 For each in-scope hook script, evaluate every section A through H in `src/rules/hooks/RULES.md`. Concrete high-value checks:
 
@@ -79,23 +89,24 @@ For each in-scope hook script, evaluate every section A through H in `src/rules/
 
 For rules whose Detect signal doesn't apply to a given hook (e.g., F.1 on a hook with no file outputs), skip silently.
 
-### 3. Apply negative-filter list
+### 4. Apply negative-filter list
 
 Per `src/rules/hooks/RULES.md` + `src/skills/_shared/finding.md`:
 
 - Style preferences not in `hooks/RULES.md` → drop
 - Pre-existing issues outside scope → record under "Pre-existing Issues"
+- Issues agnix CC-HK-* covers → cite agnix's rule, pass through
 - Pedantic nitpicks → drop
 - Linter-catchable → cite the linter, mark `severity: nit`
 - Lint-ignored lines → drop
 
-### 4. Emit SARIF
+### 5. Emit SARIF
 
 Single SARIF v2.1.0 run, `tool.driver.name = "hooks-audit"`. Each `result`:
 
 ```json
 {
-  "ruleId": "hooks/RULES.md#<section>.<n>",
+  "ruleId": "hooks/RULES.md#<section>.<n>" | "agnix/CC-HK-<n>",
   "level": "error" | "warning" | "note",
   "message": { "text": "<one-line description>" },
   "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "..." }, "region": { "startLine": N, "endLine": N } } }],
@@ -113,7 +124,7 @@ Single SARIF v2.1.0 run, `tool.driver.name = "hooks-audit"`. Each `result`:
 
 Praise rarely qualifies for hooks — but specifically surface hooks that demonstrate the full pattern (try/catch around stdin parse, trace() call, every output has a consumer, explicit exits with stderr context). Mark them `severity: praise`, `tag: defense-in-depth`, with a `fix` like "use as reference for: hook structural pattern".
 
-### 5. Emit a phased prose summary
+### 6. Emit a phased prose summary
 
 After the SARIF block:
 
@@ -173,7 +184,7 @@ When invoked by the omnibus, return the SARIF as the structured result.
 ## Guardrails
 
 - **Confidence is provisional.** Omnibus validation refines it.
-- **Cite rules precisely.** Every finding includes `hooks/RULES.md#<section>.<n>`. No bare prose accusations.
+- **Cite rules precisely.** Every finding includes `hooks/RULES.md#<section>.<n>` or `agnix/CC-HK-<n>`. No bare prose accusations.
 - **Silent-fail rules are the highest-leverage** — a hook that crashes silently breaks Claude Code's signal-to-noise without ever surfacing the cause.
 - **Dead outputs accumulate** — flagging them early prevents load-bearing maintenance burden later.
 
