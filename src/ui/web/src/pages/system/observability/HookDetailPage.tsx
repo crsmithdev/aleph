@@ -16,7 +16,7 @@ import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { CodeBlock } from '../../../components/data/CodeBlock';
 
-type InvocationRow = { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; isError?: boolean; errorMessage?: string };
+type InvocationRow = { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; decision?: "pass" | "block" | "crash"; isError?: boolean; errorMessage?: string };
 type Dataset = 'status' | 'latency';
 
 const DATASETS: { key: Dataset; label: string }[] = [
@@ -38,6 +38,7 @@ export function HookDetailPage() {
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(true);
+  const [showBlocks, setShowBlocks] = useState(true);
   const [showErrors, setShowErrors] = useState(true);
   const [tsDataset, setTsDataset] = useState<Dataset>('status');
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
@@ -47,30 +48,31 @@ export function HookDetailPage() {
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load hook details" retry={refetch} />;
 
-  const successRate = data.totalCount > 0
-    ? ((data.totalCount - data.errors) / data.totalCount) * 100
-    : 100;
-  const successCount = data.totalCount - data.errors;
+  const successCount = data.totalCount - data.blocks - data.crashes;
+  const successRate = data.totalCount > 0 ? (successCount / data.totalCount) * 100 : 100;
 
-  // Filter invocations by success/error toggles
+  // Filter invocations by decision toggles
   const filteredInvocations = data.invocations.filter((inv: InvocationRow) => {
-    if (inv.isError) return showErrors;
+    const d = inv.decision ?? (inv.isError ? "crash" : "pass");
+    if (d === "block") return showBlocks;
+    if (d === "crash") return showErrors;
     return showSuccess;
   });
 
-  // Build success/error by day from invocations
-  const byDayStatus: Record<string, { success: number; error: number }> = {};
+  // Build pass/block/crash counts by day from invocations
+  const byDayStatus: Record<string, { pass: number; block: number; crash: number }> = {};
   for (const inv of data.invocations) {
     const dateKey = inv.timestamp.slice(0, 10);
-    if (!byDayStatus[dateKey]) byDayStatus[dateKey] = { success: 0, error: 0 };
-    if (inv.isError) byDayStatus[dateKey].error++;
-    else byDayStatus[dateKey].success++;
+    if (!byDayStatus[dateKey]) byDayStatus[dateKey] = { pass: 0, block: 0, crash: 0 };
+    const d = inv.decision ?? (inv.isError ? "crash" : "pass");
+    byDayStatus[dateKey][d]++;
   }
 
   const statusByDay = data.byDay.map((day) => ({
     date: day.date,
-    Success: byDayStatus[day.date]?.success ?? day.count,
-    Errors: byDayStatus[day.date]?.error ?? 0,
+    Pass: byDayStatus[day.date]?.pass ?? day.count,
+    Block: byDayStatus[day.date]?.block ?? 0,
+    Crash: byDayStatus[day.date]?.crash ?? 0,
   }));
 
   // Latency time series
@@ -81,11 +83,12 @@ export function HookDetailPage() {
 
   // Donut data
   const statusDonut = [
-    { name: 'Success', value: successCount },
-    ...(data.errors > 0 ? [{ name: 'Errors', value: data.errors }] : []),
+    { name: 'Pass', value: successCount },
+    ...(data.blocks > 0 ? [{ name: 'Block', value: data.blocks }] : []),
+    ...(data.crashes > 0 ? [{ name: 'Crash', value: data.crashes }] : []),
   ];
 
-  const STATUS_COLORS = ['var(--c-success)', 'var(--c-error)'];
+  const STATUS_COLORS = ['var(--c-success)', 'var(--c-warning)', 'var(--c-error)'];
   const LATENCY_COLORS = ['var(--c-accent)'];
 
   // Filter out empty datasets
@@ -101,8 +104,8 @@ export function HookDetailPage() {
 
   const chartConfig: Record<Dataset, ChartConfig> = {
     status: {
-      data: statusByDay, keys: ['Success', 'Errors'], colors: STATUS_COLORS, stacked: true,
-      title: `${granularityLabel[granularity]} Executions by Status`, distTitle: 'Success vs Errors', distData: statusDonut,
+      data: statusByDay, keys: ['Pass', 'Block', 'Crash'], colors: STATUS_COLORS, stacked: true,
+      title: `${granularityLabel[granularity]} Executions by Decision`, distTitle: 'Pass / Block / Crash', distData: statusDonut,
     },
     latency: {
       data: latencyByDay, keys: ['Avg'], colors: LATENCY_COLORS,
@@ -112,15 +115,15 @@ export function HookDetailPage() {
   };
 
   const cfg = chartConfig[tsDataset];
-  const activeFilterCount = (showSuccess ? 0 : 1) + (showErrors ? 0 : 1);
+  const activeFilterCount = (showSuccess ? 0 : 1) + (showBlocks ? 0 : 1) + (showErrors ? 0 : 1);
 
   const hasTriggers = data.invocations.some((inv: InvocationRow) => inv.trigger);
 
-  function exitLabel(code?: number): { label: string; cls: string } | null {
-    if (code === undefined || code === null) return null;
-    if (code === 0) return { label: 'pass', cls: 'text-success' };
-    if (code === 2) return { label: 'block', cls: 'text-error font-medium' };
-    return { label: `crash(${code})`, cls: 'text-error' };
+  function decisionLabel(inv: InvocationRow): { label: string; cls: string } {
+    const d = inv.decision ?? (inv.isError ? "crash" : "pass");
+    if (d === "block") return { label: 'block', cls: 'text-warning font-medium' };
+    if (d === "crash") return { label: `crash${inv.exitCode !== undefined ? `(${inv.exitCode})` : ''}`, cls: 'text-error' };
+    return { label: 'pass', cls: 'text-success' };
   }
 
   const invocationColumns: Column<InvocationRow>[] = [
@@ -136,11 +139,8 @@ export function HookDetailPage() {
       label: 'Result',
       shrink: true,
       render: (row) => {
-        const lbl = exitLabel(row.exitCode);
-        if (lbl) return <span className={clsx('text-xs font-mono', lbl.cls)}>{lbl.label}</span>;
-        return row.isError
-          ? <span className="text-xs text-error">error</span>
-          : <span className="text-xs text-success">pass</span>;
+        const lbl = decisionLabel(row);
+        return <span className={clsx('text-xs font-mono', lbl.cls)}>{lbl.label}</span>;
       },
     },
     ...(hasTriggers ? [{
@@ -219,8 +219,9 @@ export function HookDetailPage() {
         onGranularityChange={setGranularity}
         filters={
           <>
-            <FilterToggle label="Success" active={showSuccess} onToggle={() => setShowSuccess(!showSuccess)} activeColor="success" />
-            <FilterToggle label="Error" active={showErrors} onToggle={() => setShowErrors(!showErrors)} activeColor="error" />
+            <FilterToggle label="Pass" active={showSuccess} onToggle={() => setShowSuccess(!showSuccess)} activeColor="success" />
+            <FilterToggle label="Block" active={showBlocks} onToggle={() => setShowBlocks(!showBlocks)} />
+            <FilterToggle label="Crash" active={showErrors} onToggle={() => setShowErrors(!showErrors)} activeColor="error" />
           </>
         }
         activeFilterCount={activeFilterCount}
@@ -229,9 +230,14 @@ export function HookDetailPage() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 !mt-0">
         <StatCard label="Executions" value={fmtNumber(data.totalCount)} accent="neutral" />
         <StatCard
-          label="Errors"
-          value={data.errors === 0 ? '0' : fmtNumber(data.errors)}
-          accent={data.errors === 0 ? 'success' : data.errors / Math.max(data.totalCount, 1) < 0.05 ? 'warning' : 'error'}
+          label="Blocks"
+          value={data.blocks === 0 ? '0' : fmtNumber(data.blocks)}
+          accent={data.blocks === 0 ? 'neutral' : 'warning'}
+        />
+        <StatCard
+          label="Crashes"
+          value={data.crashes === 0 ? '0' : fmtNumber(data.crashes)}
+          accent={data.crashes === 0 ? 'success' : data.crashes / Math.max(data.totalCount, 1) < 0.05 ? 'warning' : 'error'}
         />
         <StatCard
           label="Success Rate"
@@ -419,23 +425,29 @@ export function HookDetailPage() {
       {data.invocations.length > 0 && (
         <div>
           <h2 className="text-sm font-medium text-text-secondary mb-3">
-            Recent Invocations ({filteredInvocations.length}{(showSuccess !== showErrors || !showSuccess) ? ` of ${data.invocations.length}` : ''})
+            Recent Invocations ({filteredInvocations.length}{activeFilterCount > 0 ? ` of ${data.invocations.length}` : ''})
           </h2>
           <DataTable<InvocationRow>
             data={filteredInvocations}
             columns={invocationColumns}
             keyField="timestamp"
             maxRows={50}
-            rowClassName={(row) => row.isError ? 'bg-error/5' : undefined}
+            rowClassName={(row) => {
+              const d = row.decision ?? (row.isError ? "crash" : "pass");
+              if (d === "block") return 'bg-warning/5';
+              if (d === "crash") return 'bg-error/5';
+              return undefined;
+            }}
             expandedKey={expandedRow}
             onExpandToggle={(key) => setExpandedRow(key === expandedRow ? null : key)}
             renderExpanded={(row) => {
               const fullOutput = row.output || row.errorMessage;
               if (!fullOutput) return <p className="text-xs text-text-muted font-mono">No data</p>;
+              const d = row.decision ?? (row.isError ? "crash" : "pass");
               return (
                 <pre className={clsx(
                   'text-xs font-mono max-h-80 overflow-auto whitespace-pre-wrap break-words leading-relaxed rounded px-3 py-2',
-                  row.isError ? 'text-error bg-error/5' : 'text-text-secondary'
+                  d === 'crash' ? 'text-error bg-error/5' : d === 'block' ? 'text-warning bg-warning/5' : 'text-text-secondary'
                 )}>
                   {fullOutput}
                 </pre>

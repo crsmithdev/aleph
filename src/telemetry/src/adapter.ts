@@ -142,6 +142,22 @@ function parentSessionIdFromPath(filePath: string): string | undefined {
 // ---------------------------------------------------------------------------
 
 /**
+ * Derive a semantic hook decision from exit code and stdout output.
+ * Stop hooks signal blocks via stdout JSON; PreToolUse/PostToolUse use exit 2.
+ */
+function deriveHookDecision(exitCode: number | undefined, output: string | undefined): "pass" | "block" | "crash" {
+  if (output) {
+    try {
+      const parsed = JSON.parse(output.trim());
+      if (parsed?.decision === "block") return "block";
+    } catch { /* not JSON */ }
+  }
+  if (exitCode === 2) return "block";
+  if (exitCode !== undefined && exitCode !== 0) return "crash";
+  return "pass";
+}
+
+/**
  * Extract a clean hook name from a shell command string.
  * Command format: "bun /path/to/hook.ts 2>/dev/null" or similar.
  * Naive split("/").pop() fails when the command ends with "2>/dev/null",
@@ -375,18 +391,21 @@ function adaptLine(
       if (Array.isArray(hookInfos)) {
         for (const info of hookInfos) {
           const exitCode = info.exitCode !== undefined ? (info.exitCode as number) : undefined;
-          const isError = (exitCode !== undefined && exitCode !== 0) || hasHookErrors;
+          const output = (info.output as string) || undefined;
+          const decision = deriveHookDecision(exitCode, output);
+          const isError = decision === "crash" || hasHookErrors;
           events.push({
             ts, sid, kind: "hook_summary",
             name: hookBasename(info.command as string),
             ms: (info.durationMs as number) || undefined,
-            err: isError ? (hasHookErrors ? hookErrors!.join("\n").slice(0, 200) : `exit ${exitCode}`) : undefined,
+            err: isError ? (hasHookErrors ? hookErrors!.join("\n").slice(0, 200) : `crash(${exitCode})`) : undefined,
             data: {
               ...meta,
               command: (info.command as string) || undefined,
               exitCode,
-              output: (info.output as string) || undefined,
+              output,
               isError: isError || undefined,
+              hookDecision: decision,
             },
           });
         }
@@ -394,7 +413,7 @@ function adaptLine(
         events.push({
           ts, sid, kind: "hook_summary", name: "unknown",
           err: hookErrors!.join("\n").slice(0, 200),
-          data: { ...meta, isError: true },
+          data: { ...meta, isError: true, hookDecision: "crash" as const },
         });
       }
     }

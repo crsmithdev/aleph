@@ -119,7 +119,8 @@ export interface HookMetric {
   avgMs: number;
   p50Ms: number;
   p95Ms: number;
-  errors: number;
+  blocks: number;
+  crashes: number;
   lastUsed?: string;
   active?: boolean;
   fullCommand?: string;
@@ -303,10 +304,11 @@ export interface HookDetailData {
   avgMs: number;
   p50Ms: number;
   p95Ms: number;
-  errors: number;
+  blocks: number;
+  crashes: number;
   fullCommand?: string;
   byDay: { date: string; count: number; avgMs: number }[];
-  invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; isError?: boolean; errorMessage?: string }[];
+  invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; decision?: "pass" | "block" | "crash"; isError?: boolean; errorMessage?: string }[];
 }
 
 export interface SkillDetailData {

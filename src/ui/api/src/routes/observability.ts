@@ -692,7 +692,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
           existing.count = Math.max(existing.count, count);
           if (!existing.event) existing.event = event;
         } else {
-          rankedMap.set(hook, { command: hook, event, count, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, fullCommand: hook });
+          rankedMap.set(hook, { command: hook, event, count, avgMs: 0, p50Ms: 0, p95Ms: 0, blocks: 0, crashes: 0, fullCommand: hook });
         }
       }
       const merged = [...rankedMap.values()].sort((a, b) => b.count - a.count);

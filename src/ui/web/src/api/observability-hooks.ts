@@ -78,7 +78,8 @@ export function useObsHooks(range: TimeRange, granularity?: Granularity, session
       avgMs: number;
       p50Ms: number;
       p95Ms: number;
-      errors: number;
+      blocks: number;
+      crashes: number;
       lastUsed?: string;
       active: boolean;
       fullCommand?: string;
@@ -245,7 +246,8 @@ export function useObsHookDetail(name: string, range: TimeRange) {
     avgMs: number;
     p50Ms: number;
     p95Ms: number;
-    errors: number;
+    blocks: number;
+    crashes: number;
     active: boolean;
     fullCommand?: string;
     sourceCode?: string;
@@ -253,7 +255,7 @@ export function useObsHookDetail(name: string, range: TimeRange) {
     description?: string;
     gating?: HookGatingStat | null;
     byDay: Array<{ date: string; count: number; avgMs: number }>;
-    invocations: Array<{ timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; isError?: boolean; errorMessage?: string }>;
+    invocations: Array<{ timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; decision?: "pass" | "block" | "crash"; isError?: boolean; errorMessage?: string }>;
     queryTimeMs: number;
   }>({
     queryKey: ['observability', 'hook-detail', name, range],

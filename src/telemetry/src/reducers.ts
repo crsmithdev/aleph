@@ -306,7 +306,7 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
 // ---------------------------------------------------------------------------
 
 export function reduceHooks(events: TelemetryEvent[], granularity: Granularity = "day"): HooksData {
-  const hookMap = new Map<string, { event: string; durations: number[]; errors: number; fullCommand: string; progressCount: number; lastUsed: string }>();
+  const hookMap = new Map<string, { event: string; durations: number[]; blocks: number; crashes: number; fullCommand: string; progressCount: number; lastUsed: string }>();
   const dayHookMap = new Map<string, Map<string, number>>();
   const dayHookLatencyMap = new Map<string, Map<string, number[]>>();
   const dayHookErrorMap = new Map<string, Map<string, number>>();
@@ -315,9 +315,11 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
   for (const e of events) {
     if (e.kind === "hook_summary" && e.data?.command) {
       const shortCmd = e.name;
-      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: (e.data.command as string), progressCount: 0, lastUsed: "" };
+      const cur = hookMap.get(shortCmd) || { event: "", durations: [], blocks: 0, crashes: 0, fullCommand: (e.data.command as string), progressCount: 0, lastUsed: "" };
       if (e.ms !== undefined) cur.durations.push(e.ms);
-      if (e.data.isError) cur.errors++;
+      const decision = e.data.hookDecision as string | undefined;
+      if (decision === "block") cur.blocks++;
+      else if (decision === "crash" || e.data.isError) cur.crashes++;
       cur.fullCommand = e.data.command as string;
       if (!cur.lastUsed || e.ts > cur.lastUsed) cur.lastUsed = e.ts;
       hookMap.set(shortCmd, cur);
@@ -333,7 +335,7 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
         if (!dlm.has(shortCmd)) dlm.set(shortCmd, []);
         dlm.get(shortCmd)!.push(e.ms);
       }
-      if (e.data.isError) {
+      if (decision === "block" || decision === "crash" || e.data.isError) {
         if (!dayHookErrorMap.has(bk)) dayHookErrorMap.set(bk, new Map());
         const dem = dayHookErrorMap.get(bk)!;
         dem.set(shortCmd, (dem.get(shortCmd) || 0) + 1);
@@ -346,7 +348,7 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
 
     if (e.kind === "hook" && e.data?.command) {
       const shortCmd = e.name;
-      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: (e.data.command as string), progressCount: 0, lastUsed: "" };
+      const cur = hookMap.get(shortCmd) || { event: "", durations: [], blocks: 0, crashes: 0, fullCommand: (e.data.command as string), progressCount: 0, lastUsed: "" };
       cur.event = (e.data.event as string) || cur.event;
       cur.fullCommand = e.data.command as string;
       if (!cur.lastUsed || e.ts > cur.lastUsed) cur.lastUsed = e.ts;
@@ -377,7 +379,7 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
         avgMs: Math.round(avgMs),
         p50Ms: Math.round(percentile(sorted, 50)),
         p95Ms: Math.round(percentile(sorted, 95)),
-        errors: v.errors, fullCommand: v.fullCommand,
+        blocks: v.blocks, crashes: v.crashes, fullCommand: v.fullCommand,
         lastUsed: v.lastUsed || undefined,
       };
     })
@@ -908,7 +910,7 @@ export function reduceToolDetail(events: TelemetryEvent[], toolName: string): To
 
 export function reduceHookDetail(events: TelemetryEvent[], hookName: string): HookDetailData {
   const durations: number[] = [];
-  let event = "", errors = 0, fullCommand = "";
+  let event = "", blocks = 0, crashes = 0, fullCommand = "";
   const dayMap = new Map<string, { durations: number[]; count: number }>();
   const invocations: HookDetailData["invocations"] = [];
   let hasStopSummary = false;
@@ -918,7 +920,9 @@ export function reduceHookDetail(events: TelemetryEvent[], hookName: string): Ho
       hasStopSummary = true;
       const dur = e.ms ?? 0;
       durations.push(dur);
-      if (e.data?.isError) errors++;
+      const decision = (e.data?.hookDecision as string | undefined) ?? (e.data?.isError ? "crash" : "pass");
+      if (decision === "block") blocks++;
+      else if (decision === "crash") crashes++;
       fullCommand = (e.data?.command as string) || "";
 
       const day = dateKey(e.ts);
@@ -930,7 +934,8 @@ export function reduceHookDetail(events: TelemetryEvent[], hookName: string): Ho
         timestamp: e.ts, sessionId: e.sid, durationMs: dur,
         exitCode: e.data?.exitCode as number | undefined,
         output: e.data?.output as string | undefined,
-        isError: e.data?.isError as boolean | undefined,
+        decision: decision as "pass" | "block" | "crash",
+        isError: decision === "crash" || undefined,
         errorMessage: e.err,
       });
     }
@@ -947,7 +952,7 @@ export function reduceHookDetail(events: TelemetryEvent[], hookName: string): Ho
         const trigger = (e.data?.hookName as string)?.includes(":")
           ? (e.data?.hookName as string).split(":").slice(1).join(":")
           : undefined;
-        invocations.push({ timestamp: e.ts, sessionId: e.sid, durationMs: 0, trigger });
+        invocations.push({ timestamp: e.ts, sessionId: e.sid, durationMs: 0, trigger, decision: "pass" });
         const day = dateKey(e.ts);
         if (!dayMap.has(day)) dayMap.set(day, { durations: [], count: 0 });
         dayMap.get(day)!.count++;
@@ -970,7 +975,7 @@ export function reduceHookDetail(events: TelemetryEvent[], hookName: string): Ho
     command: hookName, event, totalCount: invocations.length, avgMs,
     p50Ms: Math.round(percentile(sorted, 50)),
     p95Ms: Math.round(percentile(sorted, 95)),
-    errors, fullCommand, byDay,
+    blocks, crashes, fullCommand, byDay,
     invocations: invocations.sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 200),
   };
 }

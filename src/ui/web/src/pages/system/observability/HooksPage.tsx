@@ -21,9 +21,11 @@ type HookRow = {
   avgMs: number;
   p50Ms: number;
   p95Ms: number;
-  errors: number;
+  blocks: number;
+  crashes: number;
   lastUsed?: string;
   active: boolean;
+  gateRate: number;
   successRate: number;
   blocking?: boolean;
   gate?: string;
@@ -314,10 +316,11 @@ export function HooksPage() {
 
   const rankedWithRate: HookRow[] = data.ranked.map(r => ({
     ...r,
-    successRate: r.count > 0 ? ((r.count - r.errors) / r.count) * 100 : 100,
+    gateRate: r.count > 0 ? (r.blocks / r.count) * 100 : 0,
+    successRate: r.count > 0 ? ((r.count - r.crashes) / r.count) * 100 : 100,
   }));
   const unusedRows: HookRow[] = (data.unused || []).map(h => ({
-    command: h.command, event: h.event, count: 0, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, active: true, successRate: 100,
+    command: h.command, event: h.event, count: 0, avgMs: 0, p50Ms: 0, p95Ms: 0, blocks: 0, crashes: 0, active: true, gateRate: 0, successRate: 100,
     blocking: h.blocking, gate: h.gate, markerFile: h.markerFile, description: h.description, group: h.group,
   }));
 
@@ -329,7 +332,8 @@ export function HooksPage() {
 
   const activeHooks = filtered.filter(r => r.count > 0).length;
   const totalExecutions = filtered.filter(r => r.count > 0).reduce((s, r) => s + r.count, 0);
-  const totalErrors = filtered.reduce((s, r) => s + r.errors, 0);
+  const totalBlocks = filtered.reduce((s, r) => s + r.blocks, 0);
+  const totalCrashes = filtered.reduce((s, r) => s + r.crashes, 0);
   const activeWithCounts = filtered.filter(r => r.active && r.count > 0);
   const avgSuccessRate = activeWithCounts.length > 0
     ? activeWithCounts.reduce((s, r) => s + r.successRate, 0) / activeWithCounts.length
@@ -431,8 +435,8 @@ export function HooksPage() {
   const stackedByErrors = stackHookDays(data.byDayErrors ?? [], topErrorHookNames);
 
   const topErrorHooksForDist = sliceRanked(
-    [...rankedWithRate].filter(r => r.errors > 0).sort((a, b) => b.errors - a.errors) as Record<string, unknown>[],
-    'errors'
+    [...rankedWithRate].filter(r => r.crashes > 0).sort((a, b) => b.crashes - a.crashes) as Record<string, unknown>[],
+    'crashes'
   );
   const topLatencyHooksForDist = sliceRanked(
     [...rankedWithRate].filter(r => r.count > 0).sort((a, b) => b.p50Ms - a.p50Ms) as Record<string, unknown>[],
@@ -520,14 +524,26 @@ export function HooksPage() {
       render: (row) => <span className="font-mono">{fmtNumber(row.count)}</span>,
     },
     {
-      key: 'errors',
-      label: 'Errors',
+      key: 'blocks',
+      label: 'Blocks',
       align: 'right',
       sortable: true,
       width: '70px',
       render: (row) => (
-        <span className={clsx('font-mono', row.errors > 0 && 'text-error font-medium')}>
-          {row.errors > 0 ? fmtNumber(row.errors) : '—'}
+        <span className={clsx('font-mono', row.blocks > 0 && 'text-warning font-medium')}>
+          {row.blocks > 0 ? fmtNumber(row.blocks) : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'crashes',
+      label: 'Crashes',
+      align: 'right',
+      sortable: true,
+      width: '70px',
+      render: (row) => (
+        <span className={clsx('font-mono', row.crashes > 0 && 'text-error font-medium')}>
+          {row.crashes > 0 ? fmtNumber(row.crashes) : '—'}
         </span>
       ),
     },
@@ -595,9 +611,14 @@ export function HooksPage() {
         <StatCard label="Active Hooks" value={fmtNumber(activeHooks)} />
         <StatCard label="Executions" value={fmtCalls(totalExecutions)} accent="neutral" />
         <StatCard
-          label="Errors"
-          value={totalErrors === 0 ? '0' : fmtNumber(totalErrors)}
-          accent={totalErrors === 0 ? 'success' : totalErrors / Math.max(totalExecutions, 1) < 0.05 ? 'warning' : 'error'}
+          label="Blocks"
+          value={totalBlocks === 0 ? '0' : fmtNumber(totalBlocks)}
+          accent={totalBlocks === 0 ? 'neutral' : 'warning'}
+        />
+        <StatCard
+          label="Crashes"
+          value={totalCrashes === 0 ? '0' : fmtNumber(totalCrashes)}
+          accent={totalCrashes === 0 ? 'success' : totalCrashes / Math.max(totalExecutions, 1) < 0.05 ? 'warning' : 'error'}
         />
         <StatCard
           label="Success Rate"
