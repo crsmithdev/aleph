@@ -10,6 +10,7 @@ import { type Granularity, type TimeRange } from '../../../components/data/TimeR
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { shortRelativeTime, fmtNumber } from '../../../utils/format';
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 
 type CompactEvent = {
@@ -35,8 +36,11 @@ const PHASE_COLOR: Record<string, string> = {
 };
 
 export function CompactionPage() {
-  const [range, setRange] = useState<TimeRange>('7d');
-  const [granularity, setGranularity] = useState<Granularity>('day');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = (searchParams.get('range') as TimeRange) ?? '7d';
+  const granularity = (searchParams.get('granularity') as Granularity) ?? 'day';
+  function setRange(r: TimeRange) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('range', r); return n; }, { replace: true }); }
+  function setGranularity(g: Granularity) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('granularity', g); return n; }, { replace: true }); }
   const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
   const { data, isLoading, error, refetch } = useObsCompaction(range);
 
@@ -99,7 +103,7 @@ export function CompactionPage() {
       width: '90px',
       render: (row) => {
         const phase = row.toolCallCount !== undefined ? phaseBucket(row.toolCallCount) : undefined;
-        const color = phase === 'early' ? 'text-green-500' : phase === 'mid' ? 'text-yellow-500' : 'text-red-500';
+        const color = phase === 'early' ? 'text-success' : phase === 'mid' ? 'text-warning' : 'text-error';
         return (
           <span className="font-mono text-text-secondary">
             {phase ? <span className={color}>{row.toolCallCount}</span> : '—'}
@@ -117,8 +121,8 @@ export function CompactionPage() {
         <span className="font-mono text-text-secondary">
           {row.contextPct !== undefined ? (
             <span className={
-              row.contextPct >= 80 ? 'text-red-500' :
-              row.contextPct >= 60 ? 'text-yellow-500' : 'text-green-500'
+              row.contextPct >= 80 ? 'text-error' :
+              row.contextPct >= 60 ? 'text-warning' : 'text-success'
             }>
               {row.contextPct}%
             </span>

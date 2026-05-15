@@ -19,6 +19,8 @@ export function TodoQuickAdd() {
     <form onSubmit={handleSubmit} className="flex gap-2">
       <input
         type="text"
+        name="todo-title"
+        autoComplete="off"
         value={title}
         onChange={(e) => {
           const v = e.target.value;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useObsSkills } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
@@ -42,8 +42,11 @@ const SKILL_DATASETS: { key: SkillDataset; label: string }[] = [
 import { GRAN_LABEL } from '../../../utils/chart-helpers';
 
 export function SkillsPage() {
-  const [range, setRange] = useState<TimeRange>('30d');
-  const [granularity, setGranularity] = useState<Granularity>('day');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = (searchParams.get('range') as TimeRange) ?? '30d';
+  const granularity = (searchParams.get('granularity') as Granularity) ?? 'day';
+  function setRange(r: TimeRange) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('range', r); return n; }, { replace: true }); }
+  function setGranularity(g: Granularity) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('granularity', g); return n; }, { replace: true }); }
   const [showUnused, setShowUnused] = useState(false);
   const [showMissing, setShowMissing] = useState(false);
   const [showCommands, setShowCommands] = useState(true);

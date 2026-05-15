@@ -56,7 +56,7 @@ export function NoteEditor({ note, onSave, onDelete, saving, deleting }: NoteEdi
               size="sm"
               loading={deleting}
               onClick={() => onDelete(note.id)}
-              className="text-red-400 hover:text-red-300 hover:bg-red-950/30"
+              className="text-error hover:text-error/70 hover:bg-error/10"
             >
               Delete
             </Button>

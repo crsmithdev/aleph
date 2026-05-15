@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { useObsSubagents, type SubagentsData, type SubagentTypeBucket, type SubagentInvocation } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
@@ -17,8 +17,11 @@ import { clsx } from 'clsx';
 
 export function SubagentsPage() {
   const navigate = useNavigate();
-  const [range, setRange] = useState<TimeRange>('7d');
-  const [granularity, setGranularity] = useState<Granularity>('day');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = (searchParams.get('range') as TimeRange) ?? '7d';
+  const granularity = (searchParams.get('granularity') as Granularity) ?? 'day';
+  function setRange(r: TimeRange) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('range', r); return n; }, { replace: true }); }
+  function setGranularity(g: Granularity) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('granularity', g); return n; }, { replace: true }); }
   const [bgOnly, setBgOnly] = useState(false);
   const { data, isLoading, error, refetch } = useObsSubagents(range, granularity);
 

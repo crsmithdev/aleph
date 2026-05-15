@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useObsEvents, useObsSessions, useObsTokens } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
@@ -278,8 +279,11 @@ function Pagination({ start, end, total, hasPrev, hasNext, onPrev, onNext }: {
 }
 
 export function EventsPage() {
-  const [range, setRange] = useState<TimeRange>('30d');
-  const [granularity, setGranularity] = useState<Granularity>('day');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = (searchParams.get('range') as TimeRange) ?? '30d';
+  const granularity = (searchParams.get('granularity') as Granularity) ?? 'day';
+  function setRange(r: TimeRange) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('range', r); return n; }, { replace: true }); }
+  function setGranularity(g: Granularity) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('granularity', g); return n; }, { replace: true }); }
   const [activeType, setActiveType] = useState<EntryType | undefined>(undefined);
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [search, setSearch] = useState('');

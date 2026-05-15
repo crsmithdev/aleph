@@ -35,6 +35,8 @@ export function GoalForm({ initial, onSubmit, onCancel, loading }: GoalFormProps
         <input
           id="goal-title"
           type="text"
+          name="goal-title"
+          autoComplete="off"
           value={title}
           onChange={(e) => {
             const v = e.target.value;

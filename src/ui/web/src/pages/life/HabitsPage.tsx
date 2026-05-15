@@ -95,6 +95,8 @@ function HabitRow({ habit }: { habit: Habit }) {
         <div className="flex-1 min-w-0 flex items-baseline gap-2">
           {editing ? (
             <input
+              name="habit-title"
+              autoComplete="off"
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               onBlur={saveTitle}

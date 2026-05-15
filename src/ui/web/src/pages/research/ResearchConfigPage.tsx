@@ -36,7 +36,7 @@ function SaveIndicator({ visible }: { visible: boolean }) {
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1 text-sm text-green-400 transition-opacity duration-300',
+        'inline-flex items-center gap-1 text-sm text-success transition-opacity duration-300',
         visible ? 'opacity-100' : 'opacity-0'
       )}
     >
@@ -286,7 +286,9 @@ function ProvidersPanel() {
 
 
       <div className="flex justify-end">
-        <SaveIndicator visible={saved} />
+        <div aria-live="polite" aria-atomic="true">
+          <SaveIndicator visible={saved} />
+        </div>
       </div>
     </div>
   );

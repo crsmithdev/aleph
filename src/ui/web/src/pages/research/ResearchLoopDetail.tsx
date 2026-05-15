@@ -844,7 +844,7 @@ function findLatestPostMortem(artifacts: Artifact[]): PostMortemPayload | null {
 const VERDICT_CLASS: Record<PostMortemPayload['verdict'], string> = {
   success: 'bg-success/15 text-success border-success/40',
   partial: 'bg-amber-500/15 text-amber-400 border-amber-500/40',
-  failure: 'bg-red-500/15 text-red-400 border-red-500/40',
+  failure: 'bg-error/15 text-error border-error/40',
 };
 
 function PostMortemPanel({ payload }: { payload: PostMortemPayload }) {
@@ -902,7 +902,7 @@ function collectIterationChecks(artifacts: Artifact[]): IterationCheckEntry[] {
 const ITER_CHIP_CLASS: Record<IterationCheckPayload['verdict'], string> = {
   on_track:          'bg-success/15 text-success',
   drifting:          'bg-amber-500/15 text-amber-400',
-  needs_correction:  'bg-red-500/15 text-red-400',
+  needs_correction:  'bg-error/15 text-error',
 };
 
 function IterationChecksPanel({ checks }: { checks: IterationCheckEntry[] }) {
@@ -990,7 +990,7 @@ function safeDomain(url: string): string {
 }
 
 function SourceExtractionPanel({ stats }: { stats: SourceStats }) {
-  const failureColor = stats.failure_rate >= 0.2 ? 'text-red-400' : stats.failure_rate > 0 ? 'text-amber-400' : 'text-success';
+  const failureColor = stats.failure_rate >= 0.2 ? 'text-error' : stats.failure_rate > 0 ? 'text-amber-400' : 'text-success';
   return (
     <Panel
       title="Source extraction"
@@ -1006,7 +1006,7 @@ function SourceExtractionPanel({ stats }: { stats: SourceStats }) {
           <dl className="flex flex-col gap-1 text-sm">
             <Row label="Extracted"><span className="font-mono tabular-nums text-success">{stats.extracted}</span></Row>
             <Row label="Snippet only"><span className="font-mono tabular-nums">{stats.snippet_only}</span></Row>
-            <Row label="Failed"><span className="font-mono tabular-nums text-red-400">{stats.failed}</span></Row>
+            <Row label="Failed"><span className="font-mono tabular-nums text-error">{stats.failed}</span></Row>
             {stats.failed > 0 && <Row label="Avg attempts (on failure)"><span className="font-mono tabular-nums">{stats.avg_attempts_on_failure.toFixed(1)}</span></Row>}
           </dl>
         </div>
@@ -1018,7 +1018,7 @@ function SourceExtractionPanel({ stats }: { stats: SourceStats }) {
             <ul className="flex flex-col gap-1 text-sm">
               {stats.top_failing_domains.map((d, i) => {
                 const pct = d.total > 0 ? (d.failed / d.total) * 100 : 0;
-                const tone = pct >= 50 ? 'text-red-400' : 'text-amber-400';
+                const tone = pct >= 50 ? 'text-error' : 'text-amber-400';
                 return (
                   <li key={i} className="flex items-baseline justify-between gap-2">
                     <span className="font-mono text-xs text-text-secondary truncate">{d.domain}</span>
@@ -1962,7 +1962,7 @@ const STATUS_CLASS: Record<string, string> = {
   running:   'bg-accent/15 text-accent',
   paused:    'bg-amber-500/15 text-amber-400',
   completed: 'bg-emerald-500/15 text-emerald-400',
-  failed:    'bg-red-500/15 text-red-400',
+  failed:    'bg-error/15 text-error',
   cancelled: 'bg-text-muted/15 text-text-muted',
 };
 function StatusBadge({ status }: { status: string }) {

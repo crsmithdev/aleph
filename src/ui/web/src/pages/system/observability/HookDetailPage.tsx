@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useObsHookDetail } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
@@ -34,8 +34,11 @@ function compactDate(iso: string): string {
 export function HookDetailPage() {
   const { name: rawName } = useParams<{ name: string }>();
   const hookName = decodeURIComponent(rawName ?? '');
-  const [range, setRange] = useState<TimeRange>('30d');
-  const [granularity, setGranularity] = useState<Granularity>('day');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = (searchParams.get('range') as TimeRange) ?? '30d';
+  const granularity = (searchParams.get('granularity') as Granularity) ?? 'day';
+  function setRange(r: TimeRange) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('range', r); return n; }, { replace: true }); }
+  function setGranularity(g: Granularity) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('granularity', g); return n; }, { replace: true }); }
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(true);
   const [showBlocks, setShowBlocks] = useState(true);

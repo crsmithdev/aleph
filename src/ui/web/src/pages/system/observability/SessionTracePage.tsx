@@ -223,7 +223,7 @@ function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
       : span.kind === 'hook'
       ? 'bg-purple-500/10 border-purple-500/30 text-purple-400'
       : span.kind === 'verify'
-      ? (span.label.includes('FAIL') ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-green-500/10 border-green-500/30 text-green-400')
+      ? (span.label.includes('FAIL') ? 'bg-error/10 border-error/30 text-error' : 'bg-success/10 border-success/30 text-success')
       : isSubagent
       ? 'bg-agent/20 border-agent-border text-text-primary'
       : 'bg-accent/10 border-accent/30 text-accent';
@@ -256,7 +256,7 @@ function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
           : span.kind === 'hook' && hookDecision === 'advisory' ? 'text-warning'
           : span.kind === 'hook' && hookDecision === 'pass' ? 'text-success'
           : span.kind === 'hook' ? 'text-purple-300'
-          : span.kind === 'verify' ? (span.label.includes('FAIL') ? 'text-red-400' : 'text-green-400')
+          : span.kind === 'verify' ? (span.label.includes('FAIL') ? 'text-error' : 'text-success')
           : isSubagent ? 'text-text-primary' : 'text-sky-500')}>
           {span.subagentSessionId ? (
             <Link
@@ -1084,7 +1084,7 @@ function FlatContextItem({ item, onTurnClick }: { item: ContextItem; onTurnClick
     item.type === 'user'
       ? 'bg-accent/10 border-accent/30 text-accent'
       : item.type === 'assistant'
-      ? 'bg-green-500/10 border-green-500/30 text-green-400'
+      ? 'bg-success/10 border-success/30 text-success'
       : 'bg-amber-500/10 border-amber-500/30 text-amber-400';
 
   const typeLabel = item.type === 'user' ? 'User' : item.type === 'assistant' ? 'Asst' : 'Tool';
@@ -1239,7 +1239,7 @@ export function SessionTracePage() {
           </Link>
         )}
         {data.gateInfo?.mode === 'inline' && (
-          <span className="rounded-md bg-yellow-500/15 px-2 py-0.5 text-xs font-medium text-yellow-400 border border-yellow-500/30">
+          <span className="rounded-md bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning border border-warning/30">
             inline
           </span>
         )}

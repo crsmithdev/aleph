@@ -10,7 +10,7 @@ import { ObsControlBar, FilterToggle, type DatasetDisplayMode } from '../../../c
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fmtNumber, fmtMs, fmtCurrency, fmtDuration, fmtLegendLabel, formatModelName, stripMarkdown, fmtProject, shortRelativeTime } from '../../../utils/format';
 import { clsx } from 'clsx';
 
@@ -88,8 +88,11 @@ type SessionRow = {
 
 export function SessionsPage() {
   const navigate = useNavigate();
-  const [range, setRange] = useState<TimeRange>('30d');
-  const [granularity, setGranularity] = useState<Granularity>('day');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = (searchParams.get('range') as TimeRange) ?? '30d';
+  const granularity = (searchParams.get('granularity') as Granularity) ?? 'day';
+  function setRange(r: TimeRange) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('range', r); return n; }, { replace: true }); }
+  function setGranularity(g: Granularity) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('granularity', g); return n; }, { replace: true }); }
   const { data, isLoading, error, refetch } = useObsSessions(range, granularity);
   const subagents = useObsSubagents(range, granularity);
   const cost = useObsCost(range, granularity);

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AreaChart, Area, BarChart, Bar, ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useObsOverview, useObsSessions, useObsTokens, useObsCost, useObsHooks, useObsTools } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
@@ -12,8 +13,11 @@ import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartCo
 import { fmtNumber, fmtCurrency, fmtPct, shortDate, granLabel, fmtLegendLabel, formatModelName } from '../../../utils/format';
 
 export function OverviewPage() {
-  const [range, setRange] = useState<TimeRange>('30d');
-  const [granularity, setGranularity] = useState<Granularity>('day');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = (searchParams.get('range') as TimeRange) ?? '30d';
+  const granularity = (searchParams.get('granularity') as Granularity) ?? 'day';
+  function setRange(r: TimeRange) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('range', r); return n; }, { replace: true }); }
+  function setGranularity(g: Granularity) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('granularity', g); return n; }, { replace: true }); }
   const { data, isLoading, error, refetch } = useObsOverview(range, granularity);
   const sessions = useObsSessions(range, granularity);
   const tokens = useObsTokens(range, granularity);

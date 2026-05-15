@@ -28,8 +28,8 @@ function TrendBadge({ trend }: { trend: EvalResult['trend'] }) {
   return (
     <span className={clsx(
       'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs',
-      trend === 'improving' && 'bg-green-500/10 text-green-500',
-      trend === 'regressing' && 'bg-red-500/10 text-red-500',
+      trend === 'improving' && 'bg-success/10 text-success',
+      trend === 'regressing' && 'bg-error/10 text-error',
       trend === 'stable' && 'bg-bg-tertiary text-text-muted',
     )}>
       {trend === 'improving' ? '↑' : trend === 'regressing' ? '↓' : '→'} {trend}
@@ -54,9 +54,9 @@ function PassRateBar({ value, label }: { value: number; label: string }) {
 function DecisionBadge({ decision }: { decision?: string }) {
   if (!decision) return <span className="text-text-disabled">—</span>;
   const colors =
-    decision === 'block' ? 'bg-red-500/10 text-red-400' :
-    decision === 'advisory' ? 'bg-yellow-500/10 text-yellow-400' :
-    'bg-green-500/10 text-green-400';
+    decision === 'block' ? 'bg-error/10 text-error' :
+    decision === 'advisory' ? 'bg-warning/10 text-warning' :
+    'bg-success/10 text-success';
   return (
     <span className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium', colors)}>
       {decision}
@@ -80,7 +80,7 @@ function PassAt1Badge({ passed }: { passed: boolean }) {
   return (
     <span className={clsx(
       'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium',
-      passed ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400',
+      passed ? 'bg-success/10 text-success' : 'bg-error/10 text-error',
     )}>
       {passed ? 'pass' : 'fail'}
     </span>
@@ -262,10 +262,10 @@ function ScenarioDetail({ dirName, onClose }: { dirName: string; onClose: () => 
             {runMutation.isPending ? 'Running…' : 'Run Again'}
           </button>
           {runMutation.isSuccess && (
-            <span className="ml-2 text-xs text-green-400">Queued!</span>
+            <span className="ml-2 text-xs text-success">Queued!</span>
           )}
           {runMutation.isError && (
-            <span className="ml-2 text-xs text-red-400">Failed to start run</span>
+            <span className="ml-2 text-xs text-error">Failed to start run</span>
           )}
         </>
       )}
@@ -334,10 +334,10 @@ function ScenarioCard({ scenario }: { scenario: EvalScenario }) {
         </div>
 
         {runMutation.isSuccess && (
-          <p className="text-xs text-green-400 mt-2">Run queued successfully.</p>
+          <p className="text-xs text-success mt-2">Run queued successfully.</p>
         )}
         {runMutation.isError && (
-          <p className="text-xs text-red-400 mt-2">Failed to start run.</p>
+          <p className="text-xs text-error mt-2">Failed to start run.</p>
         )}
       </div>
 
@@ -437,9 +437,9 @@ function CreateScenarioModal({ open, onClose }: { open: boolean; onClose: () => 
                   className={clsx(
                     'flex-1 py-1.5 text-xs rounded border font-medium transition-colors',
                     expect === d
-                      ? d === 'block' ? 'bg-red-500/20 border-red-500/40 text-red-400'
-                        : d === 'advisory' ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400'
-                        : 'bg-green-500/20 border-green-500/40 text-green-400'
+                      ? d === 'block' ? 'bg-error/20 border-error/40 text-error'
+                        : d === 'advisory' ? 'bg-warning/20 border-warning/40 text-warning'
+                        : 'bg-success/20 border-success/40 text-success'
                       : 'bg-bg-tertiary border-border-primary text-text-muted hover:border-accent/50'
                   )}
                 >
@@ -535,7 +535,7 @@ function CreateScenarioModal({ open, onClose }: { open: boolean; onClose: () => 
         </div>
 
         {createMutation.isError && (
-          <p className="text-xs text-red-400">Failed to create scenario. Check the form and try again.</p>
+          <p className="text-xs text-error">Failed to create scenario. Check the form and try again.</p>
         )}
 
         <div className="flex justify-end gap-3 pt-2 border-t border-border-primary">
@@ -651,7 +651,7 @@ function RunsTab() {
       width: '100px',
       render: (row) => row.actualDecision ? (
         <span className={clsx(
-          row.actualDecision === row.expectedDecision ? 'text-green-400' : 'text-red-400'
+          row.actualDecision === row.expectedDecision ? 'text-success' : 'text-error'
         )}>
           <DecisionBadge decision={row.actualDecision} />
         </span>
@@ -689,7 +689,7 @@ function RunsTab() {
           {row.graders.map((g, i) => (
             <span key={i} className={clsx(
               'text-xs px-1.5 py-0.5 rounded font-mono',
-              g.result === 'pass' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400',
+              g.result === 'pass' ? 'bg-success/10 text-success' : 'bg-error/10 text-error',
             )}>
               {g.type}
             </span>

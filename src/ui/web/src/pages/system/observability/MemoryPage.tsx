@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useObsMemory, useObsMemoryItems, useObsMemoryUsage, useObsMemorySearches, useTriggerSnapshot, useDeleteMemory, useUpdateMemory } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
@@ -20,8 +21,11 @@ type TagRow = { tag: string; count: number };
 type MemoryItem = { id: string; content: string; memory_type: string; tags: string; created_at: string; updated_at: string };
 
 export function MemoryPage() {
-  const [range, setRange] = useState<TimeRange>('30d');
-  const [granularity, setGranularity] = useState<Granularity>('day');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = (searchParams.get('range') as TimeRange) ?? '30d';
+  const granularity = (searchParams.get('granularity') as Granularity) ?? 'day';
+  function setRange(r: TimeRange) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('range', r); return n; }, { replace: true }); }
+  function setGranularity(g: Granularity) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('granularity', g); return n; }, { replace: true }); }
   const { data, isLoading, error, refetch } = useObsMemory();
   const snapshot = useTriggerSnapshot();
   const deleteMemory = useDeleteMemory();

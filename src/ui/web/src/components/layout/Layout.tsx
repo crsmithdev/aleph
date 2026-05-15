@@ -19,6 +19,7 @@ export function Layout() {
           <Outlet />
         </div>
       </main>
+      <div aria-live="polite" aria-atomic="true" className="sr-only" id="status-announcer" />
     </div>
   );
 }
