@@ -106,7 +106,7 @@
     },
     {
       "skill": "security-audit",
-      "keywords": ["security audit", "audit for vulnerabilities", "scan for security issues", "security review", "find vulnerabilities", "OWASP", "owasp", "CWE", "cwe", "ASVS", "asvs", "vulnerability scan", "audit for security", "SQL injection", "XSS", "XXE", "SSRF", "IDOR", "/(audit|scan|review|check).{0,15}(security|vuln|vulnerab|owasp|cwe)/", "/(security|vulnerab).{0,15}(audit|scan|review|check)/"]
+      "keywords": ["security audit", "audit for vulnerabilities", "scan for security issues", "security review", "find vulnerabilities", "owasp", "cwe", "asvs", "vulnerability scan", "audit for security", "SQL injection", "XSS", "XXE", "SSRF", "IDOR", "/(audit|scan|review|check).{0,15}(security|vuln|vulnerab|owasp|cwe)/", "/(security|vulnerab).{0,15}(audit|scan|review|check)/"]
     },
     {
       "skill": "security-fix",

@@ -5,7 +5,8 @@ description: >
   src/rules/docs/RULES.md. AUDIT MODE: identifies violations, doc-vs-code
   drift, and structural issues; emits a phased plan (Critical / Refinement /
   Polish). Tags peer-drift and c7score findings for the omnibus to route to
-  follow-up leaves. Does not write changes without approval.
+  follow-up leaves. Does not write changes without approval. Triggers on
+  "audit the docs", "review the documentation", "/docs-audit".
 verb: audit
 domain: docs
 modes:

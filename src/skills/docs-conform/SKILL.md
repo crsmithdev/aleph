@@ -6,7 +6,8 @@ description: >
   them. Often invoked from docs-audit on drift findings; can be called
   directly when the user notices structural divergence between READMEs,
   AGENTS.md files, SKILL.md frontmatter, or similar doc families. Validates
-  against src/rules/docs/RULES.md.
+  against src/rules/docs/RULES.md. Triggers on "align these docs", "sync
+  docs to reference", "/docs-conform".
 metadata:
   argument-hint: <reference-doc> [peer-scope]
 ---

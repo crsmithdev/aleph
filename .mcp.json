@@ -1,8 +1,3 @@
 {
-  "mcpServers": {
-    "goal-tracker": {
-      "command": "bun",
-      "args": ["run", "/home/crsmi/construct/src/goals/mcp/src/index.ts"]
-    }
-  }
+  "mcpServers": {}
 }

@@ -1,6 +1,6 @@
 ---
 name: eval-harness
-description: Define and run evals to measure AI development reliability. Use when setting up pass/fail criteria before implementation, measuring skill/agent reliability over time, or catching regressions. Subcommands: /eval define <name>, /eval run <name>, /eval report.
+description: Define and run evals to measure AI development reliability. Use when setting up pass/fail criteria before implementation, measuring skill/agent reliability over time, or catching regressions. Subcommands: /eval define <name>, /eval run <name>, /eval report. Triggers on "define an eval", "run evals", "/eval".
 ---
 
 # Eval Harness

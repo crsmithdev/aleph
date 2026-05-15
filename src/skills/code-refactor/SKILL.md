@@ -1,6 +1,6 @@
 ---
 name: code-refactor
-description: Refactor code for better organization, cleaner architecture, or improved maintainability. Use when reorganizing file structures, breaking down large modules, updating import paths after moves, or enforcing consistency patterns across the codebase.
+description: Refactor code for better organization, cleaner architecture, or improved maintainability. Use when reorganizing file structures, breaking down large modules, updating import paths after moves, or enforcing consistency patterns across the codebase. Triggers on "refactor this", "restructure the code", "/code-refactor".
 ---
 
 # Code Refactor Master
