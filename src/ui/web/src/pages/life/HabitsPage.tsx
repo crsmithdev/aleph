@@ -52,6 +52,7 @@ function HabitRow({ habit }: { habit: Habit }) {
   const deleteHabit = useDeleteHabit();
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(habit.title);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const checked = habit.completedThisPeriod;
   const streak = habit.streak ?? 0;
@@ -105,12 +106,13 @@ function HabitRow({ habit }: { habit: Habit }) {
               className="flex-1 bg-bg-tertiary border border-border-secondary rounded px-2 py-0.5 text-sm text-text-primary focus:outline-none focus:border-accent"
             />
           ) : (
-            <span
-              className={clsx('text-sm font-semibold cursor-pointer', checked ? 'line-through text-text-muted' : 'text-text-primary')}
+            <button
+              type="button"
+              className={clsx('text-sm font-semibold text-left bg-transparent border-none p-0 cursor-pointer', checked ? 'line-through text-text-muted' : 'text-text-primary')}
               onClick={() => setEditing(true)}
             >
               {habit.title}
-            </span>
+            </button>
           )}
           <span className="text-xs font-mono uppercase tracking-wider text-text-muted">
             {frequencyCadenceLabel(habit.frequency)}
@@ -124,14 +126,31 @@ function HabitRow({ habit }: { habit: Habit }) {
           {streak > 0 ? `streak · ${streak} ${streakUnit(habit.frequency)}` : 'no streak'}
         </span>
 
-        <button
-          onClick={() => deleteHabit.mutate(habit.id)}
-          className="text-text-muted hover:text-error text-xl leading-none transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100"
-          title="Delete habit"
-          aria-label="Delete habit"
-        >
-          &times;
-        </button>
+        {confirmDelete ? (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => deleteHabit.mutate(habit.id)}
+              className="text-sm text-red-400 hover:text-red-300 font-medium"
+            >
+              Confirm
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="text-sm text-text-muted hover:text-text-secondary"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="text-text-muted hover:text-error text-xl leading-none transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100"
+            title="Delete habit"
+            aria-label="Delete habit"
+          >
+            &times;
+          </button>
+        )}
       </div>
 
       {history.length > 0 && (

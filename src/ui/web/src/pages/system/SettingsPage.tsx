@@ -287,6 +287,7 @@ function ThemeSection() {
       <div className="relative w-full max-w-sm">
         <button
           onClick={() => setOpen(!open)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
           className={clsx(
             'flex items-center justify-between w-full rounded-lg border border-border-primary',
             'bg-bg-tertiary px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors'
@@ -301,7 +302,7 @@ function ThemeSection() {
         </button>
         {open && (
           <>
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} role="presentation" />
             <div className="absolute top-full left-0 mt-1 w-full max-h-96 overflow-y-auto z-50 rounded-lg border border-border-primary bg-bg-secondary shadow-md py-1">
               <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">Dark</div>
               {darkThemes.map((t) => (
@@ -343,6 +344,7 @@ function FontPicker({
       <div className="relative w-full max-w-xs">
         <button
           onClick={() => setOpen(!open)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
           className={clsx(
             'flex items-center justify-between w-full rounded-lg border border-border-primary',
             'bg-bg-tertiary px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors'
@@ -358,7 +360,7 @@ function FontPicker({
         </button>
         {open && (
           <>
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} role="presentation" />
             <div className="absolute top-full left-0 mt-1 w-full max-h-80 overflow-y-auto z-50 rounded-lg border border-border-primary bg-bg-secondary shadow-md py-1">
               {items.map((f) => (
                 <button

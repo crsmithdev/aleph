@@ -14,6 +14,7 @@ export function TodoItem({ todo }: TodoItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
   const [noteText, setNoteText] = useState(todo.note || '');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const updateTodo = useUpdateTodo();
   const deleteTodo = useDeleteTodo();
@@ -59,7 +60,9 @@ export function TodoItem({ todo }: TodoItemProps) {
               className={`text-sm cursor-pointer ${todo.done ? 'line-through text-text-muted' : 'text-text-primary'}`}
               onClick={() => !todo.done && setEditingTitle(true)}
               onContextMenu={(e) => { e.preventDefault(); setExpanded(!expanded); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!todo.done) setEditingTitle(true); } }}
               role="button"
+              tabIndex={0}
             >
               {todo.title}
             </span>
@@ -140,14 +143,31 @@ export function TodoItem({ todo }: TodoItemProps) {
             >
               <Icon name="check" size="md" />
             </button>
-            <button
-              onClick={() => deleteTodo.mutate(todo.id)}
-              className="p-2 rounded-md text-text-secondary hover:text-error hover:bg-error/10 transition-colors"
-              title="Delete"
-              aria-label="Delete"
-            >
-              <Icon name="close" size="md" />
-            </button>
+            {confirmDelete ? (
+              <>
+                <button
+                  onClick={() => deleteTodo.mutate(todo.id)}
+                  className="text-sm text-red-400 hover:text-red-300 font-medium px-1"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="text-sm text-text-muted hover:text-text-secondary px-1"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="p-2 rounded-md text-text-secondary hover:text-error hover:bg-error/10 transition-colors"
+                title="Delete"
+                aria-label="Delete"
+              >
+                <Icon name="close" size="md" />
+              </button>
+            )}
           </>
         )}
       </div>
