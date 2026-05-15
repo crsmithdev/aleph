@@ -60,8 +60,8 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
 
   function maskKey(key: string | undefined): string {
     if (!key) return '';
-    if (key.length <= 8) return '*'.repeat(key.length);
-    return key.slice(0, 4) + '····' + key.slice(-4);
+    if (key.length <= 8) return '****';
+    return key.slice(0, 4) + '****' + key.slice(-4);
   }
 
   app.get('/config', async () => {
@@ -84,8 +84,38 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     };
   });
 
-  app.patch<{ Body: Record<string, unknown> }>('/config', async (req) => {
-    saveProviderConfig(req.body ?? {});
+  const ALLOWED_CONFIG_KEYS: Record<string, (v: unknown) => boolean> = {
+    anthropic_api_key:  (v) => typeof v === 'string',
+    openrouter_api_key: (v) => typeof v === 'string',
+    tavily_api_key:     (v) => typeof v === 'string',
+    brave_api_key:      (v) => typeof v === 'string',
+    jina_api_key:       (v) => typeof v === 'string',
+    llm_provider:       (v) => typeof v === 'string',
+    search_provider:    (v) => typeof v === 'string',
+    fulltext_provider:  (v) => typeof v === 'string',
+  };
+
+  app.patch<{ Body: Record<string, unknown> }>('/config', async (req, reply) => {
+    const body = req.body ?? {};
+    const errors: string[] = [];
+    const validated: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(body)) {
+      if (!(key in ALLOWED_CONFIG_KEYS)) {
+        errors.push(`Unknown key: ${key}`);
+      } else if (!ALLOWED_CONFIG_KEYS[key](value)) {
+        errors.push(`Invalid type for key: ${key}`);
+      } else {
+        validated[key] = value;
+      }
+    }
+
+    if (errors.length > 0) {
+      reply.code(400);
+      return { status: 'error', errors };
+    }
+
+    saveProviderConfig(validated);
     return { status: 'saved' };
   });
 

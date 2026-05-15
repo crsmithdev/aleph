@@ -3,6 +3,14 @@ import { nanoid } from 'nanoid';
 import { eq } from 'drizzle-orm';
 import { webhooks } from '../db/schema.js';
 
+function validateWebhookUrl(url: string): void {
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { throw new Error('Invalid webhook URL'); }
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error(`Webhook URL must use http or https, got ${parsed.protocol}`);
+  }
+}
+
 export const webhookRoutes: FastifyPluginAsync = async (app) => {
   // GET / - list webhooks
   app.get('/', async () => {
@@ -22,6 +30,7 @@ export const webhookRoutes: FastifyPluginAsync = async (app) => {
       if (!url || typeof url !== 'string') {
         return reply.status(400).send({ error: 'url is required' });
       }
+      try { validateWebhookUrl(url); } catch (e) { return reply.status(400).send({ error: (e as Error).message }); }
       if (!Array.isArray(events) || events.length === 0) {
         return reply.status(400).send({ error: 'events must be a non-empty array' });
       }
@@ -58,6 +67,10 @@ export const webhookRoutes: FastifyPluginAsync = async (app) => {
 
       const { url, events, secret, active } = req.body;
       const now = new Date().toISOString();
+
+      if (url !== undefined) {
+        try { validateWebhookUrl(url); } catch (e) { return reply.status(400).send({ error: (e as Error).message }); }
+      }
 
       const updateData: Partial<typeof webhooks.$inferInsert> = { updatedAt: now };
       if (url !== undefined) updateData.url = url;

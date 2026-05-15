@@ -92,29 +92,90 @@ function cleanParams(data: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-/** Syntax-highlighted JSON for the expanded row. */
+/** A single token in the JSON output. */
+type JsonToken =
+  | { kind: 'key'; text: string }
+  | { kind: 'string'; text: string }
+  | { kind: 'number'; text: string }
+  | { kind: 'keyword'; text: string }
+  | { kind: 'plain'; text: string };
+
+/** Tokenise a JSON string into typed segments for React rendering (no innerHTML). */
+function tokenizeJSON(json: string): JsonToken[] {
+  const tokens: JsonToken[] = [];
+  // Walk through line by line to track context (key vs value position)
+  const lines = json.split('\n');
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    if (li > 0) tokens.push({ kind: 'plain', text: '\n' });
+    // Simple line-level tokeniser: find key, then value
+    let pos = 0;
+    while (pos < line.length) {
+      // Try to match a quoted key (string followed by colon)
+      const keyMatch = /^("(?:\\.|[^"\\])*")\s*:/.exec(line.slice(pos));
+      if (keyMatch) {
+        tokens.push({ kind: 'key', text: keyMatch[1] });
+        tokens.push({ kind: 'plain', text: ':' });
+        pos += keyMatch[0].length;
+        continue;
+      }
+      // Try to match a quoted string value
+      const strMatch = /^"((?:\\.|[^"\\])*)"/.exec(line.slice(pos));
+      if (strMatch) {
+        tokens.push({ kind: 'string', text: strMatch[0] });
+        pos += strMatch[0].length;
+        continue;
+      }
+      // Try to match a number
+      const numMatch = /^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(line.slice(pos));
+      if (numMatch) {
+        tokens.push({ kind: 'number', text: numMatch[0] });
+        pos += numMatch[0].length;
+        continue;
+      }
+      // Try to match a keyword
+      const kwMatch = /^(true|false|null)\b/.exec(line.slice(pos));
+      if (kwMatch) {
+        tokens.push({ kind: 'keyword', text: kwMatch[0] });
+        pos += kwMatch[0].length;
+        continue;
+      }
+      // Consume remaining plain characters up to the next interesting character
+      const plainMatch = /^[^"{}\[\],:\n0-9tTfFnN-]+|^[{}\[\],: ]/.exec(line.slice(pos));
+      if (plainMatch) {
+        tokens.push({ kind: 'plain', text: plainMatch[0] });
+        pos += plainMatch[0].length;
+        continue;
+      }
+      // Safety: advance by one to avoid infinite loop
+      tokens.push({ kind: 'plain', text: line[pos] });
+      pos++;
+    }
+  }
+  return tokens;
+}
+
+const TOKEN_CLASS: Record<JsonToken['kind'], string> = {
+  key: 'text-accent-primary',
+  string: 'text-success',
+  number: 'text-warning',
+  keyword: 'text-info',
+  plain: '',
+};
+
+/** Syntax-highlighted JSON for the expanded row — no dangerouslySetInnerHTML. */
 function HighlightedJSON({ data }: { data: Record<string, unknown> }) {
   const clean = cleanParams(data);
   const json = JSON.stringify(clean, null, 2);
-  const escaped = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const highlighted = escaped.replace(
-    /(&quot;|")((?:\\.|[^"\\])*)(&quot;|")\s*:/g,
-    '<span class="text-accent-primary">"$2"</span>:'
-  ).replace(
-    /:\s*(&quot;|")((?:\\.|[^"\\])*)(&quot;|")/g,
-    ': <span class="text-success">"$2"</span>'
-  ).replace(
-    /:\s*(\d+(?:\.\d+)?)/g,
-    ': <span class="text-warning">$1</span>'
-  ).replace(
-    /:\s*(true|false|null)\b/g,
-    ': <span class="text-info">$1</span>'
-  );
+  const tokens = tokenizeJSON(json);
   return (
-    <pre
-      className="text-xs font-mono text-text-secondary max-h-80 overflow-auto whitespace-pre-wrap break-words leading-relaxed"
-      dangerouslySetInnerHTML={{ __html: highlighted }}
-    />
+    <pre className="text-xs font-mono text-text-secondary max-h-80 overflow-auto whitespace-pre-wrap break-words leading-relaxed">
+      {tokens.map((tok, i) =>
+        tok.kind === 'plain'
+          ? tok.text
+          : <span key={i} className={TOKEN_CLASS[tok.kind]}>{tok.text}</span>
+      )}
+    </pre>
   );
 }
 

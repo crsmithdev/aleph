@@ -977,7 +977,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         db.run(`UPDATE memories SET content = ?, updated_at = unixepoch() WHERE id = ?`, [content, id]);
         return { ok: true };
       } catch (err) {
-        return { error: (err as Error).message };
+        app.log.error(`memory update failed for id ${id}: ${(err as Error).message}`);
+        return { error: 'Operation failed' };
       } finally {
         db?.close();
       }
@@ -996,7 +997,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         db.run(`DELETE FROM memories WHERE id = ?`, [id]);
         return { ok: true };
       } catch (err) {
-        return { error: (err as Error).message };
+        app.log.error(`memory delete failed for id ${id}: ${(err as Error).message}`);
+        return { error: 'Operation failed' };
       } finally {
         db?.close();
       }
@@ -1264,7 +1266,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         const rows = db.query(`SELECT * FROM "${safeTable}" LIMIT ? OFFSET ?`).all(limit, offset);
         return { rows, total: totalRow.c };
       } catch (err) {
-        return { rows: [], total: 0, error: (err as Error).message };
+        app.log.error(`db table query failed for ${safeTable}: ${(err as Error).message}`);
+        return { rows: [], total: 0, error: 'Operation failed' };
       } finally {
         db?.close();
       }
@@ -1289,7 +1292,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       });
       return { status: 'ok' };
     } catch (err) {
-      return { status: 'error', message: String(err) };
+      app.log.error(`memory snapshot failed: ${String(err)}`);
+      return { status: 'error', message: 'Internal error' };
     }
   });
 
@@ -1420,8 +1424,9 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     try {
       scenario = loadScenario(scenarioDir);
     } catch (err) {
+      app.log.error(`Failed to load scenario ${name}: ${(err as Error).message}`);
       reply.code(400);
-      return { error: `Failed to load scenario: ${(err as Error).message}` };
+      return { error: 'Failed to load scenario' };
     }
 
     const evalName = `hook:${scenario.name}`;
@@ -1518,7 +1523,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       mkdirSync(scenarioDir, { recursive: true });
       writeFileSync(resolve(scenarioDir, 'scenario.yaml'), yamlContent, 'utf-8');
     } catch (err) {
-      reply.code(500); return { error: `Failed to write scenario: ${(err as Error).message}` };
+      app.log.error(`Failed to write scenario ${dirName}: ${(err as Error).message}`);
+      reply.code(500); return { error: 'Internal error' };
     }
 
     reply.code(201);

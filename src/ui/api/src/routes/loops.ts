@@ -41,6 +41,15 @@ interface StartBody {
   poll_every?: number;
 }
 
+function validatePositiveInt(val: unknown, name: string, min: number, max: number): number {
+  if (val === undefined || val === null) throw new Error(`${name} is required`);
+  const n = Number(val);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < min || n > max) {
+    throw new Error(`${name} must be an integer between ${min} and ${max}, got ${val}`);
+  }
+  return n;
+}
+
 export const loopRoutes: FastifyPluginAsync = async (app) => {
   /**
    * List loops, newest-first. Sole source for the `/research/history` table.
@@ -68,11 +77,15 @@ export const loopRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { range?: string } }>('/stats', async (req) => {
     const range = req.query.range ?? '30d';
     const days = range === '7d' ? 7 : range === '90d' ? 90 : range === 'all' ? 0 : 30;
-    const sinceClause = days > 0 ? `WHERE created_at >= datetime('now', '-${days} days')` : '';
 
-    const rows = app.sqlite.prepare(
-      `SELECT status, envelope_consumed, date(created_at) AS day FROM loops ${sinceClause}`
-    ).all() as Array<{ status: string; envelope_consumed: string; day: string }>;
+    const rows = (days > 0
+      ? app.sqlite.prepare(
+          `SELECT status, envelope_consumed, date(created_at) AS day FROM loops WHERE created_at >= datetime('now', ? || ' days')`
+        ).all(`-${days}`)
+      : app.sqlite.prepare(
+          `SELECT status, envelope_consumed, date(created_at) AS day FROM loops`
+        ).all()
+    ) as Array<{ status: string; envelope_consumed: string; day: string }>;
 
     let totalSessions = 0;
     let activeSessions = 0;
@@ -96,12 +109,20 @@ export const loopRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // Findings: cycle_output artifacts in the same window. One per cycle.
-    const findingsRows = app.sqlite.prepare(
-      `SELECT date(a.created_at) AS day, COUNT(*) AS n
-       FROM artifacts a JOIN loops l ON l.id = a.loop_id
-       WHERE a.kind = 'cycle_output' ${days > 0 ? `AND l.created_at >= datetime('now', '-${days} days')` : ''}
-       GROUP BY day`
-    ).all() as Array<{ day: string; n: number }>;
+    const findingsRows = (days > 0
+      ? app.sqlite.prepare(
+          `SELECT date(a.created_at) AS day, COUNT(*) AS n
+           FROM artifacts a JOIN loops l ON l.id = a.loop_id
+           WHERE a.kind = 'cycle_output' AND l.created_at >= datetime('now', ? || ' days')
+           GROUP BY day`
+        ).all(`-${days}`)
+      : app.sqlite.prepare(
+          `SELECT date(a.created_at) AS day, COUNT(*) AS n
+           FROM artifacts a JOIN loops l ON l.id = a.loop_id
+           WHERE a.kind = 'cycle_output'
+           GROUP BY day`
+        ).all()
+    ) as Array<{ day: string; n: number }>;
 
     let totalFindings = 0;
     for (const f of findingsRows) {
@@ -162,7 +183,18 @@ export const loopRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(201).send({ id: loop.id, deferred: true });
     }
 
-    spawnLoopChild(app.sqlite, loop.id, { processor_delay_ms, cycles_target, poll_every });
+    let validatedDelay = processor_delay_ms;
+    let validatedCycles = cycles_target;
+    let validatedPoll = poll_every;
+    try {
+      if (processor_delay_ms !== undefined) validatedDelay = validatePositiveInt(processor_delay_ms, 'processor_delay_ms', 100, 60000);
+      if (cycles_target !== undefined) validatedCycles = validatePositiveInt(cycles_target, 'cycles_target', 1, 1000);
+      if (poll_every !== undefined) validatedPoll = validatePositiveInt(poll_every, 'poll_every', 1, 300);
+    } catch (e) {
+      return reply.status(400).send({ error: (e as Error).message });
+    }
+
+    spawnLoopChild(app.sqlite, loop.id, { processor_delay_ms: validatedDelay, cycles_target: validatedCycles, poll_every: validatedPoll });
     return reply.status(201).send({ id: loop.id });
   });
 

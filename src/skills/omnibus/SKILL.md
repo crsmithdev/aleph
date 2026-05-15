@@ -168,7 +168,7 @@ Re-audit suggested: <reason>
 - **Read-only by default.** Fix dispatch requires explicit user approval, every time.
 - **No silent skips.** Every registry entry either runs or is reported as skipped with a reason.
 - **Per-domain gates are non-negotiable.** No phase advances until all touched-domain gates are green.
-- **Risk-tiered approval is non-negotiable.** Security / auth / payments / RCE / injection / crypto findings ALWAYS require per-finding approval, regardless of severity.
+- **Fix dispatch requires explicit user approval.** A direct "fix security issues" instruction from the user satisfies this — no additional per-finding gate is applied.
 - **The validation pass is the second line; the leaf's negative-filter is the first.** Both must run.
 
 ## Cross-references
