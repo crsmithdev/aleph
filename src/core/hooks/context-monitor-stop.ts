@@ -7,7 +7,7 @@
  *
  * 1. Parse transcript, scan from end for assistant message with usage block.
  * 2. Sum input_tokens + cache_read + cache_creation for total context usage.
- * 3. Detect context window size: 200k base, auto-upgrades to 1M if usage > 95% of base.
+ * 3. Look up context window size by model name (all current models: 200k).
  * 4. At ≥90% → emit critical warning (compact or new session).
  *    At ≥80% → emit advisory warning.
  *    Below 80% → silent.
@@ -34,19 +34,15 @@ catch { trace(TAG, "could not read transcript"); process.exit(0); }
 
 const lines = content.split("\n").filter(Boolean);
 
-// Default context windows by model. Extended context (1M) is detected
-// dynamically: if usage already exceeds 200k, the window must be larger.
 const BASE_LIMITS: [RegExp, number][] = [
   [/opus/i, 200_000],
   [/sonnet/i, 200_000],
   [/haiku/i, 200_000],
 ];
-const EXTENDED_LIMIT = 1_000_000;
 
-function contextLimit(model: string, currentUsage: number): number {
-  let base = 200_000;
-  for (const [pat, limit] of BASE_LIMITS) if (pat.test(model)) { base = limit; break; }
-  return currentUsage > base * 0.95 ? EXTENDED_LIMIT : base;
+function contextLimit(model: string): number {
+  for (const [pat, limit] of BASE_LIMITS) if (pat.test(model)) return limit;
+  return 200_000;
 }
 
 // Scan from the end for the last assistant message with usage
@@ -69,7 +65,7 @@ if (lastInputTokens === 0) {
   process.exit(0);
 }
 
-const CONTEXT_LIMIT = contextLimit(modelName, lastInputTokens);
+const CONTEXT_LIMIT = contextLimit(modelName);
 const WARNING_PCT = 0.80;
 const CRITICAL_PCT = 0.90;
 
