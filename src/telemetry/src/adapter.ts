@@ -540,6 +540,7 @@ export interface AdaptOptions {
   since?: Date;
   projects?: string[];
   baseDir?: string;
+  includeDirectives?: boolean;  // default true; set false for fixture-isolated tests
 }
 
 const fileCache = new Map<string, { mtimeMs: number; events: TelemetryEvent[] }>();
@@ -593,6 +594,7 @@ function corpusCacheKey(opts?: AdaptOptions): string {
 
 export function clearCache(): void {
   cacheDb.exec("DELETE FROM telemetry_cache_v6");
+  fileCache.clear();
   discoveryCache = undefined;
   corpusCache = undefined;
 }
@@ -614,7 +616,7 @@ export function adaptAllSessions(opts?: AdaptOptions): TelemetryEvent[] {
     allEvents.push(...adaptFile(file, project, opts?.since));
   }
 
-  allEvents.push(...readDirectives(opts?.since));
+  if (opts?.includeDirectives !== false) allEvents.push(...readDirectives(opts?.since));
   corpusCache = { events: allEvents, expiresAt: Date.now() + 60_000, key };
   return allEvents;
 }

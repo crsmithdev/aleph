@@ -34,7 +34,7 @@ describe("aggregator", () => {
   beforeEach(() => {
     clearCache();
     baseDir = setupFixtureDir();
-    entries = parseAllSessions({ baseDir });
+    entries = parseAllSessions({ baseDir, includeDirectives: false });
   });
 
   afterEach(() => {
@@ -90,7 +90,7 @@ describe("aggregator", () => {
       const hooks = aggregateHooks(entries);
       expect(hooks.ranked.length).toBeGreaterThan(0);
       const formatHook = hooks.ranked.find((h) =>
-        h.command.includes("routing-classify-submit"),
+        h.command.includes("format-reminder"),
       );
       expect(formatHook).toBeDefined();
       expect(formatHook!.count).toBeGreaterThanOrEqual(1);
