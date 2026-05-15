@@ -21,7 +21,7 @@ function enrichTodos(db: Db, todoList: (typeof todos.$inferSelect)[]) {
   }));
 }
 
-export function getTodosActive(db: Db) {
+export function getTodosActive(db: Db): { active: ReturnType<typeof enrichTodos>; completed: ReturnType<typeof enrichTodos> } {
   const today = new Date().toISOString().slice(0, 10);
 
   const allUndone = db.select().from(todos).where(eq(todos.done, false)).orderBy(todos.createdAt).all();
@@ -40,7 +40,7 @@ export function getTodosActive(db: Db) {
   };
 }
 
-export function getTodosAll(db: Db) {
+export function getTodosAll(db: Db): { active: ReturnType<typeof enrichTodos>; completed: ReturnType<typeof enrichTodos> } {
   const today = new Date().toISOString().slice(0, 10);
 
   const activeTodos = db.select().from(todos).where(eq(todos.done, false)).orderBy(todos.createdAt).all();
@@ -57,7 +57,7 @@ export function getTodosAll(db: Db) {
   };
 }
 
-export function getTodosForDay(db: Db, date: string) {
+export function getTodosForDay(db: Db, date: string): { todos: (typeof todos.$inferSelect & { goalTitle: string | null })[]; completed: (typeof todos.$inferSelect & { goalTitle: string | null })[] } {
   const undone = db
     .select()
     .from(todos)
@@ -95,11 +95,11 @@ export function getTodosForDay(db: Db, date: string) {
   };
 }
 
-export function getTodo(db: Db, id: string) {
+export function getTodo(db: Db, id: string): typeof todos.$inferSelect | null {
   return db.select().from(todos).where(eq(todos.id, id)).get() ?? null;
 }
 
-export function createTodo(db: Db, input: unknown, eventBus?: EventBus) {
+export function createTodo(db: Db, input: unknown, eventBus?: EventBus): typeof todos.$inferSelect {
   const data = createTodoSchema.parse(input);
   const id = nanoid();
   const now = new Date().toISOString();
@@ -133,7 +133,7 @@ export function createTodo(db: Db, input: unknown, eventBus?: EventBus) {
   return db.select().from(todos).where(eq(todos.id, id)).get()!;
 }
 
-export function updateTodo(db: Db, id: string, input: unknown, eventBus?: EventBus) {
+export function updateTodo(db: Db, id: string, input: unknown, eventBus?: EventBus): typeof todos.$inferSelect | null {
   const existing = db.select().from(todos).where(eq(todos.id, id)).get();
   if (!existing) return null;
 

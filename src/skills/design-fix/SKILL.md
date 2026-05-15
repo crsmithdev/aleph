@@ -5,7 +5,7 @@ description: >
   composition, state coverage, token usage, or microcopy pattern from one reference
   file to peer files. Takes SARIF findings (with `tag: peer-drift` from design-audit)
   as input or runs an inline audit pass first. Verifies with `gate("design")`
-  (resolves to `bun run ui:smoke`). Triggers on "make the pages match",
+  (resolves via gate("design")). Triggers on "make the pages match",
   "align the layouts", "same loading state", "match the table headers",
   "make the components consistent", "apply this design pattern", or `/design-fix`.
 verb: fix
@@ -121,11 +121,11 @@ Output the planned edits as a unified diff or per-file edit list. For omnibus-di
 
 ### 8. Verify
 
-Run `gate("design")` from `VERIFICATION.md`. For Construct that resolves to `bun run ui:smoke` (loads every route in a real browser; asserts no render errors or 5xx). The skill MUST NOT claim done until the gate is green and the affected routes have been eyeballed.
+Run `gate("design")` from `VERIFICATION.md`. The skill MUST NOT claim done until the gate is green and the affected routes have been eyeballed.
 
 `bun run build` alone is not sufficient — per `feedback_ui_done_requires_page_load`, build pass ≠ feature works. For any rendering bug, drive a real browser and measure the element.
 
-For changes that touch shared types or API contracts, also run `gate("code")` (resolves to `bun test.ts`).
+For changes that touch shared types or API contracts, also run `gate("code")`.
 
 If `gate("design")` fails:
 
@@ -192,7 +192,7 @@ Drift: Major <n> / Minor <n> / Aligned <n>
 
 [verify]
 scope:      <files edited>
-method:     bun run ui:smoke (gate("design"))
+method:     gate("design")
 assertions: every route renders, no 5xx, no console errors; eyeballed <list>
 [/verify]
 
@@ -205,7 +205,7 @@ assertions: every route renders, no 5xx, no console errors; eyeballed <list>
 
 ## Guardrails
 
-- **Verification is non-negotiable.** Never claim done without a green `gate("design")` result in the turn's tool output. `bun run build` alone is insufficient.
+- **Verification is non-negotiable.** Never claim done without a green `gate("design")` result in the turn's tool output. `bun run build` alone is insufficient — it does not catch runtime render errors.
 - **Approved findings only.** No fix without an approved finding (inline audit + user approval, or omnibus-passed approved SARIF).
 - **Never propose fixes without showing the peer list first.** The user must be able to trim false positives before any edits.
 - **Surface intentional divergence.** If a peer has `// conform:exempt` or an obvious comment indicating intentional difference, skip it and note in the report.

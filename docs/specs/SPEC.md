@@ -34,7 +34,7 @@ Last session (<filename>):
 
 ### During a session
 
-**Depth classification** — on every prompt (>=3 words), `routing-submit-classify.ts` classifies depth:
+**Depth classification** — on every prompt (>=3 words), `routing-classify-submit.ts` classifies depth:
 - FULL if prompt matches architectural keywords (`architect|redesign|refactor|migrate|schema|structure|plan|propose|authenticat*|authorizat*|integrat*|api endpoint|rename all|move all|replace all|across all|every file|all files|end to end|full stack`) or is >=40 words.
 - QUICK otherwise (silent).
 - Output when FULL (architectural keywords): `[Construct] Depth: FULL — architectural keywords. Use design-first pipeline.`
@@ -42,9 +42,9 @@ Last session (<filename>):
 
 **Verification gate injection** — same hook injects e2e requirements for non-question prompts >=5 words: `[Construct] Verification gate active — after making changes, you MUST verify end-to-end: 1. Run the actual system 2. Interact with it (Playwright, Chrome DevTools, or run the CLI) 3. Produce an artifact: screenshot or captured output saved to a file`. Unit tests alone are not sufficient. The Stop hook checks for e2e evidence.
 
-**Skill matching** — same hook checks prompt against `skill-rules.json` keywords. On match: `[Construct] Matched skills: <names>. Activate via Skill() before proceeding.` No match = silent. Project-local skill extensions (`.claude/skills/<skill>.md`) are appended to the base skill when matched.
+**Skill matching** — `routing-classify-submit.ts` also checks prompt against `skill-rules.json` keywords. On match: `[Construct] Matched skills: <names>. Activate via Skill() before proceeding.` No match = silent. Project-local skill extensions (`.claude/skills/<skill>.md`) are appended to the base skill when matched.
 
-**Rating capture** — on every prompt, `rating-capture.ts` checks for explicit ratings:
+**Rating capture** — on every prompt, `rating-capture-submit.ts` checks for explicit ratings:
 1. Standalone integer 1-10 as the entire prompt
 2. N/10 pattern anywhere (e.g. `8/10`)
 3. Words "rate"/"rating" plus a 1-10 digit
@@ -55,42 +55,42 @@ Matched ratings are appended to `data/signals/ratings.jsonl`:
 ```
 Ratings 1-3 trigger a console message: `[Construct] Low rating (N) — store what went wrong via memory_store`. Ratings 4-10 are silent.
 
-**Quality hook** — after every `Edit` or `Write` tool use, `quality-post-format.ts` auto-formats the saved file:
+**Quality hook** — after every `Edit` or `Write` tool use, `quality-format-edit.ts` auto-formats the saved file:
 - If `.claude/quality.json` exists in the project, runs its `format` and `lint` commands with `$FILE` substituted.
 - Otherwise, extension-based defaults: `.py` -> ruff, `.ts/.tsx/.js/.jsx` -> prettier, `.go` -> gofmt, `.rs` -> rustfmt.
 - Skips silently if the formatter binary isn't installed.
 - Failures are logged to trace and printed to stderr.
 
-**TypeScript gate** — after every `Edit` or `Write` on `.ts/.tsx` files, `quality-post-typecheck.ts` finds the nearest `tsconfig.json` and runs `tsc --noEmit`. If errors are found, prints a summary of up to 5 errors.
+**TypeScript gate** — after every `Edit` or `Write` on `.ts/.tsx` files, `quality-typecheck-edit.ts` finds the nearest `tsconfig.json` and runs `tsc --noEmit`. If errors are found, prints a summary of up to 5 errors.
 
-**SQL guard** — before any MCP SQL tool call (`execute_sql`, `apply_migration`, `run_query`), `isolation-pre-block-destructive-sql.ts` blocks destructive operations: `DROP TABLE/DATABASE/SCHEMA`, `TRUNCATE`, `DELETE FROM` without WHERE, `ALTER TABLE DROP COLUMN`.
+**SQL guard** — before any MCP SQL tool call (`execute_sql`, `apply_migration`, `run_query`), `isolation-block-sql.ts` blocks destructive operations: `DROP TABLE/DATABASE/SCHEMA`, `TRUNCATE`, `DELETE FROM` without WHERE, `ALTER TABLE DROP COLUMN`.
 
-**Context compaction advisory** — before every `Edit` or `Write` tool use, `context-compact-suggest.ts` checks token usage. When context is approaching limits, emits an advisory suggesting compaction. Advisory only — does not block the tool call.
+**Context compaction advisory** — before every `Edit` or `Write` tool use, `context-suggest-edit.ts` checks token usage. When context is approaching limits, emits an advisory suggesting compaction. Advisory only — does not block the tool call.
 
-**Security scan** — before every `Bash` tool use, `security-scan-pre-commit.ts` scans the command for security issues (credential exposure, dangerous patterns, etc.). Advisory only — emits a warning but does not block execution.
+**Security scan** — before every `Bash` tool use, `security-scan-bash.ts` scans the command for security issues (credential exposure, dangerous patterns, etc.). Advisory only — emits a warning but does not block execution.
 
 ### Ending a session
 
 On `Stop`, four hooks fire:
 
-**1. E2e advisory** (`quality-stop-check-e2e.ts`) — checks whether the current turn included e2e evidence and an artifact when files were edited:
+**1. E2e advisory** (`quality-check-stop.ts`) — checks whether the current turn included e2e evidence and an artifact when files were edited:
 - If no edits: skips silently.
 - If edits present: checks for e2e signals (CLI execution, Playwright/Cypress, browser MCP tools) and artifacts (screenshots, saved output).
 - If missing: emits an advisory reminder listing edited files and what was missing.
 
-**2. Context monitor** (`context-stop-monitor.ts`) — reads token usage from the last assistant message. Warns at 80% of context limit, critical alert at 90%.
+**2. Context monitor** (`context-monitor-stop.ts`) — reads token usage from the last assistant message. Warns at 80% of context limit, critical alert at 90%.
 
-**3. Session summary** (`session-summary.ts`) — writes a summary file if the session had >=4 messages:
+**3. Session summary** (`context-save-stop.ts`) — writes a summary file if the session had >=4 messages:
 - Output: `data/sessions/YYYY-MM-DD-HHMMSS.md`
 - Contains: intent, outcome, milestones, tools used, files edited, message counts, assistant notes.
 
-**4. Memory extraction** (`memory-extract.ts`) — auto-extracts high-value memories and stores them in semantic memory:
+**4. Memory extraction** (`memory-extract-stop.ts`) — auto-extracts high-value memories and stores them in semantic memory:
 - Skips if session is not substantive (<6 messages or no edits).
 - Skips if Claude already called `memory_store` voluntarily.
 - Extracts: session summary, user corrections, error resolutions.
 - All auto-extracted memories tagged with `auto_extract`.
 
-**Pre-compaction backup** (`context-precompact-backup.ts`) — on `PreCompact`, copies the current transcript JSONL to `~/.claude/transcript-backups/` before Claude compacts the conversation.
+**Pre-compaction backup** (`context-backup-precompact.ts`) — on `PreCompact`, copies the current transcript JSONL to `~/.claude/transcript-backups/` before Claude compacts the conversation.
 
 ## Statusline
 
@@ -104,6 +104,8 @@ Uses `ccstatusline` binary. Shows model display name, git branch, cwd, context w
 
 ## Notifications
 
+_(Not yet implemented — no Notification hook is registered in `settings-hooks.json`.)_
+
 On `Notification` events (`idle`, `permission`, `complete`):
 - **WSL**: Windows Toast via PowerShell WinRT APIs.
 - **macOS**: `osascript display notification`.
@@ -113,21 +115,45 @@ On `Notification` events (`idle`, `permission`, `complete`):
 
 Skills are domain-specific playbooks activated by keyword matching. Each lives in `src/skills/<name>/SKILL.md` (source) and is installed to `construct/skills/<name>/SKILL.md`.
 
-| Skill | Activated by | Purpose |
-|---|---|---|
-| research | research, investigate, compare, survey | Structured research with parallel search and source evaluation |
-| verification | verify that, confirm passing, prove it works | Iron-law gate: no completion claim without running evidence |
-| debugging | debug, bug, broken, failing, error, crash | Four-phase root-cause-first methodology |
-| build | build, implement, add feature, refactor, overhaul | Unified implementation lifecycle: design, plan, TDD execute, review, finish |
-| code-review | dead code, unused, clean up, code review | Scan for 9 categories of issues, verify before removing |
-| docs-review | doc sync, docs drift, documentation mismatch | Verify every factual claim in docs against truth sources |
-| hooks-review | hook review, hook audit | Review hook scripts for correctness, safety, and settings.json alignment |
-| commands-review | command review, command audit | Review slash command definitions for clarity and registration |
-| skills-review | skill review, skill audit | Review SKILL.md files for quality and skill-rules.json alignment |
-| config-review | config review, settings review | Review settings.json and CLAUDE.md for consistency |
-| ralph-loop | ralph, autonomous loop, keep iterating | Iterative autonomous development via subagents |
-| finishing-branch | finish branch, merge branch, create pr | Verify tests, present merge/PR/keep/discard options |
-| git-worktrees | worktree, create worktree, isolated branch | Set up isolated worktree with dependency install and baseline tests |
+| Skill | Purpose |
+|---|---|
+| `agent-browser` | Browser automation CLI for AI agents |
+| `agents-audit` | Audit subagent definitions against rules |
+| `agents-fix` | Apply fixes for agents-audit findings |
+| `code-audit` | Audit TypeScript/JavaScript code under src/ |
+| `code-conform` | Apply a code pattern from one file across peers |
+| `code-debug` | Systematic four-phase root-cause debugging |
+| `code-fix` | Apply fixes for code-audit findings |
+| `code-refactor` | Refactor code for better organization and maintainability |
+| `code-review` | Review code for issues then refactor |
+| `code-simplify` | Remove AI-generated slop and over-engineering |
+| `config-audit` | Full health check for Claude Code agent configuration |
+| `context-compact` | Guide context compaction at logical task phase boundaries |
+| `design-audit` | Systematic UI/UX design audit (18 dimensions) |
+| `design-construct` | Construct design system — tokens, surfaces, type scale, iconography |
+| `design-fix` | Apply fixes for peer-drift findings in UI surfaces |
+| `docs-audit` | Post-hoc review of existing documentation |
+| `docs-author` | Create, update, or enhance documentation |
+| `docs-author-v2` | Create/update documentation (ENFORCEMENT MODE pilot) |
+| `docs-conform` | Reference-based propagation across peer docs |
+| `docs-fix` | Apply fixes for docs-audit findings |
+| `docs-optimize` | Optimize docs for AI coding assistants and LLMs |
+| `dogfood` | Qualitative single-run dogfood review of a tool or skill |
+| `eval-harness` | Define and run evals to measure AI development reliability |
+| `git-workflow` | Full git workflow — branch, implement, land via merge or PR |
+| `grill-me` | Relentless interview about a plan or design |
+| `hooks-audit` | Audit Claude Code hooks against rules |
+| `hooks-fix` | Apply fixes for hooks-audit findings |
+| `omnibus` | Run a verb across domains in parallel, merge findings |
+| `ralph-loop` | Iterative autonomous work toward a well-defined goal |
+| `search` | Quick web research — search, synthesize, report with sources |
+| `security-audit` | Audit TypeScript/JavaScript code for vulnerabilities |
+| `security-fix` | Apply remediations for security-audit findings |
+| `skill-creator` | Create new skills, modify and improve existing skills |
+| `skills-audit` | Audit SKILL.md files against rules |
+| `skills-fix` | Apply fixes for skills-audit findings |
+| `test-webapp` | Playwright toolkit for testing local web applications |
+| `verify-completion` | Evidence-based completion gate before claiming success |
 
 ## Slash Commands
 
@@ -135,18 +161,29 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 
 | Command | Behavior |
 |---------|----------|
-| `/gist` | Surface Claude's current mental model + project understanding |
-| `/goal` | Manage goals: list, create, update, delete, show, done, archive |
-| `/todo` | Manage todos: list, add, recurring, delete |
-| `/finish` | Mark a todo or goal as done (done/undone operations) |
-
-### Project-level (`.claude/commands/` — Construct repo only)
-
-| Command | Behavior |
-|---------|----------|
-| `/install` | Runs `bun install.ts`, then auto-runs post-install verification |
-| `/audit` | Full project audit: code, refs, instructions, docs, spec |
-| `/link` | Symlink `~/.claude/construct` to repo `src/` for live development |
+| `/audit` | Run audit leaves via the omnibus orchestrator |
+| `/code-conform` | Apply a code pattern from one file across peers |
+| `/code-review` | Review code for issues then refactor |
+| `/design-conform` | Apply a UI pattern from one file across peers |
+| `/design-fix` | Apply a UI pattern from one file across peers |
+| `/design-standards` | Audit UI code against web interface best practices |
+| `/design-type` | Professional typography rules for UI design |
+| `/feature` | Start and complete feature work in isolated worktrees |
+| `/finish` | Mark a todo or goal as done |
+| `/fix` | Run fix leaves via the omnibus orchestrator |
+| `/gist` | Surface your current understanding of the project |
+| `/goal` | Manage goals (empty command stub) |
+| `/handoff` | Save a session handoff so a fresh context can pick up |
+| `/install` | Deploy Construct to `~/.claude` |
+| `/pickup` | Resume from the most recent /handoff in a fresh context |
+| `/research` | Deep autonomous research — long-running investigations |
+| `/search` | Quick web research — search, synthesize, report with sources |
+| `/ship` | Merge all outstanding feature branches and push to GitHub |
+| `/sketch` | Build a design sketch for an idea |
+| `/ss` | Read the user's latest screenshot |
+| `/sub` | Dispatch a subagent to handle a request |
+| `/suggest` | Run suggest leaves via the omnibus orchestrator |
+| `/todo` | Manage todos: list, add, recurring |
 
 ## UI — Life Pages
 
@@ -176,7 +213,7 @@ All observability pages share a control bar with time range selector (Session/1h
 
 For the data behind these pages, see [TELEMETRY.md](TELEMETRY.md).
 
-### Overview (`/observability/overview`)
+### Overview (`/observability`)
 
 Dashboard with stat cards: Sessions, Messages, Tool Calls, Tool Success %, Total Cost, API Latency (avg + p95), Compactions, Lines Changed, Commits. Area/bar chart of messages and sessions over time.
 
@@ -334,19 +371,19 @@ All hooks registered in `settings-hooks.json` (source: `src/core/hooks/settings-
 
 | Event | Hooks (in order) | Timeouts |
 |-------|-----------------|----------|
-| SessionStart | `src/memory/hooks/session-start.ts` | 5000ms |
-| UserPromptSubmit | `src/memory/hooks/rating-capture.ts`, `src/core/hooks/routing-submit-classify.ts` | 2000ms, 3000ms |
-| Stop | `src/core/hooks/quality-stop-check-e2e.ts`, `src/core/hooks/context-stop-monitor.ts`, `src/memory/hooks/session-summary.ts`, `src/memory/hooks/memory-extract.ts` | 3000ms, 3000ms, 3000ms, 5000ms |
-| PreToolUse | `src/core/hooks/isolation-pre-block-destructive-sql.ts` (matcher: `mcp__.*(?:execute_sql\|apply_migration\|run_query)`), `src/core/hooks/git-pre-require-commit.ts` (matcher: `Edit\|Write`), `src/core/hooks/context-compact-suggest.ts` (matcher: `Edit\|Write`), `src/core/hooks/security-scan-pre-commit.ts` (matcher: `Bash`) | 3000ms, 5000ms, 3000ms, 5000ms |
-| PostToolUse | `src/core/hooks/quality-post-format.ts` (matcher: `Edit\|Write`), `src/core/hooks/quality-post-typecheck.ts` (matcher: `Edit\|Write`) | 10000ms, 15000ms |
-| PreCompact | `src/core/hooks/context-precompact-backup.ts` | 5000ms |
+| SessionStart | `src/memory/hooks/context-restore-start.ts` | 5000ms |
+| UserPromptSubmit | `src/memory/hooks/rating-capture-submit.ts`, `src/memory/hooks/feedback-capture-submit.ts`, `src/core/hooks/routing-classify-submit.ts` | 2000ms, 2000ms, 3000ms |
+| Stop | `src/core/hooks/quality-check-stop.ts`, `src/core/hooks/git-hygiene-stop.ts`, `src/core/hooks/context-monitor-stop.ts`, `src/memory/hooks/context-save-stop.ts`, `src/memory/hooks/memory-extract-stop.ts`, `src/memory/hooks/memory-consolidate-stop.ts` | 3000ms, 5000ms, 3000ms, 3000ms, 5000ms, 3000ms |
+| PreToolUse | `src/core/hooks/isolation-block-sql.ts` (matcher: `mcp__.*(?:execute_sql\|apply_migration\|run_query)`), `src/core/hooks/git-require-edit.ts` (matcher: `Edit\|Write`), `src/core/hooks/context-suggest-edit.ts` (matcher: `Edit\|Write`), `src/core/hooks/security-scan-bash.ts` (matcher: `Bash`) | 3000ms, 5000ms, 3000ms, 5000ms |
+| PostToolUse | `src/core/hooks/quality-format-edit.ts` (matcher: `Edit\|Write`), `src/core/hooks/quality-typecheck-edit.ts` (matcher: `Edit\|Write`), `src/memory/hooks/signal-capture-posttooluse.ts` (matcher: `Edit\|Write`) | 10000ms, 15000ms, 1000ms |
+| PreCompact | `src/core/hooks/context-backup-precompact.ts` | 5000ms |
 
 ## Module Detection
 
 | Module | Detection file |
 |------|---------------|
 | construct-core | `~/.claude/CLAUDE.md` |
-| construct-memory | `construct/memory/hooks/session-start.ts` |
+| construct-memory | `construct/memory/hooks/context-restore-start.ts` |
 | construct-skills | `construct/skills/skill-rules.json` |
 | construct-data | `construct/data/src/client.ts` |
 | construct-eval | `construct/eval/runner.ts` |
@@ -364,8 +401,8 @@ Architectural keywords in the prompt (`architect`, `redesign`, `refactor`, `migr
 **Q: How do I prevent the SQL guard from blocking a query?**
 The guard only blocks: `DROP TABLE/DATABASE/SCHEMA`, `TRUNCATE`, `DELETE FROM` without a WHERE clause, and `ALTER TABLE DROP COLUMN`. Add a WHERE clause to DELETE queries. Qualified deletes (e.g. `DELETE FROM t WHERE id = ?`) are allowed.
 
-**Q: What's the difference between session-summary and memory-extract?**
-`session-summary.ts` writes a structured `.md` file to `~/.construct/sessions/` for any session with ≥4 messages — always fires, no conditions on content. `memory-extract.ts` only runs for substantive sessions (≥6 messages and at least one file edit) and skips entirely if Claude already called `memory_store` voluntarily. Session summaries are human-readable digests; extracted memories are semantic store entries intended for future retrieval.
+**Q: What's the difference between context-save-stop and memory-extract-stop?**
+`context-save-stop.ts` writes a structured `.md` file to `~/.construct/sessions/` for any session with ≥4 messages — always fires, no conditions on content. `memory-extract-stop.ts` only runs for substantive sessions (≥6 messages and at least one file edit) and skips entirely if Claude already called `memory_store` voluntarily. Session summaries are human-readable digests; extracted memories are semantic store entries intended for future retrieval.
 
 **Q: How do I preserve a custom file across upgrades?**
 Name it with ALL CAPS (e.g. `PROJECTS.md`) and place it in `~/.claude/construct/core/identity/` or `~/.claude/construct/memory/`. The installer detects all ALL CAPS `.md` files in those two directories and restores them after syncing. Files with any lowercase letters in the name are overwritten.

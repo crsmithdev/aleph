@@ -14,7 +14,7 @@
  */
 import { existsSync } from "fs";
 import { dirname, extname } from "path";
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 
@@ -40,11 +40,13 @@ if (!["ts", "tsx", "js", "jsx"].includes(ext)) {
 
 // Find project root
 let projectRoot = "";
-try {
-  projectRoot = execSync(`git -C "${dirname(filePath)}" rev-parse --show-toplevel`, { encoding: "utf8" }).trim();
-} catch {
-  trace(TAG, "no git root");
-  process.exit(0);
+{
+  const result = spawnSync('git', ['-C', dirname(filePath), 'rev-parse', '--show-toplevel'], { encoding: 'utf8' });
+  if (result.status !== 0) {
+    trace(TAG, "no git root");
+    process.exit(0);
+  }
+  projectRoot = result.stdout.trim();
 }
 
 // Find the nearest tsconfig
@@ -70,8 +72,10 @@ if (!tsconfig) {
 }
 
 // Check if tsc is available
-try { execSync("which tsc", { stdio: "ignore" }); }
-catch { trace(TAG, "tsc not on PATH"); process.exit(0); }
+{
+  const which = spawnSync('which', ['tsc'], { stdio: 'ignore' });
+  if (which.status !== 0) { trace(TAG, "tsc not on PATH"); process.exit(0); }
+}
 
 // Run tsc --noEmit
 trace(TAG, `checking: tsc -p ${tsconfig}`);
@@ -91,7 +95,8 @@ try {
     const suffix = errorCount > 5 ? `\n... and ${errorCount - 5} more errors` : "";
     console.error(`⚠ TypeScript: ${errorCount} error${errorCount === 1 ? "" : "s"} found after editing ${filePath}\n${preview}${suffix}`);
     trace(TAG, `${errorCount} type errors`);
-    process.exit(2);
+    process.exit(1);
   }
   trace(TAG, "tsc exited non-zero but no TS errors found");
 }
+process.exit(0);

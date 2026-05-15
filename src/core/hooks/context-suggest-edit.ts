@@ -29,7 +29,10 @@ const stateFile = `/tmp/construct-compact-${sessionId}`;
 let count = 0;
 try { count = parseInt(readFileSync(stateFile, "utf8"), 10) || 0; } catch {}
 count++;
-try { writeFileSync(stateFile, String(count)); } catch {}
+try { writeFileSync(stateFile, String(count)); } catch (e) {
+  trace(TAG, `state write failed: ${(e as Error).message}`);
+  console.error(`[${TAG}] state write failed: ${(e as Error).message}`);
+}
 
 trace(TAG, `tool calls this session: ${count}`);
 

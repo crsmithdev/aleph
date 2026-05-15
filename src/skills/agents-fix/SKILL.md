@@ -97,8 +97,8 @@ Run `gate("agents")` from `VERIFICATION.md`. Per `omnibus.yml`, this is currentl
 - **Frontmatter parses** — YAML is valid in every edited file.
 - **Re-run `agents-audit --module <touched-files>`** — confirm finding closed without new findings.
 - **Cross-reference scan** — for renamed agents, grep `src/` for old name; flag stragglers.
-- **`bun test.ts`** — catches regressions from agent renames affecting cross-references.
-- **agnix --dry-run** (if installed) — AGM-* / XP-* rules still pass.
+- **`gate("code")`** — catches regressions from agent renames affecting cross-references.
+- **`gate("agents")`** — AGM-* / XP-* structural lint still passes.
 
 If any check fails, revert the offending edit and surface a new finding.
 
@@ -119,7 +119,7 @@ One paragraph: which findings were resolved, which agent files were touched, whi
 
 [verify]
 scope:      <files edited>
-method:     gate("agents") (frontmatter parse + agents-audit re-run + cross-ref scan + bun test.ts + agnix)
+method:     gate("agents") (frontmatter parse + agents-audit re-run + cross-ref scan + gate("code"))
 assertions: zero remaining agents-audit findings in scope; frontmatter valid; no stale cross-references after renames; full test suite passes; agnix structural lint green
 [/verify]
 
@@ -132,7 +132,7 @@ assertions: zero remaining agents-audit findings in scope; frontmatter valid; no
 
 ## Guardrails
 
-- **Verification is non-negotiable.** All checks (frontmatter + audit re-run + cross-refs + tests + agnix) must show in the turn's tool output.
+- **Verification is non-negotiable.** All checks (frontmatter + audit re-run + cross-refs + gate("code") + gate("agents")) must show in the turn's tool output.
 - **Approved findings only.**
 - **Per-finding approval for over-privileged removal and Task-tool removal.**
 - **Renames need cross-reference sweep.** A renamed agent might be invoked by other skills / hooks / docs.

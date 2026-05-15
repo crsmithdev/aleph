@@ -33,7 +33,7 @@ const STOPWORDS = new Set([
 
 export function ruleFingerprint(text: string): string {
   const norm = text.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
-  return createHash("sha1").update(norm).digest("hex").slice(0, 10);
+  return createHash("sha256").update(norm).digest("hex").slice(0, 10);
 }
 
 export function tokenize(text: string): Set<string> {

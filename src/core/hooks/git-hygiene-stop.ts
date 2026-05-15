@@ -28,7 +28,10 @@ const TAG = "git-hygiene-stop";
 
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
-catch { process.exit(0); }
+catch (e) {
+  trace(TAG, `stdin-parse-error: ${String(e)}`);
+  process.exit(1);
+}
 
 // Guards: never block re-fires or non-natural stops
 if (input.stop_hook_active) { trace(TAG, "skip: stop_hook_active"); process.exit(0); }

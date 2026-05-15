@@ -51,7 +51,7 @@ Parse the SARIF. Group by `properties.tag` (one tag → one fix shape). If `secu
 | Tag | Fix shape | What it does |
 |---|---|---|
 | `injection` (SQL) | Parameterize | Rewrite raw template-literal SQL to use placeholders + bound parameters (driver-specific) |
-| `injection` (shell) | Argv split | Rewrite `exec(\`cmd ${arg}\`)` to `spawn('cmd', [arg])` |
+| `injection` (shell) | Argv split | Rewrite `exec(/`cmd ${arg}/`)` to `spawn('cmd', [arg])` |
 | `injection` (XXE) | Parser hardening | Add `noent: false` / `resolveExternals: false` option to the parser call |
 | `injection` (NoSQL) | Key allowlist | Add `$`-key filter or use the driver's safe-query API |
 | `auth` (client-side) | Server-side check | Move the authorization check to the route handler; derive caller identity from session |
@@ -109,7 +109,7 @@ After each finding is fully applied, re-check the file against the relevant `sec
 
 ### 6. Verify
 
-Run `gate("security")` first, then `gate("code")` from `VERIFICATION.md`. For Construct, `gate("security")` resolves to running `security-audit --module <touched-files>` to confirm zero remaining findings in scope; `gate("code")` resolves to `bun test.ts`.
+Run `gate("security")` first, then `gate("code")` from `VERIFICATION.md`. `gate("security")` runs `security-audit --module <touched-files>` to confirm zero remaining findings in scope.
 
 The skill MUST NOT claim done until **both** gates are green.
 
@@ -125,7 +125,7 @@ If `gate("code")` fails:
 - Revert that fix and surface a new finding, OR adjust the fix (keeping the security property intact) and re-run.
 - Never silence a failing test or weaken the security property to make the gate pass.
 
-For changes that touch `src/ui/**`, also call `gate("design")` (resolves to `bun run ui:smoke`).
+For changes that touch `src/ui/**`, also call `gate("design")`.
 
 ### 7. Summarize
 
@@ -147,7 +147,7 @@ Skipped:  <list with reasons>
 
 [verify]
 scope:      <files edited>
-method:     security-audit --module <files> (gate("security")) && bun test.ts (gate("code"))
+method:     gate("security") (security-audit --module <files>) && gate("code")
 assertions: zero remaining findings in scope; full test suite passes; regression tests added for <list>
 [/verify]
 

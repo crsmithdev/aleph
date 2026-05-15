@@ -116,6 +116,8 @@ interface FeedbackEntry {
   prior_text?: string;
   prior_tools?: string[];
   prior_files?: string[];
+  session_id?: string;
+  timestamp?: string;
 }
 const feedback: FeedbackEntry[] = [];
 try {
@@ -175,8 +177,8 @@ try {
 const fbBySession: Record<string, SimpleFeedback[]> = {};
 for (const f of feedback) {
   // The full feedback row from §3 was typed FeedbackEntry; reuse a flatter shape
-  const sid = (f as any).session_id ?? "unknown";
-  const ts = (f as any).timestamp ?? "";
+  const sid = f.session_id ?? "unknown";
+  const ts = f.timestamp ?? "";
   if (!fbBySession[sid]) fbBySession[sid] = [];
   fbBySession[sid].push({
     polarity: f.polarity,

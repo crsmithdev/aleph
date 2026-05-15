@@ -43,7 +43,9 @@ src/ui/
 | `/webhooks` | `routes/webhooks.ts` |
 | `/observability` | `routes/observability.ts` |
 | `/research` | `routes/research.ts` |
+| `/loops` | `routes/loops.ts` |
 | `/api/docs` | Swagger/OpenAPI UI |
+| `/public` | `routes/public.ts` (no `/api` prefix) |
 
 ---
 
@@ -56,14 +58,26 @@ src/ui/
 | `/todos` | TodosPage |
 | `/habits` | HabitsPage |
 | `/research` | ResearchLandingPage |
-| `/research/history` | ResearchHistoryPage |
-| `/research/queries` | redirect → `/research/history` |
-| `/research/:id` | ResearchQueryDetailPage |
-| `/research/:id/plan` | ResearchPlanPage |
-| `/research/workers` | ResearchWorkersPage |
+| `/research/monitors` | ResearchMonitorsPage |
 | `/research/config` | ResearchConfigPage |
+| `/research/:id` | ResearchLoopDetail |
+| `/research/queries` | redirect → `/research` |
+| `/research/history` | redirect → `/research` |
 | `/observability` | OverviewPage |
 | `/observability/tools`, `/observability/tools/:name` | ToolsPage, ToolDetailPage |
+| `/observability/hooks`, `/observability/hooks/:name` | HooksPage, HookDetailPage |
+| `/observability/skills`, `/observability/skills/:name` | SkillsPage, SkillDetailPage |
+| `/observability/tokens` | TokensCostPage |
+| `/observability/subagents` | SubagentsPage |
+| `/observability/sessions`, `/observability/sessions/:id` | SessionsPage, SessionTracePage |
+| `/observability/sessions/:id/turns/:turnIndex` | TurnTracePage |
+| `/observability/evals` | EvalsPage |
+| `/observability/compaction` | CompactionPage |
+| `/observability/events` | EventsPage |
+| `/observability/memory` | MemoryPage |
+| `/observability/signals` | SignalsPage |
+| `/observability/db` | DbStatsPage |
+| `/settings` | SettingsPage |
 
 ---
 

@@ -66,3 +66,4 @@ If `ui:smoke` fails after the conform pass:
 4. If the failure is in the *reference* (because the conform pass surfaced a pre-existing bug), fix it and note as "incidental fix" in the summary — but do not roll the conform pass into the same commit as a bug fix; split the commits.
 
 Never silence a UI smoke failure by skipping the assertion or pinning the test to a specific render.
+</state>

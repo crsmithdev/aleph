@@ -8,7 +8,7 @@ description: >
   secrets from logged payloads, add typed shapes to writer-reader pairs, fix
   registration (event/matcher uniqueness, cross-registry double-firing),
   catch-block logging. Takes SARIF findings from `hooks-audit` as input.
-  Verifies with `gate("hooks")` (resolves to `bun test src/core/hooks`).
+  Verifies with `gate("hooks")`.
   Triggers on "fix the hooks findings", "remediate hook silent-fails",
   "/hooks-fix", "/fix hooks", or when the omnibus dispatches the fix verb
   to the hooks domain after approval.
@@ -99,13 +99,13 @@ Order:
 
 ### 6. Verify
 
-Run `gate("hooks")` from `VERIFICATION.md`. Per `omnibus.yml`, this resolves to `bun test src/core/hooks` — confirms hook tests still pass.
+Run `gate("hooks")` from `VERIFICATION.md`. This confirms hook tests still pass.
 
 Also inline:
 
 - **JSON parses** — validate `settings-hooks.json` and `.claude/settings.json` after registry edits.
 - **Re-run `hooks-audit --module <touched-files>`** — confirm the finding closed without introducing a new one.
-- **`bun test.ts`** — full test suite, catches cross-cutting regressions.
+- **`gate("code")`** — full test suite, catches cross-cutting regressions.
 
 If a fix introduces a new finding, revert and surface the regression as a new finding.
 
@@ -126,7 +126,7 @@ One paragraph: which findings were resolved, which hook files were touched, what
 
 [verify]
 scope:      <files edited>
-method:     gate("hooks") (bun test src/core/hooks) + hooks-audit re-run on touched files + bun test.ts + JSON.parse on registries
+method:     gate("hooks") + hooks-audit re-run on touched files + gate("code") + JSON.parse on registries
 assertions: zero remaining hooks-audit findings in scope; hook tests pass; full test suite passes; both registries valid JSON
 [/verify]
 
@@ -139,7 +139,7 @@ assertions: zero remaining hooks-audit findings in scope; hook tests pass; full 
 
 ## Guardrails
 
-- **Verification is non-negotiable.** Four checks (hook tests + audit-re-run + full tests + JSON valid) must show in the turn's tool output.
+- **Verification is non-negotiable.** Four checks (gate("hooks") + audit-re-run + gate("code") + JSON valid) must show in the turn's tool output.
 - **Approved findings only.**
 - **PII redaction is conservative — drop, don't partially-mask.**
 - **Dead-output deletions need explicit per-finding approval.** The absence of a consumer may be an in-flight feature.

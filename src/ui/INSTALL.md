@@ -10,7 +10,7 @@ All paths relative to `~/.claude/construct/ui/`. Run every check. Do not skip or
 
 ## Data
 
-- Database at `~/.claude/construct/data/construct.db` may or may not exist (created on first run)
+- Database at `~/.construct/construct.db` may or may not exist (created on first run)
 
 ## Build
 

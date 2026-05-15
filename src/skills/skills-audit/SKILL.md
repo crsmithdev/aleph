@@ -78,7 +78,7 @@ For each in-scope SKILL.md, evaluate sections A through G in `src/rules/skills/R
 - **C.2 (duplicate keywords):** parse all `keywords` arrays; flag literal keywords appearing in 2+ entries.
 - **D.1 (slim SKILL.md):** flag files longer than 250 lines (detail should move to `references/`).
 - **D.2 (examples):** skills with slash-commands or non-trivial invocations should have at least one `examples/<case>.md`.
-- **E.1 (R1 — no Skill() from leaves):** grep `Skill(` in every SKILL.md outside `omnibus/SKILL.md`; allow only prose negations (`"no \`Skill()\` calls"`); flag actual invocations.
+- **E.1 (R1 — no Skill() from leaves):** grep `Skill(` in every SKILL.md outside `omnibus/SKILL.md`; allow only prose negations (`"no /`Skill()/` calls"`); flag actual invocations.
 - **E.2 (R2 — no inline skill chaining):** flag prose like "invoke `<sibling-skill>` to do X" outside omnibus-dispatch context.
 - **F.1 (R4 — no hardcoded gates):** in fix-flavor SKILL.md files, flag literal `bun test.ts` / `bun run ui:smoke` / `agnix --dry-run` outside Cross-references / example blocks.
 - **G.1 (trigger drift):** parse description, extract quoted trigger phrases, confirm each appears in the corresponding `skill-rules.json` entry's keyword list (literal or regex).

@@ -95,7 +95,7 @@ Run `gate("docs")` from `VERIFICATION.md`. For Construct today this is not yet i
 - **Markdown parses** — every changed doc renders without warnings via the docs pipeline.
 - **Cross-references resolve** — for each `[text](path)` and `@path` reference in the changed docs, confirm the target exists.
 - **Frontmatter parses** — YAML frontmatter (where present) is valid.
-- **`bun test.ts` green** — confirms no test that references a changed doc broke (e.g., skill-rules-driven tests).
+- **`gate("code")` green** — confirms no test that references a changed doc broke (e.g., skill-rules-driven tests).
 
 If any check fails:
 
@@ -149,7 +149,7 @@ For `tag: drift` findings (doc claim contradicts code):
 
 [verify]
 scope:      <files edited>
-method:     gate("docs") (markdown parse + cross-ref resolution + frontmatter parse + bun test.ts)
+method:     gate("docs") (markdown parse + cross-ref resolution + frontmatter parse + gate("code"))
 assertions: every changed doc parses; every cross-reference resolves; full test suite passes
 [/verify]
 
@@ -162,7 +162,7 @@ assertions: every changed doc parses; every cross-reference resolves; full test 
 
 ## Guardrails
 
-- **Verification is non-negotiable.** Never claim done without the four inline checks (parse + xref + frontmatter + bun test.ts) green in the turn's tool output.
+- **Verification is non-negotiable.** Never claim done without the four inline checks (parse + xref + frontmatter + gate("code")) green in the turn's tool output.
 - **Approved findings only.** No fix without an approved finding.
 - **Preserve domain content.** Propagation copies structure; never the body.
 - **No scope creep.** Adjacent issues are new findings, not new edits.

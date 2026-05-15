@@ -104,6 +104,13 @@ export async function createApp(opts?: { dbUrl?: string; skipStatic?: boolean })
     startResearchLogger();
   }
 
+  app.addHook('onSend', (_req, reply, _payload, done) => {
+    reply.header('Content-Security-Policy', "default-src 'self'");
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    done();
+  });
+
   await app.register(cors, {
     origin: (origin, cb) => {
       if (!origin || origin === 'http://localhost' || origin.startsWith('http://localhost:') ||

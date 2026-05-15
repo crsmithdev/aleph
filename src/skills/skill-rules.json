@@ -143,6 +143,10 @@
     {
       "skill": "agents-fix",
       "keywords": ["agents-fix", "fix the agents findings", "remediate agent drift", "fix agent dispatch ambiguity", "/agents-fix", "/fix agents", "apply agent fixes", "/(fix|remediate).{0,10}(agent|subagent)/"]
+    },
+    {
+      "skill": "grill-me",
+      "keywords": ["grill me", "grill this", "stress-test this", "stress test this", "stress test my plan", "stress-test my plan", "challenge my design", "interview me about", "poke holes in my plan", "challenge my thinking", "/grill-me", "/grill me"]
     }
   ]
 }

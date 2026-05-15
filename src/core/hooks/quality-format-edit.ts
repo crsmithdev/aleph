@@ -16,7 +16,7 @@
  */
 import { existsSync, readFileSync } from "fs";
 import { dirname, extname } from "path";
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 
@@ -55,7 +55,9 @@ function has(bin: string): boolean {
 // Check for project-level quality config
 let projectRoot = "";
 try {
-  projectRoot = execSync(`git -C "${dirname(filePath)}" rev-parse --show-toplevel`, { encoding: "utf8" }).trim();
+  const result = spawnSync('git', ['-C', dirname(filePath), 'rev-parse', '--show-toplevel'], { encoding: 'utf8' });
+  if (result.status === 0) projectRoot = result.stdout.trim();
+  else trace(TAG, `no git root: ${result.stderr?.trim().slice(0, 60)}`);
 } catch (e) {
   trace(TAG, `no git root: ${(e as Error).message?.slice(0, 60)}`);
 }

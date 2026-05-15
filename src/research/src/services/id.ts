@@ -1,4 +1,5 @@
 // Word-based ID generator for human-readable identifiers
+import { randomBytes } from 'node:crypto';
 const ADJECTIVES = [
   'amber', 'azure', 'bright', 'brisk', 'calm', 'cedar', 'clean', 'clear',
   'crisp', 'dawn', 'deep', 'drift', 'dusk', 'elder', 'even', 'faint',
@@ -32,13 +33,14 @@ const NOUNS = [
 ];
 
 function pick(arr: string[]): string {
-  return arr[Math.floor(Math.random() * arr.length)];
+  const idx = randomBytes(4).readUInt32BE(0) % arr.length;
+  return arr[idx];
 }
 
 /** Generate a human-readable id with enough entropy to survive bursty
  *  parallel writes. ~100^3 word combinations × 16^4 hex tail ≈ 65B unique
  *  ids — birthday-collision-safe well past 100k rows per session. */
 export function generateId(): string {
-  const tail = Math.floor(Math.random() * 0x10000).toString(16).padStart(4, '0');
+  const tail = randomBytes(2).toString('hex');
   return `${pick(ADJECTIVES)}-${pick(NOUNS)}-${pick(NOUNS)}-${tail}`;
 }

@@ -101,7 +101,7 @@ After each file is fully edited, optionally re-check the file against the releva
 
 ### 6. Verify
 
-Run `gate("code")` from `VERIFICATION.md`. For Construct that resolves to `bun test.ts`. The skill MUST NOT claim done until the gate is green.
+Run `gate("code")` from `VERIFICATION.md`. The skill MUST NOT claim done until the gate is green.
 
 If `gate("code")` fails:
 
@@ -109,7 +109,7 @@ If `gate("code")` fails:
 - Either revert that fix and surface a new finding, OR adjust the fix and re-run the gate.
 - Never silence a failing test to make the gate pass.
 
-For changes that touch `src/ui/**` or shared types, also call `gate("design")` (resolves to `bun run ui:smoke`).
+For changes that touch `src/ui/**` or shared types, also call `gate("design")`.
 
 ### 7. Summarize
 
@@ -167,7 +167,7 @@ Plan output (before apply) followed by per-edit confirmation, then the gate resu
 
 [verify]
 scope:      <files edited>
-method:     bun test.ts (gate("code"))
+method:     gate("code")
 assertions: full suite passes; no new failures introduced
 [/verify]
 

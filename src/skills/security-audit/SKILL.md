@@ -70,7 +70,7 @@ Always include `package.json`, lock files, and `.env*` files when present in sco
 For each in-scope file, evaluate every section A through J in `src/rules/security/RULES.md`. Each rule's `Detect:` line specifies the signal (grep, structural check, or dataflow trace). Concrete examples of high-value checks:
 
 - **A.1 (SQL injection):** grep template literals containing `${` inside the first argument of `db.query` / `db.exec` / `prisma.$queryRawUnsafe` / similar.
-- **A.2 (shell injection):** grep `exec(\`` / `execSync(\`` / `spawn(\`` with interpolated arguments.
+- **A.2 (shell injection):** grep `exec(/`` / `execSync(/`` / `spawn(/`` with interpolated arguments.
 - **B.1 (client-side authz):** for each route handler, confirm `req.body.userId` / `req.body.role` are not used directly for authorization — caller identity comes from session / verified token.
 - **B.2 (IDOR):** for each handler that loads a resource by `req.params.<id>`, confirm a follow-up ownership check (`where: { ownerId: session.userId }` or equivalent).
 - **C.1 (hardcoded secrets):** scan literals against secret patterns (`sk-[A-Za-z0-9]{20,}`, `AKIA[0-9A-Z]{16}`, JWT signing strings, private key headers).

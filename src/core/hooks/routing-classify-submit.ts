@@ -22,6 +22,8 @@ import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { dataPaths } from "../../data/src/paths.ts";
 
+interface SkillRule { skill: string; keywords: string[]; }
+
 const TAG = "routing-classify-submit";
 const root = resolve(dirname(Bun.main), "../..");
 const rulesFile = resolve(root, "skills/skill-rules.json");
@@ -32,7 +34,7 @@ catch (e) {
   const msg = `[${TAG}] stdin parse failed: ${(e as Error).message}`;
   console.error(msg);
   trace(TAG, msg);
-  process.exit(0);
+  process.exit(1);
 }
 reportHook(TAG, "UserPromptSubmit", input.session_id);
 const prompt = input.prompt ?? "";
@@ -59,9 +61,9 @@ if (archPattern.test(prompt)) {
 const isQuestion = /^\s*(what|how|why|when|where|who|is |are |can |does |do |should |could |would |which |tell me|explain|describe)\b/i.test(prompt);
 
 // Skill matching
-let rules: any[] = [];
+let rules: SkillRule[] = [];
 try {
-  rules = JSON.parse(readFileSync(rulesFile, "utf8")).rules ?? [];
+  rules = (JSON.parse(readFileSync(rulesFile, "utf8")).rules ?? []) as SkillRule[];
 } catch {
   trace(TAG, "skill-rules.json missing or invalid, skip skill matching");
   process.exit(0);
@@ -93,7 +95,7 @@ function stemPhrase(text: string): string {
 const lp = prompt.toLowerCase();
 const stemmedPrompt = stemPhrase(lp);
 const matched = rules
-  .filter((r: any) => r.keywords?.some((kw: string) => {
+  .filter((r) => r.keywords?.some((kw: string) => {
     // Regex keyword: /pattern/flags
     const rxMatch = kw.match(/^\/(.+)\/([gimsuy]*)$/);
     if (rxMatch) {
@@ -103,7 +105,7 @@ const matched = rules
     // Plain keyword: stemmed substring match
     return stemmedPrompt.includes(stemPhrase(kw.toLowerCase()));
   }))
-  .map((r: any) => r.skill);
+  .map((r) => r.skill);
 
 // Always inject worktree lifecycle skills for non-question code requests
 if (!isQuestion && words.length >= 5) {

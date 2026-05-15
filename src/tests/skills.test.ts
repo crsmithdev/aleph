@@ -27,7 +27,7 @@ check(r, "skill: 'fix the typo' → only lifecycle skills", fixTypoSkills.every(
 
 runAndCheck(te, r, "core/hooks/routing-classify-submit.ts", "smoke", "{}");
 runAndCheck(te, r, "core/hooks/routing-classify-submit.ts", "short skip", '{"prompt":"do it"}');
-runAndCheck(te, r, "core/hooks/routing-classify-submit.ts", "malformed", "not json");
+runAndCheck(te, r, "core/hooks/routing-classify-submit.ts", "malformed", "not json", { expectExit: 1 });
 
 // ── Depth classification ─────────────────────────────────────────────────────
 

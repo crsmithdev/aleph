@@ -57,11 +57,8 @@ export type { TelemetryEvent } from "./event.js";
 
 export { calculateCost } from "./pricing.js";
 
-// Adapter (replaces parser)
-export { adaptAllSessions, adaptSessionsForDays, clearCache } from "./adapter.js";
-
-// Backward-compatible aliases
-export { adaptAllSessions as parseAllSessions, adaptSessionsForDays as parseSessionsForDays } from "./adapter.js";
+// Adapter (replaces parser) — exported under parse* names for backward compat
+export { adaptAllSessions as parseAllSessions, adaptSessionsForDays as parseSessionsForDays, clearCache } from "./adapter.js";
 
 // Reducers (replace aggregator) — exported under both old and new names
 export {

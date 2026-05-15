@@ -7,7 +7,6 @@ tools:
   - Bash
   - Edit
   - Write
-  - Agent
   - WebFetch
   - WebSearch
 ---
@@ -24,7 +23,7 @@ Read `src/rules/` to discover which domains have RULES.md files. Each domain get
 
 ## Audit execution
 
-Run these audits **in parallel** via the Agent tool (subagent_type: general-purpose), one per domain, each with a self-contained prompt:
+Run these audits **in parallel** via the Skill() chain through the omnibus, one per domain, each with a self-contained prompt:
 
 1. **Code** — audit all `.ts` files under `src/` against `src/rules/code/RULES.md`
 2. **Security** — audit all `.ts` files under `src/` against `src/rules/security/RULES.md`

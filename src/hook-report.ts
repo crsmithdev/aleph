@@ -27,5 +27,6 @@ export function reportHook(hook: string, event: string, sessionId?: string, deci
     appendFileSync(dataPaths.hookEvents, JSON.stringify(entry) + "\n");
   } catch (e) {
     trace("hook-report", `write failed for ${hook}: ${(e as Error).message}`);
+    throw e;
   }
 }

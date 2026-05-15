@@ -83,11 +83,13 @@ Checks are defined in each module's `INSTALL.md`:
 | Module | Checks | Detection |
 |------|--------|-----------|
 | construct-core | `src/core/INSTALL.md` | `~/.claude/CLAUDE.md` exists |
-| construct-memory | `src/memory/INSTALL.md` | `~/.claude/construct/memory/hooks/session-start.ts` exists |
+| construct-memory | `src/memory/INSTALL.md` | `~/.claude/construct/memory/hooks/context-restore-start.ts` exists |
 | construct-skills | `src/skills/INSTALL.md` | `~/.claude/construct/skills/skill-rules.json` exists |
 | construct-data | `src/data/INSTALL.md` | `~/.claude/construct/data/src/client.ts` exists |
+| construct-telemetry | `src/telemetry/INSTALL.md` | `~/.claude/construct/telemetry/src/index.ts` exists |
 | construct-eval | `src/eval/INSTALL.md` | `~/.claude/construct/eval/runner.ts` exists |
 | construct-goals | `src/goals/INSTALL.md` | `~/.claude/construct/goals/src/index.ts` exists |
+| construct-research | `src/research/INSTALL.md` | `~/.claude/construct/research/src/index.ts` exists |
 | construct-ui | `src/ui/INSTALL.md` | `~/.claude/construct/ui/api/src/app.ts` exists |
 
 Each module's INSTALL.md defines three categories of checks:

@@ -105,7 +105,7 @@ export function readFileSafe(path: string): string | undefined {
 }
 
 /** Check if a file exists and parse it as JSON, or return undefined. */
-export function readJsonSafe(path: string): any | undefined {
+export function readJsonSafe(path: string): unknown | undefined {
   const raw = readFileSafe(path);
   if (raw === undefined) return undefined;
   try { return JSON.parse(raw); } catch { return undefined; }
