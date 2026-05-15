@@ -141,7 +141,7 @@ const decision = madeEdits ? "block" : "advisory";
 const reason = violations.join("; ");
 
 trace(TAG, `${decision}: ${reason}`);
-reportHook(TAG, "Stop", input.session_id, { decision, violations });
+reportHook(TAG, "Stop", input.session_id, { decision, meta: { violations } });
 
 if (decision === "block") {
   console.log(JSON.stringify({

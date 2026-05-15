@@ -259,6 +259,8 @@ export interface SessionMetric {
   hasSubagents?: boolean;
   gateInfo?: GateInfo;
   firstUserMessage?: string;
+  intent?: string;
+  outcome?: string;
 }
 
 export interface SessionsData {
