@@ -4,8 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Construct</title>
+  <script>
+    (function () {
+      var m = localStorage.getItem('construct-color-scheme');
+      if (!m) m = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.style.colorScheme = m;
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500&family=Merriweather:wght@400;700&display=swap" as="style" />
   <!-- Sans / display fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600&family=AR+One+Sans:wght@400;700&family=Atkinson+Hyperlegible+Next:wght@400;500;600;700&family=Bricolage+Grotesque:wght@200;300;400;500;600;700&family=Commissioner:wght@100;200;300;400;500;600;700&family=DM+Sans:wght@300;400;500;600&family=Figtree:wght@300;400;500;600;700&family=Funnel+Display:wght@300;400;500;600;700&family=Geist:wght@100;200;300;400;500;600;700&family=Geologica:wght@100;200;300;400;500;600;700&family=Lato:wght@300;400;700&family=Merriweather:wght@300;400;700;900&family=Merriweather+Sans:wght@300;400;600;700&family=Mulish:wght@200;300;400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700&family=Nunito+Sans:wght@300;400;500;600&family=REM:wght@300;400;500;600;700&family=Rethink+Sans:wght@400;500;600;700&family=Rubik:wght@300;400;500;600&family=Spinnaker&family=TASA+Orbiter:wght@300;400;500;600;700&family=Varela&family=Voces&family=Work+Sans:wght@100;200;300;400;500;600;700&family=Zalando+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <!-- Mono fonts -->

@@ -109,6 +109,7 @@ function applyTheme(theme: ThemeDef) {
   }
   el.setAttribute('data-theme', theme.mode);
   el.style.colorScheme = theme.mode;
+  localStorage.setItem('construct-color-scheme', theme.mode);
 }
 
 function getInitialFont(key: string, fallbackId: string, find: (id: string) => FontDef | undefined): string {
