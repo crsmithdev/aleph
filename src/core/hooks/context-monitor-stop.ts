@@ -7,7 +7,7 @@
  *
  * 1. Parse transcript, scan from end for assistant message with usage block.
  * 2. Sum input_tokens + cache_read + cache_creation for total context usage.
- * 3. Look up context window size by model name (all current models: 200k).
+ * 3. Detect context window: 200k base; if usage already exceeds 200k, session has 1M window.
  * 4. At ≥90% → emit critical warning (compact or new session).
  *    At ≥80% → emit advisory warning.
  *    Below 80% → silent.
@@ -34,20 +34,16 @@ catch { trace(TAG, "could not read transcript"); process.exit(0); }
 
 const lines = content.split("\n").filter(Boolean);
 
-const BASE_LIMITS: [RegExp, number][] = [
-  [/opus/i, 200_000],
-  [/sonnet/i, 200_000],
-  [/haiku/i, 200_000],
-];
+const BASE_LIMIT = 200_000;
+const EXTENDED_LIMIT = 1_000_000;
 
-function contextLimit(model: string): number {
-  for (const [pat, limit] of BASE_LIMITS) if (pat.test(model)) return limit;
-  return 200_000;
+// If usage is already above the base limit, the session must have an extended window.
+function contextLimit(currentUsage: number): number {
+  return currentUsage > BASE_LIMIT ? EXTENDED_LIMIT : BASE_LIMIT;
 }
 
 // Scan from the end for the last assistant message with usage
 let lastInputTokens = 0;
-let modelName = "";
 for (let i = lines.length - 1; i >= 0; i--) {
   try {
     const entry = JSON.parse(lines[i]);
@@ -55,7 +51,6 @@ for (let i = lines.length - 1; i >= 0; i--) {
     const usage = entry.message?.usage;
     if (!usage) continue;
     lastInputTokens = (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0);
-    modelName = entry.message?.model ?? "";
     break;
   } catch { continue; }
 }
@@ -65,7 +60,7 @@ if (lastInputTokens === 0) {
   process.exit(0);
 }
 
-const CONTEXT_LIMIT = contextLimit(modelName);
+const CONTEXT_LIMIT = contextLimit(lastInputTokens);
 const WARNING_PCT = 0.80;
 const CRITICAL_PCT = 0.90;
 
