@@ -54,12 +54,6 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: 'Learning',
-    items: [
-      { to: '/observability/signals', label: 'Signals', icon: 'bolt' },
-    ],
-  },
-  {
     label: 'System',
     items: [
       { to: '/observability/db', label: 'Database', icon: 'storage' },
