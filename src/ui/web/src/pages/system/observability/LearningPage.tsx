@@ -567,23 +567,20 @@ export function LearningPage() {
       ),
     },
     {
-      key: 'source',
-      label: 'Source',
-      width: '200px',
+      key: 'insight',
+      label: 'Type',
+      width: '110px',
       render: (row) => (
-        <span className="text-text-secondary text-sm" title={row.source}>{row.source}</span>
+        <span className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold shrink-0', loopTypeBadge(row.type))}>
+          {row.type}
+        </span>
       ),
     },
     {
-      key: 'insight',
-      label: 'Insight',
+      key: 'source',
+      label: 'Source',
       render: (row) => (
-        <span className="flex items-center gap-2">
-          <span className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold shrink-0', loopTypeBadge(row.type))}>
-            {row.type}
-          </span>
-          <span className="text-text-muted text-sm italic" title={row.insight}>{row.insight}</span>
-        </span>
+        <span className="text-text-secondary text-sm" title={row.source}>{row.source}</span>
       ),
     },
     {
