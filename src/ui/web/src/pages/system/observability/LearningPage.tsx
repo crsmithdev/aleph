@@ -706,12 +706,17 @@ export function LearningPage() {
               : undefined
           }
         />
-        <StatCard
-          label="Circumventions"
-          value={fmtNumber(circumventions)}
-          accent={circumventions === 0 ? 'success' : circumventions < 5 ? 'warning' : 'error'}
-          onClick={circumventions > 0 ? () => document.getElementById('gates-section')?.scrollIntoView({ behavior: 'smooth' }) : undefined}
-        />
+        <button
+          type="button"
+          onClick={() => document.getElementById('gates-section')?.scrollIntoView({ behavior: 'smooth' })}
+          className="text-left w-full hover:brightness-105 transition-all"
+        >
+          <StatCard
+            label="Circumventions"
+            value={fmtNumber(circumventions)}
+            accent={circumventions === 0 ? 'success' : circumventions < 5 ? 'warning' : 'error'}
+          />
+        </button>
       </div>
 
       {/* Learning Loop section */}
