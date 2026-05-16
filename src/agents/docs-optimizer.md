@@ -4,4 +4,4 @@ description: Optimize documentation for AI coding assistants and LLMs. Improves 
 model: sonnet
 ---
 
-Read and follow the skill at ~/.claude/construct/skills/docs-optimizer/SKILL.md, then apply it to the documentation optimization task the user has described.
+Read and follow the skill at ~/.claude/construct/skills/docs-optimize/SKILL.md, then apply it to the documentation optimization task the user has described.

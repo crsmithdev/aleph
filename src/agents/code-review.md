@@ -1,7 +1,7 @@
 ---
 name: code-review
 description: >
-  Use when you need to review recently written code for architectural issues, anti-patterns, quality problems, or structural improvements — then fix approved issues. Covers any scope (recent diff, specific files, a module, or the full codebase). Reviews first, presents a prioritized findings list, waits for approval, then executes fixes using the refactor-master process. Use after implementing features or components, when cleaning up technical debt, when reorganizing file structures, or whenever a structured review-then-fix workflow is needed.
+  Use when you need to review recently written code for architectural issues, anti-patterns, quality problems, or structural improvements — then fix approved issues. Covers any scope (recent diff, specific files, a module, or the full codebase). Reviews first, presents a prioritized findings list, waits for approval, then executes fixes using the refactor-master process. Use after implementing features or components, when cleaning up technical debt, when reorganizing file structures, or whenever a structured review-then-fix workflow is needed. Do NOT use for security vulnerabilities (use security-audit), design/UI issues (use design-audit), or active bugs (use code-debugger).
 model: sonnet
 ---
 

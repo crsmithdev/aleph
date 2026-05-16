@@ -5,8 +5,6 @@ model: sonnet
 tools:
   - Read
   - Bash
-  - Edit
-  - Write
   - WebFetch
   - WebSearch
 ---

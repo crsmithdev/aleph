@@ -58,7 +58,7 @@ catch (e) { trace(TAG, `feedback read failed: ${(e as Error).message}`); }
 const memories = augmentWithSignals(baseMemories, toolSignalsText, feedbackText, input.session_id ?? "unknown");
 trace(TAG, `extracted ${baseMemories.length} base + augmented to ${memories.length}`);
 
-if (memories.length === 0) { process.exit(0); }
+if (memories.length === 0) { trace(TAG, "skip: no memories extracted"); process.exit(0); }
 
 if (!existsSync(VENV_PYTHON)) {
   trace(TAG, `skip: python not found at ${VENV_PYTHON}`);
