@@ -88,6 +88,7 @@ export const ROUTE_META: readonly RouteMeta[] = [
   { path: '/observability/events', smoke: { testid: 'page-observability-events' } },
   { path: '/observability/memory', smoke: { testid: 'page-observability-memory', heading: /^Memory$/ } },
   { path: '/observability/signals', smoke: { testid: 'page-observability-signals', heading: /^Signals$/ } },
+  { path: '/observability/learning', smoke: { testid: 'page-observability-learning' } },
   { path: '/observability/db', smoke: { testid: 'page-observability-db', heading: /^Database$/ } },
 
   // Settings

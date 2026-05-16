@@ -720,3 +720,134 @@ export function useObsSessionFiles(limit?: number) {
     queryFn: () => api.get(`/observability/signals/sessions${limit ? `?limit=${limit}` : ''}`),
   });
 }
+
+export function useObsLearningLoop() {
+  return useQuery<{
+    items: Array<{
+      ts: string;
+      sessionId: string;
+      memoryId?: string;
+      type: string;
+      source: string;
+      insight: string;
+      content: string;
+      tags: string;
+    }>;
+    total: number;
+  }>({
+    queryKey: ['observability', 'learning', 'loop'],
+    queryFn: () => api.get('/observability/learning/loop'),
+  });
+}
+
+export function useObsLearningFeedback() {
+  return useQuery<{
+    items: Array<{
+      ts: string;
+      sessionId: string;
+      trigger: string;
+      polarity?: 'positive' | 'negative';
+      rating?: number;
+      type: 'sentiment' | 'numeric';
+      priorText?: string;
+      priorTools?: string[];
+      priorFiles?: string[];
+    }>;
+    avgRating: number;
+    total: number;
+  }>({
+    queryKey: ['observability', 'learning', 'feedback'],
+    queryFn: () => api.get('/observability/learning/feedback'),
+  });
+}
+
+export function useObsGateEvents() {
+  return useQuery<{
+    events: Array<{
+      ts: string;
+      sessionId: string;
+      hook: string;
+      decision: 'pass' | 'block' | 'skip' | 'advisory';
+      reason: string;
+      editedFiles: string[];
+      verifyPresent?: boolean;
+      verifyMissing?: string[];
+      verify?: Record<string, string | null>;
+    }>;
+    total: number;
+    passCount: number;
+    blockCount: number;
+    skipCount: number;
+    advisoryCount: number;
+  }>({
+    queryKey: ['observability', 'gates', 'events'],
+    queryFn: () => api.get('/observability/gates/events'),
+  });
+}
+
+// ── Per-session gates + learning ──────────────────────────────────────────────
+
+export type GateEvent = {
+  ts: string;
+  sessionId: string;
+  hook: string;
+  decision: 'pass' | 'block' | 'skip' | 'advisory';
+  reason: string;
+  editedFiles: string[];
+  verifyPresent?: boolean;
+  verify?: Record<string, string | null>;
+};
+
+export type LearningItem = {
+  ts: string;
+  sessionId: string;
+  memoryId?: string;
+  type: string;
+  source: string;
+  insight: string;
+  content: string;
+  tags: string;
+};
+
+export type FeedbackItem = {
+  ts: string;
+  sessionId: string;
+  trigger: string;
+  polarity?: 'positive' | 'negative';
+  rating?: number;
+  type: 'sentiment' | 'numeric';
+};
+
+export function useObsSessionGates(sessionId: string) {
+  return useQuery<{ events: GateEvent[]; passCount: number; blockCount: number; skipCount: number; advisoryCount: number; total: number }>({
+    queryKey: ['observability', 'sessions', sessionId, 'gates'],
+    queryFn: () => api.get(`/observability/sessions/${encodeURIComponent(sessionId)}/gates`),
+    enabled: !!sessionId,
+  });
+}
+
+export function useObsSessionLearning(sessionId: string) {
+  return useQuery<{ memories: LearningItem[]; feedback: FeedbackItem[]; avgRating: number; positiveCount: number; negativeCount: number }>({
+    queryKey: ['observability', 'sessions', sessionId, 'learning'],
+    queryFn: () => api.get(`/observability/sessions/${encodeURIComponent(sessionId)}/learning`),
+    enabled: !!sessionId,
+  });
+}
+
+export function useObsGatePatterns() {
+  return useQuery<{
+    patterns: Array<{
+      hook: string;
+      filePrefix: string;
+      decision: 'block' | 'skip' | 'advisory';
+      count: number;
+      sessionIds: string[];
+      lastSeen: string;
+      representativeReason: string;
+      representativeFiles: string[];
+    }>;
+  }>({
+    queryKey: ['observability', 'gates', 'patterns'],
+    queryFn: () => api.get('/observability/gates/patterns'),
+  });
+}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useObsMemory, useObsMemoryItems, useObsMemoryUsage, useObsMemorySearches, useTriggerSnapshot, useDeleteMemory, useUpdateMemory } from '../../../api/observability-hooks';
@@ -24,6 +24,7 @@ export function MemoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const range = (searchParams.get('range') as TimeRange) ?? '30d';
   const granularity = (searchParams.get('granularity') as Granularity) ?? 'day';
+  const highlightId = searchParams.get('highlight');
   function setRange(r: TimeRange) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('range', r); return n; }, { replace: true }); }
   function setGranularity(g: Granularity) { setSearchParams(p => { const n = new URLSearchParams(p); n.set('granularity', g); return n; }, { replace: true }); }
   const { data, isLoading, error, refetch } = useObsMemory();
@@ -38,11 +39,17 @@ export function MemoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
-  const [activeSearch, setActiveSearch] = useState({ q: '', type: '', tag: '' });
+  const [activeSearch, setActiveSearch] = useState<{ q: string; type: string; tag: string }>(() =>
+    highlightId ? { q: '', type: '', tag: '' } : { q: '', type: '', tag: '' }
+  );
 
-  const [usageChartType, setUsageChartType] = useState<'bar' | 'line'>('bar');
-  const [expandedSearch, setExpandedSearch] = useState<string | null>(null);
-  const searches = useObsMemorySearches(range);
+  // Deep-link: ?highlight=<memoryId> — expand and scroll to that row
+  useEffect(() => {
+    if (highlightId) {
+      setExpandedId(highlightId);
+      setActiveSearch({ q: '', type: '', tag: '' });
+    }
+  }, [highlightId]);
 
   const items = useObsMemoryItems({
     q: activeSearch.q || undefined,
@@ -50,6 +57,18 @@ export function MemoryPage() {
     tag: activeSearch.tag || undefined,
     limit: 50,
   });
+
+  useEffect(() => {
+    if (!highlightId || !items.data) return;
+    setTimeout(() => {
+      const el = document.querySelector(`[data-memory-id="${highlightId}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 300);
+  }, [highlightId, items.data]);
+
+  const [usageChartType, setUsageChartType] = useState<'bar' | 'line'>('bar');
+  const [expandedSearch, setExpandedSearch] = useState<string | null>(null);
+  const searches = useObsMemorySearches(range);
 
   function handleSearch() {
     setActiveSearch({ q: searchQuery, type: typeFilter, tag: tagFilter });
@@ -107,7 +126,7 @@ export function MemoryPage() {
       key: 'content',
       label: 'Content',
       render: (row) => (
-        <div className="max-w-lg">
+        <div className="max-w-lg" data-memory-id={row.id}>
           <p className="text-sm text-text-primary line-clamp-2">{row.content}</p>
           <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
             <span className="font-mono">{row.memory_type}</span>

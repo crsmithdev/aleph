@@ -1,7 +1,7 @@
 import { Icon } from '../../../components/ui/Icon';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
-import { useObsSessionTrace, useObsSessionContextFiles } from '../../../api/observability-hooks';
+import { useObsSessionTrace, useObsSessionContextFiles, useObsSessionGates, useObsSessionLearning, type GateEvent, type LearningItem, type FeedbackItem } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
@@ -1125,9 +1125,12 @@ export function SessionTracePage() {
   const range: TimeRange = '30d';
   const { data, isLoading, error, refetch } = useObsSessionTrace(sessionId, range);
   const { data: contextFilesData } = useObsSessionContextFiles(sessionId);
+  const sessionGates = useObsSessionGates(sessionId);
+  const sessionLearning = useObsSessionLearning(sessionId);
   const [expandedTurns, setExpandedTurns] = useState<Set<number>>(new Set());
   const [showContext, setShowContext] = useState(true);
   const [selectedTurnIndex, setSelectedTurnIndex] = useState<number | null>(null);
+  const [showCompliance, setShowCompliance] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [atTop, setAtTop] = useState(true);
@@ -1289,7 +1292,7 @@ export function SessionTracePage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-8">
         <StatCard label="Duration" value={fmtDuration(data.totalDurationMs)} />
         <StatCard
           label="Tool Calls"
@@ -1308,6 +1311,15 @@ export function SessionTracePage() {
         <StatCard label="Tokens" value={fmtNumber(data.totalTokens)} />
         <StatCard label="Messages" value={fmtNumber(data.turns.length)} />
         <StatCard label="Cost" value={fmtCurrency(data.totalCost)} />
+        <StatCard label="Memories" value={fmtNumber(sessionLearning.data?.memories.length ?? 0)} />
+        <StatCard
+          label="Feedback"
+          value={
+            sessionLearning.data
+              ? `${sessionLearning.data.positiveCount} pos / ${sessionLearning.data.negativeCount} neg`
+              : '—'
+          }
+        />
       </div>
 
       {/* Turn feed + optional context sidebar */}
@@ -1372,6 +1384,139 @@ export function SessionTracePage() {
           </div>
         )}
       </div>
+
+      {/* Learning & Compliance section */}
+      {(sessionGates.data || sessionLearning.data) && (
+        <div className="flex flex-col items-center my-2 gap-0">
+          <button
+            onClick={() => setShowCompliance(o => !o)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded border border-border-primary bg-bg-tertiary/50 text-xs text-text-muted hover:bg-bg-tertiary transition-colors"
+          >
+            <span className={clsx('transition-transform text-xs', showCompliance ? 'rotate-90' : '')}>›</span>
+            <span>Learning & Compliance</span>
+            {sessionGates.data && (
+              <span className="text-text-disabled">
+                {sessionGates.data.total} gate{sessionGates.data.total !== 1 ? 's' : ''}
+                {sessionGates.data.blockCount > 0 && <span className="text-error"> · {sessionGates.data.blockCount} block{sessionGates.data.blockCount !== 1 ? 's' : ''}</span>}
+              </span>
+            )}
+            {sessionLearning.data && sessionLearning.data.memories.length > 0 && (
+              <span className="text-text-disabled"> · {sessionLearning.data.memories.length} memor{sessionLearning.data.memories.length !== 1 ? 'ies' : 'y'}</span>
+            )}
+          </button>
+
+          {showCompliance && (
+            <div className="w-full mt-2 rounded border border-border-primary bg-bg-secondary overflow-hidden space-y-0">
+              {/* Gate events */}
+              {sessionGates.data && sessionGates.data.events.length > 0 && (
+                <div>
+                  <div className="px-4 py-2 border-b border-border-primary/40 bg-bg-tertiary/30">
+                    <span className="text-xs font-medium text-text-secondary">Gate Events</span>
+                    <span className="ml-2 text-xs text-text-muted font-mono">
+                      {sessionGates.data.passCount} pass · {sessionGates.data.blockCount} block · {sessionGates.data.skipCount} skip · {sessionGates.data.advisoryCount} advisory
+                    </span>
+                  </div>
+                  <div className="divide-y divide-border-primary/20">
+                    {sessionGates.data.events.map((ev: GateEvent, i: number) => {
+                      const decisionStyle =
+                        ev.decision === 'pass' ? 'bg-success/10 border-success/30 text-success'
+                        : ev.decision === 'block' ? 'bg-error/10 border-error/30 text-error'
+                        : ev.decision === 'skip' ? 'bg-warning/10 border-warning/30 text-warning'
+                        : 'bg-orange-400/10 border-orange-400/30 text-orange-400';
+                      return (
+                        <div
+                          key={i}
+                          className="grid items-center gap-x-3 px-3 py-1.5 text-xs"
+                          style={{ gridTemplateColumns: '4.5rem 9rem 1fr auto' }}
+                        >
+                          <span className={clsx('inline-flex items-center justify-center px-1.5 py-0.5 rounded border text-xs font-semibold uppercase tracking-wide w-fit', decisionStyle)}>
+                            {ev.decision}
+                          </span>
+                          <span className="font-mono truncate text-text-secondary">{ev.hook}</span>
+                          <span className="text-text-muted truncate min-w-0">
+                            {ev.editedFiles.length > 0
+                              ? ev.editedFiles.slice(0, 2).map(f => f.split('/').pop()).join(', ') + (ev.editedFiles.length > 2 ? ` +${ev.editedFiles.length - 2}` : '')
+                              : ev.reason?.slice(0, 60) || ''}
+                          </span>
+                          <span className="text-text-disabled font-mono text-xs">{ev.verifyPresent ? '✓ verify' : ''}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Memories */}
+              {sessionLearning.data && sessionLearning.data.memories.length > 0 && (
+                <div className={clsx(sessionGates.data && sessionGates.data.events.length > 0 && 'border-t border-border-primary/40')}>
+                  <div className="px-4 py-2 border-b border-border-primary/40 bg-bg-tertiary/30">
+                    <span className="text-xs font-medium text-text-secondary">Memories Stored</span>
+                  </div>
+                  <div className="divide-y divide-border-primary/20">
+                    {sessionLearning.data.memories.map((mem: LearningItem, i: number) => {
+                      const typeStyle =
+                        mem.type === 'correction' ? 'bg-error/10 border-error/30 text-error'
+                        : mem.type === 'validated' ? 'bg-success/10 border-success/30 text-success'
+                        : mem.type === 'friction' ? 'bg-warning/10 border-warning/30 text-warning'
+                        : mem.type === 'session' ? 'bg-sky-400/10 border-sky-400/30 text-sky-400'
+                        : 'bg-bg-tertiary border-border-primary text-text-muted';
+                      return (
+                        <div key={i} className="flex items-center gap-3 px-3 py-1.5 text-xs">
+                          <span className={clsx('shrink-0 inline-flex items-center justify-center px-1.5 py-0.5 rounded border text-xs font-semibold uppercase tracking-wide', typeStyle)}>
+                            {mem.type}
+                          </span>
+                          <span className="font-mono text-text-muted truncate shrink-0 max-w-[8rem]" title={mem.source}>{mem.source}</span>
+                          <span className="text-text-secondary truncate flex-1">{mem.content.slice(0, 100)}</span>
+                          {mem.memoryId && (
+                            <a
+                              href={`/observability/memory?highlight=${encodeURIComponent(mem.memoryId)}`}
+                              className="text-accent hover:underline shrink-0 font-mono text-xs"
+                              title="View in memory browser"
+                            >
+                              →
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Feedback */}
+              {sessionLearning.data && sessionLearning.data.feedback.length > 0 && (
+                <div className="border-t border-border-primary/40">
+                  <div className="px-4 py-2 border-b border-border-primary/40 bg-bg-tertiary/30">
+                    <span className="text-xs font-medium text-text-secondary">Feedback</span>
+                    <span className="ml-2 text-xs text-text-muted font-mono">
+                      {sessionLearning.data.positiveCount} pos · {sessionLearning.data.negativeCount} neg
+                      {sessionLearning.data.avgRating > 0 && ` · avg ${sessionLearning.data.avgRating.toFixed(1)}`}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-border-primary/20">
+                    {sessionLearning.data.feedback.map((fb: FeedbackItem, i: number) => (
+                      <div key={i} className="flex items-center gap-3 px-3 py-1.5 text-xs">
+                        <span className={clsx(
+                          'shrink-0 inline-flex items-center justify-center px-1.5 py-0.5 rounded border text-xs font-semibold uppercase tracking-wide',
+                          fb.polarity === 'positive' ? 'bg-success/10 border-success/30 text-success'
+                          : fb.polarity === 'negative' ? 'bg-error/10 border-error/30 text-error'
+                          : 'bg-bg-tertiary border-border-primary text-text-muted'
+                        )}>
+                          {fb.polarity ?? fb.type}
+                        </span>
+                        <span className="text-text-secondary truncate flex-1">{fb.trigger}</span>
+                        {fb.rating !== undefined && (
+                          <span className="text-text-muted font-mono shrink-0">{fb.rating}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div ref={bottomRef} />
       <QueryTiming ms={data.queryTimeMs} />

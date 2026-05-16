@@ -45,6 +45,7 @@ import { CompactionPage } from './pages/system/observability/CompactionPage';
 import { SessionTracePage } from './pages/system/observability/SessionTracePage';
 import { TurnTracePage } from './pages/system/observability/TurnTracePage';
 import { SignalsPage } from './pages/system/observability/SignalsPage';
+import { LearningPage } from './pages/system/observability/LearningPage';
 import { SettingsPage } from './pages/system/SettingsPage';
 
 const ELEMENTS: Record<string, ReactNode> = {
@@ -81,6 +82,7 @@ const ELEMENTS: Record<string, ReactNode> = {
   '/observability/events': <EventsPage />,
   '/observability/memory': <MemoryPage />,
   '/observability/signals': <SignalsPage />,
+  '/observability/learning': <LearningPage />,
   '/observability/db': <DbStatsPage />,
 
   '/settings': <SettingsPage />,

@@ -31,6 +31,7 @@ export const dataPaths = {
   learnedRules: resolve(DATA_ROOT, "signals", "learned-rules.md"),
   ruleInjections: resolve(DATA_ROOT, "signals", "rule-injections.jsonl"),
   ruleEffectiveness: resolve(DATA_ROOT, "signals", "rule-effectiveness.json"),
+  learningProvenance: resolve(DATA_ROOT, "signals", "learning-provenance.jsonl"),
 };
 
 // Default matches memory-writer.py's default so reads and writes use the same DB.

@@ -8,6 +8,11 @@ export interface ExtractedMemory {
   content: string;
   tags: string;
   memory_type: string;
+  // provenance fields
+  source?: string;   // trigger text (the correction, the "great", the file+count)
+  insight?: string;  // human-readable label for what was extracted
+  session_id?: string; // session this came from
+  memory_type_detail?: 'correction' | 'validated' | 'friction' | 'session' | 'error';
 }
 
 export const CORRECTION_RE = /^(no[,.\s]|don'?t\b|stop\b|not that\b|instead\b|actually[,\s]|wait[,\s]|undo\b|revert\b|wrong\b)/i;
@@ -52,7 +57,14 @@ function buildSessionSummary(t: TranscriptSummary): ExtractedMemory | null {
   const content = `Session: ${intent.slice(0, 150)} → ${outcome.slice(0, 150)}.${fileStr}`;
   if (content.length < 30) return null;
 
-  return { content, tags: "session_context,auto_extract", memory_type: "observation" };
+  return {
+    content,
+    tags: "session_context,auto_extract",
+    memory_type: "observation",
+    source: intent.slice(0, 200),
+    insight: "Session summary",
+    memory_type_detail: 'session',
+  };
 }
 
 function extractCorrections(t: TranscriptSummary): ExtractedMemory[] {
@@ -67,7 +79,14 @@ function extractCorrections(t: TranscriptSummary): ExtractedMemory[] {
     const contextStr = context ? ` (after: ${context})` : "";
 
     const content = `User correction: ${msg.text.slice(0, 250)}${contextStr}`;
-    results.push({ content, tags: "preference,auto_extract", memory_type: "observation" });
+    results.push({
+      content,
+      tags: "preference,auto_extract",
+      memory_type: "observation",
+      source: msg.text.slice(0, 200),
+      insight: "User correction",
+      memory_type_detail: 'correction',
+    });
   }
   return results.slice(0, 3);
 }
@@ -111,12 +130,18 @@ export function augmentWithSignals(
         content: `Approach friction on ${sig.file}: ${sig.count}+ edits, user pushed back "${matched.prompt.slice(0, 100)}"${reaction ? ` reacting to: ${reaction}` : ""}`,
         tags: "preference,auto_extract,approach_friction",
         memory_type: "observation",
+        source: `Re-edit × ${sig.count} on ${sig.file}`,
+        insight: "Approach friction",
+        memory_type_detail: 'friction',
       });
     } else {
       out.push({
         content: `Re-edit observation: ${sig.file} edited ${sig.count}+ times this session.`,
         tags: "preference,auto_extract",
         memory_type: "observation",
+        source: `Re-edit × ${sig.count} on ${sig.file}`,
+        insight: "Approach friction",
+        memory_type_detail: 'friction',
       });
     }
   }
@@ -133,6 +158,9 @@ export function augmentWithSignals(
       content: `Validated approach (user said "${sig.trigger}"): ${what}${where}${why}`,
       tags: "preference,auto_extract,validated",
       memory_type: "observation",
+      source: `User said "${sig.trigger}"`,
+      insight: "Validated approach",
+      memory_type_detail: 'validated',
     });
     if (++added >= 3) break;
   }
@@ -172,7 +200,14 @@ function extractErrorResolutions(t: TranscriptSummary): ExtractedMemory[] {
     const fixExcerpt = fixMsg.text.slice(0, 150);
 
     const content = `Error: ${errorExcerpt}. Fixed by: ${fixFiles || fixExcerpt}`;
-    results.push({ content, tags: "error_resolution,auto_extract", memory_type: "error" });
+    results.push({
+      content,
+      tags: "error_resolution,auto_extract",
+      memory_type: "error",
+      source: "Error detected",
+      insight: "Error resolution",
+      memory_type_detail: 'error',
+    });
   }
 
   return results.slice(0, 3);

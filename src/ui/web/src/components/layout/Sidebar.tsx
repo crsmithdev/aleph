@@ -39,6 +39,7 @@ const navGroups: NavGroup[] = [
     items: [
       { to: '/observability', label: 'Overview', icon: 'dashboard' },
       { to: '/observability/sessions', label: 'Sessions', icon: 'schedule' },
+      { to: '/observability/learning', label: 'Learning', icon: 'school', separator: 'before' },
       { to: '/observability/skills', label: 'Skills', icon: 'auto_awesome' },
       { to: '/observability/tools', label: 'Tools', icon: 'build' },
       { to: '/observability/hooks', label: 'Hooks', icon: 'webhook' },

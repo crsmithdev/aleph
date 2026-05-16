@@ -65,7 +65,8 @@ if (!existsSync(VENV_PYTHON)) {
   process.exit(0);
 }
 
-const json = JSON.stringify(memories);
+const memoriesWithSession = memories.map(m => ({ ...m, session_id: input.session_id ?? "unknown" }));
+const json = JSON.stringify(memoriesWithSession);
 trace(TAG, `spawning writer with ${json.length} bytes`);
 
 const proc = Bun.spawn([VENV_PYTHON, WRITER_SCRIPT], {

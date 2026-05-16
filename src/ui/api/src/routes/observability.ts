@@ -1618,6 +1618,393 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // Learning & Compliance endpoints
+  // ---------------------------------------------------------------------------
+
+  app.get('/learning/loop', async () => {
+    return cachedResult('/learning/loop', 60_000, () => {
+      const path = dataPaths.learningProvenance;
+      if (!existsSync(path)) return { items: [], total: 0 };
+      try {
+        type LearningItem = {
+          ts: string; sessionId: string; memoryId?: string;
+          type: string; source: string; insight: string;
+          content: string; tags: string;
+        };
+        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
+        const items: LearningItem[] = [];
+        for (const line of lines) {
+          try { items.push(JSON.parse(line) as LearningItem); } catch {}
+        }
+        items.sort((a, b) => b.ts.localeCompare(a.ts));
+        return { items: items.slice(0, 200), total: items.length };
+      } catch { return { items: [], total: 0 }; }
+    });
+  });
+
+  app.get('/learning/feedback', async () => {
+    return cachedResult('/learning/feedback', 60_000, () => {
+      type FeedbackItem = {
+        ts: string; sessionId: string;
+        trigger: string; polarity?: 'positive' | 'negative';
+        rating?: number; type: 'sentiment' | 'numeric';
+        priorText?: string; priorTools?: string[]; priorFiles?: string[];
+      };
+
+      const items: FeedbackItem[] = [];
+
+      // Read feedback.jsonl (sentiment)
+      if (existsSync(dataPaths.feedback)) {
+        try {
+          const lines = readFileSync(dataPaths.feedback, 'utf-8').split('\n').filter(Boolean);
+          for (const line of lines) {
+            try {
+              const e = JSON.parse(line) as Record<string, unknown>;
+              const ts = (e.ts ?? e.timestamp) as string | undefined;
+              if (!ts) continue;
+              items.push({
+                ts,
+                sessionId: (e.session_id ?? '') as string,
+                trigger: (e.trigger ?? '') as string,
+                polarity: (e.polarity as 'positive' | 'negative' | undefined),
+                type: 'sentiment',
+                priorText: (e.prior_text as string | undefined),
+                priorTools: (e.prior_tools as string[] | undefined),
+                priorFiles: (e.prior_files as string[] | undefined),
+              });
+            } catch {}
+          }
+        } catch {}
+      }
+
+      // Read ratings.jsonl (numeric)
+      const numericRatings: number[] = [];
+      if (existsSync(dataPaths.ratings)) {
+        try {
+          const lines = readFileSync(dataPaths.ratings, 'utf-8').split('\n').filter(Boolean);
+          for (const line of lines) {
+            try {
+              const e = JSON.parse(line) as Record<string, unknown>;
+              const ts = (e.timestamp ?? e.ts) as string | undefined;
+              const rating = typeof e.rating === 'number' ? e.rating : undefined;
+              if (!ts) continue;
+              items.push({
+                ts,
+                sessionId: (e.session_id ?? e.sessionId ?? '') as string,
+                trigger: (e.type ?? 'rating') as string,
+                rating,
+                type: 'numeric',
+              });
+              if (rating !== undefined) numericRatings.push(rating);
+            } catch {}
+          }
+        } catch {}
+      }
+
+      items.sort((a, b) => b.ts.localeCompare(a.ts));
+      const avgRating = numericRatings.length > 0
+        ? numericRatings.reduce((s, r) => s + r, 0) / numericRatings.length
+        : 0;
+
+      return { items: items.slice(0, 200), avgRating, total: items.length };
+    });
+  });
+
+  app.get('/gates/events', async () => {
+    return cachedResult('/gates/events', 60_000, () => {
+      type GateEvent = {
+        ts: string; sessionId: string; hook: string;
+        decision: 'pass' | 'block' | 'skip' | 'advisory';
+        reason: string; editedFiles: string[];
+        verifyPresent?: boolean; verifyMissing?: string[];
+        verify?: Record<string, string | null>;
+      };
+
+      const path = dataPaths.hookEvents;
+      if (!existsSync(path)) return { events: [], total: 0, passCount: 0, blockCount: 0, skipCount: 0, advisoryCount: 0 };
+
+      const events: GateEvent[] = [];
+      try {
+        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
+        for (const line of lines) {
+          try {
+            const e = JSON.parse(line) as Record<string, unknown>;
+            // Filter to verify-gate / quality-check entries
+            const hook = (e.hook as string) ?? '';
+            const rawDecision = (e.decision as string) ?? '';
+            const tier = e.tier;
+            const isGateEntry = hook.includes('quality-check') || (tier !== undefined && ['block', 'skip', 'advisory', 'pass'].includes(rawDecision));
+            if (!isGateEntry) continue;
+
+            // Reclassify user-affirmed skips
+            let decision: GateEvent['decision'] = rawDecision as GateEvent['decision'];
+            const detail = (e.detail as string) ?? '';
+            if (decision === 'pass' && detail.includes('user-affirmed')) {
+              decision = 'skip';
+            }
+
+            events.push({
+              ts: (e.ts as string) ?? '',
+              sessionId: (e.sessionId as string) ?? '',
+              hook,
+              decision,
+              reason: detail,
+              editedFiles: (e.editedFiles as string[]) ?? [],
+              verifyPresent: e.verifyPresent as boolean | undefined,
+              verifyMissing: e.verifyMissing as string[] | undefined,
+              verify: e.verify as Record<string, string | null> | undefined,
+            });
+          } catch {}
+        }
+      } catch {}
+
+      events.sort((a, b) => b.ts.localeCompare(a.ts));
+      const passCount = events.filter(e => e.decision === 'pass').length;
+      const blockCount = events.filter(e => e.decision === 'block').length;
+      const skipCount = events.filter(e => e.decision === 'skip').length;
+      const advisoryCount = events.filter(e => e.decision === 'advisory').length;
+
+      return { events: events.slice(0, 200), total: events.length, passCount, blockCount, skipCount, advisoryCount };
+    });
+  });
+
+  app.get('/gates/patterns', async () => {
+    return cachedResult('/gates/patterns', 60_000, () => {
+      type PatternEntry = {
+        hook: string; filePrefix: string; decision: 'block' | 'skip' | 'advisory';
+        count: number; sessionIds: string[]; lastSeen: string;
+        representativeReason: string; representativeFiles: string[];
+      };
+
+      const path = dataPaths.hookEvents;
+      if (!existsSync(path)) return { patterns: [] };
+
+      type RawGate = {
+        ts: string; sessionId: string; hook: string;
+        decision: string; detail?: string; editedFiles?: string[];
+        tier?: unknown;
+      };
+
+      const raw: RawGate[] = [];
+      try {
+        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
+        for (const line of lines) {
+          try {
+            const e = JSON.parse(line) as Record<string, unknown>;
+            const hook = (e.hook as string) ?? '';
+            const decision = (e.decision as string) ?? '';
+            const tier = e.tier;
+            const isGateEntry = hook.includes('quality-check') || (tier !== undefined && ['block', 'skip', 'advisory', 'pass'].includes(decision));
+            if (!isGateEntry) continue;
+
+            const detail = (e.detail as string) ?? '';
+            let effectiveDecision = decision;
+            if (effectiveDecision === 'pass' && detail.includes('user-affirmed')) effectiveDecision = 'skip';
+            if (!['block', 'skip', 'advisory'].includes(effectiveDecision)) continue;
+
+            raw.push({
+              ts: (e.ts as string) ?? '',
+              sessionId: (e.sessionId as string) ?? '',
+              hook,
+              decision: effectiveDecision,
+              detail,
+              editedFiles: (e.editedFiles as string[]) ?? [],
+              tier,
+            });
+          } catch {}
+        }
+      } catch {}
+
+      // Compute filePrefix (first 2 path segments) for each entry
+      function filePrefix(files: string[]): string {
+        if (!files.length) return '';
+        const first = files[0];
+        const parts = first.replace(/^\//, '').split('/');
+        return parts.slice(0, 2).join('/') + '/';
+      }
+
+      // Group by (hook + decision + filePrefix)
+      const groups = new Map<string, { entries: RawGate[]; prefixes: string[] }>();
+      for (const entry of raw) {
+        const prefix = filePrefix(entry.editedFiles ?? []);
+        const key = `${entry.hook}||${entry.decision}||${prefix}`;
+        if (!groups.has(key)) groups.set(key, { entries: [], prefixes: [] });
+        groups.get(key)!.entries.push(entry);
+        groups.get(key)!.prefixes.push(prefix);
+      }
+
+      const patterns: PatternEntry[] = [];
+      for (const [key, { entries }] of groups) {
+        if (entries.length < 2) continue;
+        const [hook, decision, filePrefix] = key.split('||');
+        const sessionIds = [...new Set(entries.map(e => e.sessionId))];
+        const lastSeen = entries.map(e => e.ts).sort().reverse()[0];
+        const rep = entries[0];
+        patterns.push({
+          hook,
+          filePrefix,
+          decision: decision as 'block' | 'skip' | 'advisory',
+          count: entries.length,
+          sessionIds,
+          lastSeen,
+          representativeReason: rep.detail ?? '',
+          representativeFiles: rep.editedFiles ?? [],
+        });
+      }
+
+      patterns.sort((a, b) => b.count - a.count);
+      return { patterns };
+    });
+  });
+
+  app.get<{ Params: { id: string } }>('/sessions/:id/gates', async (req) => {
+    const sessionId = decodeURIComponent(req.params.id);
+    return cachedResult(`/sessions/${sessionId}/gates`, 30_000, () => {
+      type GateEvent = {
+        ts: string; sessionId: string; hook: string;
+        decision: 'pass' | 'block' | 'skip' | 'advisory';
+        reason: string; editedFiles: string[];
+        verifyPresent?: boolean; verifyMissing?: string[];
+        verify?: Record<string, string | null>;
+      };
+
+      const path = dataPaths.hookEvents;
+      if (!existsSync(path)) return { events: [], total: 0, passCount: 0, blockCount: 0, skipCount: 0, advisoryCount: 0 };
+
+      const events: GateEvent[] = [];
+      try {
+        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
+        for (const line of lines) {
+          try {
+            const e = JSON.parse(line) as Record<string, unknown>;
+            if (e.sessionId !== sessionId) continue;
+            const hook = (e.hook as string) ?? '';
+            const rawDecision = (e.decision as string) ?? '';
+            const tier = e.tier;
+            const isGateEntry = hook.includes('quality-check') || (tier !== undefined && ['block', 'skip', 'advisory', 'pass'].includes(rawDecision));
+            if (!isGateEntry) continue;
+
+            let decision: GateEvent['decision'] = rawDecision as GateEvent['decision'];
+            const detail = (e.detail as string) ?? '';
+            if (decision === 'pass' && detail.includes('user-affirmed')) decision = 'skip';
+
+            events.push({
+              ts: (e.ts as string) ?? '',
+              sessionId: (e.sessionId as string) ?? '',
+              hook,
+              decision,
+              reason: detail,
+              editedFiles: (e.editedFiles as string[]) ?? [],
+              verifyPresent: e.verifyPresent as boolean | undefined,
+              verifyMissing: e.verifyMissing as string[] | undefined,
+              verify: e.verify as Record<string, string | null> | undefined,
+            });
+          } catch {}
+        }
+      } catch {}
+
+      events.sort((a, b) => b.ts.localeCompare(a.ts));
+      const passCount = events.filter(e => e.decision === 'pass').length;
+      const blockCount = events.filter(e => e.decision === 'block').length;
+      const skipCount = events.filter(e => e.decision === 'skip').length;
+      const advisoryCount = events.filter(e => e.decision === 'advisory').length;
+
+      return { events, total: events.length, passCount, blockCount, skipCount, advisoryCount };
+    });
+  });
+
+  app.get<{ Params: { id: string } }>('/sessions/:id/learning', async (req) => {
+    const sessionId = decodeURIComponent(req.params.id);
+    return cachedResult(`/sessions/${sessionId}/learning`, 30_000, () => {
+      type LearningItem = {
+        ts: string; sessionId: string; memoryId?: string;
+        type: string; source: string; insight: string;
+        content: string; tags: string;
+      };
+      type FeedbackItem = {
+        ts: string; sessionId: string;
+        trigger: string; polarity?: 'positive' | 'negative';
+        rating?: number; type: 'sentiment' | 'numeric';
+        priorText?: string; priorTools?: string[]; priorFiles?: string[];
+      };
+
+      const memories: LearningItem[] = [];
+      if (existsSync(dataPaths.learningProvenance)) {
+        try {
+          const lines = readFileSync(dataPaths.learningProvenance, 'utf-8').split('\n').filter(Boolean);
+          for (const line of lines) {
+            try {
+              const e = JSON.parse(line) as LearningItem;
+              if (e.sessionId === sessionId) memories.push(e);
+            } catch {}
+          }
+        } catch {}
+      }
+      memories.sort((a, b) => b.ts.localeCompare(a.ts));
+
+      const feedbackItems: FeedbackItem[] = [];
+      const numericRatings: number[] = [];
+
+      if (existsSync(dataPaths.feedback)) {
+        try {
+          const lines = readFileSync(dataPaths.feedback, 'utf-8').split('\n').filter(Boolean);
+          for (const line of lines) {
+            try {
+              const e = JSON.parse(line) as Record<string, unknown>;
+              if ((e.session_id as string) !== sessionId) continue;
+              const ts = (e.ts ?? e.timestamp) as string | undefined;
+              if (!ts) continue;
+              feedbackItems.push({
+                ts,
+                sessionId,
+                trigger: (e.trigger ?? '') as string,
+                polarity: e.polarity as 'positive' | 'negative' | undefined,
+                type: 'sentiment',
+                priorText: e.prior_text as string | undefined,
+                priorTools: e.prior_tools as string[] | undefined,
+                priorFiles: e.prior_files as string[] | undefined,
+              });
+            } catch {}
+          }
+        } catch {}
+      }
+
+      if (existsSync(dataPaths.ratings)) {
+        try {
+          const lines = readFileSync(dataPaths.ratings, 'utf-8').split('\n').filter(Boolean);
+          for (const line of lines) {
+            try {
+              const e = JSON.parse(line) as Record<string, unknown>;
+              const sid = (e.session_id ?? e.sessionId) as string | undefined;
+              if (sid !== sessionId) continue;
+              const ts = (e.timestamp ?? e.ts) as string | undefined;
+              const rating = typeof e.rating === 'number' ? e.rating : undefined;
+              if (!ts) continue;
+              feedbackItems.push({
+                ts,
+                sessionId,
+                trigger: (e.type ?? 'rating') as string,
+                rating,
+                type: 'numeric',
+              });
+              if (rating !== undefined) numericRatings.push(rating);
+            } catch {}
+          }
+        } catch {}
+      }
+
+      feedbackItems.sort((a, b) => b.ts.localeCompare(a.ts));
+      const avgRating = numericRatings.length > 0
+        ? numericRatings.reduce((s, r) => s + r, 0) / numericRatings.length
+        : 0;
+      const positiveCount = feedbackItems.filter(f => f.polarity === 'positive').length;
+      const negativeCount = feedbackItems.filter(f => f.polarity === 'negative').length;
+
+      return { memories, feedback: feedbackItems, avgRating, positiveCount, negativeCount };
+    });
+  });
+
   // Pre-warm the cache for the most expensive endpoints on server start so the
   // first user request is always fast. Runs after all plugins are registered.
   app.addHook('onReady', (done) => {
