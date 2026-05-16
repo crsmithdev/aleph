@@ -26,17 +26,13 @@ const r = createResults();
 console.log("--- isDocOnly ---");
 check(r, "*.md anywhere is docs",
   isDocOnly("README.md") && isDocOnly("src/skills/foo/SKILL.md") && isDocOnly("/abs/path/CLAUDE.md"));
-check(r, "*.txt, *.rst, *.html, *.csv are docs",
-  isDocOnly("notes.txt") && isDocOnly("foo.rst") && isDocOnly("mockup.html") && isDocOnly("data.csv"));
-check(r, "files under docs/ are docs regardless of extension",
-  isDocOnly("docs/architecture.html") && isDocOnly("/repo/docs/foo.png") && isDocOnly("docs/mockups/gate.html"));
-check(r, "mockup files are docs via extension (.html, .svg) — no path reference needed",
-  isDocOnly("docs/mockups/gates-patterns.html") && isDocOnly("src/mockups/wireframe.svg") && isDocOnly("random/mockup.html"));
-check(r, "eval fixture JSON is docs (test data, not behavior)",
-  isDocOnly("src/skills/polish/evals/evals.json") && isDocOnly("evals/fixtures.json"));
+check(r, "markup formats are docs (.md .rst .txt .adoc .asciidoc .ad .html .csv)",
+  isDocOnly("notes.txt") && isDocOnly("foo.rst") && isDocOnly("guide.adoc")
+    && isDocOnly("spec.asciidoc") && isDocOnly("ref.ad")
+    && isDocOnly("mockup.html") && isDocOnly("data.csv"));
 check(r, "lock files are docs (generated, not executed)",
   isDocOnly("bun.lockb") && isDocOnly("package-lock.json") && isDocOnly("yarn.lock"));
-check(r, "binary/media assets are docs",
+check(r, "binary/media assets are docs — no path reference needed",
   isDocOnly("logo.png") && isDocOnly("icon.svg") && isDocOnly("font.woff2") && isDocOnly("clip.mp4"));
 check(r, "source code is NOT docs",
   !isDocOnly("src/core/hooks/quality-check-stop.ts")
@@ -51,14 +47,13 @@ check(r, "behavior-shipping config is NOT docs",
 // ── classifyChange ───────────────────────────────────────────────────────────
 console.log("--- classifyChange ---");
 check(r, "no files → skip", classifyChange([]) === "skip");
-check(r, "only docs → skip",
-  classifyChange(["README.md", "docs/foo.png", "src/skills/x/SKILL.md"]) === "skip");
+check(r, "only markup + assets → skip",
+  classifyChange(["README.md", "logo.png", "src/skills/x/SKILL.md", "guide.adoc"]) === "skip");
 check(r, "assets + lock files alone → skip",
   classifyChange(["logo.png", "font.woff2", "bun.lockb"]) === "skip");
-check(r, "eval fixture JSON alone → skip",
-  classifyChange(["src/skills/polish/evals/evals.json"]) === "skip");
-check(r, "skill-rules.json (non-eval) → required",
-  classifyChange(["src/skills/skill-rules.json"]) === "required");
+check(r, "any json → required (no path exemptions)",
+  classifyChange(["src/skills/skill-rules.json"]) === "required"
+    && classifyChange(["evals/fixtures.json"]) === "required");
 check(r, "any code mixed in → required",
   classifyChange(["README.md", "src/foo.ts"]) === "required");
 check(r, "config alone → required",

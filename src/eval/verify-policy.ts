@@ -25,11 +25,11 @@
 
 /**
  * A path is docs-only if it cannot affect runtime behavior when changed.
- * Inverted logic: code and behavior-shipping config are "required";
- * everything else is "skip".
+ * Purely extension-based — no path references. Inverted logic: only code
+ * and behavior-shipping config are "required"; everything else is "skip".
  *
- * Required: .ts/.tsx/.js/.py/.sh source, .json/.yaml/.toml config (outside eval fixtures)
- * Skip: docs, markup, assets, lock files, eval fixtures, mockups
+ * Required: source (.ts/.tsx/.js/.py/.sh/etc), config (.json/.yaml/.toml/.env)
+ * Skip: markup, assets, lock files — by extension alone
  * Note: file moves via `git mv` never produce Edit/Write calls so are already exempt.
  */
 export function isDocOnly(filePath: string): boolean {
@@ -41,12 +41,8 @@ export function isDocOnly(filePath: string): boolean {
   // Binary/media assets: cannot be exercised by running the system
   if (/\.(png|jpe?g|gif|svg|ico|webp|avif|woff2?|ttf|eot|otf|mp4|mp3|wav|pdf)$/i.test(name)) return true;
 
-  // Structural paths: docs/ and eval fixtures (mockups covered by .html/.svg extensions above)
-  if (/(^|\/)docs\//.test(filePath)) return true;
-  if (/(^|\/)evals?\//.test(filePath) && /\.json$/i.test(name)) return true;
-
-  // Human-readable document and markup formats
-  if (/\.(md|markdown|txt|rst|html|htm|csv)$/i.test(name)) return true;
+  // Human-readable document and markup formats (~98% of docs in modern projects)
+  if (/\.(md|markdown|txt|rst|adoc|asciidoc|ad|html|htm|csv)$/i.test(name)) return true;
 
   // Source code requires verification
   if (/\.(ts|tsx|js|jsx|mjs|cjs|py|sh|bash|sql)$/i.test(name)) return false;
