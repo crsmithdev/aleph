@@ -170,7 +170,7 @@ check(r, "feedback: 'exactly' → positive", feedbackTest("exactly").entry?.pola
 check(r, "feedback: 'looks good' → positive", feedbackTest("looks good").entry?.polarity === "positive");
 
 // Positive — standalone-only words
-check(r, "feedback: standalone 'yes' → positive", feedbackTest("yes").entry?.polarity === "positive");
+check(r, "feedback: standalone 'yes' → no match (too ambiguous)", feedbackTest("yes").entry === null);
 check(r, "feedback: standalone 'good' → positive", feedbackTest("good").entry?.polarity === "positive");
 check(r, "feedback: 'yes the file is at /src/foo' → no match (not standalone)",
   feedbackTest("yes the file is at /src/foo").entry === null);

@@ -200,11 +200,11 @@ check(r, "does NOT match mid-sentence positive", !POSITIVE_FEEDBACK_RE.test("tha
 // ── POSITIVE_STANDALONE_RE ────────────────────────────────────────────────────
 console.log("--- POSITIVE_STANDALONE_RE ---");
 
-check(r, "matches 'yes' alone", POSITIVE_STANDALONE_RE.test("yes"));
-check(r, "matches 'yes!'", POSITIVE_STANDALONE_RE.test("yes!"));
+check(r, "does NOT match 'yes' alone (ambiguous)", !POSITIVE_STANDALONE_RE.test("yes"));
+check(r, "does NOT match 'yes!'", !POSITIVE_STANDALONE_RE.test("yes!"));
 check(r, "matches 'good'", POSITIVE_STANDALONE_RE.test("good"));
-check(r, "matches 'ok'", POSITIVE_STANDALONE_RE.test("ok"));
-check(r, "matches 'okay'", POSITIVE_STANDALONE_RE.test("okay"));
+check(r, "does NOT match 'ok' (ambiguous)", !POSITIVE_STANDALONE_RE.test("ok"));
+check(r, "does NOT match 'okay' (ambiguous)", !POSITIVE_STANDALONE_RE.test("okay"));
 check(r, "matches 'works'", POSITIVE_STANDALONE_RE.test("works"));
 check(r, "does NOT match 'hello'", !POSITIVE_STANDALONE_RE.test("hello"));
 check(r, "does NOT match 'yes please do X'", !POSITIVE_STANDALONE_RE.test("yes please do X"));
