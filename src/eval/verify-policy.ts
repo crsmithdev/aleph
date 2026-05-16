@@ -23,14 +23,39 @@
 // File classification
 // ---------------------------------------------------------------------------
 
-/** A path is docs-only iff its filename is markdown/text or it lives under a
- *  top-level `docs/` directory. SKILL.md, CLAUDE.md, README.md, INSTALL.md,
- *  SPEC.md all count. Settings/config JSON deliberately does NOT count —
- *  those ship behavior. */
+/**
+ * A path is docs-only if it cannot affect runtime behavior when changed.
+ * Inverted logic: code and behavior-shipping config are "required";
+ * everything else is "skip".
+ *
+ * Required: .ts/.tsx/.js/.py/.sh source, .json/.yaml/.toml config (outside eval fixtures)
+ * Skip: docs, markup, assets, lock files, eval fixtures, mockups
+ * Note: file moves via `git mv` never produce Edit/Write calls so are already exempt.
+ */
 export function isDocOnly(filePath: string): boolean {
   const name = filePath.split("/").pop() ?? "";
-  if (/\.(md|markdown|txt|rst)$/i.test(name)) return true;
+
+  // Lock files: generated, never executed
+  if (/^(bun\.lockb|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock|Gemfile\.lock)$/.test(name)) return true;
+
+  // Binary/media assets: cannot be exercised by running the system
+  if (/\.(png|jpe?g|gif|svg|ico|webp|avif|woff2?|ttf|eot|otf|mp4|mp3|wav|pdf)$/i.test(name)) return true;
+
+  // Structural paths: docs, mockups, eval fixtures
   if (/(^|\/)docs\//.test(filePath)) return true;
+  if (/(^|\/)mockups?\//.test(filePath)) return true;
+  if (/(^|\/)evals?\//.test(filePath) && /\.json$/i.test(name)) return true;
+
+  // Human-readable document and markup formats
+  if (/\.(md|markdown|txt|rst|html|htm|csv)$/i.test(name)) return true;
+
+  // Source code requires verification
+  if (/\.(ts|tsx|js|jsx|mjs|cjs|py|sh|bash|sql)$/i.test(name)) return false;
+
+  // Config that ships behavior requires verification
+  if (/\.(json|ya?ml|toml|env)$/i.test(name)) return false;
+
+  // Unknown extension: conservative
   return false;
 }
 
