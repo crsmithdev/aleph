@@ -456,4 +456,162 @@ console.log("--- effectivenessScore ---");
     effectivenessScore(row) === 0.5);
 }
 
+// ── memory-extract-stop.ts hook behavioral tests ───────────────────────────────
+//
+// These tests cover the three root causes we fixed when sessions weren't
+// appearing in the Learning Loop:
+//
+//   Bug 1: hasMemoryStore() was used as a gate — any session where Claude
+//           called memory_store would be skipped entirely, which meant every
+//           session was skipped because CLAUDE.md instructs routine memory_store
+//           use. Fix: removed the gate; the function is kept but no longer called
+//           from the hook.
+//
+//   Bug 2: memory-writer.py used getattr(result, 'id', None) on a dict —
+//           store_memory returns a dict, not an object, so the id was always None
+//           and no provenance was written. Fix: use result.get('memory', {}).get('content_hash').
+//
+//   Bug 3: memory-writer.py only wrote provenance for newly-stored memories,
+//           not for deduped ones. Dedup = session already stored via memory_store
+//           MCP, so the Learning Loop never logged those sessions either.
+//           Fix: write provenance even for duplicates (with "duplicate": true).
+//
+// Tests here cover Bug 1 (hook-level, testable without Python) and confirm
+// hasMemoryStore() still works correctly as a pure function (unchanged contract).
+
+console.log("--- memory-extract-stop hook behavioral ---");
+
+import { createTestEnv, cleanupTestEnv, runHook, writeTranscript, userMsg, assistantMsg } from "../eval/harness.ts";
+
+const te = createTestEnv("memory-extract");
+
+const EXTRACT_HOOK = "memory/hooks/memory-extract-stop.ts";
+
+// Helper: build a substantive transcript (>= 6 messages, >= 1 edit)
+function makeSubstantiveTranscript(
+  te: ReturnType<typeof createTestEnv>,
+  name: string,
+  opts: { withMemoryStore?: boolean } = {}
+): string {
+  const lines = [
+    userMsg("implement the feature"),
+    assistantMsg("Starting work.", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    userMsg("looks good, keep going"),
+    assistantMsg("Continuing.", [{ name: "Edit", input: { file_path: "/src/bar.ts" } }]),
+    userMsg("great, almost there"),
+    assistantMsg("Done.", opts.withMemoryStore
+      ? [{ name: "mcp__memory__memory_store", input: { content: "user prefers small commits" } }]
+      : [{ name: "Bash", input: { command: "bun test" } }]
+    ),
+    userMsg("ship it"),
+  ];
+  return writeTranscript(te, name, lines);
+}
+
+// Non-substantive: too few messages, no edits → should skip
+{
+  const tPath = writeTranscript(te, "tiny", [
+    userMsg("do the thing"),
+    assistantMsg("ok", []),
+  ]);
+  const result = runHook(te, EXTRACT_HOOK, JSON.stringify({
+    session_id: "test-tiny",
+    transcript_path: tPath,
+  }));
+  check(r, "non-substantive (2 msgs, 0 edits): exits 0 silently", result.exitCode === 0);
+}
+
+// Substantive without memory_store: should proceed to extraction (may spawn writer)
+{
+  const tPath = makeSubstantiveTranscript(te, "no-mstore", { withMemoryStore: false });
+  const result = runHook(te, EXTRACT_HOOK, JSON.stringify({
+    session_id: "test-no-mstore",
+    transcript_path: tPath,
+  }));
+  check(r, "substantive (no memory_store): exits 0", result.exitCode === 0);
+}
+
+// Substantive WITH memory_store: must NOT skip (Bug 1 fix)
+// Before the fix, this session would be silently skipped. After the fix,
+// the hook proceeds to extraction regardless.
+{
+  const tPath = makeSubstantiveTranscript(te, "with-mstore", { withMemoryStore: true });
+  const result = runHook(te, EXTRACT_HOOK, JSON.stringify({
+    session_id: "test-with-mstore",
+    transcript_path: tPath,
+  }));
+  check(r, "substantive (WITH memory_store): exits 0 — not skipped (Bug 1 fix)", result.exitCode === 0);
+  // The hook should NOT emit a "skip: Claude already called memory_store" trace.
+  // We can verify there's no such skip by enabling tracing and checking output.
+}
+
+// Tracing verification: with memory_store present, old skip trace should NOT appear
+{
+  const { writeFileSync, unlinkSync } = await import("fs");
+  const { resolve } = await import("path");
+  const traceFile = resolve(te.root, "src/.trace");
+  writeFileSync(traceFile, "");
+
+  const tPath = makeSubstantiveTranscript(te, "trace-mstore", { withMemoryStore: true });
+  const result = runHook(te, EXTRACT_HOOK, JSON.stringify({
+    session_id: "test-trace-mstore",
+    transcript_path: tPath,
+  }));
+
+  try { unlinkSync(traceFile); } catch {}
+
+  check(r, "memory_store in transcript: trace does NOT contain old skip message",
+    !result.trace.includes("skip: Claude already called memory_store"));
+  check(r, "memory_store in transcript: hook still exits 0",
+    result.exitCode === 0);
+}
+
+// Missing transcript path → graceful skip
+{
+  const result = runHook(te, EXTRACT_HOOK, JSON.stringify({
+    session_id: "test-missing",
+    transcript_path: "/tmp/this-does-not-exist-xyzzy.jsonl",
+  }));
+  check(r, "missing transcript path: exits 0", result.exitCode === 0);
+}
+
+// Malformed stdin → exits 0 (advisory — must never block)
+{
+  const result = runHook(te, EXTRACT_HOOK, "not valid json {{{{");
+  check(r, "malformed stdin: exits 0", result.exitCode === 0);
+}
+
+// ── hasMemoryStore function contract (unchanged, still exported) ───────────────
+
+console.log("--- hasMemoryStore (still exported, no longer a gate) ---");
+
+// The function contract hasn't changed even though it's no longer used
+// as a gate in the hook. These verify the function itself is correct.
+
+{
+  // mcp__memory__memory_store (the actual MCP tool name) must match
+  const msg: ParsedMessage = { role: "assistant", text: "", toolUses: ["mcp__memory__memory_store"], toolInputs: [{}] };
+  const s = mockSummary({ messages: [msg] });
+  check(r, "hasMemoryStore: matches mcp__memory__memory_store",
+    hasMemoryStore(s) === true);
+}
+
+{
+  // Short form used in tests also matches
+  const msg: ParsedMessage = { role: "assistant", text: "", toolUses: ["memory_store"], toolInputs: [{}] };
+  const s = mockSummary({ messages: [msg] });
+  check(r, "hasMemoryStore: matches short 'memory_store'",
+    hasMemoryStore(s) === true);
+}
+
+{
+  // Non-memory tools do not match
+  const msg: ParsedMessage = { role: "assistant", text: "", toolUses: ["Bash", "Edit", "Read"], toolInputs: [{}, {}, {}] };
+  const s = mockSummary({ messages: [msg] });
+  check(r, "hasMemoryStore: false for non-memory tools",
+    hasMemoryStore(s) === false);
+}
+
+cleanupTestEnv(te);
+
 printAndExit(r);
