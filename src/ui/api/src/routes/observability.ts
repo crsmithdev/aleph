@@ -1653,8 +1653,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         const items: LearningItem[] = [];
         for (const line of lines) {
           try {
-            const item = JSON.parse(line) as LearningItem & { duplicate?: boolean };
-            if (item.duplicate) continue;
+            const item = JSON.parse(line) as LearningItem;
             const key = `${item.sessionId}|${item.type}|${item.source}`;
             if (seen.has(key)) continue;
             seen.add(key);
