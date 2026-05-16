@@ -271,6 +271,14 @@ export function setCategories(
   const added = categoryIds.filter((id) => !existingIds.has(id));
   const removed = [...existingIds].filter((id) => !newIds.has(id));
 
+  const affectedIds = [...new Set([...added, ...removed])];
+  const categoryNameMap = new Map(
+    affectedIds.length > 0
+      ? db.select().from(categories).where(inArray(categories.id, affectedIds)).all()
+          .map((c) => [c.id, c.name])
+      : []
+  );
+
   db.delete(goalCategories).where(eq(goalCategories.goalId, goalId)).run();
 
   if (categoryIds.length > 0) {
@@ -283,7 +291,7 @@ export function setCategories(
     eventBus?.emitMutation({
       type: 'category_added',
       goalId,
-      details: { categoryId },
+      details: { categoryId, categoryName: categoryNameMap.get(categoryId) },
       timestamp: now,
     });
   }
@@ -292,7 +300,7 @@ export function setCategories(
     eventBus?.emitMutation({
       type: 'category_removed',
       goalId,
-      details: { categoryId },
+      details: { categoryId, categoryName: categoryNameMap.get(categoryId) },
       timestamp: now,
     });
   }
