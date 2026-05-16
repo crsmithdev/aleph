@@ -105,7 +105,7 @@ function HabitRow({ habit }: { habit: Habit }) {
                 if (e.key === 'Escape') { setEditTitle(habit.title); setEditing(false); }
               }}
               autoFocus
-              className="flex-1 bg-bg-tertiary border border-border-secondary rounded px-2 py-0.5 text-sm text-text-primary focus:outline-none focus:border-accent"
+              className="flex-1 bg-bg-tertiary border border-border-secondary rounded px-2 py-0.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
             />
           ) : (
             <button

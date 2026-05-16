@@ -1,6 +1,6 @@
 ---
 name: design-reviewer
-description: Full design review across all 18 dimensions of `src/rules/design/RULES.md` — visual hierarchy, typography, color, components, state coverage, dark mode, density, responsiveness, accessibility, forms, performance, hydration, locale, anti-patterns, and more. Phased output (Critical, Refinement, Polish) with approval gates. Use when asked to review UI quality, audit design, or polish an interface.
+description: Full design review across all 18 dimensions of `src/rules/design/RULES.md` — visual hierarchy, typography, color, components, state coverage, dark mode, density, responsiveness, accessibility, forms, performance, hydration, locale, anti-patterns, and more. Phased output (Critical, Refinement, Polish) with approval gates. Use when asked to review UI quality, audit design, or polish an interface. Do NOT use for code logic or architecture (use code-review), active bugs (use code-debugger), or documentation (use docs-reviewer).
 model: sonnet
 ---
 

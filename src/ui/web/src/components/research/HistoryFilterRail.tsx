@@ -87,7 +87,7 @@ export function HistoryFilterRail({ filters, onChange, counts }: Props) {
           value={filters.search}
           onChange={e => onChange({ ...filters, search: e.target.value })}
           placeholder="title or prompt…"
-          className="w-full bg-bg-tertiary border border-border-primary text-text-secondary text-sm px-2.5 py-1.5 rounded focus:outline-none focus:border-accent"
+          className="w-full bg-bg-tertiary border border-border-primary text-text-secondary text-sm px-2.5 py-1.5 rounded focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
         />
       </Group>
 

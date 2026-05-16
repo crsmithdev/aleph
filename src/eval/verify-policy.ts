@@ -94,9 +94,17 @@ export function userAffirmedSkip(mostRecentUserText: string): boolean {
 // Transcript helpers
 // ---------------------------------------------------------------------------
 
+interface ContentBlock {
+  type: string;
+  text?: string;
+  name?: string;
+  input?: { file_path?: string; [key: string]: unknown };
+  content?: string | Array<{ type: string; text?: string }>;
+}
+
 interface TranscriptEntry {
   type?: string;
-  message?: { content?: unknown };
+  message?: { content?: ContentBlock[] };
 }
 
 function parseLine(line: string): TranscriptEntry | null {
@@ -111,7 +119,7 @@ export function turnStartIndex(transcriptLines: string[]): number {
     if (!e || e.type !== "user") continue;
     const content = e.message?.content;
     if (!Array.isArray(content)) continue;
-    if (content.some((b: any) => b.type === "text" && typeof b.text === "string" && b.text.trim())) {
+    if (content.some(b => b.type === "text" && typeof b.text === "string" && b.text.trim())) {
       return i;
     }
   }
@@ -123,9 +131,9 @@ export function mostRecentUserText(transcriptLines: string[]): string {
   const idx = turnStartIndex(transcriptLines);
   const e = parseLine(transcriptLines[idx]);
   if (!e || !Array.isArray(e.message?.content)) return "";
-  return (e.message!.content as any[])
+  return e.message!.content!
     .filter(b => b.type === "text" && typeof b.text === "string")
-    .map(b => b.text as string)
+    .map(b => b.text!)
     .join("\n");
 }
 
@@ -146,7 +154,7 @@ export function extractTurn(transcriptLines: string[], turnStart: number): TurnA
     if (e.type === "assistant") {
       const content = e.message?.content;
       if (!Array.isArray(content)) continue;
-      for (const b of content as any[]) {
+      for (const b of content) {
         if (b.type !== "tool_use") continue;
         if (b.name === "Edit" || b.name === "Write" || b.name === "NotebookEdit") {
           const fp = b.input?.file_path;
@@ -156,7 +164,7 @@ export function extractTurn(transcriptLines: string[], turnStart: number): TurnA
     } else if (e.type === "user") {
       const content = e.message?.content;
       if (!Array.isArray(content)) continue;
-      for (const b of content as any[]) {
+      for (const b of content) {
         if (b.type !== "tool_result") continue;
         const c = b.content;
         if (typeof c === "string") outputs.push(c);

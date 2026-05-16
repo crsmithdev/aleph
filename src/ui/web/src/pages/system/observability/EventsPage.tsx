@@ -412,7 +412,7 @@ export function EventsPage() {
         value={search}
         onChange={(e) => handleSearch(e.target.value)}
         placeholder="Search…"
-        className="px-2.5 py-0.5 text-xs rounded border border-border-primary bg-bg-secondary text-text-primary placeholder-text-muted focus:outline-none focus:border-accent w-32"
+        className="px-2.5 py-0.5 text-xs rounded border border-border-primary bg-bg-secondary text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent w-32"
       />
     </>
   );

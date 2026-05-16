@@ -53,7 +53,7 @@ export function TodoItem({ todo }: TodoItemProps) {
                 if (e.key === 'Enter') saveTitle();
                 if (e.key === 'Escape') { setTitleText(todo.title); setEditingTitle(false); }
               }}
-              className="flex-1 bg-bg-tertiary border border-border-secondary rounded px-2 py-0.5 text-sm text-text-primary focus:outline-none focus:border-accent"
+              className="flex-1 bg-bg-tertiary border border-border-secondary rounded px-2 py-0.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
             />
           ) : (
             <span
@@ -76,7 +76,7 @@ export function TodoItem({ todo }: TodoItemProps) {
                 <textarea
                   value={noteText}
                   onChange={(e) => setNoteText(e.target.value)}
-                  className="flex-1 bg-bg-tertiary border border-border-secondary rounded px-2 py-1 text-sm text-text-primary resize-none focus:outline-none focus:border-accent"
+                  className="flex-1 bg-bg-tertiary border border-border-secondary rounded px-2 py-1 text-sm text-text-primary resize-none focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
                   rows={2}
                   autoFocus
                 />

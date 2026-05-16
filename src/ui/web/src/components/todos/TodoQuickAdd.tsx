@@ -27,7 +27,7 @@ export function TodoQuickAdd() {
           setTitle(v.length > 0 ? v.charAt(0).toUpperCase() + v.slice(1) : v);
         }}
         placeholder="Add a Todo..."
-        className="flex-1 bg-bg-secondary border border-border-primary rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
+        className="flex-1 bg-bg-secondary border border-border-primary rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
       />
       <button
         type="submit"

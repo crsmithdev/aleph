@@ -1,6 +1,6 @@
 ---
 name: config-audit
-description: Full health check for Claude Code agent configuration — hooks, skills, AGENTS.md, CLAUDE.md, and MCP setup. Runs agnix structural linting, traces hook outputs to their downstream consumers (flagging dead outputs), validates the skills registry against files on disk, and checks CLAUDE.md @-includes for broken references. Produces a prioritized findings report then offers to fix approved issues. Use when auditing hooks, checking if hook outputs are consumed, finding orphaned skills, reviewing agent configuration health, or any time the user asks "are my hooks wired up", "audit my config", or "what's broken in my agent setup".
+description: Full health check for Claude Code agent configuration — hooks, skills, AGENTS.md, CLAUDE.md, and MCP setup. Runs agnix structural linting, traces hook outputs to their downstream consumers (flagging dead outputs), validates the skills registry against files on disk, and checks CLAUDE.md @-includes for broken references. Produces a prioritized findings report then offers to fix approved issues. Use when auditing hooks, checking if hook outputs are consumed, finding orphaned skills, reviewing agent configuration health, or any time the user asks "are my hooks wired up", "audit my config", or "what's broken in my agent setup". Do NOT use for general code quality (use code-review), security vulnerabilities (use security-audit), or UI design (use design-reviewer).
 model: sonnet
 ---
 

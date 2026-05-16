@@ -182,7 +182,7 @@ for (const f of feedback) {
   if (!fbBySession[sid]) fbBySession[sid] = [];
   fbBySession[sid].push({
     polarity: f.polarity,
-    text: [(f as any).prompt, (f as any).prior_text].filter(Boolean).join(" "),
+    text: [f.prompt, f.prior_text].filter(Boolean).join(" "),
     timestamp: ts,
     session_id: sid,
   });

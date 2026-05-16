@@ -311,7 +311,7 @@ function FieldInput({
   onSave: (path: string, value: unknown) => void;
 }) {
   const inputCls =
-    'bg-bg-primary border border-border-primary rounded px-2 py-1 text-sm text-text-primary focus:outline-none focus:border-accent';
+    'bg-bg-primary border border-border-primary rounded px-2 py-1 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent';
 
   const initial = field.kind === 'bool' ? Boolean(value) : value == null ? '' : String(value);
   const [draft, setDraft] = useState<string | boolean>(initial);
