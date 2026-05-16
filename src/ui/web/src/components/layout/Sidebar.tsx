@@ -39,21 +39,14 @@ const navGroups: NavGroup[] = [
     items: [
       { to: '/observability', label: 'Overview', icon: 'dashboard' },
       { to: '/observability/sessions', label: 'Sessions', icon: 'schedule' },
-      { to: '/observability/learning', label: 'Learning', icon: 'school', separator: 'before' },
+      { to: '/observability/learning', label: 'Learning', icon: 'school' },
       { to: '/observability/skills', label: 'Skills', icon: 'auto_awesome' },
       { to: '/observability/tools', label: 'Tools', icon: 'build' },
       { to: '/observability/hooks', label: 'Hooks', icon: 'webhook' },
       { to: '/observability/events', label: 'Events', icon: 'event_note' },
-      { to: '/observability/compaction', label: 'Compaction', icon: 'compress', disabled: true },
       { to: '/observability/signals', label: 'Signals', icon: 'bolt', separator: 'before' },
       { to: '/observability/memory', label: 'Memory', icon: 'memory' },
       { to: '/observability/db', label: 'Database', icon: 'storage' },
-    ],
-  },
-  {
-    label: 'Evaluation',
-    items: [
-      { to: '/observability/evals', label: 'Evals', icon: 'science' },
     ],
   },
 ];
