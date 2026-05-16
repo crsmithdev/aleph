@@ -77,11 +77,15 @@ leaves:
     references:
       - src/rules/design/typography.md
       - src/rules/design/accessibility.md
+    agent_backed: design-reviewer    # omnibus dispatches via Agent() for visual tool access
 
   docs-audit:
     # Until Phase 2 consolidation, leaf-level rules still live with the legacy skill.
     rules: src/rules/docs/RULES.md
     legacy_source: src/skills/docs-author-v2/RULES.md
+
+  docs-fix:
+    agent_backed: docs-reviewer      # fix pass uses docs-reviewer two-phase write+accuracy workflow
 
   security-audit:
     rules: src/rules/security/RULES.md

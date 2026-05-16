@@ -82,8 +82,75 @@ For each in-scope SKILL.md, evaluate sections A through G in `src/rules/skills/R
 - **E.2 (R2 — no inline skill chaining):** flag prose like "invoke `<sibling-skill>` to do X" outside omnibus-dispatch context.
 - **F.1 (R4 — no hardcoded gates):** in fix-flavor SKILL.md files, flag literal `bun test.ts` / `bun run ui:smoke` / `agnix --dry-run` outside Cross-references / example blocks.
 - **G.1 (trigger drift):** parse description, extract quoted trigger phrases, confirm each appears in the corresponding `skill-rules.json` entry's keyword list (literal or regex).
+- **G.2 (transcript trigger analysis):** read recent session transcripts and check trigger health. See the full procedure below.
 - **H.1 (unused-skill):** check all four conditions: no `examples/`, description < 150 chars, zero git commits in last 30 days, creation > 30 days ago; all four together = `suggestion` `unused-skill`
 - **H.2 (dead-reference):** parse skill body for `subagent_type: "<name>"` patterns and hook script name references; grep `src/agents/`, `~/.claude/agents/`, and hook registry; flag missing as `important` `dead-reference`
+
+### G.2: Transcript-backed trigger analysis (runs during scope=all audits)
+
+**Goal**: identify triggers that don't match how the user actually types, and surface where natural-language routing is being bypassed by slash commands.
+
+**Step 1 — Extract recent user messages:**
+
+```python
+import json, glob, os
+
+project_dir = os.path.expanduser("~/.claude/projects/-home-crsmi-construct")
+files = sorted(glob.glob(f"{project_dir}/*.jsonl"), key=os.path.getmtime, reverse=True)[:30]
+msgs = []
+for f in files:
+    for line in open(f):
+        d = json.loads(line)
+        if d.get("type") == "user":
+            content = d.get("message", {}).get("content", "")
+            if isinstance(content, str) and content.strip() and not content.startswith("<"):
+                msgs.append(content[:400])
+            elif isinstance(content, list):
+                for c in content:
+                    if isinstance(c, dict) and c.get("type") == "text" and not c["text"].startswith("<"):
+                        msgs.append(c["text"][:400])
+```
+
+**Step 2 — Classify each message:**
+
+For each message, check:
+- Does it match any skill's keyword list (literal match or regex)? → record the matched skill
+- Does it start with a slash command (e.g., `/audit`, `/pickup`)? → record as slash-only invocation
+- Did it appear to trigger a skill (look at surrounding assistant messages for skill-invocation patterns)? → compare with what the keyword router would have matched
+
+**Step 3 — Compute per-skill stats:**
+
+For each skill: `slash_count` (invoked via `/command`), `keyword_match_count` (keywords matched user text), `triggered_count` (skill actually ran), `missed_count` (phrases in transcripts that SHOULD have triggered but didn't).
+
+**Step 4 — Flag findings:**
+
+- **`trigger-stale`** (`suggestion`, confidence 70): skill has keyword triggers, but zero natural-language matches across ≥20 user messages — triggers don't match real usage. Include: the 3 closest transcript phrases that *almost* matched, and suggested additions.
+- **`slash-only`** (`suggestion`, confidence 65): skill is only ever invoked via `/command`, never by natural-language match — triggers may be too narrow or the slash command is the natural entry point (review for intentionality).
+- **`missed-trigger`** (`suggestion`, confidence 75): user phrase `<phrase>` clearly maps to skill `<skill>` semantics (based on what actually ran next) but no keyword matched. Emit the missed phrase as a suggested trigger addition.
+- **`over-broad-trigger`** (`nit`, confidence 65): a keyword is a common English word/phrase (≤3 tokens) that could match many unrelated messages. Flag for specificity review.
+
+**Step 5 — Emit trigger health summary:**
+
+At the end of the phased prose report, add:
+
+```
+## Trigger Health — <N> messages sampled
+
+| Skill | Slash-only | NL-matched | Missed | Verdict |
+|-------|-----------|------------|--------|---------|
+| grill-me | 8 | 2 | 0 | ok |
+| verify-completion | 3 | 0 | 4 | ⚠ stale triggers |
+| context-compact | 0 | 1 | 2 | ⚠ check triggers |
+...
+
+Broad triggers (may over-match): <list of keyword/skill pairs>
+Suggested additions: <list of specific phrases to add, per skill>
+```
+
+**Guardrails for G.2:**
+- Only flag `slash-only` when there are ≥5 invocations and 0 keyword matches; don't penalize rarely-used skills.
+- Don't flag trigger-stale when keyword triggers are slash-only by design (e.g., `eval-harness` is always `/eval`).
+- Suggested trigger phrases must come from actual transcript text — no invented generic suggestions.
 
 ### 4. Apply negative-filter list
 
@@ -109,7 +176,7 @@ Single SARIF v2.1.0 run, `tool.driver.name = "skills-audit"`. Each `result`:
     "confidence": 0,
     "severity": "blocking" | "important" | "nit" | "suggestion" | "praise",
     "fix": "<concrete change — frontmatter add, keyword add, refactor>",
-    "tag": "frontmatter" | "naming" | "correctness" | "description-quality" | "orphaned-skill" | "routing-collision" | "slop" | "examples" | "r1-violation" | "r2-violation" | "r4-violation" | "trigger-drift" | "unused-skill" | "dead-reference",
+    "tag": "frontmatter" | "naming" | "correctness" | "description-quality" | "orphaned-skill" | "routing-collision" | "slop" | "examples" | "r1-violation" | "r2-violation" | "r4-violation" | "trigger-drift" | "trigger-stale" | "slash-only" | "missed-trigger" | "over-broad-trigger" | "unused-skill" | "dead-reference",
     "scope": "diff" | "module" | "all"
   }
 }
@@ -127,6 +194,7 @@ Praise candidates: SKILL.md files that exemplify the architecture leaf contract 
 ## Summary
 N skills audited · N orphaned · N missing examples · N over-length
 Keyword collisions: N · R1 violations: N · R4 violations: N
+Trigger health: N stale · N slash-only · N missed-trigger · N over-broad
 
 ## blocking (N)
 - <file:line> — <rule> — <one-line>

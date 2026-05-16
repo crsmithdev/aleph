@@ -51,9 +51,11 @@ Registry (current — all audit + fix cells populated, suggest pending):
 
 | Verb | code | design | docs | skills | hooks | agents | config | security |
 |---|---|---|---|---|---|---|---|---|
-| audit | `code-audit` | `design-audit` | `docs-audit` | `skills-audit` | `hooks-audit` | `agents-audit` | `config-audit` | `security-audit` |
-| fix | `code-fix` | `design-fix` | `docs-fix` | `skills-fix` | `hooks-fix` | `agents-fix` | —¹ | `security-fix` |
+| audit | `code-audit` | `design-audit` ★ | `docs-audit` | `skills-audit` | `hooks-audit` | `agents-audit` | `config-audit` | `security-audit` |
+| fix | `code-fix` | `design-fix` | `docs-fix` ★ | `skills-fix` | `hooks-fix` | `agents-fix` | —¹ | `security-fix` |
 | suggest | — | — | — | — | — | — | — | — |
+
+★ = agent-backed: dispatched via `Agent()` rather than `Skill()` — see Phase 1 and Phase 6 notes.
 
 All audit and fix leaves emit SARIF natively per `src/skills/_shared/finding.md`. The `author` verb (`docs-author-v2`, `skill-creator`) is invoked directly per artifact creation rather than orchestrated through the matrix.
 
@@ -61,12 +63,18 @@ All audit and fix leaves emit SARIF natively per `src/skills/_shared/finding.md`
 
 ## Phase 1: Fan out (parallel)
 
-For each (verb, domain) cell with a leaf in the registry, invoke `Skill('<leaf-name>')` in parallel. Pass:
+For each (verb, domain) cell with a leaf in the registry, invoke the leaf in parallel. Pass:
 
 - `scope` — resolved per `defaults.scope` and CLI overrides
 - `reference` — if the user named one
 - `mode` — always `report-only` for this phase, even on `/fix` invocations (fix happens after approval)
 - `threshold` — provisional only; the validation pass refines
+
+**Standard leaves**: call `Skill('<leaf-name>')`.
+
+**Agent-backed leaves**: call `Agent(subagent_type: "<agent-name>", ...)` instead of `Skill()`. Agent-backed leaves run in an isolated subagent context with full tool access. Current agent-backed audit leaves:
+
+- `design` → `Agent(subagent_type: "design-reviewer")` — design-reviewer reads `design-audit/SKILL.md` and executes it as a proper subagent with browser/screenshot access for qualitative visual checks. Preferred over inline Skill() for design because RULES.md qualitative dimensions (hierarchy, motion, alignment) require `bun run ui:smoke` and visual rendering.
 
 Each leaf returns a SARIF v2.1.0 run plus a prose phased summary. Capture both; merge the SARIF, keep the prose for context.
 
@@ -159,8 +167,9 @@ For `/fix` invocations: proceed to Phase 6 only with explicit approval.
 
 Group approved findings by `domain`. For each domain with approved findings:
 
-1. Invoke `Skill('<domain>-fix')` with the SARIF subset for that domain.
-2. Wait for the fix skill to return with edits applied + `gate("<domain>")` verification.
+1. Invoke the fix leaf with the SARIF subset for that domain. **Standard domains**: call `Skill('<domain>-fix')`. **Agent-backed fix domains**: call `Agent(subagent_type: "<agent-name>")` — current agent-backed fix leaves:
+   - `docs` → `Agent(subagent_type: "docs-reviewer")` — docs-reviewer's two-phase workflow (Phase 1: write/update from source, Phase 2: accuracy + c7score) is more thorough than a bare docs-fix pass for correcting drift findings.
+2. Wait for the fix leaf to return with edits applied + `gate("<domain>")` verification.
 3. If the gate failed, stop. Surface the failure as a new finding (typically `severity: blocking`, `tag: regression`).
 
 Run domains in parallel within a phase (blocking first, then important, etc.). Sequential across phases — finish all blocking fixes and verify before starting important fixes.

@@ -6,7 +6,7 @@
     },
     {
       "skill": "verify-completion",
-      "keywords": ["verify", "check it works", "make sure it works", "validate", "end to end", "e2e"]
+      "keywords": ["verify", "check it works", "make sure it works", "validate", "end to end", "e2e", "remaining issues", "what's left", "what else needs", "what still needs", "is this done", "is it done", "what's remaining", "list remaining", "/what.{0,10}(left|remaining|still|else)/"]
     },
     {
       "skill": "ralph-loop",
@@ -78,15 +78,19 @@
     },
     {
       "skill": "context-compact",
-      "keywords": ["context window", "token budget", "context limit", "context is full", "save and clear", "running out of context", "/context.{0,15}(full|100|limit|running out)/"]
+      "keywords": ["context window", "token budget", "context limit", "context is full", "save and clear", "running out of context", "save context", "save and continue", "almost out of tokens", "almost out of context", "getting close to limit", "96%", "compaction reminder", "/context.{0,15}(full|100|limit|running out)/", "/running out.{0,15}context/", "/(save|compact).{0,10}(context|session)/"]
     },
     {
       "skill": "eval-harness",
-      "keywords": ["eval", "define eval", "run eval", "eval report"]
+      "keywords": ["eval harness", "define eval", "run eval", "eval report", "eval suite", "eval cases", "eval criteria", "/eval-harness", "run the evals", "set up evals", "/(define|create|write|run|check).{0,10}eval/"]
+    },
+    {
+      "skill": "design-standards",
+      "keywords": ["design-standards", "/design-standards", "check accessibility", "accessibility audit", "a11y", "best practices", "review for a11y", "web standards", "check web standards", "check the design", "design looks off", "design check", "design is off", "something looks off", "ui looks wrong", "the design looks", "visually check", "visual check", "check how it looks", "screenshot the ui", "/(check|review|audit).{0,20}(design|ui|page|screen|layout)/", "/design.{0,15}(looks|check|audit|review)/"]
     },
     {
       "skill": "design-audit",
-      "keywords": ["design-audit", "design audit", "audit the design", "audit the ui", "audit ui", "design review", "make this feel professional", "make this look professional", "polish the interface", "ux audit", "go through the ui", "review the ui", "the ui needs work", "clean up the ui", "typography", "fix typography", "em dash", "en dash", "text hierarchy", "review layout", "fix the font", "change the font", "font size", "font is wrong", "web standards", "check accessibility", "accessibility audit", "a11y", "best practices", "review ux", "/(review|audit|go through).{0,15}(ui|design|interface|ux)/", "/(fix|change|update|wrong).{0,15}font/", "/font.{0,15}(wrong|bad|ugly|small|big|size)/"]
+      "keywords": ["design-audit", "design audit", "audit the design", "audit the ui", "audit ui", "design review", "make this feel professional", "make this look professional", "polish the interface", "ux audit", "go through the ui", "review the ui", "the ui needs work", "clean up the ui", "typography", "fix typography", "em dash", "en dash", "text hierarchy", "review layout", "fix the font", "change the font", "font size", "font is wrong", "review ux", "/(review|audit|go through).{0,15}(ui|design|interface|ux)/", "/(fix|change|update|wrong).{0,15}font/", "/font.{0,15}(wrong|bad|ugly|small|big|size)/"]
     },
     {
       "skill": "config-audit",
@@ -114,7 +118,7 @@
     },
     {
       "skill": "dogfood",
-      "keywords": ["dogfood", "try this as a user", "use it like a user", "use it like a real user", "pretend you don't know the internals", "how does this feel to use", "/dogfood\\s+\\S+/"]
+      "keywords": ["dogfood", "try this as a user", "use it like a user", "use it like a real user", "pretend you don't know the internals", "how does this feel to use", "use it for real", "try it out as if", "act like a user", "/dogfood\\s+\\S+/", "/try.{0,20}(as a user|like a user|as if you)/"]
     },
     {
       "skill": "hooks-audit",
