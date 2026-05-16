@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Sidebar reorg — Observability options</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Symbols+Outlined" />
+<style>
+  :root {
+    /* Dracula theme (matches the screenshots in the annotations) */
+    --bg-page:        #16181d;
+    --bg-primary:     #282a36;
+    --bg-secondary:   #21222c;
+    --bg-tertiary:    #343746;
+    --text-primary:   #f8f8f2;
+    --text-secondary: #a9b1d6;
+    --text-muted:     #6272a4;
+    --border-primary: #44475a;
+    --accent:         #bd93f9;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  body { padding: 28px 32px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 700; }
+  p.lede { color: var(--text-secondary); font-size: 14px; margin: 0 0 28px; max-width: 72ch; }
+  h2.opt-h { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin: 0 0 4px; font-family: ui-monospace, Menlo, monospace; }
+  h3.opt-t { font-size: 16px; margin: 0 0 6px; font-weight: 600; color: var(--text-primary); }
+  p.opt-d { font-size: 13px; color: var(--text-secondary); margin: 0 0 14px; min-height: 56px; }
+
+  .row { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 18px; align-items: start; }
+
+  /* ---------- Sidebar shell ---------- */
+  .sidebar {
+    width: 220px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 14px;
+    user-select: none;
+  }
+  .sb-header {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border-primary);
+  }
+  .brand {
+    width: 32px; height: 32px;
+    background: var(--bg-tertiary);
+    color: var(--accent);
+    font-weight: 900;
+    border-radius: 6px;
+    display: grid; place-items: center;
+    font-family: ui-sans-serif, system-ui;
+  }
+  .brand-name { font-weight: 700; font-size: 22px; color: var(--text-primary); letter-spacing: -0.01em; }
+
+  .sb-nav { padding: 12px 8px; }
+  .sb-group { margin-top: 8px; }
+  .sb-group:first-child { margin-top: 0; }
+  .sb-group-label {
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    padding: 12px 8px 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: default;
+  }
+  .sb-group-label .chev {
+    font-size: 16px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+  .sb-items > * + * { margin-top: 2px; }
+  .sb-item {
+    display: flex; align-items: center; gap: 10px;
+    min-height: 32px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: default;
+  }
+  .sb-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+  .sb-item.active {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .sb-item.disabled { opacity: 0.4; cursor: not-allowed; }
+  .sb-icon {
+    font-family: 'Material Symbols Outlined';
+    font-size: 20px;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+  .sb-label { font-size: 14px; }
+  hr.sep { border: 0; border-top: 1px solid var(--border-primary); margin: 6px 8px; }
+
+  /* Footer */
+  .sb-footer { border-top: 1px solid var(--border-primary); padding: 8px; display: flex; align-items: center; gap: 4px; }
+  .sb-footer .sb-item { flex: 1; }
+  .collapse-btn {
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    color: var(--text-muted);
+    border-radius: 4px;
+  }
+  .collapse-btn:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+
+  /* Tag for the suggested-active item */
+  .pill {
+    display: inline-block;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 9999px;
+    margin-left: 8px;
+    letter-spacing: 0.06em;
+  }
+
+  /* ---------- Option C — page with tabs preview ---------- */
+  .c-page {
+    grid-column: span 2;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    padding: 16px 20px;
+    font-size: 13px;
+  }
+  .c-page h4 { margin: 0 0 8px; font-size: 18px; }
+  .c-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-primary); margin: 12px 0 14px; }
+  .c-tab {
+    padding: 8px 14px;
+    color: var(--text-secondary);
+    cursor: default;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .c-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 500;
+  }
+  .c-tab:hover:not(.active) { color: var(--text-primary); }
+  .c-body { color: var(--text-muted); font-size: 12px; }
+  .c-body code { background: var(--bg-tertiary); color: var(--text-secondary); padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+
+  .footnote { color: var(--text-muted); font-size: 12px; margin-top: 24px; max-width: 72ch; }
+</style>
+</head>
+<body>
+
+<h1>Observability sidebar — reorg options</h1>
+<p class="lede">
+  After removing Compaction + Evaluation, "Observability" is still a 10-item drawer. Each option keeps every existing route reachable; only the navigation shell changes.
+  Active row = <span style="color: var(--accent);">/observability/learning</span> for reference.
+</p>
+
+<div class="row">
+
+  <!-- ============================================================ -->
+  <!-- CURRENT (baseline)                                            -->
+  <!-- ============================================================ -->
+  <div>
+    <h2 class="opt-h">Baseline</h2>
+    <h3 class="opt-t">Current (after cleanup)</h3>
+    <p class="opt-d">One 10-item "Observability" group with a single inner separator. What you have today after the three annotation fixes.</p>
+
+    <div class="sidebar">
+      <div class="sb-header">
+        <div class="brand">C</div>
+        <div class="brand-name">Construct</div>
+      </div>
+      <div class="sb-nav">
+        <div class="sb-group">
+          <div class="sb-group-label">Life</div>
+          <div class="sb-items">
+            <div class="sb-item"><span class="sb-icon">dashboard</span><span class="sb-label">Overview</span></div>
+            <div class="sb-item"><span class="sb-icon">target</span><span class="sb-label">Goals</span></div>
+            <div class="sb-item"><span class="sb-icon">check_circle</span><span class="sb-label">Todos</span></div>
+            <div class="sb-item"><span class="sb-icon">autorenew</span><span class="sb-label">Habits</span></div>
+          </div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">Research</div>
+          <div class="sb-items">
+            <div class="sb-item"><span class="sb-icon">dashboard</span><span class="sb-label">Research</span></div>
+            <div class="sb-item"><span class="sb-icon">visibility</span><span class="sb-label">Monitors</span></div>
+            <div class="sb-item"><span class="sb-icon">tune</span><span class="sb-label">Providers</span></div>
+          </div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">Observability</div>
+          <div class="sb-items">
+            <div class="sb-item"><span class="sb-icon">dashboard</span><span class="sb-label">Overview</span></div>
+            <div class="sb-item"><span class="sb-icon">schedule</span><span class="sb-label">Sessions</span></div>
+            <div class="sb-item active"><span class="sb-icon">school</span><span class="sb-label">Learning</span></div>
+            <div class="sb-item"><span class="sb-icon">auto_awesome</span><span class="sb-label">Skills</span></div>
+            <div class="sb-item"><span class="sb-icon">build</span><span class="sb-label">Tools</span></div>
+            <div class="sb-item"><span class="sb-icon">webhook</span><span class="sb-label">Hooks</span></div>
+            <div class="sb-item"><span class="sb-icon">event_note</span><span class="sb-label">Events</span></div>
+            <hr class="sep" />
+            <div class="sb-item"><span class="sb-icon">bolt</span><span class="sb-label">Signals</span></div>
+            <div class="sb-item"><span class="sb-icon">memory</span><span class="sb-label">Memory</span></div>
+            <div class="sb-item"><span class="sb-icon">storage</span><span class="sb-label">Database</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="sb-footer">
+        <div class="sb-item"><span class="sb-icon">settings</span><span class="sb-label">Settings</span></div>
+        <div class="collapse-btn"><span class="sb-icon">keyboard_double_arrow_left</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- OPTION A — Split into 4 purpose-driven groups                -->
+  <!-- ============================================================ -->
+  <div>
+    <h2 class="opt-h">Option A</h2>
+    <h3 class="opt-t">Split into 4 groups</h3>
+    <p class="opt-d">Replace one "Observability" header with four shorter ones answering distinct questions. Surfaces Tokens/Cost + Subagents. Zero new routes.</p>
+
+    <div class="sidebar">
+      <div class="sb-header">
+        <div class="brand">C</div>
+        <div class="brand-name">Construct</div>
+      </div>
+      <div class="sb-nav">
+        <div class="sb-group">
+          <div class="sb-group-label">Life</div>
+          <div class="sb-items">
+            <div class="sb-item"><span class="sb-icon">dashboard</span><span class="sb-label">Overview</span></div>
+            <div class="sb-item"><span class="sb-icon">target</span><span class="sb-label">Goals</span></div>
+            <div class="sb-item"><span class="sb-icon">check_circle</span><span class="sb-label">Todos</span></div>
+            <div class="sb-item"><span class="sb-icon">autorenew</span><span class="sb-label">Habits</span></div>
+          </div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">Research</div>
+          <div class="sb-items">
+            <div class="sb-item"><span class="sb-icon">dashboard</span><span class="sb-label">Research</span></div>
+            <div class="sb-item"><span class="sb-icon">visibility</span><span class="sb-label">Monitors</span></div>
+            <div class="sb-item"><span class="sb-icon">tune</span><span class="sb-label">Providers</span></div>
+          </div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">Activity</div>
+          <div class="sb-items">
+            <div class="sb-item"><span class="sb-icon">dashboard</span><span class="sb-label">Overview</span></div>
+            <div class="sb-item"><span class="sb-icon">schedule</span><span class="sb-label">Sessions</span></div>
+            <div class="sb-item"><span class="sb-icon">event_note</span><span class="sb-label">Events</span></div>
+            <div class="sb-item"><span class="sb-icon">paid</span><span class="sb-label">Tokens & cost</span></div>
+          </div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">Capabilities</div>
+          <div class="sb-items">
+            <div class="sb-item"><span class="sb-icon">auto_awesome</span><span class="sb-label">Skills</span></div>
+            <div class="sb-item"><span class="sb-icon">build</span><span class="sb-label">Tools</span></div>
+            <div class="sb-item"><span class="sb-icon">webhook</span><span class="sb-label">Hooks</span></div>
+            <div class="sb-item"><span class="sb-icon">smart_toy</span><span class="sb-label">Subagents</span></div>
+          </div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">Learning</div>
+          <div class="sb-items">
+            <div class="sb-item active"><span class="sb-icon">school</span><span class="sb-label">Learning loop</span></div>
+            <div class="sb-item"><span class="sb-icon">memory</span><span class="sb-label">Memory</span></div>
+            <div class="sb-item"><span class="sb-icon">bolt</span><span class="sb-label">Signals</span></div>
+          </div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">System</div>
+          <div class="sb-items">
+            <div class="sb-item"><span class="sb-icon">storage</span><span class="sb-label">Database</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="sb-footer">
+        <div class="sb-item"><span class="sb-icon">settings</span><span class="sb-label">Settings</span></div>
+        <div class="collapse-btn"><span class="sb-icon">keyboard_double_arrow_left</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- OPTION B — Collapsible groups                                 -->
+  <!-- ============================================================ -->
+  <div>
+    <h2 class="opt-h">Option B</h2>
+    <h3 class="opt-t">Groups, collapsible</h3>
+    <p class="opt-d">Same shape as A; each group header is a chevron toggle. Collapsed state remembered per group. Shown here with <em>Activity</em>, <em>Capabilities</em>, <em>System</em> collapsed.</p>
+
+    <div class="sidebar">
+      <div class="sb-header">
+        <div class="brand">C</div>
+        <div class="brand-name">Construct</div>
+      </div>
+      <div class="sb-nav">
+        <div class="sb-group">
+          <div class="sb-group-label">Life <span class="chev material-symbols-outlined" style="font-family:'Material Symbols Outlined'">expand_more</span></div>
+          <div class="sb-items">
+            <div class="sb-item"><span class="sb-icon">dashboard</span><span class="sb-label">Overview</span></div>
+            <div class="sb-item"><span class="sb-icon">target</span><span class="sb-label">Goals</span></div>
+            <div class="sb-item"><span class="sb-icon">check_circle</span><span class="sb-label">Todos</span></div>
+            <div class="sb-item"><span class="sb-icon">autorenew</span><span class="sb-label">Habits</span></div>
+          </div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">Research <span class="chev" style="font-family:'Material Symbols Outlined'">expand_more</span></div>
+          <div class="sb-items">
+            <div class="sb-item"><span class="sb-icon">dashboard</span><span class="sb-label">Research</span></div>
+            <div class="sb-item"><span class="sb-icon">visibility</span><span class="sb-label">Monitors</span></div>
+            <div class="sb-item"><span class="sb-icon">tune</span><span class="sb-label">Providers</span></div>
+          </div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">Activity <span class="chev" style="font-family:'Material Symbols Outlined'">chevron_right</span></div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">Capabilities <span class="chev" style="font-family:'Material Symbols Outlined'">chevron_right</span></div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">Learning <span class="chev" style="font-family:'Material Symbols Outlined'">expand_more</span></div>
+          <div class="sb-items">
+            <div class="sb-item active"><span class="sb-icon">school</span><span class="sb-label">Learning loop</span></div>
+            <div class="sb-item"><span class="sb-icon">memory</span><span class="sb-label">Memory</span></div>
+            <div class="sb-item"><span class="sb-icon">bolt</span><span class="sb-label">Signals</span></div>
+          </div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">System <span class="chev" style="font-family:'Material Symbols Outlined'">chevron_right</span></div>
+        </div>
+      </div>
+      <div class="sb-footer">
+        <div class="sb-item"><span class="sb-icon">settings</span><span class="sb-label">Settings</span></div>
+        <div class="collapse-btn"><span class="sb-icon">keyboard_double_arrow_left</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- OPTION C — 4 entries; sub-nav lives as tabs in the page      -->
+  <!-- ============================================================ -->
+  <div>
+    <h2 class="opt-h">Option C</h2>
+    <h3 class="opt-t">Tabs-per-group</h3>
+    <p class="opt-d">Sidebar shrinks to 4 entries. Each opens a page whose tabs replace the old sub-nav. Routes become e.g. <code style="font-size:11px;background:var(--bg-tertiary);padding:1px 5px;border-radius:3px;color:var(--text-secondary);">/observability/learning/loop</code>.</p>
+
+    <div class="sidebar">
+      <div class="sb-header">
+        <div class="brand">C</div>
+        <div class="brand-name">Construct</div>
+      </div>
+      <div class="sb-nav">
+        <div class="sb-group">
+          <div class="sb-group-label">Life</div>
+          <div class="sb-items">
+            <div class="sb-item"><span class="sb-icon">dashboard</span><span class="sb-label">Overview</span></div>
+            <div class="sb-item"><span class="sb-icon">target</span><span class="sb-label">Goals</span></div>
+            <div class="sb-item"><span class="sb-icon">check_circle</span><span class="sb-label">Todos</span></div>
+            <div class="sb-item"><span class="sb-icon">autorenew</span><span class="sb-label">Habits</span></div>
+          </div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">Research</div>
+          <div class="sb-items">
+            <div class="sb-item"><span class="sb-icon">dashboard</span><span class="sb-label">Research</span></div>
+            <div class="sb-item"><span class="sb-icon">visibility</span><span class="sb-label">Monitors</span></div>
+            <div class="sb-item"><span class="sb-icon">tune</span><span class="sb-label">Providers</span></div>
+          </div>
+        </div>
+        <div class="sb-group">
+          <div class="sb-group-label">Observability</div>
+          <div class="sb-items">
+            <div class="sb-item"><span class="sb-icon">history</span><span class="sb-label">Activity</span></div>
+            <div class="sb-item"><span class="sb-icon">extension</span><span class="sb-label">Capabilities</span></div>
+            <div class="sb-item active"><span class="sb-icon">school</span><span class="sb-label">Learning</span></div>
+            <div class="sb-item"><span class="sb-icon">storage</span><span class="sb-label">System</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="sb-footer">
+        <div class="sb-item"><span class="sb-icon">settings</span><span class="sb-label">Settings</span></div>
+        <div class="collapse-btn"><span class="sb-icon">keyboard_double_arrow_left</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<h2 style="font-size:14px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-top:36px;font-family:ui-monospace,Menlo,monospace;">Option C — page preview</h2>
+<p class="opt-d" style="min-height:0;margin-bottom:14px;">What clicking <span style="color:var(--accent);">Learning</span> would show with tabs inside the page instead of more sidebar items.</p>
+
+<div class="c-page">
+  <h4>Learning</h4>
+  <div class="c-tabs">
+    <div class="c-tab active">Loop</div>
+    <div class="c-tab">Memory</div>
+    <div class="c-tab">Signals</div>
+  </div>
+  <div class="c-body">
+    <p style="margin:0 0 8px;">Tab content for <code>/observability/learning/loop</code> renders here — the existing <code>LearningPage</code> body, unchanged.</p>
+    <p style="margin:0;">Other groups follow the same pattern: <code>Activity</code> ▸ Overview · Sessions · Events · Tokens · Compaction · &nbsp; <code>Capabilities</code> ▸ Skills · Tools · Hooks · Subagents · &nbsp; <code>System</code> ▸ Database · Backups.</p>
+  </div>
+</div>
+
+<p class="footnote">
+  Active row in every sidebar shown is <code style="background:var(--bg-tertiary);padding:1px 5px;border-radius:3px;color:var(--text-secondary);">/observability/learning</code>.
+  Compaction + Evals stay routed for direct URL access; they just don't appear in the nav until ready.
+  Icon choices for new entries (Activity → <code style="background:var(--bg-tertiary);padding:1px 5px;border-radius:3px;color:var(--text-secondary);">history</code>, Capabilities → <code style="background:var(--bg-tertiary);padding:1px 5px;border-radius:3px;color:var(--text-secondary);">extension</code>, Subagents → <code style="background:var(--bg-tertiary);padding:1px 5px;border-radius:3px;color:var(--text-secondary);">smart_toy</code>, Tokens → <code style="background:var(--bg-tertiary);padding:1px 5px;border-radius:3px;color:var(--text-secondary);">paid</code>) are placeholders — swap any that don't read right.
+</p>
+
+</body>
+</html>
