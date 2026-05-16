@@ -187,15 +187,15 @@ export interface DecisionContext {
 }
 
 const BLOCK_REASON =
-  "Code change with no [verify] block. Run something that exercises the change, then emit:\n" +
+  "Code change with no [verify] block. Verify the actual output of this change — do not describe what you expect, confirm what you observe. Then emit:\n" +
   "\n" +
   "  [verify]\n" +
-  "  scope:      <files/lines exercised>\n" +
-  "  method:     <what you ran>\n" +
-  "  assertions: <what you checked>\n" +
+  "  scope:      <what was exercised>\n" +
+  "  method:     <how you verified>\n" +
+  "  assertions: <what you confirmed>\n" +
   "  [/verify]\n" +
   "\n" +
-  "All three keys required and non-empty. Reply \"skip verify\" to bypass once.";
+  "All three keys required and non-empty. The method is yours to choose: navigate the UI, exercise the hook, run the tests — whatever produces observable evidence. Reply \"skip verify\" to bypass once.";
 
 export function decide(ctx: DecisionContext): Decision {
   const klass = classifyChange(ctx.editedFiles);
