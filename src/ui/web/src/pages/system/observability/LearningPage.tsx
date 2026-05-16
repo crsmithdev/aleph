@@ -6,6 +6,7 @@ import {
   useObsGateEvents,
   useObsGatePatterns,
   useObsGatePatternEvents,
+  useObsMemoryUsage,
 } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -69,6 +70,11 @@ type CorrectionGroup = {
   lastTs: string;
   items: FeedbackItem[];
 };
+
+/** Strip /home/<username>/ prefix from file paths for compact display. */
+function shortenPath(p: string): string {
+  return p.replace(/^\/home\/[^/]+\//, '~/');
+}
 
 /** Parse a string of space-separated key=value tokens into pairs, or return null if it doesn't look like key=value. */
 function parseKeyValues(text: string): Array<{ key: string; value: string }> | null {
@@ -193,7 +199,7 @@ function PatternEventsTable({ pattern }: { pattern: GatePattern }) {
     {
       key: 'ts',
       label: 'Time',
-      width: '115px',
+      width: '140px',
       render: (row) => (
         <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{compactTs(row.ts)}</span>
       ),
@@ -217,13 +223,14 @@ function PatternEventsTable({ pattern }: { pattern: GatePattern }) {
     {
       key: 'editedFiles',
       label: 'Files',
-      width: '200px',
+      width: '300px',
       render: (row) => {
         if (!row.editedFiles || row.editedFiles.length === 0) return <span className="text-text-disabled">—</span>;
+        const short = row.editedFiles.map(shortenPath);
         return (
           <span className="font-mono text-text-muted text-xs" title={row.editedFiles.join(', ')}>
-            {row.editedFiles.slice(0, 2).join(', ')}
-            {row.editedFiles.length > 2 && ` +${row.editedFiles.length - 2}`}
+            {short.slice(0, 2).join(', ')}
+            {short.length > 2 && ` +${short.length - 2}`}
           </span>
         );
       },
@@ -314,7 +321,7 @@ function GatesSection() {
     {
       key: 'ts',
       label: 'Time',
-      width: '115px',
+      width: '140px',
       render: (row) => (
         <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{compactTs(row.ts)}</span>
       ),
@@ -343,15 +350,16 @@ function GatesSection() {
     {
       key: 'editedFiles',
       label: 'Files',
-      width: '200px',
+      width: '300px',
       render: (row) => {
         if (!row.editedFiles || row.editedFiles.length === 0) {
           return <span className="text-text-disabled">—</span>;
         }
+        const short = row.editedFiles.map(shortenPath);
         return (
           <span className="font-mono text-text-muted text-xs" title={row.editedFiles.join(', ')}>
-            {row.editedFiles.slice(0, 2).join(', ')}
-            {row.editedFiles.length > 2 && ` +${row.editedFiles.length - 2}`}
+            {short.slice(0, 2).join(', ')}
+            {short.length > 2 && ` +${short.length - 2}`}
           </span>
         );
       },
@@ -407,7 +415,7 @@ function GatesSection() {
                       <span className="font-mono text-text-primary text-xs">{pattern.hook}</span>
                       <span className="text-text-disabled text-xs shrink-0">{fmtNumber(pattern.sessionIds.length)} sessions</span>
                       {pattern.filePrefix
-                        ? <span className="font-mono text-text-muted text-xs">{pattern.filePrefix}</span>
+                        ? <span className="font-mono text-text-muted text-xs">{shortenPath(pattern.filePrefix)}</span>
                         : <span className="text-text-disabled text-xs">no scope</span>
                       }
                       <span className="text-text-disabled text-xs shrink-0">{compactTs(pattern.lastSeen)}</span>
@@ -516,6 +524,7 @@ export function LearningPage() {
   const { data: feedbackData, isLoading: feedbackLoading, error: feedbackError, refetch: feedbackRefetch } = useObsLearningFeedback();
   const { data: gateData } = useObsGateEvents();
   const { data: patternsData } = useObsGatePatterns();
+  const { data: memUsage } = useObsMemoryUsage(range);
 
   // Compute summary stats
   const memoriesStored = loopData?.memoryCount ?? 0;
@@ -547,24 +556,14 @@ export function LearningPage() {
       .sort((a, b) => b.count - a.count);
   })();
 
-  // Loop table columns
+  // Loop table columns — Type badge merged inline with Insight to avoid redundancy
   const loopColumns: Column<LoopItem>[] = [
     {
       key: 'ts',
       label: 'Time',
-      width: '115px',
+      width: '140px',
       render: (row) => (
         <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{compactTs(row.ts)}</span>
-      ),
-    },
-    {
-      key: 'type',
-      label: 'Type',
-      width: '110px',
-      render: (row) => (
-        <span className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold', loopTypeBadge(row.type))}>
-          {row.type}
-        </span>
       ),
     },
     {
@@ -579,13 +578,18 @@ export function LearningPage() {
       key: 'insight',
       label: 'Insight',
       render: (row) => (
-        <span className="text-text-muted text-sm italic" title={row.insight}>{row.insight}</span>
+        <span className="flex items-center gap-2">
+          <span className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold shrink-0', loopTypeBadge(row.type))}>
+            {row.type}
+          </span>
+          <span className="text-text-muted text-sm italic" title={row.insight}>{row.insight}</span>
+        </span>
       ),
     },
     {
       key: 'memoryId',
       label: 'Memory',
-      width: '100px',
+      width: '120px',
       render: (row) =>
         row.memoryId ? (
           <Link
@@ -611,7 +615,7 @@ export function LearningPage() {
     {
       key: 'ts',
       label: 'Time',
-      width: '115px',
+      width: '140px',
       render: (row) => (
         <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{compactTs(row.ts)}</span>
       ),
@@ -681,8 +685,13 @@ export function LearningPage() {
       />
 
       {/* Summary stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 !mt-0">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 !mt-0">
         <StatCard label="Memories Stored" value={fmtNumber(memoriesStored)} accent={memoriesStored > 0 ? 'success' : undefined} />
+        <StatCard
+          label="Memories Read"
+          value={memUsage ? fmtNumber(memUsage.searches) : '—'}
+          accent={memUsage && memUsage.searches > 0 ? 'success' : undefined}
+        />
         <StatCard
           label="Avg Rating"
           value={avgRating > 0 ? avgRating.toFixed(1) : '—'}
@@ -701,6 +710,7 @@ export function LearningPage() {
           label="Circumventions"
           value={fmtNumber(circumventions)}
           accent={circumventions === 0 ? 'success' : circumventions < 5 ? 'warning' : 'error'}
+          onClick={circumventions > 0 ? () => document.getElementById('gates-section')?.scrollIntoView({ behavior: 'smooth' }) : undefined}
         />
       </div>
 
@@ -838,7 +848,7 @@ export function LearningPage() {
       </div>
 
       {/* Gates section */}
-      <div className="space-y-3">
+      <div id="gates-section" className="space-y-3">
         <h2 className="font-heading text-lg font-medium text-text-secondary">Gates</h2>
         <GatesSection />
       </div>

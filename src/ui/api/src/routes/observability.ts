@@ -1661,8 +1661,15 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/learning/feedback', async () => {
     return cachedResult('/learning/feedback', 60_000, () => {
-      // Sentiment polarity is mapped to a canonical numeric score for uniform display.
-      const POLARITY_SCORE: Record<string, number> = { positive: 8, negative: 2 };
+      // Sentiment polarity → numeric score. Negative is flat; positive is graduated
+      // by trigger word so "great" outweighs "thanks" in the avg rating display.
+      function sentimentScore(polarity: string, trigger: string): number {
+        if (polarity === 'negative') return 2;
+        const t = trigger.toLowerCase().trim();
+        if (/^(great|perfect|exactly|excellent|awesome|brilliant|nice work|love it|looks good)/.test(t)) return 9;
+        if (/^(good|nice|cool|sweet|works|thanks)/.test(t)) return 7;
+        return 8;
+      }
 
       type FeedbackItem = {
         ts: string; sessionId: string;
@@ -1683,7 +1690,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
               const ts = (e.ts ?? e.timestamp) as string | undefined;
               if (!ts) continue;
               const polarity = e.polarity as string | undefined;
-              const rating = POLARITY_SCORE[polarity ?? ''] ?? 5;
+              const triggerWord = ((e.trigger ?? e.prompt) as string | undefined) ?? '';
+              const rating = sentimentScore(polarity ?? '', triggerWord);
               items.push({
                 ts,
                 sessionId: (e.session_id ?? '') as string,
