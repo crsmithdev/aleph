@@ -50,13 +50,12 @@ const navGroups: NavGroup[] = [
       { to: '/observability/tools', label: 'Tools', icon: 'build' },
       { to: '/observability/hooks', label: 'Hooks', icon: 'webhook' },
       { to: '/observability/subagents', label: 'Subagents', icon: 'smart_toy' },
+      { to: '/observability/learning', label: 'Learning loop', icon: 'school' },
     ],
   },
   {
     label: 'Learning',
     items: [
-      { to: '/observability/learning', label: 'Learning loop', icon: 'school' },
-      { to: '/observability/memory', label: 'Memory', icon: 'memory' },
       { to: '/observability/signals', label: 'Signals', icon: 'bolt' },
     ],
   },
@@ -64,6 +63,7 @@ const navGroups: NavGroup[] = [
     label: 'System',
     items: [
       { to: '/observability/db', label: 'Database', icon: 'storage' },
+      { to: '/observability/memory', label: 'Memory', icon: 'memory' },
     ],
   },
 ];
