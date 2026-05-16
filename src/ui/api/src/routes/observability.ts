@@ -1649,9 +1649,17 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
           content: string; tags: string;
         };
         const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
+        const seen = new Set<string>();
         const items: LearningItem[] = [];
         for (const line of lines) {
-          try { items.push(JSON.parse(line) as LearningItem); } catch {}
+          try {
+            const item = JSON.parse(line) as LearningItem & { duplicate?: boolean };
+            if (item.duplicate) continue;
+            const key = `${item.sessionId}|${item.type}|${item.source}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            items.push(item);
+          } catch {}
         }
         items.sort((a, b) => b.ts.localeCompare(a.ts));
         return { items: items.slice(0, 200), total: items.length, memoryCount };

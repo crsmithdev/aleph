@@ -62,7 +62,7 @@ async def main():
                         is_duplicate = True
                 else:
                     memory_id = getattr(result, 'id', None) or getattr(result, 'memory_id', None)
-                if memory_id:
+                if memory_id and not is_duplicate:
                     entry = {
                         "ts": datetime.datetime.utcnow().isoformat() + "Z",
                         "sessionId": mem.get("session_id", "unknown"),
@@ -72,7 +72,6 @@ async def main():
                         "insight": mem.get("insight", ""),
                         "content": content,
                         "tags": mem.get("tags", ""),
-                        **({"duplicate": True} if is_duplicate else {}),
                     }
                     os.makedirs(os.path.dirname(PROVENANCE_PATH), exist_ok=True)
                     with open(PROVENANCE_PATH, "a") as f:
