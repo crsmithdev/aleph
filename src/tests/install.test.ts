@@ -52,4 +52,83 @@ if (existsSync(installedIdentityDir)) {
   }
 }
 
+// ── Installed hooks ──────────────────────────────────────────────────────────
+
+console.log("\n--- installed hooks ---");
+
+const coreHooksDir = resolve(Bun.env.HOME!, ".claude/construct/core/hooks");
+const memoryHooksDir = resolve(Bun.env.HOME!, ".claude/construct/memory/hooks");
+const hooksJsonPath = resolve(coreHooksDir, "settings-hooks.json");
+
+check(r, "hooks: settings-hooks.json installed", existsSync(hooksJsonPath));
+
+if (existsSync(hooksJsonPath)) {
+  let hooks: any;
+  try { hooks = JSON.parse(readFileSync(hooksJsonPath, "utf-8")); } catch { hooks = null; }
+  check(r, "hooks: settings-hooks.json valid JSON", hooks !== null);
+  if (hooks?.hooks) {
+    const groups = (Object.values(hooks.hooks) as Array<Array<{ hooks: Array<{ command: string }> }>>).flat();
+    const entries = groups.flatMap(g => g.hooks ?? []);
+    check(r, "hooks: at least 5 hooks registered", entries.length >= 5);
+    check(r, "hooks: all commands reference .ts files", entries.every(h => h.command?.includes(".ts")));
+  }
+}
+
+// ~/.claude/settings.json — merged output with path-rewritten commands
+const settingsPath = resolve(Bun.env.HOME!, ".claude/settings.json");
+if (existsSync(settingsPath)) {
+  let settings: any;
+  try { settings = JSON.parse(readFileSync(settingsPath, "utf-8")); } catch { settings = null; }
+  check(r, "settings.json: valid JSON", settings !== null);
+  if (settings?.hooks) {
+    const groups = (Object.values(settings.hooks) as Array<Array<{ hooks: Array<{ command: string }> }>>).flat();
+    const entries = groups.flatMap(g => g.hooks ?? []);
+    check(r, "settings.json: commands point to installed path", entries.every(h => !h.command?.includes(" src/")));
+  }
+}
+
+const expectedCoreHooks = [
+  "quality-format-edit.ts", "git-hygiene-stop.ts", "quality-check-stop.ts",
+  "isolation-block-sql.ts", "security-scan-bash.ts", "quality-typecheck-edit.ts",
+  "context-backup-precompact.ts", "context-monitor-stop.ts", "context-suggest-edit.ts",
+  "git-require-edit.ts", "routing-classify-submit.ts",
+];
+for (const f of expectedCoreHooks) {
+  check(r, `hooks: core/${f} installed`, existsSync(resolve(coreHooksDir, f)));
+}
+
+const expectedMemoryHooks = [
+  "context-restore-start.ts", "rating-capture-submit.ts", "feedback-capture-submit.ts",
+];
+for (const f of expectedMemoryHooks) {
+  check(r, `hooks: memory/${f} installed`, existsSync(resolve(memoryHooksDir, f)));
+}
+
+// ── Installed skills ─────────────────────────────────────────────────────────
+
+console.log("\n--- installed skills ---");
+
+const installedSkillsDir = resolve(Bun.env.HOME!, ".claude/construct/skills");
+const skillRulesPath = resolve(installedSkillsDir, "skill-rules.json");
+check(r, "skills: directory installed", existsSync(installedSkillsDir));
+check(r, "skills: skill-rules.json installed", existsSync(skillRulesPath));
+if (existsSync(skillRulesPath)) {
+  let skillRules: any;
+  try { skillRules = JSON.parse(readFileSync(skillRulesPath, "utf-8")); } catch { skillRules = null; }
+  check(r, "skills: skill-rules.json valid JSON", skillRules !== null);
+  check(r, "skills: has rules array with entries", Array.isArray(skillRules?.rules) && skillRules.rules.length > 0);
+}
+
+// ── Installed CLAUDE.md ──────────────────────────────────────────────────────
+
+console.log("\n--- installed CLAUDE.md ---");
+
+const claudeMdPath = resolve(Bun.env.HOME!, ".claude/CLAUDE.md");
+check(r, "CLAUDE.md: exists", existsSync(claudeMdPath));
+if (existsSync(claudeMdPath)) {
+  const claudeMd = readFileSync(claudeMdPath, "utf-8");
+  check(r, "CLAUDE.md: references @construct/core/CLAUDE.md", claudeMd.includes("@construct/core/CLAUDE.md"));
+  check(r, "CLAUDE.md: references @construct/core/identity/AGENTS.md", claudeMd.includes("@construct/core/identity/AGENTS.md") || claudeMd.includes("@construct/core/CLAUDE.md"));
+}
+
 printAndExit(r);

@@ -10,7 +10,7 @@
  *  - the fake LLM server was actually hit (search + complete counts > 0),
  *    confirming env-based provider redirection works end-to-end
  *
- * The fake-llm-server lives in src/ui/e2e/. We import it from there so the
+ * The fake-llm-server lives in src/ui/integration/. We import it from there so the
  * two integration paths (API-direct and Playwright) share canned responses.
  *
  * Env vars must be set BEFORE app boot because Bun.spawn snapshots the
@@ -22,7 +22,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { FastifyInstance } from 'fastify';
-import { startFakeProviderServer, type FakeServerHandle } from '../../../e2e/fake-llm-server.js';
+import { startFakeProviderServer, type FakeServerHandle } from '../../../integration/fake-llm-server.js';
 
 let app: FastifyInstance;
 let port: number;

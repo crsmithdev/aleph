@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createApp } from '../app.js';
+import { dispatchWebhooks } from '../webhook-dispatch.js';
+import { createDb } from '@construct/data';
+import { webhooks } from '../db/schema.js';
 import type { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;
@@ -144,5 +147,90 @@ describe('Webhooks API', () => {
     const res = await app.inject({ method: 'GET', url: '/api/webhooks' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toHaveLength(0);
+  });
+});
+
+describe('dispatchWebhooks', () => {
+  const WEBHOOK_DDL = `
+    CREATE TABLE IF NOT EXISTS webhooks (
+      id TEXT PRIMARY KEY, url TEXT NOT NULL, events TEXT NOT NULL DEFAULT '[]',
+      secret TEXT, active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`;
+
+  it('fires POST to matching active webhook', async () => {
+    let received: unknown = null;
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        received = await req.json();
+        return new Response('ok');
+      },
+    });
+    try {
+      const { db, sqlite } = createDb(':memory:');
+      sqlite.exec(WEBHOOK_DDL);
+      db.insert(webhooks).values({
+        id: 'wh-1',
+        url: `http://localhost:${server.port}/hook`,
+        events: JSON.stringify(['loop.completed']),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }).run();
+
+      const results = await dispatchWebhooks('loop.completed', { id: 'loop-1', status: 'completed' }, db);
+      expect(results).toHaveLength(1);
+      expect(results[0].id).toBe('wh-1');
+      expect(results[0].status).toBe(200);
+      expect((received as any)?.event).toBe('loop.completed');
+      expect((received as any)?.payload?.status).toBe('completed');
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it('skips inactive webhooks', async () => {
+    const { db, sqlite } = createDb(':memory:');
+    sqlite.exec(WEBHOOK_DDL);
+    db.insert(webhooks).values({
+      id: 'wh-inactive',
+      url: 'http://localhost:9999/hook',
+      events: JSON.stringify(['loop.completed']),
+      active: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }).run();
+    const results = await dispatchWebhooks('loop.completed', {}, db);
+    expect(results).toHaveLength(0);
+  });
+
+  it('skips webhooks subscribed to different events', async () => {
+    const { db, sqlite } = createDb(':memory:');
+    sqlite.exec(WEBHOOK_DDL);
+    db.insert(webhooks).values({
+      id: 'wh-other',
+      url: 'http://localhost:9999/hook',
+      events: JSON.stringify(['goal.created']),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }).run();
+    const results = await dispatchWebhooks('loop.completed', {}, db);
+    expect(results).toHaveLength(0);
+  });
+
+  it('returns error status on unreachable URL', async () => {
+    const { db, sqlite } = createDb(':memory:');
+    sqlite.exec(WEBHOOK_DDL);
+    db.insert(webhooks).values({
+      id: 'wh-bad',
+      url: 'http://localhost:1/hook',
+      events: JSON.stringify(['loop.completed']),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }).run();
+    const results = await dispatchWebhooks('loop.completed', {}, db);
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('error');
   });
 });

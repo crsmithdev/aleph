@@ -20,8 +20,8 @@ import { researchRoutes } from './routes/research.js';
 import { loopRoutes } from './routes/loops.js';
 import { publicRoutes } from './routes/public.js';
 import { EventBus, HistoryService, applyDDL } from '@construct/goals';
-import { applyResearchDDL } from '@construct/research';
-import { webhooks } from './db/schema.js';
+import { applyResearchDDL, onResearchEvent } from '@construct/research';
+import { dispatchWebhooks } from './webhook-dispatch.js';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 import { createLogStream, log } from './logger.js';
@@ -104,6 +104,18 @@ export async function createApp(opts?: { dbUrl?: string; skipStatic?: boolean })
     startResearchLogger();
   }
 
+  // Dispatch webhooks on loop terminal events; unsubscribe on close to avoid closed-DB errors
+  const unsubWebhooks = onResearchEvent((event) => {
+    if (event.type !== 'loop') return;
+    const status = (event.payload as Record<string, unknown>)?.status as string | undefined;
+    const eventName =
+      status === 'completed' || status === 'envelope_exhausted' ? 'loop.completed'
+      : status === 'failed' ? 'loop.failed'
+      : null;
+    if (!eventName) return;
+    void dispatchWebhooks(eventName, event.payload, db);
+  });
+
   app.addHook('onSend', (_req, reply, _payload, done) => {
     reply.header('Content-Security-Policy', "default-src 'self'");
     reply.header('X-Content-Type-Options', 'nosniff');
@@ -178,6 +190,7 @@ export async function createApp(opts?: { dbUrl?: string; skipStatic?: boolean })
   });
 
   app.addHook('onClose', async () => {
+    unsubWebhooks();
     await stopAllChildren();
     sqlite.close();
   });

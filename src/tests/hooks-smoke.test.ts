@@ -83,6 +83,17 @@ runAndCheck(te, r, "core/hooks/git-require-edit.ts", "smoke (no cwd)", "{}");
 runAndCheck(te, r, "core/hooks/git-require-edit.ts", "nonexistent cwd (git fails, swallowed)", '{"cwd":"/nonexistent/path","session_id":"test-smoke"}');
 runAndCheck(te, r, "core/hooks/git-require-edit.ts", "malformed stdin (swallows)", "not json");
 
+// ── Context restore start behavioral ─────────────────────────────────────────
+
+console.log("\n--- context-restore-start behavioral ---");
+
+const restoreResult = runHook(te, "memory/hooks/context-restore-start.ts", '{"cwd":"/tmp"}');
+check(r, "context-restore-start: exits 0", restoreResult.exitCode === 0);
+check(r, "context-restore-start: prints Session Start header", restoreResult.stdout.includes("=== Session Start ==="));
+check(r, "context-restore-start: prints Sessions: line", restoreResult.stdout.includes("Sessions:"));
+check(r, "context-restore-start: Sessions: 0 in empty env", restoreResult.stdout.includes("Sessions: 0"));
+runAndCheck(te, r, "memory/hooks/context-restore-start.ts", "context-restore-start: malformed stdin (swallows)", "not json");
+
 // ── Routing classify behavioral ──────────────────────────────────────────────
 
 console.log("\n--- routing-classify-submit behavioral ---");
