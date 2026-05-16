@@ -36,7 +36,7 @@ catch (e) {
 reportHook(TAG, "UserPromptSubmit", input.session_id);
 
 const prompt: string = (input.prompt ?? "").trim();
-if (prompt.length < 2) { trace(TAG, "skip: prompt too short"); process.exit(0); }
+if (prompt.length < 2) { process.exit(0); }
 
 let polarity: "positive" | "negative" | null = null;
 let trigger = "";
