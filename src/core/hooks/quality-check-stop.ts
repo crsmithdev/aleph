@@ -18,6 +18,7 @@
  * Claude Code harness recognises and refuses-to-end on. Pass decisions stay silent.
  */
 import { existsSync, readFileSync } from "fs";
+import { execSync } from "child_process";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import {
@@ -56,9 +57,22 @@ if (input.stop_reason && input.stop_reason !== "end_of_turn") {
 const transcriptPath = input.transcript_path;
 if (!transcriptPath || !existsSync(transcriptPath)) process.exit(0);
 
+// Determine repo root so out-of-project edits (dotfiles, /tmp, /mnt/...) are exempt.
+const projectRoot = (() => {
+  try {
+    return execSync("git rev-parse --show-toplevel", { encoding: "utf8" }).trim();
+  } catch {
+    return process.cwd();
+  }
+})();
+
 const lines = readFileSync(transcriptPath, "utf8").trim().split("\n");
 const start = turnStartIndex(lines);
-const turn = extractTurn(lines, start);
+const rawTurn = extractTurn(lines, start);
+const turn = {
+  ...rawTurn,
+  editedFiles: rawTurn.editedFiles.filter(f => f.startsWith(projectRoot)),
+};
 const userText = mostRecentUserText(lines);
 
 const klass = classifyChange(turn.editedFiles);
