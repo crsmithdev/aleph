@@ -56,7 +56,7 @@ type CorrectionGroup = {
   trigger: string;
   count: number;
   lastTs: string;
-  example: string;
+  items: FeedbackItem[];
 };
 
 function loopTypeBadge(type: string) {
@@ -119,7 +119,7 @@ function GatesSection() {
     {
       key: 'ts',
       label: 'Time',
-      width: '100px',
+      width: '115px',
       render: (row) => (
         <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{compactTs(row.ts)}</span>
       ),
@@ -165,17 +165,29 @@ function GatesSection() {
       key: 'reason',
       label: 'Details',
       render: (row) => {
-        const parts: string[] = [];
-        if (row.verifyPresent) parts.push('present');
-        if (row.verifyMissing?.length) parts.push(`missing: ${row.verifyMissing.join(', ')}`);
+        const verifyParts: Array<{ key: string; value: string }> = [];
+        if (row.verifyPresent) verifyParts.push({ key: 'verify', value: 'present' });
+        if (row.verifyMissing?.length) verifyParts.push({ key: 'missing', value: row.verifyMissing.join(', ') });
         if (row.verify) {
-          Object.entries(row.verify).forEach(([k, v]) => parts.push(`${k}=${v ?? 'null'}`));
+          Object.entries(row.verify).forEach(([k, v]) => verifyParts.push({ key: k, value: v ?? 'null' }));
         }
-        const detail = parts.length > 0 ? parts.join(' | ') : row.reason;
+        if (verifyParts.length === 0) {
+          return (
+            <span className="text-text-muted text-xs" title={row.reason}>
+              {row.reason.slice(0, 120)}{row.reason.length > 120 && '…'}
+            </span>
+          );
+        }
         return (
-          <span className="text-text-muted text-xs" title={detail}>
-            {detail.slice(0, 120)}
-            {detail.length > 120 && '…'}
+          <span className="text-xs font-mono flex flex-wrap gap-2">
+            {verifyParts.slice(0, 3).map(({ key, value }, i) => (
+              <span key={i}>
+                <span className="text-text-muted">{key}</span>
+                <span className="text-text-disabled">=</span>
+                <span className="text-text-secondary">{value.length > 30 ? value.slice(0, 30) + '…' : value}</span>
+              </span>
+            ))}
+            {verifyParts.length > 3 && <span className="text-text-disabled">+{verifyParts.length - 3}</span>}
           </span>
         );
       },
@@ -199,10 +211,10 @@ function GatesSection() {
               type="button"
               onClick={() => setDecisionFilter(d => d === pattern.decision ? null : pattern.decision)}
               className={clsx(
-                'w-full text-left flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors',
+                'w-full text-left flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors cursor-pointer',
                 decisionFilter === pattern.decision
                   ? 'border-yellow-500/60 bg-yellow-500/10'
-                  : 'border-yellow-500/30 bg-yellow-500/5 hover:border-yellow-500/50 hover:bg-yellow-500/8',
+                  : 'border-yellow-500/30 bg-yellow-500/5 hover:border-yellow-500/60 hover:bg-yellow-500/10',
               )}
             >
               <Icon name="warning" className="text-[18px] text-warning shrink-0 mt-0.5" />
@@ -215,9 +227,10 @@ function GatesSection() {
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-bg-tertiary text-text-secondary">
                     {fmtNumber(pattern.count)} occurrences
                   </span>
-                  {decisionFilter === pattern.decision && (
-                    <span className="text-xs text-accent">— filtered ✕</span>
-                  )}
+                  {decisionFilter === pattern.decision
+                    ? <span className="text-xs text-accent">✕ clear filter</span>
+                    : <span className="text-xs text-text-disabled flex items-center gap-1"><Icon name="filter_alt" className="text-[12px]" /> click to filter</span>
+                  }
                 </div>
                 <div className="text-text-muted text-xs mt-1" title={pattern.representativeReason}>
                   {pattern.representativeReason.slice(0, 140)}
@@ -268,7 +281,7 @@ function GatesSection() {
           expandedKey={expandedKey}
           onExpandToggle={setExpandedKey}
           renderExpanded={(row) => (
-            <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-xs">
+            <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-sm">
               {row.reason && (
                 <div>
                   <span className="text-text-muted font-medium">Reason: </span>
@@ -282,11 +295,15 @@ function GatesSection() {
                 </div>
               )}
               {row.verify && Object.keys(row.verify).length > 0 && (
-                <div>
-                  <span className="text-text-muted font-medium">Verify: </span>
-                  <span className="font-mono text-text-secondary">
-                    {Object.entries(row.verify).map(([k, v]) => `${k}=${v ?? 'null'}`).join(' | ')}
-                  </span>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  <span className="text-text-muted font-medium">Verify:</span>
+                  {Object.entries(row.verify).map(([k, v]) => (
+                    <span key={k} className="font-mono">
+                      <span className="text-text-muted">{k}</span>
+                      <span className="text-text-disabled">=</span>
+                      <span className="text-text-secondary">{v ?? 'null'}</span>
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
@@ -307,6 +324,7 @@ export function LearningPage() {
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [feedbackExpandedKey, setFeedbackExpandedKey] = useState<string | null>(null);
   const [loopExpandedKey, setLoopExpandedKey] = useState<string | null>(null);
+  const [correctionExpandedKey, setCorrectionExpandedKey] = useState<string | null>(null);
 
   const { data: loopData, isLoading: loopLoading, error: loopError, refetch: loopRefetch } = useObsLearningLoop();
   const { data: feedbackData, isLoading: feedbackLoading, error: feedbackError, refetch: feedbackRefetch } = useObsLearningFeedback();
@@ -322,26 +340,24 @@ export function LearningPage() {
       : null;
   const circumventions = patternsData?.patterns.length ?? 0;
 
-  // Corrections: group negative-polarity feedback by trigger
+  // Corrections: group negative-polarity feedback by trigger word, collecting all items
   const correctionGroups: CorrectionGroup[] = (() => {
     if (!feedbackData?.items) return [];
-    const map = new Map<string, { count: number; lastTs: string; example: string }>();
+    const map = new Map<string, { count: number; lastTs: string; items: FeedbackItem[] }>();
     for (const item of feedbackData.items) {
       if (item.polarity !== 'negative') continue;
       const key = item.trigger.split(/[\s,]+/)[0].toLowerCase() || 'unknown';
       const existing = map.get(key);
-      if (!existing || item.ts > existing.lastTs) {
-        map.set(key, {
-          count: (existing?.count ?? 0) + 1,
-          lastTs: item.ts,
-          example: item.trigger.slice(0, 120),
-        });
+      if (existing) {
+        existing.count++;
+        if (item.ts > existing.lastTs) existing.lastTs = item.ts;
+        existing.items.push(item);
       } else {
-        map.set(key, { ...existing, count: existing.count + 1 });
+        map.set(key, { count: 1, lastTs: item.ts, items: [item] });
       }
     }
     return [...map.entries()]
-      .map(([trigger, { count, lastTs, example }]) => ({ trigger, count, lastTs, example }))
+      .map(([trigger, { count, lastTs, items }]) => ({ trigger, count, lastTs, items }))
       .sort((a, b) => b.count - a.count);
   })();
 
@@ -350,7 +366,7 @@ export function LearningPage() {
     {
       key: 'ts',
       label: 'Time',
-      width: '100px',
+      width: '115px',
       render: (row) => (
         <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{compactTs(row.ts)}</span>
       ),
@@ -370,7 +386,7 @@ export function LearningPage() {
       label: 'Source',
       width: '200px',
       render: (row) => (
-        <span className="text-text-secondary text-xs" title={row.source}>
+        <span className="text-text-secondary text-sm" title={row.source}>
           {row.source}
         </span>
       ),
@@ -379,7 +395,7 @@ export function LearningPage() {
       key: 'insight',
       label: 'Insight',
       render: (row) => (
-        <span className="text-text-muted text-xs italic" title={row.insight}>
+        <span className="text-text-muted text-sm italic" title={row.insight}>
           {row.insight}
         </span>
       ),
@@ -413,7 +429,7 @@ export function LearningPage() {
     {
       key: 'ts',
       label: 'Time',
-      width: '100px',
+      width: '115px',
       render: (row) => (
         <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{compactTs(row.ts)}</span>
       ),
@@ -422,7 +438,7 @@ export function LearningPage() {
       key: 'trigger',
       label: 'Prompt',
       render: (row) => (
-        <span className="text-text-primary text-xs break-words" style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
+        <span className="text-text-primary text-sm break-words" style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
           {row.trigger}
         </span>
       ),
@@ -430,7 +446,7 @@ export function LearningPage() {
     {
       key: 'rating',
       label: 'Signal',
-      width: '90px',
+      width: '100px',
       render: (row) => {
         if (row.type === 'numeric' && row.rating !== undefined) {
           const colorClass = row.rating >= 7 ? 'text-success' : row.rating >= 4 ? 'text-warning' : 'text-error';
@@ -443,14 +459,14 @@ export function LearningPage() {
         if (row.polarity === 'positive') {
           return (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-green-500/15 text-green-400">
-              <span>+</span> positive
+              ▲ positive
             </span>
           );
         }
         if (row.polarity === 'negative') {
           return (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-500/15 text-red-400">
-              <span>−</span> negative
+              ▼ negative
             </span>
           );
         }
@@ -465,21 +481,14 @@ export function LearningPage() {
     },
   ];
 
-  // Corrections table columns
+  // Corrections table columns — no Example column, expand for individual messages
   const correctionColumns: Column<CorrectionGroup>[] = [
     {
       key: 'trigger',
       label: 'Trigger',
-      width: '120px',
+      width: '140px',
       render: (row) => (
-        <span className="font-mono text-text-primary text-xs font-semibold">{row.trigger}</span>
-      ),
-    },
-    {
-      key: 'example',
-      label: 'Example',
-      render: (row) => (
-        <span className="text-text-muted text-xs italic">{row.example}</span>
+        <span className="font-mono text-text-primary text-sm font-semibold">{row.trigger}</span>
       ),
     },
     {
@@ -488,7 +497,7 @@ export function LearningPage() {
       width: '70px',
       align: 'right',
       render: (row) => (
-        <span className={clsx('font-mono font-semibold text-xs', row.count >= 5 ? 'text-error' : row.count >= 2 ? 'text-warning' : 'text-text-secondary')}>
+        <span className={clsx('font-mono font-semibold text-sm', row.count >= 5 ? 'text-error' : row.count >= 2 ? 'text-warning' : 'text-text-secondary')}>
           {row.count}
         </span>
       ),
@@ -496,9 +505,9 @@ export function LearningPage() {
     {
       key: 'lastTs',
       label: 'Last',
-      width: '100px',
+      width: '115px',
       render: (row) => (
-        <span className="font-mono text-text-muted text-xs">{compactTs(row.lastTs)}</span>
+        <span className="font-mono text-text-muted text-xs whitespace-nowrap">{compactTs(row.lastTs)}</span>
       ),
     },
   ];
@@ -561,7 +570,7 @@ export function LearningPage() {
             expandedKey={loopExpandedKey}
             onExpandToggle={setLoopExpandedKey}
             renderExpanded={(row) => (
-              <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-xs">
+              <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-sm">
                 {row.content && (
                   <div>
                     <span className="text-text-muted font-medium">Content: </span>
@@ -602,7 +611,11 @@ export function LearningPage() {
             expandedKey={feedbackExpandedKey}
             onExpandToggle={setFeedbackExpandedKey}
             renderExpanded={(row) => (
-              <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-xs">
+              <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-sm">
+                <div>
+                  <span className="text-text-muted font-medium">Prompt: </span>
+                  <span className="text-text-primary">{row.trigger}</span>
+                </div>
                 {row.priorText && (
                   <div>
                     <span className="text-text-muted font-medium">Prior response: </span>
@@ -648,6 +661,20 @@ export function LearningPage() {
             columns={correctionColumns}
             keyField="trigger"
             maxRows={50}
+            expandedKey={correctionExpandedKey}
+            onExpandToggle={setCorrectionExpandedKey}
+            renderExpanded={(row) => (
+              <div className="px-4 py-3 space-y-1.5 bg-bg-tertiary/30">
+                {row.items.map((item, i) => (
+                  <div key={i} className="flex items-start gap-3 text-sm">
+                    <span className="font-mono text-text-disabled text-xs whitespace-nowrap shrink-0">{compactTs(item.ts)}</span>
+                    <span className="text-text-secondary flex-1">{item.trigger}</span>
+                    <SessionLink sessionId={item.sessionId} turnIndex={item.turnIndex} />
+                  </div>
+                ))}
+              </div>
+            )}
+            rowKeyFn={(row) => row.trigger}
           />
         )}
       </div>
