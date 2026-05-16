@@ -30,8 +30,8 @@ check(r, "*.txt, *.rst, *.html, *.csv are docs",
   isDocOnly("notes.txt") && isDocOnly("foo.rst") && isDocOnly("mockup.html") && isDocOnly("data.csv"));
 check(r, "files under docs/ are docs regardless of extension",
   isDocOnly("docs/architecture.html") && isDocOnly("/repo/docs/foo.png") && isDocOnly("docs/mockups/gate.html"));
-check(r, "files under mockups/ are docs",
-  isDocOnly("docs/mockups/gates-patterns.html") && isDocOnly("src/mockups/wireframe.svg"));
+check(r, "mockup files are docs via extension (.html, .svg) — no path reference needed",
+  isDocOnly("docs/mockups/gates-patterns.html") && isDocOnly("src/mockups/wireframe.svg") && isDocOnly("random/mockup.html"));
 check(r, "eval fixture JSON is docs (test data, not behavior)",
   isDocOnly("src/skills/polish/evals/evals.json") && isDocOnly("evals/fixtures.json"));
 check(r, "lock files are docs (generated, not executed)",

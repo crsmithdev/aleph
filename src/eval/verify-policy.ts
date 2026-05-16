@@ -41,9 +41,8 @@ export function isDocOnly(filePath: string): boolean {
   // Binary/media assets: cannot be exercised by running the system
   if (/\.(png|jpe?g|gif|svg|ico|webp|avif|woff2?|ttf|eot|otf|mp4|mp3|wav|pdf)$/i.test(name)) return true;
 
-  // Structural paths: docs, mockups, eval fixtures
+  // Structural paths: docs/ and eval fixtures (mockups covered by .html/.svg extensions above)
   if (/(^|\/)docs\//.test(filePath)) return true;
-  if (/(^|\/)mockups?\//.test(filePath)) return true;
   if (/(^|\/)evals?\//.test(filePath) && /\.json$/i.test(name)) return true;
 
   // Human-readable document and markup formats
