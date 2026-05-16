@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   useObsRatings,
-  useObsDirectives,
   useObsToolSignals,
   useObsConsolidation,
   useObsSessionFiles,
@@ -17,11 +16,10 @@ import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { fmtNumber, shortRelativeTime, dateTime } from '../../../utils/format';
 import { clsx } from 'clsx';
 
-type Tab = 'sessions' | 'routing' | 're-edits' | 'ratings' | 'learning';
+type Tab = 'sessions' | 're-edits' | 'ratings' | 'learning';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'sessions', label: 'Sessions' },
-  { key: 'routing', label: 'Routing' },
   { key: 're-edits', label: 'Re-edits' },
   { key: 'ratings', label: 'Ratings' },
   { key: 'learning', label: 'Learning' },
@@ -87,110 +85,6 @@ function SessionFilesTab() {
         keyField="filename"
         maxRows={100}
       />
-    </div>
-  );
-}
-
-function RoutingTab() {
-  const { data, isLoading, error, refetch } = useObsDirectives();
-  if (isLoading) return <PageLoading />;
-  if (error || !data) return <ErrorState message="Failed to load routing data" retry={refetch} />;
-
-  const fullCount = data.depthCounts['FULL'] ?? 0;
-  const quickCount = data.depthCounts['QUICK'] ?? 0;
-
-  type DirectiveRow = (typeof data.directives)[number];
-  const columns: Column<DirectiveRow>[] = [
-    {
-      key: 'ts',
-      label: 'Time',
-      width: '160px',
-      render: (row) => (
-        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{dateTime(row.ts)}</span>
-      ),
-    },
-    {
-      key: 'directives',
-      label: 'Directives',
-      render: (row) => (
-        <div className="flex flex-wrap gap-1">
-          {(row.directives ?? []).map((d, i) => {
-            const upper = d.toUpperCase();
-            const isFull = upper.startsWith('FULL');
-            const isQuick = upper.startsWith('QUICK');
-            return (
-              <span
-                key={i}
-                className={clsx(
-                  'text-xs px-1.5 py-0.5 rounded font-mono',
-                  isFull
-                    ? 'bg-blue-500/15 text-blue-400'
-                    : isQuick
-                      ? 'bg-green-500/15 text-green-400'
-                      : 'bg-bg-tertiary text-text-secondary',
-                )}
-              >
-                {d}
-              </span>
-            );
-          })}
-        </div>
-      ),
-    },
-    {
-      key: 'promptWords',
-      label: 'Words',
-      width: '70px',
-      align: 'right',
-      render: (row) => (
-        <span className="font-mono text-text-muted text-xs">{fmtNumber(row.promptWords ?? 0)}</span>
-      ),
-    },
-  ];
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-4">
-        <StatCard label="Total Routed" value={fmtNumber(data.total)} />
-        <StatCard label="Full Depth" value={fmtNumber(fullCount)} accent={fullCount > 0 ? 'neutral' : undefined} />
-        <StatCard
-          label="Quick Depth"
-          value={fmtNumber(quickCount)}
-          accent={quickCount > 0 ? 'success' : undefined}
-        />
-      </div>
-
-      {data.byDay.length > 0 && (
-        <ChartContainer title="Routing Depth by Day" height={200}>
-          <BarChart data={data.byDay}>
-            <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} />
-            <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle} />
-            <Bar isAnimationActive={false} dataKey="full" name="Full" stackId="a" fill={CHART_PALETTE[0]} />
-            <Bar isAnimationActive={false} dataKey="quick" name="Quick" stackId="a" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} />
-          </BarChart>
-        </ChartContainer>
-      )}
-
-      {data.topSkills.length > 0 && (
-        <div>
-          <h3 className="text-sm font-medium text-text-secondary mb-2">Top Skill Matches</h3>
-          <div className="flex flex-wrap gap-2">
-            {data.topSkills.map(({ skill, count }) => (
-              <span
-                key={skill}
-                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs bg-bg-secondary border border-border-primary text-text-secondary"
-              >
-                <span className="font-mono">{skill}</span>
-                <span className="text-text-muted">{count}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <DataTable<DirectiveRow> data={data.directives} columns={columns} keyField="ts" maxRows={100} />
     </div>
   );
 }
@@ -401,7 +295,6 @@ export function SignalsPage() {
       </div>
 
       {tab === 'sessions' && <SessionFilesTab />}
-      {tab === 'routing' && <RoutingTab />}
       {tab === 're-edits' && <ReEditsTab />}
       {tab === 'ratings' && <RatingsTab />}
       {tab === 'learning' && <LearningTab />}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { useObsSkills } from '../../../api/observability-hooks';
+import { useObsSkills, useObsDirectives } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
@@ -10,7 +10,7 @@ import { type Granularity, type TimeRange } from '../../../components/data/TimeR
 import { ObsControlBar, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, fmtLegendLabel, shortRelativeTime, fmtMs } from '../../../utils/format';
+import { fmtNumber, fmtPct, fmtLegendLabel, shortRelativeTime, fmtMs, dateTime } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type SkillRow = {
@@ -602,7 +602,71 @@ export function SkillsPage() {
         rowClassName={(row) => row.unused ? 'opacity-50' : undefined}
       />
 
+      <RoutingTable />
+
       <QueryTiming ms={data.queryTimeMs} />
+    </div>
+  );
+}
+
+function RoutingTable() {
+  const { data, isLoading, error, refetch } = useObsDirectives();
+  if (isLoading) return null;
+  if (error || !data) return <ErrorState message="Failed to load routing data" retry={refetch} />;
+
+  type DirectiveRow = (typeof data.directives)[number];
+  const columns: Column<DirectiveRow>[] = [
+    {
+      key: 'ts',
+      label: 'Time',
+      width: '160px',
+      render: (row) => (
+        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{dateTime(row.ts)}</span>
+      ),
+    },
+    {
+      key: 'directives',
+      label: 'Directives',
+      render: (row) => (
+        <div className="flex flex-wrap gap-1">
+          {(row.directives ?? []).map((d, i) => {
+            const upper = d.toUpperCase();
+            const isFull = upper.startsWith('FULL');
+            const isQuick = upper.startsWith('QUICK');
+            return (
+              <span
+                key={i}
+                className={clsx(
+                  'text-xs px-1.5 py-0.5 rounded font-mono',
+                  isFull
+                    ? 'bg-blue-500/15 text-blue-400'
+                    : isQuick
+                      ? 'bg-green-500/15 text-green-400'
+                      : 'bg-bg-tertiary text-text-secondary',
+                )}
+              >
+                {d}
+              </span>
+            );
+          })}
+        </div>
+      ),
+    },
+    {
+      key: 'promptWords',
+      label: 'Words',
+      width: '70px',
+      align: 'right',
+      render: (row) => (
+        <span className="font-mono text-text-muted text-xs">{fmtNumber(row.promptWords ?? 0)}</span>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-2">
+      <h3 className="font-heading text-lg font-medium text-text-secondary">Routing</h3>
+      <DataTable<DirectiveRow> data={data.directives} columns={columns} keyField="ts" maxRows={100} />
     </div>
   );
 }
