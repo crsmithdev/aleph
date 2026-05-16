@@ -35,17 +35,34 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: 'Observability',
+    label: 'Activity',
     items: [
       { to: '/observability', label: 'Overview', icon: 'dashboard' },
       { to: '/observability/sessions', label: 'Sessions', icon: 'schedule' },
-      { to: '/observability/learning', label: 'Learning', icon: 'school' },
+      { to: '/observability/events', label: 'Events', icon: 'event_note' },
+      { to: '/observability/tokens', label: 'Tokens & cost', icon: 'paid' },
+    ],
+  },
+  {
+    label: 'Capabilities',
+    items: [
       { to: '/observability/skills', label: 'Skills', icon: 'auto_awesome' },
       { to: '/observability/tools', label: 'Tools', icon: 'build' },
       { to: '/observability/hooks', label: 'Hooks', icon: 'webhook' },
-      { to: '/observability/events', label: 'Events', icon: 'event_note' },
-      { to: '/observability/signals', label: 'Signals', icon: 'bolt', separator: 'before' },
+      { to: '/observability/subagents', label: 'Subagents', icon: 'smart_toy' },
+    ],
+  },
+  {
+    label: 'Learning',
+    items: [
+      { to: '/observability/learning', label: 'Learning loop', icon: 'school' },
       { to: '/observability/memory', label: 'Memory', icon: 'memory' },
+      { to: '/observability/signals', label: 'Signals', icon: 'bolt' },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
       { to: '/observability/db', label: 'Database', icon: 'storage' },
     ],
   },
