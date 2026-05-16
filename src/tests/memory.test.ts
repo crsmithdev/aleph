@@ -105,9 +105,9 @@ function ratingTest(prompt: string): { rating: number | null; output: string } {
   return { rating: null, output: stdout };
 }
 
-check(r, "rating: standalone 7", ratingTest("7").rating === 7);
-check(r, "rating: standalone 8", ratingTest("8").rating === 8);
-check(r, "rating: standalone 10", ratingTest("10").rating === 10);
+// Standalone bare digits intentionally not matched (too many false positives from option selection)
+check(r, "rating: bare '7' → no match", ratingTest("7").rating === null);
+check(r, "rating: bare '10' → no match", ratingTest("10").rating === null);
 check(r, "rating: 7/10 pattern", ratingTest("7/10").rating === 7);
 check(r, "rating: 'I rate this 9'", ratingTest("I rate this 9").rating === 9);
 check(r, "rating: 'rate 6'", ratingTest("rate 6").rating === 6);
@@ -137,7 +137,8 @@ check(r, "rating: skips <task-notification> prompt",
 check(r, "rating: skips <system-reminder> prompt",
   ratingTest("<system-reminder>UserPromptSubmit hook success: stuff mentioning rate and 2</system-reminder>").rating === null);
 
-const lowResult = ratingTest("2");
+// Low rating warning — use explicit "rate N" syntax (bare digit no longer matched)
+const lowResult = ratingTest("rate 2");
 check(r, "rating: low rating warns", lowResult.rating === 2 && lowResult.output.includes("Low rating"));
 
 runAndCheck(te, r, "memory/hooks/rating-capture-submit.ts", "malformed", "not json");

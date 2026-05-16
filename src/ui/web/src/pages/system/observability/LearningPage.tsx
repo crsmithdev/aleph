@@ -13,7 +13,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { Icon } from '../../../components/ui/Icon';
-import { fmtNumber, fmtPct, shortRelativeTime } from '../../../utils/format';
+import { fmtNumber, fmtPct, compactTs } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type LoopItem = {
@@ -52,6 +52,13 @@ type GateEvent = {
   verify?: Record<string, string | null>;
 };
 
+type CorrectionGroup = {
+  trigger: string;
+  count: number;
+  lastTs: string;
+  example: string;
+};
+
 function loopTypeBadge(type: string) {
   const map: Record<string, string> = {
     correction: 'bg-red-500/15 text-red-400',
@@ -87,26 +94,11 @@ function SessionLink({ sessionId, turnIndex }: { sessionId: string; turnIndex?: 
   );
 }
 
-function DirectiveComplianceSection() {
-  return (
-    <div className="rounded-lg border border-border-primary bg-bg-secondary p-6 flex items-start gap-3">
-      <Icon name="info" className="text-[18px] text-text-muted shrink-0 mt-0.5" />
-      <div className="space-y-1">
-        <p className="text-sm text-text-secondary font-medium">Not yet available</p>
-        <p className="text-xs text-text-muted">
-          Directive compliance requires explicit tracking of whether each behavioral rule was followed or violated per turn.
-          Current signal data (skill routing tags) shows skill selection, not rule adherence.
-          This section will be populated once per-turn compliance signals are collected.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function GatesSection() {
   const { data: eventsData, isLoading: eventsLoading, error: eventsError, refetch: eventsRefetch } = useObsGateEvents();
   const { data: patternsData, isLoading: patternsLoading } = useObsGatePatterns();
   const [decisionFilter, setDecisionFilter] = useState<string | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   if (eventsLoading || patternsLoading) return <PageLoading />;
   if (eventsError || !eventsData) return <ErrorState message="Failed to load gate events" retry={eventsRefetch} />;
@@ -120,27 +112,28 @@ function GatesSection() {
   ];
 
   const filtered = decisionFilter
-    ? eventsData.events.filter((e) => e.decision === decisionFilter)
+    ? eventsData.events.filter((e: GateEvent) => e.decision === decisionFilter)
     : eventsData.events;
 
   const columns: Column<GateEvent>[] = [
     {
       key: 'ts',
       label: 'Time',
-      width: '160px',
+      width: '100px',
       render: (row) => (
-        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{shortRelativeTime(row.ts)}</span>
+        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{compactTs(row.ts)}</span>
       ),
     },
     {
       key: 'hook',
       label: 'Hook',
+      width: '180px',
       render: (row) => <span className="font-mono text-text-primary text-xs">{row.hook}</span>,
     },
     {
       key: 'decision',
       label: 'Decision',
-      width: '100px',
+      width: '90px',
       render: (row) => (
         <span
           className={clsx(
@@ -155,12 +148,13 @@ function GatesSection() {
     {
       key: 'editedFiles',
       label: 'Files',
+      width: '200px',
       render: (row) => {
         if (!row.editedFiles || row.editedFiles.length === 0) {
           return <span className="text-text-disabled">—</span>;
         }
         return (
-          <span className="font-mono text-text-muted text-xs truncate" title={row.editedFiles.join(', ')}>
+          <span className="font-mono text-text-muted text-xs" title={row.editedFiles.join(', ')}>
             {row.editedFiles.slice(0, 2).join(', ')}
             {row.editedFiles.length > 2 && ` +${row.editedFiles.length - 2}`}
           </span>
@@ -168,25 +162,20 @@ function GatesSection() {
       },
     },
     {
-      key: 'verify',
-      label: 'Verify Details',
+      key: 'reason',
+      label: 'Details',
       render: (row) => {
-        if (!row.verify && !row.verifyPresent && !row.verifyMissing?.length) {
-          return <span className="text-text-disabled">—</span>;
-        }
         const parts: string[] = [];
         if (row.verifyPresent) parts.push('present');
         if (row.verifyMissing?.length) parts.push(`missing: ${row.verifyMissing.join(', ')}`);
         if (row.verify) {
-          const entries = Object.entries(row.verify)
-            .map(([k, v]) => `${k}=${v ?? 'null'}`)
-            .slice(0, 3);
-          parts.push(...entries);
+          Object.entries(row.verify).forEach(([k, v]) => parts.push(`${k}=${v ?? 'null'}`));
         }
+        const detail = parts.length > 0 ? parts.join(' | ') : row.reason;
         return (
-          <span className="text-text-muted text-xs truncate" title={parts.join(' | ')}>
-            {parts.slice(0, 2).join(' | ')}
-            {parts.length > 2 && ` +${parts.length - 2}`}
+          <span className="text-text-muted text-xs" title={detail}>
+            {detail.slice(0, 120)}
+            {detail.length > 120 && '…'}
           </span>
         );
       },
@@ -194,48 +183,54 @@ function GatesSection() {
     {
       key: 'sessionId',
       label: 'Session',
-      width: '90px',
+      width: '80px',
       render: (row) => <SessionLink sessionId={row.sessionId} />,
     },
   ];
 
   return (
     <div className="space-y-4">
-      {/* Pattern alerts */}
+      {/* Clickable pattern alerts */}
       {patternsData && patternsData.patterns.length > 0 && (
         <div className="space-y-2">
-          {patternsData.patterns.map((pattern, i) => (
-            <div
+          {patternsData.patterns.map((pattern: any, i: number) => (
+            <button
               key={i}
-              className="flex items-start gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-4 py-3"
+              type="button"
+              onClick={() => setDecisionFilter(d => d === pattern.decision ? null : pattern.decision)}
+              className={clsx(
+                'w-full text-left flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors',
+                decisionFilter === pattern.decision
+                  ? 'border-yellow-500/60 bg-yellow-500/10'
+                  : 'border-yellow-500/30 bg-yellow-500/5 hover:border-yellow-500/50 hover:bg-yellow-500/8',
+              )}
             >
               <Icon name="warning" className="text-[18px] text-warning shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-mono text-text-primary text-xs">{pattern.hook}</span>
-                  <span
-                    className={clsx(
-                      'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold',
-                      decisionBadgeClass(pattern.decision),
-                    )}
-                  >
+                  <span className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold', decisionBadgeClass(pattern.decision))}>
                     {pattern.decision}
                   </span>
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-bg-tertiary text-text-secondary">
                     {fmtNumber(pattern.count)} occurrences
                   </span>
+                  {decisionFilter === pattern.decision && (
+                    <span className="text-xs text-accent">— filtered ✕</span>
+                  )}
                 </div>
-                <div className="text-text-muted text-xs mt-1 truncate" title={pattern.representativeReason}>
-                  {pattern.representativeReason}
+                <div className="text-text-muted text-xs mt-1" title={pattern.representativeReason}>
+                  {pattern.representativeReason.slice(0, 140)}
+                  {pattern.representativeReason.length > 140 && '…'}
                 </div>
                 {pattern.representativeFiles.length > 0 && (
-                  <div className="font-mono text-text-disabled text-xs mt-0.5 truncate">
+                  <div className="font-mono text-text-disabled text-xs mt-0.5">
                     {pattern.representativeFiles.slice(0, 2).join(', ')}
                     {pattern.representativeFiles.length > 2 && ` +${pattern.representativeFiles.length - 2}`}
                   </div>
                 )}
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -268,7 +263,35 @@ function GatesSection() {
           data={filtered}
           columns={columns}
           keyField="ts"
-          maxRows={200}
+          maxRows={50}
+          pageSize={50}
+          expandedKey={expandedKey}
+          onExpandToggle={setExpandedKey}
+          renderExpanded={(row) => (
+            <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-xs">
+              {row.reason && (
+                <div>
+                  <span className="text-text-muted font-medium">Reason: </span>
+                  <span className="text-text-secondary">{row.reason}</span>
+                </div>
+              )}
+              {row.editedFiles && row.editedFiles.length > 0 && (
+                <div>
+                  <span className="text-text-muted font-medium">Files: </span>
+                  <span className="font-mono text-text-secondary">{row.editedFiles.join(', ')}</span>
+                </div>
+              )}
+              {row.verify && Object.keys(row.verify).length > 0 && (
+                <div>
+                  <span className="text-text-muted font-medium">Verify: </span>
+                  <span className="font-mono text-text-secondary">
+                    {Object.entries(row.verify).map(([k, v]) => `${k}=${v ?? 'null'}`).join(' | ')}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+          rowKeyFn={(row) => row.ts + row.sessionId}
         />
       ) : (
         <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center text-sm text-text-muted">
@@ -282,6 +305,8 @@ function GatesSection() {
 export function LearningPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
+  const [feedbackExpandedKey, setFeedbackExpandedKey] = useState<string | null>(null);
+  const [loopExpandedKey, setLoopExpandedKey] = useState<string | null>(null);
 
   const { data: loopData, isLoading: loopLoading, error: loopError, refetch: loopRefetch } = useObsLearningLoop();
   const { data: feedbackData, isLoading: feedbackLoading, error: feedbackError, refetch: feedbackRefetch } = useObsLearningFeedback();
@@ -289,7 +314,7 @@ export function LearningPage() {
   const { data: patternsData } = useObsGatePatterns();
 
   // Compute summary stats
-  const memoriesStored = loopData?.items.filter((i) => i.memoryId).length ?? 0;
+  const memoriesStored = loopData?.items.filter((i: LoopItem) => i.memoryId).length ?? 0;
   const avgRating = feedbackData?.avgRating ?? 0;
   const gatePassRate =
     gateData && gateData.total > 0
@@ -297,14 +322,37 @@ export function LearningPage() {
       : null;
   const circumventions = patternsData?.patterns.length ?? 0;
 
+  // Corrections: group negative-polarity feedback by trigger
+  const correctionGroups: CorrectionGroup[] = (() => {
+    if (!feedbackData?.items) return [];
+    const map = new Map<string, { count: number; lastTs: string; example: string }>();
+    for (const item of feedbackData.items) {
+      if (item.polarity !== 'negative') continue;
+      const key = item.trigger.split(/[\s,]+/)[0].toLowerCase() || 'unknown';
+      const existing = map.get(key);
+      if (!existing || item.ts > existing.lastTs) {
+        map.set(key, {
+          count: (existing?.count ?? 0) + 1,
+          lastTs: item.ts,
+          example: item.trigger.slice(0, 120),
+        });
+      } else {
+        map.set(key, { ...existing, count: existing.count + 1 });
+      }
+    }
+    return [...map.entries()]
+      .map(([trigger, { count, lastTs, example }]) => ({ trigger, count, lastTs, example }))
+      .sort((a, b) => b.count - a.count);
+  })();
+
   // Loop table columns
   const loopColumns: Column<LoopItem>[] = [
     {
       key: 'ts',
       label: 'Time',
-      width: '160px',
+      width: '100px',
       render: (row) => (
-        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{shortRelativeTime(row.ts)}</span>
+        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{compactTs(row.ts)}</span>
       ),
     },
     {
@@ -312,12 +360,7 @@ export function LearningPage() {
       label: 'Type',
       width: '110px',
       render: (row) => (
-        <span
-          className={clsx(
-            'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold',
-            loopTypeBadge(row.type),
-          )}
-        >
+        <span className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold', loopTypeBadge(row.type))}>
           {row.type}
         </span>
       ),
@@ -325,9 +368,9 @@ export function LearningPage() {
     {
       key: 'source',
       label: 'Source',
-      width: '160px',
+      width: '200px',
       render: (row) => (
-        <span className="text-text-secondary text-xs truncate" title={row.source}>
+        <span className="text-text-secondary text-xs" title={row.source}>
           {row.source}
         </span>
       ),
@@ -336,7 +379,7 @@ export function LearningPage() {
       key: 'insight',
       label: 'Insight',
       render: (row) => (
-        <span className="text-text-muted text-xs italic truncate" title={row.insight}>
+        <span className="text-text-muted text-xs italic" title={row.insight}>
           {row.insight}
         </span>
       ),
@@ -360,49 +403,54 @@ export function LearningPage() {
     {
       key: 'sessionId',
       label: 'Session',
-      width: '90px',
+      width: '80px',
       render: (row) => <SessionLink sessionId={row.sessionId} />,
     },
   ];
 
-  // Feedback table columns
+  // Feedback table columns — unified Signal column
   const feedbackColumns: Column<FeedbackItem>[] = [
     {
       key: 'ts',
       label: 'Time',
-      width: '160px',
+      width: '100px',
       render: (row) => (
-        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{shortRelativeTime(row.ts)}</span>
+        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{compactTs(row.ts)}</span>
       ),
     },
     {
       key: 'trigger',
-      label: 'Trigger',
+      label: 'Prompt',
       render: (row) => (
-        <span className="text-text-primary text-xs truncate" title={row.trigger} style={{ maxWidth: '320px', display: 'block' }}>
+        <span className="text-text-primary text-xs break-words" style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
           {row.trigger}
         </span>
       ),
     },
     {
       key: 'rating',
-      label: 'Rating / Polarity',
-      width: '130px',
+      label: 'Signal',
+      width: '90px',
       render: (row) => {
         if (row.type === 'numeric' && row.rating !== undefined) {
-          const colorClass =
-            row.rating >= 7 ? 'text-success' : row.rating >= 4 ? 'text-warning' : 'text-error';
-          return <span className={clsx('font-mono font-semibold text-sm', colorClass)}>{row.rating}</span>;
-        }
-        if (row.type === 'sentiment' && row.polarity) {
+          const colorClass = row.rating >= 7 ? 'text-success' : row.rating >= 4 ? 'text-warning' : 'text-error';
           return (
-            <span
-              className={clsx(
-                'text-xs font-semibold',
-                row.polarity === 'positive' ? 'text-success' : 'text-error',
-              )}
-            >
-              {row.polarity}
+            <span className={clsx('font-mono font-semibold', colorClass)}>
+              {row.rating}/10
+            </span>
+          );
+        }
+        if (row.polarity === 'positive') {
+          return (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-green-500/15 text-green-400">
+              <span>+</span> positive
+            </span>
+          );
+        }
+        if (row.polarity === 'negative') {
+          return (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-500/15 text-red-400">
+              <span>−</span> negative
             </span>
           );
         }
@@ -410,32 +458,48 @@ export function LearningPage() {
       },
     },
     {
-      key: 'priorTools',
-      label: 'Prior Context',
-      render: (row) => {
-        const parts = [
-          ...(row.priorTools ?? []).slice(0, 2),
-          ...(row.priorFiles ?? []).slice(0, 2),
-        ];
-        if (parts.length === 0) return <span className="text-text-disabled">—</span>;
-        const full = [
-          ...(row.priorTools ?? []),
-          ...(row.priorFiles ?? []),
-        ].join(', ');
-        return (
-          <span className="font-mono text-text-muted text-xs truncate" title={full}>
-            {parts.join(', ')}
-            {((row.priorTools?.length ?? 0) + (row.priorFiles?.length ?? 0)) > 4 &&
-              ` +${(row.priorTools?.length ?? 0) + (row.priorFiles?.length ?? 0) - 4}`}
-          </span>
-        );
-      },
-    },
-    {
       key: 'sessionId',
       label: 'Session',
-      width: '90px',
+      width: '80px',
       render: (row) => <SessionLink sessionId={row.sessionId} turnIndex={row.turnIndex} />,
+    },
+  ];
+
+  // Corrections table columns
+  const correctionColumns: Column<CorrectionGroup>[] = [
+    {
+      key: 'trigger',
+      label: 'Trigger',
+      width: '120px',
+      render: (row) => (
+        <span className="font-mono text-text-primary text-xs font-semibold">{row.trigger}</span>
+      ),
+    },
+    {
+      key: 'example',
+      label: 'Example',
+      render: (row) => (
+        <span className="text-text-muted text-xs italic">{row.example}</span>
+      ),
+    },
+    {
+      key: 'count',
+      label: 'Count',
+      width: '70px',
+      align: 'right',
+      render: (row) => (
+        <span className={clsx('font-mono font-semibold text-xs', row.count >= 5 ? 'text-error' : row.count >= 2 ? 'text-warning' : 'text-text-secondary')}>
+          {row.count}
+        </span>
+      ),
+    },
+    {
+      key: 'lastTs',
+      label: 'Last',
+      width: '100px',
+      render: (row) => (
+        <span className="font-mono text-text-muted text-xs">{compactTs(row.lastTs)}</span>
+      ),
     },
   ];
 
@@ -462,11 +526,7 @@ export function LearningPage() {
           value={gatePassRate !== null ? fmtPct(gatePassRate) : '—'}
           accent={
             gatePassRate !== null
-              ? gatePassRate >= 80
-                ? 'success'
-                : gatePassRate >= 60
-                  ? 'warning'
-                  : 'error'
+              ? gatePassRate >= 80 ? 'success' : gatePassRate >= 60 ? 'warning' : 'error'
               : undefined
           }
         />
@@ -485,22 +545,45 @@ export function LearningPage() {
         ) : loopError || !loopData ? (
           <ErrorState message="Failed to load learning loop data" retry={loopRefetch} />
         ) : loopData.items.length === 0 ? (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center text-sm text-text-muted">
-            No learning loop events recorded.
+          <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center space-y-1">
+            <p className="text-sm text-text-muted">No learning loop events recorded.</p>
+            <p className="text-xs text-text-disabled">
+              Populated after sessions with ≥6 messages and ≥1 edit, when the memory writer stores a new entry.
+            </p>
           </div>
         ) : (
           <DataTable<LoopItem>
             data={loopData.items}
             columns={loopColumns}
             keyField="ts"
-            maxRows={200}
+            maxRows={50}
+            pageSize={50}
+            expandedKey={loopExpandedKey}
+            onExpandToggle={setLoopExpandedKey}
+            renderExpanded={(row) => (
+              <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-xs">
+                {row.content && (
+                  <div>
+                    <span className="text-text-muted font-medium">Content: </span>
+                    <span className="text-text-secondary">{row.content}</span>
+                  </div>
+                )}
+                {row.tags && (
+                  <div>
+                    <span className="text-text-muted font-medium">Tags: </span>
+                    <span className="font-mono text-text-disabled">{row.tags}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            rowKeyFn={(row) => row.ts + row.sessionId}
           />
         )}
       </div>
 
       {/* Feedback & Ratings section */}
       <div className="space-y-3">
-        <h2 className="font-heading text-lg font-medium text-text-secondary">Feedback & Ratings</h2>
+        <h2 className="font-heading text-lg font-medium text-text-secondary">Feedback</h2>
         {feedbackLoading ? (
           <PageLoading />
         ) : feedbackError || !feedbackData ? (
@@ -514,15 +597,59 @@ export function LearningPage() {
             data={feedbackData.items}
             columns={feedbackColumns}
             keyField="ts"
-            maxRows={200}
+            maxRows={50}
+            pageSize={50}
+            expandedKey={feedbackExpandedKey}
+            onExpandToggle={setFeedbackExpandedKey}
+            renderExpanded={(row) => (
+              <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-xs">
+                {row.priorText && (
+                  <div>
+                    <span className="text-text-muted font-medium">Prior response: </span>
+                    <span className="text-text-secondary">{row.priorText}</span>
+                  </div>
+                )}
+                {row.priorTools && row.priorTools.length > 0 && (
+                  <div>
+                    <span className="text-text-muted font-medium">Tools: </span>
+                    <span className="font-mono text-text-secondary">{row.priorTools.join(', ')}</span>
+                  </div>
+                )}
+                {row.priorFiles && row.priorFiles.length > 0 && (
+                  <div>
+                    <span className="text-text-muted font-medium">Files: </span>
+                    <span className="font-mono text-text-secondary">{row.priorFiles.join(', ')}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            rowKeyFn={(row) => row.ts + row.sessionId}
           />
         )}
       </div>
 
-      {/* Directive Compliance section */}
+      {/* Corrections section */}
       <div className="space-y-3">
-        <h2 className="font-heading text-lg font-medium text-text-secondary">Directive Compliance</h2>
-        <DirectiveComplianceSection />
+        <div>
+          <h2 className="font-heading text-lg font-medium text-text-secondary">Corrections</h2>
+          <p className="text-xs text-text-disabled mt-0.5">
+            Negative feedback grouped by trigger word — a proxy for directive adherence.
+          </p>
+        </div>
+        {feedbackLoading ? (
+          <PageLoading />
+        ) : correctionGroups.length === 0 ? (
+          <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center text-sm text-text-muted">
+            No corrections recorded.
+          </div>
+        ) : (
+          <DataTable<CorrectionGroup>
+            data={correctionGroups}
+            columns={correctionColumns}
+            keyField="trigger"
+            maxRows={50}
+          />
+        )}
       </div>
 
       {/* Gates section */}

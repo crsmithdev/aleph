@@ -52,13 +52,10 @@ if (/^<(task-notification|system-reminder)\b/i.test(prompt)) {
   process.exit(0);
 }
 
-// Match: standalone digit, strict N/10 prompt, or rate-keyword at prompt start.
-// All anchored to prompt start so incidental mentions don't trigger.
+// Match: strict N/10 prompt, or rate-keyword at prompt start.
+// Standalone digits intentionally excluded — too many false positives (option selection, counts).
 let rating: string | null = null;
-if (/^(10|[1-9])$/.test(prompt)) {
-  rating = prompt;
-  trace(TAG, `matched standalone: ${rating}`);
-} else if (/^(10|[1-9])\s*\/\s*10$/.test(prompt)) {
+if (/^(10|[1-9])\s*\/\s*10$/.test(prompt)) {
   rating = prompt.match(/^(10|[1-9])/)![1];
   trace(TAG, `matched N/10: ${rating}`);
 } else {

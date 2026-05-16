@@ -23,6 +23,13 @@ export function longDate(iso: string): string {
   return format(new Date(iso), 'MMM d, yyyy');
 }
 
+export function compactTs(iso: string): string {
+  const d = new Date(iso);
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  return `${month}/${day} ${format(d, 'h:mmaaa')}`;
+}
+
 export function dateTime(iso: string): string {
   const d = new Date(iso);
   const currentYear = new Date().getFullYear();
