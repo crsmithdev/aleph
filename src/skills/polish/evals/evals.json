@@ -1,0 +1,25 @@
+{
+  "skill_name": "polish",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "fix my annotations on the learning page",
+      "expected_output": "Calls read_annotations filtered to the learning page URL, presents a summary of what was found, implements the changes, deletes the annotations, and takes a verification screenshot."
+    },
+    {
+      "id": 2,
+      "prompt": "/polish",
+      "expected_output": "Calls read_annotations without a URL filter to discover all pending annotations, presents what was found grouped by page, asks the user which page to focus on before proceeding."
+    },
+    {
+      "id": 3,
+      "prompt": "what did I mark on http://localhost:3001/observability/sessions",
+      "expected_output": "Calls read_annotations with the exact sessions URL, displays the annotations found (or says none exist), then asks whether to implement them."
+    },
+    {
+      "id": 4,
+      "prompt": "implement the annotations for the goals page",
+      "expected_output": "Maps 'goals page' to /goals URL, reads annotations, implements changes using Construct design tokens (not raw hex), deletes annotations when done."
+    }
+  ]
+}
