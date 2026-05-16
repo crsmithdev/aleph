@@ -211,6 +211,28 @@ Helpers called by hooks must not throw silently. If a helper fails, the calling 
 
 ---
 
+## I. Usage signals
+
+*Sources: `~/.construct/signals/hook-events.jsonl` (field: `hook`). Each hook reports via `reportHook()`, so absence from the log is a meaningful signal — not just missing data.*
+
+### I.1 Hook fires at least once in recent sessions
+
+A hook registered and deployed but absent from `hook-events.jsonl` across the last 20 sessions either has a broken event matcher, fires for events that never occur in practice, or is legacy — registered but never cleaned up.
+
+- **Detect:** for each hook's registered name (from `settings-hooks.json`), `grep "\"hook\":\"<name>\"" ~/.construct/signals/hook-events.jsonl | wc -l`; zero lines AND the hook is older than 5 sessions (check git log creation date) = suspect; flag with the registered event type so the reader knows what conditions were expected to fire it
+- **Severity:** `suggestion`
+- **Tag:** `unused-hook`
+
+### I.2 Hook pair reader sees output from its writer
+
+For hook pairs (writer fires in one lifecycle, reader picks up the file in a later one), verify the reader-side hook has actually executed after the writer in the session log. A writer with trace events but no corresponding reader trace events suggests the reader is broken, registered incorrectly, or consuming a stale path.
+
+- **Detect:** identify writer-reader pairs (from F.1/F.2 analysis); for each, check `hook-events.jsonl` for the writer's entries followed by the reader's entries within the same `sessionId`; flag pairs where the writer fires but the reader never does
+- **Severity:** `important`
+- **Tag:** `dead-output`
+
+---
+
 ## Negative-filter list (uniform with other audit leaves)
 
 Per `src/skills/_shared/finding.md`:

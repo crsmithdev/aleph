@@ -86,6 +86,8 @@ For each in-scope hook script, evaluate every section A through H in `src/rules/
 - **G.2 (event/matcher uniqueness):** flag duplicate `(event, matcher)` pairs.
 - **G.3 (cross-registry double registration):** flag same command path appearing in both `.claude/settings.json` and `src/core/hooks/settings-hooks.json`.
 - **H.1 (silent catch):** flag catch blocks without log / exit / re-throw.
+- **I.1 (unused-hook):** for each registered hook, `grep "\"hook\":\"<name>\"" ~/.construct/signals/hook-events.jsonl | wc -l`; zero hits AND creation > 5 sessions ago (git log) = `suggestion` `unused-hook`; include the registered event type in the finding so the reader knows what was expected to trigger it
+- **I.2 (writer fires, reader never does):** for each writer-reader pair identified in F.1/F.2, check `hook-events.jsonl` for the writer's entries; if writer entries exist but the reader's name never appears in subsequent entries within the same `sessionId`, flag as `important` `dead-output`
 
 For rules whose Detect signal doesn't apply to a given hook (e.g., F.1 on a hook with no file outputs), skip silently.
 
@@ -114,7 +116,7 @@ Single SARIF v2.1.0 run, `tool.driver.name = "hooks-audit"`. Each `result`:
     "confidence": 0,
     "severity": "blocking" | "important" | "nit" | "suggestion" | "praise",
     "fix": "<concrete remediation>",
-    "tag": "silent-fail" | "observability" | "correctness" | "slop" | "dead-output" | "pii" | "pair-contract" | "dead-hook" | "double-fire",
+    "tag": "silent-fail" | "observability" | "correctness" | "slop" | "dead-output" | "pii" | "pair-contract" | "dead-hook" | "double-fire" | "unused-hook",
     "scope": "diff" | "module" | "all"
   }
 }

@@ -5,12 +5,15 @@ description: >
   `src/rules/agents/RULES.md` — frontmatter completeness, description quality
   (when-to-use / when-not), tool-whitelist sanity, no-Task-tool-in-subagents
   (R1 for the agents domain), trigger overlap with sibling agents, output
-  contract, and statelessness. Emits SARIF findings (per
+  contract, statelessness, and cross-domain consistency (skills referenced by
+  agents still exist; recently changed skills flag the agent for review;
+  unreachable agents with no dispatch references). Emits SARIF findings (per
   `src/skills/_shared/finding.md`) plus a phased prose report. Read-only —
   no edits. Triggers on "audit agents", "check my agents", "audit subagents",
-  "find agent drift", "/agents-audit", "/audit agents", or when the omnibus
-  dispatches the audit verb to the agents domain. agnix AGM-* / XP-* covers
-  structural lint; this skill adds the semantic layer.
+  "find agent drift", "check cross-domain drift", "/agents-audit",
+  "/audit agents", or when the omnibus dispatches the audit verb to the agents
+  domain. agnix AGM-* / XP-* covers structural lint; this skill adds the
+  semantic layer.
 verb: audit
 domain: agents
 modes: [report]
@@ -77,6 +80,9 @@ For each in-scope agent file, evaluate sections A through F in `src/rules/agents
 - **E.1 (output contract drift):** agents with structured-output verbs in body but no contract statement in description.
 - **E.2 (capability drift):** description references a tool / skill not in the whitelist or not present as a skill.
 - **F.1 (statelessness):** agent body text containing phrases like "as we discussed", "earlier", "previous turn".
+- **G.1 (cross-domain-drift — dead skill reference):** extract all `subagent_type: "<name>"` literals, `/<name>` slash-command references, and prose "X skill" mentions from the agent body; for each, confirm `src/skills/<name>/SKILL.md` exists and `skill-rules.json` has an entry; flag missing as `important` `cross-domain-drift`
+- **G.2 (cross-domain-drift — stale after skill change):** for each resolved skill reference from G.1, run `git log --oneline -10 -- src/skills/<name>/SKILL.md`; if any commits, emit `suggestion` `cross-domain-drift` — "Skill `<name>` changed recently; verify agent dispatch description is still current"
+- **G.3 (unused-agent):** grep `src/skills/`, `src/core/hooks/`, and `.claude/` for the agent's name as a `subagent_type` value or explicit dispatch target; if zero hits and the agent has been in the repo > 30 days (git log), emit `suggestion` `unused-agent`
 
 ### 4. Apply negative-filter list
 
@@ -101,7 +107,7 @@ Single SARIF v2.1.0 run, `tool.driver.name = "agents-audit"`. Each `result`:
     "confidence": 0,
     "severity": "blocking" | "important" | "nit" | "suggestion" | "praise",
     "fix": "<concrete change — frontmatter add, tool removal, description rewrite>",
-    "tag": "frontmatter" | "naming" | "stale-model" | "description-quality" | "over-privileged" | "r1-violation" | "routing-collision" | "contract-drift" | "agent-drift" | "statelessness",
+    "tag": "frontmatter" | "naming" | "stale-model" | "description-quality" | "over-privileged" | "r1-violation" | "routing-collision" | "contract-drift" | "agent-drift" | "statelessness" | "cross-domain-drift" | "unused-agent",
     "scope": "diff" | "module" | "all"
   }
 }
@@ -117,7 +123,7 @@ Praise candidates: agents that exemplify clear scope (description has explicit "
 # Agents Audit — <scope>
 
 ## Summary
-N agents audited · N missing frontmatter · N over-privileged · N routing-collision pairs
+N agents audited · N missing frontmatter · N over-privileged · N routing-collision pairs · N cross-domain-drift · N unused
 
 ## blocking (N)
 - <file:line> — <rule> — <one-line>

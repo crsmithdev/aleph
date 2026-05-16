@@ -166,6 +166,28 @@ If a SKILL.md's description says "triggers on 'audit the design'", the `skill-ru
 
 ---
 
+## H. Usage signals and cross-domain references
+
+*Sources: git log; static reference analysis; practical observation — skills unused since creation or shadowed by keyword collisions are dead weight.*
+
+### H.1 Skill has been exercised (git age + keyword realism)
+
+A skill with no examples/, a sparse description, and no git activity in the last 30 days since creation is probably dead weight — never triggered, or triggered by accident and producing poor results. Not a hard rule, but a strong signal worth surfacing.
+
+- **Detect:** skills where ALL of the following are true: (a) no `examples/` directory, (b) description < 150 chars, (c) `git log --since="30 days ago" -- src/skills/<name>/` returns 0 commits, (d) the skill is older than 30 days (`git log --follow --diff-filter=A` shows creation > 30 days ago)
+- **Severity:** `suggestion`
+- **Tag:** `unused-skill`
+
+### H.2 Agent and hook references in skill body are live
+
+If a skill's body mentions an agent by name (e.g., `subagent_type: "code-review"`) or a hook by script name, those must still exist.
+
+- **Detect:** parse skill body for `subagent_type: "<name>"` patterns and any prose references to hook script names; grep `src/agents/`, `~/.claude/agents/`, and the hook registry to confirm; flag missing
+- **Severity:** `important`
+- **Tag:** `dead-reference`
+
+---
+
 ## Negative-filter list (uniform with other audit leaves)
 
 Per `src/skills/_shared/finding.md`:

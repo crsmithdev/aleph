@@ -70,6 +70,32 @@ For each (verb, domain) cell with a leaf in the registry, invoke `Skill('<leaf-n
 
 Each leaf returns a SARIF v2.1.0 run plus a prose phased summary. Capture both; merge the SARIF, keep the prose for context.
 
+## Phase 1.5: Cross-domain consistency pass
+
+Runs after all leaf audits return (Phase 1) and before validation (Phase 2). Always on when two or more domains are in scope; skipped for single-domain runs and when `--no-cross-domain` is passed.
+
+**Build the dispatch graph** (static analysis, no new Skill() calls):
+
+1. Parse every agent file in scope → extract skill references (`subagent_type: "<name>"` literals, `/<name>` slash-commands, prose "dispatches to X skill")
+2. Parse every hook file in scope → extract writer-reader pairs (from F.1/F.2 analysis in hooks-audit findings)
+3. Read `skill-rules.json` + `omnibus.yml` → build the full routing map
+
+**Check the graph against scope changes:**
+
+- For each **(agent → skill)** edge where the skill was in the audit scope or has git commits in the diff:
+  - Emit `cross-domain-drift` on the agent file: "Skill `<name>` changed in scope; verify agent's dispatch description is still current"
+  - Severity: `suggestion`; confidence 65 (validation pass refines)
+
+- For each **(agent → skill)** edge where the skill file no longer exists:
+  - Emit `dead-reference` on the agent file: "Agent dispatches to skill `<name>` which no longer exists in `src/skills/`"
+  - Severity: `important`; confidence 95
+
+- For each **(hook-writer → file → consumer)** pair where the writer was in the audit scope:
+  - Emit `cross-domain-drift` on the consumer: "Hook `<writer-name>` output format may have changed; verify schema assumptions"
+  - Severity: `suggestion`; confidence 60
+
+**Merge** all Phase 1.5 findings into the main SARIF log before Phase 2. Validation applies to them the same as leaf findings. Tag all Phase 1.5 findings with `"source": "cross-domain"` in `properties` to distinguish them in the report.
+
 ## Phase 2: Validation pass
 
 For each candidate finding from Phase 1, run a validation subagent (a separate `Skill()` invocation or inline reasoning) that:
@@ -159,7 +185,7 @@ Re-audit suggested: <reason>
 
 - `suggest` cells are declared in `omnibus.yml` but not yet wired — the proactive-suggestion variant of audit is post-v1 work.
 - No persistence — findings live for the duration of the conversation. A `/audit` followed an hour later by `/fix` requires re-running the audit.
-- No graph-index for cross-file checks. Per-file scans only. Graph-index audit (Greptile v3 pattern) is post-v1 work.
+- Phase 1.5 cross-domain graph is static analysis only (git log + grep). No graph-index for deep semantic cross-file checks (Greptile v3 pattern) — that's post-v1 work.
 - Approval gates use AskUserQuestion or simple chat prompts; no UI surface yet.
 
 ## Guardrails

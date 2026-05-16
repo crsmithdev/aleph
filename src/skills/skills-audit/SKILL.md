@@ -82,6 +82,8 @@ For each in-scope SKILL.md, evaluate sections A through G in `src/rules/skills/R
 - **E.2 (R2 — no inline skill chaining):** flag prose like "invoke `<sibling-skill>` to do X" outside omnibus-dispatch context.
 - **F.1 (R4 — no hardcoded gates):** in fix-flavor SKILL.md files, flag literal `bun test.ts` / `bun run ui:smoke` / `agnix --dry-run` outside Cross-references / example blocks.
 - **G.1 (trigger drift):** parse description, extract quoted trigger phrases, confirm each appears in the corresponding `skill-rules.json` entry's keyword list (literal or regex).
+- **H.1 (unused-skill):** check all four conditions: no `examples/`, description < 150 chars, zero git commits in last 30 days, creation > 30 days ago; all four together = `suggestion` `unused-skill`
+- **H.2 (dead-reference):** parse skill body for `subagent_type: "<name>"` patterns and hook script name references; grep `src/agents/`, `~/.claude/agents/`, and hook registry; flag missing as `important` `dead-reference`
 
 ### 4. Apply negative-filter list
 
@@ -107,7 +109,7 @@ Single SARIF v2.1.0 run, `tool.driver.name = "skills-audit"`. Each `result`:
     "confidence": 0,
     "severity": "blocking" | "important" | "nit" | "suggestion" | "praise",
     "fix": "<concrete change — frontmatter add, keyword add, refactor>",
-    "tag": "frontmatter" | "naming" | "correctness" | "description-quality" | "orphaned-skill" | "routing-collision" | "slop" | "examples" | "r1-violation" | "r2-violation" | "r4-violation" | "trigger-drift",
+    "tag": "frontmatter" | "naming" | "correctness" | "description-quality" | "orphaned-skill" | "routing-collision" | "slop" | "examples" | "r1-violation" | "r2-violation" | "r4-violation" | "trigger-drift" | "unused-skill" | "dead-reference",
     "scope": "diff" | "module" | "all"
   }
 }

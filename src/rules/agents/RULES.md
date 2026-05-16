@@ -135,6 +135,36 @@ Subagents start with no conversation history beyond what the parent passes them.
 
 ---
 
+## G. Cross-domain consistency
+
+*Sources: git log; static reference analysis; `src/skills/skill-rules.json`. The dominant failure mode: a skill is renamed or repurposed, but agents that dispatch to it still use the old name or old description of its behavior.*
+
+### G.1 Skills referenced by the agent still exist
+
+If an agent's body or description contains a `subagent_type: "<name>"` literal, a `/<skill-name>` reference, or any prose like "dispatches to X skill", that skill must exist in `src/skills/<name>/SKILL.md` and be registered in `skill-rules.json`.
+
+- **Detect:** extract all skill references from the agent body (regex: `subagent_type:\s*"([^"]+)"`, `/<[a-z-]+>`, and prose "X skill / X agent"); for each, check `src/skills/<name>/SKILL.md` existence and `skill-rules.json` entry; flag missing as dead reference
+- **Severity:** `important` (skill gone) / `nit` (skill exists but registry entry missing)
+- **Tag:** `cross-domain-drift`
+
+### G.2 Recently changed skills that this agent dispatches to warrant review
+
+If a skill this agent dispatches to was modified in the last 10 commits (on the current branch or in the audit scope), the agent's description of that skill's behavior may be stale.
+
+- **Detect:** for each skill reference found in G.1 that resolves successfully, run `git log --oneline -10 -- src/skills/<name>/SKILL.md`; if any commits are returned, emit a suggestion to re-read the skill and verify the agent's dispatch description still matches
+- **Severity:** `suggestion`
+- **Tag:** `cross-domain-drift`
+
+### G.3 Agent is reachable — something dispatches it
+
+An agent that is never referenced as a `subagent_type` anywhere in skills, hooks, or the codebase may be undiscoverable (the dispatcher needs to know the agent name to route to it).
+
+- **Detect:** grep `src/skills/`, `src/core/hooks/`, and `.claude/` for the agent's name as a `subagent_type` value or explicit dispatch mention; if zero hits and the agent has been in the repo > 30 days (check via git log), emit a suggestion
+- **Severity:** `suggestion`
+- **Tag:** `unused-agent`
+
+---
+
 ## Negative-filter list (uniform with other audit leaves)
 
 Per `src/skills/_shared/finding.md`:
