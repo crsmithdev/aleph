@@ -186,8 +186,36 @@ export interface DecisionContext {
   mostRecentUserText: string;
 }
 
-const BLOCK_REASON =
-  "Code change with no [verify] block. Verify the actual output of this change — do not describe what you expect, confirm what you observe. Then emit:\n" +
+function verificationHint(editedFiles: string[]): string {
+  const isUI = (f: string) => /\/src\/ui\/web\//.test(f) || /\.(tsx|jsx)$/.test(f);
+  const isHook = (f: string) => /\/hooks\/[^/]+\.ts$/.test(f);
+  const isRoute = (f: string) => /\/routes\/[^/]+\.ts$/.test(f) || /\/api\//.test(f);
+  const isTest = (f: string) => /\.(test|spec)\.[tj]s$/.test(f) || /\/tests?\//.test(f);
+
+  if (editedFiles.some(isUI)) {
+    const pages = [...new Set(
+      editedFiles.filter(isUI).map(f => f.replace(/.*\/pages\//, "").replace(/\/.*/, "") || f.split("/").pop())
+    )].join(", ");
+    return `UI change detected (${pages}) — navigate to the affected page and confirm the change is visible in the browser.`;
+  }
+  if (editedFiles.some(isHook)) {
+    return "Hook change detected — exercise it directly: pipe representative input and check stdout/exit code.";
+  }
+  if (editedFiles.some(isRoute)) {
+    return "API route change detected — hit the endpoint and confirm the response shape and data are correct.";
+  }
+  if (editedFiles.some(isTest)) {
+    return "Test file change detected — run the suite and confirm the output is correct.";
+  }
+  return "Observe the actual output of the system with this change applied.";
+}
+
+const BLOCK_REASON_TEMPLATE =
+  "Code change with no [verify] block. Verify the actual output of this change — do not describe what you expect, confirm what you observe.\n" +
+  "\n" +
+  "HINT: {hint}\n" +
+  "\n" +
+  "Then emit:\n" +
   "\n" +
   "  [verify]\n" +
   "  scope:      <what was exercised>\n" +
@@ -195,7 +223,11 @@ const BLOCK_REASON =
   "  assertions: <what you confirmed>\n" +
   "  [/verify]\n" +
   "\n" +
-  "All three keys required and non-empty. The method is yours to choose: navigate the UI, exercise the hook, run the tests — whatever produces observable evidence. Reply \"skip verify\" to bypass once.";
+  "All three keys required and non-empty. Reply \"skip verify\" to bypass once.";
+
+function blockReason(editedFiles: string[]): string {
+  return BLOCK_REASON_TEMPLATE.replace("{hint}", verificationHint(editedFiles));
+}
 
 export function decide(ctx: DecisionContext): Decision {
   const klass = classifyChange(ctx.editedFiles);
@@ -216,5 +248,5 @@ export function decide(ctx: DecisionContext): Decision {
   const detail = block === null
     ? "no [verify] block found"
     : `[verify] block missing required keys: ${missing.join(", ")}`;
-  return { kind: "block", reason: `${BLOCK_REASON}\n\nDetected: ${detail}.` };
+  return { kind: "block", reason: `${blockReason(ctx.editedFiles)}\n\nDetected: ${detail}.` };
 }
