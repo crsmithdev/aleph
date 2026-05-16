@@ -29,8 +29,7 @@ type FeedbackItem = {
   ts: string;
   sessionId: string;
   trigger: string;
-  polarity?: 'positive' | 'negative';
-  rating?: number;
+  rating: number;
   type: 'sentiment' | 'numeric';
   priorText?: string;
   priorTools?: string[];
@@ -103,45 +102,27 @@ function SessionLink({ sessionId, turnIndex }: { sessionId: string; turnIndex?: 
   );
 }
 
-/** Signal badge — unified ▲/▼ notation for both sentiment and numeric feedback. */
-function SignalBadge({ item }: { item: FeedbackItem }) {
-  if (item.type === 'numeric' && item.rating !== undefined) {
-    const r = item.rating;
-    if (r >= 7) {
-      return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-green-500/15 text-green-400">
-          ▲ {r}/10
-        </span>
-      );
-    }
-    if (r <= 3) {
-      return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-500/15 text-red-400">
-          ▼ {r}/10
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-yellow-500/15 text-yellow-400">
-        ~ {r}/10
-      </span>
-    );
-  }
-  if (item.polarity === 'positive') {
+/** Signal badge — ▲/▼/~ with numeric score, colored by classification. */
+function SignalBadge({ rating }: { rating: number }) {
+  if (rating >= 7) {
     return (
       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-green-500/15 text-green-400">
-        ▲ positive
+        ▲ {rating}/10
       </span>
     );
   }
-  if (item.polarity === 'negative') {
+  if (rating <= 3) {
     return (
       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-500/15 text-red-400">
-        ▼ negative
+        ▼ {rating}/10
       </span>
     );
   }
-  return <span className="text-text-disabled">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-yellow-500/15 text-yellow-400">
+      ~ {rating}/10
+    </span>
+  );
 }
 
 function GatesSection() {
@@ -351,7 +332,7 @@ export function LearningPage() {
     if (!feedbackData?.items) return [];
     const map = new Map<string, { count: number; lastTs: string; items: FeedbackItem[] }>();
     for (const item of feedbackData.items) {
-      if (item.polarity !== 'negative') continue;
+      if (item.rating > 3) continue;
       const key = item.trigger.split(/[\s,]+/)[0].toLowerCase() || 'unknown';
       const existing = map.get(key);
       if (existing) {
@@ -449,7 +430,7 @@ export function LearningPage() {
       key: 'rating',
       label: 'Signal',
       width: '140px',
-      render: (row) => <SignalBadge item={row} />,
+      render: (row) => <SignalBadge rating={row.rating} />,
     },
     {
       key: 'sessionId',

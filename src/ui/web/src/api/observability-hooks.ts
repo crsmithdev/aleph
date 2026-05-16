@@ -747,12 +747,12 @@ export function useObsLearningFeedback() {
       ts: string;
       sessionId: string;
       trigger: string;
-      polarity?: 'positive' | 'negative';
-      rating?: number;
+      rating: number;
       type: 'sentiment' | 'numeric';
       priorText?: string;
       priorTools?: string[];
       priorFiles?: string[];
+      turnIndex?: number;
     }>;
     avgRating: number;
     total: number;

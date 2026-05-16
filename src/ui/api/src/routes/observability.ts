@@ -1657,17 +1657,19 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/learning/feedback', async () => {
     return cachedResult('/learning/feedback', 60_000, () => {
+      // Sentiment polarity is mapped to a canonical numeric score for uniform display.
+      const POLARITY_SCORE: Record<string, number> = { positive: 8, negative: 2 };
+
       type FeedbackItem = {
         ts: string; sessionId: string;
-        trigger: string; polarity?: 'positive' | 'negative';
-        rating?: number; type: 'sentiment' | 'numeric';
+        trigger: string; rating: number; type: 'sentiment' | 'numeric';
         priorText?: string; priorTools?: string[]; priorFiles?: string[];
         turnIndex?: number;
       };
 
       const items: FeedbackItem[] = [];
 
-      // Read feedback.jsonl (sentiment)
+      // Read feedback.jsonl (sentiment) — polarity mapped to numeric score
       if (existsSync(dataPaths.feedback)) {
         try {
           const lines = readFileSync(dataPaths.feedback, 'utf-8').split('\n').filter(Boolean);
@@ -1676,11 +1678,13 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
               const e = JSON.parse(line) as Record<string, unknown>;
               const ts = (e.ts ?? e.timestamp) as string | undefined;
               if (!ts) continue;
+              const polarity = e.polarity as string | undefined;
+              const rating = POLARITY_SCORE[polarity ?? ''] ?? 5;
               items.push({
                 ts,
                 sessionId: (e.session_id ?? '') as string,
                 trigger: ((e.prompt ?? e.trigger) ?? '') as string,
-                polarity: (e.polarity as 'positive' | 'negative' | undefined),
+                rating,
                 type: 'sentiment',
                 priorText: (e.prior_text as string | undefined),
                 priorTools: (e.prior_tools as string[] | undefined),
@@ -1701,8 +1705,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
             try {
               const e = JSON.parse(line) as Record<string, unknown>;
               const ts = (e.timestamp ?? e.ts) as string | undefined;
-              const rating = typeof e.rating === 'number' ? e.rating : undefined;
               if (!ts) continue;
+              const rating = typeof e.rating === 'number' ? e.rating : 5;
               items.push({
                 ts,
                 sessionId: (e.session_id ?? e.sessionId ?? '') as string,
@@ -1714,7 +1718,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
                 priorFiles: (e.prior_files as string[] | undefined),
                 turnIndex: e.turn_index as number | undefined,
               });
-              if (rating !== undefined) numericRatings.push(rating);
+              numericRatings.push(rating);
             } catch {}
           }
         } catch {}
