@@ -193,6 +193,48 @@ export function extractTurn(transcriptLines: string[], turnStart: number): TurnA
 }
 
 // ---------------------------------------------------------------------------
+// Test file detection + passing-run detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Generic test file detection across languages and conventions.
+ * Covers JS/TS (jest/vitest), Python (pytest/unittest), Go, Java/Kotlin,
+ * Ruby (rspec/minitest), Scala, Rust, and common directory conventions.
+ */
+export function isTestFile(filePath: string): boolean {
+  const name = filePath.split("/").pop() ?? "";
+
+  if (/\.(test|spec)\.[a-z0-9]+$/i.test(name)) return true;  // foo.test.ts, foo.spec.js
+  if (/^test_/i.test(name)) return true;                      // test_foo.py (Python)
+  if (/_test\.[a-z0-9]+$/i.test(name)) return true;          // foo_test.go, foo_test.py
+  if (/Tests?\.[a-z]+$/i.test(name)) return true;            // FooTest.java, FooTests.kt
+  if (/Spec\.[a-z]+$/i.test(name)) return true;              // FooSpec.scala, foo_spec.rb
+  if (/(^|\/)(__tests__|tests?|specs?)\//.test(filePath)) return true; // test directories
+
+  return false;
+}
+
+/**
+ * Detect evidence of a passing test run in Bash output.
+ * Recognises output from bun, jest, vitest, pytest, go test, rspec, and most
+ * other runners that print a summary line. Requires at least one passing signal
+ * and zero failure signals.
+ */
+export function detectPassingTestRun(text: string): boolean {
+  const pass =
+    /\b\d+\s+(tests?\s+)?pass(ed|ing)?\b/i.test(text) ||  // "67 pass", "5 passed"
+    /^ok\s+\S+/m.test(text) ||                              // Go: "ok  pkg/name"
+    /\bpassed\s+\d+/i.test(text);                          // "passed 10 tests"
+
+  const fail =
+    /\b[1-9]\d*\s+(tests?\s+)?fail(ed|ure|s|ing)?\b/i.test(text) ||
+    /\bFAIL(ED)?\b/.test(text) ||
+    /\b[1-9]\d*\s+error(s)?\b/i.test(text);
+
+  return pass && !fail;
+}
+
+// ---------------------------------------------------------------------------
 // Decision
 // ---------------------------------------------------------------------------
 
@@ -210,7 +252,7 @@ function verificationHint(editedFiles: string[]): string {
   const isUI = (f: string) => /\/src\/ui\/web\//.test(f) || /\.(tsx|jsx)$/.test(f);
   const isHook = (f: string) => /\/hooks\/[^/]+\.ts$/.test(f);
   const isRoute = (f: string) => /\/routes\/[^/]+\.ts$/.test(f) || /\/api\//.test(f);
-  const isTest = (f: string) => /\.(test|spec)\.[tj]s$/.test(f) || /\/tests?\//.test(f);
+  const isShell = (f: string) => /\.(sh|bash)$/i.test(f);
 
   if (editedFiles.some(isUI)) {
     const pages = [...new Set(
@@ -224,8 +266,11 @@ function verificationHint(editedFiles: string[]): string {
   if (editedFiles.some(isRoute)) {
     return "API route change detected — hit the endpoint and confirm the response shape and data are correct.";
   }
-  if (editedFiles.some(isTest)) {
-    return "Test file change detected — run the suite and confirm the output is correct.";
+  if (editedFiles.some(isTestFile)) {
+    return "Test file change — run the suite and confirm passing output in stdout.";
+  }
+  if (editedFiles.some(isShell)) {
+    return "Shell script change — run the script with representative input and confirm exit code and output.";
   }
   return "Observe the actual output of the system with this change applied.";
 }
@@ -259,6 +304,12 @@ export function decide(ctx: DecisionContext): Decision {
   const missing = missingRequiredFields(block);
   if (missing.length === 0) {
     return { kind: "pass", reason: `verified: ${block!.fields.method}` };
+  }
+
+  // Test-only fast-path: all non-doc edits are test files + output shows a passing run.
+  const nonDocEdits = ctx.editedFiles.filter(f => !isDocOnly(f));
+  if (nonDocEdits.length > 0 && nonDocEdits.every(isTestFile) && detectPassingTestRun(ctx.toolResultText)) {
+    return { kind: "pass", reason: "test-only: passing run confirmed in output" };
   }
 
   if (userAffirmedSkip(ctx.mostRecentUserText)) {

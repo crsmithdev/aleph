@@ -3,8 +3,10 @@ import { check, createResults, printAndExit } from "../eval/harness.ts";
 import {
   classifyChange,
   decide,
+  detectPassingTestRun,
   extractTurn,
   isDocOnly,
+  isTestFile,
   missingRequiredFields,
   mostRecentUserText,
   RECOGNISED_KEYS,
@@ -58,6 +60,40 @@ check(r, "any code mixed in → required",
   classifyChange(["README.md", "src/foo.ts"]) === "required");
 check(r, "config alone → required",
   classifyChange(["settings.json"]) === "required");
+
+// ── isTestFile ───────────────────────────────────────────────────────────────
+console.log("--- isTestFile ---");
+check(r, "JS/TS: .test.ts, .spec.ts",
+  isTestFile("src/foo.test.ts") && isTestFile("src/bar.spec.tsx") && isTestFile("lib/util.test.js"));
+check(r, "Python: test_foo.py, foo_test.py",
+  isTestFile("test_models.py") && isTestFile("models_test.py"));
+check(r, "Go: foo_test.go",
+  isTestFile("handler_test.go") && isTestFile("pkg/server_test.go"));
+check(r, "Java/Kotlin: FooTest.java, FooTests.kt",
+  isTestFile("UserTest.java") && isTestFile("UserTests.kt") && isTestFile("OrderSpec.scala"));
+check(r, "Ruby: foo_spec.rb, foo_test.rb",
+  isTestFile("user_spec.rb") && isTestFile("order_test.rb"));
+check(r, "test directories: __tests__/, tests/, spec/",
+  isTestFile("src/__tests__/utils.ts") && isTestFile("tests/integration.ts") && isTestFile("spec/models/user.rb"));
+check(r, "regular source files are NOT test files",
+  !isTestFile("src/foo.ts") && !isTestFile("lib/util.py") && !isTestFile("handler.go"));
+
+// ── detectPassingTestRun ──────────────────────────────────────────────────────
+console.log("--- detectPassingTestRun ---");
+check(r, "bun: '67 pass, 0 fail'",
+  detectPassingTestRun("67 pass\n0 fail\nRan 67 tests across 6 files."));
+check(r, "jest: 'Tests: 5 passed'",
+  detectPassingTestRun("Tests: 5 passed, 5 total\nTest Suites: 1 passed"));
+check(r, "pytest: '5 passed'",
+  detectPassingTestRun("======================== 5 passed in 0.12s ========================"));
+check(r, "go test: 'ok  pkg/name'",
+  detectPassingTestRun("ok  github.com/foo/bar\t0.012s"));
+check(r, "no pass signal → false",
+  !detectPassingTestRun("compilation succeeded\nno test output"));
+check(r, "failures present → false even with passing count",
+  !detectPassingTestRun("5 passed, 2 failed\nFAILED"));
+check(r, "FAILED alone → false",
+  !detectPassingTestRun("FAILED src/foo.test.ts"));
 
 // ── REQUIRED_KEYS / RECOGNISED_KEYS shape ────────────────────────────────────
 console.log("--- REQUIRED_KEYS / RECOGNISED_KEYS ---");
@@ -204,6 +240,33 @@ console.log("--- decide ---");
   });
   check(r, "no verification but user said 'skip verify' → pass",
     d.kind === "pass" && d.reason.includes("user-affirmed"));
+}
+{
+  const d = decide({
+    editedFiles: ["src/tests/memory.test.ts", "src/__tests__/util.test.ts"],
+    toolResultText: "67 pass\n0 fail\nRan 67 tests across 6 files.",
+    mostRecentUserText: "fix the test",
+  });
+  check(r, "test-only edits + passing run → fast-path pass",
+    d.kind === "pass" && d.reason.includes("test-only"));
+}
+{
+  const d = decide({
+    editedFiles: ["src/tests/memory.test.ts", "src/memory/extract.ts"],
+    toolResultText: "67 pass\n0 fail",
+    mostRecentUserText: "fix",
+  });
+  check(r, "test + non-test edits → fast-path does NOT apply",
+    d.kind === "block");
+}
+{
+  const d = decide({
+    editedFiles: ["src/tests/memory.test.ts"],
+    toolResultText: "FAILED src/tests/memory.test.ts",
+    mostRecentUserText: "fix",
+  });
+  check(r, "test-only edits but failing run → still blocks",
+    d.kind === "block");
 }
 {
   // Old type/input/output keys must NOT cause a pass even if every old key is present.
