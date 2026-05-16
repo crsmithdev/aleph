@@ -1650,6 +1650,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         trigger: string; polarity?: 'positive' | 'negative';
         rating?: number; type: 'sentiment' | 'numeric';
         priorText?: string; priorTools?: string[]; priorFiles?: string[];
+        turnIndex?: number;
       };
 
       const items: FeedbackItem[] = [];
@@ -1666,12 +1667,13 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
               items.push({
                 ts,
                 sessionId: (e.session_id ?? '') as string,
-                trigger: (e.trigger ?? '') as string,
+                trigger: ((e.prompt ?? e.trigger) ?? '') as string,
                 polarity: (e.polarity as 'positive' | 'negative' | undefined),
                 type: 'sentiment',
                 priorText: (e.prior_text as string | undefined),
                 priorTools: (e.prior_tools as string[] | undefined),
                 priorFiles: (e.prior_files as string[] | undefined),
+                turnIndex: e.turn_index as number | undefined,
               });
             } catch {}
           }
@@ -1692,9 +1694,13 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
               items.push({
                 ts,
                 sessionId: (e.session_id ?? e.sessionId ?? '') as string,
-                trigger: (e.type ?? 'rating') as string,
+                trigger: ((e.context ?? e.prompt ?? e.type) ?? 'rating') as string,
                 rating,
                 type: 'numeric',
+                priorText: (e.prior_text as string | undefined),
+                priorTools: (e.prior_tools as string[] | undefined),
+                priorFiles: (e.prior_files as string[] | undefined),
+                turnIndex: e.turn_index as number | undefined,
               });
               if (rating !== undefined) numericRatings.push(rating);
             } catch {}

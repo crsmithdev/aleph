@@ -5,7 +5,6 @@ import {
   useObsLearningFeedback,
   useObsGateEvents,
   useObsGatePatterns,
-  useObsDirectives,
 } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -14,7 +13,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { Icon } from '../../../components/ui/Icon';
-import { fmtNumber, fmtPct, dateTime } from '../../../utils/format';
+import { fmtNumber, fmtPct, shortRelativeTime } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type LoopItem = {
@@ -38,6 +37,7 @@ type FeedbackItem = {
   priorText?: string;
   priorTools?: string[];
   priorFiles?: string[];
+  turnIndex?: number;
 };
 
 type GateEvent = {
@@ -50,14 +50,6 @@ type GateEvent = {
   verifyPresent?: boolean;
   verifyMissing?: string[];
   verify?: Record<string, string | null>;
-};
-
-type DirectiveAggregate = {
-  directive: string;
-  sessions: number;
-  followed: number;
-  missed: number;
-  rate: number;
 };
 
 function loopTypeBadge(type: string) {
@@ -81,10 +73,13 @@ function decisionBadgeClass(decision: string) {
   return map[decision] ?? 'bg-bg-tertiary text-text-secondary';
 }
 
-function SessionLink({ sessionId }: { sessionId: string }) {
+function SessionLink({ sessionId, turnIndex }: { sessionId: string; turnIndex?: number }) {
+  const path = turnIndex !== undefined
+    ? `/observability/sessions/${sessionId}/turns/${turnIndex}`
+    : `/observability/sessions/${sessionId}`;
   return (
     <Link
-      to={`/observability/sessions/${sessionId}`}
+      to={path}
       className="font-mono text-text-muted text-xs hover:text-accent transition-colors"
     >
       {sessionId.slice(0, 8)}
@@ -93,116 +88,18 @@ function SessionLink({ sessionId }: { sessionId: string }) {
 }
 
 function DirectiveComplianceSection() {
-  const { data, isLoading, error, refetch } = useObsDirectives();
-
-  if (isLoading) return <PageLoading />;
-  if (error || !data) return <ErrorState message="Failed to load directive data" retry={refetch} />;
-
-  // Group by directive text and compute followed/missed
-  const directiveMap = new Map<string, { sessions: Set<string>; followed: number; missed: number }>();
-
-  for (const event of data.directives) {
-    for (const directive of event.directives ?? []) {
-      if (!directiveMap.has(directive)) {
-        directiveMap.set(directive, { sessions: new Set(), followed: 0, missed: 0 });
-      }
-      const entry = directiveMap.get(directive)!;
-      entry.sessions.add(event.sessionId);
-      // Treat presence as followed; missed would require explicit tracking not in this data shape
-      entry.followed += 1;
-    }
-  }
-
-  const rows: DirectiveAggregate[] = [...directiveMap.entries()]
-    .map(([directive, { sessions, followed, missed }]) => ({
-      directive,
-      sessions: sessions.size,
-      followed,
-      missed,
-      rate: followed + missed > 0 ? (followed / (followed + missed)) * 100 : 100,
-    }))
-    .sort((a, b) => b.sessions - a.sessions);
-
-  const columns: Column<DirectiveAggregate>[] = [
-    {
-      key: 'directive',
-      label: 'Directive',
-      render: (row) => (
-        <span className="font-mono text-text-primary text-xs">{row.directive}</span>
-      ),
-    },
-    {
-      key: 'sessions',
-      label: 'Sessions',
-      align: 'right',
-      width: '80px',
-      render: (row) => <span className="font-mono text-text-secondary">{fmtNumber(row.sessions)}</span>,
-    },
-    {
-      key: 'followed',
-      label: 'Followed',
-      align: 'right',
-      width: '80px',
-      render: (row) => (
-        <span className={clsx('font-mono', row.followed > 0 ? 'text-success' : 'text-text-disabled')}>
-          {row.followed > 0 ? fmtNumber(row.followed) : '—'}
-        </span>
-      ),
-    },
-    {
-      key: 'missed',
-      label: 'Missed',
-      align: 'right',
-      width: '80px',
-      render: (row) => (
-        <span className={clsx('font-mono', row.missed > 0 ? 'text-error' : 'text-text-disabled')}>
-          {row.missed > 0 ? fmtNumber(row.missed) : '—'}
-        </span>
-      ),
-    },
-    {
-      key: 'rate',
-      label: 'Compliance',
-      width: '180px',
-      render: (row) => {
-        const fillColor = row.rate >= 80 ? 'bg-success' : row.rate >= 60 ? 'bg-warning' : 'bg-error';
-        return (
-          <div className="flex items-center gap-2">
-            <div className="flex-1 h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
-              <div
-                className={clsx('h-full rounded-full', fillColor)}
-                style={{ width: `${Math.min(100, row.rate)}%` }}
-              />
-            </div>
-            <span
-              className={clsx(
-                'font-mono text-xs w-12 text-right shrink-0',
-                row.rate >= 80 ? 'text-success' : row.rate >= 60 ? 'text-warning' : 'text-error',
-              )}
-            >
-              {fmtPct(row.rate)}
-            </span>
-          </div>
-        );
-      },
-    },
-  ];
-
-  if (rows.length === 0) {
-    return (
-      <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center text-sm text-text-muted">
-        No directive data recorded.
-      </div>
-    );
-  }
-
   return (
-    <DataTable<DirectiveAggregate>
-      data={rows}
-      columns={columns}
-      keyField="directive"
-      maxRows={100}
-    />
+    <div className="rounded-lg border border-border-primary bg-bg-secondary p-6 flex items-start gap-3">
+      <Icon name="info" className="text-[18px] text-text-muted shrink-0 mt-0.5" />
+      <div className="space-y-1">
+        <p className="text-sm text-text-secondary font-medium">Not yet available</p>
+        <p className="text-xs text-text-muted">
+          Directive compliance requires explicit tracking of whether each behavioral rule was followed or violated per turn.
+          Current signal data (skill routing tags) shows skill selection, not rule adherence.
+          This section will be populated once per-turn compliance signals are collected.
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -232,7 +129,7 @@ function GatesSection() {
       label: 'Time',
       width: '160px',
       render: (row) => (
-        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{dateTime(row.ts)}</span>
+        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{shortRelativeTime(row.ts)}</span>
       ),
     },
     {
@@ -390,7 +287,6 @@ export function LearningPage() {
   const { data: feedbackData, isLoading: feedbackLoading, error: feedbackError, refetch: feedbackRefetch } = useObsLearningFeedback();
   const { data: gateData } = useObsGateEvents();
   const { data: patternsData } = useObsGatePatterns();
-  const { data: directivesData } = useObsDirectives();
 
   // Compute summary stats
   const memoriesStored = loopData?.items.filter((i) => i.memoryId).length ?? 0;
@@ -401,14 +297,6 @@ export function LearningPage() {
       : null;
   const circumventions = patternsData?.patterns.length ?? 0;
 
-  // Directive compliance: overall rate across all directives
-  const directiveCompliancePct = (() => {
-    if (!directivesData?.directives?.length) return null;
-    // Each directive event = 1 followed; no explicit missed data in this shape
-    const total = directivesData.directives.reduce((s, e) => s + (e.directives?.length ?? 0), 0);
-    return total > 0 ? 100 : null;
-  })();
-
   // Loop table columns
   const loopColumns: Column<LoopItem>[] = [
     {
@@ -416,7 +304,7 @@ export function LearningPage() {
       label: 'Time',
       width: '160px',
       render: (row) => (
-        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{dateTime(row.ts)}</span>
+        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{shortRelativeTime(row.ts)}</span>
       ),
     },
     {
@@ -484,14 +372,14 @@ export function LearningPage() {
       label: 'Time',
       width: '160px',
       render: (row) => (
-        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{dateTime(row.ts)}</span>
+        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{shortRelativeTime(row.ts)}</span>
       ),
     },
     {
       key: 'trigger',
       label: 'Trigger',
       render: (row) => (
-        <span className="text-text-primary text-xs truncate" title={row.trigger}>
+        <span className="text-text-primary text-xs truncate" title={row.trigger} style={{ maxWidth: '320px', display: 'block' }}>
           {row.trigger}
         </span>
       ),
@@ -547,7 +435,7 @@ export function LearningPage() {
       key: 'sessionId',
       label: 'Session',
       width: '90px',
-      render: (row) => <SessionLink sessionId={row.sessionId} />,
+      render: (row) => <SessionLink sessionId={row.sessionId} turnIndex={row.turnIndex} />,
     },
   ];
 
@@ -562,7 +450,7 @@ export function LearningPage() {
       />
 
       {/* Summary stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 !mt-0">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 !mt-0">
         <StatCard label="Memories Stored" value={fmtNumber(memoriesStored)} />
         <StatCard
           label="Avg Rating"
@@ -586,19 +474,6 @@ export function LearningPage() {
           label="Circumventions"
           value={fmtNumber(circumventions)}
           accent={circumventions === 0 ? 'success' : circumventions < 3 ? 'warning' : 'error'}
-        />
-        <StatCard
-          label="Directive Compliance"
-          value={directiveCompliancePct !== null ? fmtPct(directiveCompliancePct) : '—'}
-          accent={
-            directiveCompliancePct !== null
-              ? directiveCompliancePct >= 80
-                ? 'success'
-                : directiveCompliancePct >= 60
-                  ? 'warning'
-                  : 'error'
-              : undefined
-          }
         />
       </div>
 

@@ -73,6 +73,12 @@ if (input.transcript_path) {
   }
 }
 
+let turnIndex: number | undefined;
+if (input.transcript_path) {
+  const t2 = parseTranscript(input.transcript_path, { textLimit: 10 });
+  if (t2) turnIndex = t2.messages.filter((m: { role: string }) => m.role === "user").length;
+}
+
 const entry = {
   timestamp: new Date().toISOString(),
   session_id: input.session_id ?? "unknown",
@@ -82,6 +88,7 @@ const entry = {
   prior_text: priorText.replace(/\n/g, " "),
   prior_tools: priorTools,
   prior_files: priorFiles,
+  turn_index: turnIndex,
 };
 appendFileSync(feedbackFile, JSON.stringify(entry) + "\n");
 trace(TAG, `${polarity} (${trigger}) → tools=${priorTools.join(",")} files=${priorFiles.join(",")}`);

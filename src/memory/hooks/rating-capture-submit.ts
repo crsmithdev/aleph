@@ -20,6 +20,7 @@ import { appendFileSync } from "fs";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { dataPaths, ensureDataDirs } from "../../data/src/paths.ts";
+import { parseTranscript } from "../parse-transcript.ts";
 
 const TAG = "rating-capture-submit";
 const ratingsFile = Bun.env.RATINGS_FILE ?? dataPaths.ratings;
@@ -73,8 +74,41 @@ if (!rating) {
   process.exit(0);
 }
 
+let priorText = "";
+let priorTools: string[] = [];
+let priorFiles: string[] = [];
+let turnIndex: number | undefined;
+if (input.transcript_path) {
+  const t = parseTranscript(input.transcript_path, { textLimit: 400 });
+  if (t) {
+    turnIndex = t.messages.filter((m: { role: string }) => m.role === "user").length;
+    for (let i = t.messages.length - 1; i >= 0; i--) {
+      const m = t.messages[i];
+      if (m.role !== "assistant") continue;
+      priorText = m.text.slice(0, 300).replace(/\n/g, " ");
+      priorTools = [...new Set(m.toolUses)].slice(0, 5) as string[];
+      priorFiles = (m.toolInputs as any[])
+        .map((inp: any) => (inp?.file_path ?? inp?.path) as string | undefined)
+        .filter((p): p is string => !!p)
+        .map((p: string) => p.split("/").slice(-2).join("/"))
+        .slice(0, 3);
+      break;
+    }
+  }
+}
+
 const ctx = prompt.slice(0, 100).replace(/"/g, "'");
-const entry = JSON.stringify({ timestamp: new Date().toISOString(), rating: Number(rating), type: "explicit", context: ctx });
+const entry = JSON.stringify({
+  timestamp: new Date().toISOString(),
+  session_id: input.session_id ?? "unknown",
+  rating: Number(rating),
+  type: "explicit",
+  context: ctx,
+  prior_text: priorText,
+  prior_tools: priorTools,
+  prior_files: priorFiles,
+  turn_index: turnIndex,
+});
 appendFileSync(ratingsFile, entry + "\n");
 trace(TAG, `recorded: ${rating}/10 → ${ratingsFile}`);
 
