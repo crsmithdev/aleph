@@ -1624,8 +1624,20 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/learning/loop', async () => {
     return cachedResult('/learning/loop', 60_000, () => {
+      // Memory count from the real sqlite DB
+      let memoryCount = 0;
+      try {
+        const memDbPath = getMemoryDbPath();
+        if (existsSync(memDbPath)) {
+          const db = new Database(memDbPath, { readonly: true });
+          const row = db.query<{ n: number }, []>('SELECT COUNT(*) AS n FROM memories WHERE deleted_at IS NULL').get();
+          memoryCount = row?.n ?? 0;
+          db.close();
+        }
+      } catch { /* DB unavailable — leave 0 */ }
+
       const path = dataPaths.learningProvenance;
-      if (!existsSync(path)) return { items: [], total: 0 };
+      if (!existsSync(path)) return { items: [], total: 0, memoryCount };
       try {
         type LearningItem = {
           ts: string; sessionId: string; memoryId?: string;
@@ -1638,8 +1650,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
           try { items.push(JSON.parse(line) as LearningItem); } catch {}
         }
         items.sort((a, b) => b.ts.localeCompare(a.ts));
-        return { items: items.slice(0, 200), total: items.length };
-      } catch { return { items: [], total: 0 }; }
+        return { items: items.slice(0, 200), total: items.length, memoryCount };
+      } catch { return { items: [], total: 0, memoryCount }; }
     });
   });
 

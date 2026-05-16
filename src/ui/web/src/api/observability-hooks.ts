@@ -734,6 +734,7 @@ export function useObsLearningLoop() {
       tags: string;
     }>;
     total: number;
+    memoryCount: number;
   }>({
     queryKey: ['observability', 'learning', 'loop'],
     queryFn: () => api.get('/observability/learning/loop'),

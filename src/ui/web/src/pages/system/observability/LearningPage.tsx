@@ -4,7 +4,6 @@ import {
   useObsLearningLoop,
   useObsLearningFeedback,
   useObsGateEvents,
-  useObsGatePatterns,
 } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -12,7 +11,6 @@ import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
-import { Icon } from '../../../components/ui/Icon';
 import { fmtNumber, fmtPct, compactTs } from '../../../utils/format';
 import { clsx } from 'clsx';
 
@@ -50,6 +48,17 @@ type GateEvent = {
   verifyPresent?: boolean;
   verifyMissing?: string[];
   verify?: Record<string, string | null>;
+};
+
+type GateHookRow = {
+  hook: string;
+  total: number;
+  passCount: number;
+  blockCount: number;
+  advisoryCount: number;
+  skipCount: number;
+  lastTs: string;
+  events: GateEvent[];
 };
 
 type CorrectionGroup = {
@@ -94,28 +103,126 @@ function SessionLink({ sessionId, turnIndex }: { sessionId: string; turnIndex?: 
   );
 }
 
+/** Signal badge — unified ▲/▼ notation for both sentiment and numeric feedback. */
+function SignalBadge({ item }: { item: FeedbackItem }) {
+  if (item.type === 'numeric' && item.rating !== undefined) {
+    const r = item.rating;
+    if (r >= 7) {
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-green-500/15 text-green-400">
+          ▲ {r}/10
+        </span>
+      );
+    }
+    if (r <= 3) {
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-500/15 text-red-400">
+          ▼ {r}/10
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-yellow-500/15 text-yellow-400">
+        ~ {r}/10
+      </span>
+    );
+  }
+  if (item.polarity === 'positive') {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-green-500/15 text-green-400">
+        ▲ positive
+      </span>
+    );
+  }
+  if (item.polarity === 'negative') {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-500/15 text-red-400">
+        ▼ negative
+      </span>
+    );
+  }
+  return <span className="text-text-disabled">—</span>;
+}
+
 function GatesSection() {
-  const { data: eventsData, isLoading: eventsLoading, error: eventsError, refetch: eventsRefetch } = useObsGateEvents();
-  const { data: patternsData, isLoading: patternsLoading } = useObsGatePatterns();
-  const [decisionFilter, setDecisionFilter] = useState<string | null>(null);
+  const { data: eventsData, isLoading, error, refetch } = useObsGateEvents();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
-  if (eventsLoading || patternsLoading) return <PageLoading />;
-  if (eventsError || !eventsData) return <ErrorState message="Failed to load gate events" retry={eventsRefetch} />;
+  if (isLoading) return <PageLoading />;
+  if (error || !eventsData) return <ErrorState message="Failed to load gate events" retry={refetch} />;
 
-  const FILTERS = [
-    { key: null, label: 'All' },
-    { key: 'pass', label: 'Pass' },
-    { key: 'block', label: 'Block' },
-    { key: 'skip', label: 'Skip' },
-    { key: 'advisory', label: 'Advisory' },
+  // Group events by hook name
+  const hookMap = new Map<string, GateHookRow>();
+  for (const ev of eventsData.events as GateEvent[]) {
+    let row = hookMap.get(ev.hook);
+    if (!row) {
+      row = { hook: ev.hook, total: 0, passCount: 0, blockCount: 0, advisoryCount: 0, skipCount: 0, lastTs: ev.ts, events: [] };
+      hookMap.set(ev.hook, row);
+    }
+    row.total++;
+    if (ev.decision === 'pass') row.passCount++;
+    else if (ev.decision === 'block') row.blockCount++;
+    else if (ev.decision === 'advisory') row.advisoryCount++;
+    else if (ev.decision === 'skip') row.skipCount++;
+    if (ev.ts > row.lastTs) row.lastTs = ev.ts;
+    row.events.push(ev);
+  }
+  const hookRows = [...hookMap.values()].sort((a, b) => b.lastTs.localeCompare(a.lastTs));
+
+  const columns: Column<GateHookRow>[] = [
+    {
+      key: 'hook',
+      label: 'Hook',
+      render: (row) => <span className="font-mono text-text-primary text-sm">{row.hook}</span>,
+    },
+    {
+      key: 'passCount',
+      label: 'Pass',
+      width: '70px',
+      align: 'right',
+      render: (row) => row.passCount > 0
+        ? <span className="font-mono text-sm text-green-400">{fmtNumber(row.passCount)}</span>
+        : <span className="text-text-disabled">—</span>,
+    },
+    {
+      key: 'blockCount',
+      label: 'Block',
+      width: '70px',
+      align: 'right',
+      render: (row) => row.blockCount > 0
+        ? <span className="font-mono text-sm text-red-400">{fmtNumber(row.blockCount)}</span>
+        : <span className="text-text-disabled">—</span>,
+    },
+    {
+      key: 'advisoryCount',
+      label: 'Advisory',
+      width: '80px',
+      align: 'right',
+      render: (row) => row.advisoryCount > 0
+        ? <span className="font-mono text-sm text-yellow-400">{fmtNumber(row.advisoryCount)}</span>
+        : <span className="text-text-disabled">—</span>,
+    },
+    {
+      key: 'skipCount',
+      label: 'Skip',
+      width: '70px',
+      align: 'right',
+      render: (row) => row.skipCount > 0
+        ? <span className="font-mono text-sm text-text-secondary">{fmtNumber(row.skipCount)}</span>
+        : <span className="text-text-disabled">—</span>,
+    },
+    {
+      key: 'lastTs',
+      label: 'Last',
+      width: '115px',
+      render: (row) => (
+        <span className="font-mono text-text-muted text-xs whitespace-nowrap">{compactTs(row.lastTs)}</span>
+      ),
+    },
   ];
 
-  const filtered = decisionFilter
-    ? eventsData.events.filter((e: GateEvent) => e.decision === decisionFilter)
-    : eventsData.events;
-
-  const columns: Column<GateEvent>[] = [
+  // Inner event columns for expanded rows
+  const eventColumns: Column<GateEvent>[] = [
     {
       key: 'ts',
       label: 'Time',
@@ -125,22 +232,11 @@ function GatesSection() {
       ),
     },
     {
-      key: 'hook',
-      label: 'Hook',
-      width: '180px',
-      render: (row) => <span className="font-mono text-text-primary text-xs">{row.hook}</span>,
-    },
-    {
       key: 'decision',
       label: 'Decision',
       width: '90px',
       render: (row) => (
-        <span
-          className={clsx(
-            'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold',
-            decisionBadgeClass(row.decision),
-          )}
-        >
+        <span className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold', decisionBadgeClass(row.decision))}>
           {row.decision}
         </span>
       ),
@@ -150,9 +246,7 @@ function GatesSection() {
       label: 'Files',
       width: '200px',
       render: (row) => {
-        if (!row.editedFiles || row.editedFiles.length === 0) {
-          return <span className="text-text-disabled">—</span>;
-        }
+        if (!row.editedFiles?.length) return <span className="text-text-disabled">—</span>;
         return (
           <span className="font-mono text-text-muted text-xs" title={row.editedFiles.join(', ')}>
             {row.editedFiles.slice(0, 2).join(', ')}
@@ -165,29 +259,27 @@ function GatesSection() {
       key: 'reason',
       label: 'Details',
       render: (row) => {
-        const verifyParts: Array<{ key: string; value: string }> = [];
-        if (row.verifyPresent) verifyParts.push({ key: 'verify', value: 'present' });
-        if (row.verifyMissing?.length) verifyParts.push({ key: 'missing', value: row.verifyMissing.join(', ') });
-        if (row.verify) {
-          Object.entries(row.verify).forEach(([k, v]) => verifyParts.push({ key: k, value: v ?? 'null' }));
-        }
-        if (verifyParts.length === 0) {
+        const parts: Array<{ key: string; value: string }> = [];
+        if (row.verifyPresent) parts.push({ key: 'verify', value: 'present' });
+        if (row.verifyMissing?.length) parts.push({ key: 'missing', value: row.verifyMissing.join(', ') });
+        if (row.verify) Object.entries(row.verify).forEach(([k, v]) => parts.push({ key: k, value: v ?? 'null' }));
+        if (parts.length === 0) {
           return (
             <span className="text-text-muted text-xs" title={row.reason}>
-              {row.reason.slice(0, 120)}{row.reason.length > 120 && '…'}
+              {row.reason.slice(0, 100)}{row.reason.length > 100 && '…'}
             </span>
           );
         }
         return (
           <span className="text-xs font-mono flex flex-wrap gap-2">
-            {verifyParts.slice(0, 3).map(({ key, value }, i) => (
+            {parts.slice(0, 3).map(({ key, value }, i) => (
               <span key={i}>
                 <span className="text-text-muted">{key}</span>
                 <span className="text-text-disabled">=</span>
                 <span className="text-text-secondary">{value.length > 30 ? value.slice(0, 30) + '…' : value}</span>
               </span>
             ))}
-            {verifyParts.length > 3 && <span className="text-text-disabled">+{verifyParts.length - 3}</span>}
+            {parts.length > 3 && <span className="text-text-disabled">+{parts.length - 3}</span>}
           </span>
         );
       },
@@ -200,122 +292,37 @@ function GatesSection() {
     },
   ];
 
-  return (
-    <div className="space-y-4">
-      {/* Clickable pattern alerts */}
-      {patternsData && patternsData.patterns.length > 0 && (
-        <div className="space-y-2">
-          {patternsData.patterns.map((pattern: any, i: number) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setDecisionFilter(d => d === pattern.decision ? null : pattern.decision)}
-              className={clsx(
-                'w-full text-left flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors cursor-pointer',
-                decisionFilter === pattern.decision
-                  ? 'border-yellow-500/60 bg-yellow-500/10'
-                  : 'border-yellow-500/30 bg-yellow-500/5 hover:border-yellow-500/60 hover:bg-yellow-500/10',
-              )}
-            >
-              <Icon name="warning" className="text-[18px] text-warning shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-text-primary text-xs">{pattern.hook}</span>
-                  <span className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold', decisionBadgeClass(pattern.decision))}>
-                    {pattern.decision}
-                  </span>
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-bg-tertiary text-text-secondary">
-                    {fmtNumber(pattern.count)} occurrences
-                  </span>
-                  {decisionFilter === pattern.decision
-                    ? <span className="text-xs text-accent">✕ clear filter</span>
-                    : <span className="text-xs text-text-disabled flex items-center gap-1"><Icon name="filter_alt" className="text-[12px]" /> click to filter</span>
-                  }
-                </div>
-                <div className="text-text-muted text-xs mt-1" title={pattern.representativeReason}>
-                  {pattern.representativeReason.slice(0, 140)}
-                  {pattern.representativeReason.length > 140 && '…'}
-                </div>
-                {pattern.representativeFiles.length > 0 && (
-                  <div className="font-mono text-text-disabled text-xs mt-0.5">
-                    {pattern.representativeFiles.slice(0, 2).join(', ')}
-                    {pattern.representativeFiles.length > 2 && ` +${pattern.representativeFiles.length - 2}`}
-                  </div>
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Filter chips */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {FILTERS.map(({ key, label }) => (
-          <button
-            key={label}
-            onClick={() => setDecisionFilter(key)}
-            className={clsx(
-              'px-3 py-1 text-xs rounded-full border transition-colors',
-              decisionFilter === key
-                ? 'border-accent bg-accent/10 text-accent'
-                : 'border-border-primary text-text-muted hover:border-accent/50 hover:text-text-secondary',
-            )}
-          >
-            {label}
-            {key === null && ` (${fmtNumber(eventsData.total)})`}
-            {key === 'pass' && ` (${fmtNumber(eventsData.passCount)})`}
-            {key === 'block' && ` (${fmtNumber(eventsData.blockCount)})`}
-            {key === 'skip' && ` (${fmtNumber(eventsData.skipCount)})`}
-            {key === 'advisory' && ` (${fmtNumber(eventsData.advisoryCount)})`}
-          </button>
-        ))}
+  if (hookRows.length === 0) {
+    return (
+      <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center text-sm text-text-muted">
+        No gate events recorded.
       </div>
+    );
+  }
 
-      {filtered.length > 0 ? (
-        <DataTable<GateEvent>
-          data={filtered}
-          columns={columns}
-          keyField="ts"
-          maxRows={50}
-          pageSize={50}
-          expandedKey={expandedKey}
-          onExpandToggle={setExpandedKey}
-          renderExpanded={(row) => (
-            <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-sm">
-              {row.reason && (
-                <div>
-                  <span className="text-text-muted font-medium">Reason: </span>
-                  <span className="text-text-secondary">{row.reason}</span>
-                </div>
-              )}
-              {row.editedFiles && row.editedFiles.length > 0 && (
-                <div>
-                  <span className="text-text-muted font-medium">Files: </span>
-                  <span className="font-mono text-text-secondary">{row.editedFiles.join(', ')}</span>
-                </div>
-              )}
-              {row.verify && Object.keys(row.verify).length > 0 && (
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  <span className="text-text-muted font-medium">Verify:</span>
-                  {Object.entries(row.verify).map(([k, v]) => (
-                    <span key={k} className="font-mono">
-                      <span className="text-text-muted">{k}</span>
-                      <span className="text-text-disabled">=</span>
-                      <span className="text-text-secondary">{v ?? 'null'}</span>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          rowKeyFn={(row) => row.ts + row.sessionId}
-        />
-      ) : (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center text-sm text-text-muted">
-          No gate events in the selected filter.
+  return (
+    <DataTable<GateHookRow>
+      data={hookRows}
+      columns={columns}
+      keyField="hook"
+      maxRows={50}
+      pageSize={50}
+      expandedKey={expandedKey}
+      onExpandToggle={setExpandedKey}
+      renderExpanded={(row) => (
+        <div className="px-4 py-3 bg-bg-tertiary/20">
+          <DataTable<GateEvent>
+            data={row.events.slice().sort((a, b) => b.ts.localeCompare(a.ts))}
+            columns={eventColumns}
+            keyField="ts"
+            maxRows={50}
+            pageSize={50}
+            rowKeyFn={(ev) => ev.ts + ev.sessionId}
+          />
         </div>
       )}
-    </div>
+      rowKeyFn={(row) => row.hook}
+    />
   );
 }
 
@@ -329,18 +336,17 @@ export function LearningPage() {
   const { data: loopData, isLoading: loopLoading, error: loopError, refetch: loopRefetch } = useObsLearningLoop();
   const { data: feedbackData, isLoading: feedbackLoading, error: feedbackError, refetch: feedbackRefetch } = useObsLearningFeedback();
   const { data: gateData } = useObsGateEvents();
-  const { data: patternsData } = useObsGatePatterns();
 
   // Compute summary stats
-  const memoriesStored = loopData?.items.filter((i: LoopItem) => i.memoryId).length ?? 0;
+  const memoriesStored = loopData?.memoryCount ?? 0;
   const avgRating = feedbackData?.avgRating ?? 0;
   const gatePassRate =
     gateData && gateData.total > 0
       ? (gateData.passCount / gateData.total) * 100
       : null;
-  const circumventions = patternsData?.patterns.length ?? 0;
+  const blockCount = gateData?.blockCount ?? 0;
 
-  // Corrections: group negative-polarity feedback by trigger word, collecting all items
+  // Corrections: group negative-polarity feedback by trigger word
   const correctionGroups: CorrectionGroup[] = (() => {
     if (!feedbackData?.items) return [];
     const map = new Map<string, { count: number; lastTs: string; items: FeedbackItem[] }>();
@@ -386,18 +392,14 @@ export function LearningPage() {
       label: 'Source',
       width: '200px',
       render: (row) => (
-        <span className="text-text-secondary text-sm" title={row.source}>
-          {row.source}
-        </span>
+        <span className="text-text-secondary text-sm" title={row.source}>{row.source}</span>
       ),
     },
     {
       key: 'insight',
       label: 'Insight',
       render: (row) => (
-        <span className="text-text-muted text-sm italic" title={row.insight}>
-          {row.insight}
-        </span>
+        <span className="text-text-muted text-sm italic" title={row.insight}>{row.insight}</span>
       ),
     },
     {
@@ -424,7 +426,7 @@ export function LearningPage() {
     },
   ];
 
-  // Feedback table columns — unified Signal column
+  // Feedback table columns
   const feedbackColumns: Column<FeedbackItem>[] = [
     {
       key: 'ts',
@@ -446,32 +448,8 @@ export function LearningPage() {
     {
       key: 'rating',
       label: 'Signal',
-      width: '100px',
-      render: (row) => {
-        if (row.type === 'numeric' && row.rating !== undefined) {
-          const colorClass = row.rating >= 7 ? 'text-success' : row.rating >= 4 ? 'text-warning' : 'text-error';
-          return (
-            <span className={clsx('font-mono font-semibold', colorClass)}>
-              {row.rating}/10
-            </span>
-          );
-        }
-        if (row.polarity === 'positive') {
-          return (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-green-500/15 text-green-400">
-              ▲ positive
-            </span>
-          );
-        }
-        if (row.polarity === 'negative') {
-          return (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-500/15 text-red-400">
-              ▼ negative
-            </span>
-          );
-        }
-        return <span className="text-text-disabled">—</span>;
-      },
+      width: '140px',
+      render: (row) => <SignalBadge item={row} />,
     },
     {
       key: 'sessionId',
@@ -481,7 +459,7 @@ export function LearningPage() {
     },
   ];
 
-  // Corrections table columns — no Example column, expand for individual messages
+  // Corrections table columns
   const correctionColumns: Column<CorrectionGroup>[] = [
     {
       key: 'trigger',
@@ -524,7 +502,7 @@ export function LearningPage() {
 
       {/* Summary stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 !mt-0">
-        <StatCard label="Memories Stored" value={fmtNumber(memoriesStored)} />
+        <StatCard label="Memories Stored" value={fmtNumber(memoriesStored)} accent={memoriesStored > 0 ? 'success' : undefined} />
         <StatCard
           label="Avg Rating"
           value={avgRating > 0 ? avgRating.toFixed(1) : '—'}
@@ -540,9 +518,9 @@ export function LearningPage() {
           }
         />
         <StatCard
-          label="Circumventions"
-          value={fmtNumber(circumventions)}
-          accent={circumventions === 0 ? 'success' : circumventions < 3 ? 'warning' : 'error'}
+          label="Blocks"
+          value={fmtNumber(blockCount)}
+          accent={blockCount === 0 ? 'success' : blockCount < 10 ? 'warning' : 'error'}
         />
       </div>
 
