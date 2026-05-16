@@ -1,11 +1,11 @@
 ---
-name: polish
+name: address
 description: >
   Reads visual annotations left via the vibe-annotations tool for a specific page,
   summarizes what needs to change, implements all the fixes, then clears the annotations.
   Use this skill whenever the user mentions annotations, visual feedback, vibe notes,
   marked changes, or asks to "work on the annotations", "fix my annotations",
-  "implement the annotations for X page", "apply my feedback", or invokes `/polish`.
+  "implement the annotations for X page", "apply my feedback", or invokes `/address`.
   Also triggers when the user names a page and implies there are pending visual notes
   on it (e.g. "check what I marked on the learning page").
 verb: fix
@@ -20,7 +20,7 @@ Implements visual feedback from vibe-annotations and clears the annotations once
 ## When to use
 
 - User has left annotations via vibe-annotations and wants them implemented.
-- User says `/polish`, "fix my annotations", "implement the annotations for X", "what did I mark on Y".
+- User says `/address`, "fix my annotations", "implement the annotations for X", "what did I mark on Y".
 - User references a page by name or URL and implies there's pending visual feedback.
 
 ## When NOT to use

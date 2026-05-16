@@ -85,8 +85,8 @@
       "keywords": ["eval harness", "define eval", "run eval", "eval report", "eval suite", "eval cases", "eval criteria", "/eval-harness", "run the evals", "set up evals", "/(define|create|write|run|check).{0,10}eval/"]
     },
     {
-      "skill": "polish",
-      "keywords": ["polish", "/polish", "annotations", "my annotations", "fix my annotations", "vibe annotations", "vibe notes", "implement the annotations", "work on the annotations", "apply my feedback", "apply annotations", "what did i mark", "check what i marked", "what's annotated", "pending annotations", "fix the annotations", "implement my feedback", "/annotations.{0,20}(on|for)/", "/(fix|implement|apply|work on).{0,20}annotations/"]
+      "skill": "address",
+      "keywords": ["address", "/address", "annotations", "my annotations", "fix my annotations", "vibe annotations", "vibe notes", "implement the annotations", "work on the annotations", "apply my feedback", "apply annotations", "what did i mark", "check what i marked", "what's annotated", "pending annotations", "fix the annotations", "implement my feedback", "/annotations.{0,20}(on|for)/", "/(fix|implement|apply|work on).{0,20}annotations/"]
     },
     {
       "skill": "design-standards",
