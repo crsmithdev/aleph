@@ -50,7 +50,7 @@ const navGroups: NavGroup[] = [
       { to: '/observability/tools', label: 'Tools', icon: 'build' },
       { to: '/observability/hooks', label: 'Hooks', icon: 'webhook' },
       { to: '/observability/subagents', label: 'Subagents', icon: 'smart_toy' },
-      { to: '/observability/learning', label: 'Learning loop', icon: 'school' },
+      { to: '/observability/learning', label: 'Learning', icon: 'school' },
     ],
   },
   {
