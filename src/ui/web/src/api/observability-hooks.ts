@@ -835,6 +835,28 @@ export function useObsSessionLearning(sessionId: string) {
   });
 }
 
+export function useObsGatePatternEvents(hook: string, decision: string, filePrefix: string) {
+  return useQuery<{
+    events: Array<{
+      ts: string;
+      sessionId: string;
+      hook: string;
+      decision: string;
+      reason: string;
+      editedFiles: string[];
+      verifyPresent?: boolean;
+      verifyMissing?: string[];
+      verify?: Record<string, string | null>;
+    }>;
+  }>({
+    queryKey: ['observability', 'gates', 'pattern-events', hook, decision, filePrefix],
+    queryFn: () => {
+      const params = new URLSearchParams({ hook, decision, filePrefix });
+      return api.get(`/observability/gates/pattern-events?${params.toString()}`);
+    },
+  });
+}
+
 export function useObsGatePatterns() {
   return useQuery<{
     patterns: Array<{

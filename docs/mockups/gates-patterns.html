@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gates Patterns — Layout Options</title>
+<style>
+  :root {
+    --bg-primary:    #292d3e;
+    --bg-secondary:  #2f3347;
+    --bg-tertiary:   #34394f;
+    --bg-contrast:   #232637;
+    --text-primary:  #babed8;
+    --text-secondary:#8796b0;
+    --text-muted:    #676e95;
+    --text-disabled: #4b5168;
+    --border:        #383c50;
+    --border-strong: #4b5168;
+    --accent:        #c792ea;
+    --success:       #c3e88d;
+    --success-soft:  rgba(195,232,141,.15);
+    --warning:       #ffcb6b;
+    --warning-soft:  rgba(255,203,107,.15);
+    --error:         #f07178;
+    --error-soft:    rgba(240,113,120,.15);
+    --info:          #82aaff;
+    --info-soft:     rgba(130,170,255,.15);
+    --font-sans:     'Noto Sans',-apple-system,system-ui,sans-serif;
+    --font-mono:     'Noto Sans Mono',ui-monospace,'JetBrains Mono',Menlo,monospace;
+    --font-heading:  'Merriweather',Georgia,serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 40px;
+  }
+  h1 { font-family: var(--font-heading); font-size: 22px; color: var(--text-primary); margin-bottom: 8px; }
+  h2 { font-family: var(--font-heading); font-size: 15px; color: var(--text-secondary); margin-bottom: 20px; font-weight: 400; }
+  .option-block { margin-bottom: 60px; }
+  .option-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .option-note {
+    font-size: 12px;
+    color: var(--text-disabled);
+    margin-bottom: 16px;
+    font-style: italic;
+  }
+
+  /* ── Shared badges ─────────────────────────────────────────── */
+  .badge {
+    display: inline-flex; align-items: center;
+    padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600; line-height: 1.6;
+  }
+  .badge-block    { background: var(--error-soft);   color: var(--error);   }
+  .badge-advisory { background: var(--warning-soft); color: var(--warning); }
+  .badge-skip     { background: rgba(100,100,120,.2); color: var(--text-muted); }
+
+  .meta-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; color: var(--text-secondary);
+  }
+  .meta-chip .label { color: var(--text-disabled); }
+
+  /* ── Shared sub-table ──────────────────────────────────────── */
+  .sub-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 12px;
+  }
+  .sub-table thead th {
+    text-align: left; padding: 6px 10px;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: .07em; text-transform: uppercase;
+    color: var(--text-disabled);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-contrast);
+  }
+  .sub-table tbody td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .sub-table tbody tr:last-child td { border-bottom: none; }
+  .sub-table tbody tr:hover td { background: rgba(255,255,255,.02); }
+  .mono { font-family: var(--font-mono); font-size: .9em; }
+  .dim  { color: var(--text-disabled); }
+  .muted { color: var(--text-muted); }
+  .secondary { color: var(--text-secondary); }
+
+  /* ── Section header ────────────────────────────────────────── */
+  .section-header {
+    font-size: 11px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     OPTION A — Expandable summary cards with coloured left border
+     ════════════════════════════════════════════════════════════ */
+  .card-list { display: flex; flex-direction: column; gap: 4px; }
+
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+  }
+
+  .card-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    transition: background .12s;
+  }
+  .card-header:hover { background: var(--bg-tertiary); }
+
+  .card--block   { border-left: 3px solid var(--error);   }
+  .card--advisory{ border-left: 3px solid var(--warning); }
+  .card--skip    { border-left: 3px solid var(--text-disabled); }
+
+  .card-chevron {
+    width: 16px; height: 16px;
+    color: var(--text-disabled);
+    flex-shrink: 0;
+    transition: transform .15s;
+    margin-left: auto;
+  }
+  .card--open .card-chevron { transform: rotate(90deg); }
+
+  .card-check {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-primary);
+    font-weight: 500;
+    min-width: 160px;
+  }
+
+  .card-metas {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+
+  .card-body {
+    border-top: 1px solid var(--border);
+    background: var(--bg-contrast);
+    display: none;
+  }
+  .card--open .card-body { display: block; }
+
+  /* occurrence count callout inside card header */
+  .occ-count {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    min-width: 36px;
+    text-align: right;
+  }
+  .occ-label {
+    font-size: 10px;
+    color: var(--text-disabled);
+    margin-top: -2px;
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     OPTION B — Stat-callout panels (large occurrence number)
+     ════════════════════════════════════════════════════════════ */
+  .stat-list { display: flex; flex-direction: column; gap: 4px; }
+
+  .stat-panel {
+    display: flex; align-items: stretch;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+    cursor: pointer;
+    transition: border-color .12s;
+  }
+  .stat-panel:hover { border-color: var(--border-strong); }
+  .stat-panel--open { border-color: var(--border-strong); }
+
+  .stat-callout {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 10px 16px;
+    min-width: 70px;
+    background: var(--bg-contrast);
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .stat-panel--block    .stat-callout { border-left: 3px solid var(--error);   }
+  .stat-panel--advisory .stat-callout { border-left: 3px solid var(--warning); }
+  .stat-panel--skip     .stat-callout { border-left: 3px solid var(--text-disabled); }
+
+  .stat-number {
+    font-family: var(--font-mono);
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .stat-panel--block    .stat-number { color: var(--error);   }
+  .stat-panel--advisory .stat-number { color: var(--warning); }
+  .stat-panel--skip     .stat-number { color: var(--text-muted); }
+
+  .stat-sublabel {
+    font-size: 9px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text-disabled);
+    margin-top: 2px;
+  }
+
+  .stat-content {
+    flex: 1; display: flex; align-items: center;
+    padding: 10px 14px; gap: 12px; flex-wrap: wrap;
+  }
+
+  .stat-chevron {
+    display: flex; align-items: center;
+    padding: 0 12px;
+    color: var(--text-disabled);
+    flex-shrink: 0;
+    transition: transform .15s;
+  }
+  .stat-panel--open .stat-chevron { transform: rotate(90deg); }
+
+  .stat-panel-body {
+    border-top: 1px solid var(--border);
+    background: var(--bg-contrast);
+    display: none;
+  }
+  .stat-panel--open .stat-panel-body { display: block; }
+
+  /* ════════════════════════════════════════════════════════════
+     OPTION C — Keep table, add "Show N events" button
+     ════════════════════════════════════════════════════════════ */
+  .data-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .data-table thead th {
+    text-align: left; padding: 8px 12px;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: .07em; text-transform: uppercase;
+    color: var(--text-disabled);
+    background: var(--bg-contrast);
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table tbody td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .data-table tbody tr:last-child td { border-bottom: none; }
+  .data-table tbody tr:hover td { background: rgba(255,255,255,.025); }
+
+  .show-btn {
+    display: inline-flex; align-items: center; gap-: 4px;
+    padding: 3px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--accent);
+    font-size: 11px;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    transition: background .1s, border-color .1s;
+    white-space: nowrap;
+  }
+  .show-btn:hover { background: rgba(199,146,234,.08); border-color: var(--accent); }
+
+  /* SVG chevron helper */
+  .chevron-icon {
+    width: 14px; height: 14px; flex-shrink: 0;
+    fill: none; stroke: currentColor; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+</style>
+</head>
+<body>
+
+<h1>Gates — Patterns display options</h1>
+<h2>Three approaches for replacing the flat Patterns table</h2>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     OPTION A
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="option-block">
+  <div class="option-label">Option A — Expandable summary cards with coloured left border</div>
+  <div class="option-note">Whole header is the click target. Chevron rotates. Colour-coded left border by decision. Collapsed = scanning; expanded = detail in context.</div>
+
+  <div class="section-header">Patterns</div>
+  <div class="card-list">
+
+    <!-- Row 1: advisory, collapsed -->
+    <div class="card card--advisory">
+      <div class="card-header" onclick="this.closest('.card').classList.toggle('card--open')">
+        <div style="display:flex;flex-direction:column;align-items:center;min-width:40px">
+          <div class="occ-count">187</div>
+          <div class="occ-label">events</div>
+        </div>
+        <span class="badge badge-advisory">advisory</span>
+        <span class="card-check">quality-check-stop</span>
+        <div class="card-metas">
+          <span class="meta-chip"><span class="label">sessions</span> 54</span>
+          <span class="meta-chip"><span class="label">scope</span> <span class="dim">—</span></span>
+          <span class="meta-chip"><span class="label">last</span> 5/3 12:21am</span>
+        </div>
+        <svg class="card-chevron chevron-icon" viewBox="0 0 16 16"><polyline points="5,3 11,8 5,13"/></svg>
+      </div>
+    </div>
+
+    <!-- Row 2: block, collapsed -->
+    <div class="card card--block">
+      <div class="card-header" onclick="this.closest('.card').classList.toggle('card--open')">
+        <div style="display:flex;flex-direction:column;align-items:center;min-width:40px">
+          <div class="occ-count">134</div>
+          <div class="occ-label">events</div>
+        </div>
+        <span class="badge badge-block">block</span>
+        <span class="card-check">quality-check-stop</span>
+        <div class="card-metas">
+          <span class="meta-chip"><span class="label">sessions</span> 39</span>
+          <span class="meta-chip"><span class="label">scope</span> <span class="mono muted">home/crsmi/</span></span>
+          <span class="meta-chip"><span class="label">last</span> 5/15 10:07pm</span>
+        </div>
+        <svg class="card-chevron chevron-icon" viewBox="0 0 16 16"><polyline points="5,3 11,8 5,13"/></svg>
+      </div>
+    </div>
+
+    <!-- Row 3: block with no scope, expanded -->
+    <div class="card card--block card--open">
+      <div class="card-header" onclick="this.closest('.card').classList.toggle('card--open')">
+        <div style="display:flex;flex-direction:column;align-items:center;min-width:40px">
+          <div class="occ-count">46</div>
+          <div class="occ-label">events</div>
+        </div>
+        <span class="badge badge-block">block</span>
+        <span class="card-check">quality-check-stop</span>
+        <div class="card-metas">
+          <span class="meta-chip"><span class="label">sessions</span> 28</span>
+          <span class="meta-chip"><span class="label">scope</span> <span class="dim">—</span></span>
+          <span class="meta-chip"><span class="label">last</span> 5/3 11:27pm</span>
+        </div>
+        <svg class="card-chevron chevron-icon" viewBox="0 0 16 16"><polyline points="5,3 11,8 5,13"/></svg>
+      </div>
+      <div class="card-body">
+        <table class="sub-table">
+          <thead>
+            <tr>
+              <th>Time</th><th>Hook</th><th>Decision</th><th>Files</th><th>Details</th><th>Session</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono dim">5/3 11:27pm</td>
+              <td class="mono secondary">quality-check-stop</td>
+              <td><span class="badge badge-block">block</span></td>
+              <td class="dim">—</td>
+              <td class="muted">missing: scope, method, assertions</td>
+              <td class="mono dim">4ca6bf93</td>
+            </tr>
+            <tr>
+              <td class="mono dim">5/3 10:44pm</td>
+              <td class="mono secondary">quality-check-stop</td>
+              <td><span class="badge badge-block">block</span></td>
+              <td class="dim">—</td>
+              <td class="muted">missing: scope, method, assertions</td>
+              <td class="mono dim">4ca6bf93</td>
+            </tr>
+            <tr>
+              <td class="mono dim">5/2 9:15pm</td>
+              <td class="mono secondary">quality-check-stop</td>
+              <td><span class="badge badge-block">block</span></td>
+              <td class="dim">—</td>
+              <td class="muted">missing: scope, assertions</td>
+              <td class="mono dim">d25747df</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Row 4: advisory, e2e -->
+    <div class="card card--advisory">
+      <div class="card-header" onclick="this.closest('.card').classList.toggle('card--open')">
+        <div style="display:flex;flex-direction:column;align-items:center;min-width:40px">
+          <div class="occ-count">17</div>
+          <div class="occ-label">events</div>
+        </div>
+        <span class="badge badge-advisory">advisory</span>
+        <span class="card-check">quality-stop-check-e2e</span>
+        <div class="card-metas">
+          <span class="meta-chip"><span class="label">sessions</span> 6</span>
+          <span class="meta-chip"><span class="label">scope</span> <span class="dim">—</span></span>
+          <span class="meta-chip"><span class="label">last</span> 4/12 2:00pm</span>
+        </div>
+        <svg class="card-chevron chevron-icon" viewBox="0 0 16 16"><polyline points="5,3 11,8 5,13"/></svg>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     OPTION B
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="option-block">
+  <div class="option-label">Option B — Stat-callout panels (large occurrence count on left)</div>
+  <div class="option-note">Occurrence count is the primary signal — given maximum visual weight. Decision colour bleeds through the number and left border. Better when you want to rank patterns by severity at a glance.</div>
+
+  <div class="section-header">Patterns</div>
+  <div class="stat-list">
+
+    <!-- advisory, collapsed -->
+    <div class="stat-panel stat-panel--advisory" onclick="this.classList.toggle('stat-panel--open')">
+      <div class="stat-callout">
+        <div class="stat-number">187</div>
+        <div class="stat-sublabel">events</div>
+      </div>
+      <div class="stat-content">
+        <span class="badge badge-advisory">advisory</span>
+        <span class="card-check">quality-check-stop</span>
+        <span class="meta-chip"><span class="label">54 sessions</span></span>
+        <span class="meta-chip"><span class="label">scope</span> <span class="dim">—</span></span>
+        <span class="meta-chip"><span class="label">last</span> 5/3 12:21am</span>
+      </div>
+      <div class="stat-chevron">
+        <svg class="chevron-icon" viewBox="0 0 16 16"><polyline points="5,3 11,8 5,13"/></svg>
+      </div>
+    </div>
+    <div class="stat-panel-body" style="display:none"></div>
+
+    <!-- block, expanded -->
+    <div class="stat-panel stat-panel--block stat-panel--open" onclick="this.classList.toggle('stat-panel--open')">
+      <div class="stat-callout">
+        <div class="stat-number">134</div>
+        <div class="stat-sublabel">events</div>
+      </div>
+      <div class="stat-content">
+        <span class="badge badge-block">block</span>
+        <span class="card-check">quality-check-stop</span>
+        <span class="meta-chip"><span class="label">39 sessions</span></span>
+        <span class="meta-chip"><span class="label">scope</span> <span class="mono muted">home/crsmi/</span></span>
+        <span class="meta-chip"><span class="label">last</span> 5/15 10:07pm</span>
+      </div>
+      <div class="stat-chevron">
+        <svg class="chevron-icon" viewBox="0 0 16 16"><polyline points="5,3 11,8 5,13"/></svg>
+      </div>
+    </div>
+    <div class="stat-panel-body" id="b-body-2">
+      <table class="sub-table">
+        <thead>
+          <tr><th>Time</th><th>Hook</th><th>Decision</th><th>Files</th><th>Details</th><th>Session</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono dim">5/15 10:07pm</td>
+            <td class="mono secondary">quality-check-stop</td>
+            <td><span class="badge badge-block">block</span></td>
+            <td class="mono muted" style="font-size:11px">LearningPage.tsx, observability.ts +1</td>
+            <td class="muted">missing: scope, method, assertions</td>
+            <td class="mono dim">23fd5352</td>
+          </tr>
+          <tr>
+            <td class="mono dim">5/15 10:02pm</td>
+            <td class="mono secondary">quality-check-stop</td>
+            <td><span class="badge badge-block">block</span></td>
+            <td class="mono muted" style="font-size:11px">LearningPage.tsx</td>
+            <td class="muted">missing: scope, method, assertions</td>
+            <td class="mono dim">23fd5352</td>
+          </tr>
+          <tr>
+            <td class="mono dim">5/15 8:28pm</td>
+            <td class="mono secondary">quality-check-stop</td>
+            <td><span class="badge badge-block">block</span></td>
+            <td class="mono muted" style="font-size:11px">summary.ts, public.ts +14</td>
+            <td class="muted">missing: scope, method, assertions</td>
+            <td class="mono dim">433ab495</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- block, 46 -->
+    <div class="stat-panel stat-panel--block" onclick="this.classList.toggle('stat-panel--open')">
+      <div class="stat-callout">
+        <div class="stat-number">46</div>
+        <div class="stat-sublabel">events</div>
+      </div>
+      <div class="stat-content">
+        <span class="badge badge-block">block</span>
+        <span class="card-check">quality-check-stop</span>
+        <span class="meta-chip"><span class="label">28 sessions</span></span>
+        <span class="meta-chip"><span class="label">scope</span> <span class="dim">—</span></span>
+        <span class="meta-chip"><span class="label">last</span> 5/3 11:27pm</span>
+      </div>
+      <div class="stat-chevron">
+        <svg class="chevron-icon" viewBox="0 0 16 16"><polyline points="5,3 11,8 5,13"/></svg>
+      </div>
+    </div>
+
+    <!-- advisory e2e -->
+    <div class="stat-panel stat-panel--advisory" onclick="this.classList.toggle('stat-panel--open')">
+      <div class="stat-callout">
+        <div class="stat-number">17</div>
+        <div class="stat-sublabel">events</div>
+      </div>
+      <div class="stat-content">
+        <span class="badge badge-advisory">advisory</span>
+        <span class="card-check">quality-stop-check-e2e</span>
+        <span class="meta-chip"><span class="label">6 sessions</span></span>
+        <span class="meta-chip"><span class="label">scope</span> <span class="dim">—</span></span>
+        <span class="meta-chip"><span class="label">last</span> 4/12 2:00pm</span>
+      </div>
+      <div class="stat-chevron">
+        <svg class="chevron-icon" viewBox="0 0 16 16"><polyline points="5,3 11,8 5,13"/></svg>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     OPTION C
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="option-block">
+  <div class="option-label">Option C — Keep table, explicit "Show N events ↓" button per row</div>
+  <div class="option-note">Smallest change. Table stays for comparison. Expand affordance is an explicit button rather than row-click, so it's unambiguous. Row click still selects/filters the events table below.</div>
+
+  <div class="section-header">Patterns</div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Check</th>
+        <th>Decision</th>
+        <th style="text-align:right">Occurrences</th>
+        <th style="text-align:right">Sessions</th>
+        <th>Scope</th>
+        <th>Last Seen</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono secondary">quality-check-stop</td>
+        <td><span class="badge badge-advisory">advisory</span></td>
+        <td class="mono" style="text-align:right;font-weight:700">187</td>
+        <td class="mono secondary" style="text-align:right">54</td>
+        <td class="dim">—</td>
+        <td class="mono dim">5/3 12:21am</td>
+        <td><button class="show-btn">Show 187 events ↓</button></td>
+      </tr>
+      <tr>
+        <td class="mono secondary">quality-check-stop</td>
+        <td><span class="badge badge-block">block</span></td>
+        <td class="mono" style="text-align:right;font-weight:700;color:var(--error)">134</td>
+        <td class="mono secondary" style="text-align:right">39</td>
+        <td class="mono muted">home/crsmi/</td>
+        <td class="mono dim">5/15 10:07pm</td>
+        <td><button class="show-btn">Show 134 events ↓</button></td>
+      </tr>
+      <tr>
+        <td class="mono secondary">quality-check-stop</td>
+        <td><span class="badge badge-block">block</span></td>
+        <td class="mono" style="text-align:right;font-weight:700;color:var(--error)">46</td>
+        <td class="mono secondary" style="text-align:right">28</td>
+        <td class="dim">—</td>
+        <td class="mono dim">5/3 11:27pm</td>
+        <td><button class="show-btn">Show 46 events ↓</button></td>
+      </tr>
+      <tr>
+        <td class="mono secondary">quality-stop-check-e2e</td>
+        <td><span class="badge badge-advisory">advisory</span></td>
+        <td class="mono" style="text-align:right;font-weight:700">17</td>
+        <td class="mono secondary" style="text-align:right">6</td>
+        <td class="dim">—</td>
+        <td class="mono dim">4/12 2:00pm</td>
+        <td><button class="show-btn">Show 17 events ↓</button></td>
+      </tr>
+      <tr>
+        <td class="mono secondary">quality-check-stop</td>
+        <td><span class="badge badge-block">block</span></td>
+        <td class="mono" style="text-align:right;font-weight:700;color:var(--error)">13</td>
+        <td class="mono secondary" style="text-align:right">2</td>
+        <td class="mono muted">ent/c/</td>
+        <td class="mono dim">5/14 2:03pm</td>
+        <td><button class="show-btn">Show 13 events ↓</button></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  // Option B: wire up the stat-panel-body show/hide properly
+  // (the body is a sibling element outside the panel div)
+  document.querySelectorAll('.stat-panel').forEach(panel => {
+    panel.addEventListener('click', () => {
+      const body = panel.nextElementSibling;
+      if (body && body.classList.contains('stat-panel-body')) {
+        body.style.display = panel.classList.contains('stat-panel--open') ? 'block' : 'none';
+      }
+    });
+  });
+  // show the initially-open one
+  const openPanel = document.querySelector('.stat-panel--open');
+  if (openPanel) {
+    const b = openPanel.nextElementSibling;
+    if (b && b.classList.contains('stat-panel-body')) b.style.display = 'block';
+  }
+</script>
+</body>
+</html>

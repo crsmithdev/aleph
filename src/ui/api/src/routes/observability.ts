@@ -1630,7 +1630,11 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         const memDbPath = getMemoryDbPath();
         if (existsSync(memDbPath)) {
           const db = new Database(memDbPath, { readonly: true });
-          const row = db.query<{ n: number }, []>('SELECT COUNT(*) AS n FROM memories WHERE deleted_at IS NULL').get();
+          const row = db.query<{ n: number }, []>(
+            `SELECT COUNT(*) AS n FROM memories WHERE deleted_at IS NULL
+             AND (memory_type IN ('pattern','learning','feedback','decision','error')
+                  OR tags LIKE '%preference%' OR tags LIKE '%correction%')`,
+          ).get();
           memoryCount = row?.n ?? 0;
           db.close();
         }
@@ -1790,6 +1794,71 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       return { events: events.slice(0, 200), total: events.length, passCount, blockCount, skipCount, advisoryCount };
     });
   });
+
+  app.get<{ Querystring: { hook?: string; decision?: string; filePrefix?: string } }>(
+    '/gates/pattern-events',
+    async (req) => {
+      const { hook: hookFilter, decision: decisionFilter, filePrefix: filePrefixFilter } = req.query;
+      const cacheKey = `/gates/pattern-events?hook=${hookFilter}&decision=${decisionFilter}&filePrefix=${filePrefixFilter}`;
+      return cachedResult(cacheKey, 60_000, () => {
+        type GateEvent = {
+          ts: string; sessionId: string; hook: string;
+          decision: string; reason: string; editedFiles: string[];
+          verifyPresent?: boolean; verifyMissing?: string[];
+          verify?: Record<string, string | null>;
+        };
+
+        function computeFilePrefix(files: string[]): string {
+          if (!files.length) return '';
+          const parts = files[0].replace(/^\//, '').split('/');
+          return parts.slice(0, 2).join('/') + '/';
+        }
+
+        const path = dataPaths.hookEvents;
+        if (!existsSync(path)) return { events: [] };
+
+        const events: GateEvent[] = [];
+        try {
+          const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
+          for (const line of lines) {
+            try {
+              const e = JSON.parse(line) as Record<string, unknown>;
+              const hook = (e.hook as string) ?? '';
+              const rawDecision = (e.decision as string) ?? '';
+              const tier = e.tier;
+              const isGateEntry = hook.includes('quality-check') || (tier !== undefined && ['block', 'skip', 'advisory', 'pass'].includes(rawDecision));
+              if (!isGateEntry) continue;
+
+              let decision = rawDecision;
+              const detail = (e.detail as string) ?? '';
+              if (decision === 'pass' && detail.includes('user-affirmed')) decision = 'skip';
+              if (decision === 'pass') continue;
+
+              const editedFiles = (e.editedFiles as string[]) ?? [];
+              if (hookFilter && hook !== hookFilter) continue;
+              if (decisionFilter && decision !== decisionFilter) continue;
+              if (filePrefixFilter !== undefined && computeFilePrefix(editedFiles) !== filePrefixFilter) continue;
+
+              events.push({
+                ts: (e.ts as string) ?? '',
+                sessionId: (e.sessionId as string) ?? '',
+                hook,
+                decision,
+                reason: detail,
+                editedFiles,
+                verifyPresent: e.verifyPresent as boolean | undefined,
+                verifyMissing: e.verifyMissing as string[] | undefined,
+                verify: e.verify as Record<string, string | null> | undefined,
+              });
+            } catch {}
+          }
+        } catch {}
+
+        events.sort((a, b) => b.ts.localeCompare(a.ts));
+        return { events };
+      });
+    },
+  );
 
   app.get('/gates/patterns', async () => {
     return cachedResult('/gates/patterns', 60_000, () => {

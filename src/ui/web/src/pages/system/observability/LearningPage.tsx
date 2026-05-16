@@ -5,6 +5,7 @@ import {
   useObsLearningFeedback,
   useObsGateEvents,
   useObsGatePatterns,
+  useObsGatePatternEvents,
 } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -51,12 +52,68 @@ type GateEvent = {
   verify?: Record<string, string | null>;
 };
 
+type GatePattern = {
+  hook: string;
+  filePrefix: string;
+  decision: 'block' | 'skip' | 'advisory';
+  count: number;
+  sessionIds: string[];
+  lastSeen: string;
+  representativeReason: string;
+  representativeFiles: string[];
+};
+
 type CorrectionGroup = {
   trigger: string;
   count: number;
   lastTs: string;
   items: FeedbackItem[];
 };
+
+/** Parse a string of space-separated key=value tokens into pairs, or return null if it doesn't look like key=value. */
+function parseKeyValues(text: string): Array<{ key: string; value: string }> | null {
+  const tokens = text.trim().split(/\s+/);
+  const pairs = tokens.map(t => {
+    const eq = t.indexOf('=');
+    if (eq < 1) return null;
+    return { key: t.slice(0, eq), value: t.slice(eq + 1) };
+  });
+  if (pairs.some(p => p === null)) return null;
+  return pairs as Array<{ key: string; value: string }>;
+}
+
+/** Unified Details cell renderer for gate events — consistent mono key: value style. */
+function GateDetailsCell({ row }: { row: GateEvent }) {
+  // Build structured pairs from verify metadata first
+  const verifyParts: Array<{ key: string; value: string }> = [];
+  if (row.verifyPresent) verifyParts.push({ key: 'verify', value: 'present' });
+  if (row.verifyMissing?.length) verifyParts.push({ key: 'missing', value: row.verifyMissing.join(', ') });
+  if (row.verify) Object.entries(row.verify).forEach(([k, v]) => verifyParts.push({ key: k, value: v ?? 'null' }));
+
+  // If no verify metadata, try to parse the reason as key=value
+  const parts = verifyParts.length > 0 ? verifyParts : (parseKeyValues(row.reason) ?? null);
+
+  if (parts && parts.length > 0) {
+    return (
+      <span className="font-mono text-xs flex flex-wrap gap-x-3 gap-y-0.5">
+        {parts.slice(0, 4).map(({ key, value }, i) => (
+          <span key={i} className="whitespace-nowrap">
+            <span className="text-text-muted">{key}</span>
+            <span className="text-text-disabled">: </span>
+            <span className="text-text-secondary">{value.length > 32 ? value.slice(0, 32) + '…' : value}</span>
+          </span>
+        ))}
+        {parts.length > 4 && <span className="text-text-disabled">+{parts.length - 4}</span>}
+      </span>
+    );
+  }
+
+  return (
+    <span className="font-mono text-text-muted text-xs" title={row.reason}>
+      {row.reason.slice(0, 120)}{row.reason.length > 120 && '…'}
+    </span>
+  );
+}
 
 function loopTypeBadge(type: string) {
   const map: Record<string, string> = {
@@ -77,6 +134,15 @@ function decisionBadgeClass(decision: string) {
     advisory: 'bg-yellow-500/15 text-yellow-400',
   };
   return map[decision] ?? 'bg-bg-tertiary text-text-secondary';
+}
+
+function decisionCalloutColor(decision: string): string {
+  const map: Record<string, string> = {
+    block: 'var(--error)',
+    advisory: 'var(--warning)',
+    skip: 'var(--text-disabled)',
+  };
+  return map[decision] ?? 'var(--text-disabled)';
 }
 
 function SessionLink({ sessionId, turnIndex }: { sessionId: string; turnIndex?: number }) {
@@ -116,11 +182,117 @@ function SignalBadge({ rating }: { rating: number }) {
   );
 }
 
+function PatternEventsTable({ pattern }: { pattern: GatePattern }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const { data, isLoading } = useObsGatePatternEvents(pattern.hook, pattern.decision, pattern.filePrefix);
+
+  if (isLoading) return <PageLoading />;
+  const matched = (data?.events ?? []) as GateEvent[];
+
+  const columns: Column<GateEvent>[] = [
+    {
+      key: 'ts',
+      label: 'Time',
+      width: '115px',
+      render: (row) => (
+        <span className="font-mono text-text-secondary whitespace-nowrap text-xs">{compactTs(row.ts)}</span>
+      ),
+    },
+    {
+      key: 'hook',
+      label: 'Hook',
+      width: '180px',
+      render: (row) => <span className="font-mono text-text-primary text-xs">{row.hook}</span>,
+    },
+    {
+      key: 'decision',
+      label: 'Decision',
+      width: '90px',
+      render: (row) => (
+        <span className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold', decisionBadgeClass(row.decision))}>
+          {row.decision}
+        </span>
+      ),
+    },
+    {
+      key: 'editedFiles',
+      label: 'Files',
+      width: '200px',
+      render: (row) => {
+        if (!row.editedFiles || row.editedFiles.length === 0) return <span className="text-text-disabled">—</span>;
+        return (
+          <span className="font-mono text-text-muted text-xs" title={row.editedFiles.join(', ')}>
+            {row.editedFiles.slice(0, 2).join(', ')}
+            {row.editedFiles.length > 2 && ` +${row.editedFiles.length - 2}`}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'reason',
+      label: 'Details',
+      render: (row) => <GateDetailsCell row={row} />,
+    },
+    {
+      key: 'sessionId',
+      label: 'Session',
+      width: '80px',
+      render: (row) => <SessionLink sessionId={row.sessionId} />,
+    },
+  ];
+
+  if (matched.length === 0) {
+    return <p className="text-xs text-text-disabled px-1">No matching events found.</p>;
+  }
+
+  return (
+    <DataTable<GateEvent>
+      data={matched}
+      columns={columns}
+      keyField="ts"
+      maxRows={100}
+      pageSize={25}
+      expandedKey={expandedKey}
+      onExpandToggle={setExpandedKey}
+      renderExpanded={(row) => (
+        <div className="px-4 py-3 space-y-2 bg-bg-tertiary/50 text-sm">
+          {row.reason && (
+            <div>
+              <span className="text-text-muted font-medium">Reason: </span>
+              <span className="text-text-secondary">{row.reason}</span>
+            </div>
+          )}
+          {row.editedFiles && row.editedFiles.length > 0 && (
+            <div>
+              <span className="text-text-muted font-medium">Files: </span>
+              <span className="font-mono text-text-secondary">{row.editedFiles.join(', ')}</span>
+            </div>
+          )}
+          {row.verify && Object.keys(row.verify).length > 0 && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <span className="text-text-muted font-medium">Verify:</span>
+              {Object.entries(row.verify).map(([k, v]) => (
+                <span key={k} className="font-mono">
+                  <span className="text-text-muted">{k}</span>
+                  <span className="text-text-disabled">=</span>
+                  <span className="text-text-secondary">{v ?? 'null'}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      rowKeyFn={(row) => row.ts + row.sessionId}
+    />
+  );
+}
+
 function GatesSection() {
   const { data: eventsData, isLoading: eventsLoading, error: eventsError, refetch: eventsRefetch } = useObsGateEvents();
   const { data: patternsData, isLoading: patternsLoading } = useObsGatePatterns();
   const [decisionFilter, setDecisionFilter] = useState<string | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [patternExpandedKey, setPatternExpandedKey] = useState<string | null>(null);
 
   if (eventsLoading || patternsLoading) return <PageLoading />;
   if (eventsError || !eventsData) return <ErrorState message="Failed to load gate events" retry={eventsRefetch} />;
@@ -137,7 +309,8 @@ function GatesSection() {
     ? eventsData.events.filter((e: GateEvent) => e.decision === decisionFilter)
     : eventsData.events;
 
-  const columns: Column<GateEvent>[] = [
+
+  const eventColumns: Column<GateEvent>[] = [
     {
       key: 'ts',
       label: 'Time',
@@ -186,33 +359,7 @@ function GatesSection() {
     {
       key: 'reason',
       label: 'Details',
-      render: (row) => {
-        const verifyParts: Array<{ key: string; value: string }> = [];
-        if (row.verifyPresent) verifyParts.push({ key: 'verify', value: 'present' });
-        if (row.verifyMissing?.length) verifyParts.push({ key: 'missing', value: row.verifyMissing.join(', ') });
-        if (row.verify) {
-          Object.entries(row.verify).forEach(([k, v]) => verifyParts.push({ key: k, value: v ?? 'null' }));
-        }
-        if (verifyParts.length === 0) {
-          return (
-            <span className="text-text-muted text-xs" title={row.reason}>
-              {row.reason.slice(0, 120)}{row.reason.length > 120 && '…'}
-            </span>
-          );
-        }
-        return (
-          <span className="text-xs font-mono flex flex-wrap gap-2">
-            {verifyParts.slice(0, 3).map(({ key, value }, i) => (
-              <span key={i}>
-                <span className="text-text-muted">{key}</span>
-                <span className="text-text-disabled">=</span>
-                <span className="text-text-secondary">{value.length > 30 ? value.slice(0, 30) + '…' : value}</span>
-              </span>
-            ))}
-            {verifyParts.length > 3 && <span className="text-text-disabled">+{verifyParts.length - 3}</span>}
-          </span>
-        );
-      },
+      render: (row) => <GateDetailsCell row={row} />,
     },
     {
       key: 'sessionId',
@@ -222,121 +369,138 @@ function GatesSection() {
     },
   ];
 
+  const patterns: GatePattern[] = patternsData?.patterns ?? [];
+
   return (
-    <div className="space-y-4">
-      {/* Clickable pattern alerts */}
-      {patternsData && patternsData.patterns.length > 0 && (
-        <div className="space-y-2">
-          {patternsData.patterns.map((pattern: any, i: number) => (
+    <div className="space-y-6">
+      {/* Patterns — stat-callout panels */}
+      {patterns.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="font-heading text-sm font-medium text-text-muted uppercase tracking-wide">Patterns</h3>
+          <div className="space-y-1.5">
+            {patterns.map((pattern) => {
+              const rowKey = pattern.hook + pattern.decision + pattern.filePrefix;
+              const isOpen = patternExpandedKey === rowKey;
+              const color = decisionCalloutColor(pattern.decision);
+              return (
+                <div key={rowKey} className="rounded-lg border border-border-primary overflow-hidden bg-bg-secondary">
+                  <button
+                    type="button"
+                    onClick={() => setPatternExpandedKey(isOpen ? null : rowKey)}
+                    className="w-full flex items-stretch text-left transition-colors hover:bg-bg-tertiary/50"
+                  >
+                    {/* Left callout */}
+                    <div
+                      className="flex flex-col items-center justify-center px-4 py-3 bg-bg-contrast border-r border-border-primary shrink-0 min-w-[68px]"
+                      style={{ borderLeft: `3px solid ${color}` }}
+                    >
+                      <span className="font-mono text-lg font-bold leading-none" style={{ color }}>
+                        {fmtNumber(pattern.count)}
+                      </span>
+                      <span className="text-[10px] text-text-disabled mt-0.5 uppercase tracking-wide">events</span>
+                    </div>
+                    {/* Content */}
+                    <div className="flex items-center gap-3 flex-1 px-4 py-3 flex-wrap min-w-0">
+                      <span className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold shrink-0', decisionBadgeClass(pattern.decision))}>
+                        {pattern.decision}
+                      </span>
+                      <span className="font-mono text-text-primary text-xs">{pattern.hook}</span>
+                      <span className="text-text-disabled text-xs shrink-0">{fmtNumber(pattern.sessionIds.length)} sessions</span>
+                      {pattern.filePrefix
+                        ? <span className="font-mono text-text-muted text-xs">{pattern.filePrefix}</span>
+                        : <span className="text-text-disabled text-xs">no scope</span>
+                      }
+                      <span className="text-text-disabled text-xs shrink-0">{compactTs(pattern.lastSeen)}</span>
+                    </div>
+                    {/* Chevron */}
+                    <div className={clsx('flex items-center px-3 text-text-disabled transition-transform shrink-0', isOpen && 'rotate-90')}>
+                      <Icon name="chevron_right" className="text-[18px]" />
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div className="border-t border-border-primary bg-bg-contrast">
+                      <PatternEventsTable pattern={pattern} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Events table */}
+      <div className="space-y-3">
+        <h3 className="font-heading text-sm font-medium text-text-muted uppercase tracking-wide">Events</h3>
+
+        {/* Filter chips */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {FILTERS.map(({ key, label }) => (
             <button
-              key={i}
-              type="button"
-              onClick={() => setDecisionFilter(d => d === pattern.decision ? null : pattern.decision)}
+              key={label}
+              onClick={() => setDecisionFilter(key)}
               className={clsx(
-                'w-full text-left flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors cursor-pointer',
-                decisionFilter === pattern.decision
-                  ? 'border-yellow-500/60 bg-yellow-500/10'
-                  : 'border-yellow-500/30 bg-yellow-500/5 hover:border-yellow-500/60 hover:bg-yellow-500/10',
+                'px-3 py-1 text-xs rounded-full border transition-colors',
+                decisionFilter === key
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-border-primary text-text-muted hover:border-accent/50 hover:text-text-secondary',
               )}
             >
-              <Icon name="warning" className="text-[18px] text-warning shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-text-primary text-xs">{pattern.hook}</span>
-                  <span className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold', decisionBadgeClass(pattern.decision))}>
-                    {pattern.decision}
-                  </span>
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-bg-tertiary text-text-secondary">
-                    {fmtNumber(pattern.count)} occurrences
-                  </span>
-                  {decisionFilter === pattern.decision
-                    ? <span className="text-xs text-accent">✕ clear filter</span>
-                    : <span className="text-xs text-text-disabled flex items-center gap-1"><Icon name="filter_alt" className="text-[12px]" /> click to filter</span>
-                  }
-                </div>
-                <div className="text-text-muted text-xs mt-1" title={pattern.representativeReason}>
-                  {pattern.representativeReason.slice(0, 140)}
-                  {pattern.representativeReason.length > 140 && '…'}
-                </div>
-                {pattern.representativeFiles.length > 0 && (
-                  <div className="font-mono text-text-disabled text-xs mt-0.5">
-                    {pattern.representativeFiles.slice(0, 2).join(', ')}
-                    {pattern.representativeFiles.length > 2 && ` +${pattern.representativeFiles.length - 2}`}
-                  </div>
-                )}
-              </div>
+              {label}
+              {key === null && ` (${fmtNumber(eventsData.total)})`}
+              {key === 'pass' && ` (${fmtNumber(eventsData.passCount)})`}
+              {key === 'block' && ` (${fmtNumber(eventsData.blockCount)})`}
+              {key === 'skip' && ` (${fmtNumber(eventsData.skipCount)})`}
+              {key === 'advisory' && ` (${fmtNumber(eventsData.advisoryCount)})`}
             </button>
           ))}
         </div>
-      )}
 
-      {/* Filter chips */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {FILTERS.map(({ key, label }) => (
-          <button
-            key={label}
-            onClick={() => setDecisionFilter(key)}
-            className={clsx(
-              'px-3 py-1 text-xs rounded-full border transition-colors',
-              decisionFilter === key
-                ? 'border-accent bg-accent/10 text-accent'
-                : 'border-border-primary text-text-muted hover:border-accent/50 hover:text-text-secondary',
+        {filtered.length > 0 ? (
+          <DataTable<GateEvent>
+            data={filtered}
+            columns={eventColumns}
+            keyField="ts"
+            maxRows={50}
+            pageSize={50}
+            expandedKey={expandedKey}
+            onExpandToggle={setExpandedKey}
+            renderExpanded={(row) => (
+              <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-sm">
+                {row.reason && (
+                  <div>
+                    <span className="text-text-muted font-medium">Reason: </span>
+                    <span className="text-text-secondary">{row.reason}</span>
+                  </div>
+                )}
+                {row.editedFiles && row.editedFiles.length > 0 && (
+                  <div>
+                    <span className="text-text-muted font-medium">Files: </span>
+                    <span className="font-mono text-text-secondary">{row.editedFiles.join(', ')}</span>
+                  </div>
+                )}
+                {row.verify && Object.keys(row.verify).length > 0 && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    <span className="text-text-muted font-medium">Verify:</span>
+                    {Object.entries(row.verify).map(([k, v]) => (
+                      <span key={k} className="font-mono">
+                        <span className="text-text-muted">{k}</span>
+                        <span className="text-text-disabled">: </span>
+                        <span className="text-text-secondary">{v ?? 'null'}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
-          >
-            {label}
-            {key === null && ` (${fmtNumber(eventsData.total)})`}
-            {key === 'pass' && ` (${fmtNumber(eventsData.passCount)})`}
-            {key === 'block' && ` (${fmtNumber(eventsData.blockCount)})`}
-            {key === 'skip' && ` (${fmtNumber(eventsData.skipCount)})`}
-            {key === 'advisory' && ` (${fmtNumber(eventsData.advisoryCount)})`}
-          </button>
-        ))}
+            rowKeyFn={(row) => row.ts + row.sessionId}
+          />
+        ) : (
+          <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center text-sm text-text-muted">
+            No gate events in the selected filter.
+          </div>
+        )}
       </div>
-
-      {filtered.length > 0 ? (
-        <DataTable<GateEvent>
-          data={filtered}
-          columns={columns}
-          keyField="ts"
-          maxRows={50}
-          pageSize={50}
-          expandedKey={expandedKey}
-          onExpandToggle={setExpandedKey}
-          renderExpanded={(row) => (
-            <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-sm">
-              {row.reason && (
-                <div>
-                  <span className="text-text-muted font-medium">Reason: </span>
-                  <span className="text-text-secondary">{row.reason}</span>
-                </div>
-              )}
-              {row.editedFiles && row.editedFiles.length > 0 && (
-                <div>
-                  <span className="text-text-muted font-medium">Files: </span>
-                  <span className="font-mono text-text-secondary">{row.editedFiles.join(', ')}</span>
-                </div>
-              )}
-              {row.verify && Object.keys(row.verify).length > 0 && (
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  <span className="text-text-muted font-medium">Verify:</span>
-                  {Object.entries(row.verify).map(([k, v]) => (
-                    <span key={k} className="font-mono">
-                      <span className="text-text-muted">{k}</span>
-                      <span className="text-text-disabled">=</span>
-                      <span className="text-text-secondary">{v ?? 'null'}</span>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          rowKeyFn={(row) => row.ts + row.sessionId}
-        />
-      ) : (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center text-sm text-text-muted">
-          No gate events in the selected filter.
-        </div>
-      )}
     </div>
   );
 }

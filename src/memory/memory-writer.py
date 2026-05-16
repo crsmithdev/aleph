@@ -7,8 +7,10 @@ Fire-and-forget — called from memory-extract.ts, runs in background.
 """
 import asyncio
 import datetime
+import hashlib
 import json
 import os
+import re
 import sys
 
 DB_PATH = os.environ.get("MEMORY_DB_PATH", os.path.expanduser("~/.local/share/mcp-memory/sqlite_vec.db"))
@@ -47,7 +49,19 @@ async def main():
                 memory_type=mem.get("memory_type", "observation"),
             )
             try:
-                memory_id = getattr(result, 'id', None) or getattr(result, 'memory_id', None)
+                memory_id = None
+                is_duplicate = False
+                if isinstance(result, dict):
+                    if result.get('success'):
+                        memory_id = (result.get('memory') or {}).get('content_hash')
+                    else:
+                        # Extract hash from duplicate error message, or compute from content
+                        err = result.get('error', '')
+                        m = re.search(r'[0-9a-f]{8,}', err)
+                        memory_id = m.group(0) if m else hashlib.sha256(content.encode()).hexdigest()[:16]
+                        is_duplicate = True
+                else:
+                    memory_id = getattr(result, 'id', None) or getattr(result, 'memory_id', None)
                 if memory_id:
                     entry = {
                         "ts": datetime.datetime.utcnow().isoformat() + "Z",
@@ -58,6 +72,7 @@ async def main():
                         "insight": mem.get("insight", ""),
                         "content": content,
                         "tags": mem.get("tags", ""),
+                        **({"duplicate": True} if is_duplicate else {}),
                     }
                     os.makedirs(os.path.dirname(PROVENANCE_PATH), exist_ok=True)
                     with open(PROVENANCE_PATH, "a") as f:

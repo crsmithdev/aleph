@@ -7,9 +7,8 @@
  *
  * 1. Parse transcript via parseTranscript().
  * 2. Skip if not substantive (< 6 messages or < 1 edit).
- * 3. Skip if Claude already called memory_store (avoid duplicates).
- * 4. Run extractMemories() heuristics to find decisions, corrections, patterns.
- * 5. If memories found and Python venv exists → spawn memory-writer.py
+ * 3. Run extractMemories() heuristics to find decisions, corrections, patterns.
+ * 4. If memories found and Python venv exists → spawn memory-writer.py
  *    fire-and-forget with JSON on stdin. Unref the process so it doesn't block exit.
  *
  * Never blocks (always exit 0). Missing Python or empty transcript → silent skip.
@@ -20,7 +19,7 @@ import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { dataPaths } from "../../data/src/paths.ts";
 import { parseTranscript } from "../parse-transcript.ts";
-import { extractMemories, hasMemoryStore, augmentWithSignals } from "../extract.ts";
+import { extractMemories, augmentWithSignals } from "../extract.ts";
 
 const TAG = "memory-extract-stop";
 const VENV_PYTHON = Bun.env.MEMORY_VENV_PYTHON ?? resolve(
@@ -41,11 +40,6 @@ if (!transcript) { trace(TAG, "skip: no transcript"); process.exit(0); }
 const edits = (transcript.toolCounts["Edit"] ?? 0) + (transcript.toolCounts["Write"] ?? 0) + (transcript.toolCounts["Bash"] ?? 0);
 const substantive = transcript.totalMessages >= 6 && edits >= 1;
 if (!substantive) { trace(TAG, `skip: not substantive (${transcript.totalMessages} msgs, ${edits} edits)`); process.exit(0); }
-
-if (hasMemoryStore(transcript)) {
-  trace(TAG, "skip: Claude already called memory_store");
-  process.exit(0);
-}
 
 const baseMemories = extractMemories(transcript);
 let toolSignalsText = "";
