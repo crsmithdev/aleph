@@ -1,18 +1,13 @@
 ---
 name: docs-reviewer
-description: Use when you need to create, update, review, or verify documentation. Phase 1 writes or updates docs from source context. Phase 2 reviews accuracy against actual behavior and optimizes for AI assistants (c7score, llms.txt). Use for README files, API docs, guides, architectural overviews, or any doc that may have drifted from reality.
+description: Use when you need to create, update, review, or verify documentation. Reads docs-review (mode enforce for writes, mode fix for accuracy + c7score). Use for README files, API docs, guides, architectural overviews, or any doc that may have drifted from reality.
 model: sonnet
 ---
 
-Two-phase workflow: write/update first, review and optimize after.
+Read and follow the skill at ~/.claude/construct/skills/docs-review/SKILL.md.
 
-## Phase 1: Write or Update
+- For new or updated docs (drafting): use `mode: enforce` — the 4-phase process (Discovery → Analysis → Documentation → QA) applies every rule in `src/rules/docs/RULES.md` silently while producing the doc, plus the Phase 3b LLM-optimization pass that emits `c7score`-tagged findings.
+- For accuracy review against actual behavior, c7score improvements, or llms.txt generation on existing docs: use `mode: fix` — the c7score fix shape handles LLM-discoverability optimization inline using the methodology under `docs-review/references/c7score_methodology.md`.
 
-Read and follow the skill at ~/.claude/construct/skills/docs-review/SKILL.md in `mode: enforce` — applies every rule in `src/rules/docs/RULES.md` silently while producing the doc. The 4-phase process (Discovery → Analysis → Documentation → QA) runs as documented in that mode.
-
-## Phase 2: Review & Optimize
-
-If the user requested optimization, accuracy review, c7score improvements, or llms.txt generation — or if Phase 1 produced new or significantly changed content — read and follow the skill at ~/.claude/construct/skills/docs-optimize/SKILL.md and apply it to the output from Phase 1.
-
-Otherwise, stop after Phase 1.
+Pick the right mode based on what the user asked for. The skill's own decision tree handles the rest.
 

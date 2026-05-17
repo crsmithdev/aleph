@@ -38,11 +38,7 @@
     },
     {
       "skill": "docs-review",
-      "keywords": ["docs-review", "docs review", "docs audit", "audit docs", "audit the docs", "doc audit", "documentation audit", "fix the docs findings", "remediate docs drift", "docs-conform", "make the docs match", "align the docs", "same readme structure", "match the readme", "sync docs to reference", "document this", "write documentation", "create docs", "update the docs", "write a readme", "document the architecture", "draft documentation", "author docs", "new readme", "/docs-review", "/docs-author", "/(audit|review|check|fix|remediate|conform|write|create|author|draft|update).{0,15}(docs|documentation|readme)/", "/(readmes|docs|guides).{0,30}(match|like|same|consistent)/"]
-    },
-    {
-      "skill": "docs-optimize",
-      "keywords": ["optimize docs", "optimize documentation", "c7score", "llms.txt", "docs for ai", "docs for llm"]
+      "keywords": ["docs-review", "docs review", "docs audit", "audit docs", "audit the docs", "doc audit", "documentation audit", "fix the docs findings", "remediate docs drift", "docs-conform", "make the docs match", "align the docs", "same readme structure", "match the readme", "sync docs to reference", "document this", "write documentation", "create docs", "update the docs", "write a readme", "document the architecture", "draft documentation", "author docs", "new readme", "optimize docs", "optimize documentation", "c7score", "llms.txt", "docs for ai", "docs for llm", "/docs-review", "/docs-author", "/docs-optimize", "/(audit|review|check|fix|remediate|conform|write|create|author|draft|update|optimize).{0,15}(docs|documentation|readme)/", "/(readmes|docs|guides).{0,30}(match|like|same|consistent)/"]
     },
     {
       "skill": "context-compact",

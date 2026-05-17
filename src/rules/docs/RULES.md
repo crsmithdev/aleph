@@ -97,10 +97,10 @@ Cross-referenced by:
 
 ## G. LLM-optimization (referenced, not duplicated)
 
-*Source: `docs-optimize/SKILL.md` + `docs-optimize/REFERENCE.md` + `docs-optimize/references/c7score_metrics.md`*
+*Source: `docs-review/SKILL.md (c7score fix shape)` + `docs-review/references/c7score_methodology.md` + `docs-review/references/c7score_metrics.md`*
 
 These are high-level expectations only. The full c7score methodology and
-transformation patterns live in `docs-optimize/`; this document does not
+transformation patterns live in `docs-review/references/`; this document does not
 duplicate them.
 
 - Snippets answer specific developer questions ("How do I X?")
@@ -110,7 +110,7 @@ duplicate them.
 - One snippet, one lesson — no duplicate information
 
 For full c7score methodology, see:
-- `src/skills/docs-optimize/REFERENCE.md`
-- `src/skills/docs-optimize/references/c7score_metrics.md`
-- `src/skills/docs-optimize/references/optimization_patterns.md`
-- `src/skills/docs-optimize/references/llmstxt_format.md`
+- `src/skills/docs-review/references/c7score_methodology.md`
+- `src/skills/docs-review/references/c7score_metrics.md`
+- `src/skills/docs-review/references/optimization_patterns.md`
+- `src/skills/docs-review/references/llmstxt_format.md`

@@ -1,6 +1,6 @@
 ---
 name: docs-review
-description: Review documentation — audit drift/accuracy (default), apply approved fixes (mode: fix), or auto-apply rules silently while writing markdown (mode: enforce). Fix mode is agent-backed via docs-reviewer (two-phase write + accuracy workflow). Evaluates rules in src/rules/docs/RULES.md. Triggers on /audit docs, /fix docs, /docs-review, "audit the docs", "review the documentation", "docs drift", "review the readme", "fix the documentation", "remediate docs drift", "align these docs", "sync docs to reference", and is self-invoked in enforce mode whenever the agent is writing or editing markdown.
+description: Review documentation — audit drift/accuracy (default), apply approved fixes (mode: fix), or auto-apply rules silently while writing markdown (mode: enforce). Fix mode is agent-backed via docs-reviewer (two-phase write + accuracy workflow); the c7score fix shape handles LLM-discoverability optimization (question-coverage, self-contained examples, language tags, llms.txt generation) inline. Evaluates rules in src/rules/docs/RULES.md. Triggers on /audit docs, /fix docs, /docs-review, "audit the docs", "review the documentation", "docs drift", "review the readme", "fix the documentation", "remediate docs drift", "align these docs", "sync docs to reference", "optimize docs", "optimize documentation", "c7score", "llms.txt", "docs for ai", "docs for llm", and is self-invoked in enforce mode whenever the agent is writing or editing markdown.
 verb: review
 domain: docs
 modes: [audit, fix, enforce]
@@ -113,13 +113,14 @@ For repo-specific drift checks, use the truth-source table in `RULES.md` section
 
 #### 6. LLM-optimization check
 
-Walk c7score-style criteria against the doc(s) in scope, sourcing the methodology from `src/skills/docs-optimize/REFERENCE.md` and `src/skills/docs-optimize/references/c7score_metrics.md` as reference files. Emit a finding for each violation, tagged `c7score`:
+Walk c7score-style criteria against the doc(s) in scope, sourcing the methodology from `references/c7score_methodology.md` and `references/c7score_metrics.md`. Emit a finding for each violation, tagged `c7score`:
 - Question coverage (snippets answering "How do I X?")
-- Self-contained example completeness
-- Metadata snippet pollution
+- Self-contained example completeness (every snippet runnable, with imports)
+- Language tags on every fenced code block
+- Metadata snippet pollution (licensing, directory trees, citations)
 - Import-only / install-only fragments
 
-The omnibus routes `c7score`-tagged findings to `docs-optimize` for the fix pass. This leaf does not call it directly (per architecture R1: only the omnibus chains skills).
+In fix mode, `c7score`-tagged findings are handled inline (see Tag-specific detail / c7score optimization below) — no external dispatch.
 
 #### 7. Drift between peer docs
 
@@ -299,11 +300,17 @@ For `tag: peer-drift` findings where `relatedLocations[0]` is the canonical refe
 
 #### c7score optimization
 
-For `tag: c7score` findings:
+For `tag: c7score` findings. Methodology lives in `references/c7score_methodology.md`; metric definitions in `references/c7score_metrics.md`; transformation patterns in `references/optimization_patterns.md`; llms.txt format in `references/llmstxt_format.md`. Example outputs in `examples/sample_readme.md` and `examples/sample_llmstxt.md`. Helper script for offline scoring: `scripts/analyze_docs.py`.
 
-1. Read the optimization detail in `properties.fix` — usually one of: add a question-answering snippet, expand an import-only fragment, mask metadata snippets, restructure a section to be self-contained.
+1. Read the optimization detail in `properties.fix` — usually one of:
+   - Add a question-answering snippet (snippet should answer a concrete "How do I X?" developer question)
+   - Expand an import-only or install-only fragment so it's self-contained and runnable
+   - Mask metadata snippets (licensing, directory trees, citations)
+   - Restructure a section to be self-contained (snippet + caption + result, not split across paragraphs)
+   - Add a language tag to a fenced code block
 2. Apply the change with the doc's existing voice / formatting conventions.
-3. If the optimization requires significant rewriting, surface as a `severity: suggestion` finding for the user rather than auto-applying.
+3. For llms.txt generation: produce a top-level `llms.txt` summarizing the doc per the format in `references/llmstxt_format.md`.
+4. If the optimization requires significant rewriting (full section rebuild, restructuring a multi-page doc), surface as a `severity: suggestion` finding for the user rather than auto-applying.
 
 #### Drift correction
 

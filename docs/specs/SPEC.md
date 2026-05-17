@@ -127,7 +127,6 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 | `context-compact` | Guide context compaction at logical task phase boundaries |
 | `debug` | Systematic four-phase root-cause debugging |
 | `design-review` | Review UI design — audit (agent-backed) + fix + enforce modes |
-| `docs-optimize` | Optimize docs for AI coding assistants and LLMs (c7score, llms.txt) |
 | `docs-review` | Review docs — audit + fix + enforce modes |
 | `dogfood` | Qualitative single-run dogfood review of a tool or skill |
 | `git` | Full git workflow — branch, implement, land via merge or PR |
