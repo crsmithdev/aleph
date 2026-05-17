@@ -38,19 +38,11 @@
     },
     {
       "skill": "code-review",
-      "keywords": ["code review", "review this code", "architecture review", "review my implementation", "check my code", "review the changes", "/review.{0,15}(code|changes|implementation|diff)/"]
-    },
-    {
-      "skill": "code-audit",
-      "keywords": ["code audit", "audit the code", "audit the diff", "audit my code", "/audit.{0,10}(code|diff|branch)/", "/code.{0,10}audit/"]
-    },
-    {
-      "skill": "code-fix",
-      "keywords": ["code fix", "fix the findings", "apply the audit fixes", "apply the fixes", "/fix.{0,10}(code|findings)/", "/code.{0,10}fix/"]
+      "keywords": ["code review", "review this code", "architecture review", "review my implementation", "check my code", "review the changes", "code audit", "audit the code", "audit the diff", "audit my code", "code fix", "fix the findings", "apply the audit fixes", "apply the fixes", "/code-review", "/(audit|review|fix).{0,15}(code|diff|branch|findings|changes|implementation)/", "/code.{0,10}(audit|review|fix)/"]
     },
     {
       "skill": "omnibus",
-      "keywords": ["/audit", "/fix", "/suggest", "omnibus", "audit everything", "audit all", "review everything", "check all the things", "fix everything", "full audit", "full review", "comprehensive audit", "audit the codebase", "review the codebase", "/(audit|fix|suggest).{0,10}(code|design|docs|skills|hooks|agents|config|security|everything|all)/"]
+      "keywords": ["/audit", "/fix", "/suggest", "omnibus", "audit everything", "audit all", "review everything", "check all the things", "fix everything", "full audit", "full review", "comprehensive audit", "audit the codebase", "review the codebase", "/(audit|fix|suggest).{0,10}(code|design|docs|agent|security|everything|all)/"]
     },
     {
       "skill": "code-refactor",
@@ -58,15 +50,15 @@
     },
     {
       "skill": "docs-author",
-      "keywords": ["document this", "write documentation", "create docs", "update the docs", "write a readme", "docs review", "update docs", "full docs review", "document the architecture"]
+      "keywords": ["document this", "write documentation", "create docs", "update the docs", "write a readme", "document the architecture"]
     },
     {
       "skill": "docs-author-v2",
       "keywords": ["docs-v2", "use docs-author-v2", "docs author v2", "/v2 docs/"]
     },
     {
-      "skill": "docs-audit",
-      "keywords": ["docs-audit", "docs audit", "audit docs", "audit the docs", "doc audit", "documentation audit", "/(audit|review|check).{0,15}(docs|documentation)/"]
+      "skill": "docs-review",
+      "keywords": ["docs-review", "docs review", "docs audit", "audit docs", "audit the docs", "doc audit", "documentation audit", "fix the docs findings", "remediate docs drift", "/docs-review", "/(audit|review|check|fix|remediate).{0,15}(docs|documentation)/"]
     },
     {
       "skill": "docs-conform",
@@ -90,67 +82,31 @@
     },
     {
       "skill": "design-standards",
-      "keywords": ["design-standards", "/design-standards", "check accessibility", "accessibility audit", "a11y", "best practices", "review for a11y", "web standards", "check web standards", "check the design", "design looks off", "design check", "design is off", "something looks off", "ui looks wrong", "the design looks", "visually check", "visual check", "check how it looks", "screenshot the ui", "/(check|review|audit).{0,20}(design|ui|page|screen|layout)/", "/design.{0,15}(looks|check|audit|review)/"]
+      "keywords": ["design-standards", "/design-standards", "check accessibility", "accessibility audit", "a11y", "best practices", "review for a11y", "web standards", "check web standards", "check the design", "design looks off", "design check", "design is off", "something looks off", "ui looks wrong", "the design looks", "visually check", "visual check", "check how it looks", "screenshot the ui"]
     },
     {
-      "skill": "design-audit",
-      "keywords": ["design-audit", "design audit", "audit the design", "audit the ui", "audit ui", "design review", "make this feel professional", "make this look professional", "polish the interface", "ux audit", "go through the ui", "review the ui", "the ui needs work", "clean up the ui", "typography", "fix typography", "em dash", "en dash", "text hierarchy", "review layout", "fix the font", "change the font", "font size", "font is wrong", "review ux", "/(review|audit|go through).{0,15}(ui|design|interface|ux)/", "/(fix|change|update|wrong).{0,15}font/", "/font.{0,15}(wrong|bad|ugly|small|big|size)/"]
+      "skill": "design-review",
+      "keywords": ["design-review", "design review", "design audit", "audit the design", "audit the ui", "audit ui", "design-fix", "design-conform", "make the pages match", "align the layouts", "same loading state", "same empty state", "match the table headers", "make the components consistent", "make this feel professional", "make this look professional", "polish the interface", "ux audit", "go through the ui", "review the ui", "the ui needs work", "clean up the ui", "typography", "fix typography", "em dash", "en dash", "text hierarchy", "review layout", "fix the font", "change the font", "font size", "font is wrong", "review ux", "/design-review", "/(review|audit|fix|go through).{0,15}(ui|design|interface|ux)/", "/(fix|change|update|wrong).{0,15}font/", "/font.{0,15}(wrong|bad|ugly|small|big|size)/", "/(pages|tables|layouts|components|cards|forms).{0,30}(match|like|same|consistent)/"]
     },
     {
-      "skill": "config-audit",
-      "keywords": ["config-audit", "audit config", "config audit", "audit my config", "audit setup", "audit claude.md", "check agent config", "audit the agent setup", "/(audit|check|review).{0,15}(config|setup|claude\\.md)/", "/are my (hooks|skills|agents) wired/", "/what's broken in my (setup|config)/"]
+      "skill": "agent-review",
+      "keywords": ["agent-review", "agent review", "agent audit", "audit the agent setup", "audit my config", "audit setup", "audit claude.md", "check agent config", "audit my hooks", "audit hooks", "check hook safety", "find dead hook outputs", "fix the hooks findings", "fix dead outputs", "audit my skills", "audit the skill registry", "find orphaned skills", "fix orphaned skills", "audit my agents", "audit subagents", "find agent drift", "check agent dispatch", "agent routing collision", "/agent-review", "/(audit|check|review|fix|remediate).{0,15}(config|setup|claude\\.md|hooks?|skill|registry|agent|subagent|persona)/", "/are my (hooks|skills|agents|personas) wired/", "/what's broken in my (setup|config)/"]
     },
     {
       "skill": "code-conform",
       "keywords": ["code-conform", "conform", "make the others", "make the other", "apply this pattern", "apply the pattern", "align with", "match the way", "match this pattern", "fix drift", "standardize", "make them consistent", "make consistent", "same pattern", "propagate this", "align the routes", "align the handlers", "match this handler", "make the providers consistent", "fix drift in the schemas", "consolidate", "single source of truth", "deduplicate", "/(handlers|providers|routes|schemas|hooks|helpers).{0,30}(consistent|match|same|like)/", "/(make|fix|align).{0,30}(consistent|match|same|like)/"]
     },
     {
-      "skill": "design-fix",
-      "keywords": ["design-fix", "design-conform", "make the pages match", "align the layouts", "same loading state", "same empty state", "match the table headers", "make the components consistent", "same shape", "apply to all", "/(pages|tables|layouts|components|cards|forms).{0,30}(match|like|same|consistent)/"]
-    },
-    {
       "skill": "design-construct",
       "keywords": ["design system", "construct design", "design tokens", "color tokens", "surface tokens", "type scale", "design reference", "design kit", "material symbols", "construct ui pattern"]
     },
     {
-      "skill": "security-audit",
-      "keywords": ["security audit", "audit for vulnerabilities", "scan for security issues", "security review", "find vulnerabilities", "owasp", "cwe", "asvs", "vulnerability scan", "audit for security", "SQL injection", "XSS", "XXE", "SSRF", "IDOR", "/(audit|scan|review|check).{0,15}(security|vuln|vulnerab|owasp|cwe)/", "/(security|vulnerab).{0,15}(audit|scan|review|check)/"]
-    },
-    {
-      "skill": "security-fix",
-      "keywords": ["security-fix", "fix the vulnerabilities", "remediate", "remediate security", "patch security", "fix security findings", "/fix security", "apply security fixes", "fix the security findings", "/(fix|remediate|patch).{0,15}(security|vuln|vulnerab|owasp|cwe)/"]
+      "skill": "security-review",
+      "keywords": ["security-review", "security review", "security audit", "audit for vulnerabilities", "scan for security issues", "find vulnerabilities", "owasp", "cwe", "asvs", "vulnerability scan", "audit for security", "SQL injection", "XSS", "XXE", "SSRF", "IDOR", "fix the vulnerabilities", "remediate", "remediate security", "patch security", "fix security findings", "apply security fixes", "/security-review", "/(audit|scan|review|check|fix|remediate|patch).{0,15}(security|vuln|vulnerab|owasp|cwe)/"]
     },
     {
       "skill": "dogfood",
       "keywords": ["dogfood", "try this as a user", "use it like a user", "use it like a real user", "pretend you don't know the internals", "how does this feel to use", "use it for real", "try it out as if", "act like a user", "/dogfood\\s+\\S+/", "/try.{0,20}(as a user|like a user|as if you)/"]
-    },
-    {
-      "skill": "hooks-audit",
-      "keywords": ["hooks-audit", "audit hooks only", "check hook safety", "audit just the hooks", "find dead hook outputs", "audit hook scripts", "/hooks-audit", "/(audit|check).{0,10}hooks?$/"]
-    },
-    {
-      "skill": "skills-audit",
-      "keywords": ["skills-audit", "audit the skill registry", "audit my skills", "audit the skills", "find orphaned skills", "audit SKILL.md files", "/skills-audit", "/(audit|check).{0,10}(skill|registry)/"]
-    },
-    {
-      "skill": "agents-audit",
-      "keywords": ["agents-audit", "audit subagents", "audit my agents", "audit the agents", "find agent drift", "check agent dispatch", "agent routing collision", "/agents-audit", "/(audit|check).{0,10}(agent|subagent)/"]
-    },
-    {
-      "skill": "docs-fix",
-      "keywords": ["docs-fix", "fix the docs findings", "remediate docs drift", "/docs-fix", "/fix docs", "apply docs fixes", "/(fix|remediate).{0,10}(doc|docs)/"]
-    },
-    {
-      "skill": "skills-fix",
-      "keywords": ["skills-fix", "fix the skills findings", "remediate skill drift", "fix orphaned skills", "/skills-fix", "/fix skills", "apply skill fixes", "/(fix|remediate).{0,10}(skill|registry)/"]
-    },
-    {
-      "skill": "hooks-fix",
-      "keywords": ["hooks-fix", "fix the hooks findings", "remediate hook silent-fails", "fix dead outputs", "/hooks-fix", "/fix hooks", "apply hook fixes", "/(fix|remediate).{0,10}hook/"]
-    },
-    {
-      "skill": "agents-fix",
-      "keywords": ["agents-fix", "fix the agents findings", "remediate agent drift", "fix agent dispatch ambiguity", "/agents-fix", "/fix agents", "apply agent fixes", "/(fix|remediate).{0,10}(agent|subagent)/"]
     },
     {
       "skill": "grill-me",

@@ -9,7 +9,7 @@
 #
 # Schema version is bumped when the structure changes incompatibly.
 
-version: 1
+version: 2
 
 # ---------------------------------------------------------------------------
 # Defaults — applied to every omnibus invocation unless overridden by CLI.
@@ -22,72 +22,59 @@ defaults:
     - important
 
 # ---------------------------------------------------------------------------
-# Active leaves — which (verb, domain) cells are populated and dispatched.
+# Active domains — each maps to a `<domain>-review` leaf skill that supports
+# both audit and fix modes. The orchestrator translates the user-facing verb
+# (/audit vs /fix) into a `mode` parameter passed to the leaf.
+#
 # Empty cells in the matrix are simply absent here; the omnibus skips them
 # silently and emits a "Skipped: <domain>" line in the report.
-#
-# These names will resolve to skills under src/skills/<name>/ once Phase 3+
-# builds the actual leaves. Today (Phase 1) they're declared intent; the
-# omnibus dispatcher (not yet built) will return "leaf not installed yet" for
-# any name without a matching skill directory.
 # ---------------------------------------------------------------------------
 active:
   audit:
     - code
     - design
     - docs
-    - skills
-    - hooks
-    - agents
-    - config
     - security
+    - agent
   fix:
     - code
     - design
     - docs
-    - skills
-    - hooks
-    - agents
     - security
-  suggest:
+    - agent
+  suggest:                          # declared but not yet wired (post-v1)
     - code
     - design
     - docs
-    - skills
-    - hooks
-    - agents
-    - config
     - security
-  # 'author' is invoked directly per artifact creation, not orchestrated.
+    - agent
 
 # ---------------------------------------------------------------------------
 # Per-leaf configuration. Each leaf inherits rules from src/rules/<domain>/
 # unless overridden here.
 # ---------------------------------------------------------------------------
 leaves:
-  code-audit:
+  code-review:
     rules: src/rules/code/RULES.md
     exclude:
       - "src/skills/docs-author/**"  # legacy, scheduled for migration
       - "**/*.generated.ts"
       - ".worktrees/**"
 
-  design-audit:
+  design-review:
     rules: src/rules/design/RULES.md
     references:
       - src/rules/design/typography.md
       - src/rules/design/accessibility.md
-    agent_backed: design-reviewer    # omnibus dispatches via Agent() for visual tool access
+    agent_backed:
+      audit: design-reviewer        # browser/ui:smoke tools needed for visual checks
 
-  docs-audit:
-    # Until Phase 2 consolidation, leaf-level rules still live with the legacy skill.
+  docs-review:
     rules: src/rules/docs/RULES.md
-    legacy_source: src/skills/docs-author-v2/RULES.md
+    agent_backed:
+      fix: docs-reviewer            # two-phase write+accuracy workflow
 
-  docs-fix:
-    agent_backed: docs-reviewer      # fix pass uses docs-reviewer two-phase write+accuracy workflow
-
-  security-audit:
+  security-review:
     rules: src/rules/security/RULES.md
     framework_mappings:
       - OWASP-Top-10-2025
@@ -96,32 +83,25 @@ leaves:
       - ASVS-5.0
       - MITRE-ATT&CK
 
-  hooks-audit:
-    rules: src/rules/hooks/RULES.md
-
-  skills-audit:
-    rules: src/rules/skills/RULES.md
-
-  agents-audit:
-    rules: src/rules/agents/RULES.md
-
-  config-audit:
-    rules: src/rules/config/RULES.md
-    use_agnix: true                 # agnix --dry-run handles structural lint
+  agent-review:
+    rules: src/rules/agent/RULES.md
+    sub_surfaces:                   # rule files per sub-surface
+      config:   src/rules/agent/config.md
+      hooks:    src/rules/agent/hooks.md
+      skills:   src/rules/agent/skills.md
+      personas: src/rules/agent/personas.md
+    use_agnix: true                 # agnix --dry-run handles structural lint for config sub-surface
 
 # ---------------------------------------------------------------------------
 # Verification gates — mirrors VERIFICATION.md. Skills call gate("<domain>")
 # and the resolution happens here. Keep this in sync with VERIFICATION.md.
 # ---------------------------------------------------------------------------
 verification:
-  code: "bun test.ts"
-  design: "bun run --cwd src/ui ui:smoke"
-  docs: ""                          # not yet implemented
-  skills: "bun test src/skills"
-  hooks: "bun test src/core/hooks"
-  agents: ""                        # manual for now
-  config: "agnix --dry-run ."
+  code:     "bun test.ts"
+  design:   "bun run --cwd src/ui ui:smoke"
+  docs:     ""                      # not yet implemented
   security: ""                      # CI-only for now
+  agent:    "bun test src/skills src/core/hooks"
 
 # ---------------------------------------------------------------------------
 # Approval policy — risk-tiered (per Anthropic 2026 Agentic Coding Trends).
@@ -144,11 +124,8 @@ approval:
     docs:     auto
     code:     single
     design:   single
-    skills:   single
-    hooks:    single
-    agents:   single
-    config:   single
     security: per-finding
+    agent:    single
 
   # by tag — most specific override
   by_tag:

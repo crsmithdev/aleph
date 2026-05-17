@@ -1,1 +1,0 @@
-Example invocation: "audit my config" or "/config-audit". The skill walks hooks, skills registry, CLAUDE.md @-includes, MCP servers, and permissions against the rule set in src/rules/config/RULES.md, then emits a phased SARIF report (Critical / Refinement / Polish) with concrete remediation steps for each finding. No changes are written without explicit approval.

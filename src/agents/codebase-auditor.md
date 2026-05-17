@@ -25,10 +25,8 @@ Run these audits **in parallel** via the Skill() chain through the omnibus, one 
 
 1. **Code** — audit all `.ts` files under `src/` against `src/rules/code/RULES.md`
 2. **Security** — audit all `.ts` files under `src/` against `src/rules/security/RULES.md`
-3. **Hooks** — audit hook scripts under `src/core/hooks/` against `src/rules/hooks/RULES.md`
-4. **Skills** — audit `src/skills/*/SKILL.md` against `src/rules/skills/RULES.md` and `src/skills/skill-rules.json`
-5. **Agents** — audit `src/agents/*.md` against `src/rules/agents/RULES.md`
-6. **Docs** — audit `README.md`, `SPEC.md`, `INSTALL.md`, `src/**/*.md` against `src/rules/docs/RULES.md`
+3. **Agent** — audit CLAUDE.md / hooks / skills / personas against `src/rules/agent/RULES.md` (covers what used to be the config, hooks, skills, agents domains)
+4. **Docs** — audit `README.md`, `SPEC.md`, `INSTALL.md`, `src/**/*.md` against `src/rules/docs/RULES.md`
 
 Each subagent must return SARIF-style findings: `{ ruleId, severity, file, line, message }`.
 

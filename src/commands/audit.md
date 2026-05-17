@@ -1,19 +1,22 @@
 ---
-description: Run audit leaves via the omnibus orchestrator. Domains and scope inferred from plain-text args.
+description: Run review skills in audit mode via the omnibus orchestrator. Domains and scope inferred from plain-text args.
 ---
 Invoke the `omnibus` skill with verb=`audit` and arguments: $ARGUMENTS
 
-Parse `$ARGUMENTS` as plain text — no flag syntax. Tokens that match a domain name from `omnibus.yml` `active.audit` (code, design, docs, skills, hooks, agents, config, security) filter the run to those domains. Everything else is a scope hint passed to the leaves.
+Parse `$ARGUMENTS` as plain text — no flag syntax. Tokens that match a domain name from `omnibus.yml` `active.audit` (code, design, docs, security, agent) filter the run to those domains. Everything else is a scope hint passed to the leaves.
 
 Examples:
 
 | `$ARGUMENTS` | Behavior |
 |---|---|
-| (empty) | all audit cells, default scope (diff vs main) |
-| `code design` | code-audit + design-audit only |
-| `src/research/` | all audit cells, scoped to that path |
-| `the research module` | all audit cells, scoped to research-related files |
-| `everything` | full codebase scan, all audit cells |
-| `code src/foo/` | code-audit only, scoped to src/foo/ |
+| (empty) | all review skills in audit mode, default scope (diff vs main) |
+| `code design` | code-review + design-review in audit mode only |
+| `src/research/` | all review skills in audit mode, scoped to that path |
+| `the research module` | all review skills, scoped to research-related files |
+| `everything` | full codebase scan, all review skills |
+| `code src/foo/` | code-review only (audit mode), scoped to src/foo/ |
+| `agent` | agent-review only — covers config + hooks + skills + personas in one pass |
+
+Audit mode is read-only: review skills emit SARIF findings + a phased prose summary, but never apply fixes. Use `/fix` for the apply-after-approval variant.
 
 If no scope hint is given and the working tree is clean on main, omnibus falls back to `HEAD~10` per its preflight.
