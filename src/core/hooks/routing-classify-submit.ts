@@ -106,11 +106,10 @@ const matched = rules
   }))
   .map((r) => r.skill);
 
-// Always inject worktree lifecycle skills for non-question code requests
-if (!isQuestion && words.length >= 5) {
-  for (const skill of ["isolate-changes", "land-changes"]) {
-    if (!matched.includes(skill)) matched.push(skill);
-  }
+// Always inject git-workflow for non-question code requests — covers both phases
+// (Phase 1: Isolate at start, Phase 2: Land at end)
+if (!isQuestion && words.length >= 5 && !matched.includes("git-workflow")) {
+  matched.push("git-workflow");
 }
 
 trace(TAG, `skill match: ${matched.length ? matched.join(", ") : "none"}`);

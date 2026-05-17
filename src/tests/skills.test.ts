@@ -18,8 +18,8 @@ function skillTest(prompt: string): { skills: string[]; depth: string } {
   return { skills, depth };
 }
 
-// isolate-changes and land-changes are always injected for non-question code requests
-const CODE_DEFAULTS = ["isolate-changes", "land-changes"];
+// git-workflow is always injected for non-question code requests (covers both phases)
+const CODE_DEFAULTS = ["git-workflow"];
 const addDarkSkills = skillTest("add dark mode to the settings page").skills;
 check(r, "skill: 'add dark mode' → only lifecycle skills", addDarkSkills.every(s => CODE_DEFAULTS.includes(s)));
 const fixTypoSkills = skillTest("fix the typo on line 42").skills;

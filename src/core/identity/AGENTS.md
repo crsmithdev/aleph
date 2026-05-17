@@ -129,4 +129,4 @@ Store a session summary at end.
 <!-- end eval-target:commit -->
 - Never leave a dirty working tree at end of task. All changes committed or explicitly deferred by the user.
 - Push after changes are accepted; squash when merging.
-- **For any non-trivial code task:** invoke the `isolate-changes` skill at the start to set up a branch or worktree, and invoke `land-changes` when the work is complete.
+- **For any non-trivial code task:** invoke the `git-workflow` skill at the start (Phase 1: Isolate — branch/worktree setup) and again when the work is complete (Phase 2: Land — verify, merge, push, cleanup).
