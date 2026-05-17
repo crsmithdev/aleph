@@ -201,7 +201,7 @@ export function ChartControlChip(props: ChartControlChipProps) {
 
           {hasDataset && (
             <PopSection icon="stacked_line_chart" label="Series" hint={totalSeries != null ? `${totalSeries} total` : undefined}>
-              <div className="flex flex-wrap gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5 mb-2">
+              <div className="flex flex-wrap gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
                 {datasets!.map(d => (
                   <button
                     key={d.key}
@@ -213,7 +213,9 @@ export function ChartControlChip(props: ChartControlChipProps) {
                 ))}
               </div>
               {hasOptions && (
-                <div className="flex flex-wrap items-center gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
+                <>
+                  <div className="my-2.5 h-px bg-border-primary" />
+                  <div className="flex flex-wrap items-center gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
                   {DISPLAY_MODES.map(m => (
                     <button
                       key={m.value}
@@ -238,7 +240,8 @@ export function ChartControlChip(props: ChartControlChipProps) {
                       ))}
                     </>
                   )}
-                </div>
+                  </div>
+                </>
               )}
             </PopSection>
           )}

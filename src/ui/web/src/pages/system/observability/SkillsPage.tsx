@@ -42,6 +42,30 @@ const SKILL_DATASETS: { key: SkillDataset; label: string }[] = [
 
 import { GRAN_LABEL } from '../../../utils/chart-helpers';
 
+const PANEL_TITLE: Record<SkillDataset, string> = {
+  'by-skill': 'Invocations by Skill',
+  'by-type':  'Invocations by Type',
+  'sessions': 'Sessions by Skill',
+  'errors':   'Errors by Skill',
+  'latency':  'Latency by Skill',
+};
+
+const LEFT_METRIC: Record<SkillDataset, string> = {
+  'by-skill': 'invocations',
+  'by-type':  'invocations',
+  'sessions': 'sessions',
+  'errors':   'errors',
+  'latency':  'p50 latency',
+};
+
+const RANGE_PHRASE: Record<TimeRange, string> = {
+  'session': 'this session',
+  '1h':      'last hour',
+  '1d':      'last 24 hours',
+  '7d':      'last 7 days',
+  '30d':     'last 30 days',
+};
+
 export function SkillsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const range = (searchParams.get('range') as TimeRange) ?? '30d';
@@ -188,16 +212,6 @@ export function SkillsPage() {
     : dataset === 'sessions' ? 'Top Skills by Sessions'
     : null;
 
-  const timeSeriesTitle = dataset === 'by-type'
-    ? `${GRAN_LABEL[granularity]} Invocations by Type`
-    : dataset === 'sessions'
-    ? `${GRAN_LABEL[granularity]} Sessions by Skill`
-    : dataset === 'errors'
-    ? `${GRAN_LABEL[granularity]} Errors by Skill`
-    : dataset === 'latency'
-    ? `${GRAN_LABEL[granularity]} Latency by Skill`
-    : `${GRAN_LABEL[granularity]} Invocations by Skill`;
-
   const distTitle = dataset === 'errors' ? 'Top Skills by Errors'
     : dataset === 'latency' ? 'Top Skills by Latency'
     : donutTitle ?? 'Distribution';
@@ -338,42 +352,50 @@ export function SkillsPage() {
       </div>
 
       {data.byDay.length > 0 && (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[350px] flex flex-col">
+        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[400px] flex flex-col">
+          <div className="flex items-center justify-between gap-3 pb-3 mb-3 border-b border-border-primary shrink-0">
+            <h2 className="font-heading text-base font-medium text-text-primary truncate min-w-0">
+              {PANEL_TITLE[dataset]}
+              <span className="ml-2 text-xs font-sans font-normal text-text-muted">
+                {fmtNumber(activeSkills)} skills · {fmtNumber(totalInvocations)} events
+              </span>
+            </h2>
+            <ChartControlChip
+              range={range}
+              onRangeChange={setRange}
+              granularity={granularity}
+              onGranularityChange={setGranularity}
+              datasets={SKILL_DATASETS}
+              dataset={dataset}
+              onDatasetChange={(d) => setDataset(d as SkillDataset)}
+              filters={filters}
+              activeFilterCount={activeFilterCount}
+              displayMode={displayMode}
+              onDisplayModeChange={setDisplayMode}
+              displayN={displayN}
+              onDisplayNChange={setDisplayN}
+              totalSeries={totalSkillsForDataset}
+            />
+          </div>
           <div className="flex-1 min-h-0 flex">
             <div className="flex-1 min-w-0 flex flex-col">
               <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
-                <h3 className="font-heading text-lg font-medium text-text-secondary truncate min-w-0">{timeSeriesTitle}</h3>
-                <div className="flex items-center gap-2 shrink-0">
-                  <ChartControlChip
-                    range={range}
-                    onRangeChange={setRange}
-                    granularity={granularity}
-                    onGranularityChange={setGranularity}
-                    datasets={SKILL_DATASETS}
-                    dataset={dataset}
-                    onDatasetChange={(d) => setDataset(d as SkillDataset)}
-                    filters={filters}
-                    activeFilterCount={activeFilterCount}
-                    displayMode={displayMode}
-                    onDisplayModeChange={setDisplayMode}
-                    displayN={displayN}
-                    onDisplayNChange={setDisplayN}
-                    totalSeries={totalSkillsForDataset}
-                  />
-                  <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
-                    {(['line', 'bar'] as const).map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => setChartType(t)}
-                        className={clsx(
-                          'px-2 py-0.5 text-xs rounded-sm transition-colors whitespace-nowrap',
-                          chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
-                        )}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
+                <span className="text-sm font-medium text-text-secondary truncate min-w-0">
+                  {GRAN_LABEL[granularity]} {LEFT_METRIC[dataset]}
+                </span>
+                <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
+                  {(['line', 'bar'] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setChartType(t)}
+                      className={clsx(
+                        'px-2 py-0.5 text-xs rounded-sm transition-colors whitespace-nowrap',
+                        chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
+                      )}
+                    >
+                      {t}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="h-1" />
@@ -513,8 +535,11 @@ export function SkillsPage() {
             <div className="w-px bg-border-primary shrink-0 mx-5" />
 
             <div className="w-[360px] shrink-0 flex flex-col">
-              <div className="flex items-center justify-between mb-3 shrink-0">
-                <h3 className="font-heading text-lg font-medium text-text-secondary">{distTitle}</h3>
+              <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+                <span className="flex items-baseline gap-2 min-w-0 truncate">
+                  <span className="text-sm font-medium text-text-secondary truncate">{distTitle}</span>
+                  <span className="text-xs font-mono text-text-disabled whitespace-nowrap">{RANGE_PHRASE[range]}</span>
+                </span>
                 {showDonutBarToggle && (
                   <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
                     {(['donut', 'bar'] as const).map((t) => (
