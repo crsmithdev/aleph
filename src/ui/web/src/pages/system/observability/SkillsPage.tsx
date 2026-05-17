@@ -338,42 +338,42 @@ export function SkillsPage() {
       </div>
 
       {data.byDay.length > 0 && (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[380px] flex flex-col">
-          <div className="flex justify-end mb-2 shrink-0">
-            <ChartControlChip
-              range={range}
-              onRangeChange={setRange}
-              granularity={granularity}
-              onGranularityChange={setGranularity}
-              datasets={SKILL_DATASETS}
-              dataset={dataset}
-              onDatasetChange={(d) => setDataset(d as SkillDataset)}
-              filters={filters}
-              activeFilterCount={activeFilterCount}
-              displayMode={displayMode}
-              onDisplayModeChange={setDisplayMode}
-              displayN={displayN}
-              onDisplayNChange={setDisplayN}
-              totalSeries={totalSkillsForDataset}
-            />
-          </div>
+        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[350px] flex flex-col">
           <div className="flex-1 min-h-0 flex">
             <div className="flex-1 min-w-0 flex flex-col">
-              <div className="flex items-center justify-between mb-2 shrink-0">
-                <h3 className="font-heading text-lg font-medium text-text-secondary">{timeSeriesTitle}</h3>
-                <div className="flex gap-1">
-                  {(['line', 'bar'] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setChartType(t)}
-                      className={clsx(
-                        'px-2 py-0.5 text-xs rounded transition-colors',
-                        chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
-                      )}
-                    >
-                      {t}
-                    </button>
-                  ))}
+              <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+                <h3 className="font-heading text-lg font-medium text-text-secondary truncate min-w-0">{timeSeriesTitle}</h3>
+                <div className="flex items-center gap-2 shrink-0">
+                  <ChartControlChip
+                    range={range}
+                    onRangeChange={setRange}
+                    granularity={granularity}
+                    onGranularityChange={setGranularity}
+                    datasets={SKILL_DATASETS}
+                    dataset={dataset}
+                    onDatasetChange={(d) => setDataset(d as SkillDataset)}
+                    filters={filters}
+                    activeFilterCount={activeFilterCount}
+                    displayMode={displayMode}
+                    onDisplayModeChange={setDisplayMode}
+                    displayN={displayN}
+                    onDisplayNChange={setDisplayN}
+                    totalSeries={totalSkillsForDataset}
+                  />
+                  <div className="flex gap-1">
+                    {(['line', 'bar'] as const).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setChartType(t)}
+                        className={clsx(
+                          'px-2 py-0.5 text-xs rounded transition-colors',
+                          chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
               <div className="h-1" />
