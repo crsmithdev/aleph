@@ -384,7 +384,7 @@ try {
       `db = ${dbPath}`,
       `memory_db = ${join(DATA_DIR, "memory", "sqlite_vec.db")}`,
       `sessions = ${join(DATA_DIR, "sessions")}`,
-      `ratings = ${join(DATA_DIR, "signals", "ratings.jsonl")}`,
+      `events = ${join(DATA_DIR, "signals", "events.jsonl")}`,
       `backups = ${join(DATA_DIR, "backups")}`,
       ``,
       `[install]`,

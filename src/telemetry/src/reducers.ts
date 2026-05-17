@@ -591,6 +591,8 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     commits: number; compactions: number;
     hasSubagents: boolean; gitBranch?: string;
     firstUserMessage?: string;
+    intent?: string;
+    outcome?: string;
   }>();
 
   // Track which sessions have a pending skill injection (next user message should be skipped)
@@ -632,31 +634,40 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     if (e.kind === "message" && e.data?.role === "user") {
       bucket.messages++; bucket.userMessages++;
       sess.userMessages++;
+      const raw = (e.data?.text as string) ?? "";
+      // Clean a raw user-message text into a one-line display string.
+      // Returns undefined when the message is noise (system caveats, file paths, etc.).
+      const cleanUserMessage = (text: string): string | undefined => {
+        if (!text) return undefined;
+        const SKIP_COMMANDS = new Set(["clear", "reset"]);
+        if (text.includes("local-command-caveat")) return undefined;
+        if (text.includes("<command-name>")) {
+          const nameMatch = text.match(/<command-name>([^<]+)<\/command-name>/);
+          const argsMatch = text.match(/<command-args>([^<]*)<\/command-args>/);
+          if (!nameMatch) return undefined;
+          const name = nameMatch[1].trim();
+          const bare = name.replace(/^\//, "");
+          if (SKIP_COMMANDS.has(bare)) return undefined;
+          const args = (argsMatch?.[1] ?? "").trim();
+          const isDup = args === name || args === `/${bare}` || args === bare;
+          return isDup || !args ? name : `${name} ${args}`;
+        }
+        const cleaned = text.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 100);
+        const isUrl = /^https?:\/\/\S+$/.test(cleaned);
+        const isFilePath = /^[A-Za-z]:[\\\/]/.test(cleaned) || /^\/[\w/.-]+$/.test(cleaned);
+        const isInterrupted = cleaned === "[Request interrupted by user]";
+        const isMarkdownHeading = /^#+ /.test(text.trimStart());
+        if (!cleaned || isUrl || isFilePath || isInterrupted || isMarkdownHeading) return undefined;
+        return cleaned;
+      };
       if (pendingSkillInjection.get(e.sid)) {
         pendingSkillInjection.set(e.sid, false);
-      } else if (!sess.firstUserMessage && e.data?.text) {
-        const raw = e.data.text as string;
-        const SKIP_COMMANDS = new Set(["clear", "reset"]);
-        if (raw.includes("local-command-caveat")) { /* skip */ }
-        else if (raw.includes("<command-name>")) {
-          const nameMatch = raw.match(/<command-name>([^<]+)<\/command-name>/);
-          const argsMatch = raw.match(/<command-args>([^<]*)<\/command-args>/);
-          if (nameMatch) {
-            const name = nameMatch[1].trim();
-            const bare = name.replace(/^\//, "");
-            if (!SKIP_COMMANDS.has(bare)) {
-              const args = (argsMatch?.[1] ?? "").trim();
-              const isDup = args === name || args === `/${bare}` || args === bare;
-              sess.firstUserMessage = isDup || !args ? name : `${name} ${args}`;
-            }
-          }
-        } else {
-          const cleaned = raw.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 100);
-          const isUrl = /^https?:\/\/\S+$/.test(cleaned);
-          const isFilePath = /^[A-Za-z]:[\\\/]/.test(cleaned) || /^\/[\w/.-]+$/.test(cleaned);
-          const isInterrupted = cleaned === "[Request interrupted by user]";
-          const isMarkdownHeading = /^#+ /.test(raw.trimStart());
-          if (cleaned && !isUrl && !isFilePath && !isInterrupted && !isMarkdownHeading) sess.firstUserMessage = cleaned;
+      } else {
+        const display = cleanUserMessage(raw);
+        if (display) {
+          if (!sess.firstUserMessage) sess.firstUserMessage = display;
+          if (!sess.intent) sess.intent = display;
+          sess.outcome = display; // overwrites until the last message wins
         }
       }
     }
@@ -723,6 +734,8 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
       firstTimestamp: s.firstTs, lastTimestamp: s.lastTs,
       gitBranch: s.gitBranch, hasSubagents: s.hasSubagents,
       firstUserMessage: s.firstUserMessage,
+      intent: s.intent ? s.intent.slice(0, 100) : undefined,
+      outcome: s.outcome ? s.outcome.slice(0, 90) : undefined,
     }))
     .sort((a, b) => b.lastTimestamp.localeCompare(a.lastTimestamp));
 

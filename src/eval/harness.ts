@@ -439,7 +439,7 @@ export function makeTracker(result: EvalResult): HookCallback {
 
 // ── Eval telemetry ──────────────────────────────────────────────
 
-/** A hook event entry, matching the format of hook-events.jsonl. */
+/** A hook event entry, matching the format of events.jsonl. */
 export interface HookEvent {
   ts: string;
   hook: string;
@@ -484,7 +484,7 @@ export interface EvalConfig {
 
 /** Paths to telemetry files written by real hooks during an eval. */
 export interface EvalTelemetry {
-  /** Path to hook-events.jsonl written by real hooks via reportHook(). */
+  /** Path to events.jsonl written by real hooks via reportHook(). */
   hookEventsPath: string;
   /** Path to the signals directory (marker files, etc.). */
   signalsDir: string;
@@ -498,7 +498,7 @@ export interface EvalTelemetry {
  * Sets up a git-initialized sandbox, optionally registers real hook scripts
  * via settings.json, launches Claude via the Agent SDK, and observes
  * behavior through both programmatic hooks (EvalResult) and real hook
- * telemetry (hook-events.jsonl, marker files).
+ * telemetry (events.jsonl, marker files).
  *
  * Returns { result, telemetry } — the telemetry paths remain valid after
  * return (the data dir is NOT cleaned up; callers should clean up).
@@ -512,7 +512,7 @@ export async function runEval(config: EvalConfig): Promise<{ result: EvalResult;
   const dataRoot = config.dataRoot ?? mkdtempSync(join(tmpdir(), "eval-data-"));
   const signalsDir = join(dataRoot, "signals");
   mkdirSync(signalsDir, { recursive: true });
-  const hookEventsPath = join(signalsDir, "hook-events.jsonl");
+  const hookEventsPath = join(signalsDir, "events.jsonl");
 
   const telemetry: EvalTelemetry = { hookEventsPath, signalsDir, dataRoot };
 
@@ -605,7 +605,7 @@ export function formatResult(label: string, r: EvalResult): string {
  * realistic agent sessions.
  *
  * @param prompt - The task prompt to write to task.md
- * @param depth - "full" writes a directives.jsonl with isFull=true; "quick" leaves it absent
+ * @param depth - "full" injects FULL directives via events.jsonl; "quick" leaves it absent
  * @param dataRoot - Isolated data dir for this eval; hooks write telemetry here
  */
 export function setupHookScenarioSandbox(
@@ -635,15 +635,15 @@ export function setupHookScenarioSandbox(
     cwd: sandbox, stdio: "pipe", env: gitEnv,
   });
 
-  // If depth=full, write a directives.jsonl so the hook classifies as FULL
+  // If depth=full, write a FULL directive event so the hook classifies as FULL
   if (depth === "full") {
     const signalsDir = join(dataRoot, "signals");
     mkdirSync(signalsDir, { recursive: true });
-    const directivesPath = join(signalsDir, "directives.jsonl");
-    // Use a sentinel session ID that the hook can match; will be overridden
-    // per-trial by writeSessionDirective if needed, but write a broad catch-all
-    writeFileSync(directivesPath, JSON.stringify({
+    const eventsPath = join(signalsDir, "events.jsonl");
+    writeFileSync(eventsPath, JSON.stringify({
       ts: new Date().toISOString(),
+      hook: "routing-classify-submit",
+      event: "UserPromptSubmit",
       sessionId: "__hook-eval__",
       directives: ["full"],
     }) + "\n");
@@ -662,15 +662,17 @@ export function setupHookScenarioSandbox(
 }
 
 /**
- * Inject a FULL directive for a specific session ID into the sandbox's
- * directives.jsonl so the quality-stop-check-e2e hook sees isFull=true.
+ * Inject a FULL directive event for a specific session ID into the sandbox's
+ * events.jsonl so the quality-stop-check-e2e hook sees isFull=true.
  */
 export function writeSessionDirective(dataRoot: string, sessionId: string) {
   const signalsDir = join(dataRoot, "signals");
   mkdirSync(signalsDir, { recursive: true });
-  const directivesPath = join(signalsDir, "directives.jsonl");
-  appendFileSync(directivesPath, JSON.stringify({
+  const eventsPath = join(signalsDir, "events.jsonl");
+  appendFileSync(eventsPath, JSON.stringify({
     ts: new Date().toISOString(),
+    hook: "routing-classify-submit",
+    event: "UserPromptSubmit",
     sessionId,
     directives: ["full"],
   }) + "\n");

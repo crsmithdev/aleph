@@ -16,11 +16,10 @@
  *
  * Writes directive signals (full, skill:{name}) to the directives log.
  */
-import { readFileSync, appendFileSync, mkdirSync } from "fs";
+import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { dataPaths } from "../../data/src/paths.ts";
 
 interface SkillRule { skill: string; keywords: string[]; }
 
@@ -36,11 +35,11 @@ catch (e) {
   trace(TAG, msg);
   process.exit(1);
 }
-reportHook(TAG, "UserPromptSubmit", input.session_id);
 const prompt = input.prompt ?? "";
 const words = prompt.split(/\s+/);
 trace(TAG, `prompt: ${words.length} words`);
 if (words.length < 3) {
+  reportHook(TAG, "UserPromptSubmit", input.session_id);
   trace(TAG, "skip: < 3 words");
   process.exit(0);
 }
@@ -121,15 +120,12 @@ const directives: string[] = [];
 if (isFull) directives.push("full");
 for (const skill of matched) directives.push(`skill:${skill}`);
 if (directives.length > 0) {
-  const sessionId = input.session_id ?? "unknown";
-  try {
-    mkdirSync(dirname(dataPaths.directives), { recursive: true });
-    const line = JSON.stringify({ ts: new Date().toISOString(), sessionId, directives, promptWords: words.length });
-    appendFileSync(dataPaths.directives, line + "\n");
-    trace(TAG, `directive signal written: ${directives.join(", ")}`);
-  } catch (e) {
-    trace(TAG, `directive signal write failed: ${(e as Error).message}`);
-  }
+  reportHook(TAG, "UserPromptSubmit", input.session_id, {
+    meta: { directives, promptWords: words.length },
+  });
+  trace(TAG, `directive signal written: ${directives.join(", ")}`);
+} else {
+  reportHook(TAG, "UserPromptSubmit", input.session_id);
 }
 
 // Domain-specific doc reference injection.

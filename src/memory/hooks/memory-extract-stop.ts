@@ -15,6 +15,7 @@
  */
 import { existsSync, readFileSync } from "fs";
 import { resolve, dirname } from "path";
+import { createHash } from "crypto";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { dataPaths } from "../../data/src/paths.ts";
@@ -32,34 +33,101 @@ let input: any;
 const raw = await Bun.stdin.text();
 try { input = JSON.parse(raw); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
-reportHook(TAG, "Stop", input.session_id);
+
+const sessionId: string = input.session_id ?? "unknown";
 
 const transcript = parseTranscript(input.transcript_path, { textLimit: 1000 });
-if (!transcript) { trace(TAG, "skip: no transcript"); process.exit(0); }
+if (!transcript) {
+  reportHook(TAG, "Stop", sessionId);
+  trace(TAG, "skip: no transcript");
+  process.exit(0);
+}
 
 const edits = (transcript.toolCounts["Edit"] ?? 0) + (transcript.toolCounts["Write"] ?? 0) + (transcript.toolCounts["Bash"] ?? 0);
 const substantive = transcript.totalMessages >= 6 && edits >= 1;
-if (!substantive) { trace(TAG, `skip: not substantive (${transcript.totalMessages} msgs, ${edits} edits)`); process.exit(0); }
+if (!substantive) {
+  reportHook(TAG, "Stop", sessionId);
+  trace(TAG, `skip: not substantive (${transcript.totalMessages} msgs, ${edits} edits)`);
+  process.exit(0);
+}
+
+// Pull this session's feedback + re-edit signals from events.jsonl
+interface SessFeedback {
+  polarity?: "positive" | "negative";
+  trigger?: string;
+  prompt?: string;
+  prior_text?: string;
+  prior_tools?: string[];
+  prior_files?: string[];
+  session_id: string;
+}
+interface SessReEdit { type: "re-edit"; file: string; count: number; sessionId: string; }
+const sessFeedback: SessFeedback[] = [];
+const sessReEdits: SessReEdit[] = [];
+try {
+  if (existsSync(dataPaths.events)) {
+    const lines = readFileSync(dataPaths.events, "utf8").trim().split("\n");
+    for (const line of lines) {
+      if (!line) continue;
+      try {
+        const e = JSON.parse(line) as Record<string, unknown>;
+        if (e.sessionId !== sessionId) continue;
+        if (e.hook === "feedback-capture-submit" && e.polarity) {
+          sessFeedback.push({
+            polarity: e.polarity as "positive" | "negative",
+            trigger: e.trigger as string,
+            prompt: e.prompt as string,
+            prior_text: e.priorText as string,
+            prior_tools: e.priorTools as string[],
+            prior_files: e.priorFiles as string[],
+            session_id: sessionId,
+          });
+        } else if (e.hook === "signal-capture" && e.file && e.count) {
+          sessReEdits.push({
+            type: "re-edit",
+            file: e.file as string,
+            count: e.count as number,
+            sessionId,
+          });
+        }
+      } catch {}
+    }
+  }
+} catch (e) { trace(TAG, `events read failed: ${(e as Error).message}`); }
 
 const baseMemories = extractMemories(transcript);
-let toolSignalsText = "";
-let feedbackText = "";
-try { if (existsSync(dataPaths.toolSignals)) toolSignalsText = readFileSync(dataPaths.toolSignals, "utf8"); }
-catch (e) { trace(TAG, `tool signals read failed: ${(e as Error).message}`); }
-try { if (existsSync(dataPaths.feedback)) feedbackText = readFileSync(dataPaths.feedback, "utf8"); }
-catch (e) { trace(TAG, `feedback read failed: ${(e as Error).message}`); }
-
-const memories = augmentWithSignals(baseMemories, toolSignalsText, feedbackText, input.session_id ?? "unknown");
+const memories = augmentWithSignals(baseMemories, sessReEdits, sessFeedback, sessionId);
 trace(TAG, `extracted ${baseMemories.length} base + augmented to ${memories.length}`);
 
-if (memories.length === 0) { trace(TAG, "skip: no memories extracted"); process.exit(0); }
+if (memories.length === 0) {
+  reportHook(TAG, "Stop", sessionId);
+  trace(TAG, "skip: no memories extracted");
+  process.exit(0);
+}
+
+// Emit a memory_write provenance event per memory before spawning Python.
+// The memoryId matches mcp-memory's content_hash (sha256(content)) so the
+// observability layer can correlate to rows in the memory DB.
+for (const m of memories) {
+  const memoryId = createHash("sha256").update(m.content).digest("hex");
+  reportHook(TAG, "Stop", sessionId, {
+    meta: {
+      memoryId,
+      memoryType: m.memory_type_detail ?? "session",
+      source: m.source ?? "",
+      insight: m.insight ?? "",
+      content: m.content,
+      tags: m.tags,
+    },
+  });
+}
 
 if (!existsSync(VENV_PYTHON)) {
   trace(TAG, `skip: python not found at ${VENV_PYTHON}`);
   process.exit(0);
 }
 
-const memoriesWithSession = memories.map(m => ({ ...m, session_id: input.session_id ?? "unknown" }));
+const memoriesWithSession = memories.map(m => ({ ...m, session_id: sessionId }));
 const json = JSON.stringify(memoriesWithSession);
 trace(TAG, `spawning writer with ${json.length} bytes`);
 

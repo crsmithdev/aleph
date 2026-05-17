@@ -22,8 +22,7 @@
  *
  * Never blocks (always exit 0). All failures are swallowed with trace logging.
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync, statSync, appendFileSync } from "fs";
-import { ruleFingerprint, parseRuleLine } from "../rule-fingerprint.ts";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { execSync } from "child_process";
 import { Database } from "bun:sqlite";
@@ -188,58 +187,87 @@ try {
   trace(TAG, `compaction notes injection failed: ${(e as Error).message}`);
 }
 
-// Learned rules injection (auto-consolidated behavioral patterns)
-// Each rule that lands in the briefing is logged to rule-injections.jsonl so
-// the consolidator can later score effectiveness (recurrence vs. injection).
+// Recent user-correction injection: tail-scan events.jsonl for negative
+// feedback (≤30 days) and low ratings, inject verbatim. No LLM synthesis.
 try {
-  if (existsSync(dataPaths.learnedRules)) {
-    const stat = statSync(dataPaths.learnedRules);
-    if (Date.now() - stat.mtimeMs < 30 * 24 * 60 * 60 * 1000) {
-      const allRuleLines = readFileSync(dataPaths.learnedRules, "utf8")
-        .split("\n").filter(l => l.startsWith("- "));
+  if (existsSync(dataPaths.events)) {
+    type CorrectionItem = { ts: string; polarity: string; trigger: string; priorText: string; prompt: string };
+    type LowRating = { ts: string; rating: number; context: string; priorText: string };
+    const cutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const corrections: CorrectionItem[] = [];
+    const lowRatings: LowRating[] = [];
 
-      // Build the truncated block, but track per-line so we know which rules
-      // actually fit in the 600-char budget (truncated lines don't count as injected).
-      const BUDGET = 600;
-      const injectedLines: string[] = [];
-      let used = 0;
-      for (const line of allRuleLines) {
-        const cost = line.length + 1; // +1 for newline
-        if (used + cost > BUDGET) break;
-        injectedLines.push(line);
-        used += cost;
-      }
-      const ruleLines = injectedLines.join("\n");
+    // Tail the file to avoid loading megabytes of history every session start.
+    // 256 KB is enough for ~1k recent entries.
+    const TAIL_BYTES = 256 * 1024;
+    let chunk: string;
+    try {
+      const fd = readFileSync(dataPaths.events);
+      chunk = fd.byteLength > TAIL_BYTES
+        ? fd.subarray(fd.byteLength - TAIL_BYTES).toString("utf8")
+        : fd.toString("utf8");
+    } catch {
+      chunk = "";
+    }
 
-      if (ruleLines) {
-        out.push("\n=== Learned Behavioral Rules ===");
-        out.push(ruleLines);
-        out.push("=========================");
-        trace(TAG, `injected learned-rules (${ruleLines.length} chars, ${injectedLines.length} rules)`);
+    // Skip the first (likely truncated) line when we sliced into the middle.
+    const lines = chunk.split("\n");
+    if (chunk.length === TAIL_BYTES) lines.shift();
 
-        // Log each fully-injected rule with a stable fingerprint
-        const sessionId = input?.session_id ?? "unknown";
-        const ts = new Date().toISOString();
-        const records: string[] = [];
-        for (const line of injectedLines) {
-          const parsed = parseRuleLine(line);
-          if (!parsed) continue;
-          records.push(JSON.stringify({
-            timestamp: ts,
-            session_id: sessionId,
-            rule_hash: ruleFingerprint(parsed.text),
-            rule_text: parsed.text.slice(0, 200),
-            polarity: parsed.polarity ?? "avoid",
-          }));
+    for (const line of lines) {
+      if (!line) continue;
+      try {
+        const e = JSON.parse(line) as Record<string, unknown>;
+        const ts = e.ts as string | undefined;
+        if (!ts || new Date(ts).getTime() < cutoffMs) continue;
+        if (e.hook === "feedback-capture-submit" && e.polarity === "negative") {
+          corrections.push({
+            ts,
+            polarity: "negative",
+            trigger: (e.trigger as string) ?? "",
+            priorText: (e.priorText as string) ?? "",
+            prompt: (e.prompt as string) ?? "",
+          });
+        } else if (e.hook === "rating-capture-submit" && typeof e.rating === "number" && (e.rating as number) <= 3) {
+          lowRatings.push({
+            ts,
+            rating: e.rating as number,
+            context: (e.context as string) ?? "",
+            priorText: (e.priorText as string) ?? "",
+          });
         }
-        if (records.length > 0) {
-          try { appendFileSync(dataPaths.ruleInjections, records.join("\n") + "\n"); }
-          catch (e) { trace(TAG, `injection log write failed: ${(e as Error).message}`); }
-        }
-      }
+      } catch {}
+    }
+
+    // Newest first, cap at the same 600-char budget as the previous injection.
+    corrections.sort((a, b) => b.ts.localeCompare(a.ts));
+    lowRatings.sort((a, b) => b.ts.localeCompare(a.ts));
+    const BUDGET = 600;
+    const injectedLines: string[] = [];
+    let used = 0;
+    for (const c of corrections) {
+      const reactingTo = c.priorText ? ` reacting to: ${c.priorText.slice(0, 60)}` : "";
+      const line = `- [avoid] "${c.prompt.slice(0, 100)}"${reactingTo}`;
+      if (used + line.length + 1 > BUDGET) break;
+      injectedLines.push(line);
+      used += line.length + 1;
+    }
+    for (const r of lowRatings) {
+      const reactingTo = r.priorText ? ` reacting to: ${r.priorText.slice(0, 60)}` : "";
+      const line = `- [low rating ${r.rating}/10] ${r.context}${reactingTo}`;
+      if (used + line.length + 1 > BUDGET) break;
+      injectedLines.push(line);
+      used += line.length + 1;
+    }
+
+    if (injectedLines.length > 0) {
+      out.push("\n=== Recent User Corrections ===");
+      out.push(injectedLines.join("\n"));
+      out.push("=========================");
+      trace(TAG, `injected ${injectedLines.length} corrections (${used} chars)`);
     }
   }
-} catch (e) { trace(TAG, `learned-rules injection failed: ${(e as Error).message}`); }
+} catch (e) { trace(TAG, `correction injection failed: ${(e as Error).message}`); }
 
 // Fire-and-forget memory snapshot for observability
 try {
@@ -306,6 +334,21 @@ try {
   if (existsSync(memDbPath)) {
     const memDb = new Database(memDbPath, { readonly: true });
 
+    // Exclude auto_extract-tagged memories until 20+ explicit memories exist
+    // (auto-extracted entries are noisy after the post-wipe rebuild period).
+    let excludeAutoExtract = false;
+    try {
+      const clean = memDb.query<{ n: number }, []>(
+        `SELECT COUNT(*) AS n FROM memories WHERE deleted_at IS NULL AND tags NOT LIKE '%auto_extract%'`
+      ).get();
+      excludeAutoExtract = (clean?.n ?? 0) < 20;
+      trace(TAG, `auto_extract filter: ${excludeAutoExtract ? "ON" : "OFF"} (${clean?.n ?? 0} clean memories)`);
+    } catch { /* tolerate */ }
+
+    const autoExtractFilter = excludeAutoExtract
+      ? " AND tags NOT LIKE '%auto_extract%'"
+      : "";
+
     // Attempt 1: FTS5 full-text search (if memories_fts virtual table exists)
     if (searchTerms.size > 0) {
       try {
@@ -322,7 +365,7 @@ try {
             SELECT m.content, m.memory_type, m.tags
             FROM memories m
             JOIN memories_fts fts ON m.id = fts.rowid
-            WHERE fts.content MATCH ? AND m.deleted_at IS NULL
+            WHERE fts.content MATCH ? AND m.deleted_at IS NULL${autoExtractFilter}
             ORDER BY rank, m.updated_at DESC
             LIMIT 12
           `).all(ftsQuery) as typeof memories;
@@ -342,7 +385,7 @@ try {
         memories = memDb.query(`
           SELECT content, memory_type, tags
           FROM memories
-          WHERE deleted_at IS NULL AND (${conditions})
+          WHERE deleted_at IS NULL${autoExtractFilter} AND (${conditions})
           ORDER BY updated_at DESC
           LIMIT 10
         `).all(...params) as typeof memories;
@@ -356,7 +399,7 @@ try {
     const recent = memDb.query(`
       SELECT content, memory_type, tags
       FROM memories
-      WHERE deleted_at IS NULL
+      WHERE deleted_at IS NULL${autoExtractFilter}
       ORDER BY updated_at DESC
       LIMIT 5
     `).all() as typeof memories;

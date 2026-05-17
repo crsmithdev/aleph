@@ -19,7 +19,7 @@ function cleanupDir(dir: string): void {
   try { rmSync(dir, { recursive: true, force: true }); } catch {}
 }
 
-const ISO = { includeDirectives: false as const };
+const ISO = { includeEvents: false as const };
 
 describe("parser", () => {
   let baseDir: string;

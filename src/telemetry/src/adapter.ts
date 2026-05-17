@@ -540,39 +540,86 @@ export interface AdaptOptions {
   since?: Date;
   projects?: string[];
   baseDir?: string;
-  includeDirectives?: boolean;  // default true; set false for fixture-isolated tests
+  includeEvents?: boolean;  // default true; set false for fixture-isolated tests
 }
 
 const fileCache = new Map<string, { mtimeMs: number; events: TelemetryEvent[] }>();
 
-function readDirectives(since?: Date): TelemetryEvent[] {
-  const filePath = dataPaths.directives;
+/**
+ * Map a hook-events.jsonl entry to a TelemetryEvent kind.
+ * Centralizes the schema for `events.jsonl` consumers (routes/observability.ts
+ * filters by these kinds; no route reads the file directly).
+ */
+function eventKindFor(hook: string, entry: Record<string, unknown>): { kind: string; name: string } {
+  // Gate hooks self-identify by setting `tier` (verify-gate, quality-check) or
+  // a `decision` value with a tier field. The git-require-edit hook is its own kind.
+  if (hook === "git-require-edit") return { kind: "gate_marker", name: hook };
+  if (hook === "feedback-capture-submit" && entry.polarity) {
+    return { kind: "feedback", name: (entry.polarity as string) || hook };
+  }
+  if (hook === "rating-capture-submit" && entry.rating !== undefined) {
+    return { kind: "rating", name: `rating:${entry.rating}` };
+  }
+  if (hook === "signal-capture" && entry.file) {
+    return { kind: "re_edit", name: entry.file as string };
+  }
+  if (hook === "memory-extract-stop" && entry.memoryId) {
+    return { kind: "memory_write", name: (entry.memoryType as string) || "session" };
+  }
+  if (hook === "routing-classify-submit" && Array.isArray(entry.directives)) {
+    return { kind: "directive", name: (entry.directives as string[]).join(", ") };
+  }
+  if (hook === "context-backup-precompact" && (entry.workingFiles || entry.recentPrompts)) {
+    return { kind: "compaction", name: hook };
+  }
+  // Anything with a tier/decision pair from a quality / verify gate
+  const tier = entry.tier;
+  const decision = entry.decision as string | undefined;
+  if (tier !== undefined && decision && ["block", "pass", "skip", "advisory"].includes(decision)) {
+    return { kind: "gate", name: hook };
+  }
+  // verify-gate / quality-check-stop entries without explicit tier
+  if (hook.includes("quality-check") || hook.includes("verify-gate")) {
+    return { kind: "gate", name: hook };
+  }
+  return { kind: "hook_event", name: hook };
+}
+
+function readEvents(since?: Date): TelemetryEvent[] {
+  const filePath = dataPaths.events;
   if (!existsSync(filePath)) return [];
   const cached = fileCache.get(filePath);
   const stat = statSync(filePath);
-  if (cached && cached.mtimeMs === stat.mtimeMs) return cached.events;
+  if (cached && cached.mtimeMs === stat.mtimeMs) {
+    if (since) {
+      const cutoff = since.toISOString();
+      return cached.events.filter((e) => e.ts >= cutoff);
+    }
+    return cached.events;
+  }
 
   const events: TelemetryEvent[] = [];
   try {
     const lines = readFileSync(filePath, "utf-8").split("\n").filter(Boolean);
     for (const line of lines) {
       try {
-        const entry = JSON.parse(line) as { ts: string; sessionId: string; directives: string[]; promptWords: number };
-        if (since && entry.ts < since.toISOString()) continue;
-        events.push({
-          ts: entry.ts,
-          sid: entry.sessionId,
-          kind: "directive",
-          name: entry.directives.join(", "),
-          data: {
-            directives: entry.directives,
-            promptWords: entry.promptWords,
-          },
-        });
+        const entry = JSON.parse(line) as Record<string, unknown>;
+        const ts = (entry.ts as string) || "";
+        const hook = (entry.hook as string) || "unknown";
+        const sid = (entry.sessionId as string) || "unknown";
+        if (!ts) continue;
+        const { kind, name } = eventKindFor(hook, entry);
+        // Strip the envelope fields from the data payload so callers see a clean meta surface.
+        const { ts: _ts, hook: _hook, event: _event, sessionId: _sid, ...rest } = entry;
+        events.push({ ts, sid, kind, name, data: { hook, event: entry.event as string | undefined, ...rest } });
       } catch {}
     }
   } catch {}
   fileCache.set(filePath, { mtimeMs: stat.mtimeMs, events });
+  if (since) {
+    const cutoff = since.toISOString();
+    return events.filter((e) => e.ts >= cutoff);
+  }
   return events;
 }
 
@@ -616,7 +663,7 @@ export function adaptAllSessions(opts?: AdaptOptions): TelemetryEvent[] {
     allEvents.push(...adaptFile(file, project, opts?.since));
   }
 
-  if (opts?.includeDirectives !== false) allEvents.push(...readDirectives(opts?.since));
+  if (opts?.includeEvents !== false) allEvents.push(...readEvents(opts?.since));
   corpusCache = { events: allEvents, expiresAt: Date.now() + 60_000, key };
   return allEvents;
 }

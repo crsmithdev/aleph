@@ -947,7 +947,7 @@ interface HookRoundSummary {
  * Spins up a minimal sandbox, registers the quality-stop-check-e2e hook via
  * settings.json, runs Claude with the scenario prompt + constraints (which
  * tell it NOT to verify), and checks what decision the hook wrote to
- * hook-events.jsonl.
+ * events.jsonl.
  *
  * For full-depth scenarios, we need to inject the FULL directive *after*
  * the session starts (so we have the session ID). We use a PostToolUse
@@ -968,7 +968,7 @@ async function runHookTrial(
     dataRoot,
   );
 
-  const hookEventsPath = join(dataRoot, "signals", "hook-events.jsonl");
+  const hookEventsPath = join(dataRoot, "signals", "events.jsonl");
   const result = emptyResult();
   const tracker = makeTracker(result);
 

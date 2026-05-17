@@ -16,14 +16,12 @@
  * If rating ≤ 3 → emit a reminder to store what went wrong via memory_store.
  * No match → exit 0 silently.
  */
-import { appendFileSync } from "fs";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { dataPaths, ensureDataDirs } from "../../data/src/paths.ts";
+import { ensureDataDirs } from "../../data/src/paths.ts";
 import { parseTranscript } from "../parse-transcript.ts";
 
 const TAG = "rating-capture-submit";
-const ratingsFile = Bun.env.RATINGS_FILE ?? dataPaths.ratings;
 ensureDataDirs();
 
 let input: any;
@@ -35,9 +33,9 @@ catch (e) {
   trace(TAG, msg);
   process.exit(0);
 }
-reportHook(TAG, "UserPromptSubmit", input.session_id);
 const prompt = (input.prompt ?? "").trim();
 if (!prompt) {
+  reportHook(TAG, "UserPromptSubmit", input.session_id);
   trace(TAG, "skip: empty prompt");
   process.exit(0);
 }
@@ -67,6 +65,7 @@ if (/^(10|[1-9])\s*\/\s*10$/.test(prompt)) {
   }
 }
 if (!rating) {
+  reportHook(TAG, "UserPromptSubmit", input.session_id);
   trace(TAG, "no rating pattern found");
   process.exit(0);
 }
@@ -95,19 +94,18 @@ if (input.transcript_path) {
 }
 
 const ctx = prompt.slice(0, 100).replace(/"/g, "'");
-const entry = JSON.stringify({
-  timestamp: new Date().toISOString(),
-  session_id: input.session_id ?? "unknown",
-  rating: Number(rating),
-  type: "explicit",
-  context: ctx,
-  prior_text: priorText,
-  prior_tools: priorTools,
-  prior_files: priorFiles,
-  turn_index: turnIndex,
+reportHook(TAG, "UserPromptSubmit", input.session_id, {
+  meta: {
+    rating: Number(rating),
+    ratingType: "explicit",
+    context: ctx,
+    priorText,
+    priorTools,
+    priorFiles,
+    turnIndex,
+  },
 });
-appendFileSync(ratingsFile, entry + "\n");
-trace(TAG, `recorded: ${rating}/10 → ${ratingsFile}`);
+trace(TAG, `recorded: ${rating}/10`);
 
 if (Number(rating) <= 3) {
   console.log(`[Construct] Low rating (${rating}) — store what went wrong via memory_store`);

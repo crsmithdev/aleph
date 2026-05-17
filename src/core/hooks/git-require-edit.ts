@@ -72,6 +72,11 @@ try {
   mkdirSync(dirname(markerPath), { recursive: true });
   writeFileSync(markerPath, JSON.stringify({ ts: new Date().toISOString(), groups: groupCount, files: fileCount, areas: groupList }));
 } catch {}
+reportHook(TAG, "PreToolUse", input.session_id, {
+  decision: "advisory",
+  detail: `${fileCount}f/${groupCount}g`,
+  meta: { groups: groupCount, files: fileCount, areas: groupList },
+});
 trace(TAG, `advisory: ${groupCount} groups`);
 console.log(`[Construct] ${fileCount} uncommitted files across ${groupCount} areas (${groupList}). Consider committing before starting a new logical change.`);
 process.exit(0);

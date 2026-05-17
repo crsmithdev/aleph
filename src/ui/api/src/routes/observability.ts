@@ -228,7 +228,7 @@ interface SessionGateInfo {
 
 function readSessionGateInfo(): Map<string, SessionGateInfo> {
   const map = new Map<string, SessionGateInfo>();
-  const hookEventsPath = resolve(dataPaths.signals, 'hook-events.jsonl');
+  const hookEventsPath = dataPaths.events;
   if (!existsSync(hookEventsPath)) return map;
   try {
     const lines = readFileSync(hookEventsPath, 'utf-8').split('\n').filter(Boolean);
@@ -257,7 +257,7 @@ function toGateInfo(info: SessionGateInfo | undefined): { inlineOverride: boolea
 
 function readSelfReportedHookCounts(startDate?: string): Map<string, { count: number; event: string }> {
   const counts = new Map<string, { count: number; event: string }>();
-  const hookEventsPath = resolve(dataPaths.signals, 'hook-events.jsonl');
+  const hookEventsPath = dataPaths.events;
   if (!existsSync(hookEventsPath)) return counts;
   try {
     const lines = readFileSync(hookEventsPath, 'utf-8').split('\n').filter(Boolean);
@@ -477,7 +477,7 @@ type HookGatingStat = {
 };
 
 function readHookGatingStats(startDate?: string): Record<string, HookGatingStat> {
-  const hookEventsPath = dataPaths.hookEvents;
+  const hookEventsPath = dataPaths.events;
   if (!existsSync(hookEventsPath)) return {};
   type Entry = { ts: string; hook: string; event: string; sessionId: string; decision?: string; detail?: string };
   type HookAccum = {
@@ -538,89 +538,6 @@ function readHookGatingStats(startDate?: string): Record<string, HookGatingStat>
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Session files reader (from context-save-stop.ts output)
-// ---------------------------------------------------------------------------
-
-type SessionFileSummary = {
-  filename: string;
-  timestamp: string; // ISO from filename
-  intent: string;
-  outcome: string;
-  milestones: string[];
-  notes: string[];
-};
-
-function parseSessionFile(content: string): Pick<SessionFileSummary, 'intent' | 'outcome' | 'milestones' | 'notes'> {
-  const lines = content.split('\n');
-  const intent = lines.find(l => l.startsWith('- Intent:'))?.replace('- Intent:', '').trim() ?? '';
-  const outcome = lines.find(l => l.startsWith('- Outcome:'))?.replace('- Outcome:', '').trim() ?? '';
-  const milestonesIdx = lines.findIndex(l => l.trimStart() === '- Milestones:');
-  const milestones = milestonesIdx === -1 ? [] : lines
-    .slice(milestonesIdx + 1)
-    .filter(l => l.trim().startsWith('- ') && !l.trim().startsWith('- Tools:') && !l.trim().startsWith('- Edits:') && !l.trim().startsWith('- Messages:') && !l.trim().startsWith('- Notes:') && !l.trim().startsWith('- Intent:') && !l.trim().startsWith('- Outcome:'))
-    .map(l => l.trim().replace(/^- /, ''))
-    .slice(0, 4);
-  const notesIdx = lines.findIndex(l => l.trimStart() === '- Notes:');
-  const notes = notesIdx === -1 ? [] : lines
-    .slice(notesIdx + 1)
-    .filter(l => l.trim().startsWith('- '))
-    .map(l => l.trim().replace(/^- /, ''))
-    .slice(0, 3);
-  return { intent, outcome, milestones, notes };
-}
-
-function filenameToTimestamp(filename: string): string | null {
-  // 2026-04-13-141748 → 2026-04-13T14:17:48Z
-  const m = filename.match(/^(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})(\d{2})/);
-  if (!m) return null;
-  return `${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`;
-}
-
-function readSessionFiles(limit = 200): SessionFileSummary[] {
-  const dir = dataPaths.sessions;
-  if (!existsSync(dir)) return [];
-  try {
-    const files = readdirSync(dir)
-      .filter(f => f.endsWith('.md') && !f.startsWith('.'))
-      .sort()
-      .reverse()
-      .slice(0, limit);
-    const results: SessionFileSummary[] = [];
-    for (const f of files) {
-      const timestamp = filenameToTimestamp(f.replace('.md', ''));
-      if (!timestamp) continue;
-      try {
-        const content = readFileSync(resolve(dir, f), 'utf-8');
-        results.push({ filename: f, timestamp, ...parseSessionFile(content) });
-      } catch {}
-    }
-    return results;
-  } catch { return []; }
-}
-
-// Build a map: ISO-timestamp → session file summary for fast lookup
-function buildSessionFileMap(files: SessionFileSummary[]): Map<string, SessionFileSummary> {
-  return new Map(files.map(f => [f.timestamp, f]));
-}
-
-// Match a session by lastTimestamp to the closest session file (within 120s)
-function matchSessionFile(
-  lastTimestamp: string,
-  fileMap: Map<string, SessionFileSummary>,
-  sortedTimestamps: string[],
-): SessionFileSummary | undefined {
-  const target = new Date(lastTimestamp).getTime();
-  let best: SessionFileSummary | undefined;
-  let bestDelta = 120_000;
-  for (const ts of sortedTimestamps) {
-    const delta = Math.abs(new Date(ts).getTime() - target);
-    if (delta < bestDelta) { bestDelta = delta; best = fileMap.get(ts); }
-    if (delta > 120_000) continue;
-  }
-  return best;
-}
-
 function readMarkerFileStats(): Record<string, { writes: number; clears: number; activeNow: boolean }> {
   const stats: Record<string, { writes: number; clears: number; activeNow: boolean }> = {};
   // Check require-e2e marker
@@ -639,18 +556,25 @@ function readMarkerFileStats(): Record<string, { writes: number; clears: number;
     } catch {}
   }
 
-  // Check git commit markers
+  // Check git commit markers — activeNow is live (file scan); writes come from gate_marker events
+  let activeNow = false;
   try {
     const signalFiles = readdirSync(dataPaths.signals);
-    const commitMarkers = signalFiles.filter(f => f.startsWith('git-require-edit-'));
-    stats['git-require-edit'] = {
-      writes: 0,
-      clears: 0,
-      activeNow: commitMarkers.length > 0,
-    };
-  } catch {
-    stats['git-require-edit'] = { writes: 0, clears: 0, activeNow: false };
-  }
+    activeNow = signalFiles.some(f => f.startsWith('git-require-edit-'));
+  } catch {}
+  let writes = 0;
+  try {
+    if (existsSync(dataPaths.events)) {
+      const lines = readFileSync(dataPaths.events, 'utf-8').split('\n').filter(Boolean);
+      for (const line of lines) {
+        try {
+          const e = JSON.parse(line) as Record<string, unknown>;
+          if (e.hook === 'git-require-edit' && e.groups !== undefined) writes++;
+        } catch {}
+      }
+    }
+  } catch {}
+  stats['git-require-edit'] = { writes, clears: 0, activeNow };
 
   return stats;
 }
@@ -785,19 +709,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     return cachedResult(req.url, 300_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateSessions(obsReq.telemetryEntries, obsReq.granularity));
       const gateMap = readSessionGateInfo();
-      const sessionFiles = readSessionFiles(500);
-      const fileMap = buildSessionFileMap(sessionFiles);
-      const sortedTimestamps = [...fileMap.keys()].sort();
       for (const session of result.sessions) {
         session.gateInfo = toGateInfo(gateMap.get(session.sessionId));
-        if (session.lastTimestamp) {
-          const match = matchSessionFile(session.lastTimestamp, fileMap, sortedTimestamps);
-          if (match) {
-            session.intent = match.intent ? match.intent.slice(0, 100) : match.intent;
-            session.outcome = match.outcome ? match.outcome.slice(0, 90) : match.outcome;
-            // sessionNotes omitted from list view
-          }
-        }
       }
       return { ...result, queryTimeMs };
     });
@@ -1004,136 +917,6 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       }
     },
   );
-
-  // ---------------------------------------------------------------------------
-  // Signal file endpoints (ratings, directives, tool-signals, consolidation)
-  // ---------------------------------------------------------------------------
-
-  app.get('/signals/ratings', async () => {
-    return cachedResult('/signals/ratings', 60_000, () => {
-      const path = dataPaths.ratings;
-      if (!existsSync(path)) return { ratings: [], total: 0 };
-      try {
-        type RatingEntry = { timestamp: string; rating: string; type?: string; context?: string };
-        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
-        const ratings: RatingEntry[] = [];
-        const byType: Record<string, number> = {};
-        const byDay: Record<string, { positive: number; negative: number }> = {};
-        for (const line of lines) {
-          try {
-            const entry = JSON.parse(line) as RatingEntry;
-            ratings.push(entry);
-            const t = entry.type ?? 'unknown';
-            byType[t] = (byType[t] ?? 0) + 1;
-            const day = entry.timestamp?.slice(0, 10);
-            if (day) {
-              if (!byDay[day]) byDay[day] = { positive: 0, negative: 0 };
-              if (entry.rating === 'positive' || entry.rating === '👍') byDay[day].positive++;
-              else byDay[day].negative++;
-            }
-          } catch {}
-        }
-        ratings.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-        const byDayArr = Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v }));
-        return { ratings: ratings.slice(0, 200), total: ratings.length, byType, byDay: byDayArr };
-      } catch { return { ratings: [], total: 0 }; }
-    });
-  });
-
-  app.get('/signals/directives', async () => {
-    return cachedResult('/signals/directives', 60_000, () => {
-      const path = dataPaths.directives;
-      if (!existsSync(path)) return { directives: [], total: 0 };
-      try {
-        type DirectiveEntry = { ts: string; sessionId: string; directives: string[]; promptWords?: number };
-        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
-        const directives: DirectiveEntry[] = [];
-        const depthCounts: Record<string, number> = {};
-        const skillHits: Record<string, number> = {};
-        const byDay: Record<string, { full: number; quick: number; total: number }> = {};
-        for (const line of lines) {
-          try {
-            const entry = JSON.parse(line) as DirectiveEntry;
-            directives.push(entry);
-            const day = entry.ts?.slice(0, 10);
-            if (day) {
-              if (!byDay[day]) byDay[day] = { full: 0, quick: 0, total: 0 };
-              byDay[day].total++;
-            }
-            for (const d of entry.directives ?? []) {
-              const upper = d.toUpperCase();
-              if (upper.startsWith('FULL')) {
-                depthCounts['FULL'] = (depthCounts['FULL'] ?? 0) + 1;
-                if (day) byDay[day].full++;
-              } else if (upper.startsWith('QUICK')) {
-                depthCounts['QUICK'] = (depthCounts['QUICK'] ?? 0) + 1;
-                if (day) byDay[day].quick++;
-              }
-              // Skill matches: entries like "SKILL:research" or just skill names
-              const skillMatch = d.match(/^(?:SKILL:|skill:)(.+)$/i);
-              if (skillMatch) skillHits[skillMatch[1]] = (skillHits[skillMatch[1]] ?? 0) + 1;
-            }
-          } catch {}
-        }
-        directives.sort((a, b) => b.ts.localeCompare(a.ts));
-        const byDayArr = Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v }));
-        const topSkills = Object.entries(skillHits).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([skill, count]) => ({ skill, count }));
-        return { directives: directives.slice(0, 200), total: directives.length, depthCounts, byDay: byDayArr, topSkills };
-      } catch { return { directives: [], total: 0 }; }
-    });
-  });
-
-  app.get('/signals/tool-signals', async () => {
-    return cachedResult('/signals/tool-signals', 60_000, () => {
-      const path = dataPaths.toolSignals;
-      if (!existsSync(path)) return { signals: [], byFile: [], total: 0 };
-      try {
-        type ToolSignalEntry = { type: string; file: string; count: number; sessionId: string; timestamp: string };
-        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
-        const signals: ToolSignalEntry[] = [];
-        const fileCounts: Record<string, number> = {};
-        for (const line of lines) {
-          try {
-            const entry = JSON.parse(line) as ToolSignalEntry;
-            signals.push(entry);
-            if (entry.type === 're-edit') fileCounts[entry.file] = (fileCounts[entry.file] ?? 0) + 1;
-          } catch {}
-        }
-        signals.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-        const byFile = Object.entries(fileCounts).sort((a, b) => b[1] - a[1]).slice(0, 50).map(([file, count]) => ({ file, count }));
-        return { signals: signals.slice(0, 200), byFile, total: signals.length };
-      } catch { return { signals: [], byFile: [], total: 0 }; }
-    });
-  });
-
-  app.get('/signals/consolidation', async () => {
-    return cachedResult('/signals/consolidation', 30_000, () => {
-      const statePath = dataPaths.consolidationState;
-      const rulesPath = dataPaths.learnedRules;
-      let state: { lastRun?: string; lastMemoryCount?: number } = {};
-      let rules: string[] = [];
-      if (existsSync(statePath)) {
-        try { state = JSON.parse(readFileSync(statePath, 'utf-8')); } catch {}
-      }
-      if (existsSync(rulesPath)) {
-        try {
-          rules = readFileSync(rulesPath, 'utf-8')
-            .split('\n')
-            .filter(l => l.startsWith('- '))
-            .map(l => l.slice(2).trim());
-        } catch {}
-      }
-      return { state, rules, rulesPath: existsSync(rulesPath) ? rulesPath : null };
-    });
-  });
-
-  app.get<{ Querystring: { limit?: string } }>('/signals/sessions', async (req) => {
-    return cachedResult(req.url, 60_000, () => {
-      const limit = Math.min(Math.max(parseInt(req.query.limit || '100', 10) || 100, 1), 500);
-      const files = readSessionFiles(limit);
-      return { sessions: files, total: files.length };
-    });
-  });
 
   app.get<{ Querystring: QueryParams }>('/compaction', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
@@ -1643,22 +1426,72 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         }
       } catch { /* DB unavailable — leave 0 */ }
 
-      const path = dataPaths.learningProvenance;
-      if (!existsSync(path)) return { items: [], total: 0, memoryCount };
-      try {
-        type LearningItem = {
-          ts: string; sessionId: string; memoryId?: string;
-          type: string; source: string; insight: string;
-          content: string; tags: string;
-        };
-        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
-        const items: LearningItem[] = [];
-        for (const line of lines) {
-          try { items.push(JSON.parse(line) as LearningItem); } catch {}
+      // Provenance comes from telemetry memory_write events (one per stored memory).
+      type LearningItem = {
+        ts: string; sessionId: string; memoryId?: string;
+        type: string; source: string; insight: string;
+        content: string; tags: string;
+      };
+      const entries = parseSessionsForDays(days);
+      const items: LearningItem[] = [];
+      for (const e of entries) {
+        if (e.kind !== 'memory_write' || !e.data) continue;
+        items.push({
+          ts: e.ts,
+          sessionId: e.sid,
+          memoryId: e.data.memoryId as string | undefined,
+          type: (e.data.memoryType as string) ?? 'session',
+          source: (e.data.source as string) ?? '',
+          insight: (e.data.insight as string) ?? '',
+          content: (e.data.content as string) ?? '',
+          tags: (e.data.tags as string) ?? '',
+        });
+      }
+      items.sort((a, b) => b.ts.localeCompare(a.ts));
+      return { items: items.slice(0, 200), total: items.length, memoryCount };
+    });
+  });
+
+  app.get('/learning/directives', async () => {
+    return cachedResult('/learning/directives', 60_000, () => {
+      type DirectiveEntry = { ts: string; sessionId: string; directives: string[]; promptWords?: number };
+      const directives: DirectiveEntry[] = [];
+      const depthCounts: Record<string, number> = {};
+      const skillHits: Record<string, number> = {};
+      const byDay: Record<string, { full: number; quick: number; total: number }> = {};
+
+      for (const e of parseSessionsForDays(30)) {
+        if (e.kind !== 'directive' || !e.data) continue;
+        const dirArr = (e.data.directives as string[]) ?? [];
+        directives.push({
+          ts: e.ts,
+          sessionId: e.sid,
+          directives: dirArr,
+          promptWords: e.data.promptWords as number | undefined,
+        });
+        const day = e.ts.slice(0, 10);
+        if (day) {
+          if (!byDay[day]) byDay[day] = { full: 0, quick: 0, total: 0 };
+          byDay[day].total++;
         }
-        items.sort((a, b) => b.ts.localeCompare(a.ts));
-        return { items: items.slice(0, 200), total: items.length, memoryCount };
-      } catch { return { items: [], total: 0, memoryCount }; }
+        for (const d of dirArr) {
+          const upper = d.toUpperCase();
+          if (upper.startsWith('FULL')) {
+            depthCounts['FULL'] = (depthCounts['FULL'] ?? 0) + 1;
+            if (day) byDay[day].full++;
+          } else if (upper.startsWith('QUICK')) {
+            depthCounts['QUICK'] = (depthCounts['QUICK'] ?? 0) + 1;
+            if (day) byDay[day].quick++;
+          }
+          const skillMatch = d.match(/^(?:SKILL:|skill:)(.+)$/i);
+          if (skillMatch) skillHits[skillMatch[1]] = (skillHits[skillMatch[1]] ?? 0) + 1;
+        }
+      }
+
+      directives.sort((a, b) => b.ts.localeCompare(a.ts));
+      const byDayArr = Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v }));
+      const topSkills = Object.entries(skillHits).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([skill, count]) => ({ skill, count }));
+      return { directives: directives.slice(0, 200), total: directives.length, depthCounts, byDay: byDayArr, topSkills };
     });
   });
 
@@ -1682,61 +1515,40 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       };
 
       const items: FeedbackItem[] = [];
-
-      // Read feedback.jsonl (sentiment) — polarity mapped to numeric score
-      if (existsSync(dataPaths.feedback)) {
-        try {
-          const lines = readFileSync(dataPaths.feedback, 'utf-8').split('\n').filter(Boolean);
-          for (const line of lines) {
-            try {
-              const e = JSON.parse(line) as Record<string, unknown>;
-              const ts = (e.ts ?? e.timestamp) as string | undefined;
-              if (!ts) continue;
-              const polarity = e.polarity as string | undefined;
-              const triggerWord = ((e.trigger ?? e.prompt) as string | undefined) ?? '';
-              const rating = sentimentScore(polarity ?? '', triggerWord);
-              items.push({
-                ts,
-                sessionId: (e.session_id ?? '') as string,
-                trigger: ((e.prompt ?? e.trigger) ?? '') as string,
-                rating,
-                type: 'sentiment',
-                priorText: (e.prior_text as string | undefined),
-                priorTools: (e.prior_tools as string[] | undefined),
-                priorFiles: (e.prior_files as string[] | undefined),
-                turnIndex: e.turn_index as number | undefined,
-              });
-            } catch {}
-          }
-        } catch {}
-      }
-
-      // Read ratings.jsonl (numeric)
       const numericRatings: number[] = [];
-      if (existsSync(dataPaths.ratings)) {
-        try {
-          const lines = readFileSync(dataPaths.ratings, 'utf-8').split('\n').filter(Boolean);
-          for (const line of lines) {
-            try {
-              const e = JSON.parse(line) as Record<string, unknown>;
-              const ts = (e.timestamp ?? e.ts) as string | undefined;
-              if (!ts) continue;
-              const rating = typeof e.rating === 'number' ? e.rating : 5;
-              items.push({
-                ts,
-                sessionId: (e.session_id ?? e.sessionId ?? '') as string,
-                trigger: ((e.context ?? e.prompt ?? e.type) ?? 'rating') as string,
-                rating,
-                type: 'numeric',
-                priorText: (e.prior_text as string | undefined),
-                priorTools: (e.prior_tools as string[] | undefined),
-                priorFiles: (e.prior_files as string[] | undefined),
-                turnIndex: e.turn_index as number | undefined,
-              });
-              numericRatings.push(rating);
-            } catch {}
-          }
-        } catch {}
+
+      const entries = parseSessionsForDays(30);
+      for (const e of entries) {
+        if (!e.data) continue;
+        if (e.kind === 'feedback') {
+          const polarity = e.data.polarity as string | undefined;
+          const triggerWord = ((e.data.trigger ?? e.data.prompt) as string | undefined) ?? '';
+          items.push({
+            ts: e.ts,
+            sessionId: e.sid,
+            trigger: ((e.data.prompt ?? e.data.trigger) as string | undefined) ?? '',
+            rating: sentimentScore(polarity ?? '', triggerWord),
+            type: 'sentiment',
+            priorText: e.data.priorText as string | undefined,
+            priorTools: e.data.priorTools as string[] | undefined,
+            priorFiles: e.data.priorFiles as string[] | undefined,
+            turnIndex: e.data.turnIndex as number | undefined,
+          });
+        } else if (e.kind === 'rating') {
+          const rating = typeof e.data.rating === 'number' ? e.data.rating : 5;
+          items.push({
+            ts: e.ts,
+            sessionId: e.sid,
+            trigger: ((e.data.context ?? e.data.prompt ?? e.data.ratingType) as string | undefined) ?? 'rating',
+            rating,
+            type: 'numeric',
+            priorText: e.data.priorText as string | undefined,
+            priorTools: e.data.priorTools as string[] | undefined,
+            priorFiles: e.data.priorFiles as string[] | undefined,
+            turnIndex: e.data.turnIndex as number | undefined,
+          });
+          numericRatings.push(rating);
+        }
       }
 
       items.sort((a, b) => b.ts.localeCompare(a.ts));
@@ -1758,43 +1570,27 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         verify?: Record<string, string | null>;
       };
 
-      const path = dataPaths.hookEvents;
-      if (!existsSync(path)) return { events: [], total: 0, passCount: 0, blockCount: 0, skipCount: 0, advisoryCount: 0 };
-
       const events: GateEvent[] = [];
-      try {
-        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
-        for (const line of lines) {
-          try {
-            const e = JSON.parse(line) as Record<string, unknown>;
-            // Filter to verify-gate / quality-check entries
-            const hook = (e.hook as string) ?? '';
-            const rawDecision = (e.decision as string) ?? '';
-            const tier = e.tier;
-            const isGateEntry = hook.includes('quality-check') || (tier !== undefined && ['block', 'skip', 'advisory', 'pass'].includes(rawDecision));
-            if (!isGateEntry) continue;
-
-            // Reclassify user-affirmed skips
-            let decision: GateEvent['decision'] = rawDecision as GateEvent['decision'];
-            const detail = (e.detail as string) ?? '';
-            if (decision === 'pass' && detail.includes('user-affirmed')) {
-              decision = 'skip';
-            }
-
-            events.push({
-              ts: (e.ts as string) ?? '',
-              sessionId: (e.sessionId as string) ?? '',
-              hook,
-              decision,
-              reason: detail,
-              editedFiles: (e.editedFiles as string[]) ?? [],
-              verifyPresent: e.verifyPresent as boolean | undefined,
-              verifyMissing: e.verifyMissing as string[] | undefined,
-              verify: e.verify as Record<string, string | null> | undefined,
-            });
-          } catch {}
+      for (const e of parseSessionsForDays(30)) {
+        if (e.kind !== 'gate' || !e.data) continue;
+        const rawDecision = (e.data.decision as string) ?? '';
+        let decision: GateEvent['decision'] = rawDecision as GateEvent['decision'];
+        const detail = (e.data.detail as string) ?? '';
+        if (decision === 'pass' && detail.includes('user-affirmed')) {
+          decision = 'skip';
         }
-      } catch {}
+        events.push({
+          ts: e.ts,
+          sessionId: e.sid,
+          hook: (e.data.hook as string) ?? '',
+          decision,
+          reason: detail,
+          editedFiles: (e.data.editedFiles as string[]) ?? [],
+          verifyPresent: e.data.verifyPresent as boolean | undefined,
+          verifyMissing: e.data.verifyMissing as string[] | undefined,
+          verify: e.data.verify as Record<string, string | null> | undefined,
+        });
+      }
 
       events.sort((a, b) => b.ts.localeCompare(a.ts));
       const passCount = events.filter(e => e.decision === 'pass').length;
@@ -1825,45 +1621,32 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
           return parts.slice(0, 2).join('/') + '/';
         }
 
-        const path = dataPaths.hookEvents;
-        if (!existsSync(path)) return { events: [] };
-
         const events: GateEvent[] = [];
-        try {
-          const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
-          for (const line of lines) {
-            try {
-              const e = JSON.parse(line) as Record<string, unknown>;
-              const hook = (e.hook as string) ?? '';
-              const rawDecision = (e.decision as string) ?? '';
-              const tier = e.tier;
-              const isGateEntry = hook.includes('quality-check') || (tier !== undefined && ['block', 'skip', 'advisory', 'pass'].includes(rawDecision));
-              if (!isGateEntry) continue;
+        for (const e of parseSessionsForDays(30)) {
+          if (e.kind !== 'gate' || !e.data) continue;
+          const hook = (e.data.hook as string) ?? '';
+          let decision = (e.data.decision as string) ?? '';
+          const detail = (e.data.detail as string) ?? '';
+          if (decision === 'pass' && detail.includes('user-affirmed')) decision = 'skip';
+          if (decision === 'pass') continue;
 
-              let decision = rawDecision;
-              const detail = (e.detail as string) ?? '';
-              if (decision === 'pass' && detail.includes('user-affirmed')) decision = 'skip';
-              if (decision === 'pass') continue;
+          const editedFiles = (e.data.editedFiles as string[]) ?? [];
+          if (hookFilter && hook !== hookFilter) continue;
+          if (decisionFilter && decision !== decisionFilter) continue;
+          if (filePrefixFilter !== undefined && computeFilePrefix(editedFiles) !== filePrefixFilter) continue;
 
-              const editedFiles = (e.editedFiles as string[]) ?? [];
-              if (hookFilter && hook !== hookFilter) continue;
-              if (decisionFilter && decision !== decisionFilter) continue;
-              if (filePrefixFilter !== undefined && computeFilePrefix(editedFiles) !== filePrefixFilter) continue;
-
-              events.push({
-                ts: (e.ts as string) ?? '',
-                sessionId: (e.sessionId as string) ?? '',
-                hook,
-                decision,
-                reason: detail,
-                editedFiles,
-                verifyPresent: e.verifyPresent as boolean | undefined,
-                verifyMissing: e.verifyMissing as string[] | undefined,
-                verify: e.verify as Record<string, string | null> | undefined,
-              });
-            } catch {}
-          }
-        } catch {}
+          events.push({
+            ts: e.ts,
+            sessionId: e.sid,
+            hook,
+            decision,
+            reason: detail,
+            editedFiles,
+            verifyPresent: e.data.verifyPresent as boolean | undefined,
+            verifyMissing: e.data.verifyMissing as string[] | undefined,
+            verify: e.data.verify as Record<string, string | null> | undefined,
+          });
+        }
 
         events.sort((a, b) => b.ts.localeCompare(a.ts));
         return { events };
@@ -1879,9 +1662,6 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         representativeReason: string; representativeFiles: string[];
       };
 
-      const path = dataPaths.hookEvents;
-      if (!existsSync(path)) return { patterns: [] };
-
       type RawGate = {
         ts: string; sessionId: string; hook: string;
         decision: string; detail?: string; editedFiles?: string[];
@@ -1889,34 +1669,24 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       };
 
       const raw: RawGate[] = [];
-      try {
-        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
-        for (const line of lines) {
-          try {
-            const e = JSON.parse(line) as Record<string, unknown>;
-            const hook = (e.hook as string) ?? '';
-            const decision = (e.decision as string) ?? '';
-            const tier = e.tier;
-            const isGateEntry = hook.includes('quality-check') || (tier !== undefined && ['block', 'skip', 'advisory', 'pass'].includes(decision));
-            if (!isGateEntry) continue;
+      for (const e of parseSessionsForDays(30)) {
+        if (e.kind !== 'gate' || !e.data) continue;
+        const decision = (e.data.decision as string) ?? '';
+        const detail = (e.data.detail as string) ?? '';
+        let effectiveDecision = decision;
+        if (effectiveDecision === 'pass' && detail.includes('user-affirmed')) effectiveDecision = 'skip';
+        if (!['block', 'skip', 'advisory'].includes(effectiveDecision)) continue;
 
-            const detail = (e.detail as string) ?? '';
-            let effectiveDecision = decision;
-            if (effectiveDecision === 'pass' && detail.includes('user-affirmed')) effectiveDecision = 'skip';
-            if (!['block', 'skip', 'advisory'].includes(effectiveDecision)) continue;
-
-            raw.push({
-              ts: (e.ts as string) ?? '',
-              sessionId: (e.sessionId as string) ?? '',
-              hook,
-              decision: effectiveDecision,
-              detail,
-              editedFiles: (e.editedFiles as string[]) ?? [],
-              tier,
-            });
-          } catch {}
-        }
-      } catch {}
+        raw.push({
+          ts: e.ts,
+          sessionId: e.sid,
+          hook: (e.data.hook as string) ?? '',
+          decision: effectiveDecision,
+          detail,
+          editedFiles: (e.data.editedFiles as string[]) ?? [],
+          tier: e.data.tier,
+        });
+      }
 
       // Compute filePrefix (first 2 path segments) for each entry
       function filePrefix(files: string[]): string {
@@ -1971,40 +1741,26 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         verify?: Record<string, string | null>;
       };
 
-      const path = dataPaths.hookEvents;
-      if (!existsSync(path)) return { events: [], total: 0, passCount: 0, blockCount: 0, skipCount: 0, advisoryCount: 0 };
-
       const events: GateEvent[] = [];
-      try {
-        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
-        for (const line of lines) {
-          try {
-            const e = JSON.parse(line) as Record<string, unknown>;
-            if (e.sessionId !== sessionId) continue;
-            const hook = (e.hook as string) ?? '';
-            const rawDecision = (e.decision as string) ?? '';
-            const tier = e.tier;
-            const isGateEntry = hook.includes('quality-check') || (tier !== undefined && ['block', 'skip', 'advisory', 'pass'].includes(rawDecision));
-            if (!isGateEntry) continue;
+      for (const e of parseSessionsForDays(30)) {
+        if (e.kind !== 'gate' || !e.data || e.sid !== sessionId) continue;
+        const rawDecision = (e.data.decision as string) ?? '';
+        let decision: GateEvent['decision'] = rawDecision as GateEvent['decision'];
+        const detail = (e.data.detail as string) ?? '';
+        if (decision === 'pass' && detail.includes('user-affirmed')) decision = 'skip';
 
-            let decision: GateEvent['decision'] = rawDecision as GateEvent['decision'];
-            const detail = (e.detail as string) ?? '';
-            if (decision === 'pass' && detail.includes('user-affirmed')) decision = 'skip';
-
-            events.push({
-              ts: (e.ts as string) ?? '',
-              sessionId: (e.sessionId as string) ?? '',
-              hook,
-              decision,
-              reason: detail,
-              editedFiles: (e.editedFiles as string[]) ?? [],
-              verifyPresent: e.verifyPresent as boolean | undefined,
-              verifyMissing: e.verifyMissing as string[] | undefined,
-              verify: e.verify as Record<string, string | null> | undefined,
-            });
-          } catch {}
-        }
-      } catch {}
+        events.push({
+          ts: e.ts,
+          sessionId: e.sid,
+          hook: (e.data.hook as string) ?? '',
+          decision,
+          reason: detail,
+          editedFiles: (e.data.editedFiles as string[]) ?? [],
+          verifyPresent: e.data.verifyPresent as boolean | undefined,
+          verifyMissing: e.data.verifyMissing as string[] | undefined,
+          verify: e.data.verify as Record<string, string | null> | undefined,
+        });
+      }
 
       events.sort((a, b) => b.ts.localeCompare(a.ts));
       const passCount = events.filter(e => e.decision === 'pass').length;
@@ -2032,70 +1788,47 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       };
 
       const memories: LearningItem[] = [];
-      if (existsSync(dataPaths.learningProvenance)) {
-        try {
-          const lines = readFileSync(dataPaths.learningProvenance, 'utf-8').split('\n').filter(Boolean);
-          for (const line of lines) {
-            try {
-              const e = JSON.parse(line) as LearningItem;
-              if (e.sessionId === sessionId) memories.push(e);
-            } catch {}
-          }
-        } catch {}
-      }
-      memories.sort((a, b) => b.ts.localeCompare(a.ts));
-
       const feedbackItems: FeedbackItem[] = [];
       const numericRatings: number[] = [];
 
-      if (existsSync(dataPaths.feedback)) {
-        try {
-          const lines = readFileSync(dataPaths.feedback, 'utf-8').split('\n').filter(Boolean);
-          for (const line of lines) {
-            try {
-              const e = JSON.parse(line) as Record<string, unknown>;
-              if ((e.session_id as string) !== sessionId) continue;
-              const ts = (e.ts ?? e.timestamp) as string | undefined;
-              if (!ts) continue;
-              feedbackItems.push({
-                ts,
-                sessionId,
-                trigger: (e.trigger ?? '') as string,
-                polarity: e.polarity as 'positive' | 'negative' | undefined,
-                type: 'sentiment',
-                priorText: e.prior_text as string | undefined,
-                priorTools: e.prior_tools as string[] | undefined,
-                priorFiles: e.prior_files as string[] | undefined,
-              });
-            } catch {}
-          }
-        } catch {}
+      for (const e of parseSessionsForDays(30)) {
+        if (e.sid !== sessionId || !e.data) continue;
+        if (e.kind === 'memory_write') {
+          memories.push({
+            ts: e.ts,
+            sessionId,
+            memoryId: e.data.memoryId as string | undefined,
+            type: (e.data.memoryType as string) ?? 'session',
+            source: (e.data.source as string) ?? '',
+            insight: (e.data.insight as string) ?? '',
+            content: (e.data.content as string) ?? '',
+            tags: (e.data.tags as string) ?? '',
+          });
+        } else if (e.kind === 'feedback') {
+          feedbackItems.push({
+            ts: e.ts,
+            sessionId,
+            trigger: (e.data.trigger as string) ?? '',
+            polarity: e.data.polarity as 'positive' | 'negative' | undefined,
+            type: 'sentiment',
+            priorText: e.data.priorText as string | undefined,
+            priorTools: e.data.priorTools as string[] | undefined,
+            priorFiles: e.data.priorFiles as string[] | undefined,
+          });
+        } else if (e.kind === 'rating') {
+          const rating = typeof e.data.rating === 'number' ? e.data.rating : undefined;
+          feedbackItems.push({
+            ts: e.ts,
+            sessionId,
+            trigger: (e.data.ratingType as string) ?? 'rating',
+            rating,
+            type: 'numeric',
+          });
+          if (rating !== undefined) numericRatings.push(rating);
+        }
       }
 
-      if (existsSync(dataPaths.ratings)) {
-        try {
-          const lines = readFileSync(dataPaths.ratings, 'utf-8').split('\n').filter(Boolean);
-          for (const line of lines) {
-            try {
-              const e = JSON.parse(line) as Record<string, unknown>;
-              const sid = (e.session_id ?? e.sessionId) as string | undefined;
-              if (sid !== sessionId) continue;
-              const ts = (e.timestamp ?? e.ts) as string | undefined;
-              const rating = typeof e.rating === 'number' ? e.rating : undefined;
-              if (!ts) continue;
-              feedbackItems.push({
-                ts,
-                sessionId,
-                trigger: (e.type ?? 'rating') as string,
-                rating,
-                type: 'numeric',
-              });
-              if (rating !== undefined) numericRatings.push(rating);
-            } catch {}
-          }
-        } catch {}
-      }
-
+      memories.sort((a, b) => b.ts.localeCompare(a.ts));
       feedbackItems.sort((a, b) => b.ts.localeCompare(a.ts));
       const avgRating = numericRatings.length > 0
         ? numericRatings.reduce((s, r) => s + r, 0) / numericRatings.length

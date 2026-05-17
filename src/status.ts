@@ -10,12 +10,6 @@ import { claudePaths, dataPaths, externalPaths } from "./data/src/paths.ts";
 
 const root = resolve(import.meta.dir);
 
-interface Rating {
-  timestamp: string;
-  rating: number;
-  type: string;
-}
-
 interface SessionInfo {
   file: string;
   content: string;
@@ -44,13 +38,21 @@ async function getRecentSessions(count: number): Promise<SessionInfo[]> {
 }
 
 async function getRatings(): Promise<{ total: number; explicit: number; avg: number | null }> {
-  const file = dataPaths.ratings;
+  // Ratings now live in events.jsonl as hook=rating-capture-submit entries.
+  const file = dataPaths.events;
   if (!existsSync(file)) return { total: 0, explicit: 0, avg: null };
   const lines = readFileSync(file, "utf-8").trim().split("\n").filter(Boolean);
-  const ratings: Rating[] = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-  const explicit = ratings.filter(r => r.type === "explicit");
-  const sum = explicit.reduce((s, r) => s + r.rating, 0);
-  return { total: ratings.length, explicit: explicit.length, avg: explicit.length > 0 ? sum / explicit.length : null };
+  const explicit: number[] = [];
+  for (const l of lines) {
+    try {
+      const e = JSON.parse(l) as Record<string, unknown>;
+      if (e.hook === "rating-capture-submit" && typeof e.rating === "number") {
+        explicit.push(e.rating as number);
+      }
+    } catch {}
+  }
+  const sum = explicit.reduce((s, r) => s + r, 0);
+  return { total: explicit.length, explicit: explicit.length, avg: explicit.length > 0 ? sum / explicit.length : null };
 }
 
 async function getSessionCount(): Promise<number> {
@@ -118,8 +120,8 @@ const sessionsSize = (() => {
   }, 0);
 })();
 const ratingsSize = (() => {
-  const f = dataPaths.ratings;
-  try { return statSync(f).size; } catch { return 0; }
+  // Ratings folded into events.jsonl; report combined events size as a proxy.
+  try { return statSync(dataPaths.events).size; } catch { return 0; }
 })();
 const memoSize = (() => {
   const db = externalPaths.memoryDb;

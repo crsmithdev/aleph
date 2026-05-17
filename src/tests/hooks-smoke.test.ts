@@ -129,12 +129,12 @@ runAndCheck(te, r, "core/hooks/routing-classify-submit.ts", "routing: malformed 
 console.log("\n--- hook telemetry (reportHook) ---");
 
 // All hooks run above have written entries. Read the accumulated JSONL.
-const hookEventsPath = resolve(te.tmpBase, "signals/hook-events.jsonl");
-check(r, "hook-events.jsonl exists", existsSync(hookEventsPath));
+const hookEventsPath = resolve(te.tmpBase, "signals/events.jsonl");
+check(r, "events.jsonl exists", existsSync(hookEventsPath));
 
 if (existsSync(hookEventsPath)) {
   const lines = readFileSync(hookEventsPath, "utf8").trim().split("\n").filter(Boolean);
-  check(r, "hook-events.jsonl has entries", lines.length > 0);
+  check(r, "events.jsonl has entries", lines.length > 0);
 
   // Every line must be valid JSON with required fields
   const entries = lines.map(l => { try { return JSON.parse(l); } catch { return null; } });

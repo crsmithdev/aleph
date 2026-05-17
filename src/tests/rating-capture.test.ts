@@ -7,7 +7,7 @@
  *   2. Rate-keyword prompts ("rate 7", "rating 8", "I rate this 9")
  *
  * Uses CONSTRUCT_DATA_ROOT isolation via createTestEnv so all writes go
- * to a temp directory, not ~/.construct/signals/ratings.jsonl.
+ * to a temp directory, not ~/.construct/signals/events.jsonl.
  */
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
@@ -28,19 +28,20 @@ const r = createResults();
 
 const HOOK = "memory/hooks/rating-capture-submit.ts";
 
-function ratingsFile(): string {
-  return join(te.tmpBase, "signals", "ratings.jsonl");
+function eventsFile(): string {
+  return join(te.tmpBase, "signals", "events.jsonl");
 }
 
 function readRatings(): Array<Record<string, unknown>> {
-  const path = ratingsFile();
+  const path = eventsFile();
   if (!existsSync(path)) return [];
   return readFileSync(path, "utf-8")
     .trim()
     .split("\n")
     .filter(Boolean)
     .map(line => { try { return JSON.parse(line); } catch { return null; } })
-    .filter((e): e is Record<string, unknown> => e !== null);
+    .filter((e): e is Record<string, unknown> => e !== null)
+    .filter((e) => e.hook === "rating-capture-submit" && typeof e.rating === "number");
 }
 
 function lastRating(): Record<string, unknown> | undefined {
@@ -60,11 +61,11 @@ console.log("--- isolation ---");
 const noMatchResult = runHook(te, HOOK, JSON.stringify({ prompt: "update the readme" }));
 check(r, "no-match: exits 0", noMatchResult.exitCode === 0);
 check(r, "no-match: no stdout emitted", noMatchResult.stdout.trim() === "");
-check(r, "no-match: real ratings.jsonl not touched",
-  !existsSync(join(process.env.HOME ?? "", ".construct", "signals", "ratings.jsonl"))
+check(r, "no-match: real events.jsonl not touched",
+  !existsSync(join(process.env.HOME ?? "", ".construct", "signals", "events.jsonl"))
   || (() => {
     const real = readFileSync(
-      join(process.env.HOME ?? "", ".construct", "signals", "ratings.jsonl"), "utf-8"
+      join(process.env.HOME ?? "", ".construct", "signals", "events.jsonl"), "utf-8"
     );
     return !real.includes("rating-capture-test-sentinel");
   })()
@@ -84,9 +85,9 @@ console.log("\n--- mechanism 1: N/10 notation ---");
   const entry = lastRating();
   check(r, "7/10: rating written to isolated file", entry !== undefined);
   check(r, "7/10: rating value is 7", entry?.rating === 7);
-  check(r, "7/10: type is explicit", entry?.type === "explicit");
-  check(r, "7/10: session_id captured", entry?.session_id === "test-slash-01");
-  check(r, "7/10: has timestamp", typeof entry?.timestamp === "string");
+  check(r, "7/10: ratingType is explicit", entry?.ratingType === "explicit");
+  check(r, "7/10: sessionId captured", entry?.sessionId === "test-slash-01");
+  check(r, "7/10: has ts", typeof entry?.ts === "string");
 }
 
 {
@@ -276,9 +277,9 @@ console.log("\n--- with transcript context ---");
   check(r, "with transcript: exits 0", result.exitCode === 0);
   const entry = lastRating();
   check(r, "with transcript: rating captured", entry?.rating === 9);
-  check(r, "with transcript: prior_tools populated", Array.isArray(entry?.prior_tools));
-  check(r, "with transcript: prior_files populated", Array.isArray(entry?.prior_files));
-  check(r, "with transcript: turn_index is a number", typeof entry?.turn_index === "number");
+  check(r, "with transcript: priorTools populated", Array.isArray(entry?.priorTools));
+  check(r, "with transcript: priorFiles populated", Array.isArray(entry?.priorFiles));
+  check(r, "with transcript: turnIndex is a number", typeof entry?.turnIndex === "number");
 }
 
 // ── Stdin safety ───────────────────────────────────────────────────────────────
@@ -302,20 +303,20 @@ console.log("\n--- data audit ---");
 const allRatings = readRatings();
 check(r, "all entries have required fields",
   allRatings.every(e =>
-    typeof e.timestamp === "string" &&
+    typeof e.ts === "string" &&
     typeof e.rating === "number" &&
-    typeof e.type === "string" &&
+    typeof e.ratingType === "string" &&
     typeof e.context === "string"
   )
 );
 check(r, "all captured ratings are in 1-10 range",
   allRatings.every(e => (e.rating as number) >= 1 && (e.rating as number) <= 10)
 );
-check(r, "type field is always 'explicit'",
-  allRatings.every(e => e.type === "explicit")
+check(r, "ratingType field is always 'explicit'",
+  allRatings.every(e => e.ratingType === "explicit")
 );
-check(r, "ratings file in isolated temp dir, not ~/.construct",
-  ratingsFile().startsWith("/tmp/") || ratingsFile().includes("construct-rating-capture-")
+check(r, "events file in isolated temp dir, not ~/.construct",
+  eventsFile().startsWith("/tmp/") || eventsFile().includes("construct-rating-capture-")
 );
 
 cleanupTestEnv(te);

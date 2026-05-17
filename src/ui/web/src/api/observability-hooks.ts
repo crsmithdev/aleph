@@ -653,7 +653,7 @@ export function useCreateEvalScenario() {
 }
 
 // ---------------------------------------------------------------------------
-// Signal file hooks
+// Telemetry-backed directive hook (powers the Routing table on /observability/skills)
 // ---------------------------------------------------------------------------
 
 export function useObsDirectives() {
@@ -664,8 +664,8 @@ export function useObsDirectives() {
     byDay: Array<{ date: string; full: number; quick: number; total: number }>;
     topSkills: Array<{ skill: string; count: number }>;
   }>({
-    queryKey: ['observability', 'signals', 'directives'],
-    queryFn: () => api.get('/observability/signals/directives'),
+    queryKey: ['observability', 'learning', 'directives'],
+    queryFn: () => api.get('/observability/learning/directives'),
   });
 }
 

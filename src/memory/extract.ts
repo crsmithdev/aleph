@@ -96,29 +96,34 @@ function extractCorrections(t: TranscriptSummary): ExtractedMemory[] {
  * Pure augmentation pass: turn raw signal files into memories.
  * Inputs are JSONL text contents — caller does the I/O.
  */
+export interface SessionFeedback {
+  polarity?: "positive" | "negative";
+  trigger?: string;
+  prompt?: string;
+  prior_text?: string;
+  prior_tools?: string[];
+  prior_files?: string[];
+  session_id: string;
+}
+
+export interface SessionReEdit {
+  type: "re-edit";
+  file: string;
+  count: number;
+  sessionId: string;
+}
+
 export function augmentWithSignals(
   base: ExtractedMemory[],
-  toolSignalsText: string,
-  feedbackText: string,
+  reEdits: SessionReEdit[],
+  feedback: SessionFeedback[],
   sessionId: string,
 ): ExtractedMemory[] {
   const out = [...base];
-
-  interface Fb { polarity: "positive" | "negative"; trigger: string; prompt: string; prior_text?: string; prior_tools?: string[]; prior_files?: string[]; }
-  const sessFb: Fb[] = [];
-  for (const line of feedbackText.trim().split("\n")) {
-    if (!line) continue;
-    try {
-      const sig = JSON.parse(line);
-      if (sig.session_id === sessionId) sessFb.push(sig);
-    } catch { /* skip */ }
-  }
+  const sessFb = feedback.filter(f => f.session_id === sessionId);
 
   // Re-edit signals — correlate with negative feedback on the same file
-  for (const line of toolSignalsText.trim().split("\n")) {
-    if (!line) continue;
-    let sig: any;
-    try { sig = JSON.parse(line); } catch { continue; }
+  for (const sig of reEdits) {
     if (sig.sessionId !== sessionId || sig.type !== "re-edit") continue;
     const matched = sessFb.find(fb =>
       fb.polarity === "negative" &&
@@ -128,7 +133,7 @@ export function augmentWithSignals(
     if (matched) {
       const reaction = (matched.prior_text ?? "").slice(0, 100);
       out.push({
-        content: `Approach friction on ${sig.file}: ${sig.count}+ edits, user pushed back "${matched.prompt.slice(0, 100)}"${reaction ? ` reacting to: ${reaction}` : ""}`,
+        content: `Approach friction on ${sig.file}: ${sig.count}+ edits, user pushed back "${(matched.prompt ?? "").slice(0, 100)}"${reaction ? ` reacting to: ${reaction}` : ""}`,
         tags: "preference,auto_extract,approach_friction",
         memory_type: "observation",
         source: `Re-edit × ${sig.count} on ${sig.file}`,

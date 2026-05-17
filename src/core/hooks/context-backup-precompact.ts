@@ -111,6 +111,13 @@ try {
 
   mkdirSync(dirname(dataPaths.compactionNotes), { recursive: true });
   writeFileSync(dataPaths.compactionNotes, JSON.stringify(notes, null, 2));
+  reportHook(TAG, "PreCompact", input.session_id, {
+    meta: {
+      workingFiles: sortedFiles,
+      recentPrompts: recentPrompts.slice(-2),
+      recentErrors: recentErrors.slice(-3),
+    },
+  });
   trace(TAG, `compaction notes written: ${sortedFiles.length} files, ${recentPrompts.length} prompts, ${recentErrors.length} errors`);
 } catch (e) {
   trace(TAG, `compaction notes failed: ${(e as Error).message}`);

@@ -34,7 +34,7 @@ describe("aggregator", () => {
   beforeEach(() => {
     clearCache();
     baseDir = setupFixtureDir();
-    entries = parseAllSessions({ baseDir, includeDirectives: false });
+    entries = parseAllSessions({ baseDir, includeEvents: false });
   });
 
   afterEach(() => {

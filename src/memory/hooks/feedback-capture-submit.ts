@@ -11,10 +11,9 @@
  * Writes one JSONL row to ~/.construct/signals/feedback.jsonl.
  * No match → exit 0. Cheap regex check before transcript parse.
  */
-import { appendFileSync } from "fs";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { dataPaths, ensureDataDirs } from "../../data/src/paths.ts";
+import { ensureDataDirs } from "../../data/src/paths.ts";
 import { parseTranscript } from "../parse-transcript.ts";
 import {
   CORRECTION_RE,
@@ -23,7 +22,6 @@ import {
 } from "../extract.ts";
 
 const TAG = "feedback-capture-submit";
-const feedbackFile = Bun.env.FEEDBACK_FILE ?? dataPaths.feedback;
 ensureDataDirs();
 
 let input: any;
@@ -33,10 +31,13 @@ catch (e) {
   console.error(`[${TAG}] stdin parse failed: ${(e as Error).message}`);
   process.exit(0);
 }
-reportHook(TAG, "UserPromptSubmit", input.session_id);
 
 const prompt: string = (input.prompt ?? "").trim();
-if (prompt.length < 2) { trace(TAG, "skip: prompt too short"); process.exit(0); }
+if (prompt.length < 2) {
+  reportHook(TAG, "UserPromptSubmit", input.session_id);
+  trace(TAG, "skip: prompt too short");
+  process.exit(0);
+}
 
 let polarity: "positive" | "negative" | null = null;
 let trigger = "";
@@ -50,7 +51,11 @@ if (posMatch) {
   trigger = m ? m[1].replace(/[,.\s]+$/, "").toLowerCase() : "";
 }
 
-if (!polarity) { trace(TAG, "no sentiment match"); process.exit(0); }
+if (!polarity) {
+  reportHook(TAG, "UserPromptSubmit", input.session_id);
+  trace(TAG, "no sentiment match");
+  process.exit(0);
+}
 
 let priorText = "";
 let priorTools: string[] = [];
@@ -79,16 +84,15 @@ if (input.transcript_path) {
   if (t2) turnIndex = t2.messages.filter((m: { role: string }) => m.role === "user").length;
 }
 
-const entry = {
-  timestamp: new Date().toISOString(),
-  session_id: input.session_id ?? "unknown",
-  polarity,
-  trigger,
-  prompt: prompt.slice(0, 200).replace(/\n/g, " "),
-  prior_text: priorText.replace(/\n/g, " "),
-  prior_tools: priorTools,
-  prior_files: priorFiles,
-  turn_index: turnIndex,
-};
-appendFileSync(feedbackFile, JSON.stringify(entry) + "\n");
+reportHook(TAG, "UserPromptSubmit", input.session_id, {
+  meta: {
+    polarity,
+    trigger,
+    prompt: prompt.slice(0, 200).replace(/\n/g, " "),
+    priorText: priorText.replace(/\n/g, " "),
+    priorTools,
+    priorFiles,
+    turnIndex,
+  },
+});
 trace(TAG, `${polarity} (${trigger}) → tools=${priorTools.join(",")} files=${priorFiles.join(",")}`);

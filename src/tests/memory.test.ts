@@ -12,11 +12,15 @@ const sessionsDir = resolve(te.tmpBase, "sessions");
 import { mkdirSync } from "fs";
 mkdirSync(sessionsDir, { recursive: true });
 
-const ratingsFile = resolve(te.tmpBase, "ratings.jsonl");
-te.env.RATINGS_FILE = ratingsFile;
+// Ratings + feedback now write to a unified events.jsonl, filtered by `hook` field.
+const eventsFile = resolve(te.tmpBase, "signals", "events.jsonl");
 
-const feedbackFile = resolve(te.tmpBase, "feedback.jsonl");
-te.env.FEEDBACK_FILE = feedbackFile;
+function readEvents(hookName: string): Array<Record<string, unknown>> {
+  if (!existsSync(eventsFile)) return [];
+  return readFileSync(eventsFile, "utf-8").trim().split("\n").filter(Boolean)
+    .map(l => { try { return JSON.parse(l); } catch { return null; } })
+    .filter((e): e is Record<string, unknown> => e !== null && e.hook === hookName);
+}
 
 // ── Session start ────────────────────────────────────────────────────────────
 
@@ -93,14 +97,11 @@ runAndCheck(te, r, "memory/hooks/context-restore-start.ts", "smoke", "{}", { exp
 console.log("\n--- rating-capture ---");
 
 function ratingTest(prompt: string): { rating: number | null; output: string } {
-  let linesBefore = 0;
-  try { linesBefore = readFileSync(ratingsFile, "utf-8").trim().split("\n").filter(Boolean).length; } catch {}
+  const before = readEvents("rating-capture-submit").length;
   const { stdout } = runHook(te, "memory/hooks/rating-capture-submit.ts", JSON.stringify({ prompt }));
-  let linesAfter = 0;
-  try { linesAfter = readFileSync(ratingsFile, "utf-8").trim().split("\n").filter(Boolean).length; } catch {}
-  if (linesAfter > linesBefore) {
-    const last = readFileSync(ratingsFile, "utf-8").trim().split("\n").pop()!;
-    return { rating: JSON.parse(last).rating, output: stdout };
+  const after = readEvents("rating-capture-submit");
+  if (after.length > before) {
+    return { rating: (after[after.length - 1].rating as number) ?? null, output: stdout };
   }
   return { rating: null, output: stdout };
 }
@@ -148,16 +149,15 @@ runAndCheck(te, r, "memory/hooks/rating-capture-submit.ts", "malformed", "not js
 console.log("\n--- feedback-capture ---");
 
 function feedbackTest(prompt: string, transcriptPath?: string): { entry: any | null; output: string } {
-  let linesBefore = 0;
-  try { linesBefore = readFileSync(feedbackFile, "utf-8").trim().split("\n").filter(Boolean).length; } catch {}
+  const before = readEvents("feedback-capture-submit").length;
   const payload: any = { prompt, session_id: "fb-test" };
   if (transcriptPath) payload.transcript_path = transcriptPath;
   const { stdout } = runHook(te, "memory/hooks/feedback-capture-submit.ts", JSON.stringify(payload));
-  let linesAfter = 0;
-  try { linesAfter = readFileSync(feedbackFile, "utf-8").trim().split("\n").filter(Boolean).length; } catch {}
-  if (linesAfter > linesBefore) {
-    const last = readFileSync(feedbackFile, "utf-8").trim().split("\n").pop()!;
-    return { entry: JSON.parse(last), output: stdout };
+  const after = readEvents("feedback-capture-submit");
+  if (after.length > before) {
+    const entry = after[after.length - 1];
+    // Match if the entry has the polarity field (signal hooks may also emit bare events with no polarity)
+    if (entry.polarity) return { entry, output: stdout };
   }
   return { entry: null, output: stdout };
 }
@@ -205,12 +205,12 @@ check(r, "feedback: trigger word lowercased", triggerEntry?.trigger === "perfect
     ]),
   ]);
   const e = feedbackTest("great, ship it", tFile).entry;
-  check(r, "feedback: prior_tools captured from transcript",
-    Array.isArray(e?.prior_tools) && e.prior_tools.includes("Edit") && e.prior_tools.includes("Bash"));
-  check(r, "feedback: prior_files captured from transcript",
-    Array.isArray(e?.prior_files) && e.prior_files.some((f: string) => f.includes("auth.ts")));
-  check(r, "feedback: prior_text excerpted from transcript",
-    typeof e?.prior_text === "string" && e.prior_text.includes("auth"));
+  check(r, "feedback: priorTools captured from transcript",
+    Array.isArray(e?.priorTools) && e.priorTools.includes("Edit") && e.priorTools.includes("Bash"));
+  check(r, "feedback: priorFiles captured from transcript",
+    Array.isArray(e?.priorFiles) && e.priorFiles.some((f: string) => f.includes("auth.ts")));
+  check(r, "feedback: priorText excerpted from transcript",
+    typeof e?.priorText === "string" && e.priorText.includes("auth"));
   try { unlinkSync(tFile); } catch {}
 }
 
@@ -317,12 +317,12 @@ console.log("\n--- re-edit correlation ---");
   const { augmentWithSignals } = await import("../memory/extract.ts");
   const SID = "corr-sess";
 
-  const reEditSig = (file: string) => JSON.stringify({
-    type: "re-edit", file, count: 3, sessionId: SID, timestamp: "2026-05-09T10:00:00Z",
+  const reEditSig = (file: string, sid: string = SID) => ({
+    type: "re-edit" as const, file, count: 3, sessionId: sid,
   });
 
-  const negFb = (file: string, prompt: string, prior_text: string) => JSON.stringify({
-    timestamp: "2026-05-09T10:30:00Z", session_id: SID, polarity: "negative", trigger: "no",
+  const negFb = (file: string, prompt: string, prior_text: string) => ({
+    session_id: SID, polarity: "negative" as const, trigger: "no",
     prompt, prior_text, prior_tools: ["Edit"], prior_files: [file],
   });
 
@@ -330,8 +330,8 @@ console.log("\n--- re-edit correlation ---");
   {
     const out = augmentWithSignals(
       [],
-      reEditSig("src/auth.ts"),
-      negFb("src/auth.ts", "no don't use mocks", "switching to mocked sessions"),
+      [reEditSig("src/auth.ts")],
+      [negFb("src/auth.ts", "no don't use mocks", "switching to mocked sessions")],
       SID,
     );
     check(r, "correlate: matching feedback → approach_friction tag",
@@ -348,8 +348,8 @@ console.log("\n--- re-edit correlation ---");
   {
     const out = augmentWithSignals(
       [],
-      reEditSig("src/parser.ts"),
-      "", // no feedback
+      [reEditSig("src/parser.ts")],
+      [], // no feedback
       SID,
     );
     check(r, "no-correlate: emits Re-edit observation (not friction)",
@@ -364,8 +364,8 @@ console.log("\n--- re-edit correlation ---");
   {
     const out = augmentWithSignals(
       [],
-      reEditSig("src/auth.ts"),
-      negFb("src/parser.ts", "no don't do that", "doing something to parser"),
+      [reEditSig("src/auth.ts")],
+      [negFb("src/parser.ts", "no don't do that", "doing something to parser")],
       SID,
     );
     check(r, "no-correlate: feedback on different file does not match",
@@ -376,13 +376,13 @@ console.log("\n--- re-edit correlation ---");
 
   // Case 4: positive feedback still produces validated-approach memories
   {
-    const posFb = JSON.stringify({
-      timestamp: "2026-05-09T10:30:00Z", session_id: SID, polarity: "positive",
+    const posFb = {
+      session_id: SID, polarity: "positive" as const,
       trigger: "perfect", prompt: "perfect, ship it",
       prior_text: "Refactored to use cookie sessions", prior_tools: ["Edit", "Bash"],
       prior_files: ["src/auth.ts"],
-    });
-    const out = augmentWithSignals([], "", posFb, SID);
+    };
+    const out = augmentWithSignals([], [], [posFb], SID);
     check(r, "validated: positive feedback → validated tag",
       out.some(m => m.tags.includes("validated")));
     check(r, "validated: content names trigger word",
@@ -393,104 +393,48 @@ console.log("\n--- re-edit correlation ---");
   {
     const out = augmentWithSignals(
       [],
-      JSON.stringify({ type: "re-edit", file: "x.ts", count: 3, sessionId: "OTHER", timestamp: "2026-05-09" }),
-      "",
+      [reEditSig("x.ts", "OTHER")],
+      [],
       SID,
     );
     check(r, "session filter: ignores other-session signals", out.length === 0);
   }
 }
 
-// ── Rule fingerprint helpers (#5) ────────────────────────────────────────────
+// ── User-correction injection (replaces old learned-rules path) ──────────────
 
-console.log("\n--- rule-fingerprint ---");
+console.log("\n--- correction injection ---");
 {
-  const { ruleFingerprint, parseRuleLine, similarity, effectivenessScore } = await import("../memory/rule-fingerprint.ts");
-
-  // ruleFingerprint stable across whitespace/punctuation
-  check(r, "fingerprint: stable across capitalization",
-    ruleFingerprint("Use real DB not mocks") === ruleFingerprint("use real db not mocks"));
-  check(r, "fingerprint: stable across trailing punctuation",
-    ruleFingerprint("use real db not mocks.") === ruleFingerprint("use real db not mocks"));
-  check(r, "fingerprint: different rules → different hashes",
-    ruleFingerprint("use real db") !== ruleFingerprint("commit before context switch"));
-
-  // parseRuleLine
-  const a = parseRuleLine("- [avoid] use real db not mocks _(3x)_");
-  check(r, "parseRuleLine: extracts text", a?.text === "use real db not mocks");
-  check(r, "parseRuleLine: extracts polarity", a?.polarity === "avoid");
-
-  const b = parseRuleLine("- [keep] verify with bun test.ts before claiming done");
-  check(r, "parseRuleLine: handles [keep] → validated", b?.polarity === "validated");
-
-  const c = parseRuleLine("- some untagged rule that should still parse");
-  check(r, "parseRuleLine: handles untagged lines", c?.text === "some untagged rule that should still parse" && c?.polarity === null);
-
-  check(r, "parseRuleLine: rejects too-short lines", parseRuleLine("- hi") === null);
-
-  // similarity
-  check(r, "similarity: identical → 1.0",
-    similarity("use real db not mocks", "use real db not mocks") === 1);
-  check(r, "similarity: paraphrased same rule → above threshold",
-    similarity("commit before context switch", "always commit before switching context") >= 0.4);
-  check(r, "similarity: unrelated → low",
-    similarity("commit frequently", "review pull requests") < 0.3);
-
-  // effectivenessScore
-  check(r, "effectiveness: avoid w/ 0 recurrences → 1.0",
-    effectivenessScore({ text: "x", polarity: "avoid", first_seen: "", last_seen: "", injections: 5, recurrences: 0, reaffirmations: 0 }) === 1);
-  check(r, "effectiveness: avoid w/ all recurrences → 0",
-    effectivenessScore({ text: "x", polarity: "avoid", first_seen: "", last_seen: "", injections: 5, recurrences: 5, reaffirmations: 0 }) === 0);
-  check(r, "effectiveness: validated w/ 3/5 reaffirmations → 0.6",
-    Math.abs((effectivenessScore({ text: "x", polarity: "validated", first_seen: "", last_seen: "", injections: 5, recurrences: 0, reaffirmations: 3 }) ?? 0) - 0.6) < 0.001);
-  check(r, "effectiveness: 0 injections → null",
-    effectivenessScore({ text: "x", polarity: "avoid", first_seen: "", last_seen: "", injections: 0, recurrences: 0, reaffirmations: 0 }) === null);
-}
-
-// ── Rule injection logging (#5) ──────────────────────────────────────────────
-
-console.log("\n--- rule-injection logging ---");
-{
-  const { resolve: resolvePath } = await import("path");
-  const injFile = resolvePath(te.tmpBase, "signals", "rule-injections.jsonl");
-  const rulesFile = resolvePath(te.tmpBase, "signals", "learned-rules.md");
-
-  // Write a learned-rules.md the SessionStart hook will read
-  const sessionsDir2 = resolve(te.tmpBase, "sessions");
-  // Clear injections from prior runs
-  try { unlinkSync(injFile); } catch {}
-  writeFileSync(rulesFile, [
-    "# Learned Rules",
-    "_Auto-generated 2026-05-09_",
-    "",
-    "- [avoid] use real db not mocks _(3x)_",
-    "- [keep] verify with bun test.ts before claiming done",
-    "- [avoid] do not edit ~/.claude directly _(2x)_",
-    "",
-  ].join("\n"));
+  // Write a synthetic events.jsonl with one negative-feedback entry within 30d
+  // and one low-rating entry; expect both to appear in the briefing.
+  const now = new Date().toISOString();
+  const eventsLines = [
+    JSON.stringify({
+      ts: now, hook: "feedback-capture-submit", event: "UserPromptSubmit",
+      sessionId: "test-sess-1", polarity: "negative", trigger: "no",
+      prompt: "no, do not mock the DB", priorText: "switching auth.ts to mocks",
+      priorTools: ["Edit"], priorFiles: ["src/auth.ts"],
+    }),
+    JSON.stringify({
+      ts: now, hook: "rating-capture-submit", event: "UserPromptSubmit",
+      sessionId: "test-sess-1", rating: 2, ratingType: "explicit",
+      context: "rate 2", priorText: "deployment was broken",
+    }),
+  ];
+  // Preserve any existing entries from prior tests in this run
+  let prior = "";
+  try { prior = readFileSync(eventsFile, "utf-8"); } catch {}
+  writeFileSync(eventsFile, prior + eventsLines.join("\n") + "\n");
 
   const { stdout } = runHook(te, "memory/hooks/context-restore-start.ts",
     JSON.stringify({ session_id: "inj-test-sess" }));
 
-  check(r, "injection: briefing includes rules", stdout.includes("Learned Behavioral Rules"));
-
-  let lines: string[] = [];
-  try { lines = readFileSync(injFile, "utf-8").trim().split("\n").filter(Boolean); } catch {}
-  check(r, "injection: rule-injections.jsonl has 3 entries", lines.length === 3);
-  if (lines.length === 3) {
-    const parsed = lines.map(l => JSON.parse(l));
-    check(r, "injection: each entry has rule_hash", parsed.every(p => typeof p.rule_hash === "string" && p.rule_hash.length > 0));
-    check(r, "injection: each entry has session_id", parsed.every(p => p.session_id === "inj-test-sess"));
-    check(r, "injection: polarity captured for [avoid]",
-      parsed.filter(p => p.polarity === "avoid").length === 2);
-    check(r, "injection: polarity captured for [keep]→validated",
-      parsed.filter(p => p.polarity === "validated").length === 1);
-    check(r, "injection: text strips frequency suffix",
-      parsed[0].rule_text === "use real db not mocks");
-  }
-
-  try { unlinkSync(rulesFile); } catch {}
-  try { unlinkSync(injFile); } catch {}
+  check(r, "correction: briefing includes corrections block",
+    stdout.includes("Recent User Corrections"));
+  check(r, "correction: includes verbatim negative-feedback prompt",
+    stdout.includes("no, do not mock the DB"));
+  check(r, "correction: includes low rating",
+    stdout.includes("[low rating 2/10]"));
 }
 
 // ── Session recall ───────────────────────────────────────────────────────────

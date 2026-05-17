@@ -36,7 +36,7 @@ export interface SystemInfo {
     sessions: string;
     telemetry: string;
     signals: string;
-    ratings: string;
+    events: string;
     backups: string;
     devLogs: string;
   };
@@ -140,7 +140,7 @@ export function getSystemInfo(runtimeDbPath: string): SystemInfo {
       sessions: manifest.paths?.sessions ?? dataPaths.sessions,
       telemetry: claudePaths.projects,
       signals: dataPaths.signals,
-      ratings: manifest.paths?.ratings ?? dataPaths.ratings,
+      events: manifest.paths?.events ?? dataPaths.events,
       backups: manifest.paths?.backups ?? dataPaths.backups,
       devLogs: devLogsDir,
     },
