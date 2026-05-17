@@ -131,7 +131,7 @@ export function CategoryManager({ goalId, currentCategories }: CategoryManagerPr
                   if (e.key === 'Escape') { setOpen(false); setNewName(''); }
                 }}
                 placeholder="New category..."
-                className="w-full bg-bg-secondary border border-border-primary rounded px-2 py-1 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
+                className="w-full bg-bg-secondary border border-border-primary rounded px-2 py-1 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
               />
             </div>
           </div>

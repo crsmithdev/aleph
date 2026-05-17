@@ -1,13 +1,17 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { getSummary, listHabits } from '@construct/goals';
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 const plus = `<span style="color:#6366f1;font-weight:700;font-size:12px;margin-right:6px;flex-shrink:0">+</span>`;
 const check = `<span style="color:#22c55e;font-weight:700;font-size:12px;margin-right:6px;flex-shrink:0">✓</span>`;
 
 function bulletList(items: string[], prefix: string) {
   if (items.length === 0) return '';
   return `<ul style="list-style:none;padding:6px 16px 10px;margin:0">
-    ${items.map((t) => `<li style="display:flex;align-items:baseline;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:14px;color:#374151">${prefix}${t}</li>`).join('')}
+    ${items.map((t) => `<li style="display:flex;align-items:baseline;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:14px;color:#374151">${prefix}${escapeHtml(t)}</li>`).join('')}
   </ul>`;
 }
 

@@ -1431,7 +1431,7 @@ function InferredPanel({ loop, payload }: { loop: Loop; payload: SchedulePayload
           <select
             value={questionShape}
             onChange={(e) => onQuestionShape(e.target.value as QuestionShape)}
-            className="w-full bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary capitalize focus:outline-none focus:border-accent"
+            className="w-full bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary capitalize focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
             data-testid="inferred-question-shape"
           >
             {QUESTION_SHAPES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -1442,7 +1442,7 @@ function InferredPanel({ loop, payload }: { loop: Loop; payload: SchedulePayload
           <select
             value={outputShapeKind}
             onChange={(e) => onOutputShapeKind(e.target.value as OutputShape['kind'])}
-            className="w-full bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary capitalize focus:outline-none focus:border-accent"
+            className="w-full bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary capitalize focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
             data-testid="inferred-output-shape"
           >
             {(['prose', 'list', 'table', 'timeline', 'mixed'] as const).map(k => (
@@ -1458,7 +1458,7 @@ function InferredPanel({ loop, payload }: { loop: Loop; payload: SchedulePayload
             onChange={(e) => setRole(e.target.value)}
             onBlur={() => persist({ role })}
             placeholder="e.g. Software engineer"
-            className="w-full bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent"
+            className="w-full bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
             data-testid="inferred-role"
           />
         </div>
@@ -1587,7 +1587,7 @@ function SchedulePreStartEditor({ loop, payload }: { loop: Loop; payload: Schedu
             onChange={(e) => setCanon(e.target.value)}
             onBlur={() => persist(draft)}
             rows={3}
-            className="w-full bg-bg-primary border border-border-primary rounded px-2.5 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent"
+            className="w-full bg-bg-primary border border-border-primary rounded px-2.5 py-2 text-sm text-text-primary font-mono focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
             data-testid="schedule-canon"
           />
         </div>
@@ -1609,14 +1609,14 @@ function SchedulePreStartEditor({ loop, payload }: { loop: Loop; payload: Schedu
                   onChange={(e) => setBranch(i, 'id', e.target.value)}
                   onBlur={() => persist(draft)}
                   placeholder="branch-id"
-                  className="bg-bg-primary border border-border-primary rounded px-2 py-1 text-xs font-mono text-text-primary focus:outline-none focus:border-accent"
+                  className="bg-bg-primary border border-border-primary rounded px-2 py-1 text-xs font-mono text-text-primary focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
                 />
                 <input
                   value={b.query}
                   onChange={(e) => setBranch(i, 'query', e.target.value)}
                   onBlur={() => persist(draft)}
                   placeholder="seed search query for this branch"
-                  className="bg-bg-primary border border-border-primary rounded px-2 py-1 text-sm text-text-primary focus:outline-none focus:border-accent"
+                  className="bg-bg-primary border border-border-primary rounded px-2 py-1 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
                 />
                 <button
                   type="button"

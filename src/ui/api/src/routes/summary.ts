@@ -1,8 +1,10 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { getSummary, getTimeseries } from '@construct/goals';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { resolve } from 'path';
 import { existsSync } from 'fs';
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function findRepoRoot(): string | null {
   let dir = resolve(import.meta.dirname, '../../../..');
@@ -22,15 +24,17 @@ function getGitStats(start: string, end: string): GitStats {
   try {
     const since = `${start} 00:00:00`;
     const until = `${end} 23:59:59`;
-    const logArgs = `--no-merges --since="${since}" --until="${until}"`;
-    const commits = parseInt(
-      execSync(`git -C "${repoDir}" rev-list --count ${logArgs} HEAD`, { encoding: 'utf-8', timeout: 5000 }).trim()
-    );
-
-    const out = execSync(
-      `git -C "${repoDir}" log --numstat --format="==COMMIT==%H%x09%s" ${logArgs}`,
+    const countResult = spawnSync(
+      'git', ['-C', repoDir, 'rev-list', '--count', '--no-merges', `--since=${since}`, `--until=${until}`, 'HEAD'],
       { encoding: 'utf-8', timeout: 5000 }
     );
+    const commits = parseInt(countResult.stdout?.trim() || '0');
+
+    const logResult = spawnSync(
+      'git', ['-C', repoDir, 'log', '--numstat', '--format===COMMIT==%H\t%s', '--no-merges', `--since=${since}`, `--until=${until}`],
+      { encoding: 'utf-8', timeout: 5000 }
+    );
+    const out = logResult.stdout ?? '';
 
     let added = 0, deleted = 0;
     const perCommit: TopCommit[] = [];
@@ -77,6 +81,9 @@ export const summaryRoutes: FastifyPluginAsync = async (app) => {
     const { start, end } = req.query;
     if (!start || !end) {
       return reply.status(400).send({ error: 'start and end query params are required (ISO date YYYY-MM-DD)' });
+    }
+    if (!DATE_RE.test(start) || !DATE_RE.test(end)) {
+      return reply.status(400).send({ error: 'start and end must be YYYY-MM-DD' });
     }
     return getGitStats(start, end);
   });

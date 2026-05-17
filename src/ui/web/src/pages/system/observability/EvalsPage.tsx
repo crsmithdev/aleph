@@ -393,7 +393,7 @@ function CreateScenarioModal({ open, onClose }: { open: boolean; onClose: () => 
     });
   }
 
-  const inputCls = 'w-full rounded border border-border-primary bg-bg-tertiary px-3 py-2 text-sm text-text-primary placeholder-text-disabled focus:outline-none focus:border-accent transition-colors';
+  const inputCls = 'w-full rounded border border-border-primary bg-bg-tertiary px-3 py-2 text-sm text-text-primary placeholder-text-disabled focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-colors';
   const labelCls = 'block text-xs text-text-muted mb-1';
 
   return (
@@ -511,7 +511,7 @@ function CreateScenarioModal({ open, onClose }: { open: boolean; onClose: () => 
             {criteria.map((c, i) => (
               <div key={i} className="flex gap-2 items-start">
                 <select
-                  className="rounded border border-border-primary bg-bg-tertiary px-2 py-2 text-xs text-text-primary focus:outline-none focus:border-accent w-28 shrink-0"
+                  className="rounded border border-border-primary bg-bg-tertiary px-2 py-2 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent w-28 shrink-0"
                   value={c.type}
                   onChange={e => { const a = [...criteria]; a[i] = { ...a[i], type: e.target.value }; setCriteria(a); }}
                 >
@@ -577,7 +577,7 @@ function ScenariosTab() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
         <input
-          className="flex-1 rounded border border-border-primary bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder-text-disabled focus:outline-none focus:border-accent transition-colors"
+          className="flex-1 rounded border border-border-primary bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder-text-disabled focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-colors"
           placeholder="Filter scenarios…"
           value={filter}
           onChange={e => setFilter(e.target.value)}
@@ -703,7 +703,7 @@ function RunsTab() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
         <input
-          className="flex-1 rounded border border-border-primary bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder-text-disabled focus:outline-none focus:border-accent transition-colors"
+          className="flex-1 rounded border border-border-primary bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder-text-disabled focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-colors"
           placeholder="Filter by scenario name…"
           value={scenarioFilter}
           onChange={e => setScenarioFilter(e.target.value)}

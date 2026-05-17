@@ -7,7 +7,7 @@ import { PageLoading } from '../../components/ui/Spinner';
 import { ResearchDefaultsPanel } from './ResearchDefaultsPanel';
 
 const inputCls =
-  'bg-bg-primary border border-border-primary rounded px-2.5 py-2 text-sm text-text-primary focus:outline-none focus:border-accent w-full';
+  'bg-bg-primary border border-border-primary rounded px-2.5 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent w-full';
 
 const labelCls = 'text-sm text-text-muted mb-1.5 block';
 

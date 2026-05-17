@@ -25,12 +25,12 @@ export function HabitCreateForm({ onCreated }: { onCreated?: () => void }) {
         }}
         placeholder="New habit..."
         autoFocus
-        className="flex-1 bg-bg-secondary border border-border-primary rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
+        className="flex-1 bg-bg-secondary border border-border-primary rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
       />
       <select
         value={frequency}
         onChange={(e) => setFrequency(e.target.value as 'daily' | 'weekly' | 'monthly')}
-        className="bg-bg-secondary border border-border-primary rounded-lg px-2 py-2 text-sm text-text-secondary focus:outline-none focus:border-accent"
+        className="bg-bg-secondary border border-border-primary rounded-lg px-2 py-2 text-sm text-text-secondary focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
       >
         <option value="daily">Daily</option>
         <option value="weekly">Weekly</option>

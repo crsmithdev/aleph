@@ -43,6 +43,7 @@ const TAG = "quality-check-stop";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) {
+  console.error(`[${TAG}] stdin-parse-error: ${String(e)}`);
   trace(TAG, `stdin-parse-error: ${String(e)}`);
   process.exit(1);
 }
