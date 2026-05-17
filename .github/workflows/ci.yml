@@ -24,9 +24,6 @@ jobs:
 
   dashboard:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src/ui
     steps:
       - uses: actions/checkout@v4
 
@@ -34,18 +31,11 @@ jobs:
         with:
           bun-version: latest
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Build
-        run: npm run build
-
-      - name: Test
-        run: npm run typecheck
+        run: bun run --cwd src/ui build
 
   validate:
     runs-on: ubuntu-latest
