@@ -133,6 +133,16 @@
         ]
       },
       {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun src/core/hooks/rules-enforce-edit.ts 2>/dev/null",
+            "timeout": 5000
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
