@@ -669,7 +669,7 @@ export function useObsDirectives() {
   });
 }
 
-export function useObsLearningLoop() {
+export function useObsLearningLoop(range?: TimeRange) {
   return useQuery<{
     items: Array<{
       ts: string;
@@ -684,8 +684,8 @@ export function useObsLearningLoop() {
     total: number;
     memoryCount: number;
   }>({
-    queryKey: ['observability', 'learning', 'loop'],
-    queryFn: () => api.get('/observability/learning/loop'),
+    queryKey: ['observability', 'learning', 'loop', range],
+    queryFn: () => api.get(`/observability/learning/loop${range ? `?range=${range}` : ''}`),
   });
 }
 

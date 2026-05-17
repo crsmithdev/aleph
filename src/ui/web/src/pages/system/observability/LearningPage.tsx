@@ -513,14 +513,24 @@ function GatesSection() {
   );
 }
 
+type Tab = 'insights' | 'feedback' | 'corrections' | 'gates';
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'insights', label: 'Insights' },
+  { key: 'feedback', label: 'Feedback' },
+  { key: 'corrections', label: 'Corrections' },
+  { key: 'gates', label: 'Gates' },
+];
+
 export function LearningPage() {
+  const [tab, setTab] = useState<Tab>('insights');
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [feedbackExpandedKey, setFeedbackExpandedKey] = useState<string | null>(null);
   const [loopExpandedKey, setLoopExpandedKey] = useState<string | null>(null);
   const [correctionExpandedKey, setCorrectionExpandedKey] = useState<string | null>(null);
 
-  const { data: loopData, isLoading: loopLoading, error: loopError, refetch: loopRefetch } = useObsLearningLoop();
+  const { data: loopData, isLoading: loopLoading, error: loopError, refetch: loopRefetch } = useObsLearningLoop(range);
   const { data: feedbackData, isLoading: feedbackLoading, error: feedbackError, refetch: feedbackRefetch } = useObsLearningFeedback();
   const { data: gateData } = useObsGateEvents();
   const { data: patternsData } = useObsGatePatterns();
@@ -716,144 +726,161 @@ export function LearningPage() {
         </button>
       </div>
 
-      {/* Learning Loop section */}
-      <div className="space-y-3">
-        <h2 className="font-heading text-lg font-medium text-text-secondary">Learning Loop</h2>
-        {loopLoading ? (
-          <PageLoading />
-        ) : loopError || !loopData ? (
-          <ErrorState message="Failed to load learning loop data" retry={loopRefetch} />
-        ) : loopData.items.length === 0 ? (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center space-y-1">
-            <p className="text-sm text-text-muted">No learning loop events recorded.</p>
-            <p className="text-xs text-text-disabled">
-              Populated after sessions with ≥6 messages and ≥1 edit, when the memory writer stores a new entry.
-            </p>
-          </div>
-        ) : (
-          <DataTable<LoopItem>
-            data={loopData.items}
-            columns={loopColumns}
-            keyField="ts"
-            maxRows={50}
-            pageSize={50}
-            expandedKey={loopExpandedKey}
-            onExpandToggle={setLoopExpandedKey}
-            renderExpanded={(row) => (
-              <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-sm">
-                {row.content && (
-                  <div>
-                    <span className="text-text-muted font-medium">Content: </span>
-                    <span className="text-text-secondary">{row.content}</span>
-                  </div>
-                )}
-                {row.tags && (
-                  <div>
-                    <span className="text-text-muted font-medium">Tags: </span>
-                    <span className="font-mono text-text-disabled">{row.tags}</span>
-                  </div>
-                )}
-              </div>
+      {/* Subtabs */}
+      <div className="flex gap-1 border-b border-border-primary">
+        {TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={clsx(
+              'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+              tab === key
+                ? 'border-accent text-text-primary'
+                : 'border-transparent text-text-muted hover:text-text-secondary',
             )}
-            rowKeyFn={(row) => row.ts + row.sessionId}
-          />
-        )}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* Feedback & Ratings section */}
-      <div className="space-y-3">
-        <h2 className="font-heading text-lg font-medium text-text-secondary">Feedback</h2>
-        {feedbackLoading ? (
-          <PageLoading />
-        ) : feedbackError || !feedbackData ? (
-          <ErrorState message="Failed to load feedback data" retry={feedbackRefetch} />
-        ) : feedbackData.items.length === 0 ? (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center text-sm text-text-muted">
-            No feedback recorded.
-          </div>
-        ) : (
-          <DataTable<FeedbackItem>
-            data={feedbackData.items}
-            columns={feedbackColumns}
-            keyField="ts"
-            maxRows={50}
-            pageSize={50}
-            expandedKey={feedbackExpandedKey}
-            onExpandToggle={setFeedbackExpandedKey}
-            renderExpanded={(row) => (
-              <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-sm">
-                <div>
-                  <span className="text-text-muted font-medium">Prompt: </span>
-                  <span className="text-text-primary">{row.trigger}</span>
+      {/* Tab panels */}
+      {tab === 'insights' && (
+        <div className="space-y-3">
+          {loopLoading ? (
+            <PageLoading />
+          ) : loopError || !loopData ? (
+            <ErrorState message="Failed to load learning loop data" retry={loopRefetch} />
+          ) : loopData.items.length === 0 ? (
+            <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center space-y-1">
+              <p className="text-sm text-text-muted">No learning loop events recorded.</p>
+              <p className="text-xs text-text-disabled">
+                Populated after sessions with ≥6 messages and ≥1 edit, when the memory writer stores a new entry.
+              </p>
+            </div>
+          ) : (
+            <DataTable<LoopItem>
+              data={loopData.items}
+              columns={loopColumns}
+              keyField="ts"
+              maxRows={50}
+              pageSize={50}
+              expandedKey={loopExpandedKey}
+              onExpandToggle={setLoopExpandedKey}
+              renderExpanded={(row) => (
+                <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-sm">
+                  {row.content && (
+                    <div>
+                      <span className="text-text-muted font-medium">Content: </span>
+                      <span className="text-text-secondary">{row.content}</span>
+                    </div>
+                  )}
+                  {row.tags && (
+                    <div>
+                      <span className="text-text-muted font-medium">Tags: </span>
+                      <span className="font-mono text-text-disabled">{row.tags}</span>
+                    </div>
+                  )}
                 </div>
-                {row.priorText && (
-                  <div>
-                    <span className="text-text-muted font-medium">Prior response: </span>
-                    <span className="text-text-secondary">{row.priorText}</span>
-                  </div>
-                )}
-                {row.priorTools && row.priorTools.length > 0 && (
-                  <div>
-                    <span className="text-text-muted font-medium">Tools: </span>
-                    <span className="font-mono text-text-secondary">{row.priorTools.join(', ')}</span>
-                  </div>
-                )}
-                {row.priorFiles && row.priorFiles.length > 0 && (
-                  <div>
-                    <span className="text-text-muted font-medium">Files: </span>
-                    <span className="font-mono text-text-secondary">{row.priorFiles.join(', ')}</span>
-                  </div>
-                )}
-              </div>
-            )}
-            rowKeyFn={(row) => row.ts + row.sessionId}
-          />
-        )}
-      </div>
+              )}
+              rowKeyFn={(row) => row.ts + row.sessionId}
+            />
+          )}
+        </div>
+      )}
 
-      {/* Corrections section */}
-      <div className="space-y-3">
-        <div>
-          <h2 className="font-heading text-lg font-medium text-text-secondary">Corrections</h2>
-          <p className="text-xs text-text-disabled mt-0.5">
+      {tab === 'feedback' && (
+        <div className="space-y-3">
+          {feedbackLoading ? (
+            <PageLoading />
+          ) : feedbackError || !feedbackData ? (
+            <ErrorState message="Failed to load feedback data" retry={feedbackRefetch} />
+          ) : feedbackData.items.length === 0 ? (
+            <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center text-sm text-text-muted">
+              No feedback recorded.
+            </div>
+          ) : (
+            <DataTable<FeedbackItem>
+              data={feedbackData.items}
+              columns={feedbackColumns}
+              keyField="ts"
+              maxRows={50}
+              pageSize={50}
+              expandedKey={feedbackExpandedKey}
+              onExpandToggle={setFeedbackExpandedKey}
+              renderExpanded={(row) => (
+                <div className="px-4 py-3 space-y-2 bg-bg-tertiary/30 text-sm">
+                  <div>
+                    <span className="text-text-muted font-medium">Prompt: </span>
+                    <span className="text-text-primary">{row.trigger}</span>
+                  </div>
+                  {row.priorText && (
+                    <div>
+                      <span className="text-text-muted font-medium">Prior response: </span>
+                      <span className="text-text-secondary">{row.priorText}</span>
+                    </div>
+                  )}
+                  {row.priorTools && row.priorTools.length > 0 && (
+                    <div>
+                      <span className="text-text-muted font-medium">Tools: </span>
+                      <span className="font-mono text-text-secondary">{row.priorTools.join(', ')}</span>
+                    </div>
+                  )}
+                  {row.priorFiles && row.priorFiles.length > 0 && (
+                    <div>
+                      <span className="text-text-muted font-medium">Files: </span>
+                      <span className="font-mono text-text-secondary">{row.priorFiles.join(', ')}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              rowKeyFn={(row) => row.ts + row.sessionId}
+            />
+          )}
+        </div>
+      )}
+
+      {tab === 'corrections' && (
+        <div className="space-y-3">
+          <p className="text-xs text-text-disabled">
             Negative feedback grouped by trigger word — a proxy for directive adherence.
           </p>
+          {feedbackLoading ? (
+            <PageLoading />
+          ) : correctionGroups.length === 0 ? (
+            <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center text-sm text-text-muted">
+              No corrections recorded.
+            </div>
+          ) : (
+            <DataTable<CorrectionGroup>
+              data={correctionGroups}
+              columns={correctionColumns}
+              keyField="trigger"
+              maxRows={50}
+              expandedKey={correctionExpandedKey}
+              onExpandToggle={setCorrectionExpandedKey}
+              renderExpanded={(row) => (
+                <div className="px-4 py-3 space-y-1.5 bg-bg-tertiary/30">
+                  {row.items.map((item, i) => (
+                    <div key={i} className="flex items-start gap-3 text-sm">
+                      <span className="font-mono text-text-disabled text-xs whitespace-nowrap shrink-0">{compactTs(item.ts)}</span>
+                      <span className="text-text-secondary flex-1">{item.trigger}</span>
+                      <SessionLink sessionId={item.sessionId} turnIndex={item.turnIndex} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              rowKeyFn={(row) => row.trigger}
+            />
+          )}
         </div>
-        {feedbackLoading ? (
-          <PageLoading />
-        ) : correctionGroups.length === 0 ? (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-8 text-center text-sm text-text-muted">
-            No corrections recorded.
-          </div>
-        ) : (
-          <DataTable<CorrectionGroup>
-            data={correctionGroups}
-            columns={correctionColumns}
-            keyField="trigger"
-            maxRows={50}
-            expandedKey={correctionExpandedKey}
-            onExpandToggle={setCorrectionExpandedKey}
-            renderExpanded={(row) => (
-              <div className="px-4 py-3 space-y-1.5 bg-bg-tertiary/30">
-                {row.items.map((item, i) => (
-                  <div key={i} className="flex items-start gap-3 text-sm">
-                    <span className="font-mono text-text-disabled text-xs whitespace-nowrap shrink-0">{compactTs(item.ts)}</span>
-                    <span className="text-text-secondary flex-1">{item.trigger}</span>
-                    <SessionLink sessionId={item.sessionId} turnIndex={item.turnIndex} />
-                  </div>
-                ))}
-              </div>
-            )}
-            rowKeyFn={(row) => row.trigger}
-          />
-        )}
-      </div>
+      )}
 
-      {/* Gates section */}
-      <div id="gates-section" className="space-y-3">
-        <h2 className="font-heading text-lg font-medium text-text-secondary">Gates</h2>
-        <GatesSection />
-      </div>
+      {tab === 'gates' && (
+        <div id="gates-section" className="space-y-3">
+          <GatesSection />
+        </div>
+      )}
     </div>
   );
 }

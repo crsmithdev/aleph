@@ -1622,19 +1622,22 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
   // Learning & Compliance endpoints
   // ---------------------------------------------------------------------------
 
-  app.get('/learning/loop', async () => {
-    return cachedResult('/learning/loop', 60_000, () => {
-      // Memory count from the real sqlite DB
+  app.get('/learning/loop', async (req: FastifyRequest<{ Querystring: QueryParams }>) => {
+    const days = rangeToDays(req.query.range) ?? 30;
+    return cachedResult(`/learning/loop?days=${days}`, 60_000, () => {
+      // Memory count from the real sqlite DB, filtered to selected range
       let memoryCount = 0;
       try {
         const memDbPath = getMemoryDbPath();
         if (existsSync(memDbPath)) {
           const db = new Database(memDbPath, { readonly: true });
-          const row = db.query<{ n: number }, []>(
+          const since = (Date.now() - days * 86400000) / 1000;
+          const row = db.query<{ n: number }, [number]>(
             `SELECT COUNT(*) AS n FROM memories WHERE deleted_at IS NULL
+             AND created_at >= ?
              AND (memory_type IN ('pattern','learning','feedback','decision','error')
                   OR tags LIKE '%preference%' OR tags LIKE '%correction%')`,
-          ).get();
+          ).get(since);
           memoryCount = row?.n ?? 0;
           db.close();
         }
