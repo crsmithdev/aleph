@@ -446,6 +446,18 @@ function adaptLine(
 // File-level adaptation with caching
 // ---------------------------------------------------------------------------
 
+// In-memory cache of parsed events per session JSONL file. Survives across
+// corpus-cache expirations, so a 60s-idle rebuild against unchanged files
+// costs only statSync per file — no SQLite SELECT, no JSON.parse. The SQLite
+// cache below remains as the warm-up layer for the first read after restart.
+const fileEventCache = new Map<string, { mtimeMs: number; size: number; events: TelemetryEvent[] }>();
+
+function filterSince(events: TelemetryEvent[], since: Date | undefined): TelemetryEvent[] {
+  if (!since) return events;
+  const cutoff = since.toISOString();
+  return events.filter((e) => e.ts >= cutoff);
+}
+
 function adaptFile(filePath: string, project: string, since?: Date): TelemetryEvent[] {
   let stat: ReturnType<typeof statSync>;
   try {
@@ -454,14 +466,16 @@ function adaptFile(filePath: string, project: string, since?: Date): TelemetryEv
     return [];
   }
 
+  const memHit = fileEventCache.get(filePath);
+  if (memHit && memHit.mtimeMs === stat.mtimeMs && memHit.size === stat.size) {
+    return filterSince(memHit.events, since);
+  }
+
   const cached = selectCache.get(filePath) as { mtime_ms: number; size: number; events: string } | undefined;
   if (cached && cached.mtime_ms === stat.mtimeMs && cached.size === stat.size) {
     const events = JSON.parse(cached.events) as TelemetryEvent[];
-    if (since) {
-      const cutoff = since.toISOString();
-      return events.filter((e) => e.ts >= cutoff);
-    }
-    return events;
+    fileEventCache.set(filePath, { mtimeMs: stat.mtimeMs, size: stat.size, events });
+    return filterSince(events, since);
   }
 
   let content: string;
@@ -524,12 +538,9 @@ function adaptFile(filePath: string, project: string, since?: Date): TelemetryEv
   }
 
   insertCache.run(filePath, stat.mtimeMs, stat.size, JSON.stringify(rawEvents));
+  fileEventCache.set(filePath, { mtimeMs: stat.mtimeMs, size: stat.size, events: rawEvents });
 
-  if (since) {
-    const cutoff = since.toISOString();
-    return rawEvents.filter((e) => e.ts >= cutoff);
-  }
-  return rawEvents;
+  return filterSince(rawEvents, since);
 }
 
 // ---------------------------------------------------------------------------
@@ -642,6 +653,7 @@ function corpusCacheKey(opts?: AdaptOptions): string {
 export function clearCache(): void {
   cacheDb.exec("DELETE FROM telemetry_cache_v6");
   fileCache.clear();
+  fileEventCache.clear();
   discoveryCache = undefined;
   corpusCache = undefined;
 }
@@ -661,6 +673,13 @@ export function adaptAllSessions(opts?: AdaptOptions): TelemetryEvent[] {
     const project = projectFromPath(file);
     if (opts?.projects && !opts.projects.includes(project)) continue;
     allEvents.push(...adaptFile(file, project, opts?.since));
+  }
+
+  // Prune in-memory event cache entries whose files are no longer in the live
+  // discovered set, so deleted/rotated files don't accumulate memory.
+  if (fileEventCache.size > files.length) {
+    const live = new Set(files);
+    for (const key of fileEventCache.keys()) if (!live.has(key)) fileEventCache.delete(key);
   }
 
   if (opts?.includeEvents !== false) allEvents.push(...readEvents(opts?.since));
