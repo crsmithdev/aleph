@@ -1,9 +1,11 @@
----
-name: design-construct
-description: Construct's design system — tokens, surfaces, type scale, iconography, component patterns. Use when building or modifying Construct UI to enforce token usage (no inline hex), the three-tier surface system, Merriweather/Noto type pairing, and Material Symbols icon conventions. Reference `previews/*.html` and `kits/*.html` as visual specs before redesigning chrome.
----
+# Construct Design System Rules
 
-# Construct Design System — usage notes
+Project-specific UI rules for the Construct codebase. Walked by `design-review`:
+- `mode: audit` — finds violations (inline hex, drop shadows, wrong type pairing, etc.)
+- `mode: enforce` — applies these rules silently while writing or editing UI source
+- `mode: fix` — applies approved findings
+
+Sibling assets — `tokens/`, `kits/`, `previews/`, `fonts/` — are the visual specs and runtime values these rules reference.
 
 When designing for **construct**, follow these rules.
 

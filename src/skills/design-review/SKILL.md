@@ -1,25 +1,26 @@
 ---
 name: design-review
-description: Review UI design quality — audit findings (default) or apply approved fixes (mode: fix). Audit mode is agent-backed via design-reviewer (needs browser/ui:smoke). Fix mode runs inline source edits. Evaluates rules in src/rules/design/RULES.md across 18 dimensions (visual hierarchy, typography, color, alignment, components, iconography, motion, state coverage, dark mode, density, responsiveness, accessibility, forms, performance, navigation, hydration, locale, anti-patterns). Triggers on /audit design, /fix design, /design-review, "audit the ui", "review the ui", "polish the interface", "design review", "make this feel professional", "make the pages match", "align the layouts".
+description: Review UI design quality — audit findings (default), apply approved fixes (mode: fix), or auto-apply Construct design rules silently while writing UI source (mode: enforce). Audit mode is agent-backed via design-reviewer (needs browser/ui:smoke). Fix mode runs inline source edits. Enforce mode applies token/surface/type/icon rules from src/rules/design/construct/RULES.md while producing React/CSS — no findings, no diff. Evaluates rules in src/rules/design/RULES.md across 18 dimensions (visual hierarchy, typography, color, alignment, components, iconography, motion, state coverage, dark mode, density, responsiveness, accessibility, forms, performance, navigation, hydration, locale, anti-patterns) plus the Construct-specific rules under src/rules/design/construct/. Triggers on /audit design, /fix design, /design-review, "audit the ui", "review the ui", "polish the interface", "design review", "make this feel professional", "make the pages match", "align the layouts", "design system", "construct design", "design tokens", "color tokens", "surface tokens", "type scale", "design reference", "design kit", "material symbols", "construct ui pattern", and is self-invoked in enforce mode whenever the agent is writing or editing UI source under src/ui/.
 verb: review
 domain: design
-modes: [audit, fix]
+modes: [audit, fix, enforce]
 agent_backed:
   audit: design-reviewer
 metadata:
   author: bencium (adapted)
-  version: "3.0.0"
-  argument-hint: <scope-or-page-url> [--mode audit|fix]
+  version: "4.0.0"
+  argument-hint: <scope-or-page-url> [--mode audit|fix|enforce]
 ---
 
 # Design Review
 
-Single entry point for design quality work. Defaults to `audit`; switch to `fix` once findings are approved.
+Single entry point for design quality work. Defaults to `audit`; switch to `fix` once findings are approved; `enforce` is self-invoked while writing UI source.
 
 | Mode | Dispatch | Mutating | Purpose |
 |---|---|---|---|
-| `audit` (default) | **Agent-backed** via `design-reviewer` subagent (needs browser tools + `bun run ui:smoke` for visual rendering) | No | Walks UI surfaces, evaluates every rule in `src/rules/design/RULES.md`, emits SARIF + phased prose summary |
+| `audit` (default) | **Agent-backed** via `design-reviewer` subagent (needs browser tools + `bun run ui:smoke` for visual rendering) | No | Walks UI surfaces, evaluates every rule in `src/rules/design/RULES.md` + `src/rules/design/construct/RULES.md`, emits SARIF + phased prose summary |
 | `fix` | **Inline** — direct source edits to React/CSS by this skill | Yes | Applies approved `peer-drift` findings (or runs an inline audit pass first), then verifies with `gate("design")` |
+| `enforce` | **Inline** — applied silently during UI writes | Yes (as part of the write) | Self-invoked when the agent is writing or editing UI source under `src/ui/`. Auto-applies every rule in `src/rules/design/construct/RULES.md` (token usage, 3-tier surfaces, type pairing, icon conventions, Construct-specific bans). No findings, no plan, no diff. Reference the visual specs in `src/rules/design/construct/{kits,previews}/` before redesigning chrome. |
 
 Pure leaf: no `Skill()` calls. The omnibus chains audit → approval → fix.
 
@@ -347,6 +348,45 @@ assertions: every route renders, no 5xx, no console errors; eyeballed <list>
 - **Verification gate.** `gate("design")` runs only when `mode: fix` finishes applying changes. Audit mode is non-mutating and has no gate.
 - **Design only, not logic.** If a finding requires a functional change, flag it and surface — outside this skill's scope.
 
+## Process — `mode: enforce`
+
+Self-invoked, not orchestrator-dispatched. When the agent is about to write or edit UI source under `src/ui/` (React/TSX, CSS, Tailwind classes, HTML), this mode activates for the duration of the write. No audit pass, no findings emitted, no plan presented. Construct's design rules in `src/rules/design/construct/RULES.md` are applied silently to the produced output.
+
+If the user wants violations *flagged* in existing UI → `mode: audit`.
+If the user wants peer UI files aligned to a reference → `mode: fix` with `tag: peer-drift`.
+
+### 1. Read the criteria
+
+Before producing any UI source, read:
+
+- `src/rules/design/construct/RULES.md` — the "Always / Never" rule list, theme swapping, icon fallback
+- `src/rules/design/construct/tokens/colors_and_type.css` — the token surface every HTML/CSS file must reference
+- `src/rules/design/construct/kits/<closest-match>.html` — start from a kit and substitute content; never redesign chrome
+- `src/rules/design/construct/previews/components.html` — buttons, inputs, badges, tables, charts
+- `src/rules/design/construct/previews/page_chrome.html` — sidebar, header, observability control bar
+
+### 2. Apply the Construct rules silently while producing the file
+
+The core constraints from `construct/RULES.md` (non-exhaustive — read the full file):
+
+- Link `tokens/colors_and_type.css` at the top of every HTML file
+- Reference colors only via tokens (`var(--bg-secondary)`, `var(--accent)`, `var(--text-muted)`) — never inline hex
+- Three-tier surface system (`--bg-primary` / `--bg-secondary` / `--bg-tertiary`)
+- Hierarchy via value: `--text-primary` / `--text-secondary` / `--text-muted`
+- `--font-heading` (Merriweather) only for stat numerics and the wordmark; default `--font-sans`; `--font-mono` for IDs/hashes/paths/code
+- Tabular numerics in tables (`font-variant-numeric: tabular-nums`)
+- Body default 14px, minimum 12px (mono captions)
+- Radii: 2/4/8/12 (cards 8, modals 12)
+- No drop shadows; use 1px borders or value steps
+- No gradient backgrounds outside the Investigate hero
+- No emoji; use Material Symbols or inline SVG
+- No new colors; derive from existing tokens or extend the theme block
+- Magenta only on habits
+
+### 3. Output
+
+There is no output format. Enforcement produces UI source, not a report.
+
 ## Guardrails
 
 - **Confidence is provisional.** Omnibus validation pass refines it.
@@ -364,6 +404,8 @@ assertions: every route renders, no 5xx, no console errors; eyeballed <list>
 
 - Rule source: `src/rules/design/RULES.md`
 - Reference sub-rules: `src/rules/design/accessibility.md`, `src/rules/design/typography.md`
+- Construct-specific rules: `src/rules/design/construct/RULES.md` (Construct design-system rules — tokens, surfaces, type pairing, icon conventions)
+- Construct design assets: `src/rules/design/construct/{tokens,kits,previews,fonts}/`
 - Finding contract: `src/skills/_shared/finding.md`
 - Audit-mode agent: `src/agents/design-reviewer.md`
 - Progressive-disclosure detail: `references/design-principles.md`, `references/audit-template.md`, `references/dimensions.md`, `references/verification.md`, `examples/`

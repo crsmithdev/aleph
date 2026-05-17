@@ -26,8 +26,8 @@ Implements visual feedback from vibe-annotations and clears the annotations once
 ## When NOT to use
 
 - No annotations exist — tell the user and stop.
-- User wants a design audit from scratch — use `design-audit`.
-- User wants to understand the design system — use `design-construct`.
+- User wants a design audit from scratch — use `design-review --mode audit`.
+- User wants to understand the design system — read `src/rules/design/construct/RULES.md` and the assets under `src/rules/design/construct/{tokens,kits,previews}/`.
 
 ## Inputs
 
@@ -122,7 +122,7 @@ Use the `test-webapp` skill pattern: navigate to the page in a headless browser,
 
 ## Design token reference
 
-Read `design-construct` skill if you need more detail on the Construct token system, surface hierarchy, or component patterns before editing.
+Read `src/rules/design/construct/RULES.md` (with assets under `src/rules/design/construct/{tokens,kits,previews}/`) if you need more detail on the Construct token system, surface hierarchy, or component patterns before editing.
 
 ## Common pitfalls
 

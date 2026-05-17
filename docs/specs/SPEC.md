@@ -130,7 +130,6 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 | `config-audit` | Full health check for Claude Code agent configuration |
 | `context-compact` | Guide context compaction at logical task phase boundaries |
 | `design-audit` | Systematic UI/UX design audit (18 dimensions) |
-| `design-construct` | Construct design system — tokens, surfaces, type scale, iconography |
 | `design-fix` | Apply fixes for peer-drift findings in UI surfaces |
 | `docs-audit` | Post-hoc review of existing documentation |
 | `docs-author` | Create, update, or enhance documentation |
