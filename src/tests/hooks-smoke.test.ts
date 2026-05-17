@@ -116,10 +116,10 @@ const longPrompt = Array(42).fill("word").join(" ");
 const longResult = runHook(te, "core/hooks/routing-classify-submit.ts", JSON.stringify({ prompt: longPrompt }));
 check(r, "routing: ≥40 words → FULL output", longResult.stdout.includes("[Construct] Depth: FULL"));
 
-// Skill matching — verify-completion is triggered by "verify" and "end to end"
-const skillResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"verify that everything is working end to end"}');
+// Skill matching — "audit the code" is triggered by code-review
+const skillResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"audit the code on this branch"}');
 check(r, "routing: skill match emits Matched skills line", skillResult.stdout.includes("[Construct] Matched skills:"));
-check(r, "routing: verify-completion skill matched", skillResult.stdout.includes("verify-completion"));
+check(r, "routing: code-review skill matched", skillResult.stdout.includes("code-review"));
 
 // Malformed stdin → exit 1
 runAndCheck(te, r, "core/hooks/routing-classify-submit.ts", "routing: malformed stdin", "not json", { expectExit: 1 });

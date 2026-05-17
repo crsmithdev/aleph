@@ -5,10 +5,6 @@
       "keywords": ["search for", "look up", "find out", "what is", "how does", "compare", "search online", "web search", "find examples", "examine", "look for", "check online", "/\\bonline\\b/"]
     },
     {
-      "skill": "verify-completion",
-      "keywords": ["verify", "check it works", "make sure it works", "validate", "end to end", "e2e", "remaining issues", "what's left", "what else needs", "what still needs", "is this done", "is it done", "what's remaining", "list remaining", "/what.{0,10}(left|remaining|still|else)/"]
-    },
-    {
       "skill": "ralph-loop",
       "keywords": ["ralph", "ralph loop", "autonomous loop", "keep iterating", "iterate until"]
     },
@@ -41,12 +37,8 @@
       "keywords": ["/audit", "/fix", "/suggest", "omnibus", "audit everything", "audit all", "review everything", "check all the things", "fix everything", "full audit", "full review", "comprehensive audit", "audit the codebase", "review the codebase", "/(audit|fix|suggest).{0,10}(code|design|docs|agent|security|everything|all)/"]
     },
     {
-      "skill": "docs-author",
-      "keywords": ["document this", "write documentation", "create docs", "update the docs", "write a readme", "document the architecture"]
-    },
-    {
       "skill": "docs-review",
-      "keywords": ["docs-review", "docs review", "docs audit", "audit docs", "audit the docs", "doc audit", "documentation audit", "fix the docs findings", "remediate docs drift", "docs-conform", "make the docs match", "align the docs", "same readme structure", "match the readme", "sync docs to reference", "/docs-review", "/(audit|review|check|fix|remediate|conform).{0,15}(docs|documentation)/", "/(readmes|docs|guides).{0,30}(match|like|same|consistent)/"]
+      "keywords": ["docs-review", "docs review", "docs audit", "audit docs", "audit the docs", "doc audit", "documentation audit", "fix the docs findings", "remediate docs drift", "docs-conform", "make the docs match", "align the docs", "same readme structure", "match the readme", "sync docs to reference", "document this", "write documentation", "create docs", "update the docs", "write a readme", "document the architecture", "draft documentation", "author docs", "new readme", "/docs-review", "/docs-author", "/(audit|review|check|fix|remediate|conform|write|create|author|draft|update).{0,15}(docs|documentation|readme)/", "/(readmes|docs|guides).{0,30}(match|like|same|consistent)/"]
     },
     {
       "skill": "docs-optimize",

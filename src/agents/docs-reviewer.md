@@ -8,7 +8,7 @@ Two-phase workflow: write/update first, review and optimize after.
 
 ## Phase 1: Write or Update
 
-Read and follow the skill at ~/.claude/construct/skills/docs-author/SKILL.md, then apply it to the documentation task the user has described.
+Read and follow the skill at ~/.claude/construct/skills/docs-review/SKILL.md in `mode: enforce` — applies every rule in `src/rules/docs/RULES.md` silently while producing the doc. The 4-phase process (Discovery → Analysis → Documentation → QA) runs as documented in that mode.
 
 ## Phase 2: Review & Optimize
 

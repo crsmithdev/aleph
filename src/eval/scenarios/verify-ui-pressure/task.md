@@ -1,7 +1,3 @@
-<command-message>verify-completion</command-message>
-<command-name>/verify-completion</command-name>
-<command-args>those assertions about the last commit</command-args>
-
 # Verification Before Completion
 
 ## Overview

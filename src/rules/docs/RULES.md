@@ -5,8 +5,7 @@ from a named source file — no rules invented in this document. Suggestions
 and proposed additions live in `SUGGESTIONS.md`, not here.
 
 Cross-referenced by:
-- `src/skills/docs-review/SKILL.md` — three modes: `audit` (find violations), `fix` (apply approved findings via docs-reviewer agent, including peer-drift propagation), `enforce` (auto-apply silently while writing markdown)
-- `src/skills/docs-author/SKILL.md` — context-gathering + drafting for new docs
+- `src/skills/docs-review/SKILL.md` — three modes: `audit` (find violations), `fix` (apply approved findings via docs-reviewer agent, including peer-drift propagation), `enforce` (auto-apply silently while writing or drafting markdown — covers from-scratch authoring with 4-phase Discovery → Analysis → Documentation → QA workflow)
 
 ## A. Voice & style
 
@@ -25,7 +24,7 @@ Cross-referenced by:
 
 ## B. Formatting
 
-*Source: `src/core/identity/STYLE.md` + `~/.claude/CLAUDE.md` Tone and style + `docs-author/SKILL.md` Standards*
+*Source: `src/core/identity/STYLE.md` + `~/.claude/CLAUDE.md` Tone and style + `docs-review/SKILL.md` enforce mode Standards*
 
 - Tables over paragraphs; code over explanation
 - No emoji
@@ -47,7 +46,7 @@ Cross-referenced by:
 
 ## D. Structure & metadata
 
-*Source: existing `docs-author/SKILL.md` Standards section*
+*Source: existing `docs-review/SKILL.md` enforce mode Standards section*
 
 - Technical language appropriate for developers
 - Table of contents for documents over ~100 lines
@@ -57,7 +56,7 @@ Cross-referenced by:
 
 ### Doc-type specifics
 
-*Source: existing `docs-author/SKILL.md` Special Cases section*
+*Source: `docs-review/SKILL.md` enforce-mode Special Cases*
 
 - **APIs**: include usage examples, response schemas, error codes
 - **Workflows**: create flow diagrams, state transitions
@@ -90,7 +89,7 @@ Cross-referenced by:
 
 ## F. Location
 
-*Source: existing `docs-author/SKILL.md` Location Strategy*
+*Source: `docs-review/SKILL.md` enforce-mode Location Strategy*
 
 - Prefer feature-local documentation (close to the code it documents)
 - Follow existing patterns already established in the codebase

@@ -2,20 +2,72 @@
 /**
  * Stop hook: verification gate.
  *
- * Two outcomes:
+ * Enforces the rule in `src/core/CLAUDE.md` Verification section: no completion
+ * claims without a `[verify]` block in the same turn.
+ *
+ * # Outcomes
+ *
  *   - SKIP    : every edited file is docs-only (markdown/text or under docs/) — pass silently
  *   - REQUIRED: any code/config edit — must show a `[verify]` block with the
  *               three required keys (scope, method, assertions) non-empty,
  *               OR have an explicit user grant via `skip verify[ication]`
- *               in the most recent user message. The hook is shape-only;
- *               quality of the answers is reviewed offline against the
- *               JSONL telemetry, where every recognised field is recorded.
+ *               in the most recent user message.
  *
- * All classification, scanning, and decision logic lives in `src/eval/verify-policy.ts`
- * so the same rules can be reused (and tested) outside the hook.
+ * # `[verify]` block contract
  *
- * Block decisions emit JSON-shaped stdout (`{decision:"block",reason:"..."}`) which the
- * Claude Code harness recognises and refuses-to-end on. Pass decisions stay silent.
+ * The block must appear in the turn's tool output (Bash printf, not assistant
+ * prose). Format:
+ *
+ *     [verify]
+ *     scope:      <files/lines exercised — what the test touched>
+ *     method:     <what was run — command, inputs, procedure>
+ *     assertions: <what was checked — meaning of the pass, not just "it passed">
+ *     [/verify]
+ *
+ * Three required keys, all non-empty:
+ *
+ *   1. scope      — files/lines exercised. Answers "what did the test touch?"
+ *   2. method     — what you ran. Command, inputs, procedure.
+ *   3. assertions — what you checked. The meaning of the pass, not just "it passed."
+ *
+ * Optional recognised keys (captured to telemetry when present):
+ *
+ *   - failure-mode — flag a known limitation
+ *   - gaps         — note what the test does not exercise
+ *
+ * # Shape-only — does not judge honesty
+ *
+ * The gate checks that the required fields are present and non-empty. It does
+ * NOT judge whether assertions are sharp, scope is honest, or method actually
+ * exercises the change. A fabricated block satisfies the regex. Catching lies
+ * is a code-review responsibility, not this hook's.
+ *
+ * # Skip path — user-authored only
+ *
+ * If verification is genuinely inappropriate (paid endpoint, doc change
+ * misclassified as REQUIRED), the model asks in chat and the user must reply
+ * with `skip verify` or `skip verification`. The hook accepts the grant only
+ * when it appears in the most recent USER message — the model cannot author
+ * the phrase on its own behalf.
+ *
+ * # Common claims the gate catches
+ *
+ *   - "Build passes"             → doesn't exercise behavior; run a real test
+ *   - "All existing tests pass"  → existing tests cover existing behavior; new
+ *                                  change needs a new or extended test
+ *   - "I checked it in the browser" → encode the check as a test, then verify
+ *   - "I curl'd and got 200"     → for an API change, name the endpoint + test +
+ *                                   response-shape claim in the block
+ *
+ * # Implementation
+ *
+ * All classification, scanning, and decision logic lives in
+ * `src/eval/verify-policy.ts` so the same rules can be reused (and tested)
+ * outside the hook.
+ *
+ * Block decisions emit JSON-shaped stdout (`{decision:"block",reason:"..."}`)
+ * which the Claude Code harness recognises and refuses-to-end on. Pass
+ * decisions stay silent.
  */
 import { existsSync, readFileSync } from "fs";
 import { execSync } from "child_process";

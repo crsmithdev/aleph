@@ -7,7 +7,8 @@ description: >
   on: "try this as a user", "dogfood X", "use X like a real user would",
   "pretend you don't know the internals", "how does this feel to use". NOT for:
   programmatic regression testing (use eval-harness), pre-ship claim verification
-  (use verify-completion), code artifact review (use code-review).
+  (the Stop hook gate enforces that automatically — see Verification section in
+  src/core/CLAUDE.md), code artifact review (use code-review).
 ---
 
 # Dogfood
@@ -34,7 +35,7 @@ works" you lose the signal.
 | Goal | Use instead |
 |---|---|
 | Catch regressions across multiple runs | `eval-harness` |
-| Verify a completion claim before committing/PR | `verify-completion` |
+| Verify a completion claim before committing/PR | the Stop hook gate (`src/core/hooks/quality-check-stop.ts`) enforces `[verify]` blocks automatically; see Verification section in `src/core/CLAUDE.md` |
 | Review code artifacts for correctness | `code-review` |
 | Read a session transcript and retrospect on it | (separate skill — this one requires driving the tool live) |
 

@@ -27,6 +27,20 @@ The verification method is yours to choose based on what changed. For UI changes
 - *"I'll verify in the next turn"* — You won't. Context shifts, the next prompt is about something else. Verification deferred is verification abandoned.
 - *"There's no easy way to test this"* — Difficulty is not permission to skip. If there's no easy way, find a harder one, or be explicit that you have not verified — do not claim completion.
 
+**Common claims and what would actually satisfy the gate:**
+
+| Claim | What would satisfy the gate |
+|---|---|
+| "Build passes" | Doesn't satisfy. Build doesn't exercise behavior. Run a test that does. |
+| "All existing tests pass" | Existing tests cover existing behavior; the change needs a new or extended test you can name. |
+| "ui:smoke passed all routes" | Block must say: scope = routes covered, method = ui:smoke command, assertions = what each route asserted. |
+| "I curl'd the endpoint and got 200" | For an API change: scope = endpoint + test file, method = the curl or test, assertions = response-shape claim. |
+| "I checked it manually in the browser" | Encode the check as a test or scripted browser run, then emit the block. |
+
+The `[verify]` block has three required keys, all non-empty: **scope** (what files/lines the test touched), **method** (what you ran), **assertions** (what the pass actually means — not just "it passed"). Optional keys `failure-mode` and `gaps` are recognised when present.
+
+**Skip path:** if verification is genuinely inappropriate (paid endpoint, doc change misclassified), ask in chat: "I'd like to skip verification because <reason>. OK?" The user can reply `skip verify` to authorise a single skip. You cannot author that phrase on your own behalf.
+
 <!-- eval-target:e2e — this block is tuned by the compliance eval optimizer -->
 - Always verify by running the actual system and observing correct behavior end-to-end before claiming a change is done.
 - Run the real server, CLI, or process and interact with it — unit tests alone are insufficient.
