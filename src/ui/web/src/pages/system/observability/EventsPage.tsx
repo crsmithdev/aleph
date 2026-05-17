@@ -27,10 +27,20 @@ const EVENT_TYPES = [
   'tool_result',
   'hook_progress',
   'stop_hook_summary',
+  'hook_event',
+  'hook_feedback',
+  'gate',
+  'gate_marker',
   'tokens',
   'turn_duration',
   'directive',
   'user_message',
+  'assistant_message',
+  'feedback',
+  'rating',
+  're_edit',
+  'memory_write',
+  'compaction',
   'compact_boundary',
 ] as const;
 
@@ -48,9 +58,12 @@ type EventRow = {
   isError?: boolean;
   errorMessage?: string;
   toolUseId?: string;
+  resultContent?: string;
+  resultChars?: number;
   hookEvent?: string;
   hookName?: string;
   hookCommand?: string;
+  hook?: string;
   hookDurationMs?: number;
   hookExitCode?: number;
   hookOutput?: string;
@@ -62,6 +75,19 @@ type EventRow = {
   directives?: string[];
   promptWords?: number;
   userRequest?: string;
+  text?: string;
+  name?: string;
+  tier?: number | string;
+  decision?: string;
+  reason?: string;
+  polarity?: string;
+  target?: string;
+  rating?: number;
+  file?: string;
+  memoryType?: string;
+  memoryId?: string;
+  workingFiles?: number;
+  recentPrompts?: number;
   compactTrigger?: string;
   compactPreTokens?: number;
 };
@@ -71,10 +97,20 @@ const TYPE_LABELS: Record<EntryType, string> = {
   tool_result: 'tool_result',
   hook_progress: 'hook_progress',
   stop_hook_summary: 'stop_hook',
+  hook_event: 'hook_event',
+  hook_feedback: 'hook_feedback',
+  gate: 'gate',
+  gate_marker: 'gate_marker',
   tokens: 'tokens',
   turn_duration: 'turn',
   directive: 'directive',
-  user_message: 'message',
+  user_message: 'user_msg',
+  assistant_message: 'asst_msg',
+  feedback: 'feedback',
+  rating: 'rating',
+  re_edit: 're_edit',
+  memory_write: 'memory',
+  compaction: 'compaction',
   compact_boundary: 'compact',
 };
 
@@ -86,10 +122,20 @@ function TypeBadge({ type, isError }: { type: string; isError?: boolean }) {
       : 'bg-success/10 text-success border-success/20',
     hook_progress: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
     stop_hook_summary: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+    hook_event: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+    hook_feedback: 'bg-error/10 text-error border-error/20',
+    gate: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    gate_marker: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
     tokens: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
     turn_duration: 'bg-bg-tertiary text-text-muted border-border-primary',
     directive: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
     user_message: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
+    assistant_message: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    feedback: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    rating: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    re_edit: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+    memory_write: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+    compaction: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
     compact_boundary: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
   };
 
@@ -108,11 +154,24 @@ function getDetail(row: EventRow): string {
     case 'tool_use':
       return row.skillName ? `Skill: ${row.skillName}` : (row.toolName ? fmtToolName(row.toolName) : '');
     case 'tool_result':
-      return row.isError ? (row.errorMessage?.slice(0, 60) ?? 'error') : 'ok';
+      if (row.isError) return row.errorMessage?.slice(0, 60) ?? 'error';
+      if (row.resultContent) {
+        const oneLine = row.resultContent.replace(/\s+/g, ' ').trim();
+        return oneLine.slice(0, 60);
+      }
+      return 'ok';
     case 'hook_progress':
-      return row.hookCommand?.split('/').pop()?.slice(0, 40) ?? row.hookEvent ?? '';
+      return row.hookName ?? row.hookCommand?.split('/').pop()?.slice(0, 40) ?? row.hookEvent ?? '';
     case 'stop_hook_summary':
-      return row.hookCommand?.split('/').pop()?.slice(0, 40) ?? '';
+      return row.hookName ?? row.hookCommand?.split('/').pop()?.slice(0, 40) ?? '';
+    case 'hook_event':
+      return row.hookName ?? row.hook ?? '';
+    case 'hook_feedback':
+      return row.text?.slice(0, 60) ?? row.name ?? '';
+    case 'gate':
+      return row.hookName ?? '';
+    case 'gate_marker':
+      return row.hookName ?? '';
     case 'tokens':
       return row.model ?? '';
     case 'turn_duration':
@@ -120,11 +179,23 @@ function getDetail(row: EventRow): string {
     case 'directive':
       return row.directives?.join(', ') ?? '';
     case 'user_message':
-      return row.userRequest?.slice(0, 60) ?? '';
+      return row.userRequest?.slice(0, 60) ?? row.text?.slice(0, 60) ?? '';
+    case 'assistant_message':
+      return row.text?.slice(0, 60) ?? '';
+    case 'feedback':
+      return row.polarity ?? '';
+    case 'rating':
+      return row.rating != null ? String(row.rating) : '';
+    case 're_edit':
+      return row.file?.split('/').pop() ?? row.file ?? '';
+    case 'memory_write':
+      return row.memoryType ?? '';
+    case 'compaction':
+      return row.hookName ?? '';
     case 'compact_boundary':
       return row.compactTrigger ?? '';
     default:
-      return '';
+      return row.name ?? '';
   }
 }
 
@@ -148,8 +219,21 @@ function getInfoPreview(row: EventRow): string {
   if (row.entryType === 'hook_progress') {
     return [row.hookEvent, row.hookName].filter(Boolean).join(' / ');
   }
-  if (row.entryType === 'tool_result' && row.errorMessage) {
-    return row.errorMessage.slice(0, 60) + (row.errorMessage.length > 60 ? '…' : '');
+  if (row.entryType === 'tool_result') {
+    if (row.errorMessage) return row.errorMessage.slice(0, 60) + (row.errorMessage.length > 60 ? '…' : '');
+    if (row.resultChars != null) return `${fmtNumber(row.resultChars)} chars`;
+  }
+  if (row.entryType === 'hook_event') return row.hookEvent ?? '';
+  if (row.entryType === 'gate' || row.entryType === 'gate_marker') {
+    return [row.hookEvent, row.tier != null ? `tier=${row.tier}` : null, row.decision].filter(Boolean).join(' · ');
+  }
+  if (row.entryType === 'feedback') return row.target ?? '';
+  if (row.entryType === 're_edit') return row.file ?? '';
+  if (row.entryType === 'memory_write') return row.memoryId ?? '';
+  if (row.entryType === 'compaction') {
+    return [row.workingFiles != null ? `${row.workingFiles} files` : null,
+      row.recentPrompts != null ? `${row.recentPrompts} prompts` : null]
+      .filter(Boolean).join(' · ');
   }
   if (row.entryType === 'directive' && row.promptWords) {
     return `${row.promptWords} words`;
@@ -175,6 +259,8 @@ function ExpandedRow({ row }: { row: EventRow }) {
   } else if (row.entryType === 'tool_result') {
     if (row.toolName) sections.push({ label: 'Tool', content: fmtToolName(row.toolName) });
     if (row.isError) sections.push({ label: 'Error', content: row.errorMessage ?? 'Unknown error', isError: true });
+    if (row.resultChars != null) sections.push({ label: 'Result Size', content: `${fmtNumber(row.resultChars)} chars` });
+    if (row.resultContent) sections.push({ label: 'Result', content: row.resultContent });
     if (row.toolUseId) sections.push({ label: 'Tool Use ID', content: row.toolUseId });
   } else if (row.entryType === 'hook_progress' || row.entryType === 'stop_hook_summary') {
     if (row.hookEvent) sections.push({ label: 'Event', content: row.hookEvent });
@@ -197,7 +283,37 @@ function ExpandedRow({ row }: { row: EventRow }) {
     if (row.directives?.length) sections.push({ label: 'Directives', content: row.directives.join(', ') });
     if (row.promptWords != null) sections.push({ label: 'Prompt Words', content: String(row.promptWords) });
   } else if (row.entryType === 'user_message') {
-    if (row.userRequest) sections.push({ label: 'Message', content: row.userRequest, isMarkdown: true });
+    const msg = row.userRequest ?? row.text;
+    if (msg) sections.push({ label: 'Message', content: msg, isMarkdown: true });
+  } else if (row.entryType === 'assistant_message') {
+    if (row.text) sections.push({ label: 'Message', content: row.text, isMarkdown: true });
+  } else if (row.entryType === 'hook_event') {
+    if (row.hookName) sections.push({ label: 'Hook', content: row.hookName });
+    if (row.hookEvent) sections.push({ label: 'Event', content: row.hookEvent });
+    if (row.hook && row.hook !== row.hookName) sections.push({ label: 'Source', content: row.hook });
+  } else if (row.entryType === 'hook_feedback') {
+    if (row.name) sections.push({ label: 'Kind', content: row.name });
+    if (row.text) sections.push({ label: 'Text', content: row.text });
+  } else if (row.entryType === 'gate' || row.entryType === 'gate_marker') {
+    if (row.hookName) sections.push({ label: 'Hook', content: row.hookName });
+    if (row.hookEvent) sections.push({ label: 'Event', content: row.hookEvent });
+    if (row.tier != null) sections.push({ label: 'Tier', content: String(row.tier) });
+    if (row.decision) sections.push({ label: 'Decision', content: row.decision, isError: row.decision === 'block' });
+    if (row.reason) sections.push({ label: 'Reason', content: row.reason });
+  } else if (row.entryType === 'feedback') {
+    if (row.polarity) sections.push({ label: 'Polarity', content: row.polarity });
+    if (row.target) sections.push({ label: 'Target', content: row.target });
+  } else if (row.entryType === 'rating') {
+    if (row.rating != null) sections.push({ label: 'Rating', content: String(row.rating) });
+  } else if (row.entryType === 're_edit') {
+    if (row.file) sections.push({ label: 'File', content: row.file });
+  } else if (row.entryType === 'memory_write') {
+    if (row.memoryType) sections.push({ label: 'Type', content: row.memoryType });
+    if (row.memoryId) sections.push({ label: 'Memory ID', content: row.memoryId });
+  } else if (row.entryType === 'compaction') {
+    if (row.hookName) sections.push({ label: 'Hook', content: row.hookName });
+    if (row.workingFiles != null) sections.push({ label: 'Working Files', content: String(row.workingFiles) });
+    if (row.recentPrompts != null) sections.push({ label: 'Recent Prompts', content: String(row.recentPrompts) });
   } else if (row.entryType === 'compact_boundary') {
     if (row.compactTrigger) sections.push({ label: 'Trigger', content: row.compactTrigger });
     if (row.compactPreTokens != null) sections.push({ label: 'Pre-Compact Tokens', content: fmtNumber(row.compactPreTokens) });

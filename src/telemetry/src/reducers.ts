@@ -1587,12 +1587,27 @@ export function reduceRecentEvents(
       stop_hook_summary: ["hook_summary"],
       turn_duration: ["turn"],
       tokens: ["tokens"],
-      user_message: ["message"],
+      user_message: ["message"],            // user role only — see role filter below
+      assistant_message: ["message"],
       compact_boundary: ["compact"],
       directive: ["directive"],
+      hook_event: ["hook_event"],
+      hook_feedback: ["hook_feedback"],
+      gate: ["gate"],
+      gate_marker: ["gate_marker"],
+      feedback: ["feedback"],
+      rating: ["rating"],
+      re_edit: ["re_edit"],
+      memory_write: ["memory_write"],
+      compaction: ["compaction"],
     };
     const kinds = typeMap[filters.entryType] || [filters.entryType];
-    filtered = filtered.filter((e) => kinds.includes(e.kind));
+    filtered = filtered.filter((e) => {
+      if (!kinds.includes(e.kind)) return false;
+      if (filters.entryType === "user_message") return e.data?.role !== "assistant";
+      if (filters.entryType === "assistant_message") return e.data?.role === "assistant";
+      return true;
+    });
   }
 
   if (filters?.search) {
@@ -1617,19 +1632,20 @@ export function reduceRecentEvents(
       return { ...base, entryType: "tool_use", toolName: d.tool, toolParams: d.params, skillName: d.skill, toolUseId: d.useId, linesAdded: d.linesAdded, linesRemoved: d.linesRemoved };
     }
     if (e.kind === "tool_result") {
-      return { ...base, entryType: "tool_result", toolUseId: d.useId, isError: d.isError, errorMessage: e.err, toolDurationMs: e.ms };
+      return { ...base, entryType: "tool_result", toolUseId: d.useId, isError: d.isError, errorMessage: e.err, toolDurationMs: e.ms, resultContent: d.resultContent, resultChars: d.resultChars };
     }
     if (e.kind === "hook") {
       return { ...base, entryType: "hook_progress", hookEvent: d.event, hookName: d.hookName, hookCommand: d.command };
     }
     if (e.kind === "hook_summary") {
-      return { ...base, entryType: "stop_hook_summary", hookCommand: d.command, hookDurationMs: e.ms, hookExitCode: d.exitCode, hookOutput: d.output, isError: d.isError, errorMessage: e.err };
+      return { ...base, entryType: "stop_hook_summary", hookName: e.name, hookCommand: d.command, hookDurationMs: e.ms, hookExitCode: d.exitCode, hookOutput: d.output, isError: d.isError, errorMessage: e.err };
     }
     if (e.kind === "tokens") {
       return { ...base, entryType: "tokens", role: "assistant", inputTokens: d.input, outputTokens: d.output, cacheReadTokens: d.cacheRead, cacheCreationTokens: d.cacheCreation };
     }
     if (e.kind === "message") {
-      return { ...base, entryType: "user_message", userRequest: d.text };
+      const isAssistant = d.role === "assistant";
+      return { ...base, entryType: isAssistant ? "assistant_message" : "user_message", text: d.text, userRequest: isAssistant ? undefined : d.text };
     }
     if (e.kind === "turn") {
       return { ...base, entryType: "turn_duration", turnDurationMs: e.ms };
@@ -1640,7 +1656,36 @@ export function reduceRecentEvents(
     if (e.kind === "directive") {
       return { ...base, entryType: "directive", directives: d.directives, promptWords: d.promptWords };
     }
-    return { ...base, entryType: e.kind };
+    // events.jsonl-sourced kinds: pass through hook + event so the page can display
+    // something meaningful instead of an empty row.
+    if (e.kind === "hook_event") {
+      return { ...base, entryType: "hook_event", hookName: e.name, hookEvent: d.event, hook: d.hook };
+    }
+    if (e.kind === "hook_feedback") {
+      return { ...base, entryType: "hook_feedback", name: e.name, text: d.text };
+    }
+    if (e.kind === "gate") {
+      return { ...base, entryType: "gate", hookName: e.name, hookEvent: d.event, tier: d.tier, decision: d.decision, reason: d.reason };
+    }
+    if (e.kind === "gate_marker") {
+      return { ...base, entryType: "gate_marker", hookName: e.name, hookEvent: d.event };
+    }
+    if (e.kind === "feedback") {
+      return { ...base, entryType: "feedback", polarity: d.polarity ?? e.name, target: d.target };
+    }
+    if (e.kind === "rating") {
+      return { ...base, entryType: "rating", rating: d.rating };
+    }
+    if (e.kind === "re_edit") {
+      return { ...base, entryType: "re_edit", file: e.name ?? d.file };
+    }
+    if (e.kind === "memory_write") {
+      return { ...base, entryType: "memory_write", memoryType: e.name ?? d.memoryType, memoryId: d.memoryId };
+    }
+    if (e.kind === "compaction") {
+      return { ...base, entryType: "compaction", hookName: e.name, workingFiles: d.workingFiles, recentPrompts: d.recentPrompts };
+    }
+    return { ...base, entryType: e.kind, name: e.name };
   });
 
   return { events: mapped, total: sorted.length };
