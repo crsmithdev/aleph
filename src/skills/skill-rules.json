@@ -155,6 +155,10 @@
     {
       "skill": "grill-me",
       "keywords": ["grill me", "grill this", "stress-test this", "stress test this", "stress test my plan", "stress-test my plan", "challenge my design", "interview me about", "poke holes in my plan", "challenge my thinking", "/grill-me", "/grill me"]
+    },
+    {
+      "skill": "grill-yourself",
+      "keywords": ["grill yourself", "grill the plan", "have agents grill", "have the agents grill", "agents grill this", "red team this", "red-team this", "red team the plan", "tear this plan apart", "tear the plan apart", "adversarial review", "adversarial review of this plan", "stress test this with subagents", "stress-test with subagents", "/grill-yourself", "/grill yourself"]
     }
   ]
 }
