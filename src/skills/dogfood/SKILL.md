@@ -6,8 +6,9 @@ description: >
   real time, and grade the output against the user's literal question. Triggers
   on: "try this as a user", "dogfood X", "use X like a real user would",
   "pretend you don't know the internals", "how does this feel to use". NOT for:
-  programmatic regression testing (use eval-harness), pre-ship claim verification
-  (the Stop hook gate enforces that automatically — see Verification section in
+  programmatic regression testing (run the eval harness directly via
+  src/eval/runner.ts), pre-ship claim verification (the Stop hook gate
+  enforces that automatically — see Verification section in
   src/core/CLAUDE.md), code artifact review (use code-review).
 ---
 
@@ -34,7 +35,7 @@ works" you lose the signal.
 
 | Goal | Use instead |
 |---|---|
-| Catch regressions across multiple runs | `eval-harness` |
+| Catch regressions across multiple runs | run `bun src/eval/runner.ts <scenario>` directly |
 | Verify a completion claim before committing/PR | the Stop hook gate (`src/core/hooks/quality-check-stop.ts`) enforces `[verify]` blocks automatically; see Verification section in `src/core/CLAUDE.md` |
 | Review code artifacts for correctness | `code-review` |
 | Read a session transcript and retrospect on it | (separate skill — this one requires driving the tool live) |

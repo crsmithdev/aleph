@@ -1,6 +1,6 @@
 ---
-name: git-workflow
-description: Full git workflow for code changes — isolate work in a branch or worktree, implement, then land via merge, PR, or discard. Use when starting any code task or finishing/landing a branch.
+name: git
+description: Full git workflow for code changes — isolate work in a branch or worktree, implement, then land via merge, PR, or discard. Use when starting any code task or finishing/landing a branch. Triggers on "worktree", "create worktree", "merge this", "merge the branch", "new branch", "feature branch", "merge and push", "commit and push", "ship it", "/git", "/git-workflow".
 compatibility: Designed for Claude Code
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: code-debug
+name: debug
 description: >
   Systematic four-phase debugging for any bug, test failure, or unexpected
   behavior — root-cause investigation first, fixes only after a confirmed
@@ -7,8 +7,8 @@ description: >
   failures (CI → build → signing, API → service → DB). Includes an agent-
   failure-recovery loop for when the assistant itself is stuck. Triggers on
   "debug", "still failing", "still erroring", "not working", "broken",
-  "root cause", "fix this error", "why is X failing", or `/code-debug`.
-  Skip for new-feature work — this is bug-only.
+  "root cause", "fix this error", "why is X failing", "/debug", or
+  "/code-debug". Skip for new-feature work — this is bug-only.
 metadata:
   argument-hint: <bug-or-failing-test>
 ---

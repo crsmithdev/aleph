@@ -9,8 +9,8 @@
       "keywords": ["ralph", "ralph loop", "autonomous loop", "keep iterating", "iterate until"]
     },
     {
-      "skill": "git-workflow",
-      "keywords": ["worktree", "create worktree", "merge this", "time to merge", "merge the branch", "new branch", "feature branch", "merge and push", "commit and push", "ship it", "/merge.{0,15}push/", "/commit.{0,25}push/"]
+      "skill": "git",
+      "keywords": ["worktree", "create worktree", "merge this", "time to merge", "merge the branch", "new branch", "feature branch", "merge and push", "commit and push", "ship it", "/git", "/git-workflow", "/merge.{0,15}push/", "/commit.{0,25}push/"]
     },
     {
       "skill": "test-webapp",
@@ -21,8 +21,8 @@
       "keywords": ["create a skill", "make a skill", "new skill", "write a skill", "skill creator", "improve skill", "optimize skill", "skill description", "skill eval", "test a skill"]
     },
     {
-      "skill": "code-debug",
-      "keywords": ["still failing", "still erroring", "not working", "not loading", "all erroring", "fix this error", "broken", "root cause", "debug", "/why is.{0,30}(not|error|fail|break|wrong|crash)/", "/still.{0,10}(fail|error|broke|crash)/", "/(all|every).{0,25}(fail|error)/"]
+      "skill": "debug",
+      "keywords": ["still failing", "still erroring", "not working", "not loading", "all erroring", "fix this error", "broken", "root cause", "debug", "/debug", "/code-debug", "/why is.{0,30}(not|error|fail|break|wrong|crash)/", "/still.{0,10}(fail|error|broke|crash)/", "/(all|every).{0,25}(fail|error)/"]
     },
     {
       "skill": "agent-browser",
@@ -47,10 +47,6 @@
     {
       "skill": "context-compact",
       "keywords": ["context window", "token budget", "context limit", "context is full", "save and clear", "running out of context", "save context", "save and continue", "almost out of tokens", "almost out of context", "getting close to limit", "96%", "compaction reminder", "/context.{0,15}(full|100|limit|running out)/", "/running out.{0,15}context/", "/(save|compact).{0,10}(context|session)/"]
-    },
-    {
-      "skill": "eval-harness",
-      "keywords": ["eval harness", "define eval", "run eval", "eval report", "eval suite", "eval cases", "eval criteria", "/eval-harness", "run the evals", "set up evals", "/(define|create|write|run|check).{0,10}eval/"]
     },
     {
       "skill": "address",

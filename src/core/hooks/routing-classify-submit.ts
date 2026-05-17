@@ -106,10 +106,10 @@ const matched = rules
   }))
   .map((r) => r.skill);
 
-// Always inject git-workflow for non-question code requests — covers both phases
+// Always inject git for non-question code requests — covers both phases
 // (Phase 1: Isolate at start, Phase 2: Land at end)
-if (!isQuestion && words.length >= 5 && !matched.includes("git-workflow")) {
-  matched.push("git-workflow");
+if (!isQuestion && words.length >= 5 && !matched.includes("git")) {
+  matched.push("git");
 }
 
 trace(TAG, `skill match: ${matched.length ? matched.join(", ") : "none"}`);

@@ -120,39 +120,25 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 | `agent-browser` | Browser automation CLI for AI agents |
 | `agents-audit` | Audit subagent definitions against rules |
 | `agents-fix` | Apply fixes for agents-audit findings |
-| `code-audit` | Audit TypeScript/JavaScript code under src/ |
-| `code-conform` | Apply a code pattern from one file across peers |
-| `code-debug` | Systematic four-phase root-cause debugging |
-| `code-fix` | Apply fixes for code-audit findings |
-| `code-refactor` | Refactor code for better organization and maintainability |
-| `code-review` | Review code for issues then refactor |
-| `code-simplify` | Remove AI-generated slop and over-engineering |
-| `config-audit` | Full health check for Claude Code agent configuration |
+| `address` | Read vibe-annotations, summarize, implement, then clear |
+| `agent-browser` | Browser automation CLI for AI agents |
+| `agent-review` | Review all AI-runtime config (CLAUDE.md, hooks, skills, personas) — audit + fix modes |
+| `code-review` | Review code — audit + fix modes; fix shapes: slop removal, propagation, consolidation, restructure |
 | `context-compact` | Guide context compaction at logical task phase boundaries |
-| `design-audit` | Systematic UI/UX design audit (18 dimensions) |
-| `design-fix` | Apply fixes for peer-drift findings in UI surfaces |
-| `docs-audit` | Post-hoc review of existing documentation |
-| `docs-author` | Create, update, or enhance documentation |
-| `docs-author-v2` | Create/update documentation (ENFORCEMENT MODE pilot) |
-| `docs-conform` | Reference-based propagation across peer docs |
-| `docs-fix` | Apply fixes for docs-audit findings |
-| `docs-optimize` | Optimize docs for AI coding assistants and LLMs |
+| `debug` | Systematic four-phase root-cause debugging |
+| `design-review` | Review UI design — audit (agent-backed) + fix + enforce modes |
+| `docs-optimize` | Optimize docs for AI coding assistants and LLMs (c7score, llms.txt) |
+| `docs-review` | Review docs — audit + fix + enforce modes |
 | `dogfood` | Qualitative single-run dogfood review of a tool or skill |
-| `eval-harness` | Define and run evals to measure AI development reliability |
-| `git-workflow` | Full git workflow — branch, implement, land via merge or PR |
-| `grill-me` | Relentless interview about a plan or design |
-| `hooks-audit` | Audit Claude Code hooks against rules |
-| `hooks-fix` | Apply fixes for hooks-audit findings |
+| `git` | Full git workflow — branch, implement, land via merge or PR |
+| `interview` | Relentless interactive Q&A with the user about a plan |
 | `omnibus` | Run a verb across domains in parallel, merge findings |
 | `ralph-loop` | Iterative autonomous work toward a well-defined goal |
+| `red-team` | Parallel adversarial review of an artifact (plan, RFC, PR) |
 | `search` | Quick web research — search, synthesize, report with sources |
-| `security-audit` | Audit TypeScript/JavaScript code for vulnerabilities |
-| `security-fix` | Apply remediations for security-audit findings |
+| `security-review` | Review for OWASP/CWE/etc vulnerabilities — audit + fix modes |
 | `skill-creator` | Create new skills, modify and improve existing skills |
-| `skills-audit` | Audit SKILL.md files against rules |
-| `skills-fix` | Apply fixes for skills-audit findings |
-| `test-webapp` | Playwright toolkit for testing local web applications |
-| `verify-completion` | Evidence-based completion gate before claiming success |
+| `test-webapp` | Front door for browser testing — agent-browser CLI or Playwright |
 
 ## Slash Commands
 
