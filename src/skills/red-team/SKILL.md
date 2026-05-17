@@ -1,49 +1,49 @@
 ---
-name: grill-yourself
+name: red-team
 description: >
   Dispatch several subagents in parallel to adversarially review a plan,
   proposal, design doc, RFC, or PR description from multiple angles — each
   agent reads the artifact AND the actual code/files it touches, applies the
-  grill-me branch-walking methodology, and returns sharp, citation-backed
+  interview branch-walking methodology, and returns sharp, citation-backed
   questions and gaps. The orchestrator then synthesizes findings into a
   prioritized report (fatal / defects / smells / cheaper alternatives). Use
   this skill when the user wants a plan stress-tested adversarially without a
   back-and-forth interview, when a proposal is about to be committed to, or
-  when you want a "red team" pass on your own design before shipping.
-  Triggers on: "grill yourself", "/grill-yourself", "have agents grill the
-  plan", "red team this plan", "red-team this", "tear this plan apart",
+  when you want a red team pass on your own design before shipping.
+  Triggers on: "red team this", "red-team this", "/red-team", "grill yourself",
+  "/grill-yourself", "have agents grill the plan", "tear this plan apart",
   "adversarial review of this plan", "stress test this with subagents".
-  NOT for: direct interview with the user (use /grill-me), post-implementation
+  NOT for: direct interview with the user (use /interview), post-implementation
   code review (use /code-review), bug investigation (use /code-debug).
 ---
 
-# Grill Yourself
+# Red Team
 
 Spawn a panel of adversarial reviewers in parallel to interrogate a plan or
 proposal from independent angles. Each reviewer reads the artifact, verifies
-its claims against actual source, applies the [[grill-me]] methodology
+its claims against actual source, applies the [[interview]] methodology
 mentally (walk every branch, demand specifics, surface dependencies), and
 returns a numbered list of sharp questions and identified gaps with file
 citations.
 
-This is the "self-grill" companion to [[grill-me]]. Where `grill-me`
-interviews the user one question at a time, `grill-yourself` interviews the
-*plan* in parallel — no user interaction required between dispatch and
+This is the parallel-adversarial companion to [[interview]]. Where `interview`
+walks one question at a time with the user, `red-team` interrogates the
+*artifact* in parallel — no user interaction required between dispatch and
 synthesis.
 
 ## When to Use
 
 - The user has written or shared a plan / proposal / design doc / RFC / PR
   description and wants it stress-tested before committing
-- The user says "grill yourself on this," "have agents grill the plan,"
-  "tear this apart," "red team this," "stress-test this with subagents"
+- The user says "red team this," "tear this apart," "stress-test this with
+  subagents," "have agents grill the plan," "grill yourself on this"
 - You just produced a plan in this session and want to pressure-test it
   before recommending it
 
 ## Do NOT Use For
 
-- Interactive grilling where the user is the subject — use [[grill-me]]
-- Reviewing already-implemented code — use `/code-review` or `/code-audit`
+- Interactive grilling where the user is the subject — use [[interview]]
+- Reviewing already-implemented code — use `/code-review`
 - Investigating a bug or failure — use `/code-debug`
 - Brainstorming when no plan exists yet — there must be an artifact to grill
 
@@ -88,7 +88,7 @@ not sequential. Each prompt must include:
 - The exact path of the artifact to read
 - A specific list of source files / paths each reviewer should read to verify
   the artifact's claims (don't make them go hunting)
-- A statement that they should apply the `grill-me` methodology (walk every
+- A statement that they should apply the `interview` methodology (walk every
   branch, demand specifics, force dependency resolution)
 - The specific question categories for that lens (bulleted, concrete)
 - An instruction to produce ~12-25 numbered questions/issues with file:line

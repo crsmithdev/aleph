@@ -5,14 +5,14 @@ description: >
 model: sonnet
 ---
 
-Two-phase workflow: review first, fix after approval.
+Two-phase workflow: review first, fix after approval. Both phases live in the same skill (`code-review`); the mode flag selects behavior.
 
 ## Phase 1: Review
 
-Read and follow the skill at ~/.claude/construct/skills/code-review/SKILL.md, then apply it to the code the user has asked you to review.
+Read and follow the skill at ~/.claude/construct/skills/code-review/SKILL.md in `mode: audit` (default). Apply it to the code the user has asked you to review.
 
 Do NOT proceed to Phase 2 until the user specifies which findings to fix.
 
-## Phase 2: Refactor
+## Phase 2: Fix
 
-Read and follow the skill at ~/.claude/construct/skills/code-refactor/SKILL.md, then execute only the approved fixes.
+Re-invoke the same skill in `mode: fix` with the approved findings. The skill picks the right fix shape (slop removal, propagation, consolidation, or restructure) from each finding's tag.

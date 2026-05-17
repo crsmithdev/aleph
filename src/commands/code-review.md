@@ -1,35 +1,35 @@
 ---
-description: Review code for issues then refactor — review phase produces findings, refactor phase executes approved fixes
+description: Review code for issues, then apply approved fixes — both phases live in the code-review skill
 ---
-Run a code review and optional refactor. Parse scope and intent from: $ARGUMENTS
+Run a code review and optional fix pass. Parse scope and intent from: $ARGUMENTS
 
 ## Phase 1: Review
 
-Launch the `code-architect` agent to review the specified scope:
+Invoke the `code-review` skill in audit mode against the specified scope:
 
 ```
-Agent(subagent_type="code-architect", prompt="Review [scope]. [any additional instructions from $ARGUMENTS]")
+Skill("code-review", mode="audit", scope="<from $ARGUMENTS>")
 ```
 
-If no scope is given in `$ARGUMENTS`, default to the recent diff (`git diff HEAD~1`).
+If no scope is given in `$ARGUMENTS`, default to the recent diff (`git diff origin/main...HEAD`).
 
-The reviewer will produce a prioritized findings list (Critical / Important / Minor) and save it to a file. **Do not proceed to Phase 2 until the user approves which findings to fix.**
+The skill produces SARIF findings + a prioritized phased report (Critical / Important / Minor). **Do not proceed to Phase 2 until the user approves which findings to fix.**
 
-## Phase 2: Refactor (after approval)
+## Phase 2: Fix (after approval)
 
-Once the user specifies which findings to address, launch the `code-refactor` agent:
+Once the user specifies which findings to address, re-invoke the same skill in fix mode with the approved SARIF subset:
 
 ```
-Agent(subagent_type="code-refactor", prompt="Fix the following approved findings from the review: [approved list]. Review file: [path]. [any additional context]")
+Skill("code-review", mode="fix", findings=<approved sarif>)
 ```
 
-The refactor agent handles all file moves, import updates, and structural changes with zero breakage.
+The fix mode picks the right shape per finding tag (slop removal, propagation, consolidation, restructure) and verifies with `gate("code")`.
 
 ## Scope examples
 
-| `$ARGUMENTS` | Scope passed to reviewer |
+| `$ARGUMENTS` | Scope passed to the audit pass |
 |---|---|
-| (empty) | `git diff HEAD~1` |
+| (empty) | `git diff origin/main...HEAD` |
 | `src/foo/` | the `src/foo/` directory tree |
 | `the auth module` | files related to auth |
 | `everything` | all source files under `src/` |

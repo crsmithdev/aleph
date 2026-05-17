@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: 'Review code in scope — audit findings (default) or apply approved fixes (mode fix). Walks TypeScript/JavaScript under src/, evaluates rules in src/rules/code/RULES.md, emits SARIF v2.1.0 findings per src/skills/_shared/finding.md, and in fix mode applies each approved finding properties.fix and verifies with gate("code"). Fix shapes include slop removal (AI-generated comments, defensive code, backwards-compat shims, scope creep, impossible-case errors), pattern propagation from a reference file to peers, drift consolidation onto a canonical helper, and structural restructure. Triggers on "/audit code", "/fix code", "/code-review", "review the diff", "audit my code", "audit the code", "fix the findings", "apply the audit fixes", "simplify before commit", "deslop", "clean up code", "remove boilerplate", "align the routes", "match this handler", "make the providers consistent", "consolidate", "deduplicate", "/code-conform", or when the omnibus dispatches the audit or fix verb to the code domain.'
+description: 'Review code in scope — audit findings (default) or apply approved fixes (mode fix). Walks TypeScript/JavaScript under src/, evaluates rules in src/rules/code/RULES.md, emits SARIF v2.1.0 findings per src/skills/_shared/finding.md, and in fix mode applies each approved finding properties.fix and verifies with gate("code"). Fix shapes: slop removal (AI-generated comments, defensive code, backwards-compat shims, scope creep, impossible-case errors), pattern propagation from a reference file to peers, drift consolidation onto a canonical helper, and structural restructure (file moves, module splits, directory reorganization with dependency-update matrix + atomic-step discipline). Triggers on "/audit code", "/fix code", "/code-review", "review the diff", "audit my code", "audit the code", "fix the findings", "apply the audit fixes", "simplify before commit", "deslop", "clean up code", "remove boilerplate", "align the routes", "match this handler", "make the providers consistent", "consolidate", "deduplicate", "refactor this", "restructure the code", "move files", "break down this file", "split this module", "/code-conform", "/code-refactor", or when the omnibus dispatches the audit or fix verb to the code domain.'
 verb: review
 domain: code
 modes: [audit, fix]
@@ -293,12 +293,54 @@ If the user gave notes ("only error wrapping"), narrow to that. Otherwise defaul
 
 ## Fix-shape detail: restructure
 
-For `tag: placement` findings:
+For `tag: placement` findings AND for free-form restructure work (file moves, breaking up large modules, reorganizing directories, enforcing consistency patterns across a codebase). Triggered by "refactor this", "restructure the code", "move files", "break down this file", "split this module", "/code-review --restructure".
 
-1. Document every importer of the file being moved (`grep -rn "from '<old-path>'" src/`).
-2. `git mv` the file.
-3. Update every importer in the same commit.
-4. Run `gate("code")` immediately to catch any missed import.
+### Critical rules
+
+- **Never move a file without first documenting ALL its importers.**
+- **Never leave broken imports.**
+- **Never lose functionality** — if it worked before, it works after.
+- **Always maintain backward compatibility** unless explicitly approved to break it.
+
+### Process
+
+**1. Discovery.** Analyze the current file structure and identify the problem area. Map all dependencies and import relationships:
+
+```bash
+grep -rn "from '<old-path>'" src/
+grep -rn 'from "<old-path>"' src/
+```
+
+Document every importer in a dependency-update matrix before touching anything.
+
+**2. Planning.** Design the new structure with clear rationale for each decision. Build the matrix of required import changes. Plan the order of operations to prevent cascading breakage. For multi-file moves, sketch the migration as a numbered list before executing.
+
+**3. Execution.** Atomic steps — one move at a time:
+
+1. `git mv` the file.
+2. Update every importer in the same commit (don't batch unrelated moves).
+3. Extract modules with clear interfaces and single responsibilities.
+4. Replace anti-patterns with the project's approved alternatives.
+
+**4. Verification.** Run `gate("code")` immediately to catch any missed import. Confirm no functionality was broken. If tests exist for the moved code, run them. Validate the new structure is clearer than the old.
+
+### Quality targets
+
+- No module should exceed ~300 lines (excluding imports/exports).
+- No file should have more than ~5 levels of nesting.
+- Import paths: relative within a module, absolute across module boundaries.
+- Each directory should have a clear, single responsibility.
+
+### Output (restructure plan)
+
+When presenting a restructure plan before execution:
+
+1. **Current structure analysis** — identified issues and why they matter
+2. **Proposed new structure** — with justification for each change
+3. **Dependency map** — every file affected and how
+4. **Step-by-step migration plan** — with exact import updates
+5. **Anti-patterns found** — and their replacements
+6. **Risk assessment** — what could break and how it's mitigated
 
 ## Scope discipline
 

@@ -1,18 +1,19 @@
 ---
-name: grill-me
+name: interview
 description: >
   Interview the user relentlessly about a plan or design until reaching deep
   shared understanding — walking every branch of the decision tree and resolving
-  dependencies between decisions one at a time. Use this skill when the user
-  wants to stress-test a plan, get grilled on their design, challenge their
-  assumptions, or be interviewed about an idea before committing to it. Triggers
-  on: "grill me", "grill this", "stress-test this", "challenge my design",
-  "interview me about", "stress test my plan", "/grill-me". NOT for: general
-  Q&A, brainstorming from scratch, or post-hoc review of implemented code (use
-  code-review instead).
+  dependencies between decisions one at a time. The subject is the user; the
+  agent does the grilling. Use when the user wants to stress-test a plan, get
+  interviewed on their design, challenge their assumptions, or be questioned
+  about an idea before committing to it. Triggers on: "interview me", "grill
+  me", "grill this", "stress-test this", "challenge my design", "stress test
+  my plan", "/interview", "/grill-me". NOT for: general Q&A, brainstorming
+  from scratch (use `plan` instead), post-hoc review of implemented code (use
+  `code-review`), or parallel adversarial review of an artifact (use `red-team`).
 ---
 
-# Grill Me
+# Interview
 
 A relentless Socratic interview that maps the full decision tree of a plan or
 design, resolves dependencies between decisions, and surfaces hidden assumptions
