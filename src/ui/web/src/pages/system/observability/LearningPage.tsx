@@ -12,8 +12,7 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { ChartControlChip } from '../../../components/data/ChartControlChip';
+import { type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import { Icon } from '../../../components/ui/Icon';
 import { fmtNumber, fmtPct, compactTs } from '../../../utils/format';
@@ -525,8 +524,7 @@ const TABS: { key: Tab; label: string }[] = [
 
 export function LearningPage() {
   const [tab, setTab] = useState<Tab>('insights');
-  const [range, setRange] = useState<TimeRange>('30d');
-  const [granularity, setGranularity] = useState<Granularity>('day');
+  const range: TimeRange = '30d';
   const [feedbackExpandedKey, setFeedbackExpandedKey] = useState<string | null>(null);
   const [loopExpandedKey, setLoopExpandedKey] = useState<string | null>(null);
   const [correctionExpandedKey, setCorrectionExpandedKey] = useState<string | null>(null);
@@ -684,17 +682,7 @@ export function LearningPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Learning"
-        actions={
-          <ChartControlChip
-            range={range}
-            onRangeChange={setRange}
-            granularity={granularity}
-            onGranularityChange={setGranularity}
-          />
-        }
-      />
+      <PageHeader title="Learning" />
 
       {/* Summary stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 !mt-0">
