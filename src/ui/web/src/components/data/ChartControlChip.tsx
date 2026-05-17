@@ -116,8 +116,10 @@ export function ChartControlChip(props: ChartControlChipProps) {
     ? (displayMode === 'all' ? totalSeries : Math.min(displayN, totalSeries))
     : null;
   const otherMarker = displayMode === 'top-n-other' && totalSeries != null && totalSeries > displayN ? '+' : '';
-  const seriesFragment = hasDataset
-    ? (seriesCount != null ? `${datasetLabel} · #${seriesCount}${otherMarker}` : datasetLabel)
+  const seriesFragment: React.ReactNode = hasDataset
+    ? (seriesCount != null
+      ? <>{datasetLabel}<span className="mx-1.5 h-3 w-px bg-border-primary" />#{seriesCount}{otherMarker}</>
+      : datasetLabel)
     : null;
 
   return (
