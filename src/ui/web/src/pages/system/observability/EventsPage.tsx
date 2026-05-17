@@ -199,25 +199,29 @@ function getDetail(row: EventRow): string {
   }
 }
 
-function getInfoPreview(row: EventRow): string {
+type InfoPreview = string | Array<[string, string]>;
+
+function getInfoPreview(row: EventRow): InfoPreview {
   if (row.entryType === 'tool_use' && row.toolParams) {
     return Object.entries(row.toolParams)
-      .map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 30) : JSON.stringify(v)}`)
       .slice(0, 3)
-      .join(' · ');
+      .map(([k, v]) => [k, typeof v === 'string' ? v.slice(0, 60) : JSON.stringify(v)] as [string, string]);
   }
   if (row.entryType === 'stop_hook_summary' && row.hookOutput) {
     return row.hookOutput.slice(0, 60) + (row.hookOutput.length > 60 ? '…' : '');
   }
   if (row.entryType === 'tokens') {
-    return [
-      row.inputTokens != null && `in:${fmtNumber(row.inputTokens)}`,
-      row.outputTokens != null && `out:${fmtNumber(row.outputTokens)}`,
-      row.cacheReadTokens != null && row.cacheReadTokens > 0 && `cr:${fmtNumber(row.cacheReadTokens)}`,
-    ].filter(Boolean).join(' ');
+    const pairs: Array<[string, string]> = [];
+    if (row.inputTokens != null) pairs.push(['in', fmtNumber(row.inputTokens)]);
+    if (row.outputTokens != null) pairs.push(['out', fmtNumber(row.outputTokens)]);
+    if (row.cacheReadTokens != null && row.cacheReadTokens > 0) pairs.push(['cr', fmtNumber(row.cacheReadTokens)]);
+    return pairs;
   }
   if (row.entryType === 'hook_progress') {
-    return [row.hookEvent, row.hookName].filter(Boolean).join(' / ');
+    const pairs: Array<[string, string]> = [];
+    if (row.hookEvent) pairs.push(['event', row.hookEvent]);
+    if (row.hookName) pairs.push(['hook', row.hookName]);
+    return pairs;
   }
   if (row.entryType === 'tool_result') {
     if (row.errorMessage) return row.errorMessage.slice(0, 60) + (row.errorMessage.length > 60 ? '…' : '');
@@ -225,15 +229,20 @@ function getInfoPreview(row: EventRow): string {
   }
   if (row.entryType === 'hook_event') return row.hookEvent ?? '';
   if (row.entryType === 'gate' || row.entryType === 'gate_marker') {
-    return [row.hookEvent, row.tier != null ? `tier=${row.tier}` : null, row.decision].filter(Boolean).join(' · ');
+    const pairs: Array<[string, string]> = [];
+    if (row.hookEvent) pairs.push(['event', row.hookEvent]);
+    if (row.tier != null) pairs.push(['tier', String(row.tier)]);
+    if (row.decision) pairs.push(['decision', row.decision]);
+    return pairs;
   }
   if (row.entryType === 'feedback') return row.target ?? '';
   if (row.entryType === 're_edit') return row.file ?? '';
   if (row.entryType === 'memory_write') return row.memoryId ?? '';
   if (row.entryType === 'compaction') {
-    return [row.workingFiles != null ? `${row.workingFiles} files` : null,
-      row.recentPrompts != null ? `${row.recentPrompts} prompts` : null]
-      .filter(Boolean).join(' · ');
+    const pairs: Array<[string, string]> = [];
+    if (row.workingFiles != null) pairs.push(['files', String(row.workingFiles)]);
+    if (row.recentPrompts != null) pairs.push(['prompts', String(row.recentPrompts)]);
+    return pairs;
   }
   if (row.entryType === 'directive' && row.promptWords) {
     return `${row.promptWords} words`;
@@ -242,6 +251,25 @@ function getInfoPreview(row: EventRow): string {
     return `${fmtNumber(row.compactPreTokens)} tokens`;
   }
   return '';
+}
+
+function InfoCell({ preview }: { preview: InfoPreview }) {
+  if (typeof preview === 'string') {
+    return preview
+      ? <span className="font-mono text-text-secondary block truncate">{preview}</span>
+      : <span className="text-text-muted">—</span>;
+  }
+  if (preview.length === 0) return <span className="text-text-muted">—</span>;
+  return (
+    <span className="font-mono block truncate">
+      {preview.map(([k, v], i) => (
+        <span key={i} className={i > 0 ? 'ml-4' : undefined}>
+          <span className="text-text-muted">{k}</span>
+          <span className="text-text-primary ml-1.5">{v}</span>
+        </span>
+      ))}
+    </span>
+  );
 }
 
 function rowKey(row: EventRow & { _idx?: number }): string {
@@ -454,9 +482,23 @@ export function EventsPage() {
 
   const columns: Column<EventRow>[] = [
     {
+      key: 'timestamp',
+      label: 'Time',
+      width: '175px',
+      render: (row) => (
+        <span className="font-mono text-text-secondary whitespace-nowrap">{dateTime(row.timestamp)}</span>
+      ),
+    },
+    {
+      key: 'entryType',
+      label: 'Type',
+      width: '130px',
+      render: (row) => <TypeBadge type={row.entryType} isError={row.isError} />,
+    },
+    {
       key: 'detail',
       label: 'Detail',
-      shrink: true,
+      width: '360px',
       render: (row) => {
         const detail = getDetail(row);
         return detail
@@ -467,33 +509,14 @@ export function EventsPage() {
     {
       key: 'info',
       label: 'Parameters',
-      render: (row) => {
-        const preview = getInfoPreview(row);
-        return preview
-          ? <span className="font-mono text-text-muted block truncate">{preview}</span>
-          : <span className="text-text-muted">—</span>;
-      },
-    },
-    {
-      key: 'entryType',
-      label: 'Type',
-      width: '110px',
-      render: (row) => <TypeBadge type={row.entryType} isError={row.isError} />,
-    },
-    {
-      key: 'timestamp',
-      label: 'Time',
-      width: '160px',
-      render: (row) => (
-        <span className="font-mono text-text-secondary whitespace-nowrap">{dateTime(row.timestamp)}</span>
-      ),
+      render: (row) => <InfoCell preview={getInfoPreview(row)} />,
     },
     {
       key: 'sessionId',
       label: 'Session',
-      width: '90px',
+      width: '110px',
       render: (row) => (
-        <span className="font-mono text-text-muted">{row.sessionId.slice(0, 8)}</span>
+        <span className="font-mono text-text-muted whitespace-nowrap">{row.sessionId.slice(0, 8)}</span>
       ),
     },
   ];
