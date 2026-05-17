@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en" data-theme-id="material-palenight">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chart Panel — Single-chart variants</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;500;700&family=Noto+Sans+Mono:wght@400;500&family=Noto+Sans:wght@400;500;600&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-primary:    #292d3e;
+  --bg-secondary:  #2f3347;
+  --bg-tertiary:   #34394f;
+  --bg-contrast:   #232637;
+  --text-primary:  #babed8;
+  --text-secondary:#8796b0;
+  --text-muted:    #676e95;
+  --text-disabled: #4b5168;
+  --border:        #383c50;
+  --border-strong: #4b5168;
+  --accent:        #c792ea;
+  --c1: #c792ea;
+  --c2: #82aaff;
+  --c3: #c3e88d;
+  --c4: #ffcb6b;
+  --c5: #f07178;
+
+  --font-sans:    'Noto Sans', -apple-system, system-ui, sans-serif;
+  --font-mono:    'Noto Sans Mono', ui-monospace, Menlo, monospace;
+  --font-heading: 'Merriweather', Georgia, serif;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+body { padding: 32px 32px 80px; }
+.material-symbols-outlined { font-family: 'Material Symbols Outlined'; font-size: 14px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20; user-select: none; flex-shrink: 0; vertical-align: middle; }
+.font-mono { font-family: var(--font-mono); }
+.font-heading { font-family: var(--font-heading); }
+
+.page { max-width: 1080px; margin: 0 auto; }
+.page-header { border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 32px; }
+.page-header h1 { font-family: var(--font-heading); font-size: 24px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px; letter-spacing: -0.01em; }
+.page-header p { color: var(--text-muted); font-size: 13px; max-width: 72ch; }
+
+.variant { margin-bottom: 44px; }
+.variant-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.variant-tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.variant-title { font-family: var(--font-heading); font-size: 16px; font-weight: 500; color: var(--text-primary); }
+.variant-note { margin-left: auto; font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+
+.panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; min-height: 280px; }
+
+/* Panel header (option A: title + chip) */
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-title { font-family: var(--font-heading); font-size: 17px; font-weight: 500; color: var(--text-primary); letter-spacing: -0.005em; }
+.panel-title .crumb { font-family: var(--font-sans); font-weight: 400; font-size: 13px; color: var(--text-muted); margin-left: 8px; }
+
+/* Subchart head (smaller label + toggle) */
+.sub-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.sub-title { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
+.sub-title .label { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+.sub-title .meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-disabled); }
+
+.chart-body { flex: 1; min-height: 180px; }
+
+/* Segmented (chart-type toggle) */
+.seg { display: inline-flex; gap: 1px; border: 1px solid var(--border); background: var(--bg-tertiary); border-radius: var(--radius-md); padding: 2px; }
+.seg button { background: transparent; border: 0; color: var(--text-muted); font-family: var(--font-sans); font-size: 11px; padding: 2px 8px; border-radius: var(--radius-sm); cursor: pointer; }
+.seg button.active { background: var(--bg-secondary); color: var(--text-primary); box-shadow: 0 1px 0 rgba(0,0,0,.1); }
+.seg button:not(.active):hover { color: var(--text-primary); }
+
+/* Summary chip */
+.chip { display: inline-flex; align-items: stretch; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); cursor: pointer; overflow: hidden; }
+.chip:hover { border-color: var(--border-strong); }
+.chip .frag { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-right: 1px solid var(--border); }
+.chip .frag:last-of-type { border-right: 0; }
+.chip .frag .material-symbols-outlined { color: var(--text-muted); font-size: 13px; }
+.chip .caret { display: inline-flex; align-items: center; padding: 4px 6px; color: var(--text-muted); background: var(--bg-secondary); border-left: 1px solid var(--border); }
+
+/* Notes block */
+.evaluation { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 14px; font-size: 12px; }
+.eval-cell { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+.eval-cell .h { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-disabled); margin-bottom: 6px; }
+.eval-cell.pros .h { color: var(--c3); }
+.eval-cell.cons .h { color: var(--c4); }
+.eval-cell.best .h { color: var(--c2); }
+.eval-cell ul { padding-left: 14px; }
+.eval-cell li { color: var(--text-secondary); margin-bottom: 2px; }
+
+@media (max-width: 760px) {
+  .evaluation { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="page-header">
+  <h1>Single-chart panel — variants</h1>
+  <p>Three takes on a single-chart panel that share the same header chrome as the two-chart panel. All keep the same chip, segmented toggle, and Construct tokens. Difference is how loud the subtitle layer is.</p>
+</header>
+
+<!-- ───────── A: matches two-chart pattern ───────── -->
+<div class="variant">
+  <div class="variant-head">
+    <span class="variant-tag">A · matches two-chart pattern</span>
+    <span class="variant-title">Title row above the chart; subtitle row right above the chart body</span>
+    <span class="variant-note">two header rows · ~76 px chrome</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2 class="panel-title">
+        Tool Calls
+        <span class="crumb">147 tools · 12,408 calls</span>
+      </h2>
+      <button class="chip" type="button">
+        <span class="frag"><span class="material-symbols-outlined">calendar_today</span>30d</span>
+        <span class="frag"><span class="material-symbols-outlined">schedule</span>day</span>
+        <span class="frag"><span class="material-symbols-outlined">stacked_line_chart</span>By Tool #10+</span>
+        <span class="frag"><span class="material-symbols-outlined">filter_list</span>1</span>
+        <span class="caret"><span class="material-symbols-outlined" style="font-size:12px">expand_more</span></span>
+      </button>
+    </div>
+
+    <div class="sub-head">
+      <span class="sub-title">
+        <span class="label">Daily calls</span>
+        <span class="meta">last 30 days</span>
+      </span>
+      <div class="seg"><button class="active">line</button><button>bar</button></div>
+    </div>
+
+    <div class="chart-body">
+      <svg viewBox="0 0 800 200" preserveAspectRatio="none" style="width:100%;height:100%">
+        <g stroke="var(--border)" stroke-dasharray="2 4" stroke-width="0.5">
+          <line x1="0" y1="40" x2="800" y2="40"/>
+          <line x1="0" y1="80" x2="800" y2="80"/>
+          <line x1="0" y1="120" x2="800" y2="120"/>
+          <line x1="0" y1="160" x2="800" y2="160"/>
+        </g>
+        <path d="M0,180 L40,160 L80,170 L120,140 L160,150 L200,110 L240,130 L280,90 L320,100 L360,70 L400,85 L440,55 L480,68 L520,40 L560,55 L600,75 L640,60 L680,80 L720,52 L760,65 L800,48 L800,200 L0,200 Z" fill="var(--c1)" opacity=".35"/>
+        <path d="M0,180 L40,160 L80,170 L120,140 L160,150 L200,110 L240,130 L280,90 L320,100 L360,70 L400,85 L440,55 L480,68 L520,40 L560,55 L600,75 L640,60 L680,80 L720,52 L760,65 L800,48" fill="none" stroke="var(--c1)" stroke-width="1.5"/>
+        <text x="0" y="198" class="font-mono" font-size="10" fill="var(--text-disabled)">Apr 17</text>
+        <text x="770" y="198" class="font-mono" font-size="10" fill="var(--text-disabled)">May 17</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="evaluation">
+    <div class="eval-cell pros"><div class="h">Pros</div><ul>
+      <li>Identical hierarchy to two-chart panels — eyes don't reset</li>
+      <li>Date phrase ("last 30 days") still visible</li>
+      <li>Chip and toggle don't compete in the same row</li>
+    </ul></div>
+    <div class="eval-cell cons"><div class="h">Cons</div><ul>
+      <li>Two header rows for one chart can feel heavy</li>
+      <li>Subtitle restates info already in the chip</li>
+    </ul></div>
+    <div class="eval-cell best"><div class="h">Best for</div><ul>
+      <li>Pages that mix one-chart and two-chart panels</li>
+      <li>Panels where the date phrasing carries weight</li>
+    </ul></div>
+  </div>
+</div>
+
+<!-- ───────── B: collapsed single row ───────── -->
+<div class="variant">
+  <div class="variant-head">
+    <span class="variant-tag">B · collapsed single row</span>
+    <span class="variant-title">Title, chip, and chart toggle all on one row; no subtitle</span>
+    <span class="variant-note">one header row · ~52 px chrome</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2 class="panel-title">
+        Tool Calls
+        <span class="crumb">last 30 days · 12,408 calls</span>
+      </h2>
+      <div style="display:inline-flex;align-items:center;gap:8px">
+        <button class="chip" type="button">
+          <span class="frag"><span class="material-symbols-outlined">calendar_today</span>30d</span>
+          <span class="frag"><span class="material-symbols-outlined">schedule</span>day</span>
+          <span class="frag"><span class="material-symbols-outlined">stacked_line_chart</span>By Tool #10+</span>
+          <span class="frag"><span class="material-symbols-outlined">filter_list</span>1</span>
+          <span class="caret"><span class="material-symbols-outlined" style="font-size:12px">expand_more</span></span>
+        </button>
+        <div class="seg"><button class="active">line</button><button>bar</button></div>
+      </div>
+    </div>
+
+    <div class="chart-body">
+      <svg viewBox="0 0 800 200" preserveAspectRatio="none" style="width:100%;height:100%">
+        <g stroke="var(--border)" stroke-dasharray="2 4" stroke-width="0.5">
+          <line x1="0" y1="40" x2="800" y2="40"/>
+          <line x1="0" y1="80" x2="800" y2="80"/>
+          <line x1="0" y1="120" x2="800" y2="120"/>
+          <line x1="0" y1="160" x2="800" y2="160"/>
+        </g>
+        <path d="M0,180 L40,160 L80,170 L120,140 L160,150 L200,110 L240,130 L280,90 L320,100 L360,70 L400,85 L440,55 L480,68 L520,40 L560,55 L600,75 L640,60 L680,80 L720,52 L760,65 L800,48 L800,200 L0,200 Z" fill="var(--c2)" opacity=".35"/>
+        <path d="M0,180 L40,160 L80,170 L120,140 L160,150 L200,110 L240,130 L280,90 L320,100 L360,70 L400,85 L440,55 L480,68 L520,40 L560,55 L600,75 L640,60 L680,80 L720,52 L760,65 L800,48" fill="none" stroke="var(--c2)" stroke-width="1.5"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="evaluation">
+    <div class="eval-cell pros"><div class="h">Pros</div><ul>
+      <li>Most compact — chart gets the room</li>
+      <li>Crumb still surfaces the range ("last 30 days")</li>
+      <li>Single visual line of controls</li>
+    </ul></div>
+    <div class="eval-cell cons"><div class="h">Cons</div><ul>
+      <li>Doesn't match two-chart pattern's subtitle layer</li>
+      <li>Header row crowds: title + crumb + chip + toggle</li>
+      <li>On narrow widths the toggle wraps or pushes</li>
+    </ul></div>
+    <div class="eval-cell best"><div class="h">Best for</div><ul>
+      <li>Pages with many small single-chart panels</li>
+      <li>Cost / latency / memory pages with one tall chart</li>
+    </ul></div>
+  </div>
+</div>
+
+<!-- ───────── C: meta-on-left ───────── -->
+<div class="variant">
+  <div class="variant-head">
+    <span class="variant-tag">C · meta inline with title</span>
+    <span class="variant-title">Title carries the date phrase; chip + toggle pair on the right</span>
+    <span class="variant-note">one header row · ~52 px chrome</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2 class="panel-title">
+        Tool Calls
+        <span class="crumb"><span style="color:var(--text-secondary)">Daily</span> · <span class="font-mono">last 30 days</span> · 12,408 calls</span>
+      </h2>
+      <div style="display:inline-flex;align-items:center;gap:8px">
+        <button class="chip" type="button">
+          <span class="frag"><span class="material-symbols-outlined">calendar_today</span>30d</span>
+          <span class="frag"><span class="material-symbols-outlined">schedule</span>day</span>
+          <span class="frag"><span class="material-symbols-outlined">stacked_line_chart</span>By Tool #10+</span>
+          <span class="frag"><span class="material-symbols-outlined">filter_list</span>1</span>
+          <span class="caret"><span class="material-symbols-outlined" style="font-size:12px">expand_more</span></span>
+        </button>
+        <div class="seg"><button class="active">line</button><button>bar</button></div>
+      </div>
+    </div>
+
+    <div class="chart-body">
+      <svg viewBox="0 0 800 200" preserveAspectRatio="none" style="width:100%;height:100%">
+        <g stroke="var(--border)" stroke-dasharray="2 4" stroke-width="0.5">
+          <line x1="0" y1="40" x2="800" y2="40"/>
+          <line x1="0" y1="80" x2="800" y2="80"/>
+          <line x1="0" y1="120" x2="800" y2="120"/>
+          <line x1="0" y1="160" x2="800" y2="160"/>
+        </g>
+        <path d="M0,180 L40,160 L80,170 L120,140 L160,150 L200,110 L240,130 L280,90 L320,100 L360,70 L400,85 L440,55 L480,68 L520,40 L560,55 L600,75 L640,60 L680,80 L720,52 L760,65 L800,48 L800,200 L0,200 Z" fill="var(--c3)" opacity=".35"/>
+        <path d="M0,180 L40,160 L80,170 L120,140 L160,150 L200,110 L240,130 L280,90 L320,100 L360,70 L400,85 L440,55 L480,68 L520,40 L560,55 L600,75 L640,60 L680,80 L720,52 L760,65 L800,48" fill="none" stroke="var(--c3)" stroke-width="1.5"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="evaluation">
+    <div class="eval-cell pros"><div class="h">Pros</div><ul>
+      <li>Bucketing + range visible inline with title</li>
+      <li>One header row · chart gets the rest</li>
+      <li>Reads like a sentence: "Tool Calls · Daily · last 30 days"</li>
+    </ul></div>
+    <div class="eval-cell cons"><div class="h">Cons</div><ul>
+      <li>Crumb gets long; eats horizontal room</li>
+      <li>Crumb style stretches what "crumb" means semantically</li>
+    </ul></div>
+    <div class="eval-cell best"><div class="h">Best for</div><ul>
+      <li>Single-chart pages with stable titles</li>
+      <li>When you want every metric inline with the name</li>
+    </ul></div>
+  </div>
+</div>
+
+<!-- ───────── synthesis ───────── -->
+<div class="variant">
+  <div class="variant-head">
+    <span class="variant-tag">Synthesis</span>
+    <span class="variant-title">Which to pick</span>
+  </div>
+  <div class="evaluation" style="grid-template-columns: 1fr;">
+    <div class="eval-cell" style="padding:14px 16px">
+      <p style="color:var(--text-secondary);margin-bottom:8px">
+        <strong style="color:var(--text-primary)">A is the most consistent.</strong> If single-chart and two-chart panels live on the same page, the eye doesn't have to switch hierarchies. The trade is one extra ~24 px row of header chrome per single-chart panel.
+      </p>
+      <p style="color:var(--text-secondary);margin-bottom:8px">
+        <strong style="color:var(--text-primary)">B is the most compact.</strong> Strong choice on pages with several small single-chart panels (e.g. a memory page with multiple per-bucket charts) where vertical room is scarce and the chip already conveys range + granularity.
+      </p>
+      <p style="color:var(--text-secondary)">
+        <strong style="color:var(--text-primary)">C is the most informative on one line.</strong> Works when there's exactly one chart per page and the title pulls double duty. Risky if the title text grows or localizes.
+      </p>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
