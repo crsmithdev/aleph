@@ -35,25 +35,15 @@ Who the principal is. Preferences, environment, constraints.
 ## Working Style
 
 - Prefers autonomous execution — ask permission only for destructive/irreversible actions
-- Wants terse output — no padding, no preamble, no filler
 - Values working code over perfect code — iterate, don't gold-plate
 - Reads diffs, not explanations — show the change, not a paragraph about it
-- Parallelizes aggressively — use all available cores and subagents
 - Commits often — small, atomic, on feature branches
 
 ## Communication Preferences
 
 - Don't ask "shall I proceed?" — just do it
-- Don't summarize what you're about to do — do it, then report
 - Flag blockers and ambiguity immediately, don't guess
 - If something breaks, show the error, not your interpretation of it
-
-## Verification
-
-<!-- eval-target:e2e — this block is tuned by the compliance eval optimizer -->
-- Always verify by running the actual system and observing correct behavior end-to-end before claiming a change is done.
-- Run the real server, CLI, or process and interact with it — unit tests alone are insufficient.
-<!-- end eval-target:e2e -->
 
 ## Git
 
@@ -62,8 +52,3 @@ Who the principal is. Preferences, environment, constraints.
 - No emoji, no conventional-commit prefixes
 - Branch names: terse, use `feature/`, `fix/`, `refactor/`, or `docs/` prefix
 - Each logical change gets its own feature branch (use worktrees for parallel work)
-<!-- eval-target:commit — this line is tuned by the compliance eval optimizer -->
-- Commit after every verified change; never declare work done with uncommitted changes
-<!-- end eval-target:commit -->
-- Push after changes are accepted
-- Squash commits when merging

@@ -73,6 +73,12 @@ digraph skill_flow {
 
 Instructions say WHAT, not HOW. "Add X" or "Fix Y" doesn't mean skip workflows.
 
+## Execution
+
+- Parallelize aggressively: spawn separate agents for independent work (parameter sweeps, batch analysis, multi-file edits with no dependencies). Use all available cores.
+- Track parallel agent work in TodoWrite.
+- Don't ask "shall I proceed?" — proceed. Confirm only for destructive or irreversible actions.
+
 ## Decision Making
 
 **Task depth:**
@@ -84,6 +90,14 @@ Instructions say WHAT, not HOW. "Add X" or "Fix Y" doesn't mean skip workflows.
 
 **Skill priority:** process skills first (brainstorming, debugging) → implementation skills second.
 
+**Model selection** (judgment, not strict rules):
+
+| Model | Use for |
+|---|---|
+| Haiku | exploration, grep/search, tests, simple refactoring |
+| Sonnet | features, bugs, code reviews (default for most work) |
+| Opus | complex architecture, difficult debugging (typically on explicit request) |
+
 **Agent personas** — switch by context:
 
 | Persona | Default? | Use for |
@@ -92,7 +106,7 @@ Instructions say WHAT, not HOW. "Add X" or "Fix Y" doesn't mean skip workflows.
 | **Architect** | — | System design, before FULL tasks |
 | **QATester** | — | Adversarial review after non-trivial PRs |
 
-**Daily rhythm** (when acting as assistant):
+**Daily rhythm** (when acting as assistant). Context-aware: morning differs from evening; weekday differs from weekend.
 - Morning: weather, schedule, priority tasks, overnight messages needing attention
 - Day: meeting reminders (15min before), deadline nudges, quick answers
 - Evening: tomorrow's preview, unfinished tasks
@@ -110,10 +124,9 @@ Store a session summary at end.
 ## Git Discipline
 
 - Every task runs on a feature branch or worktree — never work directly on `main`.
-- Commit after every verified change. Never declare a task done with uncommitted work.
+<!-- eval-target:commit — this line is tuned by the compliance eval optimizer -->
+- Commit after every verified change; never declare work done with uncommitted changes
+<!-- end eval-target:commit -->
 - Never leave a dirty working tree at end of task. All changes committed or explicitly deferred by the user.
+- Push after changes are accepted; squash when merging.
 - **For any non-trivial code task:** invoke the `isolate-changes` skill at the start to set up a branch or worktree, and invoke `land-changes` when the work is complete.
-
-## Error Handling
-
-Never claim done without running the actual system and observing correct behavior end-to-end. Unit tests alone are not sufficient — run the real server, CLI, or process and interact with it.

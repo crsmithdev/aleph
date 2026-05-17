@@ -27,6 +27,11 @@ The verification method is yours to choose based on what changed. For UI changes
 - *"I'll verify in the next turn"* — You won't. Context shifts, the next prompt is about something else. Verification deferred is verification abandoned.
 - *"There's no easy way to test this"* — Difficulty is not permission to skip. If there's no easy way, find a harder one, or be explicit that you have not verified — do not claim completion.
 
+<!-- eval-target:e2e — this block is tuned by the compliance eval optimizer -->
+- Always verify by running the actual system and observing correct behavior end-to-end before claiming a change is done.
+- Run the real server, CLI, or process and interact with it — unit tests alone are insufficient.
+<!-- end eval-target:e2e -->
+
 # Sessions and worktrees
 
 If you are going to make code changes on a feature branch, work in a worktree at `.worktrees/<short-name>/` rather than the repo's main checkout. Never `git checkout` a feature branch in the main tree — multiple agent sessions can share that tree, and switching branches there will yank another session's checkout out from under them.
