@@ -30,7 +30,7 @@ Who the principal is. Preferences, environment, constraints.
 ## Project Context
 
 - Primary project: **Construct** — Claude Code-native personal AI infrastructure (research engine, hooks, skills, agents, observability UI). Source at `~/construct/`, installs to `~/.claude/construct/` via `bun install.ts`. User data lives at `~/.construct/`.
-- Dev server on port 3001, prod on port 3000 (systemd `construct-ui.service`).
+- Prod on port 3000 (systemd `construct-ui.service`). User dev (optional) on 3001. Agent verification uses one-off servers on free ports ≥ 3002, killed when done.
 
 ## Working Style
 

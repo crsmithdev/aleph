@@ -1,7 +1,7 @@
-@construct/core/identity/AGENTS.md
-@construct/core/identity/SOUL.md
-@construct/core/identity/STYLE.md
-@construct/core/identity/USER.md
+@identity/AGENTS.md
+@identity/SOUL.md
+@identity/STYLE.md
+@identity/USER.md
 
 # Verification
 
@@ -53,8 +53,7 @@ If you are going to make code changes on a feature branch, work in a worktree at
 Concretely:
 
 - For new feature work: `git worktree add .worktrees/<name> -b <branch> main`, then `cd` into it.
-- The repo's main checkout stays on `main` and serves as a reference / dev-server source.
-- Verify worktree changes with `bun test.ts` and `bun run build` from inside the worktree, not against the main tree's dev server (which is running different code).
+- Verify worktree changes from inside the worktree. For interactive verification, spin up your own one-off dev server on a free port ≥ 3002 and kill it when done — never assume a shared dev server is serving your code.
 - When the work lands on `main`, remove the worktree: `git worktree remove .worktrees/<name>`.
 
 Trivial in-place edits to `main` (a doc fix, a one-line config tweak you intend to push immediately) don't need a worktree, but anything you'd commit to a feature branch does.

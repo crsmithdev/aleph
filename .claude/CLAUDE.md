@@ -39,30 +39,31 @@ Claude Code merges `.claude/` (project) with `~/.claude/` (global) at runtime. I
 
 ## Server
 
-- **Dev:** port 3001 — `bun dev-server.ts` from repo root, Vite HMR, live from `src/`
-- **Prod:** port 3000 — systemd `construct-ui.service`, deployed via `/install`
+- **Prod:** port 3000 — systemd `construct-ui.service`, deployed via `bun install.ts`
+- **User dev:** port 3001 — `bun run dev` from repo root. May or may not be running; **it belongs to the user**, not to you. Never assume it serves your code.
+- **Agent verification:** ephemeral, free port ≥ 3002, spawned per task and killed when done.
 
-Always develop against **port 3001**. Both share data at `~/.construct/`.
+All three share data at `~/.construct/`.
 
-The dev server is **usually already running** at http://localhost:3001. Check with `ss -tlnp | grep 3001` before starting a new one. **Never use any other port** (3002, etc.) — only 3000 and 3001 exist for this project.
+## Agent dev workflow
 
-## Dev workflow
+For any interactive verification (browser, curl, agent-browser) of UI or API changes, **spin up your own one-off server** — do not test against 3001.
 
-1. Edit source in `src/`
-2. Changes are served live via Vite HMR — **no restart needed** for UI changes; API changes are picked up via `--watch`
-3. Run `bun test.ts` to verify
-4. Run `bun install.ts` **only** to deploy to production (port 3000) — not required to see or verify dev changes
+1. Pick a free port ≥ 3002. Check with `ss -tlnp | grep ":<port> "`.
+2. If the change touches frontend bundle output, build first: `bun run --cwd src/ui build`.
+3. Start:
+   ```
+   PORT=<port> bun run --cwd src/ui start &
+   DEV_PID=$!
+   ```
+4. Verify against `http://localhost:<port>`.
+5. Always clean up with `fuser -k <port>/tcp` (not `kill $DEV_PID` — `bun --watch` forks a worker that survives the parent). Orphaned servers cause cross-session confusion.
 
-After any install, verify with `systemctl --user status construct-ui` and `curl http://localhost:3000/api/system/info`.
+`bun run ui:smoke` already picks its own free port — do not start a server manually for smoke tests.
 
-## Verification in worktrees
+`bun test.ts` covers backend logic, hooks, and API routes without any server.
 
-When working in a worktree (`.worktrees/<name>`), the main repo's dev server at 3001 is running **different code**. Do not use it for worktree verification.
-
-**Correct verification for worktree changes:**
-- `bun test.ts` from the worktree root — sufficient for backend logic, hooks, API routes
-- `bun run build` in `src/ui` — catches frontend type errors and build failures
-- For live HTTP testing, start a temporary server on any available port (e.g. `PORT=3002 bun run --cwd src/ui start`) — **kill it when done**. Orphaned worktree servers are a problem; always clean up.
+Worktrees follow the same model — start the one-off server from inside the worktree so it serves the worktree's code.
 
 ## Directory map
 
@@ -126,6 +127,6 @@ When working in a worktree (`.worktrees/<name>`), the main repo's dev server at 
 | Backend logic works | `bun test.ts` passes | Running install.ts or starting a new server |
 | Frontend compiles | `bun run build` in `src/ui` passes | "TypeScript looks correct" |
 | UI changes work | `bun run ui:smoke` passes (loads every route in a real browser, asserts no render errors or 5xx) | `bun run build` alone — compilation does not catch runtime render errors |
-| Worktree changes work | `bun test.ts` + `bun run build` + `bun run ui:smoke` from worktree root | Testing against the 3001 server (which serves different code) |
+| Worktree changes work | `bun test.ts` + `bun run build` + `bun run ui:smoke` from worktree root | Testing against the 3001 server (which serves the user's code, not yours) |
 
 **UI "done" means the page actually loads.** For any change that touches `src/ui/**`, an API route consumed by the UI, or shared types, `bun run ui:smoke` is a required gate before claiming success. It builds the bundle, boots the API, and navigates every route in headless Chromium — catching runtime render errors, API 500s, and empty renders that `bun test.ts` and `bun run build` miss. If you cannot run it (no Chromium, sandbox restrictions), say so explicitly; do not claim success.

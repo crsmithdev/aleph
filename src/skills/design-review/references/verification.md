@@ -20,7 +20,7 @@ Sandbox restrictions or missing Chromium can block `ui:smoke`. **Say so explicit
 
 ## Eyeball pass
 
-After `ui:smoke` is green, load each affected route in the browser (port 3001 for dev, port 3000 for prod) and visually compare against the reference. Specifically check:
+After `ui:smoke` is green, load each affected route in the browser and visually compare against the reference. Start a one-off dev server on a free port ≥ 3002 (`PORT=<port> bun run --cwd src/ui start &`) and kill it when done — port 3001 belongs to the user and may not serve your code; port 3000 is prod. Specifically check:
 
 1. **Side-by-side at the same scroll position** — open reference in one tab, peer in another. Hot-swap focus.
 2. **Header line-up** — sidebar header baseline matches content header baseline. Off-by-2px is real drift.
@@ -43,9 +43,9 @@ For multi-peer passes:
 
 When working in a worktree (`.worktrees/<name>`):
 
-- **Do not** rely on the main repo's port 3001 dev server — it's serving different code.
+- **Do not** rely on the user's 3001 server — it serves a different checkout.
 - Run `bun run ui:smoke` from the worktree root.
-- For interactive eyeball checks, start a temporary server: `PORT=3002 bun run --cwd src/ui start` — and **kill it when done**. Orphaned worktree servers cause confusion.
+- For interactive eyeball checks, start a one-off server on a free port ≥ 3002 (`PORT=<port> bun run --cwd src/ui start &`) and **kill it when done**. Orphaned worktree servers cause confusion.
 
 ## Non-gates
 

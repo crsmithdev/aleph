@@ -18,5 +18,6 @@ The installer prints a compact summary. Show that output to the user.
 
 ## Dev vs Prod
 
-- **Dev** (port 3001): `bun dev-server.ts` — Vite HMR, live from `src/`, no install needed
+- **User dev** (port 3001, optional): `bun run dev` — live from `src/`, no install needed
+- **Agent verification** (free port ≥ 3002, ephemeral): `PORT=<port> bun run --cwd src/ui start &`, killed when done
 - **Prod** (port 3000): this command — built static files, deployed copy
