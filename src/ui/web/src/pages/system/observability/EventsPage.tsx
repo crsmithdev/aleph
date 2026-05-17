@@ -5,12 +5,13 @@ import { useObsEvents, useObsSessions, useObsTokens } from '../../../api/observa
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
+import { ChartControlChip, FilterToggle } from '../../../components/data/ChartControlChip';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { dateTime, fmtNumber, fmtMs, fmtToolName } from '../../../utils/format';
-import { GRAN_LABEL } from '../../../utils/chart-helpers';
+import { GRAN_LABEL, RANGE_PHRASE } from '../../../utils/chart-helpers';
 
 type EventsDataset = 'activity' | 'tokens';
 const EVENTS_DATASETS: { key: EventsDataset; label: string }[] = [
@@ -556,32 +557,46 @@ export function EventsPage() {
     </>
   );
 
+  const chartChip = (
+    <ChartControlChip
+      range={range}
+      onRangeChange={(r) => { setRange(r); setOffset(0); }}
+      granularity={granularity}
+      onGranularityChange={setGranularity}
+      datasets={EVENTS_DATASETS}
+      dataset={chartDataset}
+      onDatasetChange={(d) => setChartDataset(d as EventsDataset)}
+      filters={eventFilters}
+      activeFilterCount={(activeType ? 1 : 0) + (errorsOnly ? 1 : 0) + (search ? 1 : 0)}
+    />
+  );
+
   return (
     <div className="space-y-6">
-      <ObsControlBar
-        title="Events"
-        range={range}
-        onRangeChange={(r) => { setRange(r); setOffset(0); }}
-        granularity={granularity}
-        onGranularityChange={setGranularity}
-        datasets={EVENTS_DATASETS}
-        dataset={chartDataset}
-        onDatasetChange={(d) => setChartDataset(d as EventsDataset)}
-        filters={eventFilters}
-        activeFilterCount={(activeType ? 1 : 0) + (errorsOnly ? 1 : 0) + (search ? 1 : 0)}
-      />
+      <PageHeader title="Events" />
 
-      <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[350px] flex flex-col">
+      <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[400px] flex flex-col">
+        <div className="flex items-center justify-between gap-3 pb-3 mb-3 border-b border-border-primary shrink-0">
+          <h2 className="font-heading text-base font-medium text-text-primary truncate min-w-0">
+            {chartDataset === 'tokens' ? 'Token Usage' : 'Events'}
+            <span className="ml-2 text-xs font-sans font-normal text-text-muted">
+              {fmtNumber(total)} events
+            </span>
+          </h2>
+          {chartChip}
+        </div>
         <div className="flex-1 min-h-0 flex">
           <div className="flex-1 min-w-0 flex flex-col">
-            <div className="flex items-center justify-between mb-2 shrink-0">
-              <h3 className="font-heading text-lg font-medium text-text-secondary">
-                {chartDataset === 'tokens'
-                  ? `${GRAN_LABEL[granularity] ?? 'Daily'} Token Usage`
-                  : `${GRAN_LABEL[granularity] ?? 'Daily'} Activity by Day`}
-              </h3>
+            <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+              <span className="flex items-baseline gap-2 min-w-0 truncate">
+                <span className="text-sm font-medium text-text-secondary">
+                  {chartDataset === 'tokens'
+                    ? `${GRAN_LABEL[granularity] ?? 'Daily'} tokens`
+                    : `${GRAN_LABEL[granularity] ?? 'Daily'} activity`}
+                </span>
+                <span className="text-xs font-mono text-text-disabled whitespace-nowrap">{RANGE_PHRASE[range]}</span>
+              </span>
             </div>
-            <div className="h-1" />
             <div className="flex-1 min-h-0">
               <ResponsiveContainer width="100%" height="100%">
                 {chartDataset === 'tokens' && tokens.data ? (
@@ -610,10 +625,13 @@ export function EventsPage() {
           <div className="w-px bg-border-primary shrink-0 mx-5" />
 
           <div className="w-[360px] shrink-0 flex flex-col">
-            <div className="flex items-center justify-between mb-3 shrink-0">
-              <h3 className="font-heading text-lg font-medium text-text-secondary">
-                {chartDataset === 'tokens' ? 'Token Breakdown' : 'Events by Type'}
-              </h3>
+            <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+              <span className="flex items-baseline gap-2 min-w-0 truncate">
+                <span className="text-sm font-medium text-text-secondary">
+                  {chartDataset === 'tokens' ? 'Token breakdown' : 'By type'}
+                </span>
+                <span className="text-xs font-mono text-text-disabled whitespace-nowrap">{RANGE_PHRASE[range]}</span>
+              </span>
             </div>
             {chartDataset === 'tokens' && tokens.data ? (() => {
               const tokenBreakdown = [

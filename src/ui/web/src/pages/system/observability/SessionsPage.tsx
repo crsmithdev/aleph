@@ -6,7 +6,8 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { ObsControlBar, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ObsControlBar';
+import { ChartControlChip, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ChartControlChip';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
@@ -62,7 +63,7 @@ function sliceRanked<T extends Record<string, unknown>>(items: T[], valueKey: st
   const other = { ...Object.fromEntries(Object.keys(items[0] ?? {}).map(k => [k, k === valueKey ? otherValue : 'Other'])) } as unknown as T;
   return [...top, other];
 }
-import { GRAN_LABEL } from '../../../utils/chart-helpers';
+import { GRAN_LABEL, RANGE_PHRASE } from '../../../utils/chart-helpers';
 
 type SessionRow = {
   sessionId: string;
@@ -292,41 +293,44 @@ export function SessionsPage() {
 
   const hasFilters = childCount > 0 || spawnerCount > 0;
 
+  const chartChip = (
+    <ChartControlChip
+      range={range}
+      onRangeChange={setRange}
+      granularity={granularity}
+      onGranularityChange={setGranularity}
+      datasets={SESSION_DATASETS}
+      dataset={dataset}
+      onDatasetChange={(d) => setDataset(d as SessionDataset)}
+      filters={hasFilters ? (
+        <>
+          {childCount > 0 && (
+            <FilterToggle
+              label={`Subagent (${childCount})`}
+              active={includeChildSubagents}
+              onToggle={() => setIncludeChildSubagents(!includeChildSubagents)}
+            />
+          )}
+          {spawnerCount > 0 && (
+            <FilterToggle
+              label={`Dispatcher (${spawnerCount})`}
+              active={onlyWithSubagents}
+              onToggle={() => setOnlyWithSubagents(!onlyWithSubagents)}
+            />
+          )}
+        </>
+      ) : undefined}
+      activeFilterCount={activeFilterCount}
+      displayMode={displayMode}
+      onDisplayModeChange={setDisplayMode}
+      displayN={displayN}
+      onDisplayNChange={setDisplayN}
+    />
+  );
+
   return (
     <div className="space-y-6">
-      <ObsControlBar
-        title="Sessions"
-        datasets={SESSION_DATASETS}
-        dataset={dataset}
-        onDatasetChange={(d) => setDataset(d as SessionDataset)}
-        range={range}
-        onRangeChange={setRange}
-        granularity={granularity}
-        onGranularityChange={setGranularity}
-        filters={hasFilters ? (
-          <>
-            {childCount > 0 && (
-              <FilterToggle
-                label={`Subagent (${childCount})`}
-                active={includeChildSubagents}
-                onToggle={() => setIncludeChildSubagents(!includeChildSubagents)}
-              />
-            )}
-            {spawnerCount > 0 && (
-              <FilterToggle
-                label={`Dispatcher (${spawnerCount})`}
-                active={onlyWithSubagents}
-                onToggle={() => setOnlyWithSubagents(!onlyWithSubagents)}
-              />
-            )}
-          </>
-        ) : undefined}
-        activeFilterCount={activeFilterCount}
-        displayMode={displayMode}
-        onDisplayModeChange={setDisplayMode}
-        displayN={displayN}
-        onDisplayNChange={setDisplayN}
-      />
+      <PageHeader title="Sessions" />
 
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
         <StatCard label="Sessions" value={fmtNumber(data.sessions.length)} />
@@ -341,20 +345,32 @@ export function SessionsPage() {
         <StatCard label="Avg Dispatch" value={subagents.data ? fmtMs(subagents.data.avgMs) : '—'} />
       </div>
 
-      <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[350px] flex flex-col">
+      <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[400px] flex flex-col">
+        <div className="flex items-center justify-between gap-3 pb-3 mb-3 border-b border-border-primary shrink-0">
+          <h2 className="font-heading text-base font-medium text-text-primary truncate min-w-0">
+            {chartTitles[dataset]}
+            <span className="ml-2 text-xs font-sans font-normal text-text-muted">
+              {fmtNumber(data.sessions.length)} sessions
+            </span>
+          </h2>
+          {chartChip}
+        </div>
         <div className="flex-1 min-h-0 flex">
           {/* Left: Time series */}
           <div className="flex-1 min-w-0 flex flex-col">
-            <div className="flex items-center justify-between mb-2 shrink-0">
-              <h3 className="font-heading text-lg font-medium text-text-secondary">{chartTitles[dataset]}</h3>
-              <div className="flex gap-1">
+            <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+              <span className="flex items-baseline gap-2 min-w-0 truncate">
+                <span className="text-sm font-medium text-text-secondary">{GRAN_LABEL[granularity]}</span>
+                <span className="text-xs font-mono text-text-disabled whitespace-nowrap">{RANGE_PHRASE[range]}</span>
+              </span>
+              <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
                 {(['line', 'bar'] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setChartType(t)}
                     className={clsx(
-                      'px-2 py-0.5 text-xs rounded transition-colors',
-                      chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                      'px-2 py-0.5 text-xs rounded-sm transition-colors whitespace-nowrap',
+                      chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
                     )}
                   >
                     {t}
@@ -362,7 +378,6 @@ export function SessionsPage() {
                 ))}
               </div>
             </div>
-            <div className="h-1" />
             <div className="flex-1 min-h-0">
               <ResponsiveContainer width="100%" height="100%">
                 {dataset === 'dispatches' ? (
@@ -494,17 +509,20 @@ export function SessionsPage() {
 
           {/* Right: Distribution */}
           <div className="w-[360px] shrink-0 flex flex-col">
-            <div className="flex items-center justify-between mb-3 shrink-0">
-              <h3 className="font-heading text-lg font-medium text-text-secondary">{distTitles[dataset]}</h3>
+            <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+              <span className="flex items-baseline gap-2 min-w-0 truncate">
+                <span className="text-sm font-medium text-text-secondary truncate">{distTitles[dataset]}</span>
+                <span className="text-xs font-mono text-text-disabled whitespace-nowrap">{RANGE_PHRASE[range]}</span>
+              </span>
               {(dataset === 'sessions' || dataset === 'by-project' || dataset === 'dispatches' || dataset === 'cost') && (
-                <div className="flex gap-1">
+                <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
                   {(['donut', 'bar'] as const).map((t) => (
                     <button
                       key={t}
                       onClick={() => setDistChartType(t)}
                       className={clsx(
-                        'px-2 py-0.5 text-xs rounded transition-colors',
-                        distChartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                        'px-2 py-0.5 text-xs rounded-sm transition-colors whitespace-nowrap',
+                        distChartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
                       )}
                     >
                       {t}

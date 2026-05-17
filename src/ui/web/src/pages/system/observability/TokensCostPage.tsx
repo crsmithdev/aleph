@@ -5,12 +5,14 @@ import { useObsTokens, useObsCost } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
-import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { ChartControlChip } from '../../../components/data/ChartControlChip';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, chartColor, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel, rangeToDays, formatModelName } from '../../../utils/format';
+import { fmtCurrency, fmtNumber, fmtPct, rangeToDays, formatModelName } from '../../../utils/format';
+import { GRAN_LABEL, RANGE_PHRASE } from '../../../utils/chart-helpers';
 
 type ModelRow = { model: string; usd: number; pct: number };
 
@@ -36,9 +38,18 @@ export function TokensCostPage() {
     ? cost.data.totalUsd / days
     : 0;
 
+  const chartChip = (
+    <ChartControlChip
+      range={range}
+      onRangeChange={setRange}
+      granularity={granularity}
+      onGranularityChange={setGranularity}
+    />
+  );
+
   return (
     <div className="space-y-6">
-      <ObsControlBar title="Tokens" range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
+      <PageHeader title="Tokens" />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 !mt-0">
         <StatCard label="Total Cost" value={fmtCurrency(cost.data.totalUsd)} accent="success" />
@@ -52,7 +63,13 @@ export function TokensCostPage() {
         <StatCard label="Total Tokens" value={fmtNumber(tokens.data.totalInput + tokens.data.totalOutput)} detailContent={<><span className="text-text-secondary font-medium">{fmtNumber(tokens.data.totalInput)}</span><span className="text-text-muted"> in / </span><span className="text-text-secondary font-medium">{fmtNumber(tokens.data.totalOutput)}</span><span className="text-text-muted"> out</span></>} />
       </div>
 
-      <ChartContainer title={granLabel(granularity, "Tokens")} chartType={tokensChartType} onChartTypeChange={setTokensChartType}>
+      <ChartContainer
+        title="Tokens"
+        crumb={`${GRAN_LABEL[granularity]} · ${RANGE_PHRASE[range]} · ${fmtNumber(tokens.data.totalInput + tokens.data.totalOutput)} tokens`}
+        chip={chartChip}
+        chartType={tokensChartType}
+        onChartTypeChange={setTokensChartType}
+      >
         {tokensChartType === 'bar' ? (
           <BarChart data={tokens.data.byDay}>
             <CartesianGrid {...gridProps} />
@@ -78,7 +95,12 @@ export function TokensCostPage() {
         )}
       </ChartContainer>
 
-      <ChartContainer title={granLabel(granularity, "Cost")} chartType={costChartType} onChartTypeChange={setCostChartType}>
+      <ChartContainer
+        title="Cost"
+        crumb={`${GRAN_LABEL[granularity]} · ${RANGE_PHRASE[range]} · ${fmtCurrency(cost.data.totalUsd)} total`}
+        chartType={costChartType}
+        onChartTypeChange={setCostChartType}
+      >
         {costChartType === 'bar' ? (
           <BarChart data={cost.data.byDay}>
             <CartesianGrid {...gridProps} />
@@ -99,7 +121,11 @@ export function TokensCostPage() {
       </ChartContainer>
 
       {cost.data.byModel.length > 0 && (
-        <ChartContainer title="Cost by Model" raw>
+        <ChartContainer
+          title="Cost by Model"
+          crumb={`${RANGE_PHRASE[range]} · ${cost.data.byModel.length} models`}
+          raw
+        >
           <div className="flex items-center gap-6">
             <PieChart width={160} height={160}>
               <Pie isAnimationActive={false} data={cost.data.byModel} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>

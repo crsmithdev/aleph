@@ -6,11 +6,12 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { ObsControlBar } from '../../../components/data/ObsControlBar';
-import { PageTitle, PageTitleLink, PageTitleSeparator } from '../../../components/layout/PageHeader';
+import { ChartControlChip } from '../../../components/data/ChartControlChip';
+import { PageHeader, PageTitle, PageTitleLink, PageTitleSeparator } from '../../../components/layout/PageHeader';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, fmtProject, fmtLegendLabel } from '../../../utils/format';
+import { GRAN_LABEL, RANGE_PHRASE } from '../../../utils/chart-helpers';
 import { MarkdownBlock } from '../../../components/data/MarkdownBlock';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -180,9 +181,21 @@ export function SkillDetailPage() {
     },
   ];
 
+  const chartChip = (
+    <ChartControlChip
+      range={range}
+      onRangeChange={setRange}
+      granularity={granularity}
+      onGranularityChange={setGranularity}
+      datasets={visibleDatasets}
+      dataset={tsDataset}
+      onDatasetChange={(d) => setTsDataset(d as Dataset)}
+    />
+  );
+
   return (
     <div className="space-y-6">
-      <ObsControlBar
+      <PageHeader
         title={
           <>
             <PageTitleLink to="/observability/skills">Skills</PageTitleLink>
@@ -198,13 +211,6 @@ export function SkillDetailPage() {
             </span>
           </>
         }
-        datasets={visibleDatasets}
-        dataset={tsDataset}
-        onDatasetChange={(d) => setTsDataset(d as Dataset)}
-        range={range}
-        onRangeChange={setRange}
-        granularity={granularity}
-        onGranularityChange={setGranularity}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 !mt-0">
@@ -224,20 +230,32 @@ export function SkillDetailPage() {
       </div>
 
       {data.byDay.length > 0 && (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[350px] flex flex-col">
+        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[400px] flex flex-col">
+          <div className="flex items-center justify-between gap-3 pb-3 mb-3 border-b border-border-primary shrink-0">
+            <h2 className="font-heading text-base font-medium text-text-primary truncate min-w-0">
+              {cfg.title}
+              <span className="ml-2 text-xs font-sans font-normal text-text-muted">
+                {fmtNumber(total)} events · {fmtNumber(uniqueSessions)} sessions
+              </span>
+            </h2>
+            {chartChip}
+          </div>
           <div className="flex-1 min-h-0 flex">
             {/* Time series */}
             <div className="flex-1 min-w-0 flex flex-col">
-              <div className="flex items-center justify-between mb-2 shrink-0">
-                <h3 className="font-heading text-lg font-medium text-text-secondary">{cfg.title}</h3>
-                <div className="flex gap-1">
+              <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+                <span className="flex items-baseline gap-2 min-w-0 truncate">
+                  <span className="text-sm font-medium text-text-secondary">{GRAN_LABEL[granularity]}</span>
+                  <span className="text-xs font-mono text-text-disabled whitespace-nowrap">{RANGE_PHRASE[range]}</span>
+                </span>
+                <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
                   {(['line', 'bar'] as const).map((t) => (
                     <button
                       key={t}
                       onClick={() => setChartType(t)}
                       className={clsx(
-                        'px-2 py-0.5 text-xs rounded transition-colors',
-                        chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                        'px-2 py-0.5 text-xs rounded-sm transition-colors whitespace-nowrap',
+                        chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
                       )}
                     >
                       {t}
@@ -296,16 +314,19 @@ export function SkillDetailPage() {
               <>
                 <div className="w-px bg-border-primary shrink-0 mx-5" />
                 <div className="w-[360px] shrink-0 flex flex-col">
-                  <div className="flex items-center justify-between mb-3 shrink-0">
-                    <h3 className="font-heading text-lg font-medium text-text-secondary">{cfg.distTitle}</h3>
-                    <div className="flex gap-1">
+                  <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+                    <span className="flex items-baseline gap-2 min-w-0 truncate">
+                      <span className="text-sm font-medium text-text-secondary truncate">{cfg.distTitle}</span>
+                      <span className="text-xs font-mono text-text-disabled whitespace-nowrap">{RANGE_PHRASE[range]}</span>
+                    </span>
+                    <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
                       {(['donut', 'bar'] as const).map((t) => (
                         <button
                           key={t}
                           onClick={() => setDistChartType(t)}
                           className={clsx(
-                            'px-2 py-0.5 text-xs rounded transition-colors',
-                            distChartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                            'px-2 py-0.5 text-xs rounded-sm transition-colors whitespace-nowrap',
+                            distChartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
                           )}
                         >
                           {t}

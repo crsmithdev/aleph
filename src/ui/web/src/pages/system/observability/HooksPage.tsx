@@ -7,7 +7,8 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { ObsControlBar, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ObsControlBar';
+import { ChartControlChip, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ChartControlChip';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
@@ -50,7 +51,7 @@ const HOOK_DATASETS: { key: HookDataset; label: string }[] = [
   { key: 'errors', label: 'Errors' },
 ];
 
-import { GRAN_LABEL, fmtCalls } from '../../../utils/chart-helpers';
+import { GRAN_LABEL, RANGE_PHRASE, fmtCalls } from '../../../utils/chart-helpers';
 
 function GatingSection({ gating }: { gating: Record<string, HookGatingStat> }) {
   const hooks = Object.entries(gating);
@@ -588,24 +589,27 @@ export function HooksPage() {
     },
   ];
 
+  const chartChip = (
+    <ChartControlChip
+      range={range}
+      onRangeChange={setRange}
+      granularity={granularity}
+      onGranularityChange={setGranularity}
+      datasets={HOOK_DATASETS}
+      dataset={dataset}
+      onDatasetChange={(d) => setDataset(d as HookDataset)}
+      filters={filterControls}
+      activeFilterCount={activeFilterCount}
+      displayMode={displayMode}
+      onDisplayModeChange={setDisplayMode}
+      displayN={displayN}
+      onDisplayNChange={setDisplayN}
+    />
+  );
+
   return (
     <div className="space-y-6">
-      <ObsControlBar
-        title="Hooks"
-        datasets={HOOK_DATASETS}
-        dataset={dataset}
-        onDatasetChange={(d) => setDataset(d as HookDataset)}
-        range={range}
-        onRangeChange={setRange}
-        granularity={granularity}
-        onGranularityChange={setGranularity}
-        filters={filterControls}
-        activeFilterCount={activeFilterCount}
-        displayMode={displayMode}
-        onDisplayModeChange={setDisplayMode}
-        displayN={displayN}
-        onDisplayNChange={setDisplayN}
-      />
+      <PageHeader title="Hooks" />
 
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
         <StatCard label="Active Hooks" value={fmtNumber(activeHooks)} />
@@ -646,19 +650,31 @@ export function HooksPage() {
       ) : (
         <>
           {data.byDay.length > 0 && (
-            <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[350px] flex flex-col">
+            <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[400px] flex flex-col">
+              <div className="flex items-center justify-between gap-3 pb-3 mb-3 border-b border-border-primary shrink-0">
+                <h2 className="font-heading text-base font-medium text-text-primary truncate min-w-0">
+                  {timeSeriesTitle}
+                  <span className="ml-2 text-xs font-sans font-normal text-text-muted">
+                    {fmtNumber(totalExecutions)} runs · {fmtNumber(activeHooks)} hooks
+                  </span>
+                </h2>
+                {chartChip}
+              </div>
               <div className="flex-1 min-h-0 flex">
                 <div className="flex-1 min-w-0 flex flex-col">
-                  <div className="flex items-center justify-between mb-2 shrink-0">
-                    <h3 className="font-heading text-lg font-medium text-text-secondary">{timeSeriesTitle}</h3>
-                    <div className="flex gap-1">
+                  <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+                    <span className="flex items-baseline gap-2 min-w-0 truncate">
+                      <span className="text-sm font-medium text-text-secondary">{GRAN_LABEL[granularity]}</span>
+                      <span className="text-xs font-mono text-text-disabled whitespace-nowrap">{RANGE_PHRASE[range]}</span>
+                    </span>
+                    <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
                       {(['line', 'bar'] as const).map((t) => (
                         <button
                           key={t}
                           onClick={() => setChartType(t)}
                           className={clsx(
-                            'px-2 py-0.5 text-xs rounded transition-colors',
-                            chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                            'px-2 py-0.5 text-xs rounded-sm transition-colors whitespace-nowrap',
+                            chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
                           )}
                         >
                           {t}
@@ -697,8 +713,11 @@ export function HooksPage() {
                 <div className="w-px bg-border-primary shrink-0 mx-5" />
 
                 <div className="w-[360px] shrink-0 flex flex-col">
-                  <div className="flex items-center justify-between mb-3 shrink-0">
-                    <h3 className="font-heading text-lg font-medium text-text-secondary">{distTitle}</h3>
+                  <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+                    <span className="flex items-baseline gap-2 min-w-0 truncate">
+                      <span className="text-sm font-medium text-text-secondary truncate">{distTitle}</span>
+                      <span className="text-xs font-mono text-text-disabled whitespace-nowrap">{RANGE_PHRASE[range]}</span>
+                    </span>
                   </div>
 
                   {(dataset === 'by-hook') && (

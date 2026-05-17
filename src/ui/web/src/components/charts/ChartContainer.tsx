@@ -8,6 +8,8 @@ export const chartCardClass = 'rounded-lg border border-border-primary bg-bg-sec
 
 export function ChartContainer({
   title,
+  crumb,
+  chip,
   height = 250,
   fill = false,
   raw = false,
@@ -17,6 +19,10 @@ export function ChartContainer({
   onChartTypeChange,
 }: {
   title?: string;
+  /** Inline meta beside the title — e.g. "Daily · last 30 days · 12,408 calls". */
+  crumb?: ReactNode;
+  /** Slot for a ChartControlChip; renders next to the chart-type toggle. */
+  chip?: ReactNode;
   height?: number;
   fill?: boolean;
   /** When true, renders children directly without wrapping in ResponsiveContainer. */
@@ -27,38 +33,63 @@ export function ChartContainer({
   onChartTypeChange?: (type: 'bar' | 'line') => void;
 }) {
   const showToggle = chartType !== undefined && onChartTypeChange !== undefined;
+  const hasTitledHeader = !!(title && (crumb || chip));
 
   return (
     <div className={clsx(chartCardClass, fill && 'flex flex-col', className)}>
-      {(title || showToggle) && (
-        <div className={clsx('flex items-center justify-between', fill ? 'mb-3 shrink-0' : 'mb-3')}>
-          {title && <h3 className="font-heading text-lg font-medium text-text-secondary">{title}</h3>}
-          {showToggle && (
-            <div className="flex items-center gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
-              <button
-                onClick={() => onChartTypeChange('line')}
-                className={clsx(
-                  'flex items-center rounded px-1.5 py-1 transition-colors',
-                  chartType === 'line'
-                    ? 'bg-bg-secondary text-text-primary shadow-sm'
-                    : 'text-text-muted hover:text-text-primary'
+      {(title || showToggle || chip) && (
+        <div
+          className={clsx(
+            'flex items-center justify-between gap-3',
+            fill ? 'shrink-0' : '',
+            hasTitledHeader
+              ? 'pb-3 mb-3 border-b border-border-primary'
+              : 'mb-3'
+          )}
+        >
+          {title && (
+            hasTitledHeader ? (
+              <h2 className="font-heading text-base font-medium text-text-primary truncate min-w-0">
+                {title}
+                {crumb && (
+                  <span className="ml-2 text-xs font-sans font-normal text-text-muted">{crumb}</span>
                 )}
-                title="Line chart"
-              >
-                <Icon name="show_chart" size="sm" />
-              </button>
-              <button
-                onClick={() => onChartTypeChange('bar')}
-                className={clsx(
-                  'flex items-center rounded px-1.5 py-1 transition-colors',
-                  chartType === 'bar'
-                    ? 'bg-bg-secondary text-text-primary shadow-sm'
-                    : 'text-text-muted hover:text-text-primary'
-                )}
-                title="Bar chart"
-              >
-                <Icon name="bar_chart" size="sm" />
-              </button>
+              </h2>
+            ) : (
+              <h3 className="font-heading text-lg font-medium text-text-secondary">{title}</h3>
+            )
+          )}
+          {(chip || showToggle) && (
+            <div className="flex items-center gap-2 shrink-0">
+              {chip}
+              {showToggle && (
+                <div className="flex items-center gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
+                  <button
+                    onClick={() => onChartTypeChange('line')}
+                    className={clsx(
+                      'flex items-center rounded px-1.5 py-1 transition-colors',
+                      chartType === 'line'
+                        ? 'bg-bg-secondary text-text-primary shadow-sm'
+                        : 'text-text-muted hover:text-text-primary'
+                    )}
+                    title="Line chart"
+                  >
+                    <Icon name="show_chart" size="sm" />
+                  </button>
+                  <button
+                    onClick={() => onChartTypeChange('bar')}
+                    className={clsx(
+                      'flex items-center rounded px-1.5 py-1 transition-colors',
+                      chartType === 'bar'
+                        ? 'bg-bg-secondary text-text-primary shadow-sm'
+                        : 'text-text-muted hover:text-text-primary'
+                    )}
+                    title="Bar chart"
+                  >
+                    <Icon name="bar_chart" size="sm" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

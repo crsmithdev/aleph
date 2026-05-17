@@ -8,7 +8,8 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { ObsControlBar, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ObsControlBar';
+import { ChartControlChip, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ChartControlChip';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, fmtMs, shortDate, parseToolSource, shortRelativeTime, fmtLegendLabel, fmtProject, fmtToolName } from '../../../utils/format';
@@ -32,7 +33,7 @@ const DATASETS: { key: Dataset; label: string }[] = [
   { key: 'sessions', label: 'Sessions' },
 ];
 
-import { fmtCalls, rankedKeysFromRecord, topKeysFromRecord, stackByDay } from '../../../utils/chart-helpers';
+import { fmtCalls, rankedKeysFromRecord, topKeysFromRecord, stackByDay, GRAN_LABEL, RANGE_PHRASE } from '../../../utils/chart-helpers';
 
 export function ToolsPage() {
   const [range, setRange] = useState<TimeRange>('30d');
@@ -248,26 +249,29 @@ export function ToolsPage() {
     },
   ];
 
+  const chartChip = (
+    <ChartControlChip
+      range={range}
+      onRangeChange={setRange}
+      granularity={granularity}
+      onGranularityChange={setGranularity}
+      datasets={DATASETS}
+      dataset={tsDataset}
+      onDatasetChange={(d) => setTsDataset(d as Dataset)}
+      filters={inactiveCount > 0 ? (
+        <FilterToggle label={`Missing (${inactiveCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} />
+      ) : undefined}
+      activeFilterCount={showMissing ? 1 : 0}
+      displayMode={displayMode}
+      onDisplayModeChange={setDisplayMode}
+      displayN={displayN}
+      onDisplayNChange={setDisplayN}
+    />
+  );
+
   return (
     <div className="space-y-6">
-      <ObsControlBar
-        title="Tools"
-        datasets={DATASETS}
-        dataset={tsDataset}
-        onDatasetChange={(d) => setTsDataset(d as Dataset)}
-        range={range}
-        onRangeChange={setRange}
-        granularity={granularity}
-        onGranularityChange={setGranularity}
-        filters={inactiveCount > 0 ? (
-          <FilterToggle label={`Missing (${inactiveCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} />
-        ) : undefined}
-        activeFilterCount={showMissing ? 1 : 0}
-        displayMode={displayMode}
-        onDisplayModeChange={setDisplayMode}
-        displayN={displayN}
-        onDisplayNChange={setDisplayN}
-      />
+      <PageHeader title="Tools" />
 
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
         <StatCard label="Active Tools" value={fmtNumber(activeTools)} />
@@ -296,22 +300,34 @@ export function ToolsPage() {
 
       {filtered.length > 0 && (
         <>
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[350px] flex flex-col">
+          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[400px] flex flex-col">
+            <div className="flex items-center justify-between gap-3 pb-3 mb-3 border-b border-border-primary shrink-0">
+              <h2 className="font-heading text-base font-medium text-text-primary truncate min-w-0">
+                {timeSeriesTitle}
+                <span className="ml-2 text-xs font-sans font-normal text-text-muted">
+                  {fmtNumber(activeTools)} tools · {fmtCalls(totalCalls)} calls
+                </span>
+              </h2>
+              {chartChip}
+            </div>
             <div className="flex-1 min-h-0 flex">
               {/* Time series */}
               {hasTimeSeries && (
                 <div className="flex-1 min-w-0 flex flex-col">
-                  <div className="flex items-center justify-between mb-2 shrink-0">
-                    <h3 className="font-heading text-lg font-medium text-text-secondary">{timeSeriesTitle}</h3>
+                  <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+                    <span className="flex items-baseline gap-2 min-w-0 truncate">
+                      <span className="text-sm font-medium text-text-secondary">{GRAN_LABEL[granularity]}</span>
+                      <span className="text-xs font-mono text-text-disabled whitespace-nowrap">{RANGE_PHRASE[range]}</span>
+                    </span>
                     {tsDataset !== 'velocity' && (
-                      <div className="flex gap-1">
+                      <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
                         {(['line', 'bar'] as const).map((t) => (
                           <button
                             key={t}
                             onClick={() => setChartType(t)}
                             className={clsx(
-                              'px-2 py-0.5 text-xs rounded transition-colors',
-                              chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                              'px-2 py-0.5 text-xs rounded-sm transition-colors whitespace-nowrap',
+                              chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
                             )}
                           >
                             {t}
@@ -320,7 +336,6 @@ export function ToolsPage() {
                       </div>
                     )}
                   </div>
-                  <div className="h-1" />
                   <div className="flex-1 min-h-0">
                   <ResponsiveContainer width="100%" height="100%">
                     {tsDataset === 'velocity' ? (
@@ -362,16 +377,19 @@ export function ToolsPage() {
 
               {/* Distribution */}
               <div className="w-[360px] shrink-0 flex flex-col">
-                <div className="flex items-center justify-between mb-3 shrink-0">
-                  <h3 className="font-heading text-lg font-medium text-text-secondary">{distTitle}</h3>
-                  <div className="flex gap-1">
+                <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+                  <span className="flex items-baseline gap-2 min-w-0 truncate">
+                    <span className="text-sm font-medium text-text-secondary truncate">{distTitle}</span>
+                    <span className="text-xs font-mono text-text-disabled whitespace-nowrap">{RANGE_PHRASE[range]}</span>
+                  </span>
+                  <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
                     {(['donut', 'bar'] as const).map((t) => (
                       <button
                         key={t}
                         onClick={() => setDistChartType(t)}
                         className={clsx(
-                          'px-2 py-0.5 text-xs rounded transition-colors',
-                          distChartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                          'px-2 py-0.5 text-xs rounded-sm transition-colors whitespace-nowrap',
+                          distChartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
                         )}
                       >
                         {t}

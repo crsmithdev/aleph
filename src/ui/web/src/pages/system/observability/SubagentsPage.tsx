@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { useObsSubagents, type SubagentsData, type SubagentTypeBucket, type SubagentInvocation } from '../../../api/observability-hooks';
+import { useObsSubagents, type SubagentTypeBucket, type SubagentInvocation } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
+import { ChartControlChip, FilterToggle } from '../../../components/data/ChartControlChip';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { fmtNumber, fmtMs, relativeTime, shortDate, granLabel } from '../../../utils/format';
+import { fmtNumber, fmtMs, relativeTime } from '../../../utils/format';
+import { GRAN_LABEL, RANGE_PHRASE } from '../../../utils/chart-helpers';
 import { clsx } from 'clsx';
 
 
@@ -136,23 +138,26 @@ export function SubagentsPage() {
   ];
 
 
+  const chartChip = (
+    <ChartControlChip
+      range={range}
+      onRangeChange={setRange}
+      granularity={granularity}
+      onGranularityChange={setGranularity}
+      filters={
+        <FilterToggle
+          label="Background only"
+          active={bgOnly}
+          onToggle={() => setBgOnly(!bgOnly)}
+        />
+      }
+      activeFilterCount={bgOnly ? 1 : 0}
+    />
+  );
+
   return (
     <div className="space-y-6">
-      <ObsControlBar
-        title="Subagents"
-        range={range}
-        onRangeChange={setRange}
-        granularity={granularity}
-        onGranularityChange={setGranularity}
-        filters={
-          <FilterToggle
-            label="Background only"
-            active={bgOnly}
-            onToggle={() => setBgOnly(!bgOnly)}
-          />
-        }
-        activeFilterCount={bgOnly ? 1 : 0}
-      />
+      <PageHeader title="Subagents" />
 
       <div className="grid grid-cols-4 gap-4 !mt-0">
         <StatCard
@@ -169,7 +174,11 @@ export function SubagentsPage() {
       </div>
 
       {data.byDay.length > 0 && (
-        <ChartContainer title={granLabel(granularity, 'Dispatches')}>
+        <ChartContainer
+          title="Dispatches"
+          crumb={`${GRAN_LABEL[granularity]} · ${RANGE_PHRASE[range]} · ${fmtNumber(data.totalDispatches)} dispatches`}
+          chip={chartChip}
+        >
           <BarChart data={data.byDay}>
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" {...xAxisDateProps} />

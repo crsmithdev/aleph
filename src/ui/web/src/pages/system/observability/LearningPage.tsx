@@ -13,7 +13,8 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { ChartControlChip } from '../../../components/data/ChartControlChip';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { Icon } from '../../../components/ui/Icon';
 import { fmtNumber, fmtPct, compactTs } from '../../../utils/format';
 import { clsx } from 'clsx';
@@ -683,12 +684,16 @@ export function LearningPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar
+      <PageHeader
         title="Learning"
-        range={range}
-        onRangeChange={setRange}
-        granularity={granularity}
-        onGranularityChange={setGranularity}
+        actions={
+          <ChartControlChip
+            range={range}
+            onRangeChange={setRange}
+            granularity={granularity}
+            onGranularityChange={setGranularity}
+          />
+        }
       />
 
       {/* Summary stat cards */}

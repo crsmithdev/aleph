@@ -5,12 +5,14 @@ import { useObsOverview, useObsSessions, useObsTokens, useObsCost, useObsHooks, 
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
-import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { ChartControlChip } from '../../../components/data/ChartControlChip';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtCurrency, fmtPct, shortDate, granLabel, fmtLegendLabel, formatModelName } from '../../../utils/format';
+import { fmtNumber, fmtCurrency, fmtPct, fmtLegendLabel, formatModelName } from '../../../utils/format';
+import { GRAN_LABEL, RANGE_PHRASE } from '../../../utils/chart-helpers';
 
 export function OverviewPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,9 +37,18 @@ export function OverviewPage() {
     ? ((data.toolCalls - data.toolErrors) / data.toolCalls) * 100
     : 100;
 
+  const chartChip = (
+    <ChartControlChip
+      range={range}
+      onRangeChange={setRange}
+      granularity={granularity}
+      onGranularityChange={setGranularity}
+    />
+  );
+
   return (
     <div className="space-y-6">
-      <ObsControlBar title="Observability" range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
+      <PageHeader title="Observability" />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5 !mt-0">
         <StatCard label="Sessions" value={fmtNumber(data.sessions)} />
@@ -74,7 +85,13 @@ export function OverviewPage() {
         </div>
       )}
 
-      <ChartContainer title={granLabel(granularity, "Activity")} chartType={chartType} onChartTypeChange={setChartType}>
+      <ChartContainer
+        title="Activity"
+        crumb={`${GRAN_LABEL[granularity]} · ${RANGE_PHRASE[range]} · ${fmtNumber(data.messages)} messages · ${fmtNumber(data.sessions)} sessions`}
+        chip={chartChip}
+        chartType={chartType}
+        onChartTypeChange={setChartType}
+      >
         {chartType === 'bar' ? (
           <BarChart data={data.byDay}>
             <CartesianGrid {...gridProps} />
@@ -97,7 +114,12 @@ export function OverviewPage() {
       </ChartContainer>
 
       {tokens.data && (
-        <ChartContainer title={granLabel(granularity, "Tokens")} chartType={tokensChartType} onChartTypeChange={setTokensChartType}>
+        <ChartContainer
+          title="Tokens"
+          crumb={`${GRAN_LABEL[granularity]} · ${RANGE_PHRASE[range]} · ${fmtNumber(tokens.data.totalInput + tokens.data.totalOutput)} tokens`}
+          chartType={tokensChartType}
+          onChartTypeChange={setTokensChartType}
+        >
           {tokensChartType === 'bar' ? (
             <BarChart data={tokens.data.byDay}>
               <CartesianGrid {...gridProps} />
@@ -125,7 +147,12 @@ export function OverviewPage() {
       )}
 
       {cost.data && (
-        <ChartContainer title={granLabel(granularity, "Cost")} chartType={costChartType} onChartTypeChange={setCostChartType}>
+        <ChartContainer
+          title="Cost"
+          crumb={`${GRAN_LABEL[granularity]} · ${RANGE_PHRASE[range]} · ${fmtCurrency(cost.data.totalUsd)} total`}
+          chartType={costChartType}
+          onChartTypeChange={setCostChartType}
+        >
           {costChartType === 'bar' ? (
             <BarChart data={cost.data.byDay}>
               <CartesianGrid {...gridProps} />
@@ -151,7 +178,11 @@ export function OverviewPage() {
         const otherUsd = cost.data.byModel.slice(5).reduce((s, r) => s + r.usd, 0);
         const donut = otherUsd > 0 ? [...top5, { model: 'Other', usd: otherUsd, pct: 0 }] : top5;
         return (
-          <ChartContainer title="Cost by Model" raw>
+          <ChartContainer
+            title="Cost by Model"
+            crumb={`${RANGE_PHRASE[range]} · ${cost.data.byModel.length} models`}
+            raw
+          >
             <div className="flex gap-3 h-[180px]">
               <div className="flex-1 min-w-0 flex items-center">
                 <ResponsiveContainer width="100%" height={180}>
@@ -183,7 +214,11 @@ export function OverviewPage() {
           .filter(s => s.cost > 0 || (s.linesAdded + s.linesRemoved) > 0)
           .map(s => ({ churn: s.linesAdded + s.linesRemoved, cost: s.cost, name: s.sessionId.slice(0, 8) }));
         return (
-          <ChartContainer title="Cost vs Code Output" height={200}>
+          <ChartContainer
+            title="Cost vs Code Output"
+            crumb={`${RANGE_PHRASE[range]} · ${scatterData.length} sessions`}
+            height={200}
+          >
               <ScatterChart>
                 <CartesianGrid {...gridProps} />
                 <XAxis dataKey="churn" type="number" {...axisProps} name="Lines Changed" tickFormatter={(v) => fmtNumber(Number(v))} label={{ value: 'Lines Changed', position: 'insideBottom', offset: -4, style: { fontSize: 10, fill: 'var(--color-text-muted)' } }} />
@@ -199,7 +234,11 @@ export function OverviewPage() {
       {hooks.data && hooks.data.ranked.filter(r => r.count > 0).length > 0 && (() => {
         const topHooks = [...hooks.data!.ranked].filter(r => r.count > 0).sort((a, b) => b.p50Ms - a.p50Ms).slice(0, 10);
         return (
-          <ChartContainer title="Hook Latency (p50)" height={Math.max(160, topHooks.length * 24)}>
+          <ChartContainer
+            title="Hook Latency (p50)"
+            crumb={`${RANGE_PHRASE[range]} · top ${topHooks.length} hooks`}
+            height={Math.max(160, topHooks.length * 24)}
+          >
               <BarChart layout="vertical" data={topHooks}>
                 <CartesianGrid {...gridProps} horizontal={false} />
                 <XAxis type="number" {...axisProps} tickFormatter={(v) => `${v}ms`} />
@@ -221,7 +260,11 @@ export function OverviewPage() {
           return row;
         });
         return (
-          <ChartContainer title="Skill → Tool Usage" height={Math.max(160, topSkills.length * 28)}>
+          <ChartContainer
+            title="Skill → Tool Usage"
+            crumb={`${RANGE_PHRASE[range]} · top ${topSkills.length} skills × ${allTools.length} tools`}
+            height={Math.max(160, topSkills.length * 28)}
+          >
               <BarChart layout="vertical" data={barData}>
                 <CartesianGrid {...gridProps} horizontal={false} />
                 <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />

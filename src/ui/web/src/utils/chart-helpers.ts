@@ -1,7 +1,15 @@
-import type { Granularity } from '../components/data/TimeRangeSelector';
-import type { DatasetDisplayMode } from '../components/data/ObsControlBar';
+import type { Granularity, TimeRange } from '../components/data/TimeRangeSelector';
+import type { DatasetDisplayMode } from '../components/data/ChartControlChip';
 
 export const GRAN_LABEL: Record<Granularity, string> = { minute: 'Per-Minute', hour: 'Hourly', day: 'Daily' };
+
+export const RANGE_PHRASE: Record<TimeRange, string> = {
+  'session': 'this session',
+  '1h':      'last hour',
+  '1d':      'last 24 hours',
+  '7d':      'last 7 days',
+  '30d':     'last 30 days',
+};
 
 export function fmtCalls(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';

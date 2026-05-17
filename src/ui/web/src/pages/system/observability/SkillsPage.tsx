@@ -40,7 +40,7 @@ const SKILL_DATASETS: { key: SkillDataset; label: string }[] = [
   { key: 'latency', label: 'Latency' },
 ];
 
-import { GRAN_LABEL } from '../../../utils/chart-helpers';
+import { GRAN_LABEL, RANGE_PHRASE } from '../../../utils/chart-helpers';
 
 const PANEL_TITLE: Record<SkillDataset, string> = {
   'by-skill': 'Invocations by Skill',
@@ -56,14 +56,6 @@ const LEFT_METRIC: Record<SkillDataset, string> = {
   'sessions': 'sessions',
   'errors':   'errors',
   'latency':  'p50 latency',
-};
-
-const RANGE_PHRASE: Record<TimeRange, string> = {
-  'session': 'this session',
-  '1h':      'last hour',
-  '1d':      'last 24 hours',
-  '7d':      'last 7 days',
-  '30d':     'last 30 days',
 };
 
 export function SkillsPage() {

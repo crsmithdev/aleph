@@ -8,10 +8,11 @@ import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
-import { ObsControlBar } from '../../../components/data/ObsControlBar';
-import { PageTitle } from '../../../components/layout/PageHeader';
+import { ChartControlChip } from '../../../components/data/ChartControlChip';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
-import { fmtNumber, shortDate, shortRelativeTime, granLabel, fmtLegendLabel, fmtMs, dateTime } from '../../../utils/format';
+import { fmtNumber, shortRelativeTime, fmtLegendLabel, fmtMs, dateTime } from '../../../utils/format';
+import { GRAN_LABEL, RANGE_PHRASE } from '../../../utils/chart-helpers';
 import { clsx } from 'clsx';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -154,29 +155,32 @@ export function MemoryPage() {
     },
   ];
 
+  const chartChip = (
+    <ChartControlChip
+      range={range}
+      onRangeChange={setRange}
+      granularity={granularity}
+      onGranularityChange={setGranularity}
+    />
+  );
+
   return (
     <div className="space-y-6">
-      <ObsControlBar
-        title={
-          <>
-            <PageTitle>Memory</PageTitle>
-            <button
-              onClick={() => snapshot.mutate()}
-              disabled={snapshot.isPending}
-              className={clsx(
-                'shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                'bg-accent text-white hover:bg-accent-hover',
-                'disabled:opacity-50 disabled:cursor-not-allowed'
-              )}
-            >
-              {snapshot.isPending ? 'Taking Snapshot...' : 'Take Snapshot'}
-            </button>
-          </>
+      <PageHeader
+        title="Memory"
+        actions={
+          <button
+            onClick={() => snapshot.mutate()}
+            disabled={snapshot.isPending}
+            className={clsx(
+              'shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              'bg-accent text-white hover:bg-accent-hover',
+              'disabled:opacity-50 disabled:cursor-not-allowed'
+            )}
+          >
+            {snapshot.isPending ? 'Taking Snapshot...' : 'Take Snapshot'}
+          </button>
         }
-        range={range}
-        onRangeChange={setRange}
-        granularity={granularity}
-        onGranularityChange={setGranularity}
       />
 
       {/* Stats */}
@@ -207,7 +211,9 @@ export function MemoryPage() {
         <div className="flex gap-4 items-start">
           <div className="flex-1 min-w-0">
             <ChartContainer
-              title={granLabel(granularity, "Memory Operations")}
+              title="Memory Operations"
+              crumb={`${GRAN_LABEL[granularity]} · ${RANGE_PHRASE[range]}${usage.data ? ` · ${fmtNumber(usage.data.stores + usage.data.searches)} ops` : ''}`}
+              chip={chartChip}
               chartType={usageChartType}
               onChartTypeChange={setUsageChartType}
             >
