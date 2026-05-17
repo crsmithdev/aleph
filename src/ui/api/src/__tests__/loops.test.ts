@@ -11,7 +11,7 @@
  * `:memory:` would skip startResearchLogger() — the subscriber under test —
  * so the on-disk path is required.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { createApp } from '../app.js';
 import { mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';

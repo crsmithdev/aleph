@@ -1,8 +1,9 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src"
+    "noEmit": true,
+    "rootDir": "..",
+    "types": ["bun"]
   },
-  "include": ["src"]
+  "include": ["src", "../integration/fake-llm-server.ts"]
 }

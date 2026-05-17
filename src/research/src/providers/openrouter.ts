@@ -1,4 +1,4 @@
-import type { LLMProvider, LLMResult, SearchOptions, WebSearchResult } from '../engine.js';
+import type { LLMProvider, LLMResult, SearchOptions, WebSearchResult } from '../loop/llm.js';
 import { fetchSearchResults } from './websearch.js';
 
 export interface OpenRouterConfig {
@@ -94,7 +94,6 @@ export class OpenRouterProvider implements LLMProvider {
     const completionTokens = response.usage?.completion_tokens ?? 0;
     return {
       text,
-      sourceTexts: [],
       sourceUrls,
       sourceUrlMeta: searchResults.map(r => ({ url: r.url, title: r.title, snippet: r.snippet.slice(0, displayChars) })),
       promptTokens,

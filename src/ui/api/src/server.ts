@@ -24,7 +24,14 @@ if (isDev) {
     appType: 'spa',
     customLogger: createViteLogger(),
   });
-  await app.use((req: any, res: any, next: any) => {
+  // After @fastify/middie is registered the instance gains a `.use(...)`
+  // method via module augmentation, but middie is loaded dynamically (via
+  // Bun.resolveSync) so the static import that would surface the augmented
+  // type isn't present. Narrow the type locally to expose `.use`.
+  type WithUse = typeof app & {
+    use(handler: (req: unknown, res: unknown, next: (err?: unknown) => void) => void): Promise<void>;
+  };
+  await (app as WithUse).use((req: any, res: any, next: any) => {
     if (req.url?.startsWith('/api/') || req.url?.startsWith('/public')) return next();
     vite.middlewares(req, res, next);
   });
@@ -55,7 +62,7 @@ function printBootBanner(): void {
   log({ source: 'dev', msg: `memory  ${info.paths.memoryDb}` });
   log({ source: 'dev', msg: `sessions ${info.paths.sessions}` });
   log({ source: 'dev', msg: `signals ${info.paths.signals}` });
-  log({ source: 'dev', msg: `ratings ${info.paths.ratings}` });
+  log({ source: 'dev', msg: `events  ${info.paths.events}` });
   log({ source: 'dev', msg: `backups ${info.paths.backups}` });
   log({ source: 'dev', msg: `telemetry ${info.paths.telemetry}` });
   log({ source: 'dev', msg: `logs    ${info.paths.devLogs}` });

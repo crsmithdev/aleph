@@ -2,7 +2,7 @@ import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { resolve } from 'path';
 import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, writeFileSync } from 'fs';
 import { stringify as yamlStringify } from 'yaml';
-import { loadScenario, listHookScenarios } from '@construct/eval/scenario-loader.ts';
+import { loadScenario, listHookScenarios } from '@construct/eval/scenario-loader.js';
 import { spawn } from 'child_process';
 import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
 import { Database } from 'bun:sqlite';

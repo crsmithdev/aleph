@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Typecheck
+        run: bun run --cwd src/ui typecheck
+
       - name: Build
         run: bun run --cwd src/ui build
 

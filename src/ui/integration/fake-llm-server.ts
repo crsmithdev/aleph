@@ -69,9 +69,13 @@ export function startFakeProviderServer(): FakeServerHandle {
     },
   });
 
+  // Bun.serve with port:0 always returns an assigned numeric port — the
+  // optional type in bun-types covers the unix-socket case which we don't use.
+  if (server.port === undefined) throw new Error('fake-llm-server: Bun.serve returned no port');
+  const port = server.port;
   return {
-    port: server.port,
-    baseUrl: `http://127.0.0.1:${server.port}`,
+    port,
+    baseUrl: `http://127.0.0.1:${port}`,
     stop: () => server.stop(true),
     completeCount: () => completeCalls,
     searchCount: () => searchCalls,

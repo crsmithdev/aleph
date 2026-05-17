@@ -6,6 +6,7 @@ import {
   index,
   unique,
 } from 'drizzle-orm/sqlite-core';
+import type { Priority, GoalState } from './constants.js';
 
 export const categories = sqliteTable('categories', {
   id: text('id').primaryKey(),
@@ -17,8 +18,8 @@ export const categories = sqliteTable('categories', {
 export const goals = sqliteTable('goals', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
-  priority: text('priority').notNull().default('medium'),
-  state: text('state').notNull().default('not_started'),
+  priority: text('priority').$type<Priority>().notNull().default('medium'),
+  state: text('state').$type<GoalState>().notNull().default('not_started'),
   archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),

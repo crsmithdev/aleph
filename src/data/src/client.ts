@@ -2,7 +2,7 @@ import { Database } from 'bun:sqlite';
 import { drizzle, type BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
-import { dataPaths } from './paths.ts';
+import { dataPaths } from './paths.js';
 
 const DEFAULT_DB_PATH = dataPaths.db;
 

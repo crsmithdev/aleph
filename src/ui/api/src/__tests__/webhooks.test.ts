@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { createApp } from '../app.js';
 import { dispatchWebhooks } from '../webhook-dispatch.js';
 import { createDb } from '@construct/data';
