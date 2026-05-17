@@ -615,13 +615,17 @@ function readEvents(since?: Date): TelemetryEvent[] {
     for (const line of lines) {
       try {
         const entry = JSON.parse(line) as Record<string, unknown>;
+        // Skip non-real telemetry: consolidator runs, manual stdin dev
+        // invocations, and any other hook write whose sessionId isn't a real
+        // Claude Code id. Tagged `lane: "test"` at write time by reportHook().
+        if (entry.lane === "test") continue;
         const ts = (entry.ts as string) || "";
         const hook = (entry.hook as string) || "unknown";
         const sid = (entry.sessionId as string) || "unknown";
         if (!ts) continue;
         const { kind, name } = eventKindFor(hook, entry);
         // Strip the envelope fields from the data payload so callers see a clean meta surface.
-        const { ts: _ts, hook: _hook, event: _event, sessionId: _sid, ...rest } = entry;
+        const { ts: _ts, hook: _hook, event: _event, sessionId: _sid, lane: _lane, ...rest } = entry;
         events.push({ ts, sid, kind, name, data: { hook, event: entry.event as string | undefined, ...rest } });
       } catch {}
     }

@@ -84,7 +84,6 @@ type SessionRow = {
   gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; hookBlocks: number; hookAdvisories: number; mode: 'dispatched' | 'inline' | 'none' };
   firstUserMessage?: string;
   intent?: string;
-  outcome?: string;
 };
 
 export function SessionsPage() {
@@ -192,29 +191,24 @@ export function SessionsPage() {
             const SKIP_INTENTS = new Set(['unknown task', '[request interrupted by user]']);
             const meaningfulIntent = row.intent
               && !SKIP_INTENTS.has(row.intent.toLowerCase())
-              && !/^#+ /.test(row.intent.trimStart())
               ? row.intent : undefined;
             if (meaningfulIntent) {
               return (
                 <span className="text-text-primary text-base truncate" title={meaningfulIntent}>
-                  {meaningfulIntent.length > 100 ? meaningfulIntent.slice(0, 100) + '…' : meaningfulIntent}
+                  {meaningfulIntent}
                 </span>
               );
             }
             if (row.firstUserMessage && !row.firstUserMessage.startsWith('Caveat:')) {
+              const t = stripMarkdown(row.firstUserMessage!);
               return (
-                <span className="text-text-primary text-base truncate">
-                  {(() => { const t = stripMarkdown(row.firstUserMessage!); return t.length > 100 ? t.slice(0, 100) + '…' : t; })()}
+                <span className="text-text-primary text-base truncate" title={t}>
+                  {t}
                 </span>
               );
             }
             return null;
           })()}
-          {row.outcome && (
-            <span className="text-text-muted text-xs truncate" title={row.outcome}>
-              → {row.outcome.length > 90 ? row.outcome.slice(0, 90) + '…' : row.outcome}
-            </span>
-          )}
         </div>
       ),
     },
@@ -350,7 +344,17 @@ export function SessionsPage() {
           <h2 className="font-heading text-base font-medium text-text-primary truncate min-w-0">
             {chartTitles[dataset]}
             <span className="ml-2 text-xs font-sans font-normal text-text-muted">
-              {fmtNumber(data.sessions.length)} sessions
+              {(() => {
+                if (dataset === 'cost') return fmtCurrency(data.byDay.reduce((s, d) => s + (d.cost ?? 0), 0));
+                if (dataset === 'churn') {
+                  const added = data.byDay.reduce((s, d) => s + (d.linesAdded ?? 0), 0);
+                  const removed = data.byDay.reduce((s, d) => s + (d.linesRemoved ?? 0), 0);
+                  return `+${fmtNumber(added)} / −${fmtNumber(removed)} lines`;
+                }
+                if (dataset === 'commits') return `${fmtNumber(data.byDay.reduce((s, d) => s + (d.commits ?? 0), 0))} commits`;
+                if (dataset === 'dispatches') return `${fmtNumber(subagents.data?.totalDispatches ?? 0)} dispatches`;
+                return `${fmtNumber(data.sessions.length)} sessions`;
+              })()}
             </span>
           </h2>
           {chartChip}

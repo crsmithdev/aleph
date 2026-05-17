@@ -65,6 +65,10 @@ For any interactive verification (browser, curl, agent-browser) of UI or API cha
 
 Worktrees follow the same model — start the one-off server from inside the worktree so it serves the worktree's code.
 
+## Manual hook invocations
+
+If you pipe stdin to a hook script directly (e.g. `echo '{...}' | bun src/core/hooks/foo.ts`), set `CONSTRUCT_DATA_ROOT=/tmp/scratch` first so the write lands in a throwaway dir, not the real `~/.construct/`. `reportHook()` tags writes whose `sessionId` isn't a real Claude Code id (UUID or `agent-<hex>`) with `lane: "test"` so the adapter skips them — but it's still cleaner to redirect the whole data root.
+
 ## Directory map
 
 | Path | Purpose | Installs to | Method |

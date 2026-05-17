@@ -260,7 +260,6 @@ export interface SessionMetric {
   gateInfo?: GateInfo;
   firstUserMessage?: string;
   intent?: string;
-  outcome?: string;
 }
 
 export interface SessionsData {

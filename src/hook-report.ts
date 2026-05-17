@@ -14,10 +14,24 @@ export interface HookDecision {
   meta?: Record<string, unknown>;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const SUBAGENT_RE = /^agent-[0-9a-f]+$/;
+
+/** Real Claude Code session IDs are UUIDs or `agent-<hex>` (subagent). Anything
+ *  else — empty/`unknown`, `background` from the consolidator, `test*` from
+ *  manual stdin invocations during dev — is not real session data. It still
+ *  lands in events.jsonl, but tagged `lane: "test"` so the telemetry adapter
+ *  skips it (see `readEvents` in `src/telemetry/src/adapter.ts`). */
+function isRealSessionId(sid: string | undefined): boolean {
+  if (!sid) return false;
+  return UUID_RE.test(sid) || SUBAGENT_RE.test(sid);
+}
+
 export function reportHook(hook: string, event: string, sessionId?: string, decision?: HookDecision): void {
   try {
     mkdirSync(dirname(dataPaths.events), { recursive: true });
     const entry: Record<string, unknown> = { ts: new Date().toISOString(), hook, event, sessionId: sessionId ?? "unknown" };
+    if (!isRealSessionId(sessionId)) entry.lane = "test";
     if (decision) {
       if (decision.decision) entry.decision = decision.decision;
       if (decision.tier !== undefined) entry.tier = decision.tier;

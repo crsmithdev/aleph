@@ -592,7 +592,6 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     hasSubagents: boolean; gitBranch?: string;
     firstUserMessage?: string;
     intent?: string;
-    outcome?: string;
   }>();
 
   // Track which sessions have a pending skill injection (next user message should be skipped)
@@ -641,6 +640,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
         if (!text) return undefined;
         const SKIP_COMMANDS = new Set(["clear", "reset"]);
         if (text.includes("local-command-caveat")) return undefined;
+        if (text.includes("<task-notification>")) return undefined;
         if (text.includes("<command-name>")) {
           const nameMatch = text.match(/<command-name>([^<]+)<\/command-name>/);
           const argsMatch = text.match(/<command-args>([^<]*)<\/command-args>/);
@@ -652,13 +652,15 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
           const isDup = args === name || args === `/${bare}` || args === bare;
           return isDup || !args ? name : `${name} ${args}`;
         }
-        const cleaned = text.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 100);
-        const isUrl = /^https?:\/\/\S+$/.test(cleaned);
-        const isFilePath = /^[A-Za-z]:[\\\/]/.test(cleaned) || /^\/[\w/.-]+$/.test(cleaned);
-        const isInterrupted = cleaned === "[Request interrupted by user]";
-        const isMarkdownHeading = /^#+ /.test(text.trimStart());
-        if (!cleaned || isUrl || isFilePath || isInterrupted || isMarkdownHeading) return undefined;
-        return cleaned;
+        const cleaned = text.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+        if (!cleaned || cleaned === "[Request interrupted by user]") return undefined;
+        // Only filter when the message is JUST a bare URL or path — keep
+        // messages where the user pasted a path/URL alongside substantive text.
+        const isBareUrl = /^https?:\/\/\S+$/.test(cleaned);
+        const isBareWinPath = /^[A-Za-z]:[\\\/][\S]+$/.test(cleaned) && !/\s/.test(cleaned);
+        const isBareUnixPath = /^\/[\w/.-]+$/.test(cleaned);
+        if (isBareUrl || isBareWinPath || isBareUnixPath) return undefined;
+        return cleaned.slice(0, 200);
       };
       if (pendingSkillInjection.get(e.sid)) {
         pendingSkillInjection.set(e.sid, false);
@@ -667,7 +669,6 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
         if (display) {
           if (!sess.firstUserMessage) sess.firstUserMessage = display;
           if (!sess.intent) sess.intent = display;
-          sess.outcome = display; // overwrites until the last message wins
         }
       }
     }
@@ -724,6 +725,8 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     }));
 
   const sessions: SessionMetric[] = [...sessionMap.entries()]
+    // Drop ghost sessions seeded only by hook/gate events (no transcript activity).
+    .filter(([, s]) => s.userMessages + s.assistantMessages + s.toolCalls > 0)
     .map(([sessionId, s]) => ({
       sessionId, parentSessionId: s.parentSessionId, project: s.project,
       durationMs: new Date(s.lastTs).getTime() - new Date(s.firstTs).getTime(),
@@ -734,8 +737,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
       firstTimestamp: s.firstTs, lastTimestamp: s.lastTs,
       gitBranch: s.gitBranch, hasSubagents: s.hasSubagents,
       firstUserMessage: s.firstUserMessage,
-      intent: s.intent ? s.intent.slice(0, 100) : undefined,
-      outcome: s.outcome ? s.outcome.slice(0, 90) : undefined,
+      intent: s.intent ? s.intent.slice(0, 200) : undefined,
     }))
     .sort((a, b) => b.lastTimestamp.localeCompare(a.lastTimestamp));
 
