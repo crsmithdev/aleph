@@ -7,7 +7,8 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { ObsControlBar, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ObsControlBar';
+import { ChartControlChip, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ChartControlChip';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, fmtLegendLabel, shortRelativeTime, fmtMs, dateTime } from '../../../utils/format';
@@ -306,24 +307,18 @@ export function SkillsPage() {
     </>
   );
 
+  const totalSkillsForDataset =
+    dataset === 'by-type' ? (data.byType?.length ?? 0)
+    : dataset === 'sessions' ? Object.keys(data.byDaySessions?.[0]?.skills ?? {}).length
+    : dataset === 'errors' ? data.ranked.filter(r => r.errors > 0).length
+    : dataset === 'latency' ? data.ranked.filter(r => r.p50Ms != null && r.count > 0).length
+    : data.ranked.length;
+  const activeFilterCount =
+    (showCommands ? 1 : 0) + (showSkills ? 1 : 0) + (showMissing ? 1 : 0) + (showUnused ? 1 : 0);
+
   return (
     <div className="space-y-6">
-      <ObsControlBar
-        title="Skills"
-        range={range}
-        onRangeChange={setRange}
-        granularity={granularity}
-        onGranularityChange={setGranularity}
-        datasets={SKILL_DATASETS}
-        dataset={dataset}
-        onDatasetChange={(d) => setDataset(d as SkillDataset)}
-        filters={filters}
-        activeFilterCount={(showCommands ? 1 : 0) + (showSkills ? 1 : 0) + (showMissing ? 1 : 0) + (showUnused ? 1 : 0)}
-        displayMode={displayMode}
-        onDisplayModeChange={setDisplayMode}
-        displayN={displayN}
-        onDisplayNChange={setDisplayN}
-      />
+      <PageHeader title="Skills" />
 
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
         <StatCard label="Total Invocations" value={fmtNumber(totalInvocations)} />
@@ -343,7 +338,25 @@ export function SkillsPage() {
       </div>
 
       {data.byDay.length > 0 && (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[350px] flex flex-col">
+        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[380px] flex flex-col">
+          <div className="flex justify-end mb-2 shrink-0">
+            <ChartControlChip
+              range={range}
+              onRangeChange={setRange}
+              granularity={granularity}
+              onGranularityChange={setGranularity}
+              datasets={SKILL_DATASETS}
+              dataset={dataset}
+              onDatasetChange={(d) => setDataset(d as SkillDataset)}
+              filters={filters}
+              activeFilterCount={activeFilterCount}
+              displayMode={displayMode}
+              onDisplayModeChange={setDisplayMode}
+              displayN={displayN}
+              onDisplayNChange={setDisplayN}
+              totalSeries={totalSkillsForDataset}
+            />
+          </div>
           <div className="flex-1 min-h-0 flex">
             <div className="flex-1 min-w-0 flex flex-col">
               <div className="flex items-center justify-between mb-2 shrink-0">
