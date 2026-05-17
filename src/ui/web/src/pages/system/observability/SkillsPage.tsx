@@ -250,6 +250,7 @@ export function SkillsPage() {
     {
       key: 'errors',
       label: 'Errors',
+      tooltip: 'Invocations that ended with a thrown error or non-zero exit. Hook failures, skill exceptions, and tool errors all count.',
       align: 'right',
       sortable: true,
       width: '70px',
@@ -260,6 +261,7 @@ export function SkillsPage() {
     {
       key: 'successRate',
       label: 'Success',
+      tooltip: 'Percentage of invocations that completed without error.',
       align: 'right',
       sortable: true,
       width: '78px',
@@ -272,6 +274,7 @@ export function SkillsPage() {
     {
       key: 'p50Ms',
       label: 'P50',
+      tooltip: 'Median latency (50th percentile) per invocation, in milliseconds.',
       align: 'right',
       sortable: true,
       width: '70px',
@@ -282,6 +285,7 @@ export function SkillsPage() {
     {
       key: 'p95Ms',
       label: 'P95',
+      tooltip: '95th percentile latency per invocation, in milliseconds.',
       align: 'right',
       sortable: true,
       width: '70px',
@@ -645,6 +649,17 @@ function RoutingTable() {
   if (error || !data) return <ErrorState message="Failed to load routing data" retry={refetch} />;
 
   type DirectiveRow = (typeof data.directives)[number];
+
+  function depthOf(directives: string[] | undefined): 'full' | 'quick' {
+    return (directives ?? []).some(d => d.toLowerCase() === 'full') ? 'full' : 'quick';
+  }
+  function skillDirectives(directives: string[] | undefined): string[] {
+    return (directives ?? []).filter(d => d.toLowerCase() !== 'full' && d.toLowerCase() !== 'quick');
+  }
+  function stripPrefix(d: string): string {
+    return d.startsWith('skill:') ? d.slice('skill:'.length) : d;
+  }
+
   const columns: Column<DirectiveRow>[] = [
     {
       key: 'ts',
@@ -655,36 +670,53 @@ function RoutingTable() {
       ),
     },
     {
+      key: 'depth',
+      label: 'Depth',
+      width: '88px',
+      tooltip: 'Routing depth assigned to the prompt. "full" enters plan mode (architectural scope, long prompts, or /deep prefix); "quick" is the default for everything else.',
+      render: (row) => {
+        const depth = depthOf(row.directives);
+        return (
+          <span
+            className={clsx(
+              'text-xs px-1.5 py-0.5 rounded font-mono',
+              depth === 'full'
+                ? 'bg-blue-500/15 text-blue-400'
+                : 'bg-bg-tertiary text-text-muted',
+            )}
+          >
+            {depth}
+          </span>
+        );
+      },
+    },
+    {
       key: 'directives',
-      label: 'Directives',
-      render: (row) => (
-        <div className="flex flex-wrap gap-1">
-          {(row.directives ?? []).map((d, i) => {
-            const upper = d.toUpperCase();
-            const isFull = upper.startsWith('FULL');
-            const isQuick = upper.startsWith('QUICK');
-            return (
+      label: 'Skills',
+      tooltip: 'Skills the routing hook matched on this prompt. Empty means no skill triggered (the model proceeded without one).',
+      render: (row) => {
+        const skills = skillDirectives(row.directives);
+        if (skills.length === 0) {
+          return <span className="text-text-disabled text-xs">—</span>;
+        }
+        return (
+          <div className="flex flex-wrap gap-1">
+            {skills.map((d, i) => (
               <span
                 key={i}
-                className={clsx(
-                  'text-xs px-1.5 py-0.5 rounded font-mono',
-                  isFull
-                    ? 'bg-blue-500/15 text-blue-400'
-                    : isQuick
-                      ? 'bg-green-500/15 text-green-400'
-                      : 'bg-bg-tertiary text-text-secondary',
-                )}
+                className="text-xs px-1.5 py-0.5 rounded font-mono bg-bg-tertiary text-text-secondary"
               >
-                {d}
+                {stripPrefix(d)}
               </span>
-            );
-          })}
-        </div>
-      ),
+            ))}
+          </div>
+        );
+      },
     },
     {
       key: 'promptWords',
       label: 'Words',
+      tooltip: 'Word count of the user prompt that triggered this routing decision. Prompts ≥40 words automatically route to "full" depth.',
       width: '70px',
       align: 'right',
       render: (row) => (
@@ -696,7 +728,7 @@ function RoutingTable() {
   return (
     <div className="space-y-2">
       <h3 className="font-heading text-lg font-medium text-text-secondary">Routing</h3>
-      <DataTable<DirectiveRow> data={data.directives} columns={columns} keyField="ts" maxRows={100} />
+      <DataTable<DirectiveRow> data={data.directives} columns={columns} keyField="ts" pageSize={25} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 export interface Column<T> {
   key: string;
   label: string;
+  tooltip?: string;
   align?: 'left' | 'center' | 'right';
   width?: string;
   shrink?: boolean;  // collapse column to minimum content width (no wrapping)
@@ -107,8 +108,9 @@ export function DataTable<T>({
                 )}
                 style={col.shrink ? { width: '1px' } : col.width ? { width: col.width } : { width: '100%' }}
                 onClick={col.sortable ? () => handleSort(col.key) : undefined}
+                title={col.tooltip}
               >
-                <span className="inline-flex items-center gap-1">
+                <span className={clsx('inline-flex items-center gap-1', col.tooltip && 'underline decoration-dotted decoration-text-disabled underline-offset-[3px]')}>
                   {col.label}
                   {col.sortable && sortKey === col.key && (
                     <span className="text-xs">{sortDir === 'asc' ? '\u25b2' : '\u25bc'}</span>

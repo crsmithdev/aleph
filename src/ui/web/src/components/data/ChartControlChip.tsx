@@ -117,7 +117,7 @@ export function ChartControlChip(props: ChartControlChipProps) {
     : null;
   const otherMarker = displayMode === 'top-n-other' && totalSeries != null && totalSeries > displayN ? '+' : '';
   const seriesFragment = hasDataset
-    ? (seriesCount != null ? `${datasetLabel} #${seriesCount}${otherMarker}` : datasetLabel)
+    ? (seriesCount != null ? `${datasetLabel} · #${seriesCount}${otherMarker}` : datasetLabel)
     : null;
 
   return (
