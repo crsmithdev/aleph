@@ -3,7 +3,7 @@ description: Run review skills in audit mode via the omnibus orchestrator. Domai
 ---
 Invoke the `omnibus` skill with verb=`audit` and arguments: $ARGUMENTS
 
-Parse `$ARGUMENTS` as plain text — no flag syntax. Tokens that match a domain name from `omnibus.yml` `active.audit` (code, design, docs, security, agent) filter the run to those domains. Everything else is a scope hint passed to the leaves.
+Parse `$ARGUMENTS` as plain text — no flag syntax. Tokens that match a domain name from `omnibus.yml` `active.audit` (code, design, docs, agent) filter the run to those domains. The `security` token is also recognised — it dispatches `code-review` with a security-tag filter (security is a rule family within code-review, not a separate domain). Everything else is a scope hint passed to the leaves.
 
 Examples:
 

@@ -40,7 +40,7 @@ Pure leaf: no `Skill()` calls. The omnibus chains audit → approval → fix. Wh
 - Net-new documentation authoring → `docs-author` (this skill covers post-hoc review and write-time enforcement; `docs-author` covers planning + drafting from scratch)
 - Code fixes → `code-review --mode fix`
 - Visual / layout fixes → `design-review --mode fix`
-- Security findings → `security-review --mode fix`
+- Security findings → `code-review --mode fix` (security findings)
 - Agent-definition drift → `agent-review`
 
 ---
@@ -443,7 +443,7 @@ There is no output format. Enforcement produces docs, not a report.
 - Suggested additions: `src/rules/docs/SUGGESTIONS.md`
 - Finding contract: `src/skills/_shared/finding.md`
 - Agent (fix mode): `src/agents/docs-reviewer.md`
-- Sibling unified review skills: `code-review`, `design-review`, `security-review`, `agent-review`
+- Sibling unified review skills: `code-review`, `design-review`, `agent-review`
 - LLM-discoverability reference: `src/skills/docs-optimize/REFERENCE.md`
 - Orchestrator: `src/skills/omnibus/SKILL.md`
 - Verification gate table: `VERIFICATION.md`

@@ -46,7 +46,7 @@ Pure leaf: no `Skill()` calls. The omnibus chains us; we report (audit) or apply
 - General TypeScript code quality → `code-review`.
 - Visual / UX review → `design-review`.
 - Documentation prose → `docs-review`.
-- Security vulnerabilities (injection, auth, secrets in code) → `security-review`.
+- Security vulnerabilities (injection, auth, secrets in code) → `code-review` (walks `src/rules/security/RULES.md`).
 - Authoring net-new skills → `skill-creator`.
 
 ## Modes
@@ -492,5 +492,5 @@ assertions: zero remaining agent-review findings in scope (per sub-surface); all
 - Verification gates: `VERIFICATION.md`
 - Trace helper: `src/trace.ts`
 - Architecture: `docs/plans/skill-architecture.md` (R1, R2, R4)
-- Sibling review leaves: `code-review`, `design-review`, `docs-review`, `security-review`
+- Sibling review leaves: `code-review`, `design-review`, `docs-review`
 - agnix project: https://github.com/agnix-rules/agnix (structural rules for CLAUDE.md / hooks / agents / MCP / skills)

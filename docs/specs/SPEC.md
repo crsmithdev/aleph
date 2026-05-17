@@ -135,7 +135,6 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 | `ralph-loop` | Iterative autonomous work toward a well-defined goal |
 | `red-team` | Parallel adversarial review of an artifact (plan, RFC, PR) |
 | `search` | Quick web research — search, synthesize, report with sources |
-| `security-review` | Review for OWASP/CWE/etc vulnerabilities — audit + fix modes |
 | `skill-creator` | Create new skills, modify and improve existing skills |
 | `test-webapp` | Front door for browser testing — agent-browser CLI or Playwright |
 

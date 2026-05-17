@@ -50,7 +50,7 @@ This directory is currently scaffolding. The skill-architecture migration (`docs
 | `design` | `design-review` (audit + fix modes); `design-type` for write-time typography enforcement | **Populated + consolidated** (umbrella + 4 reference files) |
 | `docs` | `docs-review` — audit (find drift), fix (apply approved findings), enforce (auto-apply rules while drafting or editing markdown — covers from-scratch authoring too) | **Populated** |
 | `agent` | `agent-review` (audit + fix modes across config/hooks/skills/personas sub-surfaces) | **Populated** (umbrella + 4 sub-surface files) |
-| `security` | `security-review` (audit + fix modes; OWASP/CWE/NIST/ASVS/MITRE-ATT&CK mapped) | Stub (net-new) |
+| `security` | `code-review` walks `src/rules/security/RULES.md` as part of its rule set (security tag enforces per-finding approval) | Stub (net-new) |
 
 ## When to add content
 

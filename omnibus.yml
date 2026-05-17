@@ -31,22 +31,19 @@ defaults:
 # ---------------------------------------------------------------------------
 active:
   audit:
-    - code
+    - code           # code-review walks src/rules/code/RULES.md + src/rules/security/RULES.md
     - design
     - docs
-    - security
     - agent
   fix:
-    - code
+    - code           # same — security findings are routed by tag, per-finding approval enforced via by_tag
     - design
     - docs
-    - security
     - agent
   suggest:                          # declared but not yet wired (post-v1)
     - code
     - design
     - docs
-    - security
     - agent
 
 # ---------------------------------------------------------------------------
@@ -55,17 +52,25 @@ active:
 # ---------------------------------------------------------------------------
 leaves:
   code-review:
-    rules: src/rules/code/RULES.md
+    rules:                          # code-review walks both rule families
+      - src/rules/code/RULES.md
+      - src/rules/security/RULES.md # OWASP/CWE/NIST/ASVS/MITRE-ATT&CK mappings
     exclude:
-      - "src/skills/docs-author/**"  # legacy, scheduled for migration
       - "**/*.generated.ts"
       - ".worktrees/**"
+    framework_mappings:             # surfaced on security-tagged findings
+      - OWASP-Top-10-2025
+      - CWE-Top-25
+      - NIST-CSF-2.0
+      - ASVS-5.0
+      - MITRE-ATT&CK
 
   design-review:
     rules: src/rules/design/RULES.md
     references:
       - src/rules/design/typography.md
       - src/rules/design/accessibility.md
+      - src/rules/design/construct/RULES.md
     agent_backed:
       audit: design-reviewer        # browser/ui:smoke tools needed for visual checks
 
@@ -73,15 +78,6 @@ leaves:
     rules: src/rules/docs/RULES.md
     agent_backed:
       fix: docs-reviewer            # two-phase write+accuracy workflow
-
-  security-review:
-    rules: src/rules/security/RULES.md
-    framework_mappings:
-      - OWASP-Top-10-2025
-      - CWE-Top-25
-      - NIST-CSF-2.0
-      - ASVS-5.0
-      - MITRE-ATT&CK
 
   agent-review:
     rules: src/rules/agent/RULES.md
@@ -97,10 +93,9 @@ leaves:
 # and the resolution happens here. Keep this in sync with VERIFICATION.md.
 # ---------------------------------------------------------------------------
 verification:
-  code:     "bun test.ts"
+  code:     "bun test.ts"            # also gates security fixes (security is a rule family inside code-review)
   design:   "bun run --cwd src/ui ui:smoke"
   docs:     ""                      # not yet implemented
-  security: ""                      # CI-only for now
   agent:    "bun test src/skills src/core/hooks"
 
 # ---------------------------------------------------------------------------
@@ -121,20 +116,20 @@ approval:
 
   # by domain — domain rule overrides severity rule when stricter
   by_domain:
-    docs:     auto
-    code:     single
-    design:   single
-    security: per-finding
-    agent:    single
+    docs:   auto
+    code:   single
+    design: single
+    agent:  single
 
-  # by tag — most specific override
+  # by tag — most specific override (security tags all per-finding regardless of domain)
   by_tag:
-    secret:      per-finding
-    auth:        per-finding
-    payments:    per-finding
-    rce:         per-finding
-    injection:   per-finding
-    crypto:      per-finding
+    secret:    per-finding
+    auth:      per-finding
+    payments:  per-finding
+    rce:       per-finding
+    injection: per-finding
+    crypto:    per-finding
+    security:  per-finding   # generic security tag — code-review emits this for OWASP/CWE/etc findings
 
 # ---------------------------------------------------------------------------
 # Finding contract — pointer to the SARIF + properties shape leaves emit.

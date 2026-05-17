@@ -38,7 +38,7 @@ Pure leaf: no `Skill()` calls. The omnibus chains audit → approval → fix.
 - Logic/data drift across peers — use `code-conform` (not a design pattern).
 - Documentation drift — use `docs-review`.
 - Subagent definitions — use `agent-review`.
-- Security review — use `security-review`.
+- Security review — use `code-review` (security is folded in as a rule family + per-finding-approval tag).
 - Pure typography correctness (smart quotes, em dashes, character entities) — surfaces in audit as `tag: typography` findings citing `design/RULES.md#B`; fix mode propagates *patterns*, not individual character substitutions.
 - Single-page polish with no peers — just edit directly.
 - Net-new features — fix mode propagates *patterns*, not roadmap items.
@@ -409,6 +409,6 @@ There is no output format. Enforcement produces UI source, not a report.
 - Finding contract: `src/skills/_shared/finding.md`
 - Audit-mode agent: `src/agents/design-reviewer.md`
 - Progressive-disclosure detail: `references/design-principles.md`, `references/audit-template.md`, `references/dimensions.md`, `references/verification.md`, `examples/`
-- Sibling review skills: `code-review`, `docs-review`, `security-review`, `agent-review`
+- Sibling review skills: `code-review`, `docs-review`, `agent-review`
 - Orchestrator: `src/skills/omnibus/SKILL.md`
 - Verification gate table: `VERIFICATION.md`

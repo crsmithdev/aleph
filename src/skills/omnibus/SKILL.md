@@ -52,17 +52,18 @@ Registry (after consolidation — verb axis collapsed into mode flag, wiring dom
 
 | Domain | Leaf | Audit-mode dispatch | Fix-mode dispatch |
 |---|---|---|---|
-| code | `code-review` | `Skill('code-review', mode: audit)` | `Skill('code-review', mode: fix)` |
+| code | `code-review` ¹ | `Skill('code-review', mode: audit)` | `Skill('code-review', mode: fix)` ² |
 | design | `design-review` | `Agent(subagent_type: 'design-reviewer')` ★ | `Skill('design-review', mode: fix)` |
 | docs | `docs-review` | `Skill('docs-review', mode: audit)` | `Agent(subagent_type: 'docs-reviewer')` ★ |
-| security | `security-review` | `Skill('security-review', mode: audit)` | `Skill('security-review', mode: fix)` ¹ |
-| agent | `agent-review` | `Skill('agent-review', mode: audit)` | `Skill('agent-review', mode: fix)` ² |
+| agent | `agent-review` | `Skill('agent-review', mode: audit)` | `Skill('agent-review', mode: fix)` ³ |
 
 ★ = agent-backed for that mode: dispatched via `Agent()` rather than inline `Skill()` because the mode needs tools the inline subagent doesn't have (browser for design audit; two-phase write+accuracy for docs fix). See `omnibus.yml` `leaves.<name>.agent_backed`.
 
-¹ Security fix requires **per-finding** approval per `omnibus.yml` approval policy. No "approve all" path.
+¹ `code-review` walks both `src/rules/code/RULES.md` AND `src/rules/security/RULES.md`. Security findings are tagged (`security`, `injection`, `auth`, `secret`, `rce`, `xss`, `crypto`, `idor`, `ssrf`, `xxe`) and carry framework mappings (OWASP/CWE/NIST/ASVS/MITRE-ATT&CK). The user can scope to security alone via `/audit security` or `/fix security` — the omnibus dispatches `code-review` with a tag filter.
 
-² `agent-review` covers four sub-surfaces in one pass: `config` (CLAUDE.md, settings.json), `hooks` (`src/core/hooks/*.ts`), `skills` (`src/skills/*/SKILL.md`, `skill-rules.json`), and `personas` (`src/agents/*.md`). Findings tagged with `properties.sub_surface`. Config structural fixes delegate to `agnix --fix-safe`.
+² Security-tagged findings require **per-finding** approval per `omnibus.yml by_tag` policy. No "approve all" path for any security tag. Non-security `code-review` findings use the default `single`-approval policy.
+
+³ `agent-review` covers four sub-surfaces in one pass: `config` (CLAUDE.md, settings.json), `hooks` (`src/core/hooks/*.ts`), `skills` (`src/skills/*/SKILL.md`, `skill-rules.json`), and `personas` (`src/agents/*.md`). Findings tagged with `properties.sub_surface`. Config structural fixes delegate to `agnix --fix-safe`.
 
 All review leaves emit SARIF natively per `src/skills/_shared/finding.md`. The `author` verb (`skill-creator` for new skills; `docs-review --mode enforce` for new docs) is invoked directly per artifact creation rather than orchestrated through the matrix.
 
@@ -128,7 +129,7 @@ This pass is the primary noise-suppressor. Per Anthropic's `code-review` plugin:
 
 Combine all SARIF runs into one multi-run SARIF log. Dedupe `results` on `(artifactLocation.uri, region.startLine, ruleId)` — keep the most specific cite, prefer higher confidence as tiebreaker.
 
-When multiple leaves flag the same location with different rules (e.g. `code-review` and `security-review` both flagging a hardcoded secret), keep both — they cite different rules and inform different fix paths.
+When multiple leaves flag the same location with different rules (e.g. `code-review` flagging a hardcoded secret under both its code-quality rule family and its security rule family — both fire on `src/rules/code/RULES.md` and `src/rules/security/RULES.md`), keep both — they cite different rules and inform different fix paths.
 
 ## Phase 4: Report
 
@@ -220,5 +221,5 @@ Re-audit suggested: <reason>
 - Finding contract: `src/skills/_shared/finding.md`
 - Verification gates: `VERIFICATION.md`
 - Architecture: `docs/plans/skill-architecture.md`
-- Review leaves: `src/skills/{code,design,docs,security,agent}-review/SKILL.md`
-- Domain rules: `src/rules/{code,design,docs,security,agent}/RULES.md`
+- Review leaves: `src/skills/{code,design,docs,agent}-review/SKILL.md`
+- Domain rules: `src/rules/{code,design,docs,agent}/RULES.md`, plus `src/rules/security/RULES.md` (walked by `code-review`)

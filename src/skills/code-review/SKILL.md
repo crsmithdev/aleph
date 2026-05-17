@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: 'Review code in scope — audit findings (default) or apply approved fixes (mode fix). Walks TypeScript/JavaScript under src/, evaluates rules in src/rules/code/RULES.md, emits SARIF v2.1.0 findings per src/skills/_shared/finding.md, and in fix mode applies each approved finding properties.fix and verifies with gate("code"). Fix shapes: slop removal (AI-generated comments, defensive code, backwards-compat shims, scope creep, impossible-case errors), pattern propagation from a reference file to peers, drift consolidation onto a canonical helper, and structural restructure (file moves, module splits, directory reorganization with dependency-update matrix + atomic-step discipline). Triggers on "/audit code", "/fix code", "/code-review", "review the diff", "audit my code", "audit the code", "fix the findings", "apply the audit fixes", "simplify before commit", "deslop", "clean up code", "remove boilerplate", "align the routes", "match this handler", "make the providers consistent", "consolidate", "deduplicate", "refactor this", "restructure the code", "move files", "break down this file", "split this module", "/code-conform", "/code-refactor", or when the omnibus dispatches the audit or fix verb to the code domain.'
+description: 'Review code in scope — audit findings (default) or apply approved fixes (mode fix). Walks TypeScript/JavaScript under src/, evaluates rules in src/rules/code/RULES.md AND src/rules/security/RULES.md (OWASP/CWE/NIST/ASVS/MITRE-ATT&CK mappings), emits SARIF v2.1.0 findings per src/skills/_shared/finding.md, and in fix mode applies each approved finding properties.fix and verifies with gate("code"). Fix shapes: slop removal (AI-generated comments, defensive code, backwards-compat shims, scope creep, impossible-case errors), pattern propagation from a reference file to peers, drift consolidation onto a canonical helper, structural restructure (file moves, module splits, directory reorganization with dependency-update matrix + atomic-step discipline), and security remediation (parameterise SQL, swap weak crypto, route secrets through env, add ownership checks, etc.) — security tags require per-finding approval, no "approve all" path. Triggers on "/audit code", "/fix code", "/code-review", "/audit security", "/fix security", "/security-review", "review the diff", "audit my code", "audit the code", "fix the findings", "apply the audit fixes", "simplify before commit", "deslop", "clean up code", "remove boilerplate", "align the routes", "match this handler", "make the providers consistent", "consolidate", "deduplicate", "refactor this", "restructure the code", "move files", "break down this file", "split this module", "security audit", "audit for vulnerabilities", "scan for security issues", "find vulnerabilities", "fix the vulnerabilities", "remediate", "OWASP", "CWE", "ASVS", "SQL injection", "XSS", "XXE", "SSRF", "IDOR", "/code-conform", "/code-refactor", "/security-review", or when the omnibus dispatches the audit or fix verb to the code (or security) domain.'
 verb: review
 domain: code
 modes: [audit, fix]
@@ -34,7 +34,7 @@ Pure leaf: no `Skill()` calls. The omnibus chains audit → approval → fix.
 - Visual/layout review or fixes → `design-review`.
 - Documentation review or fixes → `docs-review`.
 - Hook, agent, or skill review → those domain leaves.
-- Security review → `security-review` (separate domain; per-finding approval is mandatory there).
+- Security review → `code-review` (security is a rule family within it; per-finding approval enforced via the security tag).
 - Net-new features (fix mode applies *findings*, not roadmap items).
 - Fix mode without approved findings — run audit mode first.
 
@@ -78,7 +78,14 @@ Exclude `src/ui/` (visual concerns → `design-review`), `*.generated.ts`, `.wor
 
 ### 2. Walk the rules
 
-For each in-scope file, evaluate every section in `src/rules/code/RULES.md` (A through H). For each rule, the `Detect:` line in RULES.md describes the signal. Concrete examples:
+For each in-scope file, evaluate every section in both rule files:
+
+- `src/rules/code/RULES.md` (A through H) — quality, slop, drift, hooks, etc.
+- `src/rules/security/RULES.md` — exploitable vulnerabilities (injection, auth/authz, data exposure, crypto, input validation, business logic, configuration, supply chain, code execution, XSS)
+
+For each rule, the `Detect:` line in RULES.md describes the signal. Concrete examples:
+
+**Code-quality rules:**
 
 - **A.1 (no `any`):** grep `as any` in each file; exclude `JSON.parse` results and third-party-boundary casts (mark those with a same-line comment).
 - **A.4 (no bare `@ts-ignore`):** grep for `@ts-ignore` and `@ts-expect-error`; flag if the next 80 chars on the same line contain no `//` justification.
@@ -87,6 +94,18 @@ For each in-scope file, evaluate every section in `src/rules/code/RULES.md` (A t
 - **C.1 (inline reimplementation):** for each function in scope, grep `src/` for distinctive substrings of its body; flag matches outside that file.
 - **F.3 (hooks in `.claude/`):** check `.claude/settings.json` for a `hooks` array — single grep, single finding if present.
 - **H.1 (hooks fail loudly):** for each file under `src/core/hooks/`, confirm `JSON.parse(await Bun.stdin.text())` is inside a try/catch and the catch exits non-zero.
+
+**Security rules** (tagged `security` plus a specific sub-tag like `injection`, `auth`, `secret`, `rce`, `xss`, `crypto`, `idor`, `ssrf`, `xxe`):
+
+- **Injection:** grep for unparameterised SQL (string concatenation into queries), unsanitised shell exec, unsafe `eval`, NoSQL operator injection.
+- **Auth/authz:** missing ownership checks on routes that take an ID, missing authentication on endpoints under `/api/`, role-check bypasses.
+- **Data exposure:** secrets in source (`OPENAI_API_KEY=sk-...`), tokens in client bundles, PII in logs.
+- **Crypto:** `Math.random()` used for tokens/IDs, MD5/SHA-1 for password hashing, fixed IVs, weak symmetric crypto.
+- **Input validation:** unbounded inputs reaching the DB layer, missing length caps, no schema validation at API boundary.
+- **Code execution:** `child_process.exec` with user-controlled args, `vm.runInContext` on user input, dynamic `require()`.
+- **XSS:** `dangerouslySetInnerHTML` without sanitisation, raw user input rendered in templates, missing escaping.
+
+Each security finding cites both the rule (`security/RULES.md#<anchor>`) and the framework mapping (OWASP-Top-10-2025, CWE-Top-25, NIST-CSF-2.0, ASVS-5.0, MITRE-ATT&CK) in `properties.frameworks`. See `src/rules/security/RULES.md` for the full mapping table.
 
 When a rule's Detect signal doesn't apply to the current scope (e.g., G.1 N+1 queries on a docs-only diff), skip silently — no "no findings" noise per rule.
 
@@ -342,6 +361,43 @@ When presenting a restructure plan before execution:
 5. **Anti-patterns found** — and their replacements
 6. **Risk assessment** — what could break and how it's mitigated
 
+## Fix-shape detail: security remediation
+
+For `tag: security` findings (plus sub-tags like `injection`, `auth`, `secret`, `rce`, `xss`, `crypto`, `idor`, `ssrf`, `xxe`). **Per-finding approval mandatory** per `omnibus.yml by_tag` — no "approve all" path for any security tag.
+
+### Common remediation shapes
+
+| Sub-tag | Fix |
+|---|---|
+| `injection` (SQL) | Parameterise the query; replace string concatenation with bound parameters (`?` placeholders or named binds). |
+| `injection` (shell) | Use the array form of `child_process.spawn`/`execFile`; never pass user input through `exec` or shell strings. |
+| `auth` | Add ownership check on the route (compare resource owner to `req.user.id`); add authentication middleware where missing. |
+| `secret` | Delete the hardcoded secret from source; route through `process.env.X` with the secret in `.env` (gitignored). For leaked secrets, also rotate. |
+| `crypto` (weak RNG) | Replace `Math.random()` for tokens/IDs with `crypto.randomUUID()` or `crypto.randomBytes(n).toString('hex')`. |
+| `crypto` (weak hash) | Replace MD5/SHA-1 for password hashing with bcrypt/argon2/scrypt; never use raw SHA-* for passwords. |
+| `xss` | Wrap user input with DOMPurify before `dangerouslySetInnerHTML`; switch to React's auto-escaped JSX where possible. |
+| `idor` | Add a `WHERE owner_id = ?` clause to the DB query; reject if the row's owner doesn't match the authenticated user. |
+| `ssrf` | Validate the URL against an allowlist; reject schemes other than `https`; reject internal/private IP ranges. |
+| `xxe` | Disable external entity resolution in the XML parser config. |
+| `rce` | Refuse `eval`, `Function()`, `vm.runInContext(userInput)`; refuse dynamic `require()` of user-controlled paths. |
+| `payments` | Manual review only — no auto-fix. Surface the finding, route to a human. |
+
+### Verification
+
+After applying a security fix, run **both** gates: `gate("code")` (full test suite) and (when available) a security-focused regression check. A passing build alone is not sufficient — security fixes can pass typechecks while silently leaving the vulnerable path open.
+
+### Framework mappings
+
+Each remediation cites the rule plus the affected frameworks in `properties.frameworks`:
+
+- OWASP-Top-10-2025 (e.g. `A01:2025-BAC` for IDOR/auth)
+- CWE-Top-25 (e.g. `CWE-89` for SQL injection)
+- ASVS-5.0 levels
+- NIST-CSF-2.0 functions
+- MITRE-ATT&CK techniques (where the vulnerability maps to an attack pattern)
+
+See `src/rules/security/RULES.md` for the full mapping table per rule.
+
 ## Scope discipline
 
 - **Audit mode is read-only.** No `Edit`, `Write`, or `Bash` calls that mutate state. Bash is used for `git diff`, `grep`, `find` only.
@@ -411,5 +467,5 @@ assertions: full suite passes; no new failures introduced
 - Finding contract: `src/skills/_shared/finding.md` (SARIF schema + Construct extensions)
 - Orchestrator: `src/skills/omnibus/SKILL.md`
 - Verification gate table: `VERIFICATION.md`
-- Sibling domain leaves: `design-review`, `docs-review`, `security-review`, `agent-review`
+- Sibling domain leaves: `design-review`, `docs-review`, `agent-review`
 - Pattern-propagation companion: `src/skills/code-conform/SKILL.md`
