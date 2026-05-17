@@ -118,7 +118,7 @@ Clear all annotations for the page, including ones you've already addressed. Don
 
 ### 6. Verify
 
-Use the `test-webapp` skill pattern: navigate to the page in a headless browser, take a screenshot, confirm the changes look right. Fix anything that doesn't match the intent.
+Use the `code-test` skill pattern: navigate to the page in a headless browser, take a screenshot, confirm the changes look right. Fix anything that doesn't match the intent.
 
 ## Design token reference
 

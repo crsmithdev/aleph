@@ -117,17 +117,14 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 
 | Skill | Purpose |
 |---|---|
-| `agent-browser` | Browser automation CLI for AI agents |
-| `agents-audit` | Audit subagent definitions against rules |
-| `agents-fix` | Apply fixes for agents-audit findings |
 | `address` | Read vibe-annotations, summarize, implement, then clear |
-| `agent-browser` | Browser automation CLI for AI agents |
 | `agent-review` | Review all AI-runtime config (CLAUDE.md, hooks, skills, personas) — audit + fix modes |
-| `code-review` | Review code — audit + fix modes; fix shapes: slop removal, propagation, consolidation, restructure |
+| `code-review` | Review code — audit + fix modes; covers architecture, simplification, refactor, and security rule families |
+| `code-test` | Front door for browser testing — picks between agent-browser CLI and Playwright |
 | `context-compact` | Guide context compaction at logical task phase boundaries |
 | `debug` | Systematic four-phase root-cause debugging |
 | `design-review` | Review UI design — audit (agent-backed) + fix + enforce modes |
-| `docs-review` | Review docs — audit + fix + enforce modes |
+| `docs-review` | Review docs — audit + fix + enforce modes; includes c7score optimization |
 | `dogfood` | Qualitative single-run dogfood review of a tool or skill |
 | `git` | Full git workflow — branch, implement, land via merge or PR |
 | `interview` | Relentless interactive Q&A with the user about a plan |
@@ -136,7 +133,6 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 | `red-team` | Parallel adversarial review of an artifact (plan, RFC, PR) |
 | `search` | Quick web research — search, synthesize, report with sources |
 | `skill-creator` | Create new skills, modify and improve existing skills |
-| `test-webapp` | Front door for browser testing — agent-browser CLI or Playwright |
 
 ## Slash Commands
 

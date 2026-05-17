@@ -13,8 +13,8 @@
       "keywords": ["worktree", "create worktree", "merge this", "time to merge", "merge the branch", "new branch", "feature branch", "merge and push", "commit and push", "ship it", "/git", "/git-workflow", "/merge.{0,15}push/", "/commit.{0,25}push/"]
     },
     {
-      "skill": "test-webapp",
-      "keywords": ["test webapp", "test web app", "playwright", "browser test", "frontend test", "ui test", "screenshot", "test local server", "verify ui", "test the ui", "/test.{0,20}(workflow|ui|page|frontend)/"]
+      "skill": "code-test",
+      "keywords": ["code-test", "test webapp", "test web app", "playwright", "browser test", "frontend test", "ui test", "screenshot", "test local server", "verify ui", "test the ui", "agent-browser", "browser automation", "open a website", "fill out a form", "click a button", "take a screenshot", "scrape data", "automate browser", "web automation", "navigate page", "browser cli", "/test.{0,20}(workflow|ui|page|frontend)/"]
     },
     {
       "skill": "skill-creator",
@@ -23,10 +23,6 @@
     {
       "skill": "debug",
       "keywords": ["still failing", "still erroring", "not working", "not loading", "all erroring", "fix this error", "broken", "root cause", "debug", "/debug", "/code-debug", "/why is.{0,30}(not|error|fail|break|wrong|crash)/", "/still.{0,10}(fail|error|broke|crash)/", "/(all|every).{0,25}(fail|error)/"]
-    },
-    {
-      "skill": "agent-browser",
-      "keywords": ["agent-browser", "browser automation", "open a website", "fill out a form", "click a button", "take a screenshot", "scrape data", "automate browser", "web automation", "navigate page", "browser cli"]
     },
     {
       "skill": "code-review",

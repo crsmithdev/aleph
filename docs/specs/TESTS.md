@@ -40,7 +40,7 @@
 
 ## Browser e2e tests (`src/ui/e2e/`)
 
-These are automated CI tests using Playwright directly. For AI-driven verification in Claude Code sessions, use the `agent-browser` skill instead — it is the canonical tool for interactive e2e verification.
+These are automated CI tests using Playwright directly. For AI-driven verification in Claude Code sessions, use the `code-test` skill instead — it is the canonical front door for interactive e2e verification (and chooses between the agent-browser CLI and Playwright based on task shape).
 
 ### `goal-flow.test.ts`
 

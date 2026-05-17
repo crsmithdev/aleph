@@ -1,6 +1,7 @@
 ---
-name: test-webapp
-description: Front door for browser-driven testing and interaction with local web apps. Picks between the agent-browser CLI (one-off automation, scripting, snapshot-driven inspection) and Playwright (assertion-based testing, headed visual verification, multi-server orchestration) based on the task shape. Triggers on "test my web app", "verify the UI behavior", "test the frontend", "drive the browser", "automate the page", "click through the flow", "screenshot the app", "browser test", "ui test".
+name: code-test
+description: Front door for browser-driven testing and interaction with local web apps. Picks between the agent-browser CLI (one-off automation, scripting, snapshot-driven inspection) and Playwright (assertion-based testing, headed visual verification, multi-server orchestration) based on the task shape. Triggers on "test my web app", "verify the UI behavior", "test the frontend", "drive the browser", "automate the page", "click through the flow", "screenshot the app", "browser test", "ui test", plus generic browser-automation asks like "open a website", "fill out a form", "click a button", "take a screenshot", "scrape a page".
+allowed-tools: Bash(npx agent-browser:*), Bash(agent-browser:*)
 license: Complete terms in LICENSE.txt
 ---
 
@@ -50,7 +51,7 @@ agent-browser snapshot -i  # Check result
 
 Install once: `npm i -g agent-browser` (or `brew install agent-browser`, or `cargo install agent-browser`). Then `agent-browser install` to ensure Chrome is available. Existing Chrome, Brave, Playwright, and Puppeteer installations are detected automatically. Run `agent-browser upgrade` to update.
 
-For the full CLI surface (form filling, JS evaluation, network capture, authenticated session reuse), see `src/skills/agent-browser/SKILL.md`.
+For the full CLI surface (form filling, JS evaluation, network capture, authenticated session reuse), see `references/agent-browser-cli.md` and `references/agent-browser-reference.md`.
 
 ---
 
