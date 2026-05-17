@@ -112,8 +112,12 @@ export function ChartControlChip(props: ChartControlChipProps) {
   const hasOptions = !!(displayMode && onDisplayModeChange);
 
   const datasetLabel = hasDataset ? (datasets!.find(d => d.key === dataset)?.label ?? dataset) : null;
+  const seriesCount = totalSeries != null
+    ? (displayMode === 'all' ? totalSeries : Math.min(displayN, totalSeries))
+    : null;
+  const otherMarker = displayMode === 'top-n-other' && totalSeries != null && totalSeries > displayN ? '+' : '';
   const seriesFragment = hasDataset
-    ? (totalSeries != null ? `${datasetLabel} · ${displayMode === 'all' ? totalSeries : Math.min(displayN, totalSeries)}` : datasetLabel)
+    ? (seriesCount != null ? `${datasetLabel} #${seriesCount}${otherMarker}` : datasetLabel)
     : null;
 
   return (

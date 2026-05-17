@@ -360,14 +360,14 @@ export function SkillsPage() {
                     onDisplayNChange={setDisplayN}
                     totalSeries={totalSkillsForDataset}
                   />
-                  <div className="flex gap-1">
+                  <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
                     {(['line', 'bar'] as const).map((t) => (
                       <button
                         key={t}
                         onClick={() => setChartType(t)}
                         className={clsx(
-                          'px-2 py-0.5 text-xs rounded transition-colors',
-                          chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                          'px-2 py-0.5 text-xs rounded-sm transition-colors whitespace-nowrap',
+                          chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
                         )}
                       >
                         {t}
@@ -516,14 +516,14 @@ export function SkillsPage() {
               <div className="flex items-center justify-between mb-3 shrink-0">
                 <h3 className="font-heading text-lg font-medium text-text-secondary">{distTitle}</h3>
                 {showDonutBarToggle && (
-                  <div className="flex gap-1">
+                  <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
                     {(['donut', 'bar'] as const).map((t) => (
                       <button
                         key={t}
                         onClick={() => setDistChartType(t)}
                         className={clsx(
-                          'px-2 py-0.5 text-xs rounded transition-colors',
-                          distChartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                          'px-2 py-0.5 text-xs rounded-sm transition-colors whitespace-nowrap',
+                          distChartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
                         )}
                       >
                         {t}
