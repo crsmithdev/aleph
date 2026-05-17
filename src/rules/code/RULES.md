@@ -52,7 +52,7 @@ If a TypeScript error must be suppressed, the suppression comment carries a one-
 
 ## B. AI slop
 
-*Sources: `src/skills/code-simplify/SKILL.md` "AI Slop Patterns", global CLAUDE.md "Doing tasks", Construct CLAUDE.md "Commandments" §2, §7.*
+*Sources: `src/skills/code-review/SKILL.md` "Fix-shape detail: slop removal", global CLAUDE.md "Doing tasks", Construct CLAUDE.md "Commandments" §2, §7.*
 
 ### B.1 No defensive code for impossible cases
 
@@ -106,7 +106,7 @@ If a helper exists only to dedupe three lines, the helper is wrong. Wait until t
 
 ## C. Duplication
 
-*Sources: `src/skills/code-conform/SKILL.md` "Single-source-of-truth consolidation".*
+*Sources: `src/skills/code-review/SKILL.md` "Fix-shape detail: consolidation (drift without reference)".*
 
 ### C.1 No inline reimplementation of an existing helper
 
@@ -128,7 +128,7 @@ When the same shape appears in five+ places, lift it to a shared helper. Until t
 
 ## D. Drift
 
-*Sources: `src/skills/code-conform/SKILL.md` (conform = drift detection + fix).*
+*Sources: `src/skills/code-review/SKILL.md` "Fix-shape detail: propagation (drift with reference)".*
 
 ### D.1 Peer files share their canonical shape
 

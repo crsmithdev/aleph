@@ -1,25 +1,32 @@
 ---
 name: docs-review
-description: Review documentation — audit drift/accuracy (default) or apply approved fixes (mode: fix). Fix mode is agent-backed via docs-reviewer (two-phase write + accuracy workflow). Evaluates rules in src/rules/docs/RULES.md. Triggers on /audit docs, /fix docs, /docs-review, "audit the docs", "review the documentation", "docs drift", "review the readme", "fix the documentation", "remediate docs drift".
+description: Review documentation — audit drift/accuracy (default), apply approved fixes (mode: fix), or auto-apply rules silently while writing markdown (mode: enforce). Fix mode is agent-backed via docs-reviewer (two-phase write + accuracy workflow). Evaluates rules in src/rules/docs/RULES.md. Triggers on /audit docs, /fix docs, /docs-review, "audit the docs", "review the documentation", "docs drift", "review the readme", "fix the documentation", "remediate docs drift", "align these docs", "sync docs to reference", and is self-invoked in enforce mode whenever the agent is writing or editing markdown.
 verb: review
 domain: docs
-modes: [audit, fix]
+modes: [audit, fix, enforce]
 agent_backed:
   fix: docs-reviewer
 metadata:
-  argument-hint: <scope-or-doc-path> [--mode audit|fix]
+  argument-hint: <scope-or-doc-path> [--mode audit|fix|enforce]
 ---
 
 # Docs Review
 
-Unified documentation review skill. Replaces `docs-audit` (now `mode: audit`) and `docs-fix` (now `mode: fix`). Canonical rules live in `src/rules/docs/RULES.md` — every finding cites a rule section + `file:line`.
+Unified documentation skill. Three modes:
+
+- `audit` — find violations, drift, peer-drift, c7score gaps (read-only)
+- `fix` — apply approved findings (agent-backed via `docs-reviewer`)
+- `enforce` — auto-apply rules silently while writing/editing markdown (no audit pass, no findings, no diff)
+
+Canonical rules: `src/rules/docs/RULES.md`. Suggested-but-not-yet-enforced additions: `src/rules/docs/SUGGESTIONS.md`. Every audit finding cites a rule section + `file:line`.
 
 ## Modes
 
-| Mode | Default? | Agent-backed? | Purpose |
-|---|---|---|---|
-| `audit` | yes | no — inline | Walk docs, identify violations, doc-vs-code drift, peer-drift, c7score gaps. Emit phased plan + SARIF findings. **No writes.** |
-| `fix` | no | yes — `docs-reviewer` | Apply approved findings via the docs-reviewer two-phase workflow (Phase 1: write/update from source; Phase 2: accuracy + c7score). |
+| Mode | Default? | Agent-backed? | Trigger | Purpose |
+|---|---|---|---|---|
+| `audit` | yes | no — inline | `/audit docs`, "audit the docs", or omnibus audit-verb dispatch | Walk docs, identify violations, doc-vs-code drift, peer-drift, c7score gaps. Emit phased plan + SARIF findings. **No writes.** |
+| `fix` | no | yes — `docs-reviewer` | `/fix docs`, "fix the docs findings", or omnibus fix-verb dispatch after approval | Apply approved findings via docs-reviewer's two-phase workflow (Phase 1: write/update from source; Phase 2: accuracy + c7score). |
+| `enforce` | no | no — inline | Self-invoked when the agent is writing or editing markdown content (README, AGENTS.md, SKILL.md, guides, API docs) | Apply every rule in `src/rules/docs/RULES.md` silently while producing markdown. No asking, no explaining, no before/after. |
 
 Pure leaf: no `Skill()` calls. The omnibus chains audit → approval → fix. When `mode: fix` is selected, dispatch is via `Agent(subagent_type: "docs-reviewer")` — its two-phase write+accuracy workflow is more thorough than a bare edit pass for correcting drift findings.
 
@@ -30,7 +37,7 @@ Pure leaf: no `Skill()` calls. The omnibus chains audit → approval → fix. Wh
 
 ## When NOT to use
 
-- Net-new documentation authoring → `docs-author` / `docs-author-v2`
+- Net-new documentation authoring → `docs-author` (this skill covers post-hoc review and write-time enforcement; `docs-author` covers planning + drafting from scratch)
 - Code fixes → `code-review --mode fix`
 - Visual / layout fixes → `design-review --mode fix`
 - Security findings → `security-review --mode fix`
@@ -342,13 +349,94 @@ assertions: every changed doc parses; every cross-reference resolves; full test 
 
 ---
 
+## Mode: enforce
+
+Self-invoked, not orchestrator-dispatched. When the agent is about to write or edit markdown content — README, AGENTS.md, SKILL.md, INSTALL.md, guides, API docs, design docs — it activates this mode for the duration of the write. No audit pass, no findings emitted, no plan presented. The rules in `src/rules/docs/RULES.md` are applied silently to the produced output.
+
+If the user wants violations *flagged* in existing docs → use `mode: audit`.
+If the user wants peer docs aligned to a reference → use `mode: fix` with `tag: peer-drift`.
+If the user wants LLM-readability optimization on what was just written → emit `c7score`-tagged findings for the omnibus to route to `docs-optimize`.
+
+### Process (enforce)
+
+#### Phase 1: Discovery
+
+- Check memory (MCP or notes) for stored knowledge about the feature/system being documented.
+- Scan existing documentation directories for related docs — match their voice and structure.
+- Identify all related source files and configuration.
+- Map system dependencies and interactions.
+
+#### Phase 2: Analysis
+
+- Understand the complete implementation, not just the surface.
+- Identify key concepts that need explanation.
+- Determine the target audience and what they already know.
+- Recognize patterns, edge cases, and known gotchas.
+
+#### Phase 3: Documentation
+
+- Apply every rule in `src/rules/docs/RULES.md` while writing — voice, formatting, density, structure, accuracy. No before/after.
+- Structure content logically with clear hierarchy.
+- Write concise but comprehensive explanations.
+- Include practical, working code examples with language tags.
+- Add diagrams where visual representation helps.
+- Match the style of existing documentation in the project.
+
+#### Phase 3b: LLM-optimization pass
+
+Walk c7score-style criteria against the doc(s) just written, sourcing the methodology from `src/skills/docs-optimize/REFERENCE.md` and `src/skills/docs-optimize/references/c7score_metrics.md`:
+
+- Question-coverage: do snippets answer concrete "How do I X?" questions?
+- Self-contained examples: every snippet runnable, with imports
+- Language tags on every code block
+- No metadata snippet pollution (licensing, directory trees, citations)
+- No import-only or install-only fragments
+
+Emit `c7score`-tagged findings for any violation. The omnibus routes them to `docs-optimize`. This skill does not call it directly (per architecture R1: only the omnibus chains skills).
+
+#### Phase 4: QA
+
+- Verify all code examples are accurate and runnable.
+- Check that all referenced file paths exist.
+- Confirm documentation matches current implementation.
+- Include troubleshooting sections for common issues.
+
+### Location strategy (enforce)
+
+- Prefer feature-local documentation (close to the code it documents).
+- Follow existing patterns already established in the codebase.
+- Ensure documentation is discoverable — don't bury it.
+
+### Special cases (enforce)
+
+- **APIs:** include usage examples, response schemas, error codes.
+- **Workflows:** create flow diagrams, state transitions.
+- **Config:** document all options with defaults and examples.
+- **Integrations:** explain external dependencies and setup requirements.
+
+### Before writing (enforce)
+
+For non-trivial new docs, explain your documentation strategy before creating files:
+
+- What context did you find and from where?
+- What structure will you use?
+- Where will files be placed and why?
+
+Get confirmation before proceeding. For one-off edits to an existing doc, just apply the rules and produce the output.
+
+### Output (enforce)
+
+There is no output format. Enforcement produces docs, not a report.
+
+---
+
 ## Cross-references
 
 - Rule source: `src/rules/docs/RULES.md`
+- Suggested additions: `src/rules/docs/SUGGESTIONS.md`
 - Finding contract: `src/skills/_shared/finding.md`
 - Agent (fix mode): `src/agents/docs-reviewer.md`
 - Sibling unified review skills: `code-review`, `design-review`, `security-review`, `agent-review`
 - LLM-discoverability reference: `src/skills/docs-optimize/REFERENCE.md`
-- Peer-drift propagation leaf: `src/skills/docs-conform/SKILL.md`
 - Orchestrator: `src/skills/omnibus/SKILL.md`
 - Verification gate table: `VERIFICATION.md`

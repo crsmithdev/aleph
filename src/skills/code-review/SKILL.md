@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: 'Review code in scope — audit findings (default) or apply approved fixes (mode fix). Walks TypeScript/JavaScript under src/, evaluates rules in src/rules/code/RULES.md, emits SARIF v2.1.0 findings per src/skills/_shared/finding.md, and in fix mode applies each approved finding properties.fix and verifies with gate("code"). Triggers on "/audit code", "/fix code", "/code-review", "review the diff", "audit my code", "audit the code", "fix the findings", "apply the audit fixes", or when the omnibus dispatches the audit or fix verb to the code domain.'
+description: 'Review code in scope — audit findings (default) or apply approved fixes (mode fix). Walks TypeScript/JavaScript under src/, evaluates rules in src/rules/code/RULES.md, emits SARIF v2.1.0 findings per src/skills/_shared/finding.md, and in fix mode applies each approved finding properties.fix and verifies with gate("code"). Fix shapes include slop removal (AI-generated comments, defensive code, backwards-compat shims, scope creep, impossible-case errors), pattern propagation from a reference file to peers, drift consolidation onto a canonical helper, and structural restructure. Triggers on "/audit code", "/fix code", "/code-review", "review the diff", "audit my code", "audit the code", "fix the findings", "apply the audit fixes", "simplify before commit", "deslop", "clean up code", "remove boilerplate", "align the routes", "match this handler", "make the providers consistent", "consolidate", "deduplicate", "/code-conform", or when the omnibus dispatches the audit or fix verb to the code domain.'
 verb: review
 domain: code
 modes: [audit, fix]
@@ -236,31 +236,60 @@ Then summarize in one paragraph: which findings were resolved, which files were 
 
 ## Fix-shape detail: slop removal
 
-For `tag: slop` findings:
+For `tag: slop` findings, with `--diff origin/main...HEAD` as the canonical scope. Triggered by phrases like "deslop", "clean up before commit", "simplify this", "remove boilerplate".
+
+**Slop patterns** (audit-mode SARIF should already have flagged these — fix mode applies the removal):
 
 - **Defensive code (B.1):** Remove try/catch with no rethrow/log/branching. If the catch was suppressing a real error path, surface it as a new finding instead of silently removing.
-- **Restating comments (B.2):** Delete the comment, not the code below it.
-- **Backwards-compat shims (B.3):** Remove the shim, the export, and any orphaned imports. Grep first to confirm zero consumers.
-- **Scope creep (B.4):** Revert cosmetic-only changes to unchanged code. Match the file's pre-change state for those lines.
+- **Restating comments (B.2):** Delete the comment, not the code below it. Comments that only restate the next line of code add nothing.
+- **Backwards-compat shims (B.3):** Remove the shim, the export, and any orphaned imports. Grep first to confirm zero consumers. Renamed `_vars`, re-exports, `// removed`-style comments all qualify.
+- **Scope creep (B.4):** Revert cosmetic-only changes to unchanged code. Match the file's pre-change state for those lines. Includes added docstrings, type annotations, or refactors on code that wasn't touched by the user's request.
 - **Impossible-case errors (B.5):** Remove the `throw`. If the case is reachable via untrusted input, leave it and reclassify the finding.
+- **`any` casts (B.6):** Casts to `any` introduced only to bypass type issues. Restore the proper type or surface as a real finding if the type system was genuinely wrong.
+
+**Style fixes that ride along** (apply if the diff includes them):
+
+- Prefer `function` keyword over arrow functions for top-level declarations.
+- Explicit return type annotations on exported functions.
+- ES modules with proper import sorting and extensions.
+- No nested ternaries — convert to `switch` or `if/else` chains.
+- Three similar lines beat a premature abstraction.
+
+**Verification:** re-run `git diff origin/main...HEAD` and confirm only slop was removed (no functional changes). Then `gate("code")`.
 
 ## Fix-shape detail: consolidation (drift without reference)
 
-For `tag: drift` findings where the canonical helper exists (named in `relatedLocations`):
+For `tag: drift` findings where the canonical helper exists (named in `relatedLocations`). Triggered by "consolidate", "deduplicate", "single source of truth", "make X the canonical".
 
 1. Read both the duplicate site and the canonical helper.
 2. Replace the inline implementation with an import + call.
-3. Delete the orphan inline implementation (don't leave it commented).
+3. Delete the orphan inline implementation (don't leave it commented). If the canonical helper needs a small surface tweak to absorb peer use cases, edit it once, then route everyone through it.
 4. Check for other callers in the same family — if you find them, surface them as new findings rather than expanding scope.
+5. **Commandment 7:** when you route a peer through a canonical helper, the peer's now-unused inline implementation, helper, or import must go.
 
 ## Fix-shape detail: propagation (drift with reference)
 
-For `tag: drift` findings where the reference is given:
+Reference-based: user points at one file/function as the canonical pattern; peers get aligned. Triggered by "align the routes", "match this handler", "make the providers consistent", "apply this pattern", or `/code-review --reference <path>`.
 
-1. Read the reference along the chosen dimensions only (structural / compositional / behavioral / surface).
-2. Compute the minimal Edit on the peer to match.
-3. Preserve domain logic, business-specific behavior, and incidental differences.
-4. Never rewrite the peer wholesale.
+**Five pattern dimensions** to compare on:
+
+- **Structural** — file/section ordering, exports, function signatures
+- **Compositional** — which helpers/wrappers/classes are used
+- **Behavioral** — error handling, validation, response shape, retries, fallbacks
+- **Surface** — imports, type names, naming conventions
+- **Duplication of behavior** — when the reference IS a helper that should exist, peers are sites re-solving the same problem inline (fix shape becomes consolidation, see below)
+
+If the user gave notes ("only error wrapping"), narrow to that. Otherwise default to *everything that looks like an intentional pattern* — skip incidental differences (variable names, business logic specific to the file's domain).
+
+**Process:**
+
+1. **Resolve the reference.** Read the file/section/symbol. If ambiguous, ask before proceeding.
+2. **Find peers** by, in order: filename pattern (`*.handler.ts`, `providers/*.ts`), directory siblings, files importing the same key dependencies, files touched in the current session. For the duplication-axis case, also grep for the inline shape across `src/`.
+3. **Present the peer list first.** "Found 7 peers: A, B, C, D, E, F, G. Trim or proceed?" Never apply edits before the user can remove false positives.
+4. **Reference-as-outlier check.** If the reference differs from a majority of peers, surface: "Note: 5 of 7 peers don't follow the reference's pattern. Is the reference the new canonical, or did I pick the wrong anchor?" Let the user confirm or flip the anchor.
+5. **Compute minimal Edit** on each peer. Preserve domain logic, business-specific behavior, and incidental differences. Never rewrite wholesale unless the peer is severely degraded.
+6. **Surface intentional divergence.** If a peer has `// conform:exempt` or an obvious comment indicating intentional difference, skip it and note in the report.
+7. **One reference, one pass.** Don't enforce multiple unrelated patterns in a single invocation — ask the user to run again with a different reference.
 
 ## Fix-shape detail: restructure
 

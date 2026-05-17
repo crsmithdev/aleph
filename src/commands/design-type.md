@@ -161,7 +161,7 @@ For a richer before/after table when run standalone:
 - **Read-only in audit mode.** No `Edit`, `Write`, or mutating `Bash`.
 - **Write-time in enforcement mode.** Apply silently; do not emit SARIF.
 - **No `Skill()` calls.** The omnibus chains; we report or apply.
-- **Typography only.** Visual hierarchy and rhythm belong in `design-audit`; code-level a11y / forms / perf in `design-standards`.
+- **Typography only.** Visual hierarchy, rhythm, and code-level a11y / forms / perf belong in `design-review` (the unified design audit/fix skill).
 
 ## Output template (audit mode)
 
@@ -190,5 +190,5 @@ When invoked by the omnibus, return the SARIF as the structured result.
 - CSS baseline: `css-templates.md` (responsive patterns, OpenType, dark mode)
 - Entity reference: `html-entities.md` (substitution rules, usage patterns)
 - Finding contract: `src/skills/_shared/finding.md`
-- Sibling audits: `src/skills/design-audit/SKILL.md` (visual), `src/skills/design-standards/SKILL.md` (a11y/forms/perf)
+- Sibling unified skill: `src/skills/design-review/SKILL.md` (visual + a11y/forms/perf, with audit + fix modes)
 - Orchestrator: `src/skills/omnibus/SKILL.md`

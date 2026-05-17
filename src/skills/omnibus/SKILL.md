@@ -64,7 +64,7 @@ Registry (after consolidation — verb axis collapsed into mode flag, wiring dom
 
 ² `agent-review` covers four sub-surfaces in one pass: `config` (CLAUDE.md, settings.json), `hooks` (`src/core/hooks/*.ts`), `skills` (`src/skills/*/SKILL.md`, `skill-rules.json`), and `personas` (`src/agents/*.md`). Findings tagged with `properties.sub_surface`. Config structural fixes delegate to `agnix --fix-safe`.
 
-All review leaves emit SARIF natively per `src/skills/_shared/finding.md`. The `author` verb (`docs-author-v2`, `skill-creator`) is invoked directly per artifact creation rather than orchestrated through the matrix.
+All review leaves emit SARIF natively per `src/skills/_shared/finding.md`. The `author` verb (`docs-author`, `skill-creator`) is invoked directly per artifact creation rather than orchestrated through the matrix.
 
 ## Phase 1: Fan out (parallel)
 

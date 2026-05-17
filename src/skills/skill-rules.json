@@ -33,12 +33,8 @@
       "keywords": ["agent-browser", "browser automation", "open a website", "fill out a form", "click a button", "take a screenshot", "scrape data", "automate browser", "web automation", "navigate page", "browser cli"]
     },
     {
-      "skill": "code-simplify",
-      "keywords": ["deslop", "remove slop", "clean up code", "remove boilerplate", "over-engineered", "unnecessary comments", "simplify before commit", "simplify code", "clean this up", "too much boilerplate", "simplify this"]
-    },
-    {
       "skill": "code-review",
-      "keywords": ["code review", "review this code", "architecture review", "review my implementation", "check my code", "review the changes", "code audit", "audit the code", "audit the diff", "audit my code", "code fix", "fix the findings", "apply the audit fixes", "apply the fixes", "/code-review", "/(audit|review|fix).{0,15}(code|diff|branch|findings|changes|implementation)/", "/code.{0,10}(audit|review|fix)/"]
+      "keywords": ["code review", "review this code", "architecture review", "review my implementation", "check my code", "review the changes", "code audit", "audit the code", "audit the diff", "audit my code", "code fix", "fix the findings", "apply the audit fixes", "apply the fixes", "deslop", "remove slop", "clean up code", "remove boilerplate", "over-engineered", "unnecessary comments", "simplify before commit", "simplify code", "clean this up", "too much boilerplate", "simplify this", "conform", "code-conform", "apply this pattern", "apply the pattern", "align with", "match the way", "match this pattern", "fix drift", "standardize", "make them consistent", "make consistent", "same pattern", "propagate this", "align the routes", "align the handlers", "match this handler", "make the providers consistent", "fix drift in the schemas", "consolidate", "single source of truth", "deduplicate", "/code-review", "/(audit|review|fix|simplify|conform).{0,15}(code|diff|branch|findings|changes|implementation)/", "/code.{0,10}(audit|review|fix|simplify|conform)/", "/(handlers|providers|routes|schemas|helpers).{0,30}(consistent|match|same|like)/", "/(make|fix|align).{0,30}(consistent|match|same|like)/"]
     },
     {
       "skill": "omnibus",
@@ -53,16 +49,8 @@
       "keywords": ["document this", "write documentation", "create docs", "update the docs", "write a readme", "document the architecture"]
     },
     {
-      "skill": "docs-author-v2",
-      "keywords": ["docs-v2", "use docs-author-v2", "docs author v2", "/v2 docs/"]
-    },
-    {
       "skill": "docs-review",
-      "keywords": ["docs-review", "docs review", "docs audit", "audit docs", "audit the docs", "doc audit", "documentation audit", "fix the docs findings", "remediate docs drift", "/docs-review", "/(audit|review|check|fix|remediate).{0,15}(docs|documentation)/"]
-    },
-    {
-      "skill": "docs-conform",
-      "keywords": ["docs-conform", "make the docs match", "align the docs", "same readme structure", "match the readme", "/(readmes|docs|guides).{0,30}(match|like|same|consistent)/"]
+      "keywords": ["docs-review", "docs review", "docs audit", "audit docs", "audit the docs", "doc audit", "documentation audit", "fix the docs findings", "remediate docs drift", "docs-conform", "make the docs match", "align the docs", "same readme structure", "match the readme", "sync docs to reference", "/docs-review", "/(audit|review|check|fix|remediate|conform).{0,15}(docs|documentation)/", "/(readmes|docs|guides).{0,30}(match|like|same|consistent)/"]
     },
     {
       "skill": "docs-optimize",
@@ -81,20 +69,12 @@
       "keywords": ["address", "/address", "annotations", "my annotations", "fix my annotations", "vibe annotations", "vibe notes", "implement the annotations", "work on the annotations", "apply my feedback", "apply annotations", "what did i mark", "check what i marked", "what's annotated", "pending annotations", "fix the annotations", "implement my feedback", "/annotations.{0,20}(on|for)/", "/(fix|implement|apply|work on).{0,20}annotations/"]
     },
     {
-      "skill": "design-standards",
-      "keywords": ["design-standards", "/design-standards", "check accessibility", "accessibility audit", "a11y", "best practices", "review for a11y", "web standards", "check web standards", "check the design", "design looks off", "design check", "design is off", "something looks off", "ui looks wrong", "the design looks", "visually check", "visual check", "check how it looks", "screenshot the ui"]
-    },
-    {
       "skill": "design-review",
-      "keywords": ["design-review", "design review", "design audit", "audit the design", "audit the ui", "audit ui", "design-fix", "design-conform", "make the pages match", "align the layouts", "same loading state", "same empty state", "match the table headers", "make the components consistent", "make this feel professional", "make this look professional", "polish the interface", "ux audit", "go through the ui", "review the ui", "the ui needs work", "clean up the ui", "typography", "fix typography", "em dash", "en dash", "text hierarchy", "review layout", "fix the font", "change the font", "font size", "font is wrong", "review ux", "/design-review", "/(review|audit|fix|go through).{0,15}(ui|design|interface|ux)/", "/(fix|change|update|wrong).{0,15}font/", "/font.{0,15}(wrong|bad|ugly|small|big|size)/", "/(pages|tables|layouts|components|cards|forms).{0,30}(match|like|same|consistent)/"]
+      "keywords": ["design-review", "design review", "design audit", "audit the design", "audit the ui", "audit ui", "design-fix", "design-conform", "design-standards", "make the pages match", "align the layouts", "same loading state", "same empty state", "match the table headers", "make the components consistent", "make this feel professional", "make this look professional", "polish the interface", "ux audit", "go through the ui", "review the ui", "the ui needs work", "clean up the ui", "typography", "fix typography", "em dash", "en dash", "text hierarchy", "review layout", "fix the font", "change the font", "font size", "font is wrong", "review ux", "check accessibility", "accessibility audit", "a11y", "review for a11y", "check web standards", "web standards", "check the design", "design looks off", "design check", "design is off", "something looks off", "ui looks wrong", "the design looks", "visually check", "visual check", "check how it looks", "screenshot the ui", "/design-review", "/(review|audit|fix|go through).{0,15}(ui|design|interface|ux)/", "/(fix|change|update|wrong).{0,15}font/", "/font.{0,15}(wrong|bad|ugly|small|big|size)/", "/(pages|tables|layouts|components|cards|forms).{0,30}(match|like|same|consistent)/"]
     },
     {
       "skill": "agent-review",
       "keywords": ["agent-review", "agent review", "agent audit", "audit the agent setup", "audit my config", "audit setup", "audit claude.md", "check agent config", "audit my hooks", "audit hooks", "check hook safety", "find dead hook outputs", "fix the hooks findings", "fix dead outputs", "audit my skills", "audit the skill registry", "find orphaned skills", "fix orphaned skills", "audit my agents", "audit subagents", "find agent drift", "check agent dispatch", "agent routing collision", "/agent-review", "/(audit|check|review|fix|remediate).{0,15}(config|setup|claude\\.md|hooks?|skill|registry|agent|subagent|persona)/", "/are my (hooks|skills|agents|personas) wired/", "/what's broken in my (setup|config)/"]
-    },
-    {
-      "skill": "code-conform",
-      "keywords": ["code-conform", "conform", "make the others", "make the other", "apply this pattern", "apply the pattern", "align with", "match the way", "match this pattern", "fix drift", "standardize", "make them consistent", "make consistent", "same pattern", "propagate this", "align the routes", "align the handlers", "match this handler", "make the providers consistent", "fix drift in the schemas", "consolidate", "single source of truth", "deduplicate", "/(handlers|providers|routes|schemas|hooks|helpers).{0,30}(consistent|match|same|like)/", "/(make|fix|align).{0,30}(consistent|match|same|like)/"]
     },
     {
       "skill": "design-construct",

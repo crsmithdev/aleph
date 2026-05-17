@@ -5,9 +5,8 @@ from a named source file — no rules invented in this document. Suggestions
 and proposed additions live in `SUGGESTIONS.md`, not here.
 
 Cross-referenced by:
-- `src/skills/docs-author-v2/SKILL.md` — applies these rules silently during generation
-- `src/skills/docs-audit/SKILL.md` — checks existing docs against these rules
-- `src/skills/docs-conform/SKILL.md` — uses these rules to validate alignment
+- `src/skills/docs-review/SKILL.md` — three modes: `audit` (find violations), `fix` (apply approved findings via docs-reviewer agent, including peer-drift propagation), `enforce` (auto-apply silently while writing markdown)
+- `src/skills/docs-author/SKILL.md` — context-gathering + drafting for new docs
 
 ## A. Voice & style
 

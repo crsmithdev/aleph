@@ -14,23 +14,21 @@ src/rules/
 │   └── ...
 ├── design/
 │   ├── RULES.md
-│   ├── typography.md      # walked by design-audit (section B); was former design-type
-│   ├── accessibility.md   # walked by design-audit (sections L-R); was former design-standards
+│   ├── typography.md      # walked by design-review (section B); also `design-type` for write-time enforcement
+│   ├── accessibility.md   # walked by design-review (sections L-R); was former design-standards
 │   ├── css-templates.md   # baseline CSS / responsive / OpenType
 │   ├── html-entities.md   # entity substitution reference
 │   └── ...
 ├── docs/
-│   ├── RULES.md           # canonical doc rule set (moved from docs-author-v2/)
+│   ├── RULES.md           # canonical doc rule set walked by docs-review (audit/fix/enforce modes)
 │   ├── SUGGESTIONS.md     # proposed rule additions awaiting approval
 │   └── ...
-├── skills/
-│   └── RULES.md
-├── hooks/
-│   └── RULES.md
-├── agents/
-│   └── RULES.md
-├── config/
-│   └── RULES.md
+├── agent/                 # AI-runtime config: walked by agent-review across 4 sub-surfaces
+│   ├── RULES.md           # entry point
+│   ├── config.md          # CLAUDE.md, settings.json
+│   ├── hooks.md           # src/core/hooks/*.ts, settings-hooks.json
+│   ├── skills.md          # src/skills/*/SKILL.md, skill-rules.json
+│   └── personas.md        # src/agents/*.md
 └── security/
     ├── RULES.md
     ├── owasp-top-10.md
@@ -46,16 +44,13 @@ Findings cite rules as `<domain>/RULES.md#<section-anchor>` — e.g. `code/RULES
 
 This directory is currently scaffolding. The skill-architecture migration (`docs/plans/skill-architecture.md`, Phase 2) will populate each `RULES.md` by consolidating content from the legacy skills:
 
-| Domain | Legacy source | Migration status |
+| Domain | Walked by | Status |
 |---|---|---|
-| `code` | `src/skills/code-review/SKILL.md` §1-8, `src/skills/code-simplify/SKILL.md` slop patterns, CLAUDE.md commandments | **Populated** |
-| `design` | `src/skills/design-audit/` (qualitative dims); `design-standards` folded into `accessibility.md`; `design-type` folded into `typography.md` (+ `css-templates.md`, `html-entities.md`) | **Populated + consolidated** (umbrella + 4 reference files) |
-| `docs` | (moved from `src/skills/docs-author-v2/RULES.md`) | **Populated** |
-| `skills` | `src/skills/skill-creator/` (rules buried in process) | Stub |
-| `hooks` | `src/skills/config-audit/SKILL.md` Phase 2 + Construct-specific hook conventions | Stub |
-| `agents` | Construct conventions (mostly net-new) | Stub |
-| `config` | `src/skills/config-audit/SKILL.md` Phase 1 + 3 + 4 | Stub (agnix covers most) |
-| `security` | `claude-code-security-review` categories, OWASP/CWE/NIST/ASVS | Stub (net-new) |
+| `code` | `code-review` (audit + fix modes; slop removal, drift propagation, consolidation, restructure) | **Populated** |
+| `design` | `design-review` (audit + fix modes); `design-type` for write-time typography enforcement | **Populated + consolidated** (umbrella + 4 reference files) |
+| `docs` | `docs-review` (audit + fix + enforce modes); `docs-author` for from-scratch drafting | **Populated** |
+| `agent` | `agent-review` (audit + fix modes across config/hooks/skills/personas sub-surfaces) | **Populated** (umbrella + 4 sub-surface files) |
+| `security` | `security-review` (audit + fix modes; OWASP/CWE/NIST/ASVS/MITRE-ATT&CK mapped) | Stub (net-new) |
 
 ## When to add content
 

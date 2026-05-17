@@ -1,19 +1,70 @@
 ---
 name: test-webapp
-description: Toolkit for interacting with and testing local web applications using Playwright. Supports verifying frontend functionality, debugging UI behavior, capturing browser screenshots, and viewing browser logs. Triggers on "test my web app", "verify the UI behavior", "test the frontend".
+description: Front door for browser-driven testing and interaction with local web apps. Picks between the agent-browser CLI (one-off automation, scripting, snapshot-driven inspection) and Playwright (assertion-based testing, headed visual verification, multi-server orchestration) based on the task shape. Triggers on "test my web app", "verify the UI behavior", "test the frontend", "drive the browser", "automate the page", "click through the flow", "screenshot the app", "browser test", "ui test".
 license: Complete terms in LICENSE.txt
 ---
 
-# Web Application Testing
+# Web App Testing & Interaction
 
-To test local web applications, write native TypeScript Playwright scripts.
+Front door for any task that needs a browser to drive a local web app. Two tools live behind this skill — pick one based on what the task is shaped like.
 
-**Helper Scripts Available**:
-- `scripts/with-server.ts` - Manages server lifecycle (supports multiple servers)
+## Pick the right tool
 
-**Always run scripts with `--help` first** to see usage. DO NOT read the source until you try running the script first and find that a customized solution is abslutely necessary. These scripts can be very large and thus pollute your context window. They exist to be called directly as black-box scripts rather than ingested into your context window.
+| Use **agent-browser CLI** when… | Use **Playwright** when… |
+|---|---|
+| One-off automation: open page, click a button, grab a value | Assertion-based testing (compare element text/state against expected) |
+| Quick reconnaissance (snapshot, find selectors, inspect) | Headed visual verification (`headless: false` + screenshots at named beats) |
+| Single page, short script, no test runner needed | Multi-step flow that needs setup/teardown, fixtures, or test isolation |
+| Already authenticated session (CDP reuses your real Chrome) | Multi-server orchestration (frontend + backend up together) |
+| Shell-friendly: pipe `agent-browser snapshot` output into other tools | Programmatic browser API (full Playwright surface — `expect`, locators, request interception) |
+| Cross-browser inspection (Brave, Chrome, Chromium auto-detected) | Reproducible CI runs with fresh Chromium per test |
 
-## Decision Tree: Choosing Your Approach
+If the task is "drive the browser once to do X" → CLI.
+If the task is "verify Y is true on every run" or "test the X flow end-to-end" → Playwright.
+If unsure, start with the CLI for reconnaissance, then write a Playwright script if the work needs to be repeatable.
+
+---
+
+## Path A — agent-browser CLI
+
+Best for one-off automation, snapshot-driven inspection, and any task where you just need to drive the browser to get an answer.
+
+### Core workflow
+
+1. **Navigate:** `agent-browser open <url>`
+2. **Snapshot:** `agent-browser snapshot -i` (returns refs like `@e1`, `@e2`)
+3. **Interact:** use refs to click, fill, select
+4. **Re-snapshot:** after navigation or DOM changes, get fresh refs
+
+```bash
+agent-browser open https://example.com/form
+agent-browser snapshot -i
+# Output: @e1 [input type="email"], @e2 [input type="password"], @e3 [button] "Submit"
+
+agent-browser fill @e1 "user@example.com"
+agent-browser fill @e2 "password123"
+agent-browser click @e3
+agent-browser wait --load networkidle
+agent-browser snapshot -i  # Check result
+```
+
+Install once: `npm i -g agent-browser` (or `brew install agent-browser`, or `cargo install agent-browser`). Then `agent-browser install` to ensure Chrome is available. Existing Chrome, Brave, Playwright, and Puppeteer installations are detected automatically. Run `agent-browser upgrade` to update.
+
+For the full CLI surface (form filling, JS evaluation, network capture, authenticated session reuse), see `src/skills/agent-browser/SKILL.md`.
+
+---
+
+## Path B — Playwright scripts
+
+Best for assertion-based tests, multi-server orchestration, and any work that needs to be reproducible from CI.
+
+### Helper scripts
+
+- `scripts/with-server.ts` — manages server lifecycle (supports multiple servers)
+
+**Always run scripts with `--help` first** to see usage. DO NOT read the source until you've tried running the script first and found a customized solution to be absolutely necessary. These scripts are designed as black boxes; pulling them into context costs tokens for no benefit.
+
+### Decision tree
 
 ```
 User task → Is it static HTML?
@@ -32,16 +83,14 @@ User task → Is it static HTML?
             4. Execute actions with discovered selectors
 ```
 
-## Example: Using with-server.ts
-
-To start a server, run `--help` first, then use the helper:
+### Using `with-server.ts`
 
 **Single server:**
 ```bash
 bun scripts/with-server.ts --server "npm run dev" --port 3000 -- bun your_automation.ts
 ```
 
-**Multiple servers (e.g., backend + frontend):**
+**Multiple servers (backend + frontend):**
 ```bash
 bun scripts/with-server.ts \
   --server "cd backend && bun server.ts" --port 3000 \
@@ -49,47 +98,45 @@ bun scripts/with-server.ts \
   -- bun your_automation.ts
 ```
 
-To create an automation script, include only Playwright logic (servers are managed automatically):
+### Minimal Playwright script
+
 ```typescript
 import { chromium } from 'playwright';
 
-const browser = await chromium.launch({ headless: true }); // Always launch chromium in headless mode
+const browser = await chromium.launch({ headless: true }); // headless by default; switch to false for visual verification
 const page = await browser.newPage();
-await page.goto('http://localhost:3000'); // Server already running and ready
-await page.waitForLoadState('networkidle'); // CRITICAL: Wait for JS to execute
-// ... your automation logic
+await page.goto('http://localhost:3000');
+await page.waitForLoadState('networkidle'); // CRITICAL: wait for JS to execute
+// ... your assertions / interactions
 await browser.close();
 ```
 
-## Reconnaissance-Then-Action Pattern
+### Reconnaissance-then-action
 
-1. **Inspect rendered DOM**:
+1. **Inspect rendered DOM:**
    ```typescript
    await page.screenshot({ path: '/tmp/inspect.png', fullPage: true });
    const content = await page.content();
    await page.locator('button').all();
    ```
-
 2. **Identify selectors** from inspection results
-
 3. **Execute actions** using discovered selectors
 
-## Common Pitfall
+### Common pitfall
 
-❌ **Don't** inspect the DOM before waiting for `networkidle` on dynamic apps
-✅ **Do** wait for `page.waitForLoadState('networkidle')` before inspection
+- **Don't** inspect the DOM before waiting for `networkidle` on dynamic apps
+- **Do** wait for `page.waitForLoadState('networkidle')` before inspection
 
-## Best Practices
+### Best practices
 
-- **Use bundled scripts as black boxes** - To accomplish a task, consider whether one of the scripts available in `scripts/` can help. These scripts handle common, complex workflows reliably without cluttering the context window. Use `--help` to see usage, then invoke directly. 
+- Use bundled scripts as black boxes — check `scripts/` first with `--help`
 - Use `async/await` with the Playwright TypeScript API
 - Always close the browser when done
-- Use descriptive selectors: `text=`, `role=`, CSS selectors, or IDs
+- Descriptive selectors: `text=`, `role=`, CSS selectors, or IDs
 - Add appropriate waits: `page.waitForSelector()` or `page.waitForTimeout()`
 
-## Reference Files
+### Reference files
 
-- **examples/** - Examples showing common patterns:
-  - `element-discovery.ts` - Discovering buttons, links, and inputs on a page
-  - `static-html-automation.ts` - Using file:// URLs for local HTML
-  - `console-logging.ts` - Capturing console logs during automation
+- `examples/element-discovery.ts` — discovering buttons, links, and inputs on a page
+- `examples/static-html-automation.ts` — using `file://` URLs for local HTML
+- `examples/console-logging.ts` — capturing console logs during automation
