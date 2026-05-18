@@ -1,6 +1,6 @@
 ---
 name: code-suggest
-description: Proactive code-improvement scout. Two flows. (a) Tactical cleanup — surface AI-generated slop in the current diff (defensive try/catch, restating comments, backwards-compat shims with no consumers, scope-creep changes to unchanged code, impossible-case throws, `any` casts) plus style refinements (function over arrow at top level, explicit return types, no nested ternaries), present findings, apply approved removals, run the test suite. (b) Architectural — explore the codebase for friction (shallow modules, tight coupling, untested seams), classify dependencies (in-process / local-substitutable / remote-owned / true-external), design 3+ alternative interfaces in parallel, recommend one, optionally file as an RFC GitHub issue. Adapted from kennethkeim/skills/improve-codebase-architecture (Ousterhout's deep-modules framing). Triggers on /code-suggest, "deslop", "remove slop", "simplify this", "simplify before commit", "simplify code", "clean up code", "clean this up", "remove boilerplate", "too much boilerplate", "over-engineered", "unnecessary comments", "improve the architecture", "find refactoring opportunities", "what should I refactor", "deepen modules", "make this more testable", "architectural review", "architectural debt", "tightly coupled modules", "shallow module", "ports and adapters", "design alternatives", "module boundaries".
+description: Proactive code-improvement scout. Two flows. (a) Tactical cleanup — surface AI-generated slop in the current diff across seven categories (defensive / fallback / bypass patterns including swallowed catches, band-aid guards, silent defaults, quick-hack workarounds, redundant defensive checks, duplicate alternate execution paths; comments / placeholders / noise including restating comments, placeholder narration, orphan TODOs, noisy logging, commented-out code, unicode hazards; dead code including unused exports, unreachable branches, stale flags, debug leftovers, unused imports; needless abstraction including pass-through wrappers, single-use helpers, single-use variables, speculative indirection, custom Result/Error wrappers; deep nesting including nested ternaries and deeply nested conditionals; style inconsistency with the local file including naming, comment density, error-handling idiom, type-annotation pattern, inline imports; type escapes including `as any`, blind `!` non-null assertions, hallucinated interfaces) plus scope creep, backwards-compat shims, and impossible-case throws — present findings, apply approved removals, run the test suite. Distinguishes masking fallback slop (remove) from grounded compatibility/fail-safe fallback (keep). Respects trust boundaries: defensive checks legitimate at HTTP/CLI/parsing/network/FS/third-party seams, slop at post-validated internals. (b) Architectural — explore the codebase for friction (shallow modules, tight coupling, untested seams), classify dependencies (in-process / local-substitutable / remote-owned / true-external), design 3+ alternative interfaces in parallel, recommend one, optionally file as an RFC GitHub issue. Adapted from kennethkeim/skills/improve-codebase-architecture (Ousterhout's deep-modules framing) plus union of slop patterns from Sentry, Ariwor, blopa, peabody124, DeevsDeevs, Yeachan-Heo deslop variants. Triggers on /code-suggest, "deslop", "remove slop", "simplify this", "simplify before commit", "simplify code", "clean up code", "clean this up", "remove boilerplate", "too much boilerplate", "over-engineered", "unnecessary comments", "swallowed errors", "silent fallback", "dead code", "unused imports", "deep nesting", "improve the architecture", "find refactoring opportunities", "what should I refactor", "deepen modules", "make this more testable", "architectural review", "architectural debt", "tightly coupled modules", "shallow module", "ports and adapters", "design alternatives", "module boundaries".
 ---
 
 # code-suggest
@@ -32,18 +32,95 @@ If empty on clean main, fall back to `--since HEAD~10`; if still empty, exit `sc
 
 ### 2. Scan for slop patterns
 
-Walk the diff. Flag each occurrence with `file:line — pattern — rule cite`:
+Walk the diff. Flag each occurrence with `file:line — pattern — what's there — fix`.
 
-| Pattern | Rule | Detect |
+#### Defensive / fallback / bypass
+
+| Pattern | Detect | Example fix |
 |---|---|---|
-| **Defensive code** | `code/RULES.md#B.1` | try/catch with no rethrow / log / branching — the catch swallows the error |
-| **Restating comments** | `code/RULES.md#B.2` | `//` comment whose tokens ≥60% overlap with the next non-blank line's identifiers |
-| **Backwards-compat shims** | `code/RULES.md#B.3` | exports / wrappers / `// removed`-style comments / renamed `_vars` with zero consumers (grep first to confirm) |
-| **Scope creep** | `code/RULES.md#B.4` | cosmetic edits to code the user didn't touch (added docstrings, type annotations, refactors on unchanged lines) |
-| **Impossible-case throws** | `code/RULES.md#B.5` | `throw` for a case that can't be reached given the inputs |
-| **`any` casts** | `code/RULES.md#B.6` | `as any` introduced to bypass a type issue rather than fixing the type |
+| **Empty defensive catch** (`code/RULES.md#B.1`) | try/catch with no rethrow, log, or branching | Remove the wrapper; if it was masking a real error path, surface that as a separate finding |
+| **Swallowed catch** | `catch { console.log(e) }` / `catch { return null }` / `catch { return [] }` — fails silently and returns a fallback | Either rethrow with context, route to telemetry, or let the error propagate. Don't paper over it. |
+| **Band-aid guard clauses** | `if (!data) return null;` that hides an upstream pipeline issue (not loading states) | Fix the upstream invariant; remove the guard. |
+| **Quick-hack / temporary workaround** | comments like `TODO: temporary`, `quick hack`, `workaround for X`, `just bypass for now`, `fallback if it fails` | Either remove and repair the root cause, or convert into a documented, scoped fallback with explicit failure behavior. |
+| **Silent default** | a `catch` / `if` branch that substitutes a default value without logging or signalling | Make failure explicit; default values are slop when they mask a contract violation. |
+| **Redundant defensive check** | check duplicated at caller and callee when the caller already guarantees the invariant | Remove the check in the callee. |
+| **Duplicate alternate execution path** | a parallel branch that re-implements the primary path "in case" the primary fails | Consolidate to one path; if the alternate is a real compatibility shim, document it and gate it on the boundary. |
 
-For each candidate, re-read the cited lines to confirm. Drop false positives — when in doubt, don't flag.
+**Trust boundary callout.** Defensive checks ARE legitimate at: HTTP / CLI / env input, JSON / schema parsing, network responses, filesystem reads of external data, third-party callbacks. They ARE slop at: post-validated domain objects, post-auth middleware, internal-only transforms with strong invariants, calls between trusted modules. When in doubt, follow the existing pattern in the same module.
+
+**Fallback classification.** Before removing a fallback-shaped branch, classify it:
+- **Masking fallback (slop):** hides errors, suppresses validation, swallows failures, silently defaults, adds an untested alternate path. **Remove.**
+- **Grounded compatibility / fail-safe fallback (keep):** scoped to an external / version / fail-safe boundary, documents the rationale, preserves failure evidence, has tests for both primary and fallback. **Leave.**
+
+#### Comments / placeholders / noise
+
+| Pattern | Detect |
+|---|---|
+| **Restating comments** (`code/RULES.md#B.2`) | `//` comment whose tokens ≥60% overlap with the next non-blank line's identifiers |
+| **Placeholder narration** | `// Phase 1:`, `// Step 1:`, `// First we do X`, `// Setup`, scaffolding headers that say nothing |
+| **Orphan TODOs** | `// TODO: handle edge cases` and similar without a ticket / specific edge case / actionable next step |
+| **Noisy logging** | `log.info("Starting X")` + `log.info("Finished X")` around a trivial call; logs at the wrong level for the module |
+| **Commented-out code** | blocks left behind "for reference" — git history is the reference |
+| **Unicode hazards** | non-breaking space (U+00A0), zero-width (U+200B, U+200D), smart quotes / homoglyphs in identifiers, emoji in code or comments unless the module already uses them |
+
+#### Dead code
+
+| Pattern | Detect |
+|---|---|
+| **Unused exports** | exported symbol with zero consumers — grep across `src/` to confirm before removing |
+| **Unreachable branches** | `if (false)`, `// @ts-expect-error never reached`, code after an unconditional `return` / `throw` |
+| **Stale flags** | feature flags whose only reference is their own definition; conditional branches gated on a constant `true` / `false` |
+| **Debug leftovers** | `console.log` / `console.debug` added in this diff that wasn't there before; `debugger;` statements |
+| **Unused imports** | imports unreferenced in the file |
+
+#### Needless abstraction
+
+| Pattern | Detect |
+|---|---|
+| **Pass-through wrapper** | a function whose body is a single call to another function, with no added value (validation, logging, type narrowing) |
+| **Single-use helper** | a helper extracted at the top of a file that is called exactly once nearby and would read better inlined |
+| **Single-use variable** | `const clean = s.strip().lower(); return clean;` — inline if it improves clarity and matches surrounding style |
+| **Speculative indirection** | factory / provider / manager class introduced for small local logic with one implementation |
+| **Custom Result / Error wrappers** | new wrapper types introduced in a module that uses the standard idiom (e.g. throw, tagged result) for everything else |
+
+#### Deep nesting
+
+| Pattern | Detect |
+|---|---|
+| **Nested ternaries** (`code/RULES.md#B.6` adjacency) | `a ? b : c ? d : e` — convert to `switch` or `if`/`else` |
+| **Deeply nested conditionals** | `if (x) { if (y) { if (z) { ... } } }` more than 2 deep — flatten with guard clauses / early returns |
+
+#### Style inconsistency (with the local file)
+
+Match the file the diff touches. The codebase has multiple styles; match the local one. Slop pattern: introducing a different style in a file that already had one.
+
+- Naming conventions (camelCase vs snake_case vs whatever the file uses)
+- Comment density and tone
+- Error-handling idiom (throw vs tagged result vs `Either<,>` — match the module)
+- Type annotations on functions when the file otherwise leaves them inferred (or vice versa)
+- Imports inline inside functions when the module convention is top-of-file
+- Factory / provider / manager class introduced where the file uses plain functions
+- Formatting choices the file's tooling would catch — defer to the formatter, don't fight it
+
+#### Type escapes (`code/RULES.md#B.6`)
+
+| Pattern | Detect |
+|---|---|
+| **`as any` casts** | introduced to bypass a type issue rather than fixing the type |
+| **`!` non-null assertions** | added blindly to silence the checker; if you can't prove it's non-null, use a guard |
+| **Hallucinated interfaces** | TypeScript interfaces over-specifying fields that aren't actually used by the caller |
+
+#### Scope creep (`code/RULES.md#B.4`)
+
+Cosmetic-only edits to code the user didn't touch — added docstrings, type annotations, formatting on unchanged lines, "while I'm here" refactors. Revert those lines to the file's pre-change state.
+
+#### Backwards-compat shims (`code/RULES.md#B.3`)
+
+Exports, wrappers, renamed `_vars`, `// removed`-style comments, deprecation aliases with zero consumers. Grep across `src/` to confirm zero consumers before removing.
+
+#### Impossible-case throws (`code/RULES.md#B.5`)
+
+`throw new Error("this should never happen")` for a case that can't be reached given the inputs. Remove. If the case IS reachable via untrusted input, leave it and reclassify.
 
 ### 3. Scan for style refinements that ride along
 
@@ -51,9 +128,10 @@ Apply only if the diff already touches them:
 
 - Prefer `function` keyword over arrow at top-level declarations
 - Explicit return type annotations on exported functions
-- No nested ternaries — convert to `switch` or `if/else`
 - Three similar lines beat a premature abstraction
 - ES modules with proper import sorting and extensions
+- Inline single-use variables when it improves clarity
+- Match the local file's conventions over absolute style rules
 
 Don't reformat untouched code — that's scope creep itself.
 
