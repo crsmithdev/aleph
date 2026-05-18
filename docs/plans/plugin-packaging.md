@@ -176,7 +176,7 @@ Three things must happen on plugin install:
 | 4 | Workspace deps install via **`SessionStart` hook + `${CLAUDE_PLUGIN_DATA}/node_modules`** + `NODE_PATH` env on hook commands. Bun documented as a hard prereq. | proposed |
 | 5 | Router (`routing-classify-submit.ts`) emits **namespaced** skill names (`construct:<name>`). Update the hook. | proposed |
 | 6 | Version strategy: **omit `version` field initially**, use git commit SHA. Switch to explicit semver once external users dogfood. | proposed |
-| 7 | Marketplace: **own repo** (`crsmithdev/construct-marketplace`) for v1. Don't submit to `anthropics/claude-plugins-official` until external dogfooding. | from Phase 0 / sketch |
+| 7 | Marketplace lives at **`.claude-plugin/marketplace.json` in this repo** — no separate marketplace repo. Plugin source = relative path (`"./plugin"`) once the built tree is committed. Don't submit to `anthropics/claude-plugins-official` until external dogfooding. (Earlier plan said "own marketplace repo first" — that was wrong; verified against `code.claude.com/docs/en/plugin-marketplaces`.) | revised |
 | 8 | Permissions are **documented in plugin README**, not auto-set. (Plugin `settings.json` only honors `agent` and `subagentStatusLine`.) | from research |
 
 ---
