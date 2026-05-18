@@ -1,9 +1,10 @@
-# Example: /agent-review --sub-surface hooks (fix flow)
+# Example: /agent-review — hooks fix flow
 
 ## Invocation
 
 ```
-/agent-review --sub-surface hooks
+/agent-review hooks
+fix the hook findings
 ```
 
 Scans hooks, presents findings, asks at the approval gate, applies approved fixes inline, gates on `bun test src/core/hooks` + JSON validity on both registries. One skill invocation, one continuous flow.

@@ -1,12 +1,14 @@
-# Example: /agent-review (default — scope=all)
+# Example: /agent-review (default — whole codebase)
 
 ## Invocation
 
 ```
 /agent-review
+audit my config
+what's broken in my setup
 ```
 
-Walks all four sub-surfaces across the project: config (CLAUDE.md, settings.json), hooks (`src/core/hooks/`), skills (`src/skills/`), personas (`src/agents/`, `.claude/agents/`). Smart scope: `--diff` per sub-surface first, fall back to `--all` when diff is empty.
+Walks all four sub-surfaces across the project: config (CLAUDE.md, settings.json), hooks (`src/core/hooks/`), skills (`src/skills/`), personas (`src/agents/`, `.claude/agents/`). Default scope is every file in each sub-surface — narrow only when the user names a sub-surface or file.
 
 ## What was checked
 

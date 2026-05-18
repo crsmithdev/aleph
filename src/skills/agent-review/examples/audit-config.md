@@ -1,12 +1,14 @@
-# Example: /agent-review --sub-surface config
+# Example: /agent-review — config sub-surface only
 
 ## Invocation
 
 ```
-/agent-review --sub-surface config
+/agent-review config
+audit my CLAUDE.md and settings
+check the config
 ```
 
-Limits the walk to the config sub-surface: CLAUDE.md `@`-include graph, `.claude/settings.json` MCP servers and permissions, statusline config. Other sub-surfaces are skipped. agnix structural lint passthrough runs first.
+Narrows the walk to the config sub-surface when the user names it: CLAUDE.md `@`-include graph, `.claude/settings.json` MCP servers and permissions, statusline config. Other sub-surfaces are skipped. agnix structural lint passthrough runs first.
 
 ## What was checked
 

@@ -11,7 +11,7 @@ Scans all AI-runtime config (CLAUDE.md, hooks, skills, agent personas) against t
 
 ## Process
 
-1. **Scope.** `git diff --name-only $(git merge-base HEAD main)..HEAD`. If empty on clean main, fall back to `--since HEAD~10`; if still empty, scope defaults to the entire codebase — every file matching the Domain table below. Pass `--module <path>` to narrow.
+1. **Scope.** Default: every file across the four sub-surfaces in the Domain table below. If the user names a sub-surface, file, or directory in their request (e.g., "audit my hooks", "review src/agents", "check the skill-rules"), narrow to that.
 2. **Scan** the rules in Domain below. For each hit: file:line, rule cite, one-line message, fix, severity (blocking / important / nit / suggestion / praise).
 3. **Re-read** each cited location. Drop false positives.
 4. **Report** grouped by severity. One line per finding: `path:line — rule — message. Fix: ...`.

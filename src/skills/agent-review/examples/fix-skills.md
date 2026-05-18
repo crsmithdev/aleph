@@ -3,7 +3,8 @@
 ## Invocation
 
 ```
-/agent-review --sub-surface skills
+/agent-review skills
+fix the skill findings
 ```
 
 After the scan presents findings, the user picks which to apply at the approval gate. Each finding's tag routes to a fix shape from the Skills sub-surface table. The leaf verifies with `gate("skills")` + JSON validity on `skill-rules.json` + re-grep for `Skill(` in leaves + `agnix --dry-run`.

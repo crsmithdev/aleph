@@ -1,12 +1,14 @@
-# Example: /agent-review --sub-surface personas (--all)
+# Example: /agent-review — personas sub-surface only
 
 ## Invocation
 
 ```
-/agent-review --sub-surface personas --all
+/agent-review personas
+audit my agents
+check agent dispatch
 ```
 
-Limits the walk to subagent definitions in `src/agents/` and `.claude/agents/`. Use `--all` when you want a full health check rather than just the diff. Resolves cross-domain references against `src/skills/` (G.1).
+Narrows the walk to subagent definitions in `src/agents/` and `.claude/agents/` when the user names it. Default scope is every agent file. Resolves cross-domain references against `src/skills/` (G.1).
 
 ## What was checked
 

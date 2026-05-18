@@ -1,12 +1,14 @@
-# Example: /agent-review --sub-surface skills
+# Example: /agent-review — skills sub-surface only
 
 ## Invocation
 
 ```
-/agent-review --sub-surface skills
+/agent-review skills
+audit my skills
+find orphaned skills
 ```
 
-Default scope is `--all` (skill set is small and stable). Audits every `src/skills/*/SKILL.md` against `src/rules/agent/skills.md` and cross-checks `skill-rules.json` for registry consistency. Runs G.2 transcript-backed trigger health on scope=all.
+Narrows the walk to the skills sub-surface when the user names it. Default scope is every `src/skills/*/SKILL.md` against `src/rules/agent/skills.md` plus a `skill-rules.json` registry-consistency cross-check. G.2 transcript-backed trigger health runs across the full skill set.
 
 ## What was checked
 

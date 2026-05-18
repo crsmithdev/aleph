@@ -27,7 +27,7 @@ Dispatch `Agent(subagent_type: "Explore")` to navigate the codebase organically.
 
 **The friction is the signal.** Don't enumerate every module; surface the ones that hurt.
 
-Scope: `--module <path>` narrows; default is `src/` minus `src/ui/**` (architectural review of UI is a design concern, not a code-suggest concern).
+Scope: default is `src/` minus `src/ui/**` (architectural review of UI is a design concern, not a code-suggest concern). If the user names a module or directory in their request, narrow to that.
 
 ### 2. Present candidates
 

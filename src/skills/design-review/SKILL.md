@@ -15,7 +15,7 @@ Audit dispatches to the **`design-reviewer` agent** because qualitative rules (h
 
 ## Process
 
-1. **Scope.** `git diff --name-only $(git merge-base HEAD main)..HEAD`. If empty on clean main, fall back to `--since HEAD~10`; if still empty, scope defaults to the entire codebase — every file matching the Domain table below. Pass `--module <path>` to narrow.
+1. **Scope.** Default: the entire codebase — every file matching the Domain table below. If the user names a file, directory, or change range in their request (e.g., "review src/ui", "audit the dashboard page", "review the last commit"), narrow to that.
 2. **Scan** the rules in Domain below. For each hit: file:line, rule cite, one-line message, fix, severity (blocking / important / nit / suggestion / praise).
 3. **Re-read** each cited location. Drop false positives.
 4. **Report** grouped by severity. One line per finding: `path:line — rule — message. Fix: ...`.

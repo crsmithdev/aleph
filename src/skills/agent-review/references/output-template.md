@@ -116,7 +116,7 @@ When invoked by the audit dispatcher, the leaf returns its phased prose; the dis
 [verify]
 scope:      <files edited, grouped by sub_surface>
 method:     gate("hooks") + gate("skills") + gate("agents") + gate("code") (per touched sub-surface)
-            + agent-review --sub-surface <s> --module <touched>
+            + re-run agent-review on the touched files
             + JSON.parse on touched registries + grep Skill( + agnix --dry-run
 assertions: zero remaining agent-review findings in scope (per sub-surface); all gates green; registries valid JSON
 [/verify]

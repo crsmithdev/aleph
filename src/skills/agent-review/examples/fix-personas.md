@@ -1,9 +1,10 @@
-# Example: /agent-review --sub-surface personas (fix flow)
+# Example: /agent-review — personas fix flow
 
 ## Invocation
 
 ```
-/agent-review --sub-surface personas
+/agent-review personas
+fix the persona findings
 ```
 
 Scans agent personas, presents findings, asks at the approval gate (per-finding for security-shaped tags), applies approved fixes inline, gates on frontmatter parse + cross-reference scan + `bun test`. One skill invocation, one continuous flow.

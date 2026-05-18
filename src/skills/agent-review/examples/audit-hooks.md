@@ -1,12 +1,14 @@
-# Example: /agent-review --sub-surface hooks (diff scope)
+# Example: /agent-review — hooks sub-surface only
 
 ## Invocation
 
 ```
-/agent-review --sub-surface hooks
+/agent-review hooks
+audit my hooks
+are my hooks wired up
 ```
 
-Limits the walk to the hooks sub-surface. Default scope is smart: tries `--diff` against `origin/main` first, falls back to `--all` when diff is empty. Audits changed hook scripts against `src/rules/agent/hooks.md`.
+Narrows the walk to the hooks sub-surface when the user names it. Default scope is every hook script under `src/core/hooks/` against `src/rules/agent/hooks.md`. If the user names a specific hook ("audit git-hygiene-stop"), narrow further.
 
 ## What was checked
 
