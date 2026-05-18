@@ -37,8 +37,11 @@ catch (e) {
 }
 const prompt = input.prompt ?? "";
 const words = prompt.split(/\s+/);
-trace(TAG, `prompt: ${words.length} words`);
-if (words.length < 3) {
+const isSlashCommand = /^\/[a-z][a-z0-9-]*(\s|$)/i.test(prompt.trim());
+trace(TAG, `prompt: ${words.length} words${isSlashCommand ? " (slash command)" : ""}`);
+// Slash commands (e.g. /agent-review, /sketch) bypass the word-count floor —
+// they're a single "word" but carry routing intent that matches /<name> keywords.
+if (words.length < 3 && !isSlashCommand) {
   reportHook(TAG, "UserPromptSubmit", input.session_id);
   trace(TAG, "skip: < 3 words");
   process.exit(0);
