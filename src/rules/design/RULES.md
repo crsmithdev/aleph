@@ -194,6 +194,68 @@ Full list: `accessibility.md`.
 
 ---
 
+## S. React / Hook anti-patterns
+
+*Sources: blopa/musclog deslop, expo deep-code-review, React docs (rules-of-hooks).*
+
+### S.1 No div soup
+
+Don't wrap content in `<div>` when a Fragment (`<>...</>`) or a semantic element (`<section>`, `<nav>`, `<header>`, `<main>`, `<article>`, `<button>`) is correct. Wrapper divs added solely to satisfy a single-child constraint or to attach a className that doesn't need a DOM node are slop.
+
+- **Detect:** `<div>` with no className, style, role, or event handler, wrapping a single child or returning sibling JSX
+- **Severity:** `nit`
+- **Tag:** `slop`, `react`
+
+### S.2 No derived-state `useEffect`
+
+A `useEffect` that syncs one state variable from another is wrong — calculate the derived value during render. Same for `useEffect` that copies a prop into state.
+
+- **Detect:** `useEffect` whose body is a single `setState(deriveFrom(otherState))` call; deps array contains only state/props the effect reads to set another state
+- **Severity:** `important`
+- **Tag:** `react`, `correctness`
+
+### S.3 No over-memoization
+
+`useCallback` / `useMemo` around primitive values, trivial expressions, or values not passed to a memoized child / effect dependency are pure overhead. Memoize only when (a) the value is passed to a memoized child (`React.memo`), (b) the value is a dependency of `useEffect` / `useMemo` / `useCallback`, or (c) the computation is genuinely expensive.
+
+- **Detect:** `useCallback(() => x + 1, [x])`, `useMemo(() => primitive, [...])`, memoized values never destructured into a memoized child
+- **Severity:** `nit`
+- **Tag:** `react`, `slop`
+
+### S.4 No improper `useRef`
+
+Refs mutated during render are unsafe. Refs used where controlled state belongs (e.g., reading user input to display it back) are wrong. `useRef` is for: imperative DOM access, mutable values that don't trigger re-render, and values whose changes shouldn't be visible until a side effect runs.
+
+- **Detect:** `ref.current = ...` assignment outside `useEffect` / event handlers / `useLayoutEffect`; ref read in JSX expecting reactivity
+- **Severity:** `important`
+- **Tag:** `react`, `correctness`
+
+### S.5 No stale closures in effects / timers
+
+`useEffect(fn, [])` referencing state inside a `setInterval` / `setTimeout` / `addEventListener` callback captures the initial render's state forever. Use a ref, or include the state in the deps array, or use the functional form of `setState`.
+
+- **Detect:** `useEffect` with empty deps array containing a setTimeout/setInterval/addEventListener whose callback references state or props
+- **Severity:** `important`
+- **Tag:** `react`, `correctness`
+
+### S.6 No inline reference churn in hot paths
+
+Inline objects (`<Context.Provider value={{ a, b }}>`) or inline functions (`<FlatList renderItem={item => ...} />`) create a fresh reference every render, defeating downstream memoization. Hoist to `useMemo` / `useCallback` for Context Providers and high-volume list renderers.
+
+- **Detect:** JSX literal object or arrow function passed as a prop to `Provider`, `FlatList.renderItem`, `FlatList.keyExtractor`, or a `React.memo`-wrapped component
+- **Severity:** `important`
+- **Tag:** `react`, `performance`
+
+### S.7 Effects with subscriptions / fetches need cleanup
+
+`useEffect` that calls `addEventListener`, sets up an interval/timeout, opens a connection, or starts a fetch needs the matching cleanup in its return function. Fetches need `AbortController`; listeners need `removeEventListener`; intervals need `clearInterval`.
+
+- **Detect:** `useEffect` body adds a listener / starts an interval / starts an unbounded fetch with no return function
+- **Severity:** `blocking`
+- **Tag:** `react`, `leak`
+
+---
+
 ## Reference files
 
 - `accessibility.md` — ~50 rules covering a11y, focus, forms, content handling, images, performance, navigation, touch, safe areas, dark mode, locale, hydration, hover states, content & copy, anti-patterns

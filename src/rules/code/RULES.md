@@ -101,6 +101,62 @@ If a helper exists only to dedupe three lines, the helper is wrong. Wait until t
 - **Severity:** `suggestion` (judgment call, not a violation)
 - **Tag:** `slop`
 
+### B.7 No dead code
+
+Unused exports (zero consumers across `src/`), unreachable branches (code after unconditional `return`/`throw`, `if (false)` blocks), stale feature flags whose only reference is their own definition, debug leftovers (`console.log`/`console.debug` newly added to this diff, `debugger;`), unused imports. Public API surfaces, test utilities, and interface implementations don't count — confirm zero consumers across the whole repo before flagging.
+
+- **Detect:** grep for the symbol across `src/` and confirm zero consumers; AST or visual check for unreachable code after `return`/`throw`/`break`
+- **Severity:** `important` (`blocking` for unreachable branches)
+- **Tag:** `slop`, `dead-code`
+
+### B.8 No placeholder narration, orphan TODOs, or unicode hazards
+
+`// Phase 1:`, `// Step 1:`, `// First we do X`, and similar scaffolding comments that say nothing. `// TODO: handle edge cases` without a ticket reference or actionable next step. Commented-out code blocks left "for reference" (git history is the reference). Unicode hazards in code or comments: non-breaking space (U+00A0), zero-width characters (U+200B, U+200D), smart quotes (`"" ''`) in code or config, homoglyphs in identifiers, emoji in code unless the file already uses them.
+
+- **Detect:** comment lines that contain only scaffolding tokens; TODO comments without a ticket/issue/specific next step; commented-out lines containing identifiers also defined in the file; non-ASCII characters outside string literals
+- **Severity:** `nit`
+- **Tag:** `slop`
+
+### B.9 No pass-through wrappers or single-use helpers
+
+A function whose body is a single call to another function with no added value (validation, logging, type narrowing, error wrapping). A helper extracted at the top of a file that is called exactly once nearby and would read better inlined. Factory/provider/manager class introduced for small local logic with one implementation. Custom Result/Error wrappers introduced in a module that uses the standard idiom for everything else.
+
+- **Detect:** function with body `return otherFn(args)` and no other behavior; helper called from a single site in the same file with no meaningful name advantage; class with one method that wraps an external call
+- **Severity:** `nit`
+- **Tag:** `slop`, `needless-abstraction`
+
+### B.10 No deeply nested conditionals
+
+Conditionals nested more than two levels deep. Flatten with guard clauses / early returns. Includes nested ternaries (`a ? b : c ? d : e`) — convert to `switch` or chained `if`/`else if`.
+
+- **Detect:** three or more `if`/`else if`/ternary nesting levels within one function body; nested ternary expressions
+- **Severity:** `nit`
+- **Tag:** `slop`, `nesting`
+
+### B.11 No band-aid guards or silent fallbacks at trusted boundaries
+
+`if (!data) return null` / `if (!data) return []` that hides an upstream pipeline issue rather than being an intentional loading state. `catch { return defaultValue }` that papers over a real failure. Silent default substitution in a branch that should signal failure. Classify before removing: **masking fallback** (hides errors, suppresses validation, swallows failures) is slop; **grounded compatibility/fail-safe fallback** (scoped to an external/version boundary, documents the rationale, has tests for both primary and fallback) is legitimate. Trust boundaries where defensive checks ARE legitimate: HTTP/CLI/env input, JSON/schema parsing, network responses, filesystem reads of external data, third-party callbacks.
+
+- **Detect:** guard clauses returning falsy defaults on internal call paths whose inputs are already validated upstream; catches that return defaults without logging
+- **Severity:** `important`
+- **Tag:** `slop`, `silent-fail`
+
+### B.12 Match the local file's conventions
+
+Don't introduce a different style in a file that already has one. Naming, comment density and tone, error-handling idiom (throw vs tagged result), type-annotation pattern (annotated vs inferred), inline imports vs top-of-file, factory class vs plain function. Match the file, not absolute style rules.
+
+- **Detect:** new code in a touched file using a different naming convention, error pattern, or structural shape than the rest of the file
+- **Severity:** `nit`
+- **Tag:** `slop`, `style-drift`
+
+### B.13 No boolean flag parameters that change function behavior
+
+`function send(msg, urgent: boolean)` where `urgent` switches between two unrelated code paths is two functions wearing one name. Split into `send` and `sendUrgent` (or whatever names actually describe the branches). Boolean params that just configure behavior in a clearly-related way (`trimWhitespace: boolean`) are fine.
+
+- **Detect:** function with a boolean parameter that drives a top-level `if`/`else` branch covering most of the body
+- **Severity:** `suggestion`
+- **Tag:** `slop`, `interface`
+
 ---
 
 ## C. Duplication
@@ -280,6 +336,72 @@ When catching an error to rethrow, attach context: `throw new Error("loading con
 - **Detect:** catch block whose body is `return null/undefined/[]/{}` without logging or rethrow
 - **Severity:** `important`
 - **Tag:** `silent-fail`
+
+---
+
+## I. Complexity
+
+*Sources: Addy Osmani's `code-simplification` skill (function-length thresholds, nesting depth), Construct CLAUDE.md Commandment 1 ("simplicity, testability").*
+
+### I.1 Function length thresholds
+
+A single function over ~40 non-comment lines is doing too much. Split by responsibility (validation, transformation, persistence, notification) until each function has one clear job.
+
+- **Detect:** function definitions with > 40 lines of body (excluding comments and blank lines)
+- **Severity:** `suggestion` (judgment-driven — long functions can be fine if linear)
+- **Tag:** `complexity`
+
+### I.2 Nesting depth ≤ 2
+
+More than two levels of nesting reads as a stack. Flatten with guard clauses, early returns, or extracted helpers.
+
+- **Detect:** function bodies with three or more nesting levels (`if`/`for`/`while`/ternary chained)
+- **Severity:** `nit`
+- **Tag:** `complexity`, `nesting`
+
+### I.3 Parameter count ≤ 4
+
+A function with five or more parameters is taking an object that hasn't been declared yet. Extract a typed config object.
+
+- **Detect:** function signatures with ≥ 5 positional parameters
+- **Severity:** `nit`
+- **Tag:** `complexity`, `interface`
+
+---
+
+## J. Cleanup non-goals
+
+When `code-suggest` Flow A or any deslop-style cleanup runs, these are out of scope. Findings that propose them MUST be downgraded or rejected.
+
+### J.1 Don't redesign architecture
+
+Renaming modules, restructuring file layout, redesigning a public API, switching frameworks, or otherwise touching the shape of the system. Those go through `code-suggest` Flow B (architectural deepening) or `code-review`'s structural-restructure fix shape, both of which require explicit user approval of the larger plan.
+
+- **Detect:** cleanup proposals that move files, rename exports, change function signatures used by external callers
+- **Tag:** `out-of-scope`
+
+### J.2 Don't rename APIs
+
+Public APIs (anything exported from a package, anything consumed across the module boundary, anything in `src/ui/web/src/api/*`) stay named as they are during cleanup. A rename is a coordinated change, not a slop removal.
+
+### J.3 Don't remove invariant-encoding comments
+
+Comments that document *why* something works the way it does — hidden constraints, subtle invariants, workarounds for specific bugs, surprising behavior — are domain knowledge, not slop. Remove only comments that restate what the code already says.
+
+- **Detect:** before removing a comment, check whether removing it would surprise a future reader who didn't know the constraint
+- **Tag:** `out-of-scope`
+
+### J.4 Don't change formatting
+
+Defer to the formatter (prettier / biome / etc.). Cleanup edits should match the file's formatter output, not impose a different style.
+
+### J.5 Don't remove validation at genuine trust boundaries
+
+Input parsing, HTTP/CLI handlers, network responses, FS reads of external data, third-party callbacks. Those checks defend the system from untrusted input — they're load-bearing, not slop. See B.11.
+
+### J.6 Don't remove dead code that's public API, test-only, or contract-required
+
+Before flagging an export as unused, confirm zero consumers across the whole repo, including `*.test.ts` files. Interface implementations required by a contract stay even if no current caller exists. Public API surfaces (anything that could have external callers) stay until you can prove no callers exist outside the repo.
 
 ---
 
