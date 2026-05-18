@@ -1,4 +1,4 @@
-# Example: /agent-review (default — audit, scope=all)
+# Example: /agent-review (default — scope=all)
 
 ## Invocation
 
@@ -54,24 +54,19 @@ Personas: 0 missing frontmatter · 1 over-privileged · 1 routing-collision pair
 ## blocking (0)
 
 ## important (4)
-- src/agents/docs-optimizer.md:7 — agent/personas.md#G.1 — confidence 95 [sub_surface: personas]
-  Dead skill reference: body hardcodes `docs-optimizer` but skill is `docs-optimize`.
-  [tag: cross-domain-drift] [approval: single]
-- src/agents/codebase-auditor.md:8 — agent/personas.md#C.1 — confidence 90 [sub_surface: personas]
-  Edit+Write in tools list on read-only audit agent.
-  [tag: over-privileged] [approval: per-finding]
-- src/core/hooks/feedback-emit.ts:42 — agent/hooks.md#E.1 — confidence 95 [sub_surface: hooks]
-  Writes signals/feedback-debug.jsonl; no consumer found in src/.
-  [tag: dead-output] [approval: per-finding]
-- CLAUDE.md:14 — agent/config.md#A.1 — confidence 100 [sub_surface: config]
-  Broken @-include: @construct/identity/MISSING.md does not resolve.
-  [tag: broken-include] [approval: single]
+- src/agents/docs-optimizer.md:7 — agent/personas.md#G.1 — [sub_surface: personas]
+  Dead skill reference: body hardcodes `docs-optimizer` but skill is `docs-optimize`. [tag: cross-domain-drift]
+- src/agents/codebase-auditor.md:8 — agent/personas.md#C.1 — [sub_surface: personas]
+  Edit+Write in tools list on read-only audit agent. [tag: over-privileged]
+- src/core/hooks/feedback-emit.ts:42 — agent/hooks.md#E.1 — [sub_surface: hooks]
+  Writes signals/feedback-debug.jsonl; no consumer found in src/. [tag: dead-output]
+- CLAUDE.md:14 — agent/config.md#A.1 — [sub_surface: config]
+  Broken @-include: @construct/identity/MISSING.md does not resolve. [tag: broken-include]
 
 ## nit (5)
-- src/skills/omnibus/ — agent/skills.md#D.2 — confidence 90 [sub_surface: skills]
-  No examples/ directory; description mentions /omnibus slash-command.
-  [tag: examples]
+- src/skills/audit/ — agent/skills.md#D.2 — [sub_surface: skills]
+  No examples/ directory; description mentions /audit slash-command. [tag: examples]
 - ...
 ```
 
-After the report: *"Want me to apply agnix auto-fixes (`agnix --fix-safe .`) or address any of these manually?"*
+After the report: *"Apply all, pick which to apply, or discard? (`over-privileged` and `dead-output` will prompt per-finding.)"*

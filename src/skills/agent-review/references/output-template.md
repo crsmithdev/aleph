@@ -2,28 +2,18 @@
 
 Reference for the structured output `agent-review` emits. Loaded on demand from `SKILL.md` "Output" section.
 
-## SARIF result shape
+## Finding shape
 
-Single SARIF v2.1.0 run, `tool.driver.name = "agent-review"`. Each `result`:
+Findings are emitted as plain markdown lines, grouped by severity tier. Each line has:
 
-```json
-{
-  "ruleId": "agent/<sub_surface>.md#<section>.<n>" | "agnix/<rule-id>",
-  "level": "error" | "warning" | "note",
-  "message": { "text": "<one-line description>" },
-  "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "..." }, "region": { "startLine": N, "endLine": N } } }],
-  "properties": {
-    "confidence": 0,
-    "severity": "blocking" | "important" | "nit" | "suggestion" | "praise",
-    "fix": "<concrete remediation — script path, registry entry, or `agnix --fix-safe` flag>",
-    "tag": "<one of the tag values below>",
-    "sub_surface": "config" | "hooks" | "skills" | "personas",
-    "scope": "diff" | "module" | "all"
-  }
-}
-```
+- `<file:line>` anchor
+- Rule citation: `agent/<sub_surface>.md#<section>.<n>` or `agnix/<rule-id>`
+- `[sub_surface: <s>]` annotation
+- One-line description
+- `[tag: <tag-value>]` annotation
+- Optional `fix:` — concrete remediation (script path, registry entry, or `agnix --fix-safe` flag)
 
-`confidence` is provisional; the omnibus validation pass refines it.
+Severity tiers: `blocking` / `important` / `nit` / `suggestion` / `praise`.
 
 ### Tag values per sub-surface
 
@@ -50,8 +40,6 @@ Mark `severity: praise`, `tag: defense-in-depth`, with a `fix` like "use as refe
 
 ## Phased prose summary
 
-After the SARIF block:
-
 ```
 # Agent Review — <scope>
 
@@ -64,7 +52,7 @@ Skills: N orphaned · N missing examples · N over-length · keyword collisions:
 Personas: N missing frontmatter · N over-privileged · N routing-collision pairs · N cross-domain-drift · N unused
 
 ## blocking (N)
-- <file:line> — <rule> — <one-line> (confidence X) [sub_surface: <s>]
+- <file:line> — <rule> — <one-line> [sub_surface: <s>]
 
 ## important (N)
 - ...
@@ -103,22 +91,18 @@ Personas: N missing frontmatter · N over-privileged · N routing-collision pair
 - ...
 ```
 
-After the prose: *"Want me to apply agnix auto-fixes (`agnix --fix-safe .`) or address any of these manually?"*
+After the prose: *"Apply all, pick which to apply, or discard? (security-adjacent tags like `over-privileged` / `pii` will prompt per-finding.)"*
 
-## Final delivery template (audit)
+## Final delivery template (scan + present)
 
 ```
-[sarif]
-{ ... SARIF v2.1.0 ... }
-[/sarif]
-
 # Agent Review — <scope>
 <phased prose + detail tables>
 ```
 
-When invoked by the omnibus, return the SARIF as the structured result; the omnibus assembles the cross-domain phased report (if it dispatched multiple review leaves in parallel).
+When invoked by the audit dispatcher, the leaf returns its phased prose; the dispatcher concatenates results from each review in order — it does not merge or rescore.
 
-## Final delivery template (fix)
+## Final delivery template (apply + verify)
 
 ```
 [plan]
@@ -132,7 +116,7 @@ When invoked by the omnibus, return the SARIF as the structured result; the omni
 [verify]
 scope:      <files edited, grouped by sub_surface>
 method:     gate("hooks") + gate("skills") + gate("agents") + gate("code") (per touched sub-surface)
-            + agent-review --mode audit --sub-surface <s> --module <touched>
+            + agent-review --sub-surface <s> --module <touched>
             + JSON.parse on touched registries + grep Skill( + agnix --dry-run
 assertions: zero remaining agent-review findings in scope (per sub-surface); all gates green; registries valid JSON
 [/verify]

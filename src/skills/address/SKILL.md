@@ -26,7 +26,7 @@ Implements visual feedback from vibe-annotations and clears the annotations once
 ## When NOT to use
 
 - No annotations exist — tell the user and stop.
-- User wants a design audit from scratch — use `design-review --mode audit`.
+- User wants a design audit from scratch — use `design-review`.
 - User wants to understand the design system — read `src/rules/design/construct/RULES.md` and the assets under `src/rules/design/construct/{tokens,kits,previews}/`.
 
 ## Inputs

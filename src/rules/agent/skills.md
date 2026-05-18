@@ -6,7 +6,7 @@ Authoritative rules for SKILL.md files under `src/skills/`. Read by:
 - `src/skills/skill-creator/SKILL.md` — applies these rules at write-time when authoring new skills
 - CLAUDE.md (project-local + global) — applies silently at write-time
 
-Every rule is **checkable**: it can be evaluated against a real SKILL.md file and produce a SARIF finding (per `src/skills/_shared/finding.md`). agnix already covers structural lint (CC-SK-* rule family) — this file covers semantic rules agnix doesn't.
+Every rule is **checkable**: it can be evaluated against a real SKILL.md file and produce a plain-markdown finding citing this file's section anchor. agnix already covers structural lint (CC-SK-* rule family) — this file covers semantic rules agnix doesn't.
 
 Scope: every `src/skills/<name>/SKILL.md` plus their `references/`, `examples/`, and shared `_shared/` files. Also covers `src/skills/skill-rules.json` (the trigger registry).
 
@@ -18,9 +18,9 @@ Scope: every `src/skills/<name>/SKILL.md` plus their `references/`, `examples/`,
 
 ### A.1 Required fields present
 
-Every SKILL.md frontmatter must include `name:` and `description:`. Audit/fix leaves additionally need `verb:`, `domain:`, `modes:`.
+Every SKILL.md frontmatter must include `name:` and `description:`. Review leaves additionally need `verb:` and `domain:`.
 
-- **Detect:** parse YAML frontmatter; flag missing `name` or `description` (always required); flag missing `verb`/`domain`/`modes` for files under `src/skills/<x>-audit/` or `<x>-fix/`
+- **Detect:** parse YAML frontmatter; flag missing `name` or `description` (always required); flag missing `verb`/`domain` for files under `src/skills/*-review/`
 - **Severity:** `important`
 - **Tag:** `frontmatter`
 
@@ -32,11 +32,11 @@ The `name:` field must equal the parent directory name.
 - **Severity:** `important`
 - **Tag:** `naming`
 
-### A.3 `verb:` is one of audit / fix / suggest / author
+### A.3 `verb:` is one of audit / author
 
-The architecture matrix recognizes four verbs (`docs/plans/skill-architecture.md` §1). Other values are undefined.
+Review leaves use `verb: audit`. Author leaves (skill-creator, etc.) use `verb: author`. Other values are undefined.
 
-- **Detect:** `verb:` values outside `{audit, fix, suggest, author}`
+- **Detect:** `verb:` values outside `{audit, author}`
 - **Severity:** `important`
 - **Tag:** `correctness`
 
@@ -64,7 +64,7 @@ A description like "use when needed" routes nothing. The description must say *w
 
 ### B.2 Description covers "When NOT to use" implicitly
 
-The description should make scope clear so adjacent skills aren't ambiguous (e.g., `design-audit` vs `design-fix` vs `code-audit`).
+The description should make scope clear so adjacent skills aren't ambiguous (e.g., `design-review` vs `code-review`).
 
 - **Detect:** heuristic — description without negative framing AND with overlap with a sibling skill's description (parser-driven keyword overlap check)
 - **Severity:** `nit`
@@ -78,9 +78,9 @@ The description should make scope clear so adjacent skills aren't ambiguous (e.g
 
 ### C.1 Every SKILL.md has a `skill-rules.json` entry
 
-A SKILL.md without a registry entry loads but only triggers via explicit `/<name>` or omnibus dispatch. For omnibus-only leaves (`-audit` / `-fix`) that's acceptable; for user-facing skills it's a discoverability bug.
+A SKILL.md without a registry entry loads but only triggers via explicit `/<name>` invocation. For user-facing skills that's a discoverability bug.
 
-- **Detect:** for each `src/skills/<name>/SKILL.md`, confirm `skill-rules.json` has an entry for `<name>` — except when frontmatter declares `omnibus-only: true` or the skill is in the audit/fix matrix
+- **Detect:** for each `src/skills/<name>/SKILL.md`, confirm `skill-rules.json` has an entry for `<name>`
 - **Severity:** `nit`
 - **Tag:** `orphaned-skill`
 
@@ -118,13 +118,13 @@ Skills with non-obvious invocation forms should have at least one `examples/<cas
 
 ## E. Purity (R1)
 
-*Sources: `docs/plans/skill-architecture.md` R1 — "Only the omnibus invokes `Skill()`".*
+*Sources: skill architecture R1 — "Only the audit dispatcher invokes `Skill()`".*
 
 ### E.1 Leaf skills don't call `Skill()`
 
-Only `src/skills/omnibus/SKILL.md` may invoke other skills via `Skill(...)`. Every other skill is pure.
+Only `src/skills/audit/SKILL.md` may invoke other skills via `Skill(...)`. Every other skill is pure.
 
-- **Detect:** `Skill(` calls in any SKILL.md outside the omnibus (prose mentions of `Skill()` in negative form are not violations — e.g., "no `Skill()` calls")
+- **Detect:** `Skill(` calls in any SKILL.md outside `src/skills/audit/` (prose mentions of `Skill()` in negative form are not violations — e.g., "no `Skill()` calls")
 - **Severity:** `important`
 - **Tag:** `r1-violation`
 
@@ -132,7 +132,7 @@ Only `src/skills/omnibus/SKILL.md` may invoke other skills via `Skill(...)`. Eve
 
 If two skills share process detail (e.g., "verification workflow"), the detail goes in a shared reference file consumed by both — not in one skill that the other invokes.
 
-- **Detect:** SKILL.md files referencing another skill's `references/<file>.md` directly is fine; flag only when a skill describes "invoke `<sibling-skill>` to do X" outside of explicit omnibus-dispatch language
+- **Detect:** SKILL.md files referencing another skill's `references/<file>.md` directly is fine; flag only when a skill describes "invoke `<sibling-skill>` to do X"
 - **Severity:** `nit`
 - **Tag:** `r2-violation`
 
@@ -140,13 +140,13 @@ If two skills share process detail (e.g., "verification workflow"), the detail g
 
 ## F. Gate discipline (R4)
 
-*Sources: `docs/plans/skill-architecture.md` R4, `VERIFICATION.md`.*
+*Sources: skill architecture R4, `VERIFICATION.md`.*
 
 ### F.1 Skills call `gate("<domain>")`, not hardcoded commands
 
-Fix-flavor skills must call `gate("<domain>")` for verification — never bake `bun test.ts` or similar into the skill text. The gate resolution lives in `VERIFICATION.md` / `omnibus.yml`.
+Review leaves must call `gate("<domain>")` for verification — never bake `bun test.ts` or similar into the skill text. The gate resolution lives in `VERIFICATION.md`.
 
-- **Detect:** fix-flavor SKILL.md files containing literal `bun test.ts` / `bun run ui:smoke` / `agnix --dry-run` references outside a "Cross-references" block or example output
+- **Detect:** review-flavor SKILL.md files containing literal `bun test.ts` / `bun run ui:smoke` / `agnix --dry-run` references outside a "Cross-references" block or example output
 - **Severity:** `important`
 - **Tag:** `r4-violation`
 
@@ -188,12 +188,10 @@ If a skill's body mentions an agent by name (e.g., `subagent_type: "code-review"
 
 ---
 
-## Negative-filter list (uniform with other audit leaves)
-
-Per `src/skills/_shared/finding.md`:
+## Negative-filter list (uniform with other review leaves)
 
 - Style preferences not in this file → drop
-- Pre-existing issues outside scope → record under "Pre-existing Issues" SARIF run
+- Pre-existing issues outside scope → record under "Pre-existing Issues"
 - Issues agnix already covers (CC-SK-* family) → cite agnix's rule and pass through
 - Pedantic nitpicks → drop
 - Lint-ignored lines → drop
@@ -202,4 +200,4 @@ Per `src/skills/_shared/finding.md`:
 
 ## Approval policy
 
-Skill findings default to `approval: single` per `omnibus.yml` `by_domain.skills`. Most are fix-with-edit findings (frontmatter additions, registry entries, keyword adjustments) — single approval is fine.
+At the leaf's approval gate, skill findings default to apply-all / pick / discard. Most are mechanical edits (frontmatter additions, registry entries, keyword adjustments) — apply-all is fine.

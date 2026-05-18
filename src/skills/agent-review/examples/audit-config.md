@@ -28,12 +28,12 @@ agnix: 0 errors, 1 warning (1 auto-fixable)
 Config: 1 CLAUDE.md ref broken · 0 duplicates · 0 MCP issues · 1 overbroad permission
 
 ## important (2)
-- CLAUDE.md:14 — agent/config.md#A.1 — confidence 100 [sub_surface: config]
+- CLAUDE.md:14 — agent/config.md#A.1 [sub_surface: config]
   Broken @-include: @construct/identity/MISSING.md does not resolve.
-  [tag: broken-include] [approval: single]
-- .claude/settings.json:23 — agent/config.md#E.1 — confidence 90 [sub_surface: config]
+  Fix: remove the include or restore the file. [tag: broken-include] [approval: single]
+- .claude/settings.json:23 — agent/config.md#E.1 [sub_surface: config]
   Bash(*) grants unrestricted shell access; narrow to specific commands.
-  [tag: overbroad-permission] [approval: single]
+  Fix: replace with explicit allow patterns. [tag: overbroad-permission] [approval: single]
 
 ## Config detail
 | File | @-includes | Cycles | Duplicates | Verdict |
@@ -43,4 +43,16 @@ Config: 1 CLAUDE.md ref broken · 0 duplicates · 0 MCP issues · 1 overbroad pe
 | .claude/CLAUDE.md | 0 | 0 | 0 | OK |
 ```
 
-**Note:** there is no `config-fix` predecessor — config fixes are split between agnix `--fix-safe` (structural autofix, prompted explicitly) and content-level Edits (broken `@`-includes, dead MCP, overbroad permissions). In `mode: fix`, this sub-section delegates structural lint to `agnix --fix-safe` and applies only the content-level fixes itself.
+## Approval gate
+
+The skill stops here and asks. For config findings:
+
+- `broken-include`, `overbroad-permission`, `dead-mcp` — per-finding approval (each is a deletion or a permission scope change).
+- Cosmetic / structural-lint findings — bulk approval (apply all / pick / discard).
+
+After approval, the skill applies the chosen fixes inline:
+
+- Structural lint (agnix CC-SK-*, AGM-*, XP-*) → `agnix --fix-safe` passthrough.
+- Content-level fixes (broken `@`-includes, dead MCP entries, overbroad permissions) → direct Edits to the cited files.
+
+Then re-scan in scope; gate green only when zero remaining findings in the config sub-surface.

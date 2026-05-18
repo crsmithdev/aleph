@@ -5,7 +5,7 @@ Authoritative rules for subagent definitions (`src/agents/*.md` and `.claude/age
 - `src/skills/agents-audit/SKILL.md` — flags violations in existing agents (post-hoc)
 - CLAUDE.md (project-local + global) — applies these rules silently at write-time
 
-Every rule is **checkable**: it can be evaluated against a real agent definition and produce a SARIF finding (per `src/skills/_shared/finding.md`). agnix covers AGM-* and XP-* structural lint; this file covers semantic rules agnix doesn't.
+Every rule is **checkable**: it can be evaluated against a real agent definition and produce a plain-markdown finding citing this file's section anchor. agnix covers AGM-* and XP-* structural lint; this file covers semantic rules agnix doesn't.
 
 Scope: every agent markdown file (`src/agents/<name>.md`, `~/.claude/agents/<name>.md`, `.claude/agents/<name>.md`) plus any place an agent name is referenced from skills or hooks.
 
@@ -165,12 +165,10 @@ An agent that is never referenced as a `subagent_type` anywhere in skills, hooks
 
 ---
 
-## Negative-filter list (uniform with other audit leaves)
-
-Per `src/skills/_shared/finding.md`:
+## Negative-filter list (uniform with other review leaves)
 
 - Style preferences not in this file → drop
-- Pre-existing issues outside scope → record under "Pre-existing Issues" SARIF run
+- Pre-existing issues outside scope → record under "Pre-existing Issues"
 - Issues agnix AGM-* / XP-* covers → cite agnix's rule, pass through
 - Pedantic nitpicks → drop
 - Lint-ignored entries → drop
@@ -179,9 +177,7 @@ Per `src/skills/_shared/finding.md`:
 
 ## Approval policy
 
-Agent findings default to `approval: single` per `omnibus.yml` `by_domain.agents`. Exceptions:
+At the leaf's approval gate, agent findings default to apply-all / pick / discard. Exceptions promoted to per-finding prompting:
 
-- `tag: over-privileged` (granting write/edit tools to read-only agents) → `per-finding` (security-adjacent)
-- `tag: r1-violation` (Task tool granted to subagent) → `per-finding`
-
-There is currently no `agents-fix` leaf. Once authored, fix-flavor approval mirrors audit-side severity.
+- `tag: over-privileged` (granting write/edit tools to read-only agents) — security-adjacent
+- `tag: r1-violation` (Task tool granted to subagent)

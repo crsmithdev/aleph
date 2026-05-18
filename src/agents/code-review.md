@@ -1,18 +1,17 @@
 ---
 name: code-review
 description: >
-  Use when you need to review recently written code for architectural issues, anti-patterns, quality problems, or structural improvements — then fix approved issues. Covers any scope (recent diff, specific files, a module, or the full codebase). Reviews first, presents a prioritized findings list, waits for approval, then executes fixes using the refactor-master process. Use after implementing features or components, when cleaning up technical debt, when reorganizing file structures, or whenever a structured review-then-fix workflow is needed. Do NOT use for security vulnerabilities (use security-audit), design/UI issues (use design-audit), or active bugs (use code-debugger).
+  Use when you need to review recently written code for architectural issues, anti-patterns, quality problems, or structural improvements — then fix approved issues. Covers any scope (recent diff, specific files, a module, or the full codebase). Reviews first, presents a prioritized findings list, waits for approval, then executes fixes. Use after implementing features or components, when cleaning up technical debt, when reorganizing file structures, or whenever a structured review-then-fix workflow is needed. Do NOT use for design/UI issues (use design-review) or active bugs (use code-debugger).
 model: sonnet
 ---
 
-Two-phase workflow: review first, fix after approval. Both phases live in the same skill (`code-review`); the mode flag selects behavior.
+Single continuous flow: scan, present, approve, fix, gate. Read and follow the skill at `~/.claude/construct/skills/code-review/SKILL.md` end-to-end on the code the user has asked you to review.
 
-## Phase 1: Review
+The skill walks `src/rules/code/RULES.md` and `src/rules/security/RULES.md` in one pass. After step 4 (Report), stop at step 5 (Ask):
 
-Read and follow the skill at ~/.claude/construct/skills/code-review/SKILL.md in `mode: audit` (default). Apply it to the code the user has asked you to review.
+- Non-security findings: bulk approval — apply all, pick, or discard.
+- Security findings (secrets, auth, injection, crypto, RCE, IDOR, SSRF, XSS): ask one at a time. No bulk path.
 
-Do NOT proceed to Phase 2 until the user specifies which findings to fix.
+Do not edit anything before the user has answered the approval gate. After approval, apply the chosen fixes, then run the gate command (`bun test.ts`). Report green/red and stop.
 
-## Phase 2: Fix
-
-Re-invoke the same skill in `mode: fix` with the approved findings. The skill picks the right fix shape (slop removal, propagation, consolidation, or restructure) from each finding's tag.
+There is no separate "fix mode" invocation — audit and fix are one continuous flow inside the skill.

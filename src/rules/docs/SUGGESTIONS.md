@@ -40,7 +40,7 @@ codebase:
 - **SKILL.md** — Frontmatter / Mode of operation / Process / Output format
 - **Module README.md** — Purpose / Files / Cross-refs
 
-**Why suggest:** templates would live in `docs-review/references/structure-templates.md` and be referenced from RULES.md section D. Currently each module/skill author improvises, so module READMEs drift in shape — `docs-review --mode fix` (peer-drift fix shape) could enforce alignment but only if there's a canonical shape to align to.
+**Why suggest:** templates would live in `docs-review/references/structure-templates.md` and be referenced from RULES.md section D. Currently each module/skill author improvises, so module READMEs drift in shape — `docs-review`'s peer-drift fix shape could enforce alignment but only if there's a canonical shape to align to.
 
 ## 3. Examples-over-prose
 

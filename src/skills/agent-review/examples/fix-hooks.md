@@ -1,46 +1,44 @@
-# Example: /agent-review --mode fix --sub-surface hooks
+# Example: /agent-review --sub-surface hooks (fix flow)
 
 ## Invocation
 
 ```
-/fix agent --sub-surface hooks
+/agent-review --sub-surface hooks
 ```
 
-Or, with a saved SARIF report:
+Scans hooks, presents findings, asks at the approval gate, applies approved fixes inline, gates on `bun test src/core/hooks` + JSON validity on both registries. One skill invocation, one continuous flow.
+
+## Findings (presented at the approval gate)
 
 ```
-/agent-review --mode fix --findings tmp/audit.sarif --sub-surface hooks
+## important (3)
+- src/memory/hooks/feedback-capture-submit.ts:39 — agent/hooks.md#trace
+  Missing trace() before process.exit(0). Fix: insert trace({ event, sessionId, reason }).
+  [tag: missing-trace] [approval: bulk]
+- src/core/hooks/dead-writer.ts:18 — agent/hooks.md#dead-output
+  writeFileSync has no downstream consumer. Fix: remove the write block or wire a reader.
+  [tag: dead-output] [approval: single]
+- .claude/settings.json:14 — agent/hooks.md#double-fire
+  Hook also registered in src/core/hooks/settings-hooks.json. Fix: remove from .claude/settings.json.
+  [tag: double-fire] [approval: single]
 ```
 
-Applies edits derived from `agent-review` (audit) hooks findings. Each finding's `properties.tag` routes to a fix shape from the Hooks sub-surface table. Verifies with `gate("hooks")` + re-audit + `gate("code")` + JSON validity on both registries.
+## Approval gate
 
-## Plan
+User answers. For this run:
 
-```
-[plan]
-src/memory/hooks/feedback-capture-submit.ts
-  39: insert trace({ event: "feedback-capture-submit", sessionId, reason: "short-prompt" })
-  41: insert before process.exit(0)
-
-src/core/hooks/dead-writer.ts
-  - finding tagged dead-output: PER-FINDING approval needed
-  - decision: REMOVE the writeFileSync (no consumer planned)
-  - 18-22: delete write block; no other readers
-
-src/core/hooks/settings-hooks.json
-  - finding tagged double-fire (also in .claude/settings.json:14)
-  - decision: remove from .claude/settings.json (keep in src/)
-[/plan]
-```
+- `missing-trace` (bulk) → approved.
+- `dead-output` (per-finding) → approved REMOVE; no consumer planned.
+- `double-fire` (per-finding) → approved.
 
 ## Apply
 
 ```
 [applying]
-- src/memory/hooks/feedback-capture-submit.ts: trace() inserted (observability finding closed)
-- src/core/hooks/dead-writer.ts: write block removed (dead-output finding closed)
-- .claude/settings.json: duplicate hook entry removed (double-fire finding closed)
-- re-audit: zero remaining findings in scope
+- src/memory/hooks/feedback-capture-submit.ts: trace() inserted (missing-trace closed)
+- src/core/hooks/dead-writer.ts: write block removed (dead-output closed)
+- .claude/settings.json: duplicate hook entry removed (double-fire closed)
+- re-scan: zero remaining findings in scope
 [/applying]
 ```
 
@@ -49,9 +47,10 @@ src/core/hooks/settings-hooks.json
 ```
 [verify]
 scope:      3 hook files + 2 registries
-method:     gate("hooks") + agent-review --mode audit --sub-surface hooks --module <touched>
-            + gate("code") + JSON.parse(.claude/settings.json) + JSON.parse(src/core/hooks/settings-hooks.json)
-assertions: zero remaining hooks findings in scope; hook tests pass; full test suite passes; both registries valid JSON
+method:     bun test src/core/hooks
+            + JSON.parse(.claude/settings.json) + JSON.parse(src/core/hooks/settings-hooks.json)
+            + re-scan of hooks sub-surface
+assertions: zero remaining hooks findings in scope; hook tests pass; both registries valid JSON
 [/verify]
 ```
 

@@ -2,11 +2,10 @@
 
 Canonical rule set for the design domain. Read by:
 
-- `src/skills/design-audit/SKILL.md` — qualitative + checkable audit of UI surfaces (covers all 18 sections, including typography at B via `typography.md` and accessibility/forms/perf at L-R via `accessibility.md`)
-- `src/skills/design-fix/SKILL.md` — peer-drift fixes (the fix verb for the design domain)
+- `src/skills/design-review/SKILL.md` — qualitative + checkable review of UI surfaces (covers all 18 sections, including typography at B via `typography.md` and accessibility/forms/perf at L-R via `accessibility.md`) with single combined scan → present → approve → fix → gate flow
 - CLAUDE.md (project-local + global) — applied silently at write-time
 
-Every checkable rule below can be evaluated against a real file and produce a SARIF finding (per `src/skills/_shared/finding.md`). Qualitative rules (hierarchy, motion, rhythm) require visual reasoning and are run by `design-audit` against rendered surfaces.
+Every checkable rule below can be evaluated against a real file and produce a plain-markdown finding citing this file's section anchor. Qualitative rules (hierarchy, motion, rhythm) require visual reasoning and are run by `design-review` against rendered surfaces.
 
 Scope: UI source under `src/ui/` (React/TSX, CSS, Tailwind classes). Markdown previews in `src/rules/design/construct/` count as reference, not source.
 
@@ -14,7 +13,7 @@ Scope: UI source under `src/ui/` (React/TSX, CSS, Tailwind classes). Markdown pr
 
 ## A. Visual hierarchy & rhythm
 
-*Qualitative — design-audit walks rendered surfaces.* Source: `src/skills/design-audit/design-principles.md`.
+*Qualitative — design-review walks rendered surfaces.* Source: `src/skills/design-review/design-principles.md`.
 
 - **A.1** Primary action on every screen is unmissable within 2 seconds.
 - **A.2** Vertical rhythm consistent; no "off by 1-2px" alignment.
@@ -28,7 +27,7 @@ These rules require seeing the rendered page; `design-audit` checks them, not gr
 
 *See `typography.md` for the complete rule set.* Lifted verbatim from Matthew Butterick's *Practical Typography*.
 
-Checkable highlights `design-audit` is greppable on:
+Checkable highlights `design-review` is greppable on:
 
 - **B.1** Curly quotes only — straight `"`/`'` in JSX text is forbidden. *Detect:* grep for `"` or `'` between `>` and `<` in JSX. *Severity:* `nit`. *Tag:* `typography`.
 - **B.2** Em/en dash discipline — `--` and `---` in rendered text are forbidden. *Detect:* same as B.1. *Severity:* `nit`. *Tag:* `typography`.
@@ -48,20 +47,20 @@ Full ruleset (~50 rules covering characters, spacing, formatting, layout, respon
 *Qualitative + checkable.* Source: `src/rules/design/construct/` design system tokens.
 
 - **C.1** No inline hex colors — use token references (`text-text-muted`, `bg-bg-secondary`, etc.). *Detect:* `#[0-9a-f]{3,6}` in TSX/CSS files. *Severity:* `important`. *Tag:* `tokens`.
-- **C.2** Contrast ratio meets WCAG AA on every text/background pair. *Qualitative* — design-audit checks rendered.
+- **C.2** Contrast ratio meets WCAG AA on every text/background pair. *Qualitative* — design-review checks rendered.
 - **C.3** Color used purposefully — never decorative. *Qualitative.*
 
 ---
 
 ## D. Alignment & grid
 
-*Qualitative.* Visual rhythm and pixel-perfect alignment require rendered inspection. `design-audit` walks the screens.
+*Qualitative.* Visual rhythm and pixel-perfect alignment require rendered inspection. `design-review` walks the screens.
 
 ---
 
 ## E. Components
 
-Source: `src/skills/design-audit/SKILL.md` dim 6, `src/rules/design/construct/` shared primitives.
+Source: `src/skills/design-review/SKILL.md` dim 6, `src/rules/design/construct/` shared primitives.
 
 - **E.1** Shared primitives over hand-rolled markup. `<PageHeader>` not inline `<h1 className="...">`; `<DataTable>` not raw `<table>`. *Detect:* hand-rolled markup where a primitive exists. *Severity:* `important`. *Tag:* `composition`.
 - **E.2** Interactive elements are `<button>` or `<a>`, never `<div onClick>`. *Detect:* `<div ... onClick>` or `<span ... onClick>`. *Severity:* `blocking`. *Tag:* `a11y`. (Also in `accessibility.md`.)
@@ -78,7 +77,7 @@ Source: `src/skills/design-audit/SKILL.md` dim 6, `src/rules/design/construct/` 
 
 ## G. Motion
 
-*Qualitative.* Animations purposeful only — no decorative motion. `design-audit` checks rendered.
+*Qualitative.* Animations purposeful only — no decorative motion. `design-review` checks rendered.
 
 ---
 
@@ -99,7 +98,7 @@ Source: `src/skills/design-audit/SKILL.md` dim 6, `src/rules/design/construct/` 
 
 ## J. Density
 
-*Qualitative.* "Can this be removed without losing meaning?" — design-audit applies the reduction filter.
+*Qualitative.* "Can this be removed without losing meaning?" — design-review applies the reduction filter.
 
 ---
 
@@ -199,15 +198,15 @@ Full list: `accessibility.md`.
 
 - `accessibility.md` — ~50 rules covering a11y, focus, forms, content handling, images, performance, navigation, touch, safe areas, dark mode, locale, hydration, hover states, content & copy, anti-patterns
 - `typography.md` — ~50 rules covering characters, spacing, formatting, layout, responsive, dark mode, maxims
-- `src/skills/design-audit/design-principles.md` — qualitative design principles (simplicity, hierarchy, consistency, alignment, whitespace, responsive, feeling)
-- `src/skills/design-audit/audit-template.md` — phased output format for qualitative audits
+- `src/skills/design-review/design-principles.md` — qualitative design principles (simplicity, hierarchy, consistency, alignment, whitespace, responsive, feeling)
+- `src/skills/design-review/audit-template.md` — phased output format for qualitative reviews
 - `src/rules/design/construct/` — Construct's design tokens, kits, previews (visual specs)
 
 ---
 
-## Negative-filter list (uniform with `src/skills/_shared/finding.md`)
+## Negative-filter list (uniform with other review leaves)
 
-`design-audit` MUST NOT emit findings for:
+`design-review` MUST NOT emit findings for:
 
 - Style preferences not enumerated above or in reference files
 - Subjective aesthetic alternatives presented as bugs
@@ -220,6 +219,6 @@ Full list: `accessibility.md`.
 
 ## Citation format for findings
 
-Findings cite rules as `design/RULES.md#<section-id>` — e.g., `design/RULES.md#L.1`, `design/RULES.md#B.4`. Section IDs follow the same convention as `code/RULES.md` (see `src/skills/_shared/finding.md` "ruleId conventions").
+Findings cite rules as `design/RULES.md#<section-id>` — e.g., `design/RULES.md#L.1`, `design/RULES.md#B.4`. Section IDs follow the same convention as `code/RULES.md`.
 
 When the deep rule lives in `accessibility.md` or `typography.md`, the umbrella section here is the citation; the reference file is supporting detail.

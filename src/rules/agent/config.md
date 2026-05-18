@@ -4,7 +4,7 @@ Authoritative rules for Claude Code agent configuration: `CLAUDE.md` files, `.cl
 
 There is no `config-fix` or `config-author` skill — config writes are schema-driven and infrequent (agnix territory). Audit-only domain. Most structural lint is delegated to `agnix --dry-run`; `config-audit` adds the semantic layer (output tracing, dead output detection, cross-file integrity) that agnix doesn't cover.
 
-Every rule is **checkable**: it can be evaluated against a real project tree and produce a SARIF finding (per `src/skills/_shared/finding.md`). Where agnix already covers a rule, the finding's `ruleId` cites the agnix rule directly (`agnix/CC-SK-12`); this domain's rules cover what agnix doesn't.
+Every rule is **checkable**: it can be evaluated against a real project tree and produce a plain-markdown finding citing this file's section anchor. Where agnix already covers a rule, the finding cites the agnix rule directly (`agnix/CC-SK-12`); this domain's rules cover what agnix doesn't.
 
 Scope: project root, `.claude/`, `~/.claude/`, `src/core/hooks/settings-hooks.json`, every `CLAUDE.md` and `AGENTS.md` reachable from the project.
 
@@ -100,15 +100,15 @@ A registry entry whose target SKILL.md doesn't exist routes keywords to nothing.
 
 ### C.2 Every SKILL.md has a registry entry
 
-A SKILL.md without a registry entry loads but never triggers via keyword routing — only by explicit `/<name>` invocation or another skill calling it. For audit/fix leaves this is acceptable (the omnibus dispatches them); for user-facing skills it's a discoverability bug.
+A SKILL.md without a registry entry loads but never triggers via keyword routing — only by explicit `/<name>` invocation or another skill calling it. For user-facing skills it's a discoverability bug.
 
-- **Detect:** for each `src/skills/<name>/SKILL.md`, confirm `skill-rules.json` has an entry — or that the skill is explicitly marked omnibus-only
+- **Detect:** for each `src/skills/<name>/SKILL.md`, confirm `skill-rules.json` has an entry
 - **Severity:** `nit`
 - **Tag:** `orphaned-skill`
 
 ### C.3 `name:` frontmatter matches the directory
 
-A SKILL.md's `name:` field must equal the directory name. Mismatches confuse the registry and break omnibus dispatch.
+A SKILL.md's `name:` field must equal the directory name. Mismatches confuse the registry and break the audit dispatcher.
 
 - **Detect:** for each `src/skills/<dir>/SKILL.md`, parse YAML frontmatter and confirm `name == <dir>`
 - **Severity:** `important`
@@ -140,7 +140,7 @@ For each MCP server in `.claude/settings.json` `mcpServers`, the `command` field
 
 Command-line `args` for MCP servers must not include literal API keys, OAuth secrets, or tokens. Use env vars instead (the `env` field).
 
-- **Detect:** `mcpServers.<name>.args` arrays containing strings matching secret patterns (same as `security/RULES.md#C.1`)
+- **Detect:** `mcpServers.<name>.args` arrays containing strings matching secret patterns (same as `security/RULES.md` §C.1)
 - **Severity:** `blocking`
 - **Tag:** `secret`
 
@@ -196,9 +196,9 @@ Agent descriptions in frontmatter should describe what the agent does, not aspir
 
 ### G.1 Surface agnix findings with native rule IDs
 
-When `config-audit` is invoked and agnix is installed, it runs `agnix --dry-run --show-fixes` and surfaces each finding in the SARIF output. Each finding's `ruleId` is the agnix rule (e.g., `agnix/CC-SK-12`), `severity` is mapped from agnix's error/warning tier, and `properties.fix` carries `agnix --fix-safe` applicability.
+When `config-audit` is invoked and agnix is installed, it runs `agnix --dry-run --show-fixes` and surfaces each finding in the prose output. Each finding cites the agnix rule (e.g., `agnix/CC-SK-12`), severity maps from agnix's error/warning tier, and the fix note carries `agnix --fix-safe` applicability.
 
-- **Detect:** run `agnix --dry-run --show-fixes .`; for each error/warning, emit a finding with `ruleId: agnix/<rule-id>`
+- **Detect:** run `agnix --dry-run --show-fixes .`; for each error/warning, emit a finding citing `agnix/<rule-id>`
 - **Severity:** mapped from agnix's tier
 - **Tag:** `agnix`
 
@@ -213,12 +213,10 @@ If agnix is not installed, this rule produces a single `severity: nit` finding n
 
 ---
 
-## Negative-filter list (uniform with other audit leaves)
-
-Per `src/skills/_shared/finding.md`:
+## Negative-filter list (uniform with other review leaves)
 
 - Style preferences not in this file → drop
-- Pre-existing issues outside scope → record under "Pre-existing Issues" SARIF run
+- Pre-existing issues outside scope → record under "Pre-existing Issues"
 - Issues a linter would catch — cite agnix's native rule ID and pass through
 - Pedantic nitpicks → drop
 - Lint-ignored lines → drop
@@ -227,9 +225,7 @@ Per `src/skills/_shared/finding.md`:
 
 ## Approval policy
 
-Config findings default to `approval: single` per `omnibus.yml` `by_domain.config`. Exceptions:
+At the leaf's approval gate, config findings default to apply-all / pick / discard. Exceptions promoted to per-finding prompting:
 
-- `tag: secret` → `per-finding` (matches `by_tag.secret`)
-- `tag: overbroad-permission` → `per-finding` (security-adjacent)
-
-The omnibus enforces approval routing.
+- `tag: secret` — security-adjacent
+- `tag: overbroad-permission` — security-adjacent

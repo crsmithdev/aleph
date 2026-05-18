@@ -1,20 +1,20 @@
-# Example: /agent-review --mode fix --sub-surface skills
+# Example: /agent-review applying skills findings
 
 ## Invocation
 
 ```
-/fix agent --sub-surface skills
+/agent-review --sub-surface skills
 ```
 
-Applies edits derived from `agent-review` (audit) skills findings. Each finding's `properties.tag` routes to a fix shape from the Skills sub-surface table. Verifies with `gate("skills")` + JSON validity on `skill-rules.json` + re-grep for `Skill(` in leaves + `agnix --dry-run`.
+After the scan presents findings, the user picks which to apply at the approval gate. Each finding's tag routes to a fix shape from the Skills sub-surface table. The leaf verifies with `gate("skills")` + JSON validity on `skill-rules.json` + re-grep for `Skill(` in leaves + `agnix --dry-run`.
 
 ## Plan
 
 ```
 [plan]
 src/skills/example-leaf/SKILL.md
-  - finding tagged r1-violation: Skill('omnibus') invocation in body
-  - replace with tagged-finding emission; let omnibus route
+  - finding tagged r1-violation: stray Skill('audit') invocation in body
+  - remove the call; leaf skills don't dispatch other skills
 
 src/skills/another-leaf/SKILL.md
   - finding tagged r4-violation: hardcoded `bun test.ts` in verification step
@@ -32,7 +32,7 @@ src/skills/skill-rules.json
 
 ```
 [applying]
-- src/skills/example-leaf/SKILL.md: Skill('omnibus') removed; R1 closed
+- src/skills/example-leaf/SKILL.md: stray Skill() call removed; R1 closed
 - src/skills/another-leaf/SKILL.md: gate("code") substituted; R4 closed
 - src/skills/skill-rules.json: 2 entries added/updated; JSON valid
 - re-audit: zero remaining skills findings in scope
@@ -44,7 +44,7 @@ src/skills/skill-rules.json
 ```
 [verify]
 scope:      2 SKILL.md files + skill-rules.json
-method:     gate("skills") + JSON.parse(skill-rules.json) + grep -r "Skill(" src/skills (excluding omnibus)
+method:     gate("skills") + JSON.parse(skill-rules.json) + grep -r "Skill(" src/skills (excluding audit dispatcher)
             + agnix --dry-run src/skills/
 assertions: skill tests pass; registry valid JSON; no leaf calls Skill(); agnix structural lint green
 [/verify]

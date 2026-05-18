@@ -2,11 +2,10 @@
 
 Canonical rule set for the code domain. Read by:
 
-- `src/skills/code-audit/SKILL.md` — flags violations in existing code (post-hoc)
-- `src/skills/code-fix/SKILL.md` — applies fixes for violations
+- `src/skills/code-review/SKILL.md` — flags violations in existing code and applies approved fixes (single combined flow)
 - CLAUDE.md (project-local + global) — applies these rules silently at write-time
 
-Every rule is **checkable**: it can be evaluated against a real diff and produce a SARIF finding (per `src/skills/_shared/finding.md`). Philosophical guidance lives in CLAUDE.md, not here.
+Every rule is **checkable**: it can be evaluated against a real diff and produce a plain-markdown finding citing this file's section anchor. Philosophical guidance lives in CLAUDE.md, not here.
 
 Scope: TypeScript / JavaScript source under `src/` (excluding `src/ui/` for visual concerns — see `design/RULES.md`). Also covers `install.ts`, `test.ts`, `dev-server.ts` at the repo root.
 
@@ -284,9 +283,9 @@ When catching an error to rethrow, attach context: `throw new Error("loading con
 
 ---
 
-## Negative-filter list (uniform with `src/skills/_shared/finding.md`)
+## Negative-filter list (uniform with other review leaves)
 
-`code-audit` MUST NOT emit findings for:
+`code-review` MUST NOT emit findings for:
 
 - Code style or quality concerns not enumerated above
 - Potential issues depending on inputs or state outside the audit scope
@@ -307,12 +306,12 @@ These rules supplement, not replace, the rules in CLAUDE.md:
 - **Construct project** (`.claude/CLAUDE.md`) — Construct-specific commandments, server/dev workflow, skill extensions, testing philosophy, verification table
 - **Global project root** (`CLAUDE.md`) — performance / parallelization defaults
 
-Rules in those files apply at write-time (via `code-author` enforcement). Rules in this file apply at audit-time (via `code-audit`). When the two overlap, this file restates them in checkable form so `code-audit` can flag violations precisely.
+Rules in those files apply at write-time. Rules in this file apply at review-time (via `code-review`). When the two overlap, this file restates them in checkable form so `code-review` can flag violations precisely.
 
 ---
 
 ## Citation format for findings
 
-Findings cite rules as `code/RULES.md#<section-id>` — e.g., `code/RULES.md#A.1`, `code/RULES.md#H.3`. The section ID is the literal heading number (period preserved). See `src/skills/_shared/finding.md` "ruleId conventions" for the full rationale.
+Findings cite rules as `code/RULES.md#<section-id>` — e.g., `code/RULES.md#A.1`, `code/RULES.md#H.3`. The section ID is the literal heading number (period preserved).
 
 For findings sourced from external linters, use the linter's prefix and native rule id: `agnix/CC-SK-12`, `eslint/no-explicit-any`.

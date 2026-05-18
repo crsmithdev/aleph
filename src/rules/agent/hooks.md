@@ -5,7 +5,7 @@ Authoritative rules for Claude Code hooks under `src/core/hooks/` (and equivalen
 - `src/skills/hooks-audit/SKILL.md` — flags violations in existing hooks (post-hoc)
 - CLAUDE.md (project-local + global) — applies these rules silently at write-time
 
-Every rule is **checkable**: it can be evaluated against a real hook script and produce a SARIF finding (per `src/skills/_shared/finding.md`). Many rules overlap with `config/RULES.md` §B — that section is the cross-cutting view; this file is the hook-internals view.
+Every rule is **checkable**: it can be evaluated against a real hook script and produce a plain-markdown finding citing this file's section anchor. Many rules overlap with `config/RULES.md` §B — that section is the cross-cutting view; this file is the hook-internals view.
 
 Scope: `src/core/hooks/*.ts` plus any script referenced from a hook registry (`settings-hooks.json`, `.claude/settings.json` `hooks` array). Shared hook helpers (`src/trace.ts`, `src/reportHook.ts`, etc.) count when consumed by hooks.
 
@@ -131,7 +131,7 @@ Writing to a path whose parent directory doesn't exist throws — silently crash
 
 Hooks logging or storing `req.body` / env values / parsed-prompt content must not write password fields, token fields, or PII to files that aren't access-controlled.
 
-- **Detect:** `writeFileSync` / `appendFileSync` calls whose payload includes field names matching `password|token|apiKey|secret|authorization` (or values matching secret patterns from `security/RULES.md#C.1`)
+- **Detect:** `writeFileSync` / `appendFileSync` calls whose payload includes field names matching `password|token|apiKey|secret|authorization` (or values matching secret patterns from `security/RULES.md` §C.1)
 - **Severity:** `blocking`
 - **Tag:** `pii`
 
@@ -233,12 +233,10 @@ For hook pairs (writer fires in one lifecycle, reader picks up the file in a lat
 
 ---
 
-## Negative-filter list (uniform with other audit leaves)
-
-Per `src/skills/_shared/finding.md`:
+## Negative-filter list (uniform with other review leaves)
 
 - Style preferences not in this file → drop
-- Pre-existing issues outside scope → record under "Pre-existing Issues" SARIF run
+- Pre-existing issues outside scope → record under "Pre-existing Issues"
 - Pedantic nitpicks → drop
 - Issues a linter would catch — cite the linter
 - Lint-ignored lines → drop
@@ -247,9 +245,7 @@ Per `src/skills/_shared/finding.md`:
 
 ## Approval policy
 
-Hook findings default to `approval: single` per `omnibus.yml` `by_domain.hooks`. Exceptions:
+At the leaf's approval gate, hook findings default to apply-all / pick / discard. Exceptions promoted to per-finding prompting:
 
-- `tag: secret` → `per-finding`
-- `tag: pii` → `per-finding`
-
-There is currently no `hooks-fix` leaf. Once authored, fix-flavor approval policy mirrors the audit-side severity (blocking + important → single by default).
+- `tag: secret` — security-adjacent
+- `tag: pii` — security-adjacent

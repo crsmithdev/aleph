@@ -1,46 +1,47 @@
-# Example: /agent-review --mode fix --sub-surface personas
+# Example: /agent-review --sub-surface personas (fix flow)
 
 ## Invocation
 
 ```
-/fix agent --sub-surface personas
+/agent-review --sub-surface personas
 ```
 
-Applies edits derived from `agent-review` (audit) personas findings. Each finding's `properties.tag` routes to a fix shape from the Personas sub-surface table. Verifies with `gate("agents")` + frontmatter parse + cross-reference scan for renames + `gate("code")`.
+Scans agent personas, presents findings, asks at the approval gate (per-finding for security-shaped tags), applies approved fixes inline, gates on frontmatter parse + cross-reference scan + `bun test`. One skill invocation, one continuous flow.
 
-## Plan
+## Findings (presented at the approval gate)
 
 ```
-[plan]
-src/agents/codebase-auditor.md
-  - finding tagged over-privileged: PER-FINDING approval needed
-  - decision: APPROVED. Remove Edit, Write from tools:; agent is read-only ("audit") per description
-  - frontmatter tools list: [Read, Grep, Glob, Bash]
-
-src/agents/some-spawner.md
-  - finding tagged r1-violation: PER-FINDING approval needed
-  - decision: APPROVED. Remove Task from tools:; subagents cannot spawn subagents
-
-src/agents/docs-optimizer.md
-  - finding tagged cross-domain-drift: body references skill `docs-optimizer` but actual skill is `docs-optimize`
-  - decision: rename reference (skill exists; just the wrong name)
-  - 7: `subagent_type: "docs-optimizer"` → `subagent_type: "docs-optimize"`
-
-src/agents/code-debugger.md
-  - finding tagged description-quality: missing negative scope
-  - description rewrite from properties.fix applied
-[/plan]
+## important (4)
+- src/agents/codebase-auditor.md — agent/personas.md#over-privileged
+  Edit, Write in tools: but description is read-only ("audit"). Fix: remove Edit, Write.
+  [tag: over-privileged] [approval: single]
+- src/agents/some-spawner.md — agent/personas.md#r1-violation
+  Task in tools:. Subagents cannot spawn subagents. Fix: remove Task.
+  [tag: r1-violation] [approval: single]
+- src/agents/docs-optimizer.md:7 — agent/personas.md#cross-domain-drift
+  References skill `docs-optimizer`; actual skill is `docs-optimize`. Fix: rename reference.
+  [tag: cross-domain-drift] [approval: bulk]
+- src/agents/code-debugger.md — agent/personas.md#description-quality
+  Description missing negative scope. Fix: add when-NOT clause.
+  [tag: description-quality] [approval: bulk]
 ```
+
+## Approval gate
+
+User answers. For this run:
+
+- `over-privileged`, `r1-violation` (per-finding, security-shaped) → both approved.
+- `cross-domain-drift`, `description-quality` (bulk) → approved.
 
 ## Apply
 
 ```
 [applying]
 - src/agents/codebase-auditor.md: Edit, Write removed from tools (over-privileged closed)
-- src/agents/some-spawner.md: Task removed from tools (R1 closed)
+- src/agents/some-spawner.md: Task removed from tools (r1-violation closed)
 - src/agents/docs-optimizer.md: skill reference corrected (cross-domain-drift closed)
 - src/agents/code-debugger.md: description rewritten with when-NOT clause (description-quality closed)
-- re-audit: zero remaining personas findings in scope
+- re-scan: zero remaining personas findings in scope
 [/applying]
 ```
 
@@ -49,10 +50,10 @@ src/agents/code-debugger.md
 ```
 [verify]
 scope:      4 agent files
-method:     gate("agents") (frontmatter parse + agnix AGM-* green)
-            + agent-review --mode audit --sub-surface personas --module <touched>
+method:     frontmatter parse + agnix AGM-* lint
             + cross-reference scan (no stragglers for renamed refs)
-            + gate("code")
+            + re-scan of personas sub-surface
+            + bun test
 assertions: zero remaining personas findings in scope; frontmatter valid; no stale cross-references; full test suite passes
 [/verify]
 ```

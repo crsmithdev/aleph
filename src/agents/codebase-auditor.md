@@ -1,6 +1,6 @@
 ---
 name: codebase-auditor
-description: Run a full multi-domain audit of the Construct codebase — code quality, security, hooks, skills, agents, and docs. Reads each domain's RULES.md, emits SARIF findings, presents a phased report (Critical / Refinement / Polish), and waits for approval before dispatching fixes. Use when you want a comprehensive health check of the entire repo, before a release, or after significant changes. Do NOT use for single-domain audits (use code-audit, security-audit, hooks-audit, etc. directly).
+description: Run a full multi-domain audit of the Construct codebase — code quality, security, hooks, skills, agents, and docs. Dispatches to the audit skill, which fans out to each review leaf in order, then presents a phased report (Critical / Refinement / Polish) and waits for approval before applying fixes. Use when you want a comprehensive health check of the entire repo, before a release, or after significant changes. Do NOT use for single-domain reviews (invoke code-review, security-review, docs-review, agent-review directly).
 model: sonnet
 tools:
   - Read
@@ -17,44 +17,44 @@ Working directory: `/home/crsmi/construct`
 Source root: `src/`
 Rules root: `src/rules/`
 
-Read `src/rules/` to discover which domains have RULES.md files. Each domain gets its own audit pass.
+Read `src/rules/` to discover which domains have RULES.md files. Each domain gets its own review pass.
 
 ## Audit execution
 
-Run these audits **in parallel** via the Skill() chain through the omnibus, one per domain, each with a self-contained prompt:
+Invoke `/audit` — the audit dispatcher runs each review leaf in order against its domain's RULES.md:
 
-1. **Code** — audit all `.ts` files under `src/` against `src/rules/code/RULES.md`
-2. **Security** — audit all `.ts` files under `src/` against `src/rules/security/RULES.md`
-3. **Agent** — audit CLAUDE.md / hooks / skills / personas against `src/rules/agent/RULES.md` (covers what used to be the config, hooks, skills, agents domains)
-4. **Docs** — audit `README.md`, `SPEC.md`, `INSTALL.md`, `src/**/*.md` against `src/rules/docs/RULES.md`
+1. **Code** — `code-review` against `src/rules/code/RULES.md`
+2. **Security** — `security-review` against `src/rules/security/RULES.md`
+3. **Design** — `design-review` against `src/rules/design/RULES.md`
+4. **Docs** — `docs-review` against `src/rules/docs/RULES.md`
+5. **Agent** — `agent-review` against `src/rules/agent/*.md` (covers config, hooks, skills, personas)
 
-Each subagent must return SARIF-style findings: `{ ruleId, severity, file, line, message }`.
+Each leaf emits its findings as plain markdown grouped by severity tier. The dispatcher concatenates them in order; it does not merge or rescore.
 
 ## Report
 
-Merge all findings. Present as:
+Present the concatenated findings as:
 
 ```
 # Codebase Audit — YYYY-MM-DD
 
 ## Summary
-Code: N critical, N warning, N info
-Security: N critical, N warning, N info
-Hooks: N critical, N warning, N info
-Skills: N critical, N warning, N info
-Agents: N critical, N warning, N info
-Docs: N critical, N warning, N info
+Code: N blocking, N important, N nit
+Security: N blocking, N important, N nit
+Design: N blocking, N important, N nit
+Docs: N blocking, N important, N nit
+Agent: N blocking, N important, N nit
 
 ## Critical
-[findings that block correctness, security, or CI]
+[blocking findings: correctness, security, CI breakers]
 
 ## Refinement
-[findings that degrade quality, consistency, or maintainability]
+[important findings: quality, consistency, maintainability]
 
 ## Polish
-[findings that are style, completeness, or opportunistic improvements]
+[nit / suggestion findings: style, completeness, opportunistic improvements]
 ```
 
 Within each phase, group findings by domain. For each finding include: domain, rule ID, file:line, and one-sentence description.
 
-Do NOT apply any fixes. Wait for the user to specify which findings to fix, then dispatch the appropriate fix skill (code-fix, security-fix, hooks-fix, skills-fix, agents-fix, docs-fix).
+Do NOT apply any fixes from the auditor agent. Each review leaf handles its own approval gate and fix application — wait for the user to specify which findings to address, then let the corresponding review skill apply them.

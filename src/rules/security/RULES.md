@@ -2,11 +2,10 @@
 
 Authoritative rules for security findings — exploitable vulnerabilities, not code quality. Read by:
 
-- `src/skills/security-audit/SKILL.md` — flags violations in existing code (post-hoc)
-- `src/skills/security-fix/SKILL.md` — applies remediations (per-finding approval mandatory)
+- `src/skills/security-review/SKILL.md` — single combined flow: scan, present, per-finding approval, fix, gate
 - CLAUDE.md (project-local + global) — applies these rules silently at write-time
 
-Every rule is **checkable**: it can be evaluated against a real diff and produce a SARIF finding (per `src/skills/_shared/finding.md`). Categories and exclusions are lifted from Anthropic's `claude-code-security-review`; concrete rules cross-reference OWASP Top 10:2025, CWE Top 25, and ASVS 5.0.
+Every rule is **checkable**: it can be evaluated against a real diff and produce a plain-markdown finding citing this file's section anchor. Categories and exclusions are lifted from Anthropic's `claude-code-security-review`; concrete rules cross-reference OWASP Top 10:2025, CWE Top 25, and ASVS 5.0.
 
 Scope: all source under `src/` plus repo-root `*.ts`. Security findings are not scoped to a single domain — they cut across `code`, `design` (XSS in JSX), `hooks` (command injection), and `config` (secrets in settings).
 
@@ -386,16 +385,14 @@ Lifted from `claude-code-security-review`. Excluded by default because they gene
 - Open redirect (unless tied to credential leak; otherwise nit)
 - Detection evasion concerns (not a defensive concern)
 
-Override per project via `omnibus.yml` `leaves.security-audit.include:`.
+Override per project via the leaf's invocation flags.
 
 ---
 
-## Negative-filter list (uniform with other audit leaves)
-
-Per `src/skills/_shared/finding.md`:
+## Negative-filter list (uniform with other review leaves)
 
 - Style or quality concerns not in this file → drop
-- Pre-existing issues outside the audit scope → record under "Pre-existing Issues" SARIF run
+- Pre-existing issues outside the review scope → record under "Pre-existing Issues"
 - Subjective suggestions presented as bugs → use `severity: suggestion` if proposing alternatives
 - Issues a linter would catch (`eslint-plugin-security`, `semgrep`) → cite the linter, mark `severity: nit` if including at all
 - Lint-ignored lines → drop
@@ -404,7 +401,7 @@ Per `src/skills/_shared/finding.md`:
 
 ## Framework mappings
 
-Each rule cross-references to external standards (suffix added to the SARIF `ruleId`'s `properties.frameworks` when relevant):
+Each rule cross-references to external standards (cited in the finding's prose when relevant):
 
 - **OWASP Top 10:2025** — primary categorization
 - **CWE Top 25** — defect type identifier
@@ -421,6 +418,4 @@ Detail mapping tables live in reference files:
 
 ## Approval policy (Construct-specific)
 
-Security findings carry `approval: per-finding` regardless of severity. The omnibus must surface every finding individually for explicit user sign-off. No "approve all" path for the security domain.
-
-This overrides `omnibus.yml`'s default `approval: by-phase` for severity tiers — see `omnibus.yml` `approval.domain.security`.
+Security findings prompt per-finding regardless of severity. The leaf surfaces every finding individually for explicit user sign-off — there is no apply-all path for the security domain. This is the one place where the standard apply-all / pick / discard gate is replaced by per-finding prompting.
