@@ -179,3 +179,45 @@ Three things must happen on plugin install:
 | 7 | Marketplace: **own repo** (`crsmithdev/construct-marketplace`) for v1. Don't submit to `anthropics/claude-plugins-official` until external dogfooding. | from Phase 0 / sketch |
 | 8 | Permissions are **documented in plugin README**, not auto-set. (Plugin `settings.json` only honors `agent` and `subagentStatusLine`.) | from research |
 
+---
+
+## 4. Skeleton (task #3)
+
+`dist-plugin.ts` at repo root generates a loadable plugin tree under `dist/plugin/`. Run with `bun dist-plugin.ts`. Output validates with `claude plugin validate dist/plugin` (one expected warning: no version, see decision #6).
+
+### What ships in v1
+
+| Component | Count | Plugin slot |
+|---|---|---|
+| Skills (one dir per SKILL.md, with full scaffold) | 17 | `skills/<name>/` |
+| Agents | 7 | `agents/*.md` |
+| Commands | 16 | `commands/*.md` |
+| Hooks (rewritten with `${CLAUDE_PLUGIN_ROOT}`) | 19 | `hooks/hooks.json` |
+| MCP servers (goal-tracker) | 1 | `.mcp.json` |
+| Internal modules (`core/`, `data/`, `logger/`, `telemetry/`, `eval/`, `goals/`, `memory/`, `research/`, `rules/` + `trace.ts`, `hook-report.ts`, `status.ts`) | — | bundled in-tree |
+| Skill-router config (`skills/skill-rules.json`) | — | bundled; router walks `dirname(Bun.main)` and finds it unchanged |
+
+### Smoke tests run
+
+- `claude plugin validate dist/plugin` — passes with warnings (no `version`, two commands without frontmatter)
+- `routing-classify-submit.ts` invoked with `CLAUDE_PLUGIN_ROOT=$PWD/dist/plugin` + test input → matched `code-review, audit` ✓
+- `quality-format-edit.ts` and `security-scan-bash.ts` invoked similarly → silent success (nothing to flag) ✓
+
+### Deferred to follow-up commits
+
+| # | What | Why deferred |
+|---|---|---|
+| F1 | Router emits namespaced skill names (`construct:<name>` instead of `<name>`) per decision #5 | Skeleton tests showed router works structurally; namespacing is a one-line change but interacts with `agent-review` skill that currently audits unnamespaced names |
+| F2 | `SessionStart` identity-injection hook (problem B / decision #3) | Needs the actual `hookSpecificOutput.additionalContext` mechanism wired; bigger than skeleton scope |
+| F3 | MCP server npm-deps install via `${CLAUDE_PLUGIN_DATA}` (problem C / decision #4) | Only the MCP server needs deps — hooks use relative imports + bun built-ins. Implement when MCP server is actually exercised |
+| F4 | Source-side cross-refs: skills that say `/code-review` in their body would need `/construct:code-review` after install | Cosmetic — works either way |
+| F5 | `commands/goal.md` is empty, `commands/install.md` lacks frontmatter (validator warnings) | `install.md` is a dev-only command and probably shouldn't ship in the plugin at all; needs a skip-list in the builder |
+| F6 | YAML frontmatter audit across all skills | Pre-existing bug discovered: `agent-review` and `code-suggest` had `:` inside unquoted scalars and loaded with **empty metadata** in the existing install too. Fixed in this branch; a /docs-review on every SKILL.md would surface any others |
+
+### Known incompatibilities
+
+- The plugin assumes `bun` is on the user's PATH. No way to install bun from inside a plugin — must document as a hard prerequisite in the plugin README.
+- Construct's hooks rely on `~/.construct/` for user data. Plugin install does not create this dir; needs task #4 resolution.
+- Skills are namespaced — users who installed via `bun install.ts` invoke `/audit`; plugin users invoke `/construct:audit`. The two install methods are not interoperable; a user should pick one.
+
+
