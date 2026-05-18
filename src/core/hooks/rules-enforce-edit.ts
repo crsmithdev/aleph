@@ -40,12 +40,14 @@ if (!filePath) { trace(TAG, "no file_path in tool_input"); process.exit(0); }
 const rel = relativize(filePath, cwd);
 
 interface Bucket { name: string; match: RegExp; rules: string[]; }
+// Worktree-aware prefix: optionally allow `.worktrees/<name>/` ahead of repo-rooted paths.
+const WT = "(?:\\.worktrees/[^/]+/)?";
 const BUCKETS: Bucket[] = [
-  { name: "ui",    match: /^src\/ui\/.+\.(tsx?|jsx?|css|scss)$/,           rules: ["src/rules/design/RULES.md", "src/rules/design/construct/RULES.md"] },
-  { name: "skill", match: /^src\/skills\/[^/]+\/SKILL\.md$/,                rules: ["src/rules/docs/RULES.md"] },
-  { name: "agent", match: /^(src\/agents|\.claude\/agents)\/.+\.md$/,       rules: ["src/rules/agent/RULES.md"] },
-  { name: "code",  match: /^(src\/.+|install|test|dev-server)\.(tsx?|jsx?|mjs|cjs)$/, rules: ["src/rules/code/RULES.md"] },
-  { name: "docs",  match: /\.md$/,                                          rules: ["src/rules/docs/RULES.md"] },
+  { name: "ui",    match: new RegExp(`^${WT}src/ui/.+\\.(tsx?|jsx?|css|scss)$`),       rules: ["src/rules/design/RULES.md", "src/rules/design/construct/RULES.md"] },
+  { name: "skill", match: new RegExp(`^${WT}src/skills/[^/]+/SKILL\\.md$`),             rules: ["src/rules/docs/RULES.md"] },
+  { name: "agent", match: new RegExp(`^${WT}(?:src/agents|\\.claude/agents)/.+\\.md$`), rules: ["src/rules/agent/RULES.md"] },
+  { name: "code",  match: new RegExp(`^${WT}(?:src/.+|install|test|dev-server)\\.(tsx?|jsx?|mjs|cjs)$`), rules: ["src/rules/code/RULES.md"] },
+  { name: "docs",  match: /\.md$/,                                                       rules: ["src/rules/docs/RULES.md"] },
 ];
 
 const bucket = BUCKETS.find(b => b.match.test(rel))!;
