@@ -66,7 +66,11 @@
     },
     {
       "skill": "sketch",
-      "keywords": ["/sketch", "sketch this", "sketch a feature", "sketch a simple", "sketch an idea", "sketch out", "save that as a sketch", "save that to a sketch", "save this as a sketch", "make a sketch", "draft a sketch", "in docs/sketches", "in ~/.construct/sketches", "/sketch\\s+\\S+/", "/sketch.{0,15}(feature|idea|design|approach|way|plan|system)/"]
+      "keywords": ["/sketch", "sketch this", "sketch a feature", "sketch a simple", "sketch an idea", "sketch out", "save that as a sketch", "save that to a sketch", "save this as a sketch", "make a sketch", "draft a sketch", "in ~/.construct/sketches", "/sketch\\s+\\S+/", "/sketch.{0,15}(feature|idea|design|approach|way|system)/"]
+    },
+    {
+      "skill": "plan",
+      "keywords": ["/plan", "write a plan", "write the plan", "plan this", "plan this out", "plan the implementation", "draft a plan", "draft the plan", "what's the plan", "what is the plan", "decompose this", "break this into tasks", "break it into tasks", "break this down", "task breakdown", "implementation plan", "execution plan", "plan for the change", "plan the change", "in ~/.construct/plans", "/plan\\s+\\S+/", "/plan.{0,20}(this|the|for|out|implementation|change|feature|refactor|migration)/"]
     },
     {
       "skill": "red-team",
