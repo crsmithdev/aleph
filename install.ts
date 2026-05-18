@@ -152,20 +152,6 @@ async function syncConfig(): Promise<{ commands: number; removedCommands: number
       }
     }
   }
-  // Remove stale symlinks pointing into CONSTRUCT_SRC
-  let removed = 0;
-  for (const f of await readdir(join(DST, "commands"))) {
-    if (installed.has(f)) continue;
-    const p = join(DST, "commands", f);
-    try {
-      const s = await lstat(p);
-      if (s.isSymbolicLink()) {
-        const target = await import("fs/promises").then(m => m.readlink(p));
-        if (target.startsWith(CONSTRUCT_SRC)) { await rm(p); removed++; }
-      }
-    } catch { /* ignore */ }
-  }
-
   // Agents
   await mkdir(join(DST, "agents"), { recursive: true });
   const installedAgents = new Set<string>();
@@ -178,17 +164,47 @@ async function syncConfig(): Promise<{ commands: number; removedCommands: number
       installedAgents.add(f);
     }
   }
-  for (const f of await readdir(join(DST, "agents"))) {
-    if (installedAgents.has(f)) continue;
-    const p = join(DST, "agents", f);
-    try {
-      const s = await lstat(p);
-      if (s.isSymbolicLink()) {
-        const target = await import("fs/promises").then(m => m.readlink(p));
-        if (target.startsWith(CONSTRUCT_SRC)) await rm(p);
-      }
-    } catch { /* ignore */ }
+
+  // Prune orphans from prior install (manifest-based) + legacy symlinks.
+  // Anything we previously installed but no longer produce is removed.
+  // Foreign files (manually placed, other installers) are left alone.
+  const manifestPath = join(DST, ".construct-manifest.json");
+  let prior: { commands?: string[]; agents?: string[] } = {};
+  try { prior = JSON.parse(await readFile(manifestPath, "utf-8")); } catch { /* first run */ }
+
+  let removed = 0;
+  for (const f of prior.commands ?? []) {
+    if (!installed.has(f) && await exists(join(DST, "commands", f))) {
+      await rm(join(DST, "commands", f), { force: true });
+      removed++;
+    }
   }
+  for (const f of prior.agents ?? []) {
+    if (!installedAgents.has(f) && await exists(join(DST, "agents", f))) {
+      await rm(join(DST, "agents", f), { force: true });
+    }
+  }
+  // Legacy: also sweep symlinks into CONSTRUCT_SRC that aren't in the current
+  // install set (covers worktrees / older installs that used symlinks).
+  for (const sub of ["commands", "agents"] as const) {
+    const set = sub === "commands" ? installed : installedAgents;
+    for (const f of await readdir(join(DST, sub))) {
+      if (set.has(f)) continue;
+      const p = join(DST, sub, f);
+      try {
+        const s = await lstat(p);
+        if (s.isSymbolicLink()) {
+          const target = await import("fs/promises").then(m => m.readlink(p));
+          if (target.startsWith(CONSTRUCT_SRC)) { await rm(p); if (sub === "commands") removed++; }
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  await writeFile(manifestPath, JSON.stringify({
+    commands: [...installed].sort(),
+    agents: [...installedAgents].sort(),
+  }, null, 2));
 
   // settings.json — replace hooks + statusLine, preserve everything else
   const repoSettings = JSON.parse(await readFile(join(CONSTRUCT_SRC, "core/hooks/settings-hooks.json"), "utf-8"));
