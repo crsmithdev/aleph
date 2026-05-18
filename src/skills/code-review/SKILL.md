@@ -11,7 +11,7 @@ Scans TypeScript/JavaScript under `src/` against the code-quality and security r
 
 ## Process
 
-1. **Scope.** `git diff --name-only $(git merge-base HEAD main)..HEAD`. If empty on clean main, fall back to `--since HEAD~10`; if still empty, exit `scope empty — pass --all or --module <path>`.
+1. **Scope.** `git diff --name-only $(git merge-base HEAD main)..HEAD`. If empty on clean main, fall back to `--since HEAD~10`; if still empty, scope defaults to the entire codebase — every file matching the Domain table below. Pass `--module <path>` to narrow.
 2. **Scan** the rules in Domain below. For each hit: file:line, rule cite, one-line message, fix, severity (blocking / important / nit / suggestion / praise).
 3. **Re-read** each cited location. Drop false positives.
 4. **Report** grouped by severity. One line per finding: `path:line — rule — message. Fix: ...`.
