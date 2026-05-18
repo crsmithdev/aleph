@@ -164,6 +164,27 @@ If a SKILL.md's description says "triggers on 'audit the design'", the `skill-ru
 - **Severity:** `nit`
 - **Tag:** `trigger-drift`
 
+### G.2 Keywords match the user's actual phrasing from transcripts
+
+Generic keywords ("review the code", "audit the design") trigger less reliably than keywords copied from how the user actually types. A rule whose keywords never appear in real prompts is a dead rule — even if it reads sensibly.
+
+- **Detect:** extract user prompts from the last 14 days of transcripts at `~/.claude/projects/<project-slug>/*.jsonl` (filter to `type=="user"`, `message.role=="user"`, `message.content | type=="string"`, exclude tool results / hook output / session-continuation summaries). For each skill in `skill-rules.json`:
+  - **Dead keyword:** a literal keyword that has zero substring matches across all extracted prompts. Flag with suggestion to remove or replace.
+  - **Missing keyword:** a phrase that appears ≥3 times in the prompts AND is semantically aligned with the skill's domain AND does not match any existing keyword. Surface the phrase verbatim as a suggested addition.
+  - **Cross-skill collision risk:** a candidate keyword that would also match another skill's domain — call out which two skills overlap so the user picks where it belongs.
+- **Severity:** `suggestion`
+- **Tag:** `trigger-realism`
+- **Method note:** count distinct prompts, not character occurrences. Match case-insensitively. Skip prompts shorter than 5 chars (`yes`, `continue`, `ok`) — they carry no routing signal. Cite the prompt verbatim in the finding so the user sees the actual phrasing.
+
+### G.3 Skills with zero invocations in the last 14 days
+
+A skill registered in `skill-rules.json` that was never invoked in 14 days of sessions is either (a) genuinely rare, (b) shadowed by another skill's keywords, or (c) keyworded against phrases the user never types. Surface so the user can decide.
+
+- **Detect:** for each rule in `skill-rules.json`, scan `~/.claude/projects/<project-slug>/*.jsonl` for `name:"Skill"` tool calls with `input.skill == <name>`. Zero hits in 14d → flag.
+- **Severity:** `suggestion`
+- **Tag:** `unused-trigger`
+- **Method note:** distinguish "brand-new skill, < 7 days old" (not a finding — too young to judge) from "registered > 14 days ago, zero hits" (real finding). Use `git log --follow --diff-filter=A -- src/skills/<name>/SKILL.md` for creation date.
+
 ---
 
 ## H. Usage signals and cross-domain references
