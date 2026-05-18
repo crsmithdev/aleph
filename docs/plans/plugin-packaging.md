@@ -156,13 +156,18 @@ The hook approach is more reliable (no skill-matching ambiguity) but it adds con
 
 #### Problem C — Bun runtime + workspace npm deps
 
-Construct's hooks are `bun *.ts` files that import from `@construct/data`, `@construct/logger`, etc. (workspace packages). The plugin install dir is read-only-ish (cache) and dependency-free out of the box.
+**Revised after building the skeleton:** much narrower than the original mapping suggested. Smoke-test of the generated `dist/plugin/` showed:
 
-Three things must happen on plugin install:
+- Hooks use **relative imports** (`../../data/src/paths.ts`, `../../trace.ts`), not workspace imports. The only file in the plugin tree that imports `@construct/data` is `telemetry/src/adapter.ts`, which is not called by any hook directly.
+- Bun built-ins (`bun:sqlite`) + node built-ins (`fs`, `path`, `child_process`, `crypto`) cover everything the hooks need. **No `node_modules` required for hooks to run.**
 
-1. **Bun must be on the user's PATH.** Document as a hard prerequisite in the plugin README. No way to install bun from inside a plugin.
-2. **`bun install` must run** against the bundled `package.json` to materialize `node_modules`. This must land in `${CLAUDE_PLUGIN_DATA}` (persistent dir), not `${CLAUDE_PLUGIN_ROOT}` (ephemeral). Use the `SessionStart` hook pattern documented in the plugin reference (line 580 of the canonical docs): `diff` the bundled `package.json` against the cached copy, reinstall if changed.
-3. **Imports must resolve** against `${CLAUDE_PLUGIN_DATA}/node_modules`. Means setting `NODE_PATH` or rewriting workspace imports to relative paths. Plain `NODE_PATH` is simplest.
+Only `goals/mcp/` actually needs `node_modules` (`@modelcontextprotocol/sdk`, `zod`). So:
+
+1. **Bun on PATH** — still a hard prereq, document in README.
+2. **`bun install` only for `goals/mcp/`** — runs once when MCP server is first invoked. Either lazy install in a wrapper script at `goals/mcp/start.sh`, or pre-bundle `node_modules` inside the plugin (acceptable since `@modelcontextprotocol/sdk` + `zod` is small).
+3. **NODE_PATH / SessionStart pattern not needed for hooks.** Reserved for the MCP case only if we pick lazy install.
+
+The `${CLAUDE_PLUGIN_DATA}` + diff-based install pattern from the plugin docs is still the right hammer if we go lazy. But the simpler answer is: pre-bundle MCP `node_modules` in the build output, skip the lazy path entirely.
 
 ---
 
@@ -173,7 +178,7 @@ Three things must happen on plugin install:
 | 1 | Plugin name: **`construct`**. Skills namespace as `/construct:<skill>`. | proposed |
 | 2 | UI is **decoupled** — plugin ships Claude Code components only. UI install stays separate (current `bun install.ts`) until Phase 3. | proposed |
 | 3 | Identity layer ships as a **`SessionStart` hook** that emits SOUL/STYLE/USER/AGENTS content to system context. More reliable than skill-wrapped identity; users can override per-session by disabling the plugin. | proposed |
-| 4 | Workspace deps install via **`SessionStart` hook + `${CLAUDE_PLUGIN_DATA}/node_modules`** + `NODE_PATH` env on hook commands. Bun documented as a hard prereq. | proposed |
+| 4 | **Pre-bundle `node_modules` for `goals/mcp/` only** in the build output. Hooks don't need npm deps (verified by smoke test — relative imports only). Bun documented as a hard prereq. | revised |
 | 5 | Router (`routing-classify-submit.ts`) emits **namespaced** skill names (`construct:<name>`). Update the hook. | proposed |
 | 6 | Version strategy: **omit `version` field initially**, use git commit SHA. Switch to explicit semver once external users dogfood. | proposed |
 | 7 | Marketplace lives at **`.claude-plugin/marketplace.json` in this repo** — no separate marketplace repo. Plugin source = relative path (`"./plugin"`) once the built tree is committed. Don't submit to `anthropics/claude-plugins-official` until external dogfooding. (Earlier plan said "own marketplace repo first" — that was wrong; verified against `code.claude.com/docs/en/plugin-marketplaces`.) | revised |
@@ -219,5 +224,48 @@ Three things must happen on plugin install:
 - The plugin assumes `bun` is on the user's PATH. No way to install bun from inside a plugin — must document as a hard prerequisite in the plugin README.
 - Construct's hooks rely on `~/.construct/` for user data. Plugin install does not create this dir; needs task #4 resolution.
 - Skills are namespaced — users who installed via `bun install.ts` invoke `/audit`; plugin users invoke `/construct:audit`. The two install methods are not interoperable; a user should pick one.
+
+---
+
+## 5. Install methods coexistence
+
+The repo will support two install methods that **cannot run side-by-side** without double-firing:
+
+| Method | Targets | Skill invocation |
+|---|---|---|
+| `bun install.ts` (current) | `~/.claude/construct/` + `~/.claude/settings.json` hooks + `~/.claude/commands/` + `~/.claude/agents/` | `/audit` (unnamespaced) |
+| `/plugin install construct@<marketplace>` (new) | `~/.claude/plugins/cache/construct-<sha>/` via marketplace; hooks/skills/agents loaded by plugin system | `/construct:audit` (namespaced) |
+
+If both are present, hooks fire twice (once from `~/.claude/settings.json`, once from the plugin's `hooks.json`). README must say: pick one. `install.ts` should detect a plugin install and warn; the plugin should detect an `install.ts` install and warn.
+
+The author (this repo's primary user) keeps `install.ts` for dev. External users get the plugin path.
+
+---
+
+## 6. Task #4 — user-data init at `~/.construct/`
+
+Unresolved. The plugin install gets the user a working plugin tree, but no `~/.construct/` directory exists yet. Hooks that write there (memory extraction, signal capture, session backup) will fail silently on first invocation.
+
+Three options:
+
+1. **First-run `SessionStart` hook creates the dir tree.** Same hook that handles identity injection (decision #3) also does `mkdir -p ~/.construct/{sessions,signals,backups,memory}` and runs DB schema creation. Atomic, idempotent. Failure mode: hook runs every session — cheap, but adds latency.
+2. **Lazy creation by each hook.** Every hook that writes to `~/.construct/` checks-and-creates. Spreads the responsibility, no central choke point. Failure mode: easy to miss a path; DB schema setup duplicated.
+3. **One-time bootstrap command.** Plugin ships a `bin/construct-init` binary the user runs once after `/plugin install`. Failure mode: bad UX — "install" should be one command, not two.
+
+Default proposal: **option 1**. The SessionStart hook is already proposed for identity injection (decision #3); folding user-data init into the same hook keeps the bootstrap concentrated. Make it a no-op if the dir already exists, so it costs nothing after the first session.
+
+---
+
+## 7. Open questions surfaced by the build
+
+Things the v1 skeleton couldn't answer that need a real Claude Code session to verify:
+
+| # | Question | Why it matters |
+|---|---|---|
+| Q1 | Does `${CLAUDE_PLUGIN_ROOT}` get substituted inside MCP `args` arrays, or only in `command`? | If only `command`, the `bun run ${CLAUDE_PLUGIN_ROOT}/...` arg pattern fails and the MCP server can't find its source. |
+| Q2 | Do plugin hooks see `cwd` as the user's project dir, or as the plugin install dir? | Affects `routing-classify-submit.ts` and `git-hygiene-stop.ts` which assume project cwd. |
+| Q3 | What does the `agent-review` skill audit when installed as a plugin? It currently checks `src/skills/*/SKILL.md` paths. Plugin install moves them. | Either the skill needs to look at `${CLAUDE_PLUGIN_ROOT}/skills/`, or it shouldn't ship in the plugin at all (it's an author tool, not a user tool). |
+| Q4 | What happens to `feedback-capture-submit.ts` (memory hook) when the user has no `~/.construct/construct.db`? | Determines whether task #6 needs DB seeding too. |
+| Q5 | Does the plugin's `hooks.json` *replace* user-level hooks in `~/.claude/settings.json`, or merge with them? | Answers the double-fire risk in §5 concretely. |
 
 
