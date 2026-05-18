@@ -14,7 +14,7 @@ description: >
   "/grill-yourself", "have agents grill the plan", "tear this plan apart",
   "adversarial review of this plan", "stress test this with subagents".
   NOT for: direct interview with the user (use /interview), post-implementation
-  code review (use /code-review), bug investigation (use /code-debug).
+  code review (use /code-review), bug investigation (use /debug).
 ---
 
 # Red Team
@@ -44,7 +44,7 @@ synthesis.
 
 - Interactive grilling where the user is the subject — use [[interview]]
 - Reviewing already-implemented code — use `/code-review`
-- Investigating a bug or failure — use `/code-debug`
+- Investigating a bug or failure — use `/debug`
 - Brainstorming when no plan exists yet — there must be an artifact to grill
 
 ---
@@ -150,7 +150,7 @@ Examples of when to deviate from the four-lens default:
 | Auth/authz proposal | Add a `security-audit`-style reviewer |
 | Data model / schema migration | Add a migration & backfill reviewer |
 | New external API surface | Add a backwards-compatibility reviewer |
-| UI/UX proposal | Add a `design-audit`-style reviewer |
+| UI/UX proposal | Add a `design-review`-style reviewer |
 | One-page tactical fix | Drop to 2 lenses (correctness + YAGNI) |
 | Cross-cutting platform change | Add an integrations / blast-radius reviewer |
 

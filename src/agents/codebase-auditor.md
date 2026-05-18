@@ -23,11 +23,10 @@ Read `src/rules/` to discover which domains have RULES.md files. Each domain get
 
 Invoke `/audit` — the audit dispatcher runs each review leaf in order against its domain's RULES.md:
 
-1. **Code** — `code-review` against `src/rules/code/RULES.md`
-2. **Security** — `security-review` against `src/rules/security/RULES.md`
-3. **Design** — `design-review` against `src/rules/design/RULES.md`
-4. **Docs** — `docs-review` against `src/rules/docs/RULES.md`
-5. **Agent** — `agent-review` against `src/rules/agent/*.md` (covers config, hooks, skills, personas)
+1. **Code** — `code-review` against `src/rules/code/RULES.md` (also walks `src/rules/security/RULES.md` — security is a rule family inside code-review)
+2. **Design** — `design-review` against `src/rules/design/RULES.md`
+3. **Docs** — `docs-review` against `src/rules/docs/RULES.md`
+4. **Agent** — `agent-review` against `src/rules/agent/*.md` (covers config, hooks, skills, personas)
 
 Each leaf emits its findings as plain markdown grouped by severity tier. The dispatcher concatenates them in order; it does not merge or rescore.
 
