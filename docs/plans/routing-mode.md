@@ -2,7 +2,11 @@
 
 ## Context
 
-Current `src/core/hooks/routing-classify-submit.ts:50-61` runs binary `FULL | QUICK` detection (`archPattern` regex + ≥40-word floor) and emits a "use design-first pipeline" reminder. The signal isn't load-bearing; no peer formalizes depth tiers. Drop it.
+Current `src/core/hooks/routing-classify-submit.ts:50-61` runs binary `FULL | QUICK` detection (`archPattern` regex + ≥40-word floor) and emits a "use design-first pipeline" reminder. The signal isn't load-bearing.
+
+Survey of `~/personal-ai-projects/` (verified against each repo's source, not summaries): six peers ship a depth/complexity signal — SuperClaude's `/research depth: quick/standard/deep/exhaustive`, BMAD's `domain-complexity.csv` in the architecture skill, wshobson-agents' `plugin-eval --depth quick/standard`, claude-code-hooks-mastery's `/plan complexity (simple|medium|complex)`, everything-claude-code's `/plan` complexity estimate, claude-task-master's `/taskmaster:analyze-complexity` task report. **All six scope the signal to a specific command or skill** — none stamp every user prompt globally. Construct's binary FULL/QUICK classifier on every prompt is the outlier shape.
+
+Drop the global classifier. If depth ever matters, scope it per-skill (matching the peer consensus).
 
 Replace with a composable mode system synthesized from SuperClaude (`~/personal-ai-projects/SuperClaude_Framework/src/superclaude/modes/MODE_*.md`) and Roo/Kilo Code's `whenToUse` natural-language matching:
 
