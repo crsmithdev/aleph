@@ -52,14 +52,19 @@ async function copyTree(src: string, dst: string) {
 }
 
 async function writeManifest() {
-  const manifest = {
+  const authorName = Bun.env.CONSTRUCT_AUTHOR_NAME;
+  const authorUrl = Bun.env.CONSTRUCT_AUTHOR_URL;
+  const repository = Bun.env.CONSTRUCT_REPOSITORY ?? "https://github.com/crsmithdev/construct";
+  const manifest: Record<string, unknown> = {
     name: PLUGIN_NAME,
     description: "Claude Code-native personal AI infrastructure — hooks, skills, agents, memory, research, observability.",
-    author: { name: "Chris Smith", url: "https://github.com/crsmithdev" },
-    repository: "https://github.com/crsmithdev/construct",
+    repository,
     license: "MIT",
     keywords: ["claude-code", "agents", "skills", "hooks", "memory", "research", "ai-infrastructure"],
   };
+  if (authorName || authorUrl) {
+    manifest.author = { ...(authorName ? { name: authorName } : {}), ...(authorUrl ? { url: authorUrl } : {}) };
+  }
   await mkdir(join(OUT, ".claude-plugin"), { recursive: true });
   await writeFile(join(OUT, ".claude-plugin", "plugin.json"), JSON.stringify(manifest, null, 2) + "\n");
 }
