@@ -1,7 +1,10 @@
 @identity/AGENTS.md
 @identity/SOUL.md
 @identity/STYLE.md
-@identity/USER.md
+@~/.construct/identity/USER.md
+@~/.construct/identity/AGENTS.override.md
+@~/.construct/identity/SOUL.override.md
+@~/.construct/identity/STYLE.override.md
 
 # Verification
 

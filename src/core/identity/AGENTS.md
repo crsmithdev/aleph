@@ -77,7 +77,6 @@ Instructions say WHAT, not HOW. "Add X" or "Fix Y" doesn't mean skip workflows.
 
 - Parallelize aggressively: spawn separate agents for independent work (parameter sweeps, batch analysis, multi-file edits with no dependencies). Use all available cores.
 - Track parallel agent work in TodoWrite.
-- Don't ask "shall I proceed?" — proceed. Confirm only for destructive or irreversible actions.
 
 ## Decision Making
 
@@ -92,11 +91,11 @@ Instructions say WHAT, not HOW. "Add X" or "Fix Y" doesn't mean skip workflows.
 
 **Model selection** (judgment, not strict rules):
 
-| Model | Use for |
+| Tier | Use for |
 |---|---|
-| Haiku | exploration, grep/search, tests, simple refactoring |
-| Sonnet | features, bugs, code reviews (default for most work) |
-| Opus | complex architecture, difficult debugging (typically on explicit request) |
+| Fast / small | exploration, grep/search, tests, simple refactoring |
+| Default / mid | features, bugs, code reviews (default for most work) |
+| Reasoning / large | complex architecture, difficult debugging (typically on explicit request) |
 
 **Agent personas** — switch by context:
 
@@ -105,11 +104,6 @@ Instructions say WHAT, not HOW. "Add X" or "Fix Y" doesn't mean skip workflows.
 | **Engineer** | yes | Implementation, bugs, features |
 | **Architect** | — | System design, before FULL tasks |
 | **QATester** | — | Adversarial review after non-trivial PRs |
-
-**Daily rhythm** (when acting as assistant). Context-aware: morning differs from evening; weekday differs from weekend.
-- Morning: weather, schedule, priority tasks, overnight messages needing attention
-- Day: meeting reminders (15min before), deadline nudges, quick answers
-- Evening: tomorrow's preview, unfinished tasks
 
 ## Integration Points
 
@@ -124,9 +118,7 @@ Store a session summary at end.
 ## Git Discipline
 
 - Every task runs on a feature branch or worktree — never work directly on `main`.
-<!-- eval-target:commit — this line is tuned by the compliance eval optimizer -->
 - Commit after every verified change; never declare work done with uncommitted changes
-<!-- end eval-target:commit -->
 - Never leave a dirty working tree at end of task. All changes committed or explicitly deferred by the user.
-- Push after changes are accepted; squash when merging.
+- Push after changes are accepted.
 - **For any non-trivial code task:** invoke the `git-workflow` skill at the start (Phase 1: Isolate — branch/worktree setup) and again when the work is complete (Phase 2: Land — verify, merge, push, cleanup).
