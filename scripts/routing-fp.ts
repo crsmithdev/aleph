@@ -40,7 +40,7 @@ for (const f of files) {
   for (const ln of lines) {
     if (!ln) continue;
     let j: any; try { j = JSON.parse(ln); } catch { continue; }
-    if (j.type === "assistant") {
+    if (j.type === "assistant" && !j.isSidechain) {
       const c = j.message?.content;
       if (Array.isArray(c)) for (const b of c) {
         if (b.type === "tool_use" && b.name === "Skill") {
@@ -56,7 +56,7 @@ for (const f of files) {
   for (const ln of lines) {
     if (!ln) continue;
     let j: any; try { j = JSON.parse(ln); } catch { continue; }
-    if (j.type !== "user" || j.isCompactSummary || j.toolUseResult) continue;
+    if (j.type !== "user" || j.isCompactSummary || j.toolUseResult || j.isSidechain || j.isMeta) continue;
     const c = j.message?.content;
     let text: string | undefined;
     if (typeof c === "string") text = c;

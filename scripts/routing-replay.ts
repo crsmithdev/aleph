@@ -48,7 +48,10 @@ for (const f of files) {
 
     // user prompts → run through current hook.
     // Skip tool_result wrappers, system reminders, and synthetic skill bodies.
-    if (j.type === "user" && !j.isCompactSummary && !j.toolUseResult) {
+    // isSidechain → subagent dispatch turn; isMeta → injected skill body. Neither
+    // is a real user prompt, so neither fires the live routing hook — exclude both
+    // or the conversion denominator is inflated by text the user never typed.
+    if (j.type === "user" && !j.isCompactSummary && !j.toolUseResult && !j.isSidechain && !j.isMeta) {
       const c = j.message?.content;
       let text: string | undefined;
       if (typeof c === "string") text = c;
@@ -70,8 +73,10 @@ for (const f of files) {
       }
     }
 
-    // assistant Skill() tool_use → record invocation
-    if (j.type === "assistant") {
+    // assistant Skill() tool_use → record invocation (main session only;
+    // subagents are told to skip skill discovery, and their invocations would
+    // inflate the numerator against a main-session-only denominator)
+    if (j.type === "assistant" && !j.isSidechain) {
       const c = j.message?.content;
       if (Array.isArray(c)) {
         for (const b of c) {
