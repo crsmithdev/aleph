@@ -41,48 +41,50 @@ console.error(`replaying ${files.length} session files from last ${days} days...
 
 for (const f of files) {
   const lines = readFileSync(resolve(sessionsDir, f), "utf8").split("\n");
+  // True when the most recent real user turn was a slash-command / skill dispatch.
+  // A Skill() that follows is a mandatory invocation, not a keyword conversion.
+  let prevUserSlash = false;
   for (const ln of lines) {
     if (!ln) continue;
     let j: any;
     try { j = JSON.parse(ln); } catch { continue; }
 
-    // user prompts → run through current hook.
-    // Skip tool_result wrappers, system reminders, and synthetic skill bodies.
-    // isSidechain → subagent dispatch turn; isMeta → injected skill body. Neither
-    // is a real user prompt, so neither fires the live routing hook — exclude both
-    // or the conversion denominator is inflated by text the user never typed.
-    if (j.type === "user" && !j.isCompactSummary && !j.toolUseResult && !j.isSidechain && !j.isMeta) {
+    if (j.type === "user" && !j.isCompactSummary) {
       const c = j.message?.content;
-      let text: string | undefined;
-      if (typeof c === "string") text = c;
-      else if (Array.isArray(c)) {
-        // Reject if any block is a tool_result — that's not a user prompt.
-        if (c.some((b: any) => b?.type === "tool_result")) continue;
-        const parts: string[] = [];
-        for (const b of c) if (typeof b.text === "string") parts.push(b.text);
-        text = parts.join("\n");
-      }
-      if (!text || text.length < 3) continue;
-      if (text.startsWith("<")) continue; // <system-reminder>, <command-name>, etc
-      if (/^#\s+\w/.test(text)) continue;  // SKILL.md body starts with "# SkillName"
-      totalPrompts++;
-      const matched = runHook(text);
-      if (matched.length > 0) {
-        matchedPrompts++;
-        for (const s of matched) matches[s] = (matches[s] || 0) + 1;
+      // tool_result turns aren't real user turns — leave slash state untouched.
+      const isToolResult = j.toolUseResult || (Array.isArray(c) && c.some((b: any) => b?.type === "tool_result"));
+      if (!isToolResult) {
+        let text = "";
+        if (typeof c === "string") text = c;
+        else if (Array.isArray(c)) text = c.map((b: any) => (typeof b.text === "string" ? b.text : "")).filter(Boolean).join("\n");
+        const trimmed = text.trim();
+        // Slash dispatch: an isMeta "Invoke the `X` skill ..." expansion, or a
+        // literal /command. Invocations that follow are mandatory, not keyword-driven.
+        prevUserSlash = (!!j.isMeta && /invoke the\s+\W?[\w-]+\W?\s+skill/i.test(text)) || /^\/[a-z]/i.test(trimmed);
+
+        // Real typed prompt → run through hook for matches. isSidechain (subagent)
+        // and isMeta (injected skill body) are not real prompts; neither fires the
+        // live hook, so excluding them keeps the conversion denominator honest.
+        if (!j.isSidechain && !j.isMeta && trimmed.length >= 3 && !trimmed.startsWith("<") && !/^#\s+\w/.test(trimmed)) {
+          totalPrompts++;
+          const matched = runHook(text);
+          if (matched.length > 0) {
+            matchedPrompts++;
+            for (const s of matched) matches[s] = (matches[s] || 0) + 1;
+          }
+        }
       }
     }
 
-    // assistant Skill() tool_use → record invocation (main session only;
-    // subagents are told to skip skill discovery, and their invocations would
-    // inflate the numerator against a main-session-only denominator)
+    // assistant Skill() tool_use → record invocation (main session only, and only
+    // when not following a slash dispatch — those are mandatory, not conversions)
     if (j.type === "assistant" && !j.isSidechain) {
       const c = j.message?.content;
       if (Array.isArray(c)) {
         for (const b of c) {
           if (b.type === "tool_use" && b.name === "Skill") {
             const n = (b.input as any)?.skill;
-            if (n) invokes[n] = (invokes[n] || 0) + 1;
+            if (n && !prevUserSlash) invokes[n] = (invokes[n] || 0) + 1;
           }
         }
       }
