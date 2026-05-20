@@ -39,9 +39,16 @@ const prompt = input.prompt ?? "";
 const words = prompt.split(/\s+/);
 const isSlashCommand = /^\/[a-z][a-z0-9-]*(\s|$)/i.test(prompt.trim());
 trace(TAG, `prompt: ${words.length} words${isSlashCommand ? " (slash command)" : ""}`);
-// Slash commands (e.g. /agent-review, /sketch) bypass the word-count floor —
-// they're a single "word" but carry routing intent that matches /<name> keywords.
-if (words.length < 3 && !isSlashCommand) {
+// A slash command is an explicit, mandatory skill invocation by the user —
+// keyword routing is moot. Skip the hook entirely so these never pollute the
+// keyword match→invoke conversion metric (matched but never "converted"
+// because the user already chose the skill directly).
+if (isSlashCommand) {
+  reportHook(TAG, "UserPromptSubmit", input.session_id);
+  trace(TAG, "skip: slash command (explicit invocation)");
+  process.exit(0);
+}
+if (words.length < 3) {
   reportHook(TAG, "UserPromptSubmit", input.session_id);
   trace(TAG, "skip: < 3 words");
   process.exit(0);
