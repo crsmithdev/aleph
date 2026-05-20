@@ -28,6 +28,8 @@ type SkillRow = {
   type?: 'command' | 'skill';
   registered?: boolean;
   unused?: boolean;
+  matched?: number;
+  conversionPct?: number;
 };
 
 type SkillDataset = 'by-skill' | 'by-type' | 'sessions' | 'errors' | 'latency';
@@ -100,9 +102,11 @@ export function SkillsPage() {
   const commandCount = data.ranked.filter(r => r.type === 'command').length;
   const skillCount = data.ranked.filter(r => r.type === 'skill').length;
   const totalInvocations = data.ranked.reduce((s, r) => s + r.count, 0);
-  const activeSkills = data.ranked.length;
+  const activeSkills = data.ranked.filter(r => r.count > 0).length;
   const totalErrors = data.ranked.reduce((s, r) => s + r.errors, 0);
   const avgSuccessRate = totalInvocations > 0 ? ((totalInvocations - totalErrors) / totalInvocations) * 100 : 100;
+  const totalMatched = data.totalMatched ?? data.ranked.reduce((s, r) => s + (r.matched ?? 0), 0);
+  const overallConversionPct = totalMatched > 0 ? (totalInvocations / totalMatched) * 100 : null;
 
   // Helpers for display mode
   const dn = displayN;
@@ -240,12 +244,37 @@ export function SkillsPage() {
       ),
     },
     {
+      key: 'matched',
+      label: 'Matched',
+      tooltip: 'Routing matches: times the UserPromptSubmit hook matched this skill on a user prompt.',
+      align: 'right',
+      sortable: true,
+      shrink: true,
+      render: (row) => row.matched != null && row.matched > 0
+        ? <span className="font-mono text-text-secondary">{fmtNumber(row.matched)}</span>
+        : <span className="text-text-disabled">—</span>,
+    },
+    {
       key: 'count',
-      label: 'Count',
+      label: 'Invoked',
+      tooltip: 'Skill() tool invocations by the assistant.',
       align: 'right',
       sortable: true,
       shrink: true,
       render: (row) => <span className="font-mono">{fmtNumber(row.count)}</span>,
+    },
+    {
+      key: 'conversionPct',
+      label: 'Conv',
+      tooltip: 'Invoked ÷ Matched. Low conversion = router fires but model rarely calls Skill().',
+      align: 'right',
+      sortable: true,
+      shrink: true,
+      render: (row) => {
+        if (row.conversionPct == null) return <span className="text-text-disabled">—</span>;
+        const cls = row.conversionPct >= 30 ? 'text-success' : row.conversionPct >= 10 ? 'text-warning' : 'text-error';
+        return <span className={clsx('font-mono', cls)}>{fmtPct(row.conversionPct)}</span>;
+      },
     },
     {
       key: 'errors',
@@ -331,10 +360,14 @@ export function SkillsPage() {
       <PageHeader title="Skills" />
 
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
-        <StatCard label="Total Invocations" value={fmtNumber(totalInvocations)} />
+        <StatCard label="Routing Matches" value={fmtNumber(totalMatched)} />
+        <StatCard label="Invocations" value={fmtNumber(totalInvocations)} />
+        <StatCard
+          label="Conversion"
+          value={overallConversionPct == null ? '—' : fmtPct(overallConversionPct)}
+          accent={overallConversionPct == null ? undefined : overallConversionPct >= 30 ? 'success' : overallConversionPct >= 10 ? 'warning' : 'error'}
+        />
         <StatCard label="Active Skills" value={fmtNumber(activeSkills)} />
-        <StatCard label="Commands" value={fmtNumber(commandCount)} />
-        <StatCard label="Skills" value={fmtNumber(skillCount)} />
         <StatCard
           label="Errors"
           value={totalErrors === 0 ? '0' : fmtNumber(totalErrors)}
@@ -645,6 +678,7 @@ export function SkillsPage() {
 
 function RoutingTable() {
   const { data, isLoading, error, refetch } = useObsDirectives();
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   if (isLoading) return null;
   if (error || !data) return <ErrorState message="Failed to load routing data" retry={refetch} />;
 
@@ -714,6 +748,17 @@ function RoutingTable() {
       },
     },
     {
+      key: 'docRef',
+      label: 'Reference',
+      tooltip: 'Doc reference injected by the router when the prompt targets a known module.',
+      render: (row) => {
+        if (!row.docRef) return <span className="text-text-disabled text-xs">—</span>;
+        return (
+          <span className="font-mono text-text-secondary text-xs">{row.docRef.doc}</span>
+        );
+      },
+    },
+    {
       key: 'promptWords',
       label: 'Words',
       tooltip: 'Word count of the user prompt that triggered this routing decision. Prompts ≥40 words automatically route to "full" depth.',
@@ -725,10 +770,39 @@ function RoutingTable() {
     },
   ];
 
+  function reconstructInjection(row: DirectiveRow): string {
+    const lines: string[] = [];
+    const depth = depthOf(row.directives);
+    if (depth === 'full') lines.push('[Construct] Depth: FULL — complex request.');
+    if (row.docRef) lines.push(`[Construct] Reference: ${row.docRef.doc} — ${row.docRef.desc}`);
+    const skills = skillDirectives(row.directives).map(stripPrefix);
+    if (skills.length > 0) lines.push(`[Construct] Matched skills: ${skills.join(', ')}. Activate via Skill() before proceeding.`);
+    return lines.join('\n');
+  }
+
   return (
     <div className="space-y-2">
-      <h3 className="font-heading text-lg font-medium text-text-secondary">Routing</h3>
-      <DataTable<DirectiveRow> data={data.directives} columns={columns} keyField="ts" pageSize={25} />
+      <h3 className="font-heading text-lg font-medium text-text-secondary">
+        Injected suggestions
+        <span className="ml-2 text-xs font-sans font-normal text-text-muted">
+          What the routing hook prepended to each user prompt
+        </span>
+      </h3>
+      <DataTable<DirectiveRow>
+        data={data.directives}
+        columns={columns}
+        keyField="ts"
+        pageSize={25}
+        expandedKey={expandedKey}
+        onExpandToggle={setExpandedKey}
+        renderExpanded={(row) => {
+          const text = reconstructInjection(row);
+          if (!text) return <span className="text-text-disabled text-xs">Nothing injected for this prompt.</span>;
+          return (
+            <pre className="font-mono text-xs text-text-secondary whitespace-pre-wrap leading-relaxed">{text}</pre>
+          );
+        }}
+      />
     </div>
   );
 }

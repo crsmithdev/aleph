@@ -136,6 +136,8 @@ export interface SkillMetric {
   p50Ms?: number;
   p95Ms?: number;
   lastUsed?: string;
+  matched?: number;
+  conversionPct?: number;
 }
 
 export interface TimeBucket {
@@ -216,6 +218,8 @@ export interface SkillsData {
   byDaySessions: (TimeBucket & { skills: Record<string, number> })[];
   byDayErrors: (TimeBucket & { skills: Record<string, number> })[];
   byDayLatency: (TimeBucket & { skills: Record<string, number> })[];
+  byDayMatches?: (TimeBucket & { skills: Record<string, number> })[];
+  totalMatched?: number;
 }
 
 export interface TokensData {

@@ -426,8 +426,27 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
   const daySkillSessionMap = new Map<string, Map<string, Set<string>>>();
   const daySkillErrorMap = new Map<string, Map<string, number>>();
   const daySkillLatencyMap = new Map<string, Map<string, number[]>>();
+  const skillMatchCounts = new Map<string, number>();
+  const daySkillMatchMap = new Map<string, Map<string, number>>();
 
   for (const e of events) {
+    // Routing matches: directive events carry skill:X entries from the
+    // UserPromptSubmit hook. Counted as "matched" — distinct from invocations
+    // (which require an assistant Skill() tool_use block).
+    if (e.kind === "directive" && Array.isArray(e.data?.directives)) {
+      const bk = bucketKey(e.ts, granularity);
+      for (const d of e.data.directives as string[]) {
+        const m = d.match(/^skill:(.+)$/i);
+        if (!m) continue;
+        const skillName = m[1];
+        if (validSkills && !validSkills.has(skillName)) continue;
+        skillMatchCounts.set(skillName, (skillMatchCounts.get(skillName) || 0) + 1);
+        if (!daySkillMatchMap.has(bk)) daySkillMatchMap.set(bk, new Map());
+        const dm = daySkillMatchMap.get(bk)!;
+        dm.set(skillName, (dm.get(skillName) || 0) + 1);
+      }
+    }
+
     if (e.kind === "tool" && e.data?.skill) {
       const skillName = e.data.skill as string;
       if (validSkills && !validSkills.has(skillName)) continue;
@@ -465,20 +484,30 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
   }
 
   const total = [...skillCounts.values()].reduce((s, v) => s + v.count, 0);
-  const ranked: SkillMetric[] = [...skillCounts.entries()]
-    .map(([skill, v]) => {
-      const sorted = [...v.durations].sort((a, b) => a - b);
+
+  // Union of invoked + matched skill names so the ranked list surfaces
+  // skills that were matched but never invoked (the precision gap).
+  const allSkillNames = new Set<string>([...skillCounts.keys(), ...skillMatchCounts.keys()]);
+
+  const ranked: SkillMetric[] = [...allSkillNames]
+    .map((skill) => {
+      const v = skillCounts.get(skill);
+      const sorted = v ? [...v.durations].sort((a, b) => a - b) : [];
       const avgMs = sorted.length > 0 ? sorted.reduce((s, x) => s + x, 0) / sorted.length : undefined;
       const p50Ms = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.5)] : undefined;
       const p95Ms = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.95)] : undefined;
+      const count = v?.count ?? 0;
+      const matched = skillMatchCounts.get(skill);
+      const conversionPct = matched && matched > 0 ? (count / matched) * 100 : undefined;
       return {
-        skill, count: v.count,
-        pct: total > 0 ? (v.count / total) * 100 : 0,
-        errors: v.errors, sessions: v.sessions.size,
-        avgMs, p50Ms, p95Ms, lastUsed: v.lastUsed,
+        skill, count,
+        pct: total > 0 ? (count / total) * 100 : 0,
+        errors: v?.errors ?? 0, sessions: v?.sessions.size ?? 0,
+        avgMs, p50Ms, p95Ms, lastUsed: v?.lastUsed,
+        matched, conversionPct,
       };
     })
-    .sort((a, b) => b.count - a.count);
+    .sort((a, b) => (b.count + (b.matched ?? 0)) - (a.count + (a.matched ?? 0)));
 
   const byDay = [...daySkillMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -509,7 +538,16 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
       ])),
     }));
 
-  return { ranked, byDay, byDaySessions, byDayErrors, byDayLatency };
+  const byDayMatches = [...daySkillMatchMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, skills]) => ({
+      date, count: [...skills.values()].reduce((s, v) => s + v, 0),
+      skills: Object.fromEntries(skills),
+    }));
+
+  const totalMatched = [...skillMatchCounts.values()].reduce((s, v) => s + v, 0);
+
+  return { ranked, byDay, byDaySessions, byDayErrors, byDayLatency, byDayMatches, totalMatched };
 }
 
 // ---------------------------------------------------------------------------

@@ -18,12 +18,11 @@ function skillTest(prompt: string): { skills: string[]; depth: string } {
   return { skills, depth };
 }
 
-// git is always injected for non-question code requests (covers both phases)
-const CODE_DEFAULTS = ["git"];
+// Generic code requests with no triggering keywords match nothing
 const addDarkSkills = skillTest("add dark mode to the settings page").skills;
-check(r, "skill: 'add dark mode' → only lifecycle skills", addDarkSkills.every(s => CODE_DEFAULTS.includes(s)));
+check(r, "skill: 'add dark mode' → no match", addDarkSkills.length === 0);
 const fixTypoSkills = skillTest("fix the typo on line 42").skills;
-check(r, "skill: 'fix the typo' → only lifecycle skills", fixTypoSkills.every(s => CODE_DEFAULTS.includes(s)));
+check(r, "skill: 'fix the typo' → no match", fixTypoSkills.length === 0);
 
 runAndCheck(te, r, "core/hooks/routing-classify-submit.ts", "smoke", "{}");
 runAndCheck(te, r, "core/hooks/routing-classify-submit.ts", "short skip", '{"prompt":"do it"}');

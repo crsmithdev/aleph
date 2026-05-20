@@ -1454,7 +1454,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/learning/directives', async () => {
     return cachedResult('/learning/directives', 60_000, () => {
-      type DirectiveEntry = { ts: string; sessionId: string; directives: string[]; promptWords?: number };
+      type DirectiveEntry = { ts: string; sessionId: string; directives: string[]; promptWords?: number; docRef?: { doc: string; desc: string } };
       const directives: DirectiveEntry[] = [];
       const depthCounts: Record<string, number> = {};
       const skillHits: Record<string, number> = {};
@@ -1463,11 +1463,13 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       for (const e of parseSessionsForDays(30)) {
         if (e.kind !== 'directive' || !e.data) continue;
         const dirArr = (e.data.directives as string[]) ?? [];
+        const docRef = e.data.docRef as { doc: string; desc: string } | undefined;
         directives.push({
           ts: e.ts,
           sessionId: e.sid,
           directives: dirArr,
           promptWords: e.data.promptWords as number | undefined,
+          docRef,
         });
         const day = e.ts.slice(0, 10);
         if (day) {

@@ -60,8 +60,6 @@ if (archPattern.test(prompt)) {
   trace(TAG, "depth: QUICK");
 }
 
-const isQuestion = /^\s*(what|how|why|when|where|who|is |are |can |does |do |should |could |would |which |tell me|explain|describe)\b/i.test(prompt);
-
 // Skill matching
 let rules: SkillRule[] = [];
 try {
@@ -109,26 +107,7 @@ const matched = rules
   }))
   .map((r) => r.skill);
 
-// Always inject git for non-question code requests — covers both phases
-// (Phase 1: Isolate at start, Phase 2: Land at end)
-if (!isQuestion && words.length >= 5 && !matched.includes("git")) {
-  matched.push("git");
-}
-
 trace(TAG, `skill match: ${matched.length ? matched.join(", ") : "none"}`);
-
-// Write directive signal (before early exit so full is captured even with no skill match)
-const directives: string[] = [];
-if (isFull) directives.push("full");
-for (const skill of matched) directives.push(`skill:${skill}`);
-if (directives.length > 0) {
-  reportHook(TAG, "UserPromptSubmit", input.session_id, {
-    meta: { directives, promptWords: words.length },
-  });
-  trace(TAG, `directive signal written: ${directives.join(", ")}`);
-} else {
-  reportHook(TAG, "UserPromptSubmit", input.session_id);
-}
 
 // Domain-specific doc reference injection.
 // Fires when the prompt clearly targets a specific module — gives Claude a
@@ -143,12 +122,30 @@ const domainRefs: Array<{ pattern: RegExp; doc: string; desc: string }> = [
   { pattern: /\b(skill.rules|skill.routing|keyword.trigger|skill.playbook)\b/i, doc: "docs/specs/SKILLS.md", desc: "routing config, keyword triggers, slash commands" },
 ];
 
+let docRef: { doc: string; desc: string } | undefined;
 for (const { pattern, doc, desc } of domainRefs) {
   if (pattern.test(prompt)) {
-    console.log(`[Construct] Reference: ${doc} — ${desc}`);
-    trace(TAG, `domain ref: ${doc}`);
+    docRef = { doc, desc };
     break;
   }
+}
+
+// Write directive signal (before early exit so full is captured even with no skill match)
+const directives: string[] = [];
+if (isFull) directives.push("full");
+for (const skill of matched) directives.push(`skill:${skill}`);
+const meta: Record<string, unknown> = { directives, promptWords: words.length };
+if (docRef) meta.docRef = docRef;
+if (directives.length > 0 || docRef) {
+  reportHook(TAG, "UserPromptSubmit", input.session_id, { meta });
+  trace(TAG, `directive signal written: ${directives.join(", ")}${docRef ? ` ref=${docRef.doc}` : ""}`);
+} else {
+  reportHook(TAG, "UserPromptSubmit", input.session_id);
+}
+
+if (docRef) {
+  console.log(`[Construct] Reference: ${docRef.doc} — ${docRef.desc}`);
+  trace(TAG, `domain ref: ${docRef.doc}`);
 }
 
 if (!matched.length) { trace(TAG, "no skills matched, exiting"); process.exit(0); }

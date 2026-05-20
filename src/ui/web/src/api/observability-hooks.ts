@@ -115,12 +115,14 @@ export type HookGatingStat = {
 
 export function useObsSkills(range: TimeRange, granularity?: Granularity, session?: string) {
   return obsQuery<{
-    ranked: Array<{ skill: string; count: number; pct: number; errors: number; avgMs?: number; p50Ms?: number; p95Ms?: number; sessions?: number; lastUsed?: string; type: 'command' | 'skill'; registered: boolean }>;
+    ranked: Array<{ skill: string; count: number; pct: number; errors: number; avgMs?: number; p50Ms?: number; p95Ms?: number; sessions?: number; lastUsed?: string; type: 'command' | 'skill'; registered: boolean; matched?: number; conversionPct?: number }>;
     byDay: Array<{ date: string; count: number; skills: Record<string, number> }>;
     byType?: Array<{ type: string; count: number }>;
     byDaySessions: Array<{ date: string; count: number; skills: Record<string, number> }>;
     byDayErrors: Array<{ date: string; count: number; skills: Record<string, number> }>;
     byDayLatency: Array<{ date: string; count: number; skills: Record<string, number> }>;
+    byDayMatches?: Array<{ date: string; count: number; skills: Record<string, number> }>;
+    totalMatched?: number;
     unused: string[];
     queryTimeMs: number;
   }>('skills', { range, granularity, session });
@@ -658,7 +660,7 @@ export function useCreateEvalScenario() {
 
 export function useObsDirectives() {
   return useQuery<{
-    directives: Array<{ ts: string; sessionId: string; directives: string[]; promptWords?: number }>;
+    directives: Array<{ ts: string; sessionId: string; directives: string[]; promptWords?: number; docRef?: { doc: string; desc: string } }>;
     total: number;
     depthCounts: Record<string, number>;
     byDay: Array<{ date: string; full: number; quick: number; total: number }>;
