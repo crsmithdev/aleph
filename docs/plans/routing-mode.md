@@ -30,7 +30,7 @@ Six modes. Five are temperament/discourse overlays; `focused` is a scope overlay
 
 Composable: any subset active simultaneously. Hook reports the full active set.
 
-Deferred (worth filing but not in this cut): `adversarial` (overlaps with `/red-team`), `durable` (artifact-first output), `forward` (next-N-changes time horizon).
+Six modes only — `adversarial`, `durable`, and `forward` are dropped from scope (not deferred, not filed). Add later if a real need surfaces; easier to add than to remove.
 
 ## Mode file format
 
@@ -123,15 +123,18 @@ When no modes activate: no mode block printed (model may still self-select via `
 | `install.ts` | Add `src/modes/` to copy list if not already in the generic walk |
 | `docs/specs/HOOKS.md` | Document new signal shape; remove depth references |
 | Observability UI consumer of `directives: ["full"]` | grep; update to read `directives: ["mode:brainstorming", ...]` |
+| `~/.local/bin/cc-statusline/routing.sh` | Repurpose into the modes block — strip `mode:` prefix, relabel `route:`→`modes:`, distinct color. Keeps last-prompt semantics (active modes, not session union). Rename file to `modes.sh` |
+| `~/.config/ccstatusline/settings.json` | Point the `l2-routing` widget (already next to `l2-skills`) at `modes.sh`; rename id `l2-routing`→`l2-modes` |
 
 Directive log: `directives.push("mode:" + name)` for each active mode. `meta.modes: string[]` in `reportHook`.
+
+**Statusline note:** post-plan the classifier pushes only `skill:*` and `mode:*` directives (the `full` depth push is removed). `routing.sh` already shows the last prompt's non-skill directives — which become exactly the active modes — so the existing line-2 block next to `l2-skills` is the modes block with no new widget. The cc-statusline scripts are hand-maintained dotfiles outside any repo; edit in place.
 
 ## Out of scope (deferred)
 
 - **Persona axis** — `docs/plans/personas.md`. Modes ≠ personas; personas are identity (Engineer/Architect/QATester), modes are posture. SuperClaude separates them; do the same. Land modes first.
 - **Threshold-based activation** (context >75% → `efficiency`, error-recovery → `introspection`). Needs the mode set settled first.
 - **Mode interaction rules** — when two modes give conflicting guidance, which wins? Punt until observed in real sessions.
-- **The three deferred modes** — `adversarial`, `durable`, `forward`. File sketches in `docs/sketches/` rather than land in v1.
 
 ## Risks
 
@@ -152,8 +155,8 @@ Directive log: `directives.push("mode:" + name)` for each active mode. `meta.mod
 4. Live-fire (manual): for each mode, type a trigger phrase; confirm hook output names the mode AND inlines its content; confirm Claude's next response reflects the mode's posture. Repeat for two-mode and three-mode prompts.
 5. `whenToUse` self-selection check: type a prompt that should match `whenToUse` but NOT the regex (e.g. an oblique "I'm trying to decide between X and Y" — should activate `brainstorming` + `comparison` via the model reading the index). Confirm model narrates the activation.
 
-## Open questions
+## Decisions (resolved)
 
-1. **Six modes, or hold a slot open for `adversarial` / `durable` / `forward`?** Default: six. Defer the others to follow-up; easier to add than to remove.
-2. **Inline mode bodies (M1) vs system-reminder (M2) for active modes?** Default: M1 (guaranteed presence). Revisit if context cost is felt.
-3. **How does the model surface its `whenToUse`-driven self-selection?** Two options: (a) silent — just behave according to the mode; (b) explicit — emit "Activating brainstorming mode because the request is exploring options." Default: (b), one short line, so the user can see and correct.
+1. **Mode set:** six. `adversarial` / `durable` / `forward` dropped from scope entirely — not deferred, not filed. Add later only if a real need surfaces.
+2. **Active-mode delivery:** M1 — inline the full MODE body into hook stdout. Guaranteed presence; revisit if context cost is felt.
+3. **`whenToUse` self-selection surfacing:** explicit, one short line (e.g. "Activating brainstorming because the request is exploring options"), so the user can see and correct. **Plus:** active modes render in the cc-statusline line-2 block next to loaded skills (see Files to modify — `routing.sh`→`modes.sh`).
