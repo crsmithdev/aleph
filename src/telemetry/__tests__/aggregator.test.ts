@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { resolve, join } from "path";
 import { mkdirSync, copyFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
-import { adaptAllSessions as parseAllSessions, clearCache } from "../src/adapter.js";
+import { adaptAllSessions as parseAllSessions, clearCache, slashDispatchTarget } from "../src/adapter.js";
 import {
   reduceOverview as aggregateOverview,
   reduceTools as aggregateTools,
@@ -139,6 +139,19 @@ describe("aggregator", () => {
       expect(omni.conversionPct).toBeUndefined();       // unregistered → no conversion
       expect(skills.conversionMatched).toBe(3);         // registered matches only
       expect(skills.conversionInvokes).toBe(1);         // registered, non-slash only
+    });
+  });
+
+  describe("slashDispatchTarget", () => {
+    it("names the dispatched skill so cross-skill turns aren't mis-tagged", () => {
+      // /audit expands to an omnibus dispatch — names omnibus, not audit
+      expect(slashDispatchTarget("Invoke the `omnibus` skill with verb=`audit` and arguments: x", true)).toBe("omnibus");
+      expect(slashDispatchTarget("/plan trim the keywords", false)).toBe("plan");
+      expect(slashDispatchTarget("write a plan for the reducer", false)).toBeUndefined();
+      // a path/prose that isn't a command
+      expect(slashDispatchTarget("look at /home/me/file.ts", false)).toBeUndefined();
+      // the audit skill invoked during a /audit→omnibus turn must NOT match "audit"
+      expect(slashDispatchTarget("Invoke the `omnibus` skill with verb=`audit`", true) === "audit").toBe(false);
     });
   });
 

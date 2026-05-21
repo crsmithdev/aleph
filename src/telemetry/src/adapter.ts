@@ -24,8 +24,9 @@ cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v4`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v5`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v6`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v7`);
+cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v8`);
 cacheDb.exec(`
-  CREATE TABLE IF NOT EXISTS telemetry_cache_v8 (
+  CREATE TABLE IF NOT EXISTS telemetry_cache_v9 (
     file_path TEXT PRIMARY KEY,
     mtime_ms INTEGER NOT NULL,
     size INTEGER NOT NULL,
@@ -34,10 +35,10 @@ cacheDb.exec(`
 `);
 
 const insertCache = cacheDb.prepare(
-  `INSERT OR REPLACE INTO telemetry_cache_v8 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
+  `INSERT OR REPLACE INTO telemetry_cache_v9 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
 );
 const selectCache = cacheDb.prepare(
-  `SELECT mtime_ms, size, events FROM telemetry_cache_v8 WHERE file_path = ?`
+  `SELECT mtime_ms, size, events FROM telemetry_cache_v9 WHERE file_path = ?`
 );
 
 // ---------------------------------------------------------------------------
@@ -174,6 +175,22 @@ function hookBasename(command: string | null | undefined): string {
   const path = tokens.find((t) => t.startsWith("/") && !t.startsWith("/dev/"));
   if (path) return path.split("/").pop() || "unknown";
   return "unknown";
+}
+
+/**
+ * Extract the skill a user turn dispatches via a slash command, or undefined.
+ * Two forms: an isMeta "Invoke the `foo` skill ..." expansion, or a literal
+ * "/foo ..." command. Returns the lowercased skill/command name so a following
+ * Skill() call can be matched against it — only the named skill is "via slash".
+ */
+export function slashDispatchTarget(text: string, isMeta: boolean): string | undefined {
+  if (isMeta) {
+    const m = text.match(/invoke the\s+[`'"]?([\w-]+)[`'"]?\s+skill/i);
+    if (m) return m[1].toLowerCase();
+  }
+  const sl = text.trim().match(/^\/([a-z][\w-]*)/i);
+  if (sl) return sl[1].toLowerCase();
+  return undefined;
 }
 
 function adaptLine(
@@ -359,15 +376,12 @@ function adaptLine(
             data: { ...meta, text: userText.slice(0, 500) },
           });
         } else {
-          // A slash command / skill dispatch: Claude Code expands "/foo" into an
-          // isMeta "Invoke the `foo` skill ..." user turn, or the literal /command.
-          // A Skill() call that follows is a mandatory invocation, not a
-          // keyword-driven one — flag it so conversion stats can exclude it.
-          const slashDispatch =
-            (raw.isMeta === true && /invoke the\s+\W?[\w-]+\W?\s+skill/i.test(userText)) ||
-            /^\/[a-z]/i.test(userText.trim());
+          // Capture the skill a slash command dispatches, so a following Skill()
+          // call can be marked viaSlash only when it's THAT skill (not some other
+          // skill the model auto-invokes during the same slash-driven turn).
           const userData: Record<string, unknown> = { ...meta, text: userText.slice(0, 500), role: "user" };
-          if (slashDispatch) userData.slashDispatch = true;
+          const dispatchSkill = slashDispatchTarget(userText, raw.isMeta === true);
+          if (dispatchSkill) userData.dispatchSkill = dispatchSkill;
           // Mark non-real turns so per-keyword stats can exclude them: isMeta =
           // injected skill body, isSidechain = subagent turn inline in the transcript.
           if (raw.isMeta === true) userData.isMeta = true;
@@ -510,18 +524,21 @@ function adaptFile(filePath: string, project: string, since?: Date): TelemetryEv
   }
 
   // Attach last user message text and tool_result data to skill invocations.
-  // lastUserSlash tracks whether the most recent real user turn per session was
-  // a slash/skill dispatch, so a Skill() that follows is tagged viaSlash.
+  // lastDispatch holds the skill the most recent user turn dispatched via slash
+  // (undefined for a natural prompt). A Skill() is viaSlash only when it matches
+  // that dispatched skill — so a skill the model auto-invokes during another
+  // skill's slash-driven turn is correctly left as auto.
   const lastUserMsg = new Map<string, string>();
-  const lastUserSlash = new Map<string, boolean>();
+  const lastDispatch = new Map<string, string | undefined>();
   for (const e of rawEvents) {
     if (e.kind === "message" && e.data?.role === "user" && e.data?.text) {
       lastUserMsg.set(e.sid, e.data.text as string);
-      lastUserSlash.set(e.sid, e.data.slashDispatch === true);
+      lastDispatch.set(e.sid, e.data.dispatchSkill as string | undefined);
     }
     if (e.kind === "tool" && e.data?.skill) {
       e.data.userRequest = lastUserMsg.get(e.sid);
-      if (lastUserSlash.get(e.sid)) e.data.viaSlash = true;
+      const dispatched = lastDispatch.get(e.sid);
+      if (dispatched && dispatched === (e.data.skill as string).toLowerCase()) e.data.viaSlash = true;
       if (e.data.useId) {
         const result = toolResults.get(e.data.useId as string);
         if (result) {
@@ -671,7 +688,7 @@ function corpusCacheKey(opts?: AdaptOptions): string {
 }
 
 export function clearCache(): void {
-  cacheDb.exec("DELETE FROM telemetry_cache_v8");
+  cacheDb.exec("DELETE FROM telemetry_cache_v9");
   fileCache.clear();
   fileEventCache.clear();
   discoveryCache = undefined;
