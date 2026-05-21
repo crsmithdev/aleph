@@ -1,18 +1,13 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { useSummary, useHabits, useGitStats, useTimeseries, useCreateGoal } from '../../api/hooks';
+import { useSummary, useHabits, useGitStats, useTimeseries } from '../../api/hooks';
 import { MetricCard } from '../../components/data/MetricCard';
 import { ChartContainer } from '../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, xAxisDateProps, legendProps, labelFormatter } from '../../components/charts/chartTheme';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { Modal } from '../../components/ui/Modal';
-import { GoalForm } from '../../components/goals/GoalForm';
-import { TodoQuickAdd } from '../../components/todos/TodoQuickAdd';
-import { HabitCreateForm } from '../../components/habits/HabitCreateForm';
-import { Icon } from '../../components/ui/Icon';
+import { QuickCreate } from '../../components/life/QuickCreate';
+import { useState } from 'react';
 import { clsx } from 'clsx';
 import { toDateStr, longDate } from '../../utils/format';
 
@@ -225,37 +220,7 @@ function PeriodActivity({
   );
 }
 
-function CreateButton({
-  glyph,
-  label,
-  accent,
-  onClick,
-}: {
-  glyph: string;
-  label: string;
-  accent: 'accent' | 'success' | 'magenta';
-  onClick: () => void;
-}) {
-  const accentClasses: Record<typeof accent, string> = {
-    accent: 'text-accent bg-accent/15',
-    success: 'text-success bg-success/15',
-    magenta: 'text-magenta bg-magenta/15',
-  };
-  return (
-    <button
-      onClick={onClick}
-      className="group flex-1 min-w-[180px] flex items-center gap-3 bg-bg-secondary border border-border-primary hover:border-border-secondary hover:bg-bg-tertiary rounded-xl px-4 py-3 transition-colors text-left"
-    >
-      <span className={clsx('w-9 h-9 rounded-lg flex items-center justify-center', accentClasses[accent])}>
-        <Icon name={glyph} size="md" />
-      </span>
-      <span className="text-base font-semibold text-text-primary">{label}</span>
-    </button>
-  );
-}
-
 export function SummaryPage() {
-  const navigate = useNavigate();
   const today = toDateStr(new Date());
   const yesterdayDate = new Date();
   yesterdayDate.setDate(yesterdayDate.getDate() - 1);
@@ -263,8 +228,6 @@ export function SummaryPage() {
   const thirtyDaysAgoDate = new Date();
   thirtyDaysAgoDate.setDate(thirtyDaysAgoDate.getDate() - 29);
   const thirtyDaysAgo = toDateStr(thirtyDaysAgoDate);
-
-  const [openModal, setOpenModal] = useState<null | 'goal' | 'todo' | 'habit'>(null);
 
   const sevenDaysAgoDate = new Date();
   sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 6);
@@ -279,7 +242,6 @@ export function SummaryPage() {
   const { data: weekGit } = useGitStats(sevenDaysAgo, today);
   const { data: habits } = useHabits();
   const completedHabits = (habits ?? []).filter((h) => h.completedThisPeriod).map((h) => h.title);
-  const createGoal = useCreateGoal();
 
   const series = timeseries ?? [];
   const last7 = series.slice(-7);
@@ -306,11 +268,7 @@ export function SummaryPage() {
         actions={<span className="text-sm text-text-muted">{todayDisplay}</span>}
       />
 
-      <div className="flex gap-3 flex-wrap">
-        <CreateButton glyph="add" label="New goal" accent="accent" onClick={() => setOpenModal('goal')} />
-        <CreateButton glyph="check" label="New todo" accent="success" onClick={() => setOpenModal('todo')} />
-        <CreateButton glyph="autorenew" label="New habit" accent="magenta" onClick={() => setOpenModal('habit')} />
-      </div>
+      <QuickCreate />
 
       {tsError && <ErrorState message="Failed to load summary data." />}
 
@@ -405,29 +363,6 @@ export function SummaryPage() {
           gitStats={weekGit}
         />
       </div>
-
-      <Modal open={openModal === 'goal'} onClose={() => setOpenModal(null)} title="New goal">
-        <GoalForm
-          onSubmit={(data) =>
-            createGoal.mutate(data, {
-              onSuccess: (g) => {
-                setOpenModal(null);
-                navigate(`/goals/${g.id}`);
-              },
-            })
-          }
-          onCancel={() => setOpenModal(null)}
-          loading={createGoal.isPending}
-        />
-      </Modal>
-
-      <Modal open={openModal === 'todo'} onClose={() => setOpenModal(null)} title="New todo">
-        <TodoQuickAdd />
-      </Modal>
-
-      <Modal open={openModal === 'habit'} onClose={() => setOpenModal(null)} title="New habit">
-        <HabitCreateForm onCreated={() => setOpenModal(null)} />
-      </Modal>
     </div>
   );
 }
