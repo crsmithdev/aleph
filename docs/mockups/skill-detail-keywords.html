@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Skill detail — routing keywords + invocation source (mockup)</title>
+<style>
+  :root{
+    --bg:#0d0e11; --panel:#16181d; --panel2:#1c1f26; --border:#2a2e36;
+    --tp:#e7e9ee; --ts:#a7adb8; --tm:#6b7280; --td:#4b5563;
+    --accent:#6ea8fe; --success:#4ade80; --warning:#fbbf24; --error:#f87171;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:Inter,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tp);font-family:var(--sans);font-size:14px;padding:28px;line-height:1.45}
+  .wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+  .crumb{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:600}
+  .crumb a{color:var(--accent);text-decoration:none;font-weight:500}
+  .crumb .sep{color:var(--td)}
+  .tag{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);
+       border:1px solid rgba(110,168,254,.25);background:rgba(110,168,254,.08);border-radius:4px;padding:2px 7px}
+  .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+  .card .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--tm);margin-bottom:6px}
+  .card .val{font-size:24px;font-weight:600;font-family:var(--mono)}
+  .val.success{color:var(--success)}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:10px}
+  .placeholder{height:150px;display:flex;align-items:center;justify-content:center;color:var(--td);font-size:13px}
+  .secrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  h2{font-size:13px;font-weight:600;color:var(--ts);margin:0}
+  .h2count{color:var(--tm);font-weight:400}
+  .filter{display:inline-flex;gap:2px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:2px}
+  .filter button{font-family:var(--mono);font-size:12px;color:var(--tm);background:none;border:none;
+                 padding:3px 10px;border-radius:5px;cursor:pointer;display:flex;align-items:center;gap:5px}
+  .filter button.active{background:var(--panel);color:var(--tp);box-shadow:0 1px 2px rgba(0,0,0,.4)}
+  .filter .n{color:var(--td);font-size:11px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-weight:500;color:var(--tm);font-size:11px;text-transform:uppercase;letter-spacing:.04em;
+     padding:9px 12px;border-bottom:1px solid var(--border)}
+  td{padding:9px 12px;border-bottom:1px solid rgba(42,46,54,.5);font-family:var(--mono);color:var(--ts);white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  td.req{white-space:normal;color:var(--ts)}
+  .sess{color:var(--accent);text-decoration:none}
+  .via{color:var(--tm);font-size:12px}
+  .src{display:inline-flex;align-items:center;gap:5px;font-size:12px}
+  .src.slash{color:var(--tm)}
+  .src.auto{color:var(--accent)}
+  .num{text-align:right}
+  .pct{text-align:right;font-weight:600}
+  .pct.g{color:var(--success)} .pct.w{color:var(--warning)} .pct.r{color:var(--error)}
+  .note{font-size:11px;color:var(--tm);padding:8px 12px;border-top:1px solid var(--border)}
+  .note code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:var(--accent)}
+  .new{box-shadow:inset 3px 0 0 var(--accent)}
+  .srcblock{font-family:var(--mono);font-size:12px;color:var(--ts);padding:14px 16px}
+  .srcblock .fn{color:var(--tm);font-size:11px;margin-bottom:8px}
+  .badge-new{font-size:10px;background:rgba(110,168,254,.15);color:var(--accent);border-radius:4px;padding:1px 6px;margin-left:8px;text-transform:uppercase;letter-spacing:.05em}
+  .legend{font-size:11px;color:var(--td);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="crumb"><a href="#">Skills</a><span class="sep">›</span><span>/plan</span><span class="tag">skill</span></div>
+
+  <div class="cards">
+    <div class="card"><div class="lbl">Invocations</div><div class="val">42</div></div>
+    <div class="card"><div class="lbl">Errors</div><div class="val success">0</div></div>
+    <div class="card"><div class="lbl">Success Rate</div><div class="val success">100%</div></div>
+    <div class="card"><div class="lbl">Sessions</div><div class="val">18</div></div>
+    <div class="card"><div class="lbl">Projects</div><div class="val">3</div></div>
+  </div>
+
+  <div class="panel"><div class="placeholder">— usage / projects time-series + donut (unchanged) —</div></div>
+
+  <!-- Recent Invocations: + Source column + Source filter -->
+  <div>
+    <div class="secrow">
+      <h2>Recent Invocations <span class="h2count">(42)</span></h2>
+      <div class="filter">
+        <button class="active">All <span class="n">42</span></button>
+        <button>&#9889; Auto <span class="n">5</span></button>
+        <button>&#8984; Slash <span class="n">37</span></button>
+      </div>
+    </div>
+    <div class="panel">
+      <table>
+        <thead><tr><th>Date</th><th>Project</th><th>Session</th><th>Via</th><th class="new">Source</th><th>Request</th></tr></thead>
+        <tbody>
+          <tr><td>5/20 3:14pm</td><td>construct</td><td><a class="sess" href="#">a1b2c3d4</a></td><td class="via">&mdash;</td>
+              <td class="new"><span class="src slash">&#8984; slash</span></td><td class="req">/plan trim the keywords</td></tr>
+          <tr><td>5/20 1:02pm</td><td>construct</td><td><a class="sess" href="#">e5f6a7b8</a></td><td class="via">&mdash;</td>
+              <td class="new"><span class="src auto">&#9889; auto</span></td><td class="req">write a plan for the reducer change</td></tr>
+          <tr><td>5/19 9:48am</td><td>construct</td><td><a class="sess" href="#">c9d0e1f2</a></td><td class="via">&#8627; task</td>
+              <td class="new"><span class="src auto">&#9889; auto</span></td><td class="req">plan the migration</td></tr>
+          <tr><td>5/19 8:30am</td><td>construct</td><td><a class="sess" href="#">11aa22bb</a></td><td class="via">&mdash;</td>
+              <td class="new"><span class="src slash">&#8984; slash</span></td><td class="req">/plan</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- NEW: Routing Keywords with per-keyword success rate -->
+  <div>
+    <div class="secrow">
+      <h2>Routing Keywords <span class="h2count">(22)</span><span class="badge-new">new</span></h2>
+    </div>
+    <div class="panel new">
+      <table>
+        <thead><tr><th>Keyword</th><th class="num">Matched</th><th class="num">Invoked</th><th class="num">Success</th></tr></thead>
+        <tbody>
+          <tr><td>implementation plan</td><td class="num">3</td><td class="num">3</td><td class="pct g">100%</td></tr>
+          <tr><td>write a plan</td><td class="num">6</td><td class="num">4</td><td class="pct g">67%</td></tr>
+          <tr><td>break this into tasks</td><td class="num">2</td><td class="num">1</td><td class="pct w">50%</td></tr>
+          <tr><td>/plan\s+\S+/</td><td class="num">21</td><td class="num">2</td><td class="pct w">10%</td></tr>
+          <tr><td>what's the plan</td><td class="num">4</td><td class="num">0</td><td class="pct r">0%</td></tr>
+          <tr><td>plan this</td><td class="num">2</td><td class="num">0</td><td class="pct r">0%</td></tr>
+        </tbody>
+      </table>
+      <div class="note">success = non-slash <code>Skill()</code> calls &divide; real prompts matching this keyword &middot; re-matched against current keywords</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="srcblock">
+      <div class="fn">/plan/SKILL.md</div>
+      # Plan<br>Write an implementation plan &mdash; touch list, tasks, verification, rollback &hellip;
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

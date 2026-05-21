@@ -19,8 +19,10 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 
-type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string; isSubagent?: boolean; subagentType?: string; parentSessionId?: string };
+type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string; isSubagent?: boolean; subagentType?: string; parentSessionId?: string; viaSlash?: boolean };
+type KeywordRow = { keyword: string; matched: number; invoked: number; successPct?: number };
 type Dataset = 'usage' | 'projects';
+type SourceFilter = 'all' | 'auto' | 'slash';
 
 const DATASETS: { key: Dataset; label: string }[] = [
   { key: 'usage', label: 'Usage' },
@@ -42,6 +44,7 @@ export function SkillDetailPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
   const [distChartType, setDistChartType] = useState<'donut' | 'bar'>('donut');
   const [tsDataset, setTsDataset] = useState<Dataset>('usage');
@@ -171,12 +174,64 @@ export function SkillDetailPage() {
         : <span className="text-text-muted">—</span>,
     },
     {
+      key: 'viaSlash',
+      label: 'Source',
+      shrink: true,
+      render: (row) => row.viaSlash
+        ? <span className="font-mono text-xs text-text-muted whitespace-nowrap" title="Slash command — mandatory invocation">⌘ slash</span>
+        : <span className="font-mono text-xs text-accent-primary whitespace-nowrap" title="Auto — model called Skill() from a keyword match">⚡ auto</span>,
+    },
+    {
       key: 'userRequest',
       label: 'Request',
       render: (row) => {
         if (!row.userRequest) return <span className="text-text-muted">—</span>;
         const truncated = row.userRequest.length > 120 ? row.userRequest.slice(0, 120) + '…' : row.userRequest;
         return <span className="text-sm text-text-secondary font-mono">{truncated}</span>;
+      },
+    },
+  ];
+
+  const autoCount = data.invocations.filter((i: InvocationRow) => !i.viaSlash).length;
+  const slashCount = data.invocations.length - autoCount;
+  const filteredInvocations = sourceFilter === 'all'
+    ? data.invocations
+    : data.invocations.filter((i: InvocationRow) => sourceFilter === 'slash' ? !!i.viaSlash : !i.viaSlash);
+
+  const keywordRows: KeywordRow[] = data.keywords ?? [];
+  const keywordColumns: Column<KeywordRow>[] = [
+    {
+      key: 'keyword',
+      label: 'Keyword',
+      sortable: true,
+      render: (row) => <span className="font-mono text-sm text-text-secondary break-all">{row.keyword}</span>,
+    },
+    {
+      key: 'matched',
+      label: 'Matched',
+      shrink: true,
+      sortable: true,
+      tooltip: 'Real user prompts matching this keyword (injected skill bodies and subagent turns excluded).',
+      render: (row) => <span className="font-mono text-text-secondary">{fmtNumber(row.matched)}</span>,
+    },
+    {
+      key: 'invoked',
+      label: 'Invoked',
+      shrink: true,
+      sortable: true,
+      tooltip: 'Non-slash Skill() calls whose driving prompt matched this keyword.',
+      render: (row) => <span className="font-mono text-text-secondary">{fmtNumber(row.invoked)}</span>,
+    },
+    {
+      key: 'successPct',
+      label: 'Success',
+      shrink: true,
+      sortable: true,
+      tooltip: 'Invoked ÷ Matched. Re-matched against current keywords, so it reflects today\'s routing.',
+      render: (row) => {
+        if (row.successPct == null) return <span className="text-text-disabled">—</span>;
+        const cls = row.successPct >= 30 ? 'text-success' : row.successPct >= 10 ? 'text-warning' : 'text-error';
+        return <span className={clsx('font-mono', cls)}>{fmtPct(row.successPct)}</span>;
       },
     },
   ];
@@ -374,11 +429,27 @@ export function SkillDetailPage() {
 
       {data.invocations.length > 0 && (
         <div ref={invTableRef}>
-          <h2 className="text-sm font-medium text-text-secondary mb-3">
-            Recent Invocations ({data.invocations.length})
-          </h2>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="text-sm font-medium text-text-secondary">
+              Recent Invocations ({filteredInvocations.length})
+            </h2>
+            <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
+              {([['all', 'All', total], ['auto', '⚡ Auto', autoCount], ['slash', '⌘ Slash', slashCount]] as const).map(([key, label, n]) => (
+                <button
+                  key={key}
+                  onClick={() => setSourceFilter(key)}
+                  className={clsx(
+                    'px-2.5 py-0.5 text-xs rounded-sm transition-colors whitespace-nowrap font-mono',
+                    sourceFilter === key ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
+                  )}
+                >
+                  {label} <span className="text-text-disabled">{n}</span>
+                </button>
+              ))}
+            </div>
+          </div>
           <DataTable<InvocationRow>
-            data={data.invocations}
+            data={filteredInvocations}
             columns={invocationColumns}
             keyField="timestamp"
             maxRows={50}
@@ -413,6 +484,23 @@ export function SkillDetailPage() {
                 </div>
               );
             }}
+          />
+        </div>
+      )}
+
+      {keywordRows.length > 0 && (
+        <div>
+          <h2 className="text-sm font-medium text-text-secondary mb-1">
+            Routing Keywords ({keywordRows.length})
+          </h2>
+          <p className="text-xs text-text-muted mb-3">
+            Success = non-slash <span className="font-mono">Skill()</span> calls ÷ real prompts matching the keyword, re-matched against the current keyword set.
+          </p>
+          <DataTable<KeywordRow>
+            data={keywordRows}
+            columns={keywordColumns}
+            keyField="keyword"
+            maxRows={25}
           />
         </div>
       )}

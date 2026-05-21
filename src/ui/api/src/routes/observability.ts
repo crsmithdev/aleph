@@ -287,6 +287,19 @@ function getRegisteredSkills(): string[] {
   }
 }
 
+function getSkillKeywords(name: string): string[] {
+  const bare = name.startsWith('/') ? name.slice(1) : name;
+  const rulesPath = resolve(claudePaths.skills, 'skill-rules.json');
+  if (!existsSync(rulesPath)) return [];
+  try {
+    const data = JSON.parse(readFileSync(rulesPath, 'utf-8'));
+    const rule = (data.rules || []).find((r: { skill: string }) => r.skill === bare);
+    return (rule?.keywords as string[]) || [];
+  } catch {
+    return [];
+  }
+}
+
 function projectIdToPath(projectId: string): string | undefined {
   // -home-user-project → /home/user/project
   // Try progressively joining segments with / vs -
@@ -781,7 +794,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       const obsReq = req as ObsRequest;
       return cachedResult(req.url, 60_000, () => {
         const skillName = decodeURIComponent(req.params.name);
-        const { result, queryTimeMs } = timed(() => aggregateSkillDetail(obsReq.telemetryEntries, skillName));
+        const keywords = getSkillKeywords(skillName);
+        const { result, queryTimeMs } = timed(() => aggregateSkillDetail(obsReq.telemetryEntries, skillName, keywords));
         const projects = [...new Set(result.invocations?.map((i: { project: string }) => i.project) ?? [])];
         const sourceContent = findSkillSource(skillName, projects);
         const commandNames = getCommandNames();

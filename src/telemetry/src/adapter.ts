@@ -23,8 +23,9 @@ cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v4`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v5`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v6`);
+cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v7`);
 cacheDb.exec(`
-  CREATE TABLE IF NOT EXISTS telemetry_cache_v7 (
+  CREATE TABLE IF NOT EXISTS telemetry_cache_v8 (
     file_path TEXT PRIMARY KEY,
     mtime_ms INTEGER NOT NULL,
     size INTEGER NOT NULL,
@@ -33,10 +34,10 @@ cacheDb.exec(`
 `);
 
 const insertCache = cacheDb.prepare(
-  `INSERT OR REPLACE INTO telemetry_cache_v7 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
+  `INSERT OR REPLACE INTO telemetry_cache_v8 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
 );
 const selectCache = cacheDb.prepare(
-  `SELECT mtime_ms, size, events FROM telemetry_cache_v7 WHERE file_path = ?`
+  `SELECT mtime_ms, size, events FROM telemetry_cache_v8 WHERE file_path = ?`
 );
 
 // ---------------------------------------------------------------------------
@@ -367,6 +368,10 @@ function adaptLine(
             /^\/[a-z]/i.test(userText.trim());
           const userData: Record<string, unknown> = { ...meta, text: userText.slice(0, 500), role: "user" };
           if (slashDispatch) userData.slashDispatch = true;
+          // Mark non-real turns so per-keyword stats can exclude them: isMeta =
+          // injected skill body, isSidechain = subagent turn inline in the transcript.
+          if (raw.isMeta === true) userData.isMeta = true;
+          if (raw.isSidechain === true) userData.isSidechain = true;
           events.push({ ts, sid, kind: "message", name: "user", data: userData });
         }
       }
@@ -666,7 +671,7 @@ function corpusCacheKey(opts?: AdaptOptions): string {
 }
 
 export function clearCache(): void {
-  cacheDb.exec("DELETE FROM telemetry_cache_v7");
+  cacheDb.exec("DELETE FROM telemetry_cache_v8");
   fileCache.clear();
   fileEventCache.clear();
   discoveryCache = undefined;

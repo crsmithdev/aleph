@@ -11,6 +11,7 @@ import {
   reduceTokens as aggregateTokens,
   reduceCost as aggregateCost,
   reduceSessions as aggregateSessions,
+  reduceSkillDetail,
 } from "../src/reducers.js";
 import type { TelemetryEvent } from "../src/event.js";
 
@@ -138,6 +139,33 @@ describe("aggregator", () => {
       expect(omni.conversionPct).toBeUndefined();       // unregistered → no conversion
       expect(skills.conversionMatched).toBe(3);         // registered matches only
       expect(skills.conversionInvokes).toBe(1);         // registered, non-slash only
+    });
+  });
+
+  describe("aggregateSkillDetail per-keyword stats", () => {
+    it("excludes slash invocations and injected/meta turns", () => {
+      const ts = "2026-05-21T00:00:00.000Z";
+      const ev = (kind: string, data: Record<string, unknown>) => ({ ts, sid: "s1", kind, data } as any);
+      const events = [
+        ev("message", { role: "user", text: "write a plan for the reducer" }),
+        ev("tool", { skill: "plan", userRequest: "write a plan for the reducer" }), // auto invoke
+        ev("message", { role: "user", text: "what's the plan here" }),             // matched, not invoked
+        ev("message", { role: "user", text: "Invoke the `plan` skill with verb=x", isMeta: true }), // injected
+        ev("tool", { skill: "plan", userRequest: "/plan", viaSlash: true }),        // slash invoke
+      ];
+      const d = reduceSkillDetail(events, "plan", ["write a plan", "what's the plan", "/plan"]);
+      const byKw = Object.fromEntries((d.keywords ?? []).map((k) => [k.keyword, k]));
+
+      expect(byKw["write a plan"].matched).toBe(1);
+      expect(byKw["write a plan"].invoked).toBe(1);
+      expect(byKw["write a plan"].successPct).toBe(100);
+      expect(byKw["what's the plan"].matched).toBe(1);
+      expect(byKw["what's the plan"].invoked).toBe(0);   // matched but model didn't invoke
+      expect(byKw["what's the plan"].successPct).toBe(0);
+      expect(byKw["/plan"].matched).toBe(0);             // isMeta dispatch excluded from matched
+      // both invocations are present in the table, slash flagged
+      expect(d.invocations.filter((i) => i.viaSlash).length).toBe(1);
+      expect(d.invocations.filter((i) => !i.viaSlash).length).toBe(1);
     });
   });
 

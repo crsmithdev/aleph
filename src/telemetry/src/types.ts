@@ -320,11 +320,23 @@ export interface HookDetailData {
   invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; decision?: "pass" | "block" | "crash"; isError?: boolean; errorMessage?: string; isSubagent?: boolean; subagentType?: string; parentSessionId?: string }[];
 }
 
+export interface SkillKeywordStat {
+  keyword: string;
+  /** Real user prompts matching this keyword (injected/subagent turns excluded). */
+  matched: number;
+  /** Non-slash invocations of the skill whose prompt matched this keyword. */
+  invoked: number;
+  /** invoked / matched * 100; undefined when matched is 0. */
+  successPct?: number;
+}
+
 export interface SkillDetailData {
   skill: string;
   totalCount: number;
   byDay: TimeBucket[];
-  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string; isSubagent?: boolean; subagentType?: string; parentSessionId?: string }[];
+  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string; isSubagent?: boolean; subagentType?: string; parentSessionId?: string; viaSlash?: boolean }[];
+  /** Per-keyword routing stats; absent for commands (no rules entry). */
+  keywords?: SkillKeywordStat[];
 }
 
 export interface MemoryUsageData {

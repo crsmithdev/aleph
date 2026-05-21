@@ -6,6 +6,7 @@
  */
 
 import type { TelemetryEvent } from "./event.js";
+import { stemPhrase, matchesKeyword } from "./skill-match.js";
 import type {
   Granularity,
   OverviewData,
@@ -17,7 +18,7 @@ import type {
   SessionsData, SessionMetric, SessionBucket, ProjectBucket, TimeBucket,
   ToolDetailData,
   HookDetailData,
-  SkillDetailData,
+  SkillDetailData, SkillKeywordStat,
   MemoryUsageData,
   MemorySearchData, MemorySearchInvocation, MemorySearchResult,
   HookEventData, HookInvocation,
@@ -1120,7 +1121,7 @@ export function reduceHookDetail(events: TelemetryEvent[], hookName: string): Ho
 // Skill Detail
 // ---------------------------------------------------------------------------
 
-export function reduceSkillDetail(events: TelemetryEvent[], skillName: string): SkillDetailData {
+export function reduceSkillDetail(events: TelemetryEvent[], skillName: string, keywords?: string[]): SkillDetailData {
   const subagentTypeMap = buildSubagentTypeMap(events);
   const matched = events.filter((e) => e.kind === "tool" && (e.data?.skill as string) === skillName);
   const dayMap = new Map<string, number>();
@@ -1138,6 +1139,7 @@ export function reduceSkillDetail(events: TelemetryEvent[], skillName: string): 
       isSubagent: isSubagent || undefined,
       subagentType: isSubagent ? (subagentTypeMap.get(e.sid) || "claude") : undefined,
       parentSessionId: parentSessionId || undefined,
+      viaSlash: e.data?.viaSlash === true || undefined,
     });
   }
 
@@ -1145,9 +1147,39 @@ export function reduceSkillDetail(events: TelemetryEvent[], skillName: string): 
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, count]) => ({ date, count }));
 
+  // Per-keyword invocation success rate. matched(K) = real user prompts matching
+  // K (excluding injected skill bodies and subagent turns); invoked(K) = non-slash
+  // invocations of this skill whose driving prompt matches K. Re-matches the
+  // CURRENT keyword set against historical prompt text — reflects today's routing.
+  let keywordStats: SkillKeywordStat[] | undefined;
+  if (keywords && keywords.length > 0) {
+    const matchedCounts = new Map<string, number>();
+    const invokedCounts = new Map<string, number>();
+    const tally = (text: string | undefined, into: Map<string, number>) => {
+      if (!text) return;
+      const lp = text.toLowerCase();
+      const sp = stemPhrase(lp);
+      for (const kw of keywords) if (matchesKeyword(kw, lp, sp)) into.set(kw, (into.get(kw) || 0) + 1);
+    };
+    for (const e of events) {
+      if (e.kind === "message" && e.data?.role === "user" && !e.data?.isMeta && !e.data?.isSidechain && !e.data?.parentSessionId) {
+        tally(e.data.text as string | undefined, matchedCounts);
+      }
+    }
+    for (const inv of invocations) {
+      if (!inv.viaSlash) tally(inv.userRequest, invokedCounts);
+    }
+    keywordStats = keywords.map((keyword) => {
+      const m = matchedCounts.get(keyword) || 0;
+      const inv = Math.min(invokedCounts.get(keyword) || 0, m);
+      return { keyword, matched: m, invoked: inv, successPct: m > 0 ? (inv / m) * 100 : undefined };
+    }).sort((a, b) => b.matched - a.matched || b.invoked - a.invoked);
+  }
+
   return {
     skill: skillName, totalCount: matched.length, byDay,
     invocations: invocations.sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 200),
+    keywords: keywordStats,
   };
 }
 

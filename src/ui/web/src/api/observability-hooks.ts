@@ -274,7 +274,8 @@ export function useObsSkillDetail(name: string, range: TimeRange) {
     totalCount: number;
     errorCount: number;
     byDay: Array<{ date: string; count: number }>;
-    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string; isSubagent?: boolean; subagentType?: string; parentSessionId?: string }>;
+    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string; isSubagent?: boolean; subagentType?: string; parentSessionId?: string; viaSlash?: boolean }>;
+    keywords?: Array<{ keyword: string; matched: number; invoked: number; successPct?: number }>;
     sourceContent?: string;
     type?: 'command' | 'skill';
     queryTimeMs: number;
