@@ -5,6 +5,7 @@
 @~/.construct/identity/AGENTS.override.md
 @~/.construct/identity/SOUL.override.md
 @~/.construct/identity/STYLE.override.md
+@../modes/INDEX.md
 
 # Verification
 

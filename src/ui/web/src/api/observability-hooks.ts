@@ -664,8 +664,7 @@ export function useObsDirectives() {
   return useQuery<{
     directives: Array<{ ts: string; sessionId: string; directives: string[]; promptWords?: number; docRef?: { doc: string; desc: string } }>;
     total: number;
-    depthCounts: Record<string, number>;
-    byDay: Array<{ date: string; full: number; quick: number; total: number }>;
+    modeCounts: Record<string, number>;
     topSkills: Array<{ skill: string; count: number }>;
   }>({
     queryKey: ['observability', 'learning', 'directives'],

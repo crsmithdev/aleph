@@ -688,11 +688,11 @@ function RoutingTable() {
 
   type DirectiveRow = (typeof data.directives)[number];
 
-  function depthOf(directives: string[] | undefined): 'full' | 'quick' {
-    return (directives ?? []).some(d => d.toLowerCase() === 'full') ? 'full' : 'quick';
+  function modeDirectives(directives: string[] | undefined): string[] {
+    return (directives ?? []).filter(d => d.toLowerCase().startsWith('mode:')).map(d => d.slice('mode:'.length));
   }
   function skillDirectives(directives: string[] | undefined): string[] {
-    return (directives ?? []).filter(d => d.toLowerCase() !== 'full' && d.toLowerCase() !== 'quick');
+    return (directives ?? []).filter(d => d.toLowerCase().startsWith('skill:'));
   }
   function stripPrefix(d: string): string {
     return d.startsWith('skill:') ? d.slice('skill:'.length) : d;
@@ -708,23 +708,21 @@ function RoutingTable() {
       ),
     },
     {
-      key: 'depth',
-      label: 'Depth',
-      width: '88px',
-      tooltip: 'Routing depth assigned to the prompt. "full" enters plan mode (architectural scope, long prompts, or /deep prefix); "quick" is the default for everything else.',
+      key: 'modes',
+      label: 'Modes',
+      width: '180px',
+      tooltip: 'Behavioral modes the router activated on this prompt (keyword-matched). Empty means no mode fired — the baseline posture.',
       render: (row) => {
-        const depth = depthOf(row.directives);
+        const modes = modeDirectives(row.directives);
+        if (modes.length === 0) return <span className="text-text-disabled text-xs">—</span>;
         return (
-          <span
-            className={clsx(
-              'text-xs px-1.5 py-0.5 rounded font-mono',
-              depth === 'full'
-                ? 'bg-blue-500/15 text-blue-400'
-                : 'bg-bg-tertiary text-text-muted',
-            )}
-          >
-            {depth}
-          </span>
+          <div className="flex flex-wrap gap-1">
+            {modes.map((m, i) => (
+              <span key={i} className="text-xs px-1.5 py-0.5 rounded font-mono bg-accent/10 text-accent">
+                {m}
+              </span>
+            ))}
+          </div>
         );
       },
     },
@@ -765,7 +763,7 @@ function RoutingTable() {
     {
       key: 'promptWords',
       label: 'Words',
-      tooltip: 'Word count of the user prompt that triggered this routing decision. Prompts ≥40 words automatically route to "full" depth.',
+      tooltip: 'Word count of the user prompt that triggered this routing decision.',
       width: '70px',
       align: 'right',
       render: (row) => (
@@ -776,8 +774,8 @@ function RoutingTable() {
 
   function reconstructInjection(row: DirectiveRow): string {
     const lines: string[] = [];
-    const depth = depthOf(row.directives);
-    if (depth === 'full') lines.push('[Construct] Depth: FULL — complex request.');
+    const modes = modeDirectives(row.directives);
+    if (modes.length > 0) lines.push(`[Construct] Modes active: ${modes.join(', ')}`);
     if (row.docRef) lines.push(`[Construct] Reference: ${row.docRef.doc} — ${row.docRef.desc}`);
     const skills = skillDirectives(row.directives).map(stripPrefix);
     if (skills.length > 0) lines.push(`[Construct] Matched skills: ${skills.join(', ')}. Activate via Skill() before proceeding.`);

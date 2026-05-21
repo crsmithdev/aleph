@@ -34,11 +34,11 @@ Last session (<filename>):
 
 ### During a session
 
-**Depth classification** — on every prompt (>=3 words), `routing-classify-submit.ts` classifies depth:
-- FULL if prompt matches architectural keywords (`architect|redesign|refactor|migrate|schema|structure|plan|propose|authenticat*|authorizat*|integrat*|api endpoint|rename all|move all|replace all|across all|every file|all files|end to end|full stack`) or is >=40 words.
-- QUICK otherwise (silent).
-- Output when FULL (architectural keywords): `[Construct] Depth: FULL — architectural keywords. Use design-first pipeline.`
-- Output when FULL (>=40 words): `[Construct] Depth: FULL — complex request. Consider design-first pipeline.`
+**Mode activation** — on every prompt (>=3 words), `routing-classify-submit.ts` matches each `modes/MODE_*.md` file's trigger regexes against the prompt and activates every mode that matches (composable — any subset can fire at once):
+- Modes: `execution`, `brainstorming`, `introspection`, `efficiency`, `focused`, `comparison`. Each is an opt-in posture overlay; absence is the common case.
+- Output when ≥1 mode fires: `[Construct] Modes active: <slugs>` followed by the full inlined body of each active mode.
+- When no regex fires (silent): the model self-selects from the always-loaded `whenToUse` index in `modes/INDEX.md` (`@`-included from `core/CLAUDE.md`) and names the choice in one line.
+- Directive signals `mode:<slug>` are written to telemetry alongside `skill:<name>`.
 
 **Verification gate injection** — same hook injects e2e requirements for non-question prompts >=5 words: `[Construct] Verification gate active — after making changes, you MUST verify end-to-end: 1. Run the actual system 2. Interact with it (Playwright, Chrome DevTools, or run the CLI) 3. Produce an artifact: screenshot or captured output saved to a file`. Unit tests alone are not sufficient. The Stop hook checks for e2e evidence.
 
@@ -374,8 +374,8 @@ All hooks registered in `settings-hooks.json` (source: `src/core/hooks/settings-
 **Q: How do I add a new hook?**
 Add the script to `src/core/hooks/` (or `src/memory/hooks/` for session/memory hooks), register it in `src/core/hooks/settings-hooks.json` with event, command, and timeout, then run `bun install.ts` to deploy. Validate the JSON with `npm run validate`.
 
-**Q: What triggers FULL depth classification?**
-Architectural keywords in the prompt (`architect`, `redesign`, `refactor`, `migrate`, `schema`, `structure`, `plan`, `propose`, `authenticat*`, `authorizat*`, `integrat*`, `api endpoint`, `rename all`, `move all`, `replace all`, `across all`, `every file`, `all files`, `end to end`, `full stack`) or prompt length ≥ 40 words. QUICK classification is silent.
+**Q: What activates a behavioral mode?**
+Keyword triggers defined per mode in `modes/MODE_<slug>.md` frontmatter (regexes matched against the prompt). Modes are composable — any subset fires at once — and opt-in, so most prompts activate none. When no trigger fires, the model self-selects from the `whenToUse` hints in `modes/INDEX.md`. To add or retune a mode, edit its MODE file's `triggers`; regenerate `modes/INDEX.md` via `buildIndex()` (the test suite enforces they stay in sync).
 
 **Q: How do I prevent the SQL guard from blocking a query?**
 The guard only blocks: `DROP TABLE/DATABASE/SCHEMA`, `TRUNCATE`, `DELETE FROM` without a WHERE clause, and `ALTER TABLE DROP COLUMN`. Add a WHERE clause to DELETE queries. Qualified deletes (e.g. `DELETE FROM t WHERE id = ?`) are allowed.

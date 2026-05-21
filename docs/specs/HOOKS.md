@@ -14,7 +14,7 @@ They are registered in `src/core/hooks/settings-hooks.json` and installed to `~/
 | SessionStart | context-restore-start | `src/memory/hooks/context-restore-start.ts` | — | 5000ms | Open | reads `compaction-notes.json` + session files + MCP memories → stdout advisory to Claude | `hook-events.jsonl` — base fields only |
 | UserPromptSubmit | rating-capture-submit | `src/memory/hooks/rating-capture-submit.ts` | — | 2000ms | Open | writes `signals/ratings.jsonl` → observability UI ratings page | `hook-events.jsonl` — base fields; `signals/ratings.jsonl` — `{rating, type, context}` |
 | UserPromptSubmit | feedback-capture-submit | `src/memory/hooks/feedback-capture-submit.ts` | — | 3000ms | Open | writes `signals/feedback.jsonl` → consolidation pipeline | `hook-events.jsonl` — base fields only |
-| UserPromptSubmit | routing-classify-submit | `src/core/hooks/routing-classify-submit.ts` | — | 3000ms | Open | writes `signals/directives.jsonl` → `quality-check-stop` (depth gate) + eval harness; stdout skill matches → Claude | `hook-events.jsonl` — base fields only |
+| UserPromptSubmit | routing-classify-submit | `src/core/hooks/routing-classify-submit.ts` | — | 3000ms | Open | writes `mode:`/`skill:` directive signals to telemetry; stdout inlines active mode bodies + skill matches → Claude | `hook-events.jsonl` — base fields only |
 | Stop | quality-check-stop | `src/core/hooks/quality-check-stop.ts` | — | 3000ms | Open | writes `hook-events.jsonl` via `reportHook` → observability UI; stdout advisory → Claude | `hook-events.jsonl` — `{decision, tier, detail}` (only hook with structured payload beyond base fields) |
 | Stop | git-hygiene-stop | `src/core/hooks/git-hygiene-stop.ts` | — | 5000ms | **Blocking** | stdout block decision → Claude (branch/commit/push violations); advisory when pre-existing mess | `hook-events.jsonl` — base fields only |
 | Stop | context-monitor-stop | `src/core/hooks/context-monitor-stop.ts` | — | 3000ms | Open | stdout advisory only → Claude | `hook-events.jsonl` — base fields only |
@@ -75,7 +75,7 @@ They are registered in `src/core/hooks/settings-hooks.json` and installed to `~/
 
 ### Routing and security (src/core/hooks/)
 
-**routing-classify-submit** fires on UserPromptSubmit. Classifies prompt depth (QUICK vs FULL), detects architectural keywords, matches the prompt against `skill-rules.json`, writes directive signals for matched skills and dispatch mode, and injects a verification gate reminder for non-question prompts ≥5 words.
+**routing-classify-submit** fires on UserPromptSubmit. Activates composable behavioral modes by matching each `modes/MODE_*.md` file's trigger regexes against the prompt (inlining every active mode's body into stdout), matches the prompt against `skill-rules.json`, and writes `mode:`/`skill:` directive signals to telemetry. Modes are opt-in posture overlays — absence is the common case; when no regex fires, the model self-selects from the `whenToUse` index in `modes/INDEX.md`.
 
 **security-scan-bash** fires on PreToolUse (Bash). Scans bash commands for security issues. Advisory only.
 

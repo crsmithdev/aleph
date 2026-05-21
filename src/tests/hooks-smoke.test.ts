@@ -103,18 +103,14 @@ const shortResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prom
 check(r, "routing: <3 words exits 0", shortResult.exitCode === 0);
 check(r, "routing: <3 words no stdout", shortResult.stdout.trim() === "");
 
-// QUICK: no arch keywords, < 40 words → no [Construct] Depth line
-const quickResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"update the button color to blue"}');
-check(r, "routing: QUICK — no Depth line", !quickResult.stdout.includes("[Construct] Depth"));
+// No mode trigger → no mode block
+const noModeResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"update the button color to blue"}');
+check(r, "routing: no trigger → no Modes block", !noModeResult.stdout.includes("[Construct] Modes active"));
 
-// FULL via architectural keyword
-const archResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"refactor the entire auth module to use JWT tokens"}');
-check(r, "routing: arch keyword → FULL output", archResult.stdout.includes("[Construct] Depth: FULL"));
-
-// FULL via ≥40 words
-const longPrompt = Array(42).fill("word").join(" ");
-const longResult = runHook(te, "core/hooks/routing-classify-submit.ts", JSON.stringify({ prompt: longPrompt }));
-check(r, "routing: ≥40 words → FULL output", longResult.stdout.includes("[Construct] Depth: FULL"));
+// Mode activation via trigger keyword → names + inlines the mode
+const modeResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"go ahead and implement it now"}');
+check(r, "routing: trigger → Modes active line", modeResult.stdout.includes("[Construct] Modes active: execution"));
+check(r, "routing: mode body inlined", modeResult.stdout.includes("# Execution Mode"));
 
 // Skill matching — "audit the code" is triggered by code-review
 const skillResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"audit the code on this branch"}');

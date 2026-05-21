@@ -1,31 +1,30 @@
 #!/usr/bin/env bun
 /**
- * UserPromptSubmit hook: request classifier and skill router.
+ * UserPromptSubmit hook: behavioral-mode router and skill router.
  *
- * Runs on every user prompt submission. Three responsibilities:
+ * Runs on every user prompt submission. Two responsibilities:
  *
- * 1. DEPTH CLASSIFICATION — scan prompt for architectural keywords or length ≥40 words.
- *    FULL → emit design-first pipeline recommendation.
- *    QUICK → no output.
+ * 1. MODE ACTIVATION — load modes/MODE_*.md, match each mode's trigger regexes
+ *    against the prompt, and inline the body of every active mode into stdout so
+ *    its posture reaches the model this turn. Composable: any subset can fire.
  *
- * 2. VERIFICATION GATE — for non-question prompts ≥5 words, inject e2e verification
- *    requirements into the system message so the Stop hook can enforce them.
+ * 2. SKILL MATCHING — load skills/skill-rules.json, match prompt keywords against
+ *    rules, emit matched skill names for Claude to activate via Skill().
  *
- * 3. SKILL MATCHING — load skills/skill-rules.json, match prompt keywords against rules,
- *    emit matched skill names for Claude to activate via Skill().
- *
- * Writes directive signals (full, skill:{name}) to the directives log.
+ * Writes directive signals (mode:{slug}, skill:{name}) to the directives log.
  */
 import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
+import { loadModes, activeModes } from "../../modes/modes.ts";
 
 interface SkillRule { skill: string; keywords: string[]; }
 
 const TAG = "routing-classify-submit";
 const root = resolve(dirname(Bun.main), "../..");
 const rulesFile = resolve(root, "skills/skill-rules.json");
+const modesDir = resolve(root, "modes");
 
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
@@ -54,18 +53,10 @@ if (words.length < 3) {
   process.exit(0);
 }
 
-// Depth classification
-const archPattern = /\b(architect|redesign|refactor|migrate|schema|structure|plan|propose|authenticat\w*|authorizat\w*|integrat\w*|api.?endpoint|rename.?all|move.?all|replace.?all|across.?all|every.?file|all.?files|end.to.end|full.?stack)/i;
-const isFull = archPattern.test(prompt) || words.length >= 40;
-if (archPattern.test(prompt)) {
-  trace(TAG, "depth: FULL (architectural keywords)");
-  console.log("[Construct] Depth: FULL — architectural keywords. Use design-first pipeline.");
-} else if (words.length >= 40) {
-  trace(TAG, "depth: FULL (complex, ≥40 words)");
-  console.log("[Construct] Depth: FULL — complex request. Consider design-first pipeline.");
-} else {
-  trace(TAG, "depth: QUICK");
-}
+// Mode activation — match each mode's trigger regexes against the prompt.
+const modes = loadModes(modesDir);
+const active = activeModes(prompt, modes);
+trace(TAG, `modes active: ${active.length ? active.join(", ") : "none"}`);
 
 // Skill matching
 let rules: SkillRule[] = [];
@@ -137,17 +128,25 @@ for (const { pattern, doc, desc } of domainRefs) {
   }
 }
 
-// Write directive signal (before early exit so full is captured even with no skill match)
+// Write directive signal (before early exit so modes are captured even with no skill match)
 const directives: string[] = [];
-if (isFull) directives.push("full");
+for (const slug of active) directives.push(`mode:${slug}`);
 for (const skill of matched) directives.push(`skill:${skill}`);
 const meta: Record<string, unknown> = { directives, promptWords: words.length };
+if (active.length) meta.modes = active;
 if (docRef) meta.docRef = docRef;
 if (directives.length > 0 || docRef) {
   reportHook(TAG, "UserPromptSubmit", input.session_id, { meta });
   trace(TAG, `directive signal written: ${directives.join(", ")}${docRef ? ` ref=${docRef.doc}` : ""}`);
 } else {
   reportHook(TAG, "UserPromptSubmit", input.session_id);
+}
+
+// Inline the body of every active mode so its posture reaches the model this turn.
+if (active.length) {
+  const bySlug = new Map(modes.map(m => [m.slug, m]));
+  const blocks = active.map(slug => bySlug.get(slug)!.body).join("\n\n---\n\n");
+  console.log(`[Construct] Modes active: ${active.join(", ")}\n\n${blocks}`);
 }
 
 if (docRef) {

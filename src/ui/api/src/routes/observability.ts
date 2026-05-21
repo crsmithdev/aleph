@@ -411,7 +411,7 @@ const HOOK_METADATA: Record<string, HookMeta> = {
   'routing-classify-submit': {
     blocking: false,
     gate: 'dispatch',
-    description: 'Classifies prompt depth, matches skills, writes directives',
+    description: 'Activates behavioral modes, matches skills, writes directives',
   },
   'context-monitor-stop': {
     blocking: false,
@@ -1456,9 +1456,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     return cachedResult('/learning/directives', 60_000, () => {
       type DirectiveEntry = { ts: string; sessionId: string; directives: string[]; promptWords?: number; docRef?: { doc: string; desc: string } };
       const directives: DirectiveEntry[] = [];
-      const depthCounts: Record<string, number> = {};
       const skillHits: Record<string, number> = {};
-      const byDay: Record<string, { full: number; quick: number; total: number }> = {};
+      const modeCounts: Record<string, number> = {};
 
       for (const e of parseSessionsForDays(30)) {
         if (e.kind !== 'directive' || !e.data) continue;
@@ -1471,29 +1470,17 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
           promptWords: e.data.promptWords as number | undefined,
           docRef,
         });
-        const day = e.ts.slice(0, 10);
-        if (day) {
-          if (!byDay[day]) byDay[day] = { full: 0, quick: 0, total: 0 };
-          byDay[day].total++;
-        }
         for (const d of dirArr) {
-          const upper = d.toUpperCase();
-          if (upper.startsWith('FULL')) {
-            depthCounts['FULL'] = (depthCounts['FULL'] ?? 0) + 1;
-            if (day) byDay[day].full++;
-          } else if (upper.startsWith('QUICK')) {
-            depthCounts['QUICK'] = (depthCounts['QUICK'] ?? 0) + 1;
-            if (day) byDay[day].quick++;
-          }
-          const skillMatch = d.match(/^(?:SKILL:|skill:)(.+)$/i);
+          const skillMatch = d.match(/^skill:(.+)$/i);
           if (skillMatch) skillHits[skillMatch[1]] = (skillHits[skillMatch[1]] ?? 0) + 1;
+          const modeMatch = d.match(/^mode:(.+)$/i);
+          if (modeMatch) modeCounts[modeMatch[1]] = (modeCounts[modeMatch[1]] ?? 0) + 1;
         }
       }
 
       directives.sort((a, b) => b.ts.localeCompare(a.ts));
-      const byDayArr = Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v }));
       const topSkills = Object.entries(skillHits).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([skill, count]) => ({ skill, count }));
-      return { directives: directives.slice(0, 200), total: directives.length, depthCounts, byDay: byDayArr, topSkills };
+      return { directives: directives.slice(0, 200), total: directives.length, modeCounts, topSkills };
     });
   });
 

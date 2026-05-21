@@ -13,7 +13,7 @@
 | session-summary | Correction detection regex, memory extraction from transcripts |
 | memory-extract | Memory extraction from transcripts |
 | skill routing | Skill routing classifier (debugging, research, verification, docs-review, code-review) |
-| depth classification | Depth classifier (QUICK vs FULL) for prompt complexity |
+| modes | Mode loading + frontmatter parser, trigger activation (single/multi/none), INDEX.md drift guard, hook body inlining |
 | session recall | Session recall: summarizing past work, detecting unfinished tasks |
 | skill extensions | Skill extension injection (code-review, debugging project extensions) |
 | trace | Hook tracing output (`[trace:]` lines) |
