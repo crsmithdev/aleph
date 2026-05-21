@@ -22,7 +22,6 @@ import { format } from 'date-fns';
 type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string; isSubagent?: boolean; subagentType?: string; parentSessionId?: string; viaSlash?: boolean };
 type KeywordRow = { keyword: string; matched: number; invoked: number; successPct?: number };
 type Dataset = 'usage' | 'projects';
-type SourceFilter = 'all' | 'auto' | 'slash';
 
 const DATASETS: { key: Dataset; label: string }[] = [
   { key: 'usage', label: 'Usage' },
@@ -44,7 +43,6 @@ export function SkillDetailPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
   const [distChartType, setDistChartType] = useState<'donut' | 'bar'>('donut');
   const [tsDataset, setTsDataset] = useState<Dataset>('usage');
@@ -174,14 +172,6 @@ export function SkillDetailPage() {
         : <span className="text-text-muted">—</span>,
     },
     {
-      key: 'viaSlash',
-      label: 'Source',
-      shrink: true,
-      render: (row) => row.viaSlash
-        ? <span className="font-mono text-xs text-text-muted whitespace-nowrap" title="Slash command — mandatory invocation">⌘ slash</span>
-        : <span className="font-mono text-xs text-accent-primary whitespace-nowrap" title="Auto — model called Skill() from a keyword match">⚡ auto</span>,
-    },
-    {
       key: 'userRequest',
       label: 'Request',
       render: (row) => {
@@ -192,11 +182,39 @@ export function SkillDetailPage() {
     },
   ];
 
-  const autoCount = data.invocations.filter((i: InvocationRow) => !i.viaSlash).length;
-  const slashCount = data.invocations.length - autoCount;
-  const filteredInvocations = sourceFilter === 'all'
-    ? data.invocations
-    : data.invocations.filter((i: InvocationRow) => sourceFilter === 'slash' ? !!i.viaSlash : !i.viaSlash);
+  // Split invocations by source into two tables: slash (mandatory) and auto (model-invoked).
+  const slashInvocations = data.invocations.filter((i: InvocationRow) => !!i.viaSlash);
+  const autoInvocations = data.invocations.filter((i: InvocationRow) => !i.viaSlash);
+
+  const renderInvExpanded = (row: InvocationRow) => {
+    const hasParams = row.params && Object.keys(row.params).length > 0;
+    if (!row.userRequest && !hasParams) return <p className="text-xs text-text-muted font-mono">No data</p>;
+    return (
+      <div className="space-y-3">
+        {row.userRequest && (
+          <div className="text-xs">
+            <span className="font-mono text-text-muted block mb-0.5">request</span>
+            <div className="text-text-secondary
+              [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-1
+              [&_code]:font-mono [&_code]:bg-bg-tertiary [&_code]:px-1 [&_code]:rounded [&_code]:text-accent [&_code]:text-xs
+              [&_pre]:bg-bg-tertiary [&_pre]:rounded [&_pre]:p-2 [&_pre]:text-xs [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:p-0
+              [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:mb-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:mb-1
+              [&_strong]:font-semibold [&_strong]:text-text-primary">
+              <Markdown remarkPlugins={[remarkGfm]}>{row.userRequest}</Markdown>
+            </div>
+          </div>
+        )}
+        {hasParams && Object.entries(row.params!).filter(([k]) => k !== 'skill').map(([k, v]) => (
+          <div key={k} className="flex gap-3 text-xs">
+            <span className="font-mono text-text-muted w-32 shrink-0">{k}</span>
+            <span className="text-text-secondary break-all">
+              {typeof v === 'string' ? v : JSON.stringify(v)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   const keywordRows: KeywordRow[] = data.keywords ?? [];
   const keywordColumns: Column<KeywordRow>[] = [
@@ -428,63 +446,41 @@ export function SkillDetailPage() {
       )}
 
       {data.invocations.length > 0 && (
-        <div ref={invTableRef}>
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <h2 className="text-sm font-medium text-text-secondary">
-              Recent Invocations ({filteredInvocations.length})
-            </h2>
-            <div className="inline-flex gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
-              {([['all', 'All', total], ['auto', '⚡ Auto', autoCount], ['slash', '⌘ Slash', slashCount]] as const).map(([key, label, n]) => (
-                <button
-                  key={key}
-                  onClick={() => setSourceFilter(key)}
-                  className={clsx(
-                    'px-2.5 py-0.5 text-xs rounded-sm transition-colors whitespace-nowrap font-mono',
-                    sourceFilter === key ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
-                  )}
-                >
-                  {label} <span className="text-text-disabled">{n}</span>
-                </button>
-              ))}
+        <div ref={invTableRef} className="space-y-6">
+          {slashInvocations.length > 0 && (
+            <div>
+              <h2 className="text-sm font-medium text-text-secondary mb-3">
+                Slash Invocations ({slashInvocations.length})
+                <span className="ml-2 text-xs font-normal text-text-muted">mandatory — user typed /{isCommand ? skillName.replace(/^\//, '') : skillName}</span>
+              </h2>
+              <DataTable<InvocationRow>
+                data={slashInvocations}
+                columns={invocationColumns}
+                keyField="timestamp"
+                maxRows={50}
+                expandedKey={expandedRow}
+                onExpandToggle={(key) => setExpandedRow(key === expandedRow ? null : key)}
+                renderExpanded={renderInvExpanded}
+              />
             </div>
-          </div>
-          <DataTable<InvocationRow>
-            data={filteredInvocations}
-            columns={invocationColumns}
-            keyField="timestamp"
-            maxRows={50}
-            expandedKey={expandedRow}
-            onExpandToggle={(key) => setExpandedRow(key === expandedRow ? null : key)}
-            renderExpanded={(row) => {
-              const hasParams = row.params && Object.keys(row.params).length > 0;
-              if (!row.userRequest && !hasParams) return <p className="text-xs text-text-muted font-mono">No data</p>;
-              return (
-                <div className="space-y-3">
-                  {row.userRequest && (
-                    <div className="text-xs">
-                      <span className="font-mono text-text-muted block mb-0.5">request</span>
-                      <div className="text-text-secondary
-                        [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-1
-                        [&_code]:font-mono [&_code]:bg-bg-tertiary [&_code]:px-1 [&_code]:rounded [&_code]:text-accent [&_code]:text-xs
-                        [&_pre]:bg-bg-tertiary [&_pre]:rounded [&_pre]:p-2 [&_pre]:text-xs [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:p-0
-                        [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:mb-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:mb-1
-                        [&_strong]:font-semibold [&_strong]:text-text-primary">
-                        <Markdown remarkPlugins={[remarkGfm]}>{row.userRequest}</Markdown>
-                      </div>
-                    </div>
-                  )}
-                  {hasParams && Object.entries(row.params!).filter(([k]) => k !== 'skill').map(([k, v]) => (
-                    <div key={k} className="flex gap-3 text-xs">
-                      <span className="font-mono text-text-muted w-32 shrink-0">{k}</span>
-                      <span className="text-text-secondary break-all">
-                        {typeof v === 'string' ? v : JSON.stringify(v)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              );
-            }}
-          />
+          )}
+          {autoInvocations.length > 0 && (
+            <div>
+              <h2 className="text-sm font-medium text-text-secondary mb-3">
+                Auto Invocations ({autoInvocations.length})
+                <span className="ml-2 text-xs font-normal text-text-muted">model called Skill() — keyword-driven</span>
+              </h2>
+              <DataTable<InvocationRow>
+                data={autoInvocations}
+                columns={invocationColumns}
+                keyField="timestamp"
+                maxRows={50}
+                expandedKey={expandedRow}
+                onExpandToggle={(key) => setExpandedRow(key === expandedRow ? null : key)}
+                renderExpanded={renderInvExpanded}
+              />
+            </div>
+          )}
         </div>
       )}
 

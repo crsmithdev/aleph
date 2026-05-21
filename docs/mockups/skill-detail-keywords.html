@@ -29,6 +29,7 @@
   .secrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
   h2{font-size:13px;font-weight:600;color:var(--ts);margin:0}
   .h2count{color:var(--tm);font-weight:400}
+  .sub{font-size:11px;color:var(--tm);font-weight:400;margin-left:6px}
   .filter{display:inline-flex;gap:2px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:2px}
   .filter button{font-family:var(--mono);font-size:12px;color:var(--tm);background:none;border:none;
                  padding:3px 10px;border-radius:5px;cursor:pointer;display:flex;align-items:center;gap:5px}
@@ -72,28 +73,32 @@
 
   <div class="panel"><div class="placeholder">— usage / projects time-series + donut (unchanged) —</div></div>
 
-  <!-- Recent Invocations: + Source column + Source filter -->
+  <!-- Two source-split tables: Slash on top, Auto below (no filter, no Source column) -->
   <div>
     <div class="secrow">
-      <h2>Recent Invocations <span class="h2count">(42)</span></h2>
-      <div class="filter">
-        <button class="active">All <span class="n">42</span></button>
-        <button>&#9889; Auto <span class="n">5</span></button>
-        <button>&#8984; Slash <span class="n">37</span></button>
-      </div>
+      <h2>Slash Invocations <span class="h2count">(37)</span> <span class="sub">mandatory — user typed /plan</span></h2>
     </div>
     <div class="panel">
       <table>
-        <thead><tr><th>Date</th><th>Project</th><th>Session</th><th>Via</th><th class="new">Source</th><th>Request</th></tr></thead>
+        <thead><tr><th>Date</th><th>Project</th><th>Session</th><th>Via</th><th>Request</th></tr></thead>
         <tbody>
-          <tr><td>5/20 3:14pm</td><td>construct</td><td><a class="sess" href="#">a1b2c3d4</a></td><td class="via">&mdash;</td>
-              <td class="new"><span class="src slash">&#8984; slash</span></td><td class="req">/plan trim the keywords</td></tr>
-          <tr><td>5/20 1:02pm</td><td>construct</td><td><a class="sess" href="#">e5f6a7b8</a></td><td class="via">&mdash;</td>
-              <td class="new"><span class="src auto">&#9889; auto</span></td><td class="req">write a plan for the reducer change</td></tr>
-          <tr><td>5/19 9:48am</td><td>construct</td><td><a class="sess" href="#">c9d0e1f2</a></td><td class="via">&#8627; task</td>
-              <td class="new"><span class="src auto">&#9889; auto</span></td><td class="req">plan the migration</td></tr>
-          <tr><td>5/19 8:30am</td><td>construct</td><td><a class="sess" href="#">11aa22bb</a></td><td class="via">&mdash;</td>
-              <td class="new"><span class="src slash">&#8984; slash</span></td><td class="req">/plan</td></tr>
+          <tr><td>5/20 3:14pm</td><td>construct</td><td><a class="sess" href="#">a1b2c3d4</a></td><td class="via">&mdash;</td><td class="req">/plan trim the keywords</td></tr>
+          <tr><td>5/19 8:30am</td><td>construct</td><td><a class="sess" href="#">11aa22bb</a></td><td class="via">&mdash;</td><td class="req">/plan</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div>
+    <div class="secrow">
+      <h2>Auto Invocations <span class="h2count">(5)</span> <span class="sub">model called Skill() — keyword-driven</span></h2>
+    </div>
+    <div class="panel">
+      <table>
+        <thead><tr><th>Date</th><th>Project</th><th>Session</th><th>Via</th><th>Request</th></tr></thead>
+        <tbody>
+          <tr><td>5/20 1:02pm</td><td>construct</td><td><a class="sess" href="#">e5f6a7b8</a></td><td class="via">&mdash;</td><td class="req">write a plan for the reducer change</td></tr>
+          <tr><td>5/19 9:48am</td><td>construct</td><td><a class="sess" href="#">c9d0e1f2</a></td><td class="via">&#8627; task</td><td class="req">plan the migration</td></tr>
         </tbody>
       </table>
     </div>
