@@ -106,7 +106,11 @@ export function SkillsPage() {
   const totalErrors = data.ranked.reduce((s, r) => s + r.errors, 0);
   const avgSuccessRate = totalInvocations > 0 ? ((totalInvocations - totalErrors) / totalInvocations) * 100 : 100;
   const totalMatched = data.totalMatched ?? data.ranked.reduce((s, r) => s + (r.matched ?? 0), 0);
-  const overallConversionPct = totalMatched > 0 ? (totalInvocations / totalMatched) * 100 : null;
+  // Conversion: registered skills + keyword-driven invocations only (slash excluded),
+  // supplied by the reducer. Falls back to the raw ratio for older payloads.
+  const conversionMatched = data.conversionMatched ?? totalMatched;
+  const conversionInvokes = data.conversionInvokes ?? totalInvocations;
+  const overallConversionPct = conversionMatched > 0 ? (conversionInvokes / conversionMatched) * 100 : null;
 
   // Helpers for display mode
   const dn = displayN;
@@ -266,7 +270,7 @@ export function SkillsPage() {
     {
       key: 'conversionPct',
       label: 'Conv',
-      tooltip: 'Invoked ÷ Matched. Low conversion = router fires but model rarely calls Skill().',
+      tooltip: 'Keyword-driven Skill() calls ÷ matches (slash invocations excluded), registered skills only. Low = router fires but model rarely calls Skill().',
       align: 'right',
       sortable: true,
       shrink: true,

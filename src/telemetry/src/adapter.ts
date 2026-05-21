@@ -24,7 +24,7 @@ cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v4`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v5`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v6`);
 cacheDb.exec(`
-  CREATE TABLE IF NOT EXISTS telemetry_cache_v6 (
+  CREATE TABLE IF NOT EXISTS telemetry_cache_v7 (
     file_path TEXT PRIMARY KEY,
     mtime_ms INTEGER NOT NULL,
     size INTEGER NOT NULL,
@@ -33,10 +33,10 @@ cacheDb.exec(`
 `);
 
 const insertCache = cacheDb.prepare(
-  `INSERT OR REPLACE INTO telemetry_cache_v6 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
+  `INSERT OR REPLACE INTO telemetry_cache_v7 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
 );
 const selectCache = cacheDb.prepare(
-  `SELECT mtime_ms, size, events FROM telemetry_cache_v6 WHERE file_path = ?`
+  `SELECT mtime_ms, size, events FROM telemetry_cache_v7 WHERE file_path = ?`
 );
 
 // ---------------------------------------------------------------------------
@@ -358,10 +358,16 @@ function adaptLine(
             data: { ...meta, text: userText.slice(0, 500) },
           });
         } else {
-          events.push({
-            ts, sid, kind: "message", name: "user",
-            data: { ...meta, text: userText.slice(0, 500), role: "user" },
-          });
+          // A slash command / skill dispatch: Claude Code expands "/foo" into an
+          // isMeta "Invoke the `foo` skill ..." user turn, or the literal /command.
+          // A Skill() call that follows is a mandatory invocation, not a
+          // keyword-driven one — flag it so conversion stats can exclude it.
+          const slashDispatch =
+            (raw.isMeta === true && /invoke the\s+\W?[\w-]+\W?\s+skill/i.test(userText)) ||
+            /^\/[a-z]/i.test(userText.trim());
+          const userData: Record<string, unknown> = { ...meta, text: userText.slice(0, 500), role: "user" };
+          if (slashDispatch) userData.slashDispatch = true;
+          events.push({ ts, sid, kind: "message", name: "user", data: userData });
         }
       }
     }
@@ -498,14 +504,19 @@ function adaptFile(filePath: string, project: string, since?: Date): TelemetryEv
     }
   }
 
-  // Attach last user message text and tool_result data to skill invocations
+  // Attach last user message text and tool_result data to skill invocations.
+  // lastUserSlash tracks whether the most recent real user turn per session was
+  // a slash/skill dispatch, so a Skill() that follows is tagged viaSlash.
   const lastUserMsg = new Map<string, string>();
+  const lastUserSlash = new Map<string, boolean>();
   for (const e of rawEvents) {
     if (e.kind === "message" && e.data?.role === "user" && e.data?.text) {
       lastUserMsg.set(e.sid, e.data.text as string);
+      lastUserSlash.set(e.sid, e.data.slashDispatch === true);
     }
     if (e.kind === "tool" && e.data?.skill) {
       e.data.userRequest = lastUserMsg.get(e.sid);
+      if (lastUserSlash.get(e.sid)) e.data.viaSlash = true;
       if (e.data.useId) {
         const result = toolResults.get(e.data.useId as string);
         if (result) {
@@ -655,7 +666,7 @@ function corpusCacheKey(opts?: AdaptOptions): string {
 }
 
 export function clearCache(): void {
-  cacheDb.exec("DELETE FROM telemetry_cache_v6");
+  cacheDb.exec("DELETE FROM telemetry_cache_v7");
   fileCache.clear();
   fileEventCache.clear();
   discoveryCache = undefined;

@@ -428,6 +428,9 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
   const daySkillLatencyMap = new Map<string, Map<string, number[]>>();
   const skillMatchCounts = new Map<string, number>();
   const daySkillMatchMap = new Map<string, Map<string, number>>();
+  // Invocations NOT driven by a slash/skill dispatch — the conversion numerator.
+  // Slash invocations are mandatory injections, not keyword-driven conversions.
+  const skillKeywordInvokeCounts = new Map<string, number>();
 
   for (const e of events) {
     // Routing matches: directive events carry skill:X entries from the
@@ -439,7 +442,8 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
         const m = d.match(/^skill:(.+)$/i);
         if (!m) continue;
         const skillName = m[1];
-        if (validSkills && !validSkills.has(skillName)) continue;
+        // Keep unregistered/renamed names in the listing; conversion is gated to
+        // registered skills below, not by dropping them here.
         skillMatchCounts.set(skillName, (skillMatchCounts.get(skillName) || 0) + 1);
         if (!daySkillMatchMap.has(bk)) daySkillMatchMap.set(bk, new Map());
         const dm = daySkillMatchMap.get(bk)!;
@@ -449,7 +453,9 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
 
     if (e.kind === "tool" && e.data?.skill) {
       const skillName = e.data.skill as string;
-      if (validSkills && !validSkills.has(skillName)) continue;
+      if (e.data.viaSlash !== true) {
+        skillKeywordInvokeCounts.set(skillName, (skillKeywordInvokeCounts.get(skillName) || 0) + 1);
+      }
       const cur = skillCounts.get(skillName) || { count: 0, errors: 0, sessions: new Set<string>(), durations: [], lastUsed: "" };
       cur.count++;
       if (e.err) cur.errors++;
@@ -498,7 +504,12 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
       const p95Ms = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.95)] : undefined;
       const count = v?.count ?? 0;
       const matched = skillMatchCounts.get(skill);
-      const conversionPct = matched && matched > 0 ? (count / matched) * 100 : undefined;
+      // Conversion = keyword-driven invocations ÷ keyword matches, and only for
+      // registered skills (current names). Slash invocations and dead/renamed
+      // names are excluded so the rate can't exceed 100% or count noise.
+      const registered = !validSkills || validSkills.has(skill);
+      const keywordInvokes = skillKeywordInvokeCounts.get(skill) ?? 0;
+      const conversionPct = registered && matched && matched > 0 ? (keywordInvokes / matched) * 100 : undefined;
       return {
         skill, count,
         pct: total > 0 ? (count / total) * 100 : 0,
@@ -547,7 +558,17 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
 
   const totalMatched = [...skillMatchCounts.values()].reduce((s, v) => s + v, 0);
 
-  return { ranked, byDay, byDaySessions, byDayErrors, byDayLatency, byDayMatches, totalMatched };
+  // Aggregate conversion: registered skills only, keyword-driven invocations
+  // only — the numerator/denominator for the headline Conversion stat.
+  let conversionInvokes = 0;
+  let conversionMatched = 0;
+  for (const [skill, matched] of skillMatchCounts) {
+    if (validSkills && !validSkills.has(skill)) continue;
+    conversionMatched += matched;
+    conversionInvokes += skillKeywordInvokeCounts.get(skill) ?? 0;
+  }
+
+  return { ranked, byDay, byDaySessions, byDayErrors, byDayLatency, byDayMatches, totalMatched, conversionInvokes, conversionMatched };
 }
 
 // ---------------------------------------------------------------------------

@@ -220,6 +220,10 @@ export interface SkillsData {
   byDayLatency: (TimeBucket & { skills: Record<string, number> })[];
   byDayMatches?: (TimeBucket & { skills: Record<string, number> })[];
   totalMatched?: number;
+  /** Keyword-driven invocations of registered skills — aggregate conversion numerator. */
+  conversionInvokes?: number;
+  /** Keyword matches of registered skills — aggregate conversion denominator. */
+  conversionMatched?: number;
 }
 
 export interface TokensData {

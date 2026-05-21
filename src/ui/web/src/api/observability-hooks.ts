@@ -123,6 +123,8 @@ export function useObsSkills(range: TimeRange, granularity?: Granularity, sessio
     byDayLatency: Array<{ date: string; count: number; skills: Record<string, number> }>;
     byDayMatches?: Array<{ date: string; count: number; skills: Record<string, number> }>;
     totalMatched?: number;
+    conversionInvokes?: number;
+    conversionMatched?: number;
     unused: string[];
     queryTimeMs: number;
   }>('skills', { range, granularity, session });

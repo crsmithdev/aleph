@@ -112,6 +112,33 @@ describe("aggregator", () => {
       expect(skills.ranked.some((s) => s.skill === "commit")).toBe(true);
       expect(skills.ranked.some((s) => s.skill === "code-review")).toBe(true);
     });
+
+    it("conversion excludes slash invocations and unregistered skills", () => {
+      const ts = "2026-05-20T00:00:00.000Z";
+      const ev = (kind: string, data: Record<string, unknown>) => ({ ts, sid: "s1", kind, data } as any);
+      const events = [
+        ev("directive", { directives: ["skill:plan"] }),
+        ev("directive", { directives: ["skill:plan"] }),
+        ev("directive", { directives: ["skill:plan"] }),
+        ev("tool", { skill: "plan" }),                 // keyword-driven invoke
+        ev("tool", { skill: "plan", viaSlash: true }), // mandatory slash invoke
+        ev("directive", { directives: ["skill:omnibus"] }), // unregistered/renamed
+        ev("directive", { directives: ["skill:omnibus"] }),
+        ev("tool", { skill: "omnibus", viaSlash: true }),
+      ];
+      const skills = aggregateSkills(events, "day", new Set(["plan"]));
+      const plan = skills.ranked.find((s) => s.skill === "plan")!;
+      const omni = skills.ranked.find((s) => s.skill === "omnibus")!;
+
+      expect(plan.matched).toBe(3);
+      expect(plan.count).toBe(2);                       // both invokes counted as usage
+      expect(plan.conversionPct).toBeCloseTo(100 / 3);  // 1 keyword invoke / 3 matches
+      expect(omni).toBeDefined();                       // dead name still listed
+      expect(omni.matched).toBe(2);
+      expect(omni.conversionPct).toBeUndefined();       // unregistered → no conversion
+      expect(skills.conversionMatched).toBe(3);         // registered matches only
+      expect(skills.conversionInvokes).toBe(1);         // registered, non-slash only
+    });
   });
 
   describe("aggregateTokens", () => {

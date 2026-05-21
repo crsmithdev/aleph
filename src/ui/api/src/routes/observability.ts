@@ -662,8 +662,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: QueryParams }>('/skills', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 300_000, () => {
-      const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity));
       const registeredSkills = new Set(getRegisteredSkills());
+      const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity, registeredSkills));
       const commandNames = getCommandNames();
       const usedNames = new Set(result.ranked.map(s => s.skill.replace(/^\//, '')));
       const unusedSkills = [...registeredSkills].filter(s => !usedNames.has(s)).map(s => ({ name: s, type: 'skill' as const }));
