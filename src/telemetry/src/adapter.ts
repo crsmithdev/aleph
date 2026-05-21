@@ -25,8 +25,9 @@ cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v5`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v6`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v7`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v8`);
+cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v9`);
 cacheDb.exec(`
-  CREATE TABLE IF NOT EXISTS telemetry_cache_v9 (
+  CREATE TABLE IF NOT EXISTS telemetry_cache_v10 (
     file_path TEXT PRIMARY KEY,
     mtime_ms INTEGER NOT NULL,
     size INTEGER NOT NULL,
@@ -35,10 +36,10 @@ cacheDb.exec(`
 `);
 
 const insertCache = cacheDb.prepare(
-  `INSERT OR REPLACE INTO telemetry_cache_v9 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
+  `INSERT OR REPLACE INTO telemetry_cache_v10 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
 );
 const selectCache = cacheDb.prepare(
-  `SELECT mtime_ms, size, events FROM telemetry_cache_v9 WHERE file_path = ?`
+  `SELECT mtime_ms, size, events FROM telemetry_cache_v10 WHERE file_path = ?`
 );
 
 // ---------------------------------------------------------------------------
@@ -185,7 +186,10 @@ function hookBasename(command: string | null | undefined): string {
  */
 export function slashDispatchTarget(text: string, isMeta: boolean): string | undefined {
   if (isMeta) {
-    const m = text.match(/invoke the\s+[`'"]?([\w-]+)[`'"]?\s+skill/i);
+    // Anchored: a real dispatch BEGINS with "Invoke the `X` skill". Anchoring
+    // prevents a skill body that merely mentions "invoke the … skill" mid-text
+    // from being mistaken for a dispatch.
+    const m = text.match(/^\s*invoke the\s+[`'"]?([\w-]+)[`'"]?\s+skill/i);
     if (m) return m[1].toLowerCase();
   }
   const sl = text.trim().match(/^\/([a-z][\w-]*)/i);
@@ -532,8 +536,14 @@ function adaptFile(filePath: string, project: string, since?: Date): TelemetryEv
   const lastDispatch = new Map<string, string | undefined>();
   for (const e of rawEvents) {
     if (e.kind === "message" && e.data?.role === "user" && e.data?.text) {
-      lastUserMsg.set(e.sid, e.data.text as string);
-      lastDispatch.set(e.sid, e.data.dispatchSkill as string | undefined);
+      // An injected skill body (isMeta with no dispatch target) is not a user
+      // prompt — it must not become a request or carry a dispatch, or it pollutes
+      // userRequest and the per-keyword invoked counts.
+      const isInjectedBody = e.data.isMeta === true && !e.data.dispatchSkill;
+      if (!isInjectedBody) {
+        lastUserMsg.set(e.sid, e.data.text as string);
+        lastDispatch.set(e.sid, e.data.dispatchSkill as string | undefined);
+      }
     }
     if (e.kind === "tool" && e.data?.skill) {
       e.data.userRequest = lastUserMsg.get(e.sid);
@@ -688,7 +698,7 @@ function corpusCacheKey(opts?: AdaptOptions): string {
 }
 
 export function clearCache(): void {
-  cacheDb.exec("DELETE FROM telemetry_cache_v9");
+  cacheDb.exec("DELETE FROM telemetry_cache_v10");
   fileCache.clear();
   fileEventCache.clear();
   discoveryCache = undefined;

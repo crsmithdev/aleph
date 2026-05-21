@@ -150,6 +150,8 @@ describe("aggregator", () => {
       expect(slashDispatchTarget("write a plan for the reducer", false)).toBeUndefined();
       // a path/prose that isn't a command
       expect(slashDispatchTarget("look at /home/me/file.ts", false)).toBeUndefined();
+      // an injected skill body that merely mentions the phrase mid-text is NOT a dispatch
+      expect(slashDispatchTarget("# Dogfood\n\nYou should invoke the dogfood skill when…", true)).toBeUndefined();
       // the audit skill invoked during a /audit→omnibus turn must NOT match "audit"
       expect(slashDispatchTarget("Invoke the `omnibus` skill with verb=`audit`", true) === "audit").toBe(false);
     });
