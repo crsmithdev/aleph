@@ -192,9 +192,26 @@ export function slashDispatchTarget(text: string, isMeta: boolean): string | und
     const m = text.match(/^\s*invoke the\s+[`'"]?([\w-]+)[`'"]?\s+skill/i);
     if (m) return m[1].toLowerCase();
   }
+  // Claude Code records a slash invocation as a <command-name>/foo</command-name>
+  // block — the canonical, harness-injected signal that the user actually typed
+  // the command (so the skill body load is enforced, not the model's choice).
+  const cmd = text.match(/<command-name>\s*\/([a-z][\w-]*)\s*<\/command-name>/i);
+  if (cmd) return cmd[1].toLowerCase();
   const sl = text.trim().match(/^\/([a-z][\w-]*)/i);
   if (sl) return sl[1].toLowerCase();
   return undefined;
+}
+
+/**
+ * Reduce a Claude Code slash-command turn to a readable request. The raw turn is
+ * a `<command-name>/foo</command-name>` block wrapping `<command-args>`; show
+ * "/foo args" instead of the literal tag soup. Non-command text is returned as-is.
+ */
+export function cleanSlashCommandText(text: string): string {
+  const name = text.match(/<command-name>\s*(\/[a-z][\w-]*)\s*<\/command-name>/i)?.[1];
+  if (!name) return text;
+  const args = text.match(/<command-args>([\s\S]*?)<\/command-args>/i)?.[1]?.trim();
+  return args ? `${name} ${args}` : name;
 }
 
 function adaptLine(
@@ -546,7 +563,8 @@ function adaptFile(filePath: string, project: string, since?: Date): TelemetryEv
       }
     }
     if (e.kind === "tool" && e.data?.skill) {
-      e.data.userRequest = lastUserMsg.get(e.sid);
+      const req = lastUserMsg.get(e.sid);
+      e.data.userRequest = req === undefined ? undefined : cleanSlashCommandText(req);
       const dispatched = lastDispatch.get(e.sid);
       if (dispatched && dispatched === (e.data.skill as string).toLowerCase()) e.data.viaSlash = true;
       if (e.data.useId) {

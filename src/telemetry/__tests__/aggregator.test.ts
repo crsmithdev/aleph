@@ -147,6 +147,9 @@ describe("aggregator", () => {
       // /audit expands to an omnibus dispatch — names omnibus, not audit
       expect(slashDispatchTarget("Invoke the `omnibus` skill with verb=`audit` and arguments: x", true)).toBe("omnibus");
       expect(slashDispatchTarget("/plan trim the keywords", false)).toBe("plan");
+      // Claude Code wraps a typed slash command in <command-name> tags — the turn
+      // does not start with "/", so the wrapper must be detected explicitly.
+      expect(slashDispatchTarget("<command-message>dogfood</command-message>\n<command-name>/dogfood</command-name>\n<command-args>a new query</command-args>", false)).toBe("dogfood");
       expect(slashDispatchTarget("write a plan for the reducer", false)).toBeUndefined();
       // a path/prose that isn't a command
       expect(slashDispatchTarget("look at /home/me/file.ts", false)).toBeUndefined();

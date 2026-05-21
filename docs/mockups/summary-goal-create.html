@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inline goal creation — 3 approaches</title>
+<style>
+  :root {
+    --bg-primary:#282a36;
+    --bg-secondary:#21222c;
+    --bg-tertiary:#343746;
+    --bg-contrast:#191a21;
+    --text-primary:#f8f8f2;
+    --text-secondary:#a9b1d6;
+    --text-muted:#6272a4;
+    --text-disabled:#44475a;
+    --border:#44475a;
+    --accent:#bd93f9;
+    --success:#50fa7b;
+    --warning:#f1fa8c;
+    --error:#ff5555;
+    --magenta:#ff79c6;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    padding: 32px;
+    max-width: 900px;
+    margin: 0 auto;
+    line-height: 1.5;
+  }
+
+  h1 {
+    font-size: 24px;
+    font-weight: 650;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .lede {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin: 0 0 40px;
+  }
+
+  h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    color: var(--text-primary);
+  }
+
+  .caption {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin: 0 0 16px;
+  }
+
+  section { margin-bottom: 44px; }
+
+  /* Simulated page context — these composers live inside the /summary page */
+  .page-context {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+
+  .page-context .ctx-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .page-context .ctx-heading h3 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin: 0;
+  }
+
+  .ctx-goal-list {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ctx-goal {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .ctx-goal .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+  }
+
+  .tradeoff {
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .tradeoff strong { color: var(--text-secondary); font-weight: 600; }
+
+  /* ---- shared control primitives ---- */
+
+  input[type="text"] {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.12s ease;
+  }
+  input[type="text"]::placeholder { color: var(--text-muted); }
+  input[type="text"]:focus { border-color: var(--accent); }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg-contrast);
+    border: none;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 16px;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pill {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: border-color 0.12s ease, color 0.12s ease;
+  }
+  .pill:hover { border-color: var(--accent); color: var(--text-primary); }
+
+  .pill .caret { color: var(--text-muted); }
+
+  .swatch {
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    flex: none;
+  }
+
+  .icon { width: 14px; height: 14px; flex: none; display: block; }
+  .icon-muted { color: var(--text-muted); }
+
+  /* ===== Approach A — omnibox ===== */
+  .omnibox {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px 4px 4px 0;
+    transition: border-color 0.12s ease;
+  }
+  .omnibox:focus-within { border-color: var(--accent); }
+  .omnibox input[type="text"] {
+    flex: 1 1 auto;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 10px 12px 10px 14px;
+  }
+  .omnibox input[type="text"]:focus { border: none; }
+  .omnibox .divider {
+    width: 1px;
+    align-self: stretch;
+    background: var(--border);
+    margin: 6px 4px;
+  }
+  .omnibox .pill {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+  }
+  .omnibox .pill:hover { background: var(--bg-secondary); color: var(--text-primary); }
+  .omnibox .btn-primary { margin-left: 4px; }
+
+  /* ===== Approach B — control strip ===== */
+  .composer-b {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    transition: border-color 0.12s ease;
+  }
+  .composer-b:focus-within { border-color: var(--accent); }
+  .composer-b input[type="text"] {
+    width: 100%;
+    background: var(--bg-secondary);
+    font-size: 15px;
+    padding: 12px 14px;
+  }
+  .composer-b .strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .composer-b .strip .spacer { flex: 1; }
+  .composer-b .chip {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 12.5px;
+    padding: 6px 12px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: border-color 0.12s ease, color 0.12s ease;
+  }
+  .composer-b .chip:hover { border-color: var(--accent); color: var(--text-primary); }
+  .composer-b .chip .label-muted { color: var(--text-muted); }
+
+  /* ===== Approach C — segmented / tabbed ===== */
+  .composer-c {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .seg-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+  }
+  .seg-tab {
+    flex: 1;
+    text-align: center;
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .seg-tab:hover { color: var(--text-primary); }
+  .seg-tab[aria-selected="true"] {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .seg-tab[aria-selected="true"] .tab-accent { color: var(--accent); }
+  .seg-body { padding: 14px; }
+  .composer-c input[type="text"] {
+    width: 100%;
+    background: var(--bg-secondary);
+    font-size: 15px;
+    padding: 12px 14px;
+  }
+  .seg-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .seg-footer .spacer { flex: 1; }
+  .seg-hint { font-size: 12px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+  <h1>Inline goal creation — 3 approaches</h1>
+  <p class="lede">Replacing the modal "New goal" popup on /summary with an on-page composer. Each option creates a goal with a title (focal), priority, and an optional target date, plus a primary action — without leaving the page.</p>
+
+  <!-- ============ APPROACH A ============ -->
+  <section>
+    <h2>Approach A — Omnibox</h2>
+    <p class="caption">One wide input with trailing inline controls; everything lives on a single line.</p>
+
+    <div class="page-context">
+      <div class="ctx-heading">
+        <h3>Goals</h3>
+      </div>
+
+      <div class="omnibox">
+        <input type="text" placeholder="What do you want to accomplish?" aria-label="Goal title">
+        <div class="divider"></div>
+        <button class="pill" type="button">
+          <span class="swatch" style="background: var(--warning);"></span>
+          Priority
+          <svg class="icon caret" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="pill" type="button">
+          <svg class="icon icon-muted" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="2.5" y="3.5" width="11" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          Date
+        </button>
+        <button class="btn-primary" type="button">
+          <svg class="icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Add
+        </button>
+      </div>
+
+      <div class="ctx-goal-list">
+        <div class="ctx-goal"><span class="dot" style="background: var(--error);"></span>Ship the annotations feature</div>
+        <div class="ctx-goal"><span class="dot" style="background: var(--warning);"></span>Migrate sessions to SQLite</div>
+      </div>
+    </div>
+
+    <p class="tradeoff"><strong>Tradeoff:</strong> Fastest to scan and lowest footprint, but the cramped row pushes priority/date discovery onto small pills and wraps awkwardly on narrow widths.</p>
+  </section>
+
+  <!-- ============ APPROACH B ============ -->
+  <section>
+    <h2>Approach B — Control strip</h2>
+    <p class="caption">Title input on top; a strip of labeled chips for the secondary attributes sits beneath, with Add right-aligned.</p>
+
+    <div class="page-context">
+      <div class="ctx-heading">
+        <h3>Goals</h3>
+      </div>
+
+      <div class="composer-b">
+        <input type="text" placeholder="What do you want to accomplish?" aria-label="Goal title">
+        <div class="strip">
+          <button class="chip" type="button">
+            <span class="swatch" style="background: var(--warning);"></span>
+            Priority: <span style="color: var(--text-primary);">Medium</span>
+          </button>
+          <button class="chip" type="button">
+            <svg class="icon label-muted" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="2.5" y="3.5" width="11" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            <span class="label-muted">Target date</span>
+          </button>
+          <span class="spacer"></span>
+          <button class="btn-primary" type="button">Add goal</button>
+        </div>
+      </div>
+
+      <div class="ctx-goal-list">
+        <div class="ctx-goal"><span class="dot" style="background: var(--error);"></span>Ship the annotations feature</div>
+        <div class="ctx-goal"><span class="dot" style="background: var(--warning);"></span>Migrate sessions to SQLite</div>
+      </div>
+    </div>
+
+    <p class="tradeoff"><strong>Tradeoff:</strong> Roomy and self-explanatory — chips can show current values — but takes two rows of vertical space even when collapsed, making the goal list sit lower.</p>
+  </section>
+
+  <!-- ============ APPROACH C ============ -->
+  <section>
+    <h2>Approach C — Segmented creator</h2>
+    <p class="caption">A tabbed composer that unifies Goal / Todo / Habit creation behind one shared inline input.</p>
+
+    <div class="page-context">
+      <div class="ctx-heading">
+        <h3>Create</h3>
+      </div>
+
+      <div class="composer-c">
+        <div class="seg-tabs" role="tablist">
+          <button class="seg-tab" role="tab" aria-selected="true" type="button">
+            <svg class="icon tab-accent" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.4"/>
+              <circle cx="8" cy="8" r="1.6" fill="currentColor"/>
+            </svg>
+            Goal
+          </button>
+          <button class="seg-tab" role="tab" aria-selected="false" type="button">
+            <svg class="icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="2.5" y="2.5" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M5.5 8l1.8 1.8L11 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Todo
+          </button>
+          <button class="seg-tab" role="tab" aria-selected="false" type="button">
+            <svg class="icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 9l3-5 4 8 3-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Habit
+          </button>
+        </div>
+        <div class="seg-body">
+          <input type="text" placeholder="What do you want to accomplish?" aria-label="Goal title">
+          <div class="seg-footer">
+            <button class="pill" type="button">
+              <span class="swatch" style="background: var(--warning);"></span>
+              Priority
+              <svg class="icon caret" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="pill" type="button">
+              <svg class="icon icon-muted" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="2.5" y="3.5" width="11" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+              Date
+            </button>
+            <span class="spacer"></span>
+            <span class="seg-hint">Enter to add</span>
+            <button class="btn-primary" type="button">Add goal</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="ctx-goal-list">
+        <div class="ctx-goal"><span class="dot" style="background: var(--error);"></span>Ship the annotations feature</div>
+        <div class="ctx-goal"><span class="dot" style="background: var(--success);"></span>Read 20 pages daily</div>
+      </div>
+    </div>
+
+    <p class="tradeoff"><strong>Tradeoff:</strong> One mental model for all three creators and a tidy single entry point, but conflates distinct objects — switching tabs may need to swap which secondary controls (priority vs. cadence) are shown.</p>
+  </section>
+
+</body>
+</html>

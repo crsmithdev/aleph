@@ -2,9 +2,39 @@ import { useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+type Frontmatter = { name?: string; description?: string };
+
+/**
+ * Split a leading YAML frontmatter block from markdown. Rendered raw, frontmatter
+ * mis-parses (the closing `---` turns the keys into a setext heading + <hr>), so
+ * the preview pulls out name/description and drops the block from the body.
+ * Handles single-line values and folded (`>`) / literal (`|`) block scalars.
+ */
+function splitFrontmatter(content: string): { meta: Frontmatter; body: string } {
+  const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  if (!m) return { meta: {}, body: content };
+  const meta: Frontmatter = {};
+  const lines = m[1].split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const kv = lines[i].match(/^([a-zA-Z][\w-]*):\s*(.*)$/);
+    if (!kv) continue;
+    const key = kv[1].toLowerCase();
+    let value = kv[2].trim();
+    if (value === '>' || value === '|' || value === '') {
+      const folded: string[] = [];
+      while (i + 1 < lines.length && /^\s+\S/.test(lines[i + 1])) folded.push(lines[++i].trim());
+      if (folded.length) value = folded.join(value === '|' ? '\n' : ' ');
+    }
+    if (key === 'name') meta.name = value;
+    else if (key === 'description') meta.description = value;
+  }
+  return { meta, body: content.slice(m[0].length) };
+}
+
 export function MarkdownBlock({ content, filename }: { content: string; filename?: string }) {
   const [collapsed, setCollapsed] = useState(false);
   const [viewRaw, setViewRaw] = useState(false);
+  const { meta, body } = splitFrontmatter(content);
 
   return (
     <div className="rounded-lg border border-border-primary bg-bg-primary overflow-hidden">
@@ -53,7 +83,9 @@ export function MarkdownBlock({ content, filename }: { content: string; filename
             [&_th]:text-left [&_th]:text-text-muted [&_th]:font-medium [&_th]:border-b [&_th]:border-border-primary [&_th]:pb-1 [&_th]:pr-4
             [&_td]:text-text-secondary [&_td]:border-b [&_td]:border-border-primary/50 [&_td]:py-1 [&_td]:pr-4
           ">
-            <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
+            {meta.name && <h1 className="text-lg font-bold text-text-primary mt-0 mb-1">{meta.name}</h1>}
+            {meta.description && <p className="text-sm text-text-muted leading-relaxed mb-3">{meta.description}</p>}
+            <Markdown remarkPlugins={[remarkGfm]}>{body}</Markdown>
           </div>
         )
       )}

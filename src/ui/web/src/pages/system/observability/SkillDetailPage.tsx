@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useObsSkillDetail } from '../../../api/observability-hooks';
@@ -33,6 +33,16 @@ function compactDate(iso: string): string {
   const month = d.getMonth() + 1;
   const day = d.getDate();
   return `${month}/${day} ${format(d, 'h:mmaaa')}`;
+}
+
+// Tint slash-command tokens the same accent the skills list uses for the leading
+// "/", so commands stand out in free-text requests.
+function highlightSlashes(text: string): ReactNode {
+  return text.split(/(\/[a-z][\w-]*)/gi).map((part, i) =>
+    /^\/[a-z][\w-]*$/i.test(part)
+      ? <span key={i}><span className="text-accent">/</span>{part.slice(1)}</span>
+      : part,
+  );
 }
 
 export function SkillDetailPage() {
@@ -177,7 +187,7 @@ export function SkillDetailPage() {
       render: (row) => {
         if (!row.userRequest) return <span className="text-text-muted">—</span>;
         const truncated = row.userRequest.length > 120 ? row.userRequest.slice(0, 120) + '…' : row.userRequest;
-        return <span className="text-sm text-text-secondary font-mono">{truncated}</span>;
+        return <span className="text-sm text-text-secondary font-mono">{highlightSlashes(truncated)}</span>;
       },
     },
   ];
@@ -274,14 +284,6 @@ export function SkillDetailPage() {
             <PageTitleLink to="/observability/skills">Skills</PageTitleLink>
             <PageTitleSeparator />
             <PageTitle>{displayName}</PageTitle>
-            <span className={clsx(
-              'shrink-0 inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide',
-              isCommand
-                ? 'bg-accent/10 text-accent border border-accent/20'
-                : 'bg-accent/5 text-accent/70 border border-accent/10',
-            )}>
-              {isCommand ? 'cmd' : 'skill'}
-            </span>
           </>
         }
       />
@@ -451,7 +453,7 @@ export function SkillDetailPage() {
             <div>
               <h2 className="text-sm font-medium text-text-secondary mb-3">
                 Slash Invocations ({slashInvocations.length})
-                <span className="ml-2 text-xs font-normal text-text-muted">mandatory — user typed /{isCommand ? skillName.replace(/^\//, '') : skillName}</span>
+                <span className="ml-2 text-xs font-normal text-text-muted">skill load enforced — user typed /{isCommand ? skillName.replace(/^\//, '') : skillName}</span>
               </h2>
               <DataTable<InvocationRow>
                 data={slashInvocations}
@@ -468,7 +470,7 @@ export function SkillDetailPage() {
             <div>
               <h2 className="text-sm font-medium text-text-secondary mb-3">
                 Auto Invocations ({autoInvocations.length})
-                <span className="ml-2 text-xs font-normal text-text-muted">model called Skill() — keyword-driven</span>
+                <span className="ml-2 text-xs font-normal text-text-muted">model chose to call Skill() — not enforced</span>
               </h2>
               <DataTable<InvocationRow>
                 data={autoInvocations}
@@ -486,17 +488,15 @@ export function SkillDetailPage() {
 
       {keywordRows.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium text-text-secondary mb-1">
+          <h2 className="text-sm font-medium text-text-secondary mb-3">
             Routing Keywords ({keywordRows.length})
           </h2>
-          <p className="text-xs text-text-muted mb-3">
-            Success = non-slash <span className="font-mono">Skill()</span> calls ÷ real prompts matching the keyword, re-matched against the current keyword set.
-          </p>
           <DataTable<KeywordRow>
             data={keywordRows}
             columns={keywordColumns}
             keyField="keyword"
             maxRows={25}
+            rowClassName={(row) => (row.invoked === 0 ? 'opacity-50' : undefined)}
           />
         </div>
       )}

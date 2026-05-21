@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summary redesign explorations</title>
+<style>
+  :root {
+    --bg-primary:#282a36; --bg-secondary:#21222c; --bg-tertiary:#343746; --bg-contrast:#191a21;
+    --text-primary:#f8f8f2; --text-secondary:#a9b1d6; --text-muted:#6272a4; --text-disabled:#44475a;
+    --border:#44475a; --accent:#bd93f9; --success:#50fa7b; --warning:#f1fa8c; --error:#ff5555; --magenta:#ff79c6;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    padding: 32px;
+    max-width: 1100px;
+    margin: 0 auto;
+    line-height: 1.45;
+  }
+
+  .mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  h1 { font-size: 28px; font-weight: 700; margin: 0 0 4px; }
+  .page-sub { color: var(--text-muted); font-size: 14px; margin: 0 0 8px; }
+
+  h2 { font-size: 20px; font-weight: 700; margin: 0 0 4px; color: var(--accent); }
+  .caption { color: var(--text-secondary); font-size: 13px; margin: 0 0 18px; }
+
+  .variation { margin: 0 0 56px; }
+  .variation + .variation { padding-top: 40px; border-top: 1px solid var(--border); }
+
+  .divider-note {
+    margin: 16px 0 48px;
+    padding: 24px 0 0;
+    border-top: 1px dashed var(--border);
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .tradeoff {
+    margin-top: 18px;
+    padding: 12px 16px;
+    background: var(--bg-contrast);
+    border-left: 3px solid var(--warning);
+    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .tradeoff b { color: var(--warning); font-weight: 600; }
+
+  .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .sum-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 20px; }
+  .sum-header h3 { font-size: 22px; font-weight: 700; margin: 0; }
+  .sum-header .date { color: var(--text-muted); font-size: 13px; }
+
+  .label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .big-num { font-size: 32px; font-weight: 700; line-height: 1; }
+  .delta-up { color: var(--success); }
+  .delta-down { color: var(--error); }
+
+  /* ============ Shared metric strip ============ */
+  .metric-row { display: grid; gap: 14px; margin-bottom: 22px; }
+  .metric { padding: 16px 18px; }
+  .metric .label { display: block; margin-bottom: 8px; }
+  .metric .big-num { display: block; margin-bottom: 6px; }
+  .metric .sub { font-size: 12px; color: var(--text-secondary); }
+  .metric.hero { border-color: var(--accent); background: linear-gradient(180deg, var(--bg-tertiary), var(--bg-secondary)); }
+  .metric.hero .big-num { color: var(--accent); }
+
+  /* ============ VARIATION A: today-hero + tabs ============ */
+  .a-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+  .a-metrics4 { grid-template-columns: repeat(4, 1fr); }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+  .tab { padding: 7px 16px; border-radius: 8px 8px 0 0; font-size: 13px; color: var(--text-secondary); border: 1px solid transparent; cursor: default; }
+  .tab.active { background: var(--bg-secondary); border-color: var(--border); border-bottom-color: var(--bg-secondary); color: var(--text-primary); font-weight: 600; }
+
+  .panel { padding: 22px; }
+  .panel-cols { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 28px; }
+  .panel-col h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 12px; font-weight: 600; }
+
+  .goal-list { list-style: none; padding: 0; margin: 0; }
+  .goal-list li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--bg-tertiary); font-size: 14px; }
+  .goal-list li:last-child { border-bottom: none; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .dot.done { background: var(--success); }
+  .dot.open { background: var(--text-disabled); }
+  .strike { color: var(--text-muted); text-decoration: line-through; }
+
+  .check-list { list-style: none; padding: 0; margin: 0; font-size: 14px; }
+  .check-list li { padding: 6px 0; color: var(--text-secondary); }
+  .check-list .box { display: inline-block; width: 15px; height: 15px; border: 1.5px solid var(--text-muted); border-radius: 4px; margin-right: 9px; vertical-align: -2px; }
+  .check-list .box.checked { background: var(--success); border-color: var(--success); position: relative; }
+  .check-list .box.checked::after { content: ''; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px; border: solid var(--bg-contrast); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .todo-count { font-size: 13px; color: var(--text-muted); margin-top: 10px; }
+
+  .streak-strip { display: flex; gap: 5px; margin: 8px 0 4px; }
+  .sq { width: 16px; height: 16px; border-radius: 4px; background: var(--bg-tertiary); }
+  .sq.hit { background: var(--magenta); }
+  .habit-name { font-size: 13px; margin-top: 12px; color: var(--text-secondary); }
+  .habit-name .badge { color: var(--magenta); font-weight: 600; }
+  .habit-block + .habit-block { margin-top: 14px; }
+
+  .git-side { padding: 18px; }
+  .git-side h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 14px; font-weight: 600; }
+  .loc-row { display: flex; gap: 14px; font-size: 15px; margin-bottom: 14px; }
+  .commit-row { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--bg-tertiary); font-size: 12px; }
+  .commit-row .sha { color: var(--accent); }
+  .commit-row .msg { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ============ VARIATION B: timeline ============ */
+  .b-top { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+  .b-create { display: flex; gap: 10px; margin-bottom: 24px; }
+  .b-create button { flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 14px; font-family: inherit; cursor: default; }
+  .b-create button .plus { color: var(--accent); font-weight: 700; margin-right: 6px; }
+
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before { content: ''; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
+  .tl-period { position: relative; margin-bottom: 26px; }
+  .tl-period::before { content: ''; position: absolute; left: -24px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg-primary); }
+  .tl-period.muted::before { background: var(--text-muted); }
+  .tl-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .tl-head .when { font-size: 15px; font-weight: 700; }
+  .tl-head .meta { font-size: 12px; color: var(--text-muted); }
+  .tl-card { padding: 16px 18px; }
+  .tl-line { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; margin-bottom: 8px; }
+  .tl-line:last-child { margin-bottom: 0; }
+  .tl-line .k { color: var(--text-muted); margin-right: 6px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; background: var(--bg-tertiary); font-size: 12px; }
+  .pill.g { color: var(--success); }
+  .pill.t { color: var(--warning); }
+  .pill.h { color: var(--magenta); }
+  .pill.c { color: var(--accent); }
+  .tl-goals { list-style: none; padding: 0; margin: 6px 0 0; font-size: 13px; color: var(--text-secondary); }
+  .tl-goals li { padding: 2px 0; }
+  .tl-goals .dot { display: inline-block; margin-right: 8px; vertical-align: 1px; }
+
+  /* ============ VARIATION C: dense single board ============ */
+  .c-top { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 22px; }
+  .c-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .c-col h4 { font-size: 13px; font-weight: 700; margin: 0; }
+  .c-col-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 12px; border-bottom: 1px solid var(--border); }
+  .c-col-head .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--bg-tertiary); }
+  .c-col-body { padding: 14px 18px; }
+  .c-goals-tag { color: var(--success); }
+  .c-todos-tag { color: var(--warning); }
+  .c-habits-tag { color: var(--magenta); }
+
+  .ptable { width: 100%; font-size: 13px; border-collapse: collapse; }
+  .ptable th { text-align: right; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; padding: 0 0 8px; }
+  .ptable th:first-child { text-align: left; }
+  .ptable td { padding: 6px 0; border-top: 1px solid var(--bg-tertiary); text-align: right; }
+  .ptable td:first-child { text-align: left; color: var(--text-secondary); }
+  .ptable td.big { color: var(--text-primary); font-weight: 600; }
+
+  .c-goal-list { list-style: none; padding: 0; margin: 12px 0 0; }
+  .c-goal-list li { display: flex; align-items: center; gap: 9px; font-size: 13px; padding: 5px 0; }
+  .c-dots { display: flex; gap: 4px; margin-top: 4px; }
+  .c-dots .sq { width: 13px; height: 13px; }
+</style>
+</head>
+<body>
+
+<h1>Summary — redesign explorations</h1>
+<p class="page-sub">Three full-page directions for /summary. Same tokens, same data, different information architecture.</p>
+
+<!-- =================================================================== -->
+<!-- VARIATION A -->
+<!-- =================================================================== -->
+<section class="variation">
+  <h2>Variation A — Today hero + period tabs</h2>
+  <p class="caption">Today is the headline. Goals get a prominent checked list, todos a compact checklist, habits a dot strip. Yesterday / Last 7 days collapse behind tabs so the page stops repeating itself.</p>
+
+  <div class="sum-header">
+    <h3>Summary</h3>
+    <span class="date">Thursday, May 21, 2026</span>
+  </div>
+
+  <!-- top metric strip incl. aggregate commits -->
+  <div class="metric-row a-metrics4">
+    <div class="card metric hero">
+      <span class="label">Commits this week</span>
+      <span class="big-num num">23</span>
+      <span class="sub"><span class="num">8</span> today · <span class="mono delta-up">+1.4k</span> <span class="mono delta-down">−820</span></span>
+    </div>
+    <div class="card metric">
+      <span class="label">Goals created</span>
+      <span class="big-num num">4</span>
+      <span class="sub"><span class="delta-up">2 completed</span> today</span>
+    </div>
+    <div class="card metric">
+      <span class="label">Todos done</span>
+      <span class="big-num num">7</span>
+      <span class="sub">today</span>
+    </div>
+    <div class="card metric">
+      <span class="label">Habits hit</span>
+      <span class="big-num num">1<span style="color:var(--text-muted);font-size:18px;font-weight:400">/3</span></span>
+      <span class="sub">today</span>
+    </div>
+  </div>
+
+  <!-- period tabs -->
+  <div class="tabs">
+    <span class="tab active">Today</span>
+    <span class="tab">Yesterday</span>
+    <span class="tab">Last 7 days</span>
+  </div>
+
+  <div class="a-grid">
+    <!-- left: activity panel for active period -->
+    <div class="card panel">
+      <div class="panel-cols">
+        <div class="panel-col">
+          <h4>Goals</h4>
+          <ul class="goal-list">
+            <li><span class="dot done"></span><span class="strike">Ship telemetry fix</span></li>
+            <li><span class="dot done"></span><span class="strike">Draft Q3 plan</span></li>
+            <li><span class="dot open"></span>Refactor adapter</li>
+            <li><span class="dot open"></span>Review PRs</li>
+          </ul>
+        </div>
+        <div class="panel-col">
+          <h4>Todos</h4>
+          <ul class="check-list">
+            <li><span class="box checked"></span>Reply to design thread</li>
+            <li><span class="box checked"></span>Tag v0.9 release</li>
+            <li><span class="box checked"></span>Update INSTALL.md</li>
+            <li><span class="box checked"></span>Triage error report</li>
+          </ul>
+          <div class="todo-count num">7 finished · 3 added</div>
+        </div>
+        <div class="panel-col">
+          <h4>Habits</h4>
+          <div class="habit-block">
+            <div class="streak-strip">
+              <span class="sq hit"></span><span class="sq hit"></span><span class="sq hit"></span><span class="sq"></span><span class="sq"></span><span class="sq hit"></span><span class="sq hit"></span>
+            </div>
+            <div class="habit-name"><span class="badge">Read</span> · hit today</div>
+          </div>
+          <div class="habit-block">
+            <div class="streak-strip">
+              <span class="sq hit"></span><span class="sq"></span><span class="sq hit"></span><span class="sq hit"></span><span class="sq"></span><span class="sq"></span><span class="sq"></span>
+            </div>
+            <div class="habit-name">Exercise · missed</div>
+          </div>
+          <div class="habit-block">
+            <div class="streak-strip">
+              <span class="sq hit"></span><span class="sq hit"></span><span class="sq"></span><span class="sq hit"></span><span class="sq hit"></span><span class="sq"></span><span class="sq"></span>
+            </div>
+            <div class="habit-name">Journal · missed</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- right: git detail for active period -->
+    <div class="card git-side">
+      <h4>Construct — today</h4>
+      <div class="loc-row mono num">
+        <span class="delta-up">+1.4k</span>
+        <span class="delta-down">−820</span>
+        <span style="color:var(--text-muted)">8 commits</span>
+      </div>
+      <div class="commit-row mono"><span class="sha num">7ac8378</span><span class="msg">never treat injected skill body as prompt</span></div>
+      <div class="commit-row mono"><span class="sha num">9a14053</span><span class="msg">tag viaSlash only when dispatch names skill</span></div>
+      <div class="commit-row mono"><span class="sha num">1169d13</span><span class="msg">split invocations into slash + auto tables</span></div>
+      <div class="commit-row mono"><span class="sha num">77c9fca</span><span class="msg">per-keyword success rate on detail page</span></div>
+    </div>
+  </div>
+
+  <div class="tradeoff"><b>Tradeoff:</b> Tabs hide history behind a click — fast scanning of "what did I do yesterday" now costs an interaction. Best when today matters most and history is reference-only.</div>
+</section>
+
+<!-- =================================================================== -->
+<!-- VARIATION B -->
+<!-- =================================================================== -->
+<section class="variation">
+  <h2>Variation B — Vertical timeline</h2>
+  <p class="caption">One scrollable spine: today at the top, fading into history. Each period is a single compact node with typed pills instead of three identical heavy cards. Create actions live inline.</p>
+
+  <div class="sum-header">
+    <h3>Summary</h3>
+    <span class="date">Thursday, May 21, 2026</span>
+  </div>
+
+  <!-- aggregate top cards -->
+  <div class="b-top">
+    <div class="card metric hero">
+      <span class="label">Commits / week</span>
+      <span class="big-num num">23</span>
+      <span class="sub"><span class="num">8</span> today</span>
+    </div>
+    <div class="card metric">
+      <span class="label">Net LOC</span>
+      <span class="big-num num mono delta-up" style="font-size:24px">+580</span>
+      <span class="sub mono"><span class="delta-up">+1.4k</span> / <span class="delta-down">−820</span></span>
+    </div>
+    <div class="card metric">
+      <span class="label">Goals</span>
+      <span class="big-num num">4</span>
+      <span class="sub"><span class="delta-up">2 done</span></span>
+    </div>
+    <div class="card metric">
+      <span class="label">Todos done</span>
+      <span class="big-num num">7</span>
+      <span class="sub">today</span>
+    </div>
+    <div class="card metric">
+      <span class="label">Habits</span>
+      <span class="big-num num">1<span style="color:var(--text-muted);font-size:18px;font-weight:400">/3</span></span>
+      <span class="sub">today</span>
+    </div>
+  </div>
+
+  <div class="b-create">
+    <button><span class="plus">+</span>New goal</button>
+    <button><span class="plus">+</span>New todo</button>
+    <button><span class="plus">+</span>New habit</button>
+  </div>
+
+  <div class="timeline">
+    <!-- today -->
+    <div class="tl-period">
+      <div class="tl-head"><span class="when">Today</span><span class="meta">May 21</span></div>
+      <div class="card tl-card">
+        <div class="tl-line">
+          <span class="pill g">Goals · 4 new, 2 done</span>
+          <span class="pill t">Todos · 7 done, 3 added</span>
+          <span class="pill h">Habits · 1/3</span>
+          <span class="pill c">8 commits</span>
+        </div>
+        <ul class="tl-goals">
+          <li><span class="dot done"></span><span class="strike">Ship telemetry fix</span></li>
+          <li><span class="dot done"></span><span class="strike">Draft Q3 plan</span></li>
+          <li><span class="dot open"></span>Refactor adapter</li>
+          <li><span class="dot open"></span>Review PRs</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- yesterday -->
+    <div class="tl-period muted">
+      <div class="tl-head"><span class="when">Yesterday</span><span class="meta">May 20</span></div>
+      <div class="card tl-card">
+        <div class="tl-line">
+          <span class="pill g">Goals · 2 new, 3 done</span>
+          <span class="pill t">Todos · 5 done</span>
+          <span class="pill h">Habits · 3/3</span>
+          <span class="pill c">9 commits</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- last 7 days -->
+    <div class="tl-period muted">
+      <div class="tl-head"><span class="when">Last 7 days</span><span class="meta">May 14–21</span></div>
+      <div class="card tl-card">
+        <div class="tl-line">
+          <span class="pill g">Goals · 14 new, 9 done</span>
+          <span class="pill t">Todos · 38 done</span>
+          <span class="pill h">Habits · 16/21</span>
+          <span class="pill c">23 commits</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tradeoff"><b>Tradeoff:</b> Reads as a narrative and scales to more periods, but pills trade per-item detail for density — you can't see individual yesterday todos without drilling in.</div>
+</section>
+
+<!-- =================================================================== -->
+<!-- VARIATION C -->
+<!-- =================================================================== -->
+<section class="variation">
+  <h2>Variation C — Type-first board</h2>
+  <p class="caption">Pivot the grid: columns are Goals / Todos / Habits, rows are the periods. Each type owns its native shape — goals a list, todos a count table, habits a dot matrix. Git is purely a top datacard.</p>
+
+  <div class="sum-header">
+    <h3>Summary</h3>
+    <span class="date">Thursday, May 21, 2026</span>
+  </div>
+
+  <!-- aggregate top cards -->
+  <div class="c-top">
+    <div class="card metric hero">
+      <span class="label">Commits this week</span>
+      <span class="big-num num">23</span>
+      <span class="sub"><span class="num">8</span> today · <span class="mono delta-up">+1.4k</span> <span class="mono delta-down">−820</span></span>
+    </div>
+    <div class="card metric">
+      <span class="label">Goals created</span>
+      <span class="big-num num">4</span>
+      <span class="sub">today</span>
+    </div>
+    <div class="card metric">
+      <span class="label">Goals completed</span>
+      <span class="big-num num delta-up">2</span>
+      <span class="sub">today</span>
+    </div>
+    <div class="card metric">
+      <span class="label">Todos done</span>
+      <span class="big-num num">7</span>
+      <span class="sub">today</span>
+    </div>
+    <div class="card metric">
+      <span class="label">Habits hit</span>
+      <span class="big-num num">1<span style="color:var(--text-muted);font-size:18px;font-weight:400">/3</span></span>
+      <span class="sub">today</span>
+    </div>
+  </div>
+
+  <div class="c-board">
+    <!-- goals column -->
+    <div class="card c-col">
+      <div class="c-col-head"><h4>Goals</h4><span class="tag c-goals-tag">list</span></div>
+      <div class="c-col-body">
+        <div class="label" style="margin-bottom:6px">Today · 4 new, 2 done</div>
+        <ul class="c-goal-list">
+          <li><span class="dot done"></span><span class="strike">Ship telemetry fix</span></li>
+          <li><span class="dot done"></span><span class="strike">Draft Q3 plan</span></li>
+          <li><span class="dot open"></span>Refactor adapter</li>
+          <li><span class="dot open"></span>Review PRs</li>
+        </ul>
+        <div class="label" style="margin:16px 0 6px">Yesterday · 2 new, 3 done</div>
+        <ul class="c-goal-list">
+          <li><span class="dot done"></span><span class="strike">Cut v0.9 release</span></li>
+          <li><span class="dot done"></span><span class="strike">Migrate adapter schema</span></li>
+        </ul>
+        <div class="label" style="margin:16px 0 4px">Last 7 days</div>
+        <div style="font-size:13px;color:var(--text-secondary)"><span class="num" style="color:var(--text-primary);font-weight:600">14</span> created · <span class="num delta-up">9</span> completed</div>
+      </div>
+    </div>
+
+    <!-- todos column -->
+    <div class="card c-col">
+      <div class="c-col-head"><h4>Todos</h4><span class="tag c-todos-tag">counts</span></div>
+      <div class="c-col-body">
+        <table class="ptable">
+          <thead><tr><th>Period</th><th>Added</th><th>Done</th></tr></thead>
+          <tbody>
+            <tr><td>Today</td><td class="num">3</td><td class="num big">7</td></tr>
+            <tr><td>Yesterday</td><td class="num">4</td><td class="num">5</td></tr>
+            <tr><td>Last 7 days</td><td class="num">29</td><td class="num">38</td></tr>
+          </tbody>
+        </table>
+        <div class="label" style="margin:18px 0 6px">Finished today</div>
+        <ul class="check-list">
+          <li><span class="box checked"></span>Reply to design thread</li>
+          <li><span class="box checked"></span>Tag v0.9 release</li>
+          <li><span class="box checked"></span>Update INSTALL.md</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- habits column -->
+    <div class="card c-col">
+      <div class="c-col-head"><h4>Habits</h4><span class="tag c-habits-tag">matrix</span></div>
+      <div class="c-col-body">
+        <div class="label" style="margin-bottom:8px">Today · 1 of 3 hit</div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-bottom:4px">Read</div>
+        <div class="c-dots"><span class="sq hit"></span><span class="sq hit"></span><span class="sq hit"></span><span class="sq"></span><span class="sq"></span><span class="sq hit"></span><span class="sq hit"></span></div>
+        <div style="font-size:13px;color:var(--text-secondary);margin:14px 0 4px">Exercise</div>
+        <div class="c-dots"><span class="sq hit"></span><span class="sq"></span><span class="sq hit"></span><span class="sq hit"></span><span class="sq"></span><span class="sq"></span><span class="sq"></span></div>
+        <div style="font-size:13px;color:var(--text-secondary);margin:14px 0 4px">Journal</div>
+        <div class="c-dots"><span class="sq hit"></span><span class="sq hit"></span><span class="sq"></span><span class="sq hit"></span><span class="sq hit"></span><span class="sq"></span><span class="sq"></span></div>
+        <div class="label" style="margin:18px 0 4px">Last 7 days</div>
+        <div style="font-size:13px;color:var(--text-secondary)"><span class="num" style="color:var(--magenta);font-weight:600">16</span> of 21 hits · 76%</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tradeoff"><b>Tradeoff:</b> Each type reads in its best shape and comparison across periods is easy, but the page is wide and dense — weak on small screens and buries the at-a-glance "how was today" read.</div>
+</section>
+
+<p class="divider-note">Tokens: Dracula-derived palette via :root vars only · system fonts · tabular-nums on all figures · no JS · sample data per spec.</p>
+
+</body>
+</html>

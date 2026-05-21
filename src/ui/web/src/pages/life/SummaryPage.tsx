@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { useSummary, useHabits, useGitStats, useTimeseries, useCreateGoal } from '../../api/hooks';
 import { MetricCard } from '../../components/data/MetricCard';
 import { ChartContainer } from '../../components/charts/ChartContainer';
@@ -354,8 +354,8 @@ export function SummaryPage() {
       )}
 
       {!tsLoading && series.length > 0 && (
-        <ChartContainer title="Last 30 days" height={220}>
-          {hasChartData ? (
+        hasChartData ? (
+          <ChartContainer title="Last 30 days" height={220}>
             <BarChart data={series} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...xAxisDateProps} />
@@ -366,14 +366,14 @@ export function SummaryPage() {
               <Bar isAnimationActive={false} stackId="work" dataKey="todosCompleted" fill="var(--accent)" name="Todos" />
               <Bar isAnimationActive={false} stackId="work" dataKey="habitsHit" fill="var(--magenta)" name="Habits" radius={[3, 3, 0, 0]} />
             </BarChart>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <div className="h-full flex items-center justify-center text-sm text-text-muted">
-                No completed work in the last 30 days yet.
-              </div>
-            </ResponsiveContainer>
-          )}
-        </ChartContainer>
+          </ChartContainer>
+        ) : (
+          <ChartContainer title="Last 30 days" raw>
+            <div className="h-[220px] flex items-center justify-center text-sm text-text-muted">
+              No completed work in the last 30 days yet.
+            </div>
+          </ChartContainer>
+        )
       )}
 
       <div className="space-y-4">

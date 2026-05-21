@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summary metric cards — 3 redesigns</title>
+<style>
+  :root {
+    --bg-primary:#282a36; --bg-secondary:#21222c; --bg-tertiary:#343746; --bg-contrast:#191a21;
+    --text-primary:#f8f8f2; --text-secondary:#a9b1d6; --text-muted:#6272a4; --text-disabled:#44475a;
+    --border:#44475a; --accent:#bd93f9; --success:#50fa7b; --warning:#f1fa8c; --error:#ff5555; --magenta:#ff79c6;
+    --mono: ui-monospace,'SF Mono',Menlo,monospace;
+    --sans: ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--sans);
+    padding: 32px;
+    max-width: 1100px;
+    margin: 0 auto;
+    line-height: 1.4;
+  }
+
+  h1 {
+    font-size: 26px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .page-sub {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin: 0 0 32px;
+  }
+
+  section { margin-bottom: 44px; }
+
+  h2 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    color: var(--text-primary);
+  }
+
+  .caption {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin: 0 0 16px;
+  }
+
+  .tradeoff {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin: 14px 0 0;
+    font-style: italic;
+  }
+  .tradeoff strong {
+    color: var(--text-secondary);
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .num { font-variant-numeric: tabular-nums; }
+
+  .label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 0 0 10px;
+  }
+
+  /* ===== Variation A — Hero + muted footer ===== */
+  .va .hero {
+    font-family: var(--mono);
+    font-size: 42px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .va .footer {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 12px;
+    display: flex;
+    gap: 14px;
+  }
+  .va .footer .k { color: var(--text-disabled); }
+  .va .footer .v { color: var(--text-secondary); }
+
+  /* ===== Variation B — Hero + sparkline + delta ===== */
+  .vb .top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .vb .hero {
+    font-family: var(--mono);
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .vb svg { display: block; }
+  .vb .delta {
+    margin-top: 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .vb .delta .d-val { font-weight: 600; }
+  .vb .delta .d-lbl { color: var(--text-muted); }
+
+  /* ===== Variation C — Hero + 2-col sub-grid ===== */
+  .vc .hero {
+    font-family: var(--mono);
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+  }
+  .vc .subgrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--border);
+  }
+  .vc .cell {
+    padding-top: 10px;
+  }
+  .vc .cell + .cell {
+    border-left: 1px solid var(--border);
+    padding-left: 12px;
+  }
+  .vc .cell .k {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+  }
+  .vc .cell .v {
+    font-family: var(--mono);
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+</style>
+</head>
+<body>
+
+<h1>Summary metric cards — 3 redesigns</h1>
+<p class="page-sub">Multi-value metric card for the /summary page. Today is the hero; yesterday and 7-day are de-emphasized context. Sentence-case labels, datacard type scale.</p>
+
+<!-- ============ VARIATION A ============ -->
+<section>
+  <h2>Variation A — Hero with muted footer</h2>
+  <p class="caption">A single dominant today number with a quiet inline footer carrying "yest / 7d" in mono, low contrast.</p>
+  <div class="row va">
+
+    <div class="card">
+      <p class="label">Goals created</p>
+      <div class="hero num" style="color:var(--accent)">4</div>
+      <div class="footer num">
+        <span><span class="v">0</span> <span class="k">yest</span></span>
+        <span><span class="v">4</span> <span class="k">7d</span></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="label">Goals completed</p>
+      <div class="hero num" style="color:var(--success)">2</div>
+      <div class="footer num">
+        <span><span class="v">1</span> <span class="k">yest</span></span>
+        <span><span class="v">6</span> <span class="k">7d</span></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="label">Todos done</p>
+      <div class="hero num" style="color:var(--success)">7</div>
+      <div class="footer num">
+        <span><span class="v">3</span> <span class="k">yest</span></span>
+        <span><span class="v">22</span> <span class="k">7d</span></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="label">Habits hit</p>
+      <div class="hero num" style="color:var(--magenta)">1</div>
+      <div class="footer num">
+        <span><span class="v">1</span> <span class="k">yest</span></span>
+        <span><span class="v">5</span> <span class="k">7d</span></span>
+      </div>
+    </div>
+
+  </div>
+  <p class="tradeoff"><strong>Tradeoff:</strong> Cleanest and densest, but drops trend shape — no sparkline, no explicit momentum signal.</p>
+</section>
+
+<!-- ============ VARIATION B ============ -->
+<section>
+  <h2>Variation B — Hero with sparkline and labeled delta</h2>
+  <p class="caption">Today number paired with an accent sparkline; a labeled delta vs yesterday makes momentum explicit.</p>
+  <div class="row vb">
+
+    <div class="card">
+      <p class="label">Goals created</p>
+      <div class="top">
+        <div class="hero num" style="color:var(--accent)">4</div>
+        <svg width="62" height="34" viewBox="0 0 62 34" fill="none">
+          <polyline points="2,28 14,30 26,18 38,22 50,10 60,4" stroke="var(--accent)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="delta num"><span class="d-val" style="color:var(--success)">+4</span><span class="d-lbl">vs yest</span></div>
+    </div>
+
+    <div class="card">
+      <p class="label">Goals completed</p>
+      <div class="top">
+        <div class="hero num" style="color:var(--success)">2</div>
+        <svg width="62" height="34" viewBox="0 0 62 34" fill="none">
+          <polyline points="2,20 14,8 26,14 38,6 50,18 60,12" stroke="var(--success)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="delta num"><span class="d-val" style="color:var(--success)">+1</span><span class="d-lbl">vs yest</span></div>
+    </div>
+
+    <div class="card">
+      <p class="label">Todos done</p>
+      <div class="top">
+        <div class="hero num" style="color:var(--success)">7</div>
+        <svg width="62" height="34" viewBox="0 0 62 34" fill="none">
+          <polyline points="2,26 14,22 26,24 38,12 50,14 60,4" stroke="var(--success)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="delta num"><span class="d-val" style="color:var(--success)">+4</span><span class="d-lbl">vs yest</span></div>
+    </div>
+
+    <div class="card">
+      <p class="label">Habits hit</p>
+      <div class="top">
+        <div class="hero num" style="color:var(--magenta)">1</div>
+        <svg width="62" height="34" viewBox="0 0 62 34" fill="none">
+          <polyline points="2,16 14,12 26,18 38,10 50,14 60,16" stroke="var(--magenta)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="delta num"><span class="d-val" style="color:var(--text-muted)">0</span><span class="d-lbl">vs yest</span></div>
+    </div>
+
+  </div>
+  <p class="tradeoff"><strong>Tradeoff:</strong> Richest signal (level + shape + momentum), but most visually busy and tallest — fewer cards per fold.</p>
+</section>
+
+<!-- ============ VARIATION C ============ -->
+<section>
+  <h2>Variation C — Hero with two-column sub-grid</h2>
+  <p class="caption">Today number on top; a ruled "yest | 7d" sub-grid below gives both context values equal, scannable footing.</p>
+  <div class="row vc">
+
+    <div class="card">
+      <p class="label">Goals created</p>
+      <div class="hero num" style="color:var(--accent)">4</div>
+      <div class="subgrid">
+        <div class="cell"><div class="k">Yest</div><div class="v num">0</div></div>
+        <div class="cell"><div class="k">7d</div><div class="v num">4</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="label">Goals completed</p>
+      <div class="hero num" style="color:var(--success)">2</div>
+      <div class="subgrid">
+        <div class="cell"><div class="k">Yest</div><div class="v num">1</div></div>
+        <div class="cell"><div class="k">7d</div><div class="v num">6</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="label">Todos done</p>
+      <div class="hero num" style="color:var(--success)">7</div>
+      <div class="subgrid">
+        <div class="cell"><div class="k">Yest</div><div class="v num">3</div></div>
+        <div class="cell"><div class="k">7d</div><div class="v num">22</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="label">Habits hit</p>
+      <div class="hero num" style="color:var(--magenta)">1</div>
+      <div class="subgrid">
+        <div class="cell"><div class="k">Yest</div><div class="v num">1</div></div>
+        <div class="cell"><div class="k">7d</div><div class="v num">5</div></div>
+      </div>
+    </div>
+
+  </div>
+  <p class="tradeoff"><strong>Tradeoff:</strong> Most legible context values with clear labels, but the ruled grid adds structure weight and no trend shape.</p>
+</section>
+
+</body>
+</html>
