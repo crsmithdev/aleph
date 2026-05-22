@@ -19,24 +19,6 @@ type PeriodSummaryData = {
   habitsCreated?: { count: number; items: Array<{ title: string }> };
 };
 
-interface GitStats {
-  commits: number;
-  added: number;
-  deleted: number;
-  topCommits?: Array<{ sha: string; subject: string; added: number; deleted: number }>;
-}
-
-function SectionHeader({ label, count }: { label: string; count?: number }) {
-  return (
-    <div className="flex items-center gap-2 pt-3 pb-1">
-      <span className="text-sm font-semibold uppercase tracking-wider text-text-muted">{label}</span>
-      {count !== undefined && (
-        <span className="text-sm text-text-muted">({count})</span>
-      )}
-    </div>
-  );
-}
-
 type ListItem = { text: string; kind: 'created' | 'completed' };
 
 function BulletList({ items }: { items: ListItem[] }) {
@@ -54,16 +36,29 @@ function BulletList({ items }: { items: ListItem[] }) {
   );
 }
 
+/** One of the three per-day columns. Always renders so the columns stay aligned. */
+function Column({ label, items }: { label: string; items: ListItem[] }) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-baseline gap-1.5 mb-1.5">
+        <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">{label}</span>
+        {items.length > 0 && <span className="text-xs text-text-muted">{items.length}</span>}
+      </div>
+      {items.length > 0 ? <BulletList items={items} /> : <p className="text-sm text-text-disabled">—</p>}
+    </div>
+  );
+}
+
 type Emphasis = 'hero' | 'normal' | 'muted';
 
-function PeriodActivity({
+/** A single day on the timeline: header + Goals / Todos / Habits in three columns. */
+function PeriodNode({
   periodLabel,
   dateDisplay,
   emphasis,
   data,
   isLoading,
   completedHabits,
-  gitStats,
 }: {
   periodLabel: string;
   dateDisplay: string;
@@ -71,43 +66,33 @@ function PeriodActivity({
   data: PeriodSummaryData | undefined;
   isLoading: boolean;
   completedHabits: string[];
-  gitStats: GitStats | undefined;
 }) {
   const [copied, setCopied] = useState(false);
 
-  const createdGoals: ListItem[] = (data?.goalsCreated?.items ?? []).map((g) => ({ text: g.title, kind: 'created' }));
-  const completedGoalItems: ListItem[] = (data?.goalsCompleted?.items ?? []).map((g) => ({ text: g.details?.title ?? g.goalId, kind: 'completed' }));
-  const goalItems = [...createdGoals, ...completedGoalItems];
+  const goalItems: ListItem[] = [
+    ...(data?.goalsCreated?.items ?? []).map((g): ListItem => ({ text: g.title, kind: 'created' })),
+    ...(data?.goalsCompleted?.items ?? []).map((g): ListItem => ({ text: g.details?.title ?? g.goalId, kind: 'completed' })),
+  ];
+  const todoItems: ListItem[] = [
+    ...(data?.todosCreated?.items ?? []).map((t): ListItem => ({ text: t.title, kind: 'created' })),
+    ...(data?.todosCompleted?.items ?? []).map((t): ListItem => ({ text: t.title, kind: 'completed' })),
+  ];
+  const habitItems: ListItem[] = [
+    ...(data?.habitsCreated?.items ?? []).map((h): ListItem => ({ text: h.title, kind: 'created' })),
+    ...completedHabits.map((h): ListItem => ({ text: h, kind: 'completed' })),
+  ];
 
-  const createdTodos: ListItem[] = (data?.todosCreated?.items ?? []).map((t) => ({ text: t.title, kind: 'created' }));
-  const completedTodoItems: ListItem[] = (data?.todosCompleted?.items ?? []).map((t) => ({ text: t.title, kind: 'completed' }));
-
-  const createdHabits: ListItem[] = (data?.habitsCreated?.items ?? []).map((h) => ({ text: h.title, kind: 'created' }));
-  const followedHabits: ListItem[] = completedHabits.map((h) => ({ text: h, kind: 'completed' }));
-  const habitItems = [...createdHabits, ...followedHabits];
-
-  const topCommits = gitStats?.topCommits ?? [];
+  const isEmpty = !isLoading && goalItems.length === 0 && todoItems.length === 0 && habitItems.length === 0;
 
   const buildCopyText = () => {
     const lines: string[] = [`${periodLabel} — ${dateDisplay}`, ''];
-    if (goalItems.length > 0) {
-      lines.push('Goals:', ...goalItems.map((g) => `  ${g.kind === 'created' ? '+' : '✓'} ${g.text}`), '');
-    }
-    if (createdTodos.length > 0) {
-      lines.push('Todos added:', ...createdTodos.map((t) => `  + ${t.text}`), '');
-    }
-    if (completedTodoItems.length > 0) {
-      lines.push('Todos finished:', ...completedTodoItems.map((t) => `  ✓ ${t.text}`), '');
-    }
-    if (habitItems.length > 0) {
-      lines.push('Habits:', ...habitItems.map((h) => `  ${h.kind === 'created' ? '+' : '✓'} ${h.text}`), '');
-    }
-    if (gitStats && gitStats.commits > 0) {
-      lines.push(`Construct: +${gitStats.added} LOC / −${gitStats.deleted} LOC · ${gitStats.commits} commit${gitStats.commits !== 1 ? 's' : ''}`);
-      if (topCommits.length > 0) {
-        lines.push(...topCommits.map((c) => `  · ${c.sha} ${c.subject} (+${c.added}/−${c.deleted})`));
-      }
-    }
+    const section = (label: string, items: ListItem[]) => {
+      if (items.length === 0) return;
+      lines.push(`${label}:`, ...items.map((i) => `  ${i.kind === 'created' ? '+' : '✓'} ${i.text}`), '');
+    };
+    section('Goals', goalItems);
+    section('Todos', todoItems);
+    section('Habits', habitItems);
     return lines.join('\n').trim();
   };
 
@@ -118,27 +103,14 @@ function PeriodActivity({
     });
   };
 
-  const isEmpty =
-    !isLoading &&
-    goalItems.length === 0 &&
-    createdTodos.length === 0 &&
-    completedTodoItems.length === 0 &&
-    habitItems.length === 0 &&
-    !(gitStats && gitStats.commits > 0);
-
   const cardClass = clsx(
     'rounded-lg px-4 pt-3 pb-4',
-    emphasis === 'hero'   && 'bg-bg-secondary border-2 border-accent/40',
+    emphasis === 'hero' && 'bg-bg-secondary border-2 border-accent/40',
     emphasis === 'normal' && 'bg-bg-secondary border border-border-primary',
-    emphasis === 'muted'  && 'bg-bg-secondary/60 border border-border-primary',
+    emphasis === 'muted' && 'bg-bg-secondary/60 border border-border-primary',
   );
 
-  const titleClass = clsx(
-    'font-semibold',
-    emphasis === 'hero'   && 'text-base text-text-primary',
-    emphasis === 'normal' && 'text-sm text-text-primary',
-    emphasis === 'muted'  && 'text-sm text-text-secondary',
-  );
+  const titleClass = clsx('font-semibold', emphasis === 'muted' ? 'text-sm text-text-secondary' : emphasis === 'hero' ? 'text-base text-text-primary' : 'text-sm text-text-primary');
 
   return (
     <div className={cardClass}>
@@ -151,10 +123,10 @@ function PeriodActivity({
           onClick={handleCopy}
           disabled={isLoading || isEmpty}
           className={clsx(
-            'flex-shrink-0 px-3 py-1 text-sm rounded-md border transition-colors mt-0.5',
+            'flex-shrink-0 px-3 py-1 text-sm rounded-md border transition-colors',
             copied
               ? 'bg-success/10 border-success text-success'
-              : 'bg-bg-tertiary border-border-primary text-text-secondary hover:text-text-primary hover:border-border-secondary disabled:opacity-50 disabled:cursor-not-allowed'
+              : 'bg-bg-tertiary border-border-primary text-text-secondary hover:text-text-primary hover:border-border-secondary disabled:opacity-50 disabled:cursor-not-allowed',
           )}
         >
           {copied ? 'Copied!' : 'Copy'}
@@ -166,59 +138,17 @@ function PeriodActivity({
       ) : isEmpty ? (
         <p className="text-sm text-text-muted mt-3">Nothing logged.</p>
       ) : (
-        <div className="divide-y divide-border-primary/50 mt-1">
-          {goalItems.length > 0 && (
-            <div className="pb-3">
-              <SectionHeader label="Goals" count={goalItems.length} />
-              <BulletList items={goalItems} />
-            </div>
-          )}
-          {createdTodos.length > 0 && (
-            <div className="pb-3">
-              <SectionHeader label="Todos added" count={createdTodos.length} />
-              <BulletList items={createdTodos} />
-            </div>
-          )}
-          {completedTodoItems.length > 0 && (
-            <div className="pb-3">
-              <SectionHeader label="Todos finished" count={completedTodoItems.length} />
-              <BulletList items={completedTodoItems} />
-            </div>
-          )}
-          {habitItems.length > 0 && (
-            <div className="pb-3">
-              <SectionHeader label="Habits" count={habitItems.length} />
-              <BulletList items={habitItems} />
-            </div>
-          )}
-          {gitStats && gitStats.commits > 0 && (
-            <div className="pt-3">
-              <SectionHeader label="Construct" />
-              <div className="flex items-baseline gap-3 text-sm pl-1 flex-wrap">
-                <span className="whitespace-nowrap"><span className="text-success font-mono">+{gitStats.added}</span><span className="text-text-muted"> LOC</span></span>
-                <span className="whitespace-nowrap"><span className="text-error font-mono">−{gitStats.deleted}</span><span className="text-text-muted"> LOC</span></span>
-                <span className="whitespace-nowrap"><span className="text-accent font-mono">{gitStats.commits}</span><span className="text-text-secondary"> commit{gitStats.commits !== 1 ? 's' : ''}</span></span>
-              </div>
-              {topCommits.length > 0 && (
-                <ul className="mt-2 space-y-1">
-                  {topCommits.map((c) => (
-                    <li key={c.sha} className="flex items-baseline gap-2 text-sm">
-                      <span className="font-mono text-text-muted shrink-0">{c.sha}</span>
-                      <span className="text-text-secondary truncate flex-1 min-w-0">{c.subject}</span>
-                      <span className="font-mono text-text-muted shrink-0 whitespace-nowrap">
-                        <span className="text-success">+{c.added}</span> / <span className="text-error">−{c.deleted}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4 mt-3">
+          <Column label="Goals" items={goalItems} />
+          <Column label="Todos" items={todoItems} />
+          <Column label="Habits" items={habitItems} />
         </div>
       )}
     </div>
   );
 }
+
+const NODE_DOT = clsx('absolute left-0 top-1.5 w-3.5 h-3.5 rounded-full bg-bg-primary');
 
 export function SummaryPage() {
   const today = toDateStr(new Date());
@@ -255,18 +185,19 @@ export function SummaryPage() {
   const todosDoneSpark = last7.map((p) => p.todosCompleted);
   const habitsHitSpark = last7.map((p) => p.habitsHit);
 
-  const hasChartData = series.some(
-    (p) => p.goalsCompleted + p.todosCompleted + p.habitsHit > 0,
-  );
+  const hasChartData = series.some((p) => p.goalsCompleted + p.todosCompleted + p.habitsHit > 0);
 
   const todayDisplay = longDate(today);
 
+  const periods = [
+    { label: 'Today', date: todayDisplay, emphasis: 'hero' as Emphasis, data: todaySummary, loading: todayLoading, habits: completedHabits, dot: 'border-2 border-accent' },
+    { label: 'Yesterday', date: longDate(yesterday), emphasis: 'normal' as Emphasis, data: yesterdaySummary, loading: yesterdayLoading, habits: [] as string[], dot: 'border-2 border-border-secondary' },
+    { label: 'Last 7 days', date: `${longDate(sevenDaysAgo)} – ${longDate(today)}`, emphasis: 'muted' as Emphasis, data: weekSummary, loading: weekLoading, habits: [] as string[], dot: 'border border-border-primary' },
+  ];
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Summary"
-        actions={<span className="text-sm text-text-muted">{todayDisplay}</span>}
-      />
+      <PageHeader title="Summary" actions={<span className="text-sm text-text-muted">{todayDisplay}</span>} />
 
       <QuickCreate />
 
@@ -275,39 +206,12 @@ export function SummaryPage() {
       {tsLoading && !timeseries ? (
         <PageLoading />
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricCard
-            label="Goals created"
-            today={todayPoint?.goalsCreated ?? 0}
-            yesterday={yesterdayPoint?.goalsCreated ?? 0}
-            week={sumWeek('goalsCreated')}
-            spark={goalsCreatedSpark}
-            accent="accent"
-          />
-          <MetricCard
-            label="Goals completed"
-            today={todayPoint?.goalsCompleted ?? 0}
-            yesterday={yesterdayPoint?.goalsCompleted ?? 0}
-            week={sumWeek('goalsCompleted')}
-            spark={goalsCompletedSpark}
-            accent="success"
-          />
-          <MetricCard
-            label="Todos done"
-            today={todayPoint?.todosCompleted ?? 0}
-            yesterday={yesterdayPoint?.todosCompleted ?? 0}
-            week={sumWeek('todosCompleted')}
-            spark={todosDoneSpark}
-            accent="success"
-          />
-          <MetricCard
-            label="Habits hit"
-            today={todayPoint?.habitsHit ?? 0}
-            yesterday={yesterdayPoint?.habitsHit ?? 0}
-            week={sumWeek('habitsHit')}
-            spark={habitsHitSpark}
-            accent="magenta"
-          />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <MetricCard label="Goals created" today={todayPoint?.goalsCreated ?? 0} yesterday={yesterdayPoint?.goalsCreated ?? 0} week={sumWeek('goalsCreated')} spark={goalsCreatedSpark} accent="accent" />
+          <MetricCard label="Goals completed" today={todayPoint?.goalsCompleted ?? 0} yesterday={yesterdayPoint?.goalsCompleted ?? 0} week={sumWeek('goalsCompleted')} spark={goalsCompletedSpark} accent="success" />
+          <MetricCard label="Todos done" today={todayPoint?.todosCompleted ?? 0} yesterday={yesterdayPoint?.todosCompleted ?? 0} week={sumWeek('todosCompleted')} spark={todosDoneSpark} accent="success" />
+          <MetricCard label="Habits hit" today={todayPoint?.habitsHit ?? 0} yesterday={yesterdayPoint?.habitsHit ?? 0} week={sumWeek('habitsHit')} spark={habitsHitSpark} accent="magenta" />
+          <MetricCard label="Commits" today={todayGit?.commits ?? 0} yesterday={yesterdayGit?.commits ?? 0} week={weekGit?.commits ?? 0} accent="warning" />
         </div>
       )}
 
@@ -334,34 +238,22 @@ export function SummaryPage() {
         )
       )}
 
-      <div className="space-y-4">
-        <PeriodActivity
-          periodLabel="Today"
-          dateDisplay={todayDisplay}
-          emphasis="hero"
-          data={todaySummary as PeriodSummaryData | undefined}
-          isLoading={todayLoading}
-          completedHabits={completedHabits}
-          gitStats={todayGit}
-        />
-        <PeriodActivity
-          periodLabel="Yesterday"
-          dateDisplay={longDate(yesterday)}
-          emphasis="normal"
-          data={yesterdaySummary as PeriodSummaryData | undefined}
-          isLoading={yesterdayLoading}
-          completedHabits={[]}
-          gitStats={yesterdayGit}
-        />
-        <PeriodActivity
-          periodLabel="Last 7 days"
-          dateDisplay={`${longDate(sevenDaysAgo)} – ${longDate(today)}`}
-          emphasis="muted"
-          data={weekSummary as PeriodSummaryData | undefined}
-          isLoading={weekLoading}
-          completedHabits={[]}
-          gitStats={weekGit}
-        />
+      {/* Vertical timeline: one spine, a node per period, Goals/Todos/Habits in 3 columns each. */}
+      <div className="relative space-y-4">
+        <span aria-hidden className="absolute left-[6px] top-3 bottom-3 w-px bg-border-primary" />
+        {periods.map((p) => (
+          <div key={p.label} className="relative pl-7">
+            <span aria-hidden className={clsx(NODE_DOT, p.dot)} />
+            <PeriodNode
+              periodLabel={p.label}
+              dateDisplay={p.date}
+              emphasis={p.emphasis}
+              data={p.data as PeriodSummaryData | undefined}
+              isLoading={p.loading}
+              completedHabits={p.habits}
+            />
+          </div>
+        ))}
       </div>
     </div>
   );
