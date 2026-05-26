@@ -169,7 +169,6 @@ export function SummaryPage() {
   const { data: weekSummary, isLoading: weekLoading } = useSummary(sevenDaysAgo, today);
   const { data: todayGit } = useGitStats(today, today);
   const { data: yesterdayGit } = useGitStats(yesterday, yesterday);
-  const { data: weekGit } = useGitStats(sevenDaysAgo, today);
   const { data: habits } = useHabits();
   const completedHabits = (habits ?? []).filter((h) => h.completedThisPeriod).map((h) => h.title);
 
@@ -177,8 +176,6 @@ export function SummaryPage() {
   const last7 = series.slice(-7);
   const todayPoint = series.find((p) => p.date === today);
   const yesterdayPoint = series.find((p) => p.date === yesterday);
-  const sumWeek = (key: 'goalsCreated' | 'goalsCompleted' | 'todosCompleted' | 'habitsHit') =>
-    last7.reduce((acc, p) => acc + p[key], 0);
 
   const goalsCreatedSpark = last7.map((p) => p.goalsCreated);
   const goalsCompletedSpark = last7.map((p) => p.goalsCompleted);
@@ -207,11 +204,11 @@ export function SummaryPage() {
         <PageLoading />
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <MetricCard label="Goals created" today={todayPoint?.goalsCreated ?? 0} yesterday={yesterdayPoint?.goalsCreated ?? 0} week={sumWeek('goalsCreated')} spark={goalsCreatedSpark} accent="accent" />
-          <MetricCard label="Goals completed" today={todayPoint?.goalsCompleted ?? 0} yesterday={yesterdayPoint?.goalsCompleted ?? 0} week={sumWeek('goalsCompleted')} spark={goalsCompletedSpark} accent="success" />
-          <MetricCard label="Todos done" today={todayPoint?.todosCompleted ?? 0} yesterday={yesterdayPoint?.todosCompleted ?? 0} week={sumWeek('todosCompleted')} spark={todosDoneSpark} accent="success" />
-          <MetricCard label="Habits hit" today={todayPoint?.habitsHit ?? 0} yesterday={yesterdayPoint?.habitsHit ?? 0} week={sumWeek('habitsHit')} spark={habitsHitSpark} accent="magenta" />
-          <MetricCard label="Commits" today={todayGit?.commits ?? 0} yesterday={yesterdayGit?.commits ?? 0} week={weekGit?.commits ?? 0} accent="warning" />
+          <MetricCard label="Goals created" today={todayPoint?.goalsCreated ?? 0} yesterday={yesterdayPoint?.goalsCreated ?? 0} spark={goalsCreatedSpark} accent="accent" />
+          <MetricCard label="Goals completed" today={todayPoint?.goalsCompleted ?? 0} yesterday={yesterdayPoint?.goalsCompleted ?? 0} spark={goalsCompletedSpark} accent="success" />
+          <MetricCard label="Todos done" today={todayPoint?.todosCompleted ?? 0} yesterday={yesterdayPoint?.todosCompleted ?? 0} spark={todosDoneSpark} accent="success" />
+          <MetricCard label="Habits hit" today={todayPoint?.habitsHit ?? 0} yesterday={yesterdayPoint?.habitsHit ?? 0} spark={habitsHitSpark} accent="magenta" />
+          <MetricCard label="Commits" today={todayGit?.commits ?? 0} yesterday={yesterdayGit?.commits ?? 0} accent="warning" />
         </div>
       )}
 

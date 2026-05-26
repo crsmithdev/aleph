@@ -1,5 +1,4 @@
 import { clsx } from 'clsx';
-import type { ReactNode } from 'react';
 
 export type MetricAccent = 'accent' | 'success' | 'warning' | 'magenta';
 
@@ -49,38 +48,33 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   );
 }
 
+/** Day-level metric: today as the hero, a 7-day sparkline, and the change vs yesterday. */
 export function MetricCard({
   label,
   today,
   yesterday,
-  week,
   spark,
   accent = 'accent',
 }: {
   label: string;
-  today: ReactNode;
-  yesterday: ReactNode;
-  week: ReactNode;
+  today: number;
+  yesterday: number;
   spark?: number[];
   accent?: MetricAccent;
 }) {
+  const delta = today - yesterday;
+  const deltaClass = delta > 0 ? 'text-success' : delta < 0 ? 'text-error' : 'text-text-muted';
+  const deltaText =
+    delta > 0 ? `+${delta} vs yesterday` : delta < 0 ? `−${Math.abs(delta)} vs yesterday` : '0 vs yesterday';
+
   return (
     <div className="bg-bg-secondary border border-border-primary rounded-xl px-4 py-3 flex flex-col gap-2">
-      <div className="text-sm font-semibold uppercase tracking-wider text-text-muted">{label}</div>
+      <div className="text-sm font-medium text-text-secondary">{label}</div>
       <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <div className={clsx('text-4xl font-bold leading-none tabular-nums', heroColor[accent])}>{today}</div>
-          <div className="mt-2 text-sm text-text-muted flex items-baseline gap-3">
-            <span>
-              <span className="text-text-secondary tabular-nums">{yesterday}</span> yest
-            </span>
-            <span>
-              <span className="text-text-secondary tabular-nums">{week}</span> 7d
-            </span>
-          </div>
-        </div>
+        <div className={clsx('text-4xl font-bold leading-none tabular-nums', heroColor[accent])}>{today}</div>
         {spark && spark.length > 0 && <Sparkline values={spark} color={strokeColor[accent]} />}
       </div>
+      <div className={clsx('text-sm tabular-nums', deltaClass)}>{deltaText}</div>
     </div>
   );
 }
