@@ -42,6 +42,6 @@ When adding a domain to the skill matrix (per `docs/plans/skill-architecture.md`
 
 ## Construct-specific cross-references
 
-- `code` gate alone is insufficient for UI changes — see [feedback_ui_done_requires_page_load.md](.claude/projects/-home-crsmi-construct/memory/feedback_ui_done_requires_page_load.md) and [feedback_smoke_isnt_visual_verification.md](.claude/projects/-home-crsmi-construct/memory/feedback_smoke_isnt_visual_verification.md). Any change that touches `src/ui/**`, a UI-consumed API route, or shared types must run `design` gate too.
+- `code` gate alone is insufficient for UI changes — compilation and a smoke pass do not prove a page renders. Any change that touches `src/ui/**`, a UI-consumed API route, or shared types must run the `design` gate too.
 - `hooks` gate must be paired with `bun install.ts` if the change deploys to `~/.claude/construct/`. The install runs `test.ts` automatically, so a clean install + `systemctl --user status construct-ui` is the end-to-end pass.
 - For worktree changes, gates run inside the worktree — not against the dev server on port 3001 (which serves different code).

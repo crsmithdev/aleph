@@ -26,6 +26,8 @@ The installer:
 
 After install completes, run `/install` in Claude Code. It runs the installer and then automatically reads each module's `INSTALL.md` and executes the Post-install Verification checks listed there. Every check must pass.
 
+**First run:** Claude Code prompts once to approve the external `@~/` identity includes (see README "Identity layering"). Approve to load the user-side identity chain; the decision is reversible in Claude Code settings.
+
 ## Upgrade (reinstall)
 
 ```bash

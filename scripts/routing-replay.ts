@@ -16,7 +16,7 @@ import { resolve } from "path";
 
 const days = Number(process.argv[2] ?? 7);
 const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-const sessionsDir = resolve(process.env.HOME!, ".claude/projects/-home-crsmi-construct");
+const sessionsDir = resolve(process.env.HOME!, ".claude/projects", process.cwd().replace(/[\\/.]/g, "-"));
 const hookPath = resolve(import.meta.dir, "../src/core/hooks/routing-classify-submit.ts");
 
 const matches: Record<string, number> = {};

@@ -16,7 +16,7 @@ const samplesPerKw = Number(process.argv[4] ?? 2);
 if (!skill) { console.error("usage: routing-kw.ts <skill> [days] [samples]"); process.exit(1); }
 
 const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-const sessionsDir = resolve(process.env.HOME!, ".claude/projects/-home-crsmi-construct");
+const sessionsDir = resolve(process.env.HOME!, ".claude/projects", process.cwd().replace(/[\\/.]/g, "-"));
 const rulesFile = resolve(import.meta.dir, "../src/skills/skill-rules.json");
 
 const rule = (JSON.parse(readFileSync(rulesFile, "utf8")).rules as any[]).find((r) => r.skill === skill);

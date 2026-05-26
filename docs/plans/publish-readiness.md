@@ -20,7 +20,15 @@ Each row is a discrete scrub. Tackle individually; none block any other. Mark wi
 
 - [ ] **10. Git history retention** — wipe before publish. Options: `git filter-repo` (surgical, keeps history shape) or orphan-branch nuke (destructive, removes all email/identity from commit objects). User-executed at publish time; agent does NOT force-push.
 - [x] **11. Plugin user override-include resolution** — dissolved. Plugin distribution dropped (see "Distribution decision" below). The `bun install.ts` path always creates `~/.construct/identity/`, so the original concern no longer applies.
-- [ ] **12. Trust-prompt UX on first external `@~/`** (V3 from personal-data interview) — resolved as one-time dialog, reversible via settings. Action: document the prompt in README/INSTALL.md so first-time users know what they're being asked. No code change needed.
+- [x] **12. Trust-prompt UX on first external `@~/`** (V3 from personal-data interview) — documented. README "Identity layering" first-run note + INSTALL.md "New Install" first-run note. Reversible via Claude Code settings.
+
+## Leaks the original scan missed (caught by widening scope)
+
+The scan one-liner below originally covered only `src/ install.ts test.ts package.json` — it never looked at `scripts/`, `docs/mockups/`, or root docs. These were found and fixed:
+
+- [x] **A. `scripts/routing-{fp,kw,replay}.ts`** — hardcoded `.claude/projects/-home-crsmi-construct` replaced with `process.cwd().replace(/[\\/.]/g, "-")`, mirroring Claude Code's project-dir encoding. Now works for any clone. Verified: script reads the real sessions dir and prints its table.
+- [x] **B. `docs/mockups/gates-patterns.html`** — 3× `home/crsmi/` example scope text → `home/user/`.
+- [x] **C. `VERIFICATION.md:45`** — dropped the two `.claude/projects/-home-crsmi-construct/memory/...` links (username leak + pointed at non-repo files); kept the rule inline.
 
 ## Distribution decision (2026-05-19)
 
@@ -38,10 +46,10 @@ Construct ships **CLI-only** via `bun install.ts`. The plugin packaging directio
 Run these before claiming any row done — they catch peer instances of the same leak shape.
 
 ```bash
-# Identity strings across code + docs + config
-grep -rIn -E 'crsmi(thdev)?|/home/crsmi|Chris Smith' \
-  --include='*.ts' --include='*.md' --include='*.json' \
-  src/ install.ts test.ts package.json | grep -v node_modules
+# Identity strings across ALL tracked files (git grep respects .gitignore,
+# so it skips src/memory/sessions/). Exclude docs/plans/ — those document the
+# effort and name the strings on purpose.
+git grep -nI -E 'crsmi(thdev)?|/home/crsmi|Chris Smith' -- ':!docs/plans/'
 
 # Test fixtures specifically
 grep -rIn -E 'crsmi(thdev)?' src/tests/ | head -40

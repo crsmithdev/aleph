@@ -15,7 +15,7 @@ const sampleN = Number(process.argv[4] ?? 20);
 if (!skill) { console.error("usage: routing-fp.ts <skill> [days] [n]"); process.exit(1); }
 
 const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-const sessionsDir = resolve(process.env.HOME!, ".claude/projects/-home-crsmi-construct");
+const sessionsDir = resolve(process.env.HOME!, ".claude/projects", process.cwd().replace(/[\\/.]/g, "-"));
 const hookPath = resolve(import.meta.dir, "../src/core/hooks/routing-classify-submit.ts");
 
 function runHook(prompt: string): string[] {
