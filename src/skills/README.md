@@ -28,6 +28,7 @@ Every prompt is automatically classified by depth:
 
 Prompts are also matched against skill keywords. When a match is found, Claude is told to activate the skill before responding. For example, asking Claude to "research the tradeoffs between X and Y" triggers the `research` skill.
 
+
 To add a new skill:
 
 1. Add a rule to `skill-rules.json`:
