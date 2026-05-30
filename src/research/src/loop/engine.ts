@@ -20,7 +20,7 @@
  * call finds its cached entry and returns it without re-executing.
  */
 
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 import { crossedThresholds, exhaustedLimit } from './envelope.js';
 import { runOnce } from './ledger.js';
 import {

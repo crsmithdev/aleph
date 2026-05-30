@@ -1,4 +1,4 @@
-# HANDOFF — Construct Design System
+# HANDOFF — Aleph Design System
 
 You are integrating an exploratory design system from this project into the
 real codebase at `construct/`. The repo's existing tokens, theme system, and
@@ -12,7 +12,7 @@ Read this whole doc before touching files.
 ## What this project is
 
 `previews/*.html` and `kits/*.html` are static reference mockups of the
-Construct UI. They use:
+Aleph UI. They use:
 
 - `tokens/colors_and_type.css` — fonts, type scale, spacing, radii (extra
   utility primitives the previews use).

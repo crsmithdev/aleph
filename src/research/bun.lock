@@ -3,10 +3,10 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@construct/research",
+      "name": "@aleph/research",
       "dependencies": {
         "@anthropic-ai/sdk": "^0.52.0",
-        "@construct/data": "file:../data",
+        "@aleph/data": "file:../data",
         "@mozilla/readability": "^0.6.0",
         "linkedom": "^0.18.12",
         "nanoid": "^5.1.2",
@@ -20,7 +20,7 @@
   "packages": {
     "@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.52.0", "", { "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-d4c+fg+xy9e46c8+YnrrgIQR45CZlAi7PwdzIfDXDM6ACxEZli1/fxhURsq30ZpMZy6LvSkr41jGq5aF5TD7rQ=="],
 
-    "@construct/data": ["@construct/data@file:../data", { "dependencies": { "drizzle-orm": "^0.39.3" }, "devDependencies": { "typescript": "^5.7.3" } }],
+    "@aleph/data": ["@aleph/data@file:../data", { "dependencies": { "drizzle-orm": "^0.39.3" }, "devDependencies": { "typescript": "^5.7.3" } }],
 
     "@mozilla/readability": ["@mozilla/readability@0.6.0", "", {}, "sha512-juG5VWh4qAivzTAeMzvY9xs9HY5rAcr2E4I7tiSSCokRFi7XIZCAu92ZkSTsIj1OPceCifL3cpfteP3pDT9/QQ=="],
 

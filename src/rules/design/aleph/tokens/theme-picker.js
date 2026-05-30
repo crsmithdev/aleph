@@ -2,11 +2,11 @@
    Theme picker — drop-in for any preview/kit.
    Usage:  <script src="../tokens/theme-picker.js"></script>
    Renders a small floating control bottom-right.
-   Persists choice in localStorage under "construct.themeId".
+   Persists choice in localStorage under "aleph.themeId".
    Defaults to material-palenight (repo DEFAULT_DARK).
    ============================================================ */
 (() => {
-  const STORAGE_KEY = 'construct.themeId';
+  const STORAGE_KEY = 'aleph.themeId';
   const DEFAULT_ID = 'material-palenight';
 
   // Embedded registry — kept in sync with tokens/themes.css

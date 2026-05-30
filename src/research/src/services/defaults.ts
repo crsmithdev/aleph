@@ -1,4 +1,4 @@
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 import type { SessionConfig } from '../types.js';
 import { DEFAULT_SESSION_CONFIG } from '../types.js';
 

@@ -3,7 +3,7 @@ import fastifyStatic from '@fastify/static';
 import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
-import { createDb } from '@construct/data';
+import { createDb } from '@aleph/data';
 import { config } from './config.js';
 import { errorHandler } from './plugins/error-handler.js';
 import { categoryRoutes } from './routes/categories.js';
@@ -19,8 +19,8 @@ import { observabilityRoutes } from './routes/observability.js';
 import { researchRoutes } from './routes/research.js';
 import { loopRoutes } from './routes/loops.js';
 import { publicRoutes } from './routes/public.js';
-import { EventBus, HistoryService, applyDDL } from '@construct/goals';
-import { applyResearchDDL, onResearchEvent } from '@construct/research';
+import { EventBus, HistoryService, applyDDL } from '@aleph/goals';
+import { applyResearchDDL, onResearchEvent } from '@aleph/research';
 import { dispatchWebhooks } from './webhook-dispatch.js';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
@@ -146,7 +146,7 @@ export async function createApp(opts?: { dbUrl?: string; skipStatic?: boolean })
 
   await app.register(swagger, {
     openapi: {
-      info: { title: 'Construct UI API', version: '0.2.0' },
+      info: { title: 'Aleph UI API', version: '0.2.0' },
       servers: [{ url: '/api' }],
     },
   });
@@ -193,7 +193,7 @@ export async function createApp(opts?: { dbUrl?: string; skipStatic?: boolean })
     applyDDL(sqlite);
     // Research domain DDL (loop engine tables + idempotent legacy-table drop)
     applyResearchDDL(sqlite);
-    // Observability DDL — TODO: move to @construct/telemetry as applyObsDDL()
+    // Observability DDL — TODO: move to @aleph/telemetry as applyObsDDL()
     applyObsDDL(sqlite);
     // Webhooks DDL — TODO: move to dedicated module, types in db/schema.ts
     applyWebhookDDL(sqlite);

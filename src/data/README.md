@@ -1,20 +1,20 @@
-# @construct/data
+# @aleph/data
 
-Shared persistence layer for Construct modules. Provides a SQLite client factory with WAL mode and foreign key enforcement.
+Shared persistence layer for Aleph modules. Provides a SQLite client factory with WAL mode and foreign key enforcement.
 
 **Depends on:** nothing
 
 ## Usage
 
 ```typescript
-import { createDb } from '@construct/data';
+import { createDb } from '@aleph/data';
 
-const { db, sqlite } = createDb(); // ~/.claude/construct/data/construct.db
+const { db, sqlite } = createDb(); // ~/.claude/aleph/data/aleph.db
 // or
 const { db, sqlite } = createDb(':memory:'); // for tests
 ```
 
-Default path: `~/.claude/construct/data/construct.db`
-Override: `CONSTRUCT_DB_PATH` env var
+Default path: `~/.claude/aleph/data/aleph.db`
+Override: `ALEPH_DB_PATH` env var
 
 Each module runs its own `CREATE TABLE IF NOT EXISTS` DDL on connect.

@@ -4,7 +4,7 @@ description: Use when you need to create, update, review, or verify documentatio
 model: sonnet
 ---
 
-Read and follow the skill at `~/.claude/construct/skills/docs-review/SKILL.md`.
+Read and follow the skill at `~/.claude/aleph/skills/docs-review/SKILL.md`.
 
 Two contexts, one skill — no separate mode invocation:
 

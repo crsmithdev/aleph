@@ -1,6 +1,6 @@
 ---
 name: codebase-auditor
-description: Run a full multi-domain audit of the Construct codebase — code quality, security, hooks, skills, agents, and docs. Dispatches to the audit skill, which fans out to each review leaf in order, then presents a phased report (Critical / Refinement / Polish) and waits for approval before applying fixes. Use when you want a comprehensive health check of the entire repo, before a release, or after significant changes. Do NOT use for single-domain reviews (invoke code-review, security-review, docs-review, agent-review directly).
+description: Run a full multi-domain audit of the Aleph codebase — code quality, security, hooks, skills, agents, and docs. Dispatches to the audit skill, which fans out to each review leaf in order, then presents a phased report (Critical / Refinement / Polish) and waits for approval before applying fixes. Use when you want a comprehensive health check of the entire repo, before a release, or after significant changes. Do NOT use for single-domain reviews (invoke code-review, security-review, docs-review, agent-review directly).
 model: sonnet
 tools:
   - Read
@@ -9,11 +9,11 @@ tools:
   - WebSearch
 ---
 
-Run a full multi-domain audit of the Construct source under `src/`.
+Run a full multi-domain audit of the Aleph source under `src/`.
 
 ## Setup
 
-Run from the Construct repo root (where `install.ts` and `src/rules/` live).
+Run from the Aleph repo root (where `install.ts` and `src/rules/` live).
 Source root: `src/`
 Rules root: `src/rules/`
 

@@ -1,18 +1,18 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { resolve, join } from 'path';
-import { dataPaths } from '@construct/data';
+import { dataPaths } from '@aleph/data';
 
 const DEFAULT_DB_PATH = dataPaths.db;
 
 export const backupRoutes: FastifyPluginAsync = async (app) => {
-  const dbPath = process.env.CONSTRUCT_DB_PATH || DEFAULT_DB_PATH;
+  const dbPath = process.env.ALEPH_DB_PATH || DEFAULT_DB_PATH;
   const backupDir = resolve(dbPath, '..', 'backups');
 
   app.post('/create', async () => {
     mkdirSync(backupDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `construct-${timestamp}.db`;
+    const filename = `aleph-${timestamp}.db`;
     const dest = join(backupDir, filename);
     // Use serialize() for an atomic in-memory snapshot (WAL-safe)
     const snapshot = app.sqlite.serialize();

@@ -2,7 +2,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { createDb } from '@construct/data';
+import { createDb } from '@aleph/data';
 import {
   applyDDL,
   EventBus,
@@ -29,7 +29,7 @@ import {
   completeHabit,
   getHistory,
   getSummary,
-} from '@construct/goals';
+} from '@aleph/goals';
 
 const { db, sqlite } = createDb();
 applyDDL(sqlite);

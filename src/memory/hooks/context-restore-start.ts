@@ -46,7 +46,7 @@ const out: string[] = ["=== Session Start ==="];
 // Dev-mode check: remind to install after editing source
 const cwd = input.cwd ?? process.cwd();
 if (existsSync(resolve(cwd, "src/trace.ts")) && existsSync(resolve(cwd, "install.ts"))) {
-  out.push("\n⚠ DEV MODE: Edits to src/ won't take effect until you run /construct install.\n");
+  out.push("\n⚠ DEV MODE: Edits to src/ won't take effect until you run /aleph install.\n");
 }
 
 // Session count

@@ -18,16 +18,16 @@ import { mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-const tmpDir = mkdtempSync(join(tmpdir(), 'construct-e2e-loop-'));
+const tmpDir = mkdtempSync(join(tmpdir(), 'aleph-e2e-loop-'));
 const dbPath = join(tmpDir, 'test.db');
-process.env.CONSTRUCT_DB_PATH = dbPath;
+process.env.ALEPH_DB_PATH = dbPath;
 process.env.NODE_ENV = 'production';
-process.env.HOME = tmpDir; // research-logger writes NDJSON under $HOME/.construct
+process.env.HOME = tmpDir; // research-logger writes NDJSON under $HOME/.aleph
 
 const { chromium } = await import('playwright');
-const { createDb } = await import('@construct/data');
-const { applyDDL } = await import('@construct/goals');
-const { applyResearchDDL } = await import('@construct/research');
+const { createDb } = await import('@aleph/data');
+const { applyDDL } = await import('@aleph/goals');
+const { applyResearchDDL } = await import('@aleph/research');
 const { createApp } = await import('../api/src/app.js');
 
 let server: Awaited<ReturnType<typeof createApp>> | null = null;

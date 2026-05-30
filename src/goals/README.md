@@ -1,14 +1,14 @@
-# @construct/goals
+# @aleph/goals
 
-Domain logic for goals, todos, categories, notes, recurring todos, and history. Pure service functions with direct SQLite access via `@construct/data`.
+Domain logic for goals, todos, categories, notes, recurring todos, and history. Pure service functions with direct SQLite access via `@aleph/data`.
 
-**Depends on:** @construct/data
+**Depends on:** @aleph/data
 
 ## Usage
 
 ```typescript
-import { createDb } from '@construct/data';
-import { applyDDL, createGoal, listGoals, EventBus, HistoryService } from '@construct/goals';
+import { createDb } from '@aleph/data';
+import { applyDDL, createGoal, listGoals, EventBus, HistoryService } from '@aleph/goals';
 
 const { db, sqlite } = createDb();
 applyDDL(sqlite);

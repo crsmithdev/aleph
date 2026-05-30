@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import { eq } from 'drizzle-orm';
-import type { Db } from '@construct/data';
+import type { Db } from '@aleph/data';
 import { categories } from '../schema.js';
 import { createCategorySchema, updateCategorySchema } from '../validators.js';
 

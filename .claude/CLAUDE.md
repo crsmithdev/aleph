@@ -1,10 +1,10 @@
 <!-- DEV-ONLY — loaded at runtime for this repo, never installed anywhere.
-     Construct behavioral rules live in src/core/CLAUDE.md (installed to ~/.claude/CLAUDE.md).
+     Aleph behavioral rules live in src/core/CLAUDE.md (installed to ~/.claude/CLAUDE.md).
      Keep behavioral rules in src/core/CLAUDE.md; put dev-only rules here. -->
 
-# Construct Development
+# Aleph Development
 
-This is the Construct source repo. The installed Construct rules come from `~/.claude/CLAUDE.md`.
+This is the Aleph source repo. The installed Aleph rules come from `~/.claude/CLAUDE.md`.
 
 ## Commandments
 
@@ -23,11 +23,11 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 
 Claude Code merges `.claude/` (project) with `~/.claude/` (global) at runtime. If the same hook, command, or setting exists in both, it fires/loads twice. To prevent this:
 
-- Put hooks, commands, and CLAUDE.md rules in `src/` (installed to `~/.claude/construct/`), not `.claude/`.
+- Put hooks, commands, and CLAUDE.md rules in `src/` (installed to `~/.claude/aleph/`), not `.claude/`.
 - `.claude/settings.json` may only contain permissions, statusline, and MCP server config — hooks go in `src/`.
 
 **CLAUDE.md ownership** — rules must exist in exactly one place (this file supplements but does not override global rules):
-- `src/core/CLAUDE.md` → Construct behavioral rules. Referenced via `@construct/core/CLAUDE.md` in `~/.claude/CLAUDE.md`. Takes precedence as the authoritative behavioral source.
+- `src/core/CLAUDE.md` → Aleph behavioral rules. Referenced via `@aleph/core/CLAUDE.md` in `~/.claude/CLAUDE.md`. Takes precedence as the authoritative behavioral source.
 - `.claude/CLAUDE.md` → this file. Repo-specific dev rules. Loaded at runtime, never installed.
 
 ## Testing Philosophy
@@ -39,11 +39,11 @@ Claude Code merges `.claude/` (project) with `~/.claude/` (global) at runtime. I
 
 ## Server
 
-- **Prod:** port 3000 — systemd `construct-ui.service`, deployed via `bun install.ts`
+- **Prod:** port 3000 — systemd `aleph-ui.service`, deployed via `bun install.ts`
 - **Human dev:** port 3001 — `bun run dev` from repo root. Started by whoever is actively iterating on the UI; may or may not be running. If it is, it serves *their* working tree from whatever branch they're on — agents must never verify against 3001 or assume it serves the agent's code.
 - **Agent verification:** ephemeral, free port ≥ 3002, spawned per task and killed when done.
 
-All three share data at `~/.construct/`.
+All three share data at `~/.aleph/`.
 
 ## Agent dev workflow
 
@@ -67,16 +67,16 @@ Worktrees follow the same model — start the one-off server from inside the wor
 
 ## Manual hook invocations
 
-If you pipe stdin to a hook script directly (e.g. `echo '{...}' | bun src/core/hooks/foo.ts`), set `CONSTRUCT_DATA_ROOT=/tmp/scratch` first so the write lands in a throwaway dir, not the real `~/.construct/`. `reportHook()` tags writes whose `sessionId` isn't a real Claude Code id (UUID or `agent-<hex>`) with `lane: "test"` so the adapter skips them — but it's still cleaner to redirect the whole data root.
+If you pipe stdin to a hook script directly (e.g. `echo '{...}' | bun src/core/hooks/foo.ts`), set `ALEPH_DATA_ROOT=/tmp/scratch` first so the write lands in a throwaway dir, not the real `~/.aleph/`. `reportHook()` tags writes whose `sessionId` isn't a real Claude Code id (UUID or `agent-<hex>`) with `lane: "test"` so the adapter skips them — but it's still cleaner to redirect the whole data root.
 
 ## Directory map
 
 | Path | Purpose | Installs to | Method |
 |---|---|---|---|
-| `src/` | All Construct code: hooks, skills, commands, CLAUDE.md, settings | `~/.claude/construct/` | `bun install.ts` |
+| `src/` | All Aleph code: hooks, skills, commands, CLAUDE.md, settings | `~/.claude/aleph/` | `bun install.ts` |
 | `.claude/` | Project-local dev config (this file, permissions, statusline) | nowhere — used at runtime | — |
-| `~/.claude/construct/` | Installed code | — | Only written by `install.ts` |
-| `~/.construct/` | User data (DB, sessions, signals, memory) | — | Never touched by install |
+| `~/.claude/aleph/` | Installed code | — | Only written by `install.ts` |
+| `~/.aleph/` | User data (DB, sessions, signals, memory) | — | Never touched by install |
 
 ## Skill extensions
 
@@ -114,10 +114,9 @@ If you pipe stdin to a hook script directly (e.g. `echo '{...}' | bun src/core/h
 **Additional checks:**
 
 1. Every hook registered in `src/core/hooks/settings-hooks.json` is documented in the Hook Registration table
-2. Every slash subcommand in `construct.md` is documented
-3. Every skill in `skill-rules.json` is documented
-4. Every module detection file listed matches reality
-5. Flag any behavior described in `SPEC.md` that has no corresponding implementation
+2. Every skill in `skill-rules.json` is documented
+3. Every module detection file listed matches reality
+4. Flag any behavior described in `SPEC.md` that has no corresponding implementation
 
 ### /verification
 

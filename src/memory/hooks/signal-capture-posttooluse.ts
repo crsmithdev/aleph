@@ -33,7 +33,7 @@ if (!filePath) {
 const fileKey = filePath.split("/").filter(Boolean).slice(-2).join("/");
 
 // Per-session state in /tmp
-const stateFile = `/tmp/construct-posttool-${sessionId}.json`;
+const stateFile = `/tmp/aleph-posttool-${sessionId}.json`;
 let state: { fileCounts: Record<string, number> } = { fileCounts: {} };
 try {
   if (existsSync(stateFile)) {

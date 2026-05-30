@@ -15,9 +15,9 @@ import { tmpdir } from 'os';
 import { Database } from 'bun:sqlite';
 import { spawn, type ChildProcess } from 'child_process';
 
-const tmpDir = mkdtempSync(join(tmpdir(), 'construct-obs-e2e-'));
+const tmpDir = mkdtempSync(join(tmpdir(), 'aleph-obs-e2e-'));
 const dbPath = join(tmpDir, 'test.db');
-process.env.CONSTRUCT_DB_PATH = dbPath;
+process.env.ALEPH_DB_PATH = dbPath;
 
 const { chromium } = await import('playwright');
 const { createApp } = await import('../api/src/app.js');

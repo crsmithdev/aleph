@@ -7,7 +7,7 @@ import {
   deleteHabit,
   completeHabit,
   uncompleteHabit,
-} from '@construct/goals';
+} from '@aleph/goals';
 
 export const habitRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', async () => listHabits(app.db));

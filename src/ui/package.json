@@ -1,22 +1,22 @@
 {
-  "name": "construct-ui",
+  "name": "aleph-ui",
   "private": true,
   "workspaces": [
     "api",
     "web"
   ],
   "scripts": {
-    "start": "set -a && [ -f ../../.env ] && . ../../.env; set +a && CONSTRUCT_DB_PATH=${CONSTRUCT_DB_PATH:-$HOME/.construct/construct-dev.db} bun --watch api/src/server.ts",
+    "start": "set -a && [ -f ../../.env ] && . ../../.env; set +a && ALEPH_DB_PATH=${ALEPH_DB_PATH:-$HOME/.aleph/aleph-dev.db} bun --watch api/src/server.ts",
     "serve": "set -a && [ -f ../../.env ] && . ../../.env; set +a && bun api/src/server.ts",
     "build": "cd web && bun run build",
     "test:e2e": "bun e2e/goal-flow.test.ts",
     "typecheck": "tsc -b api web"
   },
   "dependencies": {
-    "@construct/data": "workspace:*",
-    "@construct/goals": "workspace:*",
-    "@construct/research": "workspace:*",
-    "@construct/telemetry": "workspace:*"
+    "@aleph/data": "workspace:*",
+    "@aleph/goals": "workspace:*",
+    "@aleph/research": "workspace:*",
+    "@aleph/telemetry": "workspace:*"
   },
   "devDependencies": {
     "playwright": "^1.58.2",

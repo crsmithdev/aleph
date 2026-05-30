@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Takes a memory snapshot and writes it to obs_memory_snapshots in construct.db.
+ * Takes a memory snapshot and writes it to obs_memory_snapshots in aleph.db.
  * Run standalone or spawned fire-and-forget from session-start.
  */
 import { Database } from "bun:sqlite";
@@ -8,7 +8,7 @@ import { existsSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import { dataPaths, externalPaths } from "../data/src/paths.ts";
 
-const constructDbPath = dataPaths.db;
+const alephDbPath = dataPaths.db;
 const memoryDbPath = externalPaths.memoryDb;
 
 function ensureTable(db: Database): void {
@@ -73,10 +73,10 @@ try {
     process.exit(0);
   }
 
-  mkdirSync(dirname(constructDbPath), { recursive: true });
-  const constructDb = new Database(constructDbPath);
-  constructDb.exec("PRAGMA journal_mode = WAL");
-  ensureTable(constructDb);
+  mkdirSync(dirname(alephDbPath), { recursive: true });
+  const alephDb = new Database(alephDbPath);
+  alephDb.exec("PRAGMA journal_mode = WAL");
+  ensureTable(alephDb);
 
   const memDb = new Database(memoryDbPath, { readonly: true });
   const stats = getMemoryStats(memDb);
@@ -84,7 +84,7 @@ try {
 
   const healthScore = stats.total > 0 ? Math.max(0, 1 - stats.stale / stats.total) : 0;
 
-  constructDb
+  alephDb
     .query(
       "INSERT INTO obs_memory_snapshots (total, by_type, health, by_tag) VALUES (?, ?, ?, ?)",
     )
@@ -95,7 +95,7 @@ try {
       JSON.stringify(stats.byTag),
     );
 
-  constructDb.close();
+  alephDb.close();
 } catch (err) {
   console.error("obs-snapshot error:", (err as Error).message ?? err);
   process.exit(1);

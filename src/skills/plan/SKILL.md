@@ -5,7 +5,7 @@ description: >
   contract that names every file that changes, the order of changes, the
   verification command per task, and the rollback path. Reads an existing
   sketch when one is provided, otherwise builds the premise from the
-  conversation. Writes to `~/.construct/plans/<slug>.md`. Use when the user
+  conversation. Writes to `~/.aleph/plans/<slug>.md`. Use when the user
   has a concrete change in mind and wants the work decomposed into
   commit-ready tasks: "write a plan", "/plan", "plan this out", "plan the
   implementation", "draft a plan for", "what's the plan", "decompose this",
@@ -36,7 +36,7 @@ with the verification each step is judged against.
 
 `$ARGUMENTS` may be:
 
-- A sketch path (e.g. `~/.construct/sketches/inbox-share.md`) — read it and
+- A sketch path (e.g. `~/.aleph/sketches/inbox-share.md`) — read it and
   use it as the premise
 - A short subject phrase — build the premise from the conversation
 - Empty — infer the subject from the conversation; ask one short question
@@ -48,14 +48,14 @@ with the verification each step is judged against.
 
 If `$ARGUMENTS` names a file, read it. Otherwise, summarize the target in
 3–6 words for the title and slug. If a corresponding sketch exists
-(`~/.construct/sketches/<slug>.md` or similar), read it and lift the
+(`~/.aleph/sketches/<slug>.md` or similar), read it and lift the
 premise.
 
 ### 2. Resolve output
 
-Read `~/.claude/construct/core/construct.config.json` and pick
+Read `~/.claude/aleph/core/aleph.config.json` and pick
 `plans.outputDir`. Expand `~` to `$HOME`. `mkdir -p` if missing. Default:
-`~/.construct/plans`. Slugify the subject for the filename. If the slug
+`~/.aleph/plans`. Slugify the subject for the filename. If the slug
 collides, suffix (`-v2`, `-revised`) — do not silently overwrite.
 
 ### 3. Read the affected code

@@ -1,6 +1,6 @@
 # Publish readiness checklist
 
-Tracking for everything that must be scrubbed/decided before the Construct repo is shared publicly. Split out from `personal-data-isolation.md` so the items survive after that plan merges.
+Tracking for everything that must be scrubbed/decided before the Aleph repo is shared publicly. Split out from `personal-data-isolation.md` so the items survive after that plan merges.
 
 Each row is a discrete scrub. Tackle individually; none block any other. Mark with `[x]` when done.
 
@@ -14,12 +14,12 @@ Each row is a discrete scrub. Tackle individually; none block any other. Mark wi
 - [x] **6. `src/tests/e2e.test.ts:212` literal** — `projDir` now `-home-testuser-construct`; encoding logic still exercises the same code path.
 - [x] **7. Fixture username leaks (broad sweep)** — `sed crsmi → testuser` across all `src/telemetry/__tests__/fixtures/`. 528 tests still green.
 - [x] **8. `.claude/CLAUDE.md` workflow scrub** — audited. File is repo-dev guidance, not personal data. Only fix needed: tightened "user owns 3001" framing to "active human dev's working tree, not the agent's" so the role distinction is explicit rather than relying on an implicit personal-pronoun reading.
-- [x] **9. Greenshot reference** — `src/commands/ss.md` generalized to `SHOTS_DIR` / `SHOTS_LATEST` env vars. Port numbers (3000/3001/3002) intentionally kept — they're Construct's actual architecture, not personal config.
+- [x] **9. Greenshot reference** — `src/commands/ss.md` generalized to `SHOTS_DIR` / `SHOTS_LATEST` env vars. Port numbers (3000/3001/3002) intentionally kept — they're Aleph's actual architecture, not personal config.
 
 ## Other pre-publish concerns
 
 - [ ] **10. Git history retention** — wipe before publish. Options: `git filter-repo` (surgical, keeps history shape) or orphan-branch nuke (destructive, removes all email/identity from commit objects). User-executed at publish time; agent does NOT force-push.
-- [x] **11. Plugin user override-include resolution** — dissolved. Plugin distribution dropped (see "Distribution decision" below). The `bun install.ts` path always creates `~/.construct/identity/`, so the original concern no longer applies.
+- [x] **11. Plugin user override-include resolution** — dissolved. Plugin distribution dropped (see "Distribution decision" below). The `bun install.ts` path always creates `~/.aleph/identity/`, so the original concern no longer applies.
 - [x] **12. Trust-prompt UX on first external `@~/`** (V3 from personal-data interview) — documented. README "Identity layering" first-run note + INSTALL.md "New Install" first-run note. Reversible via Claude Code settings.
 
 ## Leaks the original scan missed (caught by widening scope)
@@ -28,15 +28,15 @@ The scan one-liner below originally covered only `src/ install.ts test.ts packag
 
 - [x] **A. `scripts/routing-{fp,kw,replay}.ts`** — hardcoded `.claude/projects/-home-crsmi-construct` replaced with `process.cwd().replace(/[\\/.]/g, "-")`, mirroring Claude Code's project-dir encoding. Now works for any clone. Verified: script reads the real sessions dir and prints its table.
 - [x] **B. `docs/mockups/gates-patterns.html`** — 3× `home/crsmi/` example scope text → `home/user/`.
-- [x] **C. `VERIFICATION.md:45`** — dropped the two `.claude/projects/-home-crsmi-construct/memory/...` links (username leak + pointed at non-repo files); kept the rule inline.
+- [x] **C. `VERIFICATION.md:45`** — dropped the two `.claude/projects/-home-crsmi-aleph/memory/...` links (username leak + pointed at non-repo files); kept the rule inline.
 
 ## Distribution decision (2026-05-19)
 
-Construct ships **CLI-only** via `bun install.ts`. The plugin packaging direction was abandoned after:
+Aleph ships **CLI-only** via `bun install.ts`. The plugin packaging direction was abandoned after:
 
 - Claude Code plugin lifecycle hooks (PreInstall/PostInstall) don't exist — feature request [#11240](https://github.com/anthropics/claude-code/issues/11240) closed as duplicate.
 - SessionStart-as-installer workaround broken on first run for marketplace plugins ([#10997](https://github.com/anthropics/claude-code/issues/10997)).
-- Plugins can't ship a UI bundle, run a daemon, write systemd units, or create the DB — Construct's backend (research worker, observability UI, memory MCP, goals) needs all of these.
+- Plugins can't ship a UI bundle, run a daemon, write systemd units, or create the DB — Aleph's backend (research worker, observability UI, memory MCP, goals) needs all of these.
 - Dual distribution paths (plugin + CLI) doubled the maintenance and introduced drift risk without delivering anything the CLI couldn't.
 
 `feat/plugin-packaging` branch killed locally; remote branch preserved on origin for revival if the lifecycle-hook situation changes. `dist-plugin.ts` is dead code wherever it appears.

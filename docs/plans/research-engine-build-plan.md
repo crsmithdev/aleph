@@ -134,7 +134,7 @@ Each item below could plausibly be in v1 — they're called out so the boundary 
 | Recursive sub-loops via `parent_loop_id` | Opt-in per template. Add when a template demands it. | v4 |
 | Code-dev / image-iteration / long-form writing templates | After the engine is proven stable on research + monitor. | v4 |
 | Related-runs panel, cross-run concept/source indexes, knowledge graph view | Cross-run features intentionally deferred to the end — per-run engine must be solid first. | v5 |
-| LangGraph / MCP adoption | Skip entirely. Bespoke is right for Construct. | never |
+| LangGraph / MCP adoption | Skip entirely. Bespoke is right for Aleph. | never |
 
 ---
 
@@ -454,10 +454,10 @@ The four things to watch across v1.
 
 Worth restating since the comparison doc surveyed them and decided no:
 
-- **LangGraph or any Python-based workflow framework.** Construct is TypeScript; the engine is small enough that adopting a framework loses more than it gains.
-- **MCP tool ecosystem.** Construct doesn't need it. Revisit if Construct grows toward enterprise / multi-tool integrations.
+- **LangGraph or any Python-based workflow framework.** Aleph is TypeScript; the engine is small enough that adopting a framework loses more than it gains.
+- **MCP tool ecosystem.** Aleph doesn't need it. Revisit if Aleph grows toward enterprise / multi-tool integrations.
 - **Cross-loop scheduler / job queue / worker pool.** The whole point of the rewrite is to delete this layer.
-- **Training a custom model.** Construct uses provider LLMs and is not a model-training project.
+- **Training a custom model.** Aleph uses provider LLMs and is not a model-training project.
 
 ---
 

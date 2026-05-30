@@ -1,8 +1,8 @@
-# construct-memory
+# aleph-memory
 
 Session hooks, memory directories, ratings capture, semantic memory.
 
-**Depends on:** construct-core
+**Depends on:** aleph-core
 **Optional:** mcp-memory-service (for semantic memory)
 
 ## Contents

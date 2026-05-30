@@ -6,7 +6,7 @@ model: sonnet
 
 ## Workflow
 
-Read and follow the skill at ~/.claude/construct/skills/design-review/SKILL.md, then apply it to the screens or components the user has specified.
+Read and follow the skill at ~/.claude/aleph/skills/design-review/SKILL.md, then apply it to the screens or components the user has specified.
 
 `design-review` covers all 18 sections of `src/rules/design/RULES.md` in one pass — visual hierarchy (A), typography (B, via `typography.md`), color (C), alignment (D), components (E), iconography (F), motion (G), state coverage (H), dark mode (I), density (J), responsiveness (K), accessibility (L, via `accessibility.md`), forms (M), performance (N), navigation (O), hydration (P), locale (Q), and anti-patterns (R).
 

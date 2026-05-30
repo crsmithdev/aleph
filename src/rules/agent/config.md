@@ -32,7 +32,7 @@ Scope: project root, `.claude/`, `~/.claude/`, `src/core/hooks/settings-hooks.js
 
 ### A.3 No duplicate rule content across CLAUDE.md layers
 
-The same instruction must not appear in both global (`~/.claude/CLAUDE.md`) and project (`.claude/CLAUDE.md`) — Claude Code merges them and the duplicate fires/loads twice. The Construct project's "CLAUDE.md ownership" doc table defines authoritative locations.
+The same instruction must not appear in both global (`~/.claude/CLAUDE.md`) and project (`.claude/CLAUDE.md`) — Claude Code merges them and the duplicate fires/loads twice. The Aleph project's "CLAUDE.md ownership" doc table defines authoritative locations.
 
 - **Detect:** identical paragraph-level content between layers; or both files defining rules for the same domain (e.g., both have a "Testing Philosophy" section)
 - **Severity:** `important`
@@ -42,7 +42,7 @@ The same instruction must not appear in both global (`~/.claude/CLAUDE.md`) and 
 
 ## B. Hook registry consistency
 
-*Sources: `src/core/hooks/settings-hooks.json`, Construct CLAUDE.md "Avoiding duplication".*
+*Sources: `src/core/hooks/settings-hooks.json`, Aleph CLAUDE.md "Avoiding duplication".*
 
 ### B.1 Every hook command points at a file that exists
 
@@ -54,7 +54,7 @@ Hook entries in `settings-hooks.json` reference a script. If the script doesn't 
 
 ### B.2 No double registration in `.claude/settings.json` and `src/core/hooks/`
 
-Hooks declared in both `.claude/settings.json` and `src/core/hooks/settings-hooks.json` fire twice per event. The Construct CLAUDE.md says hooks belong in `src/core/hooks/`, not `.claude/settings.json`.
+Hooks declared in both `.claude/settings.json` and `src/core/hooks/settings-hooks.json` fire twice per event. The Aleph CLAUDE.md says hooks belong in `src/core/hooks/`, not `.claude/settings.json`.
 
 - **Detect:** the same hook command path appears in both `.claude/settings.json.hooks` and `src/core/hooks/settings-hooks.json`
 - **Severity:** `important`
@@ -78,7 +78,7 @@ Every hook reads from stdin. If `JSON.parse` is unwrapped or unguarded, malforme
 
 ### B.5 Hooks use `trace()` for observability
 
-Construct hooks must call `trace()` (from `src/trace.ts`) at completion so observability captures the event. Hooks that skip tracing become invisible to the UI / eval harness.
+Aleph hooks must call `trace()` (from `src/trace.ts`) at completion so observability captures the event. Hooks that skip tracing become invisible to the UI / eval harness.
 
 - **Detect:** hook scripts under `src/core/hooks/` with no `trace(` call
 - **Severity:** `nit`
@@ -160,7 +160,7 @@ Command-line `args` for MCP servers must not include literal API keys, OAuth sec
 
 ### E.2 Each permission has a discoverable rationale
 
-For Construct projects: every entry in `permissions.allow` should be one a `fewer-permission-prompts` analysis would justify. Pre-existing entries with no justification are flagged for review.
+For Aleph projects: every entry in `permissions.allow` should be one a `fewer-permission-prompts` analysis would justify. Pre-existing entries with no justification are flagged for review.
 
 - **Detect:** entries in `.claude/settings.json` `permissions.allow` added in the current diff with no accompanying comment or commit message context
 - **Severity:** `nit`

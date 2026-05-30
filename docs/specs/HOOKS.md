@@ -30,7 +30,7 @@ They are registered in `src/core/hooks/settings-hooks.json` and installed to `~/
 | PostToolUse | quality-typecheck-edit | `src/core/hooks/quality-typecheck-edit.ts` | `Edit\|Write` | 15000ms | Open | stderr type errors → Claude (advisory) | `hook-events.jsonl` — base fields only |
 | PreCompact | context-backup-precompact | `src/core/hooks/context-backup-precompact.ts` | — | 5000ms | Open | writes `signals/compaction-notes.json` → `context-restore-start` (context bridge) | `hook-events.jsonl` — base fields only |
 
-**Base fields** logged by every hook via `reportHook()`: `{ts, hook, event, sessionId}`. All entries land in `~/.construct/signals/hook-events.jsonl` and are visible in the observability UI Hooks page (aggregated by hook name and event type).
+**Base fields** logged by every hook via `reportHook()`: `{ts, hook, event, sessionId}`. All entries land in `~/.aleph/signals/hook-events.jsonl` and are visible in the observability UI Hooks page (aggregated by hook name and event type).
 
 **Fails closed** = PreToolUse exit code 2 blocks the tool call. Only PreToolUse hooks can fail closed.  
 **Fails open** = hook prints advisory output but cannot prevent the action.
@@ -43,9 +43,9 @@ They are registered in `src/core/hooks/settings-hooks.json` and installed to `~/
 
 **context-restore-start** fires on SessionStart. Shows session count, the last session summary (intent, outcome, tools, edits, messages), a briefing for any background sessions since the last interactive one, and top 5 semantic memories. Also fires `obs-snapshot.ts` fire-and-forget to capture memory health.
 
-**rating-capture-submit** fires on every UserPromptSubmit. Extracts explicit ratings (standalone 1–10, "N/10" pattern, "rate"/"rating" + digit) and appends to `~/.construct/signals/ratings.jsonl`. Ratings 1–3 trigger a console reminder to log what went wrong.
+**rating-capture-submit** fires on every UserPromptSubmit. Extracts explicit ratings (standalone 1–10, "N/10" pattern, "rate"/"rating" + digit) and appends to `~/.aleph/signals/ratings.jsonl`. Ratings 1–3 trigger a console reminder to log what went wrong.
 
-**context-save-stop** fires on Stop. Writes a structured session file to `~/.construct/sessions/YYYY-MM-DD-HHMMSS.md` if the session had ≥4 messages. Contains intent, outcome, milestones, tools, files, and message counts.
+**context-save-stop** fires on Stop. Writes a structured session file to `~/.aleph/sessions/YYYY-MM-DD-HHMMSS.md` if the session had ≥4 messages. Contains intent, outcome, milestones, tools, files, and message counts.
 
 **memory-extract-stop** fires on Stop. Auto-extracts high-value memories to the semantic store if the session is substantive (≥6 messages + edits) and Claude has not already called `memory_store` voluntarily.
 
@@ -61,7 +61,7 @@ They are registered in `src/core/hooks/settings-hooks.json` and installed to `~/
 
 **context-monitor-stop** fires on Stop. Reads token usage and warns at 80% context, critical alert at 90%. Auto-detects 1M extended context.
 
-**context-backup-precompact** fires on PreCompact. Parses the last ~120 transcript lines and writes a working-state snapshot to `~/.construct/signals/compaction-notes.json` (recent prompts, working files, errors, last assistant snippet). `context-restore-start` injects these notes at next session start if the file is less than 12 hours old, bridging context across compaction boundaries.
+**context-backup-precompact** fires on PreCompact. Parses the last ~120 transcript lines and writes a working-state snapshot to `~/.aleph/signals/compaction-notes.json` (recent prompts, working files, errors, last assistant snippet). `context-restore-start` injects these notes at next session start if the file is less than 12 hours old, bridging context across compaction boundaries.
 
 **context-suggest-edit** fires on PreToolUse (Edit/Write). Suggests context compaction when appropriate. Advisory only.
 

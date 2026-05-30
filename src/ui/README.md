@@ -1,8 +1,8 @@
-# construct-ui
+# aleph-ui
 
-General-purpose Construct web UI. Fastify API + React SPA serving goals, todos, observability, research, and system settings.
+General-purpose Aleph web UI. Fastify API + React SPA serving goals, todos, observability, research, and system settings.
 
-**Depends on:** @construct/data, @construct/goals, @construct/telemetry, @construct/research
+**Depends on:** @aleph/data, @aleph/goals, @aleph/telemetry, @aleph/research
 
 ## Contents
 
@@ -29,7 +29,7 @@ npm test       # Vitest API integration tests
 ## Architecture
 
 - **App factory:** `createApp(opts?)` in `api/src/app.ts`. Tests use `:memory:` SQLite.
-- **Routes:** Thin wrappers — parse request, call `@construct/goals` service function, format response.
+- **Routes:** Thin wrappers — parse request, call `@aleph/goals` service function, format response.
 - **Event bus:** Goals EventBus + HistoryService initialized in app.ts. WebhookDispatcher listens for events.
 - **Schema:** Goals DDL via `applyDDL()`. Webhooks DDL in `onReady` hook.
 - **Frontend proxy:** Vite proxies `/api` to Fastify in dev. Production: API serves built frontend via @fastify/static.
@@ -37,4 +37,4 @@ npm test       # Vitest API integration tests
 
 ## Data
 
-SQLite at `~/.construct/construct.db` (WAL mode, overridable via `CONSTRUCT_DATA_ROOT`).
+SQLite at `~/.aleph/aleph.db` (WAL mode, overridable via `ALEPH_DATA_ROOT`).

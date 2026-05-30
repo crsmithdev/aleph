@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: Review UI design quality under src/ui/ against `src/rules/design/RULES.md` (18 dimensions — hierarchy, typography, color, alignment, components, iconography, motion, state coverage, dark mode, density, responsiveness, accessibility, forms, performance, navigation, hydration, locale, anti-patterns) plus Construct-specific rules in `src/rules/design/construct/RULES.md`. Scans, presents findings, applies approved fixes, runs `bun run ui:smoke`. Also self-invoked in enforce mode while writing UI source — applies token/surface/type/icon rules silently with no findings. Triggers on /design-review, /audit design, "audit the ui", "review the ui", "polish the interface", "make this feel professional", "make the pages match", "align the layouts", "design system", "construct design", "design tokens", "color tokens", "surface tokens", "type scale", "design reference", "design kit", "material symbols", "construct ui pattern", and is self-invoked whenever the agent is writing or editing UI source under src/ui/.
+description: Review UI design quality under src/ui/ against `src/rules/design/RULES.md` (18 dimensions — hierarchy, typography, color, alignment, components, iconography, motion, state coverage, dark mode, density, responsiveness, accessibility, forms, performance, navigation, hydration, locale, anti-patterns) plus Aleph-specific rules in `src/rules/design/aleph/RULES.md`. Scans, presents findings, applies approved fixes, runs `bun run ui:smoke`. Also self-invoked in enforce mode while writing UI source — applies token/surface/type/icon rules silently with no findings. Triggers on /design-review, /audit design, "audit the ui", "review the ui", "polish the interface", "make this feel professional", "make the pages match", "align the layouts", "design system", "aleph design", "design tokens", "color tokens", "surface tokens", "type scale", "design reference", "design kit", "material symbols", "aleph ui pattern", and is self-invoked whenever the agent is writing or editing UI source under src/ui/.
 agent_backed:
   audit: design-reviewer
 ---
@@ -34,7 +34,7 @@ Audit dispatches to the **`design-reviewer` agent** because qualitative rules (h
 
 ## Domain
 
-- Rules: `src/rules/design/RULES.md` (A–R), `src/rules/design/typography.md`, `src/rules/design/accessibility.md`, `src/rules/design/construct/RULES.md`
+- Rules: `src/rules/design/RULES.md` (A–R), `src/rules/design/typography.md`, `src/rules/design/accessibility.md`, `src/rules/design/aleph/RULES.md`
 - Gate: `bun run --cwd src/ui ui:smoke` (loads every route in headless Chromium; passes only when each route renders without 5xx or console errors)
 - Scope filter: only `*.tsx`, `*.css` under `src/ui/`
 - Qualitative dimensions (hierarchy, motion, alignment, density) require a rendered view — the audit agent uses `bun run ui:smoke` and anchors every finding to a JSX `file:line`.
@@ -43,11 +43,11 @@ Audit dispatches to the **`design-reviewer` agent** because qualitative rules (h
 
 ## Enforce mode (self-invoked while writing UI source)
 
-When writing or editing files under `src/ui/`, apply `src/rules/design/construct/RULES.md` silently — no audit pass, no findings, no diff. Before producing UI source, read:
+When writing or editing files under `src/ui/`, apply `src/rules/design/aleph/RULES.md` silently — no audit pass, no findings, no diff. Before producing UI source, read:
 
-- `src/rules/design/construct/RULES.md` — Always / Never rule list
-- `src/rules/design/construct/tokens/colors_and_type.css` — the token surface
-- `src/rules/design/construct/kits/<closest-match>.html` — start from a kit; never redesign chrome
-- `src/rules/design/construct/previews/components.html` and `previews/page_chrome.html` — visual specs
+- `src/rules/design/aleph/RULES.md` — Always / Never rule list
+- `src/rules/design/aleph/tokens/colors_and_type.css` — the token surface
+- `src/rules/design/aleph/kits/<closest-match>.html` — start from a kit; never redesign chrome
+- `src/rules/design/aleph/previews/components.html` and `previews/page_chrome.html` — visual specs
 
 Core constraints: no inline hex (use tokens), three-tier surface system (`--bg-primary` / `--bg-secondary` / `--bg-tertiary`), Merriweather (`--font-heading`) only for stat numerics and the wordmark, tabular numerics in tables, body 14px / min 12px, radii 2/4/8/12, no drop shadows, no gradient backgrounds outside the Investigate hero, no emoji (use Material Symbols), magenta only on habits.

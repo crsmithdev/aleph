@@ -4,7 +4,7 @@
 
 Current `src/core/hooks/routing-classify-submit.ts:50-61` runs binary `FULL | QUICK` detection (`archPattern` regex + ≥40-word floor) and emits a "use design-first pipeline" reminder. The signal isn't load-bearing.
 
-Survey of `~/personal-ai-projects/` (verified against each repo's source, not summaries): six peers ship a depth/complexity signal — SuperClaude's `/research depth: quick/standard/deep/exhaustive`, BMAD's `domain-complexity.csv` in the architecture skill, wshobson-agents' `plugin-eval --depth quick/standard`, claude-code-hooks-mastery's `/plan complexity (simple|medium|complex)`, everything-claude-code's `/plan` complexity estimate, claude-task-master's `/taskmaster:analyze-complexity` task report. **All six scope the signal to a specific command or skill** — none stamp every user prompt globally. Construct's binary FULL/QUICK classifier on every prompt is the outlier shape.
+Survey of `~/personal-ai-projects/` (verified against each repo's source, not summaries): six peers ship a depth/complexity signal — SuperClaude's `/research depth: quick/standard/deep/exhaustive`, BMAD's `domain-complexity.csv` in the architecture skill, wshobson-agents' `plugin-eval --depth quick/standard`, claude-code-hooks-mastery's `/plan complexity (simple|medium|complex)`, everything-claude-code's `/plan` complexity estimate, claude-task-master's `/taskmaster:analyze-complexity` task report. **All six scope the signal to a specific command or skill** — none stamp every user prompt globally. Aleph's binary FULL/QUICK classifier on every prompt is the outlier shape.
 
 Drop the global classifier. If depth ever matters, scope it per-skill (matching the peer consensus).
 
@@ -21,12 +21,12 @@ Six modes. Five are temperament/discourse overlays; `focused` is a scope overlay
 
 | Mode | Axis | Adapted from | Purpose |
 |---|---|---|---|
-| **execution** | action orientation | (Construct-original) | Bias toward dispatch — treat the request as a task to ship, not a question to discuss. Fan out subagents when work is independent. Pick a path and execute |
+| **execution** | action orientation | (Aleph-original) | Bias toward dispatch — treat the request as a task to ship, not a question to discuss. Fan out subagents when work is independent. Pick a path and execute |
 | **brainstorming** | deliberation | MODE_Brainstorming | Generate options before committing to one. Ask before assuming. Surface 2–3 alternatives with tradeoffs. No code edits until *what* is settled |
 | **introspection** | transparency | MODE_Introspection | Narrate the reasoning, not just the result. Emit *why this, not the alternative* before significant actions. Acknowledge guessing vs. knowing |
 | **efficiency** | output density | MODE_Token_Efficiency | Maximize information per token. Symbol-dense output. Drop headers, examples, prose-restating-what-code-does. Targets ~50% token reduction |
-| **focused** | scope discipline | (Construct-original) | Touch only what was asked. Log adjacent findings to a list; do not fix them. Counter-bias against the listed "completionism" failure mode |
-| **comparison** | peer/precedent awareness | (Construct-original) | Surface 2–3 peer projects, prior art, or existing patterns with every substantive answer. Reverses the synthesize-in-a-vacuum default |
+| **focused** | scope discipline | (Aleph-original) | Touch only what was asked. Log adjacent findings to a list; do not fix them. Counter-bias against the listed "completionism" failure mode |
+| **comparison** | peer/precedent awareness | (Aleph-original) | Surface 2–3 peer projects, prior art, or existing patterns with every substantive answer. Reverses the synthesize-in-a-vacuum default |
 
 Composable: any subset active simultaneously. Hook reports the full active set.
 
@@ -66,7 +66,7 @@ triggers:
 <before/after pairs>
 ```
 
-Files install to `~/.claude/construct/modes/MODE_<name>.md` via `bun install.ts` (plain copy).
+Files install to `~/.claude/aleph/modes/MODE_<name>.md` via `bun install.ts` (plain copy).
 
 ## Activation channels (in order)
 
@@ -93,7 +93,7 @@ Files install to `~/.claude/construct/modes/MODE_<name>.md` via `bun install.ts`
 When at least one mode activates:
 
 ```
-[Construct] Modes active: brainstorming, comparison
+[Aleph] Modes active: brainstorming, comparison
 
 <full inlined content of MODE_brainstorming.md>
 
@@ -101,7 +101,7 @@ When at least one mode activates:
 
 <full inlined content of MODE_comparison.md>
 
-[Construct] Matched skills: code-review, git. Activate via Skill() before proceeding.
+[Aleph] Matched skills: code-review, git. Activate via Skill() before proceeding.
 ```
 
 When no modes activate: no mode block printed (model may still self-select via `whenToUse` strings in the index). Skill-matching output unchanged.
@@ -112,12 +112,12 @@ When no modes activate: no mode block printed (model may still self-select via `
 |---|---|
 | `src/core/hooks/routing-classify-submit.ts` | Remove depth logic (lines 50-61, 122); add mode detector; read MODE files; inline content per active mode |
 | `src/modes/INDEX.md` | **NEW** — assembled from each MODE's frontmatter `whenToUse`; @-included from `src/core/CLAUDE.md` |
-| `src/modes/MODE_execution.md` | **NEW** — Construct-original |
+| `src/modes/MODE_execution.md` | **NEW** — Aleph-original |
 | `src/modes/MODE_brainstorming.md` | **NEW** — Brainstorming-adapted |
 | `src/modes/MODE_introspection.md` | **NEW** — Introspection-adapted |
 | `src/modes/MODE_efficiency.md` | **NEW** — Token-Efficiency-adapted |
-| `src/modes/MODE_focused.md` | **NEW** — Construct-original |
-| `src/modes/MODE_comparison.md` | **NEW** — Construct-original |
+| `src/modes/MODE_focused.md` | **NEW** — Aleph-original |
+| `src/modes/MODE_comparison.md` | **NEW** — Aleph-original |
 | `src/core/hooks/routing-classify-submit.test.ts` | **NEW** — per-mode + multi-mode fixtures |
 | `src/core/CLAUDE.md` | `@-include modes/INDEX.md` |
 | `install.ts` | Add `src/modes/` to copy list if not already in the generic walk |
@@ -151,7 +151,7 @@ Directive log: `directives.push("mode:" + name)` for each active mode. `meta.mod
 
 1. `routing-classify-submit.test.ts`: ≥3 fixtures per single mode (18+), ≥3 fixtures for multi-mode activation, ≥3 for no-mode prompts.
 2. Corpus check: pipe user prompts from `~/.claude/projects/-home-crsmi-construct/*.jsonl` through the hook; print activation distribution per mode. No mode should fire >70% (over-broad) or <2% (dead trigger). Reject any regex outside that band before merging.
-3. `bun install.ts && bun test.ts` — MODE files deploy to `~/.claude/construct/modes/`; INDEX assembled; existing tests pass.
+3. `bun install.ts && bun test.ts` — MODE files deploy to `~/.claude/aleph/modes/`; INDEX assembled; existing tests pass.
 4. Live-fire (manual): for each mode, type a trigger phrase; confirm hook output names the mode AND inlines its content; confirm Claude's next response reflects the mode's posture. Repeat for two-mode and three-mode prompts.
 5. `whenToUse` self-selection check: type a prompt that should match `whenToUse` but NOT the regex (e.g. an oblique "I'm trying to decide between X and Y" — should activate `brainstorming` + `comparison` via the model reading the index). Confirm model narrates the activation.
 

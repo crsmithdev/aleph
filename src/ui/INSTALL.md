@@ -1,6 +1,6 @@
-# construct-ui — Post-install Checks
+# aleph-ui — Post-install Checks
 
-All paths relative to `~/.claude/construct/ui/`. Run every check. Do not skip or summarize.
+All paths relative to `~/.claude/aleph/ui/`. Run every check. Do not skip or summarize.
 
 ## Files
 
@@ -10,7 +10,7 @@ All paths relative to `~/.claude/construct/ui/`. Run every check. Do not skip or
 
 ## Data
 
-- Database at `~/.construct/construct.db` may or may not exist (created on first run)
+- Database at `~/.aleph/aleph.db` may or may not exist (created on first run)
 
 ## Build
 

@@ -1,4 +1,4 @@
-# Construct — Telemetry Specification
+# Aleph — Telemetry Specification
 
 Technical specification for the telemetry and observability system. Covers data ingestion, aggregation, storage, and the API surface.
 
@@ -23,12 +23,12 @@ Claude CLI JSONL files
        │                              └────┬────┘
        │                                   │
   ┌────┴─────┐                    ┌────────┴────────┐
-  │ Pricing  │                    │  construct.db    │
+  │ Pricing  │                    │  aleph.db    │
   └──────────┘                    │  memory sqlite   │
                                   └─────────────────┘
 ```
 
-All telemetry is read-only against Claude CLI's JSONL output. Construct never writes to those files.
+All telemetry is read-only against Claude CLI's JSONL output. Aleph never writes to those files.
 
 ## Data Sources
 
@@ -45,7 +45,7 @@ Each line is a JSON object with a `type` field. The parser handles:
 | `progress` | Hook execution progress: `data.hookEvent`, `data.hookName`, `data.command` |
 | `system` | Subtypes: `stop_hook_summary` (hook timing/exit codes), `turn_duration` (API latency), `compact_boundary` (compaction events) |
 
-### Construct DB (`construct.db`)
+### Aleph DB (`aleph.db`)
 
 Contains the `obs_memory_snapshots` table for memory health tracking. See [Database Tables](#database-tables).
 
@@ -53,7 +53,7 @@ Contains the `obs_memory_snapshots` table for memory health tracking. See [Datab
 
 External SQLite database owned by `mcp-memory-service`. Read-only access for memory item browsing and snapshot statistics. Queried tables: `memories` (fields: `id`, `content`, `memory_type`, `tags`, `created_at`, `updated_at`, `deleted_at`).
 
-## Parser (`@construct/telemetry` — `parser.ts`)
+## Parser (`@aleph/telemetry` — `parser.ts`)
 
 ### File discovery
 
@@ -227,7 +227,7 @@ Returns 0 for unknown models.
 
 ## Memory Snapshots (`obs-snapshot.ts`)
 
-Standalone script spawned fire-and-forget by `session-start.ts`. Reads the memory DB, computes statistics, and writes a row to `construct.db`.
+Standalone script spawned fire-and-forget by `session-start.ts`. Reads the memory DB, computes statistics, and writes a row to `aleph.db`.
 
 **What it reads** from `memories` table:
 - Total count (non-deleted)
@@ -241,7 +241,7 @@ Standalone script spawned fire-and-forget by `session-start.ts`. Reads the memor
 
 ## Database Tables
 
-### `obs_memory_snapshots` (in `construct.db`)
+### `obs_memory_snapshots` (in `aleph.db`)
 
 ```sql
 CREATE TABLE IF NOT EXISTS obs_memory_snapshots (
@@ -267,7 +267,7 @@ All endpoints are under `/api/observability/`. Routes with `parseDaysPreHandler`
 
 All responses include `queryTimeMs`.
 
-The API server runs on port 3001 in dev (`bun dev-server.ts`) and port 3000 in production (systemd `construct-ui.service`).
+The API server runs on port 3001 in dev (`bun dev-server.ts`) and port 3000 in production (systemd `aleph-ui.service`).
 
 | Method | Path | Aggregator | Notes |
 |---|---|---|---|
@@ -290,11 +290,11 @@ The API server runs on port 3001 in dev (`bun dev-server.ts`) and port 3000 in p
 | GET | `/compaction` | `aggregateCompaction` | |
 | GET | `/api-duration` | `aggregateApiDuration` | |
 | GET | `/events` | `getRecentEvents` | `?type`, `?search`, `?limit`, `?offset` |
-| GET | `/db-stats` | direct SQL | File sizes, table names + row counts for construct.db and memory.db |
+| GET | `/db-stats` | direct SQL | File sizes, table names + row counts for aleph.db and memory.db |
 
 ## CLI Status (`src/status.ts`)
 
-The `ccstatusline` binary and the `/gist` command both call `getStatus(7)` from `@construct/telemetry`, which returns a `StatusSummary` for the last 7 days. The status output includes: session count, message count, tool call count, total cost, top 5 tools, top 3 hooks, and top 3 skills.
+The `ccstatusline` binary and the `/gist` command both call `getStatus(7)` from `@aleph/telemetry`, which returns a `StatusSummary` for the last 7 days. The status output includes: session count, message count, tool call count, total cost, top 5 tools, top 3 hooks, and top 3 skills.
 
 ## Common Questions
 

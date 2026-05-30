@@ -2,7 +2,7 @@
  * Research routes — config + defaults only.
  *
  *   - GET / PATCH /api/research/config        → provider config (file-backed
- *                                               at ~/.construct/research-config.json,
+ *                                               at ~/.aleph/research-config.json,
  *                                               plus mirrored API keys on env
  *                                               vars so the loops engine and
  *                                               provider modules pick them up
@@ -16,10 +16,10 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
-import { getDefaults, updateDefaults, resetDefaults, type SessionConfig } from '@construct/research';
+import { getDefaults, updateDefaults, resetDefaults, type SessionConfig } from '@aleph/research';
 
 export const researchRoutes: FastifyPluginAsync = async (app) => {
-  const configPath = resolve(process.env.HOME ?? '', '.construct', 'research-config.json');
+  const configPath = resolve(process.env.HOME ?? '', '.aleph', 'research-config.json');
 
   function loadProviderConfig(): Record<string, unknown> {
     try { return JSON.parse(readFileSync(configPath, 'utf-8')); } catch { return {}; }

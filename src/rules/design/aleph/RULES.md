@@ -1,12 +1,12 @@
-# Construct Design System Rules
+# Aleph Design System Rules
 
-Project-specific UI rules for the Construct codebase. Walked by `design-review`:
+Project-specific UI rules for the Aleph codebase. Walked by `design-review`:
 - **Review path** — scan UI source for violations (inline hex, drop shadows, wrong type pairing, etc.), present findings, apply approved fixes, gate on `bun run ui:smoke`. Audit and fix are one continuous flow inside a single skill invocation.
 - **Enforce path** — applied silently while the agent is writing or editing UI source. No findings, no diff.
 
 Sibling assets — `tokens/`, `kits/`, `previews/`, `fonts/` — are the visual specs and runtime values these rules reference.
 
-When designing for **construct**, follow these rules.
+When designing for **aleph**, follow these rules.
 
 ## Always
 

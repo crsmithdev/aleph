@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { createDb } from '@construct/data';
+import { createDb } from '@aleph/data';
 import { webhooks } from './db/schema.js';
 
 type Db = ReturnType<typeof createDb>['db'];

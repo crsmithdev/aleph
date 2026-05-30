@@ -1,9 +1,9 @@
 /**
  * Unified dev-server logger — shared across api, supervisor, worker, and any
- * `@construct/*` peer module that previously used `console.log`.
+ * `@aleph/*` peer module that previously used `console.log`.
  *
  * One entry point — `log({source, level, msg, ...fields})`:
- *   - Append NDJSON record to ~/.construct/logs/dev-YYYY-MM-DD.ndjson
+ *   - Append NDJSON record to ~/.aleph/logs/dev-YYYY-MM-DD.ndjson
  *   - Write a colorized vite-style line to stdout: `HH:MM:SS [source] msg`
  *
  * Sources used in this codebase: dev, api, vite, fastify, research, ddl,
@@ -46,7 +46,7 @@ function compactTime(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
 }
 
-const logsDir = join(process.env.HOME ?? '/tmp', '.construct', 'logs');
+const logsDir = join(process.env.HOME ?? '/tmp', '.aleph', 'logs');
 let dirEnsured = false;
 function logFilePath(): string {
   if (!dirEnsured) { try { mkdirSync(logsDir, { recursive: true }); dirEnsured = true; } catch { /* non-fatal */ } }

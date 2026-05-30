@@ -28,7 +28,7 @@ if (!existsSync(join(webDir, 'dist'))) {
   if (r.status !== 0) { console.error('[smoke] FATAL: ui build failed'); process.exit(1); }
 }
 
-const tmpDir = mkdtempSync(join(tmpdir(), 'construct-e2e-real-smoke-'));
+const tmpDir = mkdtempSync(join(tmpdir(), 'aleph-e2e-real-smoke-'));
 const dbPath = join(tmpDir, 'test.db');
 
 // Only Tavily is faked. Do NOT set OPENROUTER_BASE_URL — provider falls
@@ -36,7 +36,7 @@ const dbPath = join(tmpDir, 'test.db');
 const { startFakeProviderServer } = await import('./fake-llm-server.js');
 const fake = startFakeProviderServer();
 
-process.env.CONSTRUCT_DB_PATH = dbPath;
+process.env.ALEPH_DB_PATH = dbPath;
 process.env.NODE_ENV = 'production';
 process.env.HOME = tmpDir;
 process.env.TAVILY_BASE_URL = fake.baseUrl;
@@ -44,9 +44,9 @@ process.env.TAVILY_API_KEY = 'fake-tavily-key';
 delete process.env.OPENROUTER_BASE_URL;
 
 const { chromium } = await import('playwright');
-const { createDb } = await import('@construct/data');
-const { applyDDL } = await import('@construct/goals');
-const { applyResearchDDL } = await import('@construct/research');
+const { createDb } = await import('@aleph/data');
+const { applyDDL } = await import('@aleph/goals');
+const { applyResearchDDL } = await import('@aleph/research');
 const { createApp } = await import('../api/src/app.js');
 
 let server: Awaited<ReturnType<typeof createApp>> | null = null;

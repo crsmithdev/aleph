@@ -1,5 +1,5 @@
 {
-  "name": "@construct/telemetry",
+  "name": "@aleph/telemetry",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@construct/data": "file:../data"
+    "@aleph/data": "file:../data"
   },
   "devDependencies": {
     "@types/bun": "^1.3.11",

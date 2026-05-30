@@ -1,4 +1,4 @@
-# Construct — Eval Specification
+# Aleph — Eval Specification
 
 Behavior-oriented spec for the autonomous evaluation system. Every claim here is testable.
 
@@ -6,7 +6,7 @@ See [SPEC.md](SPEC.md) for the application lifecycle. See [RESEARCH.md](RESEARCH
 
 ## Purpose
 
-The eval module measures whether Claude agents behave correctly in response to Construct's hooks and verification system. It does this by running real agent sessions against real hooks in isolated sandboxes, then asserting on observable outcomes. The primary use is A/B comparison: quantifying the behavioral delta between a configuration with hooks active versus one without.
+The eval module measures whether Claude agents behave correctly in response to Aleph's hooks and verification system. It does this by running real agent sessions against real hooks in isolated sandboxes, then asserting on observable outcomes. The primary use is A/B comparison: quantifying the behavioral delta between a configuration with hooks active versus one without.
 
 ## Architecture Overview
 
@@ -176,7 +176,7 @@ The following properties hold for all evals and are testable by inspection or by
 
 | Module | Detection file |
 |---|---|
-| construct-eval | `construct/src/eval/harness.ts` |
+| aleph-eval | `construct/src/eval/harness.ts` |
 
 ## Common Questions
 
@@ -184,7 +184,7 @@ The following properties hold for all evals and are testable by inspection or by
 Create `src/eval/scenarios/<name>/` with: task files (written into the sandbox), a main file that calls `setupSandbox()`, `runEval()`, your assertions via `check()`, and `printAndExit(results)`. Use an existing scenario (e.g. `broken-math`) as a template.
 
 **Q: Why do evals fail with "hook script not found"?**
-Evals invoke real hook scripts at their installed paths (e.g. `~/.claude/construct/core/hooks/...`). Run `bun install.ts` from the repo root before running evals. The harness does not fall back to `src/` paths.
+Evals invoke real hook scripts at their installed paths (e.g. `~/.claude/aleph/core/hooks/...`). Run `bun install.ts` from the repo root before running evals. The harness does not fall back to `src/` paths.
 
 **Q: What does hook-verification-gate actually test?**
 The scenario asks the agent to complete a task. Without producing e2e evidence (no Playwright, no CLI execution of the artifact), the agent tries to stop. The Stop hook detects no e2e evidence and exits non-zero. The assertion verifies that exit code was non-zero. The agent was never blocked from editing files — only from claiming completion without evidence.

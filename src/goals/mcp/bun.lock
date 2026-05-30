@@ -3,10 +3,10 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@construct/goals-mcp",
+      "name": "@aleph/goals-mcp",
       "dependencies": {
-        "@construct/data": "file:../../data",
-        "@construct/goals": "file:..",
+        "@aleph/data": "file:../../data",
+        "@aleph/goals": "file:..",
         "@modelcontextprotocol/sdk": "^1.11.0",
         "zod": "^3.24.2",
       },
@@ -16,9 +16,9 @@
     },
   },
   "packages": {
-    "@construct/data": ["@construct/data@file:../../data", { "dependencies": { "better-sqlite3": "^11.8.1", "drizzle-orm": "^0.39.3" }, "devDependencies": { "@types/better-sqlite3": "^7.6.12", "typescript": "^5.7.3" } }],
+    "@aleph/data": ["@aleph/data@file:../../data", { "dependencies": { "drizzle-orm": "^0.39.3" }, "devDependencies": { "typescript": "^5.7.3" } }],
 
-    "@construct/goals": ["@construct/goals@file:..", { "dependencies": { "@construct/data": "file:../data", "drizzle-orm": "^0.39.3", "nanoid": "^5.1.2", "zod": "^3.24.2" }, "devDependencies": { "typescript": "^5.7.3" } }],
+    "@aleph/goals": ["@aleph/goals@file:..", { "dependencies": { "@aleph/data": "file:../data", "drizzle-orm": "^0.39.3", "nanoid": "^5.1.2", "zod": "^3.24.2" }, "devDependencies": { "typescript": "^5.7.3" } }],
 
     "@hono/node-server": ["@hono/node-server@1.19.11", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dr8/3zEaB+p0D2n/IUrlPF1HZm586qgJNXK1a9fhg/PzdtkK7Ksd5l312tJX2yBuALqDYBlG20QEbayqPyxn+g=="],
 
@@ -284,6 +284,6 @@
 
     "zod-to-json-schema": ["zod-to-json-schema@3.25.1", "", { "peerDependencies": { "zod": "^3.25 || ^4" } }, "sha512-pM/SU9d3YAggzi6MtR4h7ruuQlqKtad8e9S0fmxcMi+ueAK5Korys/aWcV9LIIHTVbj01NdzxcnXSN+O74ZIVA=="],
 
-    "@construct/goals/@construct/data": ["@construct/data@file:../../data", {}],
+    "@aleph/goals/@aleph/data": ["@aleph/data@file:../../data", {}],
   }
 }

@@ -4,7 +4,7 @@
  *
  * Flow:
  * 1. Create a temp DB
- * 2. Insert a goal via @construct/goals service functions (same path as MCP)
+ * 2. Insert a goal via @aleph/goals service functions (same path as MCP)
  * 3. Start the UI server against the same DB
  * 4. Use Playwright to navigate to /goals and verify the goal title appears
  * 5. Click into the goal detail page and verify title + priority
@@ -15,15 +15,15 @@ import { mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-const tmpDir = mkdtempSync(join(tmpdir(), 'construct-e2e-'));
+const tmpDir = mkdtempSync(join(tmpdir(), 'aleph-e2e-'));
 const dbPath = join(tmpDir, 'test.db');
-process.env.CONSTRUCT_DB_PATH = dbPath;
+process.env.ALEPH_DB_PATH = dbPath;
 process.env.NODE_ENV = 'production';
 
 // Dynamic imports after env vars are set
 const { chromium } = await import('playwright');
-const { createDb } = await import('@construct/data');
-const { applyDDL, createGoal, createTodo, EventBus, HistoryService } = await import('@construct/goals');
+const { createDb } = await import('@aleph/data');
+const { applyDDL, createGoal, createTodo, EventBus, HistoryService } = await import('@aleph/goals');
 const { createApp } = await import('../api/src/app.js');
 
 let server: Awaited<ReturnType<typeof createApp>> | null = null;

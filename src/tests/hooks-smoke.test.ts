@@ -105,16 +105,16 @@ check(r, "routing: <3 words no stdout", shortResult.stdout.trim() === "");
 
 // No mode trigger → no mode block
 const noModeResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"update the button color to blue"}');
-check(r, "routing: no trigger → no Modes block", !noModeResult.stdout.includes("[Construct] Modes active"));
+check(r, "routing: no trigger → no Modes block", !noModeResult.stdout.includes("[Aleph] Modes active"));
 
 // Mode activation via trigger keyword → names + inlines the mode
 const modeResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"go ahead and implement it now"}');
-check(r, "routing: trigger → Modes active line", modeResult.stdout.includes("[Construct] Modes active: execution"));
+check(r, "routing: trigger → Modes active line", modeResult.stdout.includes("[Aleph] Modes active: execution"));
 check(r, "routing: mode body inlined", modeResult.stdout.includes("# Execution Mode"));
 
 // Skill matching — "audit the code" is triggered by code-review
 const skillResult = runHook(te, "core/hooks/routing-classify-submit.ts", '{"prompt":"audit the code on this branch"}');
-check(r, "routing: skill match emits Matched skills line", skillResult.stdout.includes("[Construct] Matched skills:"));
+check(r, "routing: skill match emits Matched skills line", skillResult.stdout.includes("[Aleph] Matched skills:"));
 check(r, "routing: code-review skill matched", skillResult.stdout.includes("code-review"));
 
 // Malformed stdin → exit 1

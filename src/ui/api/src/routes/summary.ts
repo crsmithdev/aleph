@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { getSummary, getTimeseries } from '@construct/goals';
+import { getSummary, getTimeseries } from '@aleph/goals';
 import { spawnSync } from 'child_process';
 import { resolve } from 'path';
 import { existsSync } from 'fs';

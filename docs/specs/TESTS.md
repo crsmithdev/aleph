@@ -50,7 +50,7 @@ Seeds goals/todos via service layer, starts API + Playwright, verifies web UI re
 
 | Step | What happens | Input | Output |
 |---|---|---|---|
-| 1. Seed DB | Creates temp SQLite DB, inserts 2 goals + 1 todo via `@construct/goals` service functions | Goal titles, priorities | `test.db` with seeded rows |
+| 1. Seed DB | Creates temp SQLite DB, inserts 2 goals + 1 todo via `@aleph/goals` service functions | Goal titles, priorities | `test.db` with seeded rows |
 | 2. Start API | Launches Fastify server on random port against seeded DB | DB path, port 0 | HTTP server URL |
 | 3. Launch browser | Headless Chromium via Playwright | Server URL | Browser context |
 | 4. Goals page | Navigates to `/goals`, waits for render | — | Page content |

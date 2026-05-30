@@ -1,5 +1,5 @@
 {
-  "name": "@construct/ui-api",
+  "name": "@aleph/ui-api",
   "version": "0.2.0",
   "type": "module",
   "main": "src/server.ts",
@@ -9,12 +9,12 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@construct/data": "workspace:*",
-    "@construct/eval": "workspace:*",
-    "@construct/goals": "workspace:*",
-    "@construct/logger": "workspace:*",
-    "@construct/research": "workspace:*",
-    "@construct/telemetry": "workspace:*",
+    "@aleph/data": "workspace:*",
+    "@aleph/eval": "workspace:*",
+    "@aleph/goals": "workspace:*",
+    "@aleph/logger": "workspace:*",
+    "@aleph/research": "workspace:*",
+    "@aleph/telemetry": "workspace:*",
     "yaml": "^2.8.3",
     "@fastify/cors": "^11.0.0",
     "@fastify/middie": "^9.3.1",

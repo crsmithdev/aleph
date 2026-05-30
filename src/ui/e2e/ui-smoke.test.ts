@@ -30,9 +30,9 @@ import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 
-const tmpDir = mkdtempSync(join(tmpdir(), 'construct-ui-smoke-'));
+const tmpDir = mkdtempSync(join(tmpdir(), 'aleph-ui-smoke-'));
 const dbPath = join(tmpDir, 'test.db');
-process.env.CONSTRUCT_DB_PATH = dbPath;
+process.env.ALEPH_DB_PATH = dbPath;
 process.env.NODE_ENV = 'production';
 
 const webDir = resolve(import.meta.dirname, '../web');

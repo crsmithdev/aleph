@@ -12,9 +12,9 @@ const r = createResults();
 
 console.log("--- install preservation ---");
 
-const sentinelPath = resolve(Bun.env.HOME!, ".construct/identity/TEST_SENTINEL.md");
+const sentinelPath = resolve(Bun.env.HOME!, ".aleph/identity/TEST_SENTINEL.md");
 const sentinelContent = "# Test Sentinel\n\nThis file tests user-side preservation across install.\n";
-mkdirSync(resolve(Bun.env.HOME!, ".construct/identity"), { recursive: true });
+mkdirSync(resolve(Bun.env.HOME!, ".aleph/identity"), { recursive: true });
 writeFileSync(sentinelPath, sentinelContent);
 check(r, "install: sentinel file created", existsSync(sentinelPath));
 
@@ -43,10 +43,10 @@ for (const f of expectedIdentity) {
 }
 
 // USER.md is user-side now — must NOT be in src or install dir
-check(r, "identity: USER.md not in src (moved to ~/.construct/identity/)",
+check(r, "identity: USER.md not in src (moved to ~/.aleph/identity/)",
   !existsSync(resolve(identityDir, "USER.md")));
 
-const installedIdentityDir = resolve(Bun.env.HOME!, ".claude/construct/core/identity");
+const installedIdentityDir = resolve(Bun.env.HOME!, ".claude/aleph/core/identity");
 if (existsSync(installedIdentityDir)) {
   for (const f of expectedIdentity) {
     const dst = resolve(installedIdentityDir, f);
@@ -54,7 +54,7 @@ if (existsSync(installedIdentityDir)) {
       check(r, `identity: installed ${f} exists and non-empty`, readFileSync(dst, "utf-8").length > 10);
     }
   }
-  check(r, "identity: installed USER.md absent (lives at ~/.construct/identity/)",
+  check(r, "identity: installed USER.md absent (lives at ~/.aleph/identity/)",
     !existsSync(resolve(installedIdentityDir, "USER.md")));
 }
 
@@ -62,8 +62,8 @@ if (existsSync(installedIdentityDir)) {
 
 console.log("\n--- installed hooks ---");
 
-const coreHooksDir = resolve(Bun.env.HOME!, ".claude/construct/core/hooks");
-const memoryHooksDir = resolve(Bun.env.HOME!, ".claude/construct/memory/hooks");
+const coreHooksDir = resolve(Bun.env.HOME!, ".claude/aleph/core/hooks");
+const memoryHooksDir = resolve(Bun.env.HOME!, ".claude/aleph/memory/hooks");
 const hooksJsonPath = resolve(coreHooksDir, "settings-hooks.json");
 
 check(r, "hooks: settings-hooks.json installed", existsSync(hooksJsonPath));
@@ -114,7 +114,7 @@ for (const f of expectedMemoryHooks) {
 
 console.log("\n--- installed skills ---");
 
-const installedSkillsDir = resolve(Bun.env.HOME!, ".claude/construct/skills");
+const installedSkillsDir = resolve(Bun.env.HOME!, ".claude/aleph/skills");
 const skillRulesPath = resolve(installedSkillsDir, "skill-rules.json");
 check(r, "skills: directory installed", existsSync(installedSkillsDir));
 check(r, "skills: skill-rules.json installed", existsSync(skillRulesPath));
@@ -133,20 +133,20 @@ const claudeMdPath = resolve(Bun.env.HOME!, ".claude/CLAUDE.md");
 check(r, "CLAUDE.md: exists", existsSync(claudeMdPath));
 if (existsSync(claudeMdPath)) {
   const claudeMd = readFileSync(claudeMdPath, "utf-8");
-  check(r, "CLAUDE.md: references @construct/core/CLAUDE.md", claudeMd.includes("@construct/core/CLAUDE.md"));
+  check(r, "CLAUDE.md: references @aleph/core/CLAUDE.md", claudeMd.includes("@aleph/core/CLAUDE.md"));
 }
 
 // ── Installed core CLAUDE.md identity chain ─────────────────────────────────
 
 console.log("\n--- core CLAUDE.md identity chain ---");
 
-const coreClaudeMdPath = resolve(Bun.env.HOME!, ".claude/construct/core/CLAUDE.md");
+const coreClaudeMdPath = resolve(Bun.env.HOME!, ".claude/aleph/core/CLAUDE.md");
 if (existsSync(coreClaudeMdPath)) {
   const coreMd = readFileSync(coreClaudeMdPath, "utf-8");
   check(r, "core CLAUDE.md: includes @identity/AGENTS.md", coreMd.includes("@identity/AGENTS.md"));
   check(r, "core CLAUDE.md: includes @identity/SOUL.md", coreMd.includes("@identity/SOUL.md"));
   check(r, "core CLAUDE.md: includes @identity/STYLE.md", coreMd.includes("@identity/STYLE.md"));
-  check(r, "core CLAUDE.md: includes user-side USER.md via ~/", coreMd.includes("@~/.construct/identity/USER.md"));
+  check(r, "core CLAUDE.md: includes user-side USER.md via ~/", coreMd.includes("@~/.aleph/identity/USER.md"));
 }
 
 printAndExit(r);

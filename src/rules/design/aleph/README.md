@@ -1,6 +1,6 @@
-# Construct Design System
+# Aleph Design System
 
-Construct is a personal life-OS plus AI-research workspace. This project is the design system: tokens, foundations, and UI kits that every screen of the product is built from.
+Aleph is a personal life-OS plus AI-research workspace. This project is the design system: tokens, foundations, and UI kits that every screen of the product is built from.
 
 ## File index
 
@@ -30,7 +30,7 @@ All color tokens live inside `[data-theme="…"]` blocks in `tokens/colors_and_t
 
 - **Three-tier surfaces:** `--bg-primary` (floor) → `--bg-secondary` (cards) → `--bg-tertiary` (hover/inputs/nested).
 - **Semantic accents:** `--accent` blue (primary action), `--success`, `--warning`, `--error`, `--info`, `--magenta` (habits only — the one personality color).
-- **Radii:** small. 2 / 4 / 8 / 12. Construct doesn't pillow.
+- **Radii:** small. 2 / 4 / 8 / 12. Aleph doesn't pillow.
 - **Spacing:** 4px base; rarely larger than 16. Tight by default.
 - **No drop shadows.** Depth comes from value steps and 1px borders.
 

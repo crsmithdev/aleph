@@ -1,5 +1,5 @@
 {
-  "name": "@construct/research",
+  "name": "@aleph/research",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
@@ -8,8 +8,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
-    "@construct/data": "file:../data",
-    "@construct/logger": "file:../logger",
+    "@aleph/data": "file:../data",
+    "@aleph/logger": "file:../logger",
     "@mozilla/readability": "^0.6.0",
     "linkedom": "^0.18.12",
     "nanoid": "^5.1.2",

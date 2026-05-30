@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 import { emitResearchEvent } from '../services/events.js';
 import { generateId } from '../services/id.js';
 import { EMPTY_USAGE } from './envelope.js';

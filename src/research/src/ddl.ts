@@ -1,8 +1,8 @@
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 import { seedDefaults } from './services/defaults.js';
 
 /**
- * DDL for the @construct/research package.
+ * DDL for the @aleph/research package.
  *
  *   - `research_defaults`  — persisted SessionConfig (backs `/api/research/defaults`).
  *   - `loops` / `cycles` / `artifacts` / `cycle_ledger` / `milestones`  — the

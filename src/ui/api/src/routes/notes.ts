@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { listNotes, addNote, updateNote, deleteNote } from '@construct/goals';
-import { getGoal } from '@construct/goals';
+import { listNotes, addNote, updateNote, deleteNote } from '@aleph/goals';
+import { getGoal } from '@aleph/goals';
 
 export const noteRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { goalId: string } }>('/:goalId/notes', async (req, reply) => {

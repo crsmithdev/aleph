@@ -344,9 +344,9 @@
         "design-fix",
         "design-conform",
         "design-standards",
-        "design-construct",
+        "design-aleph",
         "design system",
-        "construct design",
+        "aleph design",
         "design tokens",
         "color tokens",
         "surface tokens",
@@ -354,7 +354,7 @@
         "design reference",
         "design kit",
         "material symbols",
-        "construct ui pattern",
+        "aleph ui pattern",
         "make the pages match",
         "align the layouts",
         "same loading state",
@@ -416,7 +416,7 @@
         "check how it looks",
         "screenshot the ui",
         "/design-review",
-        "/design-construct",
+        "/design-aleph",
         "/(review|audit|fix|go through).{0,15}(ui|design|interface|ux)/",
         "/(fix|change|update|wrong).{0,15}font/",
         "/font.{0,15}(wrong|bad|ugly|small|big|size)/",
@@ -504,7 +504,7 @@
         "save this as a sketch",
         "make a sketch",
         "draft a sketch",
-        "in ~/.construct/sketches",
+        "in ~/.aleph/sketches",
         "/sketch\\s+\\S+/",
         "/sketch.{0,15}(feature|idea|design|approach|way|system)/"
       ]
@@ -531,7 +531,7 @@
         "execution plan",
         "plan for the change",
         "plan the change",
-        "in ~/.construct/plans",
+        "in ~/.aleph/plans",
         "/plan\\s+\\S+/",
         "/plan.{0,20}(this|the|for|out|implementation|change|feature|refactor|migration)/"
       ]

@@ -3,7 +3,7 @@ description: Deep autonomous research — long-running investigations with budge
 ---
 Manage deep research queries. Parse the user's intent from: $ARGUMENTS
 
-The research API is available at the Construct API server (default http://localhost:3000/api/research).
+The research API is available at the Aleph API server (default http://localhost:3000/api/research).
 
 ## Actions
 

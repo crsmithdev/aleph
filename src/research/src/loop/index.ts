@@ -1,5 +1,5 @@
 /**
- * Loop engine — v1 rewrite. Public surface for the @construct/research package.
+ * Loop engine — v1 rewrite. Public surface for the @aleph/research package.
  *
  * Importers should reach for this barrel (or its re-export from the package
  * root) rather than internal files, so we can refactor module layout without

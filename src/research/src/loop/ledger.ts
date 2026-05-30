@@ -10,7 +10,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 import type { CycleId, CycleLedgerEntry, LedgerStep, LoopId } from './types.js';
 
 /**

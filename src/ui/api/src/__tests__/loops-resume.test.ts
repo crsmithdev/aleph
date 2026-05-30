@@ -19,7 +19,7 @@ let port: number;
 let tmp: string;
 
 beforeAll(async () => {
-  tmp = mkdtempSync(join(tmpdir(), 'construct-loops-resume-test-'));
+  tmp = mkdtempSync(join(tmpdir(), 'aleph-loops-resume-test-'));
   process.env.HOME = tmp;
   app = await createApp({
     dbUrl: join(tmp, 'db.sqlite'),

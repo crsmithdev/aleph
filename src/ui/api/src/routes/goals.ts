@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { listGoals, getGoal, createGoal, updateGoal, deleteGoal, setCategories, linkGoals, unlinkGoals } from '@construct/goals';
+import { listGoals, getGoal, createGoal, updateGoal, deleteGoal, setCategories, linkGoals, unlinkGoals } from '@aleph/goals';
 
 export const goalRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { state?: string; priority?: string; category?: string; archived?: string } }>(

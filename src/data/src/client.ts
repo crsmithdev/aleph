@@ -7,7 +7,7 @@ import { dataPaths } from './paths.js';
 const DEFAULT_DB_PATH = dataPaths.db;
 
 export function createDb(url?: string): { db: BunSQLiteDatabase; sqlite: Database } {
-  const dbPath = url || process.env.CONSTRUCT_DB_PATH || DEFAULT_DB_PATH;
+  const dbPath = url || process.env.ALEPH_DB_PATH || DEFAULT_DB_PATH;
   if (dbPath !== ':memory:') {
     mkdirSync(dirname(dbPath), { recursive: true });
   }

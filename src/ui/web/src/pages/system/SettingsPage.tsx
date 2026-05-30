@@ -29,7 +29,7 @@ type SystemInfo = {
   paths: {
     repo: string;
     claudeRoot: string;
-    construct: string;
+    aleph: string;
     commands: string;
     skills: string;
     db: string;
@@ -124,8 +124,8 @@ function SystemInfoSection() {
       ]} />
       <hr className="border-border-primary" />
       <InfoGrid rows={[
-        ['Construct', info.paths.construct],
-        ['Construct DB', info.paths.db],
+        ['Aleph', info.paths.aleph],
+        ['Aleph DB', info.paths.db],
         ['Memory DB', info.paths.memoryDb],
         ['Telemetry', info.paths.telemetry],
         ['Backups', info.paths.backups],

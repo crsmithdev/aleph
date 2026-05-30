@@ -2,9 +2,9 @@ import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { resolve } from 'path';
 import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, writeFileSync } from 'fs';
 import { stringify as yamlStringify } from 'yaml';
-import { loadScenario, listHookScenarios } from '@construct/eval/scenario-loader.js';
+import { loadScenario, listHookScenarios } from '@aleph/eval/scenario-loader.js';
 import { spawn } from 'child_process';
-import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
+import { claudePaths, dataPaths, getMemoryDbPath } from '@aleph/data';
 import { Database } from 'bun:sqlite';
 import {
   parseSessionsForDays,
@@ -27,8 +27,8 @@ import {
   getRecentEvents,
   aggregateSubagents,
   aggregateVerifications,
-} from '@construct/telemetry';
-import type { Granularity, TelemetryEvent } from '@construct/telemetry';
+} from '@aleph/telemetry';
+import type { Granularity, TelemetryEvent } from '@aleph/telemetry';
 
 const MAX_MEMORY_ITEMS = 500;
 
@@ -174,13 +174,12 @@ function readContextFiles(sessionId: string): { files: ContextFile[] } {
   // 1. Global CLAUDE.md
   const globalContent = addFile('Global CLAUDE.md', resolve(claudePaths.root, 'CLAUDE.md'));
 
-  // 2. Resolve @-references in global CLAUDE.md (e.g. @construct/core/CLAUDE.md)
+  // 2. Resolve @-references in global CLAUDE.md (e.g. @aleph/core/CLAUDE.md)
   if (globalContent) {
     for (const ref of globalContent.matchAll(/^@([^\s]+)/gm)) {
       const refPath = ref[1];
-      // Map known construct/ prefix to actual construct path
-      const resolved = refPath.startsWith('construct/')
-        ? resolve(claudePaths.construct, refPath.slice('construct/'.length))
+      const resolved = refPath.startsWith('aleph/')
+        ? resolve(claudePaths.aleph, refPath.slice('aleph/'.length))
         : resolve(claudePaths.root, refPath);
       addFile(refPath, resolved);
     }

@@ -40,8 +40,8 @@ When adding a domain to the skill matrix (per `docs/plans/skill-architecture.md`
 2. If the gate doesn't exist yet, add it as a pending row with the *(future)* marker and a brief plan.
 3. Update `omnibus.yml` `verification:` block to mirror this table.
 
-## Construct-specific cross-references
+## Aleph-specific cross-references
 
 - `code` gate alone is insufficient for UI changes — compilation and a smoke pass do not prove a page renders. Any change that touches `src/ui/**`, a UI-consumed API route, or shared types must run the `design` gate too.
-- `hooks` gate must be paired with `bun install.ts` if the change deploys to `~/.claude/construct/`. The install runs `test.ts` automatically, so a clean install + `systemctl --user status construct-ui` is the end-to-end pass.
+- `hooks` gate must be paired with `bun install.ts` if the change deploys to `~/.claude/aleph/`. The install runs `test.ts` automatically, so a clean install + `systemctl --user status aleph-ui` is the end-to-end pass.
 - For worktree changes, gates run inside the worktree — not against the dev server on port 3001 (which serves different code).

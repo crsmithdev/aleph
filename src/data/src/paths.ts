@@ -3,21 +3,21 @@ import { homedir } from "os";
 import { mkdirSync } from "fs";
 
 const CLAUDE_ROOT = process.env.CLAUDE_ROOT || resolve(homedir(), ".claude");
-const DATA_ROOT = process.env.CONSTRUCT_DATA_ROOT || resolve(homedir(), ".construct");
-const CONSTRUCT_ROOT = resolve(CLAUDE_ROOT, "construct");
+const DATA_ROOT = process.env.ALEPH_DATA_ROOT || resolve(homedir(), ".aleph");
+const ALEPH_ROOT = resolve(CLAUDE_ROOT, "aleph");
 
 export const claudePaths = {
   root: CLAUDE_ROOT,
-  construct: CONSTRUCT_ROOT,
+  aleph: ALEPH_ROOT,
   commands: resolve(CLAUDE_ROOT, "commands"),
   projects: resolve(CLAUDE_ROOT, "projects"),
-  manifest: resolve(CONSTRUCT_ROOT, ".manifest"),
-  skills: resolve(CONSTRUCT_ROOT, "skills"),
+  manifest: resolve(ALEPH_ROOT, ".manifest"),
+  skills: resolve(ALEPH_ROOT, "skills"),
 };
 
 export const dataPaths = {
   root: DATA_ROOT,
-  db: resolve(DATA_ROOT, "construct.db"),
+  db: resolve(DATA_ROOT, "aleph.db"),
   backups: resolve(DATA_ROOT, "backups"),
   sessions: resolve(DATA_ROOT, "sessions"),
   signals: resolve(DATA_ROOT, "signals"),

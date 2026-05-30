@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { getTodosActive, getTodosAll, getTodo, createTodo, updateTodo, deleteTodo, promoteTodoToGoal } from '@construct/goals';
+import { getTodosActive, getTodosAll, getTodo, createTodo, updateTodo, deleteTodo, promoteTodoToGoal } from '@aleph/goals';
 
 export const todoRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { includeScheduled?: string } }>('/active', async (req) => {

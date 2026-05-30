@@ -1,12 +1,12 @@
 {
-  "name": "@construct/goals-mcp",
+  "name": "@aleph/goals-mcp",
   "version": "0.2.0",
   "type": "module",
   "main": "src/index.ts",
   "bin": { "goal-tracker-mcp": "src/index.ts" },
   "dependencies": {
-    "@construct/data": "file:../../data",
-    "@construct/goals": "file:..",
+    "@aleph/data": "file:../../data",
+    "@aleph/goals": "file:..",
     "@modelcontextprotocol/sdk": "^1.11.0",
     "zod": "^3.24.2"
   },

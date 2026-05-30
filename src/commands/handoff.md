@@ -2,9 +2,9 @@
 description: Save a session handoff so a fresh context can pick up where this one left off
 ---
 
-Write a complete handoff for the next session to `~/.construct/handoffs/current.md`. The next session will read this verbatim with no other context — assume the reader knows nothing about what we've been doing.
+Write a complete handoff for the next session to `~/.aleph/handoffs/current.md`. The next session will read this verbatim with no other context — assume the reader knows nothing about what we've been doing.
 
-Create the directory first if it doesn't exist (`mkdir -p ~/.construct/handoffs`).
+Create the directory first if it doesn't exist (`mkdir -p ~/.aleph/handoffs`).
 
 The file must contain these sections, in this order:
 
@@ -25,4 +25,4 @@ A single paragraph addressed to the next instance of yourself. Tell it: where to
 
 After writing the file, output exactly this and nothing else:
 
-> Handoff saved to `~/.construct/handoffs/current.md`. Run `/clear` then `/pickup` in the new session.
+> Handoff saved to `~/.aleph/handoffs/current.md`. Run `/clear` then `/pickup` in the new session.

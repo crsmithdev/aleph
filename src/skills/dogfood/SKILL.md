@@ -1,7 +1,7 @@
 ---
 name: dogfood
 description: >
-  Qualitative single-run dogfood review of a Construct tool or skill. Use when
+  Qualitative single-run dogfood review of a Aleph tool or skill. Use when
   you want to experience a feature as a naive user would, log UX friction in
   real time, and grade the output against the user's literal question. Triggers
   on: "try this as a user", "dogfood X", "use X like a real user would",

@@ -4,4 +4,4 @@ description: Systematic debugging with root-cause analysis. Use when encounterin
 model: sonnet
 ---
 
-Read and follow the skill at ~/.claude/construct/skills/debug/SKILL.md, then apply it to the issue the user has described.
+Read and follow the skill at ~/.claude/aleph/skills/debug/SKILL.md, then apply it to the issue the user has described.

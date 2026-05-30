@@ -185,7 +185,7 @@ function ResultsTab() {
             No evals defined yet. Use the Scenarios tab to create your first eval, then run it.
           </p>
           <p className="text-text-muted text-xs max-w-sm">
-            Results are stored in <code className="font-mono bg-bg-tertiary px-1 rounded">~/.construct/evals/results.jsonl</code>
+            Results are stored in <code className="font-mono bg-bg-tertiary px-1 rounded">~/.aleph/evals/results.jsonl</code>
           </p>
         </div>
       )}

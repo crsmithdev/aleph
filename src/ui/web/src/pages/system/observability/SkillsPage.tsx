@@ -775,10 +775,10 @@ function RoutingTable() {
   function reconstructInjection(row: DirectiveRow): string {
     const lines: string[] = [];
     const modes = modeDirectives(row.directives);
-    if (modes.length > 0) lines.push(`[Construct] Modes active: ${modes.join(', ')}`);
-    if (row.docRef) lines.push(`[Construct] Reference: ${row.docRef.doc} — ${row.docRef.desc}`);
+    if (modes.length > 0) lines.push(`[Aleph] Modes active: ${modes.join(', ')}`);
+    if (row.docRef) lines.push(`[Aleph] Reference: ${row.docRef.doc} — ${row.docRef.desc}`);
     const skills = skillDirectives(row.directives).map(stripPrefix);
-    if (skills.length > 0) lines.push(`[Construct] Matched skills: ${skills.join(', ')}. Activate via Skill() before proceeding.`);
+    if (skills.length > 0) lines.push(`[Aleph] Matched skills: ${skills.join(', ')}. Activate via Skill() before proceeding.`);
     return lines.join('\n');
   }
 

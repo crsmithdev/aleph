@@ -1,4 +1,4 @@
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 
 export function applyDDL(sqlite: Sqlite): void {
   sqlite.exec(`

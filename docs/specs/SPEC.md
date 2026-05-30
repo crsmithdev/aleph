@@ -1,4 +1,4 @@
-# Construct — Functional Specification
+# Aleph — Functional Specification
 
 Behavior-oriented spec for functional testing and drift detection. Every claim here is testable.
 
@@ -36,13 +36,13 @@ Last session (<filename>):
 
 **Mode activation** — on every prompt (>=3 words), `routing-classify-submit.ts` matches each `modes/MODE_*.md` file's trigger regexes against the prompt and activates every mode that matches (composable — any subset can fire at once):
 - Modes: `execution`, `brainstorming`, `introspection`, `efficiency`, `focused`, `comparison`. Each is an opt-in posture overlay; absence is the common case.
-- Output when ≥1 mode fires: `[Construct] Modes active: <slugs>` followed by the full inlined body of each active mode.
+- Output when ≥1 mode fires: `[Aleph] Modes active: <slugs>` followed by the full inlined body of each active mode.
 - When no regex fires (silent): the model self-selects from the always-loaded `whenToUse` index in `modes/INDEX.md` (`@`-included from `core/CLAUDE.md`) and names the choice in one line.
 - Directive signals `mode:<slug>` are written to telemetry alongside `skill:<name>`.
 
-**Verification gate injection** — same hook injects e2e requirements for non-question prompts >=5 words: `[Construct] Verification gate active — after making changes, you MUST verify end-to-end: 1. Run the actual system 2. Interact with it (Playwright, Chrome DevTools, or run the CLI) 3. Produce an artifact: screenshot or captured output saved to a file`. Unit tests alone are not sufficient. The Stop hook checks for e2e evidence.
+**Verification gate injection** — same hook injects e2e requirements for non-question prompts >=5 words: `[Aleph] Verification gate active — after making changes, you MUST verify end-to-end: 1. Run the actual system 2. Interact with it (Playwright, Chrome DevTools, or run the CLI) 3. Produce an artifact: screenshot or captured output saved to a file`. Unit tests alone are not sufficient. The Stop hook checks for e2e evidence.
 
-**Skill matching** — `routing-classify-submit.ts` also checks prompt against `skill-rules.json` keywords. On match: `[Construct] Matched skills: <names>. Activate via Skill() before proceeding.` No match = silent. Project-local skill extensions (`.claude/skills/<skill>.md`) are appended to the base skill when matched.
+**Skill matching** — `routing-classify-submit.ts` also checks prompt against `skill-rules.json` keywords. On match: `[Aleph] Matched skills: <names>. Activate via Skill() before proceeding.` No match = silent. Project-local skill extensions (`.claude/skills/<skill>.md`) are appended to the base skill when matched.
 
 **Rating capture** — on every prompt, `rating-capture-submit.ts` checks for explicit ratings:
 1. Standalone integer 1-10 as the entire prompt
@@ -53,7 +53,7 @@ Matched ratings are appended to `data/signals/ratings.jsonl`:
 ```json
 {"timestamp":"<ISO>","rating":8,"type":"explicit","context":"<first 100 chars>"}
 ```
-Ratings 1-3 trigger a console message: `[Construct] Low rating (N) — store what went wrong via memory_store`. Ratings 4-10 are silent.
+Ratings 1-3 trigger a console message: `[Aleph] Low rating (N) — store what went wrong via memory_store`. Ratings 4-10 are silent.
 
 **Quality hook** — after every `Edit` or `Write` tool use, `quality-format-edit.ts` auto-formats the saved file:
 - If `.claude/quality.json` exists in the project, runs its `format` and `lint` commands with `$FILE` substituted.
@@ -113,7 +113,7 @@ On `Notification` events (`idle`, `permission`, `complete`):
 
 ## Skills
 
-Skills are domain-specific playbooks activated by keyword matching. Each lives in `src/skills/<name>/SKILL.md` (source) and is installed to `construct/skills/<name>/SKILL.md`.
+Skills are domain-specific playbooks activated by keyword matching. Each lives in `src/skills/<name>/SKILL.md` (source) and is installed to `aleph/skills/<name>/SKILL.md`.
 
 | Skill | Purpose |
 |---|---|
@@ -153,7 +153,7 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 | `/gist` | Surface your current understanding of the project |
 | `/goal` | Manage goals (empty command stub) |
 | `/handoff` | Save a session handoff so a fresh context can pick up |
-| `/install` | Deploy Construct to `~/.claude` |
+| `/install` | Deploy Aleph to `~/.claude` |
 | `/pickup` | Resume from the most recent /handoff in a fresh context |
 | `/research` | Deep autonomous research — long-running investigations |
 | `/search` | Quick web research — search, synthesize, report with sources |
@@ -294,17 +294,17 @@ List of existing backups with filename, creation date, file size. Create and res
 **Invocation:** `bun install.ts` from repo root.
 
 **Steps:**
-1. Ensure data directories exist (`~/.construct/{sessions,signals,backups,memory}`)
+1. Ensure data directories exist (`~/.aleph/{sessions,signals,backups,memory}`)
 2. Migrate data from old locations (one-time)
 3. Back up preserved files (ALL CAPS `.md` in `core/identity/` and `memory/`) to temp dir
 4. Back up the database (last 5 backups kept)
 5. Stop UI service
-6. Sync `src/` -> `~/.claude/construct/` (overwrite + delete stale, skip `.db` files and `node_modules`)
+6. Sync `src/` -> `~/.claude/aleph/` (overwrite + delete stale, skip `.db` files and `node_modules`)
 7. Install UI dependencies
 8. Restore preserved files (byte-size verified)
 9. Sync commands from `dotclaude/commands/` and register skills as commands
 10. Merge `settings.json` — replaces `hooks` and `statusLine` only, rewrites paths to absolute
-11. Update `CLAUDE.md` — replaces `# Construct` section in-place, preserves surrounding content
+11. Update `CLAUDE.md` — replaces `# Aleph` section in-place, preserves surrounding content
 12. Verify critical files (byte-size check)
 13. Write build manifest (git info, paths, timestamps)
 14. Restart UI service
@@ -316,26 +316,26 @@ List of existing backups with filename, creation date, file size. Create and res
 ## Dev and Production Ports
 
 - **Dev:** port 3001 — `bun dev-server.ts` from repo root, Vite HMR, live from `src/`
-- **Prod:** port 3000 — systemd `construct-ui.service`, deployed via `bun install.ts`
+- **Prod:** port 3000 — systemd `aleph-ui.service`, deployed via `bun install.ts`
 
 ## Path Resolution
 
-Two roots: `~/.claude` for code/config, `~/.construct` for user data.
+Two roots: `~/.claude` for code/config, `~/.aleph` for user data.
 
 | Path | Location |
 |---|---|
-| `construct/` | `~/.claude/construct` |
+| `aleph/` | `~/.claude/aleph` |
 | `commands/` | `~/.claude/commands` |
 | `projects/` | `~/.claude/projects` |
-| `construct.db` | `~/.construct/construct.db` (overridable via `CONSTRUCT_DATA_ROOT`) |
-| `memory/sqlite_vec.db` | `~/.construct/memory/sqlite_vec.db` (overridable via `MEMORY_DB_PATH`) |
-| `sessions/` | `~/.construct/sessions` |
-| `signals/ratings.jsonl` | `~/.construct/signals/ratings.jsonl` |
-| `backups/` | `~/.construct/backups` |
+| `aleph.db` | `~/.aleph/aleph.db` (overridable via `ALEPH_DATA_ROOT`) |
+| `memory/sqlite_vec.db` | `~/.aleph/memory/sqlite_vec.db` (overridable via `MEMORY_DB_PATH`) |
+| `sessions/` | `~/.aleph/sessions` |
+| `signals/ratings.jsonl` | `~/.aleph/signals/ratings.jsonl` |
+| `backups/` | `~/.aleph/backups` |
 
 ## Identity Layer
 
-Four optional files in `construct/core/identity/`, preserved on upgrade:
+Four optional files in `aleph/core/identity/`, preserved on upgrade:
 
 | File | Purpose |
 |------|---------|
@@ -361,13 +361,13 @@ All hooks registered in `settings-hooks.json` (source: `src/core/hooks/settings-
 
 | Module | Detection file |
 |------|---------------|
-| construct-core | `~/.claude/CLAUDE.md` |
-| construct-memory | `construct/memory/hooks/context-restore-start.ts` |
-| construct-skills | `construct/skills/skill-rules.json` |
-| construct-data | `construct/data/src/client.ts` |
-| construct-eval | `construct/eval/runner.ts` |
-| construct-goals | `construct/goals/src/index.ts` |
-| construct-ui | `construct/ui/api/src/app.ts` |
+| aleph-core | `~/.claude/CLAUDE.md` |
+| aleph-memory | `aleph/memory/hooks/context-restore-start.ts` |
+| aleph-skills | `aleph/skills/skill-rules.json` |
+| aleph-data | `aleph/data/src/client.ts` |
+| aleph-eval | `aleph/eval/runner.ts` |
+| aleph-goals | `aleph/goals/src/index.ts` |
+| aleph-ui | `aleph/ui/api/src/app.ts` |
 
 ## Common Questions
 
@@ -381,16 +381,16 @@ Keyword triggers defined per mode in `modes/MODE_<slug>.md` frontmatter (regexes
 The guard only blocks: `DROP TABLE/DATABASE/SCHEMA`, `TRUNCATE`, `DELETE FROM` without a WHERE clause, and `ALTER TABLE DROP COLUMN`. Add a WHERE clause to DELETE queries. Qualified deletes (e.g. `DELETE FROM t WHERE id = ?`) are allowed.
 
 **Q: What's the difference between context-save-stop and memory-extract-stop?**
-`context-save-stop.ts` writes a structured `.md` file to `~/.construct/sessions/` for any session with ≥4 messages — always fires, no conditions on content. `memory-extract-stop.ts` only runs for substantive sessions (≥6 messages and at least one file edit) and skips entirely if Claude already called `memory_store` voluntarily. Session summaries are human-readable digests; extracted memories are semantic store entries intended for future retrieval.
+`context-save-stop.ts` writes a structured `.md` file to `~/.aleph/sessions/` for any session with ≥4 messages — always fires, no conditions on content. `memory-extract-stop.ts` only runs for substantive sessions (≥6 messages and at least one file edit) and skips entirely if Claude already called `memory_store` voluntarily. Session summaries are human-readable digests; extracted memories are semantic store entries intended for future retrieval.
 
 **Q: How do I preserve a custom file across upgrades?**
-Name it with ALL CAPS (e.g. `PROJECTS.md`) and place it in `~/.claude/construct/core/identity/` or `~/.claude/construct/memory/`. The installer detects all ALL CAPS `.md` files in those two directories and restores them after syncing. Files with any lowercase letters in the name are overwritten.
+Name it with ALL CAPS (e.g. `PROJECTS.md`) and place it in `~/.claude/aleph/core/identity/` or `~/.claude/aleph/memory/`. The installer detects all ALL CAPS `.md` files in those two directories and restores them after syncing. Files with any lowercase letters in the name are overwritten.
 
 **Q: Why does the verification gate fire even on small prompts?**
 The gate fires for any non-question prompt ≥5 words. "Small" doesn't exempt it — the threshold is word count, not change size. It fires when edits are present in the turn; if no files were edited, the Stop hook skips silently.
 
 **Q: Where is the UI served during development vs production?**
-Dev: `bun dev-server.ts` → `http://localhost:3001` (Fastify + Vite middleware in one process, hot-reload). Prod: systemd `construct-ui.service` → port 3000 (pre-built SPA). Port overridable via `PORT` or `API_PORT` env var.
+Dev: `bun dev-server.ts` → `http://localhost:3001` (Fastify + Vite middleware in one process, hot-reload). Prod: systemd `aleph-ui.service` → port 3000 (pre-built SPA). Port overridable via `PORT` or `API_PORT` env var.
 
 **Q: How do I add a new skill?**
 Create `src/skills/<name>/SKILL.md` with the skill playbook. Add keyword triggers to `src/skills/skill-rules.json`. Run `bun install.ts` to deploy the skill as a slash command and register it for keyword activation.

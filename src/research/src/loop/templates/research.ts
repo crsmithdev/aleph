@@ -27,7 +27,7 @@
  * production passes `OpenRouterProvider` constructed by `run.ts` from env.
  */
 
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 import { emitDecisionEvent, recordDecision } from '../decisions.js';
 import type {
   Template,

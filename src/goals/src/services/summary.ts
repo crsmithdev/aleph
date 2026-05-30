@@ -1,5 +1,5 @@
 import { and, gte, lte, sql, eq } from 'drizzle-orm';
-import type { Db } from '@construct/data';
+import type { Db } from '@aleph/data';
 import { goals, todos, notes, historyLogs, habits, habitCompletions } from '../schema.js';
 
 export function getSummary(db: Db, start: string, end: string, tzOffsetMinutes?: number) {

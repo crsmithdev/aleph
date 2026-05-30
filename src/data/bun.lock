@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@construct/data",
+      "name": "@aleph/data",
       "dependencies": {
         "drizzle-orm": "^0.39.3",
       },

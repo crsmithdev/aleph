@@ -1,5 +1,5 @@
 /**
- * @construct/research — config types.
+ * @aleph/research — config types.
  *
  * `SessionConfig` is the persisted defaults surface for the two per-loop
  * model selections the engine still reads at run time:

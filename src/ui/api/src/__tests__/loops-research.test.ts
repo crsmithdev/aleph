@@ -30,7 +30,7 @@ let tmp: string;
 let fake: FakeServerHandle;
 
 beforeAll(async () => {
-  tmp = mkdtempSync(join(tmpdir(), 'construct-loops-research-'));
+  tmp = mkdtempSync(join(tmpdir(), 'aleph-loops-research-'));
   process.env.HOME = tmp;
 
   // Start the fake provider before app + worker spawns. Bun.spawn captures

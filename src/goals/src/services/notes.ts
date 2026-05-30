@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import { eq, desc, and } from 'drizzle-orm';
-import type { Db } from '@construct/data';
+import type { Db } from '@aleph/data';
 import { notes, goals } from '../schema.js';
 import { createNoteSchema, updateNoteSchema } from '../validators.js';
 import type { EventBus } from './event-bus.js';

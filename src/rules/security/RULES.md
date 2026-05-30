@@ -416,6 +416,6 @@ Detail mapping tables live in reference files:
 
 ---
 
-## Approval policy (Construct-specific)
+## Approval policy (Aleph-specific)
 
 Security findings prompt per-finding regardless of severity. The leaf surfaces every finding individually for explicit user sign-off — there is no apply-all path for the security domain. This is the one place where the standard apply-all / pick / discard gate is replaced by per-finding prompting.

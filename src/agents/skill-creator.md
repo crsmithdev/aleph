@@ -4,4 +4,4 @@ description: Create new skills, modify and improve existing skills, and measure 
 model: sonnet
 ---
 
-Read and follow the skill at ~/.claude/construct/skills/skill-creator/SKILL.md, then help the user create or improve their skill.
+Read and follow the skill at ~/.claude/aleph/skills/skill-creator/SKILL.md, then help the user create or improve their skill.

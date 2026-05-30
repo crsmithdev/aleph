@@ -150,6 +150,6 @@ if (decision === "block") {
     reason: `Git hygiene: ${reason}.`,
   }));
 } else {
-  console.log(`[Construct] Git hygiene: ${reason}.`);
+  console.log(`[Aleph] Git hygiene: ${reason}.`);
 }
 process.exit(0);

@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { Db } from '@construct/data';
+import type { Db } from '@aleph/data';
 import type { EventBus, AppEvent } from './event-bus.js';
 import { historyLogs } from '../schema.js';
 import { eq, desc } from 'drizzle-orm';

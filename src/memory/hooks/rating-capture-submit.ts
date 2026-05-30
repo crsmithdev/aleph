@@ -108,5 +108,5 @@ reportHook(TAG, "UserPromptSubmit", input.session_id, {
 trace(TAG, `recorded: ${rating}/10`);
 
 if (Number(rating) <= 3) {
-  console.log(`[Construct] Low rating (${rating}) — store what went wrong via memory_store`);
+  console.log(`[Aleph] Low rating (${rating}) — store what went wrong via memory_store`);
 }

@@ -5,7 +5,7 @@ description: >
 model: sonnet
 ---
 
-Single continuous flow: scan, present, approve, fix, gate. Read and follow the skill at `~/.claude/construct/skills/code-review/SKILL.md` end-to-end on the code the user has asked you to review.
+Single continuous flow: scan, present, approve, fix, gate. Read and follow the skill at `~/.claude/aleph/skills/code-review/SKILL.md` end-to-end on the code the user has asked you to review.
 
 The skill walks `src/rules/code/RULES.md` and `src/rules/security/RULES.md` in one pass. After step 4 (Report), stop at step 5 (Ask):
 

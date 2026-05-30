@@ -13,11 +13,11 @@
  * run skips already-completed steps.
  */
 import { resolve } from 'path';
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 import {
   emitResearchEvent, getLoop, updateLoopChildPid, updateLoopStatus,
   type LoopId, type ResearchEvent, type ResearchEventType,
-} from '@construct/research';
+} from '@aleph/research';
 
 const RUN_TS_PATH = resolve(import.meta.dirname || '.', '../../../research/src/loop/run.ts');
 const MAX_RESPAWNS = 5;

@@ -46,7 +46,7 @@ const patterns: Array<{ regex: RegExp; description: string }> = [
 
 for (const { regex, description } of patterns) {
   if (regex.test(sql)) {
-    console.error(`[Construct] Blocked: ${description} detected in SQL query. This is a destructive operation that requires manual execution.`);
+    console.error(`[Aleph] Blocked: ${description} detected in SQL query. This is a destructive operation that requires manual execution.`);
     trace(TAG, `blocked: ${description}`);
     process.exit(2);
   }

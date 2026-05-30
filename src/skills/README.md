@@ -1,8 +1,8 @@
-# construct-skills
+# aleph-skills
 
 Depth classification, keyword-matched skill evaluation, skill routing config, quality hooks, notifications.
 
-**Depends on:** construct-core
+**Depends on:** aleph-core
 
 ## Contents
 

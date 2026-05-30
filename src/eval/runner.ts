@@ -646,7 +646,7 @@ async function runE2ETrial(
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
         systemPrompt,
-        env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
+        env: { ...process.env, ALEPH_DATA_ROOT: dataRoot },
         hooks: { PostToolUse: [{ hooks: [tracker] }] },
       },
     });
@@ -687,7 +687,7 @@ async function runCommitTrial(
     ...process.env,
     GIT_AUTHOR_NAME: "eval", GIT_AUTHOR_EMAIL: "eval@test",
     GIT_COMMITTER_NAME: "eval", GIT_COMMITTER_EMAIL: "eval@test",
-    CONSTRUCT_DATA_ROOT: dataRoot,
+    ALEPH_DATA_ROOT: dataRoot,
   };
 
   const result1 = emptyResult();
@@ -1002,7 +1002,7 @@ async function runHookTrial(
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
         systemPrompt,
-        env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
+        env: { ...process.env, ALEPH_DATA_ROOT: dataRoot },
         hooks: {
           PostToolUse: [
             { hooks: [tracker] },
@@ -1090,7 +1090,7 @@ async function runHookScenario(
   const pct = trials > 0 ? Math.round((passed / trials) * 100) : 0;
   console.log(`\n  Result: ${passed}/${trials} (${pct}%) pass@1=${passAt1}`);
 
-  // Append to ~/.construct/evals/results.jsonl
+  // Append to ~/.aleph/evals/results.jsonl
   const lastTier = trialResults.find(r => r.tier !== undefined)?.tier;
   appendEvalResult({
     ts: new Date().toISOString(),
@@ -1203,7 +1203,7 @@ ${contextPadding}`;
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
         systemPrompt,
-        env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
+        env: { ...process.env, ALEPH_DATA_ROOT: dataRoot },
         hooks: {
           PostToolUse: [{ hooks: [tracker] }],
           Stop: [{ hooks: [testingGate] }],
@@ -1453,7 +1453,7 @@ Now respond to the next request.`
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
         systemPrompt,
-        env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot, PORT: String(port) },
+        env: { ...process.env, ALEPH_DATA_ROOT: dataRoot, PORT: String(port) },
         hooks: {
           PostToolUse: [{ hooks: [tracker] }, { hooks: [verifyTracker] }],
         },

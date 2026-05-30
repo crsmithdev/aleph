@@ -3,9 +3,9 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@construct/goals",
+      "name": "@aleph/goals",
       "dependencies": {
-        "@construct/data": "file:../data",
+        "@aleph/data": "file:../data",
         "drizzle-orm": "^0.39.3",
         "nanoid": "^5.1.2",
         "zod": "^3.24.2",
@@ -16,7 +16,7 @@
     },
   },
   "packages": {
-    "@construct/data": ["@construct/data@file:../data", { "dependencies": { "better-sqlite3": "^11.8.1", "drizzle-orm": "^0.39.3" }, "devDependencies": { "@types/better-sqlite3": "^7.6.12", "typescript": "^5.7.3" } }],
+    "@aleph/data": ["@aleph/data@file:../data", { "dependencies": { "better-sqlite3": "^11.8.1", "drizzle-orm": "^0.39.3" }, "devDependencies": { "@types/better-sqlite3": "^7.6.12", "typescript": "^5.7.3" } }],
 
     "@types/better-sqlite3": ["@types/better-sqlite3@7.6.13", "", { "dependencies": { "@types/node": "*" } }, "sha512-NMv9ASNARoKksWtsq/SHakpYAYnhBrQgGD8zkLYk/jaK8jUGn08CfEdTRgYhMypUQAfzSP8W6gNLe0q19/t4VA=="],
 

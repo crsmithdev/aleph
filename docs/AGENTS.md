@@ -16,7 +16,7 @@ Agents are dispatched via the Agent tool with `subagent_type` set to the agent n
 | design-reviewer | `src/agents/design-reviewer.md` | Full design review across 15 dimensions | When reviewing UI quality, auditing design, or polishing an interface. Phased output: Critical, Refinement, Polish — with approval gates between phases. |
 | docs-optimizer | `src/agents/docs-optimizer.md` | Optimize docs for AI coding assistants | When improving documentation for Claude, Copilot, or other AI tools — c7score optimization, llms.txt generation, question-driven restructuring. |
 | docs-reviewer | `src/agents/docs-reviewer.md` | Write, update, and verify documentation | For README files, API docs, guides, or any doc that may have drifted from reality. Phase 1 writes or updates; Phase 2 reviews accuracy and optimizes for AI assistants. |
-| skill-creator | `src/agents/skill-creator.md` | Create and improve Construct skills | When creating a skill from scratch, editing an existing skill, running evals, benchmarking performance, or optimizing a skill's description for better trigger accuracy. |
+| skill-creator | `src/agents/skill-creator.md` | Create and improve Aleph skills | When creating a skill from scratch, editing an existing skill, running evals, benchmarking performance, or optimizing a skill's description for better trigger accuracy. |
 
 ## Selection
 

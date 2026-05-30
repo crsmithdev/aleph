@@ -1,5 +1,5 @@
 /**
- * @construct/research — public surface.
+ * @aleph/research — public surface.
  *
  *   - DDL (loops tables + research_defaults)
  *   - SessionConfig + loop types (`./types`, `./loop/types`)

@@ -18,7 +18,7 @@
  * Phase 4 ships the structural slice. Phase 5 collapses envelope, models,
  * perturbation_config, flags, and mode metadata onto the same artifact.
  */
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 import { emitDecisionEvent, recordDecision } from './decisions.js';
 import type { LLMProvider } from './llm.js';
 import type { Branch, LoopId, LoopSchedule, OutputShape } from './types.js';

@@ -1,6 +1,6 @@
 # Hooks Rules
 
-Authoritative rules for Claude Code hooks under `src/core/hooks/` (and equivalent paths in non-Construct projects) plus their registration in `settings-hooks.json` / `.claude/settings.json`. Read by:
+Authoritative rules for Claude Code hooks under `src/core/hooks/` (and equivalent paths in non-Aleph projects) plus their registration in `settings-hooks.json` / `.claude/settings.json`. Read by:
 
 - `src/skills/hooks-audit/SKILL.md` — flags violations in existing hooks (post-hoc)
 - CLAUDE.md (project-local + global) — applies these rules silently at write-time
@@ -13,7 +13,7 @@ Scope: `src/core/hooks/*.ts` plus any script referenced from a hook registry (`s
 
 ## A. stdin safety
 
-*Sources: Construct CLAUDE.md "Commandments" §1 (nothing fails silently), `src/skills/code-audit/SKILL.md` H.1.*
+*Sources: Aleph CLAUDE.md "Commandments" §1 (nothing fails silently), `src/skills/code-audit/SKILL.md` H.1.*
 
 ### A.1 Wrap stdin JSON parse in try/catch with non-zero exit on failure
 
@@ -35,11 +35,11 @@ A hook fired with no payload (some event types pass empty) must not assume stdin
 
 ## B. Tracing
 
-*Sources: `src/trace.ts`, Construct CLAUDE.md "Avoiding duplication".*
+*Sources: `src/trace.ts`, Aleph CLAUDE.md "Avoiding duplication".*
 
 ### B.1 Every hook calls `trace()` at completion
 
-Construct hooks must call `trace()` (from `src/trace.ts`) before exiting. Hooks that skip tracing become invisible to the observability UI and to any post-hoc eval harness.
+Aleph hooks must call `trace()` (from `src/trace.ts`) before exiting. Hooks that skip tracing become invisible to the observability UI and to any post-hoc eval harness.
 
 - **Detect:** hook scripts under `src/core/hooks/` without a `trace(` call before any `process.exit` path
 - **Severity:** `important`
@@ -57,7 +57,7 @@ The trace payload's base fields are required for cross-hook correlation. Hooks m
 
 ## C. Exit codes
 
-*Sources: Claude Code hooks spec; Construct CLAUDE.md "Commandments" §1.*
+*Sources: Claude Code hooks spec; Aleph CLAUDE.md "Commandments" §1.*
 
 ### C.1 Every return path has an explicit `process.exit(N)`
 
@@ -87,7 +87,7 @@ Hooks without an explicit `process.exit` fall off the end and implicitly exit 0.
 
 ## D. Stdout / stderr discipline
 
-*Sources: Claude Code hooks spec; Construct CLAUDE.md "Testing Philosophy".*
+*Sources: Claude Code hooks spec; Aleph CLAUDE.md "Testing Philosophy".*
 
 ### D.1 stdout only carries advisory text Claude should read
 
@@ -113,7 +113,7 @@ When a hook exits non-zero, stderr should contain enough text for the user to ac
 
 ### E.1 Every `writeFileSync` target has a consumer
 
-A hook writing to `signals/<file>.jsonl`, `~/.construct/<file>`, or similar must have at least one grep-visible reader (in another hook, an API route, or the observability UI). A file nothing reads is dead output — maintenance burden with no payoff.
+A hook writing to `signals/<file>.jsonl`, `~/.aleph/<file>`, or similar must have at least one grep-visible reader (in another hook, an API route, or the observability UI). A file nothing reads is dead output — maintenance burden with no payoff.
 
 - **Detect:** for each `writeFileSync` / `appendFileSync` / `reportHook` target in a hook script, grep `src/` for a reader; flag if zero
 - **Severity:** `important`
@@ -139,7 +139,7 @@ Hooks logging or storing `req.body` / env values / parsed-prompt content must no
 
 ## F. Pair contracts
 
-*Sources: cross-session hook chains documented in Construct README hook table.*
+*Sources: cross-session hook chains documented in Aleph README hook table.*
 
 ### F.1 Writer-reader pairs use a typed shape
 
@@ -161,7 +161,7 @@ Hook pairs that span session boundaries (e.g., PreCompact → SessionStart) shou
 
 ## G. Registration
 
-*Sources: `src/core/hooks/settings-hooks.json` (Construct), `.claude/settings.json` `hooks` array (standard).*
+*Sources: `src/core/hooks/settings-hooks.json` (Aleph), `.claude/settings.json` `hooks` array (standard).*
 
 ### G.1 Every script referenced by the registry exists
 
@@ -181,7 +181,7 @@ Two hooks registered for the same event with the same matcher fire in registrati
 
 ### G.3 No hook registered in both `.claude/settings.json` and `src/core/hooks/settings-hooks.json`
 
-Double registration across the project / Construct hook registries fires the hook twice. Construct hooks belong in `src/core/hooks/`, not `.claude/settings.json` (per Construct CLAUDE.md "Avoiding duplication").
+Double registration across the project / Aleph hook registries fires the hook twice. Aleph hooks belong in `src/core/hooks/`, not `.claude/settings.json` (per Aleph CLAUDE.md "Avoiding duplication").
 
 - **Detect:** same hook command path appearing in both files
 - **Severity:** `important`
@@ -191,7 +191,7 @@ Double registration across the project / Construct hook registries fires the hoo
 
 ## H. No silent failure
 
-*Sources: Construct CLAUDE.md "Commandments" §1 ("Nothing may fail silently").*
+*Sources: Aleph CLAUDE.md "Commandments" §1 ("Nothing may fail silently").*
 
 ### H.1 Every error path either exits non-zero or writes to stderr
 
@@ -213,13 +213,13 @@ Helpers called by hooks must not throw silently. If a helper fails, the calling 
 
 ## I. Usage signals
 
-*Sources: `~/.construct/signals/hook-events.jsonl` (field: `hook`). Each hook reports via `reportHook()`, so absence from the log is a meaningful signal — not just missing data.*
+*Sources: `~/.aleph/signals/hook-events.jsonl` (field: `hook`). Each hook reports via `reportHook()`, so absence from the log is a meaningful signal — not just missing data.*
 
 ### I.1 Hook fires at least once in recent sessions
 
 A hook registered and deployed but absent from `hook-events.jsonl` across the last 20 sessions either has a broken event matcher, fires for events that never occur in practice, or is legacy — registered but never cleaned up.
 
-- **Detect:** for each hook's registered name (from `settings-hooks.json`), `grep "\"hook\":\"<name>\"" ~/.construct/signals/hook-events.jsonl | wc -l`; zero lines AND the hook is older than 5 sessions (check git log creation date) = suspect; flag with the registered event type so the reader knows what conditions were expected to fire it
+- **Detect:** for each hook's registered name (from `settings-hooks.json`), `grep "\"hook\":\"<name>\"" ~/.aleph/signals/hook-events.jsonl | wc -l`; zero lines AND the hook is older than 5 sessions (check git log creation date) = suspect; flag with the registered event type so the reader knows what conditions were expected to fire it
 - **Severity:** `suggestion`
 - **Tag:** `unused-hook`
 

@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import { eq, and, inArray } from 'drizzle-orm';
-import type { Db } from '@construct/data';
+import type { Db } from '@aleph/data';
 import { habits, habitCompletions } from '../schema.js';
 import { createHabitSchema, updateHabitSchema } from '../validators.js';
 import type { Frequency } from '../constants.js';

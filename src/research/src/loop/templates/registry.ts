@@ -17,7 +17,7 @@
  *
  * Phase 2 lands `research`. Phase 2.6 lands `monitor`.
  */
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 import type { Template } from '../types.js';
 import type { LLMProvider } from '../llm.js';
 import { makeNoopTemplate } from './noop.js';

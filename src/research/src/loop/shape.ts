@@ -25,7 +25,7 @@
  * after a crash don't burn a second LLM call.
  */
 
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 import { bumpUsage, createArtifact, getLoop, listArtifacts } from './db.js';
 import type { LLMProvider } from './llm.js';
 import { withCostTracker } from './cost.js';

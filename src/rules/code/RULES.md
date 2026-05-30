@@ -51,7 +51,7 @@ If a TypeScript error must be suppressed, the suppression comment carries a one-
 
 ## B. AI slop
 
-*Sources: `src/skills/code-review/SKILL.md` "Fix-shape detail: slop removal", global CLAUDE.md "Doing tasks", Construct CLAUDE.md "Commandments" §2, §7.*
+*Sources: `src/skills/code-review/SKILL.md` "Fix-shape detail: slop removal", global CLAUDE.md "Doing tasks", Aleph CLAUDE.md "Commandments" §2, §7.*
 
 ### B.1 No defensive code for impossible cases
 
@@ -243,7 +243,7 @@ Tests for hooks under `src/core/hooks/` pipe real JSON to the hook script and as
 
 ## F. Architectural fit
 
-*Sources: `src/skills/code-review/SKILL.md` §6, Construct CLAUDE.md "Avoiding duplication".*
+*Sources: `src/skills/code-review/SKILL.md` §6, Aleph CLAUDE.md "Avoiding duplication".*
 
 ### F.1 Code lives in the correct module
 
@@ -255,7 +255,7 @@ New code belongs in the module its responsibility dictates: hooks in `src/core/h
 
 ### F.2 No CLAUDE.md duplication
 
-Rules exist in exactly one CLAUDE.md (global, project, or skill-local). Duplication is forbidden per Construct Commandment 9.
+Rules exist in exactly one CLAUDE.md (global, project, or skill-local). Duplication is forbidden per Aleph Commandment 9.
 
 - **Detect:** identical rule text in two CLAUDE.md files
 - **Severity:** `important`
@@ -263,7 +263,7 @@ Rules exist in exactly one CLAUDE.md (global, project, or skill-local). Duplicat
 
 ### F.3 Hooks live in `src/`, not `.claude/`
 
-Project-local `.claude/settings.json` may only contain permissions, statusline, and MCP server config. Hooks go in `src/` and are installed to `~/.claude/construct/`. Otherwise hooks double-fire (registered in both places at runtime).
+Project-local `.claude/settings.json` may only contain permissions, statusline, and MCP server config. Hooks go in `src/` and are installed to `~/.claude/aleph/`. Otherwise hooks double-fire (registered in both places at runtime).
 
 - **Detect:** `.claude/settings.json` contains a `hooks` array
 - **Severity:** `blocking`
@@ -311,7 +311,7 @@ Every `addEventListener` / `subscribe` / `setInterval` / `setTimeout` has a pair
 
 ## H. Error handling
 
-*Sources: Construct CLAUDE.md Commandment 1 ("Nothing may fail silently"), Construct CLAUDE.md "Server" + "Dev workflow".*
+*Sources: Aleph CLAUDE.md Commandment 1 ("Nothing may fail silently"), Aleph CLAUDE.md "Server" + "Dev workflow".*
 
 ### H.1 Hooks fail loudly
 
@@ -341,7 +341,7 @@ When catching an error to rethrow, attach context: `throw new Error("loading con
 
 ## I. Complexity
 
-*Sources: Addy Osmani's `code-simplification` skill (function-length thresholds, nesting depth), Construct CLAUDE.md Commandment 1 ("simplicity, testability").*
+*Sources: Addy Osmani's `code-simplification` skill (function-length thresholds, nesting depth), Aleph CLAUDE.md Commandment 1 ("simplicity, testability").*
 
 ### I.1 Function length thresholds
 
@@ -424,8 +424,8 @@ Before flagging an export as unused, confirm zero consumers across the whole rep
 These rules supplement, not replace, the rules in CLAUDE.md:
 
 - **Global CLAUDE.md** (`~/.claude/CLAUDE.md`) — interaction style, permissions, task execution
-- **Construct identity** (`src/core/identity/*`) — AGENTS, SOUL, STYLE, USER profile
-- **Construct project** (`.claude/CLAUDE.md`) — Construct-specific commandments, server/dev workflow, skill extensions, testing philosophy, verification table
+- **Aleph identity** (`src/core/identity/*`) — AGENTS, SOUL, STYLE, USER profile
+- **Aleph project** (`.claude/CLAUDE.md`) — Aleph-specific commandments, server/dev workflow, skill extensions, testing philosophy, verification table
 - **Global project root** (`CLAUDE.md`) — performance / parallelization defaults
 
 Rules in those files apply at write-time. Rules in this file apply at review-time (via `code-review`). When the two overlap, this file restates them in checkable form so `code-review` can flag violations precisely.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Construct status — collects identity, skills, sessions, and ratings in parallel.
+ * Aleph status — collects identity, skills, sessions, and ratings in parallel.
  */
 import { readdirSync, readFileSync, existsSync, statSync } from "fs";
 import { resolve } from "path";

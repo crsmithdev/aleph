@@ -23,8 +23,8 @@ let port: number;
 let tmp: string;
 
 beforeAll(async () => {
-  tmp = mkdtempSync(join(tmpdir(), 'construct-loops-test-'));
-  // research-logger writes to $HOME/.construct/research-logs — point HOME at tmp
+  tmp = mkdtempSync(join(tmpdir(), 'aleph-loops-test-'));
+  // research-logger writes to $HOME/.aleph/research-logs — point HOME at tmp
   // so the test is hermetic.
   process.env.HOME = tmp;
   const dbUrl = join(tmp, 'db.sqlite');

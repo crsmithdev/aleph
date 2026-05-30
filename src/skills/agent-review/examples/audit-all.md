@@ -63,7 +63,7 @@ Personas: 0 missing frontmatter · 1 over-privileged · 1 routing-collision pair
 - src/core/hooks/feedback-emit.ts:42 — agent/hooks.md#E.1 — [sub_surface: hooks]
   Writes signals/feedback-debug.jsonl; no consumer found in src/. [tag: dead-output]
 - CLAUDE.md:14 — agent/config.md#A.1 — [sub_surface: config]
-  Broken @-include: @construct/identity/MISSING.md does not resolve. [tag: broken-include]
+  Broken @-include: @aleph/identity/MISSING.md does not resolve. [tag: broken-include]
 
 ## nit (5)
 - src/skills/audit/ — agent/skills.md#D.2 — [sub_surface: skills]

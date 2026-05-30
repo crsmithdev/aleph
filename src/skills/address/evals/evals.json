@@ -19,7 +19,7 @@
     {
       "id": 4,
       "prompt": "implement the annotations for the goals page",
-      "expected_output": "Maps 'goals page' to /goals URL, reads annotations, implements changes using Construct design tokens (not raw hex), deletes annotations when done."
+      "expected_output": "Maps 'goals page' to /goals URL, reads annotations, implements changes using Aleph design tokens (not raw hex), deletes annotations when done."
     }
   ]
 }

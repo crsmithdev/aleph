@@ -7,7 +7,7 @@ Canonical rule set for the design domain. Read by:
 
 Every checkable rule below can be evaluated against a real file and produce a plain-markdown finding citing this file's section anchor. Qualitative rules (hierarchy, motion, rhythm) require visual reasoning and are run by `design-review` against rendered surfaces.
 
-Scope: UI source under `src/ui/` (React/TSX, CSS, Tailwind classes). Markdown previews in `src/rules/design/construct/` count as reference, not source.
+Scope: UI source under `src/ui/` (React/TSX, CSS, Tailwind classes). Markdown previews in `src/rules/design/aleph/` count as reference, not source.
 
 ---
 
@@ -44,7 +44,7 @@ Full ruleset (~50 rules covering characters, spacing, formatting, layout, respon
 
 ## C. Color
 
-*Qualitative + checkable.* Source: `src/rules/design/construct/` design system tokens.
+*Qualitative + checkable.* Source: `src/rules/design/aleph/` design system tokens.
 
 - **C.1** No inline hex colors — use token references (`text-text-muted`, `bg-bg-secondary`, etc.). *Detect:* `#[0-9a-f]{3,6}` in TSX/CSS files. *Severity:* `important`. *Tag:* `tokens`.
 - **C.2** Contrast ratio meets WCAG AA on every text/background pair. *Qualitative* — design-review checks rendered.
@@ -60,7 +60,7 @@ Full ruleset (~50 rules covering characters, spacing, formatting, layout, respon
 
 ## E. Components
 
-Source: `src/skills/design-review/SKILL.md` dim 6, `src/rules/design/construct/` shared primitives.
+Source: `src/skills/design-review/SKILL.md` dim 6, `src/rules/design/aleph/` shared primitives.
 
 - **E.1** Shared primitives over hand-rolled markup. `<PageHeader>` not inline `<h1 className="...">`; `<DataTable>` not raw `<table>`. *Detect:* hand-rolled markup where a primitive exists. *Severity:* `important`. *Tag:* `composition`.
 - **E.2** Interactive elements are `<button>` or `<a>`, never `<div onClick>`. *Detect:* `<div ... onClick>` or `<span ... onClick>`. *Severity:* `blocking`. *Tag:* `a11y`. (Also in `accessibility.md`.)
@@ -70,7 +70,7 @@ Source: `src/skills/design-review/SKILL.md` dim 6, `src/rules/design/construct/`
 
 ## F. Iconography
 
-- **F.1** Single icon set across the app (Material Symbols per `src/rules/design/construct/RULES.md`). *Detect:* import from a non-canonical icon library. *Severity:* `important`. *Tag:* `consistency`.
+- **F.1** Single icon set across the app (Material Symbols per `src/rules/design/aleph/RULES.md`). *Detect:* import from a non-canonical icon library. *Severity:* `important`. *Tag:* `consistency`.
 - **F.2** Decorative icons have `aria-hidden="true"`; icon-only buttons have `aria-label`. *See `accessibility.md` for full.*
 
 ---
@@ -262,7 +262,7 @@ Inline objects (`<Context.Provider value={{ a, b }}>`) or inline functions (`<Fl
 - `typography.md` — ~50 rules covering characters, spacing, formatting, layout, responsive, dark mode, maxims
 - `src/skills/design-review/design-principles.md` — qualitative design principles (simplicity, hierarchy, consistency, alignment, whitespace, responsive, feeling)
 - `src/skills/design-review/audit-template.md` — phased output format for qualitative reviews
-- `src/rules/design/construct/` — Construct's design tokens, kits, previews (visual specs)
+- `src/rules/design/aleph/` — Aleph's design tokens, kits, previews (visual specs)
 
 ---
 

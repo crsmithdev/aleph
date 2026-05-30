@@ -25,7 +25,7 @@
  * The polish prompt reads from the latest `render` artifact's findings +
  * sources — the single source of truth for what got synthesised this run.
  */
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 import { bumpUsage, createArtifact, listArtifacts } from './db.js';
 import type { LLMProvider } from './llm.js';
 import type { Artifact, LoopId } from './types.js';

@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { listCategories, getCategory, createCategory, updateCategory, deleteCategory } from '@construct/goals';
+import { listCategories, getCategory, createCategory, updateCategory, deleteCategory } from '@aleph/goals';
 
 export const categoryRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', async () => listCategories(app.db));

@@ -22,7 +22,7 @@ import {
   applyModeEnvelope, isMode,
   createDraftSchedule, updateScheduleArtifact,
   type Envelope, type SchedulePayload,
-} from '@construct/research';
+} from '@aleph/research';
 import { readSessionLog, sessionLogPath } from '../research-logger.js';
 import { spawnLoopChild, killLoopChild } from '../loop-supervisor.js';
 

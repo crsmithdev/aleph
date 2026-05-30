@@ -44,13 +44,13 @@ export interface TestEnv {
 /** Create an isolated temp directory with a signals subdirectory. */
 export function createTestEnv(prefix: string, root?: string): TestEnv {
   const resolvedRoot = root ?? REPO_ROOT;
-  const tmpBase = mkdtempSync(join(tmpdir(), `construct-${prefix}-`));
+  const tmpBase = mkdtempSync(join(tmpdir(), `aleph-${prefix}-`));
   const signalsDir = join(tmpBase, "signals");
   mkdirSync(signalsDir, { recursive: true });
   return {
     tmpBase,
     signalsDir,
-    env: { ...process.env, CONSTRUCT_DATA_ROOT: tmpBase },
+    env: { ...process.env, ALEPH_DATA_ROOT: tmpBase },
     root: resolvedRoot,
   };
 }
@@ -275,8 +275,8 @@ export interface SandboxHook {
 /**
  * Write a .claude/settings.json into the sandbox with real hook scripts.
  * Commands use absolute paths to the repo's hook scripts so they resolve
- * from any sandbox cwd. CONSTRUCT_DATA_ROOT must be set in the env so
- * hooks write telemetry to the sandbox's data dir, not ~/.construct.
+ * from any sandbox cwd. ALEPH_DATA_ROOT must be set in the env so
+ * hooks write telemetry to the sandbox's data dir, not ~/.aleph.
  */
 export function registerSandboxHooks(sandbox: string, hooks: SandboxHook[]) {
   const grouped: Record<string, any[]> = {};
@@ -314,7 +314,7 @@ export function qualityHooks(): SandboxHook[] {
 /**
  * Create a PreToolUse hook callback that delegates to a real hook script.
  * Runs the script as a subprocess with the same stdin the SDK provides,
- * plus CONSTRUCT_DATA_ROOT set to the eval's data dir. The script's
+ * plus ALEPH_DATA_ROOT set to the eval's data dir. The script's
  * exit code determines the SDK's decision (exit 2 = block).
  */
 /**
@@ -328,7 +328,7 @@ function execHook(absHook: string, dataRoot: string, input: any): { stdout: stri
       input: stdin,
       encoding: "utf-8",
       timeout: 5000,
-      env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
+      env: { ...process.env, ALEPH_DATA_ROOT: dataRoot },
       cwd: REPO_ROOT,
     });
     return { stdout: stdout.trim(), exitCode: 0 };
@@ -488,7 +488,7 @@ export interface EvalTelemetry {
   hookEventsPath: string;
   /** Path to the signals directory (marker files, etc.). */
   signalsDir: string;
-  /** Path to the CONSTRUCT_DATA_ROOT used during the eval. */
+  /** Path to the ALEPH_DATA_ROOT used during the eval. */
   dataRoot: string;
 }
 
@@ -508,7 +508,7 @@ export async function runEval(config: EvalConfig): Promise<{ result: EvalResult;
   const result = config.result ?? emptyResult();
   const start = Date.now();
 
-  // Isolated data dir for this eval — hooks write here, not to ~/.construct
+  // Isolated data dir for this eval — hooks write here, not to ~/.aleph
   const dataRoot = config.dataRoot ?? mkdtempSync(join(tmpdir(), "eval-data-"));
   const signalsDir = join(dataRoot, "signals");
   mkdirSync(signalsDir, { recursive: true });
@@ -548,7 +548,7 @@ export async function runEval(config: EvalConfig): Promise<{ result: EvalResult;
         allowDangerouslySkipPermissions: true,
         persistSession: true,
         systemPrompt: config.systemPrompt,
-        env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
+        env: { ...process.env, ALEPH_DATA_ROOT: dataRoot },
         hooks,
       },
     });
@@ -716,10 +716,10 @@ export function lastHookDecision(
 
 // ── Eval results JSONL writer ───────────────────────────────────
 
-/** Append a result line to ~/.construct/evals/results.jsonl. */
+/** Append a result line to ~/.aleph/evals/results.jsonl. */
 export function appendEvalResult(entry: Record<string, unknown>) {
   const { homedir } = require("os");
-  const evalsDir = join(homedir(), ".construct", "evals");
+  const evalsDir = join(homedir(), ".aleph", "evals");
   mkdirSync(evalsDir, { recursive: true });
   const resultsPath = join(evalsDir, "results.jsonl");
   appendFileSync(resultsPath, JSON.stringify(entry) + "\n");

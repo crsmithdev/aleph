@@ -27,14 +27,14 @@ Implements visual feedback from vibe-annotations and clears the annotations once
 
 - No annotations exist — tell the user and stop.
 - User wants a design audit from scratch — use `design-review`.
-- User wants to understand the design system — read `src/rules/design/construct/RULES.md` and the assets under `src/rules/design/construct/{tokens,kits,previews}/`.
+- User wants to understand the design system — read `src/rules/design/aleph/RULES.md` and the assets under `src/rules/design/aleph/{tokens,kits,previews}/`.
 
 ## Inputs
 
 - **Page/URL** (optional): User may provide a URL or page name. If absent, check all pending annotations and ask which page to act on.
-- **Scope** (default): `http://localhost:3001/*` — the Construct dev server.
+- **Scope** (default): `http://localhost:3001/*` — the Aleph dev server.
 
-## Page name → URL mapping (Construct)
+## Page name → URL mapping (Aleph)
 
 | User says | URL |
 |-----------|-----|
@@ -91,7 +91,7 @@ Work through each annotation. For each one:
 
 **Read the source files** that render the annotated element. The annotation's `url` tells you the page; the description or `pending_changes` tells you what to change.
 
-**Map to design tokens** — never use raw hex or pixel values. The Construct design system uses CSS variables:
+**Map to design tokens** — never use raw hex or pixel values. The Aleph design system uses CSS variables:
 
 | Raw value type | Use instead |
 |----------------|-------------|
@@ -122,7 +122,7 @@ Use the `code-test` skill pattern: navigate to the page in a headless browser, t
 
 ## Design token reference
 
-Read `src/rules/design/construct/RULES.md` (with assets under `src/rules/design/construct/{tokens,kits,previews}/`) if you need more detail on the Construct token system, surface hierarchy, or component patterns before editing.
+Read `src/rules/design/aleph/RULES.md` (with assets under `src/rules/design/aleph/{tokens,kits,previews}/`) if you need more detail on the Aleph token system, surface hierarchy, or component patterns before editing.
 
 ## Common pitfalls
 

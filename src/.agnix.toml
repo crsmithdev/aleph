@@ -4,7 +4,7 @@ exclude = [
 ]
 
 [rules]
-# @construct/ imports resolve at runtime via install/symlink — not resolvable statically
+# @aleph/ imports resolve at runtime via install/symlink — not resolvable statically
 import_references = false
-# ~/.claude/ paths are intentional — Construct is a ~/.claude/ tool
+# ~/.claude/ paths are intentional — Aleph is a ~/.claude/ tool
 cross_platform = false

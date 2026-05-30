@@ -477,7 +477,7 @@ These are not blockers for v1 but should be tracked:
 2. **Marketplace install vs. reimplementation.** Several skills exist on the Claude plugin marketplace that overlap with our leaves (`/security-review`, Anthropic's `code-review` plugin, `great_cto`'s SDLC pipeline). v1 should default to our own leaves but be installable side-by-side; reach for the marketplace skill if ours misses something.
 3. **`praise` finding generation.** Reliably generating `praise` findings from a model trained to find faults is non-trivial. May need an explicit prompt addition: "find one thing that's especially well done, separately."
 4. **Author-mode CLAUDE.md surface area.** As more domains gain `author` skills, the CLAUDE.md rule footprint grows. May need to load `<domain>/RULES.md` on demand instead of inline.
-5. **Cross-project portability.** This design assumes a single Construct-style project. To ship as a plugin to other repos, `omnibus.yml` defaults + per-project `VERIFICATION.md` must be enough; verify on at least one non-Construct repo.
+5. **Cross-project portability.** This design assumes a single Aleph-style project. To ship as a plugin to other repos, `omnibus.yml` defaults + per-project `VERIFICATION.md` must be enough; verify on at least one non-Aleph repo.
 
 ---
 
@@ -488,6 +488,6 @@ These are not blockers for v1 but should be tracked:
 3. **Phase 3 — One vertical, end-to-end.** Build `code-audit` + `code-fix` + omnibus dispatch for the code domain only. Run on this repo. Compare findings against Anthropic's `code-review` plugin (installed side-by-side). Iterate until the vertical is clean.
 4. **Phase 4 — Replicate for design and docs.** Apply the v1 pattern to design and docs domains. These have the most existing skills to consolidate.
 5. **Phase 5 — Fill in security.** New domain; build `security-audit` + `security-fix` against OWASP/CWE rules.
-6. **Phase 6 — Fill in skills, hooks, agents, config.** These are Construct-specific and mostly net-new audit content.
+6. **Phase 6 — Fill in skills, hooks, agents, config.** These are Aleph-specific and mostly net-new audit content.
 
 Each phase is mergeable on its own. Phases 3-6 are independent vertical slices and can run in parallel if a team wants. Out-of-band invocation (CLI / CI) is deliberately out of scope; v1 is a slash-command-only architecture.

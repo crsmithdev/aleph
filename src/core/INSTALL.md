@@ -1,15 +1,15 @@
-# construct-core — Post-install Checks
+# aleph-core — Post-install Checks
 
 All paths relative to `~/.claude/`. Run every check. Do not skip or summarize.
 
 ## Files
 
-- `CLAUDE.md` exists and contains `# Construct`
+- `CLAUDE.md` exists and contains `# Aleph`
 - `settings.json` exists and is valid JSON (`jq . settings.json`)
 - `ccstatusline` is on PATH (`which ccstatusline`)
-- Identity base files: `AGENTS.md`, `SOUL.md`, `STYLE.md` in `construct/core/identity/`
-- Personal profile `USER.md` lives outside the install dir at `~/.construct/identity/USER.md` (user-managed; not deployed by installer)
-- Optional user overrides at `~/.construct/identity/{AGENTS,SOUL,STYLE}.override.md` are loaded after each base via `@~/` includes
+- Identity base files: `AGENTS.md`, `SOUL.md`, `STYLE.md` in `aleph/core/identity/`
+- Personal profile `USER.md` lives outside the install dir at `~/.aleph/identity/USER.md` (user-managed; not deployed by installer)
+- Optional user overrides at `~/.aleph/identity/{AGENTS,SOUL,STYLE}.override.md` are loaded after each base via `@~/` includes
 
 ## Registration
 
@@ -19,5 +19,5 @@ All paths relative to `~/.claude/`. Run every check. Do not skip or summarize.
 ## Data
 
 - Identity base files are non-empty (0 bytes = repo damage, not a user issue)
-- `CLAUDE.md` retains user content above `# Construct` (if upgrading)
+- `CLAUDE.md` retains user content above `# Aleph` (if upgrading)
 - `CLAUDE.md` under 300 lines (⚠ if over)

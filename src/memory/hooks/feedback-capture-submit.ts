@@ -8,7 +8,7 @@
  * excerpt, tool names, files touched — so downstream consolidation knows
  * what the feedback was reacting to.
  *
- * Writes one JSONL row to ~/.construct/signals/feedback.jsonl.
+ * Writes one JSONL row to ~/.aleph/signals/feedback.jsonl.
  * No match → exit 0. Cheap regex check before transcript parse.
  */
 import { trace } from "../../trace.ts";

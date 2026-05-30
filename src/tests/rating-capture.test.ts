@@ -6,8 +6,8 @@
  *   1. N/10 slash notation ("7/10", "10/10")
  *   2. Rate-keyword prompts ("rate 7", "rating 8", "I rate this 9")
  *
- * Uses CONSTRUCT_DATA_ROOT isolation via createTestEnv so all writes go
- * to a temp directory, not ~/.construct/signals/events.jsonl.
+ * Uses ALEPH_DATA_ROOT isolation via createTestEnv so all writes go
+ * to a temp directory, not ~/.aleph/signals/events.jsonl.
  */
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
@@ -57,15 +57,15 @@ function countRatings(): number {
 
 console.log("--- isolation ---");
 
-// Run with no match — verify no file pollution occurs in real ~/.construct
+// Run with no match — verify no file pollution occurs in real ~/.aleph
 const noMatchResult = runHook(te, HOOK, JSON.stringify({ prompt: "update the readme" }));
 check(r, "no-match: exits 0", noMatchResult.exitCode === 0);
 check(r, "no-match: no stdout emitted", noMatchResult.stdout.trim() === "");
 check(r, "no-match: real events.jsonl not touched",
-  !existsSync(join(process.env.HOME ?? "", ".construct", "signals", "events.jsonl"))
+  !existsSync(join(process.env.HOME ?? "", ".aleph", "signals", "events.jsonl"))
   || (() => {
     const real = readFileSync(
-      join(process.env.HOME ?? "", ".construct", "signals", "events.jsonl"), "utf-8"
+      join(process.env.HOME ?? "", ".aleph", "signals", "events.jsonl"), "utf-8"
     );
     return !real.includes("rating-capture-test-sentinel");
   })()
@@ -315,7 +315,7 @@ check(r, "all captured ratings are in 1-10 range",
 check(r, "ratingType field is always 'explicit'",
   allRatings.every(e => e.ratingType === "explicit")
 );
-check(r, "events file in isolated temp dir, not ~/.construct",
+check(r, "events file in isolated temp dir, not ~/.aleph",
   eventsFile().startsWith("/tmp/") || eventsFile().includes("construct-rating-capture-")
 );
 

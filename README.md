@@ -1,8 +1,8 @@
-# Construct
+# Aleph
 
 Claude Code-native personal AI infrastructure. Skills, hooks, agents, an autonomous research engine, persistent memory, goal/todo tracking, and an observability UI — all running locally inside your Claude Code environment.
 
-**Install target:** `~/.claude/construct/` · **User data:** `~/.construct/` (preserved across upgrades) · **DB:** `~/.construct/construct.db`
+**Install target:** `~/.claude/aleph/` · **User data:** `~/.aleph/` (preserved across upgrades) · **DB:** `~/.aleph/aleph.db`
 
 ---
 
@@ -24,11 +24,11 @@ Claude Code-native personal AI infrastructure. Skills, hooks, agents, an autonom
 ```bash
 git clone <repo-url> ~/construct
 cd ~/construct
-bun install.ts          # deploys to ~/.claude/construct/, sets up systemd, verifies DB
+bun install.ts          # deploys to ~/.claude/aleph/, sets up systemd, verifies DB
 bun run dev             # optional: hot-reload dev server at http://localhost:3001
 ```
 
-Prod is served by `systemctl --user start construct-ui` on port 3000 (set up automatically by the installer).
+Prod is served by `systemctl --user start aleph-ui` on port 3000 (set up automatically by the installer).
 
 Full installation, upgrade, and verification: [INSTALL.md](INSTALL.md).
 
@@ -72,11 +72,11 @@ test.ts           test runner
 docs/             specs, plans, mockups, references
 ```
 
-Personal user data lives **outside** the install tree at `~/.construct/`:
+Personal user data lives **outside** the install tree at `~/.aleph/`:
 
 ```
-~/.construct/
-├── construct.db              shared SQLite (goals, todos, telemetry, memory metadata)
+~/.aleph/
+├── aleph.db              shared SQLite (goals, todos, telemetry, memory metadata)
 ├── identity/                 USER.md + optional AGENTS/SOUL/STYLE overrides
 ├── sessions/                 captured session summaries
 ├── signals/                  rating + feedback signals
@@ -128,17 +128,17 @@ Full catalog: [docs/specs/SKILLS.md](docs/specs/SKILLS.md).
 
 ## Identity layering
 
-Construct's CLAUDE.md chain is layered:
+Aleph's CLAUDE.md chain is layered:
 
 | File | Source | Purpose |
 |---|---|---|
 | `src/core/identity/AGENTS.md` | repo | Workflow rules, skill priority, decision-making |
 | `src/core/identity/SOUL.md` | repo | Purpose, values, mental models |
 | `src/core/identity/STYLE.md` | repo | Output formatting, voice |
-| `~/.construct/identity/USER.md` | user-side | Personal profile, tech stack, environment |
-| `~/.construct/identity/{AGENTS,SOUL,STYLE}.override.md` | user-side | Personal additions to each base — optional |
+| `~/.aleph/identity/USER.md` | user-side | Personal profile, tech stack, environment |
+| `~/.aleph/identity/{AGENTS,SOUL,STYLE}.override.md` | user-side | Personal additions to each base — optional |
 
-User-side files load via `@~/.construct/identity/...` in `src/core/CLAUDE.md`. Override files are optional and additive (just the lines you want on top — not a copy of the base).
+User-side files load via `@~/.aleph/identity/...` in `src/core/CLAUDE.md`. Override files are optional and additive (just the lines you want on top — not a copy of the base).
 
 **First-run note:** Claude Code will prompt once to approve external `@~/` includes. Approve to load the user-side identity chain. The decision is reversible via Claude Code settings.
 
@@ -155,9 +155,9 @@ bun run dev             # API + Vite middleware, http://localhost:3001
 ### Prod (systemd)
 
 ```bash
-systemctl --user start construct-ui                  # port 3000
-systemctl --user start construct-research-worker     # research worker
-journalctl --user -u construct-ui -f                 # tail logs
+systemctl --user start aleph-ui                  # port 3000
+systemctl --user start aleph-research-worker     # research worker
+journalctl --user -u aleph-ui -f                 # tail logs
 ```
 
 Both are deployed by `bun install.ts`.
@@ -175,7 +175,7 @@ bun run ui:smoke        # headless Chromium walk of every UI route
 git pull && bun install.ts
 ```
 
-Identity base files in `src/core/identity/` are sourced from the repo; `~/.construct/` is never touched. User-side overrides survive upgrades automatically.
+Identity base files in `src/core/identity/` are sourced from the repo; `~/.aleph/` is never touched. User-side overrides survive upgrades automatically.
 
 ---
 
@@ -187,8 +187,8 @@ Identity base files in `src/core/identity/` are sourced from the repo; `~/.const
 | `OPENROUTER_API_KEY` | — | Required for research workers |
 | `ANTHROPIC_API_KEY` | — | Optional fallback |
 | `WORKER_COUNT` | 3 | Research worker count |
-| `CONSTRUCT_DATA_ROOT` | `~/.construct/` | Override data root |
-| `CONSTRUCT_DB_PATH` | `~/.construct/construct.db` | Override DB path |
+| `ALEPH_DATA_ROOT` | `~/.aleph/` | Override data root |
+| `ALEPH_DB_PATH` | `~/.aleph/aleph.db` | Override DB path |
 
 Place secrets in `.env` at the repo root.
 
@@ -206,10 +206,10 @@ Place secrets in `.env` at the repo root.
 | [docs/specs/TELEMETRY.md](docs/specs/TELEMETRY.md) | Telemetry spec |
 | [docs/specs/EVAL.md](docs/specs/EVAL.md) | Eval harness spec |
 | [docs/specs/TESTS.md](docs/specs/TESTS.md) | Test suite listing |
-| [src/rules/design/](src/rules/design/) | Design rule set — typography, accessibility, css templates, Construct-specific design system |
+| [src/rules/design/](src/rules/design/) | Design rule set — typography, accessibility, css templates, Aleph-specific design system |
 
 ---
 
 ## Status
 
-Construct is the author's daily-driver personal AI setup. It's public, MIT-licensed, and built to be readable and forkable, but it's not packaged as a finished product. Expect rough edges, opinionated defaults, and a steady stream of changes on `main`. File issues and PRs welcome.
+Aleph is the author's daily-driver personal AI setup. It's public, MIT-licensed, and built to be readable and forkable, but it's not packaged as a finished product. Expect rough edges, opinionated defaults, and a steady stream of changes on `main`. File issues and PRs welcome.

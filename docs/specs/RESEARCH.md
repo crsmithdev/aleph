@@ -1,4 +1,4 @@
-# Construct — Research Specification
+# Aleph — Research Specification
 
 Behavior-oriented spec for the autonomous research system. Every claim here is testable.
 
@@ -468,12 +468,12 @@ Multi-tab interface for a single session.
 
 | Module | Detection file |
 |---|---|
-| construct-research | `construct/research/src/engine.ts` |
+| aleph-research | `aleph/research/src/engine.ts` |
 
 ## Common Questions
 
 **Q: How do I start a research session programmatically?**
-`POST /api/research/sessions` with `{ seed_query, title?, config? }` to create it, then `POST /api/research/sessions/:id/run` with `{ mode: 'burst', iterations: 5 }` to start workers on it. Workers must be running (started automatically by the UI, or via `systemctl --user start construct-research-worker`).
+`POST /api/research/sessions` with `{ seed_query, title?, config? }` to create it, then `POST /api/research/sessions/:id/run` with `{ mode: 'burst', iterations: 5 }` to start workers on it. Workers must be running (started automatically by the UI, or via `systemctl --user start aleph-research-worker`).
 
 **Q: Why is a thread not being picked up by workers?**
 Check in order: (1) thread `status` must be `queued`, (2) no existing `claimed`/`running` job for the session — check `GET /api/research/sessions/:id/running`, (3) `OPENROUTER_API_KEY` is set in the worker's environment, (4) daily budget not exceeded — check `GET /api/research/sessions/:id/costs`.

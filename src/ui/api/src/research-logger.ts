@@ -2,7 +2,7 @@
  * Background research event logger — loop-engine only.
  *
  * Subscribes to the global event bus (`onResearchEvent`) and writes each
- * event as one line to `~/.construct/research-logs/{session_id}.ndjson`.
+ * event as one line to `~/.aleph/research-logs/{session_id}.ndjson`.
  * Also fans the event out to in-process listeners (the SSE handler on
  * `/api/loops/:id/stream` reads the bus directly; the file path backs the
  * `/events.ndjson` endpoint used for backfill on connect).
@@ -11,15 +11,15 @@
  * subscriber before the API replies, so an SSE client connecting mid-run
  * gets the full sequence by replaying the file first.
  *
- * Files: `~/.construct/research-logs/{loopId}.ndjson`
+ * Files: `~/.aleph/research-logs/{loopId}.ndjson`
  * Each line: { type, payload, logged_at }
  */
 
 import { appendFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { onResearchEvent, type ResearchEvent } from '@construct/research';
+import { onResearchEvent, type ResearchEvent } from '@aleph/research';
 
-const logsDir = join(process.env.HOME!, '.construct', 'research-logs');
+const logsDir = join(process.env.HOME!, '.aleph', 'research-logs');
 
 export interface LoggedEvent {
   type: 'loop' | 'cycle' | 'cycle_step' | 'milestone' | 'artifact' | 'decision';

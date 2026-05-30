@@ -17,7 +17,7 @@
  *
  * Stdout is reserved for JSON events. Diagnostics go to stderr.
  */
-import { createDb } from '@construct/data';
+import { createDb } from '@aleph/data';
 import { applyResearchDDL } from '../ddl.js';
 import { OpenRouterProvider } from '../providers/openrouter.js';
 import { onResearchEvent, type ResearchEvent } from '../services/events.js';
@@ -26,7 +26,7 @@ import { bumpUsage, createArtifact, getLoop, listArtifacts, readState, updateLoo
 import { generateDocument } from './document.js';
 import { runLoop } from './engine.js';
 import type { LLMProvider } from './llm.js';
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 import { ensureScheduleArtifact, readScheduleFromArtifacts } from './shape.js';
 import { buildTemplate, type TemplateDeps, type TemplateOverrides } from './templates/registry.js';
 import type { ScheduleModels } from './types.js';

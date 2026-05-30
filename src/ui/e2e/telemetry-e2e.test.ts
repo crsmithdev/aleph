@@ -3,7 +3,7 @@
  * Telemetry E2E verification test.
  *
  * Computes ground-truth metrics from raw fixture JSONL files WITHOUT using any
- * @construct/telemetry code, then starts the full stack (API + Vite + Playwright)
+ * @aleph/telemetry code, then starts the full stack (API + Vite + Playwright)
  * and verifies that the UI displays matching values.
  *
  * Covers: overview, tools, tokens/cost, hooks, sessions, memory usage, subagents,
@@ -226,7 +226,7 @@ function computeGroundTruth(files: string[]): GroundTruth {
 // 2. Setup: temp env, copy fixtures, start servers, launch browser
 // ---------------------------------------------------------------------------
 
-const tmpBase = mkdtempSync(join(tmpdir(), 'construct-telemetry-e2e-'));
+const tmpBase = mkdtempSync(join(tmpdir(), 'aleph-telemetry-e2e-'));
 const dbPath = join(tmpBase, 'test.db');
 const fakeClaudeRoot = join(tmpBase, 'claude');
 const fakeProjectsDir = join(fakeClaudeRoot, 'projects', 'test-project');
@@ -256,9 +256,9 @@ function touchRecursive(dir: string) {
 }
 touchRecursive(fakeProjectsDir);
 
-process.env.CONSTRUCT_DB_PATH = dbPath;
+process.env.ALEPH_DB_PATH = dbPath;
 process.env.CLAUDE_ROOT = fakeClaudeRoot;
-process.env.CONSTRUCT_DATA_ROOT = join(tmpBase, 'data');
+process.env.ALEPH_DATA_ROOT = join(tmpBase, 'data');
 
 const db = new Database(dbPath);
 db.exec('PRAGMA journal_mode = WAL');

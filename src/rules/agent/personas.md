@@ -1,6 +1,6 @@
 # Agents Rules
 
-Authoritative rules for subagent definitions (`src/agents/*.md` and `.claude/agents/*.md` in non-Construct projects). Read by:
+Authoritative rules for subagent definitions (`src/agents/*.md` and `.claude/agents/*.md` in non-Aleph projects). Read by:
 
 - `src/skills/agents-audit/SKILL.md` — flags violations in existing agents (post-hoc)
 - CLAUDE.md (project-local + global) — applies these rules silently at write-time

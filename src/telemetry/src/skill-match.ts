@@ -2,7 +2,7 @@
  * Keyword matcher — mirrors the routing hook's logic
  * (src/core/hooks/routing-classify-submit.ts) so per-keyword stats computed
  * here match what the live router would fire. Kept self-contained because
- * @construct/telemetry can't reach across to the hook's package. If the hook's
+ * @aleph/telemetry can't reach across to the hook's package. If the hook's
  * stemmer/matcher changes, update this in lockstep (aggregator.test.ts pins it).
  */
 

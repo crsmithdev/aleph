@@ -1,10 +1,10 @@
-# Construct — Agent Entry Point
+# Aleph — Agent Entry Point
 
-Construct is Claude Code-native personal AI infrastructure. Source lives in `src/`, installs to `~/.claude/construct/` via `bun install.ts`. User data lives in `~/.construct/` (never touched by installer).
+Aleph is Claude Code-native personal AI infrastructure. Source lives in `src/`, installs to `~/.claude/aleph/` via `bun install.ts`. User data lives in `~/.aleph/` (never touched by installer).
 
 **Dev:** `bun dev-server.ts` → port 3001 (Vite HMR, live from `src/`)
-**Prod:** systemd `construct-ui.service` on port 3000
-**Both share:** `~/.construct/` data directory
+**Prod:** systemd `aleph-ui.service` on port 3000
+**Both share:** `~/.aleph/` data directory
 
 ---
 
@@ -21,7 +21,7 @@ Construct is Claude Code-native personal AI infrastructure. Source lives in `src
 | `src/ui/web/src/` | React SPA (pages, components, API hooks) |
 | `src/research/src/` | Autonomous research engine, worker, providers |
 | `src/telemetry/src/` | JSONL parser, reducers, pricing |
-| `install.ts` | 14-step installer: deploys `src/` → `~/.claude/construct/` |
+| `install.ts` | 14-step installer: deploys `src/` → `~/.claude/aleph/` |
 | `test.ts` | Test runner: scans `src/tests/`, requires 90% pass |
 
 ---
@@ -30,7 +30,7 @@ Construct is Claude Code-native personal AI infrastructure. Source lives in `src
 
 - **Hook registrations:** `src/core/hooks/settings-hooks.json`
 - **Skill keyword routing:** `src/skills/skill-rules.json`
-- **All path constants:** `src/data/src/paths.ts` — never hardcode `~/.construct` or `~/.claude`
+- **All path constants:** `src/data/src/paths.ts` — never hardcode `~/.aleph` or `~/.claude`
 
 ---
 
@@ -61,7 +61,7 @@ Never claim done without running tests against the actual running system.
 - Never hardcode paths — use `dataPaths`/`claudePaths` from `src/data/src/paths.ts`
 - Never add a hook without registering it in `src/core/hooks/settings-hooks.json`
 - Never add a skill without adding keyword triggers to `src/skills/skill-rules.json`
-- Never edit `~/.claude/construct/` files directly — edit `src/` then reinstall
+- Never edit `~/.claude/aleph/` files directly — edit `src/` then reinstall
 - Never write to `~/.claude/CLAUDE.md` — behavioral rules live in `src/core/CLAUDE.md`
 
 ---
@@ -86,4 +86,4 @@ Never claim done without running tests against the actual running system.
 2. Verify at http://localhost:3001 (`bun dev-server.ts`)
 3. Run `bun test.ts`
 4. Run `bun install.ts` to deploy to production (port 3000)
-5. Verify: `systemctl --user status construct-ui` and `curl http://localhost:3000/api/system/info`
+5. Verify: `systemctl --user status aleph-ui` and `curl http://localhost:3000/api/system/info`

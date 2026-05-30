@@ -30,7 +30,7 @@ if (!existsSync(DIST)) {
   process.exit(1);
 }
 
-const tmpDirPath = mkdtempSync(join(tmpdir(), 'construct-boot-smoke-'));
+const tmpDirPath = mkdtempSync(join(tmpdir(), 'aleph-boot-smoke-'));
 const dbPath = join(tmpDirPath, 'test.db');
 
 function findFreePort(): Promise<number> {
@@ -54,7 +54,7 @@ const child = spawn('bun', [SERVER_ENTRY], {
     PORT: String(port),
     HOST: '127.0.0.1',
     NODE_ENV: 'production',
-    CONSTRUCT_DB_PATH: dbPath,
+    ALEPH_DB_PATH: dbPath,
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });

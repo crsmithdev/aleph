@@ -1,0 +1,8 @@
+{
+  "sketches": {
+    "outputDir": "~/.aleph/sketches"
+  },
+  "plans": {
+    "outputDir": "~/.aleph/plans"
+  }
+}

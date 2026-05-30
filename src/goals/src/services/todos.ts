@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import { eq, and, sql, desc } from 'drizzle-orm';
-import type { Db } from '@construct/data';
+import type { Db } from '@aleph/data';
 import { todos, goals, notes } from '../schema.js';
 import { createTodoSchema, updateTodoSchema } from '../validators.js';
 import type { EventBus } from './event-bus.js';

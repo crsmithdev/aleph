@@ -6,7 +6,7 @@
  * /compact at logical phase boundaries. Never blocks.
  *
  * Threshold: COMPACT_THRESHOLD env var (default 50). Reminds every 25 after.
- * State: /tmp/construct-compact-{sessionId} (counter, reset each session)
+ * State: /tmp/aleph-compact-{sessionId} (counter, reset each session)
  */
 import { readFileSync, writeFileSync } from "fs";
 import { trace } from "../../trace.ts";
@@ -24,7 +24,7 @@ reportHook(TAG, "PreToolUse", input.session_id);
 const sessionId = input.session_id;
 if (!sessionId) { process.exit(0); }
 
-const stateFile = `/tmp/construct-compact-${sessionId}`;
+const stateFile = `/tmp/aleph-compact-${sessionId}`;
 
 let count = 0;
 try { count = parseInt(readFileSync(stateFile, "utf8"), 10) || 0; } catch {}

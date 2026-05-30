@@ -146,18 +146,18 @@ if (directives.length > 0 || docRef) {
 if (active.length) {
   const bySlug = new Map(modes.map(m => [m.slug, m]));
   const blocks = active.map(slug => bySlug.get(slug)!.body).join("\n\n---\n\n");
-  console.log(`[Construct] Modes active: ${active.join(", ")}\n\n${blocks}`);
+  console.log(`[Aleph] Modes active: ${active.join(", ")}\n\n${blocks}`);
 }
 
 if (docRef) {
-  console.log(`[Construct] Reference: ${docRef.doc} — ${docRef.desc}`);
+  console.log(`[Aleph] Reference: ${docRef.doc} — ${docRef.desc}`);
   trace(TAG, `domain ref: ${docRef.doc}`);
 }
 
 if (!matched.length) { trace(TAG, "no skills matched, exiting"); process.exit(0); }
 
 // Auto-activate: emit skill names for Claude to call Skill() on
-const out = `[Construct] Matched skills: ${matched.join(", ")}. Activate via Skill() before proceeding.`;
+const out = `[Aleph] Matched skills: ${matched.join(", ")}. Activate via Skill() before proceeding.`;
 trace(TAG, `output: ${out.slice(0, 80)}`);
 console.log(out);
 process.exit(0);

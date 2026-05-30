@@ -1,6 +1,6 @@
-# @construct/eval — Post-install Checks
+# @aleph/eval — Post-install Checks
 
-All paths relative to `~/.claude/construct/eval/`. Run every check. Do not skip or summarize.
+All paths relative to `~/.claude/aleph/eval/`. Run every check. Do not skip or summarize.
 
 ## Files
 

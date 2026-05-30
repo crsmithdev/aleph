@@ -36,7 +36,7 @@
  * artifact off a `LoopState`'s artifact array — templates + routes consume
  * it without a separate DB read.
  */
-import type { Sqlite } from '@construct/data';
+import type { Sqlite } from '@aleph/data';
 import { emitResearchEvent } from '../services/events.js';
 import { createArtifact, listArtifacts } from './db.js';
 import type {

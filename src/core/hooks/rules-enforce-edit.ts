@@ -8,13 +8,13 @@
  * rules are loaded once per bucket per session — not every edit.
  *
  * Buckets (first match wins):
- *   ui     src/ui/**.{ts,tsx,jsx,css,scss}      → design + design/construct
+ *   ui     src/ui/**.{ts,tsx,jsx,css,scss}      → design + design/aleph
  *   skill  src/skills/{slug}/SKILL.md           → docs
  *   agent  {src,.claude}/agents/**.md           → agent
  *   code   **.{ts,tsx,js,jsx,mjs,cjs} under src or root entry points → code
  *   docs   **.md                                → docs
  *
- * State: ~/.construct/signals/rules-enforce/{sessionId}-{bucket}
+ * State: ~/.aleph/signals/rules-enforce/{sessionId}-{bucket}
  * Never blocks. Silent on no-match, on missing rule files, on I/O failure.
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
@@ -43,7 +43,7 @@ interface Bucket { name: string; match: RegExp; rules: string[]; }
 // Worktree-aware prefix: optionally allow `.worktrees/<name>/` ahead of repo-rooted paths.
 const WT = "(?:\\.worktrees/[^/]+/)?";
 const BUCKETS: Bucket[] = [
-  { name: "ui",    match: new RegExp(`^${WT}src/ui/.+\\.(tsx?|jsx?|css|scss)$`),       rules: ["src/rules/design/RULES.md", "src/rules/design/construct/RULES.md"] },
+  { name: "ui",    match: new RegExp(`^${WT}src/ui/.+\\.(tsx?|jsx?|css|scss)$`),       rules: ["src/rules/design/RULES.md", "src/rules/design/aleph/RULES.md"] },
   { name: "skill", match: new RegExp(`^${WT}src/skills/[^/]+/SKILL\\.md$`),             rules: ["src/rules/docs/RULES.md"] },
   { name: "agent", match: new RegExp(`^${WT}(?:src/agents|\\.claude/agents)/.+\\.md$`), rules: ["src/rules/agent/RULES.md"] },
   { name: "code",  match: new RegExp(`^${WT}(?:src/.+|install|test|dev-server)\\.(tsx?|jsx?|mjs|cjs)$`), rules: ["src/rules/code/RULES.md"] },
@@ -87,7 +87,7 @@ if (sections.length === 0) {
   process.exit(0);
 }
 
-const additionalContext = `# Construct rules — bucket: ${bucket.name}
+const additionalContext = `# Aleph rules — bucket: ${bucket.name}
 
 The following rules apply to ${rel} and any other ${bucket.name}-bucket file you edit in this session. Auto-apply silently while writing. Cite \`<file>#<section>\` when a rule pins a specific change.
 

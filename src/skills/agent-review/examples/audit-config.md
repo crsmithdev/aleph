@@ -31,7 +31,7 @@ Config: 1 CLAUDE.md ref broken · 0 duplicates · 0 MCP issues · 1 overbroad pe
 
 ## important (2)
 - CLAUDE.md:14 — agent/config.md#A.1 [sub_surface: config]
-  Broken @-include: @construct/identity/MISSING.md does not resolve.
+  Broken @-include: @aleph/identity/MISSING.md does not resolve.
   Fix: remove the include or restore the file. [tag: broken-include] [approval: single]
 - .claude/settings.json:23 — agent/config.md#E.1 [sub_surface: config]
   Bash(*) grants unrestricted shell access; narrow to specific commands.

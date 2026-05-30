@@ -1,9 +1,9 @@
 # UI Module — Agent Guide
 
-Fastify API + React SPA serving Construct's web interface.
+Fastify API + React SPA serving Aleph's web interface.
 
 **Dev:** port 3001 — single process with Vite middleware (`bun dev-server.ts` from repo root)
-**Prod:** port 3000 — pre-built `web/dist/` served by Fastify (`systemd construct-ui.service`)
+**Prod:** port 3000 — pre-built `web/dist/` served by Fastify (`systemd aleph-ui.service`)
 
 ---
 

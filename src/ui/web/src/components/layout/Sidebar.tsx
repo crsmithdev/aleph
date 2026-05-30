@@ -113,7 +113,7 @@ function BrandMark() {
   return (
     <div
       className="grid place-items-center w-8 h-8 rounded-md bg-bg-tertiary font-heading font-black text-accent text-base shrink-0"
-      aria-label="Construct"
+      aria-label="Aleph"
     >
       C
     </div>
@@ -137,11 +137,11 @@ export function Sidebar() {
         collapsed ? 'justify-center py-3 px-2' : 'h-14 px-3',
       )}>
         {collapsed ? (
-          <NavLink to="/" title="Construct"><BrandMark /></NavLink>
+          <NavLink to="/" title="Aleph"><BrandMark /></NavLink>
         ) : (
           <NavLink to="/" className="flex items-center gap-2.5 min-w-0">
             <BrandMark />
-            <span className="font-heading text-2xl font-bold leading-tight text-text-primary truncate">Construct</span>
+            <span className="font-heading text-2xl font-bold leading-tight text-text-primary truncate">Aleph</span>
           </NavLink>
         )}
       </div>

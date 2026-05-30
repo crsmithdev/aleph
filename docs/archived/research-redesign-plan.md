@@ -238,7 +238,7 @@ PHASE 3 — Polish
 - Dark-mode parity check: mocks built for one-dark-pro only ->
   Verify tokens work in nord, dracula, ayu-mirage; specifically check that
   `--accent-dim` is defined in each theme (currently a one-off in the mocks) ->
-  Theme parity is a hard Construct requirement.
+  Theme parity is a hard Aleph requirement.
 
 Review: Phase 3 is the premium layer — none of it is blocking, but a polished
 research surface needs the loading/empty/error trio and keyboard parity.

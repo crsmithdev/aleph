@@ -65,7 +65,7 @@ All loops-engine tables. Drop-on-boot wipes the pre-loops schema; see
 `loop`, `cycle`, `cycle_step`, `artifact`, `milestone`, `decision`.
 
 On connect, the route back-fills from the NDJSON event log at
-`~/.construct/research/sessions/<loop_id>.ndjson` (every emitted event is
+`~/.aleph/research/sessions/<loop_id>.ndjson` (every emitted event is
 logged before reaching SSE subscribers, so the file is the canonical
 timeline). The log is also downloadable at `/api/loops/:id/events.ndjson`.
 
@@ -86,7 +86,7 @@ timeline). The log is also downloadable at `/api/loops/:id/events.ndjson`.
 | `schedule.plan.branches[]` | `{ id, query, budget? }` | Decomposition into investigation threads. The research template seeds cycle N from `branches[N].query`. |
 | `schedule.output_shape` | discriminated union | Renderer gates "done" on shape satisfaction. |
 
-**Provider config** lives in `~/.construct/research-config.json` (mirrored to
+**Provider config** lives in `~/.aleph/research-config.json` (mirrored to
 `process.env` so child `run.ts` processes inherit it):
 
 | Var | Purpose |

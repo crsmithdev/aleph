@@ -10,7 +10,7 @@
 import { existsSync, readFileSync, statSync, lstatSync, readlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
-import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
+import { claudePaths, dataPaths, getMemoryDbPath } from '@aleph/data';
 import { config } from './config.js';
 
 export interface SystemInfo {
@@ -28,7 +28,7 @@ export interface SystemInfo {
     repo: string;
     claudeRoot: string;
     dataRoot: string;
-    construct: string;
+    aleph: string;
     commands: string;
     skills: string;
     db: string;
@@ -99,7 +99,7 @@ function parseManifest(): Record<string, Record<string, string>> {
 }
 
 import { join } from 'node:path';
-const devLogsDir = join(process.env.HOME ?? '/tmp', '.construct', 'logs');
+const devLogsDir = join(process.env.HOME ?? '/tmp', '.aleph', 'logs');
 
 export function getSystemInfo(runtimeDbPath: string): SystemInfo {
   const manifest = parseManifest();
@@ -132,7 +132,7 @@ export function getSystemInfo(runtimeDbPath: string): SystemInfo {
       repo: repoDir ?? 'unknown',
       claudeRoot: manifest.paths?.claude_root ?? claudePaths.root,
       dataRoot: manifest.paths?.data_root ?? dataPaths.root,
-      construct: pathWithSymlink(manifest.paths?.construct ?? claudePaths.construct),
+      aleph: pathWithSymlink(manifest.paths?.aleph ?? claudePaths.aleph),
       commands: pathWithSymlink(manifest.paths?.commands ?? claudePaths.commands),
       skills: pathWithSymlink(manifest.paths?.skills ?? claudePaths.skills),
       db: runtimeDbPath,

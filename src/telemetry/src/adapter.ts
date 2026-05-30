@@ -8,7 +8,7 @@
 
 import { readdirSync, statSync, readFileSync, existsSync } from "fs";
 import { join, basename, dirname } from "path";
-import { claudePaths, dataPaths, createDb } from "@construct/data";
+import { claudePaths, dataPaths, createDb } from "@aleph/data";
 import type { TelemetryEvent } from "./event.js";
 
 const DEFAULT_BASE = claudePaths.projects;

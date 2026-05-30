@@ -5,7 +5,7 @@ description: >
   thing, not a plan to build it. Triggers a short discovery dialogue when the
   request is ambiguous, then writes a 5-section sketch (frame, shape, prior
   art, open questions, plus topic-specific sections) to
-  `~/.construct/sketches/<slug>.md`. Use when the user wants to record an
+  `~/.aleph/sketches/<slug>.md`. Use when the user wants to record an
   idea before building it: "sketch this", "sketch a feature", "sketch an
   idea", "sketch out", "save that as a sketch", "make a sketch",
   `/sketch`. NOT for: implementation plans with file paths and verification
@@ -53,7 +53,7 @@ the rest.
 
 ### 2. Resolve output
 
-Read `~/.claude/construct/core/construct.config.json` and pick
+Read `~/.claude/aleph/core/aleph.config.json` and pick
 `sketches.outputDir`. Expand `~` to `$HOME`. `mkdir -p` if missing.
 
 Slugify the subject for the filename: lowercase, spaces → hyphens, strip

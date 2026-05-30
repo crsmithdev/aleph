@@ -14,7 +14,7 @@ These skills auto-trigger when matching keywords appear in a user prompt.
 | `code-test` | Front door for browser-driven testing — picks between agent-browser CLI (one-off automation, snapshots) and Playwright (assertion-based tests) | `code-test`, `test webapp`, `playwright`, `browser test`, `ui test`, `screenshot`, `agent-browser`, `browser automation`, `open a website`, `fill out a form`, `take a screenshot`, `scrape data` |
 | `context-compact` | Guide context compaction at logical task phase boundaries rather than letting auto-compaction hit mid-task | `context window`, `token budget`, `context limit`, `context is full`, `save and clear`, `compaction reminder` |
 | `debug` | Enforces root-cause analysis before any fix — investigate, pattern analysis, hypothesis test | `still failing`, `still erroring`, `not working`, `broken`, `root cause`, `debug`, `fix this error` |
-| `design-review` | Audit/fix/enforce UI design against `src/rules/design/RULES.md` (18 dimensions) plus Construct design tokens | `design review`, `design audit`, `audit ui`, `design-fix`, `design-conform`, `design-construct`, `design system`, `design tokens`, `polish the interface`, `ux audit`, `typography`, `accessibility audit`, `a11y` |
+| `design-review` | Audit/fix/enforce UI design against `src/rules/design/RULES.md` (18 dimensions) plus Aleph design tokens | `design review`, `design audit`, `audit ui`, `design-fix`, `design-conform`, `design-construct`, `design system`, `design tokens`, `polish the interface`, `ux audit`, `typography`, `accessibility audit`, `a11y` |
 | `docs-review` | Audit/fix/optimize documentation — drift checks, c7score, llms.txt generation, author new docs | `docs review`, `docs audit`, `audit the docs`, `docs-conform`, `align the docs`, `write documentation`, `create docs`, `author docs`, `optimize docs`, `c7score`, `llms.txt` |
 | `dogfood` | Try the system as a user would — exercise UI/API without internal knowledge | `dogfood`, `try this as a user`, `use it like a user`, `act like a user` |
 | `git` | Full git workflow — branches, worktrees, commits, merges, pushes | `worktree`, `feature branch`, `merge this`, `commit and push`, `ship it`, `/git` |
@@ -44,17 +44,17 @@ Installed from `src/commands/` to `~/.claude/commands/`. Available in all projec
 | `/finish` | Mark a todo or goal as done via goal-tracker MCP |
 | `/gist` | Surface current project understanding before implementation |
 | `/goal` | Manage goals — list, create, update, delete via goal-tracker MCP |
-| `/install` | Deploy Construct to `~/.claude` — copies `src/`, builds frontend, restarts service |
+| `/install` | Deploy Aleph to `~/.claude` — copies `src/`, builds frontend, restarts service |
 | `/research` | Start, manage, and steer autonomous deep research sessions |
 | `/search` | Quick web research — search, synthesize, report with sources |
 | `/todo` | Manage todos — list, add, recurring via goal-tracker MCP |
 
 ### Project-local commands
 
-Defined in `.claude/commands/`, available only in the Construct repo.
+Defined in `.claude/commands/`, available only in the Aleph repo.
 
 | Command | Description |
 |---|---|
 | `/install` | Run `bun install.ts` + post-install verification |
-| `/link` | Symlink `~/.claude/construct` → `src/` for live development |
+| `/link` | Symlink `~/.claude/aleph` → `src/` for live development |
 | `/wipe` | Clear research/telemetry data |
