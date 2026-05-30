@@ -13,8 +13,8 @@ When copying files during installation, copy them exactly. Do not summarize, tru
 ## New Install
 
 ```bash
-git clone <repo-url> ~/construct
-cd ~/construct
+git clone <repo-url> ~/aleph
+cd ~/aleph
 bun install.ts
 ```
 
@@ -31,7 +31,7 @@ After install completes, run `/install` in Claude Code. It runs the installer an
 ## Upgrade (reinstall)
 
 ```bash
-cd ~/construct
+cd ~/aleph
 git pull
 bun install.ts
 ```

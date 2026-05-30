@@ -22,8 +22,8 @@ Claude Code-native personal AI infrastructure. Skills, hooks, agents, an autonom
 ## Quick start
 
 ```bash
-git clone <repo-url> ~/construct
-cd ~/construct
+git clone <repo-url> ~/aleph
+cd ~/aleph
 bun install.ts          # deploys to ~/.claude/aleph/, sets up systemd, verifies DB
 bun run dev             # optional: hot-reload dev server at http://localhost:3001
 ```

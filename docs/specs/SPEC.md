@@ -279,7 +279,7 @@ Git revision (short hash + branch), commit count, last commit message + date, in
 
 ### Paths
 
-`CLAUDE_ROOT` shown prominently. All derived paths (source repo, construct, commands, skills, databases, sessions, ratings, backups) shown dimmed. Absent values displayed as a greyed dash.
+`CLAUDE_ROOT` shown prominently. All derived paths (source repo, aleph, commands, skills, databases, sessions, ratings, backups) shown dimmed. Absent values displayed as a greyed dash.
 
 ### Runtime
 
@@ -311,7 +311,7 @@ List of existing backups with filename, creation date, file size. Create and res
 
 **Preserved on upgrade:** ALL CAPS `.md` files in `core/identity/` and `memory/`.
 
-**Overwritten on upgrade:** all hooks, skills, meta files, non-ALLCAPS files in construct/.
+**Overwritten on upgrade:** all hooks, skills, meta files, non-ALLCAPS files in aleph/.
 
 ## Dev and Production Ports
 

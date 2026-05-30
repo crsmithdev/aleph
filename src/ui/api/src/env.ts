@@ -1,9 +1,9 @@
-// Load .env from ~/construct/.env (project root)
+// Load .env from ~/aleph/.env (project root)
 // Must be imported before any other module that reads process.env.
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 try {
-  const envPath = resolve(process.env.HOME ?? '', 'construct', '.env');
+  const envPath = resolve(process.env.HOME ?? '', 'aleph', '.env');
   for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
     const t = line.trim();
     if (!t || t.startsWith('#')) continue;

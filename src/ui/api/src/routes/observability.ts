@@ -984,7 +984,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/db-stats', async () => {
-    const constructDbPath = dataPaths.db;
+    const alephDbPath = dataPaths.db;
     const memoryDbPath = getMemoryDbPath();
 
     type DbInfo = {
@@ -1019,7 +1019,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const databases = [
-      getDbInfo('construct', constructDbPath),
+      getDbInfo('aleph', alephDbPath),
       getDbInfo('memory', memoryDbPath),
     ].filter(Boolean);
 
@@ -1028,7 +1028,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/db-schema/:db/:table', async (request) => {
     const { db: dbName, table } = request.params as { db: string; table: string };
-    const dbPath = dbName === 'construct' ? dataPaths.db : dbName === 'memory' ? getMemoryDbPath() : null;
+    const dbPath = dbName === 'aleph' ? dataPaths.db : dbName === 'memory' ? getMemoryDbPath() : null;
     if (!dbPath || !existsSync(dbPath)) return { columns: [] };
 
     let db: Database | null = null;
@@ -1052,7 +1052,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       const { db: dbName, table } = request.params;
       const limit = Math.min(Math.max(parseInt(request.query.limit || '50', 10) || 50, 1), 200);
       const offset = Math.max(parseInt(request.query.offset || '0', 10) || 0, 0);
-      const dbPath = dbName === 'construct' ? dataPaths.db : dbName === 'memory' ? getMemoryDbPath() : null;
+      const dbPath = dbName === 'aleph' ? dataPaths.db : dbName === 'memory' ? getMemoryDbPath() : null;
       if (!dbPath || !existsSync(dbPath)) return { rows: [], total: 0 };
       const safeTable = table.replace(/[^a-zA-Z0-9_]/g, '');
       let db: Database | null = null;

@@ -4,7 +4,7 @@ Copies `src/` to `~/.claude/aleph/`, builds the frontend, installs dependencies,
 updates commands/settings/CLAUDE.md, and restarts the production service on port 3000.
 
 ```bash
-cd ~/construct && bun install.ts
+cd ~/aleph && bun install.ts
 ```
 
 ## Post-install checks
