@@ -20,7 +20,7 @@
  *    recency, apply 800-token budget.
  * 9. Emit reminder to search semantic memory for project context.
  *
- * Never blocks (always exit 0). All failures are swallowed with trace logging.
+ * Never blocks (exit 0 normally; exit 1 on malformed stdin). All failures are swallowed with trace logging.
  */
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
@@ -34,7 +34,7 @@ const TAG = "context-restore-start";
 
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
+catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
 reportHook(TAG, "SessionStart", input.session_id);
 
 const root = resolve(dirname(Bun.main), "../..");

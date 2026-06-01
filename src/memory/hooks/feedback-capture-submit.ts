@@ -29,7 +29,7 @@ const raw = await Bun.stdin.text();
 try { input = JSON.parse(raw); }
 catch (e) {
   console.error(`[${TAG}] stdin parse failed: ${(e as Error).message}`);
-  process.exit(0);
+  process.exit(1);
 }
 
 const prompt: string = (input.prompt ?? "").trim();

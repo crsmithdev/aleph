@@ -27,7 +27,7 @@ const TAG = "rules-enforce-edit";
 
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
+catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
 reportHook(TAG, "PreToolUse", input.session_id);
 
 const sessionId: string = input.session_id ?? "unknown";

@@ -47,7 +47,7 @@ runAndCheck(te, r, "core/hooks/isolation-block-sql.ts", "malformed stdin", "not 
 console.log("\n--- security-scan-bash ---");
 runAndCheck(te, r, "core/hooks/security-scan-bash.ts", "smoke (no command)", "{}");
 runAndCheck(te, r, "core/hooks/security-scan-bash.ts", "non-commit command", '{"tool_input":{"command":"ls -la"}}');
-runAndCheck(te, r, "core/hooks/security-scan-bash.ts", "malformed stdin (advisory, swallows)", "not json");
+runAndCheck(te, r, "core/hooks/security-scan-bash.ts", "malformed stdin", "not json", { expectExit: 1 });
 
 // ── Quality typecheck edit ────────────────────────────────────────────────────
 
@@ -61,27 +61,27 @@ runAndCheck(te, r, "core/hooks/quality-typecheck-edit.ts", "malformed stdin", "n
 
 console.log("\n--- context-backup-precompact ---");
 runAndCheck(te, r, "core/hooks/context-backup-precompact.ts", "smoke (no transcript)", "{}");
-runAndCheck(te, r, "core/hooks/context-backup-precompact.ts", "malformed stdin (swallows)", "not json");
+runAndCheck(te, r, "core/hooks/context-backup-precompact.ts", "malformed stdin", "not json", { expectExit: 1 });
 
 // ── Context monitor stop ──────────────────────────────────────────────────────
 
 console.log("\n--- context-monitor-stop ---");
 runAndCheck(te, r, "core/hooks/context-monitor-stop.ts", "smoke (no transcript)", "{}");
-runAndCheck(te, r, "core/hooks/context-monitor-stop.ts", "malformed stdin (swallows)", "not json");
+runAndCheck(te, r, "core/hooks/context-monitor-stop.ts", "malformed stdin", "not json", { expectExit: 1 });
 
 // ── Context suggest edit ──────────────────────────────────────────────────────
 
 console.log("\n--- context-suggest-edit ---");
 runAndCheck(te, r, "core/hooks/context-suggest-edit.ts", "smoke (no session_id)", "{}");
 runAndCheck(te, r, "core/hooks/context-suggest-edit.ts", "below threshold (count=1)", '{"session_id":"test-smoke-session"}');
-runAndCheck(te, r, "core/hooks/context-suggest-edit.ts", "malformed stdin (swallows)", "not json");
+runAndCheck(te, r, "core/hooks/context-suggest-edit.ts", "malformed stdin", "not json", { expectExit: 1 });
 
 // ── Git require edit ──────────────────────────────────────────────────────────
 
 console.log("\n--- git-require-edit ---");
 runAndCheck(te, r, "core/hooks/git-require-edit.ts", "smoke (no cwd)", "{}");
 runAndCheck(te, r, "core/hooks/git-require-edit.ts", "nonexistent cwd (git fails, swallowed)", '{"cwd":"/nonexistent/path","session_id":"test-smoke"}');
-runAndCheck(te, r, "core/hooks/git-require-edit.ts", "malformed stdin (swallows)", "not json");
+runAndCheck(te, r, "core/hooks/git-require-edit.ts", "malformed stdin", "not json", { expectExit: 1 });
 
 // ── Context restore start behavioral ─────────────────────────────────────────
 
@@ -92,7 +92,7 @@ check(r, "context-restore-start: exits 0", restoreResult.exitCode === 0);
 check(r, "context-restore-start: prints Session Start header", restoreResult.stdout.includes("=== Session Start ==="));
 check(r, "context-restore-start: prints Sessions: line", restoreResult.stdout.includes("Sessions:"));
 check(r, "context-restore-start: Sessions: 0 in empty env", restoreResult.stdout.includes("Sessions: 0"));
-runAndCheck(te, r, "memory/hooks/context-restore-start.ts", "context-restore-start: malformed stdin (swallows)", "not json");
+runAndCheck(te, r, "memory/hooks/context-restore-start.ts", "context-restore-start: malformed stdin", "not json", { expectExit: 1 });
 
 // ── Routing classify behavioral ──────────────────────────────────────────────
 

@@ -33,7 +33,7 @@ catch (e) {
   const msg = `[${TAG}] stdin parse failed: ${(e as Error).message}, raw: ${raw.slice(0, 100)}`;
   console.error(msg);
   trace(TAG, msg);
-  process.exit(0);
+  process.exit(1);
 }
 reportHook(TAG, "Stop", input.session_id);
 const transcript = parseTranscript(input.transcript_path);

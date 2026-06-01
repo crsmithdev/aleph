@@ -7,7 +7,7 @@
  * These signals are consumed by memory-extract-stop.ts and converted to
  * preference memories for the consolidation pipeline.
  *
- * Never blocks (always exit 0). All errors are swallowed with trace logging.
+ * Never blocks (exit 0 normally; exit 1 on malformed stdin). All errors are swallowed with trace logging.
  */
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { trace } from "../../trace.ts";
@@ -18,7 +18,7 @@ const RE_EDIT_THRESHOLD = 3;
 
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
+catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
 
 const sessionId: string = input.session_id ?? "unknown";
 const filePath: string = input.tool_input?.file_path ?? input.tool_input?.path ?? "";

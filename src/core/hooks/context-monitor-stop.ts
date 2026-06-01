@@ -12,7 +12,7 @@
  *    At ≥80% → emit advisory warning.
  *    Below 80% → silent.
  *
- * Never blocks (always exit 0). Informational only.
+ * Never blocks (exit 0 normally; exit 1 on malformed stdin). Informational only.
  */
 import { readFileSync } from "fs";
 import { trace } from "../../trace.ts";
@@ -21,7 +21,7 @@ import { reportHook } from "../../hook-report.ts";
 const TAG = "context-monitor-stop";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
+catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
 reportHook(TAG, "Stop", input.session_id);
 
 const transcriptPath = input.transcript_path;

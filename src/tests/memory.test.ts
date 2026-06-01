@@ -142,7 +142,7 @@ check(r, "rating: skips <system-reminder> prompt",
 const lowResult = ratingTest("rate 2");
 check(r, "rating: low rating warns", lowResult.rating === 2 && lowResult.output.includes("Low rating"));
 
-runAndCheck(te, r, "memory/hooks/rating-capture-submit.ts", "malformed", "not json");
+runAndCheck(te, r, "memory/hooks/rating-capture-submit.ts", "malformed", "not json", { expectExit: 1 });
 
 // ── Feedback (sentiment) capture ─────────────────────────────────────────────
 
@@ -214,7 +214,7 @@ check(r, "feedback: trigger word lowercased", triggerEntry?.trigger === "perfect
   try { unlinkSync(tFile); } catch {}
 }
 
-runAndCheck(te, r, "memory/hooks/feedback-capture-submit.ts", "malformed", "not json");
+runAndCheck(te, r, "memory/hooks/feedback-capture-submit.ts", "malformed", "not json", { expectExit: 1 });
 
 // ── Session summary ──────────────────────────────────────────────────────────
 
@@ -224,7 +224,7 @@ console.log("\n--- session-summary ---");
   runAndCheck(te, r, "memory/hooks/context-save-stop.ts", "too few", JSON.stringify({ transcript_path: tinyTranscript }));
   try { unlinkSync(tinyTranscript); } catch {}
 }
-runAndCheck(te, r, "memory/hooks/context-save-stop.ts", "malformed", "not json");
+runAndCheck(te, r, "memory/hooks/context-save-stop.ts", "malformed", "not json", { expectExit: 1 });
 
 // ── Memory extraction ───────────────────────────────────────────────────────
 
@@ -269,7 +269,7 @@ console.log("\n--- memory-extract ---");
   try { unlinkSync(extractSmall); } catch {}
 }
 
-runAndCheck(te, r, "memory/hooks/memory-extract-stop.ts", "malformed stdin", "not json");
+runAndCheck(te, r, "memory/hooks/memory-extract-stop.ts", "malformed stdin", "not json", { expectExit: 1 });
 
 // Heuristic tests via direct import
 {

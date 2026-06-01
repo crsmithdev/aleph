@@ -412,10 +412,10 @@ function makeSubstantiveTranscript(
   check(r, "missing transcript path: exits 0", result.exitCode === 0);
 }
 
-// Malformed stdin → exits 0 (advisory — must never block)
+// Malformed stdin → exits non-zero (fails loudly; exit 1 is non-blocking)
 {
   const result = runHook(te, EXTRACT_HOOK, "not valid json {{{{");
-  check(r, "malformed stdin: exits 0", result.exitCode === 0);
+  check(r, "malformed stdin: exits non-zero", result.exitCode !== 0);
 }
 
 // ── hasMemoryStore function contract (unchanged, still exported) ───────────────

@@ -14,7 +14,7 @@
  *   - recentErrors:  last 3 error messages from tool_results
  *   - lastAssistantSnippet: last 300 chars of last assistant text block
  *
- * Never blocks (always exit 0). All failures are swallowed with trace logging.
+ * Never blocks (exit 0 normally; exit 1 on malformed stdin). All failures are swallowed with trace logging.
  */
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { dirname } from "path";
@@ -25,7 +25,7 @@ import { dataPaths } from "../../data/src/paths.ts";
 const TAG = "context-backup-precompact";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
+catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
 reportHook(TAG, "PreCompact", input.session_id);
 
 const transcriptPath = input.transcript_path;

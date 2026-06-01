@@ -11,7 +11,7 @@
  * 4. If memories found and Python venv exists → spawn memory-writer.py
  *    fire-and-forget with JSON on stdin. Unref the process so it doesn't block exit.
  *
- * Never blocks (always exit 0). Missing Python or empty transcript → silent skip.
+ * Never blocks (exit 0 normally; exit 1 on malformed stdin). Missing Python or empty transcript → silent skip.
  */
 import { existsSync, readFileSync } from "fs";
 import { resolve, dirname } from "path";
@@ -32,7 +32,7 @@ const WRITER_SCRIPT = resolve(dirname(Bun.main), "../memory-writer.py");
 let input: any;
 const raw = await Bun.stdin.text();
 try { input = JSON.parse(raw); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
+catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
 
 const sessionId: string = input.session_id ?? "unknown";
 

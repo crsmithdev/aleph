@@ -10,7 +10,7 @@
  *   - 5+ new auto_extract memories since last run
  *   - 7+ days elapsed since last run
  *
- * Never blocks (always exit 0). DB access is a single COUNT query.
+ * Never blocks (exit 0 normally; exit 1 on malformed stdin). DB access is a single COUNT query.
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
@@ -26,7 +26,7 @@ const DAYS_THRESHOLD = 7;
 let input: any;
 const raw = await Bun.stdin.text();
 try { input = JSON.parse(raw); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
+catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
 
 const sessionId: string = input.session_id ?? "unknown";
 reportHook(TAG, "Stop", sessionId);

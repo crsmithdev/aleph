@@ -288,7 +288,7 @@ console.log("\n--- stdin safety ---");
 
 {
   const result = runHook(te, HOOK, "not valid json at all {{{");
-  check(r, "malformed stdin: exits 0 (advisory hook)", result.exitCode === 0);
+  check(r, "malformed stdin: exits non-zero (fails loudly)", result.exitCode !== 0);
 }
 
 {
