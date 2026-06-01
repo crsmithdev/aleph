@@ -156,7 +156,6 @@ export function getSystemInfo(runtimeDbPath: string): SystemInfo {
     { label: 'Sessions', path: paths.sessions },
     { label: 'Signals', path: paths.signals },
     { label: 'Events', path: paths.events },
-    { label: 'Telemetry', path: paths.telemetry },
     { label: 'Backups', path: paths.backups },
   ].map((f) => ({ ...f, sizeBytes: pathSize(f.path) }));
 
