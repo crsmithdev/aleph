@@ -25,8 +25,8 @@ async function runHarnessFile(file: string): Promise<Result> {
     const passed = m ? parseInt(m[1]) : 0;
     const failed = m ? parseInt(m[2]) : (exitCode !== 0 ? 1 : 0);
     return { label, passed, failed, output, error: exitCode !== 0 };
-  } catch (err: any) {
-    return { label, passed: 0, failed: 1, output: err.message ?? "", error: true };
+  } catch (err: unknown) {
+    return { label, passed: 0, failed: 1, output: err instanceof Error ? err.message : String(err), error: true };
   }
 }
 
@@ -50,8 +50,8 @@ async function runBunTest(label: string, dir: string | string[], cwd = ROOT): Pr
     const passed = passMatch ? parseInt(passMatch[1]) : 0;
     const failed = failMatch ? parseInt(failMatch[1]) : (exitCode !== 0 ? 1 : 0);
     return { label, passed, failed, output, error: exitCode !== 0 };
-  } catch (err: any) {
-    return { label, passed: 0, failed: 1, output: err.message ?? "", error: true };
+  } catch (err: unknown) {
+    return { label, passed: 0, failed: 1, output: err instanceof Error ? err.message : String(err), error: true };
   }
 }
 

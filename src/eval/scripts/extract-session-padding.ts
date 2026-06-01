@@ -27,12 +27,20 @@ interface Flattened {
   tools: string[];
 }
 
+type ContentBlock = {
+  type?: string;
+  text?: string;
+  name?: string;
+  input?: unknown;
+  content?: string | ContentBlock[];
+};
+
 function flatten(content: unknown): Flattened {
   if (typeof content === "string") return { text: content, tools: [] };
   if (!Array.isArray(content)) return { text: "", tools: [] };
   const texts: string[] = [];
   const tools: string[] = [];
-  for (const block of content as any[]) {
+  for (const block of content as ContentBlock[]) {
     if (block.type === "text") {
       texts.push(block.text ?? "");
     } else if (block.type === "tool_use") {
@@ -42,7 +50,7 @@ function flatten(content: unknown): Flattened {
       const c = typeof block.content === "string"
         ? block.content
         : Array.isArray(block.content)
-          ? (block.content as any[]).map((b) => b.text ?? "").join(" ")
+          ? block.content.map((b) => b.text ?? "").join(" ")
           : JSON.stringify(block.content ?? "");
       tools.push(`[RESULT] ${collapse(c, 4000)}`);
     }
@@ -70,9 +78,16 @@ function main() {
     try { return JSON.parse(l); } catch { return null; }
   }).filter(Boolean);
 
+  type SessionEvent = {
+    type?: string;
+    isMeta?: boolean;
+    message?: { content?: unknown };
+    attachment?: { content?: unknown; hookName?: string; type?: string };
+  };
+
   const out: string[] = [];
   let stopped = false;
-  for (const j of events as any[]) {
+  for (const j of events as SessionEvent[]) {
     const c = j.message?.content;
     if (until && j.type === "user" && !j.isMeta
         && typeof c === "string" && c.includes(until)) {

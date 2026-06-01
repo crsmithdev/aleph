@@ -117,7 +117,7 @@ Examples:
   return { servers, ports, timeout, command };
 }
 
-async function main() {
+async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const { servers, ports, timeout, command } = parseArgs(argv);
 

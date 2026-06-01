@@ -418,7 +418,7 @@ function generateMarkdown(benchmark: Record<string, unknown>): string {
   return lines.join("\n");
 }
 
-function main() {
+function main(): void {
   const args = process.argv.slice(2);
   let benchmarkDir = "";
   let skillName = "";

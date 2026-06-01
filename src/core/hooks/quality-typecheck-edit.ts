@@ -86,8 +86,9 @@ try {
     timeout: 15000,
   });
   trace(TAG, "ok: no type errors");
-} catch (e: any) {
-  const output = (e.stdout || e.stderr || "").trim();
+} catch (e: unknown) {
+  const err = e as { stdout?: string; stderr?: string };
+  const output = (err.stdout || err.stderr || "").trim();
   const lines = output.split("\n").filter((l: string) => l.includes("error TS"));
   const errorCount = lines.length;
   if (errorCount > 0) {

@@ -86,9 +86,10 @@ export function runHook(te: TestEnv, hookPath: string, stdin: string): HookResul
     );
     const { stdout, trace } = splitTrace(raw);
     return { stdout, trace, exitCode: 0 };
-  } catch (err: any) {
-    const { stdout, trace } = splitTrace(err.stdout ?? "");
-    return { stdout, trace, exitCode: err.status ?? 1 };
+  } catch (err: unknown) {
+    const e = err as { stdout?: string; status?: number };
+    const { stdout, trace } = splitTrace(e.stdout ?? "");
+    return { stdout, trace, exitCode: e.status ?? 1 };
   }
 }
 

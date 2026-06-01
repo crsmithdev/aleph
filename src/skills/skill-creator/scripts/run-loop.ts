@@ -495,13 +495,6 @@ async function main() {
   }
 }
 
-function openBrowser(url: string): void {
-  const result = spawnSync("xdg-open", [url], { stdio: "ignore" });
-  if (result.status !== 0) {
-    spawnSync("open", [url], { stdio: "ignore" });
-  }
-}
-
 if (import.meta.main) {
   main().catch((e) => {
     process.stderr.write(`Error: ${e}\n`);

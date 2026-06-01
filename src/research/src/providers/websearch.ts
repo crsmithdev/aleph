@@ -209,7 +209,10 @@ export async function fetchViaReadability(url: string): Promise<string> {
       signal: AbortSignal.timeout(10_000),
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; research-agent/1.0)' },
     });
-    if (!res.ok) return '';
+    if (!res.ok) {
+      process.stderr.write(`[websearch] readability HTTP ${res.status} for ${url}; returning empty\n`);
+      return '';
+    }
     const html = await res.text();
     const { document } = parseHTML(html);
     const article = new Readability(document as unknown as Document).parse();
@@ -224,7 +227,8 @@ export async function fetchViaReadability(url: string): Promise<string> {
       return text.slice(0, cut > 3000 ? cut : 6000);
     }
     return text;
-  } catch {
+  } catch (err) {
+    process.stderr.write(`[websearch] readability failed for ${url}: ${(err as Error).message}\n`);
     return '';
   }
 }

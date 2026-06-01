@@ -236,7 +236,7 @@ try {
             priorText: (e.priorText as string) ?? "",
           });
         }
-      } catch {}
+      } catch (err) { trace(TAG, `skipped malformed event: ${(err as Error).message}`); }
     }
 
     // Newest first, cap at the same 600-char budget as the previous injection.

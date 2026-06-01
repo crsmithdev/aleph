@@ -41,8 +41,9 @@ function run(cmd: string) {
   try {
     execSync(cmd, { stdio: "pipe" });
     trace(TAG, `ok: ${cmd.slice(0, 80)}`);
-  } catch (e: any) {
-    const stderr = e.stderr?.toString().trim().slice(0, 200) || (e as Error).message?.slice(0, 60);
+  } catch (e: unknown) {
+    const err = e as { stderr?: { toString(): string }; message?: string };
+    const stderr = err.stderr?.toString().trim().slice(0, 200) || err.message?.slice(0, 60);
     trace(TAG, `failed: ${cmd.slice(0, 80)} — ${stderr}`);
     console.error(`[quality] ${cmd.split("/").pop()}: ${stderr}`);
   }

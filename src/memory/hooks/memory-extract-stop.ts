@@ -90,7 +90,7 @@ try {
             sessionId,
           });
         }
-      } catch {}
+      } catch (err) { trace(TAG, `skipped malformed event: ${(err as Error).message}`); }
     }
   }
 } catch (e) { trace(TAG, `events read failed: ${(e as Error).message}`); }

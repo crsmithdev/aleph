@@ -173,7 +173,7 @@ export function packageSkill(skillPath: string, outputDir?: string): string | nu
   }
 }
 
-function main() {
+function main(): void {
   const args = process.argv.slice(2);
 
   if (args.length < 1) {

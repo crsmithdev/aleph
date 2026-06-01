@@ -357,7 +357,7 @@ class Semaphore {
   }
 }
 
-async function main() {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
   let evalSetPath = "";
   let skillPath = "";

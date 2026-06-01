@@ -362,7 +362,7 @@ ${refreshTag}    <title>${titlePrefix}Skill Description Optimization</title>
   return htmlParts.join("");
 }
 
-function main() {
+function main(): void {
   const args = process.argv.slice(2);
   let inputPath = "";
   let outputPath = "";

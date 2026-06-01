@@ -242,7 +242,7 @@ Please respond with only the new description text in <new_description> tags, not
   return description;
 }
 
-function main() {
+function main(): void {
   const args = process.argv.slice(2);
   let evalResultsPath = "";
   let skillPath = "";
