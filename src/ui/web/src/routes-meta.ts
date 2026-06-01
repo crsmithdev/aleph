@@ -42,6 +42,7 @@ export const ROUTE_META: readonly RouteMeta[] = [
   { path: '/life' },
   { path: '/research/queries' },
   { path: '/research/history' },
+  { path: '/observability/tokens' },
 
   // Life
   { path: '/summary', smoke: { testid: 'page-summary', heading: /^Summary$/ } },
@@ -78,7 +79,6 @@ export const ROUTE_META: readonly RouteMeta[] = [
   { path: '/observability/hooks/:name' },
   { path: '/observability/skills', smoke: { testid: 'page-observability-skills' } },
   { path: '/observability/skills/:name' },
-  { path: '/observability/tokens', smoke: { testid: 'page-observability-tokens' } },
   { path: '/observability/subagents', smoke: { testid: 'page-observability-subagents' } },
   { path: '/observability/sessions', smoke: { testid: 'page-observability-sessions' } },
   { path: '/observability/sessions/:id' },

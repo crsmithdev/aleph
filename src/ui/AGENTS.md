@@ -67,7 +67,6 @@ src/ui/
 | `/observability/tools`, `/observability/tools/:name` | ToolsPage, ToolDetailPage |
 | `/observability/hooks`, `/observability/hooks/:name` | HooksPage, HookDetailPage |
 | `/observability/skills`, `/observability/skills/:name` | SkillsPage, SkillDetailPage |
-| `/observability/tokens` | TokensCostPage |
 | `/observability/subagents` | SubagentsPage |
 | `/observability/sessions`, `/observability/sessions/:id` | SessionsPage, SessionTracePage |
 | `/observability/sessions/:id/turns/:turnIndex` | TurnTracePage |

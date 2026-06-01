@@ -11,7 +11,7 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtCurrency, fmtPct, fmtLegendLabel, formatModelName } from '../../../utils/format';
+import { fmtNumber, fmtCurrency, fmtPct, fmtLegendLabel, formatModelName, rangeToDays } from '../../../utils/format';
 import { GRAN_LABEL, RANGE_PHRASE } from '../../../utils/chart-helpers';
 
 export function OverviewPage() {
@@ -36,6 +36,8 @@ export function OverviewPage() {
   const toolSuccessPct = data.toolCalls > 0
     ? ((data.toolCalls - data.toolErrors) / data.toolCalls) * 100
     : 100;
+  const days = rangeToDays(range);
+  const avgDailyCost = days > 0 ? data.totalCost / days : 0;
 
   const chartChip = (
     <ChartControlChip
@@ -50,7 +52,7 @@ export function OverviewPage() {
     <div className="space-y-6">
       <PageHeader title="Observability" />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5 !mt-0">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-6 !mt-0">
         <StatCard label="Sessions" value={fmtNumber(data.sessions)} />
         <StatCard label="Messages" value={fmtNumber(data.messages)} />
         <StatCard label="Tool Calls" value={fmtNumber(data.toolCalls)} />
@@ -61,6 +63,7 @@ export function OverviewPage() {
           detail={`${fmtNumber(data.toolErrors)} errors`}
         />
         <StatCard label="Total Cost" value={fmtCurrency(data.totalCost)} accent="success" />
+        <StatCard label="Avg / Day" value={fmtCurrency(avgDailyCost)} />
       </div>
 
       {sessions.data && (

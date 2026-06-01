@@ -152,18 +152,17 @@ async function runTests(webPort: number) {
     check('hook p95 column visible', await page.isVisible('th:has-text("P95")'));
   }
 
-  // === Tokens Page ===
-  console.log('\n--- tokens page ---');
-  await page.goto(`${baseUrl}/observability/tokens`);
-  await page.waitForSelector('text=Daily Tokens', { timeout: 5000 });
-  check('tokens page loads', true);
+  // === Tokens & cost (folded into Overview) ===
+  console.log('\n--- tokens & cost (overview) ---');
+  await page.goto(`${baseUrl}/observability`);
+  await page.waitForSelector('text=Total Cost', { timeout: 5000 });
+  check('overview loads', true);
   check('total cost card visible', await page.isVisible('text=Total Cost'));
   check('avg daily card visible', await page.isVisible('text=Avg / Day'));
-  check('tokens chart visible', await page.isVisible('text=Daily Tokens'));
-  check('cost chart visible', await page.isVisible('text=Daily Cost'));
+  check('total tokens card visible', await page.isVisible('text=Total Tokens'));
 
-  const modelTable = await page.isVisible('th:has-text("Model")');
-  check('model breakdown table visible', modelTable);
+  const modelChart = await page.isVisible('text=Cost by Model');
+  check('cost-by-model chart visible', modelChart);
 
   // === Memory Page ===
   console.log('\n--- memory page ---');

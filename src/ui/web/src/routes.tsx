@@ -32,7 +32,6 @@ import { ToolsPage } from './pages/system/observability/ToolsPage';
 import { ToolDetailPage } from './pages/system/observability/ToolDetailPage';
 import { HooksPage } from './pages/system/observability/HooksPage';
 import { HookDetailPage } from './pages/system/observability/HookDetailPage';
-import { TokensCostPage } from './pages/system/observability/TokensCostPage';
 import { SessionsPage } from './pages/system/observability/SessionsPage';
 import { SkillsPage } from './pages/system/observability/SkillsPage';
 import { SkillDetailPage } from './pages/system/observability/SkillDetailPage';
@@ -52,6 +51,7 @@ const ELEMENTS: Record<string, ReactNode> = {
   '/life': <Navigate to="/summary" replace />,
   '/research/queries': <Navigate to="/research" replace />,
   '/research/history': <Navigate to="/research" replace />,
+  '/observability/tokens': <Navigate to="/observability" replace />,
 
   '/summary': <SummaryPage />,
   '/goals': <GoalsPage />,
@@ -71,7 +71,6 @@ const ELEMENTS: Record<string, ReactNode> = {
   '/observability/hooks/:name': <HookDetailPage />,
   '/observability/skills': <SkillsPage />,
   '/observability/skills/:name': <SkillDetailPage />,
-  '/observability/tokens': <TokensCostPage />,
   '/observability/subagents': <SubagentsPage />,
   '/observability/sessions': <SessionsPage />,
   '/observability/sessions/:id': <SessionTracePage />,
