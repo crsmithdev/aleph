@@ -194,7 +194,7 @@ For the data behind these pages, see [TELEMETRY.md](TELEMETRY.md).
 
 ### Overview (`/observability`)
 
-Dashboard with stat cards: Sessions, Messages, Tool Calls, Tool Success %, Total Cost, API Latency (avg + p95), Compactions, Lines Changed, Commits. Area/bar chart of messages and sessions over time.
+Dashboard with stat cards: Sessions, Messages, Tool Calls, Tool Success %, Total Cost, Avg / Day cost; second row Lines Changed, Commits, Cache Efficiency %, Total Tokens (input/output). Charts: messages/sessions activity, token types per day (stacked area), cost per day, cost-by-model donut, plus cross-page charts (cost vs code output, hook latency, skill→tool usage). Token and cost reporting lives here — there is no separate Tokens & Cost page.
 
 ### Tools (`/observability/tools`)
 
@@ -221,10 +221,6 @@ Ranked skill table with usage bars. Unused skills shown dimmed. Chart over time.
 ### Skill Detail (`/observability/skills/:name`)
 
 Stats: invocations, errors, success rate. Chart over time. Recent invocations table with user request context. Full skill source rendered as Markdown.
-
-### Tokens & Cost (`/observability/tokens`)
-
-Stats: total cost, daily average, cache efficiency %, total tokens (input/output). Stacked area chart of token types per day. Cost chart per day. Model cost breakdown table.
 
 ### Sessions (`/observability/sessions`)
 

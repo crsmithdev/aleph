@@ -445,14 +445,13 @@ async function runTests(webPort: number) {
     }
   }
 
-  // ========== TOKENS & COST (UI) ==========
+  // ========== TOKENS & COST (UI — folded into Overview) ==========
   console.log('\n--- tokens & cost (UI) ---');
-  await page.goto(`${base}/observability/tokens?range=30d`);
+  await page.goto(`${base}/observability?range=30d`);
   await page.waitForSelector('text=Total Cost', { timeout: 10000 });
   check('UI total cost card visible', await page.isVisible('text=Total Cost'));
-  check('UI tokens chart visible', await page.isVisible('text=Daily Tokens'));
-  check('UI cost chart visible', await page.isVisible('text=Daily Cost'));
-  check('UI model table visible', await page.isVisible('th:has-text("Model")'));
+  check('UI total tokens card visible', await page.isVisible('text=Total Tokens'));
+  check('UI cost-by-model chart visible', await page.isVisible('text=Cost by Model'));
 
   // ========== HOOKS (API) ==========
   console.log('\n--- hooks (API) ---');

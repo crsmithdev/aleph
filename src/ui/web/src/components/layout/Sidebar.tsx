@@ -40,7 +40,6 @@ const navGroups: NavGroup[] = [
       { to: '/observability', label: 'Overview', icon: 'dashboard' },
       { to: '/observability/sessions', label: 'Sessions', icon: 'schedule' },
       { to: '/observability/events', label: 'Events', icon: 'event_note' },
-      { to: '/observability/tokens', label: 'Tokens & cost', icon: 'paid' },
     ],
   },
   {
