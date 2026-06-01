@@ -46,7 +46,6 @@ export type {
   SubagentsData,
   SubagentInvocation,
   SubagentTypeBucket,
-  GateInfo,
   VerificationData,
   EvalData,
   EvalResult,

@@ -650,6 +650,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     linesAdded: number; linesRemoved: number;
     commits: number; compactions: number;
     hasSubagents: boolean; gitBranch?: string;
+    cwd?: string;
     firstUserMessage?: string;
     intent?: string;
   }>();
@@ -681,6 +682,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     const parentSessionId = e.data?.parentSessionId as string | undefined;
     const sess = getSession(e.sid, project, e.ts, parentSessionId);
     if (e.data?.gitBranch) sess.gitBranch = e.data.gitBranch as string;
+    if (e.data?.cwd && !sess.cwd) sess.cwd = e.data.cwd as string;
 
     if (e.kind === "tokens") {
       bucket.messages++; bucket.assistantMessages++;
@@ -796,6 +798,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
       commits: s.commits, compactions: s.compactions,
       firstTimestamp: s.firstTs, lastTimestamp: s.lastTs,
       gitBranch: s.gitBranch, hasSubagents: s.hasSubagents,
+      cwd: s.cwd,
       firstUserMessage: s.firstUserMessage,
       intent: s.intent ? s.intent.slice(0, 200) : undefined,
     }))
