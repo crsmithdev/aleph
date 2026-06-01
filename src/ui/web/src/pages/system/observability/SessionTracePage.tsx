@@ -1241,16 +1241,6 @@ export function SessionTracePage() {
             Parent →
           </Link>
         )}
-        {data.gateInfo?.mode === 'inline' && (
-          <span className="rounded-md bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning border border-warning/30">
-            inline
-          </span>
-        )}
-        {data.gateInfo?.mode === 'dispatched' && (
-          <span className="rounded-md bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-400 border border-purple-500/30">
-            dispatched
-          </span>
-        )}
         {/* Controls */}
         <div className="ml-auto flex items-center gap-2">
           {!atTop && (

@@ -224,7 +224,7 @@ Stats: invocations, errors, success rate. Chart over time. Recent invocations ta
 
 ### Sessions (`/observability/sessions`)
 
-Stats: session count, avg duration, user/assistant messages, lines changed, commits. Daily session chart. Activity chart. Session table (up to 50) with duration, messages, tools, cost, lines, commits, branch, and Gate Mode column showing `inline` (yellow) / `dispatched` (purple) / `—` badges per session. Subagent sessions shown indented. "Subagent" and "Dispatcher" filter toggles. Sessions-by-project table.
+Stats: session count, avg duration, user/assistant messages, lines changed, commits. Sessions chart. Activity chart. Session table (up to 50) with project (real working directory), duration, messages, tools, cost, lines, commits, and branch. Subagent sessions shown indented. "Subagent" and "Dispatcher" filter toggles. Sessions-by-project table.
 
 ### Session Trace (`/observability/sessions/:id`)
 

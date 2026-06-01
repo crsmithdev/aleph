@@ -12,7 +12,7 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { fmtNumber, fmtMs, fmtCurrency, fmtDuration, fmtLegendLabel, formatModelName, stripMarkdown, fmtProject, shortRelativeTime } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtCurrency, fmtDuration, fmtLegendLabel, formatModelName, stripMarkdown, fmtProject, fmtCwd, shortRelativeTime } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type SessionDataset = 'sessions' | 'dispatches' | 'cost' | 'churn' | 'by-project' | 'commits';
@@ -81,7 +81,7 @@ type SessionRow = {
   lastTimestamp: string;
   gitBranch?: string;
   parentSessionId?: string;
-  gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; hookBlocks: number; hookAdvisories: number; mode: 'dispatched' | 'inline' | 'none' };
+  cwd?: string;
   firstUserMessage?: string;
   intent?: string;
 };
@@ -121,7 +121,7 @@ export function SessionsPage() {
   const stackedByProject = stackProjectsByDay(byDayProject, topProjectNames, displayMode);
 
   const chartTitles: Record<SessionDataset, string> = {
-    sessions: `${GRAN_LABEL[granularity]} Sessions by Day`,
+    sessions: 'Sessions',
     dispatches: `${GRAN_LABEL[granularity]} Dispatches by Type`,
     cost: `${GRAN_LABEL[granularity]} Cost by Day`,
     churn: `${GRAN_LABEL[granularity]} Code Churn by Day`,
@@ -217,8 +217,8 @@ export function SessionsPage() {
       label: 'Project',
       shrink: true,
       render: (row) => (
-        <span className="text-text-secondary text-base truncate block" title={row.project}>
-          {fmtProject(row.project)}
+        <span className="text-text-secondary text-base truncate block" title={row.cwd ?? row.project}>
+          {row.cwd ? fmtCwd(row.cwd) : fmtProject(row.project)}
         </span>
       ),
     },
@@ -250,31 +250,6 @@ export function SessionsPage() {
       sortable: true,
       shrink: true,
       render: (row) => <span className="font-mono text-base text-text-secondary">{fmtCurrency(row.cost)}</span>,
-    },
-    {
-      key: 'gateInfo',
-      label: 'Gates',
-      shrink: true,
-      render: (row) => {
-        const gi = row.gateInfo;
-        if (!gi || (gi.hookBlocks === 0 && gi.hookAdvisories === 0)) {
-          return <span className="text-text-disabled">—</span>;
-        }
-        return (
-          <div className="flex items-center gap-1">
-            {gi.hookBlocks > 0 && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-error/15 text-error border border-error/30" title="Hook blocks">
-                {gi.hookBlocks}B
-              </span>
-            )}
-            {gi.hookAdvisories > 0 && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-warning/15 text-warning border border-warning/30" title="Hook advisories">
-                {gi.hookAdvisories}A
-              </span>
-            )}
-          </div>
-        );
-      },
     },
     {
       key: 'lastTimestamp',

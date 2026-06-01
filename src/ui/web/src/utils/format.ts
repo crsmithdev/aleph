@@ -172,6 +172,20 @@ export function fmtProject(raw: string): string {
   return raw.toLowerCase();
 }
 
+// Format an absolute working directory for display. Unlike fmtProject (which
+// decodes the lossy "-home-user-project" dir name), this uses the real cwd:
+//   "/home/user/project" → "user/project"
+//   "/home/user"         → "user/~"
+//   "/tmp"               → "/tmp"   (non-home paths shown verbatim)
+export function fmtCwd(cwd: string): string {
+  const home = cwd.match(/^\/home\/([^/]+)(?:\/(.+))?$/);
+  if (home) {
+    const [, user, rest] = home;
+    return rest ? `${user}/${rest}` : `${user}/~`;
+  }
+  return cwd;
+}
+
 export function rangeToDays(range: string): number {
   switch (range) {
     case '1h': return 1;

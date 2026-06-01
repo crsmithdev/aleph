@@ -219,41 +219,6 @@ function readHookSource(fullCommand: string): string | undefined {
   return tryRead(path);
 }
 
-interface SessionGateInfo {
-  inlineOverride: boolean;
-  dispatchBlocks: number;
-  dispatchAllows: number;
-}
-
-function readSessionGateInfo(): Map<string, SessionGateInfo> {
-  const map = new Map<string, SessionGateInfo>();
-  const hookEventsPath = dataPaths.events;
-  if (!existsSync(hookEventsPath)) return map;
-  try {
-    const lines = readFileSync(hookEventsPath, 'utf-8').split('\n').filter(Boolean);
-    for (const line of lines) {
-      try {
-        const entry = JSON.parse(line) as { ts: string; hook: string; event: string; sessionId?: string };
-        const sid = entry.sessionId;
-        if (!sid) continue;
-        if (!map.has(sid)) map.set(sid, { inlineOverride: false, dispatchBlocks: 0, dispatchAllows: 0 });
-        const info = map.get(sid)!;
-        if (entry.hook === 'inline-override') {
-          info.inlineOverride = true;
-        }
-      } catch {}
-    }
-  } catch {}
-  return map;
-}
-
-function toGateInfo(info: SessionGateInfo | undefined): { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; hookBlocks: number; hookAdvisories: number; mode: 'dispatched' | 'inline' | 'none' } | undefined {
-  if (!info) return undefined;
-  if (!info.inlineOverride && info.dispatchBlocks === 0 && info.dispatchAllows === 0) return undefined;
-  const mode = info.inlineOverride ? 'inline' : info.dispatchBlocks > 0 ? 'dispatched' : 'none';
-  return { ...info, hookBlocks: 0, hookAdvisories: 0, mode };
-}
-
 function readSelfReportedHookCounts(startDate?: string): Map<string, { count: number; event: string }> {
   const counts = new Map<string, { count: number; event: string }>();
   const hookEventsPath = dataPaths.events;
@@ -720,10 +685,6 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 300_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateSessions(obsReq.telemetryEntries, obsReq.granularity));
-      const gateMap = readSessionGateInfo();
-      for (const session of result.sessions) {
-        session.gateInfo = toGateInfo(gateMap.get(session.sessionId));
-      }
       return { ...result, queryTimeMs };
     });
   });
@@ -735,8 +696,6 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       const sessionId = decodeURIComponent(req.params.id);
       return cachedResult(req.url, 30_000, () => {
         const { result, queryTimeMs } = timed(() => aggregateSessionTrace((req as ObsRequest).telemetryEntries, sessionId));
-        const gateMap = readSessionGateInfo();
-        result.gateInfo = toGateInfo(gateMap.get(sessionId));
         return { ...result, queryTimeMs };
       });
     },

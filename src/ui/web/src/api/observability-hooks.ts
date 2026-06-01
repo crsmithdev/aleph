@@ -180,7 +180,7 @@ export function useObsSessions(range: TimeRange, granularity?: Granularity, sess
       gitBranch?: string;
       parentSessionId?: string;
       hasSubagents?: boolean;
-      gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; hookBlocks: number; hookAdvisories: number; mode: 'dispatched' | 'inline' | 'none' };
+      cwd?: string;
       firstUserMessage?: string;
       intent?: string;
       outcome?: string;
@@ -440,7 +440,6 @@ export function useObsSessionTrace(sessionId: string, range: TimeRange) {
     totalDurationMs: number;
     totalTokens: number;
     totalCost: number;
-    gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; hookBlocks: number; hookAdvisories: number; mode: 'dispatched' | 'inline' | 'none' };
     queryTimeMs: number;
   }>({
     queryKey: ['observability', 'session-trace', sessionId, range],
