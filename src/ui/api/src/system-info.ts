@@ -7,7 +7,7 @@
  * values are pinned in `claudePaths.manifest` at install time.
  */
 
-import { existsSync, readFileSync, statSync, lstatSync, readlinkSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, lstatSync, readlinkSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
 import { claudePaths, dataPaths, getMemoryDbPath } from '@aleph/data';
@@ -51,6 +51,8 @@ export interface SystemInfo {
     port: number;
     dbSizeBytes: number;
   };
+  /** Each data file/dir Aleph writes to, with its on-disk size. */
+  dataFiles: { label: string; path: string; sizeBytes: number }[];
 }
 
 function git(cmd: string, cwd?: string): string {
@@ -75,6 +77,19 @@ function liveGitInfo(repoDir: string): Record<string, string> {
   const commits_since_tag = latestTag ? git(`rev-list --count ${latestTag}..HEAD`, repoDir) : 'n/a';
 
   return { revision, short, dirty, branch, commit_count, commits_since_tag, last_commit, last_commit_date };
+}
+
+/** On-disk size of a file or directory (recursive). 0 if missing/unreadable. */
+function pathSize(p: string): number {
+  try {
+    const s = lstatSync(p);
+    if (s.isSymbolicLink()) return 0;
+    if (s.isFile()) return s.size;
+    if (!s.isDirectory()) return 0;
+    let total = 0;
+    for (const entry of readdirSync(p)) total += pathSize(join(p, entry));
+    return total;
+  } catch { return 0; }
 }
 
 function pathWithSymlink(p: string): string {
@@ -117,6 +132,33 @@ export function getSystemInfo(runtimeDbPath: string): SystemInfo {
     try { return statSync(runtimeDbPath).size; } catch { return 0; }
   })();
 
+  const paths = {
+    repo: repoDir ?? 'unknown',
+    claudeRoot: manifest.paths?.claude_root ?? claudePaths.root,
+    dataRoot: manifest.paths?.data_root ?? dataPaths.root,
+    aleph: pathWithSymlink(manifest.paths?.aleph ?? claudePaths.aleph),
+    commands: pathWithSymlink(manifest.paths?.commands ?? claudePaths.commands),
+    skills: pathWithSymlink(manifest.paths?.skills ?? claudePaths.skills),
+    db: runtimeDbPath,
+    memoryDb: manifest.paths?.memory_db ?? getMemoryDbPath(),
+    sessions: manifest.paths?.sessions ?? dataPaths.sessions,
+    telemetry: claudePaths.projects,
+    signals: dataPaths.signals,
+    events: manifest.paths?.events ?? dataPaths.events,
+    backups: manifest.paths?.backups ?? dataPaths.backups,
+    devLogs: devLogsDir,
+  };
+
+  // Every path Aleph persists data to, with its current on-disk size.
+  const dataFiles = [
+    { label: 'Aleph DB', path: paths.db },
+    { label: 'Memory DB', path: paths.memoryDb },
+    { label: 'Sessions', path: paths.sessions },
+    { label: 'Signals', path: paths.signals },
+    { label: 'Events', path: paths.events },
+    { label: 'Backups', path: paths.backups },
+  ].map((f) => ({ ...f, sizeBytes: pathSize(f.path) }));
+
   return {
     git: {
       revision: g.revision ?? 'unknown',
@@ -128,22 +170,8 @@ export function getSystemInfo(runtimeDbPath: string): SystemInfo {
       lastCommit: g.last_commit ?? 'unknown',
       lastCommitDate: g.last_commit_date ?? 'unknown',
     },
-    paths: {
-      repo: repoDir ?? 'unknown',
-      claudeRoot: manifest.paths?.claude_root ?? claudePaths.root,
-      dataRoot: manifest.paths?.data_root ?? dataPaths.root,
-      aleph: pathWithSymlink(manifest.paths?.aleph ?? claudePaths.aleph),
-      commands: pathWithSymlink(manifest.paths?.commands ?? claudePaths.commands),
-      skills: pathWithSymlink(manifest.paths?.skills ?? claudePaths.skills),
-      db: runtimeDbPath,
-      memoryDb: manifest.paths?.memory_db ?? getMemoryDbPath(),
-      sessions: manifest.paths?.sessions ?? dataPaths.sessions,
-      telemetry: claudePaths.projects,
-      signals: dataPaths.signals,
-      events: manifest.paths?.events ?? dataPaths.events,
-      backups: manifest.paths?.backups ?? dataPaths.backups,
-      devLogs: devLogsDir,
-    },
+    paths,
+    dataFiles,
     install: {
       timestamp: manifest.install?.timestamp ?? 'unknown',
       bunVersion: manifest.install?.bun_version ?? Bun.version,
