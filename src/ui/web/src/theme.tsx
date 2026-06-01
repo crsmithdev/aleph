@@ -49,7 +49,7 @@ export const monoFonts: FontDef[] = [
 ];
 
 const DEFAULT_FONT = 'noto-sans';
-const DEFAULT_HEADING_FONT = 'merriweather';
+const DEFAULT_HEADING_FONT = 'merriweather-sans';
 const DEFAULT_MONO_FONT = 'noto-sans-mono';
 
 const findFont = (id: string) => fonts.find((f) => f.id === id);
