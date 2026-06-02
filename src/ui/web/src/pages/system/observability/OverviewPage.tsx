@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AreaChart, Area, BarChart, Bar, ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { useObsOverview, useObsSessions, useObsTokens, useObsCost, useObsHooks, useObsTools } from '../../../api/observability-hooks';
+import { useObsOverview, useObsSessions, useObsTokens, useObsCost, useObsHooks, useObsTools, useObsSubagents } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
@@ -11,7 +11,7 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtCurrency, fmtPct, fmtLegendLabel, formatModelName, rangeToDays } from '../../../utils/format';
+import { fmtNumber, fmtCurrency, fmtPct, fmtDuration, fmtLegendLabel, formatModelName, rangeToDays } from '../../../utils/format';
 import { GRAN_LABEL, RANGE_PHRASE } from '../../../utils/chart-helpers';
 
 export function OverviewPage() {
@@ -26,6 +26,7 @@ export function OverviewPage() {
   const cost = useObsCost(range, granularity);
   const hooks = useObsHooks(range, granularity);
   const tools = useObsTools(range, granularity);
+  const subagents = useObsSubagents(range, granularity);
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
   const [tokensChartType, setTokensChartType] = useState<'bar' | 'line'>('line');
   const [costChartType, setCostChartType] = useState<'bar' | 'line'>('line');
@@ -38,6 +39,9 @@ export function OverviewPage() {
     : 100;
   const days = rangeToDays(range);
   const avgDailyCost = days > 0 ? data.totalCost / days : 0;
+  const cacheEff = tokens.data?.cacheEfficiency ?? 0;
+  const hookRuns = hooks.data ? hooks.data.ranked.reduce((s, h) => s + h.count, 0) : undefined;
+  const activeTools = tools.data ? tools.data.ranked.filter((t) => t.active).length : undefined;
 
   const chartChip = (
     <ChartControlChip
@@ -52,46 +56,45 @@ export function OverviewPage() {
     <div className="space-y-6">
       <PageHeader title="Observability" />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-6 !mt-0">
-        <StatCard label="Sessions" value={fmtNumber(data.sessions)} />
-        <StatCard label="Messages" value={fmtNumber(data.messages)} />
-        <StatCard label="Tool Calls" value={fmtNumber(data.toolCalls)} />
-        <StatCard
-          label="Tool Success"
-          value={fmtPct(toolSuccessPct)}
-          accent={toolSuccessPct >= 99 ? 'success' : toolSuccessPct >= 95 ? 'warning' : 'error'}
-          detail={`${fmtNumber(data.toolErrors)} errors`}
-        />
-        <StatCard label="Total Cost" value={fmtCurrency(data.totalCost)} accent="success" />
-        <StatCard label="Avg / Day" value={fmtCurrency(avgDailyCost)} />
+      {/* Datacards — flex-wrap so they pack onto one line on wide/ultrawide
+          monitors and spill to the next line only when they run out of room. */}
+      <div className="flex flex-wrap gap-3 !mt-0">
+        {(() => {
+          const cls = 'grow basis-[150px]';
+          return (
+            <>
+              <StatCard compact className={cls} label="Sessions" value={fmtNumber(data.sessions)} />
+              <StatCard compact className={cls} label="Messages" value={fmtNumber(data.messages)} />
+              <StatCard compact className={cls} label="Tool Calls" value={fmtNumber(data.toolCalls)} />
+              <StatCard compact className={cls} label="Tool Success" value={fmtPct(toolSuccessPct)} accent={toolSuccessPct >= 99 ? 'success' : toolSuccessPct >= 95 ? 'warning' : 'error'} />
+              <StatCard compact className={cls} label="Tool Errors" value={fmtNumber(data.toolErrors)} accent={data.toolErrors > 0 ? 'warning' : 'neutral'} />
+              <StatCard compact className={cls} label="Total Cost" value={fmtCurrency(data.totalCost)} accent="success" />
+              <StatCard compact className={cls} label="Avg / Day" value={fmtCurrency(avgDailyCost)} />
+              {sessions.data && <StatCard compact className={cls} label="Avg Duration" value={fmtDuration(sessions.data.avgDurationMs)} />}
+              {sessions.data && <StatCard compact className={cls} label="Lines Changed" value={<><span className="text-success">+{fmtNumber(sessions.data.totalLinesAdded)}</span><span className="text-text-muted">/</span><span className="text-error">-{fmtNumber(sessions.data.totalLinesRemoved)}</span></>} />}
+              {sessions.data && <StatCard compact className={cls} label="Commits" value={fmtNumber(sessions.data.totalCommits)} />}
+              {tokens.data && <StatCard compact className={cls} label="Total Tokens" value={fmtNumber(tokens.data.totalInput + tokens.data.totalOutput)} />}
+              {tokens.data && <StatCard compact className={cls} label="Input" value={fmtNumber(tokens.data.totalInput)} />}
+              {tokens.data && <StatCard compact className={cls} label="Output" value={fmtNumber(tokens.data.totalOutput)} />}
+              {tokens.data && <StatCard compact className={cls} label="Cache Read" value={fmtNumber(tokens.data.totalCacheRead)} />}
+              {tokens.data && <StatCard compact className={cls} label="Cache Efficiency" value={fmtPct(cacheEff)} accent={cacheEff >= 80 ? 'success' : cacheEff >= 50 ? 'warning' : 'error'} />}
+              {cost.data && <StatCard compact className={cls} label="Models" value={fmtNumber(cost.data.byModel.length)} />}
+              {hookRuns !== undefined && <StatCard compact className={cls} label="Hook Runs" value={fmtNumber(hookRuns)} />}
+              <StatCard compact className={cls} label="Hook Errors" value={fmtNumber(data.hookErrors)} accent={data.hookErrors > 0 ? 'warning' : 'neutral'} />
+              {subagents.data && <StatCard compact className={cls} label="Dispatches" value={fmtNumber(subagents.data.totalDispatches)} />}
+              {activeTools !== undefined && <StatCard compact className={cls} label="Active Tools" value={fmtNumber(activeTools)} />}
+            </>
+          );
+        })()}
       </div>
 
-      {sessions.data && (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="Lines Changed" value={<><span className="text-success">+{fmtNumber(sessions.data.totalLinesAdded)}</span><span className="text-text-muted">/</span><span className="text-error">-{fmtNumber(sessions.data.totalLinesRemoved)}</span></>} />
-          <StatCard label="Commits" value={fmtNumber(sessions.data.totalCommits)} />
-          {tokens.data && (
-            <StatCard
-              label="Cache Efficiency"
-              value={fmtPct(tokens.data.cacheEfficiency)}
-              accent={tokens.data.cacheEfficiency >= 80 ? 'success' : tokens.data.cacheEfficiency >= 50 ? 'warning' : 'error'}
-              detailContent={<><span className="text-success font-medium">{fmtNumber(tokens.data.totalCacheRead)}</span><span className="text-text-muted"> read / </span><span className="text-warning font-medium">{fmtNumber(tokens.data.totalCacheCreation)}</span><span className="text-text-muted"> created</span></>}
-            />
-          )}
-          {tokens.data && (
-            <StatCard
-              label="Total Tokens"
-              value={fmtNumber(tokens.data.totalInput + tokens.data.totalOutput)}
-              detailContent={<><span className="text-text-secondary font-medium">{fmtNumber(tokens.data.totalInput)}</span><span className="text-text-muted"> in / </span><span className="text-text-secondary font-medium">{fmtNumber(tokens.data.totalOutput)}</span><span className="text-text-muted"> out</span></>}
-            />
-          )}
-        </div>
-      )}
-
+      {/* Charts — 2 per row (lg) / 3 per row (2xl), evenly sized. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
       <ChartContainer
         title="Activity"
         crumb={`${GRAN_LABEL[granularity]} · ${RANGE_PHRASE[range]} · ${fmtNumber(data.messages)} messages · ${fmtNumber(data.sessions)} sessions`}
         chip={chartChip}
+        height={240}
         chartType={chartType}
         onChartTypeChange={setChartType}
       >
@@ -120,6 +123,7 @@ export function OverviewPage() {
         <ChartContainer
           title="Tokens"
           crumb={`${GRAN_LABEL[granularity]} · ${RANGE_PHRASE[range]} · ${fmtNumber(tokens.data.totalInput + tokens.data.totalOutput)} tokens`}
+          height={240}
           chartType={tokensChartType}
           onChartTypeChange={setTokensChartType}
         >
@@ -153,6 +157,7 @@ export function OverviewPage() {
         <ChartContainer
           title="Cost"
           crumb={`${GRAN_LABEL[granularity]} · ${RANGE_PHRASE[range]} · ${fmtCurrency(cost.data.totalUsd)} total`}
+          height={240}
           chartType={costChartType}
           onChartTypeChange={setCostChartType}
         >
@@ -186,9 +191,9 @@ export function OverviewPage() {
             crumb={`${RANGE_PHRASE[range]} · ${cost.data.byModel.length} models`}
             raw
           >
-            <div className="flex gap-3 h-[180px]">
+            <div className="flex gap-3 h-[200px]">
               <div className="flex-1 min-w-0 flex items-center">
-                <ResponsiveContainer width="100%" height={180}>
+                <ResponsiveContainer width="100%" height={200}>
                   <PieChart>
                     <Pie isAnimationActive={false} data={donut} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius="38%" outerRadius="90%">
                       {donut.map((entry, i) => <Cell key={i} fill={entry.model === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
@@ -220,7 +225,7 @@ export function OverviewPage() {
           <ChartContainer
             title="Cost vs Code Output"
             crumb={`${RANGE_PHRASE[range]} · ${scatterData.length} sessions`}
-            height={200}
+            height={240}
           >
               <ScatterChart>
                 <CartesianGrid {...gridProps} />
@@ -235,12 +240,12 @@ export function OverviewPage() {
       })()}
 
       {hooks.data && hooks.data.ranked.filter(r => r.count > 0).length > 0 && (() => {
-        const topHooks = [...hooks.data!.ranked].filter(r => r.count > 0).sort((a, b) => b.p50Ms - a.p50Ms).slice(0, 10);
+        const topHooks = [...hooks.data!.ranked].filter(r => r.count > 0).sort((a, b) => b.p50Ms - a.p50Ms).slice(0, 8);
         return (
           <ChartContainer
             title="Hook Latency (p50)"
             crumb={`${RANGE_PHRASE[range]} · top ${topHooks.length} hooks`}
-            height={Math.max(160, topHooks.length * 24)}
+            height={240}
           >
               <BarChart layout="vertical" data={topHooks}>
                 <CartesianGrid {...gridProps} horizontal={false} />
@@ -255,7 +260,7 @@ export function OverviewPage() {
 
       {tools.data && tools.data.skillToolMatrix && tools.data.skillToolMatrix.length > 0 && (() => {
         const matrix = tools.data!.skillToolMatrix;
-        const topSkills = [...matrix].sort((a, b) => b.tools.reduce((s, t) => s + t.count, 0) - a.tools.reduce((s, t) => s + t.count, 0)).slice(0, 10);
+        const topSkills = [...matrix].sort((a, b) => b.tools.reduce((s, t) => s + t.count, 0) - a.tools.reduce((s, t) => s + t.count, 0)).slice(0, 8);
         const allTools = Array.from(new Set(topSkills.flatMap(s => s.tools.map(t => t.tool)))).slice(0, 8);
         const barData = topSkills.map(({ skill, tools: toolCounts }) => {
           const row: Record<string, unknown> = { skill: skill.length > 20 ? skill.slice(0, 18) + '…' : skill };
@@ -266,7 +271,7 @@ export function OverviewPage() {
           <ChartContainer
             title="Skill → Tool Usage"
             crumb={`${RANGE_PHRASE[range]} · top ${topSkills.length} skills × ${allTools.length} tools`}
-            height={Math.max(160, topSkills.length * 28)}
+            height={240}
           >
               <BarChart layout="vertical" data={barData}>
                 <CartesianGrid {...gridProps} horizontal={false} />
@@ -280,6 +285,7 @@ export function OverviewPage() {
           </ChartContainer>
         );
       })()}
+      </div>
 
       <QueryTiming ms={data.queryTimeMs} />
     </div>
