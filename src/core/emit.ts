@@ -17,6 +17,7 @@ import {
 import type { EventLog } from "./eventlog.ts";
 import type { Clock } from "./clock.ts";
 import { systemClock } from "./clock.ts";
+import { remoteParentContext } from "./tracectx.ts";
 
 export interface EmitOptions {
   causedBy?: string | null;
@@ -89,9 +90,11 @@ export class Emitter {
     if (activeSpan) {
       activeSpan.addEvent(kind, { "aleph.event_id": id, "aleph.caused_by": envelope.caused_by ?? "" });
     } else if (this.deps.tracer) {
+      // No active span: open a zero-duration one under the tuple's trace id so
+      // the event still joins its trace tree instead of becoming an orphan.
       const span = this.deps.tracer.startSpan(kind, {
         attributes: { "aleph.event_id": id, "aleph.origin": fullIds.origin },
-      });
+      }, remoteParentContext(fullIds.trace_id));
       span.end();
     }
 

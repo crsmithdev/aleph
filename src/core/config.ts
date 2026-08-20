@@ -41,7 +41,7 @@ export const ConfigSchema = z.object({
     shutdown_grace_seconds: z.number().int().nonnegative().default(120),
     timezone: z.string().default("America/Los_Angeles"),
     tick_seconds: z.number().int().positive().default(30),
-  }).default({}),
+  }).prefault({}),
 
   telegram: z.object({
     enabled: z.boolean().default(false),
@@ -50,7 +50,7 @@ export const ConfigSchema = z.object({
     chat_id: z.string().default(""),
     owner_user_id: z.string().default(""),
     poll_timeout_seconds: z.number().int().positive().default(50),
-  }).default({}),
+  }).prefault({}),
 
   obs: z.object({
     enabled: z.boolean().default(true),
@@ -60,7 +60,7 @@ export const ConfigSchema = z.object({
     langfuse_project_id: z.string().default(""),
     service_name: z.string().default("aleph-daemon"),
     export_timeout_ms: z.number().int().positive().default(5000),
-  }).default({}),
+  }).prefault({}),
 
   sessions: z.object({
     resume_window_hours: z.number().positive().default(24),
@@ -68,27 +68,27 @@ export const ConfigSchema = z.object({
     archive_days: z.number().positive().default(7),
     checkpoint_every_turns: z.number().int().positive().default(5),
     max_active_topics: z.number().int().positive().default(6),
-  }).default({}),
+  }).prefault({}),
 
   meter: z.object({
     plan: z.string().default("max20x"),
     reserve: z.object({
       window_5h: z.number().min(0).max(1).default(0.30),
       weekly: z.number().min(0).max(1).default(0.25),
-    }).default({}),
+    }).prefault({}),
     capacity: z.object({
       window_5h: z.number().positive().default(4_000_000),
       weekly: z.number().positive().default(40_000_000),
-    }).default({}),
+    }).prefault({}),
     weights: z.object({
       input: z.number().nonnegative().default(1),
       output: z.number().nonnegative().default(5),
       cache_read: z.number().nonnegative().default(0.1),
       cache_creation: z.number().nonnegative().default(1.25),
-    }).default({}),
-  }).default({}),
+    }).prefault({}),
+  }).prefault({}),
 
-  lanes: z.record(z.enum(LANES), LaneSchema).default({}),
+  lanes: z.partialRecord(z.enum(LANES), LaneSchema).prefault({}),
 
   routing: z.object({
     default_tier: z.string().default("T2"),
@@ -96,16 +96,16 @@ export const ConfigSchema = z.object({
     escalate_after_failures: z.number().int().positive().default(2),
     tiers: z.record(z.string(), TierSchema).default({}),
     classes: z.record(z.string(), ClassSchema).default({}),
-  }).default({}),
+  }).prefault({}),
 
   vault: z.object({
     memory_max_lines: z.number().int().positive().default(150),
     commit_per_write: z.array(z.string()).default(["wiki/", "MEMORY.md", "index.md"]),
-  }).default({}),
+  }).prefault({}),
 
   retention: z.object({
     compress_after_days: z.number().int().positive().default(30),
-  }).default({}),
+  }).prefault({}),
 
   runner: z.enum(["sdk", "echo"]).default("sdk"),
 });
