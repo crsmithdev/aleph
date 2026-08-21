@@ -2,13 +2,8 @@ name: ci
 
 on:
   push:
-    paths: ["aleph-next/**", ".github/workflows/ci.yml"]
+    branches: ["**"]
   pull_request:
-    paths: ["aleph-next/**"]
-
-defaults:
-  run:
-    working-directory: aleph-next
 
 jobs:
   test:

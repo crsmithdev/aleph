@@ -1196,10 +1196,7 @@ Each milestone is committable, runnable, and has one check that fails if it is n
 3. **Rehydration quality is the real risk to "remembering agent."** The brief is the only thing
    crossing the 24 h boundary. Phase 1 should end with a deliberate test of a week-old topic, judged
    by Chris, not by the daemon.
-4. **Repo location.** This scaffold currently lives in a subdirectory of `crsmithdev/imagegen`
-   because that is the repository this session was scoped to. It is self-contained and intended to
-   be lifted into `crsmithdev/aleph-next` as its own root.
-5. **Confirm:** timezone `America/Los_Angeles`; 07:00 / Sunday 18:00; 30 % / 25 % reserves; Bun;
+4. **Confirm:** timezone `America/Los_Angeles`; 07:00 / Sunday 18:00; 30 % / 25 % reserves; Bun;
    TOML; and that closing (not deleting) forum topics on archive is what you want.
 
 ---

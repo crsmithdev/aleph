@@ -9,12 +9,6 @@ self-hosted Langfuse. Successor to [`crsmithdev/aleph`](https://github.com/crsmi
 `docs/design/phase-1.md`. Heartbeat, capture, librarian, approvals, the
 verification kernel, the cockpit and research are Phases 2–4 and are *not* here.
 
-> **Where this lives.** This scaffold sits in a subdirectory of
-> `crsmithdev/imagegen` because that is the repository this build session was
-> scoped to. It is self-contained: `cp -r aleph-next ../aleph-next && cd
-> ../aleph-next && git init` gives it its own root, and `.github/workflows/ci.yml`
-> is written to work either way.
-
 ## Quick start
 
 ```bash
