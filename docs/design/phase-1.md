@@ -513,8 +513,11 @@ absolute count (cockpit F7 — a permanently-amber metric trains its reader to i
 
 ### 6.4 Langfuse deployment
 
-`compose/langfuse.yml` pins Langfuse v4 with its required Postgres / ClickHouse / Redis / MinIO,
-bound to `127.0.0.1` and published on the tailnet via `tailscale serve` only. Keys: the ingestion
+`compose/langfuse.yml` pins Langfuse with its required Postgres / ClickHouse / Redis / MinIO,
+bound to `127.0.0.1` and published on the tailnet via `tailscale serve` only. It has been brought
+up and the live gate has passed against it (2026-08-21; see the runbook) — single-node ClickHouse
+needs `CLICKHOUSE_CLUSTER_ENABLED=false`, and the worker needs its own S3 region or ingestion dies
+behind a `200` from the collector. Keys: the ingestion
 key pair lives **only** in the daemon's OTel exporter config, from `.env`. There is no read-only
 Langfuse key (cockpit F3) — so nothing else in the system gets a Langfuse credential in Phase 1,
 and when v2 needs reads, they go through the daemon's GET-allowlist proxy.

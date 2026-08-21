@@ -242,3 +242,114 @@ Each was found by running the system, not by reading it:
 6. **The shutdown checkpoint was an unclassified join-audit orphan.** It is
    legitimate (it runs after the bus drains), so it is now in the baseline
    rather than a permanent amber the reader learns to ignore.
+
+---
+
+# Langfuse ingestion — recorded 2026-08-21
+
+The gap the section above left open ("Langfuse ingests these traces: **no**") is
+now closed. Recorded on the WSL2 host, Bun 1.3.3, `docker-ce 29.7.2` running
+inside the distro under systemd (Docker Desktop was not used), Langfuse
+`3.225.4`, `runner = "sdk"`, `obs.otlp_endpoint` pointed at Langfuse itself
+rather than at the local sink.
+
+```console
+$ sudo systemctl enable --now docker && docker run --rm hello-world | tail -3
+Hello from Docker!
+
+$ docker compose --env-file ../.env -f langfuse.yml up -d
+ Container aleph-langfuse-langfuse-web-1  Started
+
+$ curl -sS http://127.0.0.1:3010/api/public/health
+{"status":"OK","version":"3.225.4"}
+
+$ curl -sS -u "$PK:$SK" http://127.0.0.1:3010/api/public/projects
+{"data":[{"id":"aleph-next-local","name":"aleph-next","organization":{"id":"aleph","name":"Aleph"},"metadata":{}}]}
+```
+
+The org, project and key pair above were created by the `LANGFUSE_INIT_*`
+variables at boot — no UI step, and the project id in the deep link is known
+before the first span exists.
+
+## The live gate
+
+```console
+$ ALEPH_LIVE=1 LANGFUSE_BASE_URL=http://127.0.0.1:3010 \
+  LANGFUSE_PUBLIC_KEY=$PK LANGFUSE_SECRET_KEY=$SK \
+  bun test tests/live/langfuse.test.ts
+ 1 pass
+ 0 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [2.00s]
+```
+
+## A real turn, joined end to end
+
+```console
+$ os doctor | tail -4
+ok    otlp             http://127.0.0.1:3010/api/public/otel/v1/traces
+ok    langfuse-link    http://127.0.0.1:3010/project/aleph-next-local/traces/00000000000000000000000000000000
+ok    telegram-config  disabled
+ok    clock            2026-08-21T16:11:29.982Z
+
+$ os send --topic langfuse-gate 'Reply with just: ingested-2'
+ingested-2
+
+$ os trace 98b9a71c1414ac4a8623cd12dcf5f3f5
+http://127.0.0.1:3010/project/aleph-next-local/traces/98b9a71c1414ac4a8623cd12dcf5f3f5
+  2026-08-21T16:12:52.014Z  channel.message_received
+  2026-08-21T16:12:52.030Z  bus.submitted
+  2026-08-21T16:12:52.035Z  bus.started
+  2026-08-21T16:12:52.043Z  session.resumed
+  2026-08-21T16:12:52.047Z  routing.decided
+  2026-08-21T16:12:52.055Z  session.turn_started
+  2026-08-21T16:12:54.598Z  meter.usage_recorded
+  2026-08-21T16:12:54.608Z  vault.written
+  2026-08-21T16:12:54.612Z  session.turn_completed
+  2026-08-21T16:12:54.616Z  channel.message_sent
+  2026-08-21T16:12:54.624Z  bus.finished
+```
+
+The same id, fetched back out of Langfuse rather than out of our own event log:
+
+```console
+$ curl -sS -u "$PK:$SK" http://127.0.0.1:3010/api/public/traces/98b9a71c1414ac4a8623cd12dcf5f3f5
+trace id : 98b9a71c1414ac4a8623cd12dcf5f3f5
+name     : turn
+session  : ses_01M0JHFPBQTM2SM0JEN3TDQQ04
+user     : chris
+tags     : ['lane:interactive', 'origin:channel', 'session:ses_01M0JHFPBQTM2SM0JEN3TDQQ04']
+obs      : 7 ['channel.message_sent', 'bus.finished', 'turn', 'channel.message_received', 'sdk.query', 'bus.started', 'bus.submitted']
+
+$ os status | tail -2
+events   ~/ws/data/events/2026-08-21.jsonl
+otel     http://127.0.0.1:3010/api/public/otel/v1/traces (0 export errors)
+
+$ os obs join-audit --since 30m
+traces 18  orphans 16  baseline 16  delta 0
+```
+
+Shutdown was clean: `daemon.stopped` is the last line in the JSONL.
+
+## Defects this exercise found
+
+Two in `compose/langfuse.yml`, one in `.env`, all three found by running it and
+none visible from reading it. They are written up in `compose/README.md`; the
+one worth repeating here is the failure *shape*:
+
+> `LANGFUSE_S3_EVENT_UPLOAD_REGION` was missing on the worker. The worker died
+> on every ingestion job with `Region is missing` — and the OTLP POST kept
+> returning **200**. A 200 from the collector is not evidence of ingestion. The
+> only honest check is to fetch the trace back by id, which is exactly what
+> `tests/live/langfuse.test.ts` does and what the local sink cannot do.
+
+The `.env` defect has the same shape: an unquoted `LANGFUSE_OTLP_AUTH=Basic
+<b64>` truncates to `Basic`, and the daemon reports it once as
+`obs.export_failed{error:"Unauthorized"}` and then serves turns perfectly while
+exporting nothing.
+
+## Still not verified
+
+- The real Telegram bot and group (`tests/live/telegram.test.ts`).
+- `compose/daemon.yml` — the daemon has still only been run directly.
+- Operation over days.

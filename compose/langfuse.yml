@@ -1,10 +1,10 @@
 # Langfuse v4 self-hosted — the generic trace/eval plane (design v1.0 §7).
 #
-# NOT VERIFIED IN THIS ENVIRONMENT: the machine this was authored on has no
-# Docker daemon, so this file has never been brought up. Treat it as a starting
-# point to run and correct, not as a tested artifact. What HAS been verified is
-# the daemon's OTLP export itself, against a real local sink
-# (`bun scripts/otlp-sink.ts`) — see docs/RUNBOOK-phase1-slice.md.
+# BROUGHT UP AND VERIFIED 2026-08-21 (docker-ce 29.7.2 inside WSL2, not Docker
+# Desktop): the daemon's spans are ingested and retrievable through Langfuse's
+# API, and `os trace` deep-links to them. Two defects in the first draft of this
+# file were found by running it — the ON CLUSTER migration and the worker's
+# missing S3 region, both fixed below. See docs/RUNBOOK-phase1-slice.md.
 #
 # Everything binds to 127.0.0.1. Exposure is `tailscale serve` only; never Funnel,
 # never a published port on 0.0.0.0.
@@ -28,6 +28,7 @@ services:
       ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY}      # 64 hex chars
       CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
       CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_CLUSTER_ENABLED: "false"   # single-node: migrations must not use ON CLUSTER
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
@@ -39,6 +40,18 @@ services:
       REDIS_CONNECTION_STRING: redis://:${REDIS_AUTH}@redis:6379
       TELEMETRY_ENABLED: "false"
       LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+      # Headless bootstrap: org, project, API keys and the first user are created
+      # on boot, so the deep-link project id and ${LANGFUSE_OTLP_AUTH} are known
+      # before anything runs. No clicking through the UI to get a key pair.
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID}
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD}
     restart: unless-stopped
 
   langfuse-worker:
@@ -52,9 +65,14 @@ services:
       ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY}
       CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
       CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_CLUSTER_ENABLED: "false"   # single-node: migrations must not use ON CLUSTER
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      # REGION is not optional on the worker: without it the AWS SDK throws
+      # "Region is missing", the otel-ingestion job dies, and the web side still
+      # returns 200 for the OTLP POST — traces are accepted and never appear.
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
       LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
       LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
       LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
@@ -90,7 +108,10 @@ services:
 
   minio:
     image: minio/minio
-    command: server /data --address ":9000" --console-address ":9001"
+    # The bucket must exist before the worker uploads its first event batch;
+    # MinIO does not create it, so pre-create the directory that backs it.
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server /data --address ":9000" --console-address ":9001"'
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
