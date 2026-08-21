@@ -1203,8 +1203,12 @@ Each milestone is committable, runnable, and has one check that fails if it is n
 3. **Rehydration quality is the real risk to "remembering agent."** The brief is the only thing
    crossing the 24 h boundary. Phase 1 should end with a deliberate test of a week-old topic, judged
    by Chris, not by the daemon.
-4. **Confirm:** timezone `America/Los_Angeles`; 07:00 / Sunday 18:00; 30 % / 25 % reserves; Bun;
-   TOML; and that closing (not deleting) forum topics on archive is what you want.
+4. ~~**Confirm:**~~ **Confirmed by Chris 2026-08-21** — all six as proposed, no changes:
+   timezone `America/Los_Angeles`; briefs at 07:00 daily and 18:00 Sunday (Phase 2 heartbeat
+   inherits these times); reserves 30 % of the 5 h window and 25 % of the weekly; Bun; TOML; and
+   archiving a Telegram topic **closes** it rather than deleting it. The first three are live in
+   `config/aleph.toml`; the brief times have no Phase 1 consumer and are recorded here so Phase 2
+   does not re-open the question.
 
 ---
 

@@ -91,8 +91,13 @@ they are written. The socket is 0600. Nothing binds a public interface.
 
 ## Open questions for Chris
 
-Listed in `docs/design/phase-1.md` §16; the short version is: confirm the
-timezone and brief times, the 30 % / 25 % window reserves, Bun and TOML, and that
-archiving a topic should *close* the Telegram forum topic rather than delete it.
-The window capacity numbers in `config/aleph.toml` are estimates and will be
-wrong until real `meter.window_exhausted` events calibrate them.
+The §16.4 confirmations are **settled** as of 2026-08-21 — timezone
+`America/Los_Angeles`, briefs at 07:00 daily and 18:00 Sunday, 30 % / 25 %
+reserves, Bun, TOML, and archiving *closes* a Telegram topic rather than
+deleting it.
+
+What remains open is not a question but a measurement: the window capacity
+numbers in `config/aleph.toml` are estimates and will be wrong until real
+`meter.window_exhausted` events calibrate them. `docs/design/phase-1.md` §16.1–3
+carries the other two standing risks — forum-topic bindings desyncing, and
+rehydration quality across the 24 h boundary.
