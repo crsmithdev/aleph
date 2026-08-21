@@ -30,6 +30,7 @@ import type { Channel, InboundMessage } from "./channels/channel.ts";
 import { TelegramChannel } from "./channels/telegram/index.ts";
 import { CliChannel, type CliRequest } from "./channels/cli/index.ts";
 import { reindex } from "./core/eventlog.ts";
+import { emitJoinAudit } from "./obs/join-audit.ts";
 
 export interface DaemonOptions {
   configFile?: string;
@@ -413,6 +414,10 @@ export class Daemon {
       case "events.reindex": {
         this.log.flush();
         return reindex(this.db, join(resolve(this.config.daemon.data_dir), "events"));
+      }
+      case "obs.join_audit": {
+        const since = String(args.since ?? new Date(this.clock.ms() - 86_400_000).toISOString());
+        return emitJoinAudit(this.db, this.systemIds(), since);
       }
       case "meter": return this.meter.windows();
       case "lane": {

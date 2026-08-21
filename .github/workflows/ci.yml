@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    paths: ["aleph-next/**", ".github/workflows/ci.yml"]
+  pull_request:
+    paths: ["aleph-next/**"]
+
+defaults:
+  run:
+    working-directory: aleph-next
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+
+      - run: bun install --frozen-lockfile
+
+      - name: typecheck
+        run: bun run typecheck
+
+      - name: docs (EVENTS.md + example config + design-doc file references)
+        run: bun run docs:check
+
+      - name: unit
+        run: bun test tests/unit
+
+      # Boots the real daemon binary as a subprocess and talks to it over its
+      # real socket; runs a real OTLP sink and a real fake Bot API server.
+      - name: integration
+        run: bun test tests/integration
+
+      # CI cannot prove the real Telegram bot works, the real SDK auth path
+      # works, or that Langfuse ingests what the sink accepted. Those are
+      # tests/live + docs/RUNBOOK-phase1-slice.md. A green badge here means
+      # less than it looks like, on purpose.
+      - name: what CI did not prove
+        run: |
+          echo "not covered by CI: live Agent SDK, live Telegram, Langfuse ingestion, multi-day operation"

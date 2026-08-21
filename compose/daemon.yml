@@ -1,0 +1,44 @@
+# The daemon itself. NOT VERIFIED IN THIS ENVIRONMENT (no Docker daemon here) —
+# the daemon has only been run directly with `bun src/daemon.ts`, which is what
+# docs/RUNBOOK-phase1-slice.md records.
+#
+# The ro/rw split below is the Phase 1 half of the mount plan in
+# docs/design/phase-1.md §10.3: enforcement lives at the mount, and the daemon's
+# own path checks are defence in depth, not the gate.
+name: aleph
+
+services:
+  daemon:
+    build: ..
+    # Never root: the Agent SDK refuses bypassPermissions as root, and the
+    # vault's read-only mounts are meaningless to a process that can remount.
+    user: "1000:1000"
+    environment:
+      ALEPH_CONFIG: /app/config/aleph.toml
+      ALEPH_GIT_SHA: ${ALEPH_GIT_SHA:-unknown}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      TELEGRAM_OWNER_ID: ${TELEGRAM_OWNER_ID}
+      LANGFUSE_OTLP_AUTH: ${LANGFUSE_OTLP_AUTH}
+      LANGFUSE_PROJECT_ID: ${LANGFUSE_PROJECT_ID}
+    volumes:
+      - ../config:/app/config:ro                    # protected core
+      - aleph-data:/app/data                        # db, event log, socket
+      - ${ALEPH_VAULT:-../vault}/wiki:/vault/wiki
+      - ${ALEPH_VAULT:-../vault}/log:/vault/log
+      - ${ALEPH_VAULT:-../vault}/inbox:/vault/inbox
+      - ${ALEPH_VAULT:-../vault}/research:/vault/research
+      - ${ALEPH_VAULT:-../vault}/attachments:/vault/attachments
+      - ${ALEPH_VAULT:-../vault}/archive:/vault/archive
+      - ${ALEPH_VAULT:-../vault}/MEMORY.md:/vault/MEMORY.md
+      - ${ALEPH_VAULT:-../vault}/index.md:/vault/index.md
+      - ${ALEPH_VAULT:-../vault}/human:/vault/human:ro     # Chris's notes
+      - ${ALEPH_VAULT:-../vault}/VAULT.md:/vault/VAULT.md:ro
+    # Loopback + tailnet only. No published ports: the CLI reaches the daemon
+    # over the Unix socket in the data volume.
+    network_mode: bridge
+    restart: unless-stopped
+    stop_grace_period: 150s
+
+volumes:
+  aleph-data:

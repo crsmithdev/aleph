@@ -13,7 +13,9 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentRunner, RunRequest, RunResult, RunUsage } from "./runner.ts";
 
-const STRIP_PREFIXES = ["CLAUDE_CODE_", "CLAUDE_", "ANTHROPIC_"];
+// "CLAUDE" without the underscore is deliberate: CLAUDECODE=1 is set by the
+// Claude Code harness and would otherwise survive the filter.
+const STRIP_PREFIXES = ["CLAUDE", "ANTHROPIC"];
 const KEEP = new Set(["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]);
 
 export function sanitizedEnv(env: NodeJS.ProcessEnv = process.env): Record<string, string> {

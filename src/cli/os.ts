@@ -101,6 +101,14 @@ const commands: Record<string, () => Promise<void>> = {
     out(t, (v) => `${v.url}\n${v.events.map((e: any) => `  ${e.ts}  ${e.kind}`).join("\n")}`);
   },
 
+  async obs() {
+    if (positional[1] !== "join-audit") fail("usage: os obs join-audit [--since 24h]");
+    const since = isoSince(String(flags.since ?? "24h"));
+    const r = (await call("obs.join_audit", { since })) as any;
+    out(r, (v) => `traces ${v.traces}  orphans ${v.orphans}  baseline ${v.baseline}  delta ${v.delta}${v.delta ? `\n  unclassified: ${v.unexpected.map((u: any) => u.kinds.join("+")).join(", ")}` : ""}`);
+    if (r.delta > 0) process.exit(1);
+  },
+
   async meter() {
     const m = (await call("meter")) as any;
     out(m, (v) => Object.values(v).map((w: any) =>
@@ -191,6 +199,7 @@ if (!command || command === "help" || flags.help) {
   os events [--since 1h] [--kind k] [--session s] [--trace t] [--limit n]
   os events reindex                  rebuild the SQLite index from JSONL
   os trace <trace-id>                tuple + Langfuse deep link
+  os obs join-audit [--since 24h]    orphan delta vs the classified baseline
   os meter [--json]                  window accumulators
   os lane <name> --enable|--disable
   os vault init [--dir path] | os vault check

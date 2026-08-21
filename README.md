@@ -1,0 +1,100 @@
+# aleph-next — Phase 1 spine
+
+Chris's personal AI operating system: a TypeScript daemon hosting a
+Claude-Agent-SDK agent, with Telegram + CLI channels, topic-based long-lived
+sessions, an Obsidian vault as memory, an append-only event log, and OTel →
+self-hosted Langfuse. Successor to [`crsmithdev/aleph`](https://github.com/crsmithdev/aleph).
+
+**This repository currently contains Phase 1 only** — the spine described in
+`docs/design/phase-1.md`. Heartbeat, capture, librarian, approvals, the
+verification kernel, the cockpit and research are Phases 2–4 and are *not* here.
+
+> **Where this lives.** This scaffold sits in a subdirectory of
+> `crsmithdev/imagegen` because that is the repository this build session was
+> scoped to. It is self-contained: `cp -r aleph-next ../aleph-next && cd
+> ../aleph-next && git init` gives it its own root, and `.github/workflows/ci.yml`
+> is written to work either way.
+
+## Quick start
+
+```bash
+bun install
+cp .env.example .env                       # names only; fill in what you use
+bun src/cli/os.ts vault init --dir ./vault
+bun src/cli/os.ts doctor                   # every precondition, one line each
+bun src/daemon.ts &
+bun src/cli/os.ts send "hello"
+```
+
+`config/aleph.toml` is the committed default; per-host overrides go in
+`config/hosts/<hostname>.toml`; secrets are `${ENV_VAR}` references resolved from
+the process environment at boot, and an unresolved one is a boot failure rather
+than an empty string.
+
+## What is verified, and what is not
+
+Claims here are backed by observed output in **`docs/RUNBOOK-phase1-slice.md`**.
+Anything not in that file is unproven.
+
+**Verified by running it:** daemon boot/shutdown; the full caused event chain for
+a turn; a real Agent SDK turn answering from a resumed session; one message → one
+joined trace tree with the event log's `trace_id` equal to the exported trace;
+SQLite index rebuildable from JSONL; window meter moving on real usage; the
+starvation ladder refusing a background lane above the reserve while interactive
+flows; vault prohibitions refusing writes to `human/`, `VAULT.md` and over-budget
+`MEMORY.md`; Telegram topic creation, binding, authorization, 429 handling and
+offset durability across a restart — against a real fake Bot API server.
+
+**Not verified:** the real Telegram bot and group (`tests/live/telegram.test.ts`
+needs one); Langfuse ingestion (`compose/langfuse.yml` has never been brought up
+— the build host has no Docker daemon); operation over days.
+
+CI runs unit + integration. A green badge does not mean the live paths work; the
+workflow says so out loud in its last step.
+
+## Layout
+
+| Path | What |
+|---|---|
+| `src/core/` | ids, clock, config, event envelope + kind registry, `emit()`, event log, bus, meter |
+| `src/obs/` | OTel provider, Langfuse attribute mapping, join audit |
+| `src/sessions/` | store, lifecycle (resume vs rehydrate), SDK + echo runners, `session-brief.md` |
+| `src/channels/` | Telegram forum-topic adapter, CLI socket channel |
+| `src/vault/` | bootstrap, write path, git, templates |
+| `src/routing/` | tier table, class ceilings, ±1 flex, escalation |
+| `src/daemon.ts` | composition root |
+| `src/cli/os.ts` | the `os` CLI |
+| `docs/design/phase-1.md` | the design this implements |
+| `docs/EVENTS.md` | generated from the kind registry |
+| `docs/RUNBOOK-phase1-slice.md` | observed output |
+
+## Commands
+
+```bash
+bun test                        # unit + integration (real files, sockets, subprocesses)
+bun test tests/unit
+bun test tests/integration
+ALEPH_LIVE=1 bun test tests/live    # real SDK / Telegram / Langfuse; spends real usage
+bun run typecheck
+bun run docs:check              # EVENTS.md fresh, configs valid, design doc file refs real
+bun scripts/gen-events-doc.ts   # regenerate docs/EVENTS.md
+bun scripts/otlp-sink.ts 4318 /tmp/spans.jsonl   # stand-in for Langfuse
+```
+
+## Phase 1 security posture
+
+The agent has **no tools** (`allowedTools: []`) and no egress. It reads what the
+daemon puts in its prompt and returns text; the daemon performs every side
+effect on paths it chooses. That is why the approval broker can wait for Phase
+2a without leaving a hole: there is no path from a message to a shell command, an
+arbitrary file write, or an outbound request. Inbound Telegram messages are
+checked twice (chat *and* sender). Event payloads pass a redaction filter before
+they are written. The socket is 0600. Nothing binds a public interface.
+
+## Open questions for Chris
+
+Listed in `docs/design/phase-1.md` §16; the short version is: confirm the
+timezone and brief times, the 30 % / 25 % window reserves, Bun and TOML, and that
+archiving a topic should *close* the Telegram forum topic rather than delete it.
+The window capacity numbers in `config/aleph.toml` are estimates and will be
+wrong until real `meter.window_exhausted` events calibrate them.

@@ -225,6 +225,12 @@ export function loadConfig(opts: {
   return { config: parsed.data, hash: h.digest("hex").slice(0, 16), sources, files };
 }
 
+/**
+ * Lane defaults. `backlog` defaults to DISABLED in code, not merely in the
+ * shipped config file: design v1.0 §2 calls it the largest silent consumer, and
+ * a default that only holds when someone remembers to write the section is not
+ * a default.
+ */
 export function laneConfig(config: Config, lane: Lane) {
-  return config.lanes[lane] ?? LaneSchema.parse({});
+  return config.lanes[lane] ?? LaneSchema.parse(lane === "backlog" ? { enabled: false } : {});
 }

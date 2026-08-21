@@ -74,11 +74,18 @@ export class Router {
     const tierConfig = this.config.routing.tiers[tier];
     if (!tierConfig) throw new Error(`routing class ${className} resolved to tier ${tier}, which has no [routing.tiers.${tier}] entry`);
     if (!tierConfig.enabled) {
-      const fallback = clampTier(shift(tier, 1), "T3");
-      const fb = this.config.routing.tiers[fallback];
-      if (!fb?.enabled) throw new Error(`tier ${tier} disabled and no enabled fallback above it`);
-      reasons.push(`tier ${tier} disabled -> ${fallback}`);
-      tier = fallback;
+      // Walk forward to the next ENABLED tier rather than stopping at the next
+      // named one: T0/T0g are configured-but-disabled in Phase 1, so a single
+      // step lands on another dead tier.
+      const from = tier;
+      let next = tier;
+      for (let i = ORDER.indexOf(tier) + 1; i < ORDER.length; i++) {
+        const candidate = ORDER[i]!;
+        if (this.config.routing.tiers[candidate]?.enabled) { next = candidate; break; }
+      }
+      if (next === from) throw new Error(`tier ${tier} is disabled and no enabled tier sits above it`);
+      reasons.push(`tier ${from} disabled -> ${next}`);
+      tier = next;
     }
 
     const route: Route = {

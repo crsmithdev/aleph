@@ -95,6 +95,8 @@ aleph-next/
 │   ├── core/
 │   │   ├── ids.ts             # ULID, prefixes, tuple type
 │   │   ├── clock.ts           # injectable clock — no bare Date.now() outside here
+│   │   ├── tracectx.ts        # synthetic remote parent so spans adopt the minted trace id
+│   │   ├── redact.ts          # secret filter applied to every payload
 │   │   ├── config.ts          # TOML load + Zod validate + env interpolation
 │   │   ├── envelope.ts        # event envelope schema + kind registry
 │   │   ├── emit.ts            # THE emission helper (§5.4)
@@ -136,9 +138,14 @@ aleph-next/
 │   ├── langfuse.yml           # Langfuse v4 self-hosted
 │   ├── daemon.yml             # aleph daemon + telegram-bot-api (2a)
 │   └── README.md
+├── scripts/
+│   ├── gen-events-doc.ts      # docs/EVENTS.md generator (CI runs it with --check)
+│   ├── check-docs.ts          # docs gate
+│   └── otlp-sink.ts           # standalone OTLP sink — Langfuse stand-in for local runs
 ├── docs/
 │   ├── design/phase-1.md      # this file
 │   ├── EVENTS.md              # generated kind registry (CI-checked against code)
+│   ├── RUNBOOK-phase1-slice.md # observed output of the end-to-end slice
 │   └── VERIFICATION.md        # gate table (aleph pattern, seeded for 2b)
 └── .github/workflows/ci.yml
 ```
@@ -237,6 +244,10 @@ export const LANES = [
   'backlog',       // 7. default OFF
 ] as const;
 ```
+
+`backlog` defaults to disabled **in code** (`laneConfig()`), not merely in the
+shipped config file — a default that only holds when someone remembers to write
+the TOML section is not a default.
 
 Phase 1 uses `interactive`, `control` and a stub `heartbeat` (health ping, zero-LLM). The other
 lanes exist in the enum, in config, in the meter and in the CLI from day one, **with no
@@ -341,7 +352,7 @@ Kinds are declared in one table in `envelope.ts` with a Zod payload schema each.
 → `emit()` throws in dev/CI, and in production logs `event.unregistered_kind` and writes the event
 anyway (dropping a real event to punish a schema slip is the wrong trade).
 
-Phase 1 registry (24 kinds):
+Phase 1 registry (36 kinds, `docs/EVENTS.md` is generated from it):
 
 | Group | Kinds |
 |---|---|
@@ -457,6 +468,15 @@ One **trace per turn** (or per background job). Root span `turn` with children `
 create; the `sdk.query` span carries the usage numbers the SDK reports back, so cost and tokens
 land on a span we control (which is also what the meter reads — one number, two consumers, no
 second source to disagree with itself).
+
+**The tuple's `trace_id` is the OTel trace id.** The daemon mints the trace id
+before any span exists (a message is received, a session resolved and a job
+queued before the turn starts), so spans are opened under a *synthetic remote
+parent* carrying that id (`src/core/tracectx.ts`) rather than letting OTel
+generate its own. This is not cosmetic: the first implementation let the two
+diverge, which made every `traces/{trace_id}` deep link point at a trace that did
+not exist. Found by running it and comparing the sink's output to the event log —
+see `docs/RUNBOOK-phase1-slice.md`.
 
 Attributes on **every** span (explicit, set by the worker itself — cockpit F1):
 
@@ -1181,3 +1201,35 @@ Each milestone is committable, runnable, and has one check that fails if it is n
    be lifted into `crsmithdev/aleph-next` as its own root.
 5. **Confirm:** timezone `America/Los_Angeles`; 07:00 / Sunday 18:00; 30 % / 25 % reserves; Bun;
    TOML; and that closing (not deleting) forum topics on archive is what you want.
+
+---
+
+## 17. Corrections this design took from being built
+
+The design above is as-implemented. Six things were wrong in the first draft or
+the first implementation, and all six were found by running the system rather
+than reading it. They are listed here because the pattern is the point:
+
+1. **Trace ids diverged** between the event log and the exported spans (§6.2).
+2. **`os send --topic X` forked a second session** rather than routing to topic
+   X — the CLI's container key *is* the topic slug and nothing resolved it (§8.5).
+3. **A path escaping the vault was silently sanitized** into an internal path and
+   written. `VaultWriter` now refuses; rewriting an escape into a successful
+   write to a different file is worse than no check (§10.4).
+4. **A disabled tier fell forward exactly one step**, landing on `T0g`, which is
+   also disabled in Phase 1. The router now walks to the next *enabled* tier (§9.3).
+5. **`backlog` defaulted to enabled** whenever a config omitted the section (§4.3).
+6. **The shutdown checkpoint was an unclassified join-audit orphan.** It is
+   legitimate — it runs after the bus drains — so it is now in the classified
+   baseline rather than a permanent amber the reader learns to ignore (§6.3).
+
+Measured facts worth keeping (they are assumptions elsewhere):
+
+- `@anthropic-ai/claude-agent-sdk@0.3.238` inherits `CLAUDE*`/`ANTHROPIC*` env
+  from its parent, **including `CLAUDECODE` with no underscore** — the env filter
+  strips on the prefix `CLAUDE`, not `CLAUDE_`, or every SDK session reports the
+  parent's identity (§7.5).
+- `permissionMode: "bypassPermissions"` refuses to run as root, which is why
+  `compose/daemon.yml` sets a non-root `user:`.
+- Bun's `[test] timeout` in `bunfig.toml` does not set the per-test timeout;
+  integration tests pass theirs explicitly.
