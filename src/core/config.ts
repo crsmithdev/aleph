@@ -156,13 +156,23 @@ function resolveEnv(obj: unknown, env: Record<string, string | undefined>, path 
   return obj;
 }
 
-/** ALEPH_DAEMON__DATA_DIR=... overrides daemon.data_dir. Operational keys only. */
+/**
+ * Harness variables that name no config key: they select the file, stamp the
+ * build, or gate the live tests. Everything else prefixed ALEPH_ is a config
+ * path — including a single-segment one like ALEPH_RUNNER, which addresses the
+ * top-level `runner` key. Dropping those silently means a container can be told
+ * `runner = "echo"` and quietly run the SDK instead.
+ */
+const NOT_CONFIG_KEYS = new Set(["ALEPH_CONFIG", "ALEPH_GIT_SHA", "ALEPH_LIVE", "ALEPH_VAULT"]);
+
+/** ALEPH_DAEMON__DATA_DIR=... overrides daemon.data_dir; ALEPH_RUNNER=... overrides runner. */
 function envOverrides(env: Record<string, string | undefined>): Json {
   const out: Json = {};
   for (const [k, v] of Object.entries(env)) {
     if (!k.startsWith("ALEPH_") || v === undefined) continue;
+    if (NOT_CONFIG_KEYS.has(k)) continue;
     const path = k.slice("ALEPH_".length).toLowerCase().split("__");
-    if (path.length < 2) continue;
+    if (path.length === 0 || path[0] === "") continue;
     let node = out;
     for (const seg of path.slice(0, -1)) {
       node[seg] ??= {};

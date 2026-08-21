@@ -1,0 +1,10 @@
+.git
+.worktrees
+node_modules
+data
+vault
+compose
+docs
+tests
+.env
+*.log

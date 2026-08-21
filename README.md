@@ -30,7 +30,8 @@ than an empty string.
 Claims here are backed by observed output in **`docs/RUNBOOK-phase1-slice.md`**.
 Anything not in that file is unproven.
 
-**Verified by running it:** daemon boot/shutdown; the full caused event chain for
+**Verified by running it:** daemon boot/shutdown, on the host and in the
+container from `compose/daemon.yml` with the §10.3 mount plan probed; the full caused event chain for
 a turn; a real Agent SDK turn answering from a resumed session; one message → one
 joined trace tree with the event log's `trace_id` equal to the trace **fetched
 back out of a self-hosted Langfuse**, deep link included;
@@ -42,8 +43,9 @@ offset durability across a restart — against a real fake Bot API server, and
 then against a real bot and a real forum group, including a phone-sent message
 driving a full turn and an unauthorized sender being refused.
 
-**Not verified:** `compose/daemon.yml` (the daemon has only ever been run
-directly); operation over days; rehydration of a week-old topic.
+**Not verified:** the Agent SDK runner *inside the container* (it needs a
+credential in the container environment; the containerized run used the echo
+runner); operation over days; rehydration of a week-old topic.
 
 CI runs unit + integration. A green badge does not mean the live paths work; the
 workflow says so out loud in its last step.

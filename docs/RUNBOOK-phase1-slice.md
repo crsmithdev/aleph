@@ -449,3 +449,100 @@ carrying `rejected` — and both halves are pinned by unit tests
 $ os obs join-audit --since 60m     # same events, daemon restarted with the fix
 traces 21  orphans 20  baseline 20  delta 0
 ```
+
+---
+
+# The daemon in a container — recorded 2026-08-21
+
+`compose/daemon.yml` had never been brought up. It is now, with `runner = "echo"`
+(the SDK runner needs a credential inside the container — see the gap at the end).
+Five things were wrong, every one of them silent or fatal only at runtime.
+
+```console
+$ docker compose -f daemon.yml build          # there was no Dockerfile; there is now
+ aleph-daemon  Built
+
+$ ALEPH_UID=$(id -u) ALEPH_GID=$(id -g) ALEPH_VAULT=~/ws/vault ALEPH_RUNNER=echo \
+  docker compose --env-file ../.env -f daemon.yml up -d
+ Container aleph-daemon-1  Started
+
+$ docker compose -f daemon.yml exec daemon bun src/cli/os.ts doctor
+ok    config           /app/config/aleph.toml (3817c688bbe97252)
+ok    database         /app/data/aleph.db journal_mode=wal
+ok    vault            /vault
+ok    vault-git        history on
+ok    socket           /app/data/aleph.sock
+ok    otlp             http://langfuse-web:3000/api/public/otel/v1/traces
+ok    langfuse-link    http://127.0.0.1:3010/project/aleph-next-local/traces/000…
+ok    telegram-config  disabled
+ok    clock            2026-08-21T19:48:17.601Z
+
+$ docker compose -f daemon.yml exec daemon bun src/cli/os.ts send --topic container-final 'final container turn'
+echo[0 prior turns, seed=none]: final container turn
+
+$ curl -sS -u "$PK:$SK" .../api/public/traces/18965b5b8f654ce483fd4693670d0f47
+name: turn | session: ses_01M0JXWRBGZ5YQT5HZTM185GD8
+obs : ['bus.finished', 'channel.message_received', 'bus.started', 'sdk.query',
+       'session.topic_inferred', 'channel.message_sent', 'session.created', 'turn', 'bus.submitted']
+
+$ docker compose -f daemon.yml exec daemon bun src/cli/os.ts status | tail -1
+otel     http://langfuse-web:3000/api/public/otel/v1/traces (0 export errors)
+```
+
+## The mount plan, enforced rather than asserted
+
+Design §10.3 says enforcement lives at the mount. Probed from inside the
+container, as the daemon's own uid:
+
+```console
+$ touch /vault/human/probe
+touch: cannot touch '/vault/human/probe': Read-only file system
+$ echo x >> /vault/VAULT.md
+sh: 1: cannot create /vault/VAULT.md: Read-only file system
+$ touch /vault/wiki/probe && git -C /vault status --porcelain
+?? log/2026-08-21.md
+?? wiki/probe
+```
+
+`docker compose stop` (SIGTERM, `stop_grace_period: 150s`) wrote
+`daemon.stopped` at 19:49:05 — the container shuts down as cleanly as the host
+process does.
+
+## Defects, in the order they surfaced
+
+1. **There was no Dockerfile at all.** `build: ..` had never been exercised.
+2. **`SQLITE_CANTOPEN` on first boot.** A named volume inherits the ownership of
+   the image path it covers; `/app/data` did not exist in the image, so Docker
+   created it root-owned and the deliberately-non-root daemon could not open the
+   database.
+3. **`ALEPH_RUNNER=echo` was silently ignored.** `envOverrides()` skipped every
+   single-segment key (`if (path.length < 2) continue`), so top-level config keys
+   could not be overridden and the container ran the SDK while claiming to be
+   told otherwise. Now only the harness variables (`ALEPH_CONFIG`,
+   `ALEPH_GIT_SHA`, `ALEPH_LIVE`, `ALEPH_VAULT`) are exempt.
+4. **`EACCES` on every vault write.** The container ran as uid 1000; the
+   bind-mounted vault is owned by the host user. `user:` is now
+   `${ALEPH_UID:-1000}:${ALEPH_GID:-1000}`.
+5. **The vault silently kept no history.** Mounting only the rw *subdirectories*
+   leaves `/vault` itself an implicit root-owned directory, and git refuses to
+   work in a worktree it does not own — `fatal: detected dubious ownership`.
+   `commit()` returns null on failure and the writer simply emits no
+   `vault.commit`, so nothing said so. The vault root is now mounted rw with
+   `human/` and `VAULT.md` re-mounted ro on top, and **`os doctor` gained a
+   `vault-git` check** so the next occurrence is loud.
+
+Two smaller ones: `host.docker.internal` cannot reach a loopback-bound Langfuse
+(the daemon joins the Langfuse compose network and addresses `langfuse-web:3000`
+instead), and the committed config carries no ingestion key or project id — both
+now come from the supervisor as `ALEPH_OBS__*` env.
+
+## Still not verified
+
+- **The SDK runner inside the container.** It needs `CLAUDE_CODE_OAUTH_TOKEN`
+  (from `claude setup-token`) or `ANTHROPIC_API_KEY` in the container
+  environment; the variable is wired through `compose/daemon.yml` and has never
+  been set. Everything here ran on `runner = "echo"`.
+- Telegram from the container: the committed config disables it, so the
+  container has only the CLI channel. The host process is what exercised
+  Telegram.
+- Operation over days.

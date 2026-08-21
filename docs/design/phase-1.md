@@ -919,7 +919,11 @@ must deliver is the *plan plus the daemon-side half*:
 | `.env` | not readable by the daemon's agent-facing code; injected as env by the supervisor | never |
 
 `compose/daemon.yml` encodes the ro/rw split from day one, so the sandbox story in 2b inherits a
-working mount layout instead of inventing one.
+working mount layout instead of inventing one. Running it corrected the shape: the vault **root** is
+mounted rw with `human/` and `VAULT.md` re-mounted ro on top, rather than mounting the rw
+subdirectories individually. Mounting only the subdirectories leaves `/vault` an implicit
+root-owned directory, and git refuses to operate in a worktree it does not own — so the vault
+accepts writes and keeps no history, silently. `os doctor`'s `vault-git` check exists for that.
 
 ### 10.4 Write path and git
 
@@ -1228,6 +1232,14 @@ than reading it. They are listed here because the pattern is the point:
    Telegram traffic. Classifying the *kind* would have hidden an accepted
    message that never reached the bus, so the audit classifies on the payload's
    `rejected` field instead (§6.3).
+8. **`ALEPH_RUNNER=echo` was silently ignored.** The env-override loader skipped
+   every single-segment key, so no top-level config key could be overridden and a
+   container asked for the echo runner got the SDK. Harness variables are now an
+   explicit exemption list rather than an accident of key shape (§9.1).
+9. **The containerized vault kept no history.** Mounting only the rw
+   subdirectories left `/vault` root-owned; git refuses a worktree it does not
+   own, `commit()` returns null, and the writer emits no `vault.commit` — a
+   silent loss. Mount plan corrected and `os doctor` gained `vault-git` (§10.3).
 
 Measured facts worth keeping (they are assumptions elsewhere):
 

@@ -8,6 +8,7 @@ import { existsSync } from "node:fs";
 import { loadConfig } from "../core/config.ts";
 import { cliRequest } from "../channels/cli/index.ts";
 import { bootstrapVault } from "../vault/bootstrap.ts";
+import { isRepo } from "../vault/git.ts";
 import { openDb, journalMode } from "../platform/db.ts";
 import { traceUrl } from "../obs/langfuse.ts";
 
@@ -160,6 +161,11 @@ const commands: Record<string, () => Promise<void>> = {
 
       const vaultRoot = resolve(cfg.config.daemon.vault_dir);
       add("vault", existsSync(`${vaultRoot}/VAULT.md`), `${vaultRoot} ${existsSync(`${vaultRoot}/VAULT.md`) ? "" : "(run: os vault init)"}`);
+
+      // A vault that is not a repo takes writes and silently keeps no history —
+      // the failure mode a container hits when .git is left out of the mounts.
+      add("vault-git", !existsSync(`${vaultRoot}/VAULT.md`) || isRepo(vaultRoot),
+        isRepo(vaultRoot) ? "history on" : `${vaultRoot} is not a git repo — writes will not be committed`);
 
       const sock = resolve(cfg.config.daemon.socket);
       add("socket", existsSync(sock), existsSync(sock) ? sock : `${sock} (daemon not running)`);

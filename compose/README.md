@@ -3,7 +3,7 @@
 | File | Status |
 |---|---|
 | `langfuse.yml` | **Brought up and verified 2026-08-21.** The stack boots, the daemon's spans are ingested, and `tests/live/langfuse.test.ts` passes against it. |
-| `daemon.yml` | **Never brought up.** Encodes the Phase 1 mount plan (design §10.3). The daemon has only been run directly via `bun src/daemon.ts`. |
+| `daemon.yml` | **Brought up and verified 2026-08-21** with `runner = "echo"`; the mount plan (design §10.3) is enforced and probed. The SDK runner in a container needs a credential and has not been run. |
 
 Verified on `docker-ce 29.7.2` running *inside* WSL2 under systemd — not Docker
 Desktop. Desktop works too if its WSL integration is enabled for the distro, but
@@ -62,3 +62,32 @@ unquoted `LANGFUSE_OTLP_AUTH=Basic <b64>` is truncated to `Basic` by `set -a; .
 .env`, the exporter sends a header that fails auth, and the only symptom is one
 `obs.export_failed` event with `error: "Unauthorized"` while the daemon keeps
 serving turns normally. Quote it.
+
+## Bringing the daemon up
+
+Langfuse first — the daemon joins its network by name:
+
+```bash
+docker compose --env-file ../.env -f langfuse.yml up -d
+ALEPH_UID=$(id -u) ALEPH_GID=$(id -g) ALEPH_VAULT=/path/to/vault \
+  docker compose --env-file ../.env -f daemon.yml up -d
+docker compose -f daemon.yml exec daemon bun src/cli/os.ts doctor
+```
+
+`ALEPH_UID`/`ALEPH_GID` must match the owner of the bind-mounted vault or every
+write fails with `EACCES`. The CLI runs *inside* the container because the socket
+lives in the `aleph-data` volume, not on the host.
+
+To use the real Agent SDK rather than the echo runner, put a credential in the
+environment — `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) or
+`ANTHROPIC_API_KEY` — and drop `ALEPH_RUNNER=echo`. That path is wired but
+unverified.
+
+## Defects daemon.yml had, found by running it
+
+Full list with evidence in `docs/RUNBOOK-phase1-slice.md`. The one worth
+repeating: mounting only the vault's rw subdirectories leaves `/vault` itself
+root-owned, git refuses a worktree it does not own, and the vault takes writes
+while keeping **no history at all** — with nothing logged, because `commit()`
+returns null and the writer emits no `vault.commit`. `os doctor` now has a
+`vault-git` check.

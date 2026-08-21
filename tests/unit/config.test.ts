@@ -40,6 +40,17 @@ describe("config", () => {
     expect(loaded.sources["sessions.archive_days"]).toBe("env");
   });
 
+  test("a top-level key is overridable too, and harness vars are not config", () => {
+    const root = dir({ "aleph.toml": `runner = "sdk"\n[sessions]\narchive_days = 7\n` });
+    const loaded = loadConfig({
+      file: join(root, "aleph.toml"),
+      host: "none",
+      env: { ALEPH_RUNNER: "echo", ALEPH_GIT_SHA: "deadbeef", ALEPH_CONFIG: "/elsewhere.toml" },
+    });
+    expect(loaded.config.runner).toBe("echo");
+    expect(loaded.sources["runner"]).toBe("env");
+  });
+
   test("an unresolved ${VAR} is a boot failure, never an empty string", () => {
     const root = dir({ "aleph.toml": `[telegram]\nbot_token = "\${NOPE_TOKEN}"\n` });
     expect(() => loadConfig({ file: join(root, "aleph.toml"), host: "none", env: {} })).toThrow(ConfigError);
