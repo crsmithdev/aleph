@@ -546,3 +546,72 @@ now come from the supervisor as `ALEPH_OBS__*` env.
   container has only the CLI channel. The host process is what exercised
   Telegram.
 - Operation over days.
+
+---
+
+# The soak — started 2026-08-21T20:05Z
+
+The only Phase 1 claim that cannot be earned in an afternoon is "survives days of
+operation", and §16.3's rehydration test needs a topic that is genuinely a week
+old. Both clocks now run. The daemon is a systemd user unit on `Lightbox2`
+(`runner = "sdk"`, Telegram enabled), state under
+`~/.local/share/aleph-next/{data,vault}`, carried over from the workspace used
+earlier today so the Telegram topic **"So what can I do from here?"** (created
+2026-08-21T17:54Z) is the subject for the week-old test.
+
+```console
+$ systemctl --user status aleph-next
+     Active: active (running) since Fri 2026-08-21 13:05:45 PDT
+   Main PID: 65501 (bun)
+
+$ os status
+daemon   pid 65501  up 5s  runner=sdk  config 71d0f77b0f10a3f5
+sessions 2 active   in-flight 0
+otel     http://127.0.0.1:3010/api/public/otel/v1/traces (0 export errors)
+```
+
+## Resume across a supervisor restart
+
+The turn before the restart established a fact; the turn after it recalled the
+fact, in a new process:
+
+```console
+$ os send --topic soak 'Reply with just: soak-start'
+soak-start
+
+$ systemctl --user restart aleph-next
+
+$ os send --topic soak 'What did I ask you to reply with a moment ago? Answer in three words or fewer.'
+"soak-start"
+```
+
+`daemon.stopped` at 20:06:11.499Z, `daemon.started` at 20:06:11.881Z — systemd's
+SIGTERM path drains the bus and checkpoints exactly as a manual kill does.
+`TimeoutStopSec=180` is deliberately above `shutdown_grace_seconds = 120`; the
+other way round, systemd SIGKILLs a daemon that is still draining.
+
+## Proving the poll loop is alive, given a bot cannot hear itself
+
+Telegram never delivers a bot its own messages, so posting as the bot proves
+nothing — the probe message did not appear in the event log, and should not
+have. What does prove it is asking Telegram for updates from a second client:
+
+```console
+$ curl "https://api.telegram.org/bot$TOKEN/getUpdates?timeout=5"
+{"ok":false,"error_code":409,"description":"Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"}
+
+$ sqlite3 ~/.local/share/aleph-next/data/aleph.db 'select * from kv where key="telegram.offset"'
+telegram.offset|223721430
+```
+
+The 409 is the daemon holding the long poll, and the persisted offset is what
+makes a restart re-deliver rather than drop.
+
+(The one earlier inbound attributed to the bot's own id was the forum
+*topic-created service message*, not a message the bot sent — which is why its
+`text` was empty.)
+
+## What this does not yet prove
+
+Nothing about days: it has run for minutes. Revisit on **2026-08-28** for the
+week-old rehydration judgement, which is Chris's to make, not the daemon's.

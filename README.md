@@ -79,6 +79,37 @@ bun scripts/gen-events-doc.ts   # regenerate docs/EVENTS.md
 bun scripts/otlp-sink.ts 4318 /tmp/spans.jsonl   # stand-in for Langfuse
 ```
 
+## Running it as a service
+
+The soak on `Lightbox2` runs under a systemd **user** unit with lingering
+enabled, so it survives logout and reboot:
+
+```ini
+# ~/.config/systemd/user/aleph-next.service
+[Service]
+WorkingDirectory=/home/crsmi/aleph-next
+EnvironmentFile=/home/crsmi/aleph-next/.env
+Environment=PATH=/home/crsmi/.bun/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/crsmi/.bun/bin/bun src/daemon.ts
+KillSignal=SIGTERM
+TimeoutStopSec=180          # shutdown_grace_seconds is 120
+Restart=on-failure
+```
+
+```bash
+loginctl enable-linger "$USER"
+systemctl --user enable --now aleph-next
+```
+
+Runtime state lives outside the checkout — `~/.local/share/aleph-next/{data,vault}`
+— so a `git clean` or a worktree cannot take the event log with it. Host paths,
+Telegram and the Langfuse ingestion header come from
+`config/hosts/<hostname>.toml`, which is gitignored and which the loader picks up
+by hostname with no flag.
+
+`TimeoutStopSec` must exceed `daemon.shutdown_grace_seconds` or systemd will
+SIGKILL a daemon that is still draining the bus.
+
 ## Phase 1 security posture
 
 The agent has **no tools** (`allowedTools: []`) and no egress. It reads what the
