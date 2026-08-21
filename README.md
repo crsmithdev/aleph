@@ -38,11 +38,12 @@ SQLite index rebuildable from JSONL; window meter moving on real usage; the
 starvation ladder refusing a background lane above the reserve while interactive
 flows; vault prohibitions refusing writes to `human/`, `VAULT.md` and over-budget
 `MEMORY.md`; Telegram topic creation, binding, authorization, 429 handling and
-offset durability across a restart — against a real fake Bot API server.
+offset durability across a restart — against a real fake Bot API server, and
+then against a real bot and a real forum group, including a phone-sent message
+driving a full turn and an unauthorized sender being refused.
 
-**Not verified:** the real Telegram bot and group (`tests/live/telegram.test.ts`
-needs one); `compose/daemon.yml` (the daemon has only ever been run directly);
-operation over days.
+**Not verified:** `compose/daemon.yml` (the daemon has only ever been run
+directly); operation over days; rehydration of a week-old topic.
 
 CI runs unit + integration. A green badge does not mean the live paths work; the
 workflow says so out loud in its last step.

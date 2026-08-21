@@ -17,6 +17,21 @@ export interface OrphanBaseline {
   expected_kinds: string[];
 }
 
+/**
+ * A rejected inbound message is an orphan by construction: the adapter refuses it
+ * before anything is submitted to the bus, so no turn trace ever forms. It is
+ * classified here rather than by kind, because an *accepted* message_received
+ * that never joined is a real defect and must stay in the delta.
+ */
+function isRejectedInbound(kind: string, payload: string | null): boolean {
+  if (kind !== "channel.message_received" || !payload) return false;
+  try {
+    return typeof (JSON.parse(payload) as { rejected?: unknown }).rejected === "string";
+  } catch {
+    return false;
+  }
+}
+
 export const DEFAULT_BASELINE: OrphanBaseline = {
   expected_kinds: [
     "daemon.started", "daemon.stopped", "daemon.killed", "daemon.boot_step", "daemon.config_loaded",
@@ -37,20 +52,25 @@ export interface JoinAuditResult {
 }
 
 export function joinAudit(db: Db, since: string, baseline: OrphanBaseline = DEFAULT_BASELINE): JoinAuditResult {
-  const rows = db.query<{ trace_id: string; kind: string }, [string]>(
-    "SELECT trace_id, kind FROM events WHERE ts >= ?",
+  const rows = db.query<{ trace_id: string; kind: string; payload: string | null }, [string]>(
+    "SELECT trace_id, kind, payload FROM events WHERE ts >= ?",
   ).all(since);
 
   const byTrace = new Map<string, string[]>();
-  for (const row of rows) byTrace.set(row.trace_id, [...(byTrace.get(row.trace_id) ?? []), row.kind]);
+  const classified = new Map<string, boolean>();   // trace -> every event expected
+  for (const row of rows) {
+    byTrace.set(row.trace_id, [...(byTrace.get(row.trace_id) ?? []), row.kind]);
+    const expected = baseline.expected_kinds.includes(row.kind) || isRejectedInbound(row.kind, row.payload);
+    classified.set(row.trace_id, (classified.get(row.trace_id) ?? true) && expected);
+  }
 
   // A trace is joined when it contains a unit of work; anything else is an orphan.
   const isJoined = (kinds: string[]) =>
     kinds.includes("session.turn_started") || kinds.includes("bus.started");
 
   const orphanTraces = [...byTrace.entries()].filter(([, kinds]) => !isJoined(kinds));
-  const expected = orphanTraces.filter(([, kinds]) => kinds.every((k) => baseline.expected_kinds.includes(k)));
-  const unexpected = orphanTraces.filter(([, kinds]) => !kinds.every((k) => baseline.expected_kinds.includes(k)));
+  const expected = orphanTraces.filter(([trace]) => classified.get(trace) === true);
+  const unexpected = orphanTraces.filter(([trace]) => classified.get(trace) !== true);
 
   return {
     since,

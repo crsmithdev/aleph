@@ -1222,6 +1222,12 @@ than reading it. They are listed here because the pattern is the point:
 6. **The shutdown checkpoint was an unclassified join-audit orphan.** It is
    legitimate — it runs after the bus drains — so it is now in the classified
    baseline rather than a permanent amber the reader learns to ignore (§6.3).
+7. **A refused inbound message was also an unclassified orphan** — it emits
+   `channel.message_received` and stops, so no `bus.started` ever joins its
+   trace. Found the first time the authorization check fired against real
+   Telegram traffic. Classifying the *kind* would have hidden an accepted
+   message that never reached the bus, so the audit classifies on the payload's
+   `rejected` field instead (§6.3).
 
 Measured facts worth keeping (they are assumptions elsewhere):
 

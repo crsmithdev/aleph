@@ -353,3 +353,99 @@ exporting nothing.
 - The real Telegram bot and group (`tests/live/telegram.test.ts`).
 - `compose/daemon.yml` — the daemon has still only been run directly.
 - Operation over days.
+
+---
+
+# Telegram, against the real bot and group — recorded 2026-08-21
+
+`tests/live/telegram.test.ts` had never run: it needs a real bot and a real
+forum group, and the build host had neither. Both now exist (a scratch group,
+per the warning in that file's header). Bot `@aleph_cs_bot`, chat
+`-1004445805540` (`is_forum: true`), owner `6973977956`.
+
+```console
+$ ALEPH_LIVE=1 bun test tests/live/telegram.test.ts
+ 2 pass
+ 0 fail
+ 2 expect() calls
+Ran 2 tests across 1 file. [10.77s]
+```
+
+That creates a forum topic in the real group, posts into it, and closes it.
+
+## A message sent from a phone, end to end
+
+`os doctor` reports `telegram-config enabled`; the daemon polls; the message was
+typed into the group's General topic on a phone with no terminal involved.
+
+```console
+$ os events --since 5m        # oldest first, trimmed to the payloads that matter
+17:54:12.305Z  session.topic_inferred
+   {"decision":"new","title":"So what can I do from here?","alternatives":["langfuse-gate"],
+    "rule":"default-to-new (no explicit target)"}
+17:54:12.314Z  channel.message_received
+   {"channel":"telegram","text":"So what can I do from here?",
+    "external":{"chat_id":"-1004445805540","message_id":"6","from":"6973977956"}}
+17:54:12.784Z  channel.topic_created   {"channel":"telegram","external_id":"7","title":"So what can I do from here?"}
+17:54:12.792Z  routing.decided         {"class":"conversation","tier":"T2","model":"claude-sonnet-5"}
+17:54:20.975Z  meter.usage_recorded    {"lane":"interactive","weighted":26240.75,"cost_usd":0.1236,"source":"sdk"}
+17:54:20.984Z  vault.written           {"path":"log/2026-08-21.md","bytes":1454,"mode":"append"}
+17:54:20.988Z  session.turn_completed  {"ms":8182,"reply_chars":1054}
+17:54:21.469Z  channel.message_sent    {"channel":"telegram","external_id":"8","parts":1}
+
+$ curl -sS -u "$PK:$SK" .../api/public/traces/0206c98537b37f594b7264c0608ad1f0
+trace  : 0206c98537b37f594b7264c0608ad1f0
+name   : turn
+session: ses_01M0JQAZP1MN66EMBWDAPRF1ZJ
+tags   : ['lane:interactive', 'origin:channel', 'session:ses_01M0JQAZP1MN66EMBWDAPRF1ZJ']
+obs    : ['bus.finished', 'channel.message_sent', 'turn', 'sdk.query', 'channel.topic_created',
+          'bus.started', 'bus.submitted', 'channel.message_received', 'session.topic_inferred',
+          'session.created']
+
+$ os sessions
+active   so-what-can-i-do-from-here       turns=1    last=2026-08-21T17:54:20.967Z
+active   langfuse-gate                    turns=2    last=2026-08-21T16:12:54.578Z
+```
+
+Note the behaviour, which is §8.4 working as designed and still surprising the
+first time: a message in **General** with no explicit target infers a *new*
+topic, so the daemon created forum topic `7` and replied there rather than in
+General.
+
+## The authorization check, observed rather than asserted
+
+The live test's own post — sent by the bot — came back through the poll loop and
+was refused:
+
+```json
+{"kind":"channel.message_received","payload":{"channel":"telegram","text":"",
+ "external":{"chat_id":"-1004445805540","thread_id":"3","message_id":"5","from":"8643553633"},
+ "rejected":"unauthorized"}}
+```
+
+`8643553633` is the bot's own id, not the owner's. Nothing was submitted to the
+bus. This is the first time that path has fired against real traffic.
+
+## The defect it exposed
+
+A refused message emits `channel.message_received` and then stops, so its
+`trace_id` never grows a `bus.started` — an orphan. The join audit called it out:
+
+```console
+$ os obs join-audit --since 10m
+traces 9  orphans 8  baseline 7  delta 1
+  unclassified: channel.message_received
+```
+
+The wrong fix is to add `channel.message_received` to the baseline's
+`expected_kinds`: that would also classify an *accepted* message that never
+reached the bus, which is a genuine failure and the exact thing this audit
+exists to catch. The audit now classifies on the payload instead — an orphan
+trace is expected if every event in it is a baseline kind **or** an inbound
+carrying `rejected` — and both halves are pinned by unit tests
+(`tests/unit/join-audit.test.ts`).
+
+```console
+$ os obs join-audit --since 60m     # same events, daemon restarted with the fix
+traces 21  orphans 20  baseline 20  delta 0
+```
