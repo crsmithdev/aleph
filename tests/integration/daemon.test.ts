@@ -1,5 +1,5 @@
 import { test, expect, describe, afterEach } from "bun:test";
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, chmodSync } from "node:fs";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { makeWorkspace, type Workspace } from "../helpers/workspace.ts";
@@ -44,6 +44,34 @@ describe("boot and shutdown", () => {
     expect(log.at(-1)!.kind).toBe("daemon.stopped");
     const raw = readFileSync(join(ws.eventsDir, readdirSync(ws.eventsDir)[0]!), "utf8");
     expect(raw.endsWith("\n")).toBe(true);
+  }, 60_000);
+});
+
+describe("a failed turn", () => {
+  test("answers the requester instead of leaving the CLI hanging", async () => {
+    ws = makeWorkspace();
+    daemon = await startDaemon(ws.configFile, ws.socket);
+
+    // One good turn first, so the vault log file exists and the only thing the
+    // next turn cannot do is write to it.
+    expect(await daemon.send("first")).toContain("first");
+
+    // The real failure this reproduces: the container ran as a uid that did not
+    // own the bind-mounted vault, every write hit EACCES, and `os send` blocked
+    // for ten minutes with nothing on stdout.
+    chmodSync(join(ws.vaultDir, "log"), 0o555);
+    try {
+      const started = Date.now();
+      const reply = await daemon.send("this turn cannot write");
+      expect(reply).toContain("turn failed");
+      expect(Date.now() - started).toBeLessThan(30_000);
+
+      const log = events(ws);
+      expect(log.some((e) => e.kind === "session.turn_failed")).toBe(true);
+      expect(log.some((e) => e.kind === "bus.finished" && e.payload.ok === false)).toBe(true);
+    } finally {
+      chmodSync(join(ws.vaultDir, "log"), 0o755);
+    }
   }, 60_000);
 });
 

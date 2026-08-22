@@ -322,10 +322,22 @@ export class Daemon {
       });
     }
 
-    const out = await this.lifecycle.runTurn({
-      session, text: payload.message.text, lane: job.lane, ids: job.ids,
-      causedBy: job.caused_by, channel: payload.message.channel,
-    });
+    let out;
+    try {
+      out = await this.lifecycle.runTurn({
+        session, text: payload.message.text, lane: job.lane, ids: job.ids,
+        causedBy: job.caused_by, channel: payload.message.channel,
+      });
+    } catch (e) {
+      // A failed turn still owes the requester an answer. `os send` blocks on a
+      // reply that only arrives through the channel, so without this the CLI
+      // hangs for the full 600 s timeout on every failure — silence that reads
+      // as a hang rather than as the error it is. The throw is preserved so the
+      // bus still records bus.finished ok:false.
+      await this.reply({ ...payload, thread_id: threadId },
+        `turn failed: ${e instanceof Error ? e.message : String(e)}`, job.ids, job.caused_by);
+      throw e;
+    }
 
     await this.reply({ ...payload, thread_id: threadId }, out.reply, job.ids, out.events.turnCompleted ?? job.caused_by);
   }

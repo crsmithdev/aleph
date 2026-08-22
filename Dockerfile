@@ -30,4 +30,5 @@ RUN mkdir -p /app/data && chmod 0777 /app/data
 # and read-only vault mounts mean nothing to a process that can remount them.
 USER bun
 
+ENTRYPOINT ["/app/scripts/container-entrypoint.sh"]
 CMD ["bun", "src/daemon.ts"]

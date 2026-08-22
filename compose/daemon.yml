@@ -39,6 +39,11 @@ services:
       ALEPH_OBS__LANGFUSE_PROJECT_ID: ${LANGFUSE_PROJECT_ID}
       ALEPH_RUNNER: ${ALEPH_RUNNER:-sdk}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # The runtime uid has no passwd entry, so HOME would be "/" and unwritable.
+      # The Agent SDK keeps its session transcript under $HOME/.claude: without
+      # this the first turn answers and every resume fails. It lives in the data
+      # volume so transcripts survive `up --force-recreate`.
+      HOME: /app/data/home
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
       TELEGRAM_OWNER_ID: ${TELEGRAM_OWNER_ID}

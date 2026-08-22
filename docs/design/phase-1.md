@@ -1244,6 +1244,14 @@ than reading it. They are listed here because the pattern is the point:
    subdirectories left `/vault` root-owned; git refuses a worktree it does not
    own, `commit()` returns null, and the writer emits no `vault.commit` — a
    silent loss. Mount plan corrected and `os doctor` gained `vault-git` (§10.3).
+10. **The SDK's session transcript had nowhere to live in the container.** The
+   runtime uid has no passwd entry, so `HOME` was `/`; the first turn answered
+   and every resume failed with `error_during_execution`. `HOME` now points into
+   the data volume (§7.5).
+11. **A failed turn hung the CLI for its full 600 s timeout.** `os send` waits
+   for a reply delivered through the channel, and the throw path skipped
+   `reply()` entirely — the daemon recorded `session.turn_failed` and told the
+   person waiting nothing. Failures now answer and still rethrow (§8.5).
 
 Measured facts worth keeping (they are assumptions elsewhere):
 

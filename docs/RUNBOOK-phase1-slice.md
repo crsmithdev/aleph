@@ -615,3 +615,80 @@ makes a restart re-deliver rather than drop.
 
 Nothing about days: it has run for minutes. Revisit on **2026-08-28** for the
 week-old rehydration judgement, which is Chris's to make, not the daemon's.
+
+---
+
+# The SDK runner inside the container — recorded 2026-08-22
+
+The last open item. `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) now
+lives in `.env`, and the container runs `runner = "sdk"` against the real Agent
+SDK. Two more defects fell out, both of which only a *second* turn could expose.
+
+```console
+$ ALEPH_UID=$(id -u) ALEPH_GID=$(id -g) ALEPH_VAULT=~/.local/share/aleph-next/vault-container \
+  docker compose --env-file ../.env -f daemon.yml up -d --build
+ Container aleph-daemon-1  Started
+
+$ docker compose -f daemon.yml exec daemon bun src/cli/os.ts status | head -1
+daemon   pid 1  up 0s  runner=sdk  config 3b895ab8758fd2b4
+
+$ docker compose -f daemon.yml exec daemon bun src/cli/os.ts send --topic sdk-in-container 'Reply with exactly: container-sdk-ok'
+container-sdk-ok
+
+$ docker compose -f daemon.yml exec daemon bun src/cli/os.ts send --topic sdk-resume 'Remember the number 41. Reply with just: noted'
+noted
+$ docker compose -f daemon.yml exec daemon bun src/cli/os.ts send --topic sdk-resume 'What number? Reply with just the number.'
+41
+```
+
+The trace, fetched back out of Langfuse rather than out of our own log:
+
+```console
+name: turn | session: ses_01M0KGAD4Y4SFASPM9999Z59TD | user: chris
+obs : ['turn', 'channel.message_sent', 'sdk.query', 'bus.finished', 'bus.started',
+       'bus.submitted', 'channel.message_received']
+otel  http://langfuse-web:3000/api/public/otel/v1/traces (0 export errors)
+```
+
+## Defect 1 — the first turn worked and every resume failed
+
+```json
+{"kind":"session.turn_failed","payload":{"error":"Error: sdk result error_during_execution: no detail"}}
+```
+
+The container runs as the host user's uid so it can write the bind-mounted
+vault, and that uid has no `/etc/passwd` entry — so `HOME` was `/`, which is not
+writable:
+
+```console
+$ docker compose exec daemon sh -c 'echo HOME=$HOME; touch $HOME/.probe'
+HOME=/
+touch: cannot touch '//.probe': Permission denied
+```
+
+The Agent SDK keeps its session transcript under `$HOME/.claude`. With nowhere
+to write it, a fresh turn still answers — nothing to resume — and every resume
+after it dies. `HOME` is now `/app/data/home`, inside the data volume so
+transcripts outlive `--force-recreate`, and an entrypoint creates it whatever
+state that volume is in.
+
+## Defect 2 — a failed turn hung the CLI for ten minutes
+
+Watching defect 1 happen exposed a worse one. `os send` blocks on a reply that
+only ever arrives through the channel; `handleTurn` threw before `reply()`, so
+nothing resolved the pending promise and the CLI sat on its 600 s timeout with
+an empty stdout. The event log had already recorded `session.turn_failed` and
+`bus.finished ok:false` 1.4 seconds in — the daemon knew, and said nothing to
+the person waiting.
+
+A failed turn now answers with `turn failed: <error>` and still rethrows, so the
+bus continues to record the failure. `tests/integration/daemon.test.ts` pins it
+by chmod-ing the vault log directory read-only mid-run — the same EACCES that
+started this — and asserting the reply arrives in under 30 s. Without the fix
+that test times out at 60 s; the failure is the point of the test.
+
+## Phase 1 is now verified end to end
+
+Everything in `README.md`'s verified list has been observed, on the host and in
+the container. What remains is time: the soak (started 2026-08-21T20:05Z) and
+the week-old rehydration judgement due 2026-08-28, which is Chris's call.
