@@ -27,7 +27,7 @@ data_dir = "${dataDir}"
 vault_dir = "${vaultDir}"
 socket = "${socket}"
 shutdown_grace_seconds = 5
-tick_seconds = 3600
+tick_seconds = ${overrides.tick_seconds ?? "3600"}
 
 [telegram]
 enabled = false

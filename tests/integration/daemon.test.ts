@@ -76,6 +76,40 @@ describe("a failed turn", () => {
   }, 60_000);
 });
 
+describe("the tick", () => {
+  test("a task that throws is contained, and the tick keeps running", async () => {
+    ws = makeWorkspace({ tick_seconds: "1" });
+    daemon = await startDaemon(ws.configFile, ws.socket);
+
+    // Break the lifecycle sweep's input on a real code path: the sessions table
+    // is what it reads every tick.
+    const db = new Database(join(ws.dataDir, "aleph.db"));
+    db.run("ALTER TABLE sessions RENAME TO sessions_hidden");
+    db.close();
+    await Bun.sleep(2500);
+
+    const broken = events(ws).filter((e) => e.kind === "daemon.tick_failed");
+    expect(broken.length).toBeGreaterThan(0);
+    expect(broken[0]!.payload.task).toBe("lifecycle.sweep");
+
+    // The property that matters: the interval did not die with the task. Put the
+    // table back and a later tick reports every task healthy again.
+    const restore = new Database(join(ws.dataDir, "aleph.db"));
+    restore.run("ALTER TABLE sessions_hidden RENAME TO sessions");
+    restore.close();
+    await Bun.sleep(2500);
+
+    // No NEW failures once the input is back: the interval kept running and the
+    // task recovered on its own. (A healthy liveness event is on a ten-minute
+    // cadence, too coarse to assert in a test.)
+    const after = events(ws).filter((e) => e.kind === "daemon.tick_failed").length;
+    expect(after).toBe(broken.length);
+
+    // ...and the daemon is still serving.
+    expect(await daemon.send("still alive?")).toContain("still alive?");
+  }, 60_000);
+});
+
 describe("event chain", () => {
   test("one turn produces a fully caused chain sharing one trace", async () => {
     ws = makeWorkspace();

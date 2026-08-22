@@ -1316,6 +1316,12 @@ than reading it. They are listed here because the pattern is the point:
    `wrapUntrusted()` guarantees a section cannot be closed from inside (§7.4).
    Found by red-teaming the Phase 2a design, not by using the system.
 
+16. **A throw in any tick task killed the other two, silently.** `onTick` ran the
+   meter sweep, the lifecycle sweep and the bus pump unguarded, so one failure
+   stopped sessions ageing and the bus pumping with no event to say so. Each task
+   is guarded on its own now, a failure emits `daemon.tick_failed`, and
+   `daemon.tick` carries liveness on a ten-minute cadence (§4.4).
+
 Measured facts worth keeping (they are assumptions elsewhere):
 
 - `@anthropic-ai/claude-agent-sdk@0.3.238` inherits `CLAUDE*`/`ANTHROPIC*` env

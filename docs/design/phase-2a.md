@@ -82,7 +82,8 @@ shipped but still reads as future work here is exactly the defect this section e
 |---|---|---|
 | `log/` keyed on a UTC `new Date()` outside `clock.ts`; per-directory temp file; `commit()` staging a pathspec then committing the whole index | `206a9d9` — `Clock.localDate()`, `VaultWriter` takes clock + zone, per-target temp, `git commit -- <paths>` | `tests/unit/boundaries.test.ts` "the clock invariant", `tests/integration/lifecycle.test.ts` "today is the configured zone's date" |
 | An invalid `daemon.timezone` booted cleanly and then killed every `log/` write with an uncaught `RangeError` — a failure mode the fix above introduced | `dcc4416` — refused at config load | `tests/unit/config.test.ts` "a typo'd timezone is a boot failure" |
-| §2.4 — the brief write/read loop | this commit — entity escaping, structural parser, `wrapUntrusted()` | `tests/unit/brief.test.ts` |
+| §2.4 — the brief write/read loop | `605c6d6` — entity escaping, structural parser, `wrapUntrusted()` | `tests/unit/brief.test.ts` |
+| §2.3 — the unguarded tick | this commit — per-task guards, `daemon.tick_failed`, `daemon.tick` liveness | `tests/integration/daemon.test.ts` "a task that throws is contained" |
 
 phase-1 §17 carries these as entries 13–15, §10.4 says `log/` is keyed on the local date, §7.4
 records the escaping, and §13 no longer lets "the agent has no tools" be read as a claim about
@@ -129,7 +130,7 @@ sentinel mode, so this touches point 1 only — revision 2 claimed all three.
 Retained as a heading only so §13's numbering keeps meaning. The work is done; what remains is
 amending phase-1 §10.4 and §17, which M0 covers.
 
-### 2.3 The tick has no failure boundary
+### 2.3 The tick has no failure boundary — shipped, see the table above
 
 `onTick` (`src/daemon.ts:196-203`) has no `try/catch` and emits no liveness event. A throw in any
 of its three tasks — the meter sweep, the lifecycle sweep, the bus pump — kills the other two, and
@@ -811,7 +812,7 @@ one place the ledger's non-rebuildability (§4.2) is visible to the operator: if
 | M | Content | Done when |
 |---|---|---|
 | ~~**M0a**~~ | **§2.4** — done. Entity escaping, a structural parser, `wrapUntrusted()`, and `tests/unit/brief.test.ts` | ✅ A reply that forges a section or closes a tag survives as inert text |
-| **M0b** | §2.1 meter + `llm` on `Job`; §2.3 tick guards; amend phase-1 §10.4, §11.4, §13, §5.6 and §17 for everything M0 changed, including the two already shipped | A zero-LLM `control` job is admitted with both windows exhausted; a thrown tick task does not stop the others; phase-1 no longer contradicts the code |
+| **M0b** | §2.1 meter + `llm` on `Job`; amend phase-1 §11.4 and §5.6. Deferred to M1: it only matters once approvals exist | A zero-LLM `control` job is admitted with both windows exhausted |
 | **M1** | `src/approvals/`, the table, states, TTL + boot sweeps, `ALEPH_FAKE_CLOCK` seam | Integration: request → expire → denied across a restart, with no race before the socket binds |
 | **M2** | Telegram callback path end to end, plus the fake server's `callback_query`, markup capture and `pushCallback()` | Integration: forged sender, double-tap, decision on an expired prompt |
 | **M3** | `propose_vault_write`, allow-list, `subject_hash`, perform, supersession | Live: a real approval performs a real wiki write; a real denial does not |

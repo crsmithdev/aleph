@@ -49,6 +49,9 @@ export interface TurnJobPayload {
   thread_id?: string;
 }
 
+/** Liveness cadence, in wall-clock time so it does not move when tick_seconds does. */
+const LIVENESS_INTERVAL_MS = 10 * 60 * 1000;
+
 export class Daemon {
   readonly config: Config;
   readonly configHash: string;
@@ -70,6 +73,7 @@ export class Daemon {
   private tick: ReturnType<typeof setInterval> | null = null;
   private readonly startedAt: number;
   private stopping = false;
+  private lastLivenessAt = 0;
 
   constructor(opts: DaemonOptions = {}) {
     this.clock = opts.clock ?? systemClock;
@@ -193,12 +197,47 @@ export class Daemon {
     this.tick.unref?.();
   }
 
+  /**
+   * Every task is guarded on its own. Unguarded, a throw in any one of them took
+   * the other two with it and the only symptom was silence — the meter stopped
+   * sweeping, sessions stopped ageing and the bus stopped pumping, all at once.
+   * Phase 2a puts the approval TTL sweep here too, so the blast radius would
+   * have grown to include the safety gate (docs/design/phase-2a.md §2.3).
+   */
   private onTick(): void {
     if (this.stopping) return;
     const ids = this.systemIds();
-    this.meter.sweep(ids);
-    this.lifecycle.sweep(ids);
-    this.bus.pump();
+    const tasks: Array<[string, () => void]> = [
+      ["meter.sweep", () => this.meter.sweep(ids)],
+      ["lifecycle.sweep", () => this.lifecycle.sweep(ids)],
+      ["bus.pump", () => this.bus.pump()],
+    ];
+
+    let failed = 0;
+    for (const [name, run] of tasks) {
+      try {
+        run();
+      } catch (e) {
+        failed++;
+        // Emitting must not itself be able to kill the tick.
+        try {
+          emit("daemon.tick_failed", ids, { task: name, error: e instanceof Error ? e.message : String(e) }, {
+            cause: { kind: "computed", text: `tick task ${name} threw; the other tasks still ran`, source: "daemon.ts:onTick" },
+          });
+        } catch { /* the log is already the thing that is broken */ }
+      }
+    }
+
+    // Liveness the heartbeat can check, at a cadence that does not flood the log.
+    const now = this.clock.ms();
+    if (failed > 0 || now - this.lastLivenessAt >= LIVENESS_INTERVAL_MS) {
+      this.lastLivenessAt = now;
+      try {
+        emit("daemon.tick", ids, { tasks_ok: tasks.length - failed, tasks_failed: failed }, {
+          cause: { kind: "computed", text: `tick ran ${tasks.length - failed}/${tasks.length} tasks`, source: "daemon.ts:onTick" },
+        });
+      } catch { /* as above */ }
+    }
   }
 
   /** Inbound from any channel: authorize, resolve topic, submit a turn job. */

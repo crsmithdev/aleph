@@ -7,7 +7,7 @@ Every event carries the envelope of `docs/design/phase-1.md` §5.2: `v`, `id`, `
 `kind`, `ids` (the tuple), `caused_by`, `cause`, `payload`, `actor`. The columns below
 describe only the per-kind `payload`.
 
-37 kinds in 9 groups.
+39 kinds in 9 groups.
 
 ## bus
 
@@ -38,6 +38,8 @@ describe only the per-kind `payload`.
 | `daemon.killed` | `signal`: string |
 | `daemon.started` | `version`: string, `git_sha`?: string, `config_hash`: string, `pid`: number |
 | `daemon.stopped` | `reason`: string, `uptime_ms`: number, `in_flight`: number |
+| `daemon.tick` | `tasks_ok`: number, `tasks_failed`: number |
+| `daemon.tick_failed` | `task`: string, `error`: string |
 
 ## event
 
