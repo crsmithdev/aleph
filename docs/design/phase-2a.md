@@ -855,8 +855,9 @@ tests/live/approvals.test.ts
 3. **The ledger is not rebuildable** (§4.2) — a deliberate exception to invariant 2. Losing
    `aleph.db` loses approval state while the JSONL still reads `requested`. phase-1 §5.5 names
    litestream and nothing implements it.
-4. **The prompt is only as good as its subject line.** If M3 shows path + size is not enough to
-   decide on a phone, the fix is a diff preview, which is a design change.
+4. **The prompt is only as good as its subject line.** Preview-on-request (§5.3) is the answer to
+   "can you decide from this"; what remains a risk is whether the *default* line — path, mode,
+   size — is enough that you rarely need the preview. M3 tells us.
 5. **Confirm:** cutting class grants; deferring capture, librarian, brief, memory gate, ntfy and
    Syncthing out of 2a entirely; and 15 minutes as the TTL.
 6. ~~**Does the prompt show the body?**~~ **Answered: preview on request** (§5.3).
