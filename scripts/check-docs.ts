@@ -46,8 +46,15 @@ const designDocs = Bun.spawnSync(["bash", "-c", "ls docs/design/*.md"]).stdout.t
 const prose = [...new Set(designDocs.flatMap((f) =>
   [...readFileSync(f, "utf8").matchAll(/`([A-Za-z0-9_./-]+\.(?:ts|toml|yml|json|md|sh))`/g)].map((m) => m[1]!),
 ))].filter((r) => ROOTED.test(r));
-const brokenPaths = prose.filter((r) => !existsSync(r));
+// A design doc for unbuilt work legitimately names files it will create. Those
+// go in a ```planned block, so a forward reference is declared rather than
+// indistinguishable from a dead one.
+const planned = new Set(designDocs.flatMap((f) =>
+  [...readFileSync(f, "utf8").matchAll(/```planned\n([\s\S]*?)```/g)]
+    .flatMap((m) => m[1]!.split("\n").map((l) => l.trim()).filter(Boolean)),
+));
+const brokenPaths = prose.filter((r) => !existsSync(r) && !planned.has(r));
 if (brokenPaths.length) fail(`design docs point at paths that do not exist: ${brokenPaths.join(", ")}`);
-else ok(`${designDocs.length} design doc(s) cite ${prose.length} repo paths, all present`);
+else ok(`${designDocs.length} design doc(s) cite ${prose.length} repo paths (${planned.size} planned), all resolve`);
 
 process.exit(failed ? 1 : 0);

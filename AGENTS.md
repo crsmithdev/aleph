@@ -7,8 +7,14 @@ and it is more detailed than this file.
 `docs/design/phase-2a.md` is the **next** phase's design: the approval broker
 and agent-chosen vault writes, plus cron. It is designed and **not built** —
 nothing in `src/` implements it yet, and `docs/RUNBOOK-phase2a.md` is
-deliberately empty. Its §2 lists three defects in *this* code that must be fixed
-before any of it starts, and its §13 records what a red team changed.
+deliberately empty. Its §2 lists defects in *this* code that must be fixed
+first, and §13 records what two rounds of red-teaming changed.
+
+**Read §2.4 before touching `src/sessions/lifecycle.ts` or `brief.ts`.** The
+daemon copies the model's own output into `session-brief.md` every five turns
+and reads it back into the next system prompt, unescaped, through a
+section-delimited parser. The agent authors its own future prompt today, with no
+gate. That is a live property of this code, not a proposal.
 
 ## The rule that matters
 
