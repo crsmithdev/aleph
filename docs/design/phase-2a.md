@@ -82,9 +82,11 @@ shipped but still reads as future work here is exactly the defect this section e
 |---|---|---|
 | `log/` keyed on a UTC `new Date()` outside `clock.ts`; per-directory temp file; `commit()` staging a pathspec then committing the whole index | `206a9d9` — `Clock.localDate()`, `VaultWriter` takes clock + zone, per-target temp, `git commit -- <paths>` | `tests/unit/boundaries.test.ts` "the clock invariant", `tests/integration/lifecycle.test.ts` "today is the configured zone's date" |
 | An invalid `daemon.timezone` booted cleanly and then killed every `log/` write with an uncaught `RangeError` — a failure mode the fix above introduced | `dcc4416` — refused at config load | `tests/unit/config.test.ts` "a typo'd timezone is a boot failure" |
+| §2.4 — the brief write/read loop | this commit — entity escaping, structural parser, `wrapUntrusted()` | `tests/unit/brief.test.ts` |
 
-phase-1 §17 gains entries 13–15 for these, and phase-1 §10.4 is amended to say `log/` is keyed on
-the **local** date. Neither has been done yet; doing it is part of M0.
+phase-1 §17 carries these as entries 13–15, §10.4 says `log/` is keyed on the local date, §7.4
+records the escaping, and §13 no longer lets "the agent has no tools" be read as a claim about
+effects. Done — the retirement rule applied.
 
 ### 2.1 `control` is refused in sentinel mode (fatal)
 
@@ -172,15 +174,24 @@ Three things make it worse than a self-referential nuisance:
    (`lifecycle.ts:159-162`), and phase-1 §7.3 specifies rehydration seeds "the last N `log/`
    entries" — unbuilt today, and ungated by §5.1 when built, because the *daemon* writes it.
 
-**Correction — and it is M0, before the broker:**
+**Correction — shipped, see M0a.** Landed before the broker, as this section argued it should be:
 
-- Everything the daemon writes on the agent's behalf is **structured, not spliced**: the brief's
-  `stands` is stored as a fenced, escaped block that `parseBrief` cannot interpret as sections, and
-  the reserved section headings are recognised only at parse positions the writer controls.
-- Content read back into a prompt is **wrapped as untrusted** — delimiters that cannot appear in
-  the content, produced by an escaping function with a round-trip test, not by concatenation.
-- The round trip gets a test with hostile input: a reply that tries to forge a section, close a
-  tag, or inject frontmatter must survive `checkpoint → parse → render` as inert text.
+- Agent text is **entity-escaped at the render boundary** and unescaped at the parse boundary, so
+  what a human reads in Obsidian is what the agent wrote and the parser cannot see structure in it.
+  `&` first, then `<` (no raw `<` survives, so no tag can be closed), then a line-leading `#` or
+  `---` (the line no longer *starts* with the character, so it is neither a heading nor a fence).
+  Backslash escaping was tried first and is ambiguous: input that already begins with `\#` does not
+  round-trip.
+- **`parseBrief` reads structure structurally.** The section regex was not line-anchored, so an
+  escaped `&#35;# Decisions made` still matched as a substring; anchoring it with `m` then broke the
+  terminating lookahead, because `$` became end-of-line. It is now a line scan — a section starts at
+  a line that *is* `## <name>` and ends at the next line that starts one.
+- Content read back into a prompt is **wrapped as untrusted**: `wrapUntrusted()` in
+  `src/sessions/lifecycle.ts` guarantees the closing tag cannot appear inside the section it closes,
+  independently of the escaping above.
+- `tests/unit/brief.test.ts` pins all of it with hostile input: forging a section, closing the tag,
+  forging frontmatter, forging a bullet into a list, and a round-trip property including the escape
+  characters themselves.
 
 phase-1 §13's claim — "there is no path from a message to a file write" — is true about *tools* and
 misleading about *effects*: the daemon writes agent-chosen bytes into a file it later reads into the
@@ -245,10 +256,26 @@ surface, not documentation:
 }
 ```
 
-`src/sessions/sdk-runner.ts:55-56` sets `allowedTools: []` and `settingSources: []`, and phase-1 §13
-makes that structural. **Open question (§12.7):** whether the tool arrives as an in-process SDK MCP
-server or a `canUseTool` callback decides how `sdk-runner.ts` reaches the broker without an adapter
-importing the daemon. Until that is settled M3 cannot start.
+**Decided: an in-process SDK MCP server.** `canUseTool` was never an alternative — it is a
+permission callback that *gates* a tool the model already has; it cannot provide one
+(`node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts:1427`). The only other way to give the agent
+a write path is to hand it a built-in file tool and intercept every call, which means the model
+believes it is writing, retries when it "fails", and the tool's reach is the whole filesystem with
+the gate as the only boundary. That is the posture Phase 1 exists to avoid.
+
+`createSdkMcpServer` runs tools **in the same process** (`sdk.d.ts:499-505`), so there is no
+subprocess and no egress; the tool handler is a closure. `allowedTools` lists exactly the one tool
+name, and no permission mode is set — `bypassPermissions` stays unused (phase-1 §7.5).
+
+**The boundary is kept by injection, not by import.** `SdkRunner` takes a port in its options:
+
+```ts
+type ProposePort = (input: ProposalInput, ids: IdTuple) => Promise<{ proposal_id: string }>;
+```
+
+`src/sessions/sdk-runner.ts` imports the *type* from `core/` and never `src/approvals/`; the daemon,
+as composition root, supplies the adapter. That is how `Lifecycle` already takes its dependencies,
+it keeps the phase-1 §3 dependency rule, and the boundaries test enforces it.
 
 ### 4.1 The proposal pattern
 
@@ -585,9 +612,13 @@ Two things revision 2 got wrong about the size of that cost:
 - **The gate authorises a path, not the bytes.** The prompt shows path and size; the body is never
   rendered. Chris cannot distinguish `wiki/notes.md` containing notes from one containing the
   transcript, a pasted secret, or the contents of `MEMORY.md` — and `wiki/` is synced to the phone
-  and committed to git. `subject_hash` binds a body the approver never saw. Either the prompt
-  carries a bounded preview (first N lines, plus a diff stat for a rewrite) or the capability is
-  "approve a path" and should say so. **Open question (§12.6).**
+  and committed to git. `subject_hash` binds a body the approver never saw.
+
+  **Decided: preview on request.** The prompt carries path, mode, size and a `[ Preview ]` button;
+  tapping it posts the first `approvals.preview_lines` (default 20) of the body — escaped by the
+  same rules as the rationale (§4.4) — as a reply in the thread, and re-posts the keyboard. The
+  default prompt stays short enough to decide on a phone, and the bytes are one tap away when the
+  path alone is not enough. A preview does not extend the TTL: it is a read, not a decision.
 - **Rewrite is destruction.** `write()` defaults to `mode: "rewrite"` on an existing file
   (`src/vault/writer.ts:93`) and `wiki/` holds Chris's own notes. A failed commit does not roll the
   write back. A proposal that overwrites an existing file is a different act from one that creates a
@@ -680,6 +711,7 @@ not a footnote.
 enabled = false                       # off until M3; a disabled broker refuses proposals
 ttl_seconds = 900
 rationale_max_chars = 280
+preview_lines = 20
 path_max_chars = 180
 max_per_turn = 3
 stranded_after_seconds = 300
@@ -778,7 +810,7 @@ one place the ledger's non-rebuildability (§4.2) is visible to the operator: if
 
 | M | Content | Done when |
 |---|---|---|
-| **M0a** | **§2.4** — the brief write/read loop: structured storage, escaped wrapping, hostile-input round-trip test | A reply that forges a section or closes a tag survives as inert text |
+| ~~**M0a**~~ | **§2.4** — done. Entity escaping, a structural parser, `wrapUntrusted()`, and `tests/unit/brief.test.ts` | ✅ A reply that forges a section or closes a tag survives as inert text |
 | **M0b** | §2.1 meter + `llm` on `Job`; §2.3 tick guards; amend phase-1 §10.4, §11.4, §13, §5.6 and §17 for everything M0 changed, including the two already shipped | A zero-LLM `control` job is admitted with both windows exhausted; a thrown tick task does not stop the others; phase-1 no longer contradicts the code |
 | **M1** | `src/approvals/`, the table, states, TTL + boot sweeps, `ALEPH_FAKE_CLOCK` seam | Integration: request → expire → denied across a restart, with no race before the socket binds |
 | **M2** | Telegram callback path end to end, plus the fake server's `callback_query`, markup capture and `pushCallback()` | Integration: forged sender, double-tap, decision on an expired prompt |
@@ -806,11 +838,9 @@ tests/unit/brief.test.ts
 tests/unit/approvals.test.ts
 tests/integration/approvals.test.ts
 tests/live/approvals.test.ts
-docs/design/phase-1-corrections.md
 ```
 
-`docs/design/phase-1-corrections.md` is listed because §12.8 proposes it; it exists only if that
-question is answered yes.
+(§12.8 proposed a `phase-1-corrections.md`; that question is answered no, so it is not listed.)
 
 ---
 
@@ -829,15 +859,12 @@ question is answered yes.
    decide on a phone, the fix is a diff preview, which is a design change.
 5. **Confirm:** cutting class grants; deferring capture, librarian, brief, memory gate, ntfy and
    Syncthing out of 2a entirely; and 15 minutes as the TTL.
-6. **Does the prompt show the body?** (§5.3) Path + size is approvable on a phone and authorises
-   bytes you never saw. A bounded preview is more honest and more to read. Preview, path-only, or
-   preview-on-request?
-7. **How does the tool reach the broker?** (§4.0) In-process SDK MCP server, or a `canUseTool`
-   callback. It decides whether `sdk-runner.ts` gains a dependency it should not have, and M3
-   cannot start until it is answered.
-8. **Does §2 belong here at all?** It describes Phase 1 code in a Phase 2a document, and it goes
-   stale the moment it lands — as two of its items already did. The alternative is a standing
-   `docs/design/phase-1-corrections.md` that phase-1 §17 absorbs on completion.
+6. ~~**Does the prompt show the body?**~~ **Answered: preview on request** (§5.3).
+7. ~~**How does the tool reach the broker?**~~ **Answered: in-process SDK MCP server + an injected
+   port** (§4.0).
+8. ~~**Does §2 belong here at all?**~~ **Answered: yes, it stays in this document.** The retirement
+   rule at the top of §2 is what keeps it honest — an item that has shipped is reduced to a pointer
+   and recorded in phase-1 §17. A separate corrections document would be a third place to look.
 
 ---
 

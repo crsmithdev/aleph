@@ -44,6 +44,17 @@ You have no tools in this phase: answer from the context you are given and say p
 do not know something. Never claim that something works unless the context shows it was run and
 its output observed. Be concise; this reply is going to a phone.`;
 
+/**
+ * Vault content is not trusted input to a prompt. `renderBrief` escapes what the
+ * agent authored (see brief.ts), and this is the second line: whatever reaches
+ * here, the closing tag cannot appear inside the section it closes.
+ */
+function wrapUntrusted(tag: string, content: string): string {
+  const closing = `</${tag}>`;
+  const safe = content.split(closing).join(`&lt;/${tag}>`);
+  return `<${tag}>\n${safe}\n${closing}`;
+}
+
 export class Lifecycle {
   constructor(
     private readonly deps: {
@@ -74,12 +85,12 @@ export class Lifecycle {
     const seeded: string[] = [];
     const parts = [SYSTEM_PROMPT_BASE];
     if (this.deps.vault.exists("MEMORY.md")) {
-      parts.push(`<memory>\n${this.deps.vault.read("MEMORY.md")}\n</memory>`);
+      parts.push(wrapUntrusted("memory", this.deps.vault.read("MEMORY.md")));
       seeded.push("MEMORY.md");
     }
     const brief = this.readBrief(session);
     if (brief) {
-      parts.push(`<brief>\n${renderBrief(brief)}\n</brief>`);
+      parts.push(wrapUntrusted("brief", renderBrief(brief)));
       seeded.push(session.checkpoint_path!);
     }
     parts.push(`<topic>${session.title}</topic>`);

@@ -625,6 +625,12 @@ SQLite transaction as the turn row update.
 
 ### 7.4 `session-brief.md` — the handoff artifact
 
+**The brief is agent-authored text that becomes a prompt.** `checkpoint()` writes the model's own
+output into it and `seedPrompt()` reads it back, so everything the agent wrote is entity-escaped by
+`renderBrief` and unescaped by `parseBrief`, the parser reads sections structurally rather than by
+regex, and `wrapUntrusted()` makes the closing tag unforgeable from inside. `tests/unit/brief.test.ts`
+holds the property (§17.15).
+
 v1.0 §3.2's shared-state continuity contract. One file per topic at
 `vault/wiki/projects/<topic>/session-brief.md`, **rewritten** (never appended — v1.0 §4.1):
 
@@ -960,7 +966,8 @@ accepts writes and keeps no history, silently. `os doctor`'s `vault-git` check e
 4. Commit policy: `wiki/**` and `MEMORY.md` → **commit per write**
    (`vault: <verb> <path>` + `Session: ses_…` + `Event: evt_…` git trailers, so a `git log` and the
    event log are joinable); `log/**` → staged and committed nightly (Phase 2a) — in Phase 1 the
-   daemon commits `log/` on shutdown so nothing is left uncommitted.
+   daemon commits `log/` on shutdown so nothing is left uncommitted. `log/` is keyed on the
+   **local** date in `daemon.timezone`, via `Clock.localDate()` — never UTC (§17.13).
 5. A commit that *fails* → `vault.commit_failed` with the git step and stderr. The write itself
    stands: the bytes are on disk and `vault.written` is already in the log, so the failure is a
    loss of history, not of content. `commit()` distinguishes three outcomes — committed, nothing
@@ -1095,6 +1102,12 @@ Phase 1 predates the approval broker, so the safe posture is **structural, not p
   daemon chooses. There is therefore no path from a message to an arbitrary file write, a shell
   command, or an outbound request — which is why deferring the broker to 2a is defensible rather
   than convenient.
+
+  This is a claim about **tools**, and it was read for a while as a claim about **effects**, which
+  it is not. The daemon writes the model's own output into `log/` and into `session-brief.md`, and
+  reads the brief back into the next prompt — so the agent influences its own future context
+  without a tool and without an approval. What makes that bounded is the escaping in §7.4 and the
+  fixed set of paths the daemon will write, not the empty `allowedTools`.
 - **No egress from the agent.** No web search, no fetch, no MCP servers in Phase 1 sessions. The
   lethal trifecta cannot form when the third leg does not exist.
 - **Inbound authorization** is double-checked (§8.3).
@@ -1286,6 +1299,22 @@ than reading it. They are listed here because the pattern is the point:
    returned `null` and the writer emitted nothing either way, so a vault that had
    silently stopped keeping history read as a quiet one. `commit()` now returns
    three outcomes and a failure emits `vault.commit_failed` (§10.4).
+13. **`log/` was keyed on a UTC date read outside the clock.** `new Date()` in
+   `src/vault/writer.ts`, so the fake clock could not move it and "today" rolled
+   at 17:00 in `America/Los_Angeles` — the writer aimed at tomorrow's file and
+   its own `log_not_today` rule then refused it. `Clock.localDate()` and an
+   injected clock now key it on the configured zone (§10.4).
+14. **An invalid `daemon.timezone` booted cleanly and killed every `log/` write**
+   with an uncaught `RangeError`, once the zone became load-bearing at write
+   time. Refused at config load now, like an unresolved `${VAR}` (§9.1).
+15. **The brief was an ungated agent-write channel.** `checkpoint()` copied the
+   model's own output into `session-brief.md` and `seedPrompt()` read it back
+   into the next system prompt, through a parser that read sections by regex —
+   so ordinary reply text containing `## Decisions made` became a decision the
+   user never made, and text containing `</brief>` closed the section. Agent
+   text is entity-escaped at the render boundary, the parser is structural, and
+   `wrapUntrusted()` guarantees a section cannot be closed from inside (§7.4).
+   Found by red-teaming the Phase 2a design, not by using the system.
 
 Measured facts worth keeping (they are assumptions elsewhere):
 
