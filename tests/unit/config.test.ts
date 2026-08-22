@@ -51,6 +51,16 @@ describe("config", () => {
     expect(loaded.sources["runner"]).toBe("env");
   });
 
+  test("a typo'd timezone is a boot failure, not a write-time crash", () => {
+    const root = dir({ "aleph.toml": `[daemon]\ntimezone = "America/Los_Angles"\n` });
+    expect(() => loadConfig({ file: join(root, "aleph.toml"), host: "none", env: {} }))
+      .toThrow(/time zone/);
+
+    const ok = dir({ "aleph.toml": `[daemon]\ntimezone = "Europe/Berlin"\n` });
+    expect(loadConfig({ file: join(ok, "aleph.toml"), host: "none", env: {} }).config.daemon.timezone)
+      .toBe("Europe/Berlin");
+  });
+
   test("an unresolved ${VAR} is a boot failure, never an empty string", () => {
     const root = dir({ "aleph.toml": `[telegram]\nbot_token = "\${NOPE_TOKEN}"\n` });
     expect(() => loadConfig({ file: join(root, "aleph.toml"), host: "none", env: {} })).toThrow(ConfigError);

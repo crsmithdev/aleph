@@ -39,7 +39,7 @@ export const ConfigSchema = z.object({
     vault_dir: z.string().default("../vault"),
     socket: z.string().default("./data/aleph.sock"),
     shutdown_grace_seconds: z.number().int().nonnegative().default(120),
-    timezone: z.string().default("America/Los_Angeles"),
+    timezone: z.string().refine(isTimeZone, "not a valid IANA time zone").default("America/Los_Angeles"),
     tick_seconds: z.number().int().positive().default(30),
   }).prefault({}),
 
@@ -131,6 +131,21 @@ function trackSources(obj: Json, source: string, into: Record<string, string>, p
     const path = prefix ? `${prefix}.${k}` : k;
     if (v && typeof v === "object" && !Array.isArray(v)) trackSources(v as Json, source, into, path);
     else into[path] = source;
+  }
+}
+
+/**
+ * A typo here used to boot cleanly and then kill every `log/` write with an
+ * uncaught RangeError from inside VaultWriter.today() — the zone is only used
+ * at write time, so nothing surfaced it at startup. Config is the right place
+ * to refuse it: an unusable value is a boot failure, like an unresolved ${VAR}.
+ */
+function isTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
   }
 }
 
