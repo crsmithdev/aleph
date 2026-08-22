@@ -961,6 +961,11 @@ accepts writes and keeps no history, silently. `os doctor`'s `vault-git` check e
    (`vault: <verb> <path>` + `Session: ses_…` + `Event: evt_…` git trailers, so a `git log` and the
    event log are joinable); `log/**` → staged and committed nightly (Phase 2a) — in Phase 1 the
    daemon commits `log/` on shutdown so nothing is left uncommitted.
+5. A commit that *fails* → `vault.commit_failed` with the git step and stderr. The write itself
+   stands: the bytes are on disk and `vault.written` is already in the log, so the failure is a
+   loss of history, not of content. `commit()` distinguishes three outcomes — committed, nothing
+   staged, failed — because collapsing the last two into `null` is what made a vault that had
+   stopped keeping history look identical to one with nothing to record (§17.12).
 
 ---
 
@@ -1277,6 +1282,10 @@ than reading it. They are listed here because the pattern is the point:
    for a reply delivered through the channel, and the throw path skipped
    `reply()` entirely — the daemon recorded `session.turn_failed` and told the
    person waiting nothing. Failures now answer and still rethrow (§8.5).
+12. **A failed vault commit was indistinguishable from nothing to commit.** Both
+   returned `null` and the writer emitted nothing either way, so a vault that had
+   silently stopped keeping history read as a quiet one. `commit()` now returns
+   three outcomes and a failure emits `vault.commit_failed` (§10.4).
 
 Measured facts worth keeping (they are assumptions elsewhere):
 

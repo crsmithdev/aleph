@@ -113,6 +113,7 @@ export const KINDS = {
   "vault.written": z.object({ path: z.string(), bytes: z.number(), sha256: z.string(), mode: z.string() }),
   "vault.commit": z.object({ paths: z.array(z.string()), sha: z.string(), message: z.string() }),
   "vault.write_denied": z.object({ path: z.string(), reason: z.string() }),
+  "vault.commit_failed": z.object({ paths: z.array(z.string()), step: z.string(), error: z.string() }),
 
   "obs.export_failed": z.object({ endpoint: z.string(), error: z.string(), dropped: z.number() }),
   "obs.join_audit": z.object({ since: z.string(), orphans: z.number(), baseline: z.number(), delta: z.number() }),

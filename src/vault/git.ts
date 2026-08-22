@@ -17,15 +17,27 @@ export function initRepo(cwd: string): void {
   git(cwd, ["config", "user.email", "aleph@localhost"]);
 }
 
-export function commit(cwd: string, paths: string[], message: string, trailers: Record<string, string> = {}): string | null {
+/**
+ * Three outcomes, not two. "Nothing changed" and "git refused" both used to
+ * return null, so a vault that had stopped keeping history looked exactly like a
+ * vault with nothing to record — and the caller emitted nothing either way.
+ */
+export type CommitResult =
+  | { status: "committed"; sha: string }
+  | { status: "nothing-staged" }
+  | { status: "failed"; step: string; error: string };
+
+export function commit(cwd: string, paths: string[], message: string, trailers: Record<string, string> = {}): CommitResult {
   const add = git(cwd, ["add", "--", ...paths]);
-  if (!add.ok) return null;
+  if (!add.ok) return { status: "failed", step: "add", error: add.stderr || "git add failed" };
   const staged = git(cwd, ["diff", "--cached", "--name-only"]);
-  if (!staged.stdout) return null;
+  if (!staged.stdout) return { status: "nothing-staged" };
   const body = [message, "", ...Object.entries(trailers).map(([k, v]) => `${k}: ${v}`)].join("\n");
   const c = git(cwd, ["commit", "-q", "-m", body]);
-  if (!c.ok) return null;
-  return git(cwd, ["rev-parse", "HEAD"]).stdout;
+  if (!c.ok) return { status: "failed", step: "commit", error: c.stderr || "git commit failed" };
+  const head = git(cwd, ["rev-parse", "HEAD"]);
+  if (!head.ok) return { status: "failed", step: "rev-parse", error: head.stderr || "git rev-parse failed" };
+  return { status: "committed", sha: head.stdout };
 }
 
 export function isClean(cwd: string): boolean {

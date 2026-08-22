@@ -69,8 +69,10 @@ export function bootstrapVault(root: string, opts: { now?: string; git?: boolean
   let sha: string | null = null;
   if (opts.git !== false) {
     if (!isRepo(root)) initRepo(root);
-    sha = commit(root, ["."], "vault: bootstrap", {});
-    if (!sha) sha = git(root, ["rev-parse", "HEAD"]).stdout || null;
+    const result = commit(root, ["."], "vault: bootstrap", {});
+    if (result.status === "committed") sha = result.sha;
+    else if (result.status === "failed") throw new Error(`vault bootstrap could not commit (${result.step}): ${result.error}`);
+    else sha = git(root, ["rev-parse", "HEAD"]).stdout || null;   // re-init over an existing vault
   }
 
   return { root, created, commit: sha, alreadyExisted };

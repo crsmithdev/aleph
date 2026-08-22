@@ -97,14 +97,23 @@ export class VaultWriter {
     let sha: string | null = null;
     if (this.opts.gitEnabled !== false && this.shouldCommit(rel)) {
       const message = `vault: ${mode} ${rel}`;
-      sha = commit(this.opts.root, [rel], message, {
+      const result = commit(this.opts.root, [rel], message, {
         Session: ids.session_id ?? "",
         Event: writeEvent,
       });
-      if (sha) {
+      if (result.status === "committed") {
+        sha = result.sha;
         emit("vault.commit", ids, { paths: [rel], sha, message }, {
           causedBy: writeEvent,
           cause: { kind: "computed", text: `per-write commit policy matched ${rel}`, source: "vault/writer.ts:write" },
+        });
+      } else if (result.status === "failed") {
+        // The write itself stands — the bytes are on disk and vault.written is
+        // already in the log. What is lost is the history, and losing it
+        // silently is the failure mode this event exists to prevent.
+        emit("vault.commit_failed", ids, { paths: [rel], step: result.step, error: result.error }, {
+          causedBy: writeEvent,
+          cause: { kind: "computed", text: `git ${result.step} failed; the write stands, the history does not`, source: "vault/writer.ts:write" },
         });
       }
     }

@@ -7,7 +7,7 @@ Every event carries the envelope of `docs/design/phase-1.md` §5.2: `v`, `id`, `
 `kind`, `ids` (the tuple), `caused_by`, `cause`, `payload`, `actor`. The columns below
 describe only the per-kind `payload`.
 
-36 kinds in 9 groups.
+37 kinds in 9 groups.
 
 ## bus
 
@@ -87,5 +87,6 @@ describe only the per-kind `payload`.
 | Kind | Payload |
 |---|---|
 | `vault.commit` | `paths`: array, `sha`: string, `message`: string |
+| `vault.commit_failed` | `paths`: array, `step`: string, `error`: string |
 | `vault.write_denied` | `path`: string, `reason`: string |
 | `vault.written` | `path`: string, `bytes`: number, `sha256`: string, `mode`: string |

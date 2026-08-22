@@ -4,7 +4,7 @@
  * hours is not a test strategy.
  */
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../../src/platform/db.ts";
@@ -135,6 +135,25 @@ describe("vault prohibitions", () => {
       .toThrow(/memory_line_budget/);
     expect(harness.vault.read("MEMORY.md")).toBe(before);
     expect(harness.vault.write("MEMORY.md", "just a few\nlines\n", tuple).sha256).toHaveLength(64);
+  });
+
+  test("a git failure is emitted, not swallowed — the write stands, the history does not", () => {
+    const tuple = { origin: "system" as const, trace_id: newTraceId() };
+
+    // MEMORY.md is in commit_per_write, so this write is meant to commit.
+    // An index.lock is exactly what a crashed git leaves behind, and it makes
+    // every subsequent commit fail while the file write still succeeds.
+    writeFileSync(join(ws.vaultDir, ".git", "index.lock"), "");
+    try {
+      const written = harness.vault.write("MEMORY.md", "history cannot be kept for this one\n", tuple);
+      expect(written.sha256).toHaveLength(64);
+      expect(written.commit).toBeNull();
+      expect(harness.vault.read("MEMORY.md")).toContain("history cannot be kept");
+      expect(harness.kinds).toContain("vault.commit_failed");
+      expect(harness.kinds).not.toContain("vault.commit");
+    } finally {
+      rmSync(join(ws.vaultDir, ".git", "index.lock"), { force: true });
+    }
   });
 
   test("log/ writes are confined to today's file", () => {
