@@ -6,19 +6,19 @@ This file exists so the design doc's references to it resolve, and so there is o
 obvious place for the evidence when there is any. Until then, every Phase 2a
 claim is unproven, and that is the correct thing to say about it.
 
-What has to appear here before 2a can be called done — from design §1.4, §7 and §11:
+What has to appear here before 2a can be called done — from design §1.5 and §9:
 
-- [ ] The three §2 corrections, each with its gate green (M0).
-- [ ] A real approval **denied** by tapping Deny in the Telegram group.
-- [ ] A real approval **expired** unanswered, with the default-deny recorded.
-- [ ] A real approval **granted**, performing a real write to `wiki/`.
-- [ ] A button pressed by a non-owner, refused and rate-limited.
-- [ ] A double-tap performing exactly one write.
-- [ ] A target edited under an in-flight approval, superseding it.
-- [ ] Approvals delivered with both windows exhausted (sentinel mode).
-- [ ] `os approvals deny` used while Telegram is unreachable.
-
-Capture, librarian, the briefs, the memory gate, ntfy and Syncthing are **not**
-in Phase 2a (design §9). Nothing about them belongs in this file.
+- [ ] M0: a zero-LLM `control` job admitted with both windows exhausted.
+- [ ] M1: a memory entry added, replaced by substring, and removed; a file edited
+      underneath detected as drift rather than clobbered.
+- [ ] M1: the system prompt prefix reused across a whole session (cache_read
+      high, cache_creation near zero after the first turn).
+- [ ] M2: a real day of work in this repo, ingested, with the observations
+      pasted here so their signal-to-noise is judgeable.
+- [ ] **M3, the dogfood test**: `recall` in this repo returning something Chris
+      would otherwise have gone looking for. Quote the query and the answer.
+- [ ] M4: a promotion proposed, denied, re-proposed and approved — all from
+      Claude Code, none from a phone.
+- [ ] M5: a failed gate refusing a claim before it was made.
 
 Phase 1's evidence is in `docs/RUNBOOK-phase1-slice.md` and stays there.

@@ -4,17 +4,17 @@ Phase 1 spine of Chris's personal AI OS. Bun + TypeScript, one daemon process.
 Read `docs/design/phase-1.md` first; it is the specification this code implements
 and it is more detailed than this file.
 
-`docs/design/phase-2a.md` is the **next** phase's design: the approval broker
-and agent-chosen vault writes, plus cron. It is designed and **not built** —
-nothing in `src/` implements it yet, and `docs/RUNBOOK-phase2a.md` is
-deliberately empty. Its §2 lists defects in *this* code that must be fixed
-first, and §13 records what two rounds of red-teaming changed.
+`docs/design/phase-2a.md` is the **next** phase's design, and its shape changed
+on 2026-08-22: aleph-next is **the record and the governor** for work done in
+Claude Code — not a second coding agent. Two stores (an append-only event log for
+evidence, a reconciled memory for facts), hook ingest, an MCP server, a broker
+gating promotion into memory, and daemon-run verification gates. Nothing in
+`src/` implements it yet; `docs/RUNBOOK-phase2a.md` is deliberately empty.
 
-**Read §2.4 before touching `src/sessions/lifecycle.ts` or `brief.ts`.** The
-daemon copies the model's own output into `session-brief.md` every five turns
-and reads it back into the next system prompt, unescaped, through a
-section-delimited parser. The agent authors its own future prompt today, with no
-gate. That is a live property of this code, not a proposal.
+**Read phase-1 §7.4 and §17.15 before touching `src/sessions/lifecycle.ts` or
+`src/sessions/brief.ts`** — the daemon writes model output into the brief and
+reads it back into the next prompt. That loop is escaped now; keep it escaped,
+and `tests/unit/brief.test.ts` fails if you don't.
 
 ## The rule that matters
 
