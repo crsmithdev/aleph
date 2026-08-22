@@ -86,6 +86,8 @@ aleph-next/
 ├── tsconfig.json
 ├── bunfig.toml
 ├── .env.example               # names only, never values
+├── Dockerfile                 # daemon image: bun + git, non-root, writable /app/data
+├── .dockerignore
 ├── config/
 │   ├── aleph.toml             # committed defaults (no secrets)
 │   ├── aleph.example.toml     # documented full surface
@@ -135,12 +137,13 @@ aleph-next/
 │   ├── live/                  # real Anthropic / real Telegram — opt-in via env
 │   └── helpers/               # fake bot API server, OTLP sink, temp dirs
 ├── compose/
-│   ├── langfuse.yml           # Langfuse v4 self-hosted
-│   ├── daemon.yml             # aleph daemon + telegram-bot-api (2a)
+│   ├── langfuse.yml           # Langfuse (v3 line; 3.225.4 as run)
+│   ├── daemon.yml             # the daemon container: §10.3 mount plan, joins the langfuse net
 │   └── README.md
 ├── scripts/
 │   ├── gen-events-doc.ts      # docs/EVENTS.md generator (CI runs it with --check)
 │   ├── check-docs.ts          # docs gate
+│   ├── container-entrypoint.sh # ensures $HOME exists before the daemon starts
 │   └── otlp-sink.ts           # standalone OTLP sink — Langfuse stand-in for local runs
 ├── docs/
 │   ├── design/phase-1.md      # this file
@@ -453,7 +456,7 @@ label now costs nothing; adding it later means re-labelling history.
 
 ```
 daemon (OTel SDK, batch span processor)
-   └── OTLP/HTTP  ──►  Langfuse v4  /api/public/otel/v1/traces
+   └── OTLP/HTTP  ──►  Langfuse 3.x  /api/public/otel/v1/traces
                         (self-hosted, compose/langfuse.yml, tailnet-only)
 ```
 
@@ -492,7 +495,7 @@ Attributes on **every** span (explicit, set by the worker itself — cockpit F1)
 | `langfuse.trace.metadata.cockpit_task` / `cockpit_run` | ID strings |
 | `gen_ai.*` | model, input/output tokens on `sdk.query` |
 
-Deep links are built from IDs at render time by `obs/langfuse.ts`:
+Deep links are built from IDs at render time by `src/obs/langfuse.ts`:
 `${langfuse.base_url}/project/${projectId}/traces/${traceId}`. The daemon additionally serves
 stable redirects `/t/{task_id}` and `/r/{run_id}` (F12) so nothing else ever embeds a Langfuse URL.
 
@@ -507,9 +510,15 @@ thing Phase 1 *does* have:
 
 Implemented as an integration test against a real OTLP sink (§14.3) — not against Langfuse, so it
 runs in CI without booting ClickHouse. A separate opt-in live test asserts the same trace is
-visible through Langfuse's API. The baseline of expected orphans lives in
-`tests/fixtures/orphan-baseline.json`; `os obs join-audit` reports **delta from baseline**, never
-absolute count (cockpit F7 — a permanently-amber metric trains its reader to ignore it).
+visible through Langfuse's API. The baseline of expected orphans is `DEFAULT_BASELINE` in
+`src/obs/join-audit.ts` — code, not a fixture, so it is reviewed in the same diff as the emission
+that made an orphan legitimate. `os obs join-audit` reports **delta from baseline**, never absolute
+count (cockpit F7 — a permanently-amber metric trains its reader to ignore it).
+
+Classification is not purely by kind. A *refused* inbound message emits `channel.message_received`
+and stops, so it can never join a turn trace; an *accepted* one that never reached the bus is a
+real defect. Those are the same kind, so the audit reads the payload's `rejected` field to tell
+them apart. Anything coarser would have to choose between a permanent amber and a blind spot.
 
 ### 6.4 Langfuse deployment
 
@@ -666,6 +675,11 @@ Verified on `@anthropic-ai/claude-agent-sdk@0.3.238` (2026-08-20, this environme
   **strips all `CLAUDE_*`/`ANTHROPIC_*` env except the ones it sets deliberately** before
   spawning, so sessions get fresh ids and a known auth path. (Found the hard way: an inherited
   `CLAUDE_CODE_SESSION_ID` makes every SDK session report the same id.)
+- The SDK writes its session transcript under `$HOME/.claude`, and **resume reads it back**. A
+  process with an unwritable `HOME` answers the first turn and fails every resume after it with
+  `error_during_execution` — which is exactly what a container running as a uid with no passwd
+  entry gets, since `HOME` then defaults to `/`. `compose/daemon.yml` points `HOME` into the data
+  volume so transcripts outlive the container.
 - `settingSources: []` keeps the daemon's sessions from silently loading `~/.claude` settings —
   the daemon's behaviour must come from the daemon's config, not from whatever Chris last put in
   his personal Claude Code settings.
@@ -754,6 +768,13 @@ When a message arrives with no binding:
 phone. That cross-channel continuity is a Phase 1 test (§14.4), because it is the cheapest possible
 proof that sessions are genuinely channel-agnostic.
 
+The reply is delivered *through the channel*, which makes the failure path load-bearing: if a turn
+throws, nothing resolves the pending request and `os send` blocks for its full timeout with an
+empty stdout — a hang, where the event log already holds `session.turn_failed` and
+`bus.finished ok:false`. A failed turn therefore answers with `turn failed: <error>` and still
+rethrows, so the bus keeps recording the failure. An integration test holds this by making the
+vault unwritable mid-run.
+
 ---
 
 ## 9. Configuration and routing
@@ -761,8 +782,12 @@ proof that sessions are genuinely channel-agnostic.
 ### 9.1 Format and precedence
 
 `config/aleph.toml` (committed defaults) ← `config/hosts/<hostname>.toml` (gitignored overlay) ←
-`ALEPH_*` env overrides for a handful of operational keys. Deep-merged, then Zod-validated as one
-object. `daemon.config_loaded` records the merged config's **SHA-256 and the source of every
+`ALEPH_*` env overrides. Deep-merged, then Zod-validated as one object. `ALEPH_DAEMON__DATA_DIR`
+addresses `daemon.data_dir`; a single-segment name like `ALEPH_RUNNER` addresses the top-level
+`runner`. The exemptions are named, not inferred from key shape — `ALEPH_CONFIG`, `ALEPH_GIT_SHA`,
+`ALEPH_LIVE` and `ALEPH_VAULT` select the file or drive the harness and are not config paths.
+(Inferring caused a real defect: skipping every single-segment key meant a container told
+`ALEPH_RUNNER=echo` silently ran the SDK.) `daemon.config_loaded` records the merged config's **SHA-256 and the source of every
 overridden key** — so "why is it behaving differently on this box" is answerable from the log.
 
 Secrets are **never** in TOML. A string of the form `${TELEGRAM_BOT_TOKEN}` is resolved from the
@@ -927,7 +952,7 @@ accepts writes and keeps no history, silently. `os doctor`'s `vault-git` check e
 
 ### 10.4 Write path and git
 
-`vault/writer.ts` is the only thing that touches the vault. Every write:
+`src/vault/writer.ts` is the only thing that touches the vault. Every write:
 
 1. Path check against the prohibition table → deny + `vault.write_denied` if it violates.
 2. Atomic write (temp file + rename in the same directory).

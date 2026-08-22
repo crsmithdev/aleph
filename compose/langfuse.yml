@@ -1,4 +1,4 @@
-# Langfuse v4 self-hosted — the generic trace/eval plane (design v1.0 §7).
+# Langfuse self-hosted, v3 line (3.225.4 as run) — the generic trace/eval plane (design v1.0 §7).
 #
 # BROUGHT UP AND VERIFIED 2026-08-21 (docker-ce 29.7.2 inside WSL2, not Docker
 # Desktop): the daemon's spans are ingested and retrievable through Langfuse's

@@ -36,4 +36,17 @@ const missing = named.filter((n) => !found.has(n) && !extra.includes(n));
 if (missing.length) fail(`design doc names files that do not exist: ${missing.join(", ")}`);
 else ok(`design doc names ${named.length} files, all present`);
 
+// The layout check above matches by BASENAME and only inside the layout block,
+// which let `tests/fixtures/orphan-baseline.json` sit in the prose for months
+// after the baseline moved into code. Repo-rooted paths anywhere in the doc are
+// checked as paths. Vault-relative examples (`log/YYYY-MM-DD.md`) are not repo
+// files and are excluded by the leading-directory requirement.
+const ROOTED = /^(src|tests|scripts|config|compose|docs|\.github)\//;
+const prose = [...new Set(
+  [...design.matchAll(/`([A-Za-z0-9_./-]+\.(?:ts|toml|yml|json|md|sh))`/g)].map((m) => m[1]!),
+)].filter((r) => ROOTED.test(r));
+const brokenPaths = prose.filter((r) => !existsSync(r));
+if (brokenPaths.length) fail(`design doc points at paths that do not exist: ${brokenPaths.join(", ")}`);
+else ok(`design doc cites ${prose.length} repo paths, all present`);
+
 process.exit(failed ? 1 : 0);

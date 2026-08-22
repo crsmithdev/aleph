@@ -15,10 +15,11 @@ is Phase 2b (`docs/design/phase-1.md` §1.2).
 | `types` | `bun run typecheck` | Required for any `src/` or `tests/` change. Necessary, never sufficient. |
 | `code` | `bun test tests/unit` | Pure logic: envelope, redaction, router, meter, ladder, config, boundaries. |
 | `integration` | `bun test tests/integration` | Boots the real daemon binary as a subprocess and talks to its real socket; real OTLP sink; real fake Bot API server. Required for anything touching the daemon, channels, event log, vault or meter. |
-| `docs` | `bun run docs:check` | `docs/EVENTS.md` matches the kind registry; both config files validate; every file named in the design doc's layout exists. |
+| `docs` | `bun run docs:check` | `docs/EVENTS.md` matches the kind registry; both config files validate; every file named in the design doc's layout exists, and every repo path cited anywhere in its prose resolves. |
 | `live-sdk` | `ALEPH_LIVE=1 bun test tests/live/sdk.test.ts` | Real Agent SDK. **Required before claiming any change to `sdk-runner.ts` or session lifecycle works.** Spends real plan usage. |
 | `live-telegram` | `ALEPH_LIVE=1 TELEGRAM_BOT_TOKEN=… bun test tests/live/telegram.test.ts` | Real bot, real forum group. Required before claiming a Telegram change works. |
 | `live-langfuse` | `ALEPH_LIVE=1 LANGFUSE_PUBLIC_KEY=… bun test tests/live/langfuse.test.ts` | Proves *ingestion*, which the local sink cannot. Required before claiming an observability change works end to end. |
+| `container` | `docker compose --env-file ../.env -f compose/daemon.yml up -d --build` then `docker compose -f compose/daemon.yml exec daemon bun src/cli/os.ts doctor` | Required before claiming a change to the image, the mount plan or the supervisor env works. Needs `ALEPH_UID`/`ALEPH_GID` matching the vault's owner. Nine ok lines, or it did not pass. |
 | `slice` | manual, recorded in `docs/RUNBOOK-phase1-slice.md` | The end-to-end demonstration. Update the runbook with real output when the slice changes. |
 
 ## Combined gates
@@ -38,6 +39,8 @@ is Phase 2b (`docs/design/phase-1.md` §1.2).
 | "traces reach Langfuse" | `live-langfuse` green | spans arriving at the local OTLP sink |
 | "the event schema is fine" | `code` + `docs` green | "it compiles" |
 | "config change took effect" | the `routing.decided` / `daemon.config_loaded` event shows it | reading the TOML |
+| "it works in the container" | `container` green, and a real turn answered inside it | the same code passing on the host |
+| "the deploy survives a restart" | a fact stated before `systemctl --user restart` recalled after it | the unit reporting `active` |
 
 ## Resolution semantics
 
