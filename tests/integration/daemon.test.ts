@@ -5,6 +5,7 @@ import { Database } from "bun:sqlite";
 import { makeWorkspace, type Workspace } from "../helpers/workspace.ts";
 import { startDaemon, type RunningDaemon } from "../helpers/daemon-process.ts";
 import { startOtlpSink, type OtlpSink } from "../helpers/otlp-sink.ts";
+import { localDate, systemClock } from "../../src/core/clock.ts";
 
 let ws: Workspace | null = null;
 let daemon: RunningDaemon | null = null;
@@ -201,7 +202,9 @@ describe("vault", () => {
     expect(existsSync(join(ws.vaultDir, "MEMORY.md"))).toBe(true);
     expect(existsSync(join(ws.vaultDir, "human"))).toBe(true);
 
-    const today = new Date().toISOString().slice(0, 10);
+    // The LOCAL date, not the UTC one. They differ every evening in
+    // America/Los_Angeles, and asserting UTC here hid the writer's bug.
+    const today = localDate(systemClock, "America/Los_Angeles");
     const logFile = join(ws.vaultDir, "log", `${today}.md`);
     expect(readFileSync(logFile, "utf8")).toContain("write something to the vault");
 

@@ -5,10 +5,11 @@
  * the mount (§10.3) — this layer is defence in depth, not the gate.
  */
 import { mkdirSync, writeFileSync, renameSync, existsSync, readFileSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { emit } from "../core/emit.ts";
 import type { IdTuple } from "../core/envelope.ts";
 import { VaultDenied } from "../core/errors.ts";
+import { localDate, type Clock } from "../core/clock.ts";
 import { commit } from "./git.ts";
 
 /** Paths the agent side may never write. Mirrors VAULT.md's prohibition list. */
@@ -19,10 +20,22 @@ export interface VaultWriterOptions {
   memoryMaxLines: number;
   commitPerWrite: string[];
   gitEnabled?: boolean;
+  /** The only source of "now" — `log/` is keyed by the local date (§10.4). */
+  clock: Clock;
+  /** IANA zone for that date. `daemon.timezone`, not the host's. */
+  timezone: string;
 }
 
 export class VaultWriter {
+  /** Per-target temp suffix. A per-directory name collides between concurrent writes. */
+  private tmpSeq = 0;
+
   constructor(private readonly opts: VaultWriterOptions) {}
+
+  /** Today, in the configured zone. */
+  today(): string {
+    return localDate(this.opts.clock, this.opts.timezone);
+  }
 
   /**
    * Resolve a vault-relative path, REFUSING anything that escapes rather than
@@ -47,7 +60,7 @@ export class VaultWriter {
       }
     }
     if (rel.startsWith("log/")) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = this.today();
       if (rel !== `log/${today}.md`) throw new VaultDenied("log_not_today", relPath);
     }
     if (rel === "MEMORY.md" && content !== undefined) {
@@ -81,7 +94,9 @@ export class VaultWriter {
     mkdirSync(dirname(abs), { recursive: true });
     const body = mode === "append" && existsSync(abs) ? readFileSync(abs, "utf8") + content : content;
 
-    const tmp = join(dirname(abs), `.${Date.now()}.tmp`);
+    // Per-target, not per-directory: two writes to the same directory in the
+    // same millisecond used to share a temp name and rename the wrong body.
+    const tmp = join(dirname(abs), `.${basename(abs)}.${this.opts.clock.ms()}.${this.tmpSeq++}.tmp`);
     writeFileSync(tmp, body);
     renameSync(tmp, abs);
 
@@ -122,7 +137,7 @@ export class VaultWriter {
 
   /** Append one entry to today's episodic log (the one place append is correct). */
   appendLog(entry: string, ids: IdTuple, causedBy?: string): { path: string } {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = this.today();
     const rel = `log/${today}.md`;
     const abs = resolve(this.opts.root, rel);
     const header = existsSync(abs) ? "" : `# ${today}\n`;

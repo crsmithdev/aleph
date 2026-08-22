@@ -33,7 +33,10 @@ export function commit(cwd: string, paths: string[], message: string, trailers: 
   const staged = git(cwd, ["diff", "--cached", "--name-only"]);
   if (!staged.stdout) return { status: "nothing-staged" };
   const body = [message, "", ...Object.entries(trailers).map(([k, v]) => `${k}: ${v}`)].join("\n");
-  const c = git(cwd, ["commit", "-q", "-m", body]);
+  // Commit the pathspec, not the whole index. Without `--`, a concurrent write
+  // that had staged another path rode along under this commit's Session:/Event:
+  // trailers, which is exactly the joinability the trailers exist to provide.
+  const c = git(cwd, ["commit", "-q", "-m", body, "--", ...paths]);
   if (!c.ok) return { status: "failed", step: "commit", error: c.stderr || "git commit failed" };
   const head = git(cwd, ["rev-parse", "HEAD"]);
   if (!head.ok) return { status: "failed", step: "rev-parse", error: head.stderr || "git rev-parse failed" };

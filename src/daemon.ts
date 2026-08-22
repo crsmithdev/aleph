@@ -121,6 +121,8 @@ export class Daemon {
       root: vaultRoot,
       memoryMaxLines: this.config.vault.memory_max_lines,
       commitPerWrite: this.config.vault.commit_per_write,
+      clock: this.clock,
+      timezone: this.config.daemon.timezone,
     });
     this.bootStep("vault", true, vaultRoot);
 

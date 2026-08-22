@@ -36,7 +36,7 @@ function build(w: Workspace, iso = "2026-08-20T09:00:00.000Z") {
   const kinds: string[] = [];
   setEmitter(new Emitter({ log, clock, strict: true, onEvent: (e) => kinds.push(e.kind) }));
   bootstrapVault(w.vaultDir, { now: clock.iso() });
-  const vault = new VaultWriter({ root: w.vaultDir, memoryMaxLines: config.vault.memory_max_lines, commitPerWrite: config.vault.commit_per_write });
+  const vault = new VaultWriter({ root: w.vaultDir, memoryMaxLines: config.vault.memory_max_lines, commitPerWrite: config.vault.commit_per_write, clock, timezone: config.daemon.timezone });
   const store = new SessionStore(db, clock);
   const otel = startOtel({ enabled: false, endpoint: "", serviceName: "test" });
   const lifecycle = new Lifecycle({
@@ -154,6 +154,23 @@ describe("vault prohibitions", () => {
     } finally {
       rmSync(join(ws.vaultDir, ".git", "index.lock"), { force: true });
     }
+  });
+
+  test("today is the configured zone's date, and the fake clock moves it", () => {
+    const tuple = { origin: "system" as const, trace_id: newTraceId() };
+
+    // 2026-08-22T01:30Z is still 2026-08-21 in America/Los_Angeles. The UTC
+    // date is what the writer used to key log/ on, so an evening entry was
+    // refused as "not today" by the writer's own prohibition.
+    harness.clock.set("2026-08-22T01:30:00.000Z");
+    expect(harness.vault.today()).toBe("2026-08-21");
+    expect(harness.vault.write("log/2026-08-21.md", "evening entry\n", tuple).sha256).toHaveLength(64);
+    expect(() => harness.vault.write("log/2026-08-22.md", "tomorrow\n", tuple)).toThrow(/log_not_today/);
+
+    // Advance past local midnight; the same call now means the other file.
+    harness.clock.set("2026-08-22T08:30:00.000Z");
+    expect(harness.vault.today()).toBe("2026-08-22");
+    expect(harness.vault.write("log/2026-08-22.md", "next day\n", tuple).sha256).toHaveLength(64);
   });
 
   test("log/ writes are confined to today's file", () => {

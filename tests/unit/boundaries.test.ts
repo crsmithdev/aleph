@@ -64,3 +64,34 @@ describe("module boundaries", () => {
     expect(offenders.map((f) => relative(SRC, f))).toEqual([]);
   });
 });
+
+/**
+ * CLAUDE.md states "do not call Date.now() outside src/core/clock.ts" and until
+ * now nothing checked it. `src/vault/writer.ts` had drifted: `log/` keyed off a
+ * UTC `new Date()` that the fake clock could not move, so the "today only"
+ * prohibition rolled over at 17:00 local.
+ *
+ * The allowlist is the debt that existed when this test was written, named
+ * rather than hidden. Adding to it requires a reason in the diff.
+ */
+describe("the clock invariant", () => {
+  const ALLOWED = new Map([
+    ["core/clock.ts", "the definition"],
+    ["core/bus.ts", "drain deadline — a wall-clock timeout, not clock arithmetic"],
+    ["vault/bootstrap.ts", "one-shot init, takes an injectable `now` and falls back"],
+    ["cli/os.ts", "a short-lived client process with no clock to inject"],
+  ]);
+
+  test("nothing outside src/core/clock.ts reads the wall clock unbidden", () => {
+    const offenders: string[] = [];
+    for (const file of walk(SRC)) {
+      const rel = relative(SRC, file);
+      if (ALLOWED.has(rel)) continue;
+      const text = readFileSync(file, "utf8");
+      for (const m of text.matchAll(/\b(Date\.now\(\)|new Date\(\s*\))/g)) {
+        offenders.push(`${rel}: ${m[1]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
