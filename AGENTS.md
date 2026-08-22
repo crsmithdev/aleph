@@ -4,6 +4,11 @@ Phase 1 spine of Chris's personal AI OS. Bun + TypeScript, one daemon process.
 Read `docs/design/phase-1.md` first; it is the specification this code implements
 and it is more detailed than this file.
 
+`docs/design/phase-2a.md` is the **next** phase's design: the approval broker,
+agent-chosen vault writes, cron, capture, librarian, ntfy, Syncthing. It is
+designed and **not built** — nothing in `src/` implements it yet, and
+`docs/RUNBOOK-phase2a.md` is deliberately empty.
+
 ## The rule that matters
 
 **Never claim something works without having run it and observed the output.**

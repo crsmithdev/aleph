@@ -42,11 +42,12 @@ else ok(`design doc names ${named.length} files, all present`);
 // checked as paths. Vault-relative examples (`log/YYYY-MM-DD.md`) are not repo
 // files and are excluded by the leading-directory requirement.
 const ROOTED = /^(src|tests|scripts|config|compose|docs|\.github)\//;
-const prose = [...new Set(
-  [...design.matchAll(/`([A-Za-z0-9_./-]+\.(?:ts|toml|yml|json|md|sh))`/g)].map((m) => m[1]!),
-)].filter((r) => ROOTED.test(r));
+const designDocs = Bun.spawnSync(["bash", "-c", "ls docs/design/*.md"]).stdout.toString().split("\n").filter(Boolean);
+const prose = [...new Set(designDocs.flatMap((f) =>
+  [...readFileSync(f, "utf8").matchAll(/`([A-Za-z0-9_./-]+\.(?:ts|toml|yml|json|md|sh))`/g)].map((m) => m[1]!),
+))].filter((r) => ROOTED.test(r));
 const brokenPaths = prose.filter((r) => !existsSync(r));
-if (brokenPaths.length) fail(`design doc points at paths that do not exist: ${brokenPaths.join(", ")}`);
-else ok(`design doc cites ${prose.length} repo paths, all present`);
+if (brokenPaths.length) fail(`design docs point at paths that do not exist: ${brokenPaths.join(", ")}`);
+else ok(`${designDocs.length} design doc(s) cite ${prose.length} repo paths, all present`);
 
 process.exit(failed ? 1 : 0);
