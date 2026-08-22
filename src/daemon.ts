@@ -202,7 +202,7 @@ export class Daemon {
    * the other two with it and the only symptom was silence — the meter stopped
    * sweeping, sessions stopped ageing and the bus stopped pumping, all at once.
    * Phase 2a puts the approval TTL sweep here too, so the blast radius would
-   * have grown to include the safety gate (docs/design/phase-2a.md §2.3).
+   * have grown to include the safety gate (docs/design/phase-1.md §17.16).
    */
   private onTick(): void {
     if (this.stopping) return;

@@ -1,6 +1,6 @@
 /**
  * The brief is written from the model's own output and read back into the next
- * system prompt (docs/design/phase-2a.md §2.4). Everything here is about one
+ * system prompt (docs/design/phase-1.md §17.15). Everything here is about one
  * property: agent text cannot become document structure.
  */
 import { test, expect, describe } from "bun:test";
