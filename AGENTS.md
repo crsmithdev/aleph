@@ -4,12 +4,13 @@ Phase 1 spine of Chris's personal AI OS. Bun + TypeScript, one daemon process.
 Read `docs/design/phase-1.md` first; it is the specification this code implements
 and it is more detailed than this file.
 
-`docs/design/phase-2a.md` is the **next** phase's design, and its shape changed
-on 2026-08-22: aleph-next is **the record and the governor** for work done in
-Claude Code — not a second coding agent. Two stores (an append-only event log for
-evidence, a reconciled memory for facts), hook ingest, an MCP server, a broker
-gating promotion into memory, and daemon-run verification gates. Nothing in
-`src/` implements it yet; `docs/RUNBOOK-phase2a.md` is deliberately empty.
+`docs/design/aleph.md` is the current design as of 2026-08-22 and replaces both
+`phase-2a.md` and the short-lived `aleph-v0.md`. Aleph is a Hermes-shaped
+personal agent: **the daemon runs its own agent loop and its own tools**, and the
+Claude Code CLI is spawned only for coding jobs, in a worktree, without push
+credentials. `phase-1.md` still describes the code in `src/`, which will be
+ported selectively (see aleph.md §9). `aleph-shapes.html` records the A-vs-B
+comparison that chose this shape.
 
 **Read phase-1 §7.4 and §17.15 before touching `src/sessions/lifecycle.ts` or
 `src/sessions/brief.ts`** — the daemon writes model output into the brief and

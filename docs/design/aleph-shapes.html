@@ -1,0 +1,743 @@
+<title>Aleph v0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+
+<style>
+  :root {
+    --ground: #F1F3F6;
+    --panel: #FFFFFF;
+    --panel-2: #E8EBF0;
+    --ink: #161A21;
+    --ink-soft: #4E5867;
+    --line: #D0D6DF;
+    --brass: #8A5D11;
+    --teal: #1D6A65;
+    --clay: #9C3728;
+    --shadow: 0 1px 2px rgba(22, 26, 33, .06), 0 8px 24px -16px rgba(22, 26, 33, .28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #10131A;
+      --panel: #171B23;
+      --panel-2: #1E232C;
+      --ink: #E6EAF1;
+      --ink-soft: #97A3B4;
+      --line: #2A313C;
+      --brass: #E1AD55;
+      --teal: #6CBDB4;
+      --clay: #E28B7A;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -18px rgba(0, 0, 0, .9);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #10131A;
+    --panel: #171B23;
+    --panel-2: #1E232C;
+    --ink: #E6EAF1;
+    --ink-soft: #97A3B4;
+    --line: #2A313C;
+    --brass: #E1AD55;
+    --teal: #6CBDB4;
+    --clay: #E28B7A;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -18px rgba(0, 0, 0, .9);
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Source Serif 4", Georgia, serif;
+    font-size: 17px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 24px 96px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+  .prose { max-width: 66ch; }
+
+  h1, h2, h3, .label, .mono { font-family: Archivo, "Helvetica Neue", Arial, sans-serif; }
+  h1 {
+    font-size: clamp(38px, 6vw, 62px);
+    line-height: 1.02;
+    font-weight: 700;
+    letter-spacing: -.025em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h2 {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -.012em;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  h3 { font-size: 17px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.005em; }
+  p { margin: 0 0 14px; }
+  p:last-child { margin-bottom: 0; }
+  a { color: var(--brass); }
+
+  .label {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .mono, code {
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    font-size: .88em;
+  }
+  code {
+    background: var(--panel-2);
+    border-radius: 3px;
+    padding: .1em .32em;
+  }
+  em { font-style: italic; }
+  strong { font-weight: 600; }
+
+  header.masthead {
+    padding-top: 72px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 40px;
+  }
+  .rule-top {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .rule-top .ver {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--brass);
+    border: 1px solid var(--brass);
+    border-radius: 2px;
+    padding: 2px 7px;
+  }
+  .thesis { font-size: 21px; line-height: 1.45; max-width: 60ch; }
+  .thesis b { font-weight: 600; box-shadow: inset 0 -.42em 0 color-mix(in srgb, var(--brass) 20%, transparent); }
+
+  section { display: flex; flex-direction: column; gap: 18px; }
+  .sec-head { display: flex; flex-direction: column; gap: 4px; }
+
+  figure {
+    margin: 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    box-shadow: var(--shadow);
+    padding: 22px 20px 16px;
+    overflow-x: auto;
+  }
+  figure svg { display: block; width: 100%; min-width: 640px; height: auto; color: var(--ink); }
+  figcaption {
+    font-size: 14px;
+    color: var(--ink-soft);
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    max-width: 78ch;
+  }
+
+  table { border-collapse: collapse; width: 100%; font-size: 15.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 11px 14px 11px 0; border-bottom: 1px solid var(--line); }
+  th {
+    font-family: Archivo, sans-serif;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    border-bottom-color: var(--ink-soft);
+  }
+  td.k { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; white-space: nowrap; color: var(--brass); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 16px 18px;
+  }
+  .card .label { display: block; margin-bottom: 8px; }
+  .card p { font-size: 15.5px; }
+
+  .tree {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 18px 20px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13.5px;
+    line-height: 1.85;
+    white-space: pre;
+    overflow-x: auto;
+    color: var(--ink-soft);
+  }
+  .tree b { color: var(--ink); font-weight: 500; }
+  .tree i { color: var(--brass); font-style: normal; }
+
+  ol.miles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  ol.miles li {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1.15fr);
+    gap: 18px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--line);
+    align-items: baseline;
+  }
+  ol.miles li:first-child { border-top: 1px solid var(--ink-soft); }
+  ol.miles .m {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    color: var(--brass);
+    letter-spacing: .04em;
+  }
+  ol.miles .ships { font-size: 16px; }
+  ol.miles .done { font-size: 15px; color: var(--ink-soft); font-style: italic; }
+  ol.miles li.now .ships::after {
+    content: "minimum usable";
+    font-family: Archivo, sans-serif;
+    font-style: normal;
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--teal);
+    border: 1px solid var(--teal);
+    border-radius: 2px;
+    padding: 2px 6px;
+    margin-left: 10px;
+    white-space: nowrap;
+  }
+  @media (max-width: 700px) {
+    ol.miles li { grid-template-columns: 52px minmax(0, 1fr); }
+    ol.miles .done { grid-column: 2; }
+  }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 24px;
+    color: var(--ink-soft);
+    font-size: 14.5px;
+  }
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="rule-top">
+      <span class="label">Design note · 22 Aug 2026</span>
+      <span class="ver">v0</span>
+      <span class="label" style="color:var(--ink-soft)">supersedes phase-1 · phase-2a</span>
+    </div>
+    <h1>Aleph</h1>
+    <p class="thesis">A Hermes-shaped personal agent — one process you talk to from your phone — whose engine is <b>the Claude Code CLI you already use at your desk</b>. Chat and coding are the same code path with different knobs.</p>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">The mechanism</span>
+      <h2>One turn, end to end</h2>
+    </div>
+    <div class="prose">
+      <p>The daemon is a gateway, not a brain. It moves messages, keeps the session map, brokers approvals and writes the log. Everything model-shaped happens inside a <code>claude</code> process it spawns.</p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 960 496" role="img" aria-label="A message from Telegram, the CLI or cron enters the aleph daemon, which spawns or feeds a persistent claude process; the process reaches back through an MCP server and a PreToolUse hook over a unix socket, and the same session can later be resumed in a terminal.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+          </marker>
+          <marker id="ar-brass" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--brass)"></path>
+          </marker>
+          <marker id="ar-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>
+          </marker>
+        </defs>
+
+        <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="currentColor">
+
+          <!-- channels -->
+          <text x="24" y="34" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">SURFACES</text>
+          <rect x="24" y="48" width="150" height="40" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="99" y="73" text-anchor="middle">Telegram</text>
+          <rect x="24" y="104" width="150" height="40" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="99" y="129" text-anchor="middle">aleph chat</text>
+          <rect x="24" y="160" width="150" height="40" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="99" y="185" text-anchor="middle">cron.yaml</text>
+
+          <line x1="174" y1="68" x2="246" y2="88" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"></line>
+          <line x1="174" y1="124" x2="246" y2="124" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"></line>
+          <line x1="174" y1="180" x2="246" y2="160" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"></line>
+
+          <!-- daemon -->
+          <rect x="250" y="48" width="216" height="200" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1.6"></rect>
+          <text x="266" y="74" font-size="13.5" font-weight="500">aleph d</text>
+          <line x1="250" y1="86" x2="466" y2="86" stroke="currentColor" stroke-width="1" opacity=".35"></line>
+          <text x="266" y="110" fill="var(--ink-soft)">session map</text>
+          <text x="266" y="136" fill="var(--ink-soft)">approval broker</text>
+          <text x="266" y="162" fill="var(--ink-soft)">job runner</text>
+          <text x="266" y="188" fill="var(--ink-soft)">scheduler</text>
+          <text x="266" y="214" fill="var(--ink-soft)">event log</text>
+          <text x="266" y="238" fill="var(--ink-soft)">socket · :7717</text>
+
+          <!-- daemon -> claude -->
+          <line x1="466" y1="98" x2="586" y2="98" stroke="var(--brass)" stroke-width="1.6" marker-end="url(#ar-brass)"></line>
+          <text x="526" y="88" text-anchor="middle" fill="var(--brass)" font-size="11.5">spawn / feed</text>
+          <text x="526" y="74" text-anchor="middle" fill="var(--brass)" font-size="11.5">stream-json in</text>
+          <line x1="586" y1="212" x2="466" y2="212" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar)"></line>
+          <text x="526" y="196" text-anchor="middle" font-size="11.5" fill="var(--ink-soft)">text + events</text>
+
+          <!-- replies back out -->
+          <path d="M 250 228 L 12 228 L 12 68 L 18 68" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar)"></path>
+          <text x="26" y="248" font-size="11.5" fill="var(--ink-soft)">replies · progress</text>
+
+          <!-- claude process -->
+          <rect x="586" y="48" width="350" height="200" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.8"></rect>
+          <text x="602" y="74" font-size="13.5" font-weight="500" fill="var(--brass)">claude -p</text>
+          <line x1="586" y1="86" x2="936" y2="86" stroke="var(--brass)" stroke-width="1" opacity=".4"></line>
+          <text x="602" y="110" fill="var(--ink-soft)">--session-id &lt;uuid&gt;</text>
+          <text x="602" y="136" fill="var(--ink-soft)">--input-format stream-json</text>
+          <text x="602" y="162" fill="var(--ink-soft)">--mcp-config mcp.json</text>
+          <text x="602" y="188" fill="var(--ink-soft)">--permission-mode / --tools</text>
+          <text x="602" y="214" fill="var(--ink-soft)">cwd = context</text>
+          <text x="602" y="238" fill="var(--ink-soft)">skills · CLAUDE.md · compaction</text>
+
+          <!-- helpers -->
+          <line x1="662" y1="248" x2="662" y2="308" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)" marker-start="url(#ar)"></line>
+          <line x1="860" y1="248" x2="860" y2="308" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)" marker-start="url(#ar)"></line>
+          <rect x="570" y="308" width="184" height="56" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="662" y="331" text-anchor="middle">aleph-mcp</text>
+          <text x="662" y="351" text-anchor="middle" font-size="11" fill="var(--ink-soft)">remember · dispatch</text>
+          <rect x="768" y="308" width="168" height="56" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="852" y="331" text-anchor="middle">aleph-hook</text>
+          <text x="852" y="351" text-anchor="middle" font-size="11" fill="var(--ink-soft)">PreToolUse gate</text>
+
+          <path d="M 570 336 L 430 336 L 430 252" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar)"></path>
+          <text x="446" y="356" font-size="11" fill="var(--ink-soft)">unix socket</text>
+
+          <!-- log -->
+          <rect x="250" y="392" width="216" height="48" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".8"></rect>
+          <text x="266" y="412" font-size="11.5" fill="var(--ink-soft)">events.jsonl</text>
+          <text x="266" y="431" font-size="11.5" fill="var(--ink-soft)">index.db &nbsp;(rebuildable)</text>
+          <line x1="300" y1="252" x2="300" y2="388" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"></line>
+
+          <!-- resume -->
+          <rect x="586" y="404" width="350" height="52" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.4" stroke-dasharray="5 3"></rect>
+          <text x="602" y="426" fill="var(--teal)">your terminal, an hour later</text>
+          <text x="602" y="446" fill="var(--teal)" font-size="11.5">claude --resume &lt;uuid&gt;</text>
+          <path d="M 936 430 L 956 430 L 956 148 L 940 148" fill="none" stroke="var(--teal)" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#ar-teal)"></path>
+          <text x="800" y="392" text-anchor="middle" font-size="11.5" fill="var(--teal)">same session, human at the controls</text>
+        </g>
+      </svg>
+      <figcaption>The session id is the durable thing; the process is a cache. Kill it on idle and the next message respawns with <code>--resume</code> — which is also how you take the controls yourself.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">The only variable</span>
+      <h2>Chat and coding are one code path</h2>
+    </div>
+    <figure>
+      <svg viewBox="0 0 960 288" role="img" aria-label="Three contexts — home, repo and job — are the same claude process with three settings changed: working directory, tool allowlist and permission mode.">
+        <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="currentColor">
+          <text x="24" y="26" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">SAME BINARY · SAME DAEMON · SAME SESSION MODEL</text>
+
+          <g>
+            <rect x="24" y="44" width="290" height="216" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
+            <rect x="24" y="44" width="290" height="34" rx="3" fill="var(--panel-2)" stroke="none"></rect>
+            <text x="40" y="66" font-weight="500">home</text>
+            <text x="298" y="66" text-anchor="end" font-size="11" fill="var(--ink-soft)">default</text>
+            <text x="40" y="106" font-size="11" fill="var(--ink-soft)">cwd</text>
+            <text x="40" y="126" fill="var(--brass)">~/.aleph-next/workspace</text>
+            <text x="40" y="162" font-size="11" fill="var(--ink-soft)">tools</text>
+            <text x="40" y="182" fill="var(--brass)">mcp · Read · Write · Web</text>
+            <text x="40" y="218" font-size="11" fill="var(--ink-soft)">permission-mode</text>
+            <text x="40" y="238" fill="var(--brass)">acceptEdits</text>
+          </g>
+
+          <g>
+            <rect x="335" y="44" width="290" height="216" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
+            <rect x="335" y="44" width="290" height="34" rx="3" fill="var(--panel-2)" stroke="none"></rect>
+            <text x="351" y="66" font-weight="500">repo:aleph-next</text>
+            <text x="609" y="66" text-anchor="end" font-size="11" fill="var(--ink-soft)">you steer</text>
+            <text x="351" y="106" font-size="11" fill="var(--ink-soft)">cwd</text>
+            <text x="351" y="126" fill="var(--brass)">~/aleph-next</text>
+            <text x="351" y="162" font-size="11" fill="var(--ink-soft)">tools</text>
+            <text x="351" y="182" fill="var(--brass)">default (full)</text>
+            <text x="351" y="218" font-size="11" fill="var(--ink-soft)">permission-mode</text>
+            <text x="351" y="238" fill="var(--brass)">manual → broker</text>
+          </g>
+
+          <g>
+            <rect x="646" y="44" width="290" height="216" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
+            <rect x="646" y="44" width="290" height="34" rx="3" fill="var(--panel-2)" stroke="none"></rect>
+            <text x="662" y="66" font-weight="500">job:7f3a</text>
+            <text x="920" y="66" text-anchor="end" font-size="11" fill="var(--ink-soft)">unattended</text>
+            <text x="662" y="106" font-size="11" fill="var(--ink-soft)">cwd</text>
+            <text x="662" y="126" fill="var(--brass)">.worktrees/7f3a</text>
+            <text x="662" y="162" font-size="11" fill="var(--ink-soft)">tools</text>
+            <text x="662" y="182" fill="var(--brass)">default (full)</text>
+            <text x="662" y="218" font-size="11" fill="var(--ink-soft)">permission-mode</text>
+            <text x="662" y="238" fill="var(--brass)">acceptEdits, branch only</text>
+          </g>
+        </g>
+      </svg>
+      <figcaption>A context is a row in <code>config.toml</code>: three settings. Adding a repo is three lines, not code — and it is why there is no second agent runtime to maintain.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">The safety story</span>
+      <h2>Approval comes to whatever screen you're on</h2>
+    </div>
+    <figure>
+      <svg viewBox="0 0 960 236" role="img" aria-label="A tool call inside the claude process hits the PreToolUse hook, which asks the daemon, which asks you on Telegram; allow or deny returns to the hook, and a five-minute silence denies.">
+        <defs>
+          <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+          </marker>
+          <marker id="ar3-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>
+          </marker>
+          <marker id="ar3-clay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--clay)"></path>
+          </marker>
+        </defs>
+        <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="currentColor">
+          <rect x="24" y="56" width="196" height="60" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="122" y="82" text-anchor="middle" fill="var(--brass)">claude wants:</text>
+          <text x="122" y="102" text-anchor="middle" fill="var(--brass)" font-size="11.5">Bash(git push)</text>
+
+          <line x1="220" y1="86" x2="286" y2="86" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar3)"></line>
+
+          <rect x="290" y="56" width="160" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
+          <text x="370" y="82" text-anchor="middle">aleph-hook</text>
+          <text x="370" y="102" text-anchor="middle" font-size="11" fill="var(--ink-soft)">PreToolUse</text>
+
+          <line x1="450" y1="86" x2="516" y2="86" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar3)"></line>
+          <text x="483" y="72" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">socket</text>
+
+          <rect x="520" y="56" width="160" height="60" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1.6"></rect>
+          <text x="600" y="82" text-anchor="middle">aleph d</text>
+          <text x="600" y="102" text-anchor="middle" font-size="11" fill="var(--ink-soft)">auto-allow rules first</text>
+
+          <line x1="680" y1="86" x2="746" y2="86" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar3)"></line>
+
+          <rect x="750" y="56" width="186" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
+          <text x="843" y="82" text-anchor="middle">you, on Telegram</text>
+          <text x="843" y="102" text-anchor="middle" font-size="11" fill="var(--ink-soft)">[allow] [deny]</text>
+
+          <path d="M 843 116 L 843 158 L 370 158 L 370 120" fill="none" stroke="var(--teal)" stroke-width="1.5" marker-end="url(#ar3-teal)"></path>
+          <text x="722" y="150" text-anchor="middle" font-size="11.5" fill="var(--teal)">verdict → hook, tool runs</text>
+
+          <path d="M 600 116 L 600 196 L 386 196 L 386 120" fill="none" stroke="var(--clay)" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ar3-clay)"></path>
+          <text x="500" y="216" text-anchor="middle" font-size="11.5" fill="var(--clay)">no answer in 5 min → deny</text>
+
+          <text x="24" y="34" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">EVERY DECISION IS AN EVENT IN events.jsonl</text>
+        </g>
+      </svg>
+      <figcaption>Read, Grep and a short allowlist never reach your phone. Everything else waits, and silence is a refusal — which is what makes an unattended job safe to start from a train.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Decisions</span>
+      <h2>Ten calls this design turns on</h2>
+    </div>
+    <table>
+      <thead>
+        <tr><th style="width:34%">Decision</th><th>Because</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Every turn is a Claude Code CLI process</td><td>Skills, MCP, hooks, compaction and subscription auth all come free; there is no second runtime to keep in sync.</td></tr>
+        <tr><td>A conversation is a durable session id</td><td><code>--session-id</code> lets Aleph name it. The process is disposable; the id is the state.</td></tr>
+        <tr><td>Any conversation resumes at the desk</td><td>Direct from the phone, take the controls in your terminal, same session. Hermes cannot do this.</td></tr>
+        <tr><td>One long-lived process per live conversation</td><td>Messages go in over <code>--input-format stream-json</code>; no cold start per turn, tool events stream out as progress.</td></tr>
+        <tr><td>The daemon is a gateway, not a brain</td><td>Transport, session map, broker, scheduler, log. Small enough to stay correct.</td></tr>
+        <tr><td>Capabilities arrive as one MCP server</td><td>The agent <em>acts</em> — remember, schedule, dispatch, notify — instead of asking the daemon to act for it.</td></tr>
+        <tr><td>Files first, SQLite as a rebuildable index</td><td>Greppable, git-trackable, and it survives the code being rewritten under it.</td></tr>
+        <tr><td>Approval is a PreToolUse hook</td><td>One gate, every context, any channel. Timeout denies.</td></tr>
+        <tr><td>Greenfield tree, port selectively</td><td>The Phase 1 spine keeps its ids, clock, config, emit, Telegram client. Lanes, OTel and the brief loop do not come.</td></tr>
+        <tr><td>Telegram, CLI and cron only</td><td>Telegram is the property that makes it Hermes-like. The rest is milestone work.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">State</span>
+      <h2>Everything it knows is a file you can read</h2>
+    </div>
+    <div class="tree"><b>~/.aleph-next/</b>
+  <b>soul.md</b>          <i>identity, appended to every run's system prompt</i>
+  <b>config.toml</b>      <i>channels · contexts · cron · auto-allow rules</i>
+  <b>memory/*.md</b>      <i>one fact per file, written by the remember tool</i>
+  <b>sessions/*.json</b>  <i>thread → session id, context, transcript path</i>
+  <b>jobs/&lt;id&gt;/</b>       <i>task, worktree, stream log, diffstat</i>
+  <b>events.jsonl</b>     <i>every message, spawn, approval, job, cron fire</i>
+  <b>index.db</b>         <i>FTS over the above — delete it and it rebuilds</i>
+  <b>workspace/</b>       <i>a git repo; .claude/skills/ loads natively</i></div>
+    <div class="grid-2">
+      <div class="card">
+        <span class="label">Skills, not reinvented</span>
+        <p>They are Claude Code skills in the workspace. <code>agentskills.io</code> packs drop in unchanged, and the CLI loads them without Aleph knowing they exist.</p>
+      </div>
+      <div class="card">
+        <span class="label">Transcripts, not copied</span>
+        <p>Full conversation history already lives in <code>~/.claude/projects/&lt;slug&gt;/&lt;uuid&gt;.jsonl</code>. Aleph points at it and indexes it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Build order</span>
+      <h2>Each milestone is usable on its own</h2>
+    </div>
+    <ol class="miles">
+      <li>
+        <span class="m">M0</span>
+        <span class="ships">Daemon, session map, <code>aleph chat</code> against a persistent <code>claude -p</code>, event log</span>
+        <span class="done">A multi-turn conversation at the desk that <code>claude --resume</code> picks up</span>
+      </li>
+      <li class="now">
+        <span class="m">M1</span>
+        <span class="ships">Telegram gateway on the same path, progress messages</span>
+        <span class="done">The same conversation, from your phone</span>
+      </li>
+      <li>
+        <span class="m">M2</span>
+        <span class="ships">MCP server: remember, recall, notify · soul.md · context block</span>
+        <span class="done">It uses a fact on Tuesday that you told it on Monday</span>
+      </li>
+      <li>
+        <span class="m">M3</span>
+        <span class="ships">Approval broker, <code>repo:</code> contexts, <code>dispatch</code> and jobs</span>
+        <span class="done">"Fix the failing test" from the phone returns a branch you review</span>
+      </li>
+      <li>
+        <span class="m">M4</span>
+        <span class="ships">Cron and the <code>schedule</code> tool</span>
+        <span class="done">A morning briefing arrives without being asked</span>
+      </li>
+    </ol>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Scope</span>
+      <h2>Not in v0, and one thing unproven</h2>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <span class="label">Deliberately absent</span>
+        <p>Voice notes. Discord, Slack, Signal. User modeling. Autonomous skill authoring. Remote and serverless backends. Subagent fan-out. A web UI. Each is shaped like M2 — add it the week it starts annoying you.</p>
+      </div>
+      <div class="card">
+        <span class="label">Unverified assumption</span>
+        <p>Half-resolved: a headless <code>--session-id</code> run <em>is</em> continued by a fresh <code>claude -p --resume</code> in the same cwd, same id. The interactive picker is still untested, and two processes on one session id were observed interleaving writes into one transcript — the daemon, not the CLI, has to enforce exclusivity.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">The other shape</span>
+      <h2>Shape B — the daemon is the agent</h2>
+    </div>
+    <div class="prose">
+      <p>Same surfaces, same files, one boundary moved: the daemon runs its own agent loop and the Claude Code CLI appears exactly once — as the worker that writes code in a worktree. This is the more literal reading of "a Hermes-like system that uses the CLI for coding," and it is what Hermes itself does.</p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 960 470" role="img" aria-label="In shape B the daemon holds the agent loop, tools, approval gate and history, calls a model API directly for every chat turn, and spawns a Claude Code CLI process only when the dispatch_code tool starts a coding job in a worktree.">
+        <defs>
+          <marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+          </marker>
+          <marker id="ar4-brass" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--brass)"></path>
+          </marker>
+          <marker id="ar4-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>
+          </marker>
+        </defs>
+        <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="currentColor">
+
+          <text x="24" y="30" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">SURFACES</text>
+          <rect x="24" y="44" width="140" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="94" y="67" text-anchor="middle">Telegram</text>
+          <rect x="24" y="94" width="140" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="94" y="117" text-anchor="middle">aleph chat</text>
+          <rect x="24" y="144" width="140" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="94" y="167" text-anchor="middle">cron.yaml</text>
+          <line x1="164" y1="62" x2="216" y2="82" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar4)"></line>
+          <line x1="164" y1="112" x2="216" y2="112" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar4)"></line>
+          <line x1="164" y1="162" x2="216" y2="142" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar4)"></line>
+          <path d="M 220 300 L 12 300 L 12 62 L 18 62" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar4)"></path>
+          <text x="26" y="320" font-size="11.5" fill="var(--ink-soft)">replies · progress</text>
+
+          <rect x="220" y="44" width="452" height="292" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1.6"></rect>
+          <text x="236" y="70" font-size="13.5" font-weight="500">aleph d</text>
+
+          <rect x="236" y="84" width="196" height="104" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.8"></rect>
+          <text x="252" y="106" fill="var(--brass)" font-weight="500">agent loop</text>
+          <text x="252" y="130" font-size="11.5" fill="var(--ink-soft)">messages · tool dispatch</text>
+          <text x="252" y="152" font-size="11.5" fill="var(--ink-soft)">compaction · retries</text>
+          <text x="252" y="174" font-size="11.5" fill="var(--ink-soft)">token budget</text>
+
+          <rect x="448" y="84" width="208" height="104" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="464" y="106" font-weight="500">tools (TypeScript)</text>
+          <text x="464" y="130" font-size="11.5" fill="var(--ink-soft)">remember · recall</text>
+          <text x="464" y="152" font-size="11.5" fill="var(--ink-soft)">schedule · notify</text>
+          <text x="464" y="174" font-size="11.5" fill="var(--brass)">dispatch_code</text>
+
+          <rect x="236" y="204" width="420" height="44" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.5"></rect>
+          <text x="252" y="231" fill="var(--teal)" font-size="12">approval gate — plain code, real arguments</text>
+
+          <rect x="236" y="264" width="420" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="252" y="291" font-size="11.5" fill="var(--ink-soft)">history · memory/*.md · events.jsonl · index.db</text>
+
+          <path d="M 672 110 L 716 110" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar4)" marker-start="url(#ar4)"></path>
+          <rect x="720" y="72" width="216" height="76" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
+          <text x="828" y="100" text-anchor="middle">model API</text>
+          <text x="828" y="122" text-anchor="middle" font-size="11" fill="var(--ink-soft)">every chat turn</text>
+          <text x="828" y="140" text-anchor="middle" font-size="11" fill="var(--clay)">api key · metered</text>
+
+          <path d="M 656 176 L 690 176 L 690 216 L 716 216" fill="none" stroke="var(--brass)" stroke-width="1.6" marker-end="url(#ar4-brass)"></path>
+          <rect x="720" y="180" width="216" height="94" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.8"></rect>
+          <text x="736" y="206" fill="var(--brass)" font-weight="500">claude -p -w job/7f3a</text>
+          <text x="736" y="230" font-size="11.5" fill="var(--ink-soft)">acceptEdits · one process</text>
+          <text x="736" y="252" font-size="11.5" fill="var(--ink-soft)">worktree · no push creds</text>
+
+          <path d="M 828 274 L 828 302 L 676 302" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#ar4)"></path>
+          <text x="700" y="324" font-size="11.5" fill="var(--ink-soft)">diffstat · stream log</text>
+
+          <line x1="900" y1="274" x2="900" y2="348" stroke="var(--teal)" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#ar4-teal)"></line>
+          <rect x="720" y="352" width="216" height="52" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.4" stroke-dasharray="5 3"></rect>
+          <text x="736" y="374" fill="var(--teal)" font-size="11.5">claude --resume &lt;job&gt;</text>
+          <text x="736" y="394" fill="var(--teal)" font-size="11">desk takeover — jobs only</text>
+
+          <text x="220" y="372" font-size="11" letter-spacing="1.2" fill="var(--ink-soft)">GONE FROM SHAPE A:</text>
+          <text x="220" y="394" font-size="11.5" fill="var(--ink-soft)">PreToolUse hook · aleph-mcp · chat session map · idle-kill</text>
+          <text x="220" y="426" font-size="11" letter-spacing="1.2" fill="var(--ink-soft)">NEW WORK:</text>
+          <text x="220" y="448" font-size="11.5" fill="var(--ink-soft)">the loop itself — history, compaction, retries, streaming</text>
+        </g>
+      </svg>
+      <figcaption>The CLI stops being the runtime and becomes a subprocess with one job. Chat is no longer a resumable Claude Code session — only coding jobs are.</figcaption>
+    </figure>
+
+    <figure>
+      <svg viewBox="0 0 960 372" role="img" aria-label="A matrix of eight responsibilities showing that in shape A the Claude Code CLI owns transcript, compaction, skills, model choice and the coding turn while chat tools and approval are CLI-mediated, and in shape B aleph owns everything except the coding turn and the skills that run inside it.">
+        <g font-family="IBM Plex Mono, monospace" font-size="12">
+          <text x="24" y="26" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">WHO OWNS WHAT</text>
+
+          <rect x="470" y="40" width="14" height="14" rx="2" fill="var(--panel-2)" stroke="currentColor" stroke-width="1"></rect>
+          <text x="492" y="52" font-size="11" fill="var(--ink-soft)">aleph's code</text>
+          <rect x="608" y="40" width="14" height="14" rx="2" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="630" y="52" font-size="11" fill="var(--ink-soft)">Claude Code</text>
+          <rect x="750" y="40" width="14" height="14" rx="2" fill="none" stroke="var(--brass)" stroke-width="1.6" stroke-dasharray="3 2"></rect>
+          <text x="772" y="52" font-size="11" fill="var(--ink-soft)">CLI-mediated (hook / MCP)</text>
+
+          <text x="392" y="86" text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--ink-soft)">SHAPE A</text>
+          <text x="676" y="86" text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--ink-soft)">SHAPE B</text>
+
+          <text x="24" y="118" fill="currentColor">conversation transcript</text>
+          <rect x="252" y="102" width="280" height="24" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="392" y="119" text-anchor="middle" font-size="11" fill="var(--brass)">~/.claude/projects/*.jsonl</text>
+          <rect x="536" y="102" width="280" height="24" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1"></rect>
+          <text x="676" y="119" text-anchor="middle" font-size="11" fill="var(--ink-soft)">yours, in ~/.aleph-next</text>
+
+          <text x="24" y="152" fill="currentColor">context compaction</text>
+          <rect x="252" y="136" width="280" height="24" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="392" y="153" text-anchor="middle" font-size="11" fill="var(--brass)">free</text>
+          <rect x="536" y="136" width="280" height="24" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1"></rect>
+          <text x="676" y="153" text-anchor="middle" font-size="11" fill="var(--ink-soft)">you build it</text>
+
+          <text x="24" y="186" fill="currentColor">chat-side tools</text>
+          <rect x="252" y="170" width="280" height="24" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6" stroke-dasharray="3 2"></rect>
+          <text x="392" y="187" text-anchor="middle" font-size="11" fill="var(--brass)">aleph-mcp, dispatched by the CLI</text>
+          <rect x="536" y="170" width="280" height="24" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1"></rect>
+          <text x="676" y="187" text-anchor="middle" font-size="11" fill="var(--ink-soft)">function calls in-process</text>
+
+          <text x="24" y="220" fill="currentColor">tool approval</text>
+          <rect x="252" y="204" width="280" height="24" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6" stroke-dasharray="3 2"></rect>
+          <text x="392" y="221" text-anchor="middle" font-size="11" fill="var(--brass)">PreToolUse hook, 60s default</text>
+          <rect x="536" y="204" width="280" height="24" rx="3" fill="var(--panel-2)" stroke="var(--teal)" stroke-width="1.4"></rect>
+          <text x="676" y="221" text-anchor="middle" font-size="11" fill="var(--teal)">your gate, your timeout</text>
+
+          <text x="24" y="254" fill="currentColor">skills · CLAUDE.md</text>
+          <rect x="252" y="238" width="280" height="24" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="392" y="255" text-anchor="middle" font-size="11" fill="var(--brass)">everywhere, free</text>
+          <rect x="536" y="238" width="280" height="24" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="676" y="255" text-anchor="middle" font-size="11" fill="var(--brass)">inside coding jobs only</text>
+
+          <text x="24" y="288" fill="currentColor">model · provider</text>
+          <rect x="252" y="272" width="280" height="24" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="392" y="289" text-anchor="middle" font-size="11" fill="var(--brass)">what the CLI supports</text>
+          <rect x="536" y="272" width="280" height="24" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1"></rect>
+          <text x="676" y="289" text-anchor="middle" font-size="11" fill="var(--ink-soft)">any provider, per context</text>
+
+          <text x="24" y="322" fill="currentColor">the coding turn</text>
+          <rect x="252" y="306" width="280" height="24" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="392" y="323" text-anchor="middle" font-size="11" fill="var(--brass)">claude -p</text>
+          <rect x="536" y="306" width="280" height="24" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="676" y="323" text-anchor="middle" font-size="11" fill="var(--brass)">claude -p</text>
+
+          <text x="24" y="356" fill="currentColor">worktree · landing</text>
+          <rect x="252" y="340" width="280" height="24" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1"></rect>
+          <text x="392" y="357" text-anchor="middle" font-size="11" fill="var(--ink-soft)">aleph</text>
+          <rect x="536" y="340" width="280" height="24" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1"></rect>
+          <text x="676" y="357" text-anchor="middle" font-size="11" fill="var(--ink-soft)">aleph</text>
+        </g>
+      </svg>
+      <figcaption>One row is identical in both shapes — the coding turn. Everything above it is the argument: A rents it from the CLI, B builds it and owns it.</figcaption>
+    </figure>
+
+    <table>
+      <thead>
+        <tr><th style="width:22%">Tradeoff</th><th style="width:39%">A — CLI is the engine</th><th>B — daemon is the agent</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Billing</td><td>Subscription quota, because it <em>is</em> Claude Code.</td><td>Metered per token against an API key — unless the loop embeds the Agent SDK with your Claude Code credentials, which puts you back in A with extra steps.</td></tr>
+        <tr><td>Chat latency</td><td>Process spawn per turn, or a long-lived process speaking a control protocol on stdin.</td><td>One HTTP call. No process lifecycle at all on the chat path.</td></tr>
+        <tr><td>The approval gate</td><td>A hook contract: 60s default timeout, config snapshotted at session start, prefix patterns that don't bound arguments, unclear coverage of MCP and subagent calls.</td><td>A function. You see the real arguments, set your own timeout, edit rules live, and log the decision on the same line as the event.</td></tr>
+        <tr><td>Injection blast radius</td><td>Chat context holds Web + Write and, in repo contexts, Bash. One poisoned page reaches a tool-using agent.</td><td>Chat tools are six hand-written functions. The dangerous surface is confined to jobs, in worktrees, without push credentials.</td></tr>
+        <tr><td>Compaction and history</td><td>Free, and battle-tested.</td><td>Yours to build: windowing, summarization, token accounting, retries. This is the bulk of the new code.</td></tr>
+        <tr><td>Skills ecosystem</td><td>Skills, CLAUDE.md, MCP, plugins apply to every turn.</td><td>Only inside coding jobs. Chat gets whatever you write.</td></tr>
+        <tr><td>Desk handoff</td><td>Any conversation resumes with <code>claude --resume</code>.</td><td>Only jobs resume. The chat itself lives in your store, not the CLI's.</td></tr>
+        <tr><td>Session races</td><td>Real: two processes on one <code>--session-id</code> interleave writes into one transcript, with no lock in the CLI. The daemon must enforce exclusivity.</td><td>Not a category. Each job is one process; chat has no CLI session.</td></tr>
+        <tr><td>Failure isolation</td><td>One runtime, one failure domain. A wedged process is also your chat.</td><td>A wedged job doesn't touch chat.</td></tr>
+        <tr><td>Observability</td><td>The CLI traces itself, locally, per process — nothing correlates it to your events.</td><td>You emit the spans, so Phase 1's OTel and Langfuse work becomes useful again rather than deleted.</td></tr>
+        <tr><td>Code to write for v0</td><td>Gateway, session map, MCP server, hook, job runner.</td><td>All of that except the MCP server and hook, plus the loop — call it the larger half.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="grid-2">
+      <div class="card">
+        <span class="label">B wins if</span>
+        <p>You want the approval gate to be real code rather than a hook contract, you want chat to survive a wedged coding job, you want cheap models for small talk, or you expect to outgrow what the CLI's turn model allows. It is also the honest Hermes port: Hermes is a daemon with its own loop, and the CLI would be one more tool in it.</p>
+      </div>
+      <div class="card">
+        <span class="label">A wins if</span>
+        <p>The subscription is how you want this billed, and you'd rather spend the year on what Aleph does than on rebuilding compaction, retries and streaming. A's cost is that its safety story rents a mechanism you don't control; B's cost is that you now own an agent loop forever.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Reference shape: Hermes Agent (Nous Research) — gateway, agent loop, file-backed memory and skills, cron, SOUL.md. Aleph keeps the shape and swaps the loop for <code>claude</code>. Full design: <code>docs/design/aleph-v0.md</code>.</p>
+  </footer>
+
+</div>
