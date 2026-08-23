@@ -194,8 +194,9 @@ Models: chat on the cheap tier by default, escalation per conversation with
 |---|---|
 | `remember(text, tags?)` | writes `memory/<slug>.md`; the write is echoed to you |
 | `recall(query)` | FTS over memory + past conversations |
-| `dispatch_code(repo, task, base?)` | starts a job (§5), returns its id |
+| `dispatch_code(repo, task, base?)` | starts a job (§6), returns its id |
 | `job_status(id?)`, `job_log(id, tail)` | reads only |
+| `skill(name)` | loads a skill body when the index line looks relevant |
 | `notify(text)` | out-of-band message; the only way a cron turn speaks |
 | `schedule(when, prompt)` | see below |
 
@@ -214,7 +215,53 @@ Not in v0: web search, fetch, arbitrary shell from chat. Chat is for talking and
 for starting jobs; the sharp tools live inside jobs, where the worktree is the
 blast radius.
 
-## 5. Jobs
+## 5. Skills and memory
+
+Two kinds of knowledge, entering from opposite directions.
+
+| | Memory | Skills |
+|---|---|---|
+| Is | facts — about you, your machines, your habits | procedures — how to do a recurring thing |
+| Written by | the agent, with `remember()` | you, as files |
+| Reviewed | after the fact: every write is echoed, `aleph memory` lists them | before: a skill is a diff you land |
+| Shape | one fact per file | `SKILL.md` with name + description frontmatter |
+| Reaches chat as | a facts block in every turn | one index line each; the body on `skill(name)` |
+| Reaches a job as | the same facts block, inside the task brief | the CLI loads it natively, via the symlink below |
+
+### Where each one lives
+
+```
+~/.aleph-next/memory/<slug>.md         facts · aleph writes, you review
+~/.aleph-next/skills/<name>/SKILL.md   procedures · you write, aleph reads
+~/.claude/skills → ~/.aleph-next/skills   symlink · jobs and your own
+                                          interactive claude get the same set
+<repo>/.claude/skills/                 procedures only jobs in that repo see
+<repo>/CLAUDE.md                       the repo's own facts · aleph never writes
+                                          this outside a job you land
+```
+
+`SKILL.md` is the format Claude Code and Hermes already use, so one file is
+readable by the chat loop, by every job, and by an interactive `claude` at your
+desk. Nothing is converted, copied or kept in sync.
+
+### What a turn actually carries
+
+- **A chat turn:** `soul.md`, the facts block, the skills index — one line per
+  skill, a few hundred tokens — and the rolling history. `skill(name)` pulls a
+  body in when it becomes relevant, which is the CLI's own progressive
+  disclosure, reimplemented in about sixty lines.
+- **A job:** the task brief with the facts block inside it, plus everything the
+  CLI finds for itself — the repo's `CLAUDE.md`, the repo's skills, and the
+  symlinked Aleph skills.
+
+### Why the asymmetry
+
+The agent may write a fact unprompted because a fact is cheap to check and cheap
+to delete. It may not write itself a procedure. A skill is a file in a repo, so
+authoring one is a job, and a job ends in a diff you land — nothing that changes
+*how it acts* enters the system without passing through your hands.
+
+## 6. Jobs
 
 ```
 git -C <repo> worktree add .worktrees/job-<id> -b job/<id> <base>
@@ -237,7 +284,7 @@ claude -p --session-id <uuid> --permission-mode acceptEdits \
 Landing is human-only in v0: `aleph land <id>` squash-merges and removes the
 worktree. There is no tool the agent can call to merge anything.
 
-## 6. State
+## 7. State
 
 ```
 ~/.aleph-next/
@@ -245,6 +292,7 @@ worktree. There is no tool the agent can call to merge anything.
   config.toml              pairing, channels, models, gate rules, cron
   conversations/<id>.jsonl the loop's own transcript — ground truth
   memory/*.md              one fact per file, agent-written, human-readable
+  skills/<name>/SKILL.md   procedures you write; symlinked into ~/.claude/skills
   jobs/<id>/               task.md, state.json, stream.jsonl
   events.jsonl             every message, gate decision, job transition, cron fire
   index.db                 FTS + job/session index — delete it and it rebuilds
@@ -253,7 +301,7 @@ worktree. There is no tool the agent can call to merge anything.
 Files are truth; `index.db` is derived and disposable. The rebuild skips a torn
 final line and warns rather than failing the whole reindex.
 
-## 7. Security posture
+## 8. Security posture
 
 The honest frame first: a job runs as your Linux user with your files. There is
 no OS sandbox in v0, so every control below is a fence, not a wall. Hermes says
@@ -272,11 +320,11 @@ the same thing in its own `SECURITY.md`, and saying it out loud is the point.
    it survives.
 6. **Secrets are redacted** on the way into `events.jsonl` and memory.
 
-## 8. Milestones
+## 9. Milestones
 
 | M | Ships | Usable when | Verified by |
 |---|---|---|---|
-| **M0** | loop, `aleph chat`, `remember`/`recall`, events | a local assistant that remembers across restarts | a real 20-turn conversation, restart, recall the fact |
+| **M0** | loop, `aleph chat`, `remember`/`recall`, the skills index + `skill()`, events | a local assistant that remembers, and that you can teach a procedure | a real 20-turn conversation, restart, recall the fact; a skill that changes what it does |
 | **M1** | Telegram, pairing, throttled streaming | you use it from your phone all week | pairing refusal + a week of real use |
 | **M2** | `dispatch_code`, jobs, `aleph jobs/attach/diff/land/drop` | it fixes a real bug in this repo end to end | §1.1 and §1.3 performed, not described |
 | **M3** | the gate, approvals over Telegram, redaction | unattended turns are safe to leave running | a denied push, a timed-out ask |
@@ -286,7 +334,7 @@ Containment in M2 comes from the job design — worktree, no credentials, no
 landing — not from the gate, which is why the gate can land in M3 without M2
 being reckless.
 
-## 9. From the Phase 1 tree
+## 10. From the Phase 1 tree
 
 **Ported:** `core/ids`, `core/clock`, `core/config`, `core/emit` + `eventlog`,
 `platform/db`, `channels/telegram/api`, and `obs/otel` + `obs/langfuse` — which
@@ -304,7 +352,7 @@ src/jobs/log.ts
 tests/unit/joblog.test.ts
 ```
 
-## 10. Open questions
+## 11. Open questions
 
 1. Chat model tier — one cheap default with manual escalation, or route by
    message shape? Cost data first, decision after M1.

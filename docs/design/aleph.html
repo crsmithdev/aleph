@@ -488,7 +488,7 @@ i can open a PR, or print the command for you to run.</span></div>
           <rect x="448" y="84" width="208" height="104" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
           <text x="464" y="106" font-weight="500">tools</text>
           <text x="464" y="130" font-size="11.5" fill="var(--ink-soft)">remember · recall</text>
-          <text x="464" y="152" font-size="11.5" fill="var(--ink-soft)">notify · schedule</text>
+          <text x="464" y="152" font-size="11.5" fill="var(--ink-soft)">skill · notify · schedule</text>
           <text x="464" y="174" font-size="11.5" fill="var(--brass)">dispatch_code</text>
 
           <rect x="236" y="204" width="420" height="44" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.5"></rect>
@@ -578,6 +578,109 @@ i can open a PR, or print the command for you to run.</span></div>
       </svg>
       <figcaption>Because the gate runs inside the daemon it sees the actual arguments — not a command-name pattern — and it can wait as long as you want it to.</figcaption>
     </figure>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Knowledge</span>
+      <h2>Skills and memory enter from opposite directions</h2>
+    </div>
+    <div class="prose">
+      <p>Memory is facts and the agent writes them; skills are procedures and you write them. That asymmetry is deliberate: a fact is cheap to check and cheap to delete, so it can be written unprompted and reviewed after. A skill changes how the agent acts, so it arrives as a file — a diff you land — and never any other way.</p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 960 404" role="img" aria-label="Two prompt recipes side by side: a chat turn carries soul.md, a facts block from memory, a one-line skills index and rolling history; a job's first message carries the task brief with the same facts block, plus the repo's CLAUDE.md, the repo's skills and the symlinked Aleph skills. One skills directory is symlinked into the Claude Code skills path so both readers see it.">
+        <defs>
+          <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+          </marker>
+        </defs>
+        <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="currentColor">
+
+          <circle cx="560" cy="26" r="4" fill="var(--teal)"></circle>
+          <text x="574" y="30" font-size="11" fill="var(--ink-soft)">facts · aleph writes</text>
+          <circle cx="740" cy="26" r="4" fill="var(--brass)"></circle>
+          <text x="754" y="30" font-size="11" fill="var(--ink-soft)">procedures · you write</text>
+
+          <text x="24" y="52" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">WHAT A CHAT TURN CARRIES</text>
+          <rect x="24" y="64" width="440" height="252" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1.4"></rect>
+          <circle cx="48" cy="102" r="4" fill="currentColor"></circle>
+          <text x="66" y="98">soul.md</text>
+          <text x="66" y="116" font-size="11" fill="var(--ink-soft)">who it is, prepended every turn</text>
+          <circle cx="48" cy="152" r="4" fill="var(--teal)"></circle>
+          <text x="66" y="148" fill="var(--teal)">the facts block</text>
+          <text x="66" y="166" font-size="11" fill="var(--ink-soft)">memory/*.md — delimited, marked as facts</text>
+          <circle cx="48" cy="202" r="4" fill="var(--brass)"></circle>
+          <text x="66" y="198" fill="var(--brass)">the skills index</text>
+          <text x="66" y="216" font-size="11" fill="var(--ink-soft)">one line per SKILL.md — name + when to use</text>
+          <circle cx="48" cy="252" r="4" fill="currentColor"></circle>
+          <text x="66" y="248">rolling history</text>
+          <text x="66" y="266" font-size="11" fill="var(--ink-soft)">conversations/&lt;id&gt;.jsonl, compacted</text>
+          <circle cx="48" cy="296" r="4" fill="none" stroke="var(--brass)" stroke-width="1.4"></circle>
+          <text x="66" y="300" font-size="11" fill="var(--brass)">skill(name) pulls one body in, when it looks relevant</text>
+
+          <text x="496" y="52" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">WHAT A JOB CARRIES</text>
+          <rect x="496" y="64" width="440" height="252" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <circle cx="520" cy="102" r="4" fill="currentColor"></circle>
+          <text x="538" y="98">the task brief</text>
+          <text x="538" y="116" font-size="11" fill="var(--ink-soft)">what you asked for, written by the loop</text>
+          <circle cx="520" cy="152" r="4" fill="var(--teal)"></circle>
+          <text x="538" y="148" fill="var(--teal)">the same facts block</text>
+          <text x="538" y="166" font-size="11" fill="var(--ink-soft)">inlined into the brief — facts, never orders</text>
+          <circle cx="520" cy="202" r="4" fill="currentColor"></circle>
+          <text x="538" y="198">the repo's CLAUDE.md</text>
+          <text x="538" y="216" font-size="11" fill="var(--ink-soft)">house rules — the CLI finds it itself</text>
+          <circle cx="520" cy="252" r="4" fill="var(--brass)"></circle>
+          <text x="538" y="248" fill="var(--brass)">&lt;repo&gt;/.claude/skills</text>
+          <text x="538" y="266" font-size="11" fill="var(--ink-soft)">procedures only this repo's jobs see</text>
+          <circle cx="520" cy="296" r="4" fill="var(--brass)"></circle>
+          <text x="538" y="300" font-size="11" fill="var(--brass)">~/.claude/skills — the same set the chat loop indexes</text>
+
+          <rect x="24" y="340" width="250" height="44" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="149" y="367" text-anchor="middle" font-size="11.5" fill="var(--brass)">~/.aleph-next/skills</text>
+          <line x1="274" y1="362" x2="342" y2="362" stroke="currentColor" stroke-width="1.3" marker-end="url(#a4)"></line>
+          <text x="308" y="352" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">symlink</text>
+          <rect x="346" y="340" width="250" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3"></rect>
+          <text x="471" y="367" text-anchor="middle" font-size="11.5">~/.claude/skills</text>
+          <text x="616" y="358" font-size="11" fill="var(--ink-soft)">one directory. the loop indexes it, every job</text>
+          <text x="616" y="376" font-size="11" fill="var(--ink-soft)">loads it, and so does claude at your desk.</text>
+        </g>
+      </svg>
+      <figcaption>Nothing is converted or kept in sync: <code>SKILL.md</code> is the format Claude Code and Hermes already read, so one file serves the chat loop, every job, and your own interactive session.</figcaption>
+    </figure>
+
+    <table>
+      <thead>
+        <tr><th style="width:22%"></th><th style="width:39%">Memory</th><th>Skills</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Is</td><td>Facts — about you, your machines, your habits.</td><td>Procedures — how to do a recurring thing.</td></tr>
+        <tr><td>Written by</td><td>The agent, with <code>remember()</code>.</td><td>You, as files.</td></tr>
+        <tr><td>Reviewed</td><td>After: every write is echoed, <code>aleph memory</code> lists them.</td><td>Before: a skill is a diff you land.</td></tr>
+        <tr><td>Shape</td><td>One fact per file, <code>memory/&lt;slug&gt;.md</code>.</td><td><code>skills/&lt;name&gt;/SKILL.md</code>, name and description in frontmatter.</td></tr>
+        <tr><td>In chat</td><td>A delimited facts block, every turn.</td><td>An index line each; the body arrives on <code>skill(name)</code>.</td></tr>
+        <tr><td>In a job</td><td>The same block, inlined into the task brief.</td><td>Loaded natively by the CLI through the symlink.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="grid">
+      <div class="card">
+        <span class="k">it can learn a fact</span>
+        <h3>Unprompted, then reviewed</h3>
+        <p>Cheap to check, cheap to delete, and visible in <code>aleph memory</code> — so the agent writing one on its own costs you nothing worse than a wrong line you remove.</p>
+      </div>
+      <div class="card">
+        <span class="k">it cannot learn a procedure</span>
+        <h3>Only as a diff you land</h3>
+        <p>A skill is a file in a repo, so authoring one is a job, and a job ends in a branch. Nothing that changes how it acts enters without passing your hands.</p>
+      </div>
+      <div class="card">
+        <span class="k">and the repo keeps its own</span>
+        <h3>CLAUDE.md stays the repo's</h3>
+        <p>House rules belong to the codebase, not to the agent. Aleph reads them inside a job and never writes them outside one.</p>
+      </div>
+    </div>
   </section>
 
   <section>
@@ -700,6 +803,7 @@ i can open a PR, or print the command for you to run.</span></div>
   <b>config.toml</b>              <i>pairing · channels · models · gate rules · cron</i>
   <b>conversations/*.jsonl</b>    <i>the loop's own transcript — ground truth</i>
   <b>memory/*.md</b>              <i>one fact per file, agent-written, human-readable</i>
+  <b>skills/&lt;name&gt;/SKILL.md</b>   <i>procedures you write · symlinked into ~/.claude/skills</i>
   <b>jobs/&lt;id&gt;/</b>               <i>task.md · state.json · stream.jsonl (capped, rotated)</i>
   <b>events.jsonl</b>             <i>messages, gate decisions, job transitions, cron fires</i>
   <b>index.db</b>                 <i>FTS and indexes — delete it and it rebuilds</i></div>
@@ -716,8 +820,8 @@ i can open a PR, or print the command for you to run.</span></div>
     <ol class="miles">
       <li>
         <span class="m">M0</span>
-        <span class="ships">The loop, <code>aleph chat</code>, <code>remember</code>/<code>recall</code>, the event log</span>
-        <span class="done">A local assistant that remembers across restarts</span>
+        <span class="ships">The loop, <code>aleph chat</code>, <code>remember</code>/<code>recall</code>, the skills index and <code>skill()</code>, the event log</span>
+        <span class="done">A local assistant that remembers, and that you can teach a procedure</span>
       </li>
       <li>
         <span class="m">M1</span>
