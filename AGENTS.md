@@ -9,7 +9,7 @@ and it is more detailed than this file.
 personal agent: **the daemon runs its own agent loop and its own tools**, and the
 Claude Code CLI is spawned only for coding jobs, in a worktree, without push
 credentials. `phase-1.md` still describes the code in `src/`, which will be
-ported selectively (see aleph.md §10). `aleph-shapes.html` records the A-vs-B
+ported selectively (see aleph.md §12). `aleph-shapes.html` records the A-vs-B
 comparison that chose this shape.
 
 **Read phase-1 §7.4 and §17.15 before touching `src/sessions/lifecycle.ts` or
