@@ -1,364 +1,333 @@
 # Aleph — design
 
-A personal agent that lives on your box, answers on Telegram, remembers things,
-and does coding work by driving the Claude Code CLI in a worktree.
+Aleph is a personal agent. It runs on your machine. You speak to it from Telegram
+or from a terminal. It writes code with the Claude Code CLI.
 
-The daemon owns the conversation: its own agent loop, its own tools, its own
-transcript. `claude` is not the runtime — it is the thing the agent reaches for
-when the work is code. Chat tokens are metered on the API and are small; coding
-tokens run on the CLI against the subscription and are large. That split is the
-reason this shape exists.
+This document replaces `aleph-v0.md`. The file `aleph-shapes.html` keeps the
+comparison that selected this shape. The file `aleph.html` shows the same design
+as a page.
 
-Supersedes `phase-1.md`, `phase-2a.md` and `aleph-v0.md`. The A-vs-B comparison
-that chose this shape is kept in `aleph-shapes.html`.
-
-The same design as a page, scenes first:
-<https://claude.ai/code/artifact/e20e67d9-7a68-447f-afd1-ab1fab566244>
-(source `docs/design/aleph.html`; republish that file to the same URL).
+This document obeys ASD-STE100 Simplified Technical English.
 
 ---
 
-## 1. What using it looks like
+## 1. Why Aleph exists
 
-Everything below is the target for M0–M4. None of it runs yet.
+Claude Code writes code. Herdr runs many Claude Code sessions at your desk.
+Neither tool moves work between your desk and your telephone.
 
-### 1.1 A bug you found at your desk
+Aleph moves the work. This is its purpose. All other functions support this
+purpose.
 
-```
-$ cd ~/aleph-next
-$ aleph do "reindex dies on a torn last line — skip it and warn instead"
-job 7f3a · worktree .worktrees/job-7f3a · branch job/7f3a
-  ▸ Read src/core/eventlog.ts
-  ▸ Edit src/core/eventlog.ts
-  ▸ Bash bun test tests/unit/eventlog.test.ts → 12 pass
-done · 2 files · +31 −4 · 12 tests pass
-
-$ aleph diff 7f3a
-$ aleph land 7f3a
-merged job/7f3a into main (squash) · worktree removed
-```
-
-`aleph do` is the conversation with the small talk skipped. It is the same code
-path as asking in chat.
-
-### 1.2 Directing it from a train
-
-```
-you    the daemon died overnight, look at the journal and fix it if it's obvious
-
-aleph  journalctl -u aleph, last 200 lines.
-       OOM at 03:12 while restarting a job whose stream log had reached 412MB.
-       two fixes: cap and rotate the log, or spool it to disk and keep a tail
-       in memory. cap is 20 lines, spool is a day. which?
-
-you    cap it, 20MB, keep the last one
-
-aleph  job 91c2 · aleph-next · branch job/91c2
-       ▸ Edit src/jobs/log.ts
-       ▸ Write tests/unit/joblog.test.ts
-       ▸ Bash bun test → 44 pass
-       done · +36 −7 · /diff 91c2
-
-       ⚠ it wants to run: git push origin job/91c2
-         [allow]  [deny]
-
-you    [deny]
-
-aleph  held. the branch is local. land it when you're back at the desk.
-```
-
-Three things in that exchange are design constraints, not politeness: it asked
-a real question instead of guessing, the job could not push on its own, and
-landing is yours.
-
-### 1.3 Picking the remote session up locally
-
-```
-$ aleph jobs
-7f3a  landed    2h ago    aleph-next   reindex torn-line guard
-91c2  waiting   18m ago   aleph-next   cap job stream log at 20MB
-a0d7  running   4m ago    dotfiles     migrate to fish
-
-$ aleph attach 91c2
-cd ~/aleph-next/.worktrees/job-91c2
-claude --resume 3f0e2c81-…    ← now interactive, full history, your skills
-```
-
-The job *was* a Claude Code session all along, so attaching is not an import —
-it is the same session, with its transcript, its CLAUDE.md and its skills. While
-you are attached the daemon marks the job `attached` and will not spawn anything
-on that session id; two processes on one session id interleave writes into one
-transcript, which is measured behaviour, not a hypothetical.
-
-`aleph land 91c2` when you are happy. `aleph drop 91c2` removes the worktree and
-the branch.
-
-### 1.4 It tells you something before you ask
-
-```toml
-# ~/.aleph-next/config.toml
-[[cron]]
-at = "07:30"
-prompt = "morning: overnight job outcomes, anything waiting on me, today's calendar"
-
-[[cron]]
-at = "02:00"
-prompt = "run the aleph-next test suite in a scratch worktree; message me only if it fails"
-quiet = true          # no message unless the turn calls notify()
-```
-
-```
-aleph  07:30 · two jobs landed overnight. 91c2 is still waiting on you.
-       nothing else needs a decision today.
-```
-
-### 1.5 It remembers, and the memory reaches the work
-
-```
-you    remember: bun, never npm. and i squash-merge everything.
-
-aleph  noted (2 memories)
-
-… a week later, on a different repo …
-
-you    add a changelog script
-
-aleph  job c41f · dotfiles · branch job/c41f
-       brief includes: "package manager is bun; merges are squashed"
-```
-
-Memories are injected into the job's task brief as *facts about you*, in a block
-that says so. They never become system-prompt instructions, and `aleph memory`
-lists everything the agent has written about you, so poisoning is visible.
-
-### 1.6 What it declines
-
-```
-you    push that to prod
-
-aleph  i don't have a deploy tool, and jobs run without push credentials.
-       i can open a PR, or print the command for you to run.
-```
+The six workflows in §2 are the full test of that purpose. If Aleph does all six
+well, it is done. If it does a seventh thing, that thing is not v0.
 
 ---
 
-## 2. Shape
+## 2. The six workflows
 
-```
-  Telegram    aleph chat    cron
-      │           │           │
-      └───────────┴───────────┘
-                  │
-      ┌───────────▼─────────────────────────────┐
-      │ aleph d                                 │      ┌──────────────┐
-      │  ┌───────────────┐  ┌────────────────┐  │◀────▶│  Messages    │
-      │  │  agent loop   │  │ tools (TS)     │  │      │  API         │
-      │  │  history      │  │ remember/recall│  │      │  metered     │
-      │  │  compaction   │  │ dispatch_code  │  │      └──────────────┘
-      │  │  retries      │  │ notify/schedule│  │
-      │  └───────────────┘  └────────────────┘  │      ┌──────────────┐
-      │  ┌───────────────────────────────────┐  │─────▶│ claude -p    │
-      │  │ gate — plain code, real arguments │  │      │ in a worktree│
-      │  └───────────────────────────────────┘  │◀─────│ subscription │
-      │  conversations · memory · jobs · events │      └──────┬───────┘
-      └─────────────────────────────────────────┘             │
-                                              you, later: claude --resume
-```
+Aleph does not do these things yet. Each workflow is a target.
 
-## 3. The loop
+### 2.1 One local session
 
-One turn:
+You open a herdr pane. You start `claude` in a repository. You write code. You
+commit. You merge.
 
-1. Inbound message → resolve `(channel, chat) → conversation`. Unpaired chat:
-   refuse, and say how to pair.
-2. Build the request: `soul.md` + memory block + rolling history.
-3. Call the Messages API. Stream text to the channel, throttled to one edit per
-   3s (Phase 1 turned streaming edits off because an unthrottled edit loop is a
-   rate-limit footgun; the throttle is the price of turning them back on).
-4. `tool_use` → `gate()` → run → `tool_result` → loop. Cap: 12 iterations or the
-   turn's token budget, whichever first.
-5. Append every message to `conversations/<id>.jsonl`, every decision to
-   `events.jsonl`.
+Aleph does almost nothing here. It gives the session your facts through the
+memory bridge (§5). It can take the session later (§2.5).
 
-Compaction: when history exceeds the model's window minus headroom, summarize
-the oldest half into one assistant-authored note and keep the tail verbatim. The
-summary is data in our own store — we never feed model output back in as
-instructions.
+**The rule this makes:** a pane that never speaks to Aleph must work correctly.
+Aleph is present, but it is passive at your desk.
 
-Models: chat on the cheap tier by default, escalation per conversation with
-`/model`. Coding is not on this path at all.
+### 2.2 Many local sessions
 
-## 4. Tools and the gate
+You open six panes in herdr. Herdr shows you which agent works, which one waits
+for you, and which one is complete.
 
-| Tool | Notes |
-|---|---|
-| `remember(text, tags?)` | writes `memory/<slug>.md`; the write is echoed to you |
-| `recall(query)` | FTS over memory + past conversations |
-| `dispatch_code(repo, task, base?)` | starts a job (§6), returns its id |
-| `job_status(id?)`, `job_log(id, tail)` | reads only |
-| `skill(name)` | loads a skill body when the index line looks relevant |
-| `notify(text)` | out-of-band message; the only way a cron turn speaks |
-| `schedule(when, prompt)` | see below |
+Aleph gives all six panes the same facts and the same skills. A fact that you
+teach in one pane is available in all of them.
 
-Every call goes through `gate(tool, args, conversation)` → `allow | ask | deny`,
-from rules in `config.toml`. `ask` sends inline buttons and blocks that turn;
-default timeout 10 minutes, then deny. Unknown tool: deny. The gate sees real
-arguments, not a prefix pattern, and rules take effect on the next call — no
-process restart, no 60-second hook ceiling.
+**The rule this makes:** the daemon and your panes use the same repositories.
+Thus branch names and worktree paths are a shared resource. The daemon uses the
+prefix `job/` and the directory `.worktrees/`. It must not use a name that your
+pane holds.
 
-`schedule()` is the one tool that lets the model write text that later runs
-unattended. Three constraints make it safe enough: scheduled turns run with
-`dispatch_code` removed from the tool set, the scheduled prompt is shown to you
-at creation with `[keep] [drop]`, and `aleph cron` lists everything pending.
+### 2.3 One mobile session
 
-Not in v0: web search, fetch, arbitrary shell from chat. Chat is for talking and
-for starting jobs; the sharp tools live inside jobs, where the worktree is the
-blast radius.
+You send a message to the General topic of the Aleph group. Aleph starts a job.
+Telegram makes a new topic for that job.
+
+The job topic shows the progress. If the job needs permission, Aleph asks in that
+topic. When the job stops, Aleph shows the difference and the test result.
+
+You merge from the telephone, or you keep the job for your desk (§7). Aleph
+closes the topic when the job is complete.
+
+### 2.4 Many mobile sessions
+
+Three jobs run. Telegram shows three topics.
+
+A message in a topic is a message to that job. Aleph does not need a command to
+know which job you mean. You can make one topic silent if its job speaks too
+much.
+
+**The rule this makes:** the topic list is the job list. It is the same
+information that herdr gives you at your desk.
+
+### 2.5 A local session that continues on your telephone
+
+You write code in a pane. You must leave. You close the computer.
+
+Later you send a message to Aleph. You ask what is in progress. Aleph shows the
+jobs that it drives. It also shows the sessions at your desk that it can adopt.
+
+You select one. Aleph makes a WIP commit, adopts the session, and makes a topic
+for it. You continue from the telephone.
+
+**The rule this makes:** Aleph offers to adopt when you arrive, not when you
+leave. It must not interrupt you at your desk to ask.
+
+### 2.6 A mobile session that continues at your desk
+
+You come home. You run `aleph attach 91c2`. Aleph opens a herdr pane in the
+worktree of that job, with the same session.
+
+The session is the same session. It has the same transcript, the same skills and
+the same `CLAUDE.md`. Aleph stops to drive it while you hold it.
+
+---
+
+## 3. The driver rule
+
+A job is one Claude Code session. Each job has a worktree, a branch and a
+session ID.
+
+Each job has one driver. The driver is the process that sends turns to the
+session.
+
+| Driver | The process | You see it in |
+|---|---|---|
+| You | an interactive process in a herdr pane | herdr |
+| The daemon | a headless process that the daemon started | a Telegram topic |
+| Nobody | no process | `aleph jobs` |
+
+Two processes must not use one session ID. If they do, they write into one
+transcript at the same time and the transcript becomes bad. This is measured
+behaviour, not a risk.
+
+Thus a handover is a change of driver, and it is the same change in both
+directions:
+
+| Direction | Command | Workflow |
+|---|---|---|
+| The daemon → you | `aleph attach <id>` | §2.6 |
+| You → the daemon | adoption, which Aleph offers | §2.5 |
+
+Before Aleph completes a handover, it must know that the other driver stopped.
+It reads `/proc` to find a live process in that worktree. It does not use your
+word for this.
+
+---
+
+## 4. Surfaces
+
+| Surface | You use it to | Notes |
+|---|---|---|
+| A herdr pane | write code at your desk | Aleph does not control the pane |
+| The Telegram group | speak to Aleph, and drive jobs | one topic for each job |
+| `aleph` (CLI) | list, attach, merge, remove | thin; it speaks to the daemon |
+| Cron | let Aleph speak first | see §10, M4 |
+
+The Telegram group is one private supergroup with topics. The General topic is
+the conversation with Aleph. Each job gets its own topic.
+
+Aleph refuses every other chat, and it refuses direct messages. §9 gives the
+reason.
+
+---
 
 ## 5. Skills and memory
 
-Two kinds of knowledge, entering from opposite directions.
+Aleph holds two types of knowledge. They move in opposite directions.
 
 | | Memory | Skills |
 |---|---|---|
-| Is | facts — about you, your machines, your habits | procedures — how to do a recurring thing |
-| Written by | the agent, with `remember()` | you, as files |
-| Reviewed | after the fact: every write is echoed, `aleph memory` lists them | before: a skill is a diff you land |
-| Shape | one fact per file | `SKILL.md` with name + description frontmatter |
-| Reaches chat as | a facts block in every turn | one index line each; the body on `skill(name)` |
-| Reaches a job as | the same facts block, inside the task brief | the CLI loads it natively, via the symlink below |
+| What it is | facts about you and your machines | procedures for work that repeats |
+| Who writes it | Aleph, with `remember()` | you, as files |
+| When you examine it | after: Aleph shows each write, `aleph memory` lists them | before: a skill is a change that you merge |
+| The shape | one fact in one file | `SKILL.md` with a name and a description |
+| In a conversation | a block of facts in each turn | one line for each skill; `skill()` reads the body |
+| In a job | the same block, in the task text | the CLI reads it |
 
-### Where each one lives
+### 5.1 Where the knowledge is
 
 ```
-~/.aleph-next/memory/<slug>.md         facts · aleph writes, you review
-~/.aleph-next/skills/<name>/SKILL.md   procedures · you write, aleph reads
-~/.claude/skills → ~/.aleph-next/skills   symlink · jobs and your own
-                                          interactive claude get the same set
-<repo>/.claude/skills/                 procedures only jobs in that repo see
-<repo>/CLAUDE.md                       the repo's own facts · aleph never writes
-                                          this outside a job you land
+~/.aleph-next/memory/<slug>.md         facts. Aleph writes, you examine
+~/.aleph-next/skills/<name>/SKILL.md   procedures. You write, Aleph reads
+~/.claude/skills → ~/.aleph-next/skills   a symbolic link. Jobs and your panes
+                                          read the same set
+<repo>/.claude/skills/                 procedures for one repository
+<repo>/CLAUDE.md                       the rules of that repository
 ```
 
-`SKILL.md` is the format Claude Code and Hermes already use, so one file is
-readable by the chat loop, by every job, and by an interactive `claude` at your
-desk. Nothing is converted, copied or kept in sync.
+`SKILL.md` is the format that Claude Code and Hermes read now. Thus one file is
+sufficient for the daemon, for each job, and for each herdr pane. Aleph does not
+convert the file and does not copy it.
 
-### What a turn actually carries
+### 5.2 The memory bridge
 
-- **A chat turn:** `soul.md`, the facts block, the skills index — one line per
-  skill, a few hundred tokens — and the rolling history. `skill(name)` pulls a
-  body in when it becomes relevant, which is the CLI's own progressive
-  disclosure, reimplemented in about sixty lines.
-- **A job:** the task brief with the facts block inside it, plus everything the
-  CLI finds for itself — the repo's `CLAUDE.md`, the repo's skills, and the
-  symlinked Aleph skills.
+The daemon holds the memory. Your herdr panes are usual Claude Code sessions,
+thus they cannot read it.
 
-### Why the asymmetry
+A small MCP server corrects this. It is a client of the daemon. It gives
+`recall`, `remember` and `job_status` to each pane. You add it one time.
 
-The agent may write a fact unprompted because a fact is cheap to check and cheap
-to delete. It may not write itself a procedure. A skill is a file in a repo, so
-authoring one is a job, and a job ends in a diff you land — nothing that changes
-*how it acts* enters the system without passing through your hands.
+The bridge gives read access and write access to facts. It does not start jobs.
+You are already at a keyboard, thus you do not need that.
+
+### 5.3 Why the two types are different
+
+Aleph can write a fact without permission. A fact is easy to examine and easy to
+delete.
+
+Aleph cannot write a procedure. A skill is a file in a repository. To make one is
+a job, and a job stops at a change that you must merge. Nothing that changes how
+Aleph operates enters the system without your approval.
+
+---
 
 ## 6. Jobs
+
+A job is a worktree, a branch, a session ID and a driver.
 
 ```
 git -C <repo> worktree add .worktrees/job-<id> -b job/<id> <base>
 claude -p --session-id <uuid> --permission-mode acceptEdits \
-       --output-format stream-json <task brief>
+       --output-format stream-json <the task text>
 ```
 
-- cwd is the worktree. Env is stripped of `CLAUDE*`/`ANTHROPIC*` except the auth
-  path — the daemon may itself be started from inside a Claude Code session, and
-  `CLAUDE_CODE_SESSION_ID` leaking into a child collapses session identity.
-- No push credentials: `GIT_ASKPASS=/bin/false`, no agent socket, no
-  `GIT_CONFIG_GLOBAL` credentials. A job can commit; it cannot publish.
-- One process per job, pid in `jobs/<id>/state.json`. On daemon start, reconcile:
-  live pid → adopt, dead pid → mark `abandoned`, never orphan a worktree.
-- Wall-clock cap (default 30 min) → SIGTERM → `timed_out`, log kept.
-- The stream log is capped and rotated (20MB), which is also §1.2's bug.
-- Terminal states are `waiting` (needs you), `landed`, `dropped`, `abandoned`,
-  `timed_out`. `aleph jobs gc` removes worktrees for the last three.
+| Rule | Reason |
+|---|---|
+| No credentials to push | A job can commit. It cannot publish. |
+| The environment holds no `CLAUDE*` or `ANTHROPIC*` variable, except the one for authentication | The daemon can start from inside a Claude Code session. A variable that leaks makes two sessions into one. |
+| One process, and its PID is in `jobs/<id>/state.json` | The daemon compares this list to real processes each time it starts |
+| A limit of 30 minutes | Then SIGTERM, and the state becomes `timed_out` |
+| The log has a maximum size, and rotates at 20 MB | A log that has no limit filled the memory once |
 
-Landing is human-only in v0: `aleph land <id>` squash-merges and removes the
-worktree. There is no tool the agent can call to merge anything.
+Each job has an origin:
 
-## 7. State
+| Origin | Aleph made the worktree | Aleph can remove it |
+|---|---|---|
+| `dispatched` | yes | yes |
+| `adopted` | no | no |
+
+An adopted job keeps your branch name and your worktree. Aleph must not remove
+them.
+
+---
+
+## 7. Landing
+
+Only a person merges a branch. Aleph has no tool to merge. This does not change.
+
+But the quantity of examination that is sufficient changes with the work. Thus
+the policy is a property of the repository, not of Aleph.
+
+| Class of change | Sufficient from the telephone |
+|---|---|
+| documents | the list of changed files |
+| logic | the verification gate of the repository is green, and you read the difference |
+| migration, or a change to the release process | no. Keep it for the desk |
+
+The repository holds this policy. This repository has `docs/VERIFICATION.md`
+already, thus Aleph reads that and does not make a second rule.
+
+A job proposes its class and shows the evidence. You can always move a job down
+to "keep it for the desk". You cannot move it up.
+
+---
+
+## 8. State on disk
 
 ```
 ~/.aleph-next/
-  soul.md                  identity, prepended to every chat turn
-  config.toml              pairing, channels, models, gate rules, cron
-  conversations/<id>.jsonl the loop's own transcript — ground truth
-  memory/*.md              one fact per file, agent-written, human-readable
-  skills/<name>/SKILL.md   procedures you write; symlinked into ~/.claude/skills
+  soul.md                  the identity. Each conversation turn starts with it
+  config.toml              the group, the repositories, the models, the rules
+  conversations/<id>.jsonl the transcript of the daemon. This is the truth
+  memory/*.md              one fact in one file
+  skills/<name>/SKILL.md   procedures. A symbolic link makes them global
   jobs/<id>/               task.md, state.json, stream.jsonl
-  events.jsonl             every message, gate decision, job transition, cron fire
-  index.db                 FTS + job/session index — delete it and it rebuilds
+  events.jsonl             each message, permission, job change and cron start
+  index.db                 an index. If you delete it, Aleph builds it again
 ```
 
-Files are truth; `index.db` is derived and disposable. The rebuild skips a torn
-final line and warns rather than failing the whole reindex.
+The files are the truth. `index.db` is an index. When Aleph builds the index
+again, it ignores a bad last line and gives a warning. It does not stop.
 
-## 8. Security posture
+---
 
-The honest frame first: a job runs as your Linux user with your files. There is
-no OS sandbox in v0, so every control below is a fence, not a wall. Hermes says
-the same thing in its own `SECURITY.md`, and saying it out loud is the point.
+## 9. Security
 
-1. **Pairing before anything.** An unknown chat id gets one line telling it to
-   send the code printed by `aleph pair`. Five wrong codes → that id is locked
-   out. Group chats are refused outright. Without this, the bot handle *is* the
-   credential.
-2. **Jobs cannot publish or land.** No push credentials, no merge tool.
-3. **The gate defaults to deny** and sees real arguments.
-4. **Memory is data.** Injected as facts in a delimited block, never as
-   instructions; every write is echoed and `aleph memory` lists them.
-5. **Model output never becomes a future instruction** except through
-   `schedule()`, which is fenced in §4. This was an explicit rule in Phase 1 and
-   it survives.
-6. **Secrets are redacted** on the way into `events.jsonl` and memory.
+A job runs as your Linux user, with your files. There is no sandbox in v0. Each
+control below is a fence. It is not a wall. Hermes says the same about itself.
 
-## 9. Milestones
+1. **One group.** Aleph replies only in the supergroup that you paired. It
+   ignores each other chat and each direct message.
+2. **Membership of that group is the credential.** To add a person to the group
+   is to give that person your machine. Keep the group private.
+3. **Jobs cannot publish and cannot merge.**
+4. **The permission gate refuses by default.** It runs in the daemon, thus it
+   reads the true arguments. You set the time limit.
+5. **Memory is data.** Aleph puts facts in a block that says they are facts. They
+   are never instructions. `aleph memory` lists each one.
+6. **Adoption looks only at the repositories in `config.toml`.** The daemon must
+   not read transcripts that you did not give it.
+7. **Aleph removes secrets** before it writes to `events.jsonl` or to memory.
 
-| M | Ships | Usable when | Verified by |
+---
+
+## 10. Milestones
+
+| M | What it adds | It is useful when | The test |
 |---|---|---|---|
-| **M0** | loop, `aleph chat`, `remember`/`recall`, the skills index + `skill()`, events | a local assistant that remembers, and that you can teach a procedure | a real 20-turn conversation, restart, recall the fact; a skill that changes what it does |
-| **M1** | Telegram, pairing, throttled streaming | you use it from your phone all week | pairing refusal + a week of real use |
-| **M2** | `dispatch_code`, jobs, `aleph jobs/attach/diff/land/drop` | it fixes a real bug in this repo end to end | §1.1 and §1.3 performed, not described |
-| **M3** | the gate, approvals over Telegram, redaction | unattended turns are safe to leave running | a denied push, a timed-out ask |
-| **M4** | cron, `schedule`, quiet jobs | it speaks first, usefully | a week of 07:30 briefings |
+| **M0** | the loop, `aleph chat`, memory, the skill index, events | it remembers between restarts, and you can teach it a procedure | one long conversation, a restart, then a correct recall |
+| **M1** | the Telegram group, topics, pairing | you use it from your telephone for one week | a refused chat, and one week of true use |
+| **M2** | jobs, `aleph jobs / attach / diff / land / drop`, the memory bridge | it corrects a true defect in this repository | workflows 2.3 and 2.6, done and not described |
+| **M3** | the permission gate, permissions in Telegram, secret removal | you can leave it without supervision | a refused push, and a permission that expires |
+| **M4** | adoption, cron, `schedule` | work moves in both directions | workflow 2.5, and one week of morning reports |
 
-Containment in M2 comes from the job design — worktree, no credentials, no
-landing — not from the gate, which is why the gate can land in M3 without M2
-being reckless.
+M2 is safe before M3 because the job design contains it: a worktree, no
+credentials, and no way to merge.
 
-## 10. From the Phase 1 tree
+---
 
-**Ported:** `core/ids`, `core/clock`, `core/config`, `core/emit` + `eventlog`,
-`platform/db`, `channels/telegram/api`, and `obs/otel` + `obs/langfuse` — which
-become *more* useful here than they were in Phase 1, because now the daemon owns
-the model calls and can trace them.
+## 11. From the Phase 1 tree
 
-**Dropped:** lanes and the starvation ladder, the brief loop, the SDK and echo
-runners, `routing/`, `vault/`, the join audit.
+**Aleph uses:** `core/ids`, `core/clock`, `core/config`, `core/emit` and
+`eventlog`, `platform/db`, `channels/telegram/api`, `obs/otel` and
+`obs/langfuse`. The observability code is more useful here than in Phase 1,
+because the daemon now makes the model calls itself.
 
-Files this doc names that do not exist yet — forward references, declared rather
-than left indistinguishable from dead ones:
+**Aleph does not use:** the lanes and the starvation ladder, the brief loop, the
+SDK runner, the echo runner, `routing/` and `vault/`.
+
+These files do not exist yet. This document names them:
 
 ```planned
 src/jobs/log.ts
 tests/unit/joblog.test.ts
 ```
 
-## 11. Open questions
+---
 
-1. Chat model tier — one cheap default with manual escalation, or route by
-   message shape? Cost data first, decision after M1.
-2. Does a conversation need any notion of context (repo, project) before M2, or
-   is "which repo" just an argument to `dispatch_code`?
-3. Attach-while-running: block it, or let it interrupt the job's process
-   cleanly? M2 needs an answer; blocking is the default until measured.
-4. How much of a job's stream belongs in Telegram — every tool call, or only
-   file writes and test results?
+## 12. Open questions
+
+1. Which model does a conversation turn use? Start with the low-cost model.
+   Decide after M1, with true cost data.
+2. Can herdr open a pane from a command? Its site says that the CLI and the
+   socket are one surface for agents. `aleph attach` is better if the answer is
+   yes. Test this at M2.
+3. What quantity of the stream of a job goes to its topic? Each tool call, or
+   only file changes and test results?
+4. Does adoption need a WIP commit each time, or only when the worktree is
+   dirty?

@@ -115,7 +115,6 @@
   section { display: flex; flex-direction: column; gap: 18px; }
   .sec-head { display: flex; flex-direction: column; gap: 4px; }
 
-  /* workflow scenes */
   .scenes { display: flex; flex-direction: column; gap: 34px; }
   .scene { display: flex; flex-direction: column; gap: 10px; }
   .scene-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
@@ -133,6 +132,13 @@
     color: var(--ink-soft);
   }
   .scene > p { font-size: 15.5px; color: var(--ink-soft); max-width: 74ch; margin: 0; }
+  .rule-out {
+    border-left: 2px solid var(--teal);
+    padding: 2px 0 2px 14px;
+    font-size: 15px;
+    max-width: 74ch;
+  }
+  .rule-out b { color: var(--teal); font-weight: 600; }
 
   .panel {
     background: var(--panel);
@@ -184,12 +190,28 @@
     color: var(--clay);
   }
   .ask b { font-weight: 500; }
-  .btn {
-    border: 1px solid currentColor;
-    border-radius: 2px;
-    padding: 1px 8px;
-    font-size: 11.5px;
+  .btn { border: 1px solid currentColor; border-radius: 2px; padding: 1px 8px; font-size: 11.5px; }
+
+  /* telegram topic list */
+  .topics { padding: 6px 0; }
+  .topic {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: baseline;
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--line);
   }
+  .topic:last-child { border-bottom: 0; }
+  .topic .dot { width: 8px; height: 8px; border-radius: 50%; align-self: center; }
+  .topic .dot.work { background: var(--brass); }
+  .topic .dot.wait { background: var(--clay); }
+  .topic .dot.done { background: var(--teal); }
+  .topic .dot.idle { background: var(--line); }
+  .topic .nm { color: var(--ink); }
+  .topic .sub { color: var(--ink-soft); font-size: 12px; }
+  .topic .age { color: var(--ink-soft); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .topic.general .nm { color: var(--brass); }
 
   figure {
     margin: 0;
@@ -210,6 +232,18 @@
     max-width: 78ch;
   }
 
+  table { border-collapse: collapse; width: 100%; font-size: 15.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 11px 14px 11px 0; border-bottom: 1px solid var(--line); }
+  th {
+    font-family: Archivo, sans-serif;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    border-bottom-color: var(--ink-soft);
+  }
+
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 18px; }
   .card {
     background: var(--panel);
@@ -221,11 +255,7 @@
     gap: 8px;
   }
   .card p { font-size: 15px; margin: 0; }
-  .card .k {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 12px;
-    color: var(--brass);
-  }
+  .card .k { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--brass); }
 
   .tree {
     background: var(--panel);
@@ -256,7 +286,7 @@
   ol.miles .ships { font-size: 16px; }
   ol.miles .done { font-size: 15px; color: var(--ink-soft); font-style: italic; }
   ol.miles li.now .ships::after {
-    content: "it becomes the thing";
+    content: "work moves both ways";
     font-family: Archivo, sans-serif;
     font-style: normal;
     font-size: 10.5px;
@@ -288,156 +318,162 @@
 
   <header class="masthead">
     <div class="rule-top">
-      <span class="label">Design note · 22 Aug 2026</span>
+      <span class="label">Design note · 23 Aug 2026</span>
       <span class="ver">v0</span>
       <span class="label" style="color:var(--ink-soft)">docs/design/aleph.md</span>
     </div>
     <h1>Aleph</h1>
-    <p class="thesis">A personal agent that lives on your box, answers on Telegram, remembers things, and does coding work by <b>driving the Claude Code CLI in a worktree</b>. The daemon owns the conversation; <code>claude</code> is what it reaches for when the work is code.</p>
+    <p class="thesis">Claude Code writes code. Herdr runs many sessions at your desk. Neither tool moves work between your desk and your telephone. <b>Aleph moves the work.</b> This is its purpose, and the six workflows below are the full test of it.</p>
   </header>
 
   <section>
     <div class="sec-head">
-      <span class="label">Six scenes</span>
-      <h2>What using it looks like</h2>
+      <span class="label">The six workflows</span>
+      <h2>What Aleph must do, in order of difficulty</h2>
     </div>
     <div class="prose">
-      <p>Hypothetical, and the point of the design: everything below is the target for M0–M4, and none of it runs yet. The mechanism sections after these scenes exist to make exactly these six things true.</p>
+      <p>Aleph does not do these things yet. Each one is a target. The first two are almost not Aleph's work at all — that is the correct result. The last two are the reason it exists.</p>
     </div>
 
     <div class="scenes">
 
       <div class="scene">
         <div class="scene-head">
-          <span class="n">01</span>
-          <h3>A bug you found at your desk</h3>
-          <span class="where">terminal · ~/aleph-next</span>
+          <span class="n">2.1</span>
+          <h3>One local session</h3>
+          <span class="where">a herdr pane</span>
         </div>
         <div class="panel">
-          <div class="bar">aleph do</div>
-          <div class="body"><span class="dim">$</span> aleph do "reindex dies on a torn last line — skip it and warn instead"
-<span class="out">job 7f3a</span> <span class="dim">· worktree .worktrees/job-7f3a · branch job/7f3a</span>
-  <span class="dim">▸ Read  src/core/eventlog.ts</span>
-  <span class="dim">▸ Edit  src/core/eventlog.ts</span>
-  <span class="dim">▸ Bash  bun test tests/unit/eventlog.test.ts</span> <span class="ok">→ 12 pass</span>
-<span class="ok">done</span> <span class="dim">· 2 files · +31 −4 · 12 tests pass</span>
+          <div class="bar">herdr · pane 1 · ~/aleph-next</div>
+          <div class="body"><span class="dim">$</span> claude
+<span class="dim">›</span> the reindex stops on a torn last line. skip it and give a warning.
 
-<span class="dim">$</span> aleph diff 7f3a
-<span class="dim">$</span> aleph land 7f3a
-<span class="ok">merged job/7f3a into main (squash)</span> <span class="dim">· worktree removed</span></div>
+  <span class="dim">▸ Read  src/core/eventlog.ts</span>
+  <span class="dim">▸ mcp__aleph__recall</span>  <span class="out">"how does chris merge?"</span>
+      <span class="ok">→ package manager is bun. merges are squashed.</span>
+  <span class="dim">▸ Edit  src/core/eventlog.ts</span>
+  <span class="dim">▸ Bash  bun test</span> <span class="ok">→ 12 pass</span>
+
+<span class="dim">$</span> git commit -am "skip a torn line, warn" <span class="dim">&amp;&amp;</span> gh pr create</div>
         </div>
-        <p><code>aleph do</code> is the conversation with the small talk skipped — the same code path as asking in chat, minus the asking.</p>
+        <div class="rule-out"><b>The rule this makes.</b> A pane that never speaks to Aleph must work correctly. At your desk Aleph is present, but it is passive.</div>
       </div>
 
       <div class="scene">
         <div class="scene-head">
-          <span class="n">02</span>
-          <h3>Directing it from a train</h3>
-          <span class="where">telegram</span>
+          <span class="n">2.2</span>
+          <h3>Many local sessions</h3>
+          <span class="where">herdr, six panes</span>
         </div>
         <div class="panel">
-          <div class="bar">telegram · paired device</div>
-          <div class="turns">
-            <div class="turn you"><span class="who">you</span><span class="said">the daemon died overnight, look at the journal and fix it if it's obvious</span></div>
-            <div class="turn agent"><span class="who">aleph</span><span class="said">journalctl -u aleph, last 200 lines.
-OOM at 03:12 while restarting a job whose stream log had reached 412MB.
-two fixes: cap and rotate the log, or spool it to disk and keep a tail in
-memory. cap is 20 lines, spool is a day. which?</span></div>
-            <div class="turn you"><span class="who">you</span><span class="said">cap it, 20MB, keep the last one</span></div>
-            <div class="turn agent"><span class="who">aleph</span><span class="said"><span class="ok">job 91c2</span> <span class="dim">· aleph-next · branch job/91c2</span>
-<span class="dim">▸ Edit   src/jobs/log.ts
-▸ Write  tests/unit/joblog.test.ts
-▸ Bash   bun test → 44 pass</span>
-done · +36 −7 · /diff 91c2<span class="ask"><b>it wants to run</b> git push origin job/91c2 <span class="btn">allow</span> <span class="btn">deny</span></span></span></div>
-            <div class="turn you"><span class="who">you</span><span class="said"><span class="no">[deny]</span></span></div>
-            <div class="turn agent"><span class="who">aleph</span><span class="said">held. the branch is local. land it when you're back at the desk.</span></div>
+          <div class="bar">herdr · agents</div>
+          <div class="topics">
+            <div class="topic"><span class="dot work"></span><span class="nm">aleph-next<span class="sub"> · pane 1 · torn line guard</span></span><span class="age">works</span></div>
+            <div class="topic"><span class="dot wait"></span><span class="nm">dotfiles<span class="sub"> · pane 2 · fish migration</span></span><span class="age">waits for you</span></div>
+            <div class="topic"><span class="dot done"></span><span class="nm">aleph-next<span class="sub"> · pane 3 · event doc</span></span><span class="age">complete</span></div>
+            <div class="topic"><span class="dot idle"></span><span class="nm">comfy<span class="sub"> · pane 4 · lora index</span></span><span class="age">idle</span></div>
           </div>
         </div>
-        <p>Three things there are design constraints, not manners: it asked a real question instead of guessing, the job could not push on its own, and landing is yours.</p>
+        <div class="rule-out"><b>The rule this makes.</b> Your panes and the daemon use the same repositories, thus branch names and worktree paths are a shared resource. The daemon holds <code>job/&lt;id&gt;</code> and <code>.worktrees/job-&lt;id&gt;</code>, and it must not take a name that your pane holds.</div>
       </div>
 
       <div class="scene">
         <div class="scene-head">
-          <span class="n">03</span>
-          <h3>Picking the remote session up locally</h3>
-          <span class="where">terminal · later that evening</span>
+          <span class="n">2.3</span>
+          <h3>One mobile session</h3>
+          <span class="where">telegram · the aleph group</span>
+        </div>
+        <div class="panel">
+          <div class="bar">topic: General</div>
+          <div class="turns">
+            <div class="turn you"><span class="who">you</span><span class="said">the daemon stopped last night. read the journal and correct it if the cause is clear.</span></div>
+            <div class="turn agent"><span class="who">aleph</span><span class="said">the memory filled at 03:12. a job stream log had grown to 412 MB.
+two corrections: give the log a maximum size, or write it to disk and
+hold only the end in memory. the first is 20 lines. the second is a day.
+which one?</span></div>
+            <div class="turn you"><span class="who">you</span><span class="said">give it a maximum. 20 MB. keep the last file.</span></div>
+            <div class="turn agent"><span class="who">aleph</span><span class="said"><span class="ok">job 91c2 starts.</span> <span class="dim">i made the topic # 91c2 log-size.</span></span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="bar">topic: # 91c2 log-size</div>
+          <div class="turns">
+            <div class="turn agent"><span class="who">aleph</span><span class="said"><span class="dim">▸ Edit   src/jobs/log.ts
+▸ Write  tests/unit/joblog.test.ts
+▸ Bash   bun test → 44 pass</span>
+complete · +36 −7 · class: logic · the gate is green<span class="ask"><b>it wants to run</b> git push origin job/91c2 <span class="btn">allow</span> <span class="btn">refuse</span></span></span></div>
+            <div class="turn you"><span class="who">you</span><span class="said"><span class="no">refuse</span></span></div>
+            <div class="turn agent"><span class="who">aleph</span><span class="said">i stopped it. the branch is on your machine.
+the class is logic, thus you must read the difference before you merge.
+<span class="dim">/diff · /land · /keep</span></span></div>
+          </div>
+        </div>
+        <p>A job cannot publish and cannot merge. You can merge from the telephone, but only in the way that the repository permits.</p>
+      </div>
+
+      <div class="scene">
+        <div class="scene-head">
+          <span class="n">2.4</span>
+          <h3>Many mobile sessions</h3>
+          <span class="where">telegram · topic list</span>
+        </div>
+        <div class="panel">
+          <div class="bar">the aleph group · 4 topics</div>
+          <div class="topics">
+            <div class="topic general"><span class="dot idle"></span><span class="nm">General<span class="sub"> · speak to aleph, start work</span></span><span class="age">now</span></div>
+            <div class="topic"><span class="dot wait"></span><span class="nm"># 91c2 log-size<span class="sub"> · aleph-next · waits for you to merge</span></span><span class="age">18m</span></div>
+            <div class="topic"><span class="dot work"></span><span class="nm"># a0d7 fish-migration<span class="sub"> · dotfiles · runs</span></span><span class="age">4m</span></div>
+            <div class="topic"><span class="dot wait"></span><span class="nm"># c41f changelog<span class="sub"> · dotfiles · needs permission</span></span><span class="age">1m</span></div>
+          </div>
+        </div>
+        <div class="rule-out"><b>The rule this makes.</b> The topic list is the job list. A message in a topic is a message to that job, thus Aleph needs no command to know which job you mean. If one job speaks too much, you make its topic silent.</div>
+      </div>
+
+      <div class="scene">
+        <div class="scene-head">
+          <span class="n">2.5</span>
+          <h3>A local session that continues on your telephone</h3>
+          <span class="where">you closed the computer 40 minutes ago</span>
+        </div>
+        <div class="panel">
+          <div class="bar">topic: General</div>
+          <div class="turns">
+            <div class="turn you"><span class="who">you</span><span class="said">what is in progress?</span></div>
+            <div class="turn agent"><span class="who">aleph</span><span class="said">i drive one job:
+  <span class="ok">#</span> a0d7 fish-migration · dotfiles · runs
+
+two sessions at your desk stopped. i can adopt them:
+  <span class="out">1</span> aleph-next · branch torn-line · 3 files are not committed
+  <span class="out">2</span> comfy · branch lora-index · clean</span></div>
+            <div class="turn you"><span class="who">you</span><span class="said">take 1</span></div>
+            <div class="turn agent"><span class="who">aleph</span><span class="said">no process holds that worktree, thus i can take it.
+i made a WIP commit for the 3 files. your branch and worktree stay yours —
+i will not remove them.
+<span class="ok">i made the topic # 4e81 torn-line.</span> continue there.</span></div>
+          </div>
+        </div>
+        <div class="rule-out"><b>The rule this makes.</b> Aleph offers to adopt when you arrive, not when you leave. It must not interrupt you at your desk. Before it takes a session, it reads <code>/proc</code> to prove that no process holds that worktree. It does not use your word for this.</div>
+      </div>
+
+      <div class="scene">
+        <div class="scene-head">
+          <span class="n">2.6</span>
+          <h3>A mobile session that continues at your desk</h3>
+          <span class="where">terminal, then herdr</span>
         </div>
         <div class="panel">
           <div class="bar">aleph jobs · aleph attach</div>
           <div class="body"><span class="dim">$</span> aleph jobs
-7f3a  <span class="ok">landed</span>    2h ago    aleph-next   reindex torn-line guard
-91c2  <span class="out">waiting</span>   18m ago   aleph-next   cap job stream log at 20MB
-a0d7  running   4m ago    dotfiles     migrate to fish
+91c2  <span class="out">waits</span>    18m   aleph-next   log-size        <span class="dim">dispatched</span>
+a0d7  runs      4m    dotfiles     fish-migration  <span class="dim">dispatched</span>
+4e81  <span class="out">waits</span>    2h    aleph-next   torn-line       <span class="dim">adopted</span>
 
 <span class="dim">$</span> aleph attach 91c2
-<span class="dim">cd ~/aleph-next/.worktrees/job-91c2</span>
-claude --resume 3f0e2c81-…   <span class="dim">← interactive, full history, your skills</span></div>
+<span class="ok">the daemon stopped its process. you are the driver now.</span>
+<span class="dim">herdr: a new pane, in .worktrees/job-91c2</span>
+claude --resume 3f0e2c81-…</div>
         </div>
-        <p>The job <em>was</em> a Claude Code session all along, so attaching isn't an import — it's the same session, with its transcript, its CLAUDE.md and its skills. While you're attached the daemon marks the job <code>attached</code> and won't spawn anything on that session id: two processes on one session id interleave writes into one transcript, which is measured behaviour, not a worry.</p>
-      </div>
-
-      <div class="scene">
-        <div class="scene-head">
-          <span class="n">04</span>
-          <h3>It speaks first, but only with something to say</h3>
-          <span class="where">~/.aleph-next/config.toml · telegram</span>
-        </div>
-        <div class="panel">
-          <div class="bar">config.toml</div>
-          <div class="body"><span class="dim">[[cron]]</span>
-at     = <span class="out">"07:30"</span>
-prompt = <span class="out">"morning: overnight job outcomes, anything waiting on me, today's calendar"</span>
-
-<span class="dim">[[cron]]</span>
-at     = <span class="out">"02:00"</span>
-prompt = <span class="out">"run the aleph-next suite in a scratch worktree; message me only if it fails"</span>
-quiet  = <span class="ok">true</span>   <span class="dim"># silent unless the turn calls notify()</span></div>
-        </div>
-        <div class="panel">
-          <div class="bar">telegram · 07:30</div>
-          <div class="turns">
-            <div class="turn agent"><span class="who">aleph</span><span class="said">two jobs landed overnight. 91c2 is still waiting on you.
-nothing else needs a decision today.</span></div>
-          </div>
-        </div>
-        <p>A scheduled turn runs with <code>dispatch_code</code> removed from its tool set, so the 2am run can test but never start unattended work of its own.</p>
-      </div>
-
-      <div class="scene">
-        <div class="scene-head">
-          <span class="n">05</span>
-          <h3>It remembers, and the memory reaches the work</h3>
-          <span class="where">telegram · then a week later</span>
-        </div>
-        <div class="panel">
-          <div class="bar">telegram</div>
-          <div class="turns">
-            <div class="turn you"><span class="who">you</span><span class="said">remember: bun, never npm. and i squash-merge everything.</span></div>
-            <div class="turn agent"><span class="who">aleph</span><span class="said">noted <span class="dim">(2 memories · aleph memory to review)</span></span></div>
-            <div class="turn you"><span class="who">you</span><span class="said"><span class="dim">… a week later, different repo …</span>
-add a changelog script</span></div>
-            <div class="turn agent"><span class="who">aleph</span><span class="said"><span class="ok">job c41f</span> <span class="dim">· dotfiles · branch job/c41f</span>
-<span class="dim">brief includes: "package manager is bun; merges are squashed"</span></span></div>
-          </div>
-        </div>
-        <p>Memories reach a job as <em>facts about you</em> inside a delimited block, never as system-prompt instructions — and every write is echoed back at you, so a poisoned memory is visible rather than silent.</p>
-      </div>
-
-      <div class="scene">
-        <div class="scene-head">
-          <span class="n">06</span>
-          <h3>What it declines</h3>
-          <span class="where">telegram</span>
-        </div>
-        <div class="panel">
-          <div class="bar">telegram</div>
-          <div class="turns">
-            <div class="turn you"><span class="who">you</span><span class="said">push that to prod</span></div>
-            <div class="turn agent"><span class="who">aleph</span><span class="said">i don't have a deploy tool, and jobs run without push credentials.
-i can open a PR, or print the command for you to run.</span></div>
-          </div>
-        </div>
-        <p>The refusal isn't a policy the model was asked to follow. There is no deploy tool in the table, and the job's environment has no credential to push with.</p>
+        <p>The session does not change. It keeps the same transcript, the same skills and the same <code>CLAUDE.md</code>. This is easy because the daemon started the job: it knows the session ID, and it made the worktree. Workflow 2.5 is the difficult direction.</p>
       </div>
 
     </div>
@@ -445,154 +481,160 @@ i can open a PR, or print the command for you to run.</span></div>
 
   <section>
     <div class="sec-head">
-      <span class="label">The mechanism</span>
-      <h2>One daemon, one loop, one subprocess per job</h2>
+      <span class="label">The rule below all six</span>
+      <h2>Each job has one driver</h2>
     </div>
     <figure>
-      <svg viewBox="0 0 960 448" role="img" aria-label="The daemon holds the agent loop, its tools, the approval gate and the stores; it calls a model API for every chat turn and spawns a Claude Code CLI process in a worktree only when dispatch_code starts a job.">
+      <svg viewBox="0 0 960 452" role="img" aria-label="One job has a worktree, a branch and a session ID. Three drivers are possible: you in a herdr pane, the daemon in a headless process, or nobody. Attach moves the driver from the daemon to you. Adoption moves it from you to the daemon. When a driver stops, nobody drives the job and it waits for your decision. Before either transfer completes, Aleph proves that no other process holds the worktree.">
         <defs>
-          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <marker id="d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
           </marker>
-          <marker id="a1-brass" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <marker id="d1-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>
+          </marker>
+          <marker id="d1-brass" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--brass)"></path>
           </marker>
-          <marker id="a1-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        </defs>
+        <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="currentColor">
+
+          <text x="24" y="28" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">ONE JOB · ONE WORKTREE · ONE BRANCH · ONE SESSION ID</text>
+
+          <rect x="24" y="72" width="256" height="86" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.6"></rect>
+          <text x="44" y="100" fill="var(--teal)" font-weight="500">you drive it</text>
+          <text x="44" y="122" font-size="11.5" fill="var(--ink-soft)">an interactive process</text>
+          <text x="44" y="142" font-size="11.5" fill="var(--ink-soft)">in a herdr pane</text>
+
+          <rect x="680" y="72" width="256" height="86" rx="3" fill="var(--panel-2)" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="700" y="100" fill="var(--brass)" font-weight="500">the daemon drives it</text>
+          <text x="700" y="122" font-size="11.5" fill="var(--ink-soft)">a headless process</text>
+          <text x="700" y="142" font-size="11.5" fill="var(--ink-soft)">you speak to it in a topic</text>
+
+          <path d="M 280 96 L 672 96" fill="none" stroke="var(--brass)" stroke-width="1.6" marker-end="url(#d1-brass)"></path>
+          <text x="476" y="86" text-anchor="middle" font-size="11.5" fill="var(--brass)">adoption · aleph offers it when you arrive · §2.5</text>
+
+          <path d="M 680 134 L 288 134" fill="none" stroke="var(--teal)" stroke-width="1.6" marker-end="url(#d1-teal)"></path>
+          <text x="484" y="152" text-anchor="middle" font-size="11.5" fill="var(--teal)">aleph attach · §2.6</text>
+
+          <rect x="352" y="208" width="256" height="70" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="5 3"></rect>
+          <text x="372" y="236" font-weight="500">nobody drives it</text>
+          <text x="372" y="258" font-size="11.5" fill="var(--ink-soft)">no process. it waits for you</text>
+
+          <path d="M 152 158 L 152 243 L 344 243" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#d1)"></path>
+          <text x="164" y="196" font-size="10.5" fill="var(--ink-soft)">you close the pane</text>
+          <path d="M 808 158 L 808 243 L 616 243" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#d1)"></path>
+          <text x="672" y="196" font-size="10.5" fill="var(--ink-soft)">the job stops</text>
+
+          <rect x="24" y="310" width="912" height="52" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.5"></rect>
+          <text x="44" y="332" fill="var(--clay)" font-size="12">two processes must not use one session ID.</text>
+          <text x="44" y="352" font-size="11.5" fill="var(--ink-soft)">they write into one transcript at the same time, and the transcript becomes bad. this is measured, not a risk.</text>
+
+          <text x="24" y="396" font-size="11" letter-spacing="1.2" fill="var(--ink-soft)">THEREFORE, BEFORE A TRANSFER IS COMPLETE:</text>
+          <text x="24" y="420" font-size="11.5" fill="var(--ink-soft)">aleph reads /proc and finds no live process in that worktree. it does not use your word for this.</text>
+          <text x="24" y="440" font-size="11.5" fill="var(--ink-soft)">an adopted job keeps your branch and your worktree. aleph must never remove them.</text>
+        </g>
+      </svg>
+      <figcaption>The six workflows are the three states in this picture, plus the two arrows. <code>attach</code> and adoption are the same operation in opposite directions.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">The machine</span>
+      <h2>The daemon holds the conversation. The CLI does the code.</h2>
+    </div>
+    <figure>
+      <svg viewBox="0 0 960 424" role="img" aria-label="Herdr panes, the Telegram group and cron reach the daemon. The daemon holds the agent loop, its tools, the permission gate and the stores. It calls a model API for each conversation turn, and it starts a Claude Code process in a worktree for each job.">
+        <defs>
+          <marker id="m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+          </marker>
+          <marker id="m1-brass" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--brass)"></path>
+          </marker>
+          <marker id="m1-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>
           </marker>
         </defs>
         <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="currentColor">
 
           <text x="24" y="30" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">SURFACES</text>
-          <rect x="24" y="44" width="140" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
-          <text x="94" y="67" text-anchor="middle">Telegram</text>
-          <rect x="24" y="94" width="140" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
-          <text x="94" y="117" text-anchor="middle">aleph chat</text>
-          <rect x="24" y="144" width="140" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
-          <text x="94" y="167" text-anchor="middle">cron</text>
-          <line x1="164" y1="62" x2="216" y2="82" stroke="currentColor" stroke-width="1.2" marker-end="url(#a1)"></line>
-          <line x1="164" y1="112" x2="216" y2="112" stroke="currentColor" stroke-width="1.2" marker-end="url(#a1)"></line>
-          <line x1="164" y1="162" x2="216" y2="142" stroke="currentColor" stroke-width="1.2" marker-end="url(#a1)"></line>
-          <path d="M 220 300 L 12 300 L 12 62 L 18 62" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#a1)"></path>
-          <text x="26" y="320" font-size="11.5" fill="var(--ink-soft)">replies · progress</text>
+          <rect x="24" y="44" width="150" height="52" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.4"></rect>
+          <text x="99" y="68" text-anchor="middle" fill="var(--teal)">herdr panes</text>
+          <text x="99" y="86" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">you drive these</text>
 
-          <rect x="220" y="44" width="452" height="292" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1.6"></rect>
-          <text x="236" y="70" font-size="13.5" font-weight="500">aleph d</text>
+          <rect x="24" y="108" width="150" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="99" y="132" text-anchor="middle">telegram group</text>
+          <text x="99" y="150" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">a topic for each job</text>
 
-          <rect x="236" y="84" width="196" height="104" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.8"></rect>
-          <text x="252" y="106" fill="var(--brass)" font-weight="500">agent loop</text>
-          <text x="252" y="130" font-size="11.5" fill="var(--ink-soft)">history · compaction</text>
-          <text x="252" y="152" font-size="11.5" fill="var(--ink-soft)">12 iterations max</text>
-          <text x="252" y="174" font-size="11.5" fill="var(--ink-soft)">token budget · retries</text>
+          <rect x="24" y="172" width="150" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="99" y="196" text-anchor="middle">aleph · cron</text>
+          <text x="99" y="214" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">CLI and schedule</text>
 
-          <rect x="448" y="84" width="208" height="104" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
-          <text x="464" y="106" font-weight="500">tools</text>
-          <text x="464" y="130" font-size="11.5" fill="var(--ink-soft)">remember · recall</text>
-          <text x="464" y="152" font-size="11.5" fill="var(--ink-soft)">skill · notify · schedule</text>
-          <text x="464" y="174" font-size="11.5" fill="var(--brass)">dispatch_code</text>
+          <path d="M 174 70 L 216 70 L 216 96" fill="none" stroke="var(--teal)" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#m1-teal)"></path>
+          <text x="182" y="112" font-size="10" fill="var(--teal)">mcp bridge</text>
+          <text x="182" y="126" font-size="10" fill="var(--teal)">facts only</text>
+          <line x1="174" y1="134" x2="246" y2="134" stroke="currentColor" stroke-width="1.2" marker-end="url(#m1)"></line>
+          <line x1="174" y1="198" x2="246" y2="176" stroke="currentColor" stroke-width="1.2" marker-end="url(#m1)"></line>
 
-          <rect x="236" y="204" width="420" height="44" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.5"></rect>
-          <text x="252" y="231" fill="var(--teal)" font-size="12">gate — plain code, real arguments, default deny</text>
+          <rect x="250" y="44" width="422" height="292" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1.6"></rect>
+          <text x="266" y="70" font-size="13.5" font-weight="500">aleph d</text>
 
-          <rect x="236" y="264" width="420" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
-          <text x="252" y="291" font-size="11.5" fill="var(--ink-soft)">conversations · memory · jobs · events · index</text>
+          <rect x="266" y="84" width="186" height="98" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.8"></rect>
+          <text x="282" y="106" fill="var(--brass)" font-weight="500">the loop</text>
+          <text x="282" y="128" font-size="11.5" fill="var(--ink-soft)">history · compaction</text>
+          <text x="282" y="148" font-size="11.5" fill="var(--ink-soft)">12 turns maximum</text>
+          <text x="282" y="168" font-size="11.5" fill="var(--ink-soft)">token limit · retries</text>
 
-          <path d="M 672 110 L 716 110" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#a1)" marker-start="url(#a1)"></path>
-          <rect x="720" y="72" width="216" height="76" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
-          <text x="828" y="100" text-anchor="middle">model API</text>
-          <text x="828" y="122" text-anchor="middle" font-size="11" fill="var(--ink-soft)">every chat turn · cheap tier</text>
-          <text x="828" y="140" text-anchor="middle" font-size="11" fill="var(--ink-soft)">metered, and small</text>
+          <rect x="468" y="84" width="188" height="98" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="484" y="106" font-weight="500">tools</text>
+          <text x="484" y="128" font-size="11.5" fill="var(--ink-soft)">remember · recall</text>
+          <text x="484" y="148" font-size="11.5" fill="var(--ink-soft)">skill · notify</text>
+          <text x="484" y="168" font-size="11.5" fill="var(--brass)">start_job · adopt</text>
 
-          <path d="M 656 176 L 690 176 L 690 216 L 716 216" fill="none" stroke="var(--brass)" stroke-width="1.6" marker-end="url(#a1-brass)"></path>
-          <rect x="720" y="180" width="216" height="94" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.8"></rect>
-          <text x="736" y="206" fill="var(--brass)" font-weight="500">claude -p · one job</text>
-          <text x="736" y="230" font-size="11.5" fill="var(--ink-soft)">worktree · acceptEdits</text>
-          <text x="736" y="252" font-size="11.5" fill="var(--ink-soft)">no push creds · subscription</text>
+          <rect x="266" y="196" width="390" height="44" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.5"></rect>
+          <text x="282" y="223" fill="var(--teal)" font-size="12">the gate — true arguments · refuse by default</text>
 
-          <path d="M 828 274 L 828 302 L 676 302" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#a1)"></path>
-          <text x="700" y="324" font-size="11.5" fill="var(--ink-soft)">diffstat · stream log</text>
+          <rect x="266" y="256" width="390" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="282" y="283" font-size="11.5" fill="var(--ink-soft)">conversations · memory · skills · jobs · events</text>
 
-          <line x1="900" y1="274" x2="900" y2="348" stroke="var(--teal)" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#a1-teal)"></line>
-          <rect x="720" y="352" width="216" height="52" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.4" stroke-dasharray="5 3"></rect>
-          <text x="736" y="374" fill="var(--teal)" font-size="11.5">aleph attach &lt;job&gt;</text>
-          <text x="736" y="394" fill="var(--teal)" font-size="11">claude --resume, at your desk</text>
+          <path d="M 672 106 L 716 106" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#m1)" marker-start="url(#m1)"></path>
+          <rect x="720" y="72" width="216" height="70" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
+          <text x="828" y="98" text-anchor="middle">model API</text>
+          <text x="828" y="120" text-anchor="middle" font-size="11" fill="var(--ink-soft)">each conversation turn</text>
 
-          <text x="220" y="372" font-size="11" letter-spacing="1.2" fill="var(--ink-soft)">THE SPLIT THAT MAKES THIS WORK:</text>
-          <text x="220" y="394" font-size="11.5" fill="var(--ink-soft)">chat tokens metered and small · coding tokens on the</text>
-          <text x="220" y="416" font-size="11.5" fill="var(--ink-soft)">subscription, where they are large</text>
+          <path d="M 656 170 L 690 170 L 690 208 L 716 208" fill="none" stroke="var(--brass)" stroke-width="1.6" marker-end="url(#m1-brass)"></path>
+          <rect x="720" y="172" width="216" height="94" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.8"></rect>
+          <text x="736" y="198" fill="var(--brass)" font-weight="500">claude -p · one job</text>
+          <text x="736" y="222" font-size="11.5" fill="var(--ink-soft)">a worktree · acceptEdits</text>
+          <text x="736" y="244" font-size="11.5" fill="var(--ink-soft)">no push credentials</text>
+
+          <path d="M 828 266 L 828 294 L 662 294" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#m1)"></path>
+          <text x="700" y="316" font-size="11.5" fill="var(--ink-soft)">files changed · test result</text>
+
+          <text x="24" y="368" font-size="11" letter-spacing="1.2" fill="var(--ink-soft)">THE SPLIT THAT MAKES THIS WORK:</text>
+          <text x="24" y="392" font-size="11.5" fill="var(--ink-soft)">a conversation turn is small and the API meters it. a coding turn is large and the</text>
+          <text x="24" y="412" font-size="11.5" fill="var(--ink-soft)">subscription pays for it. a slow job cannot stop the conversation.</text>
         </g>
       </svg>
-      <figcaption>The daemon is where the conversation lives. The CLI is a subprocess with one job, one worktree and no way to publish what it wrote.</figcaption>
-    </figure>
-  </section>
-
-  <section>
-    <div class="sec-head">
-      <span class="label">Approval</span>
-      <h2>The gate is a function, not a contract</h2>
-    </div>
-    <figure>
-      <svg viewBox="0 0 960 250" role="img" aria-label="A tool call from the loop enters the gate, which checks rules and either allows, denies, or asks you on Telegram; an unanswered ask denies after ten minutes and every outcome is written to the event log.">
-        <defs>
-          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-          </marker>
-          <marker id="a2-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>
-          </marker>
-          <marker id="a2-clay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--clay)"></path>
-          </marker>
-        </defs>
-        <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="currentColor">
-          <text x="24" y="28" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">EVERY OUTCOME IS A LINE IN events.jsonl</text>
-
-          <rect x="24" y="48" width="200" height="60" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
-          <text x="124" y="72" text-anchor="middle" fill="var(--brass)">tool_use</text>
-          <text x="124" y="94" text-anchor="middle" font-size="11" fill="var(--ink-soft)">dispatch_code{repo, task}</text>
-
-          <line x1="224" y1="78" x2="286" y2="78" stroke="currentColor" stroke-width="1.4" marker-end="url(#a2)"></line>
-
-          <rect x="290" y="48" width="190" height="60" rx="3" fill="var(--panel-2)" stroke="var(--teal)" stroke-width="1.6"></rect>
-          <text x="385" y="72" text-anchor="middle" fill="var(--teal)">gate(tool, args)</text>
-          <text x="385" y="94" text-anchor="middle" font-size="11" fill="var(--ink-soft)">rules from config.toml</text>
-
-          <path d="M 385 108 L 385 140 L 150 140 L 150 168" fill="none" stroke="var(--teal)" stroke-width="1.4" marker-end="url(#a2-teal)"></path>
-          <rect x="24" y="172" width="252" height="52" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.4"></rect>
-          <text x="150" y="194" text-anchor="middle" fill="var(--teal)" font-size="12">allow → run it</text>
-          <text x="150" y="214" text-anchor="middle" font-size="11" fill="var(--ink-soft)">reads, recall, job status</text>
-
-          <path d="M 385 108 L 385 168" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#a2)"></path>
-          <rect x="290" y="172" width="252" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
-          <text x="416" y="194" text-anchor="middle" font-size="12">ask → your phone</text>
-          <text x="416" y="214" text-anchor="middle" font-size="11" fill="var(--ink-soft)">[allow] [deny] · 10 min</text>
-
-          <path d="M 385 108 L 385 140 L 690 140 L 690 168" fill="none" stroke="var(--clay)" stroke-width="1.4" marker-end="url(#a2-clay)"></path>
-          <rect x="564" y="172" width="252" height="52" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.4"></rect>
-          <text x="690" y="194" text-anchor="middle" fill="var(--clay)" font-size="12">deny → tool_result says no</text>
-          <text x="690" y="214" text-anchor="middle" font-size="11" fill="var(--ink-soft)">unknown tool · silence · rule</text>
-
-          <text x="560" y="72" font-size="11" fill="var(--ink-soft)">a rule change takes effect on the next call —</text>
-          <text x="560" y="94" font-size="11" fill="var(--ink-soft)">no restart, no 60-second ceiling</text>
-        </g>
-      </svg>
-      <figcaption>Because the gate runs inside the daemon it sees the actual arguments — not a command-name pattern — and it can wait as long as you want it to.</figcaption>
+      <figcaption>The daemon owns the conversation. The CLI is a process with one task, one worktree, and no way to publish what it wrote.</figcaption>
     </figure>
   </section>
 
   <section>
     <div class="sec-head">
       <span class="label">Knowledge</span>
-      <h2>Skills and memory enter from opposite directions</h2>
+      <h2>Aleph writes the facts. You write the procedures.</h2>
     </div>
     <div class="prose">
-      <p>Memory is facts and the agent writes them; skills are procedures and you write them. That asymmetry is deliberate: a fact is cheap to check and cheap to delete, so it can be written unprompted and reviewed after. A skill changes how the agent acts, so it arrives as a file — a diff you land — and never any other way.</p>
+      <p>Memory is facts and Aleph writes them. Skills are procedures and you write them. This difference is on purpose. A fact is easy to examine and easy to delete, thus Aleph can write one without permission. A skill changes how Aleph operates, thus it arrives as a file that you merge, and in no other way.</p>
     </div>
 
     <figure>
-      <svg viewBox="0 0 960 404" role="img" aria-label="Two prompt recipes side by side: a chat turn carries soul.md, a facts block from memory, a one-line skills index and rolling history; a job's first message carries the task brief with the same facts block, plus the repo's CLAUDE.md, the repo's skills and the symlinked Aleph skills. One skills directory is symlinked into the Claude Code skills path so both readers see it.">
+      <svg viewBox="0 0 960 396" role="img" aria-label="A conversation turn carries soul.md, a block of facts, one index line for each skill and the recent history. A job carries the task text with the same block of facts, plus the repository CLAUDE.md, the repository skills and the linked Aleph skills. One skills directory is linked into the Claude Code path, so the daemon, each job and each herdr pane read the same set.">
         <defs>
-          <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <marker id="k1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
           </marker>
         </defs>
@@ -603,249 +645,148 @@ i can open a PR, or print the command for you to run.</span></div>
           <circle cx="740" cy="26" r="4" fill="var(--brass)"></circle>
           <text x="754" y="30" font-size="11" fill="var(--ink-soft)">procedures · you write</text>
 
-          <text x="24" y="52" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">WHAT A CHAT TURN CARRIES</text>
+          <text x="24" y="52" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">A CONVERSATION TURN CARRIES</text>
           <rect x="24" y="64" width="440" height="252" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1.4"></rect>
           <circle cx="48" cy="102" r="4" fill="currentColor"></circle>
           <text x="66" y="98">soul.md</text>
-          <text x="66" y="116" font-size="11" fill="var(--ink-soft)">who it is, prepended every turn</text>
+          <text x="66" y="116" font-size="11" fill="var(--ink-soft)">who aleph is. it starts each turn</text>
           <circle cx="48" cy="152" r="4" fill="var(--teal)"></circle>
-          <text x="66" y="148" fill="var(--teal)">the facts block</text>
-          <text x="66" y="166" font-size="11" fill="var(--ink-soft)">memory/*.md — delimited, marked as facts</text>
+          <text x="66" y="148" fill="var(--teal)">the block of facts</text>
+          <text x="66" y="166" font-size="11" fill="var(--ink-soft)">memory/*.md. the block says they are facts</text>
           <circle cx="48" cy="202" r="4" fill="var(--brass)"></circle>
-          <text x="66" y="198" fill="var(--brass)">the skills index</text>
-          <text x="66" y="216" font-size="11" fill="var(--ink-soft)">one line per SKILL.md — name + when to use</text>
+          <text x="66" y="198" fill="var(--brass)">the skill index</text>
+          <text x="66" y="216" font-size="11" fill="var(--ink-soft)">one line for each SKILL.md — a name, and when to use it</text>
           <circle cx="48" cy="252" r="4" fill="currentColor"></circle>
-          <text x="66" y="248">rolling history</text>
-          <text x="66" y="266" font-size="11" fill="var(--ink-soft)">conversations/&lt;id&gt;.jsonl, compacted</text>
+          <text x="66" y="248">the recent history</text>
+          <text x="66" y="266" font-size="11" fill="var(--ink-soft)">conversations/&lt;id&gt;.jsonl, made shorter</text>
           <circle cx="48" cy="296" r="4" fill="none" stroke="var(--brass)" stroke-width="1.4"></circle>
-          <text x="66" y="300" font-size="11" fill="var(--brass)">skill(name) pulls one body in, when it looks relevant</text>
+          <text x="66" y="300" font-size="11" fill="var(--brass)">skill(name) reads one body, when the index line is relevant</text>
 
-          <text x="496" y="52" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">WHAT A JOB CARRIES</text>
+          <text x="496" y="52" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">A JOB CARRIES</text>
           <rect x="496" y="64" width="440" height="252" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
           <circle cx="520" cy="102" r="4" fill="currentColor"></circle>
-          <text x="538" y="98">the task brief</text>
-          <text x="538" y="116" font-size="11" fill="var(--ink-soft)">what you asked for, written by the loop</text>
+          <text x="538" y="98">the task text</text>
+          <text x="538" y="116" font-size="11" fill="var(--ink-soft)">what you asked for. the loop writes it</text>
           <circle cx="520" cy="152" r="4" fill="var(--teal)"></circle>
-          <text x="538" y="148" fill="var(--teal)">the same facts block</text>
-          <text x="538" y="166" font-size="11" fill="var(--ink-soft)">inlined into the brief — facts, never orders</text>
+          <text x="538" y="148" fill="var(--teal)">the same block of facts</text>
+          <text x="538" y="166" font-size="11" fill="var(--ink-soft)">inside the task text. facts, never orders</text>
           <circle cx="520" cy="202" r="4" fill="currentColor"></circle>
-          <text x="538" y="198">the repo's CLAUDE.md</text>
-          <text x="538" y="216" font-size="11" fill="var(--ink-soft)">house rules — the CLI finds it itself</text>
+          <text x="538" y="198">the CLAUDE.md of the repository</text>
+          <text x="538" y="216" font-size="11" fill="var(--ink-soft)">its rules. the CLI finds this file</text>
           <circle cx="520" cy="252" r="4" fill="var(--brass)"></circle>
           <text x="538" y="248" fill="var(--brass)">&lt;repo&gt;/.claude/skills</text>
-          <text x="538" y="266" font-size="11" fill="var(--ink-soft)">procedures only this repo's jobs see</text>
+          <text x="538" y="266" font-size="11" fill="var(--ink-soft)">procedures for one repository only</text>
           <circle cx="520" cy="296" r="4" fill="var(--brass)"></circle>
-          <text x="538" y="300" font-size="11" fill="var(--brass)">~/.claude/skills — the same set the chat loop indexes</text>
+          <text x="538" y="300" font-size="11" fill="var(--brass)">~/.claude/skills — the same set the loop indexes</text>
 
-          <rect x="24" y="340" width="250" height="44" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
-          <text x="149" y="367" text-anchor="middle" font-size="11.5" fill="var(--brass)">~/.aleph-next/skills</text>
-          <line x1="274" y1="362" x2="342" y2="362" stroke="currentColor" stroke-width="1.3" marker-end="url(#a4)"></line>
-          <text x="308" y="352" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">symlink</text>
-          <rect x="346" y="340" width="250" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3"></rect>
-          <text x="471" y="367" text-anchor="middle" font-size="11.5">~/.claude/skills</text>
-          <text x="616" y="358" font-size="11" fill="var(--ink-soft)">one directory. the loop indexes it, every job</text>
-          <text x="616" y="376" font-size="11" fill="var(--ink-soft)">loads it, and so does claude at your desk.</text>
+          <rect x="24" y="336" width="230" height="44" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="139" y="363" text-anchor="middle" font-size="11.5" fill="var(--brass)">~/.aleph-next/skills</text>
+          <line x1="254" y1="358" x2="318" y2="358" stroke="currentColor" stroke-width="1.3" marker-end="url(#k1)"></line>
+          <text x="286" y="348" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">link</text>
+          <rect x="322" y="336" width="230" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3"></rect>
+          <text x="437" y="363" text-anchor="middle" font-size="11.5">~/.claude/skills</text>
+          <text x="572" y="352" font-size="11" fill="var(--ink-soft)">one directory. the loop indexes it, each job reads</text>
+          <text x="572" y="372" font-size="11" fill="var(--ink-soft)">it, and each herdr pane reads it.</text>
         </g>
       </svg>
-      <figcaption>Nothing is converted or kept in sync: <code>SKILL.md</code> is the format Claude Code and Hermes already read, so one file serves the chat loop, every job, and your own interactive session.</figcaption>
+      <figcaption>Aleph does not convert these files and does not copy them. <code>SKILL.md</code> is the format that Claude Code and Hermes read now.</figcaption>
     </figure>
 
+    <div class="grid">
+      <div class="card">
+        <span class="k">the memory bridge</span>
+        <h3>Your panes read the same facts</h3>
+        <p>A herdr pane is a usual Claude Code session, thus it cannot reach the daemon. A small MCP server corrects this. It gives <code>recall</code>, <code>remember</code> and <code>job_status</code> to each pane. It does not start jobs — you are at a keyboard already.</p>
+      </div>
+      <div class="card">
+        <span class="k">a fact</span>
+        <h3>Aleph writes it, you examine it after</h3>
+        <p>Aleph shows you each write, and <code>aleph memory</code> lists them all. A wrong fact costs you one line to delete.</p>
+      </div>
+      <div class="card">
+        <span class="k">a procedure</span>
+        <h3>You write it, Aleph reads it</h3>
+        <p>To make a skill is a job, and a job stops at a change that you must merge. Nothing that changes how Aleph operates enters without your approval.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Landing</span>
+      <h2>The repository says what is enough</h2>
+    </div>
+    <div class="prose">
+      <p>Only a person merges a branch, and Aleph has no tool to merge. That does not change. But the quantity of examination that is enough changes with the work, thus the policy belongs to the repository and not to Aleph.</p>
+    </div>
     <table>
       <thead>
-        <tr><th style="width:22%"></th><th style="width:39%">Memory</th><th>Skills</th></tr>
+        <tr><th style="width:26%">Class of change</th><th>What is enough from the telephone</th></tr>
       </thead>
       <tbody>
-        <tr><td>Is</td><td>Facts — about you, your machines, your habits.</td><td>Procedures — how to do a recurring thing.</td></tr>
-        <tr><td>Written by</td><td>The agent, with <code>remember()</code>.</td><td>You, as files.</td></tr>
-        <tr><td>Reviewed</td><td>After: every write is echoed, <code>aleph memory</code> lists them.</td><td>Before: a skill is a diff you land.</td></tr>
-        <tr><td>Shape</td><td>One fact per file, <code>memory/&lt;slug&gt;.md</code>.</td><td><code>skills/&lt;name&gt;/SKILL.md</code>, name and description in frontmatter.</td></tr>
-        <tr><td>In chat</td><td>A delimited facts block, every turn.</td><td>An index line each; the body arrives on <code>skill(name)</code>.</td></tr>
-        <tr><td>In a job</td><td>The same block, inlined into the task brief.</td><td>Loaded natively by the CLI through the symlink.</td></tr>
+        <tr><td>documents</td><td>The list of changed files.</td></tr>
+        <tr><td>logic</td><td>The verification gate of the repository is green, and you read the difference.</td></tr>
+        <tr><td>migration · release</td><td>Nothing. Keep the job for your desk.</td></tr>
       </tbody>
     </table>
-
-    <div class="grid">
-      <div class="card">
-        <span class="k">it can learn a fact</span>
-        <h3>Unprompted, then reviewed</h3>
-        <p>Cheap to check, cheap to delete, and visible in <code>aleph memory</code> — so the agent writing one on its own costs you nothing worse than a wrong line you remove.</p>
-      </div>
-      <div class="card">
-        <span class="k">it cannot learn a procedure</span>
-        <h3>Only as a diff you land</h3>
-        <p>A skill is a file in a repo, so authoring one is a job, and a job ends in a branch. Nothing that changes how it acts enters without passing your hands.</p>
-      </div>
-      <div class="card">
-        <span class="k">and the repo keeps its own</span>
-        <h3>CLAUDE.md stays the repo's</h3>
-        <p>House rules belong to the codebase, not to the agent. Aleph reads them inside a job and never writes them outside one.</p>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <div class="sec-head">
-      <span class="label">Jobs</span>
-      <h2>A job is a worktree with a life cycle</h2>
-    </div>
-    <figure>
-      <svg viewBox="0 0 960 324" role="img" aria-label="A job moves from dispatched to running, then to waiting when its process exits, to timed out after thirty minutes, or to abandoned if the daemon restarts and the pid is gone; you land or drop it from waiting, and attaching parks it while you work in the worktree yourself.">
-        <defs>
-          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-          </marker>
-          <marker id="a3-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>
-          </marker>
-          <marker id="a3-clay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--clay)"></path>
-          </marker>
-        </defs>
-        <g font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">
-          <text x="24" y="26" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">WHO CAUSES EACH MOVE IS PRINTED ON THE ARROW</text>
-
-          <rect x="24" y="48" width="150" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
-          <text x="99" y="75" text-anchor="middle">dispatched</text>
-          <line x1="174" y1="70" x2="228" y2="70" stroke="currentColor" stroke-width="1.3" marker-end="url(#a3)"></line>
-          <text x="201" y="60" text-anchor="middle" font-size="10" fill="var(--ink-soft)">worktree</text>
-
-          <rect x="232" y="48" width="150" height="44" rx="3" fill="var(--panel-2)" stroke="var(--brass)" stroke-width="1.6"></rect>
-          <text x="307" y="75" text-anchor="middle" fill="var(--brass)">running</text>
-
-          <line x1="382" y1="70" x2="436" y2="70" stroke="currentColor" stroke-width="1.3" marker-end="url(#a3)"></line>
-          <text x="409" y="60" text-anchor="middle" font-size="10" fill="var(--ink-soft)">exit 0</text>
-
-          <rect x="440" y="48" width="150" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
-          <text x="515" y="75" text-anchor="middle">waiting</text>
-
-          <line x1="590" y1="70" x2="756" y2="70" stroke="var(--teal)" stroke-width="1.4" marker-end="url(#a3-teal)"></line>
-          <text x="673" y="60" text-anchor="middle" font-size="10" fill="var(--teal)">you: aleph land</text>
-          <rect x="760" y="48" width="176" height="44" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.5"></rect>
-          <text x="848" y="75" text-anchor="middle" fill="var(--teal)">landed</text>
-
-          <path d="M 515 92 L 515 140 L 756 140" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#a3)"></path>
-          <text x="640" y="132" text-anchor="middle" font-size="10" fill="var(--ink-soft)">you: aleph drop</text>
-          <rect x="760" y="118" width="176" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
-          <text x="848" y="145" text-anchor="middle">dropped</text>
-
-          <rect x="24" y="118" width="150" height="44" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.4" stroke-dasharray="5 3"></rect>
-          <text x="99" y="145" text-anchor="middle" fill="var(--teal)">attached</text>
-          <path d="M 290 92 L 290 148 L 178 148" fill="none" stroke="var(--teal)" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#a3-teal)"></path>
-          <path d="M 174 128 L 250 128 L 250 96" fill="none" stroke="var(--teal)" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#a3-teal)"></path>
-          <text x="24" y="186" font-size="10" fill="var(--teal)">you: aleph attach · you: done</text>
-          <text x="24" y="204" font-size="10" fill="var(--ink-soft)">while attached the daemon spawns nothing</text>
-          <text x="24" y="220" font-size="10" fill="var(--ink-soft)">on that session id</text>
-
-          <path d="M 340 92 L 340 218 L 436 218" fill="none" stroke="var(--clay)" stroke-width="1.3" marker-end="url(#a3-clay)"></path>
-          <text x="388" y="210" text-anchor="middle" font-size="10" fill="var(--clay)">30 min cap</text>
-          <rect x="440" y="196" width="150" height="44" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.3"></rect>
-          <text x="515" y="223" text-anchor="middle" fill="var(--clay)">timed_out</text>
-
-          <path d="M 340 92 L 340 276 L 436 276" fill="none" stroke="var(--clay)" stroke-width="1.3" marker-end="url(#a3-clay)"></path>
-          <text x="388" y="268" text-anchor="middle" font-size="10" fill="var(--clay)">pid gone</text>
-          <rect x="440" y="254" width="150" height="44" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.3"></rect>
-          <text x="515" y="281" text-anchor="middle" fill="var(--clay)">abandoned</text>
-
-          <text x="614" y="224" font-size="10.5" fill="var(--ink-soft)">aleph jobs gc — the worktree goes,</text>
-          <text x="614" y="242" font-size="10.5" fill="var(--ink-soft)">the log stays</text>
-        </g>
-      </svg>
-      <figcaption>The daemon reconciles this table against real pids at every start, so a restart marks work abandoned rather than leaving a worktree with nothing watching it.</figcaption>
-    </figure>
-  </section>
-
-  <section>
-    <div class="sec-head">
-      <span class="label">Features</span>
-      <h2>Six things it does, and what bounds each one</h2>
-    </div>
-    <div class="grid">
-      <div class="card">
-        <span class="k">aleph pair</span>
-        <h3>Pairing before anything</h3>
-        <p>An unknown chat gets one line telling it to send the code from <code>aleph pair</code>. Five wrong codes locks that id out; group chats are refused. Without this the bot handle <em>is</em> the credential.</p>
-      </div>
-      <div class="card">
-        <span class="k">remember · recall</span>
-        <h3>Memory you can read</h3>
-        <p>One fact per markdown file, written by the agent, listed by <code>aleph memory</code>. Injected as facts, never as instructions.</p>
-      </div>
-      <div class="card">
-        <span class="k">dispatch_code</span>
-        <h3>Jobs that cannot publish</h3>
-        <p>A worktree, <code>acceptEdits</code>, and an environment with no push credential and no agent socket. A job can commit. Only you can land.</p>
-      </div>
-      <div class="card">
-        <span class="k">gate()</span>
-        <h3>Approval in plain code</h3>
-        <p>Real arguments, live rules, a timeout you choose, default deny for anything unknown — and a line in the event log for every decision.</p>
-      </div>
-      <div class="card">
-        <span class="k">aleph attach</span>
-        <h3>Remote work, finished locally</h3>
-        <p>Any job resumes as an ordinary interactive Claude Code session in its worktree, because that is what it always was.</p>
-      </div>
-      <div class="card">
-        <span class="k">cron · schedule</span>
-        <h3>Scheduled turns, fenced</h3>
-        <p>Scheduled prompts run without <code>dispatch_code</code>, are shown to you when written, and <code>quiet</code> jobs stay silent unless they call <code>notify()</code>.</p>
-      </div>
+    <div class="prose">
+      <p>This repository has <code>docs/VERIFICATION.md</code> already. Aleph reads that file and does not make a second rule. A job proposes its class and shows the evidence. You can always move a job down to “keep it for the desk”. You cannot move it up.</p>
     </div>
   </section>
 
   <section>
     <div class="sec-head">
       <span class="label">State</span>
-      <h2>Everything it knows is a file</h2>
+      <h2>Each thing that Aleph knows is a file</h2>
     </div>
     <div class="tree"><b>~/.aleph-next/</b>
-  <b>soul.md</b>                  <i>identity, prepended to every chat turn</i>
-  <b>config.toml</b>              <i>pairing · channels · models · gate rules · cron</i>
-  <b>conversations/*.jsonl</b>    <i>the loop's own transcript — ground truth</i>
-  <b>memory/*.md</b>              <i>one fact per file, agent-written, human-readable</i>
-  <b>skills/&lt;name&gt;/SKILL.md</b>   <i>procedures you write · symlinked into ~/.claude/skills</i>
-  <b>jobs/&lt;id&gt;/</b>               <i>task.md · state.json · stream.jsonl (capped, rotated)</i>
-  <b>events.jsonl</b>             <i>messages, gate decisions, job transitions, cron fires</i>
-  <b>index.db</b>                 <i>FTS and indexes — delete it and it rebuilds</i></div>
+  <b>soul.md</b>                  <i>the identity. each conversation turn starts with it</i>
+  <b>config.toml</b>              <i>the group · the repositories · the models · the rules</i>
+  <b>conversations/*.jsonl</b>    <i>the transcript of the daemon. this is the truth</i>
+  <b>memory/*.md</b>              <i>one fact in one file</i>
+  <b>skills/&lt;name&gt;/SKILL.md</b>   <i>procedures. a link makes them global</i>
+  <b>jobs/&lt;id&gt;/</b>               <i>task.md · state.json · stream.jsonl (20 MB maximum)</i>
+  <b>events.jsonl</b>             <i>each message · permission · job change · cron start</i>
+  <b>index.db</b>                 <i>an index. if you delete it, aleph builds it again</i></div>
     <div class="prose">
-      <p>Files are truth and <code>index.db</code> is disposable. The rebuild skips a torn final line and warns, rather than failing the whole reindex — which is also the bug in scene 01.</p>
+      <p>The files are the truth. When Aleph builds the index again, it ignores a bad last line and gives a warning. It does not stop — which is the defect in workflow 2.1.</p>
     </div>
   </section>
 
   <section>
     <div class="sec-head">
       <span class="label">Build order</span>
-      <h2>Each milestone is usable on its own</h2>
+      <h2>Each milestone is useful alone</h2>
     </div>
     <ol class="miles">
       <li>
         <span class="m">M0</span>
-        <span class="ships">The loop, <code>aleph chat</code>, <code>remember</code>/<code>recall</code>, the skills index and <code>skill()</code>, the event log</span>
-        <span class="done">A local assistant that remembers, and that you can teach a procedure</span>
+        <span class="ships">The loop, <code>aleph chat</code>, memory, the skill index, events</span>
+        <span class="done">It remembers between restarts, and you can teach it a procedure</span>
       </li>
       <li>
         <span class="m">M1</span>
-        <span class="ships">Telegram, pairing, throttled streaming</span>
-        <span class="done">You use it from your phone all week</span>
+        <span class="ships">The Telegram group, topics, pairing</span>
+        <span class="done">You use it from your telephone for one week</span>
       </li>
-      <li class="now">
+      <li>
         <span class="m">M2</span>
-        <span class="ships"><code>dispatch_code</code>, jobs, <code>attach</code> / <code>diff</code> / <code>land</code> / <code>drop</code></span>
-        <span class="done">It fixes a real bug in this repo, end to end</span>
+        <span class="ships">Jobs, <code>attach</code> / <code>diff</code> / <code>land</code> / <code>drop</code>, the memory bridge</span>
+        <span class="done">It corrects a true defect in this repository — workflows 2.3 and 2.6</span>
       </li>
       <li>
         <span class="m">M3</span>
-        <span class="ships">The gate, approvals over Telegram, redaction</span>
-        <span class="done">Unattended turns are safe to leave running</span>
+        <span class="ships">The permission gate, permissions in Telegram, secret removal</span>
+        <span class="done">You can leave it without supervision</span>
       </li>
-      <li>
+      <li class="now">
         <span class="m">M4</span>
-        <span class="ships">Cron, <code>schedule</code>, quiet jobs</span>
-        <span class="done">It speaks first, usefully</span>
+        <span class="ships">Adoption, cron, <code>schedule</code></span>
+        <span class="done">Workflow 2.5, and one week of morning reports</span>
       </li>
     </ol>
     <div class="prose">
-      <p>Containment at M2 comes from the job design — worktree, no credentials, no landing — not from the gate. That is why the gate can arrive at M3 without M2 being reckless.</p>
+      <p>M2 is safe before M3 because the job design contains it: a worktree, no credentials, and no way to merge.</p>
     </div>
   </section>
 
@@ -858,23 +799,23 @@ i can open a PR, or print the command for you to run.</span></div>
       <div class="card">
         <span class="k">no sandbox</span>
         <h3>A job runs as you</h3>
-        <p>Same user, same disk, no container in v0. Every control here is a fence, not a wall — worth saying out loud, because Hermes says the same thing in its own security notes.</p>
+        <p>The same user, the same disk, no container in v0. Each control here is a fence, not a wall. Hermes says the same about itself.</p>
       </div>
       <div class="card">
-        <span class="k">one principal</span>
-        <h3>It answers to one person</h3>
-        <p>Pairing admits your devices and nothing else. There is no multi-user model, no roles, and no plan for either.</p>
+        <span class="k">one group</span>
+        <h3>Membership is the credential</h3>
+        <p>Aleph replies only in the supergroup that you paired, and refuses each direct message. To add a person to that group is to give that person your machine. Keep it private.</p>
       </div>
       <div class="card">
-        <span class="k">not yet built</span>
-        <h3>None of this runs</h3>
-        <p>Every scene above is a target. The design's own rule is that nothing gets claimed as working until it has been run and watched.</p>
+        <span class="k">adoption has a limit</span>
+        <h3>It reads only what you named</h3>
+        <p>To offer a session, the daemon must look at the sessions on disk. It looks only inside the repositories in <code>config.toml</code>. It must never index what you did not give it.</p>
       </div>
     </div>
   </section>
 
   <footer>
-    <p>Reference shape: Hermes Agent (Nous Research) — a gateway, an agent loop, file-backed memory and skills, cron, a SOUL. Aleph keeps that shape and hands the coding to <code>claude</code>. Full design: <code>docs/design/aleph.md</code>. The comparison that chose this shape: <code>docs/design/aleph-shapes.html</code>.</p>
+    <p>Hermes Agent (Nous Research) is the reference shape: a gateway, an agent loop, files for memory and skills, cron, a soul. Aleph keeps that shape and gives the code to <code>claude</code>. The full design is <code>docs/design/aleph.md</code>. The comparison that selected this shape is <code>docs/design/aleph-shapes.html</code>. This page obeys ASD-STE100 Simplified Technical English.</p>
   </footer>
 
 </div>
