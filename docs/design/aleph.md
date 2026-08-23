@@ -3,9 +3,11 @@
 Aleph is a personal agent. It runs on your machine. You speak to it from Telegram
 or from a terminal. It writes code with the Claude Code CLI.
 
-This document replaces `aleph-v0.md`. The file `aleph-shapes.html` keeps the
-comparison that selected this shape. The file `aleph.html` shows the same design
-as a page.
+The file `aleph-shapes.html` keeps the comparison that selected this shape, and
+`aleph.html` shows the same design as a page.
+
+**Nothing here is built.** This repository holds the design and no code. Each
+workflow in §2 is a target.
 
 This document obeys ASD-STE100 Simplified Technical English.
 
@@ -355,8 +357,11 @@ the policy is a property of the repository, not of Aleph.
 | logic | the verification gate of the repository is green, and you read the difference |
 | migration, or a change to the release process | no. Keep it for the desk |
 
-The repository holds this policy. This repository has `docs/VERIFICATION.md`
-already, thus Aleph reads that and does not make a second rule.
+Each repository holds its own policy, in the file that says how to verify a
+change there. Aleph reads that file. It does not make a second rule.
+
+This repository holds no code today, thus it holds no such file. It gets one
+again when it gets code.
 
 A job proposes its class and shows the evidence. You can always move a job down
 to "keep it for the desk". You cannot move it up.
@@ -497,22 +502,22 @@ comparison and nothing more.
 
 ---
 
-## 12. From the Phase 1 tree
+## 12. What to take from the Phase 1 tree
 
-**Aleph uses:** `core/ids`, `core/clock`, `core/config`, `core/emit` and
-`eventlog`, `platform/db`, `channels/telegram/api`, `obs/otel` and
-`obs/langfuse`. The observability code is more useful here than in Phase 1,
-because the daemon now makes the model calls itself.
+This repository holds no code. An earlier implementation is in the history at
+`dca908d`, and you read it with `git show dca908d:<path>`.
 
-**Aleph does not use:** the lanes and the starvation ladder, the brief loop, the
-SDK runner, the echo runner, `routing/` and `vault/`.
+**Take:** `src/core/ids`, `src/core/clock`, `src/core/config`, `src/core/emit`
+and `src/core/eventlog`, `src/platform/db`, `src/channels/telegram/api`,
+`src/obs/otel` and `src/obs/langfuse`. The observability code is more useful
+here than it was in Phase 1, because the daemon now makes the model calls
+itself.
 
-These files do not exist yet. This document names them:
+**Leave:** the lanes and the starvation ladder, the brief loop, the SDK runner,
+the echo runner, `src/routing/` and `src/vault/`.
 
-```planned
-src/jobs/log.ts
-tests/unit/joblog.test.ts
-```
+Take a file only when a milestone needs it. A file that you copy before you need
+it is a file that you must understand twice.
 
 ---
 
