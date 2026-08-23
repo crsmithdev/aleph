@@ -1,0 +1,776 @@
+<title>Aleph v0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+
+<style>
+  :root {
+    --ground: #F1F3F6;
+    --panel: #FFFFFF;
+    --panel-2: #E8EBF0;
+    --ink: #161A21;
+    --ink-soft: #4E5867;
+    --line: #D0D6DF;
+    --brass: #8A5D11;
+    --teal: #1D6A65;
+    --clay: #9C3728;
+    --shadow: 0 1px 2px rgba(22, 26, 33, .06), 0 8px 24px -16px rgba(22, 26, 33, .28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #10131A;
+      --panel: #171B23;
+      --panel-2: #1E232C;
+      --ink: #E6EAF1;
+      --ink-soft: #97A3B4;
+      --line: #2A313C;
+      --brass: #E1AD55;
+      --teal: #6CBDB4;
+      --clay: #E28B7A;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -18px rgba(0, 0, 0, .9);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #10131A;
+    --panel: #171B23;
+    --panel-2: #1E232C;
+    --ink: #E6EAF1;
+    --ink-soft: #97A3B4;
+    --line: #2A313C;
+    --brass: #E1AD55;
+    --teal: #6CBDB4;
+    --clay: #E28B7A;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -18px rgba(0, 0, 0, .9);
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Source Serif 4", Georgia, serif;
+    font-size: 17px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 24px 96px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+  .prose { max-width: 66ch; }
+
+  h1, h2, h3, .label { font-family: Archivo, "Helvetica Neue", Arial, sans-serif; }
+  h1 {
+    font-size: clamp(38px, 6vw, 62px);
+    line-height: 1.02;
+    font-weight: 700;
+    letter-spacing: -.025em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h2 {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -.012em;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  h3 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
+  p { margin: 0 0 14px; }
+  p:last-child { margin-bottom: 0; }
+  a { color: var(--brass); }
+  em { font-style: italic; }
+  strong { font-weight: 600; }
+
+  .label {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    font-size: .88em;
+    background: var(--panel-2);
+    border-radius: 3px;
+    padding: .1em .32em;
+  }
+
+  header.masthead {
+    padding: 72px 0 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .rule-top { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .rule-top .ver {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--brass);
+    border: 1px solid var(--brass);
+    border-radius: 2px;
+    padding: 2px 7px;
+  }
+  .thesis { font-size: 21px; line-height: 1.45; max-width: 62ch; }
+  .thesis b { font-weight: 600; box-shadow: inset 0 -.42em 0 color-mix(in srgb, var(--brass) 20%, transparent); }
+
+  section { display: flex; flex-direction: column; gap: 18px; }
+  .sec-head { display: flex; flex-direction: column; gap: 4px; }
+
+  /* workflow scenes */
+  .scenes { display: flex; flex-direction: column; gap: 34px; }
+  .scene { display: flex; flex-direction: column; gap: 10px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .scene-head .n {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--brass);
+    border: 1px solid var(--brass);
+    border-radius: 2px;
+    padding: 1px 6px;
+  }
+  .scene-head .where {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+  }
+  .scene > p { font-size: 15.5px; color: var(--ink-soft); max-width: 74ch; margin: 0; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    box-shadow: var(--shadow);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13.5px;
+    line-height: 1.75;
+    overflow-x: auto;
+  }
+  .panel .bar {
+    border-bottom: 1px solid var(--line);
+    padding: 8px 16px;
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    background: var(--panel-2);
+    border-radius: 4px 4px 0 0;
+  }
+  .panel .body { padding: 14px 16px; white-space: pre; }
+  .panel .body .dim { color: var(--ink-soft); }
+  .panel .body .out { color: var(--brass); }
+  .panel .body .ok { color: var(--teal); }
+  .panel .body .no { color: var(--clay); }
+
+  .turns { display: flex; flex-direction: column; padding: 6px 0; }
+  .turn { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 14px; padding: 8px 16px; }
+  .turn .who { font-size: 11.5px; color: var(--ink-soft); letter-spacing: .04em; }
+  .turn.agent { border-left: 2px solid var(--brass); }
+  .turn.you { border-left: 2px solid var(--line); }
+  .turn .said { white-space: pre-wrap; }
+  .turn .said .dim { color: var(--ink-soft); }
+  .turn .said .ok { color: var(--teal); }
+  .turn .said .no { color: var(--clay); }
+  .ask {
+    display: flex;
+    width: fit-content;
+    max-width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    border: 1px solid var(--clay);
+    border-radius: 3px;
+    padding: 6px 10px;
+    margin-top: 6px;
+    font-size: 12.5px;
+    color: var(--clay);
+  }
+  .ask b { font-weight: 500; }
+  .btn {
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    padding: 1px 8px;
+    font-size: 11.5px;
+  }
+
+  figure {
+    margin: 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    box-shadow: var(--shadow);
+    padding: 22px 20px 16px;
+    overflow-x: auto;
+  }
+  figure svg { display: block; width: 100%; min-width: 640px; height: auto; color: var(--ink); }
+  figcaption {
+    font-size: 14px;
+    color: var(--ink-soft);
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    max-width: 78ch;
+  }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .card p { font-size: 15px; margin: 0; }
+  .card .k {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--brass);
+  }
+
+  .tree {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 18px 20px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13.5px;
+    line-height: 1.85;
+    white-space: pre;
+    overflow-x: auto;
+    color: var(--ink-soft);
+  }
+  .tree b { color: var(--ink); font-weight: 500; }
+  .tree i { color: var(--brass); font-style: normal; }
+
+  ol.miles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  ol.miles li {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) minmax(0, 1.05fr);
+    gap: 18px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--line);
+    align-items: baseline;
+  }
+  ol.miles li:first-child { border-top: 1px solid var(--ink-soft); }
+  ol.miles .m { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--brass); }
+  ol.miles .ships { font-size: 16px; }
+  ol.miles .done { font-size: 15px; color: var(--ink-soft); font-style: italic; }
+  ol.miles li.now .ships::after {
+    content: "it becomes the thing";
+    font-family: Archivo, sans-serif;
+    font-style: normal;
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--teal);
+    border: 1px solid var(--teal);
+    border-radius: 2px;
+    padding: 2px 6px;
+    margin-left: 10px;
+    white-space: nowrap;
+  }
+  @media (max-width: 700px) {
+    ol.miles li { grid-template-columns: 48px minmax(0, 1fr); }
+    ol.miles .done { grid-column: 2; }
+    .turn { grid-template-columns: 60px minmax(0, 1fr); gap: 10px; }
+  }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 24px;
+    color: var(--ink-soft);
+    font-size: 14.5px;
+  }
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="rule-top">
+      <span class="label">Design note · 22 Aug 2026</span>
+      <span class="ver">v0</span>
+      <span class="label" style="color:var(--ink-soft)">docs/design/aleph.md</span>
+    </div>
+    <h1>Aleph</h1>
+    <p class="thesis">A personal agent that lives on your box, answers on Telegram, remembers things, and does coding work by <b>driving the Claude Code CLI in a worktree</b>. The daemon owns the conversation; <code>claude</code> is what it reaches for when the work is code.</p>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Six scenes</span>
+      <h2>What using it looks like</h2>
+    </div>
+    <div class="prose">
+      <p>Hypothetical, and the point of the design: everything below is the target for M0–M4, and none of it runs yet. The mechanism sections after these scenes exist to make exactly these six things true.</p>
+    </div>
+
+    <div class="scenes">
+
+      <div class="scene">
+        <div class="scene-head">
+          <span class="n">01</span>
+          <h3>A bug you found at your desk</h3>
+          <span class="where">terminal · ~/aleph-next</span>
+        </div>
+        <div class="panel">
+          <div class="bar">aleph do</div>
+          <div class="body"><span class="dim">$</span> aleph do "reindex dies on a torn last line — skip it and warn instead"
+<span class="out">job 7f3a</span> <span class="dim">· worktree .worktrees/job-7f3a · branch job/7f3a</span>
+  <span class="dim">▸ Read  src/core/eventlog.ts</span>
+  <span class="dim">▸ Edit  src/core/eventlog.ts</span>
+  <span class="dim">▸ Bash  bun test tests/unit/eventlog.test.ts</span> <span class="ok">→ 12 pass</span>
+<span class="ok">done</span> <span class="dim">· 2 files · +31 −4 · 12 tests pass</span>
+
+<span class="dim">$</span> aleph diff 7f3a
+<span class="dim">$</span> aleph land 7f3a
+<span class="ok">merged job/7f3a into main (squash)</span> <span class="dim">· worktree removed</span></div>
+        </div>
+        <p><code>aleph do</code> is the conversation with the small talk skipped — the same code path as asking in chat, minus the asking.</p>
+      </div>
+
+      <div class="scene">
+        <div class="scene-head">
+          <span class="n">02</span>
+          <h3>Directing it from a train</h3>
+          <span class="where">telegram</span>
+        </div>
+        <div class="panel">
+          <div class="bar">telegram · paired device</div>
+          <div class="turns">
+            <div class="turn you"><span class="who">you</span><span class="said">the daemon died overnight, look at the journal and fix it if it's obvious</span></div>
+            <div class="turn agent"><span class="who">aleph</span><span class="said">journalctl -u aleph, last 200 lines.
+OOM at 03:12 while restarting a job whose stream log had reached 412MB.
+two fixes: cap and rotate the log, or spool it to disk and keep a tail in
+memory. cap is 20 lines, spool is a day. which?</span></div>
+            <div class="turn you"><span class="who">you</span><span class="said">cap it, 20MB, keep the last one</span></div>
+            <div class="turn agent"><span class="who">aleph</span><span class="said"><span class="ok">job 91c2</span> <span class="dim">· aleph-next · branch job/91c2</span>
+<span class="dim">▸ Edit   src/jobs/log.ts
+▸ Write  tests/unit/joblog.test.ts
+▸ Bash   bun test → 44 pass</span>
+done · +36 −7 · /diff 91c2<span class="ask"><b>it wants to run</b> git push origin job/91c2 <span class="btn">allow</span> <span class="btn">deny</span></span></span></div>
+            <div class="turn you"><span class="who">you</span><span class="said"><span class="no">[deny]</span></span></div>
+            <div class="turn agent"><span class="who">aleph</span><span class="said">held. the branch is local. land it when you're back at the desk.</span></div>
+          </div>
+        </div>
+        <p>Three things there are design constraints, not manners: it asked a real question instead of guessing, the job could not push on its own, and landing is yours.</p>
+      </div>
+
+      <div class="scene">
+        <div class="scene-head">
+          <span class="n">03</span>
+          <h3>Picking the remote session up locally</h3>
+          <span class="where">terminal · later that evening</span>
+        </div>
+        <div class="panel">
+          <div class="bar">aleph jobs · aleph attach</div>
+          <div class="body"><span class="dim">$</span> aleph jobs
+7f3a  <span class="ok">landed</span>    2h ago    aleph-next   reindex torn-line guard
+91c2  <span class="out">waiting</span>   18m ago   aleph-next   cap job stream log at 20MB
+a0d7  running   4m ago    dotfiles     migrate to fish
+
+<span class="dim">$</span> aleph attach 91c2
+<span class="dim">cd ~/aleph-next/.worktrees/job-91c2</span>
+claude --resume 3f0e2c81-…   <span class="dim">← interactive, full history, your skills</span></div>
+        </div>
+        <p>The job <em>was</em> a Claude Code session all along, so attaching isn't an import — it's the same session, with its transcript, its CLAUDE.md and its skills. While you're attached the daemon marks the job <code>attached</code> and won't spawn anything on that session id: two processes on one session id interleave writes into one transcript, which is measured behaviour, not a worry.</p>
+      </div>
+
+      <div class="scene">
+        <div class="scene-head">
+          <span class="n">04</span>
+          <h3>It speaks first, but only with something to say</h3>
+          <span class="where">~/.aleph-next/config.toml · telegram</span>
+        </div>
+        <div class="panel">
+          <div class="bar">config.toml</div>
+          <div class="body"><span class="dim">[[cron]]</span>
+at     = <span class="out">"07:30"</span>
+prompt = <span class="out">"morning: overnight job outcomes, anything waiting on me, today's calendar"</span>
+
+<span class="dim">[[cron]]</span>
+at     = <span class="out">"02:00"</span>
+prompt = <span class="out">"run the aleph-next suite in a scratch worktree; message me only if it fails"</span>
+quiet  = <span class="ok">true</span>   <span class="dim"># silent unless the turn calls notify()</span></div>
+        </div>
+        <div class="panel">
+          <div class="bar">telegram · 07:30</div>
+          <div class="turns">
+            <div class="turn agent"><span class="who">aleph</span><span class="said">two jobs landed overnight. 91c2 is still waiting on you.
+nothing else needs a decision today.</span></div>
+          </div>
+        </div>
+        <p>A scheduled turn runs with <code>dispatch_code</code> removed from its tool set, so the 2am run can test but never start unattended work of its own.</p>
+      </div>
+
+      <div class="scene">
+        <div class="scene-head">
+          <span class="n">05</span>
+          <h3>It remembers, and the memory reaches the work</h3>
+          <span class="where">telegram · then a week later</span>
+        </div>
+        <div class="panel">
+          <div class="bar">telegram</div>
+          <div class="turns">
+            <div class="turn you"><span class="who">you</span><span class="said">remember: bun, never npm. and i squash-merge everything.</span></div>
+            <div class="turn agent"><span class="who">aleph</span><span class="said">noted <span class="dim">(2 memories · aleph memory to review)</span></span></div>
+            <div class="turn you"><span class="who">you</span><span class="said"><span class="dim">… a week later, different repo …</span>
+add a changelog script</span></div>
+            <div class="turn agent"><span class="who">aleph</span><span class="said"><span class="ok">job c41f</span> <span class="dim">· dotfiles · branch job/c41f</span>
+<span class="dim">brief includes: "package manager is bun; merges are squashed"</span></span></div>
+          </div>
+        </div>
+        <p>Memories reach a job as <em>facts about you</em> inside a delimited block, never as system-prompt instructions — and every write is echoed back at you, so a poisoned memory is visible rather than silent.</p>
+      </div>
+
+      <div class="scene">
+        <div class="scene-head">
+          <span class="n">06</span>
+          <h3>What it declines</h3>
+          <span class="where">telegram</span>
+        </div>
+        <div class="panel">
+          <div class="bar">telegram</div>
+          <div class="turns">
+            <div class="turn you"><span class="who">you</span><span class="said">push that to prod</span></div>
+            <div class="turn agent"><span class="who">aleph</span><span class="said">i don't have a deploy tool, and jobs run without push credentials.
+i can open a PR, or print the command for you to run.</span></div>
+          </div>
+        </div>
+        <p>The refusal isn't a policy the model was asked to follow. There is no deploy tool in the table, and the job's environment has no credential to push with.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">The mechanism</span>
+      <h2>One daemon, one loop, one subprocess per job</h2>
+    </div>
+    <figure>
+      <svg viewBox="0 0 960 448" role="img" aria-label="The daemon holds the agent loop, its tools, the approval gate and the stores; it calls a model API for every chat turn and spawns a Claude Code CLI process in a worktree only when dispatch_code starts a job.">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+          </marker>
+          <marker id="a1-brass" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--brass)"></path>
+          </marker>
+          <marker id="a1-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>
+          </marker>
+        </defs>
+        <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="currentColor">
+
+          <text x="24" y="30" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">SURFACES</text>
+          <rect x="24" y="44" width="140" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="94" y="67" text-anchor="middle">Telegram</text>
+          <rect x="24" y="94" width="140" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="94" y="117" text-anchor="middle">aleph chat</text>
+          <rect x="24" y="144" width="140" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="94" y="167" text-anchor="middle">cron</text>
+          <line x1="164" y1="62" x2="216" y2="82" stroke="currentColor" stroke-width="1.2" marker-end="url(#a1)"></line>
+          <line x1="164" y1="112" x2="216" y2="112" stroke="currentColor" stroke-width="1.2" marker-end="url(#a1)"></line>
+          <line x1="164" y1="162" x2="216" y2="142" stroke="currentColor" stroke-width="1.2" marker-end="url(#a1)"></line>
+          <path d="M 220 300 L 12 300 L 12 62 L 18 62" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#a1)"></path>
+          <text x="26" y="320" font-size="11.5" fill="var(--ink-soft)">replies · progress</text>
+
+          <rect x="220" y="44" width="452" height="292" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1.6"></rect>
+          <text x="236" y="70" font-size="13.5" font-weight="500">aleph d</text>
+
+          <rect x="236" y="84" width="196" height="104" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.8"></rect>
+          <text x="252" y="106" fill="var(--brass)" font-weight="500">agent loop</text>
+          <text x="252" y="130" font-size="11.5" fill="var(--ink-soft)">history · compaction</text>
+          <text x="252" y="152" font-size="11.5" fill="var(--ink-soft)">12 iterations max</text>
+          <text x="252" y="174" font-size="11.5" fill="var(--ink-soft)">token budget · retries</text>
+
+          <rect x="448" y="84" width="208" height="104" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="464" y="106" font-weight="500">tools</text>
+          <text x="464" y="130" font-size="11.5" fill="var(--ink-soft)">remember · recall</text>
+          <text x="464" y="152" font-size="11.5" fill="var(--ink-soft)">notify · schedule</text>
+          <text x="464" y="174" font-size="11.5" fill="var(--brass)">dispatch_code</text>
+
+          <rect x="236" y="204" width="420" height="44" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.5"></rect>
+          <text x="252" y="231" fill="var(--teal)" font-size="12">gate — plain code, real arguments, default deny</text>
+
+          <rect x="236" y="264" width="420" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="252" y="291" font-size="11.5" fill="var(--ink-soft)">conversations · memory · jobs · events · index</text>
+
+          <path d="M 672 110 L 716 110" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#a1)" marker-start="url(#a1)"></path>
+          <rect x="720" y="72" width="216" height="76" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
+          <text x="828" y="100" text-anchor="middle">model API</text>
+          <text x="828" y="122" text-anchor="middle" font-size="11" fill="var(--ink-soft)">every chat turn · cheap tier</text>
+          <text x="828" y="140" text-anchor="middle" font-size="11" fill="var(--ink-soft)">metered, and small</text>
+
+          <path d="M 656 176 L 690 176 L 690 216 L 716 216" fill="none" stroke="var(--brass)" stroke-width="1.6" marker-end="url(#a1-brass)"></path>
+          <rect x="720" y="180" width="216" height="94" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.8"></rect>
+          <text x="736" y="206" fill="var(--brass)" font-weight="500">claude -p · one job</text>
+          <text x="736" y="230" font-size="11.5" fill="var(--ink-soft)">worktree · acceptEdits</text>
+          <text x="736" y="252" font-size="11.5" fill="var(--ink-soft)">no push creds · subscription</text>
+
+          <path d="M 828 274 L 828 302 L 676 302" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#a1)"></path>
+          <text x="700" y="324" font-size="11.5" fill="var(--ink-soft)">diffstat · stream log</text>
+
+          <line x1="900" y1="274" x2="900" y2="348" stroke="var(--teal)" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#a1-teal)"></line>
+          <rect x="720" y="352" width="216" height="52" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.4" stroke-dasharray="5 3"></rect>
+          <text x="736" y="374" fill="var(--teal)" font-size="11.5">aleph attach &lt;job&gt;</text>
+          <text x="736" y="394" fill="var(--teal)" font-size="11">claude --resume, at your desk</text>
+
+          <text x="220" y="372" font-size="11" letter-spacing="1.2" fill="var(--ink-soft)">THE SPLIT THAT MAKES THIS WORK:</text>
+          <text x="220" y="394" font-size="11.5" fill="var(--ink-soft)">chat tokens metered and small · coding tokens on the</text>
+          <text x="220" y="416" font-size="11.5" fill="var(--ink-soft)">subscription, where they are large</text>
+        </g>
+      </svg>
+      <figcaption>The daemon is where the conversation lives. The CLI is a subprocess with one job, one worktree and no way to publish what it wrote.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Approval</span>
+      <h2>The gate is a function, not a contract</h2>
+    </div>
+    <figure>
+      <svg viewBox="0 0 960 250" role="img" aria-label="A tool call from the loop enters the gate, which checks rules and either allows, denies, or asks you on Telegram; an unanswered ask denies after ten minutes and every outcome is written to the event log.">
+        <defs>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+          </marker>
+          <marker id="a2-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>
+          </marker>
+          <marker id="a2-clay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--clay)"></path>
+          </marker>
+        </defs>
+        <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="currentColor">
+          <text x="24" y="28" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">EVERY OUTCOME IS A LINE IN events.jsonl</text>
+
+          <rect x="24" y="48" width="200" height="60" rx="3" fill="none" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="124" y="72" text-anchor="middle" fill="var(--brass)">tool_use</text>
+          <text x="124" y="94" text-anchor="middle" font-size="11" fill="var(--ink-soft)">dispatch_code{repo, task}</text>
+
+          <line x1="224" y1="78" x2="286" y2="78" stroke="currentColor" stroke-width="1.4" marker-end="url(#a2)"></line>
+
+          <rect x="290" y="48" width="190" height="60" rx="3" fill="var(--panel-2)" stroke="var(--teal)" stroke-width="1.6"></rect>
+          <text x="385" y="72" text-anchor="middle" fill="var(--teal)">gate(tool, args)</text>
+          <text x="385" y="94" text-anchor="middle" font-size="11" fill="var(--ink-soft)">rules from config.toml</text>
+
+          <path d="M 385 108 L 385 140 L 150 140 L 150 168" fill="none" stroke="var(--teal)" stroke-width="1.4" marker-end="url(#a2-teal)"></path>
+          <rect x="24" y="172" width="252" height="52" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.4"></rect>
+          <text x="150" y="194" text-anchor="middle" fill="var(--teal)" font-size="12">allow → run it</text>
+          <text x="150" y="214" text-anchor="middle" font-size="11" fill="var(--ink-soft)">reads, recall, job status</text>
+
+          <path d="M 385 108 L 385 168" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#a2)"></path>
+          <rect x="290" y="172" width="252" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
+          <text x="416" y="194" text-anchor="middle" font-size="12">ask → your phone</text>
+          <text x="416" y="214" text-anchor="middle" font-size="11" fill="var(--ink-soft)">[allow] [deny] · 10 min</text>
+
+          <path d="M 385 108 L 385 140 L 690 140 L 690 168" fill="none" stroke="var(--clay)" stroke-width="1.4" marker-end="url(#a2-clay)"></path>
+          <rect x="564" y="172" width="252" height="52" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.4"></rect>
+          <text x="690" y="194" text-anchor="middle" fill="var(--clay)" font-size="12">deny → tool_result says no</text>
+          <text x="690" y="214" text-anchor="middle" font-size="11" fill="var(--ink-soft)">unknown tool · silence · rule</text>
+
+          <text x="560" y="72" font-size="11" fill="var(--ink-soft)">a rule change takes effect on the next call —</text>
+          <text x="560" y="94" font-size="11" fill="var(--ink-soft)">no restart, no 60-second ceiling</text>
+        </g>
+      </svg>
+      <figcaption>Because the gate runs inside the daemon it sees the actual arguments — not a command-name pattern — and it can wait as long as you want it to.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Jobs</span>
+      <h2>A job is a worktree with a life cycle</h2>
+    </div>
+    <figure>
+      <svg viewBox="0 0 960 324" role="img" aria-label="A job moves from dispatched to running, then to waiting when its process exits, to timed out after thirty minutes, or to abandoned if the daemon restarts and the pid is gone; you land or drop it from waiting, and attaching parks it while you work in the worktree yourself.">
+        <defs>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+          </marker>
+          <marker id="a3-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>
+          </marker>
+          <marker id="a3-clay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--clay)"></path>
+          </marker>
+        </defs>
+        <g font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">
+          <text x="24" y="26" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">WHO CAUSES EACH MOVE IS PRINTED ON THE ARROW</text>
+
+          <rect x="24" y="48" width="150" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="99" y="75" text-anchor="middle">dispatched</text>
+          <line x1="174" y1="70" x2="228" y2="70" stroke="currentColor" stroke-width="1.3" marker-end="url(#a3)"></line>
+          <text x="201" y="60" text-anchor="middle" font-size="10" fill="var(--ink-soft)">worktree</text>
+
+          <rect x="232" y="48" width="150" height="44" rx="3" fill="var(--panel-2)" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="307" y="75" text-anchor="middle" fill="var(--brass)">running</text>
+
+          <line x1="382" y1="70" x2="436" y2="70" stroke="currentColor" stroke-width="1.3" marker-end="url(#a3)"></line>
+          <text x="409" y="60" text-anchor="middle" font-size="10" fill="var(--ink-soft)">exit 0</text>
+
+          <rect x="440" y="48" width="150" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
+          <text x="515" y="75" text-anchor="middle">waiting</text>
+
+          <line x1="590" y1="70" x2="756" y2="70" stroke="var(--teal)" stroke-width="1.4" marker-end="url(#a3-teal)"></line>
+          <text x="673" y="60" text-anchor="middle" font-size="10" fill="var(--teal)">you: aleph land</text>
+          <rect x="760" y="48" width="176" height="44" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.5"></rect>
+          <text x="848" y="75" text-anchor="middle" fill="var(--teal)">landed</text>
+
+          <path d="M 515 92 L 515 140 L 756 140" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#a3)"></path>
+          <text x="640" y="132" text-anchor="middle" font-size="10" fill="var(--ink-soft)">you: aleph drop</text>
+          <rect x="760" y="118" width="176" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="848" y="145" text-anchor="middle">dropped</text>
+
+          <rect x="24" y="118" width="150" height="44" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.4" stroke-dasharray="5 3"></rect>
+          <text x="99" y="145" text-anchor="middle" fill="var(--teal)">attached</text>
+          <path d="M 290 92 L 290 148 L 178 148" fill="none" stroke="var(--teal)" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#a3-teal)"></path>
+          <path d="M 174 128 L 250 128 L 250 96" fill="none" stroke="var(--teal)" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#a3-teal)"></path>
+          <text x="24" y="186" font-size="10" fill="var(--teal)">you: aleph attach · you: done</text>
+          <text x="24" y="204" font-size="10" fill="var(--ink-soft)">while attached the daemon spawns nothing</text>
+          <text x="24" y="220" font-size="10" fill="var(--ink-soft)">on that session id</text>
+
+          <path d="M 340 92 L 340 218 L 436 218" fill="none" stroke="var(--clay)" stroke-width="1.3" marker-end="url(#a3-clay)"></path>
+          <text x="388" y="210" text-anchor="middle" font-size="10" fill="var(--clay)">30 min cap</text>
+          <rect x="440" y="196" width="150" height="44" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.3"></rect>
+          <text x="515" y="223" text-anchor="middle" fill="var(--clay)">timed_out</text>
+
+          <path d="M 340 92 L 340 276 L 436 276" fill="none" stroke="var(--clay)" stroke-width="1.3" marker-end="url(#a3-clay)"></path>
+          <text x="388" y="268" text-anchor="middle" font-size="10" fill="var(--clay)">pid gone</text>
+          <rect x="440" y="254" width="150" height="44" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.3"></rect>
+          <text x="515" y="281" text-anchor="middle" fill="var(--clay)">abandoned</text>
+
+          <text x="614" y="224" font-size="10.5" fill="var(--ink-soft)">aleph jobs gc — the worktree goes,</text>
+          <text x="614" y="242" font-size="10.5" fill="var(--ink-soft)">the log stays</text>
+        </g>
+      </svg>
+      <figcaption>The daemon reconciles this table against real pids at every start, so a restart marks work abandoned rather than leaving a worktree with nothing watching it.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Features</span>
+      <h2>Six things it does, and what bounds each one</h2>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <span class="k">aleph pair</span>
+        <h3>Pairing before anything</h3>
+        <p>An unknown chat gets one line telling it to send the code from <code>aleph pair</code>. Five wrong codes locks that id out; group chats are refused. Without this the bot handle <em>is</em> the credential.</p>
+      </div>
+      <div class="card">
+        <span class="k">remember · recall</span>
+        <h3>Memory you can read</h3>
+        <p>One fact per markdown file, written by the agent, listed by <code>aleph memory</code>. Injected as facts, never as instructions.</p>
+      </div>
+      <div class="card">
+        <span class="k">dispatch_code</span>
+        <h3>Jobs that cannot publish</h3>
+        <p>A worktree, <code>acceptEdits</code>, and an environment with no push credential and no agent socket. A job can commit. Only you can land.</p>
+      </div>
+      <div class="card">
+        <span class="k">gate()</span>
+        <h3>Approval in plain code</h3>
+        <p>Real arguments, live rules, a timeout you choose, default deny for anything unknown — and a line in the event log for every decision.</p>
+      </div>
+      <div class="card">
+        <span class="k">aleph attach</span>
+        <h3>Remote work, finished locally</h3>
+        <p>Any job resumes as an ordinary interactive Claude Code session in its worktree, because that is what it always was.</p>
+      </div>
+      <div class="card">
+        <span class="k">cron · schedule</span>
+        <h3>Scheduled turns, fenced</h3>
+        <p>Scheduled prompts run without <code>dispatch_code</code>, are shown to you when written, and <code>quiet</code> jobs stay silent unless they call <code>notify()</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">State</span>
+      <h2>Everything it knows is a file</h2>
+    </div>
+    <div class="tree"><b>~/.aleph-next/</b>
+  <b>soul.md</b>                  <i>identity, prepended to every chat turn</i>
+  <b>config.toml</b>              <i>pairing · channels · models · gate rules · cron</i>
+  <b>conversations/*.jsonl</b>    <i>the loop's own transcript — ground truth</i>
+  <b>memory/*.md</b>              <i>one fact per file, agent-written, human-readable</i>
+  <b>jobs/&lt;id&gt;/</b>               <i>task.md · state.json · stream.jsonl (capped, rotated)</i>
+  <b>events.jsonl</b>             <i>messages, gate decisions, job transitions, cron fires</i>
+  <b>index.db</b>                 <i>FTS and indexes — delete it and it rebuilds</i></div>
+    <div class="prose">
+      <p>Files are truth and <code>index.db</code> is disposable. The rebuild skips a torn final line and warns, rather than failing the whole reindex — which is also the bug in scene 01.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Build order</span>
+      <h2>Each milestone is usable on its own</h2>
+    </div>
+    <ol class="miles">
+      <li>
+        <span class="m">M0</span>
+        <span class="ships">The loop, <code>aleph chat</code>, <code>remember</code>/<code>recall</code>, the event log</span>
+        <span class="done">A local assistant that remembers across restarts</span>
+      </li>
+      <li>
+        <span class="m">M1</span>
+        <span class="ships">Telegram, pairing, throttled streaming</span>
+        <span class="done">You use it from your phone all week</span>
+      </li>
+      <li class="now">
+        <span class="m">M2</span>
+        <span class="ships"><code>dispatch_code</code>, jobs, <code>attach</code> / <code>diff</code> / <code>land</code> / <code>drop</code></span>
+        <span class="done">It fixes a real bug in this repo, end to end</span>
+      </li>
+      <li>
+        <span class="m">M3</span>
+        <span class="ships">The gate, approvals over Telegram, redaction</span>
+        <span class="done">Unattended turns are safe to leave running</span>
+      </li>
+      <li>
+        <span class="m">M4</span>
+        <span class="ships">Cron, <code>schedule</code>, quiet jobs</span>
+        <span class="done">It speaks first, usefully</span>
+      </li>
+    </ol>
+    <div class="prose">
+      <p>Containment at M2 comes from the job design — worktree, no credentials, no landing — not from the gate. That is why the gate can arrive at M3 without M2 being reckless.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Posture</span>
+      <h2>What this does not protect you from</h2>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <span class="k">no sandbox</span>
+        <h3>A job runs as you</h3>
+        <p>Same user, same disk, no container in v0. Every control here is a fence, not a wall — worth saying out loud, because Hermes says the same thing in its own security notes.</p>
+      </div>
+      <div class="card">
+        <span class="k">one principal</span>
+        <h3>It answers to one person</h3>
+        <p>Pairing admits your devices and nothing else. There is no multi-user model, no roles, and no plan for either.</p>
+      </div>
+      <div class="card">
+        <span class="k">not yet built</span>
+        <h3>None of this runs</h3>
+        <p>Every scene above is a target. The design's own rule is that nothing gets claimed as working until it has been run and watched.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Reference shape: Hermes Agent (Nous Research) — a gateway, an agent loop, file-backed memory and skills, cron, a SOUL. Aleph keeps that shape and hands the coding to <code>claude</code>. Full design: <code>docs/design/aleph.md</code>. The comparison that chose this shape: <code>docs/design/aleph-shapes.html</code>.</p>
+  </footer>
+
+</div>

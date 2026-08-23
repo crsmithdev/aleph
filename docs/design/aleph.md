@@ -12,6 +12,10 @@ reason this shape exists.
 Supersedes `phase-1.md`, `phase-2a.md` and `aleph-v0.md`. The A-vs-B comparison
 that chose this shape is kept in `aleph-shapes.html`.
 
+The same design as a page, scenes first:
+<https://claude.ai/code/artifact/e20e67d9-7a68-447f-afd1-ab1fab566244>
+(source `docs/design/aleph.html`; republish that file to the same URL).
+
 ---
 
 ## 1. What using it looks like
