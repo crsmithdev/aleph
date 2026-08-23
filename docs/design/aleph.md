@@ -34,10 +34,12 @@ You open a herdr pane. You start `claude` in a repository. You write code. You
 commit. You merge.
 
 Aleph does almost nothing here. It gives the session your facts through the
-memory bridge (§5). It can take the session later (§2.5).
+memory bridge (§5.2). It watches the session, and if the session parks it makes a
+topic (§4).
 
 **The rule this makes:** a pane that never speaks to Aleph must work correctly.
-Aleph is present, but it is passive at your desk.
+Aleph is present, but it is passive at your desk. It watches, and it does not
+interrupt.
 
 ### 2.2 Many local sessions
 
@@ -78,22 +80,32 @@ information that herdr gives you at your desk.
 
 You write code in a pane. You must leave. You close the computer.
 
-Later you send a message to Aleph. You ask what is in progress. Aleph shows the
-jobs that it drives. It also shows the sessions at your desk that it can adopt.
+The session parks. Aleph makes a topic for it and writes three things there: a
+headline, a summary, and the last exchanges (§4.2).
 
-You select one. Aleph makes a WIP commit, adopts the session, and makes a topic
-for it. You continue from the telephone.
+Later you open that topic on your telephone. Everything is there already. You
+type your next instruction. That message attaches the session and starts the
+turn. You give no command.
 
-**The rule this makes:** Aleph offers to adopt when you arrive, not when you
-leave. It must not interrupt you at your desk to ask.
+**The rule this makes:** Aleph writes the context when the session parks, not
+when you arrive. §4.1 gives the reason.
 
 ### 2.6 A mobile session that continues at your desk
 
-You come home. You run `aleph attach 91c2`. Aleph opens a herdr pane in the
-worktree of that job, with the same session.
+You come home. You run `aleph attach 91c2`. Aleph parks the job, asks herdr for a
+pane in the worktree, and starts the same session again.
 
-The session is the same session. It has the same transcript, the same skills and
-the same `CLAUDE.md`. Aleph stops to drive it while you hold it.
+The session does not change. It has the same transcript, the same skills and the
+same `CLAUDE.md`. The topic stays, but it becomes a view: while you hold the
+pane, a message in that topic gets a refusal that tells you where the pane is.
+
+**The rule this makes:** each direction supplies the one thing that the other
+side has already.
+
+| Direction | What is missing | What Aleph supplies |
+|---|---|---|
+| Desk → telephone | the transcript. A telephone cannot hold it | a summary and the last exchanges |
+| Telephone → desk | a terminal. The daemon needs none | a herdr pane, on the same session |
 
 ---
 
@@ -116,33 +128,135 @@ transcript at the same time and the transcript becomes bad. This is measured
 behaviour, not a risk.
 
 Thus a handover is a change of driver, and it is the same change in both
-directions:
+directions. You change the driver when you act. You do not give a command:
 
-| Direction | Command | Workflow |
-|---|---|---|
-| The daemon → you | `aleph attach <id>` | §2.6 |
-| You → the daemon | adoption, which Aleph offers | §2.5 |
+| You do this | The result |
+|---|---|
+| Send a message in a job topic | The daemon drives it |
+| Start `claude` in the worktree | You drive it. The daemon stops after its turn |
 
-Before Aleph completes a handover, it must know that the other driver stopped.
-It reads `/proc` to find a live process in that worktree. It does not use your
-word for this.
+Two commands stay, and both are conveniences. `aleph attach` finds the worktree
+and asks herdr for a pane, and it makes the daemon park the job first. `aleph
+jobs` lists the work.
+
+### 3.1 The check before each handover
+
+Before Aleph completes a handover, it must prove that the other driver stopped.
+It uses two signals together:
+
+- **The working directory.** Aleph reads `/proc/<pid>/cwd` for each `claude`
+  process and compares it to the worktree.
+- **The transcript.** A recent change time on
+  `~/.claude/projects/<slug>/<uuid>.jsonl` shows that a session is alive.
+
+Aleph does not use your word for this. If a process holds the worktree, Aleph
+refuses and tells you where that process is.
+
+I do not know if the CLI holds the transcript file open. If it does, then
+`/proc/<pid>/fd` gives a better answer than both signals. This is a test for M2.
+
+### 3.2 What `aleph attach` does when a pane is open
+
+The command is idempotent. It never makes a second driver.
+
+| What holds the worktree | The result |
+|---|---|
+| Nothing | The daemon parks the job. Aleph opens a pane |
+| A process, and Aleph opened its pane | Aleph moves you to that pane |
+| A process, but Aleph did not open the pane | Aleph refuses. It prints the PID and asks herdr which pane holds it |
+| The state says a pane exists, but the process is gone | Aleph corrects the state and opens a pane |
+
+If the daemon is in a turn, `attach` waits for that turn to stop. The daemon must
+not stop in the middle of a turn.
+
+If herdr does not answer on its socket, Aleph does not start herdr. It prints the
+two commands and stops.
 
 ---
 
-## 4. Surfaces
+## 4. The mirror
+
+The Telegram group is one private supergroup with topics. The General topic is
+the conversation with Aleph. Each piece of work gets its own topic.
+
+The topic list is the state of your machine. It holds the jobs that the daemon
+drives **and** the local sessions that parked. Thus the work that you started at
+your desk is on your telephone before you look for it.
 
 | Surface | You use it to | Notes |
 |---|---|---|
 | A herdr pane | write code at your desk | Aleph does not control the pane |
-| The Telegram group | speak to Aleph, and drive jobs | one topic for each job |
+| The Telegram group | speak to Aleph, and drive each job | one topic for each job |
 | `aleph` (CLI) | list, attach, merge, remove | thin; it speaks to the daemon |
-| Cron | let Aleph speak first | see §10, M4 |
+| Cron | let Aleph speak first | see §10, M5 |
 
-The Telegram group is one private supergroup with topics. The General topic is
-the conversation with Aleph. Each job gets its own topic.
+### 4.1 Why Aleph writes the context early
 
-Aleph refuses every other chat, and it refuses direct messages. §9 gives the
-reason.
+A Telegram bot cannot see that you opened a topic. It receives messages, edits
+and button presses. It receives no event when you read.
+
+Thus Aleph cannot make the summary at the moment you arrive. It writes the
+context when the session **parks**.
+
+This also keeps the cost small. A session parks a few times each day, not
+continuously. Aleph pays one cheap model call for each park, and only for work
+that stopped.
+
+A session parks when its process stops, or when it is idle and holds files that
+are not committed. A session that you type in does not need a topic.
+
+### 4.2 What a topic holds
+
+```
+# 4e81 torn-line · aleph-next
+
+headline · Aleph edits this one message in place
+  aleph-next · branch torn-line
+  you parked this 40 minutes ago
+  3 files not committed · last: bun test → 2 fail
+
+summary
+  You corrected the reindex so that it does not stop on a torn last
+  line. The guard operates correctly. Two tests fail because no
+  fixture has a torn line. You started to write that fixture.
+
+recent
+  you     add a fixture with a torn last line
+          ▸ Read   tests/fixtures/events.jsonl
+          ▸ Write  tests/fixtures/torn.jsonl
+          ▸ Bash   bun test → 2 fail
+  aleph   the fixture is written, but the test looks for the old
+          path. i must change eventlog.test.ts line 44.
+```
+
+Each part has one purpose. The headline is live and cheap, and Aleph derives it
+from the tool names and from `git status`. The summary tells you what the work is
+about. The recent part tells you where the work stopped.
+
+The recent part is rendered, not raw. The last ten messages of a coding session
+are usually ten tool calls, and those are not useful on a telephone. Aleph shows
+the last ten **exchanges**: your instructions and its replies in full, with each
+tool call made short to one line. This also keeps the text inside the Telegram
+limit of 4096 characters.
+
+### 4.3 The life of a topic
+
+| Event | The topic |
+|---|---|
+| A session parks, or a job starts | Aleph makes the topic |
+| You send a message, and no process holds the worktree | Aleph attaches the session and starts the turn |
+| You hold the pane | The headline says so. A message gets a refusal, not a turn |
+| The work merges, or you drop it | Aleph closes the topic. Telegram keeps the history |
+| The session stops with work not committed | The topic stays open |
+| Anything | Aleph never deletes a topic. The history is context |
+
+### 4.4 Three failures
+
+| Failure | What the topic says |
+|---|---|
+| The worktree is gone | This work is not available. The directory does not exist. |
+| The branch merged while you were away | This work merged. The topic closes. |
+| The session will not start again | I cannot continue this session. Here is the summary and the branch. |
 
 ---
 
@@ -219,10 +333,12 @@ Each job has an origin:
 | Origin | Aleph made the worktree | Aleph can remove it |
 |---|---|---|
 | `dispatched` | yes | yes |
-| `adopted` | no | no |
+| `mirrored` | no | no |
 
-An adopted job keeps your branch name and your worktree. Aleph must not remove
-them.
+A mirrored job is a local session that parked. It keeps your branch name and your
+worktree, and Aleph must not remove them. Aleph gives it a job ID and a topic so
+that the two types look the same on your telephone. They are not the same on
+disk.
 
 ---
 
@@ -280,9 +396,14 @@ control below is a fence. It is not a wall. Hermes says the same about itself.
    reads the true arguments. You set the time limit.
 5. **Memory is data.** Aleph puts facts in a block that says they are facts. They
    are never instructions. `aleph memory` lists each one.
-6. **Adoption looks only at the repositories in `config.toml`.** The daemon must
-   not read transcripts that you did not give it.
-7. **Aleph removes secrets** before it writes to `events.jsonl` or to memory.
+6. **The mirror looks only at the repositories in `config.toml`.** The daemon
+   must not read a transcript that you did not give it.
+7. **The mirror sends data all day.** Before the mirror, only the work that you
+   dispatched went to Telegram. Now the names of your repositories and branches,
+   and your activity, go there each time a session parks. Decide this on
+   purpose. `config.toml` can exclude a repository, and an excluded repository
+   gets no topic.
+8. **Aleph removes secrets** before it writes to `events.jsonl` or to memory.
 
 ---
 
@@ -293,11 +414,15 @@ control below is a fence. It is not a wall. Hermes says the same about itself.
 | **M0** | the loop, `aleph chat`, memory, the skill index, events | it remembers between restarts, and you can teach it a procedure | one long conversation, a restart, then a correct recall |
 | **M1** | the Telegram group, topics, pairing | you use it from your telephone for one week | a refused chat, and one week of true use |
 | **M2** | jobs, `aleph jobs / attach / diff / land / drop`, the memory bridge | it corrects a true defect in this repository | workflows 2.3 and 2.6, done and not described |
-| **M3** | the permission gate, permissions in Telegram, secret removal | you can leave it without supervision | a refused push, and a permission that expires |
-| **M4** | adoption, cron, `schedule` | work moves in both directions | workflow 2.5, and one week of morning reports |
+| **M3** | the mirror: the watcher, the park rule, the summary, `attach` from a message | work moves in both directions with no command | workflow 2.5, done from a train |
+| **M4** | the permission gate, permissions in Telegram, secret removal | you can leave it without supervision | a refused push, and a permission that expires |
+| **M5** | cron, `schedule` | Aleph speaks first | one week of morning reports |
 
-M2 is safe before M3 because the job design contains it: a worktree, no
+M2 is safe before the gate because the job design contains it: a worktree, no
 credentials, and no way to merge.
+
+The mirror moved from last to M3. Workflow 2.5 is one of the two workflows that
+justify this design, thus it must not be the last thing that Aleph learns.
 
 ---
 
@@ -324,10 +449,14 @@ tests/unit/joblog.test.ts
 
 1. Which model does a conversation turn use? Start with the low-cost model.
    Decide after M1, with true cost data.
-2. Can herdr open a pane from a command? Its site says that the CLI and the
-   socket are one surface for agents. `aleph attach` is better if the answer is
-   yes. Test this at M2.
+2. Can herdr open a pane in a chosen space or tab? Its site says that the CLI and
+   the socket are one surface for agents. If it cannot, each pane that Aleph
+   makes lands in one place and you move it. Test this at M2.
 3. What quantity of the stream of a job goes to its topic? Each tool call, or
    only file changes and test results?
-4. Does adoption need a WIP commit each time, or only when the worktree is
-   dirty?
+4. How long must a session be idle before it parks? Too short makes noise. Too
+   long makes you wait. Start at 10 minutes and measure.
+5. Does the CLI hold the transcript file open? If it does, `/proc/<pid>/fd` is a
+   better liveness check than the two signals in §3.1. Test this at M2.
+6. Does a park need a WIP commit each time, or only when the worktree holds files
+   that are not committed?
