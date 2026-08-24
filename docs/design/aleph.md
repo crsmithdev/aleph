@@ -185,9 +185,13 @@ The topic list is the state of your machine. It holds the jobs that the daemon
 drives **and** the local sessions that parked. Thus the work that you started at
 your desk is on your telephone before you look for it.
 
+Your desk is herdr, with one Claude Code session in each pane. The design
+assumes that and nothing else. Aleph does not replace it, does not wrap it, and
+does not need you to change it.
+
 | Surface | You use it to | Notes |
 |---|---|---|
-| A herdr pane | write code at your desk | Aleph does not control the pane |
+| A herdr pane | write code at your desk | a normal Claude Code session. Aleph does not control the pane |
 | The Telegram group | speak to Aleph, and drive each job | one topic for each job |
 | `aleph` (CLI) | list, attach, merge, remove | thin; it speaks to the daemon |
 | Cron | let Aleph speak first | see §10, M5 |
@@ -330,6 +334,19 @@ claude -p --session-id <uuid> --permission-mode acceptEdits \
 | A limit of 30 minutes | Then SIGTERM, and the state becomes `timed_out` |
 | The log has a maximum size, and rotates at 20 MB | A log that has no limit filled the memory once |
 
+### 6.1 Why the split pays
+
+A job runs the `claude` binary, and that binary authenticates itself. Thus your
+subscription pays for the coding turn, and the daemon is not in that path.
+
+**The subscription travels with the CLI, not with the model.** A program that
+calls the model API is a client, and it bills you as a client. This is why the
+daemon calls the API only for a conversation turn, which is small, and never for
+a coding turn, which is large.
+
+Keep this rule when you choose any tool. It decides the cost more than the
+feature list of that tool does.
+
 Each job has an origin:
 
 | Origin | Aleph made the worktree | Aleph can remove it |
@@ -431,78 +448,7 @@ justify this design, thus it must not be the last thing that Aleph learns.
 
 ---
 
-## 11. Hosts you can use instead
-
-Many tools now run several coding agents at the same time. Each one gives you
-the worker role and keeps the manager role — except where it publishes an MCP
-server, which is what hands the manager role to an agent of your choice.
-
-### 11.1 The rule that decides more than the feature lists
-
-**The subscription travels with the CLI, not with the model.**
-
-| Where you type | Who calls the API | Who pays |
-|---|---|---|
-| a terminal tab — Warp, herdr, a bare shell | `claude`, the CLI itself | **your Max subscription** |
-| a host with its own agent — Warp Agent Mode, Antigravity | the host is the client | an API key, per token, or the host's credits |
-| `aleph chat` | the daemon is the client | an API key, per token. Small |
-
-Warp says it in its own words: it "does not proxy or modify Claude Code's
-network calls". A host that calls the API is a client, and it bills you as one.
-
-Adopt any host for the first row. If coding moves to the second row, the split
-that justifies this design is gone.
-
-### 11.2 Who can be your manager
-
-| Host | It runs your agent | Can an agent of yours be the manager? |
-|---|---|---|
-| **Superset** | 15+ CLI agents | **Yes.** 27+ MCP tools: tasks, workspaces, agents launch, terminals send input, automations, hosts |
-| **Vibe Kanban** | one executor for each agent | **In part.** MCP starts a workspace, queues a prompt, reads status. No stop, steer, diff or merge |
-| **Claude Code** | itself | **Yes, and free.** `claude --bg`, `claude agents --json`, `attach`, `logs`, `stop`, `respawn` |
-| **Warp** | 14+ agents, with the full toolbelt | No. Agent Mode is its own |
-| **Zed, JetBrains, Neovim** | any ACP agent | No manager role exists to give away |
-| **Nimbalyst** | Claude Code, Codex, opencode, Copilot | No. The board is the manager |
-| **Antigravity** | nothing foreign | No. Claude there needs your API key |
-
-### 11.3 What Aleph plus Superset looks like
-
-Superset owns tasks, workspaces (git worktrees), agent launch, terminal input,
-automations and other hosts. Aleph keeps Telegram, memory, skills, the mirror
-and the conversation. MCP joins them, and Superset starts `claude -p`, which
-bills to your subscription.
-
-Aleph then stops building six things: worktree management, the job states,
-`aleph watch`, diff review, merge, and cron.
-
-**The cost is the gate.** Superset starts the process, thus Aleph is not in the
-path and cannot read the true arguments. You fall back to the `PreToolUse` hook,
-with its 60-second default and its prefix patterns. That was one of the two
-reasons to choose this shape.
-
-A smaller cost: `terminals: send input` types characters into a terminal.
-Nothing tells you that the agent read them.
-
-### 11.4 The gap that no host closes
-
-Warp sees its tabs. Superset sees its workspaces. Nimbalyst sees its board.
-
-A session that cron started, or that you started in a bare shell, is in none of
-them. That is the mirror (§4), and it is the reason Aleph is still worth
-building.
-
-### 11.5 What to test first
-
-The Superset desktop build is macOS first, with an experimental Linux AppImage
-and no Windows build. The CLI is one standalone binary.
-
-Run `superset --help` inside WSL. If the CLI works, the MCP surface is available
-and the desktop application is optional. If it does not, this section is a
-comparison and nothing more.
-
----
-
-## 12. What to take from the Phase 1 tree
+## 11. What to take from the Phase 1 tree
 
 This repository holds no code. An earlier implementation is in the history at
 `dca908d`, and you read it with `git show dca908d:<path>`.
@@ -521,7 +467,7 @@ it is a file that you must understand twice.
 
 ---
 
-## 13. Open questions
+## 12. Open questions
 
 1. Which model does a conversation turn use? Start with the low-cost model.
    Decide after M1, with true cost data.

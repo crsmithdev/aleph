@@ -750,6 +750,70 @@ a0d7  runs      4m    dotfiles     fish-migration  <span class="dim">dispatched<
       </svg>
       <figcaption>The daemon owns the conversation. The CLI is a process with one task, one worktree, and no way to publish what it wrote.</figcaption>
     </figure>
+
+    <figure>
+      <svg viewBox="0 0 960 402" role="img" aria-label="Three paths to Anthropic. A terminal tab runs the claude CLI, which authenticates itself, so the Max subscription pays. A host such as Warp Agent Mode or Antigravity is itself the client, so an API key or host credits pay per token. The Aleph daemon is also a client, but its conversation turns are small.">
+        <defs>
+          <marker id="b1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+          </marker>
+          <marker id="b1-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>
+          </marker>
+          <marker id="b1-clay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--clay)"></path>
+          </marker>
+        </defs>
+        <g font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">
+
+          <text x="24" y="26" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">WHERE YOU TYPE</text>
+          <text x="332" y="26" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">WHO CALLS THE API</text>
+          <text x="700" y="26" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">WHO PAYS</text>
+
+          <rect x="24" y="44" width="272" height="60" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.5"></rect>
+          <text x="40" y="70" fill="var(--teal)">a terminal tab</text>
+          <text x="40" y="90" font-size="11" fill="var(--ink-soft)">herdr · a bare shell</text>
+          <line x1="296" y1="74" x2="328" y2="74" stroke="var(--teal)" stroke-width="1.4" marker-end="url(#b1-teal)"></line>
+          <rect x="332" y="44" width="320" height="60" rx="3" fill="var(--panel-2)" stroke="var(--teal)" stroke-width="1.5"></rect>
+          <text x="348" y="70" fill="var(--teal)">claude — the CLI itself</text>
+          <text x="348" y="90" font-size="11" fill="var(--ink-soft)">the terminal is not in the path</text>
+          <line x1="652" y1="74" x2="692" y2="74" stroke="var(--teal)" stroke-width="1.4" marker-end="url(#b1-teal)"></line>
+          <rect x="696" y="44" width="240" height="60" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.8"></rect>
+          <text x="712" y="70" fill="var(--teal)" font-weight="500">your Max subscription</text>
+          <text x="712" y="90" font-size="11" fill="var(--ink-soft)">no extra cost</text>
+
+          <rect x="24" y="128" width="272" height="60" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.4"></rect>
+          <text x="40" y="154" fill="var(--clay)">a program with its own agent</text>
+          <text x="40" y="174" font-size="11" fill="var(--ink-soft)">an editor, an app, a service</text>
+          <line x1="296" y1="158" x2="328" y2="158" stroke="var(--clay)" stroke-width="1.4" marker-end="url(#b1-clay)"></line>
+          <rect x="332" y="128" width="320" height="60" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.4"></rect>
+          <text x="348" y="154" fill="var(--clay)">that program is the client</text>
+          <text x="348" y="174" font-size="11" fill="var(--ink-soft)">it calls the model API with a key</text>
+          <line x1="652" y1="158" x2="692" y2="158" stroke="var(--clay)" stroke-width="1.4" marker-end="url(#b1-clay)"></line>
+          <rect x="696" y="128" width="240" height="60" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.6"></rect>
+          <text x="712" y="154" fill="var(--clay)" font-weight="500">an API key, per token</text>
+          <text x="712" y="174" font-size="11" fill="var(--ink-soft)">or that vendor’s credits</text>
+
+          <rect x="24" y="212" width="272" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="40" y="238">aleph chat</text>
+          <text x="40" y="258" font-size="11" fill="var(--ink-soft)">a topic, or a tab</text>
+          <line x1="296" y1="242" x2="328" y2="242" stroke="currentColor" stroke-width="1.3" marker-end="url(#b1)"></line>
+          <rect x="332" y="212" width="320" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="348" y="238">the daemon is the client</text>
+          <text x="348" y="258" font-size="11" fill="var(--ink-soft)">one conversation turn, on the cheap tier</text>
+          <line x1="652" y1="242" x2="692" y2="242" stroke="currentColor" stroke-width="1.3" marker-end="url(#b1)"></line>
+          <rect x="696" y="212" width="240" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+          <text x="712" y="238">an API key, per token</text>
+          <text x="712" y="258" font-size="11" fill="var(--ink-soft)">small, and it stays small</text>
+
+          <rect x="24" y="304" width="912" height="78" rx="3" fill="var(--panel-2)" stroke="var(--brass)" stroke-width="1.6"></rect>
+          <text x="44" y="330" fill="var(--brass)" font-weight="500" font-size="13">the subscription travels with the CLI, not with the model.</text>
+          <text x="44" y="352" font-size="11.5" fill="var(--ink-soft)">a terminal does not proxy the CLI. it starts it, and the CLI authenticates itself.</text>
+          <text x="44" y="372" font-size="11.5" fill="var(--ink-soft)">a program that calls the model API is a client, and it bills you as one.</text>
+        </g>
+      </svg>
+      <figcaption>Coding stays in the first row. If it ever moves to the second, the split that justifies this design is gone — the large tokens leave your subscription.</figcaption>
+    </figure>
   </section>
 
   <section>
@@ -922,174 +986,6 @@ a0d7  runs      4m    dotfiles     fish-migration  <span class="dim">dispatched<
     </ol>
     <div class="prose">
       <p>M2 is safe before the gate because the job design contains it: a worktree, no credentials, and no way to merge. The mirror moved from last to M3, because workflow 2.5 is one of the two workflows that justify this design — it must not be the last thing that Aleph learns.</p>
-    </div>
-  </section>
-
-  <section>
-    <div class="sec-head">
-      <span class="label">Hosts</span>
-      <h2>What you can adopt instead of building it</h2>
-    </div>
-    <div class="prose">
-      <p>Many tools now run several coding agents in parallel. Each one gives you the worker role and keeps the manager role — except where it publishes an MCP server, which is what hands the manager role to an agent of your choice.</p>
-      <p>Before you compare features, compare who pays. This one rule decides more than the feature lists do.</p>
-    </div>
-
-    <figure>
-      <svg viewBox="0 0 960 402" role="img" aria-label="Three paths to Anthropic. A terminal tab runs the claude CLI, which authenticates itself, so the Max subscription pays. A host such as Warp Agent Mode or Antigravity is itself the client, so an API key or host credits pay per token. The Aleph daemon is also a client, but its conversation turns are small.">
-        <defs>
-          <marker id="b1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-          </marker>
-          <marker id="b1-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>
-          </marker>
-          <marker id="b1-clay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--clay)"></path>
-          </marker>
-        </defs>
-        <g font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">
-
-          <text x="24" y="26" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">WHERE YOU TYPE</text>
-          <text x="332" y="26" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">WHO CALLS THE API</text>
-          <text x="700" y="26" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">WHO PAYS</text>
-
-          <rect x="24" y="44" width="272" height="60" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.5"></rect>
-          <text x="40" y="70" fill="var(--teal)">a terminal tab</text>
-          <text x="40" y="90" font-size="11" fill="var(--ink-soft)">warp · herdr · a bare shell</text>
-          <line x1="296" y1="74" x2="328" y2="74" stroke="var(--teal)" stroke-width="1.4" marker-end="url(#b1-teal)"></line>
-          <rect x="332" y="44" width="320" height="60" rx="3" fill="var(--panel-2)" stroke="var(--teal)" stroke-width="1.5"></rect>
-          <text x="348" y="70" fill="var(--teal)">claude — the CLI itself</text>
-          <text x="348" y="90" font-size="11" fill="var(--ink-soft)">the terminal is not in the path</text>
-          <line x1="652" y1="74" x2="692" y2="74" stroke="var(--teal)" stroke-width="1.4" marker-end="url(#b1-teal)"></line>
-          <rect x="696" y="44" width="240" height="60" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.8"></rect>
-          <text x="712" y="70" fill="var(--teal)" font-weight="500">your Max subscription</text>
-          <text x="712" y="90" font-size="11" fill="var(--ink-soft)">no extra cost</text>
-
-          <rect x="24" y="128" width="272" height="60" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.4"></rect>
-          <text x="40" y="154" fill="var(--clay)">a host with its own agent</text>
-          <text x="40" y="174" font-size="11" fill="var(--ink-soft)">warp agent mode · antigravity</text>
-          <line x1="296" y1="158" x2="328" y2="158" stroke="var(--clay)" stroke-width="1.4" marker-end="url(#b1-clay)"></line>
-          <rect x="332" y="128" width="320" height="60" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.4"></rect>
-          <text x="348" y="154" fill="var(--clay)">the host is the client</text>
-          <text x="348" y="174" font-size="11" fill="var(--ink-soft)">it calls the API with its own key or yours</text>
-          <line x1="652" y1="158" x2="692" y2="158" stroke="var(--clay)" stroke-width="1.4" marker-end="url(#b1-clay)"></line>
-          <rect x="696" y="128" width="240" height="60" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.6"></rect>
-          <text x="712" y="154" fill="var(--clay)" font-weight="500">an API key, per token</text>
-          <text x="712" y="174" font-size="11" fill="var(--ink-soft)">or the host's credits</text>
-
-          <rect x="24" y="212" width="272" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
-          <text x="40" y="238">aleph chat</text>
-          <text x="40" y="258" font-size="11" fill="var(--ink-soft)">a topic, or a tab</text>
-          <line x1="296" y1="242" x2="328" y2="242" stroke="currentColor" stroke-width="1.3" marker-end="url(#b1)"></line>
-          <rect x="332" y="212" width="320" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
-          <text x="348" y="238">the daemon is the client</text>
-          <text x="348" y="258" font-size="11" fill="var(--ink-soft)">one conversation turn, on the cheap tier</text>
-          <line x1="652" y1="242" x2="692" y2="242" stroke="currentColor" stroke-width="1.3" marker-end="url(#b1)"></line>
-          <rect x="696" y="212" width="240" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
-          <text x="712" y="238">an API key, per token</text>
-          <text x="712" y="258" font-size="11" fill="var(--ink-soft)">small, and it stays small</text>
-
-          <rect x="24" y="304" width="912" height="78" rx="3" fill="var(--panel-2)" stroke="var(--brass)" stroke-width="1.6"></rect>
-          <text x="44" y="330" fill="var(--brass)" font-weight="500" font-size="13">the subscription travels with the CLI, not with the model.</text>
-          <text x="44" y="352" font-size="11.5" fill="var(--ink-soft)">warp says it in its own words: it "does not proxy or modify Claude Code's network calls".</text>
-          <text x="44" y="372" font-size="11.5" fill="var(--ink-soft)">a host that calls the API is a client, and it bills you as one.</text>
-        </g>
-      </svg>
-      <figcaption>Adopt any host you like for the first row. The moment coding moves to the second row, the split that justifies this design is gone — the large tokens leave your subscription.</figcaption>
-    </figure>
-
-    <table>
-      <thead>
-        <tr><th style="width:22%">Host</th><th style="width:30%">It runs your agent</th><th>Can an agent of yours be the manager?</th></tr>
-      </thead>
-      <tbody>
-        <tr><td><strong>Superset</strong></td><td>15+ CLI agents. "If it runs in a terminal, it works"</td><td><strong>Yes.</strong> 27+ MCP tools: tasks, workspaces, agents&nbsp;launch, terminals&nbsp;send&nbsp;input, automations, hosts</td></tr>
-        <tr><td><strong>Vibe Kanban</strong></td><td>an executor for each agent</td><td><strong>In part.</strong> MCP can start a workspace, queue a prompt and read status. No stop, steer, diff or merge</td></tr>
-        <tr><td><strong>Warp</strong></td><td>14+ agents, auto-detected, with the full toolbelt</td><td>No. Agent Mode is its own, and it bills separately</td></tr>
-        <tr><td><strong>Claude Code</strong></td><td>itself</td><td><strong>Yes, and free.</strong> <code>claude --bg</code>, <code>claude agents --json</code>, <code>attach</code>, <code>logs</code>, <code>stop</code>, <code>respawn</code></td></tr>
-        <tr><td><strong>Zed, JetBrains, Neovim</strong></td><td>any ACP agent, in a thread</td><td>No manager role exists to give away</td></tr>
-        <tr><td><strong>Nimbalyst</strong></td><td>Claude Code, Codex, opencode, Copilot</td><td>No. The board is the manager</td></tr>
-        <tr><td><strong>Antigravity</strong></td><td>nothing foreign</td><td>No. Claude there needs your API key</td></tr>
-      </tbody>
-    </table>
-
-    <div class="prose">
-      <p>Two rows carry the answer. Claude Code manages its own background sessions with commands you have today, at no cost. Superset publishes the largest MCP surface, thus it is the one host that hands the manager role to Aleph.</p>
-    </div>
-
-    <figure>
-      <svg viewBox="0 0 960 424" role="img" aria-label="Aleph keeps Telegram, memory, skills, the mirror and the conversation. Superset owns tasks, workspaces as git worktrees, agent launch, terminal input, automations and hosts. MCP joins them. Superset starts the Claude Code process, which bills to your subscription. The cost of the split is that Aleph loses its in-process permission gate.">
-        <defs>
-          <marker id="c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-          </marker>
-          <marker id="c1-brass" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--brass)"></path>
-          </marker>
-        </defs>
-        <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="currentColor">
-
-          <text x="24" y="26" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">ALEPH KEEPS</text>
-          <rect x="24" y="42" width="300" height="216" rx="3" fill="var(--panel-2)" stroke="currentColor" stroke-width="1.6"></rect>
-          <text x="42" y="70" font-size="11.5" fill="var(--ink-soft)">telegram, a topic for each task</text>
-          <text x="42" y="98" font-size="11.5" fill="var(--ink-soft)">memory — the facts about you</text>
-          <text x="42" y="126" font-size="11.5" fill="var(--ink-soft)">skills, shared by each surface</text>
-          <text x="42" y="154" font-size="11.5" fill="var(--teal)">the mirror — sessions no host owns</text>
-          <text x="42" y="182" font-size="11.5" fill="var(--ink-soft)">the conversation. the manager</text>
-          <text x="42" y="222" font-size="11" fill="var(--ink-soft)">it stops building: worktrees, the job</text>
-          <text x="42" y="240" font-size="11" fill="var(--ink-soft)">states, watch, diff review, cron</text>
-
-          <path d="M 324 116 L 396 116" fill="none" stroke="var(--brass)" stroke-width="1.6" marker-end="url(#c1-brass)"></path>
-          <path d="M 396 160 L 324 160" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#c1)"></path>
-          <text x="360" y="106" text-anchor="middle" font-size="10.5" fill="var(--brass)">MCP</text>
-          <text x="360" y="182" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">status</text>
-
-          <text x="400" y="26" font-size="11" letter-spacing="1.4" fill="var(--ink-soft)">SUPERSET OWNS</text>
-          <rect x="400" y="42" width="300" height="216" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
-          <text x="418" y="70" font-size="11.5" fill="var(--ink-soft)">tasks · status</text>
-          <text x="418" y="98" font-size="11.5" fill="var(--ink-soft)">workspaces = git worktrees</text>
-          <text x="418" y="126" font-size="11.5" fill="var(--brass)">agents: launch</text>
-          <text x="418" y="154" font-size="11.5" fill="var(--brass)">terminals: send input</text>
-          <text x="418" y="182" font-size="11.5" fill="var(--ink-soft)">automations = cron</text>
-          <text x="418" y="210" font-size="11.5" fill="var(--ink-soft)">hosts = other machines</text>
-          <text x="418" y="240" font-size="11" fill="var(--ink-soft)">a diff viewer, commit, push, open a PR</text>
-
-          <path d="M 700 150 L 756 150" fill="none" stroke="var(--brass)" stroke-width="1.6" marker-end="url(#c1-brass)"></path>
-          <text x="728" y="140" text-anchor="middle" font-size="10.5" fill="var(--brass)">starts</text>
-          <rect x="760" y="100" width="176" height="100" rx="3" fill="none" stroke="var(--teal)" stroke-width="1.8"></rect>
-          <text x="776" y="128" fill="var(--teal)" font-weight="500">claude -p</text>
-          <text x="776" y="152" font-size="11" fill="var(--ink-soft)">in a workspace</text>
-          <text x="776" y="174" font-size="11" fill="var(--teal)">your subscription</text>
-
-          <rect x="24" y="290" width="912" height="76" rx="3" fill="none" stroke="var(--clay)" stroke-width="1.5"></rect>
-          <text x="44" y="316" fill="var(--clay)" font-weight="500">what you give up: the gate.</text>
-          <text x="44" y="338" font-size="11.5" fill="var(--ink-soft)">superset starts the process, thus aleph is not in the path and cannot read the true arguments.</text>
-          <text x="44" y="356" font-size="11.5" fill="var(--ink-soft)">you fall back to the PreToolUse hook — a 60-second default, and prefix patterns that cannot see an argument.</text>
-
-          <text x="24" y="392" font-size="11" letter-spacing="1.2" fill="var(--ink-soft)">ALSO SMALLER:</text>
-          <text x="24" y="412" font-size="11.5" fill="var(--ink-soft)">"send input" types characters into a terminal. nothing tells you that the agent read them.</text>
-        </g>
-      </svg>
-      <figcaption>The trade in one picture. You delete six things you have not built yet, and you lose one thing that was a reason to choose this shape.</figcaption>
-    </figure>
-
-    <div class="grid">
-      <div class="card">
-        <span class="k">first, the CLI</span>
-        <h3>Test it before you plan on it</h3>
-        <p>The Superset desktop build is macOS first, with an experimental Linux AppImage and no Windows build. But the CLI is one standalone binary. If <code>superset --help</code> works in your distribution, the MCP surface is available and the application is optional.</p>
-      </div>
-      <div class="card">
-        <span class="k">the free manager</span>
-        <h3>Claude Code already has a fleet</h3>
-        <p><code>claude --bg</code> starts one, <code>claude agents --json</code> lists them, and <code>attach</code>, <code>logs</code>, <code>stop</code> and <code>respawn</code> drive them. Any agent with a shell manages that fleet today, on your subscription.</p>
-      </div>
-      <div class="card">
-        <span class="k">what never arrives</span>
-        <h3>Every host sees only its own work</h3>
-        <p>Warp sees its tabs. Superset sees its workspaces. Nimbalyst sees its board. A session that cron started, or that you started in a bare shell, is in none of them. That is the mirror, and it is why Aleph exists.</p>
-      </div>
     </div>
   </section>
 
