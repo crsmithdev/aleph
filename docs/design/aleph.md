@@ -191,9 +191,10 @@ does not need you to change it.
 
 | Surface | You use it to | Notes |
 |---|---|---|
-| A herdr pane | write code at your desk | a normal Claude Code session. Aleph does not control the pane |
+| A herdr pane | write code at your desk | a normal Claude Code session. It reaches Aleph's facts through the bridge (§5.2) |
 | The Telegram group | speak to Aleph, and drive each job | one topic for each job |
-| `aleph` (CLI) | list, attach, merge, remove | thin; it speaks to the daemon |
+| Any chat client | speak to Aleph at your desk | `llm` in a pane, or Chatbox in a window. Both use the endpoint (§4.6) |
+| `aleph` (CLI) | list, attach, merge, remove, and `doctor` | thin; it speaks to the daemon |
 | Cron | let Aleph speak first | see §10, M5 |
 
 ### 4.1 Why Aleph writes the context early
@@ -254,6 +255,7 @@ limit of 4096 characters.
 | You hold the pane | The headline says so. A message gets a refusal, not a turn |
 | The work merges, or you drop it | Aleph closes the topic. Telegram keeps the history |
 | The session stops with work not committed | The topic stays open |
+| A topic that Aleph did not make | not its business. It never posts there, never closes it, and never counts it in the job list |
 | Anything | Aleph never deletes a topic. The history is context |
 
 ### 4.4 Three failures
@@ -263,6 +265,77 @@ limit of 4096 characters.
 | The worktree is gone | This work is not available. The directory does not exist. |
 | The branch merged while you were away | This work merged. The topic closes. |
 | The session will not start again | I cannot continue this session. Here is the summary and the branch. |
+
+### 4.5 Pairing, and the preflight
+
+Aleph needs one private supergroup with topics on, and admin rights with
+manage-topics. It cannot make either for you.
+
+`aleph pair` prints a link that carries a one-time token, and arms the daemon
+for five minutes:
+
+```
+https://t.me/<bot>?startgroup=8f3c1a
+```
+
+You open it, pick or make the group, and grant admin when Telegram asks.
+Telegram then delivers `/start 8f3c1a` in that group, the token matches, and
+Aleph binds that chat ID.
+
+Do not depend on the link's `&admin=` parameter. Its behaviour differs between
+clients and Telegram prompts for rights anyway. A second path exists for a group
+that you have already:
+
+```
+aleph pair --code       # add the bot yourself, then send the code in the group
+```
+
+The bind ends with a preflight, because a group you made months ago carries
+state you did not choose today:
+
+```
+paired · "Aleph" · -100…
+  type            supergroup
+  topics          enabled          ← getChat.is_forum
+  manage topics   granted          ← getChatMember.can_manage_topics
+  status          administrator
+ready.
+```
+
+If topics are off or the rights are missing, Aleph pairs anyway and works in one
+thread. It then prints `no topic` on each job message, so the limit stays
+visible instead of becoming normal.
+
+| State | Behaviour |
+|---|---|
+| Unpaired, disarmed | ignores everything |
+| Unpaired, armed | accepts a matching token from any chat. Nothing else |
+| Paired | only the bound chat. **Every other chat is ignored in silence** — a reply tells a stranger that the bot is alive |
+| `aleph pair --reset` | unbinds |
+
+### 4.6 The endpoint, and why there is no `aleph chat`
+
+**Aleph has no chat interface of its own.** It has two protocols instead:
+
+| Protocol | What it gives | Who reasons | Ships at |
+|---|---|---|---|
+| The MCP bridge (§5.2) | Aleph's **facts** to your panes | the pane's model. Your subscription pays | M0 |
+| `/v1/chat/completions` | Aleph's **agent** to any client | Aleph's loop. Metered, and small | M1 |
+
+A client sends the whole message list on each turn, and Aleph owns the history
+(§8). Thus the `model` field carries the conversation instead of a model name —
+`aleph:home` — and the daemon reads only the last user message.
+
+```yaml
+# llm, in extra-openai-models.yaml
+- model_id: aleph
+  model_name: aleph:home
+  api_base: http://127.0.0.1:7717/v1
+```
+
+A REPL written here would compete with `llm` and aichat and lose. For "is the
+loop alive", the answer is `aleph doctor`, which is a health check and not a
+conversation. For a raw turn, the answer is `curl`.
 
 ---
 
@@ -305,6 +378,10 @@ A small MCP server corrects this. It is a client of the daemon. It gives
 The bridge gives read access and write access to facts. It does not start jobs.
 You are already at a keyboard, thus you do not need that.
 
+**This bridge is M0's only surface.** Before the loop exists, every pane you open
+is already an Aleph client — you add the server one time and each session has
+your facts.
+
 ### 5.3 Why the two types are different
 
 Aleph can write a fact without permission. A fact is easy to examine and easy to
@@ -334,7 +411,30 @@ claude -p --session-id <uuid> --permission-mode acceptEdits \
 | A limit of 30 minutes | Then SIGTERM, and the state becomes `timed_out` |
 | The log has a maximum size, and rotates at 20 MB | A log that has no limit filled the memory once |
 
-### 6.1 Why the split pays
+### 6.1 What bounds a job
+
+Jobs and your herdr panes draw on the same subscription. A cap here is not about
+safety. It stops Aleph from starving you out of your own desk at two in the
+afternoon.
+
+| Cap | Default | It prevents |
+|---|---|---|
+| running at one time | 3 | Aleph taking the whole window while you work |
+| per repository | 1 | two jobs racing for `job/<id>` and `.worktrees/` |
+| started in one turn | 1 | one sentence becoming six sessions |
+
+When a cap blocks a job, Aleph refuses and names the cap and what runs. **It does
+not queue.**
+
+**The job record precedes the process.** `start_job` writes
+`jobs/<id>/state.json`, then checks the caps, then spawns. A refused job deletes
+its record.
+
+That ordering costs nothing today and it is what makes a queue cheap later: a
+`queued` state, and a tick that takes the oldest queued job when a slot frees.
+About thirty lines. Add it when refusing annoys you, and not before.
+
+### 6.2 Why the split pays
 
 A job runs the `claude` binary, and that binary authenticates itself. Thus your
 subscription pays for the coding turn, and the daemon is not in that path.
@@ -413,6 +513,9 @@ control below is a fence. It is not a wall. Hermes says the same about itself.
    ignores each other chat and each direct message.
 2. **Membership of that group is the credential.** To add a person to the group
    is to give that person your machine. Keep the group private.
+   Telegram reports `has_visible_history: true`, thus a person you add later
+   reads everything Aleph has ever written there, not only what comes after
+   them.
 3. **Jobs cannot publish and cannot merge.**
 4. **The permission gate refuses by default.** It runs in the daemon, thus it
    reads the true arguments. You set the time limit.
@@ -433,15 +536,20 @@ control below is a fence. It is not a wall. Hermes says the same about itself.
 
 | M | What it adds | It is useful when | The test |
 |---|---|---|---|
-| **M0** | the loop, `aleph chat`, memory, the skill index, events | it remembers between restarts, and you can teach it a procedure | one long conversation, a restart, then a correct recall |
-| **M1** | the Telegram group, topics, pairing | you use it from your telephone for one week | a refused chat, and one week of true use |
-| **M2** | jobs, `aleph jobs / attach / diff / land / drop`, the memory bridge | it corrects a true defect in this repository | workflows 2.3 and 2.6, done and not described |
+| **M0** | the store, memory, skills, **the MCP bridge**, events, `aleph doctor` | every pane you open already knows your facts | teach a fact in one pane, restart, recall it in another |
+| **M1** | **the loop**, Telegram, topics, pairing, **the endpoint** | you use it from your telephone for one week | a refused chat, and one week of true use |
+| **M2** | jobs, **the caps**, `aleph jobs / attach / diff / land / drop` | it corrects a true defect in this repository | workflows 2.3 and 2.6, done and not described |
 | **M3** | the mirror: the watcher, the park rule, the summary, `attach` from a message | work moves in both directions with no command | workflow 2.5, done from a train |
 | **M4** | the permission gate, permissions in Telegram, secret removal | you can leave it without supervision | a refused push, and a permission that expires |
 | **M5** | cron, `schedule` | Aleph speaks first | one week of morning reports |
 
+**M0 has no loop.** The bridge needs none: a pane brings its own model, and it
+reaches Aleph only for facts. The loop arrives at M1, because Telegram is the
+first surface with no Claude Code on the other end — and the endpoint rides
+along with it, since it is one more transport over the same loop.
+
 M2 is safe before the gate because the job design contains it: a worktree, no
-credentials, and no way to merge.
+credentials, no way to merge, and the caps in §6.1.
 
 The mirror moved from last to M3. Workflow 2.5 is one of the two workflows that
 justify this design, thus it must not be the last thing that Aleph learns.
@@ -469,16 +577,49 @@ it is a file that you must understand twice.
 
 ## 12. Open questions
 
-1. Which model does a conversation turn use? Start with the low-cost model.
-   Decide after M1, with true cost data.
-2. Can herdr open a pane in a chosen space or tab? Its site says that the CLI and
-   the socket are one surface for agents. If it cannot, each pane that Aleph
-   makes lands in one place and you move it. Test this at M2.
-3. What quantity of the stream of a job goes to its topic? Each tool call, or
-   only file changes and test results?
-4. How long must a session be idle before it parks? Too short makes noise. Too
-   long makes you wait. Start at 10 minutes and measure.
-5. Does the CLI hold the transcript file open? If it does, `/proc/<pid>/fd` is a
-   better liveness check than the two signals in §3.1. Test this at M2.
-6. Does a park need a WIP commit each time, or only when the worktree holds files
-   that are not committed?
+Grouped by the milestone each one blocks. Three questions closed in the last
+pass: the chat surface (§4.6), the job caps (§6.1), and pairing (§4.5).
+
+### Before M1
+
+1. **Is a conversation the same kind of thing as a job?** A job is a session with
+   a worktree and an ID. The General topic is a conversation with neither. Does
+   it get a row in `conversations/*.jsonl`? Does the 12-turn cap apply? Does
+   compaction? The document uses both words for one thing in places, and they are
+   not one thing.
+2. **Which model does a conversation turn use?** Start with the low-cost model.
+   Decide with true cost data.
+
+### Before M2
+
+3. **What is the landing policy file?** §7 says the repository holds it. No
+   format is named, and this repository holds no code and no such file.
+4. **What claims a branch name?** §2.2 says branch names and worktree paths are a
+   shared resource. It names no mechanism. The per-repository cap in §6.1 hides
+   this, and does not solve it.
+5. **Can herdr open a pane in a chosen space or tab?** Its site says the CLI and
+   the socket are one surface for agents. If it cannot, each pane lands in one
+   place and you move it.
+6. **Does the CLI hold the transcript file open?** If it does, `/proc/<pid>/fd`
+   beats both signals in §3.1.
+7. **How much of a job's stream goes to its topic?** Each tool call, or only file
+   changes and test results?
+
+### Before M3
+
+8. **Who maintains the repository allowlist?** §9 says the mirror reads only the
+   repositories in `config.toml`. One you forget gets no topic, and it fails in
+   silence. Warning, prompt, or nothing?
+9. **How long must a session be idle before it parks?** Too short makes noise.
+   Too long makes you wait. Start at 10 minutes and measure.
+10. **Does a park always need a WIP commit,** or only when the worktree holds
+    files that are not committed?
+11. **The cost of the summary at each park is arithmetic, not a measurement.**
+
+### Not blocking anything yet
+
+12. **What does a torn turn leave behind?** The daemon dies mid-turn. §8 says the
+    files are the truth. It does not say what a half-written turn leaves, or how
+    the next start cleans it.
+13. **`notify()` has no rate bound.** It is the one tool that reaches you without
+    you asking.

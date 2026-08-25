@@ -888,6 +888,11 @@ a0d7  runs      4m    dotfiles     fish-migration  <span class="dim">dispatched<
 
     <div class="grid">
       <div class="card">
+        <span class="k">no chat interface</span>
+        <h3>Two protocols instead</h3>
+        <p>The bridge gives your panes Aleph's <em>facts</em>, on your subscription, from M0. The endpoint gives any client Aleph's <em>agent</em>, from M1. A REPL written here would compete with <code>llm</code> and aichat and lose. For “is the loop alive”, the answer is <code>aleph doctor</code>.</p>
+      </div>
+      <div class="card">
         <span class="k">the memory bridge</span>
         <h3>Your panes read the same facts</h3>
         <p>A herdr pane is a usual Claude Code session, thus it cannot reach the daemon. A small MCP server corrects this. It gives <code>recall</code>, <code>remember</code> and <code>job_status</code> to each pane. It does not start jobs — you are at a keyboard already.</p>
@@ -960,12 +965,12 @@ a0d7  runs      4m    dotfiles     fish-migration  <span class="dim">dispatched<
       </li>
       <li>
         <span class="m">M1</span>
-        <span class="ships">The Telegram group, topics, pairing</span>
+        <span class="ships"><b>The loop</b>, Telegram, topics, pairing, <b>the OpenAI-compatible endpoint</b></span>
         <span class="done">You use it from your telephone for one week</span>
       </li>
       <li>
         <span class="m">M2</span>
-        <span class="ships">Jobs, <code>attach</code> / <code>diff</code> / <code>land</code> / <code>drop</code>, the memory bridge</span>
+        <span class="ships">Jobs, <b>the caps</b>, <code>attach</code> / <code>diff</code> / <code>land</code> / <code>drop</code></span>
         <span class="done">It corrects a true defect in this repository — workflows 2.3 and 2.6</span>
       </li>
       <li class="now">
@@ -985,7 +990,8 @@ a0d7  runs      4m    dotfiles     fish-migration  <span class="dim">dispatched<
       </li>
     </ol>
     <div class="prose">
-      <p>M2 is safe before the gate because the job design contains it: a worktree, no credentials, and no way to merge. The mirror moved from last to M3, because workflow 2.5 is one of the two workflows that justify this design — it must not be the last thing that Aleph learns.</p>
+      <p><b>M0 has no loop.</b> The bridge needs none — a pane brings its own model and reaches Aleph only for facts. The loop arrives at M1, because Telegram is the first surface with no Claude Code on the other end, and the endpoint rides along with it as one more transport over the same loop.</p>
+      <p>M2 is safe before the gate because the job design contains it: a worktree, no credentials, no way to merge, and three caps — three jobs at one time, one per repository, one started in a turn. When a cap blocks a job, Aleph refuses and names it. It does not queue.</p>
     </div>
   </section>
 
