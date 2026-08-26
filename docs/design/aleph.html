@@ -374,7 +374,7 @@
             <div class="topic"><span class="dot idle"></span><span class="nm">comfy<span class="sub"> · pane 4 · lora index</span></span><span class="age">idle</span></div>
           </div>
         </div>
-        <div class="rule-out"><b>The rule this makes.</b> Your panes and the daemon use the same repositories, thus branch names and worktree paths are a shared resource. The daemon holds <code>job/&lt;id&gt;</code> and <code>.worktrees/job-&lt;id&gt;</code>, and it must not take a name that your pane holds.</div>
+        <div class="rule-out"><b>The rule this makes.</b> Your panes and the daemon use the same repositories, thus branch names and worktree paths are a shared resource. The daemon holds <code>job/&lt;id&gt;</code> and <code>.worktrees/job-&lt;id&gt;</code>, and it must not take a name that your pane holds. <b>Git makes that claim, and Aleph never asks first:</b> <code>worktree add -b</code> is the lock — eight of them at one time on one name gave one success and seven failures. A failure refuses the job and names the holder.</div>
       </div>
 
       <div class="scene">
@@ -795,8 +795,8 @@ a0d7  runs      4m    dotfiles     fish-migration  <span class="dim">dispatched<
           <text x="712" y="174" font-size="11" fill="var(--ink-soft)">or that vendor’s credits</text>
 
           <rect x="24" y="212" width="272" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
-          <text x="40" y="238">aleph chat</text>
-          <text x="40" y="258" font-size="11" fill="var(--ink-soft)">a topic, or a tab</text>
+          <text x="40" y="238">a conversation turn</text>
+          <text x="40" y="258" font-size="11" fill="var(--ink-soft)">a topic, or the endpoint</text>
           <line x1="296" y1="242" x2="328" y2="242" stroke="currentColor" stroke-width="1.3" marker-end="url(#b1)"></line>
           <rect x="332" y="212" width="320" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
           <text x="348" y="238">the daemon is the client</text>
@@ -962,6 +962,11 @@ a0d7  runs      4m    dotfiles     fish-migration  <span class="dim">dispatched<
         <p>The daemon sets <code>TRACEPARENT</code> when it spawns a job, and <code>claude_code.interaction</code> lands as a child of the daemon's span, in the daemon's trace. Tested, not assumed. Traces on, logs off — one two-word turn emitted 58 KB of logs against 4 KB of traces.</p>
       </div>
       <div class="card">
+        <span class="k">the claim</span>
+        <h3>Git holds the names, not Aleph</h3>
+        <p>The claim is <code>git worktree add -b job/&lt;id&gt;</code> itself, after a <code>prune</code>. Eight at one time on one name gave exactly one success. Measured, not assumed. Aleph keeps no list, and a failure refuses the job and names the holder — it does not make a second ID.</p>
+      </div>
+      <div class="card">
         <span class="k">threads</span>
         <h3>One type, two kinds</h3>
         <p>A job is a thread of kind <code>code</code> — a worktree, a branch, a CLI session, and the driver rule. The General topic is a thread of kind <code>chat</code>, which has none of those and needs no driver rule. One store, one ID space.</p>
@@ -977,8 +982,8 @@ a0d7  runs      4m    dotfiles     fish-migration  <span class="dim">dispatched<
     <ol class="miles">
       <li>
         <span class="m">M0</span>
-        <span class="ships">The loop, <code>aleph chat</code>, memory, the skill index, events</span>
-        <span class="done">It remembers between restarts, and you can teach it a procedure</span>
+        <span class="ships">The store, memory, skills, <b>the MCP bridge</b>, events, <code>aleph doctor</code></span>
+        <span class="done">Every pane you open already knows your facts. There is no loop yet</span>
       </li>
       <li>
         <span class="m">M1</span>

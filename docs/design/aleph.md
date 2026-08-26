@@ -435,7 +435,36 @@ claude -p --session-id <uuid> --permission-mode acceptEdits \
 | A limit of 30 minutes | Then SIGTERM, and the state becomes `timed_out` |
 | The log has a maximum size, and rotates at 20 MB | A log that has no limit filled the memory once |
 
-### 6.1 What bounds a job
+### 6.1 What claims the name
+
+Branch names and worktree paths are shared with your panes (§2.2). **Git makes
+the claim, and Aleph never asks first.** The claim is the command itself:
+
+```
+git -C <repo> worktree prune
+git -C <repo> worktree add .worktrees/job-<id> -b job/<id> <base>
+```
+
+Measured: eight of these commands, at the same time and with one branch name,
+gave one success and seven failures. Eight commands with different names all
+succeeded. Thus the command is the lock. A test before the command is not
+sufficient, because the state can change between the test and the command.
+
+| Rule | Reason |
+|---|---|
+| Aleph keeps no list of the names it holds | Git holds the truth. A second list moves away from it. |
+| A failure refuses the job | Aleph names the holder from `git worktree list --porcelain`, then stops. It does not make a new ID and try again. |
+| `worktree prune` runs before each claim | A directory that a person removed keeps its branch. Prune releases it. Measured. |
+| A mirrored job claims nothing | The branch and the worktree are yours, and they exist. Aleph records them. It refuses to mirror a worktree that another job ID holds. |
+
+An ID is new, thus a failure is not chance. It tells you that the state is old,
+or that the name is one you hold. Both need your eyes, and a second ID hides
+both.
+
+This makes the per-repository cap in §6.2 a rule about your desk only. It is no
+longer necessary for correctness.
+
+### 6.2 What bounds a job
 
 Jobs and your herdr panes draw on the same subscription. A cap here is not about
 safety. It stops Aleph from starving you out of your own desk at two in the
@@ -458,7 +487,7 @@ That ordering costs nothing today and it is what makes a queue cheap later: a
 `queued` state, and a tick that takes the oldest queued job when a slot frees.
 About thirty lines. Add it when refusing annoys you, and not before.
 
-### 6.2 Why the split pays
+### 6.3 Why the split pays
 
 A job runs the `claude` binary, and that binary authenticates itself. Thus your
 subscription pays for the coding turn, and the daemon is not in that path.
@@ -645,7 +674,7 @@ first surface with no Claude Code on the other end — and the endpoint rides
 along with it, since it is one more transport over the same loop.
 
 M2 is safe before the gate because the job design contains it: a worktree, no
-credentials, no way to merge, and the caps in §6.1.
+credentials, no way to merge, and the caps in §6.2.
 
 The mirror moved from last to M3. Workflow 2.5 is one of the two workflows that
 justify this design, thus it must not be the last thing that Aleph learns.
@@ -673,46 +702,42 @@ it is a file that you must understand twice.
 
 ## 12. Open questions
 
-Grouped by the milestone each one blocks. Seven have closed: the chat surface
-(§4.6), the job caps (§6.1), pairing (§4.5), threads and jobs being one type
-(§3), the landing policy file (§7.1), one trace (§8.2), and the liveness signal
-(§3.1).
+Grouped by the milestone each one blocks. Eight have closed: the chat surface
+(§4.6), the job caps (§6.2), pairing (§4.5), threads and jobs being one type
+(§3), the landing policy file (§7.1), one trace (§8.2), the liveness signal
+(§3.1), and what claims a branch name (§6.1).
 
 ### Before M2
 
-1. **What claims a branch name?** §2.2 says branch names and worktree paths are a
-   shared resource. It names no mechanism. The per-repository cap in §6.1 hides
-   this and does not solve it — a mirrored job carries a branch name you chose,
-   and nothing stops a dispatched job from wanting it.
-2. **Can herdr open a pane in a chosen space or tab?** Its site says the CLI and
+1. **Can herdr open a pane in a chosen space or tab?** Its site says the CLI and
    the socket are one surface for agents. If it cannot, each pane Aleph makes
    lands in one place and you move it.
-3. **How much of a job's stream goes to its topic?** Each tool call, or only file
+2. **How much of a job's stream goes to its topic?** Each tool call, or only file
    changes and test results?
-4. **Is a 30-minute wall clock the right cap for a job?** Nothing asked for that
+3. **Is a 30-minute wall clock the right cap for a job?** Nothing asked for that
    number. It is the last rule in this document that no workflow and no decision
    produced.
 
 ### Before M3
 
-5. **Who maintains the repository allowlist?** §9 says the mirror reads only the
+4. **Who maintains the repository allowlist?** §9 says the mirror reads only the
    repositories in `config.toml`. One you forget gets no topic, and it fails in
    silence. Warning, prompt, or nothing?
-6. **How long must a session be idle before it parks?** Start at 10 minutes and
+5. **How long must a session be idle before it parks?** Start at 10 minutes and
    measure. §4.1 says how idle is measured; it does not say how much is enough.
-7. **Does a park always need a WIP commit,** or only when the worktree holds
+6. **Does a park always need a WIP commit,** or only when the worktree holds
    files that are not committed?
-8. **The cost of the summary at each park is arithmetic, not a measurement.**
+7. **The cost of the summary at each park is arithmetic, not a measurement.**
 
 ### Before M1, and cheap to defer
 
-9. **Which model does a conversation turn use?** Start with the low-cost model
+8. **Which model does a conversation turn use?** Start with the low-cost model
    and decide with true cost data.
 
 ### Not blocking anything yet
 
-10. **What does a torn turn leave behind?** The daemon dies mid-turn. §8 says the
-    files are the truth. It does not say what a half-written turn leaves, or how
-    the next start cleans it.
-11. **`notify()` has no rate bound.** It is the one tool that reaches you without
+9. **What does a torn turn leave behind?** The daemon dies mid-turn. §8 says the
+   files are the truth. It does not say what a half-written turn leaves, or how
+   the next start cleans it.
+10. **`notify()` has no rate bound.** It is the one tool that reaches you without
     you asking.
