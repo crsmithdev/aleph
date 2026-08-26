@@ -111,10 +111,28 @@ side has already.
 
 ---
 
-## 3. The driver rule
+## 3. Threads, and the driver rule
 
-A job is one Claude Code session. Each job has a worktree, a branch and a
-session ID.
+A **thread** is the unit. It has an ID, a Telegram topic, a transcript and a
+driver. One store, one state machine, one ID space. Its `kind` decides which
+rules apply to it:
+
+| | `kind: code` — a **job** | `kind: chat` |
+|---|---|---|
+| Worktree and branch | yes | no |
+| A Claude Code session ID | yes | no |
+| Whose transcript | the CLI's, under `~/.claude/projects/` | the daemon's, `conversations/<id>.jsonl` |
+| The driver rule below | **applies** | **does not.** The daemon is always the driver |
+| Attachable | yes — a pane in the worktree | no. There is no CLI session to resume |
+| Compaction | the CLI's own | the daemon's, and the 12-turn cap |
+| `origin` | `dispatched` or `mirrored` | not used |
+
+The rest of this document says "job", and a job is a thread of kind `code`. The
+General topic is a chat thread. Nothing forbids a second chat thread, thus you
+can keep one for a subject that is not code and it costs no new machinery.
+
+The driver rule that follows is about **jobs**. A chat thread has no second
+process to conflict with.
 
 Each job has one driver. The driver is the process that sends turns to the
 session.
@@ -144,18 +162,20 @@ jobs` lists the work.
 ### 3.1 The check before each handover
 
 Before Aleph completes a handover, it must prove that the other driver stopped.
-It uses two signals together:
 
-- **The working directory.** Aleph reads `/proc/<pid>/cwd` for each `claude`
-  process and compares it to the worktree.
-- **The transcript.** A recent change time on
-  `~/.claude/projects/<slug>/<uuid>.jsonl` shows that a session is alive.
+**Liveness is one signal: a `claude` process whose `/proc/<pid>/cwd` is that
+worktree.** That is the whole check. If such a process exists, Aleph refuses and
+tells you where it is. It does not use your word for this.
 
-Aleph does not use your word for this. If a process holds the worktree, Aleph
-refuses and tells you where that process is.
+The transcript's change time is **not** a liveness signal, and an earlier draft
+of this document wrongly paired the two. A pane you left open two hours ago is
+alive with a two-hour-old transcript. Reading mtime as liveness would call it
+dead and take the session — the exact failure this rule exists to prevent. The
+mtime measures *activity*, and it belongs to the park rule in §4.1.
 
-I do not know if the CLI holds the transcript file open. If it does, then
-`/proc/<pid>/fd` gives a better answer than both signals. This is a test for M2.
+Measured, not assumed: a live interactive session holds **no** file descriptor
+on its transcript. The CLI opens the file, appends, and closes it. Thus
+`/proc/<pid>/fd` is not an option, and the cwd link is what there is.
 
 ### 3.2 What `aleph attach` does when a pane is open
 
@@ -211,6 +231,10 @@ that stopped.
 
 A session parks when its process stops, or when it is idle and holds files that
 are not committed. A session that you type in does not need a topic.
+
+**Idle is measured by the transcript's change time** —
+`~/.claude/projects/<slug>/<uuid>.jsonl`. That is what the mtime is for. It says
+nothing about liveness (§3.1); it says how long since the session did anything.
 
 ### 4.2 What a topic holds
 
@@ -474,14 +498,42 @@ the policy is a property of the repository, not of Aleph.
 | logic | the verification gate of the repository is green, and you read the difference |
 | migration, or a change to the release process | no. Keep it for the desk |
 
-Each repository holds its own policy, in the file that says how to verify a
-change there. Aleph reads that file. It does not make a second rule.
+### 7.1 The file
 
-This repository holds no code today, thus it holds no such file. It gets one
-again when it gets code.
+Each repository declares its own policy in `.aleph.toml` at its root. A
+repository with no such file, or a change that matches no class, is **desk
+only**.
+
+```toml
+[land]
+default = "desk"
+
+[land.class.docs]
+match = ["docs/**", "*.md"]
+from_phone = "diffstat"
+
+[land.class.logic]
+from_phone = "gate+diff"
+gate = "bun test && bun run typecheck"
+
+[land.class.migration]
+from_phone = "never"
+```
 
 A job proposes its class and shows the evidence. You can always move a job down
 to "keep it for the desk". You cannot move it up.
+
+### 7.2 Run the gate, never interpret it
+
+The `gate` key is a **command**. Aleph runs it and reads the exit code.
+
+That is how a repository which already has a verification story plugs in: you
+point at the command it already uses, in one line, instead of restating the
+policy. Aleph may later offer to fill that line in from what CI runs — but it
+offers and you accept. It never reads prose, or a workflow file, and guesses.
+
+The difference matters because a wrong guess here lets something land from a
+train that should not have.
 
 ---
 
@@ -501,6 +553,50 @@ to "keep it for the desk". You cannot move it up.
 
 The files are the truth. `index.db` is an index. When Aleph builds the index
 again, it ignores a bad last line and gives a warning. It does not stop.
+
+### 8.1 What makes the event log good
+
+Five rules. They come from the Phase 1 tree, and they are kept on purpose rather
+than inherited.
+
+| Rule | Why it earns its place |
+|---|---|
+| **One emit path** | Every event goes through one function that writes the line, updates the index and opens the span. Two paths means the three drift |
+| **Every event names its cause** | `caused_by`, plus a `cause` kind. That turns the log from a list into a graph, and it is the difference between "what happened" and "why" |
+| **The JSONL is truth, the index is derived** | You must be able to delete `index.db` and rebuild it. Anything in the index that is not in a line is a defect |
+| **Redaction before the write** | A secret that reaches the file has leaked already |
+| **The event carries the trace ID** | An event links to its trace and the trace links back. §8.2 is what gives this rule teeth |
+
+The kinds this shape needs, which Phase 1 did not have: **park and mirror
+events, topic lifecycle, gate decisions, and each job transition with the driver
+that held it.** Without that last one, §3 cannot be audited after the fact.
+
+### 8.2 One trace, not two
+
+The daemon opens a span for the turn. When it spawns a job it sets `TRACEPARENT`
+from that span, and the job's spans nest inside the same trace. One trace then
+covers "you asked in a topic on a train" through "the job edited three files".
+
+**Measured, not assumed.** With `CLAUDE_CODE_ENABLE_TELEMETRY=1`,
+`CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1` and a `TRACEPARENT` in the environment, a
+`claude -p` child produced:
+
+```
+00f067aa0ba902b7                       ← the span the parent set
+└── claude_code.interaction            parent=00f067aa0ba902b7
+    └── claude_code.llm_request
+trace = the trace id the parent set, on both
+```
+
+Two settings follow from the same test:
+
+| Setting | Reason |
+|---|---|
+| `OTEL_TRACES_EXPORTER=otlp` | the join above |
+| `OTEL_LOGS_EXPORTER=none` for jobs | one two-word turn emitted 58 KB of logs against 4 KB of traces. `events.jsonl` is the log, it is yours, and it has the causality that OTel logs do not |
+
+Traces are behind a beta flag. Treat the join as a feature that may need
+revisiting, not a guarantee.
 
 ---
 
@@ -577,49 +673,46 @@ it is a file that you must understand twice.
 
 ## 12. Open questions
 
-Grouped by the milestone each one blocks. Three questions closed in the last
-pass: the chat surface (§4.6), the job caps (§6.1), and pairing (§4.5).
-
-### Before M1
-
-1. **Is a conversation the same kind of thing as a job?** A job is a session with
-   a worktree and an ID. The General topic is a conversation with neither. Does
-   it get a row in `conversations/*.jsonl`? Does the 12-turn cap apply? Does
-   compaction? The document uses both words for one thing in places, and they are
-   not one thing.
-2. **Which model does a conversation turn use?** Start with the low-cost model.
-   Decide with true cost data.
+Grouped by the milestone each one blocks. Seven have closed: the chat surface
+(§4.6), the job caps (§6.1), pairing (§4.5), threads and jobs being one type
+(§3), the landing policy file (§7.1), one trace (§8.2), and the liveness signal
+(§3.1).
 
 ### Before M2
 
-3. **What is the landing policy file?** §7 says the repository holds it. No
-   format is named, and this repository holds no code and no such file.
-4. **What claims a branch name?** §2.2 says branch names and worktree paths are a
+1. **What claims a branch name?** §2.2 says branch names and worktree paths are a
    shared resource. It names no mechanism. The per-repository cap in §6.1 hides
-   this, and does not solve it.
-5. **Can herdr open a pane in a chosen space or tab?** Its site says the CLI and
-   the socket are one surface for agents. If it cannot, each pane lands in one
-   place and you move it.
-6. **Does the CLI hold the transcript file open?** If it does, `/proc/<pid>/fd`
-   beats both signals in §3.1.
-7. **How much of a job's stream goes to its topic?** Each tool call, or only file
+   this and does not solve it — a mirrored job carries a branch name you chose,
+   and nothing stops a dispatched job from wanting it.
+2. **Can herdr open a pane in a chosen space or tab?** Its site says the CLI and
+   the socket are one surface for agents. If it cannot, each pane Aleph makes
+   lands in one place and you move it.
+3. **How much of a job's stream goes to its topic?** Each tool call, or only file
    changes and test results?
+4. **Is a 30-minute wall clock the right cap for a job?** Nothing asked for that
+   number. It is the last rule in this document that no workflow and no decision
+   produced.
 
 ### Before M3
 
-8. **Who maintains the repository allowlist?** §9 says the mirror reads only the
+5. **Who maintains the repository allowlist?** §9 says the mirror reads only the
    repositories in `config.toml`. One you forget gets no topic, and it fails in
    silence. Warning, prompt, or nothing?
-9. **How long must a session be idle before it parks?** Too short makes noise.
-   Too long makes you wait. Start at 10 minutes and measure.
-10. **Does a park always need a WIP commit,** or only when the worktree holds
-    files that are not committed?
-11. **The cost of the summary at each park is arithmetic, not a measurement.**
+6. **How long must a session be idle before it parks?** Start at 10 minutes and
+   measure. §4.1 says how idle is measured; it does not say how much is enough.
+7. **Does a park always need a WIP commit,** or only when the worktree holds
+   files that are not committed?
+8. **The cost of the summary at each park is arithmetic, not a measurement.**
+
+### Before M1, and cheap to defer
+
+9. **Which model does a conversation turn use?** Start with the low-cost model
+   and decide with true cost data.
 
 ### Not blocking anything yet
 
-12. **What does a torn turn leave behind?** The daemon dies mid-turn. §8 says the
+10. **What does a torn turn leave behind?** The daemon dies mid-turn. §8 says the
     files are the truth. It does not say what a half-written turn leaves, or how
     the next start cleans it.
-13. **`notify()` has no rate bound.** It is the one tool that reaches you without
+11. **`notify()` has no rate bound.** It is the one tool that reaches you without
     you asking.

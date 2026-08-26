@@ -523,7 +523,7 @@ a0d7  runs      4m    dotfiles     fish-migration  <span class="dim">dispatched<
           <text x="700" y="142" font-size="11.5" fill="var(--ink-soft)">you speak to it in a topic</text>
 
           <path d="M 280 96 L 672 96" fill="none" stroke="var(--brass)" stroke-width="1.6" marker-end="url(#d1-brass)"></path>
-          <text x="476" y="86" text-anchor="middle" font-size="11.5" fill="var(--brass)">adoption · aleph offers it when you arrive · §2.5</text>
+          <text x="476" y="86" text-anchor="middle" font-size="11.5" fill="var(--brass)">you type in its topic · the mirror · §2.5</text>
 
           <path d="M 680 134 L 288 134" fill="none" stroke="var(--teal)" stroke-width="1.6" marker-end="url(#d1-teal)"></path>
           <text x="484" y="152" text-anchor="middle" font-size="11.5" fill="var(--teal)">aleph attach · §2.6</text>
@@ -542,8 +542,8 @@ a0d7  runs      4m    dotfiles     fish-migration  <span class="dim">dispatched<
           <text x="44" y="352" font-size="11.5" fill="var(--ink-soft)">they write into one transcript at the same time, and the transcript becomes bad. this is measured, not a risk.</text>
 
           <text x="24" y="396" font-size="11" letter-spacing="1.2" fill="var(--ink-soft)">THEREFORE, BEFORE A TRANSFER IS COMPLETE:</text>
-          <text x="24" y="420" font-size="11.5" fill="var(--ink-soft)">aleph reads /proc and finds no live process in that worktree. it does not use your word for this.</text>
-          <text x="24" y="440" font-size="11.5" fill="var(--ink-soft)">a mirrored job keeps your branch and your worktree. aleph must never remove them.</text>
+          <text x="24" y="420" font-size="11.5" fill="var(--ink-soft)">aleph finds no claude process whose /proc/&lt;pid&gt;/cwd is that worktree. that is the whole check.</text>
+          <text x="24" y="440" font-size="11.5" fill="var(--ink-soft)">the transcript's mtime is activity, not liveness. an idle pane is alive with an old mtime.</text>
         </g>
       </svg>
       <figcaption>The six workflows are the three states in this picture, plus the two arrows. You change the driver when you act — a message in a topic, or a <code>claude</code> in the worktree. The commands are conveniences.</figcaption>
@@ -949,6 +949,23 @@ a0d7  runs      4m    dotfiles     fish-migration  <span class="dim">dispatched<
   <b>index.db</b>                 <i>an index. if you delete it, aleph builds it again</i></div>
     <div class="prose">
       <p>The files are the truth. When Aleph builds the index again, it ignores a bad last line and gives a warning. It does not stop — which is the defect in workflow 2.1.</p>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <span class="k">the event log</span>
+        <h3>Five rules, kept on purpose</h3>
+        <p>One emit path. Every event names its cause, so the log is a graph and not a list. The JSONL is truth and the index rebuilds. Redaction before the write. And every event carries its trace ID.</p>
+      </div>
+      <div class="card">
+        <span class="k">one trace</span>
+        <h3>A job's spans nest inside yours</h3>
+        <p>The daemon sets <code>TRACEPARENT</code> when it spawns a job, and <code>claude_code.interaction</code> lands as a child of the daemon's span, in the daemon's trace. Tested, not assumed. Traces on, logs off — one two-word turn emitted 58 KB of logs against 4 KB of traces.</p>
+      </div>
+      <div class="card">
+        <span class="k">threads</span>
+        <h3>One type, two kinds</h3>
+        <p>A job is a thread of kind <code>code</code> — a worktree, a branch, a CLI session, and the driver rule. The General topic is a thread of kind <code>chat</code>, which has none of those and needs no driver rule. One store, one ID space.</p>
+      </div>
     </div>
   </section>
 
