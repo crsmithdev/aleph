@@ -185,7 +185,7 @@ The command is idempotent. It never makes a second driver.
 |---|---|
 | Nothing | The daemon parks the job. Aleph opens a pane |
 | A process, and Aleph opened its pane | Aleph moves you to that pane |
-| A process, but Aleph did not open the pane | Aleph refuses. It prints the PID and asks herdr which pane holds it |
+| A process, but Aleph did not open the pane | Aleph refuses. It prints the PID from the liveness check, and the pane that herdr reports for that worktree |
 | The state says a pane exists, but the process is gone | Aleph corrects the state and opens a pane |
 
 If the daemon is in a turn, `attach` waits for that turn to stop. The daemon must
@@ -193,6 +193,24 @@ not stop in the middle of a turn.
 
 If herdr does not answer on its socket, Aleph does not start herdr. It prints the
 two commands and stops.
+
+### 3.3 What herdr gives Aleph
+
+Herdr can put a pane where you want it. Measured against herdr 0.5.10, in a
+session of its own that is not yours:
+
+| Aleph needs | The command | What the test showed |
+|---|---|---|
+| a pane in a chosen space and tab | `herdr agent start <name> --cwd <worktree> --workspace <id> --tab <id> --no-focus -- claude --resume <sid>` | The pane appeared in the tab that the command named, with the cwd that it named. The focus stayed in the other space. |
+| one space for each repository | `herdr workspace create --cwd <repo> --label <name> --no-focus`, then `herdr tab create --workspace <id>` | Both take a label, thus a space can carry the name of the repository and a tab the name of the job. |
+| which pane holds a worktree | `herdr agent list`, and match on `cwd` | The answer holds no PID. The `cwd` is live: a `cd` in the pane changed the next answer. |
+| what a pane shows | `herdr pane read <id> --source visible --format text` | Returns the screen. `--source recent` was empty while no client was attached. |
+
+Two rules come from this. **A pane that Aleph opens uses `--no-focus`,** because
+you asked for the job and not for the view. `aleph attach` is the one command
+that moves your focus, because there you asked for it. And **the pane lookup is
+by `cwd`, not by PID.** The liveness check in §3.1 gives the PID, herdr gives the
+cwd, and the worktree path joins the two.
 
 ---
 
@@ -702,42 +720,39 @@ it is a file that you must understand twice.
 
 ## 12. Open questions
 
-Grouped by the milestone each one blocks. Eight have closed: the chat surface
+Grouped by the milestone each one blocks. Nine have closed: the chat surface
 (§4.6), the job caps (§6.2), pairing (§4.5), threads and jobs being one type
 (§3), the landing policy file (§7.1), one trace (§8.2), the liveness signal
-(§3.1), and what claims a branch name (§6.1).
+(§3.1), what claims a branch name (§6.1), and the herdr surface (§3.3).
 
 ### Before M2
 
-1. **Can herdr open a pane in a chosen space or tab?** Its site says the CLI and
-   the socket are one surface for agents. If it cannot, each pane Aleph makes
-   lands in one place and you move it.
-2. **How much of a job's stream goes to its topic?** Each tool call, or only file
+1. **How much of a job's stream goes to its topic?** Each tool call, or only file
    changes and test results?
-3. **Is a 30-minute wall clock the right cap for a job?** Nothing asked for that
+2. **Is a 30-minute wall clock the right cap for a job?** Nothing asked for that
    number. It is the last rule in this document that no workflow and no decision
    produced.
 
 ### Before M3
 
-4. **Who maintains the repository allowlist?** §9 says the mirror reads only the
+3. **Who maintains the repository allowlist?** §9 says the mirror reads only the
    repositories in `config.toml`. One you forget gets no topic, and it fails in
    silence. Warning, prompt, or nothing?
-5. **How long must a session be idle before it parks?** Start at 10 minutes and
+4. **How long must a session be idle before it parks?** Start at 10 minutes and
    measure. §4.1 says how idle is measured; it does not say how much is enough.
-6. **Does a park always need a WIP commit,** or only when the worktree holds
+5. **Does a park always need a WIP commit,** or only when the worktree holds
    files that are not committed?
-7. **The cost of the summary at each park is arithmetic, not a measurement.**
+6. **The cost of the summary at each park is arithmetic, not a measurement.**
 
 ### Before M1, and cheap to defer
 
-8. **Which model does a conversation turn use?** Start with the low-cost model
+7. **Which model does a conversation turn use?** Start with the low-cost model
    and decide with true cost data.
 
 ### Not blocking anything yet
 
-9. **What does a torn turn leave behind?** The daemon dies mid-turn. §8 says the
+8. **What does a torn turn leave behind?** The daemon dies mid-turn. §8 says the
    files are the truth. It does not say what a half-written turn leaves, or how
    the next start cleans it.
-10. **`notify()` has no rate bound.** It is the one tool that reaches you without
+9. **`notify()` has no rate bound.** It is the one tool that reaches you without
     you asking.
