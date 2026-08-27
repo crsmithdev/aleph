@@ -650,6 +650,21 @@ a0d7  runs      4m    dotfiles     fish-migration  <span class="dim">dispatched<
       </tbody>
     </table>
 
+    <table>
+      <thead>
+        <tr><th style="width:38%">A running job writes</th><th>What the topic gets</th><th style="width:14%">Notifies</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>It starts</td><td>One message: the task, the repository, the base.</td><td>yes</td></tr>
+        <tr><td>While it runs</td><td>An edit to the headline, one time in 15 seconds at the most — elapsed, what it does now, files changed, the last test result.</td><td>no</td></tr>
+        <tr><td>It asks, or a cap refuses it</td><td>A new message. An edit is silent, and a job that waits in silence is the failure that makes you stop trusting the telephone.</td><td>yes</td></tr>
+        <tr><td>It stops</td><td>One message: files changed, the gate result, and the first failure.</td><td>yes</td></tr>
+      </tbody>
+    </table>
+    <div class="prose">
+      <p><b>No stream of tool calls.</b> Measured in two true jobs: 51 and 38 stream events, 12 and 9 tool calls, and 7 and 4 changes to the headline — 4 to 8 for each minute. Telegram documents approximately 20 messages in one minute for a group, thus the three jobs that the caps permit would fill it with tool calls alone. The stream stays in <code>jobs/&lt;id&gt;/stream.jsonl</code>, where <code>diff</code> and <code>attach</code> reach it.</p>
+    </div>
+
     <div class="grid">
       <div class="card">
         <span class="k">it deletes</span>

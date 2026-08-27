@@ -231,7 +231,7 @@ does not need you to change it.
 |---|---|---|
 | A herdr pane | write code at your desk | a normal Claude Code session. It reaches Aleph's facts through the bridge (§5.2) |
 | The Telegram group | speak to Aleph, and drive each job | one topic for each job |
-| Any chat client | speak to Aleph at your desk | `llm` in a pane, or Chatbox in a window. Both use the endpoint (§4.6) |
+| Any chat client | speak to Aleph at your desk | `llm` in a pane, or Chatbox in a window. Both use the endpoint (§4.7) |
 | `aleph` (CLI) | list, attach, merge, remove, and `doctor` | thin; it speaks to the daemon |
 | Cron | let Aleph speak first | see §10, M5 |
 
@@ -300,7 +300,47 @@ limit of 4096 characters.
 | A topic that Aleph did not make | not its business. It never posts there, never closes it, and never counts it in the job list |
 | Anything | Aleph never deletes a topic. The history is context |
 
-### 4.4 Three failures
+### 4.4 What a running job writes
+
+A topic is where you decide, and a decision does not need each tool call. Thus a
+job writes four things, and only three of them make your telephone speak.
+
+| Event | The topic gets | It notifies |
+|---|---|---|
+| The job starts | one message: the task, the repository, the base | yes |
+| While it runs | **an edit to the headline message** — the time since it started, what it does now, the files it changed, the last test result | no |
+| It asks a question, or a cap or the gate refuses it | a new message | yes |
+| It stops | one message: the files changed, the gate result, and the first failure if there is one | yes |
+
+**A job that waits for you must make a new message.** An edit is silent, and a
+job that waits in silence is the failure that makes you stop trusting the
+telephone.
+
+The stream itself stays on disk in `jobs/<id>/stream.jsonl` (§8), and `aleph
+diff` and `aleph attach` give you the detail when you want it. The topic is a
+view, and it is not the record.
+
+Measured, in two true jobs of approximately one minute each:
+
+| For each job | job A | job B |
+|---|---|---|
+| stream events | 51 | 38 |
+| tool calls | 12 | 9 |
+| changes to the headline | 7 | 4 |
+| changes to the headline, for each minute | 7.5 | 4.4 |
+
+**The headline needs a tick.** Telegram documents a limit of approximately 20
+messages in one minute for a group. A raw stream of tool calls is 10 to 13 for
+each job, thus the three jobs that §6.2 permits fill the group alone. The
+headline at its measured rate is 4 to 8 for each job, which is also too much for
+three. Thus Aleph edits the headline one time in 15 seconds at the most, and the
+messages that must reach you still pass.
+
+Two numbers here are not measured. Both jobs were short, thus the rate of a job
+of 30 minutes is not known. And the limit of 20 is Telegram's documentation and
+not a measurement — §12 keeps that one open.
+
+### 4.5 Three failures
 
 | Failure | What the topic says |
 |---|---|
@@ -308,7 +348,7 @@ limit of 4096 characters.
 | The branch merged while you were away | This work merged. The topic closes. |
 | The session will not start again | I cannot continue this session. Here is the summary and the branch. |
 
-### 4.5 Pairing, and the preflight
+### 4.6 Pairing, and the preflight
 
 Aleph needs one private supergroup with topics on, and admin rights with
 manage-topics. It cannot make either for you.
@@ -355,7 +395,7 @@ visible instead of becoming normal.
 | Paired | only the bound chat. **Every other chat is ignored in silence** — a reply tells a stranger that the bot is alive |
 | `aleph pair --reset` | unbinds |
 
-### 4.6 The endpoint, and why there is no `aleph chat`
+### 4.7 The endpoint, and why there is no `aleph chat`
 
 **Aleph has no chat interface of its own.** It has two protocols instead:
 
@@ -720,34 +760,37 @@ it is a file that you must understand twice.
 
 ## 12. Open questions
 
-Grouped by the milestone each one blocks. Nine have closed: the chat surface
-(§4.6), the job caps (§6.2), pairing (§4.5), threads and jobs being one type
+Grouped by the milestone each one blocks. Ten have closed: the chat surface
+(§4.7), the job caps (§6.2), pairing (§4.6), threads and jobs being one type
 (§3), the landing policy file (§7.1), one trace (§8.2), the liveness signal
-(§3.1), what claims a branch name (§6.1), and the herdr surface (§3.3).
+(§3.1), what claims a branch name (§6.1), the herdr surface (§3.3), and what a
+running job writes (§4.4).
 
 ### Before M2
 
-1. **How much of a job's stream goes to its topic?** Each tool call, or only file
-   changes and test results?
-2. **Is a 30-minute wall clock the right cap for a job?** Nothing asked for that
+1. **Is a 30-minute wall clock the right cap for a job?** Nothing asked for that
    number. It is the last rule in this document that no workflow and no decision
    produced.
 
 ### Before M3
 
-3. **Who maintains the repository allowlist?** §9 says the mirror reads only the
+2. **Who maintains the repository allowlist?** §9 says the mirror reads only the
    repositories in `config.toml`. One you forget gets no topic, and it fails in
    silence. Warning, prompt, or nothing?
-4. **How long must a session be idle before it parks?** Start at 10 minutes and
+3. **How long must a session be idle before it parks?** Start at 10 minutes and
    measure. §4.1 says how idle is measured; it does not say how much is enough.
-5. **Does a park always need a WIP commit,** or only when the worktree holds
+4. **Does a park always need a WIP commit,** or only when the worktree holds
    files that are not committed?
-6. **The cost of the summary at each park is arithmetic, not a measurement.**
+5. **The cost of the summary at each park is arithmetic, not a measurement.**
 
-### Before M1, and cheap to defer
+### Before M1
 
+6. **What message rate does the true group accept?** §4.4 uses 20 messages in one
+   minute, which is Telegram's documentation. Aleph must measure the rate for a
+   message and for an edit in the paired group, because the tick of 15 seconds
+   comes from that number.
 7. **Which model does a conversation turn use?** Start with the low-cost model
-   and decide with true cost data.
+   and decide with true cost data. This one is cheap to defer.
 
 ### Not blocking anything yet
 
@@ -755,4 +798,4 @@ Grouped by the milestone each one blocks. Nine have closed: the chat surface
    files are the truth. It does not say what a half-written turn leaves, or how
    the next start cleans it.
 9. **`notify()` has no rate bound.** It is the one tool that reaches you without
-    you asking.
+   you asking.
