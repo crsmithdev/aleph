@@ -50,9 +50,17 @@ One session is one trace; its id is `sha256(session_id)[:32]`.
 session                 root, tags source:* and mode:*
 └─ turn                 one per prompt, output = last assistant message
    ├─ prompt            event, input = the prompt
+   ├─ <model id>        one generation per API request, usage and cost
    ├─ <tool name>       real start and end via a Pre→Post handshake file
-   └─ <agent type>      subagent, with its own tool spans beneath it
+   ├─ <agent type>      subagent, with its own tool spans beneath it
+   └─ verify-gate       guardrail, verdict and reason (docs/verify-gate.md)
 ```
+
+Generations come from the transcript at `Stop`: one per `requestId`, with
+`input`, `output`, `cache_read_input_tokens` and `cache_creation_input_tokens`
+as usage and a cost computed from the price table in `hooks/lib/pricing.ts`.
+The hook prices them itself because Langfuse's public models API keeps only
+input and output prices, and cache reads are most of a Claude Code request.
 
 Compaction, permission denials, API failures and session end are events on
 the trace. A trace is at

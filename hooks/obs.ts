@@ -10,6 +10,8 @@ import { basename } from "node:path";
 import { langfuseConfig } from "./lib/env.ts";
 import { peek, prune, put, take } from "./lib/handshake.ts";
 import { attrs, nano, postSpans, spanId, traceIdFor, truncate, turnSpanIdFor, type AttrValue, type Span } from "./lib/otlp.ts";
+import { readEntries } from "./lib/digest.ts";
+import { costDetails } from "./lib/pricing.ts";
 
 type Payload = Record<string, any>;
 
@@ -47,7 +49,7 @@ const base: Record<string, AttrValue | undefined> = {
   "aleph.event": event,
 };
 
-function span(name: string, type: string, start: number, extra: Record<string, AttrValue | undefined | null>, opts: { id?: string; parent?: string; error?: string } = {}): Span {
+function span(name: string, type: string, start: number, extra: Record<string, AttrValue | undefined | null>, opts: { id?: string; parent?: string; error?: string; end?: number } = {}): Span {
   const s: Span = {
     traceId,
     spanId: opts.id ?? spanId(),
@@ -55,11 +57,64 @@ function span(name: string, type: string, start: number, extra: Record<string, A
     name,
     kind: 1,
     startTimeUnixNano: nano(start),
-    endTimeUnixNano: nano(Math.max(now, start)),
+    endTimeUnixNano: nano(Math.max(opts.end ?? now, start)),
     attributes: attrs({ ...base, "langfuse.observation.type": type, ...extra }),
   };
   if (opts.error) s.status = { code: 2, message: opts.error.slice(0, 200) };
   return s;
+}
+
+
+
+/**
+ * Stop fires while the last assistant entry may still be on its way to disk
+ * (measured: the final request was missing from the transcript at Stop). Wait,
+ * briefly, until an assistant entry carries the final message.
+ */
+function settledEntries(transcriptPath: string, promptId: string, finalMessage: string) {
+  const needle = finalMessage.trim().slice(0, 80);
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const entries = readEntries(transcriptPath, promptId);
+    if (!needle) return entries;
+    const landed = entries.some((e) => e.type === "assistant" && Array.isArray(e.message?.content)
+      && e.message.content.some((block: any) => block.type === "text" && typeof block.text === "string" && block.text.includes(needle)));
+    if (landed) return entries;
+    Bun.sleepSync(100);
+  }
+  return readEntries(transcriptPath, promptId);
+}
+
+/**
+ * One generation per API request in this turn. Assistant entries come one per
+ * content block and repeat the request's usage, so dedupe on requestId. The
+ * span runs from the previous entry's timestamp to this one's: the model was
+ * the only thing happening in between.
+ */
+function generations(transcriptPath: string, promptId: string, turnId: string, finalMessage: string): Span[] {
+  const out: Span[] = [];
+  const seen = new Set<string>();
+  let previous = 0;
+  for (const entry of settledEntries(transcriptPath, promptId, finalMessage)) {
+    const at = Date.parse(entry.timestamp ?? "") || previous || now;
+    const usage = entry.message?.usage;
+    const requestId: string | undefined = entry.requestId;
+    if (entry.type === "assistant" && usage && requestId && !seen.has(requestId)) {
+      seen.add(requestId);
+      const model: string = entry.message?.model ?? "unknown";
+      const usageDetails: Record<string, number> = { input: usage.input_tokens ?? 0, output: usage.output_tokens ?? 0 };
+      if (usage.cache_read_input_tokens) usageDetails.cache_read_input_tokens = usage.cache_read_input_tokens;
+      if (usage.cache_creation_input_tokens) usageDetails.cache_creation_input_tokens = usage.cache_creation_input_tokens;
+      const cost = costDetails(model, usageDetails);
+      out.push(span(model, "generation", previous || at, {
+        "langfuse.observation.model.name": model,
+        "langfuse.observation.usage_details": JSON.stringify(usageDetails),
+        "langfuse.observation.cost_details": cost ? JSON.stringify(cost) : undefined,
+        "langfuse.observation.metadata.request_id": requestId,
+      }, { parent: turnId, end: at }));
+    }
+    previous = at;
+  }
+  return out;
 }
 
 const spans: Span[] = [];
@@ -123,10 +178,12 @@ switch (event) {
   case "Stop": {
     // peek, not take: a blocked Stop fires again and the turn keeps its start; prune() clears the file later
     const hs = turnKey ? peek(turnKey) : null;
+    const turnId = hs?.spanId ?? turnSpanIdFor(input.prompt_id ?? sessionId);
     spans.push(span("turn", "agent", hs?.start ?? now, {
       "langfuse.observation.output": truncate(input.last_assistant_message ?? ""),
       "langfuse.observation.metadata.prompt_id": input.prompt_id,
-    }, { id: hs?.spanId }));
+    }, { id: turnId }));
+    if (input.prompt_id && input.transcript_path) spans.push(...generations(input.transcript_path, input.prompt_id, turnId, input.last_assistant_message ?? ""));
     break;
   }
 

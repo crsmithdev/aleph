@@ -183,3 +183,93 @@ describe("handshake prune", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe("obs hook generations", () => {
+  test("Stop emits one generation per requestId, parented to the turn, with usage", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "aleph-gen-"));
+    const transcript = join(dir, "t.jsonl");
+    const usage = (input: number, output: number, read: number, create: number) => ({ input_tokens: input, output_tokens: output, cache_read_input_tokens: read, cache_creation_input_tokens: create });
+    const lines = [
+      { type: "user", promptId: "pg", isSidechain: false, timestamp: "2026-09-03T10:00:00.000Z", message: { role: "user", content: "hi" } },
+      { type: "assistant", isSidechain: false, requestId: "req_A", timestamp: "2026-09-03T10:00:02.000Z", message: { role: "assistant", model: "claude-fable-5-1", usage: usage(10, 20, 300, 40), content: [{ type: "thinking", thinking: "" }] } },
+      { type: "assistant", isSidechain: false, requestId: "req_A", timestamp: "2026-09-03T10:00:02.500Z", message: { role: "assistant", model: "claude-fable-5-1", usage: usage(10, 20, 300, 40), content: [{ type: "tool_use", id: "t", name: "Bash", input: {} }] } },
+      { type: "user", isSidechain: false, timestamp: "2026-09-03T10:00:03.000Z", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t", content: "ok" }] } },
+      { type: "assistant", isSidechain: false, requestId: "req_B", timestamp: "2026-09-03T10:00:05.000Z", message: { role: "assistant", model: "claude-fable-5-1", usage: usage(5, 7, 0, 0), content: [{ type: "text", text: "done" }] } },
+    ];
+    writeFileSync(transcript, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+
+    const posted: any[] = [];
+    const server = Bun.serve({ port: 0, fetch: async (req) => { posted.push(await req.json()); return new Response("{}"); } });
+    const spool = mkdtempSync(join(tmpdir(), "aleph-gen-spool-"));
+    const proc = Bun.spawn(["bun", join(HOOKS, "obs.ts")], {
+      stdin: new TextEncoder().encode(JSON.stringify({ session_id: "s-gen", cwd: "/tmp/proj", hook_event_name: "Stop", prompt_id: "pg", transcript_path: transcript, last_assistant_message: "done" })),
+      env: { ...process.env, LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SPOOL: spool },
+      stdout: "pipe", stderr: "pipe",
+    });
+    expect(await proc.exited).toBe(0);
+    server.stop();
+    const spans = posted[0].resourceSpans[0].scopeSpans[0].spans;
+    const attr = (span: any, key: string) => span.attributes.find((a: any) => a.key === key)?.value?.stringValue;
+    const turn = spans.find((s: any) => s.name === "turn");
+    const gens = spans.filter((s: any) => attr(s, "langfuse.observation.type") === "generation");
+    expect(gens).toHaveLength(2);
+    for (const g of gens) {
+      expect(g.parentSpanId).toBe(turn.spanId);
+      expect(g.name).toBe("claude-fable-5-1");
+      expect(attr(g, "langfuse.observation.model.name")).toBe("claude-fable-5-1");
+    }
+    expect(JSON.parse(attr(gens[0], "langfuse.observation.usage_details"))).toEqual({ input: 10, output: 20, cache_read_input_tokens: 300, cache_creation_input_tokens: 40 });
+    expect(JSON.parse(attr(gens[1], "langfuse.observation.usage_details"))).toEqual({ input: 5, output: 7 });
+    expect(attr(gens[0], "langfuse.observation.metadata.request_id")).toBe("req_A");
+    // fable 5.1: 10 in @ $10/M, 20 out @ $50/M, 300 cache read @ $0.25/M, 40 cache write @ $12.5/M
+    const cost = JSON.parse(attr(gens[0], "langfuse.observation.cost_details"));
+    expect(cost.input).toBeCloseTo(0.0001, 10);
+    expect(cost.output).toBeCloseTo(0.001, 10);
+    expect(cost.cache_read_input_tokens).toBeCloseTo(0.000075, 10);
+    expect(cost.cache_creation_input_tokens).toBeCloseTo(0.0005, 10);
+    expect(cost.total).toBeCloseTo(0.001675, 10);
+    // req_A ran from the user line (10:00:00) to its first block (10:00:02); req_B from the tool result (10:00:03) to 10:00:05
+    expect(BigInt(gens[0].endTimeUnixNano) - BigInt(gens[0].startTimeUnixNano)).toBe(2_000_000_000n);
+    expect(BigInt(gens[1].endTimeUnixNano) - BigInt(gens[1].startTimeUnixNano)).toBe(2_000_000_000n);
+    rmSync(dir, { recursive: true, force: true }); rmSync(spool, { recursive: true, force: true });
+  });
+});
+
+describe("pricing", () => {
+  test("dated haiku id prices as haiku 4.5; unknown model has no cost", async () => {
+    const { costDetails, priceFor } = await import("./lib/pricing.ts");
+    expect(priceFor("claude-haiku-4-5-20251001")?.input).toBe(1);
+    expect(costDetails("claude-haiku-4-5-20251001", { input: 1_000_000, output: 0 })?.total).toBeCloseTo(1, 10);
+    expect(costDetails("gpt-x", { input: 1, output: 1 })).toBeNull();
+  });
+});
+
+describe("obs hook waits for the transcript", () => {
+  test("a final assistant entry written 300 ms after Stop is still counted", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "aleph-late-"));
+    const transcript = join(dir, "t.jsonl");
+    const usage = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+    const first = [
+      { type: "user", promptId: "pl", isSidechain: false, timestamp: "2026-09-03T10:00:00.000Z", message: { role: "user", content: "hi" } },
+      { type: "assistant", isSidechain: false, requestId: "req_1", timestamp: "2026-09-03T10:00:01.000Z", message: { role: "assistant", model: "claude-haiku-4-5-20251001", usage, content: [{ type: "tool_use", id: "t", name: "Bash", input: {} }] } },
+    ];
+    writeFileSync(transcript, first.map((l) => JSON.stringify(l)).join("\n") + "\n");
+    const posted: any[] = [];
+    const server = Bun.serve({ port: 0, fetch: async (req) => { posted.push(await req.json()); return new Response("{}"); } });
+    const spool = mkdtempSync(join(tmpdir(), "aleph-late-spool-"));
+    const proc = Bun.spawn(["bun", join(HOOKS, "obs.ts")], {
+      stdin: new TextEncoder().encode(JSON.stringify({ session_id: "s-late", cwd: "/tmp/proj", hook_event_name: "Stop", prompt_id: "pl", transcript_path: transcript, last_assistant_message: "all done here" })),
+      env: { ...process.env, LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SPOOL: spool },
+      stdout: "pipe", stderr: "pipe",
+    });
+    await Bun.sleep(300);
+    const { appendFileSync } = await import("node:fs");
+    appendFileSync(transcript, JSON.stringify({ type: "assistant", isSidechain: false, requestId: "req_2", timestamp: "2026-09-03T10:00:03.000Z", message: { role: "assistant", model: "claude-haiku-4-5-20251001", usage, content: [{ type: "text", text: "all done here" }] } }) + "\n");
+    expect(await proc.exited).toBe(0);
+    server.stop();
+    const spans = posted[0].resourceSpans[0].scopeSpans[0].spans;
+    const gens = spans.filter((s: any) => s.attributes.some((a: any) => a.key === "langfuse.observation.type" && a.value.stringValue === "generation"));
+    expect(gens.map((g: any) => g.attributes.find((a: any) => a.key === "langfuse.observation.metadata.request_id").value.stringValue)).toEqual(["req_1", "req_2"]);
+    rmSync(dir, { recursive: true, force: true }); rmSync(spool, { recursive: true, force: true });
+  });
+});
