@@ -55,6 +55,6 @@ names the claim and the concrete run that would back it, in two sentences.
 
 - Tuning the rubric against real verdicts: needs a few weeks of scores.
 - Gating subagents (decision 6) if main-agent-only proves too loose.
-- API-direct judge if the nested `claude` call gets slower or flakier. The
-  `ANTHROPIC_API_KEY` in `~/.aleph/.env` is invalid today, so this needs a key first.
+- No API-direct judge. The nested `claude -p` bills the subscription; with
+  thinking off it is about 3 s, and Chris wants no API spend here.
 - Changes in repos other than the cwd repo and its worktrees are not detected.
