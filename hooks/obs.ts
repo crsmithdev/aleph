@@ -8,7 +8,7 @@
  */
 import { basename } from "node:path";
 import { langfuseConfig } from "./lib/env.ts";
-import { peek, put, take } from "./lib/handshake.ts";
+import { peek, prune, put, take } from "./lib/handshake.ts";
 import { attrs, nano, postSpans, spanId, traceIdFor, truncate, type AttrValue, type Span } from "./lib/otlp.ts";
 
 type Payload = Record<string, any>;
@@ -66,6 +66,7 @@ const spans: Span[] = [];
 
 switch (event) {
   case "SessionStart":
+    prune();
     spans.push(span("session", "span", now, {
       "langfuse.trace.tags": [`source:${input.source ?? "unknown"}`, `mode:${input.permission_mode ?? "unknown"}`],
       "langfuse.trace.metadata.cwd": input.cwd,
@@ -139,5 +140,7 @@ switch (event) {
   }
 }
 
-const result = await postSpans(cfg, spans);
+// Stop and SessionEnd run synchronously (an async hook is killed when the session exits), so keep their wait short.
+const timeoutMs = event === "Stop" || event === "SessionEnd" ? 3000 : 8000;
+const result = await postSpans(cfg, spans, timeoutMs);
 if (!result.ok) console.error(`[aleph obs] ${event}: ${result.status ?? ""} ${result.error ?? ""}`.trim());

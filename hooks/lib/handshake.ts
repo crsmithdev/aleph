@@ -3,7 +3,7 @@
  * matching Post* event picks up, so a span can carry its real start time and
  * its parent. Files live in ~/.aleph/spool (ALEPH_SPOOL overrides, for tests).
  */
-import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -35,4 +35,15 @@ export function take(key: string): Handshake | null {
   const value = peek(key);
   if (value) { try { unlinkSync(pathFor(key)); } catch { /* already gone */ } }
   return value;
+}
+
+/** A Pre event whose Post never came leaves a file behind; drop anything older than a day. */
+export function prune(maxAgeMs = 86_400_000): void {
+  let names: string[];
+  try { names = readdirSync(spoolDir()); } catch { return; }
+  const cutoff = Date.now() - maxAgeMs;
+  for (const name of names) {
+    const path = join(spoolDir(), name);
+    try { if (statSync(path).mtimeMs < cutoff) unlinkSync(path); } catch { /* raced with another hook */ }
+  }
 }

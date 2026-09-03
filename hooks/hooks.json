@@ -1,20 +1,17 @@
 {
   "hooks": {
-    "SessionStart": [{ "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10 }] }],
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10 }] }],
-    "PreToolUse": [
-      { "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10 }] },
-      { "matcher": "Edit|Write", "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/git-guard.ts"], "timeout": 10, "statusMessage": "git-guard" }] }
-    ],
-    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10 }] }],
-    "PostToolUseFailure": [{ "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10 }] }],
-    "PermissionDenied": [{ "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10 }] }],
-    "Stop": [{ "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10 }] }],
-    "StopFailure": [{ "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10 }] }],
-    "SubagentStart": [{ "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10 }] }],
-    "SubagentStop": [{ "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10 }] }],
-    "PreCompact": [{ "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10 }] }],
-    "PostCompact": [{ "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10 }] }],
-    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10 }] }]
+    "SessionStart": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
+    "PreToolUse": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}, {"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/git-guard.ts"], "timeout": 10, "statusMessage": "git-guard"}]}],
+    "PostToolUse": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
+    "PostToolUseFailure": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
+    "PermissionDenied": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "timeout": 5}]}],
+    "StopFailure": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
+    "SubagentStart": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
+    "SubagentStop": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
+    "PreCompact": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
+    "PostCompact": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
+    "SessionEnd": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "timeout": 5}]}]
   }
 }

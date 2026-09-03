@@ -165,3 +165,21 @@ describe("git-guard", () => {
     expect(await guard(join(root, "plain", "a.ts"))).toBe("");
   });
 });
+
+describe("handshake prune", () => {
+  test("drops stale files and keeps fresh ones", async () => {
+    const { put, prune, peek } = await import("./lib/handshake.ts");
+    const dir = mkdtempSync(join(tmpdir(), "aleph-prune-"));
+    process.env.ALEPH_SPOOL = dir;
+    put("tool:old", { start: 1 });
+    put("tool:new", { start: 2 });
+    const { utimesSync } = await import("node:fs");
+    const old = new Date(Date.now() - 2 * 86_400_000);
+    utimesSync(join(dir, "tool:old.json"), old, old);
+    prune();
+    expect(peek("tool:old")).toBeNull();
+    expect(peek("tool:new")).toEqual({ start: 2 });
+    delete process.env.ALEPH_SPOOL;
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
