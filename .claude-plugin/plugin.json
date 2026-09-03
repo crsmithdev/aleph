@@ -1,0 +1,6 @@
+{
+  "name": "aleph",
+  "description": "Personal Claude Code plugin: four skills, hooks, Langfuse traces",
+  "version": "0.1.0",
+  "hooks": "./hooks/hooks.json"
+}
