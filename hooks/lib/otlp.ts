@@ -31,6 +31,11 @@ export function spanId(): string {
   return randomBytes(8).toString("hex");
 }
 
+/** The turn span id is a pure function of the prompt id, so any hook can parent to it. */
+export function turnSpanIdFor(promptId: string): string {
+  return createHash("sha256").update(`turn:${promptId}`).digest("hex").slice(0, 16);
+}
+
 export function nano(ms: number): string {
   return `${BigInt(Math.round(ms))}000000`;
 }

@@ -35,7 +35,11 @@ Stop              verify-gate.ts
 ```
 
 The hook is synchronous with `timeout: 45`. The judge call itself is capped
-at 30 s. **Fail open:** if the judge is unreachable, times out, or returns
+at 30 s and runs with `MAX_THINKING_TOKENS=0` and `--tools ""`: measured
+3 s per verdict without thinking against 15 to 45 s with it, same verdicts.
+The deny is emitted as `{"decision":"block","reason":…}`; on 2.1.259 the
+documented `hookSpecificOutput.permissionDecision` shape does nothing for
+`Stop`, measured with three shapes in headless sessions. **Fail open:** if the judge is unreachable, times out, or returns
 unparseable JSON twice, the turn passes with a `WARNING` span and no score.
 
 ## Judge prompt, in outline
@@ -51,5 +55,6 @@ names the claim and the concrete run that would back it, in two sentences.
 
 - Tuning the rubric against real verdicts: needs a few weeks of scores.
 - Gating subagents (decision 6) if main-agent-only proves too loose.
-- API-direct judge if the nested `claude` call gets slower or flakier.
+- API-direct judge if the nested `claude` call gets slower or flakier. The
+  `ANTHROPIC_API_KEY` in `~/.aleph/.env` is invalid today, so this needs a key first.
 - Changes in repos other than the cwd repo and its worktrees are not detected.

@@ -9,7 +9,7 @@
 import { basename } from "node:path";
 import { langfuseConfig } from "./lib/env.ts";
 import { peek, prune, put, take } from "./lib/handshake.ts";
-import { attrs, nano, postSpans, spanId, traceIdFor, truncate, type AttrValue, type Span } from "./lib/otlp.ts";
+import { attrs, nano, postSpans, spanId, traceIdFor, truncate, turnSpanIdFor, type AttrValue, type Span } from "./lib/otlp.ts";
 
 type Payload = Record<string, any>;
 
@@ -75,7 +75,7 @@ switch (event) {
     break;
 
   case "UserPromptSubmit": {
-    const turnSpanId = spanId();
+    const turnSpanId = turnSpanIdFor(input.prompt_id ?? sessionId);
     if (turnKey) put(turnKey, { start: now, spanId: turnSpanId });
     spans.push(span("prompt", "event", now, {
       "langfuse.observation.input": truncate(input.prompt ?? ""),
@@ -121,7 +121,8 @@ switch (event) {
   }
 
   case "Stop": {
-    const hs = turnKey ? take(turnKey) : null;
+    // peek, not take: a blocked Stop fires again and the turn keeps its start; prune() clears the file later
+    const hs = turnKey ? peek(turnKey) : null;
     spans.push(span("turn", "agent", hs?.start ?? now, {
       "langfuse.observation.output": truncate(input.last_assistant_message ?? ""),
       "langfuse.observation.metadata.prompt_id": input.prompt_id,

@@ -1,12 +1,12 @@
 {
   "hooks": {
     "SessionStart": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
-    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}, {"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate.ts"], "timeout": 10, "statusMessage": "verify gate"}]}],
     "PreToolUse": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}, {"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/git-guard.ts"], "timeout": 10, "statusMessage": "git-guard"}]}],
     "PostToolUse": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
     "PostToolUseFailure": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
     "PermissionDenied": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
-    "Stop": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "timeout": 5}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "timeout": 5}]}, {"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate.ts"], "timeout": 45, "statusMessage": "verify gate"}]}],
     "StopFailure": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
     "SubagentStart": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
     "SubagentStop": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
