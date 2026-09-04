@@ -273,3 +273,63 @@ describe("obs hook waits for the transcript", () => {
     rmSync(dir, { recursive: true, force: true }); rmSync(spool, { recursive: true, force: true });
   });
 });
+
+describe("vault-context hook", () => {
+  let vault: string;
+  beforeAll(() => {
+    vault = mkdtempSync(join(tmpdir(), "aleph-vaultctx-"));
+    writeFileSync(join(vault, "Home.md"), "# Home\n\n- [[A Note]] — hook\n\nHealth: 1 notes, 0 dangling, 0 orphans, lint 2026-09-04\n");
+    writeFileSync(join(vault, "MEMORY.md"), "# Memory\n\n- Chris, Pacific\n");
+  });
+  afterAll(() => rmSync(vault, { recursive: true, force: true }));
+  async function start(dir: string) {
+    const proc = Bun.spawn(["bun", join(HOOKS, "vault-context.ts")], {
+      stdin: new TextEncoder().encode(JSON.stringify({ hook_event_name: "SessionStart", source: "startup" })),
+      env: { ...process.env, ALEPH_VAULT: dir }, stdout: "pipe",
+    });
+    await proc.exited;
+    return (await new Response(proc.stdout).text()).trim();
+  }
+  test("injects Home then MEMORY whole", async () => {
+    const out = JSON.parse(await start(vault));
+    const ctx: string = out.hookSpecificOutput.additionalContext;
+    expect(out.hookSpecificOutput.hookEventName).toBe("SessionStart");
+    expect(ctx.indexOf("# Home")).toBeLessThan(ctx.indexOf("# Memory"));
+    expect(ctx).toContain("- [[A Note]] — hook");
+    expect(ctx).toContain("Health: 1 notes");
+    expect(ctx).toContain("- Chris, Pacific");
+  });
+  test("no vault, no output", async () => {
+    expect(await start(join(vault, "missing"))).toBe("");
+  });
+});
+
+describe("git-guard vault clause", () => {
+  let vault: string;
+  beforeAll(() => {
+    vault = mkdtempSync(join(tmpdir(), "aleph-guardvault-"));
+    const run = (...args: string[]) => { const p = Bun.spawnSync(["git", "-C", vault, ...args], { stdout: "ignore", stderr: "pipe" }); if (p.exitCode !== 0) throw new Error(p.stderr.toString()); };
+    run("init", "-q", "-b", "main");
+    run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init");
+    writeFileSync(join(vault, "VAULT.md"), "# contract\n");
+    mkdirSync(join(vault, "wiki", "gotchas"), { recursive: true });
+  });
+  afterAll(() => rmSync(vault, { recursive: true, force: true }));
+  async function guard(filePath: string) {
+    const proc = Bun.spawn(["bun", join(HOOKS, "git-guard.ts")], {
+      stdin: new TextEncoder().encode(JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Write", tool_input: { file_path: filePath } })),
+      env: { ...process.env, ALEPH_VAULT: vault }, stdout: "pipe",
+    });
+    await proc.exited;
+    return (await new Response(proc.stdout).text()).trim();
+  }
+  test("allows a note on main in the vault", async () => {
+    expect(await guard(join(vault, "wiki", "gotchas", "A Note.md"))).toBe("");
+    expect(await guard(join(vault, "Home.md"))).toBe("");
+  });
+  test("denies VAULT.md", async () => {
+    const out = JSON.parse(await guard(join(vault, "VAULT.md")));
+    expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(out.hookSpecificOutput.permissionDecisionReason).toContain("wiki/decisions/");
+  });
+});

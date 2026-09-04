@@ -1,6 +1,6 @@
 {
   "hooks": {
-    "SessionStart": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
+    "SessionStart": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}, {"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/vault-context.ts"], "timeout": 10, "statusMessage": "vault"}]}],
     "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}, {"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate.ts"], "timeout": 10, "statusMessage": "verify gate"}]}],
     "PreToolUse": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}, {"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/git-guard.ts"], "timeout": 10, "statusMessage": "git-guard"}]}],
     "PostToolUse": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],

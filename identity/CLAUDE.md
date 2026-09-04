@@ -60,6 +60,14 @@ A Stop hook judges each such turn against exactly this rule and sends the
 turn back with a reason when a claim is unbacked. Chris can waive it for one
 turn by saying `skip verify`; you cannot say it for him.
 
+## Memory
+
+The vault at `~/.aleph/vault` is memory; `Home.md` and `MEMORY.md` arrive
+at session start. Read the note Home points at before deriving; search
+only after. When you learn how something actually behaves, decide
+something, or get corrected, write the page before the turn ends
+(`/aleph:vault`). No hook extracts facts; `compile` is the safety net.
+
 ## Sessions
 
 Verify from inside the worktree you edited. For interactive checks spin up a
