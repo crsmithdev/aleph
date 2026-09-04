@@ -1,13 +1,13 @@
 # aleph
 
-A Claude Code plugin: four skills, hooks against the 2.1.x hook API, and
+A Claude Code plugin: five skills, hooks against the 2.1.x hook API, and
 Langfuse as the only observability sink. It replaces the earlier Aleph at
 `~/aleph` (skills, hooks, installer, SQLite telemetry, research, UI) and the
 daemon design that lived in this repository until `a7540fa`.
 
 | | |
 |---|---|
-| `skills/` | `red-team`, `interview`, `handoff`, `pickup`, invoked as `/aleph:<name>` |
+| `skills/` | `red-team`, `grill-me`, `to-spec`, `handoff`, `pickup`, invoked as `/aleph:<name>` |
 | `hooks/obs.ts` | every hook event becomes one OTLP span posted to Langfuse |
 | `hooks/git-guard.ts` | denies `Edit`/`Write` on `main` outside `.worktrees/` |
 | `hooks/hooks.json` | the wiring; every observability entry is `async` |

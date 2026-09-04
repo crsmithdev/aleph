@@ -12,7 +12,7 @@ description: >
   on: "red team this", "red-team this", "/red-team", "grill yourself", "have
   agents grill the plan", "tear this plan apart", "adversarial review of this
   plan", "stress test this with subagents". NOT for: interviewing the user
-  (use /aleph:interview), reviewing implemented code (use /code-review), bug
+  (use /aleph:grill-me), reviewing implemented code (use /code-review), bug
   investigation (use /debug).
 ---
 
@@ -24,7 +24,7 @@ its claims against actual source, walks every branch of its decisions, and
 returns a numbered list of sharp questions and identified gaps with file
 citations.
 
-This is the parallel companion to `/aleph:interview`. Where the interview
+This is the parallel companion to `/aleph:grill-me`. Where the interview
 walks one question at a time with the user, red-team interrogates the
 *artifact* in parallel, with no user interaction between dispatch and
 synthesis.
@@ -40,7 +40,7 @@ synthesis.
 
 ## Do NOT Use For
 
-- Interactive grilling where the user is the subject: `/aleph:interview`
+- Interactive grilling where the user is the subject: `/aleph:grill-me`
 - Reviewing already-implemented code: `/code-review`
 - Investigating a bug or failure: `/debug`
 - Brainstorming when no plan exists yet. There must be an artifact to grill.
