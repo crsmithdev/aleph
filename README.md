@@ -1,9 +1,8 @@
 # aleph
 
 A Claude Code plugin: five skills, hooks against the 2.1.x hook API, and
-Langfuse as the only observability sink. It replaces the earlier Aleph at
-`~/aleph` (skills, hooks, installer, SQLite telemetry, research, UI) and the
-daemon design that lived in this repository until `a7540fa`.
+Langfuse as the only observability sink. It replaces the daemon design that
+lived in this repository until `a7540fa`.
 
 | | |
 |---|---|
@@ -81,5 +80,4 @@ retrievable.
 
 Research, memory hooks, the keyword skill router, behavioral modes, goals,
 eval, the UI, and the `plan`/`sketch`/`git`/`debug`/`code-review` skills.
-`debug` and `code-review` are bundled in Claude Code now. The rest is in
-`~/aleph`'s history.
+`debug` and `code-review` are bundled in Claude Code now.
