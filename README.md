@@ -1,18 +1,25 @@
 # aleph
 
-A Claude Code plugin: five skills, hooks against the 2.1.x hook API, and
+A Claude Code plugin: ten skills, hooks against the 2.1.x hook API, and
 Langfuse as the only observability sink. It replaces the daemon design that
 lived in this repository until `a7540fa`.
 
 | | |
 |---|---|
-| `skills/` | `red-team`, `grill-me`, `to-spec`, `handoff`, `pickup`, `vault`, invoked as `/aleph:<name>` |
+| `skills/` | `red-team`, `grill-me`, `to-spec`, `handoff`, `pickup`, `vault`, `tdd`, `diagnosing-bugs`, `retro`, `writing-for-agents`, invoked as `/aleph:<name>` |
 | `vault/cli.ts` | the memory vault's mechanics: `init`, `write`, `recall`, `lint`, `compile` |
 | `hooks/vault-context.ts` | SessionStart: injects the vault's `Home.md` and `MEMORY.md` |
 | `hooks/obs.ts` | every hook event becomes one OTLP span posted to Langfuse |
 | `hooks/git-guard.ts` | denies `Edit`/`Write` on `main` outside `.worktrees/`; allows the vault except `VAULT.md` |
 | `hooks/hooks.json` | the wiring; every observability entry is `async` |
 | `compose/langfuse.yml` | self-hosted Langfuse on `127.0.0.1:3010` |
+
+## Skills
+
+`tdd`, `diagnosing-bugs`, `retro` and `writing-for-agents` are adapted from
+[mattpocock/skills](https://github.com/mattpocock/skills) (MIT,
+`skills/LICENSE-mattpocock`), with its `CONTEXT.md`, ADR and issue-tracker
+conventions removed and `retro` pointed at the Langfuse trace.
 
 ## Install
 
