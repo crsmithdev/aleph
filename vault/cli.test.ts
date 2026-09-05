@@ -26,7 +26,7 @@ const gitLog = () => Bun.spawnSync(["git", "-C", vault, "log", "--format=%s%n%b"
 const gitStatus = () => Bun.spawnSync(["git", "-C", vault, "status", "--porcelain"], { stdout: "pipe" }).stdout.toString().trim();
 
 function note(title: string, over: Record<string, string> = {}, body?: string): string {
-  const fm = { kind: "gotcha", scope: "aleph-next", confidence: "measured", updated: "2026-09-04", supersedes: "[]", sources: "[trace:abc123]", ...over };
+  const fm = { kind: "gotcha", scope: "aleph", confidence: "measured", updated: "2026-09-04", supersedes: "[]", sources: "[trace:abc123]", ...over };
   const text = `---\n${Object.entries(fm).map(([k, v]) => `${k}: ${v}`).join("\n")}\n---\n` + (body ?? `**Claim.** ${title} does a thing, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- trace abc123\n\n## Related\n[[Home]]\n`);
   const path = join(drafts, `${title}.md`);
   writeFileSync(path, text);
@@ -231,7 +231,7 @@ describe("compile", () => {
   let server: ReturnType<typeof Bun.serve>;
   let failing: ReturnType<typeof Bun.serve>;
   const trace = {
-    id: "t1", name: "aleph-next", metadata: { cwd: "/home/x/aleph-next" },
+    id: "t1", name: "aleph", metadata: { cwd: "/home/x/aleph" },
     observations: [
       { id: "turn1", type: "AGENT", name: "turn", output: "Done. Ran bun test, 12 pass.", startTime: "2026-09-04T10:00:00Z" },
       { id: "p1", type: "EVENT", name: "prompt", parentObservationId: "turn1", input: "fix the gate" },
@@ -256,7 +256,7 @@ describe("compile", () => {
   test("digests turns, handoffs, daily note and cited traces", async () => {
     const r = await runAsync(env(server.port), "compile", "2026-09-04");
     expect(r.code).toBe(0);
-    expect(r.stdout).toContain("### trace t1 (/home/x/aleph-next)");
+    expect(r.stdout).toContain("### trace t1 (/home/x/aleph)");
     expect(r.stdout).toContain("- prompt: fix the gate");
     expect(r.stdout).toContain("ran: bun test");
     expect(r.stdout).toContain("verify: pass backed by bun test");

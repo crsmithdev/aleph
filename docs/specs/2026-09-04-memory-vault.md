@@ -210,7 +210,7 @@ None blocking. Deferred, each with its unblock:
 ## Further Notes
 
 The August contract at the daemon-era vault is the ancestor of `VAULT.md`;
-it is aleph-next lineage and may be trimmed, not rewritten. Nothing from
+it is this repo's own lineage and may be trimmed, not rewritten. Nothing from
 the old construct is carried in. The `verified` score and the verify gate's
 "what was run and observed" sentence are the raw material compile mines;
 the vault does not add its own hooks beyond the SessionStart injection.

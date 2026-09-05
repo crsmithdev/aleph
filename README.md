@@ -24,8 +24,8 @@ conventions removed and `retro` pointed at the Langfuse trace.
 ## Install
 
 ```bash
-ln -s ~/aleph-next ~/.claude/skills/aleph     # loads as aleph@skills-dir
-ln -s ~/aleph-next/identity/CLAUDE.md ~/.claude/CLAUDE.md   # the global CLAUDE.md is this file
+ln -s ~/aleph ~/.claude/skills/aleph     # loads as aleph@skills-dir
+ln -s ~/aleph/identity/CLAUDE.md ~/.claude/CLAUDE.md   # the global CLAUDE.md is this file
 ```
 
 `SKILL.md` edits are live. Hook changes need `/reload-plugins`. For a one-off

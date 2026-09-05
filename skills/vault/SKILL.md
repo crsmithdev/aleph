@@ -25,7 +25,7 @@ existing page rather than writing a second one about the same thing; set
    ---
    aliases: []
    kind: gotcha            # decision | concept | entity | project | gotcha
-   scope: aleph-next       # repo name, or global
+   scope: aleph            # repo name, or global
    confidence: measured    # measured (you ran it) | reported (someone said) | inferred
    updated: 2026-09-04
    supersedes: []

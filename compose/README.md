@@ -30,7 +30,7 @@ project id in `os trace` deep links is known in advance. Confirm with:
 
 ```bash
 curl -sS -u "$PK:$SK" http://127.0.0.1:3010/api/public/projects
-# {"data":[{"id":"aleph-next-local","name":"aleph-next",...}]}
+# {"data":[{"id":"aleph-local","name":"aleph",...}]}
 ```
 
 Then point `obs.otlp_endpoint` at
@@ -38,7 +38,7 @@ Then point `obs.otlp_endpoint` at
 
 ```bash
 LANGFUSE_OTLP_AUTH="Basic $(printf '%s:%s' "$PK" "$SK" | base64 -w0)"   # quotes matter
-LANGFUSE_PROJECT_ID=aleph-next-local
+LANGFUSE_PROJECT_ID=aleph-local
 ```
 
 and run `ALEPH_LIVE=1 bun test tests/live/langfuse.test.ts` to prove ingestion.
