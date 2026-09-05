@@ -1,13 +1,12 @@
-# Langfuse self-hosted, v3 line (3.225.4 as run) — the generic trace/eval plane (design v1.0 §7).
+# Langfuse self-hosted, v3 line (3.225.4 as run): the only observability sink.
 #
-# BROUGHT UP AND VERIFIED 2026-08-21 (docker-ce 29.7.2 inside WSL2, not Docker
-# Desktop): the daemon's spans are ingested and retrievable through Langfuse's
-# API, and `os trace` deep-links to them. Two defects in the first draft of this
-# file were found by running it — the ON CLUSTER migration and the worker's
-# missing S3 region, both fixed below. See docs/RUNBOOK-phase1-slice.md.
+# Brought up and verified 2026-08-21 (docker-ce 29.7.2 inside WSL2, not Docker
+# Desktop): spans posted by the hooks are ingested and retrievable through
+# Langfuse's API. Two defects in the first draft of this file were found by
+# running it, the ON CLUSTER migration and the worker's missing S3 region;
+# both fixed below, both written up in README.md.
 #
-# Everything binds to 127.0.0.1. Exposure is `tailscale serve` only; never Funnel,
-# never a published port on 0.0.0.0.
+# Everything binds to 127.0.0.1; never a published port on 0.0.0.0.
 name: aleph-langfuse
 
 services:
@@ -41,7 +40,7 @@ services:
       TELEMETRY_ENABLED: "false"
       LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
       # Headless bootstrap: org, project, API keys and the first user are created
-      # on boot, so the deep-link project id and ${LANGFUSE_OTLP_AUTH} are known
+      # on boot, so the project id and key pair are known
       # before anything runs. No clicking through the UI to get a key pair.
       LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID}
       LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME}

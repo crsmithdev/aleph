@@ -11,7 +11,6 @@ export interface Digest {
   edits: string[];
   items: string[];
   finalMessage: string;
-  toolCalls: number;
   text: string;
 }
 
@@ -75,7 +74,6 @@ export function digest(transcriptPath: string, promptId: string, fallbackFinal =
   const edits: string[] = [];
   const items: string[] = [];
   let finalMessage = "";
-  let toolCalls = 0;
 
   for (const e of entries) {
     const content = e.message?.content;
@@ -93,7 +91,6 @@ export function digest(transcriptPath: string, promptId: string, fallbackFinal =
     for (const block of content) {
       if (block.type === "text" && block.text) texts.push(block.text);
       if (block.type !== "tool_use") continue;
-      toolCalls++;
       const name: string = block.name ?? "tool";
       const inp = block.input ?? {};
       const out = results.get(block.id);
@@ -117,7 +114,7 @@ export function digest(transcriptPath: string, promptId: string, fallbackFinal =
     `TURN (in order):\n${body || "(no tool calls)"}`,
     `FINAL MESSAGE:\n${finalMessage}`,
   ].join("\n\n");
-  return { prompt, edits, items, finalMessage, toolCalls, text };
+  return { prompt, edits, items, finalMessage, text };
 }
 
 export function userGrantedSkip(prompt: string): boolean {

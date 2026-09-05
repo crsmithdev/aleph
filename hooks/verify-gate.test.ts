@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { digest, userGrantedSkip } from "./lib/digest.ts";
@@ -128,7 +128,6 @@ describe("verify-gate hook", () => {
     const out1 = JSON.parse(r1.stdout);
     expect(out1.decision).toBe("block");
     expect(out1.reason).toContain("Nothing ran after the edit.");
-    const span1 = posted.at(-2)?.url === "/api/public/otel/v1/traces" ? posted.at(-2) : posted.at(-1);
     const scores = posted.filter((p) => p.url === "/api/public/scores");
     expect(scores.at(-1).body).toMatchObject({ name: "verified", value: 0 });
 
@@ -143,7 +142,6 @@ describe("verify-gate hook", () => {
     expect(last.name).toBe("verify-gate");
     expect(last.attributes.find((a: any) => a.key === "langfuse.observation.metadata.kind").value).toEqual({ stringValue: "forced" });
     expect(last.parentSpanId).toMatch(/^[0-9a-f]{16}$/);
-    void span1;
   });
 
   test("judge passes: no output, score 1", async () => {

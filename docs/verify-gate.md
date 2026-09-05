@@ -22,15 +22,15 @@ which changed code is honest about what it verified.
 UserPromptSubmit  verify-gate.ts snapshot → ~/.aleph/spool/snap:<prompt_id>
 Stop              verify-gate.ts
                     stop_hook_active or not → judge anyway (a retry is still a turn)
-                    snapshot unchanged and no Edit|Write marker → pass, no span
+                    snapshot unchanged (outside git: no edits in the transcript) → pass, no span
                     "skip verify" in latest user message → pass, span notes skip
                     denials for prompt_id ≥ 2 → forced pass, score 0.5
-                    digest = transcript entries since the last user text message:
-                      edits (file, tool), commands (Bash input, exit code, output tail ≤ 500 chars),
+                    digest = transcript entries for this prompt_id:
+                      edits (file, tool), commands (Bash input, output tail ≤ 500 chars),
                       other tool calls (name, key input), last assistant message; cap ~12 KB
                     claude -p --model haiku --setting-sources "" --output-format json
                       → {"verdict":"pass"|"deny","reason":"…"} (strict JSON, one retry on parse failure)
-                    deny → stdout {hookSpecificOutput:{hookEventName:"Stop",permissionDecision:"deny",permissionDecisionReason}}
+                    deny → stdout {"decision":"block","reason":…}
                     always → guardrail span + score
 ```
 

@@ -15,7 +15,6 @@ export const REQUIRED = ["kind", "scope", "confidence", "updated", "supersedes",
 export const LISTS = ["aliases", "supersedes", "sources", "tags"] as const;
 export const LINE_BUDGET = 150;
 export const STALE_DAYS = 90;
-export const ROOT_FILES = ["Home", "MEMORY", "VAULT"];
 
 export function vaultDir(): string {
   return process.env.ALEPH_VAULT ?? join(homedir(), ".aleph", "vault");

@@ -9,7 +9,7 @@ function git(cwd: string, ...args: string[]): string | null {
   return proc.exitCode === 0 ? proc.stdout.toString() : null;
 }
 
-export function worktreesOf(cwd: string): string[] {
+function worktreesOf(cwd: string): string[] {
   const top = git(cwd, "rev-parse", "--show-toplevel")?.trim();
   if (!top) return [];
   const listed = git(top, "worktree", "list", "--porcelain") ?? "";

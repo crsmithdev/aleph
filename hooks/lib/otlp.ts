@@ -5,7 +5,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { LangfuseConfig } from "./env.ts";
 
-export const MAX_FIELD = 4096;
+const MAX_FIELD = 4096;
 
 export type AttrValue = string | number | boolean | string[];
 export type OtlpAttr = { key: string; value: Record<string, unknown> };

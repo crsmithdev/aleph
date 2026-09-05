@@ -11,7 +11,7 @@ lived in this repository until `a7540fa`.
 | `hooks/vault-context.ts` | SessionStart: injects the vault's `Home.md` and `MEMORY.md` |
 | `hooks/obs.ts` | every hook event becomes one OTLP span posted to Langfuse |
 | `hooks/git-guard.ts` | denies `Edit`/`Write` on `main` outside `.worktrees/`; allows the vault except `VAULT.md` |
-| `hooks/hooks.json` | the wiring; every observability entry is `async` |
+| `hooks/hooks.json` | the wiring; every observability entry is `async` except `Stop` and `SessionEnd` |
 | `compose/langfuse.yml` | self-hosted Langfuse on `127.0.0.1:3010` |
 
 ## Skills
@@ -98,7 +98,7 @@ breaks; warns on orphans, stale measured claims and same-scope overlap.
 ## Tests
 
 ```bash
-bun test                        # hooks, with a mock Langfuse
+bun test                        # hooks and the vault CLI, with a mock Langfuse
 ALEPH_LIVE=1 bun test tests/live  # posts a span and fetches the trace back; two headless sessions through the vault
 ```
 

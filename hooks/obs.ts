@@ -2,7 +2,8 @@
 /**
  * Every observability hook is this one script. It reads the event from stdin,
  * turns it into one OTLP span, and posts it to Langfuse. Wired with
- * `async: true`, so it never blocks a turn and its stdout is ignored.
+ * `async: true` (except Stop and SessionEnd, which the session would not wait
+ * for), so it never blocks a turn and its stdout is ignored.
  *
  * Tree per session:  session (root) → turn (per prompt) → tool | agent → tool
  */
@@ -11,7 +12,7 @@ import { langfuseConfig } from "./lib/env.ts";
 import { peek, prune, put, take } from "./lib/handshake.ts";
 import { attrs, nano, postSpans, spanId, traceIdFor, truncate, turnSpanIdFor, type AttrValue, type Span } from "./lib/otlp.ts";
 import { readEntries } from "./lib/digest.ts";
-import { costDetails } from "./lib/pricing.ts";
+import { costDetails, type Usage } from "./lib/pricing.ts";
 
 type Payload = Record<string, any>;
 
@@ -64,8 +65,6 @@ function span(name: string, type: string, start: number, extra: Record<string, A
   return s;
 }
 
-
-
 /**
  * Stop fires while the last assistant entry may still be on its way to disk
  * (measured: the final request was missing from the transcript at Stop). Wait,
@@ -101,7 +100,7 @@ function generations(transcriptPath: string, promptId: string, turnId: string, f
     if (entry.type === "assistant" && usage && requestId && !seen.has(requestId)) {
       seen.add(requestId);
       const model: string = entry.message?.model ?? "unknown";
-      const usageDetails: Record<string, number> = { input: usage.input_tokens ?? 0, output: usage.output_tokens ?? 0 };
+      const usageDetails: Usage = { input: usage.input_tokens ?? 0, output: usage.output_tokens ?? 0 };
       if (usage.cache_read_input_tokens) usageDetails.cache_read_input_tokens = usage.cache_read_input_tokens;
       if (usage.cache_creation_input_tokens) usageDetails.cache_creation_input_tokens = usage.cache_creation_input_tokens;
       const cost = costDetails(model, usageDetails);

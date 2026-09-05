@@ -11,7 +11,7 @@ import { serializeFrontmatter } from "./lib/frontmatter.ts";
 import { commitAll, git } from "./lib/git.ts";
 import { handoffsFor, traceDigest } from "./lib/compile.ts";
 import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./lib/templates.ts";
-import { budgetFindings, citedTraces, clock, folderFor, health, healthLine, links, lintVault, loadVault, readNote, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
+import { budgetFindings, citedTraces, clock, folderFor, health, healthLine, lintVault, loadVault, readNote, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
 
 const [cmd, ...rest] = process.argv.slice(2);
 const root = resolve(vaultDir());
