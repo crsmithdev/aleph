@@ -30,6 +30,7 @@ export async function judge(digestText: string, timeoutMs = 30_000): Promise<Jud
   const env = { ...process.env };
   delete env.CLAUDECODE;
   delete env.CLAUDE_CODE_ENTRYPOINT;
+  delete env.ANTHROPIC_API_KEY; // the judge runs on the subscription, never the API
   env.MAX_THINKING_TOKENS = "0"; // measured: 3 s without thinking, 15-45 s with it, same verdicts
   let error = "";
   for (let attempt = 1; attempt <= 2; attempt++) {

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { attrs, traceIdFor, truncate } from "./lib/otlp.ts";
+import { loadDotenv } from "./lib/env.ts";
 
 const HOOKS = import.meta.dir;
 
@@ -22,6 +23,21 @@ describe("otlp helpers", () => {
     expect(out.map((a) => a.key)).toEqual(["a", "d", "e"]);
     expect(out[1].value).toEqual({ arrayValue: { values: [{ stringValue: "t1" }, { stringValue: "t2" }] } });
     expect(out[2].value).toEqual({ intValue: "3" });
+  });
+});
+
+describe("dotenv", () => {
+  test("loads only LANGFUSE_* keys and never overrides the shell", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "aleph-env-")), ".env");
+    writeFileSync(file, 'ANTHROPIC_API_KEY=sk-ant-x\nLANGFUSE_PUBLIC_KEY="pk-file"\nLANGFUSE_SECRET_KEY=sk-file\n# LANGFUSE_BASE_URL=commented\n');
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.LANGFUSE_PUBLIC_KEY;
+    process.env.LANGFUSE_SECRET_KEY = "sk-shell";
+    loadDotenv(file);
+    expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(process.env.LANGFUSE_PUBLIC_KEY).toBe("pk-file");
+    expect(process.env.LANGFUSE_SECRET_KEY).toBe("sk-shell");
+    rmSync(join(file, ".."), { recursive: true, force: true });
   });
 });
 
