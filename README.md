@@ -53,7 +53,11 @@ Without those two keys the hooks exit silently.
 
 ## Traces
 
-One session is one trace; its id is `sha256(session_id)[:32]`.
+One session is one trace; its id is `sha256(session_id)[:32]`. The trace is
+named after the session's starting directory, once, and carries a Langfuse
+`environment` that the Sessions and Traces pages filter on: `interactive`,
+`headless` (an ancestor is `claude -p`) or whatever `ALEPH_ENV` says (the live
+tests set `test`).
 
 ```
 session                 root, tags source:* and mode:*

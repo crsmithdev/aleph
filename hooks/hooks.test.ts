@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { attrs, traceIdFor, truncate } from "./lib/otlp.ts";
-import { loadDotenv } from "./lib/env.ts";
+import { classifyEnvironment, loadDotenv } from "./lib/env.ts";
 
 const HOOKS = import.meta.dir;
 
@@ -42,6 +42,18 @@ describe("dotenv", () => {
   });
 });
 
+describe("environment", () => {
+  test("headless only when an ancestor is claude -p; ALEPH_ENV wins", () => {
+    const interactive = [["/home/x/.local/bin/claude"], ["/bin/bash", "/home/x/dotfiles/bin/claude"], ["/bin/bash"]];
+    const headless = [["bun", "test"], ["/bin/bash", "/home/x/dotfiles/bin/claude", "-p", "hello", "--model", "haiku"]];
+    const lookalike = [["/usr/bin/grep", "-p", "claude"], ["/home/x/.local/bin/claude"]];
+    expect(classifyEnvironment(interactive, undefined)).toBe("interactive");
+    expect(classifyEnvironment(headless, undefined)).toBe("headless");
+    expect(classifyEnvironment(lookalike, undefined)).toBe("interactive");
+    expect(classifyEnvironment(headless, "test")).toBe("test");
+  });
+});
+
 describe("obs hook", () => {
   const posted: any[] = [];
   let server: ReturnType<typeof Bun.serve>;
@@ -57,7 +69,7 @@ describe("obs hook", () => {
   async function fire(payload: Record<string, unknown>) {
     const proc = Bun.spawn(["bun", join(HOOKS, "obs.ts")], {
       stdin: new TextEncoder().encode(JSON.stringify({ session_id: session, cwd: "/tmp/proj", ...payload })),
-      env: { ...process.env, LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SPOOL: spool },
+      env: { ...process.env, LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SPOOL: spool, ALEPH_ENV: "test" },
       stdout: "pipe", stderr: "pipe",
     });
     const code = await proc.exited;
@@ -76,6 +88,7 @@ describe("obs hook", () => {
     expect(spans[0].name).toBe("session");
     expect(attr(spans[0], "langfuse.session.id")).toEqual({ stringValue: session });
     expect(attr(spans[0], "langfuse.trace.name")).toEqual({ stringValue: "proj" });
+    expect(attr(spans[0], "langfuse.environment")).toEqual({ stringValue: "test" });
     expect(attr(spans[0], "langfuse.trace.tags")).toEqual({ arrayValue: { values: [{ stringValue: "source:startup" }, { stringValue: "mode:auto" }] } });
     expect(posted.at(-1).url).toBe("/api/public/otel/v1/traces");
     expect(posted.at(-1).headers["x-langfuse-ingestion-version"]).toBe("4");
@@ -100,6 +113,8 @@ describe("obs hook", () => {
     expect(tool.parentSpanId).toBe(turnId);
     expect(attr(tool, "langfuse.observation.type")).toEqual({ stringValue: "tool" });
     expect(attr(tool, "langfuse.observation.output")).toEqual({ stringValue: "a\nb" });
+    expect(attr(tool, "langfuse.environment")).toEqual({ stringValue: "test" });
+    expect(attr(tool, "langfuse.trace.name")).toBeUndefined(); // named once, at SessionStart
     const durationMs = Number(BigInt(tool.endTimeUnixNano) - BigInt(tool.startTimeUnixNano)) / 1e6;
     expect(durationMs).toBeGreaterThan(100);
 

@@ -27,6 +27,7 @@ describeLive("live langfuse", () => {
         "langfuse.user.id": "chris",
         "langfuse.observation.type": "span",
         "langfuse.trace.tags": ["live-test"],
+        "langfuse.environment": "test",
       }),
     }]);
     expect(result.ok).toBe(true);

@@ -8,7 +8,7 @@
  * Tree per session:  session (root) → turn (per prompt) → tool | agent → tool
  */
 import { basename } from "node:path";
-import { langfuseConfig } from "./lib/env.ts";
+import { langfuseConfig, sessionEnvironment } from "./lib/env.ts";
 import { peek, prune, put, take } from "./lib/handshake.ts";
 import { attrs, nano, postSpans, spanId, traceIdFor, truncate, turnSpanIdFor, type AttrValue, type Span } from "./lib/otlp.ts";
 import { readEntries } from "./lib/digest.ts";
@@ -46,7 +46,7 @@ function scalars(payload: Payload, skip: string[]): Record<string, AttrValue> {
 const base: Record<string, AttrValue | undefined> = {
   "langfuse.session.id": sessionId,
   "langfuse.user.id": "chris",
-  "langfuse.trace.name": input.cwd ? basename(input.cwd) : undefined,
+  "langfuse.environment": sessionEnvironment(),
   "aleph.event": event,
 };
 
@@ -122,6 +122,7 @@ switch (event) {
   case "SessionStart":
     prune();
     spans.push(span("session", "span", now, {
+      "langfuse.trace.name": input.cwd ? basename(input.cwd) : undefined, // once: a later cwd (a worktree) must not rename the trace
       "langfuse.trace.tags": [`source:${input.source ?? "unknown"}`, `mode:${input.permission_mode ?? "unknown"}`],
       "langfuse.trace.metadata.cwd": input.cwd,
       "langfuse.observation.metadata.source": input.source,

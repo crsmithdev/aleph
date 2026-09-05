@@ -22,7 +22,7 @@ describeLive("live vault", () => {
   afterAll(() => rmSync(join(vault, ".."), { recursive: true, force: true }));
 
   function headless(prompt: string): string {
-    const env = { ...process.env, ALEPH_VAULT: vault, MAX_THINKING_TOKENS: "0" };
+    const env = { ...process.env, ALEPH_VAULT: vault, MAX_THINKING_TOKENS: "0", ALEPH_ENV: "test" };
     delete (env as any).CLAUDECODE;
     const p = Bun.spawnSync(["claude", "-p", prompt, "--model", "sonnet", "--permission-mode", "bypassPermissions"], { env, cwd: vault, stdout: "pipe", stderr: "pipe", timeout: 240_000 });
     if (p.exitCode !== 0) throw new Error(p.stderr.toString());
