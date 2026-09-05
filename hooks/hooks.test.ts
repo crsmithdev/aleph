@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { attrs, traceIdFor, truncate } from "./lib/otlp.ts";
+import { attrs, traceIdFor, truncate, turnSpanIdFor, turnTraceIdFor } from "./lib/otlp.ts";
 import { classifyEnvironment, loadDotenv } from "./lib/env.ts";
 
 const HOOKS = import.meta.dir;
@@ -78,30 +78,38 @@ describe("obs hook", () => {
   const lastSpans = () => posted.at(-1).body.resourceSpans[0].scopeSpans[0].spans;
   const attr = (span: any, key: string) => span.attributes.find((a: any) => a.key === key)?.value;
 
-  test("SessionStart posts a root span with trace attributes and auth headers", async () => {
+  test("SessionStart posts nothing and leaves the session's name and tags for its turns", async () => {
+    const before = posted.length;
     const r = await fire({ hook_event_name: "SessionStart", source: "startup", permission_mode: "auto" });
     expect(r.code).toBe(0);
     expect(r.stdout).toBe("");
+    expect(posted.length).toBe(before);
+    expect(JSON.parse(readFileSync(join(spool, `session:${session}.json`), "utf8"))).toMatchObject({ name: "proj", cwd: "/tmp/proj", tags: ["source:startup", "mode:auto"] });
+  });
+
+  test("a prompt opens a turn trace whose root carries the prompt, name, tags and auth headers", async () => {
+    await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p1", prompt: "hello" });
     const spans = lastSpans();
     expect(spans).toHaveLength(1);
-    expect(spans[0].traceId).toBe(traceIdFor(session));
-    expect(spans[0].name).toBe("session");
-    expect(attr(spans[0], "langfuse.session.id")).toEqual({ stringValue: session });
-    expect(attr(spans[0], "langfuse.trace.name")).toEqual({ stringValue: "proj" });
-    expect(attr(spans[0], "langfuse.environment")).toEqual({ stringValue: "test" });
-    expect(attr(spans[0], "langfuse.trace.tags")).toEqual({ arrayValue: { values: [{ stringValue: "source:startup" }, { stringValue: "mode:auto" }] } });
+    const turn = spans[0];
+    expect(turn.name).toBe("turn");
+    expect(turn.traceId).toBe(turnTraceIdFor("p1"));
+    expect(turn.spanId).toBe(turnSpanIdFor("p1"));
+    expect(turn.parentSpanId).toBeUndefined();
+    expect(attr(turn, "langfuse.observation.input")).toEqual({ stringValue: "hello" });
+    expect(attr(turn, "langfuse.trace.input")).toEqual({ stringValue: "hello" });
+    expect(attr(turn, "langfuse.observation.output")).toBeUndefined();
+    expect(attr(turn, "langfuse.session.id")).toEqual({ stringValue: session });
+    expect(attr(turn, "langfuse.environment")).toEqual({ stringValue: "test" });
+    expect(attr(turn, "langfuse.trace.name")).toEqual({ stringValue: "proj" });
+    expect(attr(turn, "langfuse.trace.tags")).toEqual({ arrayValue: { values: [{ stringValue: "source:startup" }, { stringValue: "mode:auto" }] } });
+    expect(attr(turn, "langfuse.trace.metadata.cwd")).toEqual({ stringValue: "/tmp/proj" });
     expect(posted.at(-1).url).toBe("/api/public/otel/v1/traces");
     expect(posted.at(-1).headers["x-langfuse-ingestion-version"]).toBe("4");
     expect(posted.at(-1).headers.authorization).toBe(`Basic ${Buffer.from("pk:sk").toString("base64")}`);
   });
 
-  test("prompt → tool → stop nest under one turn span with real tool duration", async () => {
-    await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p1", prompt: "hello" });
-    const prompt = lastSpans()[0];
-    expect(prompt.name).toBe("prompt");
-    const turnId = prompt.parentSpanId;
-    expect(turnId).toMatch(/^[0-9a-f]{16}$/);
-
+  test("tools nest under the turn in its trace with real duration; Stop completes the same turn span", async () => {
     const pre = await fire({ hook_event_name: "PreToolUse", prompt_id: "p1", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "ls" } });
     expect(pre.code).toBe(0);
     const before = posted.length;
@@ -110,11 +118,12 @@ describe("obs hook", () => {
     expect(posted.length).toBe(before + 1);
     const tool = lastSpans()[0];
     expect(tool.name).toBe("Bash");
-    expect(tool.parentSpanId).toBe(turnId);
+    expect(tool.traceId).toBe(turnTraceIdFor("p1"));
+    expect(tool.parentSpanId).toBe(turnSpanIdFor("p1"));
     expect(attr(tool, "langfuse.observation.type")).toEqual({ stringValue: "tool" });
     expect(attr(tool, "langfuse.observation.output")).toEqual({ stringValue: "a\nb" });
     expect(attr(tool, "langfuse.environment")).toEqual({ stringValue: "test" });
-    expect(attr(tool, "langfuse.trace.name")).toEqual({ stringValue: "proj" }); // named at SessionStart, repeated on every span
+    expect(attr(tool, "langfuse.trace.name")).toEqual({ stringValue: "proj" });
     const durationMs = Number(BigInt(tool.endTimeUnixNano) - BigInt(tool.startTimeUnixNano)) / 1e6;
     expect(durationMs).toBeGreaterThan(100);
 
@@ -126,36 +135,61 @@ describe("obs hook", () => {
 
     await fire({ hook_event_name: "Stop", prompt_id: "p1", last_assistant_message: "done", cwd: "/tmp/proj/.worktrees/x" });
     const turn = lastSpans()[0];
-    expect(attr(turn, "langfuse.trace.name")).toEqual({ stringValue: "proj" }); // a worktree cwd does not rename the trace
     expect(turn.name).toBe("turn");
-    expect(turn.spanId).toBe(turnId);
+    expect(turn.traceId).toBe(turnTraceIdFor("p1"));
+    expect(turn.spanId).toBe(turnSpanIdFor("p1"));
     expect(turn.parentSpanId).toBeUndefined();
+    expect(attr(turn, "langfuse.observation.input")).toEqual({ stringValue: "hello" });
     expect(attr(turn, "langfuse.observation.output")).toEqual({ stringValue: "done" });
+    expect(attr(turn, "langfuse.trace.output")).toEqual({ stringValue: "done" });
+    expect(attr(turn, "langfuse.trace.name")).toEqual({ stringValue: "proj" }); // a worktree cwd does not rename the trace
+    expect(BigInt(turn.endTimeUnixNano) - BigInt(turn.startTimeUnixNano)).toBeGreaterThan(BigInt(100_000_000));
   });
 
-  test("subagent tools nest under the agent span, which nests under the turn", async () => {
+  test("StopFailure completes the turn as an error carrying the API message", async () => {
+    await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p3", prompt: "write a story" });
+    await fire({ hook_event_name: "StopFailure", prompt_id: "p3", error: "invalid_request", last_assistant_message: "API Error: safeguards flagged this message" });
+    const turn = lastSpans()[0];
+    expect(turn.name).toBe("turn");
+    expect(turn.spanId).toBe(turnSpanIdFor("p3"));
+    expect(turn.status).toEqual({ code: 2, message: "invalid_request: API Error: safeguards flagged this message" });
+    expect(attr(turn, "langfuse.observation.level")).toEqual({ stringValue: "ERROR" });
+    expect(attr(turn, "langfuse.observation.input")).toEqual({ stringValue: "write a story" });
+    expect(attr(turn, "langfuse.observation.output")).toEqual({ stringValue: "API Error: safeguards flagged this message" });
+  });
+
+  test("subagent tools nest under the agent span, which nests under the turn, all in the turn's trace", async () => {
     await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p2", prompt: "delegate" });
-    const turnId = lastSpans()[0].parentSpanId;
     await fire({ hook_event_name: "SubagentStart", prompt_id: "p2", agent_id: "a1", agent_type: "Explore" });
-    await fire({ hook_event_name: "PreToolUse", prompt_id: "p2", agent_id: "a1", agent_type: "Explore", tool_name: "Read", tool_use_id: "t3", tool_input: { file_path: "/x" } });
-    await fire({ hook_event_name: "PostToolUse", prompt_id: "p2", agent_id: "a1", agent_type: "Explore", tool_name: "Read", tool_use_id: "t3", tool_input: { file_path: "/x" }, tool_response: "…" });
+    // a subagent's tool events may arrive without the prompt id; the agent handshake still knows the trace
+    await fire({ hook_event_name: "PreToolUse", agent_id: "a1", agent_type: "Explore", tool_name: "Read", tool_use_id: "t3", tool_input: { file_path: "/x" } });
+    await fire({ hook_event_name: "PostToolUse", agent_id: "a1", agent_type: "Explore", tool_name: "Read", tool_use_id: "t3", tool_input: { file_path: "/x" }, tool_response: "…" });
     const tool = lastSpans()[0];
     await fire({ hook_event_name: "SubagentStop", prompt_id: "p2", agent_id: "a1", agent_type: "Explore", last_assistant_message: "found it" });
     const agent = lastSpans()[0];
     expect(agent.name).toBe("Explore");
-    expect(agent.parentSpanId).toBe(turnId);
+    expect(agent.traceId).toBe(turnTraceIdFor("p2"));
+    expect(agent.parentSpanId).toBe(turnSpanIdFor("p2"));
+    expect(tool.traceId).toBe(turnTraceIdFor("p2"));
     expect(tool.parentSpanId).toBe(agent.spanId);
   });
 
-  test("unknown events become metadata-only events; missing keys exit silently", async () => {
-    await fire({ hook_event_name: "PreCompact", compact_reason: "auto", trigger: "auto" });
+  test("other events inside a turn become metadata-only events; outside a turn, or without keys, nothing posts", async () => {
+    await fire({ hook_event_name: "PreCompact", prompt_id: "p2", compact_reason: "auto", trigger: "auto" });
     const ev = lastSpans()[0];
     expect(ev.name).toBe("PreCompact");
+    expect(ev.traceId).toBe(turnTraceIdFor("p2"));
+    expect(ev.parentSpanId).toBe(turnSpanIdFor("p2"));
     expect(attr(ev, "langfuse.observation.metadata.compact_reason")).toEqual({ stringValue: "auto" });
 
-    const before = posted.length;
+    let before = posted.length;
+    const outside = await fire({ hook_event_name: "SessionEnd", reason: "other" });
+    expect(outside.code).toBe(0);
+    expect(posted.length).toBe(before);
+
+    before = posted.length;
     const proc = Bun.spawn(["bun", join(HOOKS, "obs.ts")], {
-      stdin: new TextEncoder().encode(JSON.stringify({ session_id: session, hook_event_name: "Stop" })),
+      stdin: new TextEncoder().encode(JSON.stringify({ session_id: session, hook_event_name: "Stop", prompt_id: "p1" })),
       env: { PATH: process.env.PATH, HOME: mkdtempSync(join(tmpdir(), "nohome-")), ALEPH_SPOOL: spool },
       stdout: "pipe",
     });

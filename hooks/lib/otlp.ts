@@ -22,9 +22,14 @@ export interface Span {
   status?: { code: number; message?: string };
 }
 
-/** One session, one trace: the id is a pure function of the session id. */
-export function traceIdFor(sessionId: string): string {
-  return createHash("sha256").update(sessionId).digest("hex").slice(0, 32);
+/** A trace id from any string; the live test uses it for a throwaway session. */
+export function traceIdFor(seed: string): string {
+  return createHash("sha256").update(seed).digest("hex").slice(0, 32);
+}
+
+/** One turn, one trace: the id is a pure function of the prompt id, so every hook lands in the same trace. */
+export function turnTraceIdFor(promptId: string): string {
+  return traceIdFor(`turn:${promptId}`);
 }
 
 export function spanId(): string {

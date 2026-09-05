@@ -233,8 +233,7 @@ describe("compile", () => {
   const trace = {
     id: "t1", name: "aleph", metadata: { cwd: "/home/x/aleph" },
     observations: [
-      { id: "turn1", type: "AGENT", name: "turn", output: "Done. Ran bun test, 12 pass.", startTime: "2026-09-04T10:00:00Z" },
-      { id: "p1", type: "EVENT", name: "prompt", parentObservationId: "turn1", input: "fix the gate" },
+      { id: "turn1", type: "AGENT", name: "turn", input: "fix the gate", output: "Done. Ran bun test, 12 pass.", startTime: "2026-09-04T10:00:00Z" },
       { id: "b1", type: "TOOL", name: "Bash", parentObservationId: "turn1", input: { command: "bun test" } },
       { id: "g1", type: "GUARDRAIL", name: "verify-gate", parentObservationId: "turn1", metadata: { verdict: "pass", reason: "backed by bun test" } },
     ],

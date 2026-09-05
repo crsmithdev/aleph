@@ -102,5 +102,5 @@ one-off server on a free port at or above 3002 and kill it when done; never
 assume a shared server is serving your code. Headless checks run as
 `claude -p` with `CLAUDECODE` unset.
 
-Every session is traced to Langfuse at `http://127.0.0.1:3010`; the trace id
-is `sha256(session_id)[:32]`. Look there before guessing what a past session did.
+Every session is traced to Langfuse at `http://127.0.0.1:3010`, one trace per
+turn under the session id. Look there before guessing what a past session did.

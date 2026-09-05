@@ -53,20 +53,21 @@ Without those two keys the hooks exit silently.
 
 ## Traces
 
-One session is one trace; its id is `sha256(session_id)[:32]`. The trace is
-named after the session's starting directory, once, and carries a Langfuse
-`environment` that the Sessions and Traces pages filter on: `interactive`,
-`headless` (an ancestor is `claude -p`) or whatever `ALEPH_ENV` says (the live
-tests set `test`).
+One turn is one trace, id `sha256("turn:" + prompt_id)[:32]`, and a session is
+the Langfuse session that groups them, so the Sessions page shows a session
+as its prompts and replies. Every trace is named after the session's starting
+directory and carries a Langfuse `environment` that the Sessions and Traces
+pages filter on: `interactive`, `headless` (an ancestor is `claude -p`) or
+whatever `ALEPH_ENV` says (the live tests set `test`).
 
 ```
-session                 root, tags source:* and mode:*
-└─ turn                 one per prompt, output = last assistant message
-   ├─ prompt            event, input = the prompt
-   ├─ <model id>        one generation per API request, usage and cost
-   ├─ <tool name>       real start and end via a Pre→Post handshake file
-   ├─ <agent type>      subagent, with its own tool spans beneath it
-   └─ verify-gate       guardrail, verdict and reason (docs/verify-gate.md)
+turn                    root: input = the prompt, output = the last assistant
+│                       message, tags source:* and mode:*, metadata cwd. Posted
+│                       at the prompt, completed in place at Stop or StopFailure
+├─ <model id>           one generation per API request, usage and cost
+├─ <tool name>          real start and end via a Pre→Post handshake file
+├─ <agent type>         subagent, with its own tool spans beneath it
+└─ verify-gate          guardrail, verdict and reason (docs/verify-gate.md)
 ```
 
 Generations come from the transcript at `Stop`: one per `requestId`, with
@@ -75,9 +76,10 @@ as usage and a cost computed from the price table in `hooks/lib/pricing.ts`.
 The hook prices them itself because Langfuse's public models API keeps only
 input and output prices, and cache reads are most of a Claude Code request.
 
-Compaction, permission denials, API failures and session end are events on
-the trace. A trace is at
-`http://127.0.0.1:3010/project/aleph-local/traces/<id>`.
+A turn that ends in StopFailure is an error trace whose output is the API
+message. Compaction and permission denials are events under the turn; session
+start and end post nothing. A session is at
+`http://127.0.0.1:3010/project/aleph-local/sessions/<session_id>`.
 
 ## Vault
 

@@ -9,11 +9,11 @@
  *                     otherwise ask the judge; deny with its reason
  *                     always record a guardrail span and a score
  */
-import { langfuseConfig } from "./lib/env.ts";
+import { langfuseConfig, sessionEnvironment } from "./lib/env.ts";
 import { digest, userGrantedSkip } from "./lib/digest.ts";
 import { peek, put, take } from "./lib/handshake.ts";
 import { judge } from "./lib/judge.ts";
-import { attrs, nano, postSpans, spanId, traceIdFor, truncate, turnSpanIdFor, type Span } from "./lib/otlp.ts";
+import { attrs, nano, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type Span } from "./lib/otlp.ts";
 import { snapshot } from "./lib/snapshot.ts";
 
 const input = JSON.parse(await Bun.stdin.text());
@@ -70,7 +70,7 @@ if (outcome.verdict === "pass") take(`snap:${promptId}`);
 // Record, unless nothing happened.
 const cfg = langfuseConfig();
 if (cfg && outcome.kind !== "unchanged") {
-  const traceId = traceIdFor(sessionId);
+  const traceId = turnTraceIdFor(promptId);
   const span: Span = {
     traceId,
     spanId: spanId(),
@@ -82,6 +82,7 @@ if (cfg && outcome.kind !== "unchanged") {
     attributes: attrs({
       "langfuse.session.id": sessionId,
       "langfuse.user.id": "chris",
+      "langfuse.environment": sessionEnvironment(),
       "langfuse.observation.type": "guardrail",
       "langfuse.observation.level": outcome.kind === "fail-open" || outcome.kind === "forced" ? "WARNING" : "DEFAULT",
       "langfuse.observation.input": truncate(d.text),

@@ -2,15 +2,18 @@
 /**
  * Every observability hook is this one script. It reads the event from stdin,
  * turns it into one OTLP span, and posts it to Langfuse. Wired with
- * `async: true` (except Stop and SessionEnd, which the session would not wait
- * for), so it never blocks a turn and its stdout is ignored.
+ * `async: true` (except Stop, StopFailure and SessionEnd, which the session
+ * would not wait for), so it never blocks a turn and its stdout is ignored.
  *
- * Tree per session:  session (root) → turn (per prompt) → tool | agent → tool
+ * One trace per turn, all in one Langfuse session, so the Sessions page shows
+ * a session as its prompts and replies:
+ *
+ *   turn (root)  →  tool | agent → tool | generation | event
  */
 import { basename } from "node:path";
 import { langfuseConfig, sessionEnvironment } from "./lib/env.ts";
 import { peek, prune, put, take } from "./lib/handshake.ts";
-import { attrs, nano, postSpans, spanId, traceIdFor, truncate, turnSpanIdFor, type AttrValue, type Span } from "./lib/otlp.ts";
+import { attrs, nano, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type AttrValue, type Span } from "./lib/otlp.ts";
 import { readEntries } from "./lib/digest.ts";
 import { costDetails, type Usage } from "./lib/pricing.ts";
 
@@ -23,20 +26,32 @@ if (!cfg || !sessionId) process.exit(0);
 
 const now = Date.now();
 const event: string = input.hook_event_name ?? "unknown";
-const traceId = traceIdFor(sessionId);
+const sessionKey = `session:${sessionId}`;
 const turnKey = input.prompt_id ? `turn:${input.prompt_id}` : null;
 const agentKey = input.agent_id ? `agent:${input.agent_id}` : null;
-const sessionKey = `session:${sessionId}`;
-// Named once, at SessionStart, and repeated on every span: a span without a trace name lets Langfuse
-// rename the trace after its root span, and a later cwd (a worktree) must not rename it either.
-const cwdName = input.cwd ? basename(input.cwd) : undefined;
-const traceName = event === "SessionStart" ? cwdName : (peek(sessionKey)?.name ?? cwdName);
+
+// SessionStart posts nothing. It leaves the name, tags and cwd that every turn trace repeats.
+if (event === "SessionStart") {
+  prune();
+  put(sessionKey, {
+    start: now,
+    name: input.cwd ? basename(input.cwd) : undefined,
+    cwd: input.cwd,
+    tags: [`source:${input.source ?? "unknown"}`, `mode:${input.permission_mode ?? "unknown"}`],
+  });
+  process.exit(0);
+}
+
+// A span belongs to its turn's trace. Inside a subagent the agent's handshake remembers which.
+const resolvedTraceId = input.prompt_id ? turnTraceIdFor(input.prompt_id) : agentKey ? peek(agentKey)?.traceId : undefined;
+if (!resolvedTraceId) process.exit(0);
+const traceId: string = resolvedTraceId;
+const turnSpanId = input.prompt_id ? turnSpanIdFor(input.prompt_id) : undefined;
 
 /** Tool spans inside a subagent hang off the agent span; everything else off the turn. */
 function parentForChild(): string | undefined {
   if (agentKey) return peek(agentKey)?.spanId;
-  if (turnKey) return peek(turnKey)?.spanId;
-  return undefined;
+  return turnSpanId;
 }
 
 function scalars(payload: Payload, skip: string[]): Record<string, AttrValue> {
@@ -48,11 +63,15 @@ function scalars(payload: Payload, skip: string[]): Record<string, AttrValue> {
   return out;
 }
 
+// Trace attributes ride on every span: a span without them lets Langfuse rename the trace after its root span.
+const session = peek(sessionKey);
 const base: Record<string, AttrValue | undefined> = {
   "langfuse.session.id": sessionId,
   "langfuse.user.id": "chris",
   "langfuse.environment": sessionEnvironment(),
-  "langfuse.trace.name": traceName,
+  "langfuse.trace.name": session?.name ?? (input.cwd ? basename(input.cwd) : undefined),
+  "langfuse.trace.tags": session?.tags,
+  "langfuse.trace.metadata.cwd": session?.cwd ?? input.cwd,
   "aleph.event": event,
 };
 
@@ -69,6 +88,25 @@ function span(name: string, type: string, start: number, extra: Record<string, A
   };
   if (opts.error) s.status = { code: 2, message: opts.error.slice(0, 200) };
   return s;
+}
+
+/**
+ * The turn is the trace's root, posted once at the prompt and again, with the
+ * same id, when it ends: Langfuse updates the span in place. Its input and
+ * output are the trace's, which is what the Sessions page shows.
+ */
+function turnSpan(start: number, output: string | undefined, error?: string): Span {
+  const prompt = peek(turnKey!)?.input;
+  const inputText = prompt === undefined ? undefined : truncate(prompt);
+  const outputText = output === undefined ? undefined : truncate(output);
+  return span("turn", "agent", start, {
+    "langfuse.observation.input": inputText,
+    "langfuse.trace.input": inputText,
+    "langfuse.observation.output": outputText,
+    "langfuse.trace.output": outputText,
+    "langfuse.observation.level": error ? "ERROR" : "DEFAULT",
+    "langfuse.observation.metadata.prompt_id": input.prompt_id,
+  }, { id: turnSpanId, error });
 }
 
 /**
@@ -95,7 +133,7 @@ function settledEntries(transcriptPath: string, promptId: string, finalMessage: 
  * span runs from the previous entry's timestamp to this one's: the model was
  * the only thing happening in between.
  */
-function generations(transcriptPath: string, promptId: string, turnId: string, finalMessage: string): Span[] {
+function generations(transcriptPath: string, promptId: string, finalMessage: string): Span[] {
   const out: Span[] = [];
   const seen = new Set<string>();
   let previous = 0;
@@ -115,7 +153,7 @@ function generations(transcriptPath: string, promptId: string, turnId: string, f
         "langfuse.observation.usage_details": JSON.stringify(usageDetails),
         "langfuse.observation.cost_details": cost ? JSON.stringify(cost) : undefined,
         "langfuse.observation.metadata.request_id": requestId,
-      }, { parent: turnId, end: at }));
+      }, { parent: turnSpanId, end: at }));
     }
     previous = at;
   }
@@ -125,25 +163,10 @@ function generations(transcriptPath: string, promptId: string, turnId: string, f
 const spans: Span[] = [];
 
 switch (event) {
-  case "SessionStart":
-    prune();
-    put(sessionKey, { start: now, name: traceName });
-    spans.push(span("session", "span", now, {
-      "langfuse.trace.tags": [`source:${input.source ?? "unknown"}`, `mode:${input.permission_mode ?? "unknown"}`],
-      "langfuse.trace.metadata.cwd": input.cwd,
-      "langfuse.observation.metadata.source": input.source,
-    }));
+  case "UserPromptSubmit":
+    put(turnKey!, { start: now, spanId: turnSpanId, input: input.prompt ?? "" });
+    spans.push(turnSpan(now, undefined));
     break;
-
-  case "UserPromptSubmit": {
-    const turnSpanId = turnSpanIdFor(input.prompt_id ?? sessionId);
-    if (turnKey) put(turnKey, { start: now, spanId: turnSpanId });
-    spans.push(span("prompt", "event", now, {
-      "langfuse.observation.input": truncate(input.prompt ?? ""),
-      "langfuse.observation.metadata.prompt_id": input.prompt_id,
-    }, { parent: turnKey ? turnSpanId : undefined }));
-    break;
-  }
 
   case "PreToolUse":
     if (input.tool_use_id) put(`tool:${input.tool_use_id}`, { start: now, input: input.tool_input });
@@ -168,7 +191,7 @@ switch (event) {
   }
 
   case "SubagentStart":
-    if (agentKey) put(agentKey, { start: now, spanId: spanId(), parentSpanId: turnKey ? peek(turnKey)?.spanId : undefined });
+    if (agentKey) put(agentKey, { start: now, spanId: spanId(), parentSpanId: turnSpanId, traceId });
     process.exit(0);
 
   case "SubagentStop": {
@@ -177,34 +200,33 @@ switch (event) {
       "langfuse.observation.output": truncate(input.last_assistant_message ?? ""),
       "langfuse.observation.metadata.agent_id": input.agent_id,
       "langfuse.observation.metadata.agent_type": input.agent_type,
-    }, { id: hs?.spanId, parent: hs?.parentSpanId ?? (turnKey ? peek(turnKey)?.spanId : undefined) }));
+    }, { id: hs?.spanId, parent: hs?.parentSpanId ?? turnSpanId }));
     break;
   }
 
-  case "Stop": {
+  case "Stop":
+  case "StopFailure": {
     // peek, not take: a blocked Stop fires again and the turn keeps its start; prune() clears the file later
-    const hs = turnKey ? peek(turnKey) : null;
-    const turnId = hs?.spanId ?? turnSpanIdFor(input.prompt_id ?? sessionId);
-    spans.push(span("turn", "agent", hs?.start ?? now, {
-      "langfuse.observation.output": truncate(input.last_assistant_message ?? ""),
-      "langfuse.observation.metadata.prompt_id": input.prompt_id,
-    }, { id: turnId }));
-    if (input.prompt_id && input.transcript_path) spans.push(...generations(input.transcript_path, input.prompt_id, turnId, input.last_assistant_message ?? ""));
+    const start = peek(turnKey!)?.start ?? now;
+    const failed = event === "StopFailure";
+    const message: string = input.last_assistant_message ?? "";
+    spans.push(turnSpan(start, message, failed ? (input.error ? `${input.error}: ${message}` : message || "StopFailure") : undefined));
+    // a failed turn's message is the API error, which never reaches the transcript, so do not wait for it
+    if (input.transcript_path) spans.push(...generations(input.transcript_path, input.prompt_id, failed ? "" : message));
     break;
   }
 
   default: {
-    // PreCompact, PostCompact, StopFailure, PermissionDenied, SessionEnd, anything new.
-    const level = event === "StopFailure" || event === "PermissionDenied" ? "WARNING" : "DEFAULT";
+    // PreCompact, PostCompact, PermissionDenied, SessionEnd, anything new that arrives inside a turn.
     spans.push(span(event, "event", now, {
       ...scalars(input, ["session_id", "cwd", "hook_event_name", "transcript_path", "prompt_id"]),
-      "langfuse.observation.level": level,
+      "langfuse.observation.level": event === "PermissionDenied" ? "WARNING" : "DEFAULT",
       "langfuse.observation.input": input.tool_input ? truncate(input.tool_input) : undefined,
     }, { parent: parentForChild() }));
   }
 }
 
-// Stop and SessionEnd run synchronously (an async hook is killed when the session exits), so keep their wait short.
-const timeoutMs = event === "Stop" || event === "SessionEnd" ? 3000 : 8000;
+// The turn-ending hooks run synchronously (an async hook is killed when the session exits), so keep their wait short.
+const timeoutMs = event === "Stop" || event === "StopFailure" || event === "SessionEnd" ? 3000 : 8000;
 const result = await postSpans(cfg, spans, timeoutMs);
 if (!result.ok) console.error(`[aleph obs] ${event}: ${result.status ?? ""} ${result.error ?? ""}`.trim());

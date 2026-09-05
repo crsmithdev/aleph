@@ -10,7 +10,7 @@ The user has asked for a **retrospective**. You are suggesting improvements to t
 
 1. Call the Skill tool with `aleph:writing-for-agents` for the writing style guide.
 
-2. Read the primary sources for the session the user specifies; default to the current one. The Langfuse trace at `http://127.0.0.1:3010` (id `sha256(session_id)[:32]`) has every hook event, tool call, verify-gate verdict and price; the transcript is `~/.claude/projects/<cwd-slug>/<session_id>.jsonl`. Read the trace first.
+2. Read the primary sources for the session the user specifies; default to the current one. The Langfuse session at `http://127.0.0.1:3010/project/aleph-local/sessions/<session_id>` (one trace per turn, id `sha256("turn:" + prompt_id)[:32]`) has every tool call, generation, verify-gate verdict and price; the transcript is `~/.claude/projects/<cwd-slug>/<session_id>.jsonl`. Read the trace first.
 
 3. Look for candidates for improvement in these categories.
 
