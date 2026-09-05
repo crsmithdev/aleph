@@ -249,6 +249,7 @@ describe("compile", () => {
     failing = Bun.serve({ port: 0, fetch: () => new Response("down", { status: 503 }) });
     mkdirSync(join(base, "handoffs"), { recursive: true });
     writeFileSync(join(base, "handoffs", "2026-09-04-101001.md"), "# Handoff\n\nIntent: vault.\n");
+    writeFileSync(join(vault, "daily", "2026-09-04.md"), "# 2026-09-04\n\n- 10:00 wrote Verify Gate\n");
   });
   afterAll(() => { server.stop(); failing.stop(); });
   const env = (port: number) => ({ ALEPH_VAULT: vault, LANGFUSE_BASE_URL: `http://127.0.0.1:${port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
@@ -263,7 +264,7 @@ describe("compile", () => {
     expect(r.stdout).toContain("final: Done. Ran bun test, 12 pass.");
     expect(r.stdout).toContain("### 2026-09-04-101001.md");
     expect(r.stdout).toContain("- trace:abc123");
-    expect(r.stdout).toMatch(/## Daily note\n\n# \d{4}-\d{2}-\d{2}/);
+    expect(r.stdout).toContain("## Daily note\n\n# 2026-09-04\n\n- 10:00 wrote Verify Gate");
   });
   test("Langfuse down: still prints handoffs and daily, notes the failure, exit 0", async () => {
     const r = await runAsync(env(failing.port), "compile", "2026-09-04");
