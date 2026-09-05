@@ -37,7 +37,11 @@ if (event === "SessionStart") {
     start: now,
     name: input.cwd ? basename(input.cwd) : undefined,
     cwd: input.cwd,
-    tags: [`source:${input.source ?? "unknown"}`, `mode:${input.permission_mode ?? "unknown"}`],
+    tags: [
+      `source:${input.source ?? "unknown"}`,
+      `mode:${input.permission_mode ?? "unknown"}`,
+      ...(input.cwd ? [`project:${basename(input.cwd)}`] : []),
+    ],
   });
   process.exit(0);
 }

@@ -84,7 +84,7 @@ describe("obs hook", () => {
     expect(r.code).toBe(0);
     expect(r.stdout).toBe("");
     expect(posted.length).toBe(before);
-    expect(JSON.parse(readFileSync(join(spool, `session:${session}.json`), "utf8"))).toMatchObject({ name: "proj", cwd: "/tmp/proj", tags: ["source:startup", "mode:auto"] });
+    expect(JSON.parse(readFileSync(join(spool, `session:${session}.json`), "utf8"))).toMatchObject({ name: "proj", cwd: "/tmp/proj", tags: ["source:startup", "mode:auto", "project:proj"] });
   });
 
   test("a prompt opens a turn trace whose root carries the prompt, name, tags and auth headers", async () => {
@@ -102,7 +102,7 @@ describe("obs hook", () => {
     expect(attr(turn, "langfuse.session.id")).toEqual({ stringValue: session });
     expect(attr(turn, "langfuse.environment")).toEqual({ stringValue: "test" });
     expect(attr(turn, "langfuse.trace.name")).toEqual({ stringValue: "proj" });
-    expect(attr(turn, "langfuse.trace.tags")).toEqual({ arrayValue: { values: [{ stringValue: "source:startup" }, { stringValue: "mode:auto" }] } });
+    expect(attr(turn, "langfuse.trace.tags")).toEqual({ arrayValue: { values: [{ stringValue: "source:startup" }, { stringValue: "mode:auto" }, { stringValue: "project:proj" }] } });
     expect(attr(turn, "langfuse.trace.metadata.cwd")).toEqual({ stringValue: "/tmp/proj" });
     expect(posted.at(-1).url).toBe("/api/public/otel/v1/traces");
     expect(posted.at(-1).headers["x-langfuse-ingestion-version"]).toBe("4");
