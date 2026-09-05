@@ -34,9 +34,10 @@ describe("dotenv", () => {
     delete process.env.LANGFUSE_PUBLIC_KEY;
     process.env.LANGFUSE_SECRET_KEY = "sk-shell";
     loadDotenv(file);
-    expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
-    expect(process.env.LANGFUSE_PUBLIC_KEY).toBe("pk-file");
-    expect(process.env.LANGFUSE_SECRET_KEY).toBe("sk-shell");
+    const env: NodeJS.ProcessEnv = process.env; // an alias: the deletes above narrowed process.env for the checker
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.LANGFUSE_PUBLIC_KEY).toBe("pk-file");
+    expect(env.LANGFUSE_SECRET_KEY).toBe("sk-shell");
     rmSync(join(file, ".."), { recursive: true, force: true });
   });
 });

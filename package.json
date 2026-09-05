@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck": "tsc"
   },
   "devDependencies": {
     "@types/bun": "^1.2.0",

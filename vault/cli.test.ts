@@ -252,7 +252,7 @@ describe("compile", () => {
     writeFileSync(join(vault, "daily", "2026-09-04.md"), "# 2026-09-04\n\n- 10:00 wrote Verify Gate\n");
   });
   afterAll(() => { server.stop(); failing.stop(); });
-  const env = (port: number) => ({ ALEPH_VAULT: vault, LANGFUSE_BASE_URL: `http://127.0.0.1:${port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
+  const env = (port: number | undefined) => ({ ALEPH_VAULT: vault, LANGFUSE_BASE_URL: `http://127.0.0.1:${port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
 
   test("digests turns, handoffs, daily note and cited traces", async () => {
     const r = await runAsync(env(server.port), "compile", "2026-09-04");
