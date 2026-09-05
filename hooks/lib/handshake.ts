@@ -12,6 +12,7 @@ export interface Handshake {
   spanId?: string;
   parentSpanId?: string;
   input?: unknown;
+  name?: string;
 }
 
 function spoolDir(): string {

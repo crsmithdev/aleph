@@ -114,7 +114,7 @@ describe("obs hook", () => {
     expect(attr(tool, "langfuse.observation.type")).toEqual({ stringValue: "tool" });
     expect(attr(tool, "langfuse.observation.output")).toEqual({ stringValue: "a\nb" });
     expect(attr(tool, "langfuse.environment")).toEqual({ stringValue: "test" });
-    expect(attr(tool, "langfuse.trace.name")).toBeUndefined(); // named once, at SessionStart
+    expect(attr(tool, "langfuse.trace.name")).toEqual({ stringValue: "proj" }); // named at SessionStart, repeated on every span
     const durationMs = Number(BigInt(tool.endTimeUnixNano) - BigInt(tool.startTimeUnixNano)) / 1e6;
     expect(durationMs).toBeGreaterThan(100);
 
@@ -124,8 +124,9 @@ describe("obs hook", () => {
     expect(failed.status).toEqual({ code: 2, message: "boom" });
     expect(attr(failed, "langfuse.observation.level")).toEqual({ stringValue: "ERROR" });
 
-    await fire({ hook_event_name: "Stop", prompt_id: "p1", last_assistant_message: "done" });
+    await fire({ hook_event_name: "Stop", prompt_id: "p1", last_assistant_message: "done", cwd: "/tmp/proj/.worktrees/x" });
     const turn = lastSpans()[0];
+    expect(attr(turn, "langfuse.trace.name")).toEqual({ stringValue: "proj" }); // a worktree cwd does not rename the trace
     expect(turn.name).toBe("turn");
     expect(turn.spanId).toBe(turnId);
     expect(turn.parentSpanId).toBeUndefined();

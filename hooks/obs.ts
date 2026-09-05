@@ -26,6 +26,11 @@ const event: string = input.hook_event_name ?? "unknown";
 const traceId = traceIdFor(sessionId);
 const turnKey = input.prompt_id ? `turn:${input.prompt_id}` : null;
 const agentKey = input.agent_id ? `agent:${input.agent_id}` : null;
+const sessionKey = `session:${sessionId}`;
+// Named once, at SessionStart, and repeated on every span: a span without a trace name lets Langfuse
+// rename the trace after its root span, and a later cwd (a worktree) must not rename it either.
+const cwdName = input.cwd ? basename(input.cwd) : undefined;
+const traceName = event === "SessionStart" ? cwdName : (peek(sessionKey)?.name ?? cwdName);
 
 /** Tool spans inside a subagent hang off the agent span; everything else off the turn. */
 function parentForChild(): string | undefined {
@@ -47,6 +52,7 @@ const base: Record<string, AttrValue | undefined> = {
   "langfuse.session.id": sessionId,
   "langfuse.user.id": "chris",
   "langfuse.environment": sessionEnvironment(),
+  "langfuse.trace.name": traceName,
   "aleph.event": event,
 };
 
@@ -121,8 +127,8 @@ const spans: Span[] = [];
 switch (event) {
   case "SessionStart":
     prune();
+    put(sessionKey, { start: now, name: traceName });
     spans.push(span("session", "span", now, {
-      "langfuse.trace.name": input.cwd ? basename(input.cwd) : undefined, // once: a later cwd (a worktree) must not rename the trace
       "langfuse.trace.tags": [`source:${input.source ?? "unknown"}`, `mode:${input.permission_mode ?? "unknown"}`],
       "langfuse.trace.metadata.cwd": input.cwd,
       "langfuse.observation.metadata.source": input.source,
