@@ -13,7 +13,7 @@ import { langfuseConfig, sessionEnvironment } from "./lib/env.ts";
 import { digest, userGrantedSkip } from "./lib/digest.ts";
 import { peek, put, take } from "./lib/handshake.ts";
 import { judge } from "./lib/judge.ts";
-import { attrs, nano, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type Span } from "./lib/otlp.ts";
+import { attrs, nano, postScore, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type Span } from "./lib/otlp.ts";
 import { snapshot } from "./lib/snapshot.ts";
 
 const input = JSON.parse(await Bun.stdin.text());
@@ -94,13 +94,7 @@ if (cfg && outcome.kind !== "unchanged") {
       "langfuse.observation.metadata.judge_ms": outcome.judgeMs ?? 0,
     }),
   };
-  const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
-  const score = outcome.score === undefined ? Promise.resolve() : fetch(`${cfg.baseUrl}/api/public/scores`, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Basic ${auth}` },
-    body: JSON.stringify({ traceId, name: "verified", value: outcome.score, dataType: "NUMERIC", comment: `${outcome.kind}: ${outcome.reason}`.slice(0, 500) }),
-    signal: AbortSignal.timeout(3000),
-  }).catch(() => undefined);
+  const score = outcome.score === undefined ? Promise.resolve() : postScore(cfg, { traceId, name: "verified", value: outcome.score, comment: `${outcome.kind}: ${outcome.reason}`, environment: sessionEnvironment() });
   await Promise.all([postSpans(cfg, [span], 3000), score]);
 }
 

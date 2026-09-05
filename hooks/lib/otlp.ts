@@ -91,6 +91,24 @@ export async function postSpans(cfg: LangfuseConfig, spans: Span[], timeoutMs = 
   }
 }
 
+export interface Score { traceId: string; name: string; value: number; comment?: string; environment?: string }
+
+/** A score on a trace, through the scores API: OTLP has no score. */
+export async function postScore(cfg: LangfuseConfig, score: Score, timeoutMs = 3000): Promise<PostResult> {
+  const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
+  try {
+    const res = await fetch(`${cfg.baseUrl}/api/public/scores`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Basic ${auth}` },
+      body: JSON.stringify({ ...score, dataType: "NUMERIC", comment: score.comment?.slice(0, 500) }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return { ok: res.ok, status: res.status, error: res.ok ? undefined : (await res.text()).slice(0, 300) };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+}
+
 /** Only Langfuse proves ingestion; a 200 on the POST does not. */
 export async function fetchTrace(cfg: LangfuseConfig, traceId: string): Promise<unknown | null> {
   const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");

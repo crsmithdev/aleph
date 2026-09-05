@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { attrs, traceIdFor, truncate, turnSpanIdFor, turnTraceIdFor } from "./lib/otlp.ts";
 import { classifyEnvironment, loadDotenv } from "./lib/env.ts";
+import { parseRating } from "./lib/rating.ts";
+import { scanDiff, scanLine } from "./lib/scan.ts";
 
 const HOOKS = import.meta.dir;
 
@@ -195,6 +197,31 @@ describe("obs hook", () => {
     });
     expect(await proc.exited).toBe(0);
     expect(posted.length).toBe(before);
+  });
+
+  test("an N/10 prompt scores the previous turn's trace; other prompts score nothing", async () => {
+    await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p5", prompt: "first" });
+    let before = posted.length;
+    await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p6", prompt: "8/10, the table was too wide" });
+    const score = posted.slice(before).find((p) => p.url === "/api/public/scores");
+    expect(score).toBeDefined();
+    expect(score.body).toMatchObject({ traceId: turnTraceIdFor("p5"), name: "rating", value: 8, dataType: "NUMERIC", comment: "8/10, the table was too wide", environment: "test" });
+    expect(score.headers.authorization).toBe(`Basic ${Buffer.from("pk:sk").toString("base64")}`);
+    before = posted.length;
+    await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p7", prompt: "now fix it" });
+    expect(posted.slice(before).map((p) => p.url)).toEqual(["/api/public/otel/v1/traces"]);
+  });
+});
+
+describe("rating", () => {
+  test("N/10 anywhere in the prompt, not dates or other fractions", () => {
+    expect(parseRating("8/10")).toBe(8);
+    expect(parseRating("that was 10 / 10, thanks")).toBe(10);
+    expect(parseRating("0/10. wrong file")).toBe(0);
+    expect(parseRating("ship it on 9/10/2026")).toBeNull();
+    expect(parseRating("3/100 done")).toBeNull();
+    expect(parseRating("38/10")).toBeNull();
+    expect(parseRating("looks good")).toBeNull();
   });
 });
 
@@ -398,5 +425,77 @@ describe("git-guard vault clause", () => {
     const out = JSON.parse(await guard(join(vault, "VAULT.md")));
     expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
     expect(out.hookSpecificOutput.permissionDecisionReason).toContain("wiki/decisions/");
+  });
+});
+
+describe("secret scan", () => {
+  test("flags vendor keys, credential literals and debug leftovers; ignores placeholders and short values", () => {
+    expect(scanLine("aws_key = AKIA" + "IOSFODNN7EXAMPLE")).toBe("AWS access key");
+    expect(scanLine("ANTHROPIC_API_KEY=sk-ant-" + "api03-abcdefghijklmnopqrstuvwxyz0123")).toBe("Anthropic API key");
+    expect(scanLine("LANGFUSE_SECRET_KEY=sk-lf-" + "12345678-1234-1234-1234-123456789abc")).toBe("Langfuse secret key");
+    expect(scanLine("LANGFUSE_PUBLIC_KEY=pk-lf-12345678-1234-1234-1234-123456789abc")).toBeNull();
+    expect(scanLine("token: ghp_" + "a".repeat(36))).toBe("GitHub token");
+    expect(scanLine("-----BEGIN OPENSSH " + "PRIVATE KEY-----")).toBe("private key block");
+    expect(scanLine('const password = "correct-horse' + '-battery-staple"')).toBe("credential assignment");
+    expect(scanLine('LANGFUSE_SECRET_KEY: "sk"')).toBeNull();
+    expect(scanLine('password: "<your-password-here>"')).toBeNull();
+    expect(scanLine("password = os.environ['PASSWORD']")).toBeNull();
+    expect(scanLine("  debugger;")).toBe("debugger statement");
+    expect(scanLine("    break" + "point()")).toBe("breakpoint");
+    expect(scanLine("import " + "pdb")).toBe("breakpoint");
+    expect(scanLine("test." + "only('x', () => {})")).toBe("focused test");
+    expect(scanLine("console.log(JSON.stringify(out))")).toBeNull();
+  });
+  test("diff findings carry the new file's line numbers", () => {
+    const diff = [
+      "diff --git a/src/a.ts b/src/a.ts", "--- a/src/a.ts", "+++ b/src/a.ts",
+      "@@ -1,2 +1,3 @@", " keep", "-old", "+fine", "+debugger",
+      "@@ -10 +11,2 @@", "+const token = \"sk-ant-" + "api03-abcdefghijklmnopqrstuvwxyz0123\"", "+ok",
+      "diff --git a/b.py b/b.py", "--- /dev/null", "+++ b/b.py", "@@ -0,0 +1 @@", "+import " + "pdb",
+    ].join("\n");
+    expect(scanDiff(diff)).toEqual([
+      { file: "src/a.ts", line: 3, label: "debugger statement" },
+      { file: "src/a.ts", line: 11, label: "Anthropic API key" },
+      { file: "b.py", line: 1, label: "breakpoint" },
+    ]);
+  });
+
+  describe("hook", () => {
+    let repo: string;
+    const run = (...args: string[]) => { const p = Bun.spawnSync(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t", ...args], { stdout: "ignore", stderr: "pipe" }); if (p.exitCode !== 0) throw new Error(p.stderr.toString()); };
+    beforeAll(() => {
+      repo = mkdtempSync(join(tmpdir(), "aleph-scan-"));
+      run("init", "-q", "-b", "main");
+      run("commit", "-q", "--allow-empty", "-m", "init");
+    });
+    afterAll(() => rmSync(repo, { recursive: true, force: true }));
+    async function scan(command: string, cwd = repo) {
+      const proc = Bun.spawn(["bun", join(HOOKS, "secret-scan.ts")], {
+        stdin: new TextEncoder().encode(JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", cwd, tool_input: { command } })),
+        env: { ...process.env }, stdout: "pipe",
+      });
+      await proc.exited;
+      const out = (await new Response(proc.stdout).text()).trim();
+      return out ? JSON.parse(out).hookSpecificOutput : null;
+    }
+    test("denies a commit whose staged diff holds a secret, naming file and line", async () => {
+      writeFileSync(join(repo, "config.ts"), "export const region = 'us-east-1';\nexport const key = 'AKIA" + "IOSFODNN7EXAMPLE';\n");
+      run("add", "config.ts");
+      const out = await scan("git commit -m 'add config'");
+      expect(out.permissionDecision).toBe("deny");
+      expect(out.permissionDecisionReason).toContain("config.ts:2  AWS access key");
+      expect(out.permissionDecisionReason).toContain("ALEPH_SKIP_SCAN=1");
+      expect(await scan("ALEPH_SKIP_SCAN=1 git commit -m 'add config'")).toBeNull();
+      expect(await scan("git log --oneline | grep commit")).toBeNull();
+    });
+    test("a clean staged diff passes; untracked secrets count only when the command adds them", async () => {
+      writeFileSync(join(repo, "config.ts"), "export const region = 'us-east-1';\n");
+      run("add", "config.ts");
+      writeFileSync(join(repo, "notes.txt"), "slack: xoxb-" + "1234567890-abcdefghij\n");
+      expect(await scan("git commit -m 'clean'")).toBeNull();
+      expect((await scan("git add . && git commit -m 'all'")).permissionDecisionReason).toContain("notes.txt:1  Slack token");
+      expect((await scan("git commit -am 'all'")).permissionDecisionReason).toContain("notes.txt:1  Slack token");
+      expect((await scan(`cd ${repo} && git commit -am 'all'`, "/")).permissionDecisionReason).toContain("notes.txt:1");
+    });
   });
 });

@@ -13,7 +13,8 @@
 import { basename } from "node:path";
 import { langfuseConfig, sessionEnvironment } from "./lib/env.ts";
 import { peek, prune, put, take } from "./lib/handshake.ts";
-import { attrs, nano, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type AttrValue, type Span } from "./lib/otlp.ts";
+import { attrs, nano, postScore, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type AttrValue, type Score, type Span } from "./lib/otlp.ts";
+import { parseRating } from "./lib/rating.ts";
 import { readEntries } from "./lib/digest.ts";
 import { costDetails, type Usage } from "./lib/pricing.ts";
 
@@ -165,12 +166,19 @@ function generations(transcriptPath: string, promptId: string, finalMessage: str
 }
 
 const spans: Span[] = [];
+const scores: Score[] = [];
 
 switch (event) {
-  case "UserPromptSubmit":
+  case "UserPromptSubmit": {
     put(turnKey!, { start: now, spanId: turnSpanId, input: input.prompt ?? "" });
     spans.push(turnSpan(now, undefined));
+    // "N/10" in a prompt rates the previous reply; the session handshake remembers which trace that was
+    const previous = session?.lastTraceId;
+    put(sessionKey, { ...(session ?? { start: now }), lastTraceId: traceId });
+    const rating = parseRating(input.prompt ?? "");
+    if (rating !== null && previous) scores.push({ traceId: previous, name: "rating", value: rating, comment: input.prompt, environment: sessionEnvironment() });
     break;
+  }
 
   case "PreToolUse":
     if (input.tool_use_id) put(`tool:${input.tool_use_id}`, { start: now, input: input.tool_input });
@@ -232,5 +240,5 @@ switch (event) {
 
 // The turn-ending hooks run synchronously (an async hook is killed when the session exits), so keep their wait short.
 const timeoutMs = event === "Stop" || event === "StopFailure" || event === "SessionEnd" ? 3000 : 8000;
-const result = await postSpans(cfg, spans, timeoutMs);
-if (!result.ok) console.error(`[aleph obs] ${event}: ${result.status ?? ""} ${result.error ?? ""}`.trim());
+const results = await Promise.all([postSpans(cfg, spans, timeoutMs), ...scores.map((score) => postScore(cfg, score, timeoutMs))]);
+for (const result of results) if (!result.ok) console.error(`[aleph obs] ${event}: ${result.status ?? ""} ${result.error ?? ""}`.trim());

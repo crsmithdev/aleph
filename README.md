@@ -11,6 +11,7 @@ lived in this repository until `a7540fa`.
 | `hooks/vault-context.ts` | SessionStart: injects the vault's `Home.md` and `MEMORY.md` |
 | `hooks/obs.ts` | every hook event becomes one OTLP span posted to Langfuse |
 | `hooks/git-guard.ts` | denies `Edit`/`Write` on `main` outside `.worktrees/`; allows the vault except `VAULT.md` |
+| `hooks/secret-scan.ts` | denies a `git commit` whose added lines hold a secret or a debug leftover; `ALEPH_SKIP_SCAN=1` in the command bypasses |
 | `hooks/hooks.json` | the wiring; every observability entry is `async` except `Stop` and `SessionEnd` |
 | `compose/langfuse.yml` | self-hosted Langfuse on `127.0.0.1:3010` |
 
@@ -76,8 +77,9 @@ as usage and a cost computed from the price table in `hooks/lib/pricing.ts`.
 The hook prices them itself because Langfuse's public models API keeps only
 input and output prices, and cache reads are most of a Claude Code request.
 
-A turn that ends in StopFailure is an error trace whose output is the API
-message. Compaction and permission denials are events under the turn; session
+A prompt carrying `N/10` puts a `rating` score of N on the previous turn's
+trace, with the prompt as the comment. A turn that ends in StopFailure is an
+error trace whose output is the API message. Compaction and permission denials are events under the turn; session
 start and end post nothing. A session is at
 `http://127.0.0.1:3010/project/aleph-local/sessions/<session_id>`.
 
@@ -110,7 +112,8 @@ ALEPH_LIVE=1 bun test tests/live  # posts a span and fetches the trace back; two
 
 A 200 on the OTLP POST proves nothing; the worker can drop a batch silently
 (`compose/README.md`, defect 2). The live test asserts the trace is
-retrievable.
+retrievable. `.github/workflows/ci.yml` runs the typecheck and the unit suite
+on every push.
 
 ## Not here
 

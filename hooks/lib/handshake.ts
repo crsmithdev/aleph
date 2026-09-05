@@ -16,6 +16,7 @@ export interface Handshake {
   tags?: string[];
   cwd?: string;
   traceId?: string;
+  lastTraceId?: string;
 }
 
 function spoolDir(): string {
