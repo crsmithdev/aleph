@@ -10,6 +10,7 @@ lived in this repository until `a7540fa`.
 | `vault/cli.ts` | the memory vault's mechanics: `init`, `write`, `recall`, `lint`, `compile` |
 | `hooks/vault-context.ts` | SessionStart: injects the vault's `Home.md` and `MEMORY.md` |
 | `hooks/obs.ts` | every hook event becomes one OTLP span posted to Langfuse |
+| `hooks/narrate.ts` | PreToolUse: one spoken phrase per tool call, appended to `~/.aleph/narration/<session>.jsonl`, so the voice bridge can say what is happening during a long turn. Off unless `ALEPH_NARRATE` is set (`1` for the default directory, or a path). The phrase names the kind of work and never the argument |
 | `hooks/git-guard.ts` | denies `Edit`/`Write` on `main` outside `.worktrees/`; allows the vault except `VAULT.md` |
 | `hooks/secret-scan.ts` | denies a `git commit` whose added lines hold a secret or a debug leftover; `ALEPH_SKIP_SCAN=1` in the command bypasses |
 | `hooks/hooks.json` | the wiring; every observability entry is `async` except `Stop` and `SessionEnd` |

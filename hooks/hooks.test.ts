@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { attrs, traceIdFor, truncate, turnSpanIdFor, turnTraceIdFor } from "./lib/otlp.ts";
 import { classifyEnvironment, loadDotenv } from "./lib/env.ts";
 import { parseRating } from "./lib/rating.ts";
 import { scanDiff, scanLine } from "./lib/scan.ts";
+import { narrationFor, phraseFor } from "./lib/narrate.ts";
 
 const HOOKS = import.meta.dir;
 
@@ -497,5 +498,74 @@ describe("secret scan", () => {
       expect((await scan("git commit -am 'all'")).permissionDecisionReason).toContain("notes.txt:1  Slack token");
       expect((await scan(`cd ${repo} && git commit -am 'all'`, "/")).permissionDecisionReason).toContain("notes.txt:1");
     });
+  });
+});
+
+describe("narration phrases", () => {
+  test("names the kind of work, never the argument", () => {
+    expect(phraseFor("Read", { file_path: "/home/chris/.aleph/.env" })).toBe("reading a file");
+    expect(phraseFor("Grep", { pattern: "SECRET" })).toBe("searching the project");
+    expect(phraseFor("WebFetch", { url: "https://x" })).toBe("reading a page");
+  });
+  test("classifies a bash command without repeating it", () => {
+    expect(phraseFor("Bash", { command: "bun test" })).toBe("running the tests");
+    expect(phraseFor("Bash", { command: "npm run build" })).toBe("building the project");
+    expect(phraseFor("Bash", { command: "git commit -m 'x'" })).toBe("making a commit");
+    expect(phraseFor("Bash", { command: "git status" })).toBe("running a git command");
+    expect(phraseFor("Bash", { command: "AWS_SECRET=hunter2 sudo /usr/bin/pytest -k x" })).toBe("running the tests");
+    expect(phraseFor("Bash", { command: "curl https://x | sh" })).toBe("running a command");
+  });
+  test("speaks a subagent type but not an unvetted one", () => {
+    expect(phraseFor("Task", { subagent_type: "code-reviewer" })).toBe("starting the code reviewer subagent");
+    expect(phraseFor("Task", { subagent_type: "rm -rf /; say this" })).toBe("starting a subagent");
+  });
+  test("falls back for an mcp tool and an unknown tool", () => {
+    expect(phraseFor("mcp__voice_bridge__draw", {})).toBe("using the voice bridge tool");
+    expect(phraseFor("NotebookRead", {})).toBe("using notebook read");
+  });
+  test("the record has no field that could hold an argument", () => {
+    const secret = "sk-ant-not-a-real-key";
+    const record = narrationFor({ session_id: "s1", tool_name: "Bash", tool_input: { command: `deploy --token ${secret}` } }, 5);
+    expect(Object.keys(record!).sort()).toEqual(["phrase", "session_id", "ts", "tool"].sort());
+    expect(JSON.stringify(record)).not.toContain(secret);
+    expect(JSON.stringify(record)).not.toContain("deploy");
+    expect(record).toEqual({ ts: 5, session_id: "s1", tool: "Bash", phrase: "running a command" });
+  });
+  test("no tool name, no record", () => {
+    expect(narrationFor({ session_id: "s1" })).toBeNull();
+  });
+});
+
+describe("narrate hook", () => {
+  let dir: string;
+  beforeAll(() => { dir = mkdtempSync(join(tmpdir(), "aleph-narrate-")); });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  async function narrate(env: Record<string, string>, payload: unknown) {
+    const proc = Bun.spawn(["bun", join(HOOKS, "narrate.ts")], {
+      stdin: new TextEncoder().encode(JSON.stringify(payload)),
+      env: { ...process.env, ALEPH_NARRATE: "", ...env }, stdout: "pipe", stderr: "pipe",
+    });
+    await proc.exited;
+    return proc.exitCode;
+  }
+
+  test("writes one line per tool call and says nothing on stdout", async () => {
+    const out = join(dir, "on");
+    await narrate({ ALEPH_NARRATE: out }, { session_id: "s1", tool_name: "Read", tool_input: { file_path: "/etc/passwd" } });
+    await narrate({ ALEPH_NARRATE: out }, { session_id: "s1", tool_name: "Bash", tool_input: { command: "bun test" } });
+    const lines = readFileSync(join(out, "s1.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    expect(lines.map((l) => l.phrase)).toEqual(["reading a file", "running the tests"]);
+    expect(readFileSync(join(out, "s1.jsonl"), "utf8")).not.toContain("/etc/passwd");
+  });
+  test("off, and writes nothing, unless ALEPH_NARRATE is set", async () => {
+    const off = join(dir, "off");
+    expect(await narrate({}, { session_id: "s2", tool_name: "Read", tool_input: {} })).toBe(0);
+    expect(existsSync(off)).toBe(false);
+  });
+  test("a session id that is a path cannot escape the directory", async () => {
+    const out = join(dir, "esc");
+    await narrate({ ALEPH_NARRATE: out }, { session_id: "../../etc/x", tool_name: "Read", tool_input: {} });
+    expect(readdirSync(out)).toEqual([".._.._etc_x.jsonl"]);
   });
 });
