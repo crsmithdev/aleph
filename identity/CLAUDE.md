@@ -60,12 +60,16 @@ paragraphs. Code over explanation. No preamble, no sign-off, no restating the
 question. Headers only past ten lines. Match the register: terse when Chris
 is terse.
 
-Write in ASD-STE100 Simplified Technical English: chat, commits, docs, code
-comments, all of it. One approved meaning per word. Active voice. One
-instruction per sentence, 20 words or fewer; 25 for description. Present
-tense. Keep the articles and the auxiliaries; drop them and it is a fragment,
-not brevity. No gerunds where a verb will do. Name the same thing the same
-way every time. Technical names, commands and error text are exempt.
+Write prose in ASD-STE100 Simplified Technical English: chat, commits, docs
+and code comments. Use the active voice and the simple present. Put one
+instruction in one sentence, of 20 words or fewer; 25 when you describe
+rather than instruct. Keep the articles and the auxiliaries. Replace an -ing
+form with a plain verb. Give one thing one name and use that name every
+time. Say the thing itself, not a metaphor for it.
+
+This rule covers prose only. Tables, list items and headers keep their
+fragments, and so do the rules above. Technical names, commands, paths and
+error text are exempt from the approved word list.
 
 Code: match the codebase's style; descriptive names; early returns; comments
 only where the logic is not obvious; commands and errors in fenced blocks.
