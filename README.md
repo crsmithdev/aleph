@@ -1,12 +1,12 @@
 # aleph
 
-A Claude Code plugin: ten skills, hooks against the 2.1.x hook API, and
+A Claude Code plugin: fifteen skills, hooks against the 2.1.x hook API, and
 Langfuse as the only observability sink. It replaces the daemon design that
 lived in this repository until `a7540fa`.
 
 | | |
 |---|---|
-| `skills/` | `red-team`, `grill-me`, `to-spec`, `handoff`, `pickup`, `vault`, `tdd`, `diagnosing-bugs`, `retro`, `writing-for-agents`, invoked as `/aleph:<name>` |
+| `skills/` | `red-team`, `grill-me`, `grill-with-docs`, `to-spec`, `handoff`, `pickup`, `vault`, `tdd`, `diagnosing-bugs`, `retro`, `writing-for-agents`, `docs-writing`, `codebase-design`, `domain-modeling`, `improve-codebase-architecture`, invoked as `/aleph:<name>` |
 | `vault/cli.ts` | the memory vault's mechanics: `init`, `write`, `recall`, `lint`, `compile` |
 | `hooks/vault-context.ts` | SessionStart: injects the vault's `Home.md` and `MEMORY.md` |
 | `hooks/obs.ts` | every hook event becomes one OTLP span posted to Langfuse |
@@ -21,6 +21,16 @@ lived in this repository until `a7540fa`.
 [mattpocock/skills](https://github.com/mattpocock/skills) (MIT,
 `skills/LICENSE-mattpocock`), with its `CONTEXT.md`, ADR and issue-tracker
 conventions removed and `retro` pointed at the Langfuse trace.
+
+`codebase-design`, `domain-modeling`, `grill-with-docs` and
+`improve-codebase-architecture` come from the same repository and keep the
+`CONTEXT.md` glossary and `docs/adr/` conventions, because those files are
+what the skills produce. `grill-with-docs` calls `grill-me` and
+`domain-modeling`. `docs-writing` is adapted from
+[mblode/agent-skills](https://github.com/mblode/agent-skills) (MIT,
+`skills/LICENSE-mblode`): Diátaxis classification and 51 rules under
+`skills/docs-writing/rules/`, with its sibling-skill references and eval
+suite removed.
 
 ## Install
 
