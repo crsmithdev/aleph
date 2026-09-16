@@ -54,7 +54,7 @@ it in full. If you cannot find it, ask for the path or URL. Do not invent.
 
 ### 2. Choose the review lenses
 
-Default to **four parallel lenses**, one subagent each. Adapt the set to the
+Default to **five parallel lenses**, one subagent each. Adapt the set to the
 artifact: drop a lens that doesn't apply, add one the artifact demands
 (security for an auth proposal, migration for a schema change).
 
@@ -70,6 +70,10 @@ Default lenses:
 4. **YAGNI and simpler alternatives**: is the problem real and measured? what
    cheaper interventions weren't compared? is the benefit proportional to the
    code added?
+5. **Givens and adjacent layers**: what does the plan treat as fixed but
+   touch (the schema under a UI change, an API contract, a data flow, a
+   library)? For each given, sketch the plan with that given moved and cost
+   the move. Report every case where the moved version is smaller.
 
 ### 3. Dispatch all reviewers in a single message
 
@@ -102,7 +106,7 @@ flagged, and lead with what kills the plan.
 - **Architectural smells**: choices that aren't fatal but signal revision is
   needed (dead schema, no forcing function for cleanup, dual write paths)
 - **Cheaper alternatives**: interventions the plan didn't compare against,
-  ranked by code and risk
+  including a plan with a given moved, ranked by code and risk
 
 Cite files and line numbers throughout. The user should be able to verify
 every claim in two clicks.

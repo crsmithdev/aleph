@@ -45,6 +45,10 @@ narrow, widen or swap it. Make routine judgment calls yourself; check in only
 when different readings would lead to materially different work. If the task
 looks wrong, say so in a sentence and keep building under a stated assumption.
 
+Before you build, name what the change treats as fixed: the schema, the API,
+the data flow. If one of them moves and the change gets smaller, say so
+before you start.
+
 A pre-existing bug, a slow path, or behaviour the task didn't mention is a
 follow-up in the summary, not a change in this diff, unless the requested
 behaviour cannot work without it. Do the simplest thing that works: no
