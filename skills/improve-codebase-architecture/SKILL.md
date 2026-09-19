@@ -70,6 +70,4 @@ Side effects happen inline as decisions crystallize; call the Skill tool with `a
 - **User rejects the candidate with a load-bearing reason?** Offer an ADR, framed as: _"Want me to record this as an ADR so future architecture reviews don't re-suggest it?"_ Only offer when the reason would actually be needed by a future explorer to avoid re-suggesting the same thing; skip ephemeral reasons ("not worth it right now") and self-evident ones.
 - **Want to explore alternative interfaces for the deepened module?** Call the Skill tool with `aleph:codebase-design` and use its design-it-twice parallel sub-agent pattern.
 
-When the grill ends with an agreed interface, tell the user to run `/aleph:deepen-module` to land it. That skill pins the current behaviour, builds the module beside the old code, moves the callers, and deletes what is left.
-
 Adapted from Matt Pocock's `improve-codebase-architecture` skill (github.com/mattpocock/skills).
