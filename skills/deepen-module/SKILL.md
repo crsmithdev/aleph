@@ -22,6 +22,8 @@ Before the first edit, write the givens in one message:
 - The dependency category from `DEEPENING.md` and the adapters it implies.
 - The tests that survive and the tests that go.
 
+Then name what the design treats as **fixed** and touches: the schema or store behind the seam, the shape the callers pass in, a library, a data flow. For each one, say what the deepening looks like if that given moves and what the move costs. A given whose move makes the module deeper or the change smaller goes to the user before step 1, with the moved version as the recommended answer. The user decides which givens stay fixed.
+
 ## Rules
 
 - **A deepening is a refactor.** A bug the pin reveals goes in the report as a follow-up. Its characterization test keeps asserting today's output.
@@ -58,7 +60,7 @@ Move the callers one at a time.
 
 - Point one caller at the new interface. Run the suite.
 - Green: commit `move <caller> to <module>`.
-- Red: the failing characterization test names the behaviour the design missed. Fix the module. If the fix needs an interface change, apply the miss rule.
+- Red: the failing characterization test names the behaviour the design missed. Fix the module. If the fix needs an interface change, or a given from the givens is the cause, apply the miss rule and say which given.
 - Repeat until a grep for the old modules finds only the old modules and their tests.
 
 Done when every caller in the givens imports the new module.
