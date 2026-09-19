@@ -1,12 +1,12 @@
 # aleph
 
-A Claude Code plugin: fifteen skills, hooks against the 2.1.x hook API, and
+A Claude Code plugin: sixteen skills, hooks against the 2.1.x hook API, and
 Langfuse as the only observability sink. It replaces the daemon design that
 lived in this repository until `a7540fa`.
 
 | | |
 |---|---|
-| `skills/` | `red-team`, `grill-me`, `grill-with-docs`, `to-spec`, `handoff`, `pickup`, `vault`, `tdd`, `diagnosing-bugs`, `retro`, `writing-for-agents`, `docs-writing`, `codebase-design`, `domain-modeling`, `improve-codebase-architecture`, invoked as `/aleph:<name>` |
+| `skills/` | `red-team`, `grill-me`, `grill-with-docs`, `to-spec`, `handoff`, `pickup`, `vault`, `tdd`, `diagnosing-bugs`, `retro`, `writing-for-agents`, `docs-writing`, `codebase-design`, `domain-modeling`, `improve-codebase-architecture`, `deepen-module`, invoked as `/aleph:<name>` |
 | `vault/cli.ts` | the memory vault's mechanics: `init`, `write`, `recall`, `lint`, `compile` |
 | `hooks/vault-context.ts` | SessionStart: injects the vault's `Home.md` and `MEMORY.md` |
 | `hooks/obs.ts` | every hook event becomes one OTLP span posted to Langfuse |
@@ -26,7 +26,9 @@ conventions removed and `retro` pointed at the Langfuse trace.
 `improve-codebase-architecture` come from the same repository and keep the
 `CONTEXT.md` glossary and `docs/adr/` conventions, because those files are
 what the skills produce. `grill-with-docs` calls `grill-me` and
-`domain-modeling`. `docs-writing` is adapted from
+`domain-modeling`. `deepen-module` is original: it lands one deepening that
+`improve-codebase-architecture` designed, in Feathers' pin, build, move,
+delete steps. `docs-writing` is adapted from
 [mblode/agent-skills](https://github.com/mblode/agent-skills) (MIT,
 `skills/LICENSE-mblode`): Diátaxis classification and 51 rules under
 `skills/docs-writing/rules/`, with its sibling-skill references and eval
