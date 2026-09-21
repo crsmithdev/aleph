@@ -1,6 +1,6 @@
 {
   "name": "aleph",
-  "description": "Personal Claude Code plugin: fifteen skills, hooks, Langfuse traces",
+  "description": "Claude Code plugin: fifteen skills for planning, design, testing and memory; hooks for Langfuse traces, a verify gate, a main-branch guard and a secret scan; an Obsidian memory vault",
   "version": "0.1.0",
   "hooks": "./hooks/hooks.json"
 }
