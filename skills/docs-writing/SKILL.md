@@ -59,6 +59,8 @@ Docs writing progress:
 - [ ] Step 5: Verify: run every example, resolve every link, confirm parameter names and defaults against the implementation; quote the command output
 ```
 
+For a README, start from `readme-template.md`.
+
 Step 5 is the exit criterion: a doc ships when its examples ran and its links resolved, not when it "reads well". Length follows what the reader has to do, not the template: drop a section the page does not need rather than filling it.
 
 ## Type-gating table
