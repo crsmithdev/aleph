@@ -252,6 +252,26 @@ describe("lint --fix", () => {
     rmSync(p);
     cli("lint");
   });
+  test("a missing updated comes from the date the note entered git, not its last commit", () => {
+    const rel = "wiki/gotchas/Entered Long Ago.md";
+    const p = join(vault, rel);
+    const text = readFileSync(note("Entered Long Ago"), "utf8").replace(/^updated: .*\n/m, "");
+    const commitAt = (msg: string, date: string) => {
+      Bun.spawnSync(["git", "-C", vault, "add", "--", rel]);
+      Bun.spawnSync(["git", "-C", vault, "-c", "commit.gpgsign=false", "commit", "-q", "-m", msg, "--", rel],
+        { env: { ...process.env, ...testEnv, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } });
+    };
+    writeFileSync(p, text);
+    commitAt("seed the note", "2026-01-15T12:00:00");
+    writeFileSync(p, text + "\n<!-- a later housekeeping touch -->\n");
+    commitAt("touch it later", "2026-06-01T12:00:00");
+    const r = cli("lint", "--fix");
+    expect(readFileSync(p, "utf8")).toContain("updated: 2026-01-15");
+    expect(r.json.fixed.find((f: any) => f.note === "Entered Long Ago").repairs)
+      .toEqual(["added updated: 2026-01-15, the date the note entered git"]);
+    rmSync(p);
+    cli("lint");
+  });
   test("a # inside a list is content, and --fix leaves a line it cannot rebuild", () => {
     const r = cli("write", note("Hash In A List", { aliases: "[url scheme, #go]" }), "--why", "x");
     expect(r.code).toBe(0);

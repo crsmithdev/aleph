@@ -8,7 +8,7 @@ import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, unli
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { langfuseConfig } from "../hooks/lib/env.ts";
 import { serializeFrontmatter } from "./lib/frontmatter.ts";
-import { commitPaths, git, lastCommitDate, tracked } from "./lib/git.ts";
+import { addedDate, commitPaths, git, tracked } from "./lib/git.ts";
 import { handoffsFor, traceDigest } from "./lib/compile.ts";
 import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./lib/templates.ts";
 import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, homeCandidates, lintVault, loadVault, readNote, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
@@ -205,7 +205,7 @@ function lint(): void {
   const fixed: { note: string; path: string; repairs: string[] }[] = [];
   if (has("fix")) {
     for (const n of wikiNotes(loadVault(root))) {
-      const r = fixFrontmatter(n, lastCommitDate(root, n.path));
+      const r = fixFrontmatter(n, addedDate(root, n.path));
       if (!r) continue;
       writeFileSync(n.path, r.text);
       fixed.push({ note: n.title, path: n.rel, repairs: r.repairs });

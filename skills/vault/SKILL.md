@@ -62,8 +62,8 @@ duplicate title, dangling link, budget. A broken template warns instead,
 one line per note, because a note on disk cannot be un-written.
 
 `cli.ts lint --fix` repairs frontmatter and never the body: it adds a
-missing `supersedes: []`, wraps a list key holding a bare scalar, and fills
-a missing `updated` from git. It never adds a `## Evidence` heading or an
+missing `supersedes: []`, wraps a list key holding a bare scalar, and fills a
+missing `updated` with the date the note entered git. It never adds a `## Evidence` heading or an
 `as of` marker; those are claims about the world, and a heading that says
 nothing hides an unbacked claim. Read the diff before you commit anything
 else.

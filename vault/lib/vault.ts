@@ -224,7 +224,7 @@ export function citedTraces(notes: Note[]): string[] {
  * Edits are line-level, so a note keeps its own formatting and the diff stays
  * readable. Returns null when there is nothing to repair.
  */
-export function fixFrontmatter(note: Note, lastCommit: string | null): { text: string; repairs: string[] } | null {
+export function fixFrontmatter(note: Note, added: string | null): { text: string; repairs: string[] } | null {
   if (!note.hasFrontmatter) return null;
   const { frontmatter, body } = splitFrontmatter(note.text);
   const lines = frontmatter!.split(/\r?\n/);
@@ -243,7 +243,7 @@ export function fixFrontmatter(note: Note, lastCommit: string | null): { text: s
     repairs.push(`${key} wrapped in a list`);
   }
   if (note.fm.supersedes === undefined) { lines.push("supersedes: []"); repairs.push("added supersedes: []"); }
-  if (note.fm.updated === undefined && lastCommit) { lines.push(`updated: ${lastCommit}`); repairs.push(`added updated: ${lastCommit} from git`); }
+  if (note.fm.updated === undefined && added) { lines.push(`updated: ${added}`); repairs.push(`added updated: ${added}, the date the note entered git`); }
 
   if (!repairs.length) return null;
   return { text: `---\n${lines.join("\n")}\n---\n${body}`, repairs };

@@ -13,9 +13,19 @@ export function tracked(dir: string, path: string): boolean {
   return git(dir, "ls-files", "--error-unmatch", "--", relative(dir, path)).ok;
 }
 
-/** The last commit date for a path, YYYY-MM-DD, or null when git has never seen it. */
-export function lastCommitDate(dir: string, path: string): string | null {
-  const r = git(dir, "log", "-1", "--format=%ad", "--date=short", "--", relative(dir, path));
+/**
+ * The date a path first entered git, YYYY-MM-DD, or null when git has never
+ * seen it.
+ *
+ * The *last* commit date used to stand here, and it lies. A housekeeping
+ * commit that touches only frontmatter moves it, so `lint --fix` would have
+ * stamped two notes 2026-09-24 when they landed on 2026-09-20 — four days
+ * young on the one field the `stale` warning reads. The date a note entered
+ * never moves, and under-dating is the safe direction: it asks for a re-check
+ * that is not needed, where over-dating hides one that is.
+ */
+export function addedDate(dir: string, path: string): string | null {
+  const r = git(dir, "log", "--diff-filter=A", "-1", "--format=%ad", "--date=short", "--", relative(dir, path));
   return r.ok && /^\d{4}-\d{2}-\d{2}$/.test(r.out) ? r.out : null;
 }
 

@@ -57,11 +57,16 @@ unbacked claim later.
 | --- | --- |
 | `missing supersedes` | add `supersedes: []` — absent and `[]` mean the same thing |
 | a list key holding a bare scalar | wrap it, but only when the raw text is a plain scalar |
-| `missing updated` | git's last commit date for the file |
+| `missing updated` | the date the note entered git |
 
 Everything else is reported, not repaired: `confidence` outside the enum is a
 claim about how a fact was learned, and a missing `kind`, `scope` or `sources`
 is a claim no repair can make true.
+
+`updated` takes the date the file entered git, not its last commit date. A
+housekeeping commit moves the last date, and `updated` is the one field the
+`stale` warning reads: under-dating asks for a re-check that is not needed,
+where over-dating hides one that is.
 
 Edits are line-level, so a note keeps its own formatting and the diff stays
 readable. Run it read-only by default; `--fix` writes one commit, subject
