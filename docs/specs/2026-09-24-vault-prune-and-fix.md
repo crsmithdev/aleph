@@ -1,95 +1,110 @@
 # Vault prune and lint --fix
 
 Written 2026-09-24 after a session hit the `Home.md` budget and found nothing
-to help it. Not built. Two new ops on `vault/cli.ts`.
+to help it. Rewritten the same day, after the archaeology below showed the
+first draft's cause was wrong. Built.
 
 ## Problem Statement
 
-The vault has five ops — `init`, `write`, `recall`, `lint`, `compile` — and
-every one of them only ever adds. `lint` names problems and fixes none.
-Archiving happens only as a side effect of `supersedes:` in a write, which
-needs a replacement note. `VAULT.md` says notes are never deleted, and that is
-right for notes. Nothing covers the two places where the vault needs to lose
-weight.
+The first draft said the template rules tightened and 73 notes never caught up.
+That is not what happened. `git log -S` on both rule strings in
+`vault/lib/vault.ts` returns one commit, `3d41a48`, the day the vault shipped.
+No note ever lived under a looser rule.
 
-**`Home.md` has a hard budget and no way to meet it.** `LINE_BUDGET` is 150 and
-`Home.md` is at 150. A write that would push it over is refused, and the agent
-is then left hand-editing an index file it has no policy for. On 2026-09-24
-that refusal is what made a session ask Chris which of his own memory lines to
-drop — there was no tool to ask instead. Three notes currently have no index
-line, and one of them is an orphan only because a line was removed to fit two
-new ones.
+The notes bypassed the gate. `commitAll` was `git add -A`, so every op staged
+the whole vault. A file lying in `wiki/` rode into history on the next op's
+commit, whoever put it there and whether or not a write had accepted it.
 
-**The template rules tightened and 73 notes never caught up.**
+| Measure | Count |
+| --- | --- |
+| notes added on a commit whose subject names a different note | 102 of 137 |
+| notes that refused lint | 73 |
+| refusing notes that entered that way | 67 (92%) |
 
-```
-170 refusals across 73 notes
-  57  claim missing an `as of YYYY-MM-DD` marker
-  47  missing section ## Evidence
-  16  missing supersedes
-  11  missing ## Details        11  missing ## Related
-   3  body does not open with **Claim.**
-   3  confidence not one of measured|reported|inferred
-  12  missing frontmatter keys (2 notes)
-```
+The loop that made this permanent: a session drafts a note inside the vault,
+`vault write` refuses it, the refusal returns before the disk section so it
+rolls nothing back, the invalid file stays untracked in `wiki/`, and the next
+successful write adopts it. Same defect class as the rollback bug in `b089def`:
+an op that acts on the whole tree instead of its own paths.
 
-No write touches those notes, so they sit refused for ever. The volume is the
-damage: a real problem in that list cannot be seen. About 90 of the 170 are
-mechanical.
+Second problem, unchanged from the first draft: **`Home.md` has a hard budget
+and no way to meet it.** `LINE_BUDGET` is 150 and `Home.md` is at 150. A write
+that would push it over is refused, and the caller is left hand-editing an index
+file it has no policy for.
 
 ## Solution
 
+### Commit only the paths the op touched
+
+`commitAll` is gone. `commitPaths(dir, subject, paths)` stages and commits the
+given pathspecs and nothing else. `write` already tracked `touched`; `lint`
+commits `Home.md` and whatever `--fix` repaired; `init` commits the files it
+laid down. An unaccepted note now stays untracked, where `git status` shows it.
+
+A refusal also names a file that sits at its destination and that git does not
+track. It does not delete it: the file may be Chris's own note, typed in
+Obsidian, and `b089def` is what undoing another writer's work costs.
+
 ### `vault lint --fix`
 
-Apply only the repairs that need no judgement, print what changed, touch no
-prose. In scope:
+One rule: **`--fix` edits frontmatter and never the body.** Frontmatter is
+structural and each defect below has one right answer. A missing `## Evidence`
+or `as of` marker is a claim about the world; appending the heading would turn
+"this claim is unbacked" into a passing check and lose the only way to find an
+unbacked claim later.
 
 | Refusal | Repair |
 | --- | --- |
-| `missing supersedes` | add `supersedes: []` |
-| `confidence` not in the enum | `observed` and `documented` → `measured` when the body cites a run, else `reported`; anything else is left and reported |
-| missing `## Evidence`, `## Details`, `## Related` | append the heading with an explicit `_Not recorded._` line, never invented content |
-| missing `kind`, `scope`, `updated`, `sources` | `updated` from git's last commit date for the file; the rest left for a human, and named |
-| `aliases must be a list` | wrap a bare string |
+| `missing supersedes` | add `supersedes: []` — absent and `[]` mean the same thing |
+| a list key holding a bare scalar | wrap it, but only when the raw text is a plain scalar |
+| `missing updated` | git's last commit date for the file |
 
-Out of scope, because each is a claim about the world: the 57 missing `as of`
-markers, the 3 missing `**Claim.**` openings, every dangling link. `--fix`
-prints these as the remaining list.
+Everything else is reported, not repaired: `confidence` outside the enum is a
+claim about how a fact was learned, and a missing `kind`, `scope` or `sources`
+is a claim no repair can make true.
 
-Run it read-only by default; `--fix` writes. One commit, subject
+Edits are line-level, so a note keeps its own formatting and the diff stays
+readable. Run it read-only by default; `--fix` writes one commit, subject
 `lint --fix: <n> notes`.
 
-### `vault prune`
+### `lint` reports the template; `write` gates it
 
-Read-only by default. Rank the lines of `Home.md` for removal and print a
-proposal that brings the file under budget. `--apply` writes it.
+`write` is the gate and still refuses on the template. `lint` reports a vault
+that already exists, where a note on disk cannot be un-written, so template
+findings warn — one collapsed line per note, not one per missing heading. The
+refuse list falls from 170 to 40, and to 22 after `--fix`.
 
-Rank by, in order: the target note is an orphan of its own heading; a newer
-note in the same scope covers the same ground (the existing `overlap` warning
-already computes this); the note is old and its subject is retired, which its
-own hook usually says; the line is one of a run of three or more about one
-series.
+### The budget refusal carries its own proposal
 
-**Prune removes index lines only.** The note stays on disk, tracked, and
-`recall` still finds it. Nothing is deleted and nothing is archived, so
-`VAULT.md`'s rule holds unchanged.
+No standing `prune` op. The moment the caller needs the candidates is the moment
+the budget refuses, so `homeCandidates` ranks `Home.md`'s index lines and the
+refusal prints exactly as many as the file is over. It ranks by facts about the
+target note: the link resolves to nothing, the note is archived, then oldest
+`updated`. **It removes nothing.** The note stays on disk and `recall` finds it.
+
+Home holds 132 index lines for 137 notes, so it is an inventory, not a map. What
+Home is for is still open, and a heading-level cap is the likelier answer than
+any ranking. This refusal hint is the stopgap that unblocks a write.
 
 ## Consequences
 
-`lint --fix` is mechanical but it edits 73 notes at once, so run it against a
-copy of the vault and read the diff before letting it near the real one. That
-is not paranoia: on 2026-09-24 a rollback in `write` deleted two uncommitted
-notes and six lines of `Home.md` (fixed in `b089def`), and the only reason
-anything came back is that a session happened to be holding the text.
+The dry run against a copy of the vault changed 16 files, 18 insertions, 0
+deletions, every line frontmatter. Take the copy with `cp -aL`:
+`~/.aleph/vault` is a symlink to `/mnt/c/Users/crsmi/vault`, and `cp -a`
+copies the symlink, so the "copy" is the live vault. That mistake put one bad
+commit on the real vault on 2026-09-24; `0385a9c` reverts it.
 
-`prune` decides what Chris stops seeing at session start. It should stay
-read-only by default for a long time, and `--apply` should print the removed
-lines so they can be pasted back.
+A parser bug surfaced only in that dry run. `parseFrontmatter` cut every line at
+` #`, so `aliases: [deep link a draw, #go]` lost its closing bracket, parsed as
+a string, and lint called it "aliases must be a list". `stripComment` now
+ignores a `#` inside quotes or brackets.
 
-Neither op should exist as a hook or run unattended.
+`--fix` still edits many notes at once. Run it against a real copy and read the
+diff. Neither op should run as a hook or unattended.
 
 ## Related
 
 - `docs/specs/2026-09-04-memory-vault.md` — the vault's design
-- `vault/lib/vault.ts` — `LINE_BUDGET`, `budgetFindings`, `lintVault`
-- `b089def` — the rollback fix that this spec's Consequences section cites
+- `vault/lib/git.ts` — `commitPaths`
+- `vault/lib/vault.ts` — `fixFrontmatter`, `homeCandidates`, `lintVault`
+- `b089def` — the rollback fix this spec's Problem Statement cites

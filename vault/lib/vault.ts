@@ -153,7 +153,16 @@ export function lintVault(notes: Note[]): { refuse: Finding[]; warn: Finding[] }
   const refuse: Finding[] = [];
   const warn: Finding[] = [];
   const wiki = wikiNotes(notes);
-  for (const n of wiki) refuse.push(...validateNote(n, notes));
+  // `write` is the gate and refuses on the template; `lint` reports a vault
+  // that already exists. A note on disk cannot be un-written, and the template
+  // rules are claims about prose that no repair can make true, so they warn
+  // here — one line per note, not one per missing heading.
+  for (const n of wiki) {
+    const found = validateNote(n, notes);
+    refuse.push(...found.filter((f) => f.rule !== "template"));
+    const template = found.filter((f) => f.rule === "template");
+    if (template.length) warn.push({ note: n.title, rule: "template", detail: template.map((f) => f.detail).join("; ") });
+  }
   refuse.push(...budgetFindings(notes));
   const targets = linkTargets(notes);
   for (const n of notes.filter((x) => !x.wiki && !x.archived && x.rel !== "VAULT.md")) for (const t of links(n.body)) if (!targets.has(t.toLowerCase())) refuse.push({ note: n.title, rule: "dangling", detail: `[[${t}]] resolves to nothing` });
@@ -203,4 +212,69 @@ export function citedTraces(notes: Note[]): string[] {
   const ids = new Set<string>();
   for (const n of notes) for (const s of list(n.fm, "sources")) if (s.startsWith("trace:")) ids.add(s.slice(6));
   return [...ids].sort();
+}
+
+/**
+ * The repairs that need no judgement. `--fix` edits frontmatter and never the
+ * body: frontmatter is structural and each defect below has one right answer,
+ * where a missing `## Evidence` or `as of` marker is a claim about the world.
+ * Appending those headings would turn "this claim is unbacked" into a passing
+ * check and lose the only way to find an unbacked claim later.
+ *
+ * Edits are line-level, so a note keeps its own formatting and the diff stays
+ * readable. Returns null when there is nothing to repair.
+ */
+export function fixFrontmatter(note: Note, lastCommit: string | null): { text: string; repairs: string[] } | null {
+  if (!note.hasFrontmatter) return null;
+  const { frontmatter, body } = splitFrontmatter(note.text);
+  const lines = frontmatter!.split(/\r?\n/);
+  const repairs: string[] = [];
+
+  for (const key of LISTS) {
+    const v = note.fm[key];
+    if (v === undefined || Array.isArray(v)) continue;
+    const i = lines.findIndex((l) => new RegExp(`^${key}:\\s`).test(l));
+    // Rebuild the line from its own text, not from the parsed value, and only
+    // when the text is a plain scalar. A line the parser read as a string
+    // because it could not read it at all is a defect to report, not to wrap.
+    const raw = i < 0 ? "" : lines[i].slice(key.length + 1).trim();
+    if (i < 0 || !raw || /["'\[\]#]/.test(raw)) continue;
+    lines[i] = `${key}: [${raw}]`;
+    repairs.push(`${key} wrapped in a list`);
+  }
+  if (note.fm.supersedes === undefined) { lines.push("supersedes: []"); repairs.push("added supersedes: []"); }
+  if (note.fm.updated === undefined && lastCommit) { lines.push(`updated: ${lastCommit}`); repairs.push(`added updated: ${lastCommit} from git`); }
+
+  if (!repairs.length) return null;
+  return { text: `---\n${lines.join("\n")}\n---\n${body}`, repairs };
+}
+
+export interface Candidate { line: number; text: string; why: string }
+
+/**
+ * Home.md index lines ranked for removal, worst first, and only as many as the
+ * budget needs. Every reason is a fact about the target note, never a guess
+ * about what Chris still wants to see. Removing a line drops nothing: the note
+ * stays on disk and `recall` still finds it.
+ */
+export function homeCandidates(notes: Note[]): Candidate[] {
+  const home = notes.find((n) => n.rel === "Home.md");
+  if (!home) return [];
+  const lines = home.text.replace(/\n+$/, "").split("\n");
+  const over = lines.length - LINE_BUDGET;
+  if (over <= 0) return [];
+  const targets = linkTargets(notes);
+
+  const scored: (Candidate & { rank: number; updated: string })[] = [];
+  for (const [i, text] of lines.entries()) {
+    const m = /^\s*-\s*\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/.exec(text);
+    if (!m) continue;
+    const hit = targets.get(m[1].trim().toLowerCase());
+    const updated = String(hit?.fm.updated ?? "");
+    if (!hit) scored.push({ line: i + 1, text, why: `[[${m[1].trim()}]] resolves to nothing`, rank: 0, updated });
+    else if (hit.archived) scored.push({ line: i + 1, text, why: `${hit.title} is archived`, rank: 1, updated });
+    else scored.push({ line: i + 1, text, why: `${hit.title} last updated ${updated || "never"}`, rank: 2, updated });
+  }
+  scored.sort((a, b) => a.rank - b.rank || a.updated.localeCompare(b.updated) || a.line - b.line);
+  return scored.slice(0, over).map(({ line, text, why }) => ({ line, text, why }));
 }

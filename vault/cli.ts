@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * vault <init|write|recall|lint|compile> — the mechanical half of /aleph:vault.
+ * vault <init|write|recall|lint [--fix]|compile> — the mechanical half of /aleph:vault.
  * Vault path: $ALEPH_VAULT or ~/.aleph/vault. JSON on stdout, findings on
  * stderr, exit 1 on refusal. See docs/specs/2026-09-04-memory-vault.md.
  */
@@ -8,10 +8,10 @@ import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, unli
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { langfuseConfig } from "../hooks/lib/env.ts";
 import { serializeFrontmatter } from "./lib/frontmatter.ts";
-import { commitAll, git } from "./lib/git.ts";
+import { commitPaths, git, lastCommitDate, tracked } from "./lib/git.ts";
 import { handoffsFor, traceDigest } from "./lib/compile.ts";
 import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./lib/templates.ts";
-import { budgetFindings, citedTraces, clock, folderFor, health, healthLine, lintVault, loadVault, readNote, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
+import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, homeCandidates, lintVault, loadVault, readNote, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
 
 const [cmd, ...rest] = process.argv.slice(2);
 const root = resolve(vaultDir());
@@ -20,6 +20,7 @@ function flag(name: string): string | undefined {
   const i = rest.indexOf(`--${name}`);
   return i >= 0 ? rest[i + 1] : undefined;
 }
+function has(name: string): boolean { return rest.includes(`--${name}`); }
 const positional = rest.filter((a, i) => !a.startsWith("--") && rest[i - 1]?.startsWith("--") !== true);
 
 function out(value: unknown): void { console.log(JSON.stringify(value, null, 2)); }
@@ -27,6 +28,14 @@ function refuse(findings: Finding[], hint?: string): never {
   for (const f of findings) console.error(`refuse ${f.rule} ${f.note}: ${f.detail}`);
   if (hint) console.error(hint);
   process.exit(1);
+}
+
+/** The lines a budget refusal should offer, so the caller is not left guessing. */
+function budgetHint(notes: Note[]): string {
+  const candidates = homeCandidates(notes);
+  if (!candidates.length) return "";
+  return ["", "Home.md lines ranked for removal, worst first. The notes stay on disk and recall still finds them:",
+    ...candidates.map((c) => `  ${c.line}: ${c.text.trim()}\n      — ${c.why}`)].join("\n");
 }
 function warn(findings: Finding[]): void {
   for (const f of findings) console.error(`warn ${f.rule} ${f.note}: ${f.detail}`);
@@ -71,20 +80,22 @@ function setHealth(): void {
 // ---------------------------------------------------------------- init
 function init(): void {
   if (existsSync(join(root, "Home.md"))) { console.error(`vault already at ${root}`); process.exit(1); }
+  const made: string[] = [];
+  const lay = (rel: string, text: string) => { writeFileSync(join(root, rel), text); made.push(join(root, rel)); };
   for (const d of ["wiki/decisions", "wiki/concepts", "wiki/entities", "wiki/projects", "wiki/gotchas", "daily", "archive", "attachments", ".obsidian"]) mkdirSync(join(root, d), { recursive: true });
-  for (const d of ["daily", "archive", "attachments"]) writeFileSync(join(root, d, ".gitkeep"), "");
-  for (const d of ["decisions", "concepts", "entities", "projects", "gotchas"]) writeFileSync(join(root, "wiki", d, ".gitkeep"), "");
-  writeFileSync(join(root, "VAULT.md"), VAULT_MD);
-  writeFileSync(join(root, "Home.md"), HOME_MD);
-  writeFileSync(join(root, "MEMORY.md"), MEMORY_MD);
-  writeFileSync(join(root, ".gitignore"), GITIGNORE);
-  for (const [name, value] of Object.entries(OBSIDIAN)) writeFileSync(join(root, ".obsidian", name), JSON.stringify(value, null, 2) + "\n");
+  for (const d of ["daily", "archive", "attachments"]) lay(join(d, ".gitkeep"), "");
+  for (const d of ["decisions", "concepts", "entities", "projects", "gotchas"]) lay(join("wiki", d, ".gitkeep"), "");
+  lay("VAULT.md", VAULT_MD);
+  lay("Home.md", HOME_MD);
+  lay("MEMORY.md", MEMORY_MD);
+  lay(".gitignore", GITIGNORE);
+  for (const [name, value] of Object.entries(OBSIDIAN)) lay(join(".obsidian", name), JSON.stringify(value, null, 2) + "\n");
   if (!existsSync(join(root, ".git"))) {
     const r = git(root, "init", "-q", "-b", "main");
     if (!r.ok) { console.error(r.out); process.exit(1); }
   }
   setHealth();
-  const commit = commitAll(root, "init vault");
+  const commit = commitPaths(root, "init vault", made);
   out({ op: "init", path: root, commit });
 }
 
@@ -105,14 +116,14 @@ function write(): void {
     if (name === "Home") setHealth();
     const notes = loadVault(root);
     const budget = budgetFindings(notes).filter((f) => f.note === name);
-    if (budget.length) refuse(budget);
+    if (budget.length) refuse(budget, budgetHint(notes));
     const { refuse: r, warn: w } = lintVault(notes);
     const dangling = r.filter((f) => f.note === name);
     if (dangling.length) refuse(dangling);
     warn(w);
     appendDaily(`write [[${name}]] — ${why}`);
     if (name === "MEMORY") setHealth();
-    const commit = commitAll(root, `write: ${name}`);
+    const commit = commitPaths(root, `write: ${name}`, [join(root, `${name}.md`), join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
     out({ op: "write", title: name, path: `${name}.md`, warnings: w, commit });
     return;
   }
@@ -131,12 +142,19 @@ function write(): void {
     if (!hit) findings.push({ note: draft.title, rule: "supersedes", detail: `supersedes [${title}] but no live wiki note has that title` });
     else old.push(hit);
   }
-  if (findings.length) refuse(findings);
+  // A draft that already sits at its destination and that no write has ever
+  // accepted is invisible to git but not to lint or to [[links]]. Name it; do
+  // not delete it. It may be Chris's own note, typed in Obsidian, and b089def
+  // is what undoing another writer's work costs.
+  if (findings.length) refuse(findings, existsSync(dest) && !tracked(root, dest)
+    ? `${relative(root, dest)} is in the vault but no write has accepted it. Fix it and rerun, or remove it.`
+    : undefined);
   // Home and MEMORY are budgeted, and a note write cannot shrink either. Asking
   // before the disk is touched means an over-budget Home refuses a write that
   // has changed nothing, instead of one that has to be undone.
-  const overBudget = budgetFindings(loadVault(root));
-  if (overBudget.length) refuse(overBudget, "prune the over-budget file first: this write changed nothing");
+  const before = loadVault(root);
+  const overBudget = budgetFindings(before);
+  if (overBudget.length) refuse(overBudget, "prune the over-budget file first: this write changed nothing" + budgetHint(before));
 
   // Everything validated; now touch the disk.
   const touched: string[] = [join(root, "Home.md"), join(root, "daily", `${today()}.md`), dest];
@@ -156,10 +174,10 @@ function write(): void {
   setHealth();
   const after = loadVault(root);
   const budget = budgetFindings(after);
-  if (budget.length) { rollback(touched); refuse(budget); }
+  if (budget.length) { rollback(touched); refuse(budget, budgetHint(after)); }
   warn(lintVault(after).warn.filter((f) => f.note === draft.title || f.detail.includes(draft.title)));
   const subject = archived.length ? `supersede: ${archived.join(", ")} → ${draft.title}` : `write: ${draft.title}`;
-  const commit = commitAll(root, subject);
+  const commit = commitPaths(root, subject, touched);
   out({ op: archived.length ? "supersede" : "write", title: draft.title, path: relative(root, dest), archived, commit });
 }
 
@@ -184,10 +202,20 @@ function recall(): void {
 // ---------------------------------------------------------------- lint
 function lint(): void {
   requireVault();
+  const fixed: { note: string; path: string; repairs: string[] }[] = [];
+  if (has("fix")) {
+    for (const n of wikiNotes(loadVault(root))) {
+      const r = fixFrontmatter(n, lastCommitDate(root, n.path));
+      if (!r) continue;
+      writeFileSync(n.path, r.text);
+      fixed.push({ note: n.title, path: n.rel, repairs: r.repairs });
+    }
+  }
   setHealth();
   const result = lintVault(loadVault(root));
-  const commit = commitAll(root, `lint: ${today()}`);
-  out({ ...result, commit });
+  const touched = [join(root, "Home.md"), ...fixed.map((f) => join(root, f.path))];
+  const commit = commitPaths(root, fixed.length ? `lint --fix: ${fixed.length} notes` : `lint: ${today()}`, touched);
+  out({ fixed, ...result, commit });
   process.exit(result.refuse.length ? 1 : 0);
 }
 
@@ -219,6 +247,6 @@ switch (cmd) {
   case "lint": lint(); break;
   case "compile": await compile(); break;
   default:
-    console.error("usage: vault <init|write <file> --why <text>|recall <query>|lint|compile [date]>");
+    console.error("usage: vault <init|write <file> --why <text>|recall <query>|lint [--fix]|compile [date]>");
     process.exit(2);
 }

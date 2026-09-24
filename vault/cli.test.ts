@@ -213,6 +213,84 @@ describe("lint", () => {
   });
 });
 
+describe("commit scope", () => {
+  test("a stray note in wiki/ does not ride into history on another write", () => {
+    const stray = join(vault, "wiki/gotchas/Never Accepted.md");
+    writeFileSync(stray, "no frontmatter, never written\n");
+    expect(cli("write", note("Scoped Commit Check"), "--why", "x").code).toBe(0);
+    expect(gitStatus().replace(/"/g, "")).toBe("?? wiki/gotchas/Never Accepted.md");
+    expect(Bun.spawnSync(["git", "-C", vault, "ls-files", "--", "wiki/gotchas/Never Accepted.md"], { stdout: "pipe" }).stdout.toString().trim()).toBe("");
+    rmSync(stray);
+  });
+  test("a refusal names a file in the vault that no write has accepted", () => {
+    const p = join(vault, "wiki/gotchas/Half Written.md");
+    writeFileSync(p, readFileSync(note("Half Written"), "utf8").replace("## Evidence\n", ""));
+    const r = cli("write", p, "--why", "x");
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("missing section ## Evidence");
+    expect(r.stderr).toContain("no write has accepted it");
+    expect(existsSync(p)).toBe(true);
+    rmSync(p);
+  });
+});
+
+describe("lint --fix", () => {
+  test("repairs frontmatter, leaves the body, and reports what it cannot judge", () => {
+    const p = join(vault, "wiki/gotchas/Needs Repair.md");
+    const body = "**Claim.** repairs happen in frontmatter only, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- run\n\n## Related\n[[Home]]\n";
+    writeFileSync(p, "---\naliases: one name\nkind: gotcha\nscope: aleph\nconfidence: sure\nupdated: 2026-09-04\nsources: [chris]\n---\n" + body);
+    const r = cli("lint", "--fix");
+    expect(r.json.fixed).toContainEqual({ note: "Needs Repair", path: "wiki/gotchas/Needs Repair.md", repairs: ["aliases wrapped in a list", "added supersedes: []"] });
+    const after = readFileSync(p, "utf8");
+    expect(after).toContain("aliases: [one name]");
+    expect(after).toContain("supersedes: []");
+    expect(after).toContain(body);
+    // confidence is a claim about how the fact was learned, so --fix leaves it.
+    expect(after).toContain("confidence: sure");
+    expect(r.json.refuse).toContainEqual({ note: "Needs Repair", rule: "schema", detail: "confidence must be one of measured|reported|inferred, got sure" });
+    expect(gitLog()).toContain("lint --fix: 1 notes");
+    rmSync(p);
+    cli("lint");
+  });
+  test("a # inside a list is content, and --fix leaves a line it cannot rebuild", () => {
+    const r = cli("write", note("Hash In A List", { aliases: "[url scheme, #go]" }), "--why", "x");
+    expect(r.code).toBe(0);
+    const p = join(vault, "wiki/gotchas/Hash In A List.md");
+    expect(readFileSync(p, "utf8")).toContain("aliases: [url scheme, #go]");
+    expect(cli("recall", "#go").json[0]).toMatchObject({ title: "Hash In A List", rank: 1 });
+    const fix = cli("lint", "--fix");
+    expect(fix.json.fixed.map((f: any) => f.note)).not.toContain("Hash In A List");
+    expect(readFileSync(p, "utf8")).toContain("aliases: [url scheme, #go]");
+  });
+  test("a template break warns once per note and does not refuse", () => {
+    const p = join(vault, "wiki/gotchas/Thin Body.md");
+    writeFileSync(p, readFileSync(note("Thin Body"), "utf8").replace(/\*\*Claim\.\*\*[\s\S]*/, "Just prose.\n\n## Details\nd\n"));
+    const r = cli("lint");
+    expect(r.json.refuse.filter((f: any) => f.note === "Thin Body")).toEqual([]);
+    const w = r.json.warn.filter((f: any) => f.note === "Thin Body" && f.rule === "template");
+    expect(w).toHaveLength(1);
+    expect(w[0].detail).toContain("**Claim.**");
+    expect(w[0].detail).toContain("## Evidence");
+    rmSync(p);
+    cli("lint");
+  });
+});
+
+describe("budget", () => {
+  test("an over-budget Home refusal ranks the lines to remove", () => {
+    const home = join(vault, "Home.md");
+    const text = readFileSync(home, "utf8");
+    writeFileSync(home, text.replace("## Gotchas\n", "## Gotchas\n- [[Ghost Target]] — points at nothing\n") + "- filler\n".repeat(150));
+    const r = cli("write", home, "--why", "too long");
+    expect(r.code).toBe(1);
+    expect(r.stderr).toMatch(/Home\.md is \d+ lines; the budget is 150/);
+    expect(r.stderr).toContain("ranked for removal");
+    expect(r.stderr).toContain("[[Ghost Target]] resolves to nothing");
+    writeFileSync(home, text);
+    cli("write", home, "--why", "restore");
+  });
+});
+
 describe("recall", () => {
   test("ranks title, alias, contains, body; empty list otherwise", () => {
     cli("write", note("Verify Gate", { aliases: "[stop gate]" }, "**Claim.** judged at Stop, as of 2026-09-04.\n\n## Details\nnested claude -p haiku\n\n## Evidence\n\n## Related\n[[Home]]\n"), "--why", "x");

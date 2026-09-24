@@ -31,11 +31,31 @@ function flowList(inner: string): string[] {
   return out;
 }
 
+/**
+ * Drop a trailing ` # comment`. A `#` inside quotes or brackets is content:
+ * `aliases: [deep link a draw, #go]` is a three-item list, and cutting at the
+ * `#` left it unclosed, so it parsed as a string and lint called it "aliases
+ * must be a list".
+ */
+function stripComment(line: string): string {
+  let quote: string | null = null;
+  let depth = 0;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quote) { if (ch === quote) quote = null; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    if (ch === "[") depth++;
+    else if (ch === "]") depth--;
+    else if (ch === "#" && depth === 0 && /\s/.test(line[i - 1] ?? "")) return line.slice(0, i);
+  }
+  return line;
+}
+
 export function parseFrontmatter(yaml: string): Frontmatter {
   const fm: Frontmatter = {};
   let listKey: string | null = null;
   for (const raw of yaml.split(/\r?\n/)) {
-    const line = raw.replace(/\s+#.*$/, "").trimEnd();
+    const line = stripComment(raw).trimEnd();
     if (!line.trim()) continue;
     const item = /^\s+-\s*(.*)$/.exec(line) ?? /^-\s*(.*)$/.exec(line);
     if (item && listKey) { (fm[listKey] as string[]).push(unquote(item[1])); continue; }

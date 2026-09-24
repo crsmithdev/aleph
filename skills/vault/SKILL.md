@@ -57,7 +57,20 @@ note it returns; do not paraphrase Home from memory.
 
 `cli.ts lint` prints refusals and warnings for the whole vault and sets the
 health line. Run it after a batch of writes or when Home's health line
-shows dangling links or orphans.
+shows dangling links or orphans. Refusals are structural: schema, folder,
+duplicate title, dangling link, budget. A broken template warns instead,
+one line per note, because a note on disk cannot be un-written.
+
+`cli.ts lint --fix` repairs frontmatter and never the body: it adds a
+missing `supersedes: []`, wraps a list key holding a bare scalar, and fills
+a missing `updated` from git. It never adds a `## Evidence` heading or an
+`as of` marker; those are claims about the world, and a heading that says
+nothing hides an unbacked claim. Read the diff before you commit anything
+else.
+
+A refusal that names a file "no write has accepted" means the file sits in
+`wiki/` but never passed the gate. Fix it and rerun, or remove it. No op
+commits a path it did not touch, so such a file stays untracked.
 
 ## compile
 
