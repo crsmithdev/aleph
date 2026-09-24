@@ -380,6 +380,8 @@ describe("archive", () => {
     const w = r.json.warn.find((f: any) => f.rule === "deleted" && f.note === "Deleted By Hand");
     expect(w.detail).toContain("tracked but gone from disk");
     expect(w.detail).toContain('vault archive "Deleted By Hand"');
+    // A tracked non-markdown file is not a deleted note.
+    expect(r.json.warn.filter((f: any) => f.rule === "deleted").map((f: any) => f.note)).toEqual(["Deleted By Hand"]);
     Bun.spawnSync(["git", "-C", vault, "checkout", "--", "wiki/gotchas/Deleted By Hand.md"]);
     cli("archive", "Deleted By Hand", "--why", "test fixture");
     expect(gitStatus()).toBe("");

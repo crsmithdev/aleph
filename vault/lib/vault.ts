@@ -218,7 +218,9 @@ export function lintVault(notes: Note[], { read = {}, overlap = false, now = new
   // door: `archive` retires a note without destroying it.
   const onDisk = new Set(notes.map((n) => n.rel));
   for (const rel of tracked) {
-    if (onDisk.has(rel)) continue;
+    // `loadVault` walks markdown only, so every other tracked file — a
+    // `.gitkeep`, an attachment — would look deleted.
+    if (!rel.endsWith(".md") || onDisk.has(rel)) continue;
     warn.push({ note: basename(rel, ".md"), rule: "deleted", detail: `${rel} is tracked but gone from disk; retire it with: vault archive "${basename(rel, ".md")}" --why "<one line>"` });
   }
 
