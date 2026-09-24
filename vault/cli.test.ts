@@ -52,7 +52,7 @@ describe("init", () => {
     expect(JSON.parse(readFileSync(join(vault, ".obsidian/app.json"), "utf8")).attachmentFolderPath).toBe("attachments");
     expect(readFileSync(join(vault, ".gitignore"), "utf8")).toContain("workspace*.json");
     expect(Bun.spawnSync(["git", "-C", vault, "remote"], { stdout: "pipe" }).stdout.toString().trim()).toBe("");
-    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toMatch(/^Health: 0 notes, 0 dangling, 0 orphans, lint \d{4}-\d{2}-\d{2}$/);
+    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toMatch(/^Health: 0 notes, 0 dangling, 0 orphans, 0 stale, lint \d{4}-\d{2}-\d{2}$/);
   });
   test("refuses a second init", () => {
     expect(cli("init").code).toBe(1);
@@ -71,7 +71,7 @@ describe("write", () => {
     const today = new Date();
     const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     expect(readFileSync(join(vault, "daily", `${date}.md`), "utf8")).toMatch(/^- \d\d:\d\d write \[\[Stop Hook Block Shape\]\] — measured three shapes$/m);
-    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toBe(`Health: 1 notes, 0 dangling, 0 orphans, lint ${date}`);
+    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toBe(`Health: 1 notes, 0 dangling, 0 orphans, 0 stale, lint ${date}`);
     const log = gitLog();
     expect(log).toContain("write: Stop Hook Block Shape");
     expect(log).toContain("Co-Authored-By: Claude");
@@ -171,7 +171,7 @@ describe("write", () => {
     const r = cli("write", home, "--why", "map the gotcha");
     expect(r.code).toBe(0);
     expect(gitLog()).toContain("write: Home");
-    expect(readFileSync(home, "utf8").trim().split("\n").at(-1)).toMatch(/orphans, lint/);
+    expect(readFileSync(home, "utf8").trim().split("\n").at(-1)).toMatch(/orphans, \d+ stale, lint/);
     writeFileSync(home, text + "- filler\n".repeat(150));
     const over = cli("write", home, "--why", "too long");
     expect(over.code).toBe(1);
@@ -200,7 +200,7 @@ describe("lint", () => {
     expect(r.code).toBe(0);
     const rules = r.json.warn.map((w: any) => w.rule);
     expect(rules).toContain("orphan");
-    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toMatch(/^Health: \d+ notes, 0 dangling, \d+ orphans, lint \d{4}-\d{2}-\d{2}$/);
+    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toMatch(/^Health: \d+ notes, 0 dangling, \d+ orphans, \d+ stale, lint \d{4}-\d{2}-\d{2}$/);
   });
   test("warns on stale; overlap is opt-in; exit 1 on a hand-made structural break", () => {
     cli("write", note("Langfuse Ingestion Drops Batches", { updated: "2026-01-01" }), "--why", "x");
@@ -277,6 +277,26 @@ describe("lint --fix", () => {
     expect(r.json.fixed.find((f: any) => f.note === "Entered Long Ago").repairs)
       .toEqual(["added updated: 2026-01-15, the date the note entered git"]);
     cli("archive", "Entered Long Ago", "--why", "test fixture");
+  });
+  test("many template breaks collapse to a count; --template names them", () => {
+    const thin = (t: string) => {
+      const p = join(vault, `wiki/gotchas/${t}.md`);
+      writeFileSync(p, readFileSync(note(t), "utf8").replace(/\*\*Claim\.\*\*[\s\S]*/, "Just prose.\n\n## Details\nd\n"));
+      return p;
+    };
+    const made = ["Thin One", "Thin Two"].map(thin);
+    const r = cli("lint");
+    const w = r.json.warn.filter((f: any) => f.rule === "template");
+    expect(w).toHaveLength(1);
+    expect(w[0].note).toBe("2 notes");
+    expect(w[0].detail).toContain("lint --template");
+
+    const named = cli("lint", "--template").json.warn.filter((f: any) => f.rule === "template");
+    expect(named.map((f: any) => f.note).sort()).toEqual(["Thin One", "Thin Two"]);
+    for (const p of made) rmSync(p);
+    Bun.spawnSync(["git", "-C", vault, "checkout", "--", "wiki"]);
+    for (const t of ["Thin One", "Thin Two"]) cli("archive", t, "--why", "test fixture");
+    expect(gitStatus()).toBe("");
   });
   test("a # inside a list is content, and --fix leaves a line it cannot rebuild", () => {
     const r = cli("write", note("Hash In A List", { aliases: "[url scheme, #go]" }), "--why", "x");
@@ -390,6 +410,21 @@ describe("archive", () => {
     const r = cli("archive", "Never Existed", "--why", "x");
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("no live wiki note has that title");
+  });
+});
+
+describe("health", () => {
+  test("the line carries the stale count, so a closing window is in context", () => {
+    const staleCount = () => {
+      cli("lint");
+      const line = readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)!;
+      return Number(/, (\d+) stale, lint /.exec(line)![1]);
+    };
+    const before = staleCount();
+    cli("write", note("Long Past Its Window", { confidence: "inferred", updated: "2026-01-01" }), "--why", "x");
+    expect(staleCount()).toBe(before + 1);
+    cli("recall", "long past its window");
+    expect(staleCount()).toBe(before);
   });
 });
 

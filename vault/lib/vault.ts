@@ -193,9 +193,9 @@ export function staleness(note: Note, read: Record<string, string> = {}, now = n
   return `${kind}/${note.fm.confidence} wants a re-check every ${window} days; ${since}, ${days} days ago`;
 }
 
-export interface LintOptions { read?: Record<string, string>; overlap?: boolean; now?: Date; tracked?: string[] }
+export interface LintOptions { read?: Record<string, string>; overlap?: boolean; now?: Date; tracked?: string[]; templates?: boolean }
 
-export function lintVault(notes: Note[], { read = {}, overlap = false, now = new Date(), tracked = [] }: LintOptions = {}): { refuse: Finding[]; warn: Finding[] } {
+export function lintVault(notes: Note[], { read = {}, overlap = false, now = new Date(), tracked = [], templates = false }: LintOptions = {}): { refuse: Finding[]; warn: Finding[] } {
   const refuse: Finding[] = [];
   const warn: Finding[] = [];
   const wiki = wikiNotes(notes);
@@ -203,12 +203,17 @@ export function lintVault(notes: Note[], { read = {}, overlap = false, now = new
   // that already exists. A note on disk cannot be un-written, and the template
   // rules are claims about prose that no repair can make true, so they warn
   // here — one line per note, not one per missing heading.
+  const template: Finding[] = [];
   for (const n of wiki) {
     const found = validateNote(n, notes);
     refuse.push(...found.filter((f) => f.rule !== "template"));
-    const template = found.filter((f) => f.rule === "template");
-    if (template.length) warn.push({ note: n.title, rule: "template", detail: template.map((f) => f.detail).join("; ") });
+    const broken = found.filter((f) => f.rule === "template");
+    if (broken.length) template.push({ note: n.title, rule: "template", detail: broken.map((f) => f.detail).join("; ") });
   }
+  // 69 correct warnings are a wall, and the seventieth is the one that matters.
+  // The count goes in the list; the notes go behind `lint --template`.
+  if (templates || template.length <= 1) warn.push(...template);
+  else warn.push({ note: `${template.length} notes`, rule: "template", detail: `want an \`as of\` marker, a **Claim.** opening or a ## Details/Evidence/Related section; name them with: lint --template` });
   refuse.push(...budgetFindings(notes));
   const targets = linkTargets(notes);
   for (const n of notes.filter((x) => !x.wiki && !x.archived && x.rel !== "VAULT.md")) for (const t of links(n.body)) if (!targets.has(t.toLowerCase())) refuse.push({ note: n.title, rule: "dangling", detail: `[[${t}]] resolves to nothing` });
@@ -258,15 +263,22 @@ export function lintVault(notes: Note[], { read = {}, overlap = false, now = new
   return { refuse, warn };
 }
 
-export interface Health { notes: number; dangling: number; orphans: number; date: string }
+export interface Health { notes: number; dangling: number; orphans: number; stale: number; date: string }
 
-export function health(notes: Note[]): Health {
-  const { refuse, warn } = lintVault(notes);
-  return { notes: wikiNotes(notes).length, dangling: refuse.filter((f) => f.rule === "dangling").length, orphans: warn.filter((f) => f.rule === "orphan").length, date: today() };
+/**
+ * The counts that go in Home's last line, which SessionStart injects.
+ *
+ * `stale` is here because nothing else shows it. A decay window that nobody
+ * reads is a window that closes quietly, and no hook runs `consolidate`.
+ */
+export function health(notes: Note[], read: Record<string, string> = {}): Health {
+  const { refuse, warn } = lintVault(notes, { read });
+  const count = (rule: string) => warn.filter((f) => f.rule === rule).length;
+  return { notes: wikiNotes(notes).length, dangling: refuse.filter((f) => f.rule === "dangling").length, orphans: count("orphan"), stale: count("stale"), date: today() };
 }
 
 export function healthLine(h: Health): string {
-  return `Health: ${h.notes} notes, ${h.dangling} dangling, ${h.orphans} orphans, lint ${h.date}`;
+  return `Health: ${h.notes} notes, ${h.dangling} dangling, ${h.orphans} orphans, ${h.stale} stale, lint ${h.date}`;
 }
 
 /** Home.md with its last line set to the health line. */

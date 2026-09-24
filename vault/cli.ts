@@ -96,7 +96,7 @@ function noteRead(titles: string[]): void {
 
 function setHealth(): void {
   const home = join(root, "Home.md");
-  writeFileSync(home, withHealth(readFileSync(home, "utf8"), healthLine(health(loadVault(root)))));
+  writeFileSync(home, withHealth(readFileSync(home, "utf8"), healthLine(health(loadVault(root), readLog()))));
 }
 
 // ---------------------------------------------------------------- init
@@ -235,7 +235,7 @@ function lint(): void {
     }
   }
   setHealth();
-  const result = lintVault(loadVault(root), { read: readLog(), overlap: has("overlap"), tracked: trackedFiles(root, "wiki") });
+  const result = lintVault(loadVault(root), { read: readLog(), overlap: has("overlap"), templates: has("template"), tracked: trackedFiles(root, "wiki") });
   const touched = [join(root, "Home.md"), ...fixed.map((f) => join(root, f.path))];
   const commit = commitPaths(root, fixed.length ? `lint --fix: ${fixed.length} notes` : `lint: ${today()}`, touched);
   out({ fixed, ...result, commit });
@@ -350,6 +350,6 @@ switch (cmd) {
   case "archive": archive(); break;
   case "compile": await compile(); break;
   default:
-    console.error("usage: vault <init|write <file> --why <text>|recall <query>|lint [--fix] [--overlap]|consolidate [--apply]|archive <title> --why <text>|compile [date]>");
+    console.error("usage: vault <init|write <file> --why <text>|recall <query>|lint [--fix] [--overlap] [--template]|consolidate [--apply]|archive <title> --why <text>|compile [date]>");
     process.exit(2);
 }

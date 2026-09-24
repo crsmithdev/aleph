@@ -97,8 +97,16 @@ for a rule that finds something.
 
 Home falls from 132 index lines to about 41, so the budget stops binding.
 
-The write rate is untouched, and it is the disease: 98 gotchas to 20 decisions
-says the bar for a gotcha is too low. Nothing here raises it.
+The write rate is the disease: 98 gotchas to 20 decisions says the bar for a
+gotcha is too low. The skill now sets one — a gotcha earns a page when the
+behaviour cost a debugging session and the next session would pay again — but
+a sentence in a skill is not a gate, and nothing measures whether it holds.
+
+Home's health line carries the stale count, because SessionStart injects that
+line and nothing else shows a window closing. No hook runs `consolidate`.
+
+Template warnings collapse to a count past one note. 69 correct warnings are a
+wall, and the seventieth is the one that matters; `lint --template` names them.
 
 Contradiction detection is still missing. A frontier model scores 55.2% on the
 STALE benchmark's implicit conflicts, so this is not a gap to close with a

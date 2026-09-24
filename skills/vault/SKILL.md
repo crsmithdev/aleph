@@ -18,6 +18,19 @@ or change a project's state (`project`). One page per fact. Rewrite the
 existing page rather than writing a second one about the same thing; set
 `supersedes` when the old page is now wrong.
 
+**`recall` first.** If a page already covers the fact, rewrite that page.
+
+**A gotcha has to earn its page.** Write one when the behaviour cost you a
+debugging session and the next session would pay again. Do not write one for
+a fact you could re-derive in a minute from the code, `--help` or an error
+message; that is a search, not a memory. A gotcha that names a version or a
+tool you do not control rots fast, so say the date and the version in the
+claim.
+
+The vault ran at 98 gotchas to 20 decisions in its first 20 days, and the
+index had weeks left. Decisions and projects are what a later session cannot
+re-derive at any price. Prefer them.
+
 1. Draft the note in the scratchpad as `<Title>.md`. Title Case, unique,
    no `/ \ : * ? " < > |`. Frontmatter:
 
@@ -84,7 +97,8 @@ note it returns; do not paraphrase Home from memory.
 health line. Run it after a batch of writes or when Home's health line
 shows dangling links or orphans. Refusals are structural: schema, folder,
 duplicate title, dangling link, budget. A broken template warns instead,
-one line per note, because a note on disk cannot be un-written.
+because a note on disk cannot be un-written; past one note the warnings
+collapse to a count, and `lint --template` names them.
 
 `cli.ts lint --fix` repairs frontmatter and never the body: it adds a
 missing `supersedes: []`, wraps a list key holding a bare scalar, and fills a
