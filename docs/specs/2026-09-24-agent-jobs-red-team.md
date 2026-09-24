@@ -1,5 +1,9 @@
 # Agent jobs: red team and revised plan
 
+**Superseded.** Version 2 of [`2026-09-24-agent-jobs.md`](2026-09-24-agent-jobs.md)
+takes in these findings and simplifies them further. Read that file. This one
+keeps the evidence.
+
 Written 2026-09-24. This document reviews
 [`2026-09-24-agent-jobs.md`](2026-09-24-agent-jobs.md) and replaces the parts
 that it names. Where the two disagree, this document wins. Nothing is built.
@@ -203,3 +207,30 @@ Sidetone and Cloud Chamber from each repo's own `CLAUDE.md`.
 2. **C13, permission mode.** Bypass plus the hook rule, or allowlist mode if milestone 0 shows it works?
 3. **D1, Sidetone restart.** Restart 20 s after a land, or only when Chris says "restart"?
 4. **Cuts.** Agree to the six cuts, or keep any of them?
+
+## Round 2
+
+Three reviewers read version 2: correctness, operations, and
+simplification. Version 3 of the spec takes in the result.
+
+| Finding | Version 3 |
+| --- | --- |
+| `exit` was written before `finish`, so a run looked dead during its checks: the lost rule fired, the cap under-counted, the working sign went off | The unit writes `exit` last. A run is live from setup to the end of its checks. The lost rule only reports. |
+| The checks had no time limit | Each check runs under `timeout`; measured: `timeout` stops the whole process group |
+| The 10 s stale-lock rule broke under a slow setup | A lock holds the owner's pid and is stale only when that pid is dead. Setup runs in the unit, outside the lock. |
+| A regex Bash rule misses `bash -c`, `git -c` and `update-ref` (measured: `update-ref` in a worktree moved the shared `main`), and blocks normal commands | No Bash rule. The worker's push goes to a host that does not exist (measured: exit 128, fetch still works). Land builds from `origin/main`. |
+| Denying writes outside the worktree breaks real workers (scratch summaries, the vault) | Cut |
+| Checks ran on uncommitted edits that land would not push | A run with tracked changes fails with "uncommitted changes" |
+| `worktree remove` and `branch -d` fail on untracked files and squash-landed branches (measured) | `--force` and `-D` |
+| Tree-equality recovery gave false positives | Cut. `landed` is written right after the push. Equal trees end `done`. |
+| `land --checked` could skip a worker's question | `--checked` applies to manual checks only |
+| `--session-id` with `--resume` | `--resume` cut; each run gets a new session id and the previous `result.md` |
+| The `QUESTION:` text reached speech and the phone | aleph says only "has a question"; the lead reads it |
+| `/say` needed a URL and a TLS rule | `$SIDETONE_SAY_URL`, default loopback, certificate check skipped for it only |
+| Land ran inside the lead's Bash call: tool limits and barge-ins | Land is a run in its own unit |
+| 21 past jobs were plain commands with no runner after migration | `aleph run <name> -- <command>` |
+| An aleph land swaps hooks under live workers | `quiet: true` on aleph: its land waits for no live agent run |
+| Sidetone's registry had no source; worktrees lack `local.properties` | Checks taken from the lead's worker rules; setup copies `local.properties` |
+| An env file's `PATH` overrode the dispatcher's | The unit sets `PATH` after it loads the env file |
+| Aliases, `CONTEXT.md`, resume rotation, the "already pushed" recovery, two-ledger cap | Cut |
+| The estimate | ~5 h over three milestones |
