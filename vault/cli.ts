@@ -43,6 +43,26 @@ function appendDaily(line: string): void {
   appendFileSync(file, `- ${clock()} ${line}\n`);
 }
 
+/**
+ * Undo exactly the paths one write touched, and nothing else.
+ *
+ * `git checkout -- .` and `git clean -fdq` used to stand here. They reverted
+ * every uncommitted change in the vault and deleted every untracked file in it,
+ * whoever had made them: on 2026-09-24 a refused write destroyed two notes an
+ * earlier session had left uncommitted and six lines of Home.md. A rollback may
+ * only undo its own write.
+ *
+ * A path git knows goes back to its committed state; a path git has never seen
+ * was created by this write, so it is removed.
+ */
+function rollback(paths: string[]): void {
+  for (const p of [...new Set(paths)]) {
+    const rel = relative(root, p);
+    if (git(root, "ls-files", "--error-unmatch", "--", rel).ok) git(root, "checkout", "--", rel);
+    else if (existsSync(p)) unlinkSync(p);
+  }
+}
+
 function setHealth(): void {
   const home = join(root, "Home.md");
   writeFileSync(home, withHealth(readFileSync(home, "utf8"), healthLine(health(loadVault(root)))));
@@ -112,8 +132,14 @@ function write(): void {
     else old.push(hit);
   }
   if (findings.length) refuse(findings);
+  // Home and MEMORY are budgeted, and a note write cannot shrink either. Asking
+  // before the disk is touched means an over-budget Home refuses a write that
+  // has changed nothing, instead of one that has to be undone.
+  const overBudget = budgetFindings(loadVault(root));
+  if (overBudget.length) refuse(overBudget, "prune the over-budget file first: this write changed nothing");
 
   // Everything validated; now touch the disk.
+  const touched: string[] = [join(root, "Home.md"), join(root, "daily", `${today()}.md`), dest];
   mkdirSync(dirname(dest), { recursive: true });
   if (srcPath !== dest) copyFileSync(srcPath, dest);
   const archived: string[] = [];
@@ -121,6 +147,7 @@ function write(): void {
     const target = join(root, "archive", `${o.title}.md`);
     const fm = { ...o.fm, archived: today(), archived_reason: `superseded by [[${draft.title}]]` };
     writeFileSync(target, serializeFrontmatter(fm) + o.body);
+    touched.push(target, o.path);
     unlinkSync(o.path);
     archived.push(o.title);
     appendDaily(`supersede [[${o.title}]] → [[${draft.title}]]`);
@@ -129,7 +156,7 @@ function write(): void {
   setHealth();
   const after = loadVault(root);
   const budget = budgetFindings(after);
-  if (budget.length) { git(root, "checkout", "--", "."); git(root, "clean", "-fdq"); refuse(budget); }
+  if (budget.length) { rollback(touched); refuse(budget); }
   warn(lintVault(after).warn.filter((f) => f.note === draft.title || f.detail.includes(draft.title)));
   const subject = archived.length ? `supersede: ${archived.join(", ")} → ${draft.title}` : `write: ${draft.title}`;
   const commit = commitAll(root, subject);
