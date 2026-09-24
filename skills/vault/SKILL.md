@@ -40,13 +40,38 @@ existing page rather than writing a second one about the same thing; set
 2. `cli.ts write "<path>" --why "<one line>"`. The script files it by kind,
    appends the daily note, sets the health line and commits. A refusal
    names the rule; fix the draft and rerun. Warnings are yours to judge.
-3. Add one line under the kind's heading in `Home.md`:
-   `- [[Title]] — <hook, under ten words>`, then
-   `cli.ts write ~/.aleph/vault/Home.md --why "<why>"`. An orphan warning
-   means this step was missed.
+3. For a `decision`, `project`, `concept` or `entity`, add one line under
+   the kind's heading in `Home.md`: `- [[Title]] — <hook, under ten words>`,
+   then `cli.ts write ~/.aleph/vault/Home.md --why "<why>"`. An orphan
+   warning means this step was missed. **A gotcha gets no Home line.** Home
+   routes to the standing kinds; `recall` finds the rest.
 
 MEMORY.md holds standing context about Chris and the environment. Rewrite
 the section, keep it under 150 lines, commit the same way.
+
+## consolidate
+
+`cli.ts consolidate` is read-only. It reports the Home lines it would drop
+(dead pointers, archived targets, gotchas), the notes that want a Home line,
+the claims past their decay window, and the bodies that say "yesterday"
+instead of a date. `--apply` rebuilds Home and commits. It writes no index
+line: a hook is prose, so you write it.
+
+A claim's window is its kind's budget, times its confidence — `measured`
+1.5, `reported` 1, `inferred` 0.5 — counted from the later of `updated` and
+the last `recall` that returned it. Base days: project 30, gotcha 60,
+decision 180, concept and entity 365.
+
+## archive
+
+`cli.ts archive "<title>" --why "<one line>"` retires a note when the
+subject is over and no replacement exists. It moves the file to `archive/`
+with a reason, drops its Home line, and names every note that links to it.
+Nothing is deleted and the note stays a link target. Use `supersedes` in a
+write instead when a newer note covers the same ground.
+
+A `deleted` warning means git tracks a note that is gone from disk. Restore
+it and archive it; no op will commit a bare deletion.
 
 ## recall
 

@@ -14,7 +14,29 @@ export const CONFIDENCE = ["measured", "reported", "inferred"] as const;
 export const REQUIRED = ["kind", "scope", "confidence", "updated", "supersedes", "sources"] as const;
 export const LISTS = ["aliases", "supersedes", "sources", "tags"] as const;
 export const LINE_BUDGET = 150;
-export const STALE_DAYS = 90;
+
+/**
+ * The kinds Home indexes. A gotcha is what you search for when you hit it, not
+ * what you need in context every session, and gotchas were 91 of Home's 132
+ * index lines. The index pattern is reported to hold to 100-200 pages; at 138
+ * notes and about seven a day, Home had weeks left as an inventory of
+ * everything. It routes to the standing kinds; `recall` finds the rest.
+ */
+export const HOME_KINDS: readonly string[] = ["decision", "project", "concept", "entity"];
+
+/**
+ * Days before a note's claim wants a re-check, by kind. An architecture
+ * decision decays slowly and a transient gotcha decays fast; a project note
+ * describes current state, so it decays fastest of all.
+ */
+export const DECAY_DAYS: Record<Kind, number> = { project: 30, gotcha: 60, decision: 180, concept: 365, entity: 365 };
+
+/**
+ * Freshness and authority are different axes. A six-month-old claim someone
+ * measured outlives a fresh one they guessed, so confidence widens or narrows
+ * the window rather than gating it, as the old `measured`-only rule did.
+ */
+export const CONFIDENCE_FACTOR: Record<string, number> = { measured: 1.5, reported: 1, inferred: 0.5 };
 
 export function vaultDir(): string {
   return process.env.ALEPH_VAULT ?? join(homedir(), ".aleph", "vault");
@@ -149,7 +171,31 @@ function words(s: string): Set<string> {
   return new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4));
 }
 
-export function lintVault(notes: Note[]): { refuse: Finding[]; warn: Finding[] } {
+/**
+ * How stale a note's claim is, or null when it is inside its window.
+ *
+ * The window is the kind's decay budget, widened or narrowed by confidence,
+ * and it runs from the later of `updated` and the last time `recall` returned
+ * the note. A retention curve resets on reinforcement: a note read every week
+ * is in use, whatever its `updated` line says, and the old rule could not tell
+ * that from one nobody had opened.
+ */
+export function staleness(note: Note, read: Record<string, string> = {}, now = new Date()): string | null {
+  const kind = String(note.fm.kind ?? "");
+  if (!(KINDS as readonly string[]).includes(kind)) return null;
+  const updated = String(note.fm.updated ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(updated)) return null;
+  const window = Math.round(DECAY_DAYS[kind as Kind] * (CONFIDENCE_FACTOR[String(note.fm.confidence)] ?? 1));
+  const last = [updated, read[note.title] ?? ""].sort().at(-1)!;
+  const days = Math.floor((now.getTime() - Date.parse(last)) / 86400_000);
+  if (days <= window) return null;
+  const since = last === updated ? `updated ${updated}` : `last read ${last}`;
+  return `${kind}/${note.fm.confidence} wants a re-check every ${window} days; ${since}, ${days} days ago`;
+}
+
+export interface LintOptions { read?: Record<string, string>; overlap?: boolean; now?: Date; tracked?: string[] }
+
+export function lintVault(notes: Note[], { read = {}, overlap = false, now = new Date(), tracked = [] }: LintOptions = {}): { refuse: Finding[]; warn: Finding[] } {
   const refuse: Finding[] = [];
   const warn: Finding[] = [];
   const wiki = wikiNotes(notes);
@@ -167,16 +213,37 @@ export function lintVault(notes: Note[]): { refuse: Finding[]; warn: Finding[] }
   const targets = linkTargets(notes);
   for (const n of notes.filter((x) => !x.wiki && !x.archived && x.rel !== "VAULT.md")) for (const t of links(n.body)) if (!targets.has(t.toLowerCase())) refuse.push({ note: n.title, rule: "dangling", detail: `[[${t}]] resolves to nothing` });
 
-  const home = notes.find((x) => x.rel === "Home.md");
-  const fromHome = new Set(links(home?.body ?? "").map((t) => targets.get(t.toLowerCase())?.path));
-  for (const n of wiki) if (!fromHome.has(n.path)) warn.push({ note: n.title, rule: "orphan", detail: "not linked from Home.md" });
-
-  const cutoff = Date.now() - STALE_DAYS * 86400_000;
-  for (const n of wiki) {
-    if (n.fm.confidence === "measured" && Date.parse(String(n.fm.updated)) < cutoff) warn.push({ note: n.title, rule: "stale", detail: `measured, updated ${n.fm.updated}, older than ${STALE_DAYS} days` });
+  // A note deleted by hand is gone from the filesystem, so nothing else here
+  // can see it, and no op commits the deletion any more. Say so and name the
+  // door: `archive` retires a note without destroying it.
+  const onDisk = new Set(notes.map((n) => n.rel));
+  for (const rel of tracked) {
+    if (onDisk.has(rel)) continue;
+    warn.push({ note: basename(rel, ".md"), rule: "deleted", detail: `${rel} is tracked but gone from disk; retire it with: vault archive "${basename(rel, ".md")}" --why "<one line>"` });
   }
 
-  for (let i = 0; i < wiki.length; i++) for (let j = i + 1; j < wiki.length; j++) {
+  const home = notes.find((x) => x.rel === "Home.md");
+  const fromHome = new Set(links(home?.body ?? "").map((t) => targets.get(t.toLowerCase())?.path));
+  for (const n of wiki) {
+    if (!HOME_KINDS.includes(String(n.fm.kind))) continue;
+    if (!fromHome.has(n.path)) warn.push({ note: n.title, rule: "orphan", detail: "not linked from Home.md" });
+  }
+
+  for (const n of wiki) {
+    const s = staleness(n, read, now);
+    if (s) warn.push({ note: n.title, rule: "stale", detail: s });
+  }
+
+  // The overlap check is off. It pairs notes on words their titles and aliases
+  // share inside one scope, and the scope already encodes the project name, so
+  // it fired 147 times across 62 of 138 notes and named no duplicate worth
+  // acting on. Dated series (`... Review 2026-09-19/-20/-23`) pair with each
+  // other by design. Word overlap also cannot see the thing that matters, a
+  // later note that quietly invalidates an earlier one; the published work on
+  // that uses embeddings plus fuzzy matching and still needs a labelled corpus
+  // to set the threshold. The code stays until a rule exists that finds
+  // something: turn it on with `lint --overlap`.
+  if (overlap) for (let i = 0; i < wiki.length; i++) for (let j = i + 1; j < wiki.length; j++) {
     const a = wiki[i], b = wiki[j];
     if (a.fm.scope !== b.fm.scope) continue;
     const sup = (x: Note, y: Note) => list(x.fm, "supersedes").some((t) => t.toLowerCase() === y.title.toLowerCase());
@@ -277,4 +344,60 @@ export function homeCandidates(notes: Note[]): Candidate[] {
   }
   scored.sort((a, b) => a.rank - b.rank || a.updated.localeCompare(b.updated) || a.line - b.line);
   return scored.slice(0, over).map(({ line, text, why }) => ({ line, text, why }));
+}
+
+export interface HomePlan {
+  text: string;
+  dropped: { line: number; text: string; why: string }[];
+  missing: { title: string; kind: string; rel: string }[];
+  lines: number;
+}
+
+/**
+ * Home rebuilt as a router: an index line for every live note of a
+ * `HOME_KINDS` kind, and nothing else.
+ *
+ * It drops lines and never writes one. A hook is prose about what a note is
+ * for, so a missing line is reported for a human or an agent to write; an
+ * invented hook would be a claim nobody made. Headings stay even when they
+ * empty out, because their order is Chris's.
+ */
+export function planHome(notes: Note[]): HomePlan {
+  const home = notes.find((n) => n.rel === "Home.md");
+  if (!home) return { text: "", dropped: [], missing: [], lines: 0 };
+  const targets = linkTargets(notes);
+  const kept: string[] = [];
+  const dropped: HomePlan["dropped"] = [];
+  const indexed = new Set<string>();
+
+  for (const [i, text] of home.text.replace(/\n+$/, "").split("\n").entries()) {
+    const m = /^\s*-\s*\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/.exec(text);
+    if (!m) { kept.push(text); continue; }
+    const hit = targets.get(m[1].trim().toLowerCase());
+    if (!hit) dropped.push({ line: i + 1, text, why: `[[${m[1].trim()}]] resolves to nothing` });
+    else if (hit.archived) dropped.push({ line: i + 1, text, why: `${hit.title} is archived` });
+    else if (!HOME_KINDS.includes(String(hit.fm.kind))) dropped.push({ line: i + 1, text, why: hit.fm.kind === undefined ? `${hit.title} has no kind; fix it, then it can be indexed` : `${hit.fm.kind}s are not indexed; recall finds them` });
+    else { kept.push(text); indexed.add(hit.path); }
+  }
+
+  const missing = wikiNotes(notes)
+    .filter((n) => HOME_KINDS.includes(String(n.fm.kind)) && !indexed.has(n.path))
+    .map((n) => ({ title: n.title, kind: String(n.fm.kind), rel: n.rel }))
+    .sort((a, b) => a.kind.localeCompare(b.kind) || a.title.localeCompare(b.title));
+
+  // Two blank lines in a row are what a removed run leaves behind.
+  const text = kept.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\n+$/, "") + "\n";
+  return { text, dropped, missing, lines: text.replace(/\n+$/, "").split("\n").length };
+}
+
+/** Body text that names a date the reader cannot resolve. Reported, never rewritten. */
+export function relativeDates(notes: Note[]): Finding[] {
+  const words = /\b(yesterday|today|tomorrow|last (?:night|week|month|year)|this (?:morning|week|month)|next week|a few days ago|recently|just now)\b/gi;
+  const out: Finding[] = [];
+  for (const n of wikiNotes(notes)) {
+    const prose = n.body.replace(/```[\s\S]*?```/g, "");
+    const hits = [...new Set([...prose.matchAll(words)].map((m) => m[0].toLowerCase()))];
+    if (hits.length) out.push({ note: n.title, rule: "relative-date", detail: `says ${hits.map((h) => `"${h}"`).join(", ")}; give the date` });
+  }
+  return out;
 }

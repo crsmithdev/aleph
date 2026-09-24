@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /**
- * vault <init|write|recall|lint [--fix]|compile> — the mechanical half of /aleph:vault.
+ * vault <init|write|recall|lint [--fix]|consolidate|archive|compile> — the
+ * mechanical half of /aleph:vault.
  * Vault path: $ALEPH_VAULT or ~/.aleph/vault. JSON on stdout, findings on
  * stderr, exit 1 on refusal. See docs/specs/2026-09-04-memory-vault.md.
  */
@@ -8,10 +9,10 @@ import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, unli
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { langfuseConfig } from "../hooks/lib/env.ts";
 import { serializeFrontmatter } from "./lib/frontmatter.ts";
-import { addedDate, commitPaths, git, tracked } from "./lib/git.ts";
+import { addedDate, commitPaths, git, tracked, trackedFiles } from "./lib/git.ts";
 import { handoffsFor, traceDigest } from "./lib/compile.ts";
 import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./lib/templates.ts";
-import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, homeCandidates, lintVault, loadVault, readNote, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
+import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
 
 const [cmd, ...rest] = process.argv.slice(2);
 const root = resolve(vaultDir());
@@ -70,6 +71,27 @@ function rollback(paths: string[]): void {
     if (git(root, "ls-files", "--error-unmatch", "--", rel).ok) git(root, "checkout", "--", rel);
     else if (existsSync(p)) unlinkSync(p);
   }
+}
+
+/**
+ * When `recall` last returned each note, by title. A retention curve resets on
+ * use, so staleness reads this beside `updated`.
+ *
+ * It lives outside git: a read is not a change to memory, and committing one
+ * on every recall would bury the writes that matter. Losing the file only
+ * costs the reset, so every access here is best-effort.
+ */
+const READ_LOG = () => join(root, ".recall.json");
+function readLog(): Record<string, string> {
+  try { return JSON.parse(readFileSync(READ_LOG(), "utf8")); } catch { return {}; }
+}
+function noteRead(titles: string[]): void {
+  if (!titles.length) return;
+  try {
+    const log = readLog();
+    for (const t of titles) log[t] = today();
+    writeFileSync(READ_LOG(), JSON.stringify(log, null, 0));
+  } catch { /* a read must never fail on its own bookkeeping */ }
 }
 
 function setHealth(): void {
@@ -196,6 +218,7 @@ function recall(): void {
     return -1;
   };
   const hits = wikiNotes(loadVault(root)).map((n) => ({ n, r: rank(n) })).filter((x) => x.r >= 0).sort((a, b) => a.r - b.r || a.n.title.localeCompare(b.n.title));
+  noteRead(hits.map(({ n }) => n.title));
   out(hits.map(({ n, r }) => ({ title: n.title, path: n.rel, rank: r, frontmatter: n.fm })));
 }
 
@@ -212,11 +235,89 @@ function lint(): void {
     }
   }
   setHealth();
-  const result = lintVault(loadVault(root));
+  const result = lintVault(loadVault(root), { read: readLog(), overlap: has("overlap"), tracked: trackedFiles(root, "wiki") });
   const touched = [join(root, "Home.md"), ...fixed.map((f) => join(root, f.path))];
   const commit = commitPaths(root, fixed.length ? `lint --fix: ${fixed.length} notes` : `lint: ${today()}`, touched);
   out({ fixed, ...result, commit });
   process.exit(result.refuse.length ? 1 : 0);
+}
+
+// ---------------------------------------------------------------- consolidate
+/**
+ * The pass that acts on what `compile` gathers: it rebuilds Home as a router,
+ * drops index lines that point at nothing, and reports every claim whose
+ * window has run out.
+ *
+ * Read-only unless `--apply`. The consolidation passes that ship elsewhere run
+ * unattended with no dry run and no approval; this vault has already lost
+ * notes to an op that reached past its own paths, so the default prints and
+ * writes nothing.
+ *
+ * It removes only Home lines. Every note stays on disk and `recall` still
+ * finds it, so VAULT.md's rule that a note is never deleted holds unchanged.
+ */
+function consolidate(): void {
+  requireVault();
+  const apply = has("apply");
+  const notes = loadVault(root);
+  const plan = planHome(notes);
+  const read = readLog();
+  const stale = wikiNotes(notes)
+    .map((n) => ({ note: n.title, path: n.rel, detail: staleness(n, read) }))
+    .filter((x): x is { note: string; path: string; detail: string } => x.detail !== null)
+    .sort((a, b) => a.note.localeCompare(b.note));
+  const dates = relativeDates(notes);
+
+  let commit: string | null = null;
+  if (apply && plan.dropped.length) {
+    writeFileSync(join(root, "Home.md"), plan.text);
+    setHealth();
+    appendDaily(`consolidate — dropped ${plan.dropped.length} Home lines`);
+    commit = commitPaths(root, `consolidate: Home ${plan.lines} lines`, [join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
+  }
+  out({
+    op: "consolidate", applied: apply,
+    home: { lines: plan.lines, was: notes.find((n) => n.rel === "Home.md")?.text.replace(/\n+$/, "").split("\n").length ?? 0, budget: LINE_BUDGET },
+    dropped: plan.dropped, missing: plan.missing, stale, relativeDates: dates, commit,
+  });
+  if (!apply && plan.dropped.length) console.error(`consolidate changed nothing; rerun with --apply to drop ${plan.dropped.length} Home lines`);
+}
+
+// ---------------------------------------------------------------- archive
+/**
+ * Retire a note without writing its replacement.
+ *
+ * `supersedes` was the only exit, and it needs a newer note that covers the
+ * same ground. A subject that is simply over has no such note, so nothing ever
+ * left: 2 notes archived in the vault's first 20 days. Archive is not
+ * deletion; the file moves to `archive/` and stays a link target.
+ */
+function archive(): void {
+  requireVault();
+  const title = positional.join(" ").trim();
+  const why = flag("why");
+  if (!title || !why) { console.error('usage: vault archive "<title>" --why "<one line>"'); process.exit(1); }
+  const notes = loadVault(root);
+  const hit = wikiNotes(notes).find((n) => n.title.toLowerCase() === title.toLowerCase());
+  if (!hit) refuse([{ note: title, rule: "archive", detail: "no live wiki note has that title" }]);
+
+  // Wiki notes only. Home's line goes with the plan below, and a daily note is
+  // a record of what happened on a day; neither is a caller to warn about.
+  const inbound = wikiNotes(notes).filter((n) => n.path !== hit.path && links(n.body).some((t) => t.toLowerCase() === hit.title.toLowerCase()));
+  const dest = join(root, "archive", `${hit.title}.md`);
+  const fm = { ...hit.fm, archived: today(), archived_reason: why };
+  writeFileSync(dest, serializeFrontmatter(fm) + hit.body);
+  unlinkSync(hit.path);
+  const home = join(root, "Home.md");
+  const plan = planHome(loadVault(root));
+  if (plan.dropped.length) writeFileSync(home, plan.text);
+  appendDaily(`archive [[${hit.title}]] — ${why}`);
+  setHealth();
+  const commit = commitPaths(root, `archive: ${hit.title}`, [dest, hit.path, home, join(root, "daily", `${today()}.md`)]);
+  // An archived note stays a link target, so nothing dangles; the callers are
+  // named because each one now points at a retired claim.
+  warn(inbound.map((n) => ({ note: n.title, rule: "inbound", detail: `links [[${hit.title}]], which is now archived` })));
+  out({ op: "archive", title: hit.title, path: relative(root, dest), why, inbound: inbound.map((n) => n.title), commit });
 }
 
 // ---------------------------------------------------------------- compile
@@ -245,8 +346,10 @@ switch (cmd) {
   case "write": write(); break;
   case "recall": recall(); break;
   case "lint": lint(); break;
+  case "consolidate": consolidate(); break;
+  case "archive": archive(); break;
   case "compile": await compile(); break;
   default:
-    console.error("usage: vault <init|write <file> --why <text>|recall <query>|lint [--fix]|compile [date]>");
+    console.error("usage: vault <init|write <file> --why <text>|recall <query>|lint [--fix] [--overlap]|consolidate [--apply]|archive <title> --why <text>|compile [date]>");
     process.exit(2);
 }

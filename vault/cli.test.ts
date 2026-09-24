@@ -71,19 +71,25 @@ describe("write", () => {
     const today = new Date();
     const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     expect(readFileSync(join(vault, "daily", `${date}.md`), "utf8")).toMatch(/^- \d\d:\d\d write \[\[Stop Hook Block Shape\]\] — measured three shapes$/m);
-    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toBe(`Health: 1 notes, 0 dangling, 1 orphans, lint ${date}`);
+    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toBe(`Health: 1 notes, 0 dangling, 0 orphans, lint ${date}`);
     const log = gitLog();
     expect(log).toContain("write: Stop Hook Block Shape");
     expect(log).toContain("Co-Authored-By: Claude");
     expect(gitStatus()).toBe("");
-    expect(r.stderr).toContain("warn orphan");
+    // Home indexes the standing kinds; a gotcha off Home is not an orphan.
+    expect(r.stderr).not.toContain("warn orphan");
+  });
+  test("a decision off Home is an orphan", () => {
+    const r = cli("write", note("Orphaned Decision", { kind: "decision" }), "--why", "x");
+    expect(r.code).toBe(0);
+    expect(r.stderr).toContain("warn orphan Orphaned Decision");
   });
   test("a decision goes to wiki/decisions", () => {
     const r = cli("write", note("No API Judge", { kind: "decision" }), "--why", "subscription only");
     expect(r.json.path).toBe("wiki/decisions/No API Judge.md");
   });
-  test("two writes are two commits", () => {
-    expect(gitLog().split("\n").filter((l) => l.startsWith("write: ")).length).toBe(2);
+  test("each write is its own commit", () => {
+    expect(gitLog().split("\n").filter((l) => l.startsWith("write: ")).length).toBe(3);
   });
   test("refuses a note in the wrong folder", () => {
     mkdirSync(join(vault, "wiki/concepts"), { recursive: true });
@@ -196,13 +202,15 @@ describe("lint", () => {
     expect(rules).toContain("orphan");
     expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toMatch(/^Health: \d+ notes, 0 dangling, \d+ orphans, lint \d{4}-\d{2}-\d{2}$/);
   });
-  test("warns on stale measured and same-scope overlap; exit 1 on a hand-made structural break", () => {
+  test("warns on stale; overlap is opt-in; exit 1 on a hand-made structural break", () => {
     cli("write", note("Langfuse Ingestion Drops Batches", { updated: "2026-01-01" }), "--why", "x");
     cli("write", note("Langfuse Ingestion Needs Version Header"), "--why", "x");
     const r = cli("lint");
     const find = (rule: string) => r.json.warn.filter((w: any) => w.rule === rule);
     expect(find("stale").map((w: any) => w.note)).toContain("Langfuse Ingestion Drops Batches");
-    expect(find("overlap")[0].detail).toContain("neither supersedes the other");
+    expect(find("overlap")).toEqual([]);
+    const on = cli("lint", "--overlap");
+    expect(on.json.warn.filter((w: any) => w.rule === "overlap")[0].detail).toContain("neither supersedes the other");
     const broken = join(vault, "wiki/gotchas/Hand Edited.md");
     writeFileSync(broken, "no frontmatter\n");
     const bad = cli("lint");
@@ -249,8 +257,7 @@ describe("lint --fix", () => {
     expect(after).toContain("confidence: sure");
     expect(r.json.refuse).toContainEqual({ note: "Needs Repair", rule: "schema", detail: "confidence must be one of measured|reported|inferred, got sure" });
     expect(gitLog()).toContain("lint --fix: 1 notes");
-    rmSync(p);
-    cli("lint");
+    cli("archive", "Needs Repair", "--why", "test fixture");
   });
   test("a missing updated comes from the date the note entered git, not its last commit", () => {
     const rel = "wiki/gotchas/Entered Long Ago.md";
@@ -269,8 +276,7 @@ describe("lint --fix", () => {
     expect(readFileSync(p, "utf8")).toContain("updated: 2026-01-15");
     expect(r.json.fixed.find((f: any) => f.note === "Entered Long Ago").repairs)
       .toEqual(["added updated: 2026-01-15, the date the note entered git"]);
-    rmSync(p);
-    cli("lint");
+    cli("archive", "Entered Long Ago", "--why", "test fixture");
   });
   test("a # inside a list is content, and --fix leaves a line it cannot rebuild", () => {
     const r = cli("write", note("Hash In A List", { aliases: "[url scheme, #go]" }), "--why", "x");
@@ -308,6 +314,100 @@ describe("budget", () => {
     expect(r.stderr).toContain("[[Ghost Target]] resolves to nothing");
     writeFileSync(home, text);
     cli("write", home, "--why", "restore");
+  });
+});
+
+describe("consolidate", () => {
+  test("read-only by default; --apply drops gotcha and dead lines, keeps the standing kinds", () => {
+    const home = join(vault, "Home.md");
+    const text = readFileSync(home, "utf8");
+    writeFileSync(home, text
+      .replace("## Gotchas\n", "## Gotchas\n- [[Stop Hook Deny Shape]] — a gotcha, not a router entry\n- [[Ghost Note]] — points at nothing\n")
+      .replace("## Decisions\n", "## Decisions\n- [[No API Judge]] — subscription only\n"));
+    const dry = cli("consolidate");
+    expect(dry.json.applied).toBe(false);
+    const why = dry.json.dropped.map((d: any) => d.why);
+    expect(why).toContain("gotchas are not indexed; recall finds them");
+    expect(why).toContain("[[Ghost Note]] resolves to nothing");
+    expect(dry.stderr).toContain("changed nothing");
+    expect(readFileSync(home, "utf8")).toContain("Stop Hook Deny Shape");
+    expect(dry.json.missing.map((m: any) => m.title)).toContain("Orphaned Decision");
+
+    const r = cli("consolidate", "--apply");
+    expect(r.json.applied).toBe(true);
+    const after = readFileSync(home, "utf8");
+    expect(after).not.toContain("Stop Hook Deny Shape");
+    expect(after).not.toContain("Ghost Note");
+    expect(after).toContain("- [[No API Judge]] — subscription only");
+    expect(gitLog()).toContain("consolidate: Home");
+    expect(gitStatus()).toBe("");
+  });
+  test("reports a relative date without rewriting the note", () => {
+    const body = "**Claim.** the run passed yesterday, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\ne\n\n## Related\n[[Home]]\n";
+    cli("write", note("Says Yesterday", {}, body), "--why", "x");
+    const r = cli("consolidate");
+    expect(r.json.relativeDates).toContainEqual({ note: "Says Yesterday", rule: "relative-date", detail: 'says "yesterday"; give the date' });
+    expect(readFileSync(join(vault, "wiki/gotchas/Says Yesterday.md"), "utf8")).toContain("passed yesterday");
+  });
+});
+
+describe("archive", () => {
+  test("retires a note with no replacement, drops its Home line, names its callers", () => {
+    cli("write", note("Retired Subject", { kind: "decision" }), "--why", "x");
+    const home = join(vault, "Home.md");
+    writeFileSync(home, readFileSync(home, "utf8").replace("## Decisions\n", "## Decisions\n- [[Retired Subject]] — about to go\n"));
+    cli("write", home, "--why", "map it");
+    const body = "**Claim.** a caller, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\ne\n\n## Related\n[[Retired Subject]]\n";
+    cli("write", note("Points At The Retired One", {}, body), "--why", "x");
+
+    const r = cli("archive", "Retired Subject", "--why", "the subject is over");
+    expect(r.code).toBe(0);
+    expect(r.json).toMatchObject({ op: "archive", title: "Retired Subject", path: "archive/Retired Subject.md", inbound: ["Points At The Retired One"] });
+    expect(existsSync(join(vault, "wiki/decisions/Retired Subject.md"))).toBe(false);
+    const archived = readFileSync(join(vault, "archive/Retired Subject.md"), "utf8");
+    expect(archived).toContain("archived_reason: the subject is over");
+    expect(readFileSync(home, "utf8")).not.toContain("Retired Subject");
+    expect(r.stderr).toContain("warn inbound Points At The Retired One");
+    // An archived note is still a link target, so its caller does not dangle.
+    expect(cli("lint").json.refuse.filter((f: any) => f.rule === "dangling")).toEqual([]);
+    expect(gitLog()).toContain("archive: Retired Subject");
+    expect(gitStatus()).toBe("");
+  });
+  test("a note deleted by hand is named, and points at archive", () => {
+    cli("write", note("Deleted By Hand"), "--why", "x");
+    rmSync(join(vault, "wiki/gotchas/Deleted By Hand.md"));
+    const r = cli("lint");
+    const w = r.json.warn.find((f: any) => f.rule === "deleted" && f.note === "Deleted By Hand");
+    expect(w.detail).toContain("tracked but gone from disk");
+    expect(w.detail).toContain('vault archive "Deleted By Hand"');
+    Bun.spawnSync(["git", "-C", vault, "checkout", "--", "wiki/gotchas/Deleted By Hand.md"]);
+    cli("archive", "Deleted By Hand", "--why", "test fixture");
+    expect(gitStatus()).toBe("");
+  });
+  test("refuses a title no live note has", () => {
+    const r = cli("archive", "Never Existed", "--why", "x");
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("no live wiki note has that title");
+  });
+});
+
+describe("decay", () => {
+  test("the window is per kind and confidence, and a recall resets it", () => {
+    // gotcha 60 days x inferred 0.5 = a 30-day window.
+    cli("write", note("Rots Fast", { confidence: "inferred", updated: "2026-01-01" }), "--why", "x");
+    // decision 180 days x measured 1.5 = 270 days, so the same date is fresh.
+    cli("write", note("Ages Well", { kind: "decision", confidence: "measured", updated: "2026-01-01" }), "--why", "x");
+    const stale = (r: any) => r.json.warn.filter((w: any) => w.rule === "stale").map((w: any) => w.note);
+    const before = cli("lint");
+    expect(stale(before)).toContain("Rots Fast");
+    expect(stale(before)).not.toContain("Ages Well");
+    expect(before.json.warn.find((w: any) => w.note === "Rots Fast" && w.rule === "stale").detail)
+      .toContain("gotcha/inferred wants a re-check every 30 days");
+
+    cli("recall", "rots fast");
+    expect(stale(cli("lint"))).not.toContain("Rots Fast");
+    expect(existsSync(join(vault, ".recall.json"))).toBe(true);
+    expect(gitStatus()).toBe("");
   });
 });
 

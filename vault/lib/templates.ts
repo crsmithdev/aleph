@@ -104,7 +104,8 @@ in \`wiki/\`.
 ## Standing preferences
 `;
 
-export const GITIGNORE = `.obsidian/workspace*.json
+export const GITIGNORE = `.recall.json
+.obsidian/workspace*.json
 .obsidian/plugins/*/main.js
 .obsidian/plugins/*/styles.css
 .trash/

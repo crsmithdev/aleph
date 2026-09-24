@@ -48,3 +48,9 @@ export function commitPaths(dir: string, subject: string, paths: string[]): stri
   if (!r.ok) throw new Error(`git commit failed: ${r.out}`);
   return git(dir, "rev-parse", "--short", "HEAD").out;
 }
+
+/** Every path git tracks under `dir`, relative and posix-style. */
+export function trackedFiles(dir: string, ...pathspec: string[]): string[] {
+  const r = git(dir, "ls-files", "--", ...pathspec);
+  return r.ok ? r.out.split("\n").map((l) => l.trim()).filter(Boolean) : [];
+}
