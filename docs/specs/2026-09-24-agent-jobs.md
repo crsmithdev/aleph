@@ -4,6 +4,10 @@ Written 2026-09-24 from a grill in the same session. The decisions are in the
 vault note `Aleph Owns Jobs And Sidetone Watches The Ledger`. The evidence is
 in `Sidetone Job Floor 2026-09-24`. Not built.
 
+**Red-teamed the same day.** [`2026-09-24-agent-jobs-red-team.md`](2026-09-24-agent-jobs-red-team.md)
+replaces the state table, launcher, land, verdict and news sections. Read
+it first.
+
 ## Problem Statement
 
 Chris drives development through one agent, more and more by voice through
