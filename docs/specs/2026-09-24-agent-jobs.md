@@ -1,9 +1,10 @@
 # Agent jobs
 
-Written 2026-09-24. Version 4, after three red teams. The findings and the
+Written 2026-09-24. Version 5: version 4 after three red teams, then a
+simplification pass. The findings and the
 evidence of all three rounds are in
 [`2026-09-24-agent-jobs-red-team.md`](2026-09-24-agent-jobs-red-team.md).
-Version 1 is `3d1ffa8` and version 3 is `b426a74` in git. Not built.
+Earlier versions are in git: 1 is `3d1ffa8`, 3 is `b426a74`, 4 is `6df8d5a`. Not built.
 
 ## Problem Statement
 
@@ -56,8 +57,7 @@ not a sandbox.
 18. As Chris, I want each run's Langfuse session known from the start, so that I can see what a worker did, even when it was killed.
 19. As Chris, I want the phone's working sign on for the whole run, so that the app shows work with no turn behind it.
 20. As the lead, I want to run a plain command detached, so that builds survive a barge-in.
-21. As Chris, I want a job started twice by mistake refused, so that a false "rejected" after a barge-in does not duplicate work.
-22. As Chris, I want `scripts/job` removed and the lead told exactly how to use jobs, so that one runner remains and the voice flow works.
+21. As Chris, I want `scripts/job` removed and the lead told exactly how to use jobs, so that one runner remains and the voice flow works.
 
 ## Acceptance Criteria
 
@@ -66,14 +66,14 @@ Numbers match the user stories.
 1. WHEN `aleph job <repo> <name> --spec <file|->` runs from any directory THE system SHALL create a run folder in `~/.aleph/jobs/` and start unit `aleph-<run-id>`, and print the run id.
 2. IF `<repo>`, lowercased with spaces removed, matches no registry key THEN THE system SHALL exit 1, create nothing, and print the keys. IF `<name>` is open in another repo THEN it SHALL exit 1 and name that repo.
 3. WHEN a run starts in a worktree without the setup marker THE unit SHALL run the registry's `setup` commands before the worker, then write the marker. IF a setup command fails THEN the run SHALL end `failed` with that command's name.
-4. IF 5 agent runs are live THEN `aleph job` SHALL exit 1 and name them. A run counts as live from the moment its folder exists. Plain and land runs do not count.
+4. IF 5 agent runs are live THEN `aleph job` SHALL exit 1 and name them. Plain and land runs do not count. Two calls at the same moment SHALL NOT both pass.
 5. WHEN the dispatching process exits, or `sidetone.service` restarts, THE run SHALL continue and end with a state.
 6. WHEN the worker runs longer than `ALEPH_JOB_TIMEOUT` seconds (default 2400), or one check longer than `ALEPH_CHECK_TIMEOUT` (default 1200), THE unit SHALL stop it and its process group, AND the run SHALL end `failed` with "timed out" and what timed out. The unit decides "timed out" from its own clock, not from an exit code.
 7. WHILE a worker runs, `git push` to a `git@github.com:` remote SHALL go to the host `aleph-no-push`, AND `gh` SHALL find no credentials. WHILE `ALEPH_JOB_ID` is set, `skip verify` in the prompt SHALL NOT skip the verify gate.
-8. WHEN the worker exits THE unit SHALL decide the state in this order, the first match wins: (a) non-zero exit → `failed`, "worker exited N"; (b) a `QUESTION:` line in the result → `needs-you`, kind `question`; (c) any change in `git status --porcelain`, untracked files included → `failed`, "uncommitted: <first path>"; (d) no commits past `merge-base origin/<main> HEAD` → `done`; (e) a check fails → `failed`, "<check> failed"; (f) a changed file matches a `manual` glob → `needs-you`, kind `manual`; (g) `passed`.
+8. WHEN the worker exits THE unit SHALL decide the state in this order, the first match wins: (a) non-zero exit → `failed`, "worker exited N"; (b) a `QUESTION:` line in the result → `needs-you`, kind `question`; (c) any change in `git status --porcelain`, untracked files included → `failed`, "uncommitted: <first path>"; (d) no commits past `merge-base origin/<main> HEAD` → `done`, and the worktree and branch are removed; (e) a check fails → `failed`, "<check> failed"; (f) a changed file matches a `manual` glob → `needs-you`, kind `manual`; (g) `passed`.
 9. The checks SHALL run every check with no `when`, and every check whose `when` globs match a file in `git diff --name-only $(git merge-base origin/<main> HEAD) HEAD`, after a `git fetch`.
 10. WHEN a run ends in `needs-you`, kind `question`, THE state SHALL hold the question line.
-11. WHEN a run ends THE unit SHALL write `state.json`, then `exit`, then POST the news to `$SIDETONE_TELL_URL` with a 10 s limit, and set `told` in `state.json` on a 2xx reply.
+11. WHEN a run ends THE unit SHALL write `state.json`, then `exit`, then POST one line of news to `$SIDETONE_TELL_URL` with a 10 s limit, and set `told` in `state.json` on a 2xx reply. The line is `<repo>/<name> <state>`, plus the needs-you kind or the failed check's name.
 12. WHEN `aleph jobs --news` runs THE system SHALL print every ended run with `told` false and set `told` on each.
 13. WHEN `aleph job` runs with the name of an open job in the same repo THE system SHALL start a new run in that worktree. Its prompt SHALL hold the fixed text, the original `spec.md`, every `notes/*.md` in order (the new `--spec` is saved as the next note), and the previous run's `result.md`, `checks.log` and `land.log` when they exist.
 14. WHEN `aleph land <name>` runs AND the latest agent run is `passed`, or `needs-you` kind `manual` with `--checked`, THE system SHALL start a land run. The land run SHALL take the job's lock, abort any rebase in progress, fetch, rebase onto `origin/<main>`, end `done` "no net change" if the tree equals `origin/<main>`'s tree, run the checks, push one `git commit-tree` commit to `<main>`, write `landed` with the hash, fast-forward the main checkout if `git status --porcelain --untracked-files=no` is empty and it is on `<main>`, and remove the worktree with `--force` and the branch with `-D`.
@@ -82,9 +82,8 @@ Numbers match the user stories.
 17. WHEN `aleph jobs` runs THE system SHALL print JSON for each open job: name, repo, goal (the first line of `spec.md`), state, needs-you kind, phase (`setup`, `worker`, `check <name>`, `land`), started, ended, and `lost` when the run's process is gone. `aleph jobs <name>` SHALL also print the latest `result.md`, question, `checks.log` tail and `land.log`.
 18. WHEN a run starts THE run's `state.json` SHALL hold the session id before the worker starts.
 19. WHILE a run's unit runs, Sidetone's working sign SHALL be on.
-20. WHEN `aleph run <name> -- <command>` runs THE system SHALL start the command in the current directory in a unit, and POST "<name> finished." or "<name> failed." to `/tell`.
-21. IF a run of the same name and repo started less than 120 seconds ago THEN `aleph job` SHALL exit 1 with "started <n> s ago".
-22. WHEN milestone 3 lands, `scripts/job` SHALL be absent from Sidetone, AND Sidetone's `CLAUDE.md` SHALL hold the block in [The lead's instructions](#the-leads-instructions).
+20. WHEN `aleph run <name> -- <command>` runs THE system SHALL start the command in the current directory in a unit, and POST `<name> finished` or `<name> failed` to `/tell`.
+21. WHEN milestone 3 lands, `scripts/job` SHALL be absent from Sidetone, AND Sidetone's `CLAUDE.md` SHALL hold the block in [The lead's instructions](#the-leads-instructions).
 
 ## Implementation Decisions
 
@@ -131,18 +130,16 @@ interface Run {
 }
 ```
 
-**Liveness.** A run is live when its folder has no `exit` file and either its
-`pid` process is alive with the folder in its command line, or it has no `pid`
-file and was created less than 30 seconds ago. The second case covers the
-moment between dispatch and the unit's start, so the cap and the double-start
-check see it. This is Sidetone's rule (spec 14.10.4) plus that window.
-`aleph jobs` reports a run with no `exit`, a dead process and an age over 30
-seconds as `lost`, and writes nothing.
+**Liveness.** A run is live when its folder has `pid`, has no `exit`, and the
+`pid` process is alive with the folder in its command line. That is Sidetone's
+rule (spec 14.10.4), unchanged. The dispatcher holds the dispatch lock until
+the unit has written `pid`, at most 10 seconds, so a run is never uncounted.
+`aleph jobs` reports a run with `pid`, no `exit` and a dead process as `lost`,
+and writes nothing.
 
-**Locks.** A lock is an atomic `mkdir` under `~/.aleph/jobs/.locks/`. It holds
-a file `owner` with the pid and the process start time from
-`/proc/<pid>/stat`. It is stale when that process is gone or has another start
-time. `dispatch` covers the cap count and the folder creation. `job-<repo>-<name>`
+**Locks.** A lock is an atomic `mkdir` under `$XDG_RUNTIME_DIR/aleph/`, a
+tmpfs that a reboot clears. It holds a file `owner` with the pid. It is stale
+when that process is gone. `dispatch` covers the cap count and the folder creation. `job-<repo>-<name>`
 covers a new run, a land, and a drop of one job. The land unit takes the job
 lock itself, not the dispatcher.
 
@@ -226,18 +223,14 @@ The steps are those of criterion 14, with each step and its output in
 now, the fast-forward is skipped, so is Cloud Chamber's `post-merge` reload,
 and the news says "main checkout not updated".
 
-**News.** aleph POSTs JSON to `$SIDETONE_TELL_URL`, default
-`https://127.0.0.1:3100/tell`, and skips the certificate check for that
-loopback address only, as `scripts/job` does. The body:
+**News.** aleph POSTs `{"text": "<line>"}` to `$SIDETONE_TELL_URL`, default
+`https://127.0.0.1:3100/tell`, the same body as `/say`. It skips the
+certificate check for that loopback address only, as `scripts/job` does. A
+land adds the registry's `note` to the line.
 
-```json
-{ "job": "menu-knobs", "repo": "sidetone", "state": "passed", "needs": null, "reason": null, "note": null }
-```
-
-**Sidetone's `/tell` route.** The route takes the body above and queues it. When
-no turn runs, the bridge starts a turn through the same path as a spoken
-utterance. The turn's text is one line per queued item: `[job news]` followed
-by the JSON. Items that arrive while a turn runs wait and go in together. The
+**Sidetone's `/tell` route.** The route queues the text. When no turn runs, the
+bridge starts a turn through the same path as a spoken utterance. The turn's
+text is one line per queued item, each prefixed with `[job news]`. Items that arrive while a turn runs wait and go in together. The
 queue lives in memory; a restart loses it, and `aleph jobs --news` recovers it
 (criterion 12). The route has the same loopback guard as `/say`.
 
@@ -264,7 +257,8 @@ queue lives in memory; a restart loses it, and `aleph jobs --news` recovers it
 >
 > At the first turn of a conversation, run `aleph jobs --news` and tell Chris
 > anything it lists. If a tool call reads as rejected after a barge-in, run
-> `aleph jobs` before you start a job again.
+> `aleph jobs` before you start a job again: the same name would start a
+> second run.
 
 **Rejected, with reasons.**
 
@@ -276,6 +270,7 @@ queue lives in memory; a restart loses it, and `aleph jobs --news` recovers it
 | News straight to speech with `/say` | the lead does not learn what Chris heard; it cannot read the question or say what to do next |
 | `--resume` of the worker session | the spec, the notes and the previous result carry the task |
 | A stored base commit | measured: it goes stale after a rebase; `merge-base` is recomputed |
+| A 120 s refusal of a repeated start, a 30 s liveness window, locks keyed by process start time | the dispatch lock waits for `pid`, locks live on a tmpfs, and the lead checks `aleph jobs` after a false "rejected" |
 | `quiet` for aleph lands | a changed hook takes effect at its next call; no event needs the wait |
 | Automatic fix runs, the overlap warning, `--review`, the status line, aliases, `CONTEXT.md`, resumable land steps, automatic Sidetone restart | no observed event asks for them |
 
@@ -286,7 +281,7 @@ state and the recorded POSTs. It does not import internal functions.
 
 | Seam | Covers | How | Prior art |
 | --- | --- | --- | --- |
-| `aleph` as a process | 1–4, 6, 8–17, 20, 21 | `ALEPH_JOBS_DIR`, `ALEPH_REPOS`, `ALEPH_JOB_FOREGROUND=1`, timeouts of 1–2 s, `ALEPH_WORKER_CMD` set to a fake worker that commits, leaves an untracked file, sleeps, exits 3, or prints `QUESTION:`; a bare repo as the remote and a second clone that races it; a small HTTPS listener for `/tell` | `vault/cli.test.ts` |
+| `aleph` as a process | 1–4, 6, 8–17, 20 | `ALEPH_JOBS_DIR`, `ALEPH_REPOS`, `ALEPH_JOB_FOREGROUND=1`, timeouts of 1–2 s, `ALEPH_WORKER_CMD` set to a fake worker that commits, leaves an untracked file, sleeps, exits 3, or prints `QUESTION:`; a bare repo as the remote and a second clone that races it; a small HTTPS listener for `/tell` | `vault/cli.test.ts` |
 | the push and `gh` block | 7 | a fake worker with `GIT_SSH_COMMAND` pointed at a script that records its host argument and exits 1: the host must be `aleph-no-push`; `gh auth status` must fail | none |
 | `userGrantedSkip` | 7 | a case with `ALEPH_JOB_ID` set | `hooks/verify-gate.test.ts` |
 | Sidetone `/tell` | 11 | a route test: an item while a turn runs waits; two items go in as one turn | Sidetone's route and bridge tests |
@@ -294,7 +289,7 @@ state and the recorded POSTs. It does not import internal functions.
 
 One live test in `tests/live`: a real `systemd-run` and a real `claude -p` on a
 trivial spec in a scratch repo, which ends `passed` with a session id
-(criteria 5 and 18). Criterion 22 and the voice flow are checked by one spoken
+(criteria 5 and 18). Criterion 21 and the voice flow are checked by one spoken
 job from the phone, from dispatch to "land it".
 
 ## Out of Scope
@@ -313,6 +308,6 @@ None.
 
 | # | Repo | Content | Done when | My time |
 | --- | --- | --- | --- | --- |
-| 1 | aleph | `bin/aleph`; registry; `job`, `run`, `jobs`, `drop`, `unit`; liveness, locks, push and `gh` block; skip fix; live test | process tests pass; the live test ends `passed` | ~5 h |
+| 1 | aleph | `bin/aleph`; registry; `job`, `run`, `jobs`, `drop`, `unit`; liveness, locks, push and `gh` block; skip fix; live test | process tests pass; the live test ends `passed` | ~4.5 h |
 | 2 | aleph | `land` as a run | tests for land, conflict, a raced push, no net change, a dirty checkout, and a land after a failed land; a real Cloud Chamber job is pushed | ~2 h |
 | 3 | sidetone | `/tell` route; `JOBS_DIR` is `~/.aleph/jobs`; the `CLAUDE.md` block; spec 14.10.4; remove `scripts/job` | route tests pass; one spoken job goes from dispatch to "land it" from the phone | ~1.5 h |
