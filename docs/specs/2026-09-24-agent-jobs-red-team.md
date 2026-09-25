@@ -1,6 +1,6 @@
 # Agent jobs: red team and revised plan
 
-**Superseded.** Version 2 of [`2026-09-24-agent-jobs.md`](2026-09-24-agent-jobs.md)
+**Superseded.** Version 4 of [`2026-09-24-agent-jobs.md`](2026-09-24-agent-jobs.md)
 takes in these findings and simplifies them further. Read that file. This one
 keeps the evidence.
 
@@ -234,3 +234,33 @@ simplification. Version 3 of the spec takes in the result.
 | An env file's `PATH` overrode the dispatcher's | The unit sets `PATH` after it loads the env file |
 | Aliases, `CONTEXT.md`, resume rotation, the "already pushed" recovery, two-ledger cap | Cut |
 | The estimate | ~5 h over three milestones |
+
+## Round 3
+
+Three reviewers read version 3: correctness (with experiments in scratch
+repos), implementability, and the voice workflow. Version 4 takes in the
+result.
+
+| Finding | Version 4 |
+| --- | --- |
+| News went to Chris's ear, never to the lead, so the lead did not know what Chris heard | A new Sidetone route, `/tell`, gives the news to the lead at idle; the lead reads the result and says what to do next. Chris chose this. |
+| Measured: an untracked file that a committed file imports passed the checks and was missing after the push | A clean tree now includes untracked files. All setup artifacts are already gitignored. |
+| A failed land made the job impossible to land | The latest agent run decides whether a job can land; land runs do not |
+| No `aleph` executable; foreground tests could not meet the liveness rule | `bin/aleph`; foreground mode runs `aleph unit <folder>` as a child |
+| The lead's instructions were not in the spec | The exact `CLAUDE.md` block is in the spec |
+| Measured: the stored base went stale after a rebase | `merge-base origin/main HEAD` each time |
+| A run was not live between dispatch and `pid` | A folder younger than 30 s with no `pid` counts as live |
+| Locks could be held by a reused pid | The lock holds the pid and the process start time |
+| Drop during a land that had pushed | Drop refuses while a land runs |
+| Measured: a leftover `job/<name>` branch blocked a new job | A new job removes leftovers of an ended job with the same name |
+| Names could exist in two repos; folder names had no year | Names are unique among open jobs; folders are `YYYYMMDD-HHMMSS-<repo>-<name>-<kind>` |
+| A question with unfinished edits ended `failed`; a non-zero exit had no rule | One order: exit, question, clean tree, no change, checks, manual |
+| Measured: exit codes cannot tell a timeout apart | The unit decides from its own clock |
+| The POST ran before `exit` | `state.json`, then `exit`, then the POST with a 10 s limit |
+| Measured: `gh` held a live token | `GH_CONFIG_DIR` points at an empty folder; token variables unset |
+| A lost first run never got setup | Setup runs whenever the setup marker is missing |
+| A follow-up lost the original task; a failed check left no output | Every run gets `spec.md`, all notes, the previous `result.md`, `checks.log` and `land.log` |
+| A job started twice after a false "rejected" | A second run of a name within 120 s is refused |
+| The `quiet` rule had no owner | Cut |
+| The cap of 4 was below the observed peak of 5 | 5 |
+| The estimates | ~8.5 h over three milestones |
