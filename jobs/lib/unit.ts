@@ -116,29 +116,38 @@ async function land(folder: string, run: Run, repo: Repo, env: Record<string, st
 
   const release = await lock(`job-${repo.key}-${run.name}`, 60_000);
   if (!release) return fail("job lock busy");
+  let releaseRepo: (() => void) | null = null;
   try {
     phase("land");
     if (existsSync(join(git(wt, "rev-parse", "--absolute-git-dir").out, "rebase-merge"))) step("abort rebase in progress", "rebase", "--abort");
+    // One land at a time per repo, from the fetch to the push. The checks run inside it.
+    releaseRepo = await lock(`land-${repo.key}`, Infinity);
     if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
-    const base = git(wt, "merge-base", `origin/${main}`, "HEAD").out;
-    const subjects = git(wt, "log", "--reverse", "--format=%s", `${base}..HEAD`).out.split("\n").filter(Boolean);
-    if (!step("rebase", "rebase", `origin/${main}`).ok) {
+    // origin/<main> is shared by every worktree, and another land's push moves it.
+    // Everything after the fetch uses this commit, so a move makes the push non-fast-forward.
+    const base = git(wt, "rev-parse", `origin/${main}`).out;
+    const fork = git(wt, "merge-base", base, "HEAD").out;
+    const subjects = git(wt, "log", "--reverse", "--format=%s", `${fork}..HEAD`).out.split("\n").filter(Boolean);
+    if (!step("rebase", "rebase", base).ok) {
       step("abort rebase", "rebase", "--abort");
       return fail("rebase conflict");
     }
-    if (git(wt, "rev-parse", "HEAD^{tree}").out === git(wt, "rev-parse", `origin/${main}^{tree}`).out) {
+    if (git(wt, "rev-parse", "HEAD^{tree}").out === git(wt, "rev-parse", `${base}^{tree}`).out) {
       log("no net change");
       removeWorktree(repo, run);
       return { verdict: { state: "done", reason: "no net change" }, code: 0 };
     }
-    const changed = git(wt, "diff", "--name-only", `origin/${main}`, "HEAD").out.split("\n").filter(Boolean);
+    const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
     const failed = await runChecks(folder, wt, repo, env, changed, phase);
     if (failed) return fail(failed);
     phase("land");
     const message = [subjects[0] ?? run.name, "", ...(subjects.length > 1 ? subjects.map((s) => `- ${s}`) : []), `Job: ${run.job}`].join("\n");
-    const commit = step("commit-tree", "commit-tree", "HEAD^{tree}", "-p", `origin/${main}`, "-m", message);
+    const commit = step("commit-tree", "commit-tree", "HEAD^{tree}", "-p", base, "-m", message);
     if (!commit.ok) return fail("commit-tree failed");
-    if (!step("push", "push", "-q", "origin", `${commit.out}:refs/heads/${main}`).ok) return fail("push refused");
+    if (!step("push", "push", "-q", "origin", `${commit.out}:refs/heads/${main}`).ok) {
+      const remoteMain = git(wt, "ls-remote", "origin", `refs/heads/${main}`).out.split("\t")[0];
+      return fail(remoteMain && remoteMain !== base ? "main moved during the land; land again" : "push refused");
+    }
 
     // The main checkout follows only when it is on <main> with no tracked changes.
     let reason: string | undefined;
@@ -149,6 +158,7 @@ async function land(folder: string, run: Run, repo: Repo, env: Record<string, st
     removeWorktree(repo, run);
     return { verdict: { state: "landed", commit: commit.out, reason }, code: 0 };
   } finally {
+    releaseRepo?.();
     release();
   }
 }

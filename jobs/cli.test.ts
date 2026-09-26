@@ -91,6 +91,8 @@ beforeAll(() => {
     { name: "no job variables", run: 'test -z "$ALEPH_JOB_ID$ALEPH_JOB_RUN"' },
     { name: "android build", run: `echo built >> ${join(base, "android.log")}`, when: ["android/**"] },
     { name: "slow", run: "sleep 60", when: ["slow/**"] },
+    // Holds two lands between their fetch and their push at the same time.
+    { name: "pause", run: "sleep 1", when: ["pair/**"] },
     // Pushes to the remote from another clone once, so the land's own push loses the race.
     { name: "race", run: `if [ -f ${join(base, "race-once")} ]; then rm ${join(base, "race-once")}; cd ${join(base, "other")} && git pull -q --rebase origin main && echo $RANDOM > raced && git add raced && git commit -qm race && git push -q origin main; fi`, when: ["race/**"] },
   ];
@@ -402,17 +404,26 @@ describe("land", () => {
     expect(existsSync(worktree("twin"))).toBe(false);
   });
 
-  test("a push that loses a race fails, and the next land succeeds", async () => {
+  test("a push that loses a race fails as main moved, and the next land succeeds", async () => {
     await job("racer", "commit race/x.txt");
     writeFileSync(join(base, "race-once"), "");
     const r = await aleph(["land", "racer"]);
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "push refused" });
+    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "main moved during the land; land again" });
     expect(sh(base, "git", "--git-dir", remote, "log", "-1", "--format=%s", "main")).toBe("race");
     const again = await aleph(["land", "racer"]);
     const s = state(again.json.run);
     expect(s.state).toBe("landed");
     expect(sh(base, "git", "--git-dir", remote, "log", "-2", "--format=%s", "main")).toBe("add race/x.txt\nrace");
   });
+
+  test("two lands at once in one repo both reach main, neither undoing the other", async () => {
+    await job("left", "commit pair/left.txt");
+    await job("right", "commit pair/right.txt");
+    const [l, r] = await Promise.all([aleph(["land", "left"]), aleph(["land", "right"])]);
+    expect([state(l.json.run).state, state(r.json.run).state]).toEqual(["landed", "landed"]);
+    expect(sh(base, "git", "--git-dir", remote, "ls-tree", "--name-only", "main:pair").split("\n")).toEqual(["left.txt", "right.txt"]);
+    expect(sh(base, "git", "--git-dir", remote, "log", "-2", "--format=%s", "main").split("\n").sort()).toEqual(["add pair/left.txt", "add pair/right.txt"]);
+  }, 30_000);
 
   test("a main checkout with tracked changes is not updated, and the news says so", async () => {
     await job("dirtyco", "commit dc.txt");
