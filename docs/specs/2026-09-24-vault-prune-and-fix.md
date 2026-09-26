@@ -99,6 +99,14 @@ deletions, every line frontmatter. Take the copy with `cp -aL`:
 copies the symlink, so the "copy" is the live vault. That mistake put one bad
 commit on the real vault on 2026-09-24; `0385a9c` reverts it.
 
+`~/.aleph/vault` being a symlink cost a second time on 2026-09-26. A write
+guarded its copy with `srcPath !== dest`, a string compare, so a note given its
+`/mnt/c/...` path was copied onto itself through the `~/.aleph` spelling and
+`copyFileSync` truncated it to 0 bytes. Two notes went that way. Both were in
+git, because another session had written them minutes earlier; a note that had
+never been written would have been gone. The root and a write's source now
+resolve through symlinks, so the guard compares one spelling against itself.
+
 A parser bug surfaced only in that dry run. `parseFrontmatter` cut every line at
 ` #`, so `aliases: [deep link a draw, #go]` lost its closing bracket, parsed as
 a string, and lint called it "aliases must be a list". `stripComment` now

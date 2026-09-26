@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -334,6 +334,32 @@ describe("budget", () => {
     expect(r.stderr).toContain("[[Ghost Target]] resolves to nothing");
     writeFileSync(home, text);
     cli("write", home, "--why", "restore");
+  });
+});
+
+describe("symlinked vault", () => {
+  test("a write through the other spelling of the same file does not truncate it", () => {
+    // ~/.aleph/vault is a symlink to /mnt/c/Users/crsmi/vault, so one note has
+    // two absolute paths. A string compare guarding copyFileSync could not see
+    // that, and the copy-onto-itself emptied the file.
+    const link = join(base, "vault-link");
+    if (!existsSync(link)) symlinkSync(vault, link);
+    const r = cli("write", note("Two Paths One File"), "--why", "seed it");
+    expect(r.code).toBe(0);
+    const real = join(vault, "wiki/gotchas/Two Paths One File.md");
+    const before = readFileSync(real, "utf8");
+    expect(before.length).toBeGreaterThan(100);
+
+    // Same file, reached through the symlink, written again.
+    const viaLink = join(link, "wiki/gotchas/Two Paths One File.md");
+    expect(run({ ALEPH_VAULT: vault }, "write", viaLink, "--why", "rewrite in place").code).toBe(0);
+    expect(readFileSync(real, "utf8")).toBe(before);
+
+    // And with the vault itself named through the link.
+    expect(run({ ALEPH_VAULT: link }, "write", real, "--why", "rewrite the other way").code).toBe(0);
+    expect(readFileSync(real, "utf8")).toBe(before);
+    cli("archive", "Two Paths One File", "--why", "test fixture");
+    expect(gitStatus()).toBe("");
   });
 });
 

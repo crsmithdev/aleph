@@ -5,7 +5,7 @@
  * Vault path: $ALEPH_VAULT or ~/.aleph/vault. JSON on stdout, findings on
  * stderr, exit 1 on refusal. See docs/specs/2026-09-04-memory-vault.md.
  */
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { langfuseConfig } from "../hooks/lib/env.ts";
 import { serializeFrontmatter } from "./lib/frontmatter.ts";
@@ -15,7 +15,20 @@ import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./lib/templat
 import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
 
 const [cmd, ...rest] = process.argv.slice(2);
-const root = resolve(vaultDir());
+/**
+ * The vault root with every symlink resolved.
+ *
+ * `~/.aleph/vault` is a symlink to `/mnt/c/Users/crsmi/vault`, so one note has
+ * two absolute paths. Both the root and a write's source resolve here, so the
+ * `srcPath !== dest` guard below compares one spelling against itself.
+ *
+ * Without that, a write given a note's `/mnt/c/...` path copied the file onto
+ * itself through the `~/.aleph` spelling, and `copyFileSync` truncated it to 0
+ * bytes. It also read as outside the vault, so `relative()` put
+ * `../../../../mnt/c/...` in the messages.
+ */
+const root = (() => { const r = resolve(vaultDir()); try { return realpathSync(r); } catch { return r; } })();
+
 
 function flag(name: string): string | undefined {
   const i = rest.indexOf(`--${name}`);
@@ -127,7 +140,7 @@ function write(): void {
   const src = positional[0];
   const why = flag("why");
   if (!src || !why) { console.error('usage: vault write <file.md> --why "<one line>"'); process.exit(1); }
-  const srcPath = resolve(src);
+  const srcPath = (() => { const r = resolve(src); try { return realpathSync(r); } catch { return r; } })();
   if (!existsSync(srcPath)) { console.error(`no such file: ${srcPath}`); process.exit(1); }
   const inside = !relative(root, srcPath).startsWith("..");
   const rel = inside ? relative(root, srcPath) : null;
