@@ -12,7 +12,7 @@ import { serializeFrontmatter } from "./lib/frontmatter.ts";
 import { addedDate, commitPaths, git, tracked, trackedFiles } from "./lib/git.ts";
 import { handoffsFor, traceDigest } from "./lib/compile.ts";
 import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./lib/templates.ts";
-import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, HOME_KINDS, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
+import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, HOME_KINDS, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, renameScope, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
 
 const [cmd, ...rest] = process.argv.slice(2);
 /**
@@ -313,6 +313,37 @@ function adopt(): void {
   out({ op: "adopt", title: note.title, path: rel, template, commit });
 }
 
+// ---------------------------------------------------------------- rename-scope
+/**
+ * Move every note in one scope to another. Read-only unless `--apply`.
+ *
+ * A rename moves the repo and leaves the notes behind, so the vault ends up
+ * with several names for one project and no way to see it: `scope` is free
+ * text, and the only rule that read it is off. On 2026-09-26 five names covered
+ * two projects across 49 notes.
+ */
+function renameScopeOp(): void {
+  requireVault();
+  const [from, to] = positional;
+  const apply = has("apply");
+  if (!from || !to) { console.error("usage: vault rename-scope <old> <new> [--apply]"); process.exit(1); }
+  const notes = loadVault(root);
+  const scopes = [...new Set(wikiNotes(notes).map((n) => String(n.fm.scope)))].sort();
+  if (!scopes.includes(from)) refuse([{ note: from, rule: "scope", detail: `no note has scope ${from}; the vault uses: ${scopes.join(", ")}` }]);
+  const changes = renameScope(notes, from, to);
+
+  let commit: string | null = null;
+  if (apply && changes.length) {
+    for (const c of changes) writeFileSync(c.note.path, c.text);
+    appendDaily(`rename-scope ${from} → ${to} — ${changes.length} notes`);
+    setHealth();
+    commit = commitPaths(root, `rename-scope: ${from} → ${to}, ${changes.length} notes`,
+      [...changes.map((c) => c.note.path), join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
+  }
+  out({ op: "rename-scope", from, to, applied: apply, notes: changes.map((c) => c.note.rel), count: changes.length, commit });
+  if (!apply && changes.length) console.error(`rename-scope changed nothing; rerun with --apply to move ${changes.length} notes from ${from} to ${to}`);
+}
+
 // ---------------------------------------------------------------- consolidate
 /**
  * The pass that acts on what `compile` gathers: it rebuilds Home as a router,
@@ -418,10 +449,11 @@ switch (cmd) {
   case "recall": recall(); break;
   case "lint": lint(); break;
   case "adopt": adopt(); break;
+  case "rename-scope": renameScopeOp(); break;
   case "consolidate": consolidate(); break;
   case "archive": archive(); break;
   case "compile": await compile(); break;
   default:
-    console.error("usage: vault <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|consolidate [--apply]|archive <title> --why <text>|compile [date]>");
+    console.error("usage: vault <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|consolidate [--apply]|archive <title> --why <text>|compile [date]>");
     process.exit(2);
 }

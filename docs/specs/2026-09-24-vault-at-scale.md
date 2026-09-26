@@ -99,6 +99,19 @@ the template to a warning. It does not edit the note. An `## Evidence` heading
 nobody wrote would turn "this claim is unbacked" into a passing check, which is
 the same reason `lint --fix` never touches a body.
 
+### `vault rename-scope <old> <new>`
+
+`scope` is free text, and a rename moves the repo and leaves every note behind,
+so the vault collected five names for two projects across 49 notes:
+`voice-bridge` and `voice-bridge-mcp` are both Sidetone (`~/voice-bridge-mcp`
+is the voice bridge repo, per [[Voice Bridge MCP]]), and `caller` is Voiceover.
+Nothing caught it, because the only rule that read `scope` was the overlap
+check, now off.
+
+Read-only unless `--apply`. It rewrites the `scope:` line and nothing else, one
+commit for the batch, and refuses a scope no note has — a misspelling is the
+likelier reading than a new project.
+
 ### `overlap` is off
 
 Kept behind `lint --overlap`. It pairs notes on the project name, which the

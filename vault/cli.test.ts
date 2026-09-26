@@ -337,6 +337,42 @@ describe("budget", () => {
   });
 });
 
+describe("rename-scope", () => {
+  test("read-only by default; --apply moves every note and touches no other line", () => {
+    cli("write", note("Old Scope One", { scope: "voice-bridge-mcp" }), "--why", "x");
+    cli("write", note("Old Scope Two", { scope: "voice-bridge-mcp" }), "--why", "x");
+    const paths = ["Old Scope One", "Old Scope Two"].map((t) => join(vault, `wiki/gotchas/${t}.md`));
+    const before = paths.map((p) => readFileSync(p, "utf8"));
+
+    const dry = cli("rename-scope", "voice-bridge-mcp", "sidetone");
+    expect(dry.json).toMatchObject({ applied: false, count: 2, commit: null });
+    expect(dry.stderr).toContain("rerun with --apply");
+    expect(readFileSync(paths[0], "utf8")).toBe(before[0]);
+
+    const r = cli("rename-scope", "voice-bridge-mcp", "sidetone", "--apply");
+    expect(r.json).toMatchObject({ applied: true, count: 2 });
+    paths.forEach((p, i) => {
+      const after = readFileSync(p, "utf8");
+      expect(after).toContain("scope: sidetone");
+      expect(after).not.toContain("voice-bridge-mcp");
+      // Only the scope line moved.
+      expect(after.split("\n").length).toBe(before[i].split("\n").length);
+      expect(after.replace(/^scope: .*$/m, "")).toBe(before[i].replace(/^scope: .*$/m, ""));
+    });
+    expect(cli("recall", "--scope", "sidetone").json.map((h: any) => h.title).sort()).toEqual(["Old Scope One", "Old Scope Two"]);
+    expect(cli("recall", "--scope", "voice-bridge-mcp").json).toEqual([]);
+    expect(gitLog()).toContain("rename-scope: voice-bridge-mcp → sidetone, 2 notes");
+    expect(gitStatus()).toBe("");
+    for (const t of ["Old Scope One", "Old Scope Two"]) cli("archive", t, "--why", "test fixture");
+  });
+  test("refuses a scope no note has, and names the ones that exist", () => {
+    const r = cli("rename-scope", "voyce-bridge", "sidetone");
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("no note has scope voyce-bridge");
+    expect(r.stderr).toContain("aleph");
+  });
+});
+
 describe("adopt", () => {
   test("commits an in-vault draft, forgiving the template but not the schema", () => {
     const rel = "wiki/decisions/Drafted In Place.md";

@@ -10,7 +10,7 @@ Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 |---|---|
 | `skills/` | the fifteen skills, invoked as `/aleph:<name>` |
 | `hooks/` | the hook scripts and `hooks.json`, against the 2.1.x hook API |
-| `vault/cli.ts` | the memory vault's mechanics: `init`, `write`, `adopt`, `recall`, `lint [--fix]`, `consolidate`, `archive`, `compile` |
+| `vault/cli.ts` | the memory vault's mechanics: `init`, `write`, `adopt`, `recall`, `lint [--fix]`, `consolidate`, `rename-scope`, `archive`, `compile` |
 | `identity/CLAUDE.md` | the global `CLAUDE.md` the hooks assume: the worktree rule, the verification rule, the voice |
 | `compose/langfuse.yml` | self-hosted Langfuse on `127.0.0.1:3010` |
 | `docs/` | the verify-gate decision record and the vault spec |

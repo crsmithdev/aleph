@@ -62,6 +62,13 @@ re-derive at any price. Prefer them.
 MEMORY.md holds standing context about Chris and the environment. Rewrite
 the section, keep it under 150 lines, commit the same way.
 
+## rename-scope
+
+`cli.ts rename-scope <old> <new>` is read-only; `--apply` writes. A rename
+moves the repo and leaves every note behind, so the vault collected five
+scope names for two projects. It rewrites only the `scope:` line, one commit
+for the batch. An unknown scope refuses and names the ones that exist.
+
 ## consolidate
 
 `cli.ts consolidate` is read-only. It reports the Home lines it would drop

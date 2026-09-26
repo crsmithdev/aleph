@@ -428,3 +428,30 @@ export function relativeDates(notes: Note[]): Finding[] {
   }
   return out;
 }
+
+/**
+ * Rewrite the `scope:` line of every note in one scope.
+ *
+ * Line-level, like `fixFrontmatter`, so a note keeps its own formatting. The
+ * vault carried five scope names for two projects, because a rename moved the
+ * repo and left every note behind: `voice-bridge` and `voice-bridge-mcp` are
+ * both Sidetone, and `caller` is Voiceover. Nothing catches that, because
+ * `scope` is free text.
+ *
+ * Returns the notes it would change, each with its new text. It touches no
+ * other line and invents no scope.
+ */
+export function renameScope(notes: Note[], from: string, to: string): { note: Note; text: string }[] {
+  const out: { note: Note; text: string }[] = [];
+  for (const n of wikiNotes(notes)) {
+    if (String(n.fm.scope) !== from) continue;
+    const { frontmatter, body } = splitFrontmatter(n.text);
+    if (frontmatter === null) continue;
+    const lines = frontmatter.split(/\r?\n/);
+    const i = lines.findIndex((l) => /^scope:\s/.test(l));
+    if (i < 0) continue;
+    lines[i] = `scope: ${to}`;
+    out.push({ note: n, text: `---\n${lines.join("\n")}\n---\n${body}` });
+  }
+  return out.sort((a, b) => a.note.rel.localeCompare(b.note.rel));
+}
