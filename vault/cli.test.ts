@@ -337,6 +337,30 @@ describe("budget", () => {
   });
 });
 
+describe("push", () => {
+  test("a write pushes to origin, and a broken origin warns without failing", () => {
+    const bare = join(base, "vault-origin.git");
+    Bun.spawnSync(["git", "init", "-q", "--bare", "-b", "main", bare]);
+    Bun.spawnSync(["git", "-C", vault, "remote", "add", "origin", bare]);
+    const r = cli("write", note("Pushed Upstream"), "--why", "x");
+    expect(r.code).toBe(0);
+    const remoteLog = Bun.spawnSync(["git", "-C", bare, "log", "--format=%s"], { stdout: "pipe" }).stdout.toString();
+    expect(remoteLog).toContain("write: Pushed Upstream");
+
+    // A remote that cannot be reached must not fail the write.
+    Bun.spawnSync(["git", "-C", vault, "remote", "set-url", "origin", join(base, "does-not-exist.git")]);
+    const broken = cli("write", note("Pushed Upstream", { updated: "2026-09-27" }), "--why", "rewrite");
+    expect(broken.code).toBe(0);
+    expect(broken.json.commit).toMatch(/^[0-9a-f]{7,}$/);
+    expect(broken.stderr).toContain("warn push");
+    expect(broken.stderr).toContain("the commit stands");
+
+    Bun.spawnSync(["git", "-C", vault, "remote", "remove", "origin"]);
+    cli("archive", "Pushed Upstream", "--why", "test fixture");
+    expect(gitStatus()).toBe("");
+  });
+});
+
 describe("rename-scope", () => {
   test("read-only by default; --apply moves every note and touches no other line", () => {
     cli("write", note("Old Scope One", { scope: "voice-bridge-mcp" }), "--why", "x");

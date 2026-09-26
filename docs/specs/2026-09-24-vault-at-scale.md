@@ -121,6 +121,20 @@ invalidates an earlier one. Published work on that uses embeddings with fuzzy
 matching and still needs a labelled corpus to set a threshold. The code waits
 for a rule that finds something.
 
+### The vault has a remote
+
+`git remote -v` was empty. 165 notes and 179 commits, written by Chris and five
+sessions since 2026-09-04, existed once, on a Windows drive at 72% capacity.
+Every fix above guards against a bug; none guarded against the disk.
+
+The remote is the private `crsmithdev/aleph-vault`. Every op that commits now
+pushes, best-effort: a failed push warns and leaves the commit for the next op,
+because a write must not fail because the network did.
+
+Before the first push, a secret scan over the working tree and all 179 commits
+found nothing — the only non-markdown files are `.obsidian` config and the logo
+generators under `attachments/`.
+
 ## Consequences
 
 Home falls from 132 index lines to about 41, so the budget stops binding.

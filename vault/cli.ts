@@ -9,7 +9,7 @@ import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, real
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { langfuseConfig } from "../hooks/lib/env.ts";
 import { serializeFrontmatter } from "./lib/frontmatter.ts";
-import { addedDate, commitPaths, git, tracked, trackedFiles } from "./lib/git.ts";
+import { addedDate, commitPaths, git, pushOrigin, tracked, trackedFiles } from "./lib/git.ts";
 import { handoffsFor, traceDigest } from "./lib/compile.ts";
 import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./lib/templates.ts";
 import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, HOME_KINDS, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, renameScope, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
@@ -38,6 +38,18 @@ function has(name: string): boolean { return rest.includes(`--${name}`); }
 const positional = rest.filter((a, i) => !a.startsWith("--") && rest[i - 1]?.startsWith("--") !== true);
 
 function out(value: unknown): void { console.log(JSON.stringify(value, null, 2)); }
+
+/**
+ * Commit, then push. Every vault op that writes goes through here, so the
+ * second copy is never one someone forgot to make.
+ */
+function commitAndPush(subject: string, paths: string[]): string | null {
+  const commit = commitPaths(root, subject, paths);
+  if (!commit) return null;
+  const p = pushOrigin(root);
+  if (!p.pushed && p.detail !== "no origin") console.error(`warn push ${subject}: ${p.detail}; the commit stands, push it when you can`);
+  return commit;
+}
 function refuse(findings: Finding[], hint?: string): never {
   for (const f of findings) console.error(`refuse ${f.rule} ${f.note}: ${f.detail}`);
   if (hint) console.error(hint);
@@ -130,7 +142,7 @@ function init(): void {
     if (!r.ok) { console.error(r.out); process.exit(1); }
   }
   setHealth();
-  const commit = commitPaths(root, "init vault", made);
+  const commit = commitAndPush("init vault", made);
   out({ op: "init", path: root, commit });
 }
 
@@ -158,7 +170,7 @@ function write(): void {
     warn(w);
     appendDaily(`write [[${name}]] — ${why}`);
     if (name === "MEMORY") setHealth();
-    const commit = commitPaths(root, `write: ${name}`, [join(root, `${name}.md`), join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
+    const commit = commitAndPush(`write: ${name}`, [join(root, `${name}.md`), join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
     out({ op: "write", title: name, path: `${name}.md`, warnings: w, commit });
     return;
   }
@@ -212,7 +224,7 @@ function write(): void {
   if (budget.length) { rollback(touched); refuse(budget, budgetHint(after)); }
   warn(lintVault(after).warn.filter((f) => f.note === draft.title || f.detail.includes(draft.title)));
   const subject = archived.length ? `supersede: ${archived.join(", ")} → ${draft.title}` : `write: ${draft.title}`;
-  const commit = commitPaths(root, subject, touched);
+  const commit = commitAndPush(subject, touched);
   out({ op: archived.length ? "supersede" : "write", title: draft.title, path: relative(root, dest), archived, commit });
 }
 
@@ -263,7 +275,7 @@ function lint(): void {
   setHealth();
   const result = lintVault(loadVault(root), { read: readLog(), overlap: has("overlap"), templates: has("template"), tracked: trackedFiles(root, "wiki") });
   const touched = [join(root, "Home.md"), ...fixed.map((f) => join(root, f.path))];
-  const commit = commitPaths(root, fixed.length ? `lint --fix: ${fixed.length} notes` : `lint: ${today()}`, touched);
+  const commit = commitAndPush(fixed.length ? `lint --fix: ${fixed.length} notes` : `lint: ${today()}`, touched);
   out({ fixed, ...result, commit });
   process.exit(result.refuse.length ? 1 : 0);
 }
@@ -306,7 +318,7 @@ function adopt(): void {
 
   appendDaily(`adopt [[${note.title}]] — ${why}`);
   setHealth();
-  const commit = commitPaths(root, `adopt: ${note.title}`, [path, join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
+  const commit = commitAndPush(`adopt: ${note.title}`, [path, join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
   warn(template);
   const home = HOME_KINDS.includes(String(note.fm.kind)) ? "wants a line in Home.md" : null;
   if (home) warn([{ note: note.title, rule: "orphan", detail: home }]);
@@ -337,7 +349,7 @@ function renameScopeOp(): void {
     for (const c of changes) writeFileSync(c.note.path, c.text);
     appendDaily(`rename-scope ${from} → ${to} — ${changes.length} notes`);
     setHealth();
-    commit = commitPaths(root, `rename-scope: ${from} → ${to}, ${changes.length} notes`,
+    commit = commitAndPush(`rename-scope: ${from} → ${to}, ${changes.length} notes`,
       [...changes.map((c) => c.note.path), join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
   }
   out({ op: "rename-scope", from, to, applied: apply, notes: changes.map((c) => c.note.rel), count: changes.length, commit });
@@ -375,7 +387,7 @@ function consolidate(): void {
     writeFileSync(join(root, "Home.md"), plan.text);
     setHealth();
     appendDaily(`consolidate — dropped ${plan.dropped.length} Home lines`);
-    commit = commitPaths(root, `consolidate: Home ${plan.lines} lines`, [join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
+    commit = commitAndPush(`consolidate: Home ${plan.lines} lines`, [join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
   }
   out({
     op: "consolidate", applied: apply,
@@ -415,7 +427,7 @@ function archive(): void {
   if (plan.dropped.length) writeFileSync(home, plan.text);
   appendDaily(`archive [[${hit.title}]] — ${why}`);
   setHealth();
-  const commit = commitPaths(root, `archive: ${hit.title}`, [dest, hit.path, home, join(root, "daily", `${today()}.md`)]);
+  const commit = commitAndPush(`archive: ${hit.title}`, [dest, hit.path, home, join(root, "daily", `${today()}.md`)]);
   // An archived note stays a link target, so nothing dangles; the callers are
   // named because each one now points at a retired claim.
   warn(inbound.map((n) => ({ note: n.title, rule: "inbound", detail: `links [[${hit.title}]], which is now archived` })));

@@ -49,6 +49,20 @@ export function commitPaths(dir: string, subject: string, paths: string[]): stri
   return git(dir, "rev-parse", "--short", "HEAD").out;
 }
 
+/**
+ * Push the current branch to `origin`, if there is one. Returns what happened.
+ *
+ * Best-effort on purpose. The vault held 165 notes and 179 commits on one
+ * Windows drive with no remote until 2026-09-26, so every op that commits now
+ * pushes; but a write must not fail because the network did. A failure is
+ * reported and the commit stands, ready for the next push.
+ */
+export function pushOrigin(dir: string): { pushed: boolean; detail?: string } {
+  if (!git(dir, "remote", "get-url", "origin").ok) return { pushed: false, detail: "no origin" };
+  const r = git(dir, "push", "--quiet", "origin", "HEAD");
+  return r.ok ? { pushed: true } : { pushed: false, detail: r.out.split("\n").at(-1) ?? "push failed" };
+}
+
 /** Every path git tracks under `dir`, relative and posix-style. */
 export function trackedFiles(dir: string, ...pathspec: string[]): string[] {
   const r = git(dir, "ls-files", "--", ...pathspec);

@@ -10,6 +10,11 @@ SessionStart. Read the note Home points at before searching; search with
 Script: `bun ~/.claude/skills/aleph/vault/cli.ts <op>`. JSON on stdout,
 findings on stderr, exit 1 on refusal. Never edit `VAULT.md`.
 
+Every op that commits also pushes to `origin`, the private repo
+`crsmithdev/aleph-vault`. A push that fails prints `warn push` and leaves the
+commit; the next op sends it. The vault held 165 notes on one drive with no
+second copy until 2026-09-26, so do not turn this off.
+
 ## write
 
 Write a page when you learn how something actually behaves (`gotcha`),
