@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * vault <init|write|recall [--scope]|lint [--fix]|consolidate|archive|compile> — the
+ * vault <init|write|adopt|recall [--scope]|lint [--fix]|consolidate|archive|compile> — the
  * mechanical half of /aleph:vault.
  * Vault path: $ALEPH_VAULT or ~/.aleph/vault. JSON on stdout, findings on
  * stderr, exit 1 on refusal. See docs/specs/2026-09-04-memory-vault.md.
@@ -12,7 +12,7 @@ import { serializeFrontmatter } from "./lib/frontmatter.ts";
 import { addedDate, commitPaths, git, tracked, trackedFiles } from "./lib/git.ts";
 import { handoffsFor, traceDigest } from "./lib/compile.ts";
 import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./lib/templates.ts";
-import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
+import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, HOME_KINDS, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
 
 const [cmd, ...rest] = process.argv.slice(2);
 /**
@@ -268,6 +268,51 @@ function lint(): void {
   process.exit(result.refuse.length ? 1 : 0);
 }
 
+// ---------------------------------------------------------------- adopt
+/**
+ * Commit a note that is already in the vault but that git has never seen.
+ *
+ * `write` gates new prose and refuses on the template; `lint` treats the
+ * template as a warning, because a note on disk cannot be un-written. A draft
+ * written straight into `wiki/` is both at once, so before this op there was no
+ * door: `write` refused it and no other op would commit it. Five such notes
+ * were stranded in the live vault on 2026-09-26.
+ *
+ * Adopt applies every schema, folder, duplicate and dangling refusal — those
+ * are structural and fixable. It demotes the template to a warning, and says
+ * what is missing, so the gap is recorded rather than papered over. It does not
+ * edit the note: adding an `## Evidence` heading nobody wrote would turn "this
+ * claim is unbacked" into a passing check.
+ */
+function adopt(): void {
+  requireVault();
+  const src = positional[0];
+  const why = flag("why");
+  if (!src || !why) { console.error('usage: vault adopt <path-inside-the-vault> --why "<one line>"'); process.exit(1); }
+  const path = (() => { const r = resolve(src); try { return realpathSync(r); } catch { return r; } })();
+  if (!existsSync(path)) { console.error(`no such file: ${path}`); process.exit(1); }
+  const rel = relative(root, path);
+  if (rel.startsWith("..")) { console.error(`${src} is outside the vault; adopt is for a note already in it — use: vault write`); process.exit(1); }
+  if (!rel.startsWith("wiki/")) { console.error(`${rel} is not a wiki note; adopt only takes one`); process.exit(1); }
+  if (tracked(root, path)) { console.error(`${rel} is already tracked; rewrite it with: vault write`); process.exit(1); }
+
+  const note = readNote(path, root);
+  const folder = folderFor(String(note.fm.kind ?? ""));
+  if (folder && dirname(rel) !== folder) refuse([{ note: note.title, rule: "folder", detail: `kind ${note.fm.kind} belongs in ${folder}/, note is in ${dirname(rel)}/` }]);
+  const findings = validateNote(note, loadVault(root).filter((n) => n.path !== path));
+  const template = findings.filter((f) => f.rule === "template");
+  const hard = findings.filter((f) => f.rule !== "template");
+  if (hard.length) refuse(hard, "adopt forgives the template, not the schema");
+
+  appendDaily(`adopt [[${note.title}]] — ${why}`);
+  setHealth();
+  const commit = commitPaths(root, `adopt: ${note.title}`, [path, join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
+  warn(template);
+  const home = HOME_KINDS.includes(String(note.fm.kind)) ? "wants a line in Home.md" : null;
+  if (home) warn([{ note: note.title, rule: "orphan", detail: home }]);
+  out({ op: "adopt", title: note.title, path: rel, template, commit });
+}
+
 // ---------------------------------------------------------------- consolidate
 /**
  * The pass that acts on what `compile` gathers: it rebuilds Home as a router,
@@ -372,10 +417,11 @@ switch (cmd) {
   case "write": write(); break;
   case "recall": recall(); break;
   case "lint": lint(); break;
+  case "adopt": adopt(); break;
   case "consolidate": consolidate(); break;
   case "archive": archive(); break;
   case "compile": await compile(); break;
   default:
-    console.error("usage: vault <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|consolidate [--apply]|archive <title> --why <text>|compile [date]>");
+    console.error("usage: vault <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|consolidate [--apply]|archive <title> --why <text>|compile [date]>");
     process.exit(2);
 }

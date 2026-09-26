@@ -88,8 +88,21 @@ it and archive it; no op will commit a bare deletion.
 
 An `untracked` warning means the opposite: a note sits in `wiki/` that git
 has never seen, because it was drafted in place and never went through
-`write`. Put it through the gate. No op commits a path it did not touch, so
-nothing else will pick it up.
+`write`. Put it through `adopt`.
+
+## adopt
+
+`cli.ts adopt <path-inside-the-vault> --why "<one line>"` commits a note
+that is already in `wiki/` but that git has never seen. Use it for a draft
+written in place, or a note Chris typed in Obsidian.
+
+It applies every schema, folder, duplicate and dangling refusal, and demotes
+the template to a warning, because a note on disk cannot be un-written. It
+does not edit the note: an `## Evidence` heading nobody wrote would turn
+"this claim is unbacked" into a passing check. Add the Home line yourself if
+the kind wants one.
+
+Use `write` instead for a new note, or to rewrite a tracked one.
 
 ## recall
 

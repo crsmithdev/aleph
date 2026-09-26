@@ -337,6 +337,52 @@ describe("budget", () => {
   });
 });
 
+describe("adopt", () => {
+  test("commits an in-vault draft, forgiving the template but not the schema", () => {
+    const rel = "wiki/decisions/Drafted In Place.md";
+    const p = join(vault, rel);
+    // A real note with real sources, in the looser body shape: no `as of`
+    // marker and no ## Evidence, which is what `write` refuses.
+    writeFileSync(p, ["---", "aliases: []", "kind: decision", "scope: aleph",
+      "confidence: measured", "updated: 2026-09-26", "supersedes: []",
+      "sources: [commit abc1234, session 2026-09-26]", "tags: []", "---",
+      "**Claim.** A draft written straight into wiki/ needs a door.", "", "## Details", "d", ""].join("\n"));
+    expect(cli("write", p, "--why", "x").code).toBe(1);
+
+    const r = cli("adopt", p, "--why", "reconcile a note drafted in the vault");
+    expect(r.code).toBe(0);
+    expect(r.json).toMatchObject({ op: "adopt", title: "Drafted In Place", path: rel });
+    expect(r.json.template.map((f: any) => f.detail).join(" ")).toContain("as of YYYY-MM-DD");
+    expect(gitLog()).toContain("adopt: Drafted In Place");
+    expect(gitStatus()).toBe("");
+    // The note is untouched: no heading nobody wrote.
+    expect(readFileSync(p, "utf8")).not.toContain("## Evidence");
+    // And lint no longer calls it untracked.
+    expect(cli("lint").json.warn.filter((f: any) => f.rule === "untracked")).toEqual([]);
+    // A decision still wants its Home line.
+    expect(r.stderr).toContain("warn orphan Drafted In Place");
+  });
+  test("refuses a schema break, a tracked note, and a path outside the vault", () => {
+    const bad = join(vault, "wiki/gotchas/Bad Adopt.md");
+    writeFileSync(bad, "---\nkind: gotcha\nscope: aleph\nconfidence: sure\nupdated: 2026-09-26\nsupersedes: []\nsources: []\n---\n**Claim.** x\n");
+    const r = cli("adopt", bad, "--why", "x");
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("confidence must be one of");
+    expect(r.stderr).toContain("adopt forgives the template, not the schema");
+    rmSync(bad);
+
+    const already = cli("adopt", join(vault, "wiki/decisions/Drafted In Place.md"), "--why", "x");
+    expect(already.code).toBe(1);
+    expect(already.stderr).toContain("already tracked");
+
+    const outside = cli("adopt", note("Outside The Vault"), "--why", "x");
+    expect(outside.code).toBe(1);
+    expect(outside.stderr).toContain("outside the vault");
+    cli("archive", "Drafted In Place", "--why", "test fixture");
+    expect(gitStatus()).toBe("");
+  });
+});
+
 describe("symlinked vault", () => {
   test("a write through the other spelling of the same file does not truncate it", () => {
     // ~/.aleph/vault is a symlink to /mnt/c/Users/crsmi/vault, so one note has

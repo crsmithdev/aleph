@@ -86,6 +86,19 @@ named with `write`. On 2026-09-26 seven drafts another session had left in the
 live vault were waiting, and nothing had said so. Deleting a note in Obsidian used to be swept into the
 next commit; now no op touches it, so something has to say it happened.
 
+### `vault adopt <path> --why`
+
+`write` gates new prose and refuses on the template; `lint` treats the template
+as a warning, because a note on disk cannot be un-written. A draft written
+straight into `wiki/` is both at once, so there was no door: `write` refused it
+and no other op would commit it. Five notes were stranded in the live vault on
+2026-09-26 for exactly that reason.
+
+Adopt applies every schema, folder, duplicate and dangling refusal and demotes
+the template to a warning. It does not edit the note. An `## Evidence` heading
+nobody wrote would turn "this claim is unbacked" into a passing check, which is
+the same reason `lint --fix` never touches a body.
+
 ### `overlap` is off
 
 Kept behind `lint --overlap`. It pairs notes on the project name, which the
