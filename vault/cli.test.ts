@@ -68,8 +68,8 @@ describe("write", () => {
     expect(r.code).toBe(0);
     expect(r.json).toMatchObject({ op: "write", title: "Stop Hook Block Shape", path: "wiki/gotchas/Stop Hook Block Shape.md", archived: [] });
     expect(existsSync(join(vault, "wiki/gotchas/Stop Hook Block Shape.md"))).toBe(true);
-    const today = new Date();
-    const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    // The test process can run in UTC while the CLI child runs in local time, so ask a child for the date.
+    const date = Bun.spawnSync(["date", "+%F"], { stdout: "pipe" }).stdout.toString().trim();
     expect(readFileSync(join(vault, "daily", `${date}.md`), "utf8")).toMatch(/^- \d\d:\d\d write \[\[Stop Hook Block Shape\]\] — measured three shapes$/m);
     expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toBe(`Health: 1 notes, 0 dangling, 0 orphans, 0 stale, lint ${date}`);
     const log = gitLog();
