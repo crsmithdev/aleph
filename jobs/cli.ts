@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * aleph <job|run|land|drop|jobs|unit> — detached agent jobs and plain runs.
+ * aleph <job|run|land|checked|drop|jobs|unit> — detached agent jobs and plain runs.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/jobs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal.
  * See docs/specs/2026-09-24-agent-jobs.md.
@@ -142,7 +142,9 @@ async function plain(): Promise<void> {
 
 /**
  * Start a land run. The latest agent run decides: passed, or needs-you for a
- * manual check that Chris confirmed with --checked. The land unit takes the job lock.
+ * manual check that Chris confirmed with --checked. With --unchecked, Chris
+ * lands before the check and the land run keeps the check open. The land unit
+ * takes the job lock.
  */
 async function landJob(): Promise<void> {
   const name = checkName(positional[0]);
@@ -151,14 +153,27 @@ async function landJob(): Promise<void> {
   if (live) refuse(`${name} is running as ${live.id}`);
   const agent = runs.filter((e) => e.run.kind === "agent").at(-1)!.run;
   const manual = agent.state === "needs-you" && agent.needs === "manual";
-  if (manual && !rest.includes("--checked")) refuse(`${name} needs a manual check: ${agent.say}; land with --checked after it`);
+  const unchecked = manual && rest.includes("--unchecked");
+  if (manual && !rest.includes("--checked") && !unchecked) {
+    refuse(`${name} needs a manual check: ${agent.say}; land with --checked after it, or with --unchecked only when Chris asks to land before the check`);
+  }
   if (agent.state !== "passed" && !manual) refuse(`${name} is ${agent.state}${agent.needs ? ` (${agent.needs})` : ""}, not passed`);
   const repo = loadRegistry()[agent.repo!];
   const child = await dispatch({
     kind: "land", job: agent.job, name, repo: agent.repo, branch: agent.branch, worktree: agent.worktree,
     state: "running", phase: "land", told: false, started: new Date().toISOString(),
+    ...(unchecked ? { check: "open" as const, say: agent.say } : {}),
   }, `${repo.key}-${name}`, repo.path, () => {});
   await child?.exited;
+}
+
+/** Close the manual check of a job that landed with --unchecked. */
+function checked(): void {
+  const name = checkName(positional[0]);
+  const last = allJobs().filter((j) => j.at(-1)!.run.name === name).at(-1)?.at(-1);
+  if (!last || last.run.state !== "landed" || last.run.check !== "open") refuse(`${name} has no open check`);
+  updateRun(last!.folder, { check: "done" });
+  out({ job: last!.run.job, name, state: "landed", check: "done" });
 }
 
 function read(folder: string, file: string): string | undefined {
@@ -173,7 +188,7 @@ function summary(runs: Entry[]) {
   const goal = (read(first.folder, "spec.md") ?? read(first.folder, "command.txt") ?? "").trim().split("\n")[0];
   return {
     name: r.name, repo: r.repo, kind: r.kind, job: r.job, run: last.id, goal, state: r.state, needs: r.needs, phase: r.phase,
-    reason: r.reason, say: r.say, session: r.session, started: first.run.started, ended: r.ended,
+    reason: r.reason, say: r.say, ...(r.state === "landed" && r.check ? { check: r.check } : {}), session: r.session, started: first.run.started, ended: r.ended,
     ...(isLost(last.folder) ? { lost: true } : {}),
   };
 }
@@ -190,7 +205,8 @@ function jobs(): void {
   }
   const all = allJobs();
   const name = positional[0];
-  if (!name) return out(all.filter(isOpen).map(summary));
+  // A job that landed with its check open stays in the list until `aleph checked`.
+  if (!name) return out(all.filter((j) => isOpen(j) || (j.at(-1)!.run.state === "landed" && j.at(-1)!.run.check === "open")).map(summary));
   const runs = all.filter(isOpen).find((j) => j.at(-1)!.run.name === name) ?? all.filter((j) => j.at(-1)!.run.name === name).at(-1);
   if (!runs) refuse(`no job named ${name}`);
   const last = runs!.at(-1)!;
@@ -239,7 +255,8 @@ try {
     case "drop": await drop(); break;
     case "unit": await unit(resolve(positional[0])); break;
     case "land": await landJob(); break;
-    default: refuse("usage: aleph <job|run|land|drop|jobs> ...");
+    case "checked": checked(); break;
+    default: refuse("usage: aleph <job|run|land|checked|drop|jobs> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;

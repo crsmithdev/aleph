@@ -354,8 +354,31 @@ describe("land", () => {
     const r = await aleph(["land", "phoneland"]);
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("run it on the phone");
+    expect(r.stderr).toContain("--checked");
+    expect(r.stderr).toContain("--unchecked");
     const ok = await aleph(["land", "phoneland", "--checked"]);
     expect(state(ok.json.run).state).toBe("landed");
+    expect(state(ok.json.run).check).toBeUndefined();
+    expect((await aleph(["jobs", "phoneland"])).json.check).toBeUndefined();
+  });
+
+  test("--unchecked lands a manual check job and keeps the check open until checked", async () => {
+    await job("phonelater", "commit android/later.txt");
+    const r = await aleph(["land", "phonelater", "--unchecked"]);
+    expect(r.code).toBe(0);
+    expect(state(r.json.run)).toMatchObject({ kind: "land", state: "landed", check: "open", say: "run it on the phone" });
+    expect(remoteHead()).toBe(state(r.json.run).commit);
+    expect(told).toContain("demo/phonelater landed; check open");
+    expect((await aleph(["jobs", "phonelater"])).json).toMatchObject({ state: "landed", check: "open", say: "run it on the phone" });
+    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "phonelater")).toMatchObject({ check: "open" });
+
+    const c = await aleph(["checked", "phonelater"]);
+    expect(c.code).toBe(0);
+    expect((await aleph(["jobs", "phonelater"])).json).toMatchObject({ state: "landed", check: "done" });
+    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "phonelater")).toBeUndefined();
+    const again = await aleph(["checked", "phonelater"]);
+    expect(again.code).toBe(1);
+    expect(again.stderr).toContain("phonelater has no open check");
   });
 
   test("a conflict leaves the remote alone and the job open", async () => {

@@ -76,7 +76,7 @@ Numbers match the user stories.
 11. WHEN a run ends THE unit SHALL write `state.json`, then `exit`, then POST one line of news to `$SIDETONE_TELL_URL` with a 10 s limit, and set `told` in `state.json` on a 2xx reply. The line is `<repo>/<name> <state>`, plus the needs-you kind or the failed check's name.
 12. WHEN `aleph jobs --news` runs THE system SHALL print every ended run with `told` false and set `told` on each.
 13. WHEN `aleph job` runs with the name of an open job in the same repo THE system SHALL start a new run in that worktree. Its prompt SHALL hold the fixed text, the original `spec.md`, every `notes/*.md` in order (the new `--spec` is saved as the next note), and the previous run's `result.md`, `checks.log` and `land.log` when they exist.
-14. WHEN `aleph land <name>` runs AND the latest agent run is `passed`, or `needs-you` kind `manual` with `--checked`, THE system SHALL start a land run. The land run SHALL take the job's lock, abort any rebase in progress, fetch, rebase onto `origin/<main>`, end `done` "no net change" if the tree equals `origin/<main>`'s tree, run the checks, push one `git commit-tree` commit to `<main>`, write `landed` with the hash, fast-forward the main checkout if `git status --porcelain --untracked-files=no` is empty and it is on `<main>`, and remove the worktree with `--force` and the branch with `-D`.
+14. WHEN `aleph land <name>` runs AND the latest agent run is `passed`, or `needs-you` kind `manual` with `--checked` or `--unchecked`, THE system SHALL start a land run. With `--unchecked` the land run SHALL carry `check: "open"` and the check's `say`; `aleph jobs` SHALL list the job, `aleph jobs <name>` SHALL show `check: "open"`, and the news SHALL say "check open", until `aleph checked <name>` sets `check: "done"`. Without either flag the land SHALL exit 1 and name both flags. The land run SHALL take the job's lock, abort any rebase in progress, fetch, rebase onto `origin/<main>`, end `done` "no net change" if the tree equals `origin/<main>`'s tree, run the checks, push one `git commit-tree` commit to `<main>`, write `landed` with the hash, fast-forward the main checkout if `git status --porcelain --untracked-files=no` is empty and it is on `<main>`, and remove the worktree with `--force` and the branch with `-D`.
 15. IF the rebase conflicts, a check fails, or the push is refused THEN the land run SHALL abort the rebase, leave the remote unchanged, end `failed` with the reason in `land.log`, and POST the news. Land runs SHALL NOT change which agent run decides whether the job can land.
 16. WHEN `aleph drop <name> [reason]` runs AND no land run of it is live THE system SHALL stop a live agent run of it, remove the worktree and branch, and write `dropped` with the reason, or "dropped by Chris". IF a land run is live THEN it SHALL exit 1 with "landing".
 17. WHEN `aleph jobs` runs THE system SHALL print JSON for each open job: name, repo, goal (the first line of `spec.md`), state, needs-you kind, phase (`setup`, `worker`, `check <name>`, `land`), started, ended, and `lost` when the run's process is gone. `aleph jobs <name>` SHALL also print the latest `result.md`, question, `checks.log` tail and `land.log`.
@@ -123,7 +123,7 @@ type State = "running" | "passed" | "needs-you" | "failed" | "done" | "landed" |
 interface Run {
   kind: "agent" | "plain" | "land";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
-  state: State; needs?: "manual" | "question"; phase?: string;
+  state: State; needs?: "manual" | "question"; phase?: string; check?: "open" | "done";
   reason?: string; question?: string; say?: string;
   session?: string; model?: string; commit?: string;
   told: boolean; started: string; ended?: string;
@@ -249,7 +249,9 @@ queue lives in memory; a restart loses it, and `aleph jobs --news` recovers it
 > try the manual check, or drop it. For a question, read the question.
 >
 > To land, run `aleph land <name>`. For a job that needs a manual check, ask
-> "Did you check it?" first, and add `--checked` only on a clear yes. For a
+> "Did you check it?" first, and add `--checked` only on a clear yes. Add
+> `--unchecked` only when Chris asks to land before the check; run
+> `aleph checked <name>` when he says the check passed. For a
 > follow-up, an answer, or "fix it", run `aleph job` with the same name and
 > Chris's words as the spec. To drop, run `aleph drop <name>` with Chris's
 > words as the reason. When a name Chris says does not match, list the open

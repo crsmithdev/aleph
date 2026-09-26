@@ -14,6 +14,8 @@ export interface Run {
   state: State; needs?: "manual" | "question"; phase?: string;
   reason?: string; question?: string; say?: string;
   session?: string; model?: string; commit?: string;
+  /** A land run with --unchecked: the manual check is "open" until `aleph checked` makes it "done". */
+  check?: "open" | "done";
   told: boolean; started: string; ended?: string;
 }
 
@@ -172,6 +174,7 @@ export function newsLine(run: Run, note?: string): string {
   // Only a check's reason ends in "failed"; see the state rule in unit.ts.
   const check = run.state === "failed" && run.reason?.match(/^(.+) failed$/);
   if (check) line += ` ${check[1]}`;
+  if (run.state === "landed" && run.check === "open") line += "; check open";
   if (run.state === "landed" && run.reason) line += `; ${run.reason}`;
   if (run.state === "landed" && note) line += `; ${note}`;
   return line;
