@@ -74,6 +74,14 @@ describe("digest", () => {
     expect(userGrantedSkip("please skip verification")).toBe(true);
     expect(userGrantedSkip("verify it")).toBe(false);
   });
+  test("a job worker cannot skip the gate", () => {
+    process.env.ALEPH_JOB_ID = "20260925-000000-demo-alpha-agent";
+    try {
+      expect(userGrantedSkip("skip verify")).toBe(false);
+    } finally {
+      delete process.env.ALEPH_JOB_ID;
+    }
+  });
 });
 
 describe("verify-gate hook", () => {
