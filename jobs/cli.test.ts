@@ -51,6 +51,7 @@ env > "$FAKE_LOG/env"
 action=$(printf '%s\\n' "$prompt" | grep '^ACTION:' | tail -1 | cut -d' ' -f2-)
 case $action in
   commit\\ *) f=\${action#commit }; mkdir -p "$(dirname "$f")"; echo "$RANDOM" > "$f"; git add "$f"; git commit -qm "add $f" ;;
+  commit-fixed\\ *) f=\${action#commit-fixed }; echo same > "$f"; git add "$f"; git commit -qm "add $f" ;;
   untracked) echo x > stray.txt ;;
   sleep) sleep 60 ;;
   exit3) exit 3 ;;
@@ -89,6 +90,8 @@ beforeAll(() => {
     { name: "tests", run: "test ! -f FAIL" },
     { name: "android build", run: `echo built >> ${join(base, "android.log")}`, when: ["android/**"] },
     { name: "slow", run: "sleep 60", when: ["slow/**"] },
+    // Pushes to the remote from another clone once, so the land's own push loses the race.
+    { name: "race", run: `if [ -f ${join(base, "race-once")} ]; then rm ${join(base, "race-once")}; cd ${join(base, "other")} && git pull -q --rebase origin main && echo $RANDOM > raced && git add raced && git commit -qm race && git push -q origin main; fi`, when: ["race/**"] },
   ];
   writeFileSync(join(base, "repos.json"), JSON.stringify({
     demo: { path: repo, setup: [`echo ran >> "$SETUP_LOG"`], checks, manual: [{ when: ["android/**"], say: "run it on the phone" }] },
@@ -304,5 +307,94 @@ describe("run", () => {
     const r = await aleph(["run", "build", "--", "false"]);
     expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "exited 1" });
     expect(told).toContain("build failed");
+  });
+});
+
+describe("land", () => {
+  const remoteHead = () => sh(base, "git", "--git-dir", remote, "rev-parse", "main");
+  function pushFromOther(f: string, content: string): void {
+    sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
+    writeFileSync(join(other, f), content);
+    sh(other, "git", "add", f);
+    sh(other, "git", "commit", "-qm", `other ${f}`);
+    sh(other, "git", "push", "-q", "origin", "main");
+  }
+
+  test("a job that has not passed is refused", async () => {
+    await job("unpassed", "exit3");
+    const r = await aleph(["land", "unpassed"]);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("unpassed is failed, not passed");
+    await aleph(["drop", "unpassed"]);
+  });
+
+  test("a passed job lands as one commit on main, and the main checkout follows", async () => {
+    await job("shipit", "commit ship.txt");
+    const before = remoteHead();
+    const r = await aleph(["land", "shipit"]);
+    expect(r.code).toBe(0);
+    const s = state(r.json.run);
+    expect(s).toMatchObject({ kind: "land", state: "landed", told: true });
+    expect(remoteHead()).toBe(s.commit);
+    expect(sh(base, "git", "--git-dir", remote, "log", "-1", "--format=%s%n%b%n%P", "main")).toBe(`add ship.txt\nJob: ${r.json.job}\n\n${before}`);
+    expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(s.commit);
+    expect(existsSync(worktree("shipit"))).toBe(false);
+    expect(branchExists("shipit")).toBe(false);
+    expect(told).toContain("demo/shipit landed");
+    expect(file(r.json.run, "land.log")).toContain("## push: ok");
+    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "shipit")).toBeUndefined();
+  });
+
+  test("a manual check needs --checked", async () => {
+    await job("phoneland", "commit android/land.txt");
+    const r = await aleph(["land", "phoneland"]);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("run it on the phone");
+    const ok = await aleph(["land", "phoneland", "--checked"]);
+    expect(state(ok.json.run).state).toBe("landed");
+  });
+
+  test("a conflict leaves the remote alone and the job open", async () => {
+    await job("clash", "commit-fixed clash.txt");
+    pushFromOther("clash.txt", "different\n");
+    const before = remoteHead();
+    const r = await aleph(["land", "clash"]);
+    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "rebase conflict" });
+    expect(remoteHead()).toBe(before);
+    expect(told).toContain("demo/clash failed");
+    expect(sh(worktree("clash"), "git", "status", "--porcelain")).toBe("");
+    expect((await aleph(["jobs", "clash"])).json).toMatchObject({ kind: "land", state: "failed" });
+    await aleph(["drop", "clash"]);
+  });
+
+  test("a change main already has ends done with no net change", async () => {
+    await job("twin", "commit-fixed twin.txt");
+    pushFromOther("twin.txt", "same\n");
+    const r = await aleph(["land", "twin"]);
+    expect(state(r.json.run)).toMatchObject({ state: "done", reason: "no net change" });
+    expect(existsSync(worktree("twin"))).toBe(false);
+  });
+
+  test("a push that loses a race fails, and the next land succeeds", async () => {
+    await job("racer", "commit race/x.txt");
+    writeFileSync(join(base, "race-once"), "");
+    const r = await aleph(["land", "racer"]);
+    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "push refused" });
+    expect(sh(base, "git", "--git-dir", remote, "log", "-1", "--format=%s", "main")).toBe("race");
+    const again = await aleph(["land", "racer"]);
+    const s = state(again.json.run);
+    expect(s.state).toBe("landed");
+    expect(sh(base, "git", "--git-dir", remote, "log", "-2", "--format=%s", "main")).toBe("add race/x.txt\nrace");
+  });
+
+  test("a main checkout with tracked changes is not updated, and the news says so", async () => {
+    await job("dirtyco", "commit dc.txt");
+    writeFileSync(join(repo, "README"), "local edit\n");
+    const head = sh(repo, "git", "rev-parse", "HEAD");
+    const r = await aleph(["land", "dirtyco"]);
+    expect(state(r.json.run)).toMatchObject({ state: "landed", reason: "main checkout not updated" });
+    expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(head);
+    expect(told).toContain("demo/dirtyco landed; main checkout not updated");
+    sh(repo, "git", "checkout", "README");
   });
 });

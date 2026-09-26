@@ -140,6 +140,27 @@ async function plain(): Promise<void> {
   await child?.exited;
 }
 
+/**
+ * Start a land run. The latest agent run decides: passed, or needs-you for a
+ * manual check that Chris confirmed with --checked. The land unit takes the job lock.
+ */
+async function landJob(): Promise<void> {
+  const name = checkName(positional[0]);
+  const runs = allJobs().find((j) => isOpen(j) && j.at(-1)!.run.name === name) ?? refuse(`no open job named ${name}`);
+  const live = runs.find((e) => isLive(e.folder));
+  if (live) refuse(`${name} is running as ${live.id}`);
+  const agent = runs.filter((e) => e.run.kind === "agent").at(-1)!.run;
+  const manual = agent.state === "needs-you" && agent.needs === "manual";
+  if (manual && !rest.includes("--checked")) refuse(`${name} needs a manual check: ${agent.say}; land with --checked after it`);
+  if (agent.state !== "passed" && !manual) refuse(`${name} is ${agent.state}${agent.needs ? ` (${agent.needs})` : ""}, not passed`);
+  const repo = loadRegistry()[agent.repo!];
+  const child = await dispatch({
+    kind: "land", job: agent.job, name, repo: agent.repo, branch: agent.branch, worktree: agent.worktree,
+    state: "running", phase: "land", told: false, started: new Date().toISOString(),
+  }, `${repo.key}-${name}`, repo.path, () => {});
+  await child?.exited;
+}
+
 function read(folder: string, file: string): string | undefined {
   const p = join(folder, file);
   return existsSync(p) ? readFileSync(p, "utf8") : undefined;
@@ -217,7 +238,7 @@ try {
     case "jobs": jobs(); break;
     case "drop": await drop(); break;
     case "unit": await unit(resolve(positional[0])); break;
-    case "land": refuse("land is not built yet (milestone 2)"); break;
+    case "land": await landJob(); break;
     default: refuse("usage: aleph <job|run|land|drop|jobs> ...");
   }
 } catch (e) {

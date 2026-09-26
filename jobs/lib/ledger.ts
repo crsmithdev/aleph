@@ -172,6 +172,7 @@ export function newsLine(run: Run, note?: string): string {
   // Only a check's reason ends in "failed"; see the state rule in unit.ts.
   const check = run.state === "failed" && run.reason?.match(/^(.+) failed$/);
   if (check) line += ` ${check[1]}`;
+  if (run.state === "landed" && run.reason) line += `; ${run.reason}`;
   if (run.state === "landed" && note) line += `; ${note}`;
   return line;
 }

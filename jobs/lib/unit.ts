@@ -6,7 +6,7 @@
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { allJobs, loadRegistry, newsLine, readEnvFile, readRun, tell, updateRun, type Repo, type Run } from "./ledger.ts";
+import { allJobs, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type Repo, type Run } from "./ledger.ts";
 
 let child: ReturnType<typeof Bun.spawn> | null = null;
 
@@ -85,7 +85,81 @@ export function prompt(id: string, folder: string, run: Run, repo: Repo): string
   return parts.join("\n\n") + "\n";
 }
 
-type Verdict = Pick<Run, "state" | "needs" | "reason" | "question" | "say">;
+/** Run every check with no `when`, and every check whose globs match a changed file. Returns why one failed. */
+async function runChecks(folder: string, wt: string, repo: Repo, env: Record<string, string | undefined>, changed: string[], phase: (p: string) => void): Promise<string | null> {
+  const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
+  for (const check of repo.checks) {
+    if (check.when && !matches(check.when)) continue;
+    phase(`check ${check.name}`);
+    const out = join(folder, "check.out");
+    writeFileSync(out, "");
+    const r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
+    appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : ""}\n${tail(out, 100)}\n\n`);
+    if (r.timedOut) return `timed out: check ${check.name}`;
+    if (r.code !== 0) return `${check.name} failed`;
+  }
+  return null;
+}
+
+/**
+ * Land a job: rebase onto origin/<main>, run the checks, push one squash
+ * commit as a fast-forward. Every failure leaves the remote as it was.
+ */
+async function land(folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ verdict: Verdict; code: number }> {
+  const wt = run.worktree!;
+  const main = repo.main;
+  const logFile = join(folder, "land.log");
+  const log = (step: string, out = "") => appendFileSync(logFile, `## ${step}\n${out ? out + "\n" : ""}\n`);
+  const step = (name: string, ...args: string[]) => { const r = git(wt, ...args); log(`${name}: ${r.ok ? "ok" : "failed"}`, r.out); return r; };
+  const phase = (p: string) => updateRun(folder, { phase: p });
+  const fail = (reason: string) => { log(`failed: ${reason}`); return { verdict: { state: "failed" as const, reason }, code: 1 }; };
+
+  const release = await lock(`job-${repo.key}-${run.name}`, 60_000);
+  if (!release) return fail("job lock busy");
+  try {
+    phase("land");
+    if (existsSync(join(git(wt, "rev-parse", "--absolute-git-dir").out, "rebase-merge"))) step("abort rebase in progress", "rebase", "--abort");
+    if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
+    const base = git(wt, "merge-base", `origin/${main}`, "HEAD").out;
+    const subjects = git(wt, "log", "--reverse", "--format=%s", `${base}..HEAD`).out.split("\n").filter(Boolean);
+    if (!step("rebase", "rebase", `origin/${main}`).ok) {
+      step("abort rebase", "rebase", "--abort");
+      return fail("rebase conflict");
+    }
+    if (git(wt, "rev-parse", "HEAD^{tree}").out === git(wt, "rev-parse", `origin/${main}^{tree}`).out) {
+      log("no net change");
+      removeWorktree(repo, run);
+      return { verdict: { state: "done", reason: "no net change" }, code: 0 };
+    }
+    const changed = git(wt, "diff", "--name-only", `origin/${main}`, "HEAD").out.split("\n").filter(Boolean);
+    const failed = await runChecks(folder, wt, repo, env, changed, phase);
+    if (failed) return fail(failed);
+    phase("land");
+    const message = [subjects[0] ?? run.name, "", ...(subjects.length > 1 ? subjects.map((s) => `- ${s}`) : []), `Job: ${run.job}`].join("\n");
+    const commit = step("commit-tree", "commit-tree", "HEAD^{tree}", "-p", `origin/${main}`, "-m", message);
+    if (!commit.ok) return fail("commit-tree failed");
+    if (!step("push", "push", "-q", "origin", `${commit.out}:refs/heads/${main}`).ok) return fail("push refused");
+
+    // The main checkout follows only when it is on <main> with no tracked changes.
+    let reason: string | undefined;
+    const head = git(repo.path, "symbolic-ref", "--short", "HEAD").out;
+    const dirty = git(repo.path, "status", "--porcelain", "--untracked-files=no").out;
+    if (head !== main || dirty || !git(repo.path, "merge", "--ff-only", "-q", commit.out).ok) reason = "main checkout not updated";
+    log(reason ?? "main checkout updated");
+    removeWorktree(repo, run);
+    return { verdict: { state: "landed", commit: commit.out, reason }, code: 0 };
+  } finally {
+    release();
+  }
+}
+
+function removeWorktree(repo: Repo, run: Run): void {
+  git(repo.path, "worktree", "remove", "--force", run.worktree!);
+  git(repo.path, "worktree", "prune");
+  git(repo.path, "branch", "-D", run.branch!);
+}
+
+type Verdict = Pick<Run, "state" | "needs" | "reason" | "question" | "say" | "commit">;
 
 export async function unit(folder: string): Promise<void> {
   // drop sends SIGTERM when no systemd unit is there to stop the cgroup.
@@ -116,6 +190,8 @@ export async function unit(folder: string): Promise<void> {
       const r = await exec(["bash", "-c", readFileSync(join(folder, "command.txt"), "utf8")], { cwd: process.cwd(), env, out: join(folder, "output.log") });
       code = r.code;
       verdict = code === 0 ? { state: "done" } : { state: "failed", reason: `exited ${code}` };
+    } else if (run.kind === "land") {
+      ({ verdict, code } = await land(folder, run, repo!, env));
     } else {
       ({ verdict, code } = await agent(id, folder, run, repo!, env));
     }
@@ -126,7 +202,7 @@ export async function unit(folder: string): Promise<void> {
 
   const ended = updateRun(folder, { ...verdict, phase: undefined, ended: new Date().toISOString() });
   writeFileSync(join(folder, "exit"), String(code));
-  if (await tell(newsLine(ended))) updateRun(folder, { told: true });
+  if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });
 }
 
 async function agent(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ verdict: Verdict; code: number }> {
@@ -185,23 +261,13 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   if (!git(wt, "fetch", "-q", "origin").ok) return fail("fetch failed");
   const base = git(wt, "merge-base", `origin/${repo.main}`, "HEAD").out;
   if (git(wt, "rev-list", "--count", `${base}..HEAD`).out === "0") {
-    git(repo.path, "worktree", "remove", "--force", wt);
-    git(repo.path, "branch", "-D", branch);
+    removeWorktree(repo, run);
     return { verdict: { state: "done", reason: "no commits" }, code: 0 };
   }
   const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
+  const failed = await runChecks(folder, wt, repo, env, changed, phase);
+  if (failed) return fail(failed);
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
-  const checksLog = join(folder, "checks.log");
-  for (const check of repo.checks) {
-    if (check.when && !matches(check.when)) continue;
-    phase(`check ${check.name}`);
-    const out = join(folder, `check.out`);
-    writeFileSync(out, "");
-    const r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
-    appendFileSync(checksLog, `## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : ""}\n${tail(out, 100)}\n\n`);
-    if (r.timedOut) return fail(`timed out: check ${check.name}`);
-    if (r.code !== 0) return fail(`${check.name} failed`);
-  }
   const manual = repo.manual.find((m) => matches(m.when));
   if (manual) return { verdict: { state: "needs-you", needs: "manual", say: manual.say }, code: 0 };
   return { verdict: { state: "passed" }, code: 0 };
