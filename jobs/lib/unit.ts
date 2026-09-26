@@ -183,6 +183,9 @@ export async function unit(folder: string): Promise<void> {
   delete env.CLAUDECODE;
   delete env.ALEPH_RUN_ENV;
 
+  // The job variables are for the worker: a check that runs aleph's own tests must not see them.
+  const checkEnv = { ...env, ALEPH_JOB_ID: undefined, ALEPH_JOB_RUN: undefined };
+
   let verdict: Verdict;
   let code = 0;
   try {
@@ -191,9 +194,9 @@ export async function unit(folder: string): Promise<void> {
       code = r.code;
       verdict = code === 0 ? { state: "done" } : { state: "failed", reason: `exited ${code}` };
     } else if (run.kind === "land") {
-      ({ verdict, code } = await land(folder, run, repo!, env));
+      ({ verdict, code } = await land(folder, run, repo!, checkEnv));
     } else {
-      ({ verdict, code } = await agent(id, folder, run, repo!, env));
+      ({ verdict, code } = await agent(id, folder, run, repo!, env, checkEnv));
     }
   } catch (e: any) {
     verdict = { state: "failed", reason: `error: ${e?.message ?? e}` };
@@ -205,7 +208,7 @@ export async function unit(folder: string): Promise<void> {
   if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });
 }
 
-async function agent(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ verdict: Verdict; code: number }> {
+async function agent(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>, checkEnv: Record<string, string | undefined>): Promise<{ verdict: Verdict; code: number }> {
   const wt = run.worktree!;
   const branch = run.branch!;
   const phase = (p: string) => updateRun(folder, { phase: p });
@@ -227,7 +230,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     phase("setup");
     for (const cmd of repo.setup) {
       appendFileSync(join(folder, "setup.log"), `## ${cmd}\n`);
-      const r = await exec(["bash", "-c", cmd], { cwd: wt, env, out: join(folder, "setup.log"), limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
+      const r = await exec(["bash", "-c", cmd], { cwd: wt, env: checkEnv, out: join(folder, "setup.log"), limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
       if (r.timedOut) return fail(`timed out: setup ${cmd}`);
       if (r.code !== 0) return fail(`setup failed: ${cmd}`);
     }
@@ -265,7 +268,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     return { verdict: { state: "done", reason: "no commits" }, code: 0 };
   }
   const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
-  const failed = await runChecks(folder, wt, repo, env, changed, phase);
+  const failed = await runChecks(folder, wt, repo, checkEnv, changed, phase);
   if (failed) return fail(failed);
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
   const manual = repo.manual.find((m) => matches(m.when));

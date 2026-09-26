@@ -88,6 +88,7 @@ beforeAll(() => {
 
   const checks = [
     { name: "tests", run: "test ! -f FAIL" },
+    { name: "no job variables", run: 'test -z "$ALEPH_JOB_ID$ALEPH_JOB_RUN"' },
     { name: "android build", run: `echo built >> ${join(base, "android.log")}`, when: ["android/**"] },
     { name: "slow", run: "sleep 60", when: ["slow/**"] },
     // Pushes to the remote from another clone once, so the land's own push loses the race.
