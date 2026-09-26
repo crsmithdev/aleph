@@ -96,6 +96,12 @@ nothing else will pick it up.
 `cli.ts recall "<query>"` ranks title, alias, contains, body. Read the
 note it returns; do not paraphrase Home from memory.
 
+`--scope <name>` narrows the search to one project, and on its own lists
+that scope's notes — this is how you answer "what do we know about X" now
+that Home routes only to decisions and projects. An unknown scope prints
+the scopes that exist, because the vault still has several names for one
+project.
+
 ## lint
 
 `cli.ts lint` prints refusals and warnings for the whole vault and sets the

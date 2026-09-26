@@ -472,6 +472,27 @@ describe("recall", () => {
     expect(none.code).toBe(0);
     expect(none.json).toEqual([]);
   });
+  test("--scope narrows the search, and alone it lists the scope", () => {
+    cli("write", note("Scoped To Beamline", { scope: "beamline" }), "--why", "x");
+    cli("write", note("Also Beamline", { scope: "beamline" }), "--why", "x");
+    const all = cli("recall", "--scope", "beamline");
+    expect(all.json.map((h: any) => h.title).sort()).toEqual(["Also Beamline", "Scoped To Beamline"]);
+    expect(all.json.every((h: any) => h.scope === "beamline")).toBe(true);
+    // The same query, narrowed and not: every fixture body says "does a thing".
+    const wide = cli("recall", "does a thing").json.length;
+    const narrow = cli("recall", "does a thing", "--scope", "beamline").json;
+    expect(wide).toBeGreaterThan(narrow.length);
+    expect(narrow.map((h: any) => h.title).sort()).toEqual(["Also Beamline", "Scoped To Beamline"]);
+    expect(cli("recall", "also", "--scope", "beamline").json.map((h: any) => h.title)).toEqual(["Also Beamline"]);
+    expect(cli("recall", "also", "--scope", "aleph").json).toEqual([]);
+  });
+  test("an unknown scope names the ones that exist", () => {
+    const r = cli("recall", "--scope", "beemline");
+    expect(r.code).toBe(0);
+    expect(r.json).toEqual([]);
+    expect(r.stderr).toContain("no note has scope beemline");
+    expect(r.stderr).toContain("beamline");
+  });
 });
 
 describe("compile", () => {

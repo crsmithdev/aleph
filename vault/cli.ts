@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * vault <init|write|recall|lint [--fix]|consolidate|archive|compile> — the
+ * vault <init|write|recall [--scope]|lint [--fix]|consolidate|archive|compile> — the
  * mechanical half of /aleph:vault.
  * Vault path: $ALEPH_VAULT or ~/.aleph/vault. JSON on stdout, findings on
  * stderr, exit 1 on refusal. See docs/specs/2026-09-04-memory-vault.md.
@@ -207,7 +207,12 @@ function write(): void {
 function recall(): void {
   requireVault();
   const q = positional.join(" ").trim().toLowerCase();
-  if (!q) { console.error("usage: vault recall <query>"); process.exit(1); }
+  const scope = flag("scope");
+  if (!q && !scope) { console.error('usage: vault recall <query> [--scope <name>]  |  vault recall --scope <name>'); process.exit(1); }
+  // `--scope` alone lists a project's notes: at 165 notes "what do we know
+  // about cloudchamber" is a real question, and ranking every note by one word
+  // could not answer it.
+  const scoped = (n: Note) => scope === undefined || String(n.fm.scope) === scope;
   const rank = (n: Note): number => {
     const aliases = (Array.isArray(n.fm.aliases) ? n.fm.aliases : []).map((a) => a.toLowerCase());
     const title = n.title.toLowerCase();
@@ -217,9 +222,17 @@ function recall(): void {
     if (n.body.toLowerCase().includes(q)) return 3;
     return -1;
   };
-  const hits = wikiNotes(loadVault(root)).map((n) => ({ n, r: rank(n) })).filter((x) => x.r >= 0).sort((a, b) => a.r - b.r || a.n.title.localeCompare(b.n.title));
+  const notes = wikiNotes(loadVault(root));
+  const hits = notes.filter(scoped).map((n) => ({ n, r: q ? rank(n) : 4 })).filter((x) => x.r >= 0)
+    .sort((a, b) => a.r - b.r || a.n.title.localeCompare(b.n.title));
   noteRead(hits.map(({ n }) => n.title));
-  out(hits.map(({ n, r }) => ({ title: n.title, path: n.rel, rank: r, frontmatter: n.fm })));
+  // A scope nobody uses is almost always a misspelling of one that exists, and
+  // the vault has five names for one project. Say so rather than return [].
+  if (scope !== undefined && !hits.length) {
+    const known = [...new Set(notes.map((n) => String(n.fm.scope)))].sort();
+    console.error(`no note has scope ${scope}; the vault uses: ${known.join(", ")}`);
+  }
+  out(hits.map(({ n, r }) => ({ title: n.title, path: n.rel, rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
 }
 
 // ---------------------------------------------------------------- lint
@@ -350,6 +363,6 @@ switch (cmd) {
   case "archive": archive(); break;
   case "compile": await compile(); break;
   default:
-    console.error("usage: vault <init|write <file> --why <text>|recall <query>|lint [--fix] [--overlap] [--template]|consolidate [--apply]|archive <title> --why <text>|compile [date]>");
+    console.error("usage: vault <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|consolidate [--apply]|archive <title> --why <text>|compile [date]>");
     process.exit(2);
 }
