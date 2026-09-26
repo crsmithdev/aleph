@@ -6,7 +6,7 @@
     "PostToolUse": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
     "PostToolUseFailure": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
     "PermissionDenied": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
-    "Stop": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "timeout": 5}]}, {"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate.ts"], "timeout": 45, "statusMessage": "verify gate"}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "timeout": 5}]}, {"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate.ts"], "timeout": 45, "statusMessage": "verify gate"}]}, {"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/context-gate.ts"], "timeout": 10, "statusMessage": "context gate"}]}],
     "StopFailure": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "timeout": 5}]}],
     "SubagentStart": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
     "SubagentStop": [{"hooks": [{"type": "command", "command": "bun", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/obs.ts"], "async": true, "timeout": 10}]}],
