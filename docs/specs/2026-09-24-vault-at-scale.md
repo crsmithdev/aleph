@@ -80,8 +80,10 @@ An exit that needs no replacement note. The file moves to `archive/` with an
 named. Archive is not deletion, so VAULT.md's rule holds; an archived note
 stays a link target and nothing dangles.
 
-`lint` also warns when git tracks a wiki note that is gone from disk, and names
-`archive` as the door. Deleting a note in Obsidian used to be swept into the
+`lint` warns on both halves of the git/disk gap: a wiki note git tracks that is
+gone from disk, named with `archive`, and a note on disk git has never seen,
+named with `write`. On 2026-09-26 seven drafts another session had left in the
+live vault were waiting, and nothing had said so. Deleting a note in Obsidian used to be swept into the
 next commit; now no op touches it, so something has to say it happened.
 
 ### `overlap` is off

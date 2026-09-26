@@ -229,6 +229,19 @@ export function lintVault(notes: Note[], { read = {}, overlap = false, now = new
     warn.push({ note: basename(rel, ".md"), rule: "deleted", detail: `${rel} is tracked but gone from disk; retire it with: vault archive "${basename(rel, ".md")}" --why "<one line>"` });
   }
 
+  // The other half: a note on disk that git has never seen. No op commits a
+  // path it did not touch, so an unwritten draft sits in `wiki/` for ever,
+  // visible to lint and to [[links]] but absent from history. On 2026-09-26
+  // seven notes another session had drafted were waiting in the live vault and
+  // nothing had said so.
+  if (tracked.length) {
+    const known = new Set(tracked);
+    for (const n of wiki) {
+      if (known.has(n.rel)) continue;
+      warn.push({ note: n.title, rule: "untracked", detail: `${n.rel} is on disk but git has never seen it; put it through: vault write "${n.rel}" --why "<one line>"` });
+    }
+  }
+
   const home = notes.find((x) => x.rel === "Home.md");
   const fromHome = new Set(links(home?.body ?? "").map((t) => targets.get(t.toLowerCase())?.path));
   for (const n of wiki) {

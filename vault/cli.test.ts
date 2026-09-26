@@ -406,6 +406,18 @@ describe("archive", () => {
     cli("archive", "Deleted By Hand", "--why", "test fixture");
     expect(gitStatus()).toBe("");
   });
+  test("a note git has never seen is named, and points at write", () => {
+    const p = join(vault, "wiki/gotchas/Never Written.md");
+    writeFileSync(p, readFileSync(note("Never Written"), "utf8"));
+    const w = cli("lint").json.warn.find((f: any) => f.rule === "untracked" && f.note === "Never Written");
+    expect(w.detail).toContain("git has never seen it");
+    expect(w.detail).toContain('vault write "wiki/gotchas/Never Written.md"');
+    // Putting it through the gate clears the warning.
+    expect(cli("write", p, "--why", "reconciled").code).toBe(0);
+    expect(cli("lint").json.warn.filter((f: any) => f.rule === "untracked")).toEqual([]);
+    cli("archive", "Never Written", "--why", "test fixture");
+    expect(gitStatus()).toBe("");
+  });
   test("refuses a title no live note has", () => {
     const r = cli("archive", "Never Existed", "--why", "x");
     expect(r.code).toBe(1);

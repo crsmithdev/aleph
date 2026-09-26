@@ -86,6 +86,11 @@ write instead when a newer note covers the same ground.
 A `deleted` warning means git tracks a note that is gone from disk. Restore
 it and archive it; no op will commit a bare deletion.
 
+An `untracked` warning means the opposite: a note sits in `wiki/` that git
+has never seen, because it was drafted in place and never went through
+`write`. Put it through the gate. No op commits a path it did not touch, so
+nothing else will pick it up.
+
 ## recall
 
 `cli.ts recall "<query>"` ranks title, alias, contains, body. Read the
