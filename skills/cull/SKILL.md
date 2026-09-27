@@ -1,104 +1,150 @@
 ---
 name: cull
-description: Survey a codebase for what should not exist, prove each candidate dead, rank the findings into tiers, then delete tier by tier with a verified build between each. Use when the user asks to clean up a codebase, remove dead code, find unused exports or dependencies, audit tech debt, or decide what a project still needs. Triggers on "clean up this codebase", "what is dead here", "remove unused code", "tech debt audit", "/cull". NOT for improving code that should exist (use /aleph:improve-codebase-architecture), or for build artifacts and scratch files (use /aleph:tidy).
+description: Get a repo into a state worth showing: sweep the mechanical junk, then prove what code is dead and delete it tier by tier behind a green build, and publish the findings. Use when the user asks to clean up a repo or codebase, remove dead code, find unused files, exports or dependencies, clear out leftover or stray files, fix where files live, or audit what a project still needs. `sweep` as an argument runs the mechanical pass alone, fast enough before a commit. Triggers on "clean up this repo", "what is dead here", "remove unused code", "tidy this up", "what junk is in here", "/cull". NOT for improving code that should exist (use /aleph:improve-codebase-architecture).
 ---
 
 # Cull
 
 Ask **should this exist?** before **how do I improve this?**
 
-The failure mode in cleanup is refactoring code that should be deleted, or wrapping an over-abstracted mess in one more abstraction. Every finding here ends in a deletion or it is not a finding. Removal over refactoring; simplification over restructuring.
+The failure mode in cleanup is refactoring code that should be deleted, or wrapping an over-abstracted mess in one more abstraction. Every finding here ends in a deletion, a relocation, or it is not a finding. Removal over refactoring; simplification over restructuring.
 
-A scanner does not find dead code. It finds **candidates**. Turning a candidate into a deletion is the judgment this skill exists to apply, and step 3 is where the value sits: steps 2 and 6 are mechanical.
+Two passes, in order, over one baseline:
 
-Use the `aleph:codebase-design` vocabulary when you talk about what you found, and the **deletion test** in particular: would removing this concentrate complexity, or just move it? Read `CONTEXT.md` for the domain names and `docs/adr/` for decisions you must not re-litigate.
+| Pass | Asks | Costs |
+|---|---|---|
+| **1 — Sweep** | Is this junk, or in the wrong place? | minutes |
+| **2 — Prove** | Should this code exist at all? | the rest of the run |
 
-## Process
+Sweep first, always. It is cheap, and it clears the noise that would otherwise show up as candidates in pass 2. **`/aleph:cull sweep` runs pass 1 alone**, which is fast enough to run before a commit; the plain invocation runs both.
 
-### 1. Scope and baseline
+Use the `aleph:codebase-design` vocabulary for what you find, and the **deletion test** in particular: would removing this concentrate complexity, or just move it? Read `CONTEXT.md` for the domain names and `docs/adr/` for decisions you must not re-litigate.
 
-Take the user's direction if they gave one, a path, a subsystem, a suspicion. Otherwise scope by `git log --oneline` to find what is cold: code nobody has touched in a long time is where mass accumulates, the mirror of `/aleph:improve-codebase-architecture`, which follows the hot spots.
+## The line between the passes
 
-Then record a **baseline** you can compare against and return to:
+**Pass 1 acts only where a check answers yes or no.** The path does not resolve. The ignore rule matches. The command exits non-zero. Nothing in pass 1 turns on whether a thing is worth keeping; the moment it does, the finding moves to pass 2.
+
+That line runs straight through tests and docs, so place each one by where its check falls:
+
+- A test whose subject no longer exists → **pass 1**. The path does not resolve.
+- A test that duplicates three others → **pass 2**. That is a judgment.
+- A doc naming a command that no longer runs → **pass 1**. The command exits non-zero.
+- A doc describing a design the code outgrew → **pass 2**, or `/aleph:docs-writing`.
+
+## Tracked and untracked
+
+Settle this before deleting anything, in either pass. A tracked file is recoverable: `git rm` it and the content stays in history. An untracked file has never been committed, so deleting it destroys the only copy.
+
+**Delete tracked findings once their check or proof passes. List untracked findings and get explicit confirmation, every run.** An untracked file is often exactly the scratch this skill hunts, and it is also the uncommitted work someone left open. No check tells those apart.
+
+## 1. Baseline
+
+Both passes measure against this, so take it once.
 
 - The repo's own build, test and lint commands, run and green. Read them from the manifest; never hardcode a command the repo does not define.
-- `git status` clean, and the commit you started from.
+- The starting commit, and `git status --porcelain`. A dirty tree is fine, and it is also why the untracked rule exists: today's edits look like scratch.
 - Size: file count and total lines in scope. The report quotes the delta.
 
 A red baseline ends the run. Say so and stop: you cannot prove a deletion safe against a suite that was already failing.
 
-### 2. Survey
+Take the user's direction on scope if they gave one. Otherwise scope pass 2 by `git log --oneline` to find what is cold, since mass accumulates where nobody has looked in a long time. Pass 1 always runs over the whole repo; it is cheap.
 
-Detect the stack from the manifest, then run the detectors for it. Read [DETECTORS.md](DETECTORS.md) for the per-stack tool table, how to run each one without touching the repo's dependencies, and what its output actually means.
+# Pass 1 — Sweep
 
-Run a detector only if it is installed or runs from a throwaway cache (`bunx`, `npx -y`, `uvx`). Adding a dev dependency to audit a repo is itself a thing to cull. Where no detector exists, fall back to the grep sweep in DETECTORS.md.
+## 2. Find
+
+| Category | How to find it | The check |
+|---|---|---|
+| Build output and caches | The build config's output path; `coverage/`, `.cache/`, `*.tsbuildinfo`, `__pycache__`, `target/`, `dist/` | The build regenerates it |
+| Scratch and one-off output | `*.log`, `*.tmp`, `*.bak`, `*.orig`, `.DS_Store`, dated or numbered names, `test2.ts`, `foo-copy.py` | No reference in the tree, no manifest or CI entry |
+| Ignore-rule gaps | A **tracked** file matching a build-output or machine-local shape | The file rebuilds, or it is local to one machine |
+| Orphaned fixtures and tests | For each test and fixture, resolve the subject it names | The subject is absent from the tree **and** from `HEAD` |
+| Stale doc references | Every path, command and flag a doc names | The path resolves; the command runs; the flag appears in `--help` |
+| Misplaced files | A file whose kind disagrees with its directory | The repo's own convention: the majority of that kind live elsewhere |
+
+Two of these need a stated threshold rather than a guess. For **misplaced files** the convention is the majority: if eleven hooks live in `hooks/` and one lives in `bin/`, the one is misplaced; a two-versus-three split is not a convention and not a finding. For **stale doc references**, resolve the reference rather than reading around it: a command that runs is current even where the prose around it reads dated.
+
+## 3. Apply
+
+Sort every finding into **remove**, **relocate**, or **defer to pass 2**, and say which.
+
+`git rm` for tracked removals, `git mv` for relocations so history follows the file, plain `rm` for untracked ones once confirmed. Fix the imports and config entries a relocation breaks in the same commit as the move. Add the ignore rule alongside any deletion of a file that will come back: an artifact removed without its rule returns on the next build.
+
+Then run the baseline commands and commit. A relocation that breaks a path shows up here, and it is the only category in this pass that can.
+
+**On `/aleph:cull sweep`, stop here and report.**
+
+# Pass 2 — Prove
+
+## 4. Survey
+
+Detect the stack from the manifest, then run its detectors. Read [DETECTORS.md](DETECTORS.md) for the per-stack tool table, how to run each without touching the repo's dependencies, and what each one's output actually means.
+
+Run a detector only if it is installed or runs from a throwaway cache (`bunx`, `npx -y`, `uvx`). Adding a dev dependency to audit a repo is itself a thing to cull. Where no detector exists, use the grep sweep in DETECTORS.md.
 
 Every candidate carries a `file:line` citation from here on. A finding you cannot cite is a guess.
 
-### 3. Prove
+## 5. Prove
 
 A candidate is dead when every one of these is ruled out. Work the list; do not sample it.
 
 | Escape hatch | What to check |
 |---|---|
-| Dynamic dispatch | A registry keyed by string, a computed `import()`, reflection, a factory that maps names to constructors |
+| Dynamic dispatch | A registry keyed by string, a computed `import()`, reflection, a factory mapping names to constructors |
 | Filename registration | Hooks, CLI bins, job handlers, migrations, route files: the framework loads the path, so nothing imports the symbol |
 | Config and manifest | `package.json` scripts, CI workflows, Dockerfiles, compose files, systemd units, cron entries |
 | Public API | Exported from the package entry point. A consumer you cannot see is still a consumer |
 | String lookup | Grep the bare name, not just the symbol. Feature flags, env keys and event names hide here |
 | Docs and ops | A runbook that tells a human to call it keeps it alive until the runbook changes too |
 
+Resolve every reference to the module that declares it. Two modules can export the same name, and counting the word then answers for the wrong one.
+
 One hatch does not apply: **test-only reference**. A symbol reached only by its own test is dead, and the test dies with it. Delete both in the same commit.
 
-### 4. Tier
+## 6. Tier
 
 Sort every proven finding into one tier. The tier sets the proof burden and the approval it needs.
 
 | Tier | What it is | Approval | Your time |
 |---|---|---|---|
-| T1 | Unreferenced files, abandoned experiments, commented-out blocks, unused dependencies | The proof table | minutes |
+| T1 | Unreferenced files, abandoned experiments, commented-out blocks, unused dependencies, an export nothing imports | The proof table | minutes |
 | T2 | An export, flag or branch no live path reaches; a test whose subject moved | The proof table, plus every call site read | ~an hour |
 | T3 | A feature nobody uses; a module whose deletion concentrates complexity | The user decides | a day |
 | T4 | A layer, an abstraction, a whole subsystem | An ADR | scheduled work, not this run |
 
-Do not mix tiers in one batch, and do not let a tier run long: a T1 that takes an hour was a T2 you misjudged. Re-tier it and continue.
+Do not let a tier run long: a T1 that takes an hour was a T2 you misjudged. Re-tier it and continue.
 
-### 5. Negotiate
+An "unused export" is not an "unused function". Where a symbol is exported but used inside its own file, the finding is to drop the `export`, not the code.
+
+## 7. Negotiate
 
 Present the tiers and let the user set the scope before you touch anything. Explain the findings in prose, with citations and the line count each tier removes, then put the choice in an `AskUserQuestion` with the tiers as options.
 
-T4 findings are reported, never executed. Write them up as follow-ups.
+T4 findings are reported, never executed.
 
-### 6. Execute
+## 8. Execute
 
 One tier per commit, in tier order, lowest first.
 
 1. Delete the whole finding: the code, its tests, its fixtures, its exports, its docs entry, its dependency line.
 2. Run the baseline commands.
-3. Green: commit, with the tier and the finding count in the message. Red: revert that finding, mark it "proof failed", and record which hatch you missed. That is a finding about your proof, not a reason to loosen it.
+3. Green: commit, naming the tier and the finding count. Red: revert that finding, mark it "proof failed", and record which hatch you missed. That is a finding about your proof, not a reason to loosen it.
 
 Never carry a red build into the next tier.
 
-### 7. Report
+# 9. Report
 
-Publish the findings as an artifact. Load the `artifact-design` skill, write the
-page, publish it with the Artifact tool, and give the user the link. A cull run
-produces a judgment about every candidate it touched, and that judgment is worth
-more than the diff; in terminal scrollback it is gone by the next session.
+Publish the run as an artifact. Load the `artifact-design` skill, write the page, publish it with the Artifact tool, and give the user the link. A run produces a judgment about every candidate it touched, and that judgment is worth more than the diff; in terminal scrollback it is gone by the next session.
 
-The page carries four things:
+The page carries five things:
 
-- **The delta.** Files and lines removed against the baseline, per tier.
-- **Every finding.** One row each: tier, `file:line`, what it was, which
-  detector raised it.
-- **The survivors.** Each candidate you did not delete and the escape hatch that
-  saved it. This is the more useful half of the page: it maps the entry points,
-  dynamic dispatch and string lookups the codebase relies on, which is exactly
-  what the next reader of this code does not know and cannot see.
-- **Follow-ups.** T4 items and anything you re-tiered upward.
+- **The delta.** Files and lines removed against the baseline, split by pass and by tier.
+- **The sweep**, one row per finding, grouped by outcome rather than by category. The reader wants to know what changed; the category is how you found the file, not what you did to it. Include the ignore rules added, so a reader can tell why the next run will be quieter.
+- **Every finding** from pass 2: tier, `file:line`, what it was, which detector raised it.
+- **The survivors.** Each candidate you did not delete and the escape hatch that saved it. This is the most useful part of the page: it maps the entry points, dynamic dispatch and string lookups the codebase relies on, which is exactly what the next reader cannot see.
+- **Follow-ups.** T4 items, anything re-tiered upward, and untracked files the user declined — those survive into the next run, and the page is what keeps that from being a surprise.
 
-Then write the vault page (`/aleph:vault`) for what the run taught you about how
-this codebase actually behaves.
+Then write the vault page (`/aleph:vault`) for what the run taught you about how this codebase actually behaves.
 
 ## Red flags
 
