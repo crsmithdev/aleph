@@ -1,6 +1,6 @@
 # aleph
 
-A personal [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin. Fifteen skills for planning, design, testing and memory; hooks that trace every turn to a local [Langfuse](https://langfuse.com), guard `main`, scan commits for secrets and judge whether a turn verified what it claims; and an Obsidian vault the agent writes and a human reads.
+A personal [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin. Sixteen skills for planning, design, testing and memory; hooks that trace every turn to a local [Langfuse](https://langfuse.com), guard `main`, scan commits for secrets and judge whether a turn verified what it claims; and an Obsidian vault the agent writes and a human reads.
 
 Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 
@@ -8,7 +8,7 @@ Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 
 | Path | Holds |
 |---|---|
-| `skills/` | the fifteen skills, invoked as `/aleph:<name>` |
+| `skills/` | the sixteen skills, invoked as `/aleph:<name>` |
 | `hooks/` | the hook scripts and `hooks.json`, against the 2.1.x hook API |
 | `vault/cli.ts` | the memory vault's mechanics (each write op commits and pushes): `init`, `write`, `adopt`, `recall`, `lint [--fix]`, `consolidate`, `rename-scope`, `archive`, `compile` |
 | `identity/CLAUDE.md` | the global `CLAUDE.md` the hooks assume: the worktree rule, the verification rule, the voice |
@@ -23,6 +23,7 @@ Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 | `grill-me` | Interviews you about a plan until shared understanding. Maps the plan as a design tree and asks the whole open frontier each round, with a recommended answer per question |
 | `grill-with-docs` † | `grill-me` that also writes `CONTEXT.md` and ADRs as terms and decisions settle |
 | `red-team` | Parallel subagents review a plan, RFC or PR description against the code it touches; report by fatal, defects, smells, cheaper alternatives |
+| `prior-art` | Surveys the open-source field against a repo you own: axes drawn from its architecture, finalists read at the code level, a ranked list of what to take and what to skip |
 | `to-spec` | Turns the conversation into a spec file. No interview |
 | `tdd` | Red → green, with tests only at seams agreed up front |
 | `diagnosing-bugs` | Reproduce, minimise, rank several hypotheses, then fix |
