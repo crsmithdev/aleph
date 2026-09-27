@@ -1,22 +1,31 @@
 ---
-name: cull
-description: Get a repo into a state worth showing: sweep the mechanical junk, then prove what code is dead and delete it tier by tier behind a green build, and publish the findings. Use when the user asks to clean up a repo or codebase, remove dead code, find unused files, exports or dependencies, clear out leftover or stray files, fix where files live, or audit what a project still needs. `sweep` as an argument runs the mechanical pass alone, fast enough before a commit. Triggers on "clean up this repo", "what is dead here", "remove unused code", "tidy this up", "what junk is in here", "/cull". NOT for improving code that should exist (use /aleph:improve-codebase-architecture).
+name: tidy
+description: Get a repo into a state worth showing: sweep the mechanical junk, prove what code is dead and delete it tier by tier behind a green build, check it survives a cold clone, and publish the findings. Use when the user asks to clean up a repo or codebase, remove dead code, find unused files, exports or dependencies, clear out leftover or stray files, fix where files live, audit what a project still needs, or get a repo ready for someone else to look at. Takes a mode: `sweep` for the mechanical pass alone, `polish` for the inspection gate. Triggers on "clean up this repo", "what is dead here", "remove unused code", "tidy this up", "what junk is in here", "is this ready to show", "open source this", "/tidy". NOT for improving code that should exist (use /aleph:improve-codebase-architecture).
 ---
 
-# Cull
+# Tidy
 
 Ask **should this exist?** before **how do I improve this?**
 
 The failure mode in cleanup is refactoring code that should be deleted, or wrapping an over-abstracted mess in one more abstraction. Every finding here ends in a deletion, a relocation, or it is not a finding. Removal over refactoring; simplification over restructuring.
 
-Two passes, in order, over one baseline:
+Three passes over one baseline, in order:
 
-| Pass | Asks | Costs |
+| Pass | Asks | Acts on | Costs |
+|---|---|---|---|
+| **1 — Sweep** | Is this junk, or in the wrong place? | A check that answers yes or no | minutes |
+| **2 — Prove** | Should this code exist at all? | A proof that rules out every escape hatch | the rest of the run |
+| **3 — Polish** | Does this survive someone else looking at it? | A gate that passes or fails | ~an hour |
+
+Sweep first, always. It is cheap, and it clears noise that pass 2 would otherwise raise as candidates to prove.
+
+| Mode | Runs | Reach for it |
 |---|---|---|
-| **1 — Sweep** | Is this junk, or in the wrong place? | minutes |
-| **2 — Prove** | Should this code exist at all? | the rest of the run |
+| `/aleph:tidy` | 1 → 2 | The default. Cleaning up |
+| `/aleph:tidy sweep` | 1 | Before a commit |
+| `/aleph:tidy polish` | 1 → 3 | Someone is about to look at the repo |
 
-Sweep first, always. It is cheap, and it clears the noise that would otherwise show up as candidates in pass 2. **`/aleph:cull sweep` runs pass 1 alone**, which is fast enough to run before a commit; the plain invocation runs both.
+`polish` skips pass 2 because its gate is about the outside of the repo and pass 2 can run for a day. Run the default first when there is time: dead code is something a visitor sees too.
 
 Use the `aleph:codebase-design` vocabulary for what you find, and the **deletion test** in particular: would removing this concentrate complexity, or just move it? Read `CONTEXT.md` for the domain names and `docs/adr/` for decisions you must not re-litigate.
 
@@ -72,7 +81,7 @@ Sort every finding into **remove**, **relocate**, or **defer to pass 2**, and sa
 
 Then run the baseline commands and commit. A relocation that breaks a path shows up here, and it is the only category in this pass that can.
 
-**On `/aleph:cull sweep`, stop here and report.**
+**On `/aleph:tidy sweep`, stop here and report.**
 
 # Pass 2 — Prove
 
@@ -80,7 +89,7 @@ Then run the baseline commands and commit. A relocation that breaks a path shows
 
 Detect the stack from the manifest, then run its detectors. Read [DETECTORS.md](DETECTORS.md) for the per-stack tool table, how to run each without touching the repo's dependencies, and what each one's output actually means.
 
-Run a detector only if it is installed or runs from a throwaway cache (`bunx`, `npx -y`, `uvx`). Adding a dev dependency to audit a repo is itself a thing to cull. Where no detector exists, use the grep sweep in DETECTORS.md.
+Run a detector only if it is installed or runs from a throwaway cache (`bunx`, `npx -y`, `uvx`). Adding a dev dependency to audit a repo is itself a thing to remove. Where no detector exists, use the grep sweep in DETECTORS.md.
 
 Every candidate carries a `file:line` citation from here on. A finding you cannot cite is a guess.
 
@@ -132,7 +141,32 @@ One tier per commit, in tier order, lowest first.
 
 Never carry a red build into the next tier.
 
-# 9. Report
+# Pass 3 — Polish
+
+Runs on `polish`. The question is not "is this good code" but "does a stranger get anywhere with it in ten minutes". Read [POLISH.md](POLISH.md) for the cold-clone procedure, the history sweep and the required-files matrix.
+
+## 9. Gate
+
+Each row passes or fails. Nothing here is scored: a number averages a leaked credential against a thin README, and the two are not commensurable.
+
+| Gate | How it passes |
+|---|---|
+| **Cold clone** | Clone to a temp dir, follow the README's quickstart verbatim, and reach the result it promises. Do not use the working tree; it holds state a stranger will not have |
+| **Secrets in history** | No credential in `git log -p`, not merely none in `HEAD`. Deleting a key from the working tree leaves it in every clone |
+| **Personal artifacts** | No absolute path carrying a username, no machine-local config, no `.env`, no editor or agent directory the repo does not mean to ship |
+| **License** | A `LICENSE` file exists, the manifest's license field agrees with it, and no vendored file carries an incompatible one |
+| **Required files** | The ones this repo's kind implies are present and say something. POLISH.md has the matrix |
+| **CI** | Green on the current commit, and running the same commands the README tells a human to run |
+
+## 10. Act, or stop
+
+Fix what a check settles: add the missing `LICENSE`, correct the quickstart command that fails, delete the `.env`, point CI at the real test command.
+
+Flag what needs judgment, and leave it: whether the README leads with what the project does, whether the file tree reads to someone who has never seen it, whether an error message tells the reader what to do next.
+
+**One gate never auto-fixes. A secret in history is a stop.** Report it, name the commits, and leave the decision to the user: rewriting history breaks every clone and fork, and the credential has to be rotated whether or not the history changes. Removing it from `HEAD` and calling the gate passed is worse than failing it, because it reads as fixed.
+
+# 11. Report
 
 Publish the run as an artifact. Load the `artifact-design` skill, write the page, publish it with the Artifact tool, and give the user the link. A run produces a judgment about every candidate it touched, and that judgment is worth more than the diff; in terminal scrollback it is gone by the next session.
 
@@ -142,13 +176,14 @@ The page carries five things:
 - **The sweep**, one row per finding, grouped by outcome rather than by category. The reader wants to know what changed; the category is how you found the file, not what you did to it. Include the ignore rules added, so a reader can tell why the next run will be quieter.
 - **Every finding** from pass 2: tier, `file:line`, what it was, which detector raised it.
 - **The survivors.** Each candidate you did not delete and the escape hatch that saved it. This is the most useful part of the page: it maps the entry points, dynamic dispatch and string lookups the codebase relies on, which is exactly what the next reader cannot see.
-- **Follow-ups.** T4 items, anything re-tiered upward, and untracked files the user declined — those survive into the next run, and the page is what keeps that from being a surprise.
+- **The gate**, when pass 3 ran: each row pass or fail, the cold clone's actual outcome, and every judgment call left open.
+- **Follow-ups.** T4 items, anything re-tiered upward, a secret in history, and untracked files the user declined — those survive into the next run, and the page is what keeps that from being a surprise.
 
 Then write the vault page (`/aleph:vault`) for what the run taught you about how this codebase actually behaves.
 
 ## Red flags
 
 - **You are writing more lines than you delete.** Stop. The work turned into `/aleph:improve-codebase-architecture`.
-- **You reached for a new abstraction.** Same stop. Culling never adds a layer.
+- **You reached for a new abstraction.** Same stop. This skill never adds a layer.
 - **You loosened the proof table to keep a finding.** The finding goes; the table stays.
 - **A deletion "should be safe".** It is proven or it is not a finding.

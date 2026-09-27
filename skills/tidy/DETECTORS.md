@@ -1,6 +1,6 @@
 # Detectors
 
-Per-stack tools for step 2 of [cull](SKILL.md). Detect the stack from the manifest, run that row, ignore the rest.
+Per-stack tools for step 4 of [tidy](SKILL.md). Detect the stack from the manifest, run that row, ignore the rest.
 
 **Run from a throwaway cache, never from the repo's dependencies.** `bunx`/`npx -y`/`uvx` fetch a tool without writing to `package.json` or the lockfile. If a tool is already a dev dependency, use the installed one. If neither works offline, use the grep sweep below and say in the report that the survey was grep-only.
 
