@@ -81,10 +81,24 @@ Never carry a red build into the next tier.
 
 ### 7. Report
 
-- Lines and files removed, per tier, against the baseline.
-- Every finding you left, and which escape hatch saved it.
-- T4 items and anything re-tiered upward, as follow-ups.
-- What the vault should remember (`/aleph:vault`) about how this codebase actually behaves.
+Publish the findings as an artifact. Load the `artifact-design` skill, write the
+page, publish it with the Artifact tool, and give the user the link. A cull run
+produces a judgment about every candidate it touched, and that judgment is worth
+more than the diff; in terminal scrollback it is gone by the next session.
+
+The page carries four things:
+
+- **The delta.** Files and lines removed against the baseline, per tier.
+- **Every finding.** One row each: tier, `file:line`, what it was, which
+  detector raised it.
+- **The survivors.** Each candidate you did not delete and the escape hatch that
+  saved it. This is the more useful half of the page: it maps the entry points,
+  dynamic dispatch and string lookups the codebase relies on, which is exactly
+  what the next reader of this code does not know and cannot see.
+- **Follow-ups.** T4 items and anything you re-tiered upward.
+
+Then write the vault page (`/aleph:vault`) for what the run taught you about how
+this codebase actually behaves.
 
 ## Red flags
 

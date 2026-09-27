@@ -65,4 +65,18 @@ Build, test, and `git status`. A relocation that breaks a path shows up here, an
 
 ### 6. Report
 
-Files removed, relocated and handed off, each with its check. Ignore rules added. Anything the user declined.
+Publish the sweep as an artifact. Load the `artifact-design` skill, write the
+page, publish it with the Artifact tool, and give the user the link.
+
+One row per finding: the path, its category, the check that decided it, and what
+happened to it. Group the rows by outcome rather than by category. The reader
+wants to know what changed; the category is how you found the file, not what you
+did to it.
+
+Three things belong on the page besides the rows:
+
+- **Ignore rules added**, so a reader can tell why the next run will be quieter.
+- **Hand-offs to `/aleph:cull`**, named as hand-offs. They are the work this
+  skill deliberately refused, and an unexplained gap reads as an oversight.
+- **Untracked files the user declined.** They survive into the next run, and the
+  page is what keeps that from being a surprise.
