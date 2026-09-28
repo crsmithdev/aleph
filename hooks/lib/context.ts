@@ -4,6 +4,17 @@
  * CLAUDE_CODE_AUTO_COMPACT_WINDOW, then the autoCompactWindow setting, then the
  * model default of 1M. Compaction fires at window - min(maxOutput, 20k) - 13k
  * (measured in 2.1.283); 33k is that headroom.
+ *
+ * Only compact_boundary counts as compaction. A microcompact_boundary evicts
+ * old tool results and leaves the conversation intact, so the context is still
+ * the conversation rather than a summary of one; it also fires early in a
+ * tool-heavy session and lowers the fill, which would gate a healthy session at
+ * a low reading.
+ *
+ * The budget is what the setting asks for, not a prediction. Measured over 99
+ * sessions on 2026-09-27: three compacted within 12k of the threshold and five
+ * ran past it untouched, one to 314k. The warn names the budget for that
+ * reason.
  */
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -31,7 +42,7 @@ export function read(transcriptPath: string): Reading {
     let e: Record<string, any>;
     try { e = JSON.parse(line); } catch { continue; }
     if (e.isSidechain) continue;
-    if (e.type === "system" && (e.subtype === "compact_boundary" || e.subtype === "microcompact_boundary")) compacted = true;
+    if (e.type === "system" && e.subtype === "compact_boundary") compacted = true;
     if (e.isCompactSummary) compacted = true;
     const usage = e.type === "assistant" ? e.message?.usage : undefined;
     if (!usage) continue;
@@ -77,7 +88,7 @@ export function assess(reading: Reading, limit: number, blocked: boolean, retry:
   const fraction = Number(process.env.ALEPH_CONTEXT_WARN ?? DEFAULT_WARN);
   const warnAt = limit * (Number.isFinite(fraction) && fraction > 0 ? fraction : DEFAULT_WARN);
   if (reading.fill >= warnAt && !reading.compacted) {
-    return { kind: "warn", message: `Context ${k(reading.fill)} of ${k(limit)} before compaction. /aleph:handoff then /clear keeps the next turn sharp.` };
+    return { kind: "warn", message: `Context ${k(reading.fill)} of the ${k(limit)} budget. /aleph:handoff then /clear keeps the next turn sharp.` };
   }
   return { kind: "quiet" };
 }

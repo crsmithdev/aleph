@@ -37,8 +37,13 @@ test("subagent requests are ignored", () => {
 
 test("a compact boundary is seen", () => {
   expect(read(transcript([turn(10_000), { type: "system", subtype: "compact_boundary" }])).compacted).toBe(true);
-  expect(read(transcript([turn(10_000), { type: "system", subtype: "microcompact_boundary" }])).compacted).toBe(true);
   expect(read(transcript([{ type: "user", isCompactSummary: true, message: { content: "summary" } }])).compacted).toBe(true);
+});
+
+test("a microcompact boundary is not compaction", () => {
+  const r = read(transcript([turn(10_000), { type: "system", subtype: "microcompact_boundary" }, turn(12_000)]));
+  expect(r.compacted).toBe(false);
+  expect(assess(r, 167_000, false, false).kind).toBe("quiet");
 });
 
 test("a missing transcript reads as empty", () => {
@@ -61,7 +66,7 @@ test("quiet, then warn, then gate", () => {
   expect(assess({ fill: 100_000, compacted: false, requests: 3 }, limit, false, false).kind).toBe("quiet");
   const warn = assess({ fill: 130_000, compacted: false, requests: 3 }, limit, false, false);
   expect(warn.kind).toBe("warn");
-  if (warn.kind === "warn") expect(warn.message).toContain("130k of 167k");
+  if (warn.kind === "warn") expect(warn.message).toContain("130k of the 167k budget");
   const gate = assess({ fill: 40_000, compacted: true, requests: 9 }, limit, false, false);
   expect(gate.kind).toBe("gate");
   if (gate.kind === "gate") expect(gate.reason).toContain("aleph:handoff");
@@ -99,7 +104,7 @@ test("the hook warns on the wire and stays quiet below the fraction", () => {
   const path = transcript([turn(140_000)]);
   const payload = { hook_event_name: "Stop", session_id: "s2", transcript_path: path };
   const out = JSON.parse(hook(payload, { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "200000" }));
-  expect(out.systemMessage).toContain("of 167k");
+  expect(out.systemMessage).toContain("of the 167k budget");
   expect(hook(payload, { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "1000000" })).toBe("");
 });
 
