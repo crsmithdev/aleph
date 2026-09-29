@@ -26,7 +26,9 @@ const gitLog = () => Bun.spawnSync(["git", "-C", vault, "log", "--format=%s%n%b"
 const gitStatus = () => Bun.spawnSync(["git", "-C", vault, "status", "--porcelain"], { stdout: "pipe" }).stdout.toString().trim();
 
 function note(title: string, over: Record<string, string> = {}, body?: string): string {
-  const fm = { kind: "gotcha", scope: "aleph", confidence: "measured", updated: "2026-09-04", supersedes: "[]", sources: "[trace:abc123]", ...over };
+  // Today, not a fixed date: the default note must read as freshly written, and a
+  // pinned date silently crosses its decay window and fails tests months later.
+  const fm = { kind: "gotcha", scope: "aleph", confidence: "measured", updated: new Date().toISOString().slice(0, 10), supersedes: "[]", sources: "[trace:abc123]", ...over };
   const text = `---\n${Object.entries(fm).map(([k, v]) => `${k}: ${v}`).join("\n")}\n---\n` + (body ?? `**Claim.** ${title} does a thing, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- trace abc123\n\n## Related\n[[Home]]\n`);
   const path = join(drafts, `${title}.md`);
   writeFileSync(path, text);
@@ -574,10 +576,15 @@ describe("health", () => {
 
 describe("decay", () => {
   test("the window is per kind and confidence, and a recall resets it", () => {
+    // One date, two verdicts: past a gotcha/inferred window of 30 days, inside a
+    // decision/measured window of 270. Relative to today, because a fixed date
+    // crosses the wider window as the calendar moves and the test then fails on
+    // a day nobody changed anything (2026-01-01 aged out on 2026-09-29).
+    const day = new Date(Date.now() - 100 * 86400_000).toISOString().slice(0, 10);
     // gotcha 60 days x inferred 0.5 = a 30-day window.
-    cli("write", note("Rots Fast", { confidence: "inferred", updated: "2026-01-01" }), "--why", "x");
+    cli("write", note("Rots Fast", { confidence: "inferred", updated: day }), "--why", "x");
     // decision 180 days x measured 1.5 = 270 days, so the same date is fresh.
-    cli("write", note("Ages Well", { kind: "decision", confidence: "measured", updated: "2026-01-01" }), "--why", "x");
+    cli("write", note("Ages Well", { kind: "decision", confidence: "measured", updated: day }), "--why", "x");
     const stale = (r: any) => r.json.warn.filter((w: any) => w.rule === "stale").map((w: any) => w.note);
     const before = cli("lint");
     expect(stale(before)).toContain("Rots Fast");
