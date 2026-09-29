@@ -114,6 +114,22 @@ bun vault/cli.ts compile 2026-09-04                    # digest of a day's trace
 
 Notes are `wiki/<kind>/<Title>.md` with `[[Title]]` links and frontmatter `aliases kind scope confidence updated supersedes sources tags`. `write` refuses schema, duplicate, dangling-link, folder/kind, budget and template breaks, and warns on orphans, stale measured claims and same-scope overlap. `VAULT.md` is the human-owned contract. `compile` is the safety net for what the agent did not write on the day.
 
+## To do
+
+Every repo in `~/.aleph/repos.json` has a list at `docs/todo.md`: numbered `## N. Title` sections with a small frontmatter header and free prose. **Status is a field, never a filing position** — a finished item stays where it is and keeps its number, because commits, specs and the vault quote that number.
+
+```bash
+aleph todo add <repo> "<title>" [--priority high] [--labels a,b]
+aleph todo list <repo> [--status open|done|dropped] [--label <name>] [--json]
+aleph todo show <repo> <id> [--json]
+aleph todo note <repo> <id> "<text>"      # appends one timestamped line, never rewrites
+aleph todo done <repo> <id> ["<summary>"]
+aleph todo drop <repo> <id> "<reason>"
+aleph todo lint <repo> [--fix]
+```
+
+Each item carries `id status created updated priority labels`. `note` is append-only, which is the lost update this format exists to stop: two writers add lines, neither erases the other's. `lint` refuses (exit 1) on a missing or malformed key, an unknown status, or a duplicate id; `--fix` repairs what is mechanical — a missing date, a stale `id`, a bare scalar where a list belongs — and still exits 1 if anything is left. An item written before this command existed has no header, parses fine, and reads as `open`.
+
 ## Development
 
 ```bash

@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /**
- * aleph <job|run|land|checked|drop|jobs|unit> — detached agent jobs and plain runs.
+ * aleph <job|run|land|checked|drop|jobs|todo|unit> — detached agent jobs, plain runs
+ * and each repo's to-do list.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/jobs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal.
  * See docs/specs/2026-09-24-agent-jobs.md.
@@ -9,6 +10,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join, resolve } from "node:path";
 import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Run } from "./lib/ledger.ts";
 import { git, unit } from "./lib/unit.ts";
+import * as todos from "../todo/lib/todo.ts";
 
 const CLI = import.meta.path;
 const CAP = 5;
@@ -247,6 +249,95 @@ async function drop(): Promise<void> {
   }
 }
 
+/**
+ * aleph todo <add|list|show|note|done|drop|lint> <repo> ... — every repo in the
+ * registry has a list; `docs/todo.md` is the file. Status is a field, so an
+ * item never moves and never gets a new number.
+ */
+function todoCmd(): void {
+  const [verb, repoKey, ...args] = positional;
+  const sub = verb ?? refuse("usage: aleph todo <add|list|show|note|done|drop|lint> <repo> ...");
+  const repo = loadRegistry()[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
+  const file = todos.todoPath(repo.path);
+  if (!existsSync(file)) refuse(`no ${file}`);
+  const doc = todos.parse(readFileSync(file, "utf8"));
+
+  const item = (): todos.Item => {
+    const id = Number(args[0]);
+    if (!Number.isInteger(id)) refuse("name an item by its number");
+    return todos.find(doc, id) ?? refuse(`${repo.key} has no item ${id}`);
+  };
+  const save = () => writeFileSync(file, todos.render(doc));
+  const brief = (i: todos.Item) => ({ id: i.id, title: i.title, status: todos.status(i), priority: i.fm.priority ?? null, labels: i.fm.labels ?? [], updated: i.fm.updated ?? null, notes: i.notes.length, legacy: i.legacy || undefined });
+
+  switch (sub) {
+    case "add": {
+      const title = args.join(" ").trim() || refuse("give the item a title");
+      const labels = (flag("labels") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      const made = todos.add(doc, title, { priority: flag("priority"), labels });
+      save();
+      out({ repo: repo.key, added: made.id, title: made.title, file });
+      return;
+    }
+    case "list": {
+      const want = flag("status");
+      if (want && !todos.STATUSES.includes(want as todos.Status)) refuse(`status must be one of ${todos.STATUSES.join(", ")}`);
+      const label = flag("label");
+      const rows = doc.items
+        .filter((i) => (want ? todos.status(i) === want : true))
+        .filter((i) => (label ? ((i.fm.labels as string[]) ?? []).includes(label) : true));
+      if (rest.includes("--json")) { out(rows.map(brief)); return; }
+      if (!rows.length) { console.log("no items"); return; }
+      const w = String(Math.max(...rows.map((i) => i.id))).length;
+      for (const i of rows) console.log(`${String(i.id).padStart(w)}  ${todos.status(i).padEnd(7)} ${i.title}`);
+      return;
+    }
+    case "show": {
+      const i = item();
+      if (rest.includes("--json")) { out({ ...brief(i), body: i.body, notes: i.notes }); return; }
+      console.log(`## ${i.id}. ${i.title}`);
+      console.log(`status ${todos.status(i)}   priority ${i.fm.priority ?? "-"}   labels ${(((i.fm.labels as string[]) ?? []).join(", ")) || "-"}   updated ${i.fm.updated ?? "-"}`);
+      if (i.body.trim()) console.log(`\n${i.body}`);
+      if (i.notes.length) console.log(`\n### Notes\n${i.notes.join("\n")}`);
+      return;
+    }
+    case "note": {
+      const i = item();
+      const text = args.slice(1).join(" ").trim() || refuse("give the note some text");
+      const line = todos.note(i, text);
+      save();
+      out({ repo: repo.key, id: i.id, note: line });
+      return;
+    }
+    case "done":
+    case "drop": {
+      const i = item();
+      const text = args.slice(1).join(" ").trim();
+      if (sub === "drop" && !text) refuse("say why it is dropped");
+      todos.setStatus(i, sub === "done" ? "done" : "dropped");
+      if (text) todos.note(i, text);
+      save();
+      out({ repo: repo.key, id: i.id, status: todos.status(i), title: i.title });
+      return;
+    }
+    case "lint": {
+      if (rest.includes("--fix")) {
+        const fixed = todos.fix(doc);
+        if (fixed.length) save();
+        const left = todos.lint(doc);
+        out({ repo: repo.key, fixed, remaining: left });
+        if (left.length) process.exit(1);
+        return;
+      }
+      const findings = todos.lint(doc);
+      if (!findings.length) { out({ repo: repo.key, items: doc.items.length, findings: [] }); return; }
+      for (const f of findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
+      refuse(`${findings.length} problem${findings.length > 1 ? "s" : ""} in ${file}`);
+    }
+    default: refuse("usage: aleph todo <add|list|show|note|done|drop|lint> <repo> ...");
+  }
+}
+
 try {
   switch (cmd) {
     case "job": await job(); break;
@@ -256,7 +347,8 @@ try {
     case "unit": await unit(resolve(positional[0])); break;
     case "land": await landJob(); break;
     case "checked": checked(); break;
-    default: refuse("usage: aleph <job|run|land|checked|drop|jobs> ...");
+    case "todo": todoCmd(); break;
+    default: refuse("usage: aleph <job|run|land|checked|drop|jobs|todo> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;
