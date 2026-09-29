@@ -73,3 +73,17 @@ labels: [jobs]
 ### Notes
 
 - 2026-09-29 07:51: unit.ts:109 passes run.worktree to git() with no existsSync guard, so a removed worktree reads as posix_spawn git ENOENT. Line 228 in the same file already guards it.
+
+## 6. Flaky test: a check past its limit is stopped and fails as timed out
+---
+id: 6
+status: open
+created: 2026-09-29
+updated: 2026-09-29
+priority: medium
+labels: [test, flaky]
+---
+
+### Notes
+
+- 2026-09-29 08:11: Failed once on main at 4c8ea4e on 29 September 2026 and passed on the next run. Not investigated.
