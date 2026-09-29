@@ -33,7 +33,7 @@ Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 | `docs-writing` | Writes and audits docs with Diátaxis type gating and 51 rules |
 | `writing-for-agents` | How to write a skill, an `AGENTS.md` or a `CLAUDE.md` |
 | `vault` | Reads and writes the memory vault |
-| `handoff` / `pickup` | Saves a session to `~/.aleph/handoffs/current.md`; resumes it in a fresh context |
+| `handoff` / `pickup` | Saves a session to `~/.aleph/handoffs/current.md` (or `<name>.md` when given a name); resumes it in a fresh context |
 | `retro` † | Reads the session's trace and transcript; proposes fixes to identity, skills, hooks and vault |
 
 † user-invoked only: the model cannot fire it on its own.

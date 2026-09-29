@@ -3,7 +3,7 @@ name: handoff
 description: Save a session handoff to ~/.aleph/handoffs/current.md so a fresh context can pick up where this one left off. Use when the user says "handoff", "save a handoff", "write a handoff", "/handoff", or when context is about to be cleared mid-task.
 ---
 
-Write a complete handoff for the next session to `~/.aleph/handoffs/current.md`. The next session will read this verbatim with no other context. Assume the reader knows nothing about what we've been doing.
+Write a complete handoff for the next session to `~/.aleph/handoffs/<name>.md`. `<name>` is the argument, if one is given (the Sidetone bridge passes `sidetone`), and `current` if not. The next session will read this verbatim with no other context. Assume the reader knows nothing about what we've been doing.
 
 Create the directory first if it doesn't exist (`mkdir -p ~/.aleph/handoffs`).
 
@@ -24,6 +24,10 @@ Anything the user has not yet answered, decisions deferred, or things you'd ask 
 ## Resume instructions
 A single paragraph addressed to the next instance of yourself. Tell it: where to start reading (specific file paths, line ranges), what to verify before doing anything (e.g. "check that branch X is still checked out", "restart the dev server on a free port"), and what the next concrete action is. Be directive, "do X, then Y", not advisory. Write it so the next session can act without re-asking the user.
 
-After writing the file, output exactly this and nothing else:
+After writing the file, output exactly this and nothing else. With no argument:
 
 > Handoff saved to `~/.aleph/handoffs/current.md`. Run `/clear` then `/aleph:pickup` in the new session.
+
+With an argument, a program starts the next session, so output only:
+
+> Handoff saved to `~/.aleph/handoffs/<name>.md`.
