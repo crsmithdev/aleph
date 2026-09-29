@@ -259,8 +259,10 @@ function todoCmd(): void {
   const sub = verb ?? refuse("usage: aleph todo <add|list|show|note|done|drop|lint> <repo> ...");
   const repo = loadRegistry()[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
   const file = todos.todoPath(repo.path);
-  if (!existsSync(file)) refuse(`no ${file}`);
-  const doc = todos.parse(readFileSync(file, "utf8"));
+  // `add` starts a list for a registered repo that has none; every other verb
+  // needs one to already exist.
+  if (!existsSync(file) && sub !== "add") refuse(`no ${file}`);
+  const doc = existsSync(file) ? todos.parse(readFileSync(file, "utf8")) : todos.blank(repo.key);
 
   const item = (): todos.Item => {
     const id = Number(args[0]);

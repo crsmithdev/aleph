@@ -103,6 +103,18 @@ test("lint refuses an unknown status and a duplicate id, and --fix cannot save i
   expect(aleph("todo", "lint", "proj", "--fix").code).toBe(1);
 });
 
+test("add starts a list for a repo that has none; every other verb refuses", () => {
+  rmSync(file);
+  expect(aleph("todo", "list", "proj").code).toBe(1);
+  expect(aleph("todo", "list", "proj").err).toContain("no ");
+  const a = aleph("todo", "add", "proj", "The first thing");
+  expect(a.code).toBe(0);
+  expect(JSON.parse(a.out).added).toBe(1);
+  expect(readFileSync(file, "utf8")).toContain("# To do");
+  expect(JSON.parse(aleph("todo", "list", "proj", "--json").out)).toHaveLength(1);
+  expect(aleph("todo", "lint", "proj").code).toBe(0);
+});
+
 test("an unknown repo and an unknown item both refuse", () => {
   expect(aleph("todo", "list", "nope").err).toContain("no repo named nope");
   expect(aleph("todo", "show", "proj", "99").err).toContain("has no item 99");

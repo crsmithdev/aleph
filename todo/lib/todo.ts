@@ -102,6 +102,11 @@ export function write(repoPath: string, doc: Doc): void {
   writeFileSync(todoPath(repoPath), render(doc));
 }
 
+/** The list a repo gets on its first `todo add`. */
+export function blank(repo: string): Doc {
+  return { head: `# To do\n\nThings to build or look at in ${repo}. \`aleph todo\` owns this file.\nItem numbers never change: commits, the spec and the vault quote them.`, items: [] };
+}
+
 export const find = (doc: Doc, id: number): Item | undefined => doc.items.find((i) => i.id === id);
 export const nextId = (doc: Doc): number => doc.items.reduce((m, i) => Math.max(m, i.id), 0) + 1;
 
