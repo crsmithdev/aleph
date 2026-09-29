@@ -97,3 +97,17 @@ updated: 2026-09-29
 priority: medium
 labels: [jobs, todo]
 ---
+
+### Notes
+
+- 2026-09-29 13:09: Job todo-link: aleph land now marks a linked item done in the main checkout after the fast-forward, so every land of a linked job leaves docs/todo.md changed there, and the next land does not fast-forward that checkout.
+
+## 8. aleph todo add fails with ENOENT in a repo that has no docs directory
+---
+id: 8
+status: open
+created: 2026-09-29
+updated: 2026-09-29
+priority: medium
+labels: [todo]
+---

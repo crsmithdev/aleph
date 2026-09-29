@@ -436,3 +436,54 @@ describe("land", () => {
     sh(repo, "git", "checkout", "README");
   });
 });
+
+describe("a job tied to a to-do item", () => {
+  // Untracked in the main checkout, so the fast-forward check still sees it clean.
+  const list = () => readFileSync(join(repo, "docs", "todo.md"), "utf8");
+  const show = async (id: number) => (await aleph(["todo", "show", "demo", String(id), "--json"])).json;
+  let landId: number, dropId: number;
+  beforeAll(async () => {
+    mkdirSync(join(repo, "docs"), { recursive: true });
+    landId = (await aleph(["todo", "add", "demo", "ship the widget"])).json.added;
+    dropId = (await aleph(["todo", "add", "demo", "paint the shed"])).json.added;
+  });
+
+  test("an id the list does not have is refused, and nothing starts", async () => {
+    const before = readdirSync(jobsDir).length;
+    const r = await aleph(["job", "demo", "badlink", "--spec", specFile("x"), "--todo", "99"]);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("demo has no item 99");
+    expect(readdirSync(jobsDir).length).toBe(before);
+  });
+
+  test("land marks the item done, naming the job and the landing commit", async () => {
+    const j = await aleph(["job", "demo", "widget", "--spec", specFile("Goal: widget\nACTION: commit widget.txt\n"), "--todo", String(landId)]);
+    expect(state(j.json.run)).toMatchObject({ state: "passed", todo: landId });
+    const r = await aleph(["land", "widget"]);
+    const s = state(r.json.run);
+    expect(s).toMatchObject({ kind: "land", state: "landed", todo: landId });
+    expect(s.reason).toBeUndefined();
+    const item = await show(landId);
+    expect(item.status).toBe("done");
+    expect(item.notes.at(-1)).toContain(`job widget landed as ${s.commit.slice(0, 7)}`);
+    expect(file(r.json.run, "land.log")).toContain(`## todo ${landId} done`);
+  });
+
+  test("drop adds a note with the reason and leaves the item open", async () => {
+    await aleph(["job", "demo", "shed", "--spec", specFile("Goal: shed\nACTION: commit shed.txt\n"), "--todo", String(dropId)]);
+    expect((await aleph(["drop", "shed", "wrong", "colour"])).code).toBe(0);
+    const item = await show(dropId);
+    expect(item.status).toBe("open");
+    expect(item.notes.at(-1)).toContain("job shed dropped: wrong colour");
+  });
+
+  test("a job without --todo records none and leaves the list alone", async () => {
+    const before = list();
+    const j = await job("plainjob", "commit plainjob.txt");
+    expect(state(j.json.run).todo).toBeUndefined();
+    const r = await aleph(["land", "plainjob"]);
+    expect(state(r.json.run)).toMatchObject({ state: "landed" });
+    expect(state(r.json.run).todo).toBeUndefined();
+    expect(list()).toBe(before);
+  });
+});

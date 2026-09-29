@@ -9,7 +9,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Run } from "./lib/ledger.ts";
-import { git, unit } from "./lib/unit.ts";
+import { git, unit, updateTodo } from "./lib/unit.ts";
 import * as todos from "../todo/lib/todo.ts";
 
 const CLI = import.meta.path;
@@ -28,7 +28,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--spec", "--model", "--priority", "--labels", "--status", "--label"];
+const VALUED = ["--spec", "--model", "--todo", "--priority", "--labels", "--status", "--label"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 
 function checkName(name: string | undefined): string {
@@ -94,6 +94,15 @@ async function job(): Promise<void> {
   const name = checkName(nameArg);
   const specArg = flag("spec") ?? refuse("--spec <file|-> is required");
   const spec = specArg === "-" ? await Bun.stdin.text() : readFileSync(specArg, "utf8");
+  const todoArg = flag("todo");
+  let todo: number | undefined;
+  if (todoArg !== undefined) {
+    todo = Number(todoArg);
+    if (!Number.isInteger(todo)) refuse("--todo takes an item number");
+    const file = todos.todoPath(repo.path);
+    if (!existsSync(file)) refuse(`no ${file}`);
+    if (!todos.find(todos.parse(readFileSync(file, "utf8")), todo!)) refuse(`${repo.key} has no item ${todo}`);
+  }
 
   const release = await lock(`job-${repo.key}-${name}`);
   if (!release) refuse(`job ${name} is busy`);
@@ -106,10 +115,12 @@ async function job(): Promise<void> {
     const first = open?.[0];
     const worktree = first?.run.worktree ?? join(repo.path, ".worktrees", `job-${name}`);
     const model = flag("model");
+    // A follow-up without --todo keeps the item the job started with.
+    todo ??= open?.findLast((e) => e.run.todo !== undefined)?.run.todo;
     child = await dispatch({
       kind: "agent", job: first?.id, name, repo: repo.key, branch: `job/${name}`, worktree,
       state: "running", phase: "starting", session: crypto.randomUUID(), ...(model ? { model } : {}),
-      told: false, started: new Date().toISOString(),
+      ...(todo !== undefined ? { todo } : {}), told: false, started: new Date().toISOString(),
     }, `${repo.key}-${name}`, repo.path, (folder) => {
       if (!first) return writeFileSync(join(folder, "spec.md"), spec);
       const notes = join(first.folder, "notes");
@@ -169,6 +180,7 @@ async function landJob(): Promise<void> {
     kind: "land", job: agent.job, name, repo: agent.repo, branch: agent.branch, worktree: agent.worktree,
     state: "running", phase: "land", told: false, started: new Date().toISOString(),
     ...(unchecked ? { check: "open" as const, say: agent.say } : {}),
+    ...(agent.todo !== undefined ? { todo: agent.todo } : {}),
   }, `${repo.key}-${name}`, repo.path, () => {});
   await child?.exited;
 }
@@ -247,6 +259,9 @@ async function drop(): Promise<void> {
     }
     // Chris asked for the drop, so it is not news.
     updateRun(last.folder, { state: "dropped", reason, needs: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
+    const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
+    const why = repo && todo !== undefined ? updateTodo(repo.path, todo, `job ${name} dropped: ${reason}`, false) : null;
+    if (why) console.error(`warn: todo ${todo} has no note: ${why}`);
     out({ job: last.run.job, name, state: "dropped", reason });
   } finally {
     release!();

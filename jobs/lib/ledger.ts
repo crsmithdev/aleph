@@ -16,6 +16,8 @@ export interface Run {
   session?: string; model?: string; commit?: string;
   /** A land run with --unchecked: the manual check is "open" until `aleph checked` makes it "done". */
   check?: "open" | "done";
+  /** The repo's to-do item the job works on: land marks it done, drop adds a note. */
+  todo?: number;
   told: boolean; started: string; ended?: string;
 }
 

@@ -6,6 +6,7 @@
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import * as todos from "../../todo/lib/todo.ts";
 import { allJobs, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type Repo, type Run } from "./ledger.ts";
 
 let child: ReturnType<typeof Bun.spawn> | null = null;
@@ -155,11 +156,34 @@ async function land(folder: string, run: Run, repo: Repo, env: Record<string, st
     const dirty = git(repo.path, "status", "--porcelain", "--untracked-files=no").out;
     if (head !== main || dirty || !git(repo.path, "merge", "--ff-only", "-q", commit.out).ok) reason = "main checkout not updated";
     log(reason ?? "main checkout updated");
+    // After the fast-forward: the write leaves docs/todo.md changed in the main checkout.
+    if (run.todo !== undefined) {
+      const why = updateTodo(repo.path, run.todo, `job ${run.name} landed as ${commit.out.slice(0, 7)}`, true);
+      log(why ? `todo ${run.todo} not closed: ${why}` : `todo ${run.todo} done`);
+    }
     removeWorktree(repo, run);
     return { verdict: { state: "landed", commit: commit.out, reason }, code: 0 };
   } finally {
     releaseRepo?.();
     release();
+  }
+}
+
+/**
+ * `aleph todo done` (with `done`) or `aleph todo note` for a job's item, in the
+ * repo's main checkout. Returns why it could not, for the caller to report.
+ */
+export function updateTodo(repoPath: string, id: number, text: string, done: boolean): string | null {
+  try {
+    const doc = todos.read(repoPath);
+    const item = todos.find(doc, id);
+    if (!item) return `no item ${id}`;
+    if (done) todos.setStatus(item, "done");
+    todos.note(item, text);
+    todos.write(repoPath, doc);
+    return null;
+  } catch (e: any) {
+    return e?.message ?? String(e);
   }
 }
 

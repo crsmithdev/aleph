@@ -63,7 +63,7 @@ not a sandbox.
 
 Numbers match the user stories.
 
-1. WHEN `aleph job <repo> <name> --spec <file|->` runs from any directory THE system SHALL create a run folder in `~/.aleph/jobs/` and start unit `aleph-<run-id>`, and print the run id.
+1. WHEN `aleph job <repo> <name> --spec <file|-> [--model <model>] [--todo <id>]` runs from any directory THE system SHALL create a run folder in `~/.aleph/jobs/` and start unit `aleph-<run-id>`, and print the run id. WHEN `--todo <id>` is given THE run SHALL carry `todo: <id>`; IF the repo's `docs/todo.md` has no item `<id>` THEN the system SHALL exit 1 and create nothing. A follow-up without `--todo` keeps the job's item. WHEN a job with an item lands THE land run SHALL do what `aleph todo done <repo> <id>` does, with the note "job <name> landed as <short hash>". WHEN it is dropped THE system SHALL add the note "job <name> dropped: <reason>" and leave the item open.
 2. IF `<repo>`, lowercased with spaces removed, matches no registry key THEN THE system SHALL exit 1, create nothing, and print the keys. IF `<name>` is open in another repo THEN it SHALL exit 1 and name that repo.
 3. WHEN a run starts in a worktree without the setup marker THE unit SHALL run the registry's `setup` commands before the worker, then write the marker. IF a setup command fails THEN the run SHALL end `failed` with that command's name.
 4. IF 5 agent runs are live THEN `aleph job` SHALL exit 1 and name them. Plain and land runs do not count. Two calls at the same moment SHALL NOT both pass.
@@ -125,7 +125,7 @@ interface Run {
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
   state: State; needs?: "manual" | "question"; phase?: string; check?: "open" | "done";
   reason?: string; question?: string; say?: string;
-  session?: string; model?: string; commit?: string;
+  session?: string; model?: string; commit?: string; todo?: number;
   told: boolean; started: string; ended?: string;
 }
 ```
