@@ -122,3 +122,20 @@ test("an unknown repo and an unknown item both refuse", () => {
   expect(aleph("todo", "list", "nope").err).toContain("no repo named nope");
   expect(aleph("todo", "show", "proj", "99").err).toContain("has no item 99");
 });
+
+test("dates are local, not UTC", () => {
+  // `bun test` pins TZ=UTC, so the stamp has to be read from a process that has
+  // a real zone. At 18:06 in Los Angeles it is already tomorrow in UTC, and an
+  // item filed that evening used to land on tomorrow's date.
+  const lib = join(import.meta.dir, "lib", "todo.ts");
+  const p = Bun.spawnSync(
+    ["bun", "-e", `import {today,minute} from ${JSON.stringify(lib)};
+       const e = new Date(2026, 8, 28, 18, 6);
+       console.log(today(e), minute(e), today(), new Date().getDate());`],
+    { env: { ...(process.env as Record<string, string>), TZ: "America/Los_Angeles" }, stdout: "pipe" },
+  );
+  const [day, date, time, now, dayOfMonth] = p.stdout.toString().trim().split(/[\s]+/);
+  expect(`${day}`).toBe("2026-09-28");
+  expect(`${date} ${time}`).toBe("2026-09-28 18:06");
+  expect(now.endsWith(`-${dayOfMonth.padStart(2, "0")}`)).toBe(true);
+});

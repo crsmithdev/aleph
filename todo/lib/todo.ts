@@ -32,8 +32,14 @@ export interface Doc {
   items: Item[];
 }
 
-export const today = (now = new Date()): string => now.toISOString().slice(0, 10);
-export const minute = (now = new Date()): string => now.toISOString().slice(0, 16).replace("T", " ");
+// Local time, not UTC. `toISOString` stamps the UTC date, so west of Greenwich
+// every item filed in the evening carried tomorrow's date.
+const pad = (n: number): string => String(n).padStart(2, "0");
+
+export const today = (now = new Date()): string =>
+  `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+export const minute = (now = new Date()): string =>
+  `${today(now)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
 export function todoPath(repoPath: string): string {
   return join(repoPath, "docs", "todo.md");
