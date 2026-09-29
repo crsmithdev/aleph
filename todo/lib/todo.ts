@@ -78,7 +78,7 @@ export function parse(text: string): Doc {
       id: Number(id),
       title: title.trim(),
       fm: frontmatter === null ? {} : parseFrontmatter(frontmatter),
-      body: body.replace(/\n+$/, ""),
+      body: body.replace(/^\n+/, "").replace(/\n+$/, ""),
       notes,
       legacy: frontmatter === null,
     });

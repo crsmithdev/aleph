@@ -139,3 +139,10 @@ test("dates are local, not UTC", () => {
   expect(`${date} ${time}`).toBe("2026-09-28 18:06");
   expect(now.endsWith(`-${dayOfMonth.padStart(2, "0")}`)).toBe(true);
 });
+
+test("a write keeps one blank line between the header and the body", () => {
+  writeFileSync(file, `# To do\n\n## 5. Five\n---\nid: 5\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nBody.\n\n## 6. Six\n---\nid: 6\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nOther.\n`);
+  for (let i = 0; i < 3; i++) aleph("todo", "note", "proj", "6", `note ${i}`);
+  expect(doc()).toContain("---\n\nBody.\n\n## 6.");
+  expect(doc()).toContain("---\n\nOther.\n\n### Notes");
+});
