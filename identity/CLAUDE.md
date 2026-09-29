@@ -109,22 +109,23 @@ The vault is the only memory store; write nothing to Claude Code's auto-memory.
 ## To do
 
 Every repo in the registry keeps its list at `docs/todo.md`, and `aleph todo`
-owns the file. When Chris asks to note, track or park something to do, it goes
-there.
+owns the file. Every to-do goes there, whoever names it: an ask from Chris, a
+follow-up you name in a summary, a `TODO` you meet in the code. File it in the
+same turn you name it, and quote the item number after that.
 
 ```bash
-aleph todo list <repo> [--status open|done|dropped]
+aleph todo list <repo> [--status open|done|dropped] [--label x]
 aleph todo add <repo> "<title>" [--priority high] [--labels a,b]
+aleph todo show <repo> <id>
 aleph todo note <repo> <id> "<text>"
 aleph todo done <repo> <id> ["<summary>"]
+aleph todo drop <repo> <id> "<reason>"
 ```
 
 Write through the command, never by hand. `note` appends, so two writers cannot
 erase each other. An item keeps its number for life, because commits, specs and
 the vault quote it. `done` sets a field, so nothing moves and nothing is
 renumbered.
-
-The follow-up you name in a summary goes here too, in the same turn.
 
 `~/.aleph/TODO.md` is Chris's own list across projects. The command does not
 manage it.
