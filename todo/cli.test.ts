@@ -76,9 +76,12 @@ test("drop refuses without a reason", () => {
   expect(r.err).toContain("say why");
 });
 
-test("labels filter", () => {
-  aleph("todo", "add", "proj", "Audio thing", "--labels", "audio,phone");
+test("labels filter, and a flag value never lands in the title", () => {
+  aleph("todo", "add", "proj", "Audio thing", "--labels", "audio,phone", "--priority", "high");
   aleph("todo", "add", "proj", "Other thing", "--labels", "build");
+  const rows = JSON.parse(aleph("todo", "list", "proj", "--json").out);
+  expect(rows.map((r: any) => r.title)).toEqual(["An old prose item", "Audio thing", "Other thing"]);
+  expect(rows[1]).toMatchObject({ priority: "high", labels: ["audio", "phone"] });
   expect(JSON.parse(aleph("todo", "list", "proj", "--label", "audio", "--json").out).map((r: any) => r.id)).toEqual([4]);
 });
 

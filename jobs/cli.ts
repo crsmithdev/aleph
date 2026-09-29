@@ -25,7 +25,11 @@ function flag(name: string): string | undefined {
   const i = rest.indexOf(`--${name}`);
   return i >= 0 ? rest[i + 1] : undefined;
 }
-const positional = rest.filter((a, i) => !a.startsWith("--") && !["--spec", "--model"].includes(rest[i - 1]));
+// A flag's value is not a positional. Every flag here takes one, so leaving a
+// name off this list silently folds its value into the next argument: `todo add
+// <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
+const VALUED = ["--spec", "--model", "--priority", "--labels", "--status", "--label"];
+const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 
 function checkName(name: string | undefined): string {
   if (!name || !/^[A-Za-z0-9-]+$/.test(name)) refuse("the name must be letters, digits and hyphens");
