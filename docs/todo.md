@@ -231,7 +231,7 @@ labels: [seats]
 ## 16. The worker prompt's 'never push' stops workers from using aleph todo
 ---
 id: 16
-status: open
+status: done
 created: 2026-09-30
 updated: 2026-09-30
 priority: high
@@ -241,3 +241,7 @@ labels: [jobs, todo]
 Measured 30 Sep 2026 with 18 throwaway worker runs (six to-do tasks, three runs each). 14 of 18 did not do the task: the fixed worker text in jobs/lib/unit.ts says "Never merge, never push", and `aleph todo` pushes a commit to origin/main, so the worker stopped and offered choices. Its result has no QUESTION: line and no commits, so a real job ends `done` "no commits" with the work not done. The same 18 tasks as plain sessions: 18 of 18 used `aleph todo`.
 
 Done when the fixed text says that `aleph todo` writes the list on main by itself and is not the worker's push, and a rerun of the six worker tasks completes them through `aleph todo`.
+
+### Notes
+
+- 2026-09-30 11:18: Landed in d24d220. Eval in Langfuse, dataset aleph-todo-worker, runs main-caafe40 and worker-todo-fix: task done 13/18 -> 18/18, questions 5 -> 0, hand edits on main 1 -> 0.
