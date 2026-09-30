@@ -39,9 +39,9 @@ labels: [jobs]
 ## 3. Record the branch tip, merge-base and net patch-id when a run passes
 ---
 id: 3
-status: open
+status: done
 created: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 priority: high
 labels: [jobs]
 ---
@@ -49,6 +49,7 @@ labels: [jobs]
 ### Notes
 
 - 2026-09-29 07:51: Step 0 of the ladder. The only change that stops evidence being lost; every day without it is another job that can never be resolved. unit.ts, ledger.ts.
+- 2026-09-30 08:15: Superseded in e0c6fe8: the squash and each worker commit carry a Job: trailer, and a live branch is matched by git merge-tree, so no patch-id needs recording.
 
 ## 4. Capture the conflicted paths before the rebase abort
 ---
