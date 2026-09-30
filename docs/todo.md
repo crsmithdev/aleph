@@ -17,6 +17,7 @@ labels: [jobs]
 
 - 2026-09-29 07:51: Red team 29 Sep: the ladder as designed cannot resolve the four stuck jobs. Their branches are gone and they carry no Job: trailer, so tiers 2-4 have nothing to read. Landing detection depends on item 5 being built first.
 - 2026-09-29 07:51: Verified on git 2.43: git cherry marks both commits of a squashed branch as unlanded, so per-commit patch-id is the wrong comparison; the branch's net diff patch-id matches the squash exactly. Tree equality fails once main moves on; use git merge-tree --write-tree.
+- 2026-09-29 18:41: 2026-09-29 measurement: all 73 agent runs in states passed/failed/needs-you point at a branch and a worktree that no longer exist. git branch --list 'job/*' returns nothing in aleph, sidetone or cloudchamber. 58 of the 73 read as 'passed' with nothing left to land. The ledger is 100% drifted for anything not closed through aleph land or aleph drop.
 
 ## 2. aleph jobs shows each job's fate, not its run state
 ---
@@ -31,6 +32,7 @@ labels: [jobs]
 ### Notes
 
 - 2026-09-29 07:51: Fate is a second field beside state, not a replacement: a run can be failed with its work already on main. Show the tier that decided, so a patch match reads weaker than a trailer match.
+- 2026-09-29 15:24: 2026-09-29 evidence: aleph jobs lists sidetone voice-eval, prefer-background, audio-static and tool-batching as failed, and they are still listed after their work reached main by hand. Chris asked 'anything unlanded?' and the list gave the wrong answer until a manual git log check. A landed job should not read as failed.
 
 ## 3. Record the branch tip, merge-base and net patch-id when a run passes
 ---
@@ -73,6 +75,7 @@ labels: [jobs]
 ### Notes
 
 - 2026-09-29 07:51: unit.ts:109 passes run.worktree to git() with no existsSync guard, so a removed worktree reads as posix_spawn git ENOENT. Line 228 in the same file already guards it.
+- 2026-09-29 15:24: 2026-09-29 evidence: the sidetone jobs voice-eval, prefer-background, audio-static and tool-batching each failed land twice (runs 20260928-163706 and 20260929-111540) with 'posix_spawn git ENOENT'. git is at /usr/bin/git; the cause is the missing worktree used as cwd, as above. Chris had already ported all four to main by hand, and the job branches were deleted: voice-eval as 1704917, prefer-background as e1cb4d7 (item 64), tool-batching as 7ae9476 and 94bbe0a (item 62), audio-static as the finding ~/.sidetone/findings/audio-transport-56.md plus 309d2fe. So aleph jobs still lists four failed jobs that did land. The error text says git is missing, which misled the diagnosis.
 
 ## 6. Flaky test: a check past its limit is stopped and fails as timed out
 ---
@@ -93,7 +96,7 @@ labels: [test, flaky]
 id: 7
 status: open
 created: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 priority: medium
 labels: [jobs, todo]
 ---
@@ -101,6 +104,8 @@ labels: [jobs, todo]
 ### Notes
 
 - 2026-09-29 13:09: Job todo-link: aleph land now marks a linked item done in the main checkout after the fast-forward, so every land of a linked job leaves docs/todo.md changed there, and the next land does not fast-forward that checkout.
+- 2026-09-30 07:08: 2026-09-30 root cause of the drift: aleph todo writes every add, note and done to the main checkout (todoPath(repo.path)), never to a branch. So docs/todo.md in main stays dirty, and land.ts:157 then skips the fast-forward. 23 of the 26 lands since 29 Sep 10:08 say 'main checkout not updated'. Now: aleph +56 lines, sidetone +101/-8 uncommitted in docs/todo.md. Fix: write the done note into the squash tree before commit-tree, so it lands in the same commit.
+- 2026-09-30 07:08: Correction to the note above: the fast-forward guard is jobs/lib/unit.ts:157, not land.ts:157.
 
 ## 8. aleph todo add fails with ENOENT in a repo that has no docs directory
 ---
@@ -131,3 +136,60 @@ updated: 2026-09-29
 priority: medium
 labels: [hooks, docs]
 ---
+
+## 11. Land says 'main checkout not updated' when the main checkout has uncommitted changes, and reports the job as landed
+---
+id: 11
+status: open
+created: 2026-09-29
+updated: 2026-09-29
+priority: medium
+labels: [jobs]
+---
+
+### Notes
+
+- 2026-09-29 15:24: 2026-09-29 evidence: sidetone job test-audit (run 20260929-111251) ran fetch, rebase, commit-tree and push all ok, and pushed 18ad700. Then land.log says 'main checkout not updated' and the state is landed with that as its reason. The sidetone main checkout had an uncommitted change to docs/todo.md at the time, which is the likely cause but is not verified. Same run as the item 5 failures. Chris cannot tell from the landed state that the local main is behind origin. Check what the land step does when the checkout is dirty, and say so in the news line.
+
+## 12. Queue lands: two lands at once let one succeed and the others fail
+---
+id: 12
+status: open
+created: 2026-09-29
+updated: 2026-09-30
+priority: medium
+labels: [jobs]
+---
+
+### Notes
+
+- 2026-09-30 07:08: 2026-09-30 lands are already serial: land() holds lock land-<repo> from fetch to push (unit.ts:125). The 'others fail' are rebase conflicts on shared files (docs/spec.md, src/conversation.ts, test/fixtures/messages.jsonl), then a hand-run agent follow-up and a second land (project-switch, retract-join, fade-skip, garbled-edges, fade-inverse). The queue to build: on a rebase conflict, capture the paths (item 4), dispatch the follow-up agent run itself, and land again when it passes. Survey 30 Sep: GitHub merge queue needs an org repo; Mergify, Trunk, Graphite and Aviator need a PR per branch; bors-ng and Bulldozer are archived; no agent orchestrator (Claude Squad, container-use, Vibe Kanban) ships a land queue. Keep it local.
+
+## 13. Review land permissions: let a repo land its jobs without asking, set in a per-repo config
+---
+id: 13
+status: open
+created: 2026-09-29
+updated: 2026-09-29
+priority: medium
+labels: [jobs]
+---
+
+### Notes
+
+- 2026-09-29 15:48: 2026-09-29 policy from Chris: a manual check is a smell. A job should land on its automated tests. Many checks, like the car, can only happen after the change lands, so a gate before landing makes them impossible. The land gate should not block on a manual check; a rare case that cannot be tested automatically should need approval, not every job. Today aleph land refuses without --checked or --unchecked, and sidetone CLAUDE.md tells the agent to ask 'Did you check it?'. Change both: land on green tests by default, and keep the manual check as an open item on the to-do, not a gate.
+- 2026-09-29 15:49: 2026-09-29 done on the sidetone side: CLAUDE.md (33e637b) now tells the agent to land a passed job, add --unchecked when aleph land refuses for a manual check, and note the check on the to-do item. The aleph side is not changed: aleph land still refuses without --checked or --unchecked, and the news line still says 'needs-you manual'. Make a manual check a to-do note, not a refusal.
+
+## 14. aleph todo rewrites the whole file with no lock and no atomic rename
+---
+id: 14
+status: open
+created: 2026-09-29
+updated: 2026-09-29
+priority: high
+labels: [todo, jobs]
+---
+
+### Notes
+
+- 2026-09-29 18:41: todo/lib/todo.ts:104-108 read-parse-render-writeFileSync, no lock, no temp+rename; jobs/cli.ts uses lock() for dispatch and per-job. Append-only notes stop semantic erasure between two writers, not a concurrent read-modify-write: the second render overwrites the first. Survey 29 Sep: this exact shape is claude-task-master's corruption tail (#1567 race between Claude Code windows, #854 bulk-update data loss, #1708 schema corruption on set-status) and Backlog.md #843 'task edit loses concurrent writes silently'. One writer today; a seat model makes it routine.
