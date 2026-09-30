@@ -6,9 +6,9 @@ Item numbers never change: commits, the spec and the vault quote them.
 ## 1. Landing detection: find work that reached main without the ledger
 ---
 id: 1
-status: open
+status: done
 created: 2026-09-28
-updated: 2026-09-29
+updated: 2026-09-30
 priority: medium
 labels: [jobs]
 ---
@@ -18,6 +18,7 @@ labels: [jobs]
 - 2026-09-29 07:51: Red team 29 Sep: the ladder as designed cannot resolve the four stuck jobs. Their branches are gone and they carry no Job: trailer, so tiers 2-4 have nothing to read. Landing detection depends on item 5 being built first.
 - 2026-09-29 07:51: Verified on git 2.43: git cherry marks both commits of a squashed branch as unlanded, so per-commit patch-id is the wrong comparison; the branch's net diff patch-id matches the squash exactly. Tree equality fails once main moves on; use git merge-tree --write-tree.
 - 2026-09-29 18:41: 2026-09-29 measurement: all 73 agent runs in states passed/failed/needs-you point at a branch and a worktree that no longer exist. git branch --list 'job/*' returns nothing in aleph, sidetone or cloudchamber. 58 of the 73 read as 'passed' with nothing left to land. The ledger is 100% drifted for anything not closed through aleph land or aleph drop.
+- 2026-09-30 08:14: Landed in e0c6fe8: the fate of a job comes from git, a to-do write is a commit on origin/main, and a conflict goes back to the worker.
 
 ## 2. aleph jobs shows each job's fate, not its run state
 ---
