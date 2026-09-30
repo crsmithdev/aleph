@@ -245,3 +245,17 @@ Done when the fixed text says that `aleph todo` writes the list on main by itsel
 ### Notes
 
 - 2026-09-30 11:18: Landed in d24d220. Eval in Langfuse, dataset aleph-todo-worker, runs main-caafe40 and worker-todo-fix: task done 13/18 -> 18/18, questions 5 -> 0, hand edits on main 1 -> 0.
+
+## 17. Land refuses a branch that changes docs/todo.md and sends it back to the worker
+---
+id: 17
+status: open
+created: 2026-09-30
+updated: 2026-09-30
+priority: medium
+labels: [jobs, todo]
+---
+
+The eval of 30 Sep 2026 (Langfuse dataset aleph-todo-worker, run main-caafe40, title-2) found one worker that edited the list with a script that imports todo/lib/todo.ts, committed it as "todo: ...", and the job landed it (dcd0fad). git-guard sees only Edit and Write. The land is the one place that sees every branch, whatever tool made the change, and it is inside aleph, so no repo needs a hook.
+
+With the fixed worker text (d24d220) the eval had 0 hand edits in 24 runs, so this is a backstop. Done when a land of a branch that changes docs/todo.md fails with a reason that names aleph todo, sends the job back to the worker, and a test holds it.
