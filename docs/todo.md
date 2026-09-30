@@ -85,9 +85,9 @@ labels: [jobs]
 ## 6. Flaky test: a check past its limit is stopped and fails as timed out
 ---
 id: 6
-status: open
+status: done
 created: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 priority: medium
 labels: [test, flaky]
 ---
@@ -95,6 +95,7 @@ labels: [test, flaky]
 ### Notes
 
 - 2026-09-29 08:11: Failed once on main at 4c8ea4e on 29 September 2026 and passed on the next run. Not investigated.
+- 2026-09-30 08:55: caafe40 measures the limit on performance.now() instead of Date.now(). The cause is not proven: the failure was not reproduced, and 8 of 8 targeted runs pass. Open a new item if it fails again.
 
 ## 7. A job's aleph todo note writes to the main checkout and leaves it dirty
 ---
