@@ -23,9 +23,9 @@ labels: [jobs]
 ## 2. aleph jobs shows each job's fate, not its run state
 ---
 id: 2
-status: open
+status: done
 created: 2026-09-28
-updated: 2026-09-29
+updated: 2026-09-30
 priority: medium
 labels: [jobs]
 ---
@@ -34,6 +34,7 @@ labels: [jobs]
 
 - 2026-09-29 07:51: Fate is a second field beside state, not a replacement: a run can be failed with its work already on main. Show the tier that decided, so a patch match reads weaker than a trailer match.
 - 2026-09-29 15:24: 2026-09-29 evidence: aleph jobs lists sidetone voice-eval, prefer-background, audio-static and tool-batching as failed, and they are still listed after their work reached main by hand. Chris asked 'anything unlanded?' and the list gave the wrong answer until a manual git log check. A landed job should not read as failed.
+- 2026-09-30 08:14: Landed in e0c6fe8: the fate of a job comes from git, a to-do write is a commit on origin/main, and a conflict goes back to the worker.
 
 ## 3. Record the branch tip, merge-base and net patch-id when a run passes
 ---
