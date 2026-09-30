@@ -115,12 +115,16 @@ labels: [jobs, todo]
 ## 8. aleph todo add fails with ENOENT in a repo that has no docs directory
 ---
 id: 8
-status: open
+status: done
 created: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 priority: medium
 labels: [todo]
 ---
+
+### Notes
+
+- 2026-09-30 08:14: Landed in e0c6fe8: the fate of a job comes from git, a to-do write is a commit on origin/main, and a conflict goes back to the worker.
 
 ## 9. git-guard bypass through the symlink: an Edit or Write on ~/.claude/CLAUDE.md is allowed, because ~/.claude is not a git repo and hooks/git-guard.ts:24-25 exits before it checks the branch. The path writes to aleph's main checkout (identity/CLAUDE.md). Resolve the symlink before the repo check.
 ---
