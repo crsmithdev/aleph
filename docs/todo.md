@@ -144,12 +144,16 @@ labels: [hooks, bug]
 ## 10. identity/CLAUDE.md allows trivial edits to main when Chris asks, but hooks/git-guard.ts:37-45 denies every Edit and Write on main outside .worktrees/. Either add an exception to the hook or delete the rule from the Git section.
 ---
 id: 10
-status: open
+status: done
 created: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 priority: medium
 labels: [hooks, docs]
 ---
+
+### Notes
+
+- 2026-09-30 08:55: Landed in caafe40: the exception is deleted from identity/CLAUDE.md.
 
 ## 11. Land says 'main checkout not updated' when the main checkout has uncommitted changes, and reports the job as landed
 ---
