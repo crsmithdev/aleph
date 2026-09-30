@@ -98,7 +98,7 @@ labels: [test, flaky]
 ## 7. A job's aleph todo note writes to the main checkout and leaves it dirty
 ---
 id: 7
-status: open
+status: done
 created: 2026-09-29
 updated: 2026-09-30
 priority: medium
@@ -110,6 +110,7 @@ labels: [jobs, todo]
 - 2026-09-29 13:09: Job todo-link: aleph land now marks a linked item done in the main checkout after the fast-forward, so every land of a linked job leaves docs/todo.md changed there, and the next land does not fast-forward that checkout.
 - 2026-09-30 07:08: 2026-09-30 root cause of the drift: aleph todo writes every add, note and done to the main checkout (todoPath(repo.path)), never to a branch. So docs/todo.md in main stays dirty, and land.ts:157 then skips the fast-forward. 23 of the 26 lands since 29 Sep 10:08 say 'main checkout not updated'. Now: aleph +56 lines, sidetone +101/-8 uncommitted in docs/todo.md. Fix: write the done note into the squash tree before commit-tree, so it lands in the same commit.
 - 2026-09-30 07:08: Correction to the note above: the fast-forward guard is jobs/lib/unit.ts:157, not land.ts:157.
+- 2026-09-30 08:14: Landed in e0c6fe8: the fate of a job comes from git, a to-do write is a commit on origin/main, and a conflict goes back to the worker.
 
 ## 8. aleph todo add fails with ENOENT in a repo that has no docs directory
 ---
