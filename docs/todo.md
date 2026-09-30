@@ -182,7 +182,7 @@ labels: [jobs]
 id: 13
 status: open
 created: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 priority: medium
 labels: [jobs]
 ---
@@ -191,6 +191,7 @@ labels: [jobs]
 
 - 2026-09-29 15:48: 2026-09-29 policy from Chris: a manual check is a smell. A job should land on its automated tests. Many checks, like the car, can only happen after the change lands, so a gate before landing makes them impossible. The land gate should not block on a manual check; a rare case that cannot be tested automatically should need approval, not every job. Today aleph land refuses without --checked or --unchecked, and sidetone CLAUDE.md tells the agent to ask 'Did you check it?'. Change both: land on green tests by default, and keep the manual check as an open item on the to-do, not a gate.
 - 2026-09-29 15:49: 2026-09-29 done on the sidetone side: CLAUDE.md (33e637b) now tells the agent to land a passed job, add --unchecked when aleph land refuses for a manual check, and note the check on the to-do item. The aleph side is not changed: aleph land still refuses without --checked or --unchecked, and the news line still says 'needs-you manual'. Make a manual check a to-do note, not a refusal.
+- 2026-09-30 08:15: e0c6fe8 adds aleph job --land, which lands a run when it passes; the bounce after a conflict uses it. aleph land still refuses a manual check without --checked or --unchecked, and a plain aleph job does not land by itself.
 
 ## 14. aleph todo rewrites the whole file with no lock and no atomic rename
 ---
