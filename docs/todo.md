@@ -164,7 +164,7 @@ labels: [jobs]
 ## 12. Queue lands: two lands at once let one succeed and the others fail
 ---
 id: 12
-status: open
+status: done
 created: 2026-09-29
 updated: 2026-09-30
 priority: medium
@@ -174,6 +174,7 @@ labels: [jobs]
 ### Notes
 
 - 2026-09-30 07:08: 2026-09-30 lands are already serial: land() holds lock land-<repo> from fetch to push (unit.ts:125). The 'others fail' are rebase conflicts on shared files (docs/spec.md, src/conversation.ts, test/fixtures/messages.jsonl), then a hand-run agent follow-up and a second land (project-switch, retract-join, fade-skip, garbled-edges, fade-inverse). The queue to build: on a rebase conflict, capture the paths (item 4), dispatch the follow-up agent run itself, and land again when it passes. Survey 30 Sep: GitHub merge queue needs an org repo; Mergify, Trunk, Graphite and Aviator need a PR per branch; bors-ng and Bulldozer are archived; no agent orchestrator (Claude Squad, container-use, Vibe Kanban) ships a land queue. Keep it local.
+- 2026-09-30 08:14: Landed in e0c6fe8: the fate of a job comes from git, a to-do write is a commit on origin/main, and a conflict goes back to the worker.
 
 ## 13. Review land permissions: let a repo land its jobs without asking, set in a per-repo config
 ---
