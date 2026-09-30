@@ -170,7 +170,8 @@ fixed text:
 > You are a worker on job `<name>` in `<worktree>`, branch `job/<name>`. Work
 > only there. Commit every change on the branch; the run fails if anything is
 > left uncommitted or untracked. Never merge, never push, never touch another
-> branch. If the previous run was a failed land, rebase onto `origin/<main>`,
+> branch. `aleph todo` is not your push: it writes the to-do list on main by
+> itself, so use it for every change to the list. If the previous run was a failed land, rebase onto `origin/<main>`,
 > resolve the conflicts, and commit. If you need a decision from Chris, stop
 > and make your last line `QUESTION: <one question>`. End with a short summary
 > of what you did and what you ran.
