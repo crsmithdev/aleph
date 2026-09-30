@@ -53,9 +53,9 @@ labels: [jobs]
 ## 4. Capture the conflicted paths before the rebase abort
 ---
 id: 4
-status: open
+status: done
 created: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 priority: high
 labels: [jobs]
 ---
@@ -63,6 +63,7 @@ labels: [jobs]
 ### Notes
 
 - 2026-09-29 07:51: land() runs rebase --abort before anything reads the conflicted paths (unit.ts:133). git diff --name-only --diff-filter=U and git ls-files -u both work and neither needs rerere. Seven land runs have been lost this way.
+- 2026-09-30 08:14: Landed in e0c6fe8: the fate of a job comes from git, a to-do write is a commit on origin/main, and a conflict goes back to the worker.
 
 ## 5. Guard the missing worktree in land()
 ---
