@@ -102,8 +102,10 @@ beforeAll(() => {
     { name: "race", run: `if [ -f ${join(base, "race-once")} ]; then rm ${join(base, "race-once")}; cd ${join(base, "other")} && git pull -q --rebase origin main && echo $RANDOM > raced && git add raced && git commit -qm race && git push -q origin main; fi`, when: ["race/**"] },
   ];
   writeFileSync(join(base, "repos.json"), JSON.stringify({
-    demo: { path: repo, setup: [`echo ran >> "$SETUP_LOG"`], checks, manual: [{ when: ["android/**"], say: "run it on the phone" }] },
-    other: { path: other, checks: [] },
+    // The tests land by hand; "auto" is the same clone with the default, landing by itself.
+    demo: { path: repo, setup: [`echo ran >> "$SETUP_LOG"`], checks, manual: [{ when: ["android/**"], say: "run it on the phone" }], autoland: false },
+    auto: { path: repo, checks: [], manual: [{ when: ["android/**"], say: "run it on the phone" }] },
+    other: { path: other, checks: [], autoland: false },
   }));
 
   sh(base, "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "key.pem", "-out", "cert.pem", "-days", "1", "-subj", "/CN=tailnet");
@@ -125,7 +127,7 @@ describe("job", () => {
   test("refuses an unknown repo, prints the keys, creates nothing", async () => {
     const r = await aleph(["job", "nowhere", "alpha", "--spec", specFile("x")]);
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain("demo, other");
+    expect(r.stderr).toContain("demo, auto, other");
     expect(readdirSync(jobsDir)).toEqual([]);
   });
 
@@ -235,10 +237,12 @@ describe("the state rule", () => {
     expect(file(r.json.run, "checks.log")).toContain("## tests: exit 1");
   });
 
-  test("a change under a manual glob runs its checks and waits for Chris", async () => {
+  test("a change under a manual glob runs its checks and passes, keeping what to check", async () => {
     const r = await job("phone", "commit android/app.txt");
-    expect(state(r.json.run)).toMatchObject({ state: "needs-you", needs: "manual", say: "run it on the phone" });
+    expect(state(r.json.run)).toMatchObject({ state: "passed", say: "run it on the phone" });
+    expect(state(r.json.run).needs).toBeUndefined();
     expect(readFileSync(join(base, "android.log"), "utf8")).toBe("built\n");
+    await aleph(["drop", "phone"]);
   });
 
   test("a worker past its limit is stopped and fails as timed out", async () => {
@@ -357,36 +361,45 @@ describe("land", () => {
     expect((await aleph(["jobs"])).json.find((j: any) => j.name === "shipit")).toBeUndefined();
   });
 
-  test("a manual check needs --checked", async () => {
+  test("a manual check does not gate the land; --checked lands with no check open", async () => {
     await job("phoneland", "commit android/land.txt");
-    const r = await aleph(["land", "phoneland"]);
-    expect(r.code).toBe(1);
-    expect(r.stderr).toContain("run it on the phone");
-    expect(r.stderr).toContain("--checked");
-    expect(r.stderr).toContain("--unchecked");
     const ok = await aleph(["land", "phoneland", "--checked"]);
     expect(state(ok.json.run).state).toBe("landed");
     expect(state(ok.json.run).check).toBeUndefined();
     expect((await aleph(["jobs", "phoneland"])).json.check).toBeUndefined();
   });
 
-  test("--unchecked lands a manual check job and keeps the check open until checked", async () => {
+  test("a job with a manual check lands with the check open as a to-do item, until checked", async () => {
     await job("phonelater", "commit android/later.txt");
-    const r = await aleph(["land", "phonelater", "--unchecked"]);
+    const r = await aleph(["land", "phonelater"]);
     expect(r.code).toBe(0);
-    expect(state(r.json.run)).toMatchObject({ kind: "land", state: "landed", check: "open", say: "run it on the phone" });
-    expect(remoteHead()).toBe(state(r.json.run).commit);
+    const s = state(r.json.run);
+    expect(s).toMatchObject({ kind: "land", state: "landed", check: "open", say: "run it on the phone" });
+    expect(remoteHead()).toBe(s.commit);
+    const item = (await aleph(["todo", "show", "demo", String(s.checkItem), "--json"])).json;
+    expect(item).toMatchObject({ title: "Check phonelater: run it on the phone", status: "open", labels: ["check"] });
+    expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${s.commit}~1`, s.commit).split("\n")).toContain("docs/todo.md");
     expect(told).toContain("demo/phonelater landed; check open");
-    expect((await aleph(["jobs", "phonelater"])).json).toMatchObject({ state: "landed", check: "open", say: "run it on the phone" });
     expect((await aleph(["jobs"])).json.find((j: any) => j.name === "phonelater")).toMatchObject({ check: "open" });
 
     const c = await aleph(["checked", "phonelater"]);
     expect(c.code).toBe(0);
     expect((await aleph(["jobs", "phonelater"])).json).toMatchObject({ state: "landed", check: "done" });
     expect((await aleph(["jobs"])).json.find((j: any) => j.name === "phonelater")).toBeUndefined();
+    expect((await aleph(["todo", "show", "demo", String(s.checkItem), "--json"])).json.status).toBe("done");
     const again = await aleph(["checked", "phonelater"]);
     expect(again.code).toBe(1);
     expect(again.stderr).toContain("phonelater has no open check");
+  });
+
+  test("in a repo that lands by itself, a passed job lands with no aleph land", async () => {
+    const r = await job("selfland", "commit selfland.txt", {}, "auto");
+    expect(state(r.json.run)).toMatchObject({ state: "passed", next: "land" });
+    const runs = readdirSync(jobsDir).filter((d) => d.includes("-auto-selfland-")).sort();
+    expect(runs.map((d) => state(d).kind)).toEqual(["agent", "land"]);
+    expect(state(runs[1])).toMatchObject({ state: "landed" });
+    expect(remoteHead()).toBe(state(runs[1]).commit);
+    expect(told).toContain("auto/selfland passed; landing");
   });
 
   const runsOf = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-demo-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));

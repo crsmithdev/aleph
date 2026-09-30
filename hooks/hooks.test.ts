@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { attrs, traceIdFor, truncate, turnSpanIdFor, turnTraceIdFor } from "./lib/otlp.ts";
@@ -257,6 +257,16 @@ describe("git-guard", () => {
   });
   test("allows edits outside any repo", async () => {
     expect(await guard(join(root, "plain", "a.ts"))).toBe("");
+  });
+  test("follows a link from outside any repo into main, and denies the edit", async () => {
+    writeFileSync(join(root, "repo", "linked.md"), "x\n");
+    symlinkSync(join(root, "repo", "linked.md"), join(root, "plain", "linked.md"));
+    const out = JSON.parse(await guard(join(root, "plain", "linked.md")));
+    expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
+  });
+  test("follows a linked directory into a worktree, and allows a new file there", async () => {
+    symlinkSync(join(root, "repo", ".worktrees", "x"), join(root, "plain", "wt"));
+    expect(await guard(join(root, "plain", "wt", "new.md"))).toBe("");
   });
 });
 

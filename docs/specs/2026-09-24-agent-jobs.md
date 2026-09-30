@@ -29,7 +29,7 @@ not a sandbox.
 
 1. The lead runs `aleph job <repo> <name> --spec <file>`. aleph creates a worktree and starts a systemd unit. The unit runs setup, a fresh `claude -p` worker, and the repo's checks, then writes the state.
 2. A worker's `git push` and `gh` calls fail, because its environment points them at nothing.
-3. The checks' exit codes, on a fully clean worktree, decide the state. A change to a path with a manual check, such as `android/**`, waits for Chris.
+3. The checks' exit codes, on a fully clean worktree, decide the state. A change to a path with a manual check, such as `android/**`, lands with the check open as a to-do item; the check does not gate the land (todo item 13).
 4. aleph POSTs the news to Sidetone's new `/tell` route. When the conversation is idle, the bridge gives the news to the lead as a message. The lead reads the job's result or question and tells Chris, under its own speech rules.
 5. Chris says "land <name>". `aleph land` starts a land run: rebase, checks, one squash commit pushed as a fast-forward.
 6. A follow-up is `aleph job` again with the same name: a new run in the same worktree. It sees the original spec, every note since, and the previous result.
@@ -45,7 +45,7 @@ not a sandbox.
 6. As Chris, I want a stuck worker or check stopped, so that nothing uses quota or ports for hours.
 7. As Chris, I want a worker unable to push or merge through git or `gh`, so that only a land moves the remote main.
 8. As Chris, I want the state decided by the checks on exactly the files that will land, so that "passed" means the code that lands passed.
-9. As Chris, I want a change to a path with a manual check to wait for me, so that an untested Android change cannot land on unit tests alone.
+9. As Chris, I want a change to a path with a manual check to land on its tests and leave the check open on the to-do list, because a check such as the car can happen only after the change lands.
 10. As a worker, I want to stop with a question, so that I do not guess at Chris's intent.
 11. As Chris, I want the lead to tell me when a run ends, with what it found and what I can do next, so that I can act without asking.
 12. As Chris, I want to hear news that arrived while Sidetone was down, so that nothing is lost.
@@ -70,13 +70,13 @@ Numbers match the user stories.
 5. WHEN the dispatching process exits, or `sidetone.service` restarts, THE run SHALL continue and end with a state.
 6. WHEN the worker runs longer than `ALEPH_JOB_TIMEOUT` seconds (default 2400), or one check longer than `ALEPH_CHECK_TIMEOUT` (default 1200), THE unit SHALL stop it and its process group, AND the run SHALL end `failed` with "timed out" and what timed out. The unit decides "timed out" from its own clock, not from an exit code.
 7. WHILE a worker runs, `git push` to a `git@github.com:` remote SHALL go to the host `aleph-no-push`, AND `gh` SHALL find no credentials. WHILE `ALEPH_JOB_ID` is set, `skip verify` in the prompt SHALL NOT skip the verify gate.
-8. WHEN the worker exits THE unit SHALL decide the state in this order, the first match wins: (a) non-zero exit → `failed`, "worker exited N"; (b) a `QUESTION:` line in the result → `needs-you`, kind `question`; (c) any change in `git status --porcelain`, untracked files included → `failed`, "uncommitted: <first path>"; (d) no commits past `merge-base origin/<main> HEAD` → `done`, and the worktree and branch are removed; (e) a check fails → `failed`, "<check> failed"; (f) a changed file matches a `manual` glob → `needs-you`, kind `manual`; (g) `passed`.
+8. WHEN the worker exits THE unit SHALL decide the state in this order, the first match wins: (a) non-zero exit → `failed`, "worker exited N"; (b) a `QUESTION:` line in the result → `needs-you`, kind `question`; (c) any change in `git status --porcelain`, untracked files included → `failed`, "uncommitted: <first path>"; (d) no commits past `merge-base origin/<main> HEAD` → `done`, and the worktree and branch are removed; (e) a check fails → `failed`, "<check> failed"; (f) `passed`, with the `say` of the first `manual` glob that a changed file matches. WHEN the run passes AND it carries `land: true` or its repo does not set `"autoland": false` THEN the unit SHALL start `aleph land <name>`, and the news adds "landing".
 9. The checks SHALL run every check with no `when`, and every check whose `when` globs match a file in `git diff --name-only $(git merge-base origin/<main> HEAD) HEAD`, after a `git fetch`.
 10. WHEN a run ends in `needs-you`, kind `question`, THE state SHALL hold the question line.
 11. WHEN a run ends THE unit SHALL write `state.json`, then `exit`, then POST one line of news to `$SIDETONE_TELL_URL` with a 10 s limit, and set `told` in `state.json` on a 2xx reply. The line is `<repo>/<name> <state>`, plus the needs-you kind or the failed check's name.
 12. WHEN `aleph jobs --news` runs THE system SHALL print every ended run with `told` false and set `told` on each.
 13. WHEN `aleph job` runs with the name of an open job in the same repo THE system SHALL start a new run in that worktree. Its prompt SHALL hold the fixed text, the original `spec.md`, every `notes/*.md` in order (the new `--spec` is saved as the next note), and the previous run's `result.md`, `checks.log` and `land.log` when they exist.
-14. WHEN `aleph land <name>` runs AND the latest agent run is `passed`, or `needs-you` kind `manual` with `--checked` or `--unchecked`, THE system SHALL start a land run. With `--unchecked` the land run SHALL carry `check: "open"` and the check's `say`; `aleph jobs` SHALL list the job, `aleph jobs <name>` SHALL show `check: "open"`, and the news SHALL say "check open", until `aleph checked <name>` sets `check: "done"`. Without either flag the land SHALL exit 1 and name both flags. The land run SHALL take the job's lock, abort any rebase in progress, fetch, rebase onto `origin/<main>`, end `done` "no net change" if the tree equals `origin/<main>`'s tree, run the checks, push one `git commit-tree` commit to `<main>` with a `Job: <job>` trailer, write `landed` with the hash, fast-forward the main checkout if `git status --porcelain --untracked-files=no` is empty and it is on `<main>`, and remove the worktree with `--force` and the branch with `-D`. IF the push is refused AND every commit main gained since the fetch changes only `docs/todo.md` AND the branch does not change it THEN the land SHALL build the squash again on the new main, with no new checks, up to 5 pushes. IF the worktree is gone THEN the land SHALL end `landed` when the job's work is on main (criterion 20), else `failed` with "worktree gone".
+14. WHEN `aleph land <name>` runs AND the latest agent run is `passed` (or `needs-you` kind `manual`, from before this rule), THE system SHALL start a land run. WHEN the run has a manual check AND `--checked` is not given THE land run SHALL carry `check: "open"` and the check's `say`, the squash SHALL add the to-do item "Check <name>: <say>" with the label `check`, and `aleph jobs` SHALL list the job, `aleph jobs <name>` SHALL show `check: "open"`, and the news SHALL say "check open", until `aleph checked <name>` sets `check: "done"` and marks that item done. The land run SHALL take the job's lock, abort any rebase in progress, fetch, rebase onto `origin/<main>`, end `done` "no net change" if the tree equals `origin/<main>`'s tree, run the checks, push one `git commit-tree` commit to `<main>` with a `Job: <job>` trailer, write `landed` with the hash, fast-forward the main checkout if `git status --porcelain --untracked-files=no` is empty and it is on `<main>`, and remove the worktree with `--force` and the branch with `-D`. IF the push is refused AND every commit main gained since the fetch changes only `docs/todo.md` AND the branch does not change it THEN the land SHALL build the squash again on the new main, with no new checks, up to 5 pushes. IF the worktree is gone THEN the land SHALL end `landed` when the job's work is on main (criterion 20), else `failed` with "worktree gone".
 15. IF the rebase conflicts, a check fails, or the push is refused THEN the land run SHALL abort the rebase, leave the remote unchanged, end `failed` with the reason in `land.log`, and POST the news. Land runs SHALL NOT change which agent run decides whether the job can land. On a conflict the land SHALL first write the conflicted paths to `land.log` and `conflicts`, and the unit SHALL start a follow-up agent run with `--land` and a note that names them, at most 2 times for each job; the news adds "sent back to the worker". When main moved during the land the unit SHALL start the land again, at most 3 times for each job; the news adds "landing again".
 16. WHEN `aleph drop <name> [reason]` runs AND no land run of it is live THE system SHALL stop a live agent run of it, remove the worktree and branch, and write `dropped` with the reason, or "dropped by Chris". IF a land run is live THEN it SHALL exit 1 with "landing".
 17. WHEN `aleph jobs` runs THE system SHALL print JSON for each open job: name, repo, goal (the first line of `spec.md`), state, needs-you kind, phase (`setup`, `worker`, `check <name>`, `land`), started, ended, and `lost` when the run's process is gone. `aleph jobs <name>` SHALL also print the latest `result.md`, question, `checks.log` tail and `land.log`. Before it prints, `aleph jobs` SHALL fetch each repo once, fast-forward its main checkout as the land does, and apply criterion 20 to each open job that is not live.
@@ -256,10 +256,9 @@ queue lives in memory; a restart loses it, and `aleph jobs --news` recovers it
 > found or changed, and what Chris can do next: land it, answer a question,
 > try the manual check, or drop it. For a question, read the question.
 >
-> To land, run `aleph land <name>`. For a job that needs a manual check, ask
-> "Did you check it?" first, and add `--checked` only on a clear yes. Add
-> `--unchecked` only when Chris asks to land before the check; run
-> `aleph checked <name>` when he says the check passed. For a
+> A job lands by itself when it passes. For a job with a manual check, the
+> check stays open as a to-do item; run `aleph checked <name>` when Chris
+> says the check passed. For a
 > follow-up, an answer, or "fix it", run `aleph job` with the same name and
 > Chris's words as the spec. To drop, run `aleph drop <name>` with Chris's
 > words as the reason. When a name Chris says does not match, list the open
@@ -307,7 +306,7 @@ job from the phone, from dispatch to "land it".
 - Persistent roles, daemons, tmux, YAML teams; sessions per repo (Sidetone item 22); pull requests; cloud sessions; a jobs dashboard (Sidetone item 21).
 - A sandbox against a worker that tries to get around its limits.
 - Checks that take turns on the GPU or on ports. No clash is recorded yet.
-- Installing a worktree's Android build on the phone. A manual check waits until Chris can do it.
+- Installing a worktree's Android build on the phone. A manual check stays open on the to-do list until Chris does it.
 - Cleaning up failed jobs' worktrees. `drop` does it; `aleph jobs` lists them.
 
 ## Open Questions

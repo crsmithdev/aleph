@@ -161,10 +161,11 @@ async function plain(): Promise<void> {
 }
 
 /**
- * Start a land run. The latest agent run decides: passed, or needs-you for a
- * manual check that Chris confirmed with --checked. With --unchecked, Chris
- * lands before the check and the land run keeps the check open. The land unit
- * takes the job lock.
+ * Start a land run. The latest agent run must have passed. A manual check does
+ * not gate the land: the land run keeps it open, as a to-do item, until
+ * `aleph checked`. With --checked, Chris has done the check already. A run
+ * from before this rule, needs-you for a manual check, lands the same way.
+ * The land unit takes the job lock.
  */
 async function landJob(): Promise<void> {
   const name = checkName(positional[0]);
@@ -172,11 +173,8 @@ async function landJob(): Promise<void> {
   const live = runs.find((e) => isLive(e.folder));
   if (live) refuse(`${name} is running as ${live.id}`);
   const agent = runs.filter((e) => e.run.kind === "agent").at(-1)!.run;
-  const manual = agent.state === "needs-you" && agent.needs === "manual";
-  const unchecked = manual && rest.includes("--unchecked");
-  if (manual && !rest.includes("--checked") && !unchecked) {
-    refuse(`${name} needs a manual check: ${agent.say}; land with --checked after it, or with --unchecked only when Chris asks to land before the check`);
-  }
+  const manual = (agent.state === "needs-you" && agent.needs === "manual") || (agent.state === "passed" && agent.say !== undefined);
+  const unchecked = manual && !rest.includes("--checked");
   if (agent.state !== "passed" && !manual) refuse(`${name} is ${agent.state}${agent.needs ? ` (${agent.needs})` : ""}, not passed`);
   const repo = loadRegistry()[agent.repo!];
   const child = await dispatch({
@@ -188,12 +186,16 @@ async function landJob(): Promise<void> {
   await child?.exited;
 }
 
-/** Close the manual check of a job that landed with --unchecked. */
+/** Close the manual check of a job that landed with it open, and its to-do item. */
 function checked(): void {
   const name = checkName(positional[0]);
   const last = allJobs().filter((j) => j.at(-1)!.run.name === name).at(-1)?.at(-1);
   if (!last || last.run.state !== "landed" || last.run.check !== "open") refuse(`${name} has no open check`);
   updateRun(last!.folder, { check: "done" });
+  const repo = last!.run.repo ? loadRegistry()[last!.run.repo] : undefined;
+  const item = last!.run.checkItem;
+  const why = repo && item !== undefined ? updateTodo(repo, item, "checked by Chris", true) : null;
+  if (why) console.error(`warn: todo ${item} not closed: ${why}`);
   out({ job: last!.run.job, name, state: "landed", check: "done" });
 }
 

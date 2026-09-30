@@ -14,8 +14,10 @@ export interface Run {
   state: State; needs?: "manual" | "question"; phase?: string;
   reason?: string; question?: string; say?: string;
   session?: string; model?: string; commit?: string;
-  /** A land run with --unchecked: the manual check is "open" until `aleph checked` makes it "done". */
+  /** A land run of a job with a manual check: "open" until `aleph checked` makes it "done". */
   check?: "open" | "done";
+  /** The to-do item that holds an open manual check. */
+  checkItem?: number;
   /** The repo's to-do item the job works on: land marks it done, drop adds a note. */
   todo?: number;
   /** An agent run started with --land: it lands when it passes. */
@@ -31,6 +33,8 @@ export interface Check { name: string; run: string; when?: string[] }
 export interface Repo {
   key: string; path: string; env?: string; main: string;
   setup: string[]; checks: Check[]; manual: { when: string[]; say: string }[]; note?: string;
+  /** A passed agent run lands by itself. On unless the registry says false. */
+  autoland: boolean;
 }
 
 export const OPEN: State[] = ["running", "passed", "needs-you", "failed"];
@@ -48,7 +52,7 @@ export function loadRegistry(): Record<string, Repo> {
   for (const [key, r] of Object.entries<any>(raw)) {
     repos[key] = {
       key, path: expand(r.path), env: r.env ? expand(r.env) : undefined, main: r.main ?? "main",
-      setup: r.setup ?? [], checks: r.checks ?? [], manual: r.manual ?? [], note: r.note,
+      setup: r.setup ?? [], checks: r.checks ?? [], manual: r.manual ?? [], note: r.note, autoland: r.autoland ?? true,
     };
   }
   return repos;
@@ -186,7 +190,7 @@ export function newsLine(run: Run, note?: string): string {
   if (run.state === "landed" && run.reason) line += `; ${run.reason}`;
   if (run.state === "landed" && note) line += `; ${note}`;
   if (run.next === "worker") line += "; sent back to the worker";
-  if (run.next === "land") line += "; landing again";
+  if (run.next === "land") line += run.kind === "land" ? "; landing again" : "; landing";
   return line;
 }
 

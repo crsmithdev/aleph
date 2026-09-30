@@ -81,9 +81,6 @@ squash merge to `main` from the main checkout, push, remove the worktree and
 the branch. Commit after each verified change, and end every task with a
 clean tree.
 
-Trivial edits to `main` (a one-line doc fix pushed immediately) are the one
-exception, and only when Chris asks for one.
-
 ## Verification
 
 A turn that changed code ends by saying what was run and what was observed,

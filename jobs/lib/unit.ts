@@ -21,17 +21,19 @@ interface Exec { code: number; timedOut: boolean }
 /**
  * Run a command with its output appended to `out`. With a limit, it runs under
  * `timeout`, which puts the command in its own process group and signals the
- * group. Whether it timed out comes from this clock, not from the exit code.
+ * group. Whether it timed out comes from this clock, not from the exit code,
+ * which the command can return by itself. The clock is performance.now(), which
+ * only moves forward: Date.now() follows the wall clock, which WSL can set back.
  */
 async function exec(argv: string[], o: { cwd: string; env: Record<string, string | undefined>; out: string; limit?: number; stdin?: string }): Promise<Exec> {
   const cmd = o.limit ? ["timeout", "--kill-after=30", String(o.limit), ...argv] : argv;
   const fd = openSync(o.out, "a");
-  const start = Date.now();
+  const start = performance.now();
   child = Bun.spawn(cmd, { cwd: o.cwd, env: o.env, stdin: o.stdin === undefined ? "ignore" : new Blob([o.stdin]), stdout: fd, stderr: fd });
   const code = await child.exited;
   child = null;
   closeSync(fd);
-  return { code, timedOut: o.limit !== undefined && Date.now() - start >= o.limit * 1000 };
+  return { code, timedOut: o.limit !== undefined && performance.now() - start >= o.limit * 1000 };
 }
 
 const limit = (name: string, fallback: number) => Number(process.env[name] ?? fallback);
@@ -123,22 +125,30 @@ export function onMain(repo: Repo, run: Run): { commit: string; how: string } | 
 }
 
 /**
- * The tree to push: the checked tree, with the list from `onto` and the job's
- * item marked done. When the branch changed the list itself, its copy is the one used.
+ * The tree to push: the checked tree, with the list from `onto`, the job's
+ * item marked done, and a new item for an open manual check. When the branch
+ * changed the list itself, its copy is the one used.
  */
-function squashTree(wt: string, run: Run, onto: string, ownList: boolean): { tree: string; todo?: string } {
+function squashTree(wt: string, run: Run, onto: string, ownList: boolean): { tree: string; todo?: string; checkItem?: number } {
   const head = git(wt, "rev-parse", "HEAD^{tree}").out;
-  const text = show(wt, ownList ? "HEAD" : onto, TODO_PATH);
-  if (text === null) return { tree: head, todo: run.todo === undefined ? undefined : `no ${TODO_PATH}` };
-  // Without an item to close, the list goes in byte for byte.
-  const asIs = () => text === show(wt, "HEAD", TODO_PATH) ? head : treeWith(wt, head, TODO_PATH, text);
-  if (run.todo === undefined) return { tree: asIs() };
+  const shown = show(wt, ownList ? "HEAD" : onto, TODO_PATH);
+  const open = run.check === "open";
+  if (shown === null && !open) return { tree: head, todo: run.todo === undefined ? undefined : `no ${TODO_PATH}` };
+  const text = shown ?? todos.render(todos.blank(run.repo ?? ""));
+  // With nothing to change, the list goes in byte for byte.
+  if (run.todo === undefined && !open) return { tree: text === show(wt, "HEAD", TODO_PATH) ? head : treeWith(wt, head, TODO_PATH, text) };
   const doc = todos.parse(text);
-  const item = todos.find(doc, run.todo);
-  if (!item) return { tree: asIs(), todo: `no item ${run.todo}` };
-  todos.setStatus(item, "done");
-  todos.note(item, `job ${run.name} landed`);
-  return { tree: treeWith(wt, head, TODO_PATH, todos.render(doc)), todo: "done" };
+  let todo: string | undefined;
+  if (run.todo !== undefined) {
+    const item = todos.find(doc, run.todo);
+    if (item) {
+      todos.setStatus(item, "done");
+      todos.note(item, `job ${run.name} landed`);
+    }
+    todo = item ? "done" : `no item ${run.todo}`;
+  }
+  const checkItem = open ? todos.add(doc, `Check ${run.name}: ${run.say}`, { labels: ["check"] }).id : undefined;
+  return { tree: treeWith(wt, head, TODO_PATH, todos.render(doc)), todo, checkItem };
 }
 
 const PUSHES = 5;
@@ -203,9 +213,11 @@ async function land(folder: string, run: Run, repo: Repo, env: Record<string, st
     let onto = base;
     let commit = "";
     let todo: string | undefined;
+    let checkItem: number | undefined;
     for (let attempt = 1; ; attempt++) {
       const squash = squashTree(wt, run, onto, ownList);
       todo = squash.todo;
+      checkItem = squash.checkItem;
       const c = step("commit-tree", "commit-tree", squash.tree, "-p", onto, "-m", message);
       if (!c.ok) return fail("commit-tree failed");
       if (step("push", "push", "-q", "origin", `${c.out}:refs/heads/${main}`).ok) { commit = c.out; break; }
@@ -218,11 +230,12 @@ async function land(folder: string, run: Run, repo: Repo, env: Record<string, st
       onto = moved;
     }
     if (todo) log(todo === "done" ? `todo ${run.todo} done` : `todo ${run.todo} not closed: ${todo}`);
+    if (checkItem !== undefined) log(`todo ${checkItem} holds the manual check`);
 
     const reason = followMain(repo.path, main) ?? undefined;
     log(reason ?? "main checkout updated");
     removeWorktree(repo, run);
-    return { verdict: { state: "landed", commit, reason }, code: 0 };
+    return { verdict: { state: "landed", commit, reason, checkItem }, code: 0 };
   } finally {
     releaseRepo?.();
     release();
@@ -267,7 +280,7 @@ export function removeWorktree(repo: Repo, run: Run): void {
   git(repo.path, "branch", "-D", run.branch!);
 }
 
-type Verdict = Pick<Run, "state" | "needs" | "reason" | "question" | "say" | "commit" | "conflicts">;
+type Verdict = Pick<Run, "state" | "needs" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem">;
 
 export async function unit(folder: string): Promise<void> {
   // drop sends SIGTERM when no systemd unit is there to stop the cgroup.
@@ -312,7 +325,7 @@ export async function unit(folder: string): Promise<void> {
   }
 
   let ended = updateRun(folder, { ...verdict, phase: undefined, ended: new Date().toISOString() });
-  const next = nextStep(ended);
+  const next = nextStep(ended, repo);
   if (next) ended = updateRun(folder, { next });
   writeFileSync(join(folder, "exit"), String(code));
   if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });
@@ -325,10 +338,11 @@ const RELANDS = 3;
 /**
  * What the unit starts after a run ends. A land that conflicts goes back to
  * the worker, at most BOUNCES times a job; a land that lost a race lands
- * again, at most RELANDS times; an agent run started with --land lands when it passes.
+ * again, at most RELANDS times; an agent run lands when it passes, when it was
+ * started with --land or its repo lands by itself.
  */
-function nextStep(run: Run): Run["next"] {
-  if (run.kind === "agent") return run.state === "passed" && run.land ? "land" : undefined;
+function nextStep(run: Run, repo: Repo | undefined): Run["next"] {
+  if (run.kind === "agent") return run.state === "passed" && (run.land || repo?.autoland) ? "land" : undefined;
   if (run.kind !== "land" || run.state !== "failed") return undefined;
   const lands = (allJobs().find((j) => j[0].id === run.job) ?? []).filter((e) => e.run.kind === "land").map((e) => e.run);
   if (run.conflicts?.length) return lands.filter((r) => r.conflicts?.length).length <= BOUNCES ? "worker" : undefined;
@@ -412,7 +426,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   const failed = await runChecks(folder, wt, repo, checkEnv, changed, phase);
   if (failed) return fail(failed);
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
+  // A manual check does not hold the run: it lands with the check open (see land).
   const manual = repo.manual.find((m) => matches(m.when));
-  if (manual) return { verdict: { state: "needs-you", needs: "manual", say: manual.say }, code: 0 };
-  return { verdict: { state: "passed" }, code: 0 };
+  return { verdict: { state: "passed", ...(manual ? { say: manual.say } : {}) }, code: 0 };
 }
