@@ -68,9 +68,9 @@ labels: [jobs]
 ## 5. Guard the missing worktree in land()
 ---
 id: 5
-status: open
+status: done
 created: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 priority: high
 labels: [jobs]
 ---
@@ -79,6 +79,7 @@ labels: [jobs]
 
 - 2026-09-29 07:51: unit.ts:109 passes run.worktree to git() with no existsSync guard, so a removed worktree reads as posix_spawn git ENOENT. Line 228 in the same file already guards it.
 - 2026-09-29 15:24: 2026-09-29 evidence: the sidetone jobs voice-eval, prefer-background, audio-static and tool-batching each failed land twice (runs 20260928-163706 and 20260929-111540) with 'posix_spawn git ENOENT'. git is at /usr/bin/git; the cause is the missing worktree used as cwd, as above. Chris had already ported all four to main by hand, and the job branches were deleted: voice-eval as 1704917, prefer-background as e1cb4d7 (item 64), tool-batching as 7ae9476 and 94bbe0a (item 62), audio-static as the finding ~/.sidetone/findings/audio-transport-56.md plus 309d2fe. So aleph jobs still lists four failed jobs that did land. The error text says git is missing, which misled the diagnosis.
+- 2026-09-30 08:14: Landed in e0c6fe8: the fate of a job comes from git, a to-do write is a commit on origin/main, and a conflict goes back to the worker.
 
 ## 6. Flaky test: a check past its limit is stopped and fails as timed out
 ---
