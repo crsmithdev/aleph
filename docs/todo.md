@@ -194,9 +194,9 @@ labels: [jobs]
 ## 14. aleph todo rewrites the whole file with no lock and no atomic rename
 ---
 id: 14
-status: open
+status: done
 created: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 priority: high
 labels: [todo, jobs]
 ---
@@ -204,3 +204,4 @@ labels: [todo, jobs]
 ### Notes
 
 - 2026-09-29 18:41: todo/lib/todo.ts:104-108 read-parse-render-writeFileSync, no lock, no temp+rename; jobs/cli.ts uses lock() for dispatch and per-job. Append-only notes stop semantic erasure between two writers, not a concurrent read-modify-write: the second render overwrites the first. Survey 29 Sep: this exact shape is claude-task-master's corruption tail (#1567 race between Claude Code windows, #854 bulk-update data loss, #1708 schema corruption on set-status) and Backlog.md #843 'task edit loses concurrent writes silently'. One writer today; a seat model makes it routine.
+- 2026-09-30 08:15: Landed in e0c6fe8: the fate of a job comes from git, a to-do write is a commit on origin/main, and a conflict goes back to the worker.
