@@ -149,9 +149,9 @@ labels: [hooks, docs]
 ## 11. Land says 'main checkout not updated' when the main checkout has uncommitted changes, and reports the job as landed
 ---
 id: 11
-status: open
+status: done
 created: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 priority: medium
 labels: [jobs]
 ---
@@ -159,6 +159,7 @@ labels: [jobs]
 ### Notes
 
 - 2026-09-29 15:24: 2026-09-29 evidence: sidetone job test-audit (run 20260929-111251) ran fetch, rebase, commit-tree and push all ok, and pushed 18ad700. Then land.log says 'main checkout not updated' and the state is landed with that as its reason. The sidetone main checkout had an uncommitted change to docs/todo.md at the time, which is the likely cause but is not verified. Same run as the item 5 failures. Chris cannot tell from the landed state that the local main is behind origin. Check what the land step does when the checkout is dirty, and say so in the news line.
+- 2026-09-30 08:14: Landed in e0c6fe8: the fate of a job comes from git, a to-do write is a commit on origin/main, and a conflict goes back to the worker.
 
 ## 12. Queue lands: two lands at once let one succeed and the others fail
 ---
