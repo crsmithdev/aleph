@@ -18,6 +18,12 @@ export interface Run {
   check?: "open" | "done";
   /** The repo's to-do item the job works on: land marks it done, drop adds a note. */
   todo?: number;
+  /** An agent run started with --land: it lands when it passes. */
+  land?: boolean;
+  /** A land run's conflicted paths, read before the rebase abort. */
+  conflicts?: string[];
+  /** What the unit started after this run ended: the worker again, or another land. */
+  next?: "worker" | "land";
   told: boolean; started: string; ended?: string;
 }
 
@@ -179,6 +185,8 @@ export function newsLine(run: Run, note?: string): string {
   if (run.state === "landed" && run.check === "open") line += "; check open";
   if (run.state === "landed" && run.reason) line += `; ${run.reason}`;
   if (run.state === "landed" && note) line += `; ${note}`;
+  if (run.next === "worker") line += "; sent back to the worker";
+  if (run.next === "land") line += "; landing again";
   return line;
 }
 

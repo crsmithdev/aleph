@@ -4,28 +4,92 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const CLI = join(import.meta.dir, "..", "jobs", "cli.ts");
-let base: string, repo: string, file: string;
+let base: string, remote: string, repo: string, file: string;
 
-function env(): Record<string, string> {
-  return { ...(process.env as Record<string, string>), ALEPH_REPOS: join(base, "repos.json") };
+const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+function sh(cwd: string, ...args: string[]): string {
+  const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
+  if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
+  return p.stdout.toString().trim();
+}
+
+function env(extra: Record<string, string> = {}): Record<string, string> {
+  return { ...(process.env as Record<string, string>), ...gitEnv, ALEPH_REPOS: join(base, "repos.json"), ...extra };
 }
 
 function aleph(...args: string[]): { code: number; out: string; err: string } {
-  const p = Bun.spawnSync(["bun", CLI, ...args], { env: env(), stdout: "pipe", stderr: "pipe" });
+  return alephWith({}, ...args);
+}
+function alephWith(extra: Record<string, string>, ...args: string[]): { code: number; out: string; err: string } {
+  const p = Bun.spawnSync(["bun", CLI, ...args], { env: env(extra), stdout: "pipe", stderr: "pipe" });
   return { code: p.exitCode, out: p.stdout.toString(), err: p.stderr.toString() };
 }
 
+/** The list as the main checkout has it, which follows origin/main. */
 const doc = () => readFileSync(file, "utf8");
+const remoteList = () => sh(base, "git", "--git-dir", remote, "show", "main:docs/todo.md");
+
+/** Put `text` on origin/main as the list, the way a hand commit would. */
+function seed(text: string | null): void {
+  if (text === null) sh(repo, "git", "rm", "-q", "docs/todo.md");
+  else { writeFileSync(file, text); sh(repo, "git", "add", "docs/todo.md"); }
+  sh(repo, "git", "commit", "-qm", "seed");
+  sh(repo, "git", "push", "-q", "origin", "main");
+}
 
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-todo-"));
+  remote = join(base, "remote.git");
   repo = join(base, "proj");
+  sh(base, "git", "init", "-q", "--bare", "-b", "main", remote);
+  sh(base, "git", "clone", "-q", remote, repo);
   mkdirSync(join(repo, "docs"), { recursive: true });
   file = join(repo, "docs", "todo.md");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ proj: { path: repo } }));
-  writeFileSync(file, "# To do\n\nChris's list.\n\n## 3. An old prose item\n\nWritten before the command existed.\n\nDone when it is done.\n");
+  seed("# To do\n\nChris's list.\n\n## 3. An old prose item\n\nWritten before the command existed.\n\nDone when it is done.\n");
 });
 afterEach(() => rmSync(base, { recursive: true, force: true }));
+
+test("a write is one commit on origin/main, and the main checkout follows with no changes of its own", () => {
+  const before = sh(repo, "git", "rev-parse", "HEAD");
+  const a = aleph("todo", "add", "proj", "Teach the gate to count");
+  expect(a.code).toBe(0);
+  const head = sh(base, "git", "--git-dir", remote, "rev-parse", "main");
+  expect(JSON.parse(a.out).commit).toBe(head);
+  expect(sh(base, "git", "--git-dir", remote, "rev-parse", "main~1")).toBe(before);
+  expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", "main~1", "main")).toBe("docs/todo.md");
+  expect(remoteList()).toContain("## 4. Teach the gate to count");
+  expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(head);
+  expect(sh(repo, "git", "status", "--porcelain")).toBe("");
+});
+
+test("a write from a clone that is behind lands on top of main and keeps main's change", () => {
+  const other = join(base, "other");
+  sh(base, "git", "clone", "-q", remote, other);
+  writeFileSync(join(other, "code.txt"), "x\n");
+  sh(other, "git", "add", "code.txt");
+  sh(other, "git", "commit", "-qm", "code");
+  sh(other, "git", "push", "-q", "origin", "main");
+  expect(aleph("todo", "add", "proj", "After the code").code).toBe(0);
+  expect(sh(base, "git", "--git-dir", remote, "log", "--format=%s", "-2", "main")).toBe("todo: add an item\ncode");
+  expect(existsInCheckout("code.txt")).toBe(true);
+});
+const existsInCheckout = (f: string) => Bun.spawnSync(["test", "-f", join(repo, f)]).exitCode === 0;
+
+test("a write with a dirty main checkout still reaches main, and says the checkout did not follow", () => {
+  writeFileSync(join(repo, "docs", "todo.md"), "local edit\n");
+  const a = aleph("todo", "add", "proj", "Despite the edit");
+  expect(a.code).toBe(0);
+  expect(remoteList()).toContain("Despite the edit");
+  expect(a.err).toContain("main checkout not updated: it has changes in docs/todo.md");
+  expect(doc()).toBe("local edit\n");
+});
+
+test("a worker's push block does not stop a to-do write", () => {
+  const w = alephWith({ GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: `url.${join(base, "nowhere")}.pushInsteadOf`, GIT_CONFIG_VALUE_0: remote }, "todo", "note", "proj", "3", "from a worker");
+  expect(w.code).toBe(0);
+  expect(remoteList()).toContain("from a worker");
+});
 
 test("add allocates the next id and list shows it", () => {
   const a = aleph("todo", "add", "proj", "Teach the gate to count");
@@ -86,7 +150,7 @@ test("labels filter, and a flag value never lands in the title", () => {
 });
 
 test("lint blocks on bad frontmatter and --fix repairs what it can", () => {
-  writeFileSync(file, `# To do\n\n## 7. Broken\n---\nid: 9\nstatus: open\ncreated: 2026-09-01\n---\n\nBody.\n`);
+  seed(`# To do\n\n## 7. Broken\n---\nid: 9\nstatus: open\ncreated: 2026-09-01\n---\n\nBody.\n`);
   const bad = aleph("todo", "lint", "proj");
   expect(bad.code).toBe(1);
   expect(bad.err).toContain("updated is missing");
@@ -98,7 +162,7 @@ test("lint blocks on bad frontmatter and --fix repairs what it can", () => {
 });
 
 test("lint refuses an unknown status and a duplicate id, and --fix cannot save it", () => {
-  writeFileSync(file, `# To do\n\n## 8. One\n---\nid: 8\nstatus: maybe\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nA.\n\n## 8. Two\n---\nid: 8\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nB.\n`);
+  seed(`# To do\n\n## 8. One\n---\nid: 8\nstatus: maybe\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nA.\n\n## 8. Two\n---\nid: 8\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nB.\n`);
   const r = aleph("todo", "lint", "proj");
   expect(r.code).toBe(1);
   expect(r.err).toContain('status "maybe" is not one of');
@@ -107,13 +171,13 @@ test("lint refuses an unknown status and a duplicate id, and --fix cannot save i
 });
 
 test("add starts a list for a repo that has none; every other verb refuses", () => {
-  rmSync(file);
+  seed(null);
   expect(aleph("todo", "list", "proj").code).toBe(1);
   expect(aleph("todo", "list", "proj").err).toContain("no ");
   const a = aleph("todo", "add", "proj", "The first thing");
   expect(a.code).toBe(0);
   expect(JSON.parse(a.out).added).toBe(1);
-  expect(readFileSync(file, "utf8")).toContain("# To do");
+  expect(remoteList()).toContain("# To do");
   expect(JSON.parse(aleph("todo", "list", "proj", "--json").out)).toHaveLength(1);
   expect(aleph("todo", "lint", "proj").code).toBe(0);
 });
@@ -141,7 +205,7 @@ test("dates are local, not UTC", () => {
 });
 
 test("a write keeps one blank line between the header and the body", () => {
-  writeFileSync(file, `# To do\n\n## 5. Five\n---\nid: 5\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nBody.\n\n## 6. Six\n---\nid: 6\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nOther.\n`);
+  seed(`# To do\n\n## 5. Five\n---\nid: 5\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nBody.\n\n## 6. Six\n---\nid: 6\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nOther.\n`);
   for (let i = 0; i < 3; i++) aleph("todo", "note", "proj", "6", `note ${i}`);
   expect(doc()).toContain("---\n\nBody.\n\n## 6.");
   expect(doc()).toContain("---\n\nOther.\n\n### Notes");

@@ -9,8 +9,10 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Run } from "./lib/ledger.ts";
-import { git, unit, updateTodo } from "./lib/unit.ts";
+import { followMain } from "./lib/git.ts";
+import { git, onMain, removeWorktree, unit, updateTodo } from "./lib/unit.ts";
 import * as todos from "../todo/lib/todo.ts";
+import * as store from "../todo/lib/store.ts";
 
 const CLI = import.meta.path;
 const CAP = 5;
@@ -54,9 +56,12 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
       if (live.length >= CAP) refuse(`${live.length} agent runs are live: ${live.map((e) => e.run.name).join(", ")}`);
     }
     mkdirSync(jobsDir(), { recursive: true });
+    // Runs sort by folder name, so two runs of one job never share a second:
+    // a follow-up started in its land's second would sort before that land.
     for (;;) {
-      id = `${stamp()}-${tag}-${run.kind}`;
-      if (!existsSync(join(jobsDir(), id))) break;
+      const prefix = `${stamp()}-${tag}-`;
+      id = `${prefix}${run.kind}`;
+      if (!readdirSync(jobsDir()).some((d) => d.startsWith(prefix))) break;
       await Bun.sleep(200);
     }
     const folder = join(jobsDir(), id);
@@ -99,9 +104,7 @@ async function job(): Promise<void> {
   if (todoArg !== undefined) {
     todo = Number(todoArg);
     if (!Number.isInteger(todo)) refuse("--todo takes an item number");
-    const file = todos.todoPath(repo.path);
-    if (!existsSync(file)) refuse(`no ${file}`);
-    if (!todos.find(todos.parse(readFileSync(file, "utf8")), todo!)) refuse(`${repo.key} has no item ${todo}`);
+    if (!todos.find(readTodo(repo, `origin/${repo.main}:${store.TODO_PATH}`), todo!)) refuse(`${repo.key} has no item ${todo}`);
   }
 
   const release = await lock(`job-${repo.key}-${name}`);
@@ -120,7 +123,7 @@ async function job(): Promise<void> {
     child = await dispatch({
       kind: "agent", job: first?.id, name, repo: repo.key, branch: `job/${name}`, worktree,
       state: "running", phase: "starting", session: crypto.randomUUID(), ...(model ? { model } : {}),
-      ...(todo !== undefined ? { todo } : {}), told: false, started: new Date().toISOString(),
+      ...(todo !== undefined ? { todo } : {}), ...(rest.includes("--land") ? { land: true } : {}), told: false, started: new Date().toISOString(),
     }, `${repo.key}-${name}`, repo.path, (folder) => {
       if (!first) return writeFileSync(join(folder, "spec.md"), spec);
       const notes = join(first.folder, "notes");
@@ -199,14 +202,49 @@ function read(folder: string, file: string): string | undefined {
   return existsSync(p) ? readFileSync(p, "utf8") : undefined;
 }
 
-function summary(runs: Entry[]) {
+/**
+ * The ledger follows git. An open job whose work is on origin/<main> becomes
+ * landed, quietly, with its to-do item done. An open job with no branch and
+ * no worktree left is "gone": nothing is left to land. Every other open job
+ * is "unlanded". Each repo is fetched once, and its main checkout follows.
+ */
+function reconcile(all: Entry[][]): Map<string, string> {
+  const registry = loadRegistry();
+  const fetched = new Set<string>();
+  const fates = new Map<string, string>();
+  for (const runs of all.filter(isOpen)) {
+    const last = runs.at(-1)!;
+    const repo = last.run.repo ? registry[last.run.repo] : undefined;
+    if (!repo || last.run.kind === "plain" || isLive(last.folder)) continue;
+    if (!fetched.has(repo.key)) {
+      fetched.add(repo.key);
+      git(repo.path, "fetch", "-q", "origin");
+      const why = followMain(repo.path, repo.main);
+      if (why) console.error(`warn: ${repo.key}: ${why}`);
+    }
+    const found = onMain(repo, last.run);
+    if (found) {
+      updateRun(last.folder, { state: "landed", commit: found.commit, reason: `found on main (${found.how})`, needs: undefined, told: true });
+      if (last.run.worktree) removeWorktree(repo, last.run);
+      const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
+      const why = todo === undefined ? null : updateTodo(repo, todo, `job ${last.run.name} found on main as ${found.commit.slice(0, 7)}`, true);
+      if (why) console.error(`warn: todo ${todo} not closed: ${why}`);
+      continue;
+    }
+    const branch = last.run.branch && git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${last.run.branch}`).ok;
+    fates.set(last.run.job, branch || (last.run.worktree && existsSync(last.run.worktree)) ? "unlanded" : "gone");
+  }
+  return fates;
+}
+
+function summary(runs: Entry[], fates = new Map<string, string>()) {
   const first = runs[0];
   const last = runs.at(-1)!;
   const r = last.run;
   const goal = (read(first.folder, "spec.md") ?? read(first.folder, "command.txt") ?? "").trim().split("\n")[0];
   return {
     name: r.name, repo: r.repo, kind: r.kind, job: r.job, run: last.id, goal, state: r.state, needs: r.needs, phase: r.phase,
-    reason: r.reason, say: r.say, ...(r.state === "landed" && r.check ? { check: r.check } : {}), session: r.session, started: first.run.started, ended: r.ended,
+    reason: r.reason, say: r.say, ...(r.state === "landed" && r.check ? { check: r.check } : {}), fate: fates.get(r.job), session: r.session, started: first.run.started, ended: r.ended,
     ...(isLost(last.folder) ? { lost: true } : {}),
   };
 }
@@ -221,16 +259,17 @@ function jobs(): void {
     }
     return out(news);
   }
+  const fates = reconcile(allJobs());
   const all = allJobs();
   const name = positional[0];
   // A job that landed with its check open stays in the list until `aleph checked`.
-  if (!name) return out(all.filter((j) => isOpen(j) || (j.at(-1)!.run.state === "landed" && j.at(-1)!.run.check === "open")).map(summary));
+  if (!name) return out(all.filter((j) => isOpen(j) || (j.at(-1)!.run.state === "landed" && j.at(-1)!.run.check === "open")).map((j) => summary(j, fates)));
   const runs = all.filter(isOpen).find((j) => j.at(-1)!.run.name === name) ?? all.filter((j) => j.at(-1)!.run.name === name).at(-1);
   if (!runs) refuse(`no job named ${name}`);
   const last = runs!.at(-1)!;
   const checks = read(last.folder, "checks.log");
   out({
-    ...summary(runs!), question: last.run.question, result: read(last.folder, "result.md"),
+    ...summary(runs!, fates), question: last.run.question, result: read(last.folder, "result.md"),
     checks: checks?.trimEnd().split("\n").slice(-40).join("\n"), land: read(last.folder, "land.log"),
   });
 }
@@ -260,7 +299,7 @@ async function drop(): Promise<void> {
     // Chris asked for the drop, so it is not news.
     updateRun(last.folder, { state: "dropped", reason, needs: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
-    const why = repo && todo !== undefined ? updateTodo(repo.path, todo, `job ${name} dropped: ${reason}`, false) : null;
+    const why = repo && todo !== undefined ? updateTodo(repo, todo, `job ${name} dropped: ${reason}`, false) : null;
     if (why) console.error(`warn: todo ${todo} has no note: ${why}`);
     out({ job: last.run.job, name, state: "dropped", reason });
   } finally {
@@ -277,33 +316,40 @@ function todoCmd(): void {
   const [verb, repoKey, ...args] = positional;
   const sub = verb ?? refuse("usage: aleph todo <add|list|show|note|done|drop|lint> <repo> ...");
   const repo = loadRegistry()[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
-  const file = todos.todoPath(repo.path);
-  // `add` starts a list for a registered repo that has none; every other verb
-  // needs one to already exist.
-  if (!existsSync(file) && sub !== "add") refuse(`no ${file}`);
-  const doc = existsSync(file) ? todos.parse(readFileSync(file, "utf8")) : todos.blank(repo.key);
+  const where = `origin/${repo.main}:${store.TODO_PATH}`;
 
-  const item = (): todos.Item => {
+  const pick = (doc: todos.Doc): todos.Item => {
     const id = Number(args[0]);
     if (!Number.isInteger(id)) refuse("name an item by its number");
     return todos.find(doc, id) ?? refuse(`${repo.key} has no item ${id}`);
   };
-  const save = () => writeFileSync(file, todos.render(doc));
+  // Every verb but `add` needs a list on main; `add` starts one.
+  const write = <T>(message: string, change: (doc: todos.Doc) => T | null, create = false) => {
+    let written;
+    try {
+      written = store.writeList(repo, message, change, create);
+    } catch (e: any) {
+      if (e instanceof Refusal) throw e;
+      refuse(e?.message ?? String(e));
+    }
+    if (written?.follow) console.error(`warn: ${written.follow}`);
+    return written;
+  };
   const brief = (i: todos.Item) => ({ id: i.id, title: i.title, status: todos.status(i), priority: i.fm.priority ?? null, labels: i.fm.labels ?? [], updated: i.fm.updated ?? null, notes: i.notes.length, legacy: i.legacy || undefined });
 
   switch (sub) {
     case "add": {
       const title = args.join(" ").trim() || refuse("give the item a title");
       const labels = (flag("labels") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-      const made = todos.add(doc, title, { priority: flag("priority"), labels });
-      save();
-      out({ repo: repo.key, added: made.id, title: made.title, file });
+      const w = write("todo: add an item", (doc) => todos.add(doc, title, { priority: flag("priority"), labels }), true)!;
+      out({ repo: repo.key, added: w.value.id, title: w.value.title, commit: w.commit });
       return;
     }
     case "list": {
       const want = flag("status");
       if (want && !todos.STATUSES.includes(want as todos.Status)) refuse(`status must be one of ${todos.STATUSES.join(", ")}`);
       const label = flag("label");
+      const doc = readTodo(repo, where);
       const rows = doc.items
         .filter((i) => (want ? todos.status(i) === want : true))
         .filter((i) => (label ? ((i.fm.labels as string[]) ?? []).includes(label) : true));
@@ -314,7 +360,7 @@ function todoCmd(): void {
       return;
     }
     case "show": {
-      const i = item();
+      const i = pick(readTodo(repo, where));
       if (rest.includes("--json")) { out({ ...brief(i), body: i.body, notes: i.notes }); return; }
       console.log(`## ${i.id}. ${i.title}`);
       console.log(`status ${todos.status(i)}   priority ${i.fm.priority ?? "-"}   labels ${(((i.fm.labels as string[]) ?? []).join(", ")) || "-"}   updated ${i.fm.updated ?? "-"}`);
@@ -323,40 +369,47 @@ function todoCmd(): void {
       return;
     }
     case "note": {
-      const i = item();
       const text = args.slice(1).join(" ").trim() || refuse("give the note some text");
-      const line = todos.note(i, text);
-      save();
-      out({ repo: repo.key, id: i.id, note: line });
+      const w = write(`todo: a note on item ${args[0]}`, (doc) => { const i = pick(doc); return { id: i.id, line: todos.note(i, text) }; })!;
+      out({ repo: repo.key, id: w.value.id, note: w.value.line, commit: w.commit });
       return;
     }
     case "done":
     case "drop": {
-      const i = item();
       const text = args.slice(1).join(" ").trim();
       if (sub === "drop" && !text) refuse("say why it is dropped");
-      todos.setStatus(i, sub === "done" ? "done" : "dropped");
-      if (text) todos.note(i, text);
-      save();
-      out({ repo: repo.key, id: i.id, status: todos.status(i), title: i.title });
+      const w = write(`todo: item ${args[0]} ${sub === "done" ? "done" : "dropped"}`, (doc) => {
+        const i = pick(doc);
+        todos.setStatus(i, sub === "done" ? "done" : "dropped");
+        if (text) todos.note(i, text);
+        return i;
+      })!;
+      out({ repo: repo.key, id: w.value.id, status: todos.status(w.value), title: w.value.title, commit: w.commit });
       return;
     }
     case "lint": {
       if (rest.includes("--fix")) {
-        const fixed = todos.fix(doc);
-        if (fixed.length) save();
-        const left = todos.lint(doc);
-        out({ repo: repo.key, fixed, remaining: left });
+        const w = write("todo: lint --fix", (doc) => { const fixed = todos.fix(doc); return fixed.length ? { fixed, left: todos.lint(doc) } : null; });
+        const left = w?.value.left ?? todos.lint(readTodo(repo, where));
+        out({ repo: repo.key, fixed: w?.value.fixed ?? [], remaining: left });
         if (left.length) process.exit(1);
         return;
       }
+      const doc = readTodo(repo, where);
       const findings = todos.lint(doc);
       if (!findings.length) { out({ repo: repo.key, items: doc.items.length, findings: [] }); return; }
       for (const f of findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
-      refuse(`${findings.length} problem${findings.length > 1 ? "s" : ""} in ${file}`);
+      refuse(`${findings.length} problem${findings.length > 1 ? "s" : ""} in ${where}`);
     }
     default: refuse("usage: aleph todo <add|list|show|note|done|drop|lint> <repo> ...");
   }
+}
+
+/** The list on origin/<main>; a refusal when main has none or the fetch fails. */
+function readTodo(repo: store.Place, where: string): todos.Doc {
+  let doc: todos.Doc | null = null;
+  try { doc = store.readList(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
+  return doc ?? refuse(`no ${where}`);
 }
 
 try {

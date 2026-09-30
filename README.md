@@ -128,6 +128,8 @@ aleph todo drop <repo> <id> "<reason>"
 aleph todo lint <repo> [--fix]
 ```
 
+The list lives on `origin/<main>`. A read fetches and reads it there; a write is one commit on `origin/<main>` that changes only `docs/todo.md`, made without a working tree, so the main checkout never holds a changed list and only fast-forwards. A job's item closes inside the job's landing commit.
+
 Each item carries `id status created updated priority labels`. `note` is append-only, which is the lost update this format exists to stop: two writers add lines, neither erases the other's. `lint` refuses (exit 1) on a missing or malformed key, an unknown status, or a duplicate id; `--fix` repairs what is mechanical — a missing date, a stale `id`, a bare scalar where a list belongs — and still exits 1 if anything is left. An item written before this command existed has no header, parses fine, and reads as `open`.
 
 ## Development

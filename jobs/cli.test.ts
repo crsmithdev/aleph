@@ -52,6 +52,9 @@ action=$(printf '%s\\n' "$prompt" | grep '^ACTION:' | tail -1 | cut -d' ' -f2-)
 case $action in
   commit\\ *) f=\${action#commit }; mkdir -p "$(dirname "$f")"; echo "$RANDOM" > "$f"; git add "$f"; git commit -qm "add $f" ;;
   commit-fixed\\ *) f=\${action#commit-fixed }; echo same > "$f"; git add "$f"; git commit -qm "add $f" ;;
+  resolve-later\\ *) f=\${action#resolve-later }
+    if printf '%s' "$prompt" | grep -q 'The land conflicted'; then git fetch -q origin && git rebase -q -X theirs origin/main
+    else echo mine > "$f"; git add "$f"; git commit -qm "add $f"; fi ;;
   untracked) echo x > stray.txt ;;
   sleep) sleep 60 ;;
   exit3) exit 3 ;;
@@ -94,6 +97,8 @@ beforeAll(() => {
     // Holds two lands between their fetch and their push at the same time.
     { name: "pause", run: "sleep 1", when: ["pair/**"] },
     // Pushes to the remote from another clone once, so the land's own push loses the race.
+    // Writes a to-do note to main once, during the land's checks.
+    { name: "todo race", run: `if [ -f ${join(base, "todo-once")} ]; then rm ${join(base, "todo-once")}; bun ${CLI} todo note demo 1 "during the land"; fi`, when: ["todo-race/**"] },
     { name: "race", run: `if [ -f ${join(base, "race-once")} ]; then rm ${join(base, "race-once")}; cd ${join(base, "other")} && git pull -q --rebase origin main && echo $RANDOM > raced && git add raced && git commit -qm race && git push -q origin main; fi`, when: ["race/**"] },
   ];
   writeFileSync(join(base, "repos.json"), JSON.stringify({
@@ -320,6 +325,7 @@ describe("land", () => {
   const remoteHead = () => sh(base, "git", "--git-dir", remote, "rev-parse", "main");
   function pushFromOther(f: string, content: string): void {
     sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
+    mkdirSync(join(other, f, ".."), { recursive: true });
     writeFileSync(join(other, f), content);
     sh(other, "git", "add", f);
     sh(other, "git", "commit", "-qm", `other ${f}`);
@@ -383,18 +389,35 @@ describe("land", () => {
     expect(again.stderr).toContain("phonelater has no open check");
   });
 
-  test("a conflict leaves the remote alone and the job open", async () => {
+  const runsOf = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-demo-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));
+
+  test("a conflict records its paths, sends the job back to the worker, and the passed follow-up lands", async () => {
+    await job("mend", "resolve-later mend.txt");
+    pushFromOther("mend.txt", "theirs\n");
+    const r = await aleph(["land", "mend"]);
+    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "rebase conflict", conflicts: ["mend.txt"], next: "worker" });
+    expect(file(r.json.run, "land.log")).toContain("## conflicts\nmend.txt");
+    expect(told).toContain("demo/mend failed; sent back to the worker");
+    const runs = runsOf("mend");
+    expect(runs.map((x) => [x.kind, x.state])).toEqual([["agent", "passed"], ["land", "failed"], ["agent", "passed"], ["land", "landed"]]);
+    expect(runs[2].land).toBe(true);
+    expect(sh(base, "git", "--git-dir", remote, "show", "main:mend.txt")).toBe("mine");
+    expect(remoteHead()).toBe(runs[3].commit);
+  }, 30_000);
+
+  test("a conflict the worker cannot resolve goes back twice, then stops and leaves the remote alone", async () => {
     await job("clash", "commit-fixed clash.txt");
     pushFromOther("clash.txt", "different\n");
     const before = remoteHead();
-    const r = await aleph(["land", "clash"]);
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "rebase conflict" });
+    await aleph(["land", "clash"]);
+    const runs = runsOf("clash");
+    expect(runs.filter((x) => x.kind === "land").map((x) => x.next ?? null)).toEqual(["worker", "worker", null]);
+    expect(runs.at(-1)).toMatchObject({ kind: "land", state: "failed", reason: "rebase conflict" });
     expect(remoteHead()).toBe(before);
     expect(told).toContain("demo/clash failed");
     expect(sh(worktree("clash"), "git", "status", "--porcelain")).toBe("");
-    expect((await aleph(["jobs", "clash"])).json).toMatchObject({ kind: "land", state: "failed" });
     await aleph(["drop", "clash"]);
-  });
+  }, 30_000);
 
   test("a change main already has ends done with no net change", async () => {
     await job("twin", "commit-fixed twin.txt");
@@ -404,17 +427,28 @@ describe("land", () => {
     expect(existsSync(worktree("twin"))).toBe(false);
   });
 
-  test("a push that loses a race fails as main moved, and the next land succeeds", async () => {
+  test("a push that loses a race fails as main moved, and the land runs again by itself", async () => {
     await job("racer", "commit race/x.txt");
     writeFileSync(join(base, "race-once"), "");
     const r = await aleph(["land", "racer"]);
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "main moved during the land; land again" });
-    expect(sh(base, "git", "--git-dir", remote, "log", "-1", "--format=%s", "main")).toBe("race");
-    const again = await aleph(["land", "racer"]);
-    const s = state(again.json.run);
-    expect(s.state).toBe("landed");
+    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "main moved during the land; land again", next: "land" });
+    expect(told).toContain("demo/racer failed; landing again");
+    expect(runsOf("racer").at(-1)).toMatchObject({ kind: "land", state: "landed" });
     expect(sh(base, "git", "--git-dir", remote, "log", "-2", "--format=%s", "main")).toBe("add race/x.txt\nrace");
   });
+
+  test("a to-do commit during the checks does not fail the land: the squash goes onto the new main", async () => {
+    const list = "# To do\n\n## 1. Something\n---\nid: 1\nstatus: open\ncreated: 2026-09-30\nupdated: 2026-09-30\n---\n";
+    pushFromOther("docs/todo.md", list);
+    await job("patient", "commit todo-race/patient.txt");
+    writeFileSync(join(base, "todo-once"), "");
+    const l = await aleph(["land", "patient"]);
+    const s = state(l.json.run);
+    expect(s).toMatchObject({ state: "landed" });
+    expect(file(l.json.run, "land.log")).toContain("main moved by a to-do commit");
+    expect(sh(base, "git", "--git-dir", remote, "log", "-2", "--format=%s", "main")).toBe("add todo-race/patient.txt\ntodo: a note on item 1");
+    expect(sh(base, "git", "--git-dir", remote, "show", "main:docs/todo.md")).toContain("during the land");
+  }, 30_000);
 
   test("two lands at once in one repo both reach main, neither undoing the other", async () => {
     await job("left", "commit pair/left.txt");
@@ -430,20 +464,18 @@ describe("land", () => {
     writeFileSync(join(repo, "README"), "local edit\n");
     const head = sh(repo, "git", "rev-parse", "HEAD");
     const r = await aleph(["land", "dirtyco"]);
-    expect(state(r.json.run)).toMatchObject({ state: "landed", reason: "main checkout not updated" });
+    expect(state(r.json.run)).toMatchObject({ state: "landed", reason: "main checkout not updated: it has changes in README" });
     expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(head);
-    expect(told).toContain("demo/dirtyco landed; main checkout not updated");
+    expect(told).toContain("demo/dirtyco landed; main checkout not updated: it has changes in README");
     sh(repo, "git", "checkout", "README");
   });
 });
 
 describe("a job tied to a to-do item", () => {
-  // Untracked in the main checkout, so the fast-forward check still sees it clean.
-  const list = () => readFileSync(join(repo, "docs", "todo.md"), "utf8");
+  const list = () => sh(base, "git", "--git-dir", remote, "show", "main:docs/todo.md");
   const show = async (id: number) => (await aleph(["todo", "show", "demo", String(id), "--json"])).json;
   let landId: number, dropId: number;
   beforeAll(async () => {
-    mkdirSync(join(repo, "docs"), { recursive: true });
     landId = (await aleph(["todo", "add", "demo", "ship the widget"])).json.added;
     dropId = (await aleph(["todo", "add", "demo", "paint the shed"])).json.added;
   });
@@ -465,8 +497,11 @@ describe("a job tied to a to-do item", () => {
     expect(s.reason).toBeUndefined();
     const item = await show(landId);
     expect(item.status).toBe("done");
-    expect(item.notes.at(-1)).toContain(`job widget landed as ${s.commit.slice(0, 7)}`);
+    expect(item.notes.at(-1)).toContain("job widget landed");
     expect(file(r.json.run, "land.log")).toContain(`## todo ${landId} done`);
+    // The item closes in the landing commit itself, and nothing is left changed in the main checkout.
+    expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${s.commit}~1`, s.commit).split("\n")).toEqual(["docs/todo.md", "widget.txt"]);
+    expect(sh(repo, "git", "status", "--porcelain", "--untracked-files=no")).toBe("");
   });
 
   test("drop adds a note with the reason and leaves the item open", async () => {
@@ -487,3 +522,57 @@ describe("a job tied to a to-do item", () => {
     expect(list()).toBe(before);
   });
 });
+
+describe("fate from git", () => {
+  const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
+  const listed = async (name: string) => (await aleph(["jobs"])).json.find((j: any) => j.name === name);
+
+  test("each worker commit carries the job's trailer", async () => {
+    const j = await job("stamped", "commit stamped.txt");
+    expect(sh(worktree("stamped"), "git", "log", "-1", "--format=%B")).toContain(`Job: ${j.json.job}`);
+    await aleph(["drop", "stamped"]);
+  });
+
+  test("work ported to main by hand reads as landed, and its to-do item closes", async () => {
+    const id = (await aleph(["todo", "add", "demo", "port by hand"])).json.added;
+    const j = await aleph(["job", "demo", "ported", "--spec", specFile("Goal: ported\nACTION: commit ported.txt\n"), "--todo", String(id)]);
+    const tip = sh(repo, "git", "rev-parse", "job/ported");
+    sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
+    sh(other, "git", "fetch", "-q", repo, "job/ported");
+    sh(other, "git", "cherry-pick", tip);
+    sh(other, "git", "push", "-q", "origin", "main");
+    const picked = remoteGit("rev-parse", "main");
+    expect(await listed("ported")).toBeUndefined();
+    expect(state(j.json.run)).toMatchObject({ state: "landed", reason: "found on main (Job trailer)", commit: picked });
+    expect(existsSync(worktree("ported"))).toBe(false);
+    expect((await aleph(["todo", "show", "demo", String(id), "--json"])).json.status).toBe("done");
+  });
+
+  test("a branch whose change main already has, under another message, reads as landed", async () => {
+    const j = await job("twice", "commit-fixed twice.txt");
+    sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
+    writeFileSync(join(other, "twice.txt"), "same\n");
+    sh(other, "git", "add", "twice.txt");
+    sh(other, "git", "commit", "-qm", "the same change, by hand");
+    sh(other, "git", "push", "-q", "origin", "main");
+    expect(await listed("twice")).toBeUndefined();
+    expect(state(j.json.run)).toMatchObject({ state: "landed", reason: "found on main (content)" });
+  });
+
+  test("a job with no branch and no worktree reads as gone, and land says the worktree is gone", async () => {
+    await job("vanished", "commit vanished.txt");
+    sh(repo, "git", "worktree", "remove", "--force", worktree("vanished"));
+    sh(repo, "git", "branch", "-D", "job/vanished");
+    expect(await listed("vanished")).toMatchObject({ state: "passed", fate: "gone" });
+    const r = await aleph(["land", "vanished"]);
+    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: `worktree gone: ${worktree("vanished")}` });
+    await aleph(["drop", "vanished"]);
+  });
+
+  test("an open job with its branch reads as unlanded", async () => {
+    await job("waiting", "commit waiting.txt");
+    expect(await listed("waiting")).toMatchObject({ state: "passed", fate: "unlanded" });
+    await aleph(["drop", "waiting"]);
+  });
+});
+
