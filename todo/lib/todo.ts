@@ -116,13 +116,13 @@ export function blank(repo: string): Doc {
 export const find = (doc: Doc, id: number): Item | undefined => doc.items.find((i) => i.id === id);
 export const nextId = (doc: Doc): number => doc.items.reduce((m, i) => Math.max(m, i.id), 0) + 1;
 
-export function add(doc: Doc, title: string, o: { priority?: string; labels?: string[]; now?: Date } = {}): Item {
+export function add(doc: Doc, title: string, o: { priority?: string; labels?: string[]; body?: string; now?: Date } = {}): Item {
   const day = today(o.now);
   const item: Item = {
     id: nextId(doc),
     title,
     fm: { id: String(nextId(doc)), status: "open", created: day, updated: day, priority: o.priority ?? "medium", labels: o.labels ?? [] },
-    body: "",
+    body: o.body ?? "",
     notes: [],
     legacy: false,
   };
@@ -137,6 +137,16 @@ export function note(item: Item, text: string, now = new Date()): string {
   item.fm.updated = today(now);
   if (item.legacy) adopt(item, now);
   return line;
+}
+
+/** Replace the fields given. Notes are never edited: they stay append-only. */
+export function edit(item: Item, change: { title?: string; body?: string; priority?: string; labels?: string[] }, now = new Date()): void {
+  if (item.legacy) adopt(item, now);
+  if (change.title !== undefined) item.title = change.title;
+  if (change.body !== undefined) item.body = change.body;
+  if (change.priority !== undefined) item.fm.priority = change.priority;
+  if (change.labels !== undefined) item.fm.labels = change.labels;
+  item.fm.updated = today(now);
 }
 
 export function setStatus(item: Item, next: Status, now = new Date()): void {

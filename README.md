@@ -119,16 +119,17 @@ Notes are `wiki/<kind>/<Title>.md` with `[[Title]]` links and frontmatter `alias
 Every repo in `~/.aleph/repos.json` has a list at `docs/todo.md`: numbered `## N. Title` sections with a small frontmatter header and free prose. **Status is a field, never a filing position** — a finished item stays where it is and keeps its number, because commits, specs and the vault quote that number.
 
 ```bash
-aleph todo add <repo> "<title>" [--priority high] [--labels a,b]
+aleph todo add <repo> "<title>" [--body -] [--priority high] [--labels a,b]
 aleph todo list <repo> [--status open|done|dropped] [--label <name>] [--json]
 aleph todo show <repo> <id> [--json]
+aleph todo edit <repo> <id> [--title "<title>"] [--body -] [--priority p] [--labels a,b]
 aleph todo note <repo> <id> "<text>"      # appends one timestamped line, never rewrites
 aleph todo done <repo> <id> ["<summary>"]
 aleph todo drop <repo> <id> "<reason>"
 aleph todo lint <repo> [--fix]
 ```
 
-The list lives on `origin/<main>`. A read fetches and reads it there; a write is one commit on `origin/<main>` that changes only `docs/todo.md`, made without a working tree, so the main checkout never holds a changed list and only fast-forwards. A job's item closes inside the job's landing commit.
+The list lives on `origin/<main>`. A read fetches and reads it there; a write is one commit on `origin/<main>` that changes only `docs/todo.md`, made without a working tree, so the main checkout never holds a changed list and only fast-forwards. A job's item closes inside the job's landing commit. git-guard denies an Edit or Write on a registered repo's `docs/todo.md`, so nobody edits it on a branch.
 
 Each item carries `id status created updated priority labels`. `note` is append-only, which is the lost update this format exists to stop: two writers add lines, neither erases the other's. `lint` refuses (exit 1) on a missing or malformed key, an unknown status, or a duplicate id; `--fix` repairs what is mechanical — a missing date, a stale `id`, a bare scalar where a list belongs — and still exits 1 if anything is left. An item written before this command existed has no header, parses fine, and reads as `open`.
 

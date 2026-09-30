@@ -30,7 +30,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--spec", "--model", "--todo", "--priority", "--labels", "--status", "--label"];
+const VALUED = ["--spec", "--model", "--todo", "--priority", "--labels", "--status", "--label", "--body", "--title"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 
 function checkName(name: string | undefined): string {
@@ -314,9 +314,9 @@ async function drop(): Promise<void> {
  * registry has a list; `docs/todo.md` is the file. Status is a field, so an
  * item never moves and never gets a new number.
  */
-function todoCmd(): void {
+async function todoCmd(): Promise<void> {
   const [verb, repoKey, ...args] = positional;
-  const sub = verb ?? refuse("usage: aleph todo <add|list|show|note|done|drop|lint> <repo> ...");
+  const sub = verb ?? refuse("usage: aleph todo <add|list|show|note|edit|done|drop|lint> <repo> ...");
   const repo = loadRegistry()[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
   const where = `origin/${repo.main}:${store.TODO_PATH}`;
 
@@ -337,13 +337,17 @@ function todoCmd(): void {
     if (written?.follow) console.error(`warn: ${written.follow}`);
     return written;
   };
+  // `--body -` reads the body from stdin: it is prose of several lines.
+  const bodyArg = flag("body");
+  const body = bodyArg === undefined ? undefined : (bodyArg === "-" ? await Bun.stdin.text() : bodyArg).trim();
+  const labelsArg = flag("labels");
+  const labels = labelsArg === undefined ? undefined : labelsArg.split(",").map((s) => s.trim()).filter(Boolean);
   const brief = (i: todos.Item) => ({ id: i.id, title: i.title, status: todos.status(i), priority: i.fm.priority ?? null, labels: i.fm.labels ?? [], updated: i.fm.updated ?? null, notes: i.notes.length, legacy: i.legacy || undefined });
 
   switch (sub) {
     case "add": {
       const title = args.join(" ").trim() || refuse("give the item a title");
-      const labels = (flag("labels") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-      const w = write("todo: add an item", (doc) => todos.add(doc, title, { priority: flag("priority"), labels }), true)!;
+      const w = write("todo: add an item", (doc) => todos.add(doc, title, { priority: flag("priority"), labels: labels ?? [], body }), true)!;
       out({ repo: repo.key, added: w.value.id, title: w.value.title, commit: w.commit });
       return;
     }
@@ -376,6 +380,19 @@ function todoCmd(): void {
       out({ repo: repo.key, id: w.value.id, note: w.value.line, commit: w.commit });
       return;
     }
+    case "edit": {
+      const title = flag("title")?.trim();
+      const priority = flag("priority");
+      if (title === undefined && body === undefined && priority === undefined && labels === undefined) refuse("give --title, --body, --priority or --labels");
+      if (title === "") refuse("the title cannot be empty");
+      const w = write(`todo: edit item ${args[0]}`, (doc) => {
+        const i = pick(doc);
+        todos.edit(i, { title, body, priority, labels });
+        return i;
+      })!;
+      out({ repo: repo.key, ...brief(w.value), commit: w.commit });
+      return;
+    }
     case "done":
     case "drop": {
       const text = args.slice(1).join(" ").trim();
@@ -403,7 +420,7 @@ function todoCmd(): void {
       for (const f of findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${findings.length} problem${findings.length > 1 ? "s" : ""} in ${where}`);
     }
-    default: refuse("usage: aleph todo <add|list|show|note|done|drop|lint> <repo> ...");
+    default: refuse("usage: aleph todo <add|list|show|note|edit|done|drop|lint> <repo> ...");
   }
 }
 
@@ -423,7 +440,7 @@ try {
     case "unit": await unit(resolve(positional[0])); break;
     case "land": await landJob(); break;
     case "checked": checked(); break;
-    case "todo": todoCmd(); break;
+    case "todo": await todoCmd(); break;
     default: refuse("usage: aleph <job|run|land|checked|drop|jobs|todo> ...");
   }
 } catch (e) {

@@ -21,7 +21,10 @@ function aleph(...args: string[]): { code: number; out: string; err: string } {
   return alephWith({}, ...args);
 }
 function alephWith(extra: Record<string, string>, ...args: string[]): { code: number; out: string; err: string } {
-  const p = Bun.spawnSync(["bun", CLI, ...args], { env: env(extra), stdout: "pipe", stderr: "pipe" });
+  return alephIn(extra, undefined, ...args);
+}
+function alephIn(extra: Record<string, string>, stdin: string | undefined, ...args: string[]): { code: number; out: string; err: string } {
+  const p = Bun.spawnSync(["bun", CLI, ...args], { env: env(extra), stdin: stdin === undefined ? "ignore" : new Blob([stdin]), stdout: "pipe", stderr: "pipe" });
   return { code: p.exitCode, out: p.stdout.toString(), err: p.stderr.toString() };
 }
 
@@ -209,4 +212,39 @@ test("a write keeps one blank line between the header and the body", () => {
   for (let i = 0; i < 3; i++) aleph("todo", "note", "proj", "6", `note ${i}`);
   expect(doc()).toContain("---\n\nBody.\n\n## 6.");
   expect(doc()).toContain("---\n\nOther.\n\n### Notes");
+});
+
+test("add takes a body of several lines from stdin", () => {
+  const a = alephIn({}, "Why it matters.\n\nDone when the gate counts.\n", "todo", "add", "proj", "Count at the gate", "--body", "-");
+  expect(a.code).toBe(0);
+  const shown = JSON.parse(aleph("todo", "show", "proj", "4", "--json").out);
+  expect(shown.body).toBe("Why it matters.\n\nDone when the gate counts.");
+  expect(remoteList()).toContain("---\n\nWhy it matters.\n\nDone when the gate counts.");
+});
+
+test("edit replaces the title, body, priority and labels it is given, and keeps the notes", () => {
+  aleph("todo", "add", "proj", "Old title", "--labels", "a");
+  aleph("todo", "note", "proj", "4", "a finding");
+  const e = alephIn({}, "The new body.\n", "todo", "edit", "proj", "4", "--title", "New title", "--body", "-", "--priority", "high");
+  expect(e.code).toBe(0);
+  expect(JSON.parse(e.out)).toMatchObject({ id: 4, title: "New title", priority: "high", labels: ["a"] });
+  const shown = JSON.parse(aleph("todo", "show", "proj", "4", "--json").out);
+  expect(shown).toMatchObject({ title: "New title", body: "The new body.", priority: "high", labels: ["a"] });
+  expect(shown.notes[0]).toContain("a finding");
+  expect(JSON.parse(aleph("todo", "edit", "proj", "4", "--labels", "b,c").out).labels).toEqual(["b", "c"]);
+  expect(sh(base, "git", "--git-dir", remote, "log", "-1", "--format=%s", "main")).toBe("todo: edit item 4");
+});
+
+test("edit of a legacy item gives it a header and keeps its prose unless the body is given", () => {
+  expect(aleph("todo", "edit", "proj", "3", "--priority", "low").code).toBe(0);
+  const shown = JSON.parse(aleph("todo", "show", "proj", "3", "--json").out);
+  expect(shown).toMatchObject({ priority: "low", status: "open" });
+  expect(shown.legacy).toBeUndefined();
+  expect(shown.body).toContain("Written before the command existed.");
+});
+
+test("edit with nothing to change refuses", () => {
+  const r = aleph("todo", "edit", "proj", "3");
+  expect(r.code).toBe(1);
+  expect(r.err).toContain("give --title, --body, --priority or --labels");
 });

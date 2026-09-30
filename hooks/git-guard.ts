@@ -2,11 +2,13 @@
 /**
  * PreToolUse on Edit|Write: no edits on main outside a worktree.
  * Exempt: ~/.claude, ~/.aleph and the home directory itself. The vault is
- * allowed on main except VAULT.md, which is human-owned.
+ * allowed on main except VAULT.md, which is human-owned. A registered repo's
+ * docs/todo.md is never edited by hand, on any branch: `aleph todo` writes it.
  */
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { loadRegistry } from "../jobs/lib/ledger.ts";
 import { vaultDir } from "../vault/lib/vault.ts";
 
 const input = JSON.parse(await Bun.stdin.text());
@@ -31,6 +33,15 @@ function git(...args: string[]): string | null {
 
 const top = git("rev-parse", "--show-toplevel");
 if (!top) process.exit(0);
+// A hand edit on a branch conflicts with every other writer of the list.
+if (target === join(top, "docs", "todo.md")) {
+  const common = git("rev-parse", "--path-format=absolute", "--git-common-dir");
+  const repoKey = Object.values(loadRegistry()).find((r) => existsSync(r.path) && common === join(realpathSync(r.path), ".git"))?.key;
+  if (repoKey) {
+    console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: `docs/todo.md is written by aleph todo, never by hand. Use: aleph todo add ${repoKey} "<title>" --body -, aleph todo edit ${repoKey} <id> [--title ...] [--body -], aleph todo note|done|drop ${repoKey} <id> "<text>". Put measurements in a findings file and link it in a note.` } }));
+    process.exit(0);
+  }
+}
 const home = homedir();
 if ([home, resolve(home, ".claude"), resolve(home, ".aleph")].includes(top)) process.exit(0);
 

@@ -112,15 +112,20 @@ same turn you name it, and quote the item number after that.
 
 ```bash
 aleph todo list <repo> [--status open|done|dropped] [--label x]
-aleph todo add <repo> "<title>" [--priority high] [--labels a,b]
+aleph todo add <repo> "<title>" [--body -] [--priority high] [--labels a,b]
 aleph todo show <repo> <id>
+aleph todo edit <repo> <id> [--title "<title>"] [--body -] [--priority p] [--labels a,b]
 aleph todo note <repo> <id> "<text>"
 aleph todo done <repo> <id> ["<summary>"]
 aleph todo drop <repo> <id> "<reason>"
 ```
 
-Write through the command, never by hand. `note` appends, so two writers cannot
-erase each other. An item keeps its number for life, because commits, specs and
+Write through the command, never by hand; a hook denies Edit and Write on
+the file. Each write is a commit on `origin/main`, so it reaches main at once,
+not with your branch. `--body -` reads the body from stdin. An item holds
+what, why, when it is done and where it stands now. Measurements and
+write-ups go in a findings file or the spec, and a note links them. `note`
+appends, so two writers cannot erase each other. An item keeps its number for life, because commits, specs and
 the vault quote it. `done` sets a field, so nothing moves and nothing is
 renumbered.
 
