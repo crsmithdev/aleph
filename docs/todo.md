@@ -331,3 +331,17 @@ Missing done bars: tdd (run the test and see it go red), diagnosing-bugs phases 
 Sprawl to disclose: vault maintenance ops (~80 lines) to MAINTAIN.md; tidy pass 2 (~55 lines) to PROVE.md.
 Duplication: codebase-design (SKILL vs DEEPENING, testability no-op section), domain-modeling (3 files), tdd (3 files), red-team/prior-art calibration and when-to-use echo, docs-writing gotchas, vocabulary bans repeated 4x across codebase-design and improve-codebase-architecture.
 retro: give the Langfuse API curl, not the UI URL.
+
+## 22. Cut caches and no-ops from identity/CLAUDE.md
+---
+id: 22
+status: open
+created: 2026-10-01
+updated: 2026-10-01
+priority: medium
+labels: [identity]
+---
+
+2026-10-01 audit: claude-md-improver 75/100; agnix ~1674 tokens vs 1500 limit.
+Cuts (~30 lines): the aleph todo usage block and flag notes (the tool prints usage); hook restatements (verify gate, git-guard deny, auto-memory already off in settings); Permissions line 15 no-op and line 17 duplicate of Manner; default-behaviour Values/Code lines. Move Sessions verification lines under Verification. Move the skill-naming gotcha to writing-for-agents/SKILL-MECHANICS.md. Rephrase "don't apologise" positively.
+Needs Chris's review: this file loads into every session.
