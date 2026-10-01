@@ -315,3 +315,19 @@ labels: [skills]
 
 Descriptions load every turn. Word counts on 2026-10-01: red-team 139, tidy 138, prior-art 133, grill-me 89, grill-with-docs 55, to-spec 53. Each repeats body identity and lists synonym triggers for one branch; red-team, prior-art and tidy do not front-load their leading word. handoff, pickup, docs-writing ("51 rules"), codebase-design (advertises a scan branch it lacks) also have fixes.
 Target: ~50 words max, leading word first, one trigger per branch. Audit tables: session 2026-10-01 (Langfuse).
+
+## 21. Add completion criteria and cut duplication in skill bodies
+---
+id: 21
+status: open
+created: 2026-10-01
+updated: 2026-10-01
+priority: medium
+labels: [skills]
+---
+
+From the 2026-10-01 writing-for-agents audit.
+Missing done bars: tdd (run the test and see it go red), diagnosing-bugs phases 3-4, docs-writing audit, domain-modeling, to-spec steps 1 and 3, retro, prior-art step 4, improve-codebase-architecture explore brief, writing-for-agents itself, tidy sweep stop point.
+Sprawl to disclose: vault maintenance ops (~80 lines) to MAINTAIN.md; tidy pass 2 (~55 lines) to PROVE.md.
+Duplication: codebase-design (SKILL vs DEEPENING, testability no-op section), domain-modeling (3 files), tdd (3 files), red-team/prior-art calibration and when-to-use echo, docs-writing gotchas, vocabulary bans repeated 4x across codebase-design and improve-codebase-architecture.
+retro: give the Langfuse API curl, not the UI URL.
