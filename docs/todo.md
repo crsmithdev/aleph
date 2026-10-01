@@ -277,3 +277,28 @@ labels: [skills, bug]
 skills/pickup/SKILL.md:13 archives to `<name>-<date>.md` (current-2026-...). vault/lib/compile.ts:80 `handoffsFor` reads only files that start with the date. A picked-up handoff never reaches `vault compile`.
 Fix: archive to `$(date +%Y-%m-%d-%H%M%S)-<name>.md`. Done when compile shows a picked-up handoff for its date.
 Found by the 2026-10-01 agent-instructions audit.
+
+## 19. Fix contradictions and stale references in skills
+---
+id: 19
+status: open
+created: 2026-10-01
+updated: 2026-10-01
+priority: medium
+labels: [skills]
+---
+
+From the 2026-10-01 writing-for-agents audit. Each is a case where the agent gets two answers or a dead pointer:
+- tidy/SKILL.md:2 description is invalid YAML (unquoted `: `); agnix fails to parse it.
+- red-team/SKILL.md:16,45 points at `/debug`; the skill is aleph:diagnosing-bugs. :141 says "four lenses", default is five (:57).
+- red-team:93, prior-art:111 say subagents run "in the foreground"; they run in the background.
+- improve-codebase-architecture SKILL.md:43-50 and HTML-REPORT.md:44-53 give two card specs that disagree. :35 restates the deletion test wrongly.
+- domain-modeling: SKILL.md shows per-context src/*/docs/adr/, ADR-FORMAT.md says docs/adr/.
+- grill-with-docs: grill-me says do not act until confirmed; domain-modeling says write CONTEXT.md inline. No tie-break.
+- grill-with-docs is user-invoked but carries model-facing triggers.
+- vault/SKILL.md:126 says Home routes only decisions and projects; step 3 and live Home.md route concepts and entities.
+- to-spec:11 "Do NOT interview" vs step 2 asks a question.
+- writing-for-agents SKILL-MECHANICS.md:22 vs :10 on whether user-invoked skills have a description.
+- tidy DETECTORS.md:20 "three" lists four; SKILL.md:173 "five" lists six.
+- tdd description triggers on red-green-refactor; body says refactor is not in the loop.
+Done when each line is fixed and `agnix -t claude-code skills` reports no parse error.
