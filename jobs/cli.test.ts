@@ -55,6 +55,11 @@ case $action in
   resolve-later\\ *) f=\${action#resolve-later }
     if printf '%s' "$prompt" | grep -q 'The land conflicted'; then git fetch -q origin && git rebase -q -X theirs origin/main
     else echo mine > "$f"; git add "$f"; git commit -qm "add $f"; fi ;;
+  own-list\\ *) f=\${action#own-list }
+    if printf '%s' "$prompt" | grep -q 'The land refused'; then git fetch -q origin
+      if git cat-file -e origin/main:docs/todo.md 2>/dev/null; then git checkout -q origin/main -- docs/todo.md; else git rm -q docs/todo.md; fi
+      git commit -qm "restore the list"
+    else mkdir -p docs; echo "$RANDOM" > "$f"; echo "# To do (by hand)" > docs/todo.md; git add "$f" docs/todo.md; git commit -qm "add $f"; fi ;;
   untracked) echo x > stray.txt ;;
   sleep) sleep 60 ;;
   exit3) exit 3 ;;
@@ -430,6 +435,17 @@ describe("land", () => {
     expect(told).toContain("demo/clash failed");
     expect(sh(worktree("clash"), "git", "status", "--porcelain")).toBe("");
     await aleph(["drop", "clash"]);
+  }, 30_000);
+
+  test("a branch that changes the list is refused, goes back to the worker, and lands without the change", async () => {
+    await job("byhand", "own-list byhand.txt");
+    const r = await aleph(["land", "byhand"]);
+    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "the branch changes docs/todo.md; change the list with aleph todo", conflicts: ["docs/todo.md"], next: "worker" });
+    const runs = runsOf("byhand");
+    expect(runs.map((x) => [x.kind, x.state])).toEqual([["agent", "passed"], ["land", "failed"], ["agent", "passed"], ["land", "landed"]]);
+    expect(file(runs[2].id, "prompt.md")).toContain("Only aleph todo writes the list");
+    expect(sh(base, "git", "--git-dir", remote, "show", "main:docs/todo.md")).not.toContain("by hand");
+    expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${runs[3].commit}~1`, runs[3].commit)).toBe("byhand.txt");
   }, 30_000);
 
   test("a change main already has ends done with no net change", async () => {

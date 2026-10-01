@@ -128,12 +128,11 @@ export function onMain(repo: Repo, run: Run): { commit: string; how: string } | 
 
 /**
  * The tree to push: the checked tree, with the list from `onto`, the job's
- * item marked done, and a new item for an open manual check. When the branch
- * changed the list itself, its copy is the one used.
+ * item marked done, and a new item for an open manual check.
  */
-function squashTree(wt: string, run: Run, onto: string, ownList: boolean): { tree: string; todo?: string; checkItem?: number } {
+function squashTree(wt: string, run: Run, onto: string): { tree: string; todo?: string; checkItem?: number } {
   const head = git(wt, "rev-parse", "HEAD^{tree}").out;
-  const shown = show(wt, ownList ? "HEAD" : onto, TODO_PATH);
+  const shown = show(wt, onto, TODO_PATH);
   const open = run.check === "open";
   if (shown === null && !open) return { tree: head, todo: run.todo === undefined ? undefined : `no ${TODO_PATH}` };
   const text = shown ?? todos.render(todos.blank(run.repo ?? ""));
@@ -155,6 +154,7 @@ function squashTree(wt: string, run: Run, onto: string, ownList: boolean): { tre
 
 const PUSHES = 5;
 const MOVED = "main moved during the land; land again";
+const OWN_LIST = `the branch changes ${TODO_PATH}; change the list with aleph todo`;
 
 /**
  * Land a job: rebase onto origin/<main>, run the checks, push one squash
@@ -207,17 +207,18 @@ async function land(folder: string, run: Run, repo: Repo, env: Record<string, st
       return { verdict: { state: "done", reason: "no net change" }, code: 0 };
     }
     const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
+    // Only aleph todo writes the list. A worker can go past git-guard with a script, so the land refuses it.
+    if (changed.includes(TODO_PATH)) return fail(OWN_LIST, { conflicts: [TODO_PATH] });
     const failed = await runChecks(folder, wt, repo, env, changed, phase);
     if (failed) return fail(failed);
     phase("land");
     const message = [subjects[0] ?? run.name, "", ...(subjects.length > 1 ? subjects.map((s) => `- ${s}`) : []), `Job: ${run.job}`].join("\n");
-    const ownList = changed.includes(TODO_PATH);
     let onto = base;
     let commit = "";
     let todo: string | undefined;
     let checkItem: number | undefined;
     for (let attempt = 1; ; attempt++) {
-      const squash = squashTree(wt, run, onto, ownList);
+      const squash = squashTree(wt, run, onto);
       todo = squash.todo;
       checkItem = squash.checkItem;
       const c = step("commit-tree", "commit-tree", squash.tree, "-p", onto, "-m", message);
@@ -227,7 +228,7 @@ async function land(folder: string, run: Run, repo: Repo, env: Record<string, st
       const moved = git(wt, "rev-parse", `origin/${main}`).out;
       if (moved === onto) return fail("push refused");
       const between = git(wt, "diff", "--name-only", onto, moved).out.split("\n").filter(Boolean);
-      if (ownList || attempt === PUSHES || between.some((f) => f !== TODO_PATH)) return fail(MOVED);
+      if (attempt === PUSHES || between.some((f) => f !== TODO_PATH)) return fail(MOVED);
       log(`main moved by a to-do commit; the squash goes onto ${moved}`);
       onto = moved;
     }
@@ -338,10 +339,11 @@ const BOUNCES = 2;
 const RELANDS = 3;
 
 /**
- * What the unit starts after a run ends. A land that conflicts goes back to
- * the worker, at most BOUNCES times a job; a land that lost a race lands
- * again, at most RELANDS times; an agent run lands when it passes, when it was
- * started with --land or its repo lands by itself.
+ * What the unit starts after a run ends. A land that conflicts, or that
+ * refuses a branch that changes the list, goes back to the worker, at most
+ * BOUNCES times a job; a land that lost a race lands again, at most RELANDS
+ * times; an agent run lands when it passes, when it was started with --land
+ * or its repo lands by itself.
  */
 function nextStep(run: Run, repo: Repo | undefined): Run["next"] {
   if (run.kind === "agent") return run.state === "passed" && (run.land || repo?.autoland) ? "land" : undefined;
@@ -356,7 +358,9 @@ function nextStep(run: Run, repo: Repo | undefined): Run["next"] {
 async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): Promise<void> {
   const cli = join(import.meta.dir, "..", "cli.ts");
   const argv = next === "land" ? ["land", run.name] : ["job", run.repo!, run.name, "--spec", "-", "--land"];
-  const note = `The land conflicted with origin/main in: ${(run.conflicts ?? []).join(", ")}. Rebase onto origin/main, resolve each conflict so that the change on main and this job's change both survive, run the tests, and commit.`;
+  const note = run.reason === OWN_LIST
+    ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph todo writes the list. Restore ${TODO_PATH} to its content on origin/main, commit, and make each change to the list with aleph todo.`
+    : `The land conflicted with origin/main in: ${(run.conflicts ?? []).join(", ")}. Rebase onto origin/main, resolve each conflict so that the change on main and this job's change both survive, run the tests, and commit.`;
   const log = openSync(join(folder, "next.log"), "a");
   const p = Bun.spawn([process.execPath, cli, ...argv], { env: process.env, stdin: next === "worker" ? new Blob([note]) : "ignore", stdout: log, stderr: log });
   const code = await p.exited;
