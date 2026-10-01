@@ -302,3 +302,16 @@ From the 2026-10-01 writing-for-agents audit. Each is a case where the agent get
 - tidy DETECTORS.md:20 "three" lists four; SKILL.md:173 "five" lists six.
 - tdd description triggers on red-green-refactor; body says refactor is not in the loop.
 Done when each line is fixed and `agnix -t claude-code skills` reports no parse error.
+
+## 20. Trim always-loaded skill descriptions
+---
+id: 20
+status: open
+created: 2026-10-01
+updated: 2026-10-01
+priority: medium
+labels: [skills]
+---
+
+Descriptions load every turn. Word counts on 2026-10-01: red-team 139, tidy 138, prior-art 133, grill-me 89, grill-with-docs 55, to-spec 53. Each repeats body identity and lists synonym triggers for one branch; red-team, prior-art and tidy do not front-load their leading word. handoff, pickup, docs-writing ("51 rules"), codebase-design (advertises a scan branch it lacks) also have fixes.
+Target: ~50 words max, leading word first, one trigger per branch. Audit tables: session 2026-10-01 (Langfuse).
