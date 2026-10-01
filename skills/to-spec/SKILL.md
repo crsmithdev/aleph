@@ -24,7 +24,7 @@ Take the current conversation context and codebase understanding and produce a s
 
 <spec-template>
 
-# <Feature name>
+# `<Feature name>`
 
 ## Problem Statement
 
@@ -38,7 +38,7 @@ The solution, from the user's perspective.
 
 A LONG, numbered list. Each in the form:
 
-1. As an <actor>, I want <feature>, so that <benefit>
+1. As an `<actor>`, I want `<feature>`, so that `<benefit>`
 
 Extremely extensive; cover every aspect of the feature.
 
@@ -46,9 +46,9 @@ Extremely extensive; cover every aspect of the feature.
 
 One or more per user story, numbered to match. Each must be falsifiable: a concrete trigger, a concrete observable result. Prefer the EARS forms:
 
-- WHEN <trigger> THE system SHALL <response>
-- IF <condition> THEN THE system SHALL <response>
-- WHILE <state> THE system SHALL <response>
+- WHEN `<trigger>` THE system SHALL `<response>`
+- IF `<condition>` THEN THE system SHALL `<response>`
+- WHILE `<state>` THE system SHALL `<response>`
 
 "Handles errors properly" is not a criterion. "WHEN the token is expired THE API SHALL return 401 with body `{error: "expired"}`" is.
 
