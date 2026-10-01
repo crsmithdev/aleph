@@ -263,3 +263,17 @@ With the fixed worker text (d24d220) the eval had 0 hand edits in 24 runs, so th
 ### Notes
 
 - 2026-10-01 07:37: 85de789: land refuses a branch that changes docs/todo.md (reason names aleph todo) and sends the job back with a restore note; test in jobs/cli.test.ts. The squash no longer takes the branch's copy of the list.
+
+## 18. pickup archives handoffs under a name compile never reads
+---
+id: 18
+status: open
+created: 2026-10-01
+updated: 2026-10-01
+priority: high
+labels: [skills, bug]
+---
+
+skills/pickup/SKILL.md:13 archives to `<name>-<date>.md` (current-2026-...). vault/lib/compile.ts:80 `handoffsFor` reads only files that start with the date. A picked-up handoff never reaches `vault compile`.
+Fix: archive to `$(date +%Y-%m-%d-%H%M%S)-<name>.md`. Done when compile shows a picked-up handoff for its date.
+Found by the 2026-10-01 agent-instructions audit.
