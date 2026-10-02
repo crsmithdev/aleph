@@ -1,6 +1,9 @@
 ---
 name: vault
-description: Read and write the memory vault at ~/.aleph/vault (Obsidian notes the agent owns). Use when the user says "remember this", "write that down", "what do we know about X", "/vault", when you learn how something actually behaves, decide something, or get corrected, or to run lint or compile over the vault.
+description: >
+  Read and write the memory vault at ~/.aleph/vault. Use when the user asks to
+  remember something or what we know about X; when you learn how something
+  behaves, decide something or get corrected; or to run lint or compile.
 ---
 
 The vault is memory. Home.md and MEMORY.md are already in context from
@@ -122,8 +125,7 @@ Use `write` instead for a new note, or to rewrite a tracked one.
 note it returns; do not paraphrase Home from memory.
 
 `--scope <name>` narrows the search to one project, and on its own lists
-that scope's notes — this is how you answer "what do we know about X" now
-that Home routes only to decisions and projects. An unknown scope prints
+that scope's notes — this is how you answer "what do we know about X". An unknown scope prints
 the scopes that exist, because the vault still has several names for one
 project.
 

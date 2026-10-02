@@ -1,19 +1,11 @@
 ---
 name: red-team
 description: >
-  Dispatch several subagents in parallel to adversarially review a plan,
-  proposal, design doc, RFC, or PR description from multiple angles. Each
-  agent reads the artifact AND the actual code it touches, walks every branch
-  of its decisions, and returns sharp, citation-backed questions and gaps. The
-  orchestrator synthesizes a prioritized report (fatal / defects / smells /
-  cheaper alternatives). Use when the user wants a plan stress-tested without
-  a back-and-forth interview, when a proposal is about to be committed to, or
-  when you want a red team pass on your own design before shipping. Triggers
-  on: "red team this", "red-team this", "/red-team", "grill yourself", "have
-  agents grill the plan", "tear this plan apart", "adversarial review of this
-  plan", "stress test this with subagents". NOT for: interviewing the user
-  (use /aleph:grill-me), reviewing implemented code (use /code-review), bug
-  investigation (use /debug).
+  Red-team a plan, proposal, design doc or PR description: parallel subagents
+  check it against the code and return a ranked list of flaws. Use when a plan
+  needs stress-testing before commit, including your own. NOT for:
+  interviewing the user (use /aleph:grill-me), implemented code (use
+  /code-review), bugs (use /aleph:diagnosing-bugs).
 ---
 
 # Red Team
@@ -42,7 +34,7 @@ synthesis.
 
 - Interactive grilling where the user is the subject: `/aleph:grill-me`
 - Reviewing already-implemented code: `/code-review`
-- Investigating a bug or failure: `/debug`
+- Investigating a bug or failure: `/aleph:diagnosing-bugs`
 - Brainstorming when no plan exists yet. There must be an artifact to grill.
 
 ## Procedure
@@ -90,8 +82,7 @@ Each prompt must include:
 - A length cap (under 800 words is a good default)
 
 Use `subagent_type: "general-purpose"` unless a specialist agent exists for
-the artifact's domain. Run them in the foreground; you need their findings to
-synthesize.
+the artifact's domain. Wait for every reviewer before you synthesize.
 
 ### 4. Synthesize the findings
 
@@ -138,5 +129,4 @@ author pushes back via SendMessage and the reviewer updates.
 | One-page tactical fix | Drop to 2 lenses (correctness + YAGNI) |
 | Cross-cutting platform change | Add a blast-radius reviewer |
 
-Match the panel to the artifact. Don't fire four lenses because the default
-says four.
+Match the panel to the artifact.

@@ -1,17 +1,11 @@
 ---
 name: prior-art
 description: >
-  Survey the open-source projects that solve the same problem as a repo you
-  own, compare their architecture against it, and return a ranked list of
-  what to take and what to skip. Derives the comparison axes from the anchor
-  repo's own design, scans wide over READMEs to pick finalists, then clones
-  the finalists and reads their code with file:line citations. Use when the
-  user asks what else is out there, how their project compares to similar
-  ones, what other people built for this, or what to steal from them.
-  Triggers on: "research similar projects", "prior art", "what else solves
-  this", "how does X compare to other", "survey the field", "/prior-art".
-  NOT for: market, pricing or positioning research; reviewing one repo with
-  no anchor to compare it to; stress-testing a plan (use /aleph:red-team).
+  Prior art: survey the open-source projects that solve the same problem as a
+  repo you own, and rank what to take or skip. Use when the user asks how
+  their project compares to others, what else solves this, or what to steal
+  from them. NOT for: market or pricing research; one repo with no anchor;
+  stress-testing a plan (use /aleph:red-team).
 ---
 
 # Prior Art
@@ -108,7 +102,7 @@ Dispatch subagents, two to three finalists each, in one message.
 
 Every subagent prompt carries: the anchor's name and one-paragraph
 architecture, the axis list, its finalists' URLs, and the evidence rules
-below. Use `subagent_type: "general-purpose"`, in the foreground.
+below. Use `subagent_type: "general-purpose"`. Wait for every subagent before step 5.
 
 Each subagent returns, per finalist:
 

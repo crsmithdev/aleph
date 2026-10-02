@@ -1,11 +1,10 @@
 ---
 name: docs-writing
 description: >
-  Writes and audits technical docs with Diataxis type gating, runnable
-  examples, and 51 documentation rules. Use when the user asks to "review my
-  docs", "audit the docs", "write an API reference", "write a how-to", or
-  improve a documentation page or README. NOT for: AGENTS.md, CLAUDE.md or
-  skills (use /aleph:writing-for-agents).
+  Writes and audits technical docs with Diataxis type gating and runnable
+  examples. Use when the user asks to review, audit or write docs, an API
+  reference, a how-to, or a README. NOT for: AGENTS.md, CLAUDE.md or skills
+  (use /aleph:writing-for-agents).
 ---
 
 # Documentation Writing

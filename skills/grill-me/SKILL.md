@@ -1,14 +1,11 @@
 ---
 name: grill-me
 description: >
-  Grill the user relentlessly about a plan, decision, or idea until reaching
-  shared understanding. Maps the plan as a design tree and asks one
-  unblocked decision at a time, explained in detail, with a recommended
-  answer. Use when the user wants to stress-test their thinking or says
-  "grill me", "grill this", "interview me", "stress-test this", "challenge my
-  design", "/grill-me". NOT for: general Q&A, idea generation when no plan
-  exists yet, review of implemented code (use /code-review), or parallel
-  adversarial review without the user in the loop (use /aleph:red-team).
+  Grill the user about a plan, decision or idea until you reach shared
+  understanding. Use when the user says "grill me" or "interview me", or wants
+  a plan stress-tested in conversation. NOT for: general Q&A, ideas with no
+  plan yet, implemented code (use /code-review), or review without the user in
+  the loop (use /aleph:red-team).
 ---
 
 Interview the user relentlessly until you reach a shared understanding. Map this as a **design tree**: every decision branches into the decisions that hang off it.

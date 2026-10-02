@@ -1,6 +1,8 @@
 ---
 name: handoff
-description: Save a session handoff to ~/.aleph/handoffs/current.md so a fresh context can pick up where this one left off. Use when the user says "handoff", "save a handoff", "write a handoff", "/handoff", or when context is about to be cleared mid-task.
+description: >
+  Save a session handoff so a fresh context can resume the work. Use when the
+  user asks for a handoff, or when context is about to be cleared mid-task.
 ---
 
 Write a complete handoff for the next session to `~/.aleph/handoffs/<name>.md`. `<name>` is the argument, if one is given (the Sidetone bridge passes `sidetone`), and `current` if not. The next session will read this verbatim with no other context. Assume the reader knows nothing about what we've been doing.

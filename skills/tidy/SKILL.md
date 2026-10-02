@@ -1,6 +1,12 @@
 ---
 name: tidy
-description: Get a repo into a state worth showing: sweep the mechanical junk, prove what code is dead and delete it tier by tier behind a green build, check it survives a cold clone, and publish the findings. Use when the user asks to clean up a repo or codebase, remove dead code, find unused files, exports or dependencies, clear out leftover or stray files, fix where files live, audit what a project still needs, or get a repo ready for someone else to look at. Takes a mode: `sweep` for the mechanical pass alone, `polish` for the inspection gate. Triggers on "clean up this repo", "what is dead here", "remove unused code", "tidy this up", "what junk is in here", "is this ready to show", "open source this", "/tidy". NOT for improving code that should exist (use /aleph:improve-codebase-architecture).
+description: >
+  Tidy a repo: sweep the junk, prove dead code and delete it behind a green
+  build, and gate it as ready to show. Modes: `sweep` (mechanical pass only),
+  `polish` (the inspection gate). Use when the user asks to clean up a repo,
+  find dead or unused code, files or dependencies, fix stray or misplaced
+  files, or get a repo ready to show or open-source. NOT for improving code
+  that should exist (use /aleph:improve-codebase-architecture).
 ---
 
 # Tidy
@@ -170,7 +176,7 @@ Flag what needs judgment, and leave it: whether the README leads with what the p
 
 Publish the run as an artifact. Load the `artifact-design` skill, write the page, publish it with the Artifact tool, and give the user the link. A run produces a judgment about every candidate it touched, and that judgment is worth more than the diff; in terminal scrollback it is gone by the next session.
 
-The page carries five things:
+The page carries six things:
 
 - **The delta.** Files and lines removed against the baseline, split by pass and by tier.
 - **The sweep**, one row per finding, grouped by outcome rather than by category. The reader wants to know what changed; the category is how you found the file, not what you did to it. Include the ignore rules added, so a reader can tell why the next run will be quieter.

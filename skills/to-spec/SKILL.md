@@ -1,14 +1,13 @@
 ---
 name: to-spec
 description: >
-  Turn the current conversation into a development spec: no interview, just
-  synthesis of what has already been decided, typically right after
-  /aleph:grill-me. Writes a markdown file. Use when the user says "write the
-  spec", "turn this into a spec", "/to-spec". NOT for: gathering
-  requirements (use /aleph:grill-me first) or breaking work into tickets.
+  Spec: turn the decisions already made in this conversation into a
+  development spec file, typically after /aleph:grill-me. Use when the user
+  asks to write the spec. NOT for: gathering requirements (use
+  /aleph:grill-me) or breaking work into tickets.
 ---
 
-Take the current conversation context and codebase understanding and produce a spec. Do NOT interview the user; synthesize what you already know. If a decision the spec needs was never made, list it under Open Questions rather than inventing an answer.
+Take the current conversation context and codebase understanding and produce a spec. Synthesize what you already know; the seam check in step 2 is the one question you ask. If a decision the spec needs was never made, list it under Open Questions rather than inventing an answer.
 
 ## Process
 

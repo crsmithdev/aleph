@@ -17,7 +17,7 @@ Per-stack tools for step 4 of [tidy](SKILL.md). Detect the stack from the manife
 
 ## Reading the output
 
-Detector output is a candidate list, not a finding list. Three failure shapes recur:
+Detector output is a candidate list, not a finding list. Four failure shapes recur:
 
 - **Entry-point blindness, and the cascade behind it.** Anything the framework loads by path looks unused: hooks, CLI bins, job handlers, route files, migrations. This is not a rare miss, and it does not stop at the entry point. Everything the misread file imports goes dark with it, so one unregistered path can carry a dozen live modules and their exports into the report. On the aleph repo, 21 of 23 `knip` candidates traced back to a single manifest the tool had not been pointed at. Find the entry points first and re-run; a report built on the wrong roots is not worth reading, let alone proving.
 - **Type-only exports.** A type imported with `import type` and erased at build time reads as unused to some tools. It is not.

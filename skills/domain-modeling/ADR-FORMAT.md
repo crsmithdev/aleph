@@ -1,6 +1,6 @@
 # ADR Format
 
-ADRs live in `docs/adr/` and use sequential numbering: `0001-slug.md`, `0002-slug.md`, etc.
+An ADR lives in the `docs/adr/` of the context it concerns: the root `docs/adr/` for a system-wide decision, the context's own `docs/adr/` otherwise (see the file structure in SKILL.md). Each folder numbers its ADRs in sequence: `0001-slug.md`, `0002-slug.md`, etc.
 
 Create the `docs/adr/` directory lazily: only when the first ADR is needed.
 
@@ -24,7 +24,7 @@ Only include these when they add genuine value. Most ADRs won't need them.
 
 ## Numbering
 
-Scan `docs/adr/` for the highest existing number and increment by one.
+Scan the target `docs/adr/` folder for the highest existing number and increment by one.
 
 ## When to offer an ADR
 
