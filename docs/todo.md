@@ -285,9 +285,9 @@ Found by the 2026-10-01 agent-instructions audit.
 ## 19. Fix contradictions and stale references in skills
 ---
 id: 19
-status: open
+status: done
 created: 2026-10-01
-updated: 2026-10-01
+updated: 2026-10-02
 priority: medium
 labels: [skills]
 ---
@@ -306,6 +306,10 @@ From the 2026-10-01 writing-for-agents audit. Each is a case where the agent get
 - tidy DETECTORS.md:20 "three" lists four; SKILL.md:173 "five" lists six.
 - tdd description triggers on red-green-refactor; body says refactor is not in the loop.
 Done when each line is fixed and `agnix -t claude-code skills` reports no parse error.
+
+### Notes
+
+- 2026-10-02 09:33: All listed contradictions and stale refs fixed in 74072f8; agnix 0 errors.
 
 ## 20. Trim always-loaded skill descriptions
 ---
