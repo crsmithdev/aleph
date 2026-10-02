@@ -333,7 +333,7 @@ Target: ~50 words max, leading word first, one trigger per branch. Audit tables:
 id: 21
 status: open
 created: 2026-10-01
-updated: 2026-10-01
+updated: 2026-10-02
 priority: medium
 labels: [skills]
 ---
@@ -343,6 +343,10 @@ Missing done bars: tdd (run the test and see it go red), diagnosing-bugs phases 
 Sprawl to disclose: vault maintenance ops (~80 lines) to MAINTAIN.md; tidy pass 2 (~55 lines) to PROVE.md.
 Duplication: codebase-design (SKILL vs DEEPENING, testability no-op section), domain-modeling (3 files), tdd (3 files), red-team/prior-art calibration and when-to-use echo, docs-writing gotchas, vocabulary bans repeated 4x across codebase-design and improve-codebase-architecture.
 retro: give the Langfuse API curl, not the UI URL.
+
+### Notes
+
+- 2026-10-02 10:12: Splits landed: vault/MAINTAIN.md, tidy/PROVE.md. Open: done criteria, duplication.
 
 ## 22. Cut caches and no-ops from identity/CLAUDE.md
 ---
