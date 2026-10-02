@@ -267,9 +267,9 @@ With the fixed worker text (d24d220) the eval had 0 hand edits in 24 runs, so th
 ## 18. pickup archives handoffs under a name compile never reads
 ---
 id: 18
-status: open
+status: done
 created: 2026-10-01
-updated: 2026-10-01
+updated: 2026-10-02
 priority: high
 labels: [skills, bug]
 ---
@@ -277,6 +277,10 @@ labels: [skills, bug]
 skills/pickup/SKILL.md:13 archives to `<name>-<date>.md` (current-2026-...). vault/lib/compile.ts:80 `handoffsFor` reads only files that start with the date. A picked-up handoff never reaches `vault compile`.
 Fix: archive to `$(date +%Y-%m-%d-%H%M%S)-<name>.md`. Done when compile shows a picked-up handoff for its date.
 Found by the 2026-10-01 agent-instructions audit.
+
+### Notes
+
+- 2026-10-02 09:33: pickup archives as <date>-<name>.md (74072f8); compile looked beside the vault symlink's target and never read any handoff, fixed with a test; 5 old archives renamed. compile 2026-09-30 lists 3 handoffs.
 
 ## 19. Fix contradictions and stale references in skills
 ---
