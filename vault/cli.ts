@@ -441,7 +441,7 @@ async function compile(): Promise<void> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { console.error("usage: vault compile [YYYY-MM-DD]"); process.exit(1); }
   const cfg = langfuseConfig();
   const traces = cfg ? await traceDigest(cfg, date) : { text: "", error: "no Langfuse keys" };
-  const handoffs = handoffsFor(process.env.ALEPH_HANDOFFS ?? join(dirname(root), "handoffs"), date);
+  const handoffs = handoffsFor(process.env.ALEPH_HANDOFFS ?? join(dirname(resolve(vaultDir())), "handoffs"), date);
   const dailyPath = join(root, "daily", `${date}.md`);
   const daily = existsSync(dailyPath) ? readFileSync(dailyPath, "utf8") : "";
   const cited = citedTraces(loadVault(root));

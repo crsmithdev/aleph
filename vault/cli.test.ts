@@ -678,4 +678,13 @@ describe("compile", () => {
     expect(r.stdout).toContain("Langfuse failed: 503");
     expect(r.stdout).toContain("### 2026-09-04-101001.md");
   });
+  test("symlinked vault: reads handoffs beside the link, not beside its target", async () => {
+    const home = mkdtempSync(join(tmpdir(), "aleph-home-"));
+    symlinkSync(vault, join(home, "vault"));
+    mkdirSync(join(home, "handoffs"));
+    writeFileSync(join(home, "handoffs", "2026-09-04-120000-current.md"), "# Handoff\n");
+    const r = await runAsync({ ...env(failing.port), ALEPH_VAULT: join(home, "vault") }, "compile", "2026-09-04");
+    rmSync(home, { recursive: true });
+    expect(r.stdout).toContain("### 2026-09-04-120000-current.md");
+  });
 });
