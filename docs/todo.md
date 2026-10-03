@@ -351,9 +351,9 @@ retro: give the Langfuse API curl, not the UI URL.
 ## 22. Cut caches and no-ops from identity/CLAUDE.md
 ---
 id: 22
-status: open
+status: done
 created: 2026-10-01
-updated: 2026-10-01
+updated: 2026-10-03
 priority: medium
 labels: [identity]
 ---
@@ -361,3 +361,7 @@ labels: [identity]
 2026-10-01 audit: claude-md-improver 75/100; agnix ~1674 tokens vs 1500 limit.
 Cuts (~30 lines): the aleph todo usage block and flag notes (the tool prints usage); hook restatements (verify gate, git-guard deny, auto-memory already off in settings); Permissions line 15 no-op and line 17 duplicate of Manner; default-behaviour Values/Code lines. Move Sessions verification lines under Verification. Move the skill-naming gotcha to writing-for-agents/SKILL-MECHANICS.md. Rephrase "don't apologise" positively.
 Needs Chris's review: this file loads into every session.
+
+### Notes
+
+- 2026-10-03 16:43: df34bc5: 146 -> 120 lines; agnix token warning cleared. Usage block kept compact: bare aleph todo prints no flags.
