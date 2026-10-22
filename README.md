@@ -31,6 +31,7 @@ Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 | `domain-modeling` | Builds the project glossary (`CONTEXT.md`) and records ADRs |
 | `improve-codebase-architecture` † | Scans a codebase for deepening candidates, presents them as an HTML report, grills through the one you pick |
 | `docs-writing` | Writes and audits docs with Diátaxis type gating and 51 rules |
+| `humanizer` | Rewrites prose so it does not read as AI-written: blog posts, essays, anything for people rather than agents |
 | `writing-for-agents` | How to write a skill, an `AGENTS.md` or a `CLAUDE.md` |
 | `vault` | Reads and writes the memory vault |
 | `handoff` / `pickup` | Saves a session to `~/.aleph/handoffs/current.md` (or `<name>.md` when given a name); resumes it in a fresh context |
@@ -144,4 +145,4 @@ A 200 on the OTLP POST proves nothing, because the worker can drop a batch silen
 
 ## Credits
 
-`tdd`, `diagnosing-bugs`, `retro`, `writing-for-agents`, `codebase-design`, `domain-modeling`, `grill-with-docs` and `improve-codebase-architecture` are adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, `skills/LICENSE-mattpocock`). The first four drop its `CONTEXT.md`, ADR and issue-tracker conventions; the last four keep them, because those files are what the skills produce. `docs-writing` is adapted from [mblode/agent-skills](https://github.com/mblode/agent-skills) (MIT, `skills/LICENSE-mblode`), without its sibling-skill references and eval suite.
+`tdd`, `diagnosing-bugs`, `retro`, `writing-for-agents`, `codebase-design`, `domain-modeling`, `grill-with-docs` and `improve-codebase-architecture` are adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, `skills/LICENSE-mattpocock`). The first four drop its `CONTEXT.md`, ADR and issue-tracker conventions; the last four keep them, because those files are what the skills produce. `docs-writing` is adapted from [mblode/agent-skills](https://github.com/mblode/agent-skills) (MIT, `skills/LICENSE-mblode`), without its sibling-skill references and eval suite. `humanizer` is [blader/humanizer](https://github.com/blader/humanizer) 3.1.0 at `8c307f3` (MIT, `skills/LICENSE-humanizer`), SKILL.md only, unmodified.
