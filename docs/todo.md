@@ -365,3 +365,13 @@ Needs Chris's review: this file loads into every session.
 ### Notes
 
 - 2026-10-03 16:43: df34bc5: 146 -> 120 lines; agnix token warning cleared. Usage block kept compact: bare aleph todo prints no flags.
+
+## 23. plugin.json description says sixteen skills; there are 19
+---
+id: 23
+status: open
+created: 2026-10-23
+updated: 2026-10-23
+priority: medium
+labels: []
+---
