@@ -391,6 +391,10 @@ From the agent memory types review (vault: Seven Agent Memory Types Mapped Onto 
 2. Log recall queries that return nothing or are followed by a second query. Add embeddings behind `recall` only if misses are frequent.
 Prospective memory (`--due` on todo add) is deferred until wanted.
 
+### Notes
+
+- 2026-10-25 19:16: Second source (2026-10-25): an infographic 'Andrej Karpathy: Obsidian + Opus 5.5 + Jev' proposes Obsidian as persistent memory, Opus 5.5 for reasoning and Jev as orchestration, in a plan/act/observe/improve loop. Same three layers aleph has (vault, Claude, item 26). No method or data; the 10x and 80% claims and the Karpathy attribution are unbacked. Recorded in vault: Seven Agent Memory Types Mapped Onto Aleph.
+
 ## 25. Factory: revise the agent seats spec with the factory research
 ---
 id: 25
