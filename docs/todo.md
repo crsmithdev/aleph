@@ -473,3 +473,7 @@ labels: [ui, tooling]
 
 Old aleph (~/aleph-old) had a custom UI that read better than Langfuse. The todo and land system is now constrained; it may need to work more like GitHub issues.
 Part of the goal-to-shipped vision (Chris, 2026-10-25): state a high-level goal, get a short grill, and the system builds, tests and deploys it with little input, then reports how it went, what broke and what it could not solve. Many goals run at once.
+
+### Notes
+
+- 2026-10-25 19:25: Part of docs/specs/2026-10-25-goal-to-shipped.md; write this piece's detailed plan from it.
