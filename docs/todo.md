@@ -477,3 +477,15 @@ Part of the goal-to-shipped vision (Chris, 2026-10-25): state a high-level goal,
 ### Notes
 
 - 2026-10-25 19:25: Part of docs/specs/2026-10-25-goal-to-shipped.md; write this piece's detailed plan from it.
+
+## 30. Read the five factory leads before piece 2's detailed plan
+---
+id: 30
+status: open
+created: 2026-10-25
+updated: 2026-10-25
+priority: medium
+labels: [factory]
+---
+
+From ~/.aleph/reports/Software factory corpus.md section 7.4: (1) openai/symphony SPEC and the gitpod-io/memo automation YAMLs in full; (2) workos/case source (evidence-marker CLI, failure fingerprint); (3) Anthropic's long-running app harness post (evaluator prompt, thresholds); (4) arXiv 2610.13668 (review benchmark behind RDEL #165); (5) Yegge's Gas Town shutdown essay and Horthy's talk.
