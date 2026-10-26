@@ -454,3 +454,16 @@ labels: [obs]
 ---
 
 `priceFor("claude-haiku-5-5")` returns null (run 2026-10-25). Opus 5.5 and Sonnet 5.5 fall through to the opus-5 and sonnet-5 prefixes; check their list prices against Anthropic's pricing docs. A secondhand graphic gives Haiku 5.5 input at $0.10/M; confirm before adding.
+
+## 29. UI and tooling: a real dashboard and an issue system beyond docs/todo.md
+---
+id: 29
+status: open
+created: 2026-10-25
+updated: 2026-10-25
+priority: medium
+labels: [ui, tooling]
+---
+
+Old aleph (~/aleph-old) had a custom UI that read better than Langfuse. The todo and land system is now constrained; it may need to work more like GitHub issues.
+Part of the goal-to-shipped vision (Chris, 2026-10-25): state a high-level goal, get a short grill, and the system builds, tests and deploys it with little input, then reports how it went, what broke and what it could not solve. Many goals run at once.
