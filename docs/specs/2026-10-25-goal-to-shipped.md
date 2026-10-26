@@ -1,9 +1,10 @@
 # Goal to shipped
 
-Written 2026-10-25. Version 2: version 1 plus three corrections from Chris on
-the same day (bootstrap first, personal scope, Chris's input and checking time
-as the constraint). Not built. Each piece gets its own spec in this folder; this
-file stays the map. Version 1 is in git (`4e0da45`).
+Written 2026-10-25. Version 3: version 2 plus two decisions from Chris on the
+same day (a high-level grill and spec with grading criteria, after Anthropic's
+long-running harness; standing automations only for reliability or short
+experiments). Not built. Each piece gets its own spec in this folder; this file
+stays the map. Versions 1 and 2 are in git (`4e0da45`, `2c6942d`).
 
 ## The vision
 
@@ -75,8 +76,8 @@ Per Goal) sets these limits:
 | # | Stage | What happens | Who |
 |---|---|---|---|
 | 1 | Intake | A goal arrives from Sidetone, the CLI or the UI | Chris |
-| 2 | Grill | Five to ten questions at goal level, each with a recommended answer | planner model, Chris |
-| 3 | Spec | What done means, the checks (tests, scenarios or a rubric), where it is delivered, the budget | planner model |
+| 2 | Grill | Five to ten questions about the product, never the implementation, each with a recommended answer | planner model, Chris |
+| 3 | Spec | The planner expands the goal into a product spec: what done means, the grading criteria, where it is delivered, the budget | planner model |
 | 4 | Decompose | Tasks, each sized to finish in one run | planner model |
 | 5 | Make | One worker per task, in its own isolated workspace | worker model |
 | 6 | Check | Code: lint, tests, no edits to existing tests, a fresh reviewer. Writing and research: the rubric, a fresh judge, source checks. Capped fix rounds | deterministic, reviewer model |
@@ -87,6 +88,64 @@ Per Goal) sets these limits:
 Stages 4 to 8 repeat until the goal's checks pass, the budget ends, or a task
 is stuck after its fix rounds. A stuck task goes to the report, not into a
 retry loop.
+
+## Goal, grill and spec stay at the product level
+
+This follows Anthropic's harness for long-running apps
+(https://www.anthropic.com/engineering/harness-design-long-running-apps).
+
+- **The goal is one to four sentences.** Chris never writes a detailed spec.
+  Anthropic's planner took a single sentence and produced a 16-feature spec.
+- **The grill asks about the product, not the code:** who it is for, what it
+  must do, what good looks like, where it goes, what it must not do. Each
+  question has a recommended answer.
+- **The planner expands, at the product level.** The spec holds the product
+  context, the features as user stories, a high-level technical design and the
+  grading criteria. It leaves out detailed implementation, because "errors in
+  the spec would cascade into the downstream implementation"; the workers find
+  the path as they go.
+- **Keep the planner.** Without it, Anthropic's generator under-scoped the
+  work. With newer models Anthropic removed sprints and context resets, but
+  kept the planner and the evaluator.
+
+## Grading criteria
+
+Each goal kind has a small set of grading criteria. Each criterion has a hard
+threshold: one criterion below its threshold fails the check, whatever the
+others score. An evaluator that did not make the thing scores it, after it uses
+the thing the way Chris would (Playwright for an app, a read-through for a
+document). The evaluator is calibrated with a few scored examples, because
+Anthropic's evaluator "talked itself into approving" work until it had hard
+thresholds.
+
+| Goal kind | Criteria | Source |
+|---|---|---|
+| App or tool | product depth, functionality, visual design, code quality | Anthropic, full-stack harness |
+| Front end | design quality, originality, craft, functionality; the first two weigh more | Anthropic, frontend experiment |
+| Writing | to be set in the non-code goal plan; a starting point is the voice sample, clarity, structure, and the humanizer's AI-pattern checks | proposal |
+| Research | to be set in the non-code goal plan; a starting point is source credibility, coverage of the question, claims that trace to a fetched source | proposal |
+
+Before a worker starts, it writes a short contract: what it will make and how
+the evaluator will check it. The evaluator agrees or asks for changes. They
+communicate through files. Anthropic's contracts had up to 27 criteria.
+
+Cost reference (Anthropic, Opus 4.6): one app in 3 h 50 min for $124.70, of
+which planning cost $0.46 and three QA passes about $10.
+
+## Standing automations
+
+A standing automation runs on a trigger with no goal behind it, like Ona's
+feature planner or product improver. Most of these make work nobody asked for,
+which is how Ona's factory ended in chores. The rule:
+
+- **May run unattended:** automations for reliability and stability: finding
+  bugs, smoke tests after delivery, broken integrations, flaky checks, stale
+  dependencies, the factory's own health.
+- **May run unattended for a time:** experiments, each with an end date and a
+  budget, listed in the digest until they end.
+- **Proposes only:** everything else, such as feature generators and product
+  improvers. Their output is a proposed goal in Chris's queue, not work in
+  progress.
 
 ## What this plan treats as fixed
 
