@@ -376,7 +376,7 @@ priority: medium
 labels: []
 ---
 
-## 24. Memory: add episodic recall and measure recall misses
+## 24. Memory: plan all seven memory types, starting with episodic recall and recall misses
 ---
 id: 24
 status: open
