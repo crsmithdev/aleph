@@ -422,3 +422,15 @@ labels: [routing]
 Today hooks/lib/judge.ts runs every judge as `claude -p --model haiku`, and jobs take one optional --model.
 1. Evaluate TypeSafe's Jev (typed-decision judge; used by jev-belay, hookgate, clear-head) against the haiku judge on stored verify-gate verdicts: agreement, latency, cost.
 2. Design a routing table: which model tier each role uses (judge, reviewer key 2, worker, planner/lead), with escalation on failure.
+
+## 27. verify-gate digest drops grep output: judge said a judge.ts grep returned nothing when it printed line 37
+---
+id: 27
+status: open
+created: 2026-10-25
+updated: 2026-10-25
+priority: medium
+labels: [verify-gate]
+---
+
+Session 527e44d7, 2026-10-25. Two Stop denials in a row said no grep of hooks/lib/judge.ts showed output. The earlier `grep -n model hooks/lib/judge.ts ...` printed lines 2 and 37. Check how the digest selects or truncates Bash output.
