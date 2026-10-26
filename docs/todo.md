@@ -375,3 +375,18 @@ updated: 2026-10-23
 priority: medium
 labels: []
 ---
+
+## 24. Memory: add episodic recall and measure recall misses
+---
+id: 24
+status: open
+created: 2026-10-25
+updated: 2026-10-25
+priority: medium
+labels: [memory]
+---
+
+From the agent memory types review (vault: Seven Agent Memory Types Mapped Onto Aleph).
+1. `vault recall --episodes <query>`: search past Langfuse trace prompts and final messages, return session ids. No new store.
+2. Log recall queries that return nothing or are followed by a second query. Add embeddings behind `recall` only if misses are frequent.
+Prospective memory (`--due` on todo add) is deferred until wanted.
