@@ -395,6 +395,7 @@ Prospective memory (`--due` on todo add) is deferred until wanted.
 
 - 2026-10-25 19:16: Second source (2026-10-25): an infographic 'Andrej Karpathy: Obsidian + Opus 5.5 + Jev' proposes Obsidian as persistent memory, Opus 5.5 for reasoning and Jev as orchestration, in a plan/act/observe/improve loop. Same three layers aleph has (vault, Claude, item 26). No method or data; the 10x and 80% claims and the Karpathy attribution are unbacked. Recorded in vault: Seven Agent Memory Types Mapped Onto Aleph.
 - 2026-10-25 19:25: Part of docs/specs/2026-10-25-goal-to-shipped.md; write this piece's detailed plan from it.
+- 2026-10-25 20:30: Spec v2 (2c6942d) piece 1 maps all seven memory types (working, semantic, episodic, procedural, retrieval, parametric, prospective) to what holds each today and what the factory adds; the detailed memory plan must cover each type explicitly (Chris).
 
 ## 25. Factory: revise the agent seats spec with the factory research
 ---
