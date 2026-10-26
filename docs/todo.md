@@ -417,6 +417,7 @@ Report: ~/.aleph/reports/AI agent software factory design.md. Vault: Software Fa
 ### Notes
 
 - 2026-10-25 19:25: Part of docs/specs/2026-10-25-goal-to-shipped.md; write this piece's detailed plan from it.
+- 2026-10-25 20:13: Corpus report (~/.aleph/reports/Software factory corpus.md, section 6.2) proposes: a 'flag for human' worker outcome, a diff-coverage gate, stall detection from hook state and repeated identical tool calls, an environment contract per app kind (setup, dev login, preflight), an integration branch per goal, and unattended workers in git clone --shared under bubblewrap instead of worktrees. The last one moves an item the plan treats as fixed.
 
 ## 26. Model routing: Jev as judge and tiered models per agent role
 ---
