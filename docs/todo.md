@@ -414,6 +414,10 @@ Report: ~/.aleph/reports/AI agent software factory design.md. Vault: Software Fa
 - On a follow-up wake, compare a fresh fork plus notes and git log against session resume.
 - Defer seat-to-seat messaging.
 
+### Notes
+
+- 2026-10-25 19:25: Part of docs/specs/2026-10-25-goal-to-shipped.md; write this piece's detailed plan from it.
+
 ## 26. Model routing: Jev as judge and tiered models per agent role
 ---
 id: 26
