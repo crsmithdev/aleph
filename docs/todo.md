@@ -408,3 +408,17 @@ Report: ~/.aleph/reports/AI agent software factory design.md. Vault: Software Fa
 - Route review by risk class; cap items waiting for Chris.
 - On a follow-up wake, compare a fresh fork plus notes and git log against session resume.
 - Defer seat-to-seat messaging.
+
+## 26. Model routing: Jev as judge and tiered models per agent role
+---
+id: 26
+status: open
+created: 2026-10-25
+updated: 2026-10-25
+priority: medium
+labels: [routing]
+---
+
+Today hooks/lib/judge.ts runs every judge as `claude -p --model haiku`, and jobs take one optional --model.
+1. Evaluate TypeSafe's Jev (typed-decision judge; used by jev-belay, hookgate, clear-head) against the haiku judge on stored verify-gate verdicts: agreement, latency, cost.
+2. Design a routing table: which model tier each role uses (judge, reviewer key 2, worker, planner/lead), with escalation on failure.
