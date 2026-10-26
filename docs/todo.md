@@ -490,3 +490,15 @@ labels: [factory]
 ---
 
 From ~/.aleph/reports/Software factory corpus.md section 7.4: (1) openai/symphony SPEC and the gitpod-io/memo automation YAMLs in full; (2) workos/case source (evidence-marker CLI, failure fingerprint); (3) Anthropic's long-running app harness post (evaluator prompt, thresholds); (4) arXiv 2610.13668 (review benchmark behind RDEL #165); (5) Yegge's Gas Town shutdown essay and Horthy's talk.
+
+## 31. Seed factory: the minimum factory that can build the rest of itself
+---
+id: 31
+status: open
+created: 2026-10-25
+updated: 2026-10-25
+priority: high
+labels: [factory]
+---
+
+First priority (Chris, 2026-10-25). docs/specs/2026-10-25-goal-to-shipped.md, "Bootstrap first": a work store for goals and tasks with state, the loop for code goals (grill, spec, decompose, make, check, land), the digest as a text file, a per-run and per-night budget, and idle when no goal is open. Needs its detailed plan first; items 25, 29 and 30 feed it. Its first goals: routing (26), non-code goals, UI (29), memory (24), the Sidetone desktop app (sidetone 93).
