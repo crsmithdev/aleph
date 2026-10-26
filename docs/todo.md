@@ -390,3 +390,21 @@ From the agent memory types review (vault: Seven Agent Memory Types Mapped Onto 
 1. `vault recall --episodes <query>`: search past Langfuse trace prompts and final messages, return session ids. No new store.
 2. Log recall queries that return nothing or are followed by a second query. Add embeddings behind `recall` only if misses are frequent.
 Prospective memory (`--due` on todo add) is deferred until wanted.
+
+## 25. Factory: revise the agent seats spec with the factory research
+---
+id: 25
+status: open
+created: 2026-10-25
+updated: 2026-10-25
+priority: medium
+labels: [factory]
+---
+
+Revise docs/specs/2026-09-30-agent-seats.md before building it (item 15).
+Report: ~/.aleph/reports/AI agent software factory design.md. Vault: Software Factories Are Pipelines Gated By Verification.
+- Key 2 is a fresh reviewer given the spec, the diff and the test-file diff, not a durable seat.
+- A land check fails when a branch edits or deletes existing test files.
+- Route review by risk class; cap items waiting for Chris.
+- On a follow-up wake, compare a fresh fork plus notes and git log against session resume.
+- Defer seat-to-seat messaging.
