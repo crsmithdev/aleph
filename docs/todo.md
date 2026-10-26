@@ -434,3 +434,15 @@ labels: [verify-gate]
 ---
 
 Session 527e44d7, 2026-10-25. Two Stop denials in a row said no grep of hooks/lib/judge.ts showed output. The earlier `grep -n model hooks/lib/judge.ts ...` printed lines 2 and 37. Check how the digest selects or truncates Bash output.
+
+## 28. pricing.ts has no Haiku 5.5 entry, so Haiku 5.5 turns get no cost
+---
+id: 28
+status: open
+created: 2026-10-25
+updated: 2026-10-25
+priority: medium
+labels: [obs]
+---
+
+`priceFor("claude-haiku-5-5")` returns null (run 2026-10-25). Opus 5.5 and Sonnet 5.5 fall through to the opus-5 and sonnet-5 prefixes; check their list prices against Anthropic's pricing docs. A secondhand graphic gives Haiku 5.5 input at $0.10/M; confirm before adding.
