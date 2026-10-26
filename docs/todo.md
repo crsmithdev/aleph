@@ -423,6 +423,10 @@ Today hooks/lib/judge.ts runs every judge as `claude -p --model haiku`, and jobs
 1. Evaluate TypeSafe's Jev (typed-decision judge; used by jev-belay, hookgate, clear-head) against the haiku judge on stored verify-gate verdicts: agreement, latency, cost.
 2. Design a routing table: which model tier each role uses (judge, reviewer key 2, worker, planner/lead), with escalation on failure.
 
+### Notes
+
+- 2026-10-25 19:13: Reference tiering (The VC Corner graphic, Oct 2026, citing Anthropic docs): Fable 5.1 writes the daily plan (Read/Grep/Glob, high effort); Opus 5.5 judges every diff and plans when Fable is unavailable (read-only, high); Sonnet 5.5 does each task in its own worktree (scoped edits, medium); Haiku 5.5 screens every inbox item (no tools, medium). Fable input $10/M vs Haiku 5.5 $0.10/M. Mapping to aleph: lead/planner = Fable, key-2 reviewer = Opus, worker = Sonnet, verify-gate judge and intake screen = Haiku 5.5 or Jev (TypeSafe's Jev or equivalent, per Chris).
+
 ## 27. verify-gate digest drops grep output: judge said a judge.ts grep returned nothing when it printed line 37
 ---
 id: 27
