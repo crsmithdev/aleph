@@ -149,6 +149,13 @@ test("done and drop set a field, never move or renumber the item", () => {
   expect(JSON.parse(aleph("todo", "show", "proj", "4", "--json").out).notes[0]).toContain("landed in abc123");
 });
 
+test("a title that YAML would misread is quoted in the file and comes back exactly", () => {
+  const title = '`/play` says "done" \\ then: drops it';
+  expect(aleph("todo", "add", "proj", title).code).toBe(0);
+  expect(remoteItem(4)).toContain(`title: ${JSON.stringify(title)}\n`);
+  expect(JSON.parse(aleph("todo", "show", "proj", "4", "--json").out).title).toBe(title);
+});
+
 test("drop refuses without a reason", () => {
   aleph("todo", "add", "proj", "Item four");
   const r = aleph("todo", "drop", "proj", "4");

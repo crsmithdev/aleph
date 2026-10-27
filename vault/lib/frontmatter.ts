@@ -13,7 +13,10 @@ export function splitFrontmatter(text: string): { frontmatter: string | null; bo
 
 function unquote(s: string): string {
   const t = s.trim();
-  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) return t.slice(1, -1);
+  if (t.length > 1 && t.startsWith('"') && t.endsWith('"')) {
+    try { return JSON.parse(t); } catch { return t.slice(1, -1); }
+  }
+  if (t.length > 1 && t.startsWith("'") && t.endsWith("'")) return t.slice(1, -1);
   return t;
 }
 
@@ -70,8 +73,10 @@ export function parseFrontmatter(yaml: string): Frontmatter {
   return fm;
 }
 
+// Quoted: a value with a character YAML reads as syntax, one that starts with
+// an indicator (a title can start with a backtick), and one with edge spaces.
 function quoteIfNeeded(s: string): string {
-  return /[,:#\[\]"']/.test(s) ? JSON.stringify(s) : s;
+  return /[,:#\[\]"'\\]/.test(s) || /^[`@&*!|>%{}?\-\s]/.test(s) || /\s$/.test(s) ? JSON.stringify(s) : s;
 }
 
 export function serializeFrontmatter(fm: Frontmatter): string {

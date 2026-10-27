@@ -21,10 +21,15 @@ const tasksDir = (key: string): string => `${key}/backlog/tasks`;
 export const configPath = (key: string): string => `${key}/backlog/config.yml`;
 export const itemPath = (key: string, id: number): string => `${tasksDir(key)}/${key}-${id}.md`;
 
-/** The Backlog.md project file for a repo: its statuses are aleph's, and Backlog.md never commits. */
+/**
+ * The Backlog.md project file for a repo: its statuses are aleph's, and
+ * Backlog.md never commits. It is in the full form Backlog.md 1.55.3 writes
+ * back when it loads a config, so opening the board leaves the checkout clean.
+ */
 export const config = (key: string): string => [
-  `project_name: "${key}"`, `default_status: "open"`, `statuses: ["open", "done", "dropped"]`, `date_format: yyyy-mm-dd`,
-  `remote_operations: false`, `auto_commit: false`, `check_active_branches: false`, `task_prefix: "${key}"`, "",
+  `project_name: "${key}"`, `default_status: "open"`, `statuses: ["open", "done", "dropped"]`, `labels: []`, `date_format: yyyy-mm-dd`,
+  `max_column_width: 80`, `auto_open_browser: true`, `default_port: 6420`, `remote_operations: false`, `auto_commit: false`,
+  `bypass_git_hooks: false`, `check_active_branches: false`, `active_branch_days: 30`, `task_prefix: "${key}"`, "",
 ].join("\n");
 
 function fetch(dir: string): void {
