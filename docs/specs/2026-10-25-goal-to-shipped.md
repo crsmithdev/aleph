@@ -312,7 +312,8 @@ goal, a state, links to runs and deliveries, and a history. The seed builds
 the first half: Backlog.md files in `~/.aleph/items`, with Backlog.md's board
 until the UI exists. Then a UI whose front page is the report: delivered, needs a look, stuck, waiting. It shows the
 evidence for each delivery, so a spot check takes minutes. Old aleph's UI
-(`~/aleph-old/src/ui`) is a source of components, not a base.
+(`~/aleph-old/src/ui`) is a source of components, not a base. The UI's spec is
+[`2026-10-27-ui.md`](2026-10-27-ui.md).
 
 ### 5. Sidetone desktop app (Sidetone to-do 93)
 
