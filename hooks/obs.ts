@@ -16,6 +16,7 @@ import { peek, prune, put, take } from "./lib/handshake.ts";
 import { attrs, nano, postScore, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type AttrValue, type Score, type Span } from "./lib/otlp.ts";
 import { parseRating } from "./lib/rating.ts";
 import { readEntries } from "./lib/digest.ts";
+import { decide, judgeChoice, type Question } from "./lib/jev.ts";
 import { costDetails, type Usage } from "./lib/pricing.ts";
 
 type Payload = Record<string, any>;
@@ -100,7 +101,7 @@ function span(name: string, type: string, start: number, extra: Record<string, A
  * same id, when it ends: Langfuse updates the span in place. Its input and
  * output are the trace's, which is what the Sessions page shows.
  */
-function turnSpan(start: number, output: string | undefined, error?: string): Span {
+function turnSpan(start: number, output: string | undefined, error?: string, extra: Record<string, AttrValue | undefined> = {}): Span {
   const prompt = peek(turnKey!)?.input;
   const inputText = prompt === undefined ? undefined : truncate(prompt);
   const outputText = output === undefined ? undefined : truncate(output);
@@ -111,7 +112,37 @@ function turnSpan(start: number, output: string | undefined, error?: string): Sp
     "langfuse.trace.output": outputText,
     "langfuse.observation.level": error ? "ERROR" : "DEFAULT",
     "langfuse.observation.metadata.prompt_id": input.prompt_id,
+    ...extra,
   }, { id: turnSpanId, error });
+}
+
+const TASK_TYPES: Record<string, string> = {
+  code_edit: "The turn mainly writes or changes source code",
+  debug: "The turn mainly finds or fixes the cause of a bug, failure or error",
+  research: "The turn mainly reads, searches or investigates to answer a question",
+  writing: "The turn mainly writes prose: docs, messages, specs, summaries",
+  planning: "The turn mainly plans, designs or breaks down work without doing it",
+  ops: "The turn mainly does git, deploys, config or factory operations",
+  chat: "The turn is conversation with no work product",
+  other: "None of the other kinds fits",
+};
+const TASK_TYPE_QUESTION: Question = { type: "choice", instructions: "Which kind of turn is this?", criteria: TASK_TYPES };
+
+/** Jev's top task type for the turn and its probability, or {} when Jev is off, has nothing to read, errors or is late. */
+async function taskType(prompt: string | undefined, finalMessage: string): Promise<Record<string, AttrValue>> {
+  if (!prompt?.trim() || judgeChoice() === "haiku") return {};
+  try {
+    const d = await decide({ user_prompt: prompt, final_message: finalMessage }, { task_type: TASK_TYPE_QUESTION }, 1500);
+    const a = d.answers.task_type;
+    if (a.type !== "choice" || !(a.choice in TASK_TYPES)) return {};
+    const p = a.probabilities?.[a.choice] ?? a.confidence;
+    return {
+      "langfuse.trace.metadata.task_type": a.choice,
+      ...(typeof p === "number" ? { "langfuse.trace.metadata.task_type_p": p } : {}),
+    };
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -222,7 +253,8 @@ switch (event) {
     const start = peek(turnKey!)?.start ?? now;
     const failed = event === "StopFailure";
     const message: string = input.last_assistant_message ?? "";
-    spans.push(turnSpan(start, message, failed ? (input.error ? `${input.error}: ${message}` : message || "StopFailure") : undefined));
+    const tag = failed ? {} : await taskType(peek(turnKey!)?.input as string | undefined, message);
+    spans.push(turnSpan(start, message, failed ? (input.error ? `${input.error}: ${message}` : message || "StopFailure") : undefined, tag));
     // a failed turn's message is the API error, which never reaches the transcript, so do not wait for it
     if (input.transcript_path) spans.push(...generations(input.transcript_path, input.prompt_id, failed ? "" : message));
     break;
