@@ -1,6 +1,6 @@
 # Seed factory
 
-Written 2026-10-26. Version 3. Not built. To-do 31.
+Written 2026-10-26. Version 3, with the sandbox section corrected by the `srt` probe of 2026-10-27 (to-do 32). Not built. To-do 31.
 
 - Version 1 (`cae4664`) went through a five-lens red team.
 - Version 2 (`ee4d251`) took Chris's answers to it: a separate worker, one copy of aleph and no deploy, the work store in its own repo, and milestones. Version 2 went through a two-lens red team; both rounds are in [`2026-10-26-seed-factory-red-team.md`](2026-10-26-seed-factory-red-team.md).
@@ -185,15 +185,16 @@ One given moves: the map's "`aleph land` is the only path to `main`" becomes "th
 
 ### Sandbox
 
-- **Tool.** `@anthropic-ai/sandbox-runtime` (`srt`), pinned. It is installed with `npm i -g` into a prefix outside every path a sandbox can write. It needs `socat` from apt, the one root step. `aleph sandbox setup` prints that step for Chris to run with `!`, then checks it. Anthropic names `srt` as the way to run all of Claude Code unattended. The built-in `/sandbox` covers only shell commands.
-- **Run folder.** `~/.aleph/runs/<id>/`, with `in.bundle`, an empty `home/` and `work/`, `srt.json`, and later `out.bundle`. aleph removes it after the verdict.
+- **Tool.** `@anthropic-ai/sandbox-runtime` (`srt`), pinned. Version 0.0.79 is installed with `npm i -g --prefix ~/.aleph/tools`, outside every path a sandbox can write. It needs `socat` from apt, the one root step; `socat` 1.8.0.0 is installed (27 Oct). Anthropic names `srt` as the way to run all of Claude Code unattended. The built-in `/sandbox` covers only shell commands.
+- **Run folder.** `~/.aleph/runs/<id>/`, with `in.bundle`, an empty `home/`, `work/` and `tmp/`, `sock/`, `srt.json`, and later `out.bundle`. The profile must not allow reads of the whole run folder: `srt` mounts it read-only over the writable `home/` and `work/`. `srt` itself runs with `TMPDIR=sock/`, so its proxy sockets are in the run folder and not in the host's `/tmp`; the worker gets `TMPDIR=tmp/`. aleph removes it after the verdict.
 - **Profile (`srt.json`):**
-  - `denyRead`: `/home`, `/root`, `/mnt`, `/run`, `/var/run`, `/srv`;
-  - `allowRead`: the run folder and the pinned `claude` and `bun` files;
-  - `allowWrite`: `home/`, `work/` and `/tmp`;
+  - `denyRead`: `/home`, `/root`, `/mnt`, `/run`, `/var/run`, `/srv`, `/tmp`;
+  - `allowRead`: `in.bundle`, `sock/`, the pinned `claude` and `bun` files, and `srt`'s own `vendor/` folder (its seccomp helper is under `/home`);
+  - `allowWrite`: `home/`, `work/` and `tmp/`;
+  - `deniedDomains` and `denyWrite` as empty lists, because `srt` refuses a file without them;
   - `allowedDomains`: `api.anthropic.com` and `registry.npmjs.org`;
   - deny the resolved addresses in RFC 1918, `100.64.0.0/10` and `172.17.0.0/16`.
-- **Start.** The unit is started as today, with `RuntimeMaxSec` set to the time box. `unit.ts` runs `srt --settings srt.json -- claude -p … --permission-mode bypassPermissions --output-format stream-json` with a clean environment:
+- **Start.** The unit is started as today, with `RuntimeMaxSec` set to the time box. `unit.ts` runs `env -i … srt --settings srt.json -- claude -p … --permission-mode bypassPermissions --output-format stream-json`. The clean environment is set outside `srt`, because `srt` adds the proxy variables the sandbox needs:
   - `HOME` and `CLAUDE_CONFIG_DIR` under `home/`, where aleph writes `settings.json` with `autoMemoryEnabled: false` and no plugins;
   - `PATH` to the pinned binaries;
   - `CLAUDE_CODE_OAUTH_TOKEN`;
@@ -201,7 +202,7 @@ One given moves: the map's "`aleph land` is the only path to `main`" becomes "th
 
   stdout goes to `output.log` and stderr to `stderr.log`.
 - **Code in and out.**
-  1. Inside the sandbox: `git init work`, `git fetch ../in.bundle refs/remotes/origin/main:refs/heads/main`, then branch `factory/<job>`.
+  1. Inside the sandbox: `git init`, `git fetch ../in.bundle refs/remotes/origin/main:refs/remotes/origin/main`, then `git switch -c factory/<job> origin/main`. A fetch into `refs/heads/main` fails, because git will not fetch into the checked-out branch.
   2. After the worker, a second `srt` call runs the repo's setup and checks in `work/`.
   3. A third runs `git bundle create ../out.bundle factory/<job>`.
   4. aleph fetches that branch into a worktree of the product repo under `~/.aleph/work/<job>`, outside `~/aleph`, and lands from there. A bundle fetch runs no code from the worker's repo.
@@ -297,13 +298,12 @@ Milestone 2 adds one seam: the queue on real git, with three branches, an overla
 
 ## Open Questions
 
-- **`srt` on this machine.** It has not run here, because `socat` is not installed. Untested:
-  - its kill behaviour;
-  - whether its `/run` deny stops WSL interop as bwrap's does;
-  - whether its AF_UNIX block breaks `bun test`;
-  - whether `claude` works with the token alone, with no `platform.claude.com`.
+- **`srt` on this machine.** A probe by hand on 27 Oct (to-do 32) answered three of four questions:
+  - kill: `RuntimeMaxSec` ends the unit with `Result=timeout`, and a `setsid` child stops with it;
+  - WSL interop: `/run/WSL`, `cmd.exe` and writes to `/mnt/c` are all denied;
+  - `bun test`: aleph's suite passes inside the sandbox (167 pass, 9 skip, 0 fail), after `bun install` through the proxy.
 
-  The first `aleph sandbox probe` answers these. If it fails, Docker with `--network none` is the fallback.
+  Still untested: whether `claude` works with the token alone. Without a token it starts and prints "Not logged in". A probe must use `curl -f`, because the proxy answers a denied host with HTTP 403.
 - **Token revocation.** How to revoke a `setup-token` token before its year is unverified.
 - **WSL idle shutdown.** Whether WSL stops the VM, and every user unit with it, when no Windows client is attached is unchecked. A night with the timer and the health line answers it.
 - **Proof sample size.** One run each of to-dos 28 and 27 shows that the path works. It does not measure a rate. A rate needs the factory's first ten goals.
