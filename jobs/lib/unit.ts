@@ -8,8 +8,11 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { writeList } from "../../todo/lib/store.ts";
-import { followMain, git } from "./git.ts";
-import { allJobs, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type Repo, type Run } from "./ledger.ts";
+import { git } from "./git.ts";
+import { heldRule, outcome, tagged } from "./gate.ts";
+import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type Repo, type Run } from "./ledger.ts";
+import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
+import { paused } from "./factory.ts";
 
 export { git };
 
@@ -63,15 +66,26 @@ only there. Commit every change on the branch; the run fails if anything is
 left uncommitted or untracked. Never merge, never push, never touch another
 branch. \`aleph todo\` is not your push: it writes the to-do list on main by
 itself, so use it for every change to the list. If the previous run was a
-failed land, rebase onto \`origin/${main}\`, resolve the conflicts, and
-commit. If you need a decision from Chris, stop
+failed land, merge \`origin/${main}\` into the branch, resolve the conflicts,
+and commit. If you need a decision from Chris, stop
 and make your last line \`QUESTION: <one question>\`. End with a short summary
 of what you did and what you ran.`;
+
+const FACTORY = (run: Run, main: string) => `You are a worker on job \`${run.name}\`, in a git repo on branch \`${run.branch}\`, inside
+a sandbox. You see this repo and nothing else of the machine, and the network
+reaches only the Anthropic API and npm. Do the goal below. Commit every change
+on the branch: only commits leave the sandbox. Never switch to another branch
+and never push. If the previous run's land conflicted, merge \`origin/${main}\`
+into the branch and resolve the conflicts so that both changes survive. Nobody
+answers questions during the run: when you must choose, take the answer you
+would recommend and print a line \`DEFAULT: <question> -> <answer>\`. For work
+you find but do not do, print a line \`FOLLOWUP: <title>\`. Run the repo's
+tests before you end. End with a short summary of what you did and what you ran.`;
 
 /** The fixed text, the spec, every note in order, and the previous run's files. */
 export function prompt(id: string, folder: string, run: Run, repo: Repo): string {
   const first = join(folder, "..", run.job);
-  const parts = [FIXED(run, repo.main), `## Spec\n\n${readFileSync(join(first, "spec.md"), "utf8").trim()}`];
+  const parts = [(repo.sandbox ? FACTORY : FIXED)(run, repo.main), `## Spec\n\n${readFileSync(join(first, "spec.md"), "utf8").trim()}`];
   const notesDir = join(first, "notes");
   if (existsSync(notesDir)) {
     for (const n of readdirSync(notesDir).sort()) parts.push(`## Note ${basename(n, ".md")}\n\n${readFileSync(join(notesDir, n), "utf8").trim()}`);
@@ -162,16 +176,44 @@ const MOVED = "main moved during the land; land again";
 const OWN_LIST = `the branch changes ${TODO_PATH}; change the list with aleph todo`;
 
 /**
- * Land a job: rebase onto origin/<main>, run the checks, push one squash
- * commit as a fast-forward. The job's to-do item closes in the work store
- * after the push. Every failure leaves the remote as it was.
+ * Wait until no older land of this repo is still live, then hold the repo's
+ * land lock. Land runs sort by the time they were made, which is the time
+ * their branch became ready, so the repo's lands go one at a time in that order.
  */
-async function land(folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ verdict: Verdict; code: number }> {
-  const wt = run.worktree!;
+async function landTurn(repo: Repo, id: string): Promise<() => void> {
+  for (;;) {
+    const release = (await lock(`land-${repo.key}`, Infinity))!;
+    const older = allRuns().some((e) => e.run.kind === "land" && e.run.repo === repo.key && e.id < id && isLive(e.folder));
+    if (!older) return release;
+    release();
+    await Bun.sleep(200);
+  }
+}
+
+/** The squash commit's message: the worker's subjects, then the trailer block. */
+function landMessage(subjects: string[], run: Run, repo: Repo): string {
+  const trailers = [
+    ...(run.todo !== undefined ? [`Item: ${repo.key}-${run.todo}`] : []),
+    `Job: ${run.job}`,
+    ...(run.held ? ["Held-by: Chris"] : []),
+  ];
+  // A subject is never on a line of its own after the title, so none can read as a trailer.
+  const body = subjects.length > 1 ? ["", ...subjects.map((s) => `- ${s}`)] : [];
+  return [subjects[0] ?? run.name, ...body, "", ...trailers].join("\n");
+}
+
+/**
+ * Land a job: merge its branch onto origin/<main> in memory, run the checks on
+ * that tree, and push one squash commit of exactly that tree with a plain
+ * push. A refused push merges again, at most RELANDS times. The job's to-do
+ * item closes in the work store after the push. No checkout of the repo
+ * moves, and every failure leaves the remote as it was.
+ */
+async function land(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ verdict: Verdict; code: number }> {
   const main = repo.main;
   const logFile = join(folder, "land.log");
   const log = (step: string, out = "") => appendFileSync(logFile, `## ${step}\n${out ? out + "\n" : ""}\n`);
-  const step = (name: string, ...args: string[]) => { const r = git(wt, ...args); log(`${name}: ${r.ok ? "ok" : "failed"}`, r.out); return r; };
+  const step = (name: string, ...args: string[]) => { const r = git(repo.path, ...args); log(`${name}: ${r.ok ? "ok" : "failed"}`, r.out); return r; };
   const phase = (p: string) => updateRun(folder, { phase: p });
   const fail = (reason: string, extra: Partial<Verdict> = {}) => { log(`failed: ${reason}`); return { verdict: { state: "failed" as const, reason, ...extra }, code: 1 }; };
 
@@ -179,61 +221,125 @@ async function land(folder: string, run: Run, repo: Repo, env: Record<string, st
   if (!release) return fail("job lock busy");
   let releaseRepo: (() => void) | null = null;
   try {
+    phase("queued");
+    releaseRepo = await landTurn(repo, id);
     phase("land");
-    if (!existsSync(wt)) {
-      // The work may have reached main another way before its worktree went.
-      git(repo.path, "fetch", "-q", "origin");
-      const found = onMain(repo, run);
-      if (!found) return fail(`worktree gone: ${wt}`);
-      log(`already on main as ${found.commit} (${found.how})`);
-      return { verdict: { state: "landed", commit: found.commit, reason: `found on main (${found.how})` }, code: 0 };
-    }
-    if (existsSync(join(git(wt, "rev-parse", "--absolute-git-dir").out, "rebase-merge"))) step("abort rebase in progress", "rebase", "--abort");
-    // One land at a time per repo, from the fetch to the push. The checks run inside it.
-    releaseRepo = await lock(`land-${repo.key}`, Infinity);
-    if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
-    // origin/<main> is shared by every worktree, and another land's push moves it.
-    // Everything after the fetch uses this commit, so a move makes the push non-fast-forward.
-    const base = git(wt, "rev-parse", `origin/${main}`).out;
-    const fork = git(wt, "merge-base", base, "HEAD").out;
-    const subjects = git(wt, "log", "--reverse", "--format=%s", `${fork}..HEAD`).out.split("\n").filter(Boolean);
-    if (!step("rebase", "rebase", base).ok) {
-      // Read before the abort, which clears them.
-      const conflicts = git(wt, "diff", "--name-only", "--diff-filter=U").out.split("\n").filter(Boolean);
-      log("conflicts", conflicts.join("\n"));
-      step("abort rebase", "rebase", "--abort");
-      return fail("rebase conflict", { conflicts });
-    }
-    if (git(wt, "rev-parse", "HEAD^{tree}").out === git(wt, "rev-parse", `${base}^{tree}`).out) {
-      log("no net change");
-      removeWorktree(repo, run);
-      return { verdict: { state: "done", reason: "no net change" }, code: 0 };
-    }
-    const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
-    // Only aleph todo writes the list. A worker can go past git-guard with a script, so the land refuses it.
-    if (changed.includes(TODO_PATH)) return fail(OWN_LIST, { conflicts: [TODO_PATH] });
-    const failed = await runChecks(folder, wt, repo, env, changed, phase);
-    if (failed) return fail(failed);
-    phase("land");
-    const message = [subjects[0] ?? run.name, "", ...(subjects.length > 1 ? subjects.map((s) => `- ${s}`) : []), `Job: ${run.job}`].join("\n");
-    const c = step("commit-tree", "commit-tree", git(wt, "rev-parse", "HEAD^{tree}").out, "-p", base, "-m", message);
-    if (!c.ok) return fail("commit-tree failed");
-    if (!step("push", "push", "-q", "origin", `${c.out}:refs/heads/${main}`).ok) {
+    for (let attempt = 0; ; attempt++) {
       if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
-      return fail(git(wt, "rev-parse", `origin/${main}`).out === base ? "push refused" : MOVED);
+      // A land that pushed and then died finds its own commit here and does not merge again.
+      const pushed = git(repo.path, "log", `origin/${main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${run.job}$`).out;
+      if (pushed) {
+        log(`already on main as ${pushed}`);
+        removeBranch(repo, run);
+        return { verdict: { state: "landed", commit: pushed }, code: 0 };
+      }
+      const tip = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${run.branch}`);
+      if (!tip.ok) return fail(`branch gone: ${run.branch}`);
+      // Every step after the fetch uses this commit, so a move of main makes the push non-fast-forward.
+      const base = git(repo.path, "rev-parse", `origin/${main}`).out;
+      const merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", base, tip.out);
+      if (!merged.ok) {
+        const lines = merged.out.split("\n");
+        const conflicts = lines.slice(1, lines.indexOf("") < 0 ? undefined : lines.indexOf("")).filter(Boolean);
+        log("conflicts", conflicts.join("\n"));
+        return fail("merge conflict", { conflicts });
+      }
+      const tree = merged.out.split("\n")[0];
+      if (tree === git(repo.path, "rev-parse", `${base}^{tree}`).out) {
+        log("no net change");
+        removeBranch(repo, run);
+        return { verdict: { state: "done", reason: "no net change" }, code: 0 };
+      }
+      const changed = git(repo.path, "diff", "--name-only", base, tree).out.split("\n").filter(Boolean);
+      // Only aleph todo writes the list. A worker can go past git-guard with a script, so the land refuses it.
+      if (changed.includes(TODO_PATH)) return fail(OWN_LIST, { conflicts: [TODO_PATH] });
+      const fork = git(repo.path, "merge-base", base, tip.out).out;
+      const subjects = git(repo.path, "log", "--reverse", "--no-merges", "--format=%s", `${fork}..${tip.out}`).out.split("\n").filter(Boolean);
+      const c = step("commit-tree", "commit-tree", tree, "-p", base, "-m", landMessage(subjects, run, repo));
+      if (!c.ok) return fail("commit-tree failed");
+      const failed = repo.sandbox
+        ? await sandboxChecks(id, folder, repo, c.out, changed, phase)
+        : await worktreeChecks(folder, run, repo, env, c.out, changed, phase);
+      if (failed) return fail(failed);
+      phase("land");
+      if (step("push", "push", "-q", "origin", `${c.out}:refs/heads/${main}`).ok) {
+        const { todo, checkItem } = closeItems(repo, run);
+        if (todo) log(todo === "done" ? `todo ${run.todo} done` : `todo ${run.todo} not closed: ${todo}`);
+        if (checkItem !== undefined) log(`todo ${checkItem} holds the manual check`);
+        removeBranch(repo, run);
+        return { verdict: { state: "landed", commit: c.out, checkItem }, code: 0 };
+      }
+      if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
+      if (git(repo.path, "rev-parse", `origin/${main}`).out === base) return fail("push refused");
+      if (attempt >= RELANDS) return fail(MOVED);
+      log("main moved; merging again");
     }
-    const commit = c.out;
-    const { todo, checkItem } = closeItems(repo, run);
-    if (todo) log(todo === "done" ? `todo ${run.todo} done` : `todo ${run.todo} not closed: ${todo}`);
-    if (checkItem !== undefined) log(`todo ${checkItem} holds the manual check`);
-
-    const reason = followMain(repo.path, main) ?? undefined;
-    log(reason ?? "main checkout updated");
-    removeWorktree(repo, run);
-    return { verdict: { state: "landed", commit, reason, checkItem }, code: 0 };
   } finally {
     releaseRepo?.();
     release();
+  }
+}
+
+/** The checks on `commit`, in the job's worktree, which is back on its branch after. */
+async function worktreeChecks(folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>, commit: string, changed: string[], phase: (p: string) => void): Promise<string | null> {
+  const wt = run.worktree!;
+  if (!existsSync(wt)) return `worktree gone: ${wt}`;
+  if (!git(wt, "checkout", "-q", "--detach", commit).ok) return "checkout failed";
+  try {
+    return await runChecks(folder, wt, repo, env, changed, phase);
+  } finally {
+    git(wt, "checkout", "-q", "-f", run.branch!);
+  }
+}
+
+/**
+ * The repo's setup and checks on `ref` of `bundle`, under srt, in a fresh
+ * clone in check/: nothing a worker left in work/ runs. Each check's output
+ * and exit code go to checklog/, which only this step can write.
+ */
+async function checksInSandbox(folder: string, dir: string, bundle: string, ref: string, repo: Repo, changed: string[], phase: (p: string) => void): Promise<string | null> {
+  const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
+  const checks = repo.checks.filter((c) => !c.when || matches(c.when));
+  const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
+  const lim = limit("ALEPH_CHECK_TIMEOUT", 1200);
+  const script = [
+    "set -e", "git init -q .",
+    `git fetch -q ../${bundle} ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
+    `{ ${repo.setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1; echo $? > ../checklog/setup.code`,
+    `[ "$(cat ../checklog/setup.code)" = 0 ] || exit 0`,
+    ...checks.map((c, i) => `timeout -k 30 ${lim} bash -c ${q(c.run)} > ../checklog/${i}.log 2>&1; echo $? > ../checklog/${i}.code; [ "$(cat ../checklog/${i}.code)" = 0 ] || exit 0`),
+  ].join("\n");
+  phase(checks.length ? `check ${checks.map((c) => c.name).join(", ")}` : "check");
+  const r = await sandboxed(dir, script, { read: [bundle], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: join(folder, "check.out"), stderr: join(folder, "check.out") });
+  const read = (f: string) => existsSync(join(dir, "checklog", f)) ? readFileSync(join(dir, "checklog", f), "utf8").trim() : undefined;
+  const setup = read("setup.code");
+  if (setup === undefined) return `checks did not start (exit ${r.code})`;
+  if (setup !== "0") {
+    appendFileSync(join(folder, "checks.log"), `## setup: exit ${setup}\n${tail(join(dir, "checklog", "setup.log"), 100)}\n\n`);
+    return "setup failed";
+  }
+  for (const [i, check] of checks.entries()) {
+    const code = read(`${i}.code`);
+    const timedOut = code === "124";
+    appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${code ?? "none"}${timedOut ? " (timed out)" : ""}\n${tail(join(dir, "checklog", `${i}.log`), 100)}\n\n`);
+    if (timedOut) return `timed out: check ${check.name}`;
+    if (code !== "0") return `${check.name} failed`;
+  }
+  return null;
+}
+
+/** The checks on a land's squash commit: the commit goes in as a bundle. */
+async function sandboxChecks(id: string, folder: string, repo: Repo, commit: string, changed: string[], phase: (p: string) => void): Promise<string | null> {
+  const dir = makeRunFolder(id);
+  const ref = `refs/aleph/land/${id}`;
+  try {
+    git(repo.path, "update-ref", ref, commit);
+    const b = git(repo.path, "bundle", "create", join(dir, "out", "land.bundle"), ref);
+    if (!b.ok) return `bundle failed: ${b.out}`;
+    return await checksInSandbox(folder, dir, "out/land.bundle", ref, repo, changed, phase);
+  } finally {
+    git(repo.path, "update-ref", "-d", ref);
+    removeRunFolder(dir);
   }
 }
 
@@ -269,13 +375,16 @@ function stampJob(wt: string, base: string, job: string): void {
   if (!git(wt, "-c", "core.hooksPath=/dev/null", "rebase", "-q", "--exec", amend, base).ok) git(wt, "rebase", "--abort");
 }
 
-export function removeWorktree(repo: Repo, run: Run): void {
-  git(repo.path, "worktree", "remove", "--force", run.worktree!);
-  git(repo.path, "worktree", "prune");
-  git(repo.path, "branch", "-D", run.branch!);
+/** The job's worktree, when it has one, and its branch. */
+export function removeBranch(repo: Repo, run: Run): void {
+  if (run.worktree) {
+    git(repo.path, "worktree", "remove", "--force", run.worktree);
+    git(repo.path, "worktree", "prune");
+  }
+  if (run.branch) git(repo.path, "branch", "-D", run.branch);
 }
 
-type Verdict = Pick<Run, "state" | "needs" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem">;
+type Verdict = Pick<Run, "state" | "needs" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "cost" | "defaults" | "stat">;
 
 export async function unit(folder: string): Promise<void> {
   // drop sends SIGTERM when no systemd unit is there to stop the cgroup.
@@ -310,7 +419,9 @@ export async function unit(folder: string): Promise<void> {
       code = r.code;
       verdict = code === 0 ? { state: "done" } : { state: "failed", reason: `exited ${code}` };
     } else if (run.kind === "land") {
-      ({ verdict, code } = await land(folder, run, repo!, checkEnv));
+      ({ verdict, code } = await land(id, folder, run, repo!, checkEnv));
+    } else if (repo!.sandbox) {
+      ({ verdict, code } = await factoryAgent(id, folder, run, repo!));
     } else {
       ({ verdict, code } = await agent(id, folder, run, repo!, env, checkEnv));
     }
@@ -348,11 +459,16 @@ function nextStep(run: Run, repo: Repo | undefined): Run["next"] {
 
 /** Start the next run through the CLI, as Chris would. Its refusal goes to next.log. */
 async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): Promise<void> {
+  if (paused()) {
+    appendFileSync(join(folder, "next.log"), `paused: no ${next} started\n`);
+    updateRun(folder, { next: undefined });
+    return;
+  }
   const cli = join(import.meta.dir, "..", "cli.ts");
   const argv = next === "land" ? ["land", run.name] : ["job", run.repo!, run.name, "--spec", "-", "--land"];
   const note = run.reason === OWN_LIST
     ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph todo writes the list. The lists live in the work store now. Remove ${TODO_PATH} from the branch, commit, and make each change to the list with aleph todo.`
-    : `The land conflicted with origin/main in: ${(run.conflicts ?? []).join(", ")}. Rebase onto origin/main, resolve each conflict so that the change on main and this job's change both survive, run the tests, and commit.`;
+    : `The land conflicted with origin/main in: ${(run.conflicts ?? []).join(", ")}. Merge origin/main into this branch, resolve each conflict so that the change on main and this job's change both survive, run the tests, and commit.`;
   const log = openSync(join(folder, "next.log"), "a");
   const p = Bun.spawn([process.execPath, cli, ...argv], { env: process.env, stdin: next === "worker" ? new Blob([note]) : "ignore", stdout: log, stderr: log });
   const code = await p.exited;
@@ -416,7 +532,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   if (!git(wt, "fetch", "-q", "origin").ok) return fail("fetch failed");
   const base = git(wt, "merge-base", `origin/${repo.main}`, "HEAD").out;
   if (git(wt, "rev-list", "--count", `${base}..HEAD`).out === "0") {
-    removeWorktree(repo, run);
+    removeBranch(repo, run);
     return { verdict: { state: "done", reason: "no commits" }, code: 0 };
   }
   stampJob(wt, base, run.job);
@@ -427,4 +543,84 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   // A manual check does not hold the run: it lands with the check open (see land).
   const manual = repo.manual.find((m) => matches(m.when));
   return { verdict: { state: "passed", ...(manual ? { say: manual.say } : {}) }, code: 0 };
+}
+
+/**
+ * A factory run. The worker gets origin/<main>, and the job's branch when a
+ * previous run left one, as a bundle; it runs under srt with an empty home
+ * and the worker token as its only secret. A second srt call bundles the
+ * branch, aleph fetches it, and a third runs the checks on a fresh clone.
+ * The run folder goes when the verdict is known. See the seed spec's "Sandbox".
+ */
+async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): Promise<{ verdict: Verdict; code: number }> {
+  const branch = run.branch!;
+  const main = `refs/remotes/origin/${repo.main}`;
+  const phase = (p: string) => updateRun(folder, { phase: p });
+  const stuck = (reason: string, extra: Partial<Verdict> = {}) => ({ verdict: { state: "stuck" as const, reason, ...extra }, code: 1 });
+  phase("setup");
+  if (!git(repo.path, "fetch", "-q", "origin").ok) return stuck("fetch failed");
+  const prev = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok;
+  const dir = makeRunFolder(id);
+  try {
+    const b = git(repo.path, "bundle", "create", join(dir, "in.bundle"), main, ...(prev ? [`refs/heads/${branch}`] : []));
+    if (!b.ok) return stuck(`bundle failed: ${b.out}`);
+    const text = prompt(id, folder, run, repo);
+    writeFileSync(join(folder, "prompt.md"), text);
+    const argv = [process.env.ALEPH_WORKER_CMD ?? "claude", "-p", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+      ...(run.model ? ["--model", run.model] : [])];
+    const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
+    // Setup output goes to stderr, so the worker's own stdout ends the transcript.
+    const script = [
+      "set -e", "exec 3>&1 1>&2", "git init -q .",
+      `git fetch -q ../in.bundle ${q(`+${main}:${main}`)}${prev ? ` ${q(`+refs/heads/${branch}:refs/heads/${branch}`)}` : ""}`,
+      prev ? `git switch -q ${q(branch)}` : `git switch -q -c ${q(branch)} ${q(`origin/${repo.main}`)}`,
+      ...repo.setup, "exec 1>&3 3>&-", `exec ${argv.map(q).join(" ")}`,
+    ].join("\n");
+    phase("worker");
+    const w = await sandboxed(dir, script, {
+      read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
+      env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken() },
+      stdout: join(folder, "output.log"), stderr: join(folder, "stderr.log"), limit: limit("ALEPH_JOB_TIMEOUT", 2400),
+      onSpawn: (p) => { child = p; },
+    });
+    child = null;
+    const o = outcome(readFileSync(join(folder, "output.log"), "utf8"));
+    writeFileSync(join(folder, "result.md"), o.result);
+    const facts: Partial<Verdict> = { ...(o.cost !== undefined ? { cost: o.cost } : {}), defaults: tagged(o.result, "DEFAULT") };
+    fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
+    if (w.timedOut) return stuck("time box", facts);
+    if (!o.ok) return stuck(o.line, facts);
+
+    // The worker's processes are gone with its sandbox. Only this step reads work/.
+    phase("bundle");
+    const out = await sandboxed(dir, `git bundle create -q ../out/out.bundle ${q(`refs/heads/${branch}`)}`, {
+      read: ["work"], write: ["out"], cwd: "work", stdout: join(folder, "stderr.log"), stderr: join(folder, "stderr.log"),
+    });
+    if (out.code !== 0) return stuck(`no branch ${branch} to hand back`, facts);
+    // The one operation on the worker's data: a fetch of its branch from the bundle.
+    const f = git(repo.path, "fetch", "-q", join(dir, "out", "out.bundle"), `+refs/heads/${branch}:refs/heads/${branch}`);
+    if (!f.ok) return stuck(`fetch of the bundle failed: ${f.out}`, facts);
+    const base = git(repo.path, "merge-base", main, `refs/heads/${branch}`).out;
+    if (git(repo.path, "rev-list", "--count", `${main}..refs/heads/${branch}`).out === "0") return stuck("no commit", facts);
+
+    const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
+    const failed = await checksInSandbox(folder, dir, "out/out.bundle", `refs/heads/${branch}`, repo, changed, phase);
+    if (failed) return stuck(failed, facts);
+    const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
+    if (rule) return { verdict: { state: "needs-you", needs: "held", reason: rule, stat: git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out, ...facts }, code: 0 };
+    return { verdict: { state: "passed", ...facts }, code: 0 };
+  } finally {
+    removeRunFolder(dir);
+  }
+}
+
+/** A worker's `FOLLOWUP:` lines become items in the repo's list, filed by aleph. */
+function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
+  if (!titles.length) return;
+  try {
+    writeList(repo, `todo: follow-ups from job ${run.name}`, (doc) => {
+      for (const t of titles) todos.add(doc, t, { labels: ["followup"], body: `From job ${run.name}${run.todo !== undefined ? ` on item ${run.todo}` : ""}.` });
+      return true;
+    }, true);
+  } catch {}
 }

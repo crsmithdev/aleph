@@ -6,12 +6,12 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export type State = "running" | "passed" | "needs-you" | "failed" | "done" | "landed" | "dropped";
+export type State = "running" | "passed" | "needs-you" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
 export interface Run {
   kind: "agent" | "plain" | "land";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
-  state: State; needs?: "manual" | "question"; phase?: string;
+  state: State; needs?: "manual" | "question" | "held"; phase?: string;
   reason?: string; question?: string; say?: string;
   session?: string; model?: string; commit?: string;
   /** A land run of a job with a manual check: "open" until `aleph checked` makes it "done". */
@@ -26,7 +26,16 @@ export interface Run {
   conflicts?: string[];
   /** What the unit started after this run ended: the worker again, or another land. */
   next?: "worker" | "land";
-  told: boolean; started: string; ended?: string;
+  /** A factory run: the price of its worker's `result` event, at API rates. */
+  cost?: number;
+  /** A factory run: the `DEFAULT: <question> -> <answer>` lines of its result. */
+  defaults?: string[];
+  /** A run that needs Chris for a held path or a test edit: the diff stat. */
+  stat?: string;
+  /** A land of a held run, by Chris: the commit gets `Held-by: Chris`. */
+  held?: boolean;
+  /** Sidetone's flag: the news line went out. `shown` is the report's. */
+  told: boolean; shown?: boolean; started: string; ended?: string;
 }
 
 export interface Check { name: string; run: string; when?: string[] }
@@ -35,9 +44,13 @@ export interface Repo {
   setup: string[]; checks: Check[]; manual: { when: string[]; say: string }[]; note?: string;
   /** A passed agent run lands by itself. On unless the registry says false. */
   autoland: boolean;
+  /** Its agent runs are factory runs: the worker and the checks run under srt. */
+  sandbox: boolean;
+  /** Globs a factory run may not change without Chris. */
+  held: string[];
 }
 
-export const OPEN: State[] = ["running", "passed", "needs-you", "failed"];
+export const OPEN: State[] = ["running", "passed", "needs-you", "failed", "stuck"];
 
 export function expand(p: string): string {
   return p === "~" || p.startsWith("~/") ? join(homedir(), p.slice(1)) : p;
@@ -53,6 +66,7 @@ export function loadRegistry(): Record<string, Repo> {
     repos[key] = {
       key, path: expand(r.path), env: r.env ? expand(r.env) : undefined, main: r.main ?? "main",
       setup: r.setup ?? [], checks: r.checks ?? [], manual: r.manual ?? [], note: r.note, autoland: r.autoland ?? true,
+      sandbox: r.sandbox ?? false, held: r.held ?? [],
     };
   }
   return repos;

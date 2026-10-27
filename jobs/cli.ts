@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
- * aleph <job|run|land|checked|drop|jobs|todo|unit> — detached agent jobs, plain runs
- * and each repo's to-do list.
+ * aleph <job|run|land|checked|drop|jobs|todo|unit|tick|report|pause|resume|sandbox>
+ * — detached agent jobs, plain runs, each repo's to-do list, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/jobs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal.
  * See docs/specs/2026-09-24-agent-jobs.md.
@@ -9,10 +9,11 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Run } from "./lib/ledger.ts";
-import { followMain } from "./lib/git.ts";
-import { git, onMain, removeWorktree, unit, updateTodo } from "./lib/unit.ts";
+import { git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
+import { behind, factoryDir, factoryLog, health, lastProbe, paused, probeDue, report, setPaused, tick } from "./lib/factory.ts";
+import { probe } from "./lib/probe.ts";
 
 const CLI = import.meta.path;
 const CAP = 5;
@@ -74,7 +75,10 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
       child = Bun.spawn([process.execPath, CLI, "unit", folder], { cwd, env: process.env, stdout: "inherit", stderr: "inherit" });
     } else {
       const pass = Object.entries(process.env).filter(([k]) => k.startsWith("ALEPH_") || k.startsWith("SIDETONE_")).map(([k, v]) => `--setenv=${k}=${v}`);
-      const p = Bun.spawnSync(["systemd-run", "--user", "--collect", "--quiet", `--unit=aleph-${id}`, `--working-directory=${cwd}`,
+      // A factory run's unit is the backstop for its time box: systemd stops the whole cgroup.
+      const factory = run.kind === "agent" && run.repo && loadRegistry()[run.repo]?.sandbox;
+      const max = factory ? [`--property=RuntimeMaxSec=${Number(process.env.ALEPH_JOB_TIMEOUT ?? 2400) + 3600}`] : [];
+      const p = Bun.spawnSync(["systemd-run", "--user", "--collect", "--quiet", `--unit=aleph-${id}`, `--working-directory=${cwd}`, ...max,
         `--setenv=PATH=${process.env.PATH}`, ...pass, process.execPath, CLI, "unit", folder], { stdout: "pipe", stderr: "pipe" });
       if (p.exitCode !== 0) {
         updateRun(folder, { state: "failed", reason: `systemd-run failed: ${p.stderr.toString().trim()}`, ended: new Date().toISOString() });
@@ -116,14 +120,15 @@ async function job(): Promise<void> {
     if (last && last.run.repo !== repo.key) refuse(last.run.repo ? `${name} is open in ${last.run.repo}` : `${name} is running as ${last.id}`);
     if (last && isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
     const first = open?.[0];
-    const worktree = first?.run.worktree ?? join(repo.path, ".worktrees", `job-${name}`);
+    // A factory run has no worktree: its branch comes and goes as a bundle.
+    const worktree = repo.sandbox ? undefined : first?.run.worktree ?? join(repo.path, ".worktrees", `job-${name}`);
     const model = flag("model");
     // A follow-up without --todo keeps the item the job started with.
     todo ??= open?.findLast((e) => e.run.todo !== undefined)?.run.todo;
     child = await dispatch({
-      kind: "agent", job: first?.id, name, repo: repo.key, branch: `job/${name}`, worktree,
+      kind: "agent", job: first?.id, name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, ...(worktree ? { worktree } : {}),
       state: "running", phase: "starting", session: crypto.randomUUID(), ...(model ? { model } : {}),
-      ...(todo !== undefined ? { todo } : {}), ...(rest.includes("--land") ? { land: true } : {}), told: false, started: new Date().toISOString(),
+      ...(todo !== undefined ? { todo } : {}), ...(rest.includes("--land") ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
     }, `${repo.key}-${name}`, repo.path, (folder) => {
       if (!first) return writeFileSync(join(folder, "spec.md"), spec);
       const notes = join(first.folder, "notes");
@@ -161,7 +166,8 @@ async function plain(): Promise<void> {
 }
 
 /**
- * Start a land run. The latest agent run must have passed. A manual check does
+ * Start a land run. The latest agent run must have passed, or need Chris for a
+ * held path: his land is the review, and the commit says so. A manual check does
  * not gate the land: the land run keeps it open, as a to-do item, until
  * `aleph checked`. With --checked, Chris has done the check already. A run
  * from before this rule, needs-you for a manual check, lands the same way.
@@ -175,12 +181,14 @@ async function landJob(): Promise<void> {
   const agent = runs.filter((e) => e.run.kind === "agent").at(-1)!.run;
   const manual = (agent.state === "needs-you" && agent.needs === "manual") || (agent.state === "passed" && agent.say !== undefined);
   const unchecked = manual && !rest.includes("--checked");
-  if (agent.state !== "passed" && !manual) refuse(`${name} is ${agent.state}${agent.needs ? ` (${agent.needs})` : ""}, not passed`);
+  const held = agent.state === "needs-you" && agent.needs === "held";
+  if (agent.state !== "passed" && !manual && !held) refuse(`${name} is ${agent.state}${agent.needs ? ` (${agent.needs})` : ""}, not passed`);
   const repo = loadRegistry()[agent.repo!];
   const child = await dispatch({
     kind: "land", job: agent.job, name, repo: agent.repo, branch: agent.branch, worktree: agent.worktree,
-    state: "running", phase: "land", told: false, started: new Date().toISOString(),
+    state: "running", phase: "land", told: false, shown: false, started: new Date().toISOString(),
     ...(unchecked ? { check: "open" as const, say: agent.say } : {}),
+    ...(held ? { held: true } : {}),
     ...(agent.todo !== undefined ? { todo: agent.todo } : {}),
   }, `${repo.key}-${name}`, repo.path, () => {});
   await child?.exited;
@@ -208,12 +216,13 @@ function read(folder: string, file: string): string | undefined {
  * The ledger follows git. An open job whose work is on origin/<main> becomes
  * landed, quietly, with its to-do item done. An open job with no branch and
  * no worktree left is "gone": nothing is left to land. Every other open job
- * is "unlanded". Each repo is fetched once, and its main checkout follows.
+ * is "unlanded". Each repo is fetched once.
  */
 function reconcile(all: Entry[][]): Map<string, string> {
   const registry = loadRegistry();
   const fetched = new Set<string>();
   const fates = new Map<string, string>();
+  // Only Chris's git pull moves a checkout: the ledger fetches and reads refs.
   for (const runs of all.filter(isOpen)) {
     const last = runs.at(-1)!;
     const repo = last.run.repo ? registry[last.run.repo] : undefined;
@@ -221,13 +230,11 @@ function reconcile(all: Entry[][]): Map<string, string> {
     if (!fetched.has(repo.key)) {
       fetched.add(repo.key);
       git(repo.path, "fetch", "-q", "origin");
-      const why = followMain(repo.path, repo.main);
-      if (why) console.error(`warn: ${repo.key}: ${why}`);
     }
     const found = onMain(repo, last.run);
     if (found) {
       updateRun(last.folder, { state: "landed", commit: found.commit, reason: `found on main (${found.how})`, needs: undefined, told: true });
-      if (last.run.worktree) removeWorktree(repo, last.run);
+      removeBranch(repo, last.run);
       const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
       const why = todo === undefined ? null : updateTodo(repo, todo, `job ${last.run.name} found on main as ${found.commit.slice(0, 7)}`, true);
       if (why) console.error(`warn: todo ${todo} not closed: ${why}`);
@@ -293,11 +300,7 @@ async function drop(): Promise<void> {
     }
     if (!existsSync(join(last.folder, "exit"))) writeFileSync(join(last.folder, "exit"), "143");
     const repo = last.run.repo ? loadRegistry()[last.run.repo] : undefined;
-    if (repo && last.run.worktree) {
-      git(repo.path, "worktree", "remove", "--force", last.run.worktree);
-      git(repo.path, "worktree", "prune");
-      git(repo.path, "branch", "-D", last.run.branch!);
-    }
+    if (repo) removeBranch(repo, last.run);
     // Chris asked for the drop, so it is not news.
     updateRun(last.folder, { state: "dropped", reason, needs: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
@@ -423,6 +426,52 @@ async function todoCmd(): Promise<void> {
   }
 }
 
+/**
+ * `aleph tick`, from the timer: the nightly probe when it is due, then one run
+ * for each open goal item that has no open job. A failed probe starts no run.
+ */
+async function tickCmd(): Promise<void> {
+  if (!paused() && probeDue()) {
+    const repo = Object.values(loadRegistry()).find((r) => r.sandbox);
+    if (repo) {
+      mkdirSync(factoryDir(), { recursive: true });
+      const p = await probe(repo, join(factoryDir(), "probe.log"));
+      factoryLog(`probe ${p.ok ? "passed" : `failed: ${p.failed.join("; ")}`}`);
+    }
+  }
+  const p = lastProbe();
+  if (!paused() && p && !p.ok) {
+    factoryLog("the last probe failed; no run started");
+    return out({ started: [], skipped: [`the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`] });
+  }
+  out(await tick(async (repo, name, id, spec) => {
+    const p = Bun.spawn([process.execPath, CLI, "job", repo.key, name, "--spec", "-", "--todo", String(id), "--land"], {
+      env: process.env, stdin: new Blob([spec]), stdout: "ignore", stderr: "pipe",
+    });
+    const code = await p.exited;
+    return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
+  }));
+}
+
+/**
+ * `aleph report`: the runs not yet shown, how far each factory repo's
+ * checkout is behind origin, and the health line. With --hook it prints the
+ * SessionStart hook's JSON, and nothing when there is nothing to say.
+ */
+function reportCmd(): void {
+  const lines = [report()];
+  for (const repo of Object.values(loadRegistry()).filter((r) => r.sandbox)) {
+    git(repo.path, "fetch", "-q", "origin");
+    lines.push(behind(repo) ?? "");
+  }
+  lines.push(...health());
+  const text = lines.filter(Boolean).join("\n\n");
+  if (!rest.includes("--hook")) { console.log(text || "nothing new"); return; }
+  if (!text) return;
+  const msg = `aleph report\n\n${text}`;
+  out({ systemMessage: msg, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: msg } });
+}
+
 /** The repo's list in the work store; a refusal when the store has none or the fetch fails. */
 function readTodo(repo: store.Place): todos.Doc {
   let doc: todos.Doc | null = null;
@@ -440,7 +489,20 @@ try {
     case "land": await landJob(); break;
     case "checked": checked(); break;
     case "todo": await todoCmd(); break;
-    default: refuse("usage: aleph <job|run|land|checked|drop|jobs|todo> ...");
+    case "tick": await tickCmd(); break;
+    case "report": reportCmd(); break;
+    case "pause": setPaused(true); out({ paused: true }); break;
+    case "resume": setPaused(false); out({ paused: false }); break;
+    case "sandbox": {
+      if (positional[0] !== "probe") refuse("usage: aleph sandbox probe");
+      const repo = Object.values(loadRegistry()).find((r) => r.sandbox) ?? refuse("no repo in the registry has sandbox: true");
+      mkdirSync(factoryDir(), { recursive: true });
+      const p = await probe(repo, join(factoryDir(), "probe.log"));
+      out(p);
+      if (!p.ok) process.exit(1);
+      break;
+    }
+    default: refuse("usage: aleph <job|run|land|checked|drop|jobs|todo|tick|report|pause|resume|sandbox> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;

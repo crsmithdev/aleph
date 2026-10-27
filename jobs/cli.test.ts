@@ -20,6 +20,9 @@ function env(extra: Record<string, string> = {}): Record<string, string> {
     ...(process.env as Record<string, string>), ...gitEnv,
     ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: items, ALEPH_JOB_FOREGROUND: "1",
     ALEPH_WORKER_CMD: fake, XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
+    ALEPH_SANDBOX_CMD: join(base, "pass"), ALEPH_RUNS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_WORKER_TOKEN: join(base, "token"),
+    // The tests start more factory runs than a day's cap; the cap has its own test.
+    ALEPH_DAY_CAP: "100",
     SIDETONE_TELL_URL: `https://127.0.0.1:${server.port}/tell`, ...extra,
   };
 }
@@ -64,12 +67,18 @@ case $action in
   sleep) sleep 60 ;;
   exit3) exit 3 ;;
   question) echo '{"type":"result","result":"I looked.\\nQUESTION: which colour?"}'; exit 0 ;;
+  error) echo '{"type":"result","is_error":true,"result":"API Error: 500"}'; exit 0 ;;
+  noresult) echo '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'; exit 0 ;;
+  trailing) echo x > t.txt; git add t.txt; git commit -qm "add t.txt"; echo '{"type":"result","is_error":false,"result":"done"}'; echo 'one more line'; exit 0 ;;
+  defaults) echo d > d.txt; git add d.txt; git commit -qm "add d.txt"
+    echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"Done.\\nDEFAULT: which colour? -> blue\\nFOLLOWUP: paint the fence"}'; exit 0 ;;
+  branchlog) git log --format=%s > "$FAKE_LOG/branchlog"; git rm -q FAIL; git commit -qm "remove FAIL" ;;
   push)
     GIT_SSH_COMMAND="$FAKE_LOG/ssh" git push git@github.com:x/y.git HEAD > /dev/null 2>&1; echo $? > "$FAKE_LOG/push.code"
     gh auth status > /dev/null 2>&1; echo $? > "$FAKE_LOG/gh.code" ;;
 esac
 echo '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
-echo '{"type":"result","result":"did '"$action"'"}'
+echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"result":"did '"$action"'"}'
 `;
 
 beforeAll(() => {
@@ -80,6 +89,9 @@ beforeAll(() => {
   setupLog = join(base, "setup.log");
   fake = join(base, "fake-worker");
   writeFileSync(fake, FAKE, { mode: 0o755 });
+  // The tests' stand-in for srt: the clean environment, and FAKE_LOG for the fake worker.
+  writeFileSync(join(base, "pass"), `#!/bin/bash\nshift\nexec env -i FAKE_LOG="$FAKE_LOG" "$@"\n`, { mode: 0o755 });
+  writeFileSync(join(base, "token"), "tok-123\n");
   writeFileSync(join(fakeLog, "ssh"), `#!/bin/sh\necho "$@" > "${join(base, "fake", "ssh.args")}"\nexit 1\n`, { mode: 0o755 });
 
   remote = join(base, "remote.git");
@@ -88,6 +100,7 @@ beforeAll(() => {
   sh(base, "git", "clone", "-q", remote, seed);
   writeFileSync(join(seed, ".gitignore"), ".worktrees/\n");
   writeFileSync(join(seed, "README"), "demo\n");
+  writeFileSync(join(seed, "old.test.ts"), "test(\"old\", () => {});\n");
   sh(seed, "git", "add", "."); sh(seed, "git", "commit", "-qm", "init"); sh(seed, "git", "push", "-q", "origin", "main");
   repo = join(base, "repo");
   other = join(base, "other");
@@ -118,6 +131,11 @@ beforeAll(() => {
     demo: { path: repo, setup: [`echo ran >> "$SETUP_LOG"`], checks, manual: [{ when: ["android/**"], say: "run it on the phone" }], autoland: false },
     auto: { path: repo, checks: [], manual: [{ when: ["android/**"], say: "run it on the phone" }] },
     other: { path: other, checks: [], autoland: false },
+    // The factory: the same clone, its runs under the stand-in sandbox.
+    fac: {
+      path: repo, sandbox: true, held: ["held/**"], autoland: false,
+      checks: [{ name: "tests", run: "test ! -f FAIL" }, { name: "tree", run: `git rev-parse 'HEAD^{tree}' >> ${join(base, "trees")}` }],
+    },
   }));
 
   sh(base, "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "key.pem", "-out", "cert.pem", "-days", "1", "-subj", "/CN=tailnet");
@@ -139,7 +157,7 @@ describe("job", () => {
   test("refuses an unknown repo, prints the keys, creates nothing", async () => {
     const r = await aleph(["job", "nowhere", "alpha", "--spec", specFile("x")]);
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain("demo, auto, other");
+    expect(r.stderr).toContain("demo, auto, other, fac");
     expect(readdirSync(jobsDir)).toEqual([]);
   });
 
@@ -356,16 +374,17 @@ describe("land", () => {
     await aleph(["drop", "unpassed"]);
   });
 
-  test("a passed job lands as one commit on main, and the main checkout follows", async () => {
+  test("a passed job lands as one commit on main, and the main checkout does not move", async () => {
     await job("shipit", "commit ship.txt");
     const before = remoteHead();
+    const head = sh(repo, "git", "rev-parse", "HEAD");
     const r = await aleph(["land", "shipit"]);
     expect(r.code).toBe(0);
     const s = state(r.json.run);
     expect(s).toMatchObject({ kind: "land", state: "landed", told: true });
     expect(remoteHead()).toBe(s.commit);
     expect(sh(base, "git", "--git-dir", remote, "log", "-1", "--format=%s%n%b%n%P", "main")).toBe(`add ship.txt\nJob: ${r.json.job}\n\n${before}`);
-    expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(s.commit);
+    expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(head);
     expect(existsSync(worktree("shipit"))).toBe(false);
     expect(branchExists("shipit")).toBe(false);
     expect(told).toContain("demo/shipit landed");
@@ -420,7 +439,7 @@ describe("land", () => {
     await job("mend", "resolve-later mend.txt");
     pushFromOther("mend.txt", "theirs\n");
     const r = await aleph(["land", "mend"]);
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "rebase conflict", conflicts: ["mend.txt"], next: "worker" });
+    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "merge conflict", conflicts: ["mend.txt"], next: "worker" });
     expect(file(r.json.run, "land.log")).toContain("## conflicts\nmend.txt");
     expect(told).toContain("demo/mend failed; sent back to the worker");
     const runs = runsOf("mend");
@@ -437,7 +456,7 @@ describe("land", () => {
     await aleph(["land", "clash"]);
     const runs = runsOf("clash");
     expect(runs.filter((x) => x.kind === "land").map((x) => x.next ?? null)).toEqual(["worker", "worker", null]);
-    expect(runs.at(-1)).toMatchObject({ kind: "land", state: "failed", reason: "rebase conflict" });
+    expect(runs.at(-1)).toMatchObject({ kind: "land", state: "failed", reason: "merge conflict" });
     expect(remoteHead()).toBe(before);
     expect(told).toContain("demo/clash failed");
     expect(sh(worktree("clash"), "git", "status", "--porcelain")).toBe("");
@@ -463,13 +482,14 @@ describe("land", () => {
     expect(existsSync(worktree("twin"))).toBe(false);
   });
 
-  test("a push that loses a race fails as main moved, and the land runs again by itself", async () => {
+  test("a push that loses a race merges again in the same land, and lands", async () => {
     await job("racer", "commit race/x.txt");
     writeFileSync(join(base, "race-once"), "");
     const r = await aleph(["land", "racer"]);
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "main moved during the land; land again", next: "land" });
-    expect(told).toContain("demo/racer failed; landing again");
-    expect(runsOf("racer").at(-1)).toMatchObject({ kind: "land", state: "landed" });
+    expect(state(r.json.run)).toMatchObject({ state: "landed" });
+    expect(state(r.json.run).next).toBeUndefined();
+    expect(file(r.json.run, "land.log")).toContain("## main moved; merging again");
+    expect(runsOf("racer").map((x) => x.kind)).toEqual(["agent", "land"]);
     expect(sh(base, "git", "--git-dir", remote, "log", "-2", "--format=%s", "main")).toBe("add race/x.txt\nrace");
   });
 
@@ -493,14 +513,14 @@ describe("land", () => {
     expect(sh(base, "git", "--git-dir", remote, "log", "-2", "--format=%s", "main").split("\n").sort()).toEqual(["add pair/left.txt", "add pair/right.txt"]);
   }, 30_000);
 
-  test("a main checkout with tracked changes is not updated, and the news says so", async () => {
-    await job("dirtyco", "commit dc.txt");
+  test("a land changes no checkout: the main checkout's HEAD, index and working tree stay as they were", async () => {
+    await job("still", "commit still.txt");
     writeFileSync(join(repo, "README"), "local edit\n");
-    const head = sh(repo, "git", "rev-parse", "HEAD");
-    const r = await aleph(["land", "dirtyco"]);
-    expect(state(r.json.run)).toMatchObject({ state: "landed", reason: "main checkout not updated: it has changes in README" });
-    expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(head);
-    expect(told).toContain("demo/dirtyco landed; main checkout not updated: it has changes in README");
+    const before = [sh(repo, "git", "rev-parse", "HEAD"), sh(repo, "git", "status", "--porcelain"), sh(repo, "git", "diff")];
+    const r = await aleph(["land", "still"]);
+    expect(state(r.json.run)).toMatchObject({ state: "landed" });
+    expect(state(r.json.run).reason).toBeUndefined();
+    expect([sh(repo, "git", "rev-parse", "HEAD"), sh(repo, "git", "status", "--porcelain"), sh(repo, "git", "diff")]).toEqual(before);
     sh(repo, "git", "checkout", "README");
   });
 });
@@ -594,13 +614,13 @@ describe("fate from git", () => {
     expect(state(j.json.run)).toMatchObject({ state: "landed", reason: "found on main (content)" });
   });
 
-  test("a job with no branch and no worktree reads as gone, and land says the worktree is gone", async () => {
+  test("a job with no branch and no worktree reads as gone, and land says the branch is gone", async () => {
     await job("vanished", "commit vanished.txt");
     sh(repo, "git", "worktree", "remove", "--force", worktree("vanished"));
     sh(repo, "git", "branch", "-D", "job/vanished");
     expect(await listed("vanished")).toMatchObject({ state: "passed", fate: "gone" });
     const r = await aleph(["land", "vanished"]);
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: `worktree gone: ${worktree("vanished")}` });
+    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "branch gone: job/vanished" });
     await aleph(["drop", "vanished"]);
   });
 
@@ -611,3 +631,174 @@ describe("fate from git", () => {
   });
 });
 
+
+describe("a factory run", () => {
+  const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
+  const fjob = (name: string, action: string, extra: Record<string, string> = {}, more: string[] = []) =>
+    aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), ...more], extra);
+  const factoryBranch = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `factory/${name}`]).exitCode === 0;
+  const runsLeft = () => existsSync(join(base, "runs")) ? readdirSync(join(base, "runs")) : [];
+
+  test("the worker's branch comes back as a bundle; the run passes and its run folder is gone", async () => {
+    const r = await fjob("fpass", "commit fpass.txt");
+    const s = state(r.json.run);
+    expect(s).toMatchObject({ kind: "agent", state: "passed", branch: "factory/fpass", cost: 0.01, defaults: [] });
+    expect(s.worktree).toBeUndefined();
+    expect(factoryBranch("fpass")).toBe(true);
+    expect(sh(repo, "git", "log", "-1", "--format=%s", "factory/fpass")).toBe("add fpass.txt");
+    expect(runsLeft()).toEqual([]);
+    expect(file(r.json.run, "prompt.md")).toContain("inside\na sandbox");
+    expect(file(r.json.run, "checks.log")).toContain("## tests: exit 0");
+  });
+
+  test("the sandbox's environment holds the worker token and nothing of Chris's", () => {
+    const env = readFileSync(join(fakeLog, "env"), "utf8");
+    expect(env).toContain("CLAUDE_CODE_OAUTH_TOKEN=tok-123");
+    expect(env).toMatch(/^HOME=.*\/runs\/.*\/home$/m);
+    expect(env).not.toMatch(/^(ALEPH_[A-Z_]+|SIDETONE_[A-Z_]+|GIT_AUTHOR_NAME|XDG_RUNTIME_DIR)=/m);
+  });
+
+  test("the land pushes the tested tree with Item and Job trailers, and moves no checkout", async () => {
+    const id = (await aleph(["todo", "add", "fac", "a factory item"])).json.added;
+    const j = await fjob("fitem", "commit fitem.txt", {}, ["--todo", String(id)]);
+    const head = [sh(repo, "git", "rev-parse", "HEAD"), sh(repo, "git", "status", "--porcelain")];
+    const r = await aleph(["land", "fitem"]);
+    const s = state(r.json.run);
+    expect(s).toMatchObject({ kind: "land", state: "landed" });
+    expect(remoteGit("log", "-1", "--format=%B", "main").trim()).toBe(`add fitem.txt\n\nItem: fac-${id}\nJob: ${j.json.job}`);
+    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main").trim()).toBe(`Item: fac-${id}\nJob: ${j.json.job}`);
+    expect(readFileSync(join(base, "trees"), "utf8").trim().split("\n").at(-1)).toBe(remoteGit("rev-parse", "main^{tree}"));
+    expect([sh(repo, "git", "rev-parse", "HEAD"), sh(repo, "git", "status", "--porcelain")]).toEqual(head);
+    expect(factoryBranch("fitem")).toBe(false);
+    expect((await aleph(["todo", "show", "fac", String(id), "--json"])).json.status).toBe("done");
+    expect(runsLeft()).toEqual([]);
+  });
+
+  test("an error result, no result, a line after the result, or no commit ends stuck", async () => {
+    expect(state((await fjob("ferr", "error")).json.run)).toMatchObject({ state: "stuck", reason: "API Error: 500" });
+    expect(state((await fjob("fnone", "noresult")).json.run)).toMatchObject({ state: "stuck", reason: expect.stringContaining('"type":"assistant"') });
+    expect(state((await fjob("ftrail", "trailing")).json.run)).toMatchObject({ state: "stuck", reason: "one more line" });
+    expect(state((await fjob("fidle", "none")).json.run)).toMatchObject({ state: "stuck", reason: "no commit" });
+    expect(told).toContain("fac/ferr stuck");
+    for (const n of ["ferr", "fnone", "ftrail", "fidle"]) await aleph(["drop", n]);
+  });
+
+  test("a worker past the time box ends stuck as \"time box\"", async () => {
+    const r = await fjob("fslow", "sleep", { ALEPH_JOB_TIMEOUT: "1" });
+    expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "time box" });
+    expect(runsLeft()).toEqual([]);
+    await aleph(["drop", "fslow"]);
+  });
+
+  test("a held path needs Chris with the rule and the diff stat; his land adds Held-by", async () => {
+    const r = await fjob("fheld", "commit held/x.txt");
+    const s = state(r.json.run);
+    expect(s).toMatchObject({ state: "needs-you", needs: "held", reason: "held path held/x.txt" });
+    expect(s.stat).toContain("held/x.txt");
+    const before = remoteGit("rev-parse", "main");
+    expect(remoteGit("rev-parse", "main")).toBe(before);
+    const l = await aleph(["land", "fheld"]);
+    expect(state(l.json.run)).toMatchObject({ state: "landed", held: true });
+    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain("Held-by: Chris");
+  });
+
+  test("a change to an existing test needs Chris; drop leaves the item open", async () => {
+    const id = (await aleph(["todo", "add", "fac", "tests"])).json.added;
+    const r = await fjob("ftest", "commit old.test.ts", {}, ["--todo", String(id)]);
+    expect(state(r.json.run)).toMatchObject({ state: "needs-you", needs: "held", reason: "changes the test old.test.ts" });
+    expect((await aleph(["drop", "ftest"])).code).toBe(0);
+    expect((await aleph(["todo", "show", "fac", String(id), "--json"])).json.status).toBe("open");
+    expect(factoryBranch("ftest")).toBe(false);
+  });
+
+  test("a follow-up on a stuck job starts from the job's previous branch", async () => {
+    const r = await fjob("fagain", "commit FAIL");
+    expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "tests failed" });
+    const f = await fjob("fagain", "branchlog");
+    expect(readFileSync(join(fakeLog, "branchlog"), "utf8")).toContain("add FAIL");
+    expect(state(f.json.run).state).toBe("passed");
+    await aleph(["drop", "fagain"]);
+  });
+
+  test("DEFAULT lines and the cost reach the report once; FOLLOWUP lines become items", async () => {
+    const r = await fjob("fdefault", "defaults");
+    expect(state(r.json.run)).toMatchObject({ state: "passed", cost: 0.25, defaults: ["which colour? -> blue"] });
+    const items = (await aleph(["todo", "list", "fac", "--label", "followup", "--json"])).json;
+    expect(items.map((i: any) => i.title)).toContain("paint the fence");
+    const rep = await aleph(["report"]);
+    expect(rep.stdout).toContain("fac/fdefault passed");
+    expect(rep.stdout).toContain("DEFAULT: which colour? -> blue");
+    expect(rep.stdout).toContain("cost $0.2500 at the API price");
+    expect(rep.stdout).toContain("fac/fheld needs-you (held): held path held/x.txt");
+    expect(rep.stdout).toContain("aleph land fheld");
+    expect(rep.stdout).toMatch(/runs in the last 24 hours: \d+ of 100, \$\d+\.\d{4} at the API price/);
+    expect(state(r.json.run)).toMatchObject({ shown: true, told: true });
+    expect((await aleph(["report"])).stdout).not.toContain("fdefault");
+    await aleph(["drop", "fdefault"]);
+  });
+
+  test("the report hook prints JSON for SessionStart, and nothing when nothing is new", async () => {
+    const behind = await aleph(["report", "--hook"]);
+    expect(behind.json.hookSpecificOutput.additionalContext).toMatch(/repo is \d+ commits? behind origin\/main; git pull brings:\n[\s\S]*held\/x\.txt/);
+    sh(repo, "git", "merge", "-q", "--ff-only", "origin/main");
+    const quiet = await aleph(["report", "--hook"]);
+    expect(quiet.stdout.trim()).toBe("");
+    await fjob("fhook", "error");
+    const h = await aleph(["report", "--hook"]);
+    expect(h.json.hookSpecificOutput.additionalContext).toContain("fac/fhook stuck: API Error: 500");
+    expect(h.json.systemMessage).toContain("fac/fhook stuck");
+    await aleph(["drop", "fhook"]);
+  });
+
+  test("a failed probe starts no run and puts a health line in the report", async () => {
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: false, failed: ["read ~/.ssh"] }));
+    const id = (await aleph(["todo", "add", "fac", "blocked by the probe", "--labels", "goal"])).json.added;
+    const t = await aleph(["tick"]);
+    expect(t.json.started).toEqual([]);
+    expect(t.json.skipped[0]).toContain("failed: read ~/.ssh");
+    expect((await aleph(["report"])).stdout).toContain("health: the sandbox probe at");
+    await aleph(["todo", "drop", "fac", String(id), "test over"]);
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
+  });
+
+  test("a tick starts one run per open goal, lands it, and then has nothing to start", async () => {
+    const id = (await aleph(["todo", "add", "fac", "ship the goal", "--labels", "goal", "--body", "-"], {}, "ACTION: commit goal.txt\n")).json.added;
+    const t = await aleph(["tick"]);
+    expect(t.json.skipped).toEqual([]);
+    expect(t.json.started).toEqual([`fac-${id}`]);
+    const runs = readdirSync(jobsDir).filter((d) => d.includes(`-fac-fac-${id}-`)).sort();
+    expect(runs.map((d) => [state(d).kind, state(d).state])).toEqual([["agent", "passed"], ["land", "landed"]]);
+    expect((await aleph(["todo", "show", "fac", String(id), "--json"])).json.status).toBe("done");
+    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain(`Item: fac-${id}`);
+    expect((await aleph(["tick"])).json.started).toEqual([]);
+  }, 30_000);
+
+  test("a tick skips a goal whose job is stuck, and the cap stops it", async () => {
+    const id = (await aleph(["todo", "add", "fac", "a stuck goal", "--labels", "goal", "--body", "-"], {}, "ACTION: error\n")).json.added;
+    expect((await aleph(["tick"])).json.started).toEqual([`fac-${id}`]);
+    const again = await aleph(["tick"]);
+    expect(again.json.started).toEqual([]);
+    expect(again.json.skipped).toContain(`fac-${id}: stuck`);
+    await aleph(["drop", `fac-${id}`]);
+    const capped = await aleph(["tick"], { ALEPH_DAY_CAP: "0" });
+    expect(capped.json.started).toEqual([]);
+    expect(capped.json.skipped).toContain(`fac-${id}: cap of 0 runs in 24 hours`);
+    await aleph(["todo", "drop", "fac", String(id), "test over"]);
+  }, 30_000);
+
+  test("pause stops the tick and the unit's follow-up land, but not Chris's land", async () => {
+    expect((await aleph(["pause"])).json).toEqual({ paused: true });
+    const id = (await aleph(["todo", "add", "fac", "while paused", "--labels", "goal", "--body", "-"], {}, "ACTION: commit paused.txt\n")).json.added;
+    expect((await aleph(["tick"])).json).toMatchObject({ started: [], paused: true });
+    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("paused");
+    const r = await fjob("fpaused", "commit fpaused.txt", {}, ["--land"]);
+    expect(state(r.json.run).state).toBe("passed");
+    expect(state(r.json.run).next).toBeUndefined();
+    expect(file(r.json.run, "next.log")).toContain("paused");
+    const l = await aleph(["land", "fpaused"]);
+    expect(state(l.json.run).state).toBe("landed");
+    expect((await aleph(["resume"])).json).toEqual({ paused: false });
+    expect((await aleph(["tick"])).json.started).toEqual([`fac-${id}`]);
+  }, 30_000);
+});

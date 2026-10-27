@@ -1,6 +1,6 @@
 # Seed factory
 
-Written 2026-10-26. Version 3, with the sandbox section corrected by the `srt` probe of 2026-10-27 (to-do 32). Not built. To-do 31.
+Written 2026-10-26. Version 3, with the sandbox section corrected by the `srt` probe of 2026-10-27 (to-do 32). Milestone 1 built on 27 Oct apart from the proofs; see "As built". To-do 31.
 
 - Version 1 (`cae4664`) went through a five-lens red team.
 - Version 2 (`ee4d251`) took Chris's answers to it: a separate worker, one copy of aleph and no deploy, the work store in its own repo, and milestones. Version 2 went through a two-lens red team; both rounds are in [`2026-10-26-seed-factory-red-team.md`](2026-10-26-seed-factory-red-team.md).
@@ -247,6 +247,21 @@ Check runs and probe runs do not count against the 12. They start no `claude`.
 
 - **Land queue.** One drainer per repo. It is started by each run that becomes ready and by each timer tick, and held by a lock. It takes ready branches in order and merges each with `git merge-tree --write-tree` onto `origin/main`. It checks the merged tree in a sandbox, then commits and pushes it with a plain push. A refused push merges again. The queue keeps `BOUNCES` and `RELANDS` and records each entry's state, so a crash after the push does not re-merge.
 - **Item state.** Derived from the store, the `origin/main` trailers, the ledger and the queue. The precedence is dropped, done, needs-you, stuck, running, open. Only lines in the trailer block count, and a revert of the commit undoes done. Items done before milestone 2, which have no trailer, keep the store's done. Nothing writes the derived state back to the store.
+
+### As built (27 Oct)
+
+Where the code departs from the sections above:
+
+- **The land is milestone 2's.** Milestone 1 was to keep the rebase land and milestone 2 to replace it. The land was written once, in milestone 2's form: a merge in memory with `git merge-tree`, the checks on that tree, and a plain push of exactly that tree; a refused push merges again in the same land run, at most `RELANDS` times. It serves every repo. A repo outside the factory checks the tree in the job's worktree; a factory repo checks it under `srt`.
+- **No worktree for a factory run.** aleph fetches `factory/<name>` from `out.bundle` into the repo's refs, and the land reads it from there. `~/.aleph/work/` is not used.
+- **The checks run on a fresh clone of the out-bundle**, in `check/`, in their own `srt` call, so nothing the worker left in `work/` runs. Their output goes to `checklog/`, which only that call can write.
+- **Stuck covers every failed factory run**: the result line, no commit, a failed check, the time box. The timer skips any goal with an open job, so a failed run is never retried by itself.
+- **The held rule runs after the checks.** A run whose checks fail is stuck, not held.
+- **A failed probe starts no run**, and the health line names it.
+- **The report shows runs made after the report existed.** New runs carry `shown: false`; the 78 older runs have no `shown` and never appear.
+- **`~/.aleph` inside the sandbox** shows the empty mount points `srt` makes for the run's own paths (`runs/<id>/`, `tools/lib`). No file under it can be read; the probe reads `secrets/`, `jobs/`, `items/` and `vault/`.
+- **The tailnet probe uses port 80**, which answers the host; port 3010 does not, so it proved nothing.
+- **`FOLLOWUP: <title>`** lines in a result become items labelled `followup`.
 
 ### Rejected alternatives
 

@@ -1,0 +1,12 @@
+# The factory's tick: the nightly sandbox probe when it is due, then one run
+# for each open goal item. See docs/specs/2026-10-26-seed-factory.md.
+#   systemctl --user enable --now ~/aleph/jobs/systemd/aleph-tick.timer
+#   journalctl --user -u aleph-tick -n 20;  ~/.aleph/factory/tick.log
+[Unit]
+Description=aleph factory tick
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=%h/aleph
+ExecStart=%h/.bun/bin/bun %h/aleph/jobs/cli.ts tick

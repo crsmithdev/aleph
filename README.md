@@ -1,6 +1,6 @@
 # aleph
 
-A personal [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin. Sixteen skills for planning, design, testing and memory; hooks that trace every turn to a local [Langfuse](https://langfuse.com), guard `main`, scan commits for secrets and judge whether a turn verified what it claims; and an Obsidian vault the agent writes and a human reads.
+A personal [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin. Skills for planning, design, testing and memory; hooks that trace every turn to a local [Langfuse](https://langfuse.com), guard `main`, scan commits for secrets and judge whether a turn verified what it claims; and an Obsidian vault the agent writes and a human reads.
 
 Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 
@@ -8,7 +8,8 @@ Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 
 | Path | Holds |
 |---|---|
-| `skills/` | the sixteen skills, invoked as `/aleph:<name>` |
+| `skills/` | the skills, invoked as `/aleph:<name>` |
+| `jobs/` | `aleph`: agent jobs, the land, the to-do CLI and the factory (`jobs/lib/sandbox.ts`, `gate.ts`, `factory.ts`); the tick's systemd units |
 | `hooks/` | the hook scripts and `hooks.json`, against the 2.1.x hook API |
 | `vault/cli.ts` | the memory vault's mechanics (each write op commits and pushes): `init`, `write`, `adopt`, `recall`, `lint [--fix]`, `consolidate`, `rename-scope`, `archive`, `compile` |
 | `identity/CLAUDE.md` | the global `CLAUDE.md` the hooks assume: the worktree rule, the verification rule, the voice |
@@ -37,6 +38,7 @@ Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 | `vault` | Reads and writes the memory vault |
 | `handoff` / `pickup` | Saves a session to `~/.aleph/handoffs/current.md` (or `<name>.md` when given a name); resumes it in a fresh context |
 | `retro` † | Reads the session's trace and transcript; proposes fixes to identity, skills, hooks and vault |
+| `goal` | A short product-level grill that writes one `goal` item for the factory: goal, edit surface, oracle, time box |
 
 † user-invoked only: the model cannot fire it on its own.
 
@@ -46,6 +48,7 @@ Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 |---|---|---|
 | every event | `obs.ts` | posts one OTLP span per hook event to Langfuse; async except `Stop` and `SessionEnd` |
 | `SessionStart` | `vault-context.ts` | injects the vault's `Home.md` and `MEMORY.md` |
+| `SessionStart` | `aleph report --hook` | the factory runs not yet shown, how far each factory repo's checkout is behind `origin/main`, and the health line |
 | `UserPromptSubmit`, `Stop` | `verify-gate.ts` | snapshots the tree, then judges the final message: every claim of completion must trace to a run after the last edit. Denies with a reason, at most twice per prompt. `docs/verify-gate.md` |
 | `Stop` | `context-gate.ts` | reads the session's context fill from the transcript: warns Chris above 0.75 of the compaction threshold, blocks once the session has compacted and asks for a handoff. `docs/context-gate.md` |
 | `PreToolUse` `Edit\|Write` | `git-guard.ts` | denies edits on `main` outside `.worktrees/`; allows the vault except `VAULT.md` |
@@ -135,11 +138,27 @@ The store's `origin/main` is the record. A read fetches and reads it there; a wr
 
 Each item carries `id title status created updated priority labels repo`. `note` is append-only, which is the lost update this format exists to stop: two writers add lines, neither erases the other's. `lint` refuses (exit 1) on a missing or malformed key, an unknown status, or a duplicate id; `--fix` repairs what is mechanical — a missing date, a stale `id`, a bare scalar where a list belongs — and still exits 1 if anything is left.
 
+## Factory
+
+A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo (today: aleph). `/aleph:goal` writes an open item labelled `goal`; the `aleph-tick` timer starts one run for each such item every 30 minutes. Spec: `docs/specs/2026-10-26-seed-factory.md`.
+
+- **The run.** The worker is `claude -p` under `srt` (`~/.aleph/tools/bin/srt`), in `~/.aleph/runs/<id>/`. It sees an empty home, the code as a bundle of `origin/main` (and the job's previous `factory/<name>` branch), and the network only to `api.anthropic.com` and npm. Its environment holds the token in `~/.aleph/secrets/worker-token` and nothing else of yours. A second `srt` call bundles the branch, aleph fetches it into the repo as `factory/<name>`, and a third runs the repo's setup and checks on a fresh clone. The run folder goes when the verdict is known.
+- **The gate.** A run is stuck when the last line of the worker's output is not a `result` event with `is_error` false, when it made no commit, when a check fails, or at the time box (`ALEPH_JOB_TIMEOUT`, 40 minutes). A diff that touches a path in the repo's `held` list, or deletes, renames or changes an existing test, or adds `.skip`, `.only` or `.todo`, needs you: `aleph land <name>` lands it with `Held-by: Chris`, `aleph drop <name>` drops it.
+- **The land.** Lands of one repo go one at a time, in the order they became ready. Each merges the branch onto `origin/main` in memory (`git merge-tree`), runs the checks on that tree, and pushes exactly that tree as one squash commit with a plain push; a refused push merges again. The commit ends with `Item: <repo>-<n>` and `Job: <job>`. No checkout moves: your `git pull` is the review.
+- **The switches.** `aleph pause` and `aleph resume` (`~/.aleph/factory/paused`); 12 runs in any 24 hours; `aleph sandbox probe` checks the isolation, nightly from the tick, and a failed probe starts no run. `aleph report` prints what is new.
+
+```bash
+systemctl --user enable --now ~/aleph/jobs/systemd/aleph-tick.timer
+aleph sandbox probe          # criterion 11, from inside the profile
+aleph report                 # runs not yet shown, behind count, health
+aleph pause | aleph resume
+```
+
 ## Development
 
 ```bash
 bun test                          # hooks and the vault CLI, with a mock Langfuse
-ALEPH_LIVE=1 bun test tests/live  # posts a span and fetches the trace back; headless sessions through the vault
+ALEPH_LIVE=1 bun test tests/live  # posts a span and fetches the trace back; headless sessions through the vault; the factory sandbox
 ```
 
 A 200 on the OTLP POST proves nothing, because the worker can drop a batch silently (`compose/README.md`). The live test asserts the trace is retrievable. CI runs the typecheck and the unit suite on every push.
