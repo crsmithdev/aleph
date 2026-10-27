@@ -32,9 +32,26 @@ export const config = (key: string): string => [
   `bypass_git_hooks: false`, `check_active_branches: false`, `active_branch_days: 30`, `task_prefix: "${key}"`, "",
 ].join("\n");
 
+const fetchedAt = new Map<string, number>();
+
+/** Seconds the UI reuses a fetch of the work store ($ALEPH_UI_FETCH_TTL, default 30). */
+export function uiFetchTtl(): number {
+  const n = Number(process.env.ALEPH_UI_FETCH_TTL ?? 30);
+  return Number.isFinite(n) && n >= 0 ? n : 30;
+}
+
+let reuse = 0;
+
+/** Reuse a fetch of the store for `seconds` in this process. Only the UI server turns it on; the CLI always fetches. */
+export function cacheFetches(seconds: number): void { reuse = seconds; }
+
+/** Fetch origin/main, unless this process fetched the store less than `reuse` seconds ago. */
 function fetch(dir: string): void {
+  const last = fetchedAt.get(dir);
+  if (reuse > 0 && last !== undefined && Date.now() - last < reuse * 1000) return;
   const r = git(dir, "fetch", "-q", "origin", MAIN);
   if (!r.ok) throw new Error(`work store fetch failed: ${r.out}`);
+  fetchedAt.set(dir, Date.now());
 }
 
 /** The contents of each `rev:path`, in one `git cat-file --batch`. */

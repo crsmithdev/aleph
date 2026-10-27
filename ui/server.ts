@@ -5,6 +5,7 @@
  */
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { cacheFetches, uiFetchTtl } from "../todo/lib/store.ts";
 
 export type Handler = (req: Request, params: Record<string, string>, url: URL) => Response | Promise<Response>;
 export type Routes = Record<string, Handler>;
@@ -45,6 +46,8 @@ export function views(dir = join(import.meta.dir, "views")): string[] {
 
 export async function serve(port: number) {
   const dir = import.meta.dir;
+  // Every read of the work store in this process reuses a fetch for ALEPH_UI_FETCH_TTL seconds.
+  cacheFetches(uiFetchTtl());
   const routes = await loadRoutes(join(dir, "api"));
   return Bun.serve({
     hostname: "127.0.0.1",
