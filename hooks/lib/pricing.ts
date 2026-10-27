@@ -1,10 +1,23 @@
 /**
- * USD per token, from https://platform.claude.com/docs/en/about-claude/pricing
- * (read 2026-09-03). Langfuse's public models API keeps only input/output
+ * USD per million tokens, from https://platform.claude.com/docs/en/about-claude/pricing
+ * (read 2026-09-03); the three 5.5 models from https://claude.com/pricing (read 2026-10-27).
+ * These are API list prices. Chris's runs use the claude.ai subscription, so a
+ * cost from this table is an API-equivalent estimate. Where Claude Code reports
+ * a cost (`total_cost_usd` in a `claude -p` result), that cost wins; the table
+ * is for transcript turns only. Langfuse's public models API keeps only input/output
  * prices, and cache reads are most of a Claude Code request, so the hook
  * prices each generation itself and sends cost_details.
  */
-const PER_MILLION: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
+interface Rate { input: number; output: number; cacheRead: number; cacheWrite: number }
+/** `long` replaces the base rate for a request whose prompt (input + cache read + cache write) exceeds `above` tokens. */
+type Price = Rate & { long?: { above: number; rate: Rate } };
+const PER_MILLION: Record<string, Price> = {
+  "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
+  "claude-haiku-5-5": {
+    input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125,
+    long: { above: 100_000, rate: { input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 0.625 } },
+  },
   "claude-fable-5-1": { input: 10, output: 50, cacheRead: 0.25, cacheWrite: 12.5 },
   "claude-fable-5": { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
   "claude-opus-5": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
@@ -25,8 +38,10 @@ export function priceFor(model: string) {
 }
 
 export function costDetails(model: string, usage: Usage): Record<string, number> | null {
-  const p = priceFor(model);
-  if (!p) return null;
+  const price = priceFor(model);
+  if (!price) return null;
+  const prompt = usage.input + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+  const p: Rate = price.long && prompt > price.long.above ? price.long.rate : price;
   const cost: Record<string, number> = {
     input: (usage.input * p.input) / 1e6,
     output: (usage.output * p.output) / 1e6,
