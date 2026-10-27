@@ -7,7 +7,7 @@ import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSyn
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { writeList } from "../../todo/lib/store.ts";
+import { readHidden, writeList } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { heldRule, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
@@ -270,7 +270,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
       const c = step("commit-tree", "commit-tree", tree, "-p", base, "-m", landMessage(subjects, run, repo));
       if (!c.ok) return fail("commit-tree failed");
       const failed = repo.sandbox
-        ? await sandboxChecks(id, folder, repo, c.out, changed, phase)
+        ? await sandboxChecks(id, folder, repo, c.out, changed, phase, hiddenOf(repo, run))
         : await worktreeChecks(folder, run, repo, env, c.out, changed, phase);
       if (failed) return fail(failed);
       phase("land");
@@ -309,20 +309,26 @@ async function worktreeChecks(folder: string, run: Run, repo: Repo, env: Record<
  * clone in check/: nothing a worker left in work/ runs. Each check's output
  * and exit code go to checklog/, which only this step can write.
  */
-async function checksInSandbox(folder: string, dir: string, bundle: string, ref: string, repo: Repo, changed: string[], phase: (p: string) => void, record?: (c: CheckResult) => void): Promise<string | null> {
+async function checksInSandbox(folder: string, dir: string, bundle: string, ref: string, repo: Repo, changed: string[], phase: (p: string) => void, record?: (c: CheckResult) => void, hiddenFiles: Record<string, string> = {}): Promise<string | null> {
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
-  const checks = repo.checks.filter((c) => !c.when || matches(c.when));
+  const hasHidden = Object.keys(hiddenFiles).length > 0;
+  // The hidden check runs last, on files copied in after the repo's own checks have passed.
+  const checks = [...repo.checks.filter((c) => !c.when || matches(c.when)), ...(hasHidden ? [{ name: "hidden", run: repo.hiddenRun }] : [])];
   const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
   const lim = limit("ALEPH_CHECK_TIMEOUT", 1200);
+  if (hasHidden) {
+    mkdirSync(join(dir, "hidden"), { recursive: true });
+    for (const [name, text] of Object.entries(hiddenFiles)) writeFileSync(join(dir, "hidden", name), text);
+  }
   const script = [
     "set -e", "git init -q .",
     `git fetch -q ../${bundle} ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
     `{ ${repo.setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1; echo $? > ../checklog/setup.code`,
     `[ "$(cat ../checklog/setup.code)" = 0 ] || exit 0`,
-    ...checks.map((c, i) => `t=$(date +%s%N); timeout -k 30 ${lim} bash -c ${q(c.run)} > ../checklog/${i}.log 2>&1; echo $? > ../checklog/${i}.code; echo $(( ($(date +%s%N) - t) / 1000000 )) > ../checklog/${i}.ms; [ "$(cat ../checklog/${i}.code)" = 0 ] || exit 0`),
+    ...checks.map((c, i) => `${c.name === "hidden" && hasHidden && i === checks.length - 1 ? "cp -r ../hidden .hidden; " : ""}t=$(date +%s%N); timeout -k 30 ${lim} bash -c ${q(c.run)} > ../checklog/${i}.log 2>&1; echo $? > ../checklog/${i}.code; echo $(( ($(date +%s%N) - t) / 1000000 )) > ../checklog/${i}.ms; [ "$(cat ../checklog/${i}.code)" = 0 ] || exit 0`),
   ].join("\n");
   phase(checks.length ? `check ${checks.map((c) => c.name).join(", ")}` : "check");
-  const r = await sandboxed(dir, script, { read: [bundle], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: join(folder, "check.out"), stderr: join(folder, "check.out") });
+  const r = await sandboxed(dir, script, { read: [bundle, ...(hasHidden ? ["hidden"] : [])], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: join(folder, "check.out"), stderr: join(folder, "check.out") });
   const read = (f: string) => existsSync(join(dir, "checklog", f)) ? readFileSync(join(dir, "checklog", f), "utf8").trim() : undefined;
   const setup = read("setup.code");
   if (setup === undefined) return `checks did not start (exit ${r.code})`;
@@ -333,7 +339,21 @@ async function checksInSandbox(folder: string, dir: string, bundle: string, ref:
   for (const [i, check] of checks.entries()) {
     const code = read(`${i}.code`);
     const timedOut = code === "124";
-    if (code !== undefined) record?.({ name: check.name, ok: code === "0", seconds: Math.round(Number(read(`${i}.ms`) ?? 0) / 1000) });
+    const seconds = Math.round(Number(read(`${i}.ms`) ?? 0) / 1000);
+    if (check.name === "hidden") {
+      // The hidden log can show the tests' source, so it goes to its own file and never into checks.log.
+      if (code === undefined) continue;
+      const log = read(`${i}.log`) ?? "";
+      const pass = Number(log.match(/^\s*(\d+) pass\s*$/m)?.[1] ?? 0);
+      const fail = Number(log.match(/^\s*(\d+) fail\s*$/m)?.[1] ?? 0);
+      record?.({ name: "hidden", ok: code === "0", seconds, ...(pass + fail ? { passed: pass, total: pass + fail } : {}) });
+      writeFileSync(join(folder, "hidden.log"), log + "\n");
+      appendFileSync(join(folder, "checks.log"), `## hidden: exit ${code}${timedOut ? " (timed out)" : ""}\n\n`);
+      if (timedOut) return "timed out: check hidden";
+      if (code !== "0") return fail ? `hidden check failed: ${fail} of ${pass + fail} tests` : "hidden check failed";
+      continue;
+    }
+    if (code !== undefined) record?.({ name: check.name, ok: code === "0", seconds });
     appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${code ?? "none"}${timedOut ? " (timed out)" : ""}\n${tail(join(dir, "checklog", `${i}.log`), 100)}\n\n`);
     if (timedOut) return `timed out: check ${check.name}`;
     if (code !== "0") return `${check.name} failed`;
@@ -341,15 +361,21 @@ async function checksInSandbox(folder: string, dir: string, bundle: string, ref:
   return null;
 }
 
+/** The hidden files of the run's item, or none: a read of the work store that fails gives none, as a repo without an item has none. */
+function hiddenOf(repo: Repo, run: Run): Record<string, string> {
+  if (run.todo === undefined) return {};
+  try { return readHidden(repo, run.todo); } catch { return {}; }
+}
+
 /** The checks on a land's squash commit: the commit goes in as a bundle. */
-async function sandboxChecks(id: string, folder: string, repo: Repo, commit: string, changed: string[], phase: (p: string) => void): Promise<string | null> {
+async function sandboxChecks(id: string, folder: string, repo: Repo, commit: string, changed: string[], phase: (p: string) => void, hidden: Record<string, string>): Promise<string | null> {
   const dir = makeRunFolder(id);
   const ref = `refs/aleph/land/${id}`;
   try {
     git(repo.path, "update-ref", ref, commit);
     const b = git(repo.path, "bundle", "create", join(dir, "out", "land.bundle"), ref);
     if (!b.ok) return `bundle failed: ${b.out}`;
-    return await checksInSandbox(folder, dir, "out/land.bundle", ref, repo, changed, phase, recorder(folder));
+    return await checksInSandbox(folder, dir, "out/land.bundle", ref, repo, changed, phase, recorder(folder), hidden);
   } finally {
     git(repo.path, "update-ref", "-d", ref);
     removeRunFolder(dir);
@@ -501,6 +527,17 @@ function checkLog(folder: string, name: string): string {
   return section.split("\n").slice(1).join("\n").trimEnd().split("\n").slice(-80).join("\n");
 }
 
+/**
+ * The fix-round note for a failed hidden check: the reason and the names of
+ * the failing tests, read from hidden.log. Never the log, never the source.
+ */
+function hiddenNote(folder: string, run: Run): string {
+  const file = join(folder, "hidden.log");
+  const log = existsSync(file) ? readFileSync(file, "utf8") : "";
+  const names = [...new Set([...log.matchAll(/^\(fail\) (.*?)(?: \[[\d.]+m?s\])?$/gm)].map((m) => m[1]))];
+  return `${run.reason}\n${names.length ? `\nThe failing tests:\n${names.map((n) => `- ${n}`).join("\n")}\n` : ""}\nThe tests are hidden: their source and log are not available. Fix the cause, run the tests, and commit.`;
+}
+
 /** Start the next run through the CLI, as Chris would. Its refusal goes to next.log. */
 async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): Promise<void> {
   if (paused()) {
@@ -510,7 +547,9 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   }
   const cli = join(import.meta.dir, "..", "cli.ts");
   const argv = next === "land" ? ["land", run.name] : ["job", run.repo!, run.name, "--spec", "-", "--land"];
-  const note = run.failed
+  const note = run.failed === "hidden"
+    ? hiddenNote(folder, run)
+    : run.failed
     ? `The check \`${run.failed}\` failed on this branch. The last 80 lines of its log:\n\n${checkLog(folder, run.failed)}\n\nFix the cause, run the tests, and commit.`
     : run.reason === OWN_LIST
     ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph issue writes the list. The lists live in the work store now. Remove ${TODO_PATH} from the branch, commit, and make each change to the list with aleph issue.`
@@ -659,11 +698,11 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     const done = (allJobs().find((j) => j[0].id === run.job) ?? []).filter((e) => e.id !== id && e.run.kind === "agent" && e.run.failed).length;
     if (done) facts.round = done;
     const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
-    const failed = await checksInSandbox(folder, dir, "out/out.bundle", `refs/heads/${branch}`, repo, changed, phase, recorder(folder));
+    const failed = await checksInSandbox(folder, dir, "out/out.bundle", `refs/heads/${branch}`, repo, changed, phase, recorder(folder), hiddenOf(repo, run));
     if (failed) {
       // A check that failed goes back to the worker, at most FIX_ROUNDS times a job.
       const check = readRun(folder)?.checks?.findLast((c) => !c.ok)?.name;
-      if (!check || failed !== `${check} failed`) return stuck(failed, facts);
+      if (!check || (failed !== `${check} failed` && !(check === "hidden" && failed.startsWith("hidden check failed")))) return stuck(failed, facts);
       const rounds = fixRounds();
       if (done < rounds) return stuck(failed, { ...facts, failed: check, round: done });
       return stuck(rounds > 0 ? `${failed} after ${done} fix rounds` : failed, facts);

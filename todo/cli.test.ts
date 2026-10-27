@@ -336,3 +336,19 @@ test("aleph issue and aleph todo are the same command", () => {
   expect(usage).toContain("|issue|");
   expect(usage).not.toContain("todo");
 });
+
+test("hidden copies files into the store as one commit, lists them, and show counts them", () => {
+  const f = join(base, "a.test.ts");
+  writeFileSync(f, 'import { test } from "bun:test";\ntest("a", () => {});\n');
+  expect(aleph("todo", "show", "proj", "3").out).toContain("hidden checks: 0");
+  expect(aleph("todo", "hidden", "proj", "3").out).toContain("no hidden checks");
+  const before = sh(base, "git", "--git-dir", remote, "rev-list", "--count", "main");
+  const h = aleph("todo", "hidden", "proj", "3", f);
+  expect(h.code).toBe(0);
+  expect(Number(sh(base, "git", "--git-dir", remote, "rev-list", "--count", "main"))).toBe(Number(before) + 1);
+  expect(sh(base, "git", "--git-dir", remote, "show", "main:proj/hidden/3/a.test.ts")).toContain('test("a"');
+  expect(aleph("todo", "hidden", "proj", "3").out.trim()).toBe("a.test.ts");
+  expect(aleph("todo", "show", "proj", "3").out).toContain("hidden checks: 1");
+  expect(aleph("todo", "hidden", "proj", "99", f).err).toContain("has no issue 99");
+  expect(aleph("todo", "hidden", "proj", "3", join(base, "nope.ts")).code).toBe(1);
+});

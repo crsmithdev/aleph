@@ -7,8 +7,8 @@
  * See docs/specs/2026-09-24-agent-jobs.md.
  */
 import { jobArgv, route } from "./lib/route.ts";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
 import { baselineChecks, git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
@@ -333,7 +333,7 @@ async function drop(): Promise<void> {
  */
 async function todoCmd(): Promise<void> {
   const [verb, repoKey, ...args] = positional;
-  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|done|drop|lint> <repo> ...");
+  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|done|drop|hidden|lint> <repo> ...");
   if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(sub);
   const repo = loadRegistry()[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
 
@@ -385,12 +385,39 @@ async function todoCmd(): Promise<void> {
     }
     case "show": {
       const i = pick(readTodo(repo));
-      if (rest.includes("--json")) { out({ ...brief(i), body: i.body, notes: i.notes }); return; }
+      if (rest.includes("--json")) { out({ ...brief(i), body: i.body, notes: i.notes, hidden: hiddenCount(repo, i.id) }); return; }
       console.log(`## ${i.id}. ${i.title}`);
       console.log(`status ${todos.status(i)}   priority ${i.fm.priority ?? "-"}   labels ${(((i.fm.labels as string[]) ?? []).join(", ")) || "-"}   updated ${i.fm.updated ?? "-"}`);
       console.log(`due ${i.fm.due ?? "-"}   waiting_on ${i.fm.waiting_on ?? "-"}`);
+      console.log(`hidden checks: ${hiddenCount(repo, i.id)}`);
       if (i.body.trim()) console.log(`\n${i.body}`);
       if (i.notes.length) console.log(`\n### Notes\n${i.notes.join("\n")}`);
+      return;
+    }
+    case "hidden": {
+      const i = pick(readTodo(repo));
+      const paths = args.slice(1);
+      let have: Record<string, string>;
+      try {
+        if (!paths.length) {
+          have = store.readHidden(repo, i.id);
+          if (rest.includes("--json")) { out(Object.keys(have)); return; }
+          if (!Object.keys(have).length) console.log("no hidden checks");
+          for (const n of Object.keys(have)) console.log(n);
+          return;
+        }
+        const files: Record<string, string> = {};
+        for (const p of paths) {
+          if (!existsSync(p) || !statSync(p).isFile()) refuse(`${p} is not a file`);
+          files[basename(p)] = readFileSync(p, "utf8");
+        }
+        const w = store.writeHidden(repo, i.id, files);
+        if (w.follow) console.error(`warn: ${w.follow}`);
+        out({ repo: repo.key, id: i.id, hidden: Object.keys(files), commit: w.commit });
+      } catch (e: any) {
+        if (e instanceof Refusal) throw e;
+        refuse(e?.message ?? String(e));
+      }
       return;
     }
     case "note": {
@@ -439,9 +466,12 @@ async function todoCmd(): Promise<void> {
       for (const f of findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${findings.length} problem${findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
     }
-    default: refuse("usage: aleph issue <add|list|show|note|edit|done|drop|lint> <repo> ...");
+    default: refuse("usage: aleph issue <add|list|show|note|edit|done|drop|hidden|lint> <repo> ...");
   }
 }
+
+/** How many hidden check files an item has in the store. */
+const hiddenCount = (repo: Repo, id: number): number => Object.keys(store.readHidden(repo, id)).length;
 
 const brief = (i: todos.Item) => ({ id: i.id, title: i.title, status: todos.status(i), priority: i.fm.priority ?? null, labels: i.fm.labels ?? [], updated: i.fm.updated ?? null, due: i.fm.due ?? null, waiting_on: i.fm.waiting_on ?? null, notes: i.notes.length, legacy: i.legacy || undefined });
 const ready = (i: todos.Item) => [i.fm.due ? `due ${i.fm.due}` : "", i.fm.waiting_on ? `waits ${i.fm.waiting_on}` : ""].filter(Boolean).join("  ");

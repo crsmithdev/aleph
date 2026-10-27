@@ -124,3 +124,31 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
     if (attempt === ATTEMPTS) throw new Error(`push refused ${ATTEMPTS} times: ${push.out}`);
   }
 }
+
+const hiddenDir = (key: string, id: number): string => `${key}/hidden/${id}`;
+
+/** An item's hidden check files on the store's origin/main, by file name; empty when it has none. */
+export function readHidden(repo: Place, id: number): Record<string, string> {
+  const dir = storeDir();
+  fetch(dir);
+  const ls = git(dir, "ls-tree", "--name-only", `origin/${MAIN}:${hiddenDir(repo.key, id)}`);
+  const names = ls.ok ? ls.out.split("\n").filter(Boolean) : [];
+  const texts = readFiles(dir, names.map((n) => `origin/${MAIN}:${hiddenDir(repo.key, id)}/${n}`));
+  return Object.fromEntries(names.map((n, i) => [n, texts[i]]));
+}
+
+/** Put `files` (by file name) in an item's hidden checks as one commit on the store's origin/main. */
+export function writeHidden(repo: Place, id: number, files: Record<string, string>): { commit: string; follow: string | null } {
+  const dir = storeDir();
+  for (let attempt = 1; ; attempt++) {
+    fetch(dir);
+    const base = git(dir, "rev-parse", `origin/${MAIN}`).out;
+    const put = Object.fromEntries(Object.entries(files).map(([n, text]) => [`${hiddenDir(repo.key, id)}/${n}`, text]));
+    const tree = treeWithFiles(dir, `${base}^{tree}`, put);
+    const commit = git(dir, "commit-tree", tree, "-p", base, "-m", `${repo.key}: hidden checks for item ${id}`);
+    if (!commit.ok) throw new Error(`commit-tree failed: ${commit.out}`);
+    const push = git(dir, "push", "-q", "origin", `${commit.out}:refs/heads/${MAIN}`);
+    if (push.ok) return { commit: commit.out, follow: followMain(dir, MAIN) };
+    if (attempt === ATTEMPTS) throw new Error(`push refused ${ATTEMPTS} times: ${push.out}`);
+  }
+}

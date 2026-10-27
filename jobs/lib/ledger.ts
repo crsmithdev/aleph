@@ -8,8 +8,8 @@ import { join } from "node:path";
 
 export type State = "running" | "passed" | "needs-you" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
-/** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. */
-export interface CheckResult { name: string; ok: boolean; seconds: number }
+/** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. The hidden check adds its test counts. */
+export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number }
 
 export interface Run {
   kind: "agent" | "plain" | "land";
@@ -59,6 +59,8 @@ export interface Repo {
   sandbox: boolean;
   /** Globs a factory run may not change without Chris. */
   held: string[];
+  /** The command of the hidden check, run on `.hidden/` in the check clone. */
+  hiddenRun: string;
 }
 
 export const OPEN: State[] = ["running", "passed", "needs-you", "failed", "stuck"];
@@ -77,7 +79,7 @@ export function loadRegistry(): Record<string, Repo> {
     repos[key] = {
       key, path: expand(r.path), env: r.env ? expand(r.env) : undefined, main: r.main ?? "main",
       setup: r.setup ?? [], checks: r.checks ?? [], manual: r.manual ?? [], note: r.note, autoland: r.autoland ?? true,
-      sandbox: r.sandbox ?? false, held: r.held ?? [],
+      sandbox: r.sandbox ?? false, held: r.held ?? [], hiddenRun: r.hiddenRun ?? "bun test ./.hidden",
     };
   }
   return repos;

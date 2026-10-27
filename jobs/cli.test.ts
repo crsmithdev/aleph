@@ -98,6 +98,9 @@ case $action in
   fail-then-fix) echo "$RANDOM" > f.txt; git add f.txt
     if printf '%s' "$prompt" | grep -q 'The check \`tests\` failed'; then git rm -q FAIL; else echo x > FAIL; git add FAIL; fi
     git commit -qm "work" ;;
+  hidden-fix) echo "$RANDOM" > f.txt; git add f.txt
+    if printf '%s' "$prompt" | grep -q 'hidden check failed'; then echo ok > hid.txt; git add hid.txt; fi
+    git commit -qm "work" ;;
   fail-always) echo "$RANDOM" > f.txt; echo x > FAIL; git add f.txt FAIL; git commit -qm "work" ;;
   branchlog) git log --format=%s > "$FAKE_LOG/branchlog"; git rm -q FAIL; git commit -qm "remove FAIL" ;;
   status\\ *) set -- \${action#status }; cli=$1; shift
@@ -767,6 +770,56 @@ describe("a factory run", () => {
     expect(state((await fjob("fidle", "none")).json.run)).toMatchObject({ state: "stuck", reason: "no commit" });
     expect(told).toContain("fac/ferr stuck");
     for (const n of ["ferr", "fnone", "ftrail", "fidle"]) await aleph(["drop", n]);
+  });
+
+  describe("hidden checks", () => {
+    const SOURCE = `import { expect, test } from "bun:test";\nimport { existsSync } from "node:fs";\n// SECRET-HIDDEN-LINE\ntest("hid file exists", () => { expect(existsSync("hid.txt")).toBe(true); });\n`;
+    const hiddenItem = async () => {
+      const id = (await aleph(["todo", "add", "fac", "an item with a hidden check"])).json.added;
+      writeFileSync(join(base, "a.test.ts"), SOURCE);
+      expect((await aleph(["todo", "hidden", "fac", String(id), join(base, "a.test.ts")])).code).toBe(0);
+      return id;
+    };
+    const runs = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-fac-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));
+
+    test("a run whose code fails the hidden test is stuck with the count, and no source reaches the note", async () => {
+      const id = await hiddenItem();
+      const r = await fjob("hidbad", "commit hidbad.txt", { ALEPH_FIX_ROUNDS: "0" }, ["--todo", String(id)]);
+      expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "hidden check failed: 1 of 1 tests" });
+      expect(state(r.json.run).checks.map((c: any) => c.name)).toEqual(["tests", "tree", "hidden"]);
+      expect(file(r.json.run, "hidden.log")).toContain("SECRET-HIDDEN-LINE");
+      expect(file(r.json.run, "checks.log")).not.toContain("SECRET-HIDDEN-LINE");
+      expect(file(r.json.run, "prompt.md")).not.toContain("SECRET-HIDDEN-LINE");
+      expect(runsLeft()).toEqual([]);
+      expect((await aleph(["report"])).stdout).toContain("hidden 0/1");
+      await aleph(["drop", "hidbad"]);
+    }, 30_000);
+
+    test("the fix round's note has the line and the failing test names, and the job lands once it passes", async () => {
+      const id = await hiddenItem();
+      await fjob("hidfix", "hidden-fix", {}, ["--todo", String(id)]);
+      const rs = runs("hidfix");
+      expect(rs.map((x) => [x.kind, x.state])).toEqual([["agent", "stuck"], ["agent", "passed"], ["land", "landed"]]);
+      expect(rs[0]).toMatchObject({ reason: "hidden check failed: 1 of 1 tests", failed: "hidden", next: "worker" });
+      const p = readFileSync(join(fakeLog, "prompt"), "utf8");
+      expect(p).toContain("hidden check failed: 1 of 1 tests");
+      expect(p).toContain("hid file exists");
+      expect(p).not.toContain("SECRET-HIDDEN-LINE");
+      expect(p).not.toContain("expect(existsSync");
+      // The land's checks ran the hidden check; its log is in the land run's folder.
+      expect(rs[2].checks.map((c: any) => c.name)).toEqual(["tests", "tree", "hidden"]);
+      expect(rs[2].checks.at(-1)).toMatchObject({ ok: true, passed: 1, total: 1 });
+      expect(readFileSync(join(jobsDir, rs[2].id, "hidden.log"), "utf8")).toContain("1 pass");
+      expect(runsLeft()).toEqual([]);
+    }, 60_000);
+
+    test("an item with no hidden files runs the same checks as before", async () => {
+      const id = (await aleph(["todo", "add", "fac", "no hidden"])).json.added;
+      const r = await fjob("hidnone", "commit hidnone.txt", {}, ["--todo", String(id)]);
+      expect(state(r.json.run).checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
+      expect(existsSync(join(jobsDir, r.json.run, "hidden.log"))).toBe(false);
+      await aleph(["drop", "hidnone"]);
+    }, 30_000);
   });
 
   describe("fix rounds", () => {

@@ -209,6 +209,8 @@ function entry(e: Entry): string {
     lines.push(`  aleph land ${r.name}   (lands it, with Held-by: Chris)`, `  aleph drop ${r.name}   (drops it; the item stays open)`);
   }
   for (const d of r.defaults ?? []) lines.push(`  DEFAULT: ${d}`);
+  const hidden = r.checks?.find((c) => c.name === "hidden" && c.total);
+  if (hidden) lines.push(`  hidden ${hidden.passed}/${hidden.total}`);
   if (r.cost !== undefined) lines.push(`  cost ${money(r.cost)} at the API price`);
   return lines.join("\n");
 }
