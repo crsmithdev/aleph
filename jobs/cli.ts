@@ -14,6 +14,7 @@ import { git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
+import { triage } from "../todo/lib/triage.ts";
 import { behind, factoryDir, factoryLog, health, lastProbe, paused, probeDue, report, setPaused, tick } from "./lib/factory.ts";
 import { probe } from "./lib/probe.ts";
 import { derive, facts, FACTS_REF, readFacts, type Facts } from "./lib/status.ts";
@@ -353,8 +354,12 @@ async function todoCmd(): Promise<void> {
   switch (sub) {
     case "add": {
       const title = args.join(" ").trim() || refuse("give the item a title");
-      const w = write("todo: add an item", (doc) => todos.add(doc, title, { priority: flag("priority"), labels: labels ?? [], body }), true)!;
-      out({ repo: repo.key, added: w.value.id, title: w.value.title, commit: w.commit });
+      let existing: todos.Doc | null = null;
+      try { existing = store.readList(repo); } catch {}
+      const t = await triage(existing, title, body ?? "");
+      const w = write("todo: add an item", (doc) => todos.add(doc, title, { priority: flag("priority"), labels: labels ?? t.labels, body }), true)!;
+      for (const m of t.maybeSame) console.error(`aleph-${m.id} may be the same task: ${m.title}`);
+      out({ repo: repo.key, added: w.value.id, title: w.value.title, commit: w.commit, ...(t.maybeSame.length ? { maybeSame: t.maybeSame } : {}) });
       return;
     }
     case "list": {
