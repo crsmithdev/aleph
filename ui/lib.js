@@ -26,6 +26,19 @@ export function span(from, to) {
 /** The empty state, after old aleph's EmptyState: one sentence, one hint. `hint` is HTML. */
 export const empty = (line, hint = "") => `<div class="empty"><p>${esc(line)}</p>${hint ? `<p class="hint">${hint}</p>` : ""}</div>`;
 
+/** The line for a failed API response: the JSON body's `error`, else the body's text cut to 300 characters. */
+export function failMessage(url, status, body) {
+  const head = `${url} answered ${status}`;
+  const text = String(body ?? "").trim();
+  if (!text) return head;
+  let msg = text.slice(0, 300);
+  try {
+    const j = JSON.parse(text);
+    if (j && typeof j.error === "string" && j.error) msg = j.error;
+  } catch {}
+  return `${head}: ${msg}`;
+}
+
 /** The error state: what failed, and what to try. */
 export const error = (line, hint = "Check that aleph-ui is running, then reload.") =>
   `<div class="error" role="alert"><p>${esc(line)}</p><p class="hint">${esc(hint)}</p></div>`;

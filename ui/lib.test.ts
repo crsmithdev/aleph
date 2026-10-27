@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { chart, chartTheme, clock, cmd, empty, error, esc, md, money, mountView, span } from "./lib.js";
+import { chart, chartTheme, clock, cmd, empty, error, esc, failMessage, md, money, mountView, span } from "./lib.js";
 
 test("esc escapes markup", () => {
   expect(esc("<script>alert('x')</script>")).toBe("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;");
@@ -82,4 +82,16 @@ test("chart on() attaches a handler that survives a re-theme", () => {
   } finally {
     Object.assign(g, keep);
   }
+});
+
+test("failMessage shows the reason from the body", () => {
+  expect(failMessage("/api/sessions", 502, '{"error":"Langfuse is unreachable at http://x"}')).toBe("/api/sessions answered 502: Langfuse is unreachable at http://x");
+  expect(failMessage("/api/sessions", 404, "not found")).toBe("/api/sessions answered 404: not found");
+  expect(failMessage("/api/sessions", 500, "")).toBe("/api/sessions answered 500");
+  expect(failMessage("/api/x", 500, "a".repeat(1000))).toBe(`/api/x answered 500: ${"a".repeat(300)}`);
+});
+
+test("the shell reports failures with failMessage", async () => {
+  const { readFileSync } = await import("node:fs");
+  expect(readFileSync(new URL("./index.html", import.meta.url), "utf8")).toContain("failMessage(");
 });

@@ -424,7 +424,7 @@ pre.trailers b { color: var(--need); }
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { empty, error, esc, mountView } from "/lib.js";
+  import { empty, error, esc, failMessage, mountView } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, render(data, params), mount?(root, data), api?, refresh? }:
@@ -479,7 +479,7 @@ pre.trailers b { color: var(--need); }
       const url = typeof view.api === "function" ? view.api(params) : view.api.replace(/:(\w+)/g, (_, n) => encodeURIComponent(params[n] ?? ""));
       try {
         const res = await api(url);
-        if (!res.ok) throw new Error(`${url} answered ${res.status}`);
+        if (!res.ok) throw new Error(failMessage(url, res.status, await res.text().catch(() => "")));
         data = await res.json();
         $("offline").hidden = true;
       } catch (e) {
