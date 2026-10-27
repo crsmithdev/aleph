@@ -25,11 +25,15 @@ export function compile(path: string): { pattern: RegExp; names: string[] } {
   return { pattern: new RegExp(`^${src}/?$`), names };
 }
 
+/** Each route file's optional `warm` export: fills its caches once the server is up. */
+const warmers: { file: string; warm: () => Promise<void> }[] = [];
+
 async function loadRoutes(dir: string): Promise<Route[]> {
   const files = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts")).sort() : [];
   const routes: Route[] = [];
   for (const f of files) {
     const mod = await import(join(dir, f));
+    if (typeof mod.warm === "function") warmers.push({ file: f, warm: mod.warm });
     for (const [key, handler] of Object.entries<Handler>(mod.routes ?? {})) {
       const [method, path] = key.trim().split(/\s+/);
       if (!method || !path) throw new Error(`ui/api/${f}: bad route "${key}"`);
@@ -48,8 +52,9 @@ export async function serve(port: number) {
   const dir = import.meta.dir;
   // Every read of the work store in this process reuses a fetch for ALEPH_UI_FETCH_TTL seconds.
   cacheFetches(uiFetchTtl());
+  warmers.length = 0;
   const routes = await loadRoutes(join(dir, "api"));
-  return Bun.serve({
+  const server = Bun.serve({
     hostname: "127.0.0.1",
     port,
     // Bun closes a request after 10 s by default; /api/memory and /api/activity take longer.
@@ -79,6 +84,9 @@ export async function serve(port: number) {
       return new Response("not found", { status: 404 });
     },
   });
+  // One background call per slow route, so the first visit finds its cache filled.
+  for (const { file, warm } of warmers) warm().catch((e) => console.error(`ui/api/${file}: warm-up failed: ${e instanceof Error ? e.message : e}`));
+  return server;
 }
 
 if (import.meta.main) {

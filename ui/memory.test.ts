@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serve } from "./server.ts";
-import { clearCache } from "./api/memory.ts";
+import { clearCache, warm } from "./api/memory.ts";
 // @ts-ignore plain JS, shared with the page
 import { md } from "./lib.js";
 // @ts-ignore
@@ -117,6 +117,26 @@ test("vault misses runs once within ALEPH_UI_CACHE_TTL, and the answer says when
   } finally {
     process.env.PATH = saveEnv.PATH;
     if (saveEnv.TTL === undefined) delete process.env.ALEPH_UI_CACHE_TTL; else process.env.ALEPH_UI_CACHE_TTL = saveEnv.TTL;
+    clearCache();
+  }
+});
+
+test("warm() fills the misses cache, so the first request runs vault misses zero more times", async () => {
+  const bin = join(base, "bin-warm"), log = join(base, "calls-warm");
+  mkdirSync(bin);
+  writeFileSync(join(bin, "bun"), `#!/bin/sh\necho x >> ${log}\necho '{"days":7,"recalls":3}'\n`);
+  chmodSync(join(bin, "bun"), 0o755);
+  const saveEnv = { PATH: process.env.PATH };
+  process.env.PATH = `${bin}:${process.env.PATH}`;
+  clearCache();
+  try {
+    await warm();
+    expect(readFileSync(log, "utf8").trim().split("\n")).toHaveLength(1);
+    const a: any = await (await at("/api/memory")).json();
+    expect(a.misses).toEqual({ days: 7, recalls: 3 });
+    expect(readFileSync(log, "utf8").trim().split("\n")).toHaveLength(1);
+  } finally {
+    process.env.PATH = saveEnv.PATH;
     clearCache();
   }
 });

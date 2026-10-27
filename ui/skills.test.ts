@@ -163,3 +163,40 @@ test("the skills table scrolls inside its own wrapper", async () => {
   expect(html).toContain('<div class="tscroll"><table>');
   expect(html).toContain(".skills .tscroll { overflow-x: auto;");
 });
+
+test("pages are fetched concurrently, and serve() warms the cache so the first request hits Langfuse zero times", async () => {
+  // Overlap is counted per list: the two lists run side by side even when each one pages serially.
+  const active: Record<string, number> = {}, peak: Record<string, number> = {};
+  let calls = 0;
+  const paged = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      const u = new URL(req.url);
+      calls++; active[u.pathname] = (active[u.pathname] ?? 0) + 1;
+      peak[u.pathname] = Math.max(peak[u.pathname] ?? 0, active[u.pathname]);
+      await Bun.sleep(40);
+      active[u.pathname]--;
+      const page = Number(u.searchParams.get("page") ?? 1);
+      const data = u.pathname === "/api/public/observations" && page === 1 ? observations.filter((o) => Date.parse(o.startTime) >= Date.now() - 30 * 86400_000) : [];
+      return Response.json({ data: u.pathname === "/api/public/traces" && page === 1 ? traces : data, meta: { totalPages: 4 } });
+    },
+  });
+  const before = process.env.LANGFUSE_BASE_URL;
+  process.env.LANGFUSE_BASE_URL = `http://127.0.0.1:${paged.port}`;
+  clearCache();
+  const warmed = await serve(0);
+  try {
+    for (let i = 0; i < 100 && calls < 8; i++) await Bun.sleep(20); // 2 lists x 4 pages
+    await Bun.sleep(200);
+    expect(peak["/api/public/traces"]).toBeGreaterThan(1);
+    expect(peak["/api/public/observations"]).toBeGreaterThan(1);
+    const seen = calls;
+    const r = await fetch(`http://127.0.0.1:${warmed.port}/api/skills`);
+    expect(r.status).toBe(200);
+    expect(((await r.json()) as any).skills.length).toBeGreaterThan(0);
+    expect(calls).toBe(seen);
+  } finally {
+    warmed.stop(true); paged.stop(true);
+    process.env.LANGFUSE_BASE_URL = before;
+  }
+});

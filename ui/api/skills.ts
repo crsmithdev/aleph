@@ -7,7 +7,6 @@ import { existsSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
 import type { Observation } from "../../hooks/lib/otlp.ts";
-import { fetchObservations } from "../../hooks/lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
 
@@ -53,15 +52,17 @@ async function getJson(cfg: { baseUrl: string; publicKey: string; secretKey: str
   return res.json();
 }
 
-async function fetchTraces(cfg: any, from: Date, to: Date): Promise<TraceInfo[]> {
-  const found: TraceInfo[] = [];
-  for (let page = 1; page < 500; page++) {
-    const body = await getJson(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString(), limit: "100", page: String(page) });
-    found.push(...(body.data ?? []));
-    if (!body.meta || page >= (body.meta.totalPages ?? 1)) break;
-  }
-  return found;
+/** Every row of a paged Langfuse list: page 1 says how many pages there are, the rest are fetched together. */
+async function allPages<T>(cfg: any, path: string, q: Record<string, string>): Promise<T[]> {
+  const page = (n: number) => getJson(cfg, path, { ...q, limit: "100", page: String(n) });
+  const first = await page(1);
+  const pages = first.meta ? Math.min(Number(first.meta.totalPages) || 1, 499) : 1;
+  const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => page(i + 2)));
+  return [first, ...rest].flatMap((b) => b.data ?? []);
 }
+
+const fetchObservations = (cfg: any, from: Date, to: Date) => allPages<Observation>(cfg, "/api/public/observations", { fromStartTime: from.toISOString(), toStartTime: to.toISOString() });
+const fetchTraces = (cfg: any, from: Date, to: Date) => allPages<TraceInfo>(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString() });
 
 interface Analysis { uses: Use[]; tools: Map<string, Map<string, number>>; errors: Map<string, { trace: string; message: string }>; since: Date; days: number }
 
@@ -152,6 +153,12 @@ function detail(a: Analysis, name: string) {
     tools: [...counts].map(([tool, count]) => ({ tool, count })).sort((x, y) => y.count - x.count || x.tool.localeCompare(y.tool)),
     errors: [...a.errors].filter(([k]) => same(k.split("\0")[0], name)).map(([, e]) => ({ ...e, session: turns.get(e.trace)?.session ?? "", project: turns.get(e.trace)?.project ?? "", time: turns.get(e.trace)?.time ?? "", prompt: turns.get(e.trace)?.prompt ?? "" })),
   };
+}
+
+/** Fills the cache for the default view (30 days, all projects); throws when Langfuse fails. */
+export async function warm(): Promise<void> {
+  const res = await cached(new URL("http://localhost/api/skills"), summary);
+  if (!res.ok) throw new Error(`skills warm-up: ${res.status} ${await res.text()}`);
 }
 
 async function cached(url: URL, make: (a: Analysis) => unknown | null): Promise<Response> {

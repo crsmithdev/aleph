@@ -55,11 +55,22 @@ function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, p
 async function misses(): Promise<{ value: unknown; cachedAt: string } | null> {
   const ttl = ttlMs(), now = Date.now();
   if (ttl && missesCache && now - missesCache.at < ttl) return missesCache.hit;
-  const value = await runMisses();
-  if (value == null) return null;
-  const hit = { value, cachedAt: new Date(now).toISOString() };
-  if (ttl) missesCache = { at: now, hit };
-  return hit;
+  // A request that arrives while the warm-up (or another request) runs waits for it.
+  if (inflight) return inflight;
+  inflight = (async () => {
+    const value = await runMisses();
+    if (value == null) return null;
+    const hit = { value, cachedAt: new Date(now).toISOString() };
+    if (ttl) missesCache = { at: now, hit };
+    return hit;
+  })().finally(() => { inflight = null; });
+  return inflight;
+}
+let inflight: Promise<{ value: unknown; cachedAt: string } | null> | null = null;
+
+/** Fills the misses cache; throws when `vault misses` fails. */
+export async function warm(): Promise<void> {
+  if (!(await misses())) throw new Error("memory warm-up: vault misses failed");
 }
 /** `vault misses` is slow (Langfuse), so its answer is kept `ALEPH_UI_CACHE_TTL` seconds (default 300; 0 turns it off). */
 let missesCache: { at: number; hit: { value: unknown; cachedAt: string } } | null = null;
