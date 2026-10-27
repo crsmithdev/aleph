@@ -251,7 +251,8 @@ aleph.
 
 The memory plan covers all seven agent memory types (vault: Seven Agent Memory
 Types Mapped Onto Aleph). Each row says what holds it today and what the
-factory adds.
+factory adds. The memory spec (`docs/specs/2026-10-27-memory.md`) gives each
+type its owner, store and gate, and defines milestone 1.
 
 | Type | Holds | Today | The factory adds |
 |---|---|---|---|
