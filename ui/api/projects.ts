@@ -1,0 +1,115 @@
+/**
+ * `GET /api/projects` and `GET /api/projects/<key>`: each registry repo with its open
+ * items and goals, last land, distance behind origin/<main>, baseline and vault notes.
+ * Read-only and offline: git is asked about refs already fetched, never fetched.
+ */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { factoryDir } from "../../jobs/lib/factory.ts";
+import { git, show } from "../../jobs/lib/git.ts";
+import { allJobs, loadRegistry, type Entry, type Repo } from "../../jobs/lib/ledger.ts";
+import { storeDir } from "../../todo/lib/store.ts";
+import { parseItem, status, type Item } from "../../todo/lib/todo.ts";
+import { loadVault, vaultDir } from "../../vault/lib/vault.ts";
+import type { Routes } from "../server.ts";
+import { githubBase } from "../state.ts";
+
+export interface Card {
+  key: string; path: string; factory: boolean;
+  openItems: number; openGoals: number;
+  lastLanded: { name: string; at: string } | null;
+  behind: number | null;
+  baseline: { commit: string; ok: boolean; failed?: string } | null;
+  notes: number;
+  /** The latest of the last land and the latest job start, for ordering. */
+  activity: string | null;
+}
+
+export interface Detail extends Card {
+  commits: { hash: string; subject: string; date: string; item: string | null; commitUrl?: string }[];
+  items: { id: number; title: string; labels: string[]; priority: string }[];
+  jobs: { name: string; state: string; started: string; ended?: string; item: number | null }[];
+  vault: { title: string; kind: string; updated: string }[];
+}
+
+const labels = (i: Item): string[] => (Array.isArray(i.fm.labels) ? (i.fm.labels as string[]) : []);
+
+/** The repo's open issues on the work store's last-fetched origin/main; no fetch. */
+function openIssues(key: string): Item[] {
+  const dir = storeDir(), rev = "origin/main", tasks = `${key}/backlog/tasks`;
+  const ls = git(dir, "ls-tree", "--name-only", `${rev}:${tasks}`);
+  if (!ls.ok) return [];
+  const names = ls.out.split("\n").filter((n) => n.endsWith(".md"));
+  const items = names.map((n) => show(dir, rev, `${tasks}/${n}`)).filter((t): t is string => t !== null).map(parseItem);
+  return items.filter((i) => status(i) === "open").sort((a, b) => a.id - b.id);
+}
+
+function baselineOf(repo: Repo): Card["baseline"] {
+  if (!repo.sandbox) return null;
+  try {
+    const b = JSON.parse(readFileSync(join(factoryDir(), "baseline.json"), "utf8"))[repo.key];
+    return b ? { commit: b.commit, ok: !!b.ok, ...(b.failed ? { failed: b.failed } : {}) } : null;
+  } catch { return null; }
+}
+
+const scoped = (repo: Repo) => loadVault(vaultDir()).filter((n) => !n.archived && [n.fm.scope ?? []].flat().includes(repo.key));
+
+const jobsOf = (repo: Repo): Entry[][] => allJobs().filter((j) => j.at(-1)!.run.repo === repo.key);
+
+function card(repo: Repo, issues: Item[], jobs: Entry[][], notes: number): Card {
+  const landed = jobs.map((j) => j.at(-1)!.run).filter((r) => r.state === "landed" && r.ended)
+    .sort((a, b) => Date.parse(b.ended!) - Date.parse(a.ended!))[0];
+  const started = jobs.map((j) => j[0].run.started).sort().at(-1);
+  const n = git(repo.path, "rev-list", "--count", `HEAD..origin/${repo.main}`);
+  const activity = [landed?.ended, started].filter((x): x is string => !!x).sort().at(-1) ?? null;
+  return {
+    key: repo.key, path: repo.path, factory: repo.sandbox,
+    openItems: issues.length, openGoals: issues.filter((i) => labels(i).includes("goal")).length,
+    lastLanded: landed ? { name: landed.name, at: landed.ended! } : null,
+    behind: n.ok ? Number(n.out) : null,
+    baseline: baselineOf(repo), notes, activity,
+  };
+}
+
+function commits(repo: Repo): Detail["commits"] {
+  const base = githubBase(git(repo.path, "remote", "get-url", "origin").out);
+  const r = git(repo.path, "log", "-20", `--format=%H%x1f%s%x1f%aI%x1f%(trailers:key=Item,valueonly,separator=%x2C )%x1e`, `origin/${repo.main}`);
+  if (!r.ok) return [];
+  return r.out.split("\x1e").map((s) => s.trim()).filter(Boolean).map((rec) => {
+    const [hash, subject, date, item] = rec.split("\x1f");
+    return { hash, subject, date, item: item?.trim() || null, ...(base ? { commitUrl: `${base}/commit/${hash}` } : {}) };
+  });
+}
+
+const stamp = (s: string | null | undefined) => (s ? Date.parse(s) || 0 : 0);
+
+export function projects(only: string | null): Card[] {
+  return Object.values(loadRegistry()).filter((r) => !only || r.key === only).map((r) => card(r, openIssues(r.key), jobsOf(r), scoped(r).length))
+    .sort((a, b) => stamp(b.activity) - stamp(a.activity) || a.key.localeCompare(b.key));
+}
+
+export function project(key: string): Detail | null {
+  const repo = loadRegistry()[key];
+  if (!repo) return null;
+  const issues = openIssues(key), jobs = jobsOf(repo), notes = scoped(repo);
+  return {
+    ...card(repo, issues, jobs, notes.length),
+    commits: commits(repo),
+    items: issues.map((i) => ({ id: i.id, title: i.title, labels: labels(i), priority: String(i.fm.priority ?? "medium") })),
+    jobs: jobs.slice(-10).reverse().map((j) => {
+      const r = j.at(-1)!.run;
+      return { name: r.name, state: r.state, started: j[0].run.started, ...(r.ended ? { ended: r.ended } : {}), item: j.findLast((e) => e.run.todo !== undefined)?.run.todo ?? null };
+    }),
+    vault: notes.map((n) => ({ title: n.title, kind: String(n.fm.kind ?? ""), updated: String(n.fm.updated ?? "") }))
+      .sort((a, b) => b.updated.localeCompare(a.updated) || a.title.localeCompare(b.title)),
+  };
+}
+
+export const routes: Routes = {
+  "GET /api/projects": (_req, _p, url) => Response.json(projects(url.searchParams.get("project") || null)),
+  "GET /api/projects/:key": (_req, params, url) => {
+    const only = url.searchParams.get("project");
+    const d = only && only !== params.key ? null : project(params.key);
+    return d ? Response.json(d) : Response.json({ error: `no project ${params.key}` }, { status: 404 });
+  },
+};
