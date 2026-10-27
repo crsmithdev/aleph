@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { chart, chartTheme, clock, cmd, empty, error, esc, failMessage, md, money, mountView, span } from "./lib.js";
+import { chart, chartTheme, clock, cmd, empty, error, esc, failMessage, loading, md, money, mountView, span } from "./lib.js";
 
 test("esc escapes markup", () => {
   expect(esc("<script>alert('x')</script>")).toBe("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;");
@@ -94,4 +94,12 @@ test("failMessage shows the reason from the body", () => {
 test("the shell reports failures with failMessage", async () => {
   const { readFileSync } = await import("node:fs");
   expect(readFileSync(new URL("./index.html", import.meta.url), "utf8")).toContain("failMessage(");
+});
+
+test("loading shows a status line with the title escaped", () => {
+  const h = loading("Now");
+  expect(h).toContain("Loading Now…");
+  expect(h).toContain('role="status"');
+  expect(loading("<b>")).toContain("Loading &lt;b&gt;…");
+  expect(loading("<b>")).not.toContain("<b>");
 });

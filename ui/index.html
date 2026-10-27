@@ -431,7 +431,7 @@ pre.trailers b { color: var(--need); }
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { empty, error, esc, failMessage, mountView } from "/lib.js";
+  import { empty, error, esc, failMessage, loading, mountView } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, render(data, params), mount?(root, data), api?, refresh? }:
@@ -526,6 +526,7 @@ pre.trailers b { color: var(--need); }
       return;
     }
     document.title = `${m.view.title} · aleph`;
+    $("view").innerHTML = loading(m.view.title);
     load(shown, true);
     if (m.view.refresh) timer = setInterval(() => load(m, false), m.view.refresh * 1000);
   }

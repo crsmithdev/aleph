@@ -68,3 +68,12 @@ test("the shell calls a view's mount after render, through mountView", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   expect(html).toMatch(/view\.render\([^]*mountView\(view, \$\("view"\), data\)/);
 });
+
+test("route writes the loading line to the view before the first load", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const body = html.slice(html.indexOf("function route()"));
+  const a = body.indexOf("loading(");
+  const b = body.indexOf("load(shown, true)");
+  expect(a).toBeGreaterThan(-1);
+  expect(b).toBeGreaterThan(a);
+});

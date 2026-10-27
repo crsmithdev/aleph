@@ -39,6 +39,9 @@ export function failMessage(url, status, body) {
   return `${head}: ${msg}`;
 }
 
+/** The first-load state of a view, shown until its API answers. */
+export const loading = (title) => `<div class="page"><p class="quiet loading" role="status">Loading ${esc(title)}…</p></div>`;
+
 /** The error state: what failed, and what to try. */
 export const error = (line, hint = "Check that aleph-ui is running, then reload.") =>
   `<div class="error" role="alert"><p>${esc(line)}</p><p class="hint">${esc(hint)}</p></div>`;
