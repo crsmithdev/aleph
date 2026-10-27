@@ -66,6 +66,8 @@ updated: YYYY-MM-DD
 supersedes: []              # titles this note replaces
 sources: []                 # trace:<id>, a path, chris, a URL
 tags: []                    # optional
+written_by: claude|chris    # optional, stamped by vault write
+session: <id>               # optional, the Claude Code session, stamped by vault write
 \`\`\`
 
 Body: a first paragraph \`**Claim.** … as of YYYY-MM-DD.\`, then

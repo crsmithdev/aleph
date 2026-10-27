@@ -10,12 +10,12 @@ let drafts: string;
 
 const testEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 async function runAsync(env: Record<string, string>, ...args: string[]) {
-  const p = Bun.spawn(["bun", CLI, ...args], { env: { ...process.env, ...testEnv, ...env }, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawn(["bun", CLI, ...args], { env: { ...process.env, ...testEnv, ALEPH_JUDGE: "haiku", ...env }, stdout: "pipe", stderr: "pipe" });
   const code = await p.exited;
   return { code, stdout: await new Response(p.stdout).text(), stderr: await new Response(p.stderr).text() };
 }
 function run(env: Record<string, string>, ...args: string[]) {
-  const p = Bun.spawnSync(["bun", CLI, ...args], { env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", ...env }, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawnSync(["bun", CLI, ...args], { env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", ALEPH_JUDGE: "haiku", ...env }, stdout: "pipe", stderr: "pipe" });
   const stdout = p.stdout.toString();
   let json: any = null;
   try { json = JSON.parse(stdout); } catch {}
@@ -686,5 +686,104 @@ describe("compile", () => {
     const r = await runAsync({ ...env(failing.port), ALEPH_VAULT: join(home, "vault") }, "compile", "2026-09-04");
     rmSync(home, { recursive: true });
     expect(r.stdout).toContain("### 2026-09-04-120000-current.md");
+  });
+});
+
+describe("provenance and the contradiction screen", () => {
+  let v: string;
+  let server: ReturnType<typeof Bun.serve>;
+  let asked: any[];
+  let answer: number;
+  const env = (extra: Record<string, string> = {}) => ({ ALEPH_VAULT: v, ALEPH_JUDGE: "jev", ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k", CLAUDE_CODE_SESSION_ID: "", ...extra });
+  const snapshot = () => Bun.spawnSync(["bash", "-c", `cd ${v} && find . -path ./.git -prune -o -type f -print | sort | xargs cat | sha256sum`], { stdout: "pipe" }).stdout.toString();
+  const write = (path: string, extra: Record<string, string> = {}) => runAsync(env(extra), "write", path, "--why", "t");
+  const wikiText = (title: string) => readFileSync(join(v, "wiki", "gotchas", `${title}.md`), "utf8");
+
+  beforeAll(() => {
+    v = join(base, "vault-screen");
+    expect(run({ ALEPH_VAULT: v }, "init").code).toBe(0);
+    server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const body: any = await req.json();
+        asked.push(body);
+        const answers = Object.fromEntries(Object.keys(body.questions).map((k) => [k, { type: "noul", noul: answer }]));
+        return Response.json({ answers, model: "m", usage: { cost: 0 } });
+      },
+    });
+  });
+  afterAll(() => server.stop(true));
+  const reset = (a = 0.9) => { asked = []; answer = a; };
+  // Titles share "widget" and nothing else with the other tests' notes.
+  const live = async (title: string) => { const r = await write(note(title, { scope: "screen" }), { ALEPH_JUDGE: "haiku" }); expect(r.code).toBe(0); };
+
+  test("stamps claude and the session id", async () => {
+    reset();
+    const t = "Stamp Alpha";
+    expect((await write(note(t), { CLAUDE_CODE_SESSION_ID: "s1", ALEPH_JUDGE: "haiku" })).code).toBe(0);
+    const text = wikiText(t);
+    expect(text).toContain("written_by: claude");
+    expect(text).toContain("session: s1");
+  });
+  test("stamps chris without a session", async () => {
+    const t = "Stamp Beta";
+    expect((await write(note(t), { ALEPH_JUDGE: "haiku" })).code).toBe(0);
+    const text = wikiText(t);
+    expect(text).toContain("written_by: chris");
+    expect(text).not.toContain("session:");
+  });
+  test("a draft's own written_by is kept", async () => {
+    const t = "Stamp Gamma";
+    expect((await write(note(t, { written_by: "chris" }), { CLAUDE_CODE_SESSION_ID: "s1", ALEPH_JUDGE: "haiku" })).code).toBe(0);
+    const text = wikiText(t);
+    expect(text).toContain("written_by: chris");
+    expect(text).not.toContain("written_by: claude");
+  });
+  test("a note without the fields passes lint", async () => {
+    expect(run({ ALEPH_VAULT: v }, "lint").code).toBe(0);
+  });
+
+  test("p 0.9 refuses, names the note, changes nothing", async () => {
+    await live("Widget Registry");
+    reset(0.9);
+    const before = snapshot();
+    const r = await write(note("Widget Registry Rules", { scope: "screen" }));
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("Widget Registry");
+    expect(r.stderr).toContain("add it to supersedes or fix the draft");
+    expect(snapshot()).toBe(before);
+    expect(asked.length).toBe(1);
+  });
+  test("superseding the note writes and does not ask about it", async () => {
+    reset(0.9);
+    const r = await write(note("Widget Registry Rules", { scope: "screen", supersedes: "[Widget Registry]" }));
+    expect(r.code).toBe(0);
+    expect(JSON.stringify(asked)).not.toContain("`Widget Registry`");
+  });
+  test("p 0.5 writes", async () => {
+    await live("Gadget Ledger");
+    reset(0.5);
+    expect((await write(note("Gadget Ledger Rules", { scope: "screen" }))).code).toBe(0);
+    expect(asked.length).toBe(1);
+  });
+  test("a dead Jev writes with a warning", async () => {
+    await live("Sprocket Ledger");
+    reset(0.9);
+    const r = await write(note("Sprocket Ledger Rules", { scope: "screen" }), { ALEPH_JEV_URL: "http://127.0.0.1:1/" });
+    expect(r.code).toBe(0);
+    expect(r.stderr).toContain("warn contradiction");
+  });
+  test("under judge haiku the server gets no request", async () => {
+    await live("Flange Ledger");
+    reset(0.9);
+    expect((await write(note("Flange Ledger Rules", { scope: "screen" }), { ALEPH_JUDGE: "haiku" })).code).toBe(0);
+    expect(asked.length).toBe(0);
+  });
+  test("one request holds at most 20 questions", async () => {
+    for (let i = 0; i < 25; i++) await live(`Turbine Number ${"abcdefghijklmnopqrstuvwxy"[i]}`);
+    reset(0.1);
+    expect((await write(note("Turbine Summary", { scope: "screen" }))).code).toBe(0);
+    expect(asked.length).toBe(1);
+    expect(Object.keys(asked[0].questions).length).toBe(20);
   });
 });

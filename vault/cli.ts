@@ -7,12 +7,13 @@
  */
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
+import { decide, judgeChoice, type Question } from "../hooks/lib/jev.ts";
 import { langfuseConfig } from "../hooks/lib/env.ts";
 import { serializeFrontmatter } from "./lib/frontmatter.ts";
 import { addedDate, commitPaths, git, pushOrigin, tracked, trackedFiles } from "./lib/git.ts";
 import { handoffsFor, traceDigest } from "./lib/compile.ts";
 import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./lib/templates.ts";
-import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, HOME_KINDS, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, renameScope, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
+import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, HOME_KINDS, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
 
 const [cmd, ...rest] = process.argv.slice(2);
 /**
@@ -147,7 +148,9 @@ function init(): void {
 }
 
 // ---------------------------------------------------------------- write
-function write(): void {
+const claimLine = (n: Note) => (n.body.trim().split(/\n\s*\n/)[0] ?? "").replace(/\s+/g, " ").trim();
+
+async function write(): Promise<void> {
   requireVault();
   const src = positional[0];
   const why = flag("why");
@@ -203,10 +206,33 @@ function write(): void {
   const overBudget = budgetFindings(before);
   if (overBudget.length) refuse(overBudget, "prune the over-budget file first: this write changed nothing" + budgetHint(before));
 
+  // The contradiction screen. A Jev failure never blocks a write.
+  if (judgeChoice() !== "haiku") {
+    const candidates = screenCandidates(placed, notes);
+    if (candidates.length) {
+      const questions: Record<string, Question> = {};
+      candidates.forEach((n, i) => {
+        questions[`n${i}`] = { type: "noul", instructions: `Does the draft's claim contradict the note's claim? Draft \`${draft.title}\` (its claim line: ${claimLine(draft)}). Note \`${n.title}\` (its claim line: ${claimLine(n)}).` };
+      });
+      try {
+        const d = await decide({ draft: draft.title }, questions);
+        const hits = candidates.filter((_, i) => {
+          const a = d.answers[`n${i}`];
+          return a.type === "noul" && a.noul >= 0.7;
+        });
+        if (hits.length) refuse(hits.map((n) => ({ note: n.title, rule: "contradiction", detail: `the draft [${draft.title}] may contradict [${n.title}]` })), "add it to supersedes or fix the draft: this write changed nothing");
+      } catch (e) {
+        console.error(`warn contradiction ${draft.title}: screen skipped, ${(e as Error).message}`);
+      }
+    }
+  }
+
   // Everything validated; now touch the disk.
   const touched: string[] = [join(root, "Home.md"), join(root, "daily", `${today()}.md`), dest];
   mkdirSync(dirname(dest), { recursive: true });
+  const stamped = stampProvenance(draft, process.env.CLAUDE_CODE_SESSION_ID || undefined);
   if (srcPath !== dest) copyFileSync(srcPath, dest);
+  if (stamped !== draft.text) writeFileSync(dest, stamped);
   const archived: string[] = [];
   for (const o of old) {
     const target = join(root, "archive", `${o.title}.md`);
@@ -457,7 +483,7 @@ async function compile(): Promise<void> {
 
 switch (cmd) {
   case "init": init(); break;
-  case "write": write(); break;
+  case "write": await write(); break;
   case "recall": recall(); break;
   case "lint": lint(); break;
   case "adopt": adopt(); break;

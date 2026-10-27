@@ -167,6 +167,28 @@ export function budgetFindings(notes: Note[]): Finding[] {
   return f;
 }
 
+const STOP = new Set("about after also been before being could does doing from have here into just like make more most much must only other over really should some such than that their them then there these they this those very want were what when where which while will with would your".split(" "));
+const screenWords = (s: string) => (s.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) => !STOP.has(w));
+
+/** Live wiki notes in the draft's scope that share a title or alias word with it, minus those it supersedes, at most `max`. */
+export function screenCandidates(draft: Note, notes: Note[], max = 20): Note[] {
+  const want = new Set(screenWords([draft.title, ...list(draft.fm, "aliases")].join(" ")));
+  const sup = new Set(list(draft.fm, "supersedes").map((t) => t.toLowerCase()));
+  return wikiNotes(notes)
+    .filter((n) => n.fm.scope === draft.fm.scope && !sup.has(n.title.toLowerCase()))
+    .filter((n) => screenWords([n.title, ...list(n.fm, "aliases")].join(" ")).some((w) => want.has(w)))
+    .slice(0, max);
+}
+
+/** The draft's text with `written_by` and `session` added to its frontmatter where it has none. */
+export function stampProvenance(draft: Note, sessionId: string | undefined): string {
+  const add: string[] = [];
+  if (draft.fm.written_by === undefined) add.push(`written_by: ${sessionId ? "claude" : "chris"}`);
+  if (sessionId && draft.fm.session === undefined) add.push(`session: ${sessionId}`);
+  if (!add.length) return draft.text;
+  return draft.text.replace(/^(---\r?\n[\s\S]*?\r?\n)(---)/, (_, head, close) => `${head}${add.join("\n")}\n${close}`);
+}
+
 function words(s: string): Set<string> {
   return new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4));
 }
