@@ -1,0 +1,164 @@
+/**
+ * The `/api/state` object of docs/specs/2026-10-27-ui.md, built read-only from
+ * the ledger, the factory directory and the work store. It marks no run
+ * `shown` and does not reconcile the ledger with git: both are the CLI's.
+ */
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { DAY_CAP, factoryDir, health, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
+import { allJobs, isOpen, loadRegistry, type Entry, type Repo } from "../jobs/lib/ledger.ts";
+import { readList } from "../todo/lib/store.ts";
+import type { Doc } from "../todo/lib/todo.ts";
+
+export interface Job {
+  name: string; repo: string; item: { id: number; title: string } | null;
+  state: string; needs?: string; phase?: string; reason?: string; question?: string;
+  started: string; ended?: string; cost?: number; model?: string;
+  commit?: string; commitUrl?: string;
+  defaults: string[]; followups: string[];
+  stat?: string;
+  checks?: { name: string; ok: boolean; seconds: number }[];
+}
+
+export interface State {
+  now: string;
+  factory: {
+    paused: boolean; dayCap: number; runsToday: number; costToday: number;
+    nextTick: string | null;
+    probe: { at: string; ok: boolean; failed: string[] } | null;
+    health: string[];
+  };
+  needs: Job[]; stuck: Job[]; running: Job[]; delivered: Job[];
+  waiting: { repo: string; id: number; title: string }[];
+  ticks: { at: string; line: string }[];
+}
+
+const DAY = 24 * 3600_000;
+
+/** The next firing of aleph-tick.timer, or null when systemctl fails or lists no such timer. */
+export function nextTick(): string | null {
+  try {
+    const p = Bun.spawnSync(["systemctl", "--user", "list-timers", "aleph-tick.timer", "--no-pager"], { stdout: "pipe", stderr: "ignore" });
+    if (p.exitCode !== 0) return null;
+    const line = p.stdout.toString().split("\n").find((l) => l.includes("aleph-tick.timer"));
+    const m = line?.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})(?: (UTC|GMT|Z))?/);
+    if (!m) return null;
+    const d = new Date(m[3] ? `${m[1]}T${m[2]}Z` : `${m[1]}T${m[2]}`);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  } catch { return null; }
+}
+
+/** `https://github.com/<owner>/<name>` from an origin URL in https or git@github.com: form. */
+export function githubBase(url: string): string | null {
+  const m = url.trim().match(/^(?:https?:\/\/(?:[^@/]+@)?github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/);
+  return m ? `https://github.com/${m[1]}/${m[2]}` : null;
+}
+
+function commitUrl(repo: Repo | undefined, commit: string | undefined, bases: Map<string, string | null>): string | undefined {
+  if (!repo || !commit) return undefined;
+  if (!bases.has(repo.key)) {
+    const p = Bun.spawnSync(["git", "-C", repo.path, "remote", "get-url", "origin"], { stdout: "pipe", stderr: "ignore" });
+    bases.set(repo.key, p.exitCode === 0 ? githubBase(p.stdout.toString()) : null);
+  }
+  const base = bases.get(repo.key);
+  return base ? `${base}/commit/${commit}` : undefined;
+}
+
+const read = (folder: string, f: string): string | undefined => {
+  const p = join(folder, f);
+  return existsSync(p) ? readFileSync(p, "utf8") : undefined;
+};
+
+const tagged = (text: string, tag: string): string[] =>
+  text.split("\n").map((l) => l.trim()).filter((l) => l.startsWith(`${tag}:`)).map((l) => l.slice(tag.length + 1).trim());
+
+export function state(now = new Date()): State {
+  const registry = loadRegistry();
+  const jobs = allJobs();
+  const lists = new Map<string, Doc | null>();
+  const list = (key: string): Doc | null => {
+    if (!lists.has(key)) {
+      let doc: Doc | null = null;
+      try { doc = readList({ key }); } catch {}
+      lists.set(key, doc);
+    }
+    return lists.get(key)!;
+  };
+  const bases = new Map<string, string | null>();
+
+  const toJob = (runs: Entry[]): Job => {
+    const last = runs.at(-1)!;
+    const r = last.run;
+    const repo = r.repo ? registry[r.repo] : undefined;
+    const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
+    const found = todo !== undefined && r.repo ? list(r.repo)?.items.find((i) => i.id === todo) : undefined;
+    const withDefaults = runs.findLast((e) => e.run.defaults !== undefined);
+    const withResult = runs.findLast((e) => e.run.kind === "agent" && existsSync(join(e.folder, "result.md")));
+    const commit = r.commit ?? runs.findLast((e) => e.run.commit)?.run.commit;
+    const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
+    const job: Job = {
+      name: r.name, repo: r.repo ?? "", item: found ? { id: found.id, title: found.title } : todo !== undefined ? { id: todo, title: "" } : null,
+      state: r.state, started: runs[0].run.started,
+      defaults: withDefaults?.run.defaults ?? [],
+      followups: withResult ? tagged(read(withResult.folder, "result.md") ?? "", "FOLLOWUP") : [],
+    };
+    if (r.needs) job.needs = r.needs;
+    if (r.phase) job.phase = r.phase;
+    if (r.reason) job.reason = r.reason;
+    if (r.question) job.question = r.question;
+    if (r.ended) job.ended = r.ended;
+    if (cost !== undefined) job.cost = cost;
+    const model = r.model ?? runs.findLast((e) => e.run.model)?.run.model;
+    if (model) job.model = model;
+    if (commit) {
+      job.commit = commit;
+      const url = commitUrl(repo, commit, bases);
+      if (url) job.commitUrl = url;
+    }
+    const stat = r.stat ?? runs.findLast((e) => e.run.stat)?.run.stat;
+    if (r.state === "needs-you" && stat) job.stat = stat;
+    return job;
+  };
+
+  const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
+  const delivered: { at: number; job: Job }[] = [];
+  const openNames = new Set<string>();
+  for (const runs of jobs) {
+    const last = runs.at(-1)!.run;
+    if (isOpen(runs)) {
+      openNames.add(`${last.repo}/${last.name}`);
+      if (last.state === "needs-you") needs.push(toJob(runs));
+      else if (last.state === "stuck" || last.state === "failed") stuck.push(toJob(runs));
+      else running.push(toJob(runs));
+    } else if (last.state === "landed" && last.ended) {
+      const at = Date.parse(last.ended);
+      if (now.getTime() - at < DAY) delivered.push({ at, job: toJob(runs) });
+    }
+  }
+
+  const today = runsToday(now.getTime());
+  const probe = lastProbe();
+  const day = now.toDateString();
+  const ticks: { at: string; line: string }[] = [];
+  const log = read(factoryDir(), "tick.log");
+  for (const l of log?.split("\n") ?? []) {
+    const sp = l.indexOf(" ");
+    const at = sp < 0 ? "" : l.slice(0, sp);
+    const t = Date.parse(at);
+    if (!Number.isNaN(t) && new Date(t).toDateString() === day) ticks.push({ at, line: l.slice(sp + 1) });
+  }
+
+  return {
+    now: now.toISOString(),
+    factory: {
+      paused: paused(), dayCap: DAY_CAP(), runsToday: today.length,
+      costToday: today.reduce((a, e) => a + (e.run.cost ?? 0), 0),
+      nextTick: nextTick(), probe, health: health(now.getTime()),
+    },
+    needs, stuck, running,
+    delivered: delivered.sort((a, b) => b.at - a.at).map((d) => d.job),
+    waiting: openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`))
+      .map(({ repo, item }) => ({ repo: repo.key, id: item.id, title: item.title })),
+    ticks,
+  };
+}

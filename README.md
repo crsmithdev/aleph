@@ -161,6 +161,10 @@ aleph jobs                   # open jobs, then the jobs that ended in the last 2
 aleph pause | aleph resume
 ```
 
+## UI
+
+`aleph-ui [--port <n>]` serves the factory's state on `127.0.0.1` only (default `ALEPH_UI_PORT` or 3020) and prints the URL. `GET /api/state` is the JSON of `docs/specs/2026-10-27-ui.md`, read from the ledger, the factory directory and the work store; it writes nothing. `GET /` is `ui/index.html`, else `ui/prototype.html`.
+
 ## Development
 
 ```bash
