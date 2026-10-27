@@ -1,33 +1,31 @@
-// Rendering for the factory UI: each function takes the /api/state object (or
-// a part of it) and returns an HTML string. No DOM, so tests can call them.
+// The Now view: the factory's front page. Each render function takes the
+// /api/state object and returns an HTML string. No DOM, so tests can call them.
+import { clock, cmd, empty, esc, money, span } from "../lib.js";
 
-export function esc(s) {
-  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-}
-
-const pad = (n) => String(n).padStart(2, "0");
-export const clock = (iso) => {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+export const view = {
+  path: "/",
+  title: "Now",
+  group: "factory",
+  order: 0,
+  api: "/api/state",
+  refresh: 15,
+  render: (s) =>
+    `<header class="strip">${renderHeader(s)}</header>` +
+    `<div class="page"><p class="lede">${renderLede(s)}</p><p class="asof">${renderAsOf(s)}</p>` +
+    `<div class="grid"><div>` +
+    `<section id="needs" aria-labelledby="h-needs">${renderNeeds(s)}</section>` +
+    `<section id="stuck" aria-labelledby="h-stuck">${renderStuck(s)}</section>` +
+    `<section id="delivered" aria-labelledby="h-del">${renderDelivered(s)}</section>` +
+    `</div><aside class="rail">` +
+    `<section id="running" aria-labelledby="h-run">${renderRunning(s)}</section>` +
+    `<section id="waiting" aria-labelledby="h-wait">${renderWaiting(s)}</section>` +
+    `<section id="ticks" aria-labelledby="h-ticks">${renderTicks(s)}</section>` +
+    `</aside></div></div>`,
 };
-export const money = (n) => `$${(n ?? 0).toFixed(4)}`;
-
-/** "12 min", "2 h 5 min": the span from `from` to `to` (ISO strings). */
-export function span(from, to) {
-  const ms = Date.parse(to) - Date.parse(from);
-  if (!(ms >= 0)) return "";
-  const m = Math.floor(ms / 60000);
-  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
-}
 
 const count = (n) => `<span class="count">${n}</span>`;
 const section = (id, title, n, body, aside = "") =>
   `<div class="sh"><h2 id="h-${id}">${esc(title)}</h2>${count(n)}${aside ? `<span class="aside">${esc(aside)}</span>` : ""}</div>${body}`;
-const empty = (line, hint) => `<div class="empty"><p>${esc(line)}</p><p class="hint">${hint}</p></div>`;
-
-export function cmd(text, { primary = false, hint = "" } = {}) {
-  return `<button class="cmd${primary ? " primary" : ""}" type="button" data-cmd="${esc(text)}"><span>${esc(text)}</span>${hint ? `<span class="hint">${esc(hint)}</span>` : ""}<span class="cp">Copy</span></button>`;
-}
 
 const itemId = (j) => `<span class="id">${esc(j.name)}</span>`;
 const title = (j) => `<h3>${esc(j.item?.title || j.name)}</h3>`;
@@ -42,7 +40,7 @@ export function renderHeader(s) {
   const health = f.health.length
     ? cell("Health", f.health.map((l) => `<small>${esc(l)}</small>`).join(""), " health")
     : "";
-  return `<div class="strip-in"><span class="mark">aleph</span><div class="cells">` +
+  return `<div class="strip-in"><div class="cells">` +
     cell("Factory", f.paused ? `<span class="dot off"></span>Paused<small>start: <code>aleph resume</code></small>` : `<span class="dot"></span>On<small>stop: <code>aleph pause</code></small>`) +
     cell("Next tick", next, " num") +
     cell("Runs today", `${f.runsToday} of ${f.dayCap}<span class="pips" aria-hidden="true">${pips}</span>`, " num") +

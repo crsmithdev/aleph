@@ -163,7 +163,12 @@ aleph pause | aleph resume
 
 ## UI
 
-`aleph-ui [--port <n>]` serves the factory's state on `127.0.0.1` only (default `ALEPH_UI_PORT` or 3020) and prints the URL. `GET /api/state` is the JSON of `docs/specs/2026-10-27-ui.md`, read from the ledger, the factory directory and the work store; it writes nothing. `GET /` is `ui/index.html`, else `ui/prototype.html`.
+`aleph-ui [--port <n>]` serves the factory UI on `127.0.0.1` only (default `ALEPH_UI_PORT` or 3020) and prints the URL. `GET /` is `ui/index.html`, else `ui/prototype.html`: a sidebar in four groups (Factory, Work, Activity, Memory), hash routes (`#/jobs/aleph-52`), and a project picker whose choice rides along as `?project=<key>` on every route and every `/api` fetch. `GET /api/state` is the JSON of `docs/specs/2026-10-27-ui.md`, read from the ledger, the factory directory and the work store, narrowed by `?project=`; it writes nothing. `GET /api/projects/keys` lists the registry's repos, `GET /api/views` the files under `ui/views/`.
+
+To add a view, add two files and touch no shared one:
+
+- `ui/views/<view>.js` exports `view = { path, title, group, order, api, refresh, render(data, params) }`. `path` is the hash route, with `:params` (`/jobs/:name`); a path with a param stays out of the sidebar. `group` is `factory`, `work`, `activity` or `memory`; `order` sorts within it. `api` is the URL the page fetches, with the route's `:params` filled in (or a function of `params`); `refresh` is seconds between reloads, if any. `render` returns HTML; import `esc`, `md`, `clock`, `money`, `span`, `empty`, `error` and `cmd` from `../lib.js`, and add to `ui/lib.js` without changing what is there.
+- `ui/api/<view>.ts` exports `routes`, a map from `"GET /api/jobs/:name"` to `(req, params, url) => Response`. Honour `url.searchParams.get("project")`. The server loads every `ui/api/*.ts` at start, so restart `aleph-ui` after adding one.
 
 ## Development
 

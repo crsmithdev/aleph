@@ -29,3 +29,9 @@ test("the new rules sit at the top level, outside any @media block", () => {
     expect(depth).toBe(0);
   }
 });
+
+test("the page builds the sidebar from /api/views and keeps the project filter", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  for (const s of ["/api/views", "/api/projects/keys", 'aria-current="page"', "project=", '"factory", "Factory"', '"memory", "Memory"']) expect(html).toContain(s);
+  expect(html).not.toContain("/render.js");
+});

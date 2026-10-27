@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-// @ts-ignore render.js is plain JS, shared with the page
-import * as r from "./render.js";
+// @ts-ignore now.js is plain JS, shared with the page
+import * as r from "./views/now.js";
 
 const job = (o: object) => ({ repo: "aleph", item: null, state: "running", started: "2026-10-27T16:00:00Z", defaults: [], followups: [], ...o });
 const state: any = {

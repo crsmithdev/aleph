@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>aleph report</title>
+<title>aleph</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -115,7 +115,8 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .pips i.on { background: var(--ink-2); }
 
 /* ---------- page ---------- */
-main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 64px; }
+main { min-width: 0; }
+.page { max-width: 1280px; margin: 0 auto; padding: 28px 24px 64px; }
 .lede {
   font: 400 26px/1.35 var(--serif); letter-spacing: -0.01em;
   margin: 0 0 6px; max-width: 46ch; text-wrap: balance;
@@ -265,7 +266,7 @@ summary .peek { color: var(--muted); margin-left: 6px; }
   .strip-in { padding: 10px 16px; gap: 10px; }
   .cells { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 0; flex-basis: 100%; }
   .cell { border-left: 0; padding: 0; }
-  main { padding: 20px 16px 48px; }
+  .page { padding: 20px 16px 48px; }
   .lede { font-size: 21px; }
   .ev { grid-template-columns: minmax(0, 1fr); }
   .ev > div { border-left: 0; border-top: 1px solid var(--rule-2); }
@@ -278,58 +279,179 @@ summary .peek { color: var(--muted); margin-left: 6px; }
 .ev.one { grid-template-columns: minmax(0, 1fr); }
 .q { margin: 10px 0 0; font-size: 13px; max-width: 76ch; }
 #offline { margin: 0; padding: 6px 24px; background: var(--stuck-bg); color: var(--stuck); font-size: 13px; text-align: center; }
+/* ---------- shell: sidebar and views ---------- */
+.shell { display: grid; grid-template-columns: 208px minmax(0, 1fr); min-height: 100vh; }
+.side {
+  position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+  border-right: 1px solid var(--rule); background: var(--surface); padding: 14px 12px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.side .mark { display: block; padding: 2px 8px 0; }
+.side .proj { display: flex; flex-direction: column; gap: 4px; padding: 0 8px; font-size: 12px; color: var(--muted); }
+.side select {
+  font: 500 13px var(--sans); color: var(--ink); background: var(--sunk);
+  border: 1px solid var(--rule); border-radius: 5px; padding: 5px 6px; width: 100%;
+}
+.side select:hover { border-color: var(--ink-2); }
+.nav-group h2 { font: 600 11.5px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; padding: 0 8px; }
+.nav-group ul { list-style: none; margin: 0; padding: 0; }
+.nav-group a {
+  display: block; padding: 5px 8px; border-radius: 4px; text-decoration: none;
+  color: var(--ink-2); font-size: 13.5px; transition: background-color .15s ease-out;
+}
+.nav-group a:hover { background: var(--sunk); color: var(--ink); }
+.nav-group a[aria-current="page"] { background: var(--sunk); color: var(--ink); font-weight: 600; box-shadow: inset 2px 0 0 var(--ink); }
+.error p { margin: 0; color: var(--stuck); }
+.error .hint { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.nf h1 { font: 400 26px/1.35 var(--serif); margin: 0 0 6px; }
+.md h1, .md h2, .md h3, .md h4 { font: 600 15px/1.35 var(--sans); margin: 14px 0 6px; }
+.md h1 { font-size: 18px; }
+.md pre { background: var(--sunk); padding: 8px 10px; border-radius: 4px; overflow-x: auto; font: 12px/1.55 var(--mono); }
+@media (max-width: 720px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .side {
+    position: sticky; z-index: 2; height: auto; flex-direction: row; align-items: center; gap: 10px;
+    border-right: 0; border-bottom: 1px solid var(--rule); padding: 8px 16px; overflow-x: auto;
+  }
+  .side .mark { padding: 0; flex: none; }
+  .side .proj { order: 9; padding: 0; flex: none; }
+  .side .proj span { display: none; }
+  .side select { width: auto; }
+  .nav-group { flex: none; }
+  .nav-group h2 { display: none; }
+  .nav-group ul { display: flex; gap: 2px; }
+  .nav-group a { white-space: nowrap; padding: 4px 8px; }
+  .nav-group a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--ink); }
+}
 </style>
 </head>
 <body>
-<p id="offline" role="alert" hidden>The server is unreachable. Showing the last data.</p>
-<header class="strip" id="header"></header>
-
-<main>
-  <p class="lede" id="lede"></p>
-  <p class="asof" id="asof"></p>
-
-  <div class="grid">
-    <div>
-      <section id="needs" aria-labelledby="h-needs"></section>
-      <section id="stuck" aria-labelledby="h-stuck"></section>
-      <section id="delivered" aria-labelledby="h-del"></section>
-    </div>
-    <aside class="rail">
-      <section id="running" aria-labelledby="h-run"></section>
-      <section id="waiting" aria-labelledby="h-wait"></section>
-      <section id="ticks" aria-labelledby="h-ticks"></section>
-    </aside>
-  </div>
-</main>
+<div class="shell">
+  <nav class="side" aria-label="Views">
+    <span class="mark">aleph</span>
+    <label class="proj"><span>Project</span><select id="project"><option value="">All projects</option></select></label>
+    <div id="nav"></div>
+  </nav>
+  <main>
+    <p id="offline" role="alert" hidden>The server is unreachable. Showing the last data.</p>
+    <div id="view"></div>
+  </main>
+</div>
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import * as r from "/render.js";
+  import { empty, error, esc } from "/lib.js";
 
-  const put = (id, html) => { document.getElementById(id).innerHTML = html; };
-  function show(s) {
-    put("header", r.renderHeader(s));
-    put("lede", r.renderLede(s));
-    put("asof", r.renderAsOf(s));
-    put("needs", r.renderNeeds(s));
-    put("stuck", r.renderStuck(s));
-    put("delivered", r.renderDelivered(s));
-    put("running", r.renderRunning(s));
-    put("waiting", r.renderWaiting(s));
-    put("ticks", r.renderTicks(s));
+  // The shell. Each module listed by /api/views exports
+  // view = { path, title, group, order, render(data, params), api?, refresh? }:
+  // `api` is the URL its data comes from (":params" filled in from the route),
+  // `refresh` the seconds between reloads. The page builds the sidebar from
+  // them, routes by hash (#/jobs/aleph-52?project=aleph), and passes the
+  // project to every /api fetch.
+  const GROUPS = [["factory", "Factory"], ["work", "Work"], ["activity", "Activity"], ["memory", "Memory"]];
+  const $ = (id) => document.getElementById(id);
+  let views = [], project = "", timer = 0, shown = null;
+
+  function compile(path) {
+    const names = [];
+    const src = path.split("/").map((seg) => seg.startsWith(":") ? (names.push(seg.slice(1)), "([^/]+)") : seg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("/");
+    return { re: new RegExp(`^${src}/?$`), names };
   }
-  async function load() {
-    try {
-      const res = await fetch("/api/state", { cache: "no-store" });
-      if (!res.ok) throw new Error(String(res.status));
-      show(await res.json());
-      document.getElementById("offline").hidden = true;
-    } catch {
-      document.getElementById("offline").hidden = false;
+  function parseHash() {
+    const h = location.hash.replace(/^#/, "") || "/";
+    const q = h.indexOf("?");
+    return { path: q < 0 ? h : h.slice(0, q), query: new URLSearchParams(q < 0 ? "" : h.slice(q + 1)) };
+  }
+  function match(path) {
+    for (const v of views) {
+      const m = path.match(v._route.re);
+      if (m) return { view: v, params: Object.fromEntries(v._route.names.map((n, i) => [n, decodeURIComponent(m[i + 1])])) };
     }
+    return null;
   }
-  load();
-  setInterval(load, 15000);
+  const withProject = (href) => (project ? `${href}${href.includes("?") ? "&" : "?"}project=${encodeURIComponent(project)}` : href);
+  function api(url) { return fetch(withProject(url), { cache: "no-store" }); }
+
+  function nav(path) {
+    // The entry whose path is the longest segment prefix of the route is active: #/jobs/x marks Jobs.
+    let active = null;
+    for (const v of views) {
+      if (v.path.includes(":")) continue;
+      const hit = v.path === "/" ? path === "/" : path === v.path || path.startsWith(v.path + "/");
+      if (hit && (!active || v.path.length > active.path.length)) active = v;
+    }
+    $("nav").innerHTML = GROUPS.map(([key, label]) => {
+      const items = views.filter((v) => v.group === key && !v.path.includes(":")).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
+      if (!items.length) return "";
+      return `<div class="nav-group"><h2>${esc(label)}</h2><ul>${items.map((v) =>
+        `<li><a href="#${esc(withProject(v.path))}"${v === active ? ' aria-current="page"' : ""}>${esc(v.title)}</a></li>`).join("")}</ul></div>`;
+    }).join("");
+  }
+
+  async function load(route, first) {
+    const { view, params } = route;
+    let data = null;
+    if (view.api) {
+      const url = typeof view.api === "function" ? view.api(params) : view.api.replace(/:(\w+)/g, (_, n) => encodeURIComponent(params[n] ?? ""));
+      try {
+        const res = await api(url);
+        if (!res.ok) throw new Error(`${url} answered ${res.status}`);
+        data = await res.json();
+        $("offline").hidden = true;
+      } catch (e) {
+        if (route !== shown) return;
+        if (first) $("view").innerHTML = `<div class="page">${error(`Could not load ${view.title}: ${e.message}`)}</div>`;
+        else $("offline").hidden = false;
+        return;
+      }
+    }
+    if (route !== shown) return;  // the reader moved on while this loaded
+    try { $("view").innerHTML = view.render(data, params); }
+    catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} failed to render: ${e.message}`, "This is a bug in the view.")}</div>`; }
+  }
+
+  function route() {
+    const { path, query } = parseHash();
+    const p = query.get("project") ?? "";
+    // Keep the project when a link leaves it out.
+    if (!query.has("project") && project) {
+      history.replaceState(null, "", "#" + withProject(location.hash.replace(/^#/, "") || "/"));
+    } else project = p;
+    if ($("project").value !== project) {
+      if (project && ![...$("project").options].some((o) => o.value === project)) $("project").add(new Option(project, project));
+      $("project").value = project;
+    }
+    nav(path);
+    clearInterval(timer);
+    const m = match(path);
+    shown = m ?? { view: null };
+    if (!m) {
+      document.title = "Not found · aleph";
+      $("view").innerHTML = `<div class="page nf"><h1>Nothing at ${esc(path)}</h1>${empty("No view has this address.", `Go to <a href="#${esc(withProject("/"))}">Now</a> or pick a view from the list.`)}</div>`;
+      $("offline").hidden = true;
+      return;
+    }
+    document.title = `${m.view.title} · aleph`;
+    load(shown, true);
+    if (m.view.refresh) timer = setInterval(() => load(m, false), m.view.refresh * 1000);
+  }
+
+  $("project").addEventListener("change", (e) => {
+    project = e.target.value;
+    const { path, query } = parseHash();
+    if (project) query.set("project", project); else query.delete("project");
+    const q = query.toString();
+    location.hash = path + (q ? `?${q}` : "");
+  });
+
+  // In-page anchors (#needs) scroll to their element instead of routing.
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest('a[href^="#"]');
+    if (!a || a.getAttribute("href").startsWith("#/")) return;
+    const el = document.getElementById(a.getAttribute("href").slice(1));
+    e.preventDefault();
+    if (el) el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  });
 
   // Copy a command to the clipboard; fall back to selecting it. One handler,
   // because the buttons are rebuilt on every refresh.
@@ -344,13 +466,27 @@ summary .peek { color: var(--muted); margin-left: 6px; }
       }
       cp.textContent = ok ? "Copied" : "Press Ctrl+C";
       b.classList.add("copied");
-      document.getElementById("copied").textContent = (ok ? "Copied: " : "Selected: ") + text;
+      $("copied").textContent = (ok ? "Copied: " : "Selected: ") + text;
       clearTimeout(b._t);
       b._t = setTimeout(() => { cp.textContent = "Copy"; b.classList.remove("copied"); }, 1600);
     };
     if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => done(true), () => done(false));
     else done(false);
   });
+
+  async function start() {
+    const [names, keys] = await Promise.all([
+      fetch("/api/views", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
+      fetch("/api/projects/keys", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
+    ]);
+    for (const k of keys) $("project").add(new Option(k, k));
+    const mods = await Promise.all(names.map((n) => import(`/views/${n}`).then((m) => m.view, (e) => { console.error(n, e); return null; })));
+    views = mods.filter((v) => v && typeof v.path === "string" && typeof v.render === "function")
+      .map((v) => ({ ...v, _route: compile(v.path) }));
+    addEventListener("hashchange", route);
+    route();
+  }
+  start();
 </script>
 </body>
 </html>
