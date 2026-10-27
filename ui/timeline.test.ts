@@ -13,7 +13,9 @@ let base: string, jobsDir: string, fake: ReturnType<typeof Bun.serve>;
 const saved: Record<string, string | undefined> = {};
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): string {
-  const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
+  // A fixed commit date: the wall clock can be later than `now` (23:00), which would hide the commit.
+  const date = at(0, 12);
+  const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date }, stdout: "pipe", stderr: "pipe" });
   if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
   return p.stdout.toString().trim();
 }
