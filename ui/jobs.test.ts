@@ -1,0 +1,162 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { routes } from "./api/jobs.ts";
+// @ts-ignore jobs.js is plain JS, shared with the page
+import * as v from "./views/jobs.js";
+// @ts-ignore plain JS, shared with the page
+import * as jobView from "./views/job.js";
+
+let base: string, jobsDir: string;
+const saved: Record<string, string | undefined> = {};
+const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+function sh(cwd: string, ...args: string[]): string {
+  const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
+  if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
+  return p.stdout.toString().trim();
+}
+const now = Date.now();
+const ago = (h: number) => new Date(now - h * 3600_000).toISOString();
+function run(id: string, extra: Record<string, unknown>, files: Record<string, string> = {}) {
+  const dir = join(jobsDir, id);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "agent", told: true, started: ago(3), ...extra }));
+  for (const [f, t] of Object.entries(files)) writeFileSync(join(dir, f), t);
+}
+async function get(path: string) {
+  const url = new URL(`http://x${path}`);
+  const key = Object.keys(routes).find((k) => {
+    const [, p] = k.split(" ");
+    return new RegExp("^" + p.replace(/:\w+/g, "([^/]+)") + "$").test(url.pathname);
+  })!;
+  const m = url.pathname.match(new RegExp("^" + key.split(" ")[1].replace(/:\w+/g, "([^/]+)") + "$"))!;
+  const params: Record<string, string> = m[1] ? { name: m[1] } : {};
+  return routes[key](new Request(url), params, url);
+}
+
+beforeAll(() => {
+  base = mkdtempSync(join(tmpdir(), "aleph-ui-jobs-"));
+  jobsDir = join(base, "jobs");
+  mkdirSync(jobsDir);
+  const mk = (name: string) => { const p = join(base, name); sh(base, "git", "init", "-q", "-b", "main", p); return p; };
+  const fac = mk("fac"), oth = mk("oth");
+  for (const r of [fac, oth]) {
+    writeFileSync(join(r, "a.txt"), "one\n");
+    sh(r, "git", "add", "."); sh(r, "git", "commit", "-qm", "init");
+    sh(r, "git", "update-ref", "refs/remotes/origin/main", "HEAD");
+  }
+  sh(fac, "git", "switch", "-qc", "factory/fac-9");
+  writeFileSync(join(fac, "a.txt"), "one\ntwo\n");
+  sh(fac, "git", "commit", "-qam", "work");
+  sh(fac, "git", "switch", "-q", "main");
+  writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: fac }, oth: { path: oth } }));
+  for (const [k, val] of Object.entries({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: join(base, "none"), LANGFUSE_PUBLIC_KEY: "" })) {
+    saved[k] = process.env[k]; process.env[k] = val;
+  }
+  // fac-9: a worker, a fix round with a reviewer, then a land.
+  run("20261027-000001-a", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", state: "failed", reason: "review held", started: ago(5), ended: ago(4), cost: 0.5, model: "claude-sonnet-5-5" },
+    { "result.md": "first\nFOLLOWUP: tidy\n", "checks.log": "## test: exit 1\n" + Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n") + "\n", "stderr.log": "warn\n" });
+  run("20261027-000002-a", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", state: "passed", started: ago(3.5), ended: ago(3), cost: 0.25, defaults: ["a? -> b"] },
+    { "result.md": "fixed it\nFOLLOWUP: tidy\n", "review.md": "Looks right.\nVERDICT: pass\n" });
+  run("20261027-000003-a", { job: "fac-9", name: "fac-9", kind: "land", repo: "fac", branch: "factory/fac-9", state: "landed", started: ago(2.5), ended: ago(2), commit: "abc1234" });
+  run("20261027-000004-a", { job: "oth-1", name: "oth-1", repo: "oth", state: "stuck", started: ago(1) });
+  run("20261027-000005-a", { job: "fac-2", name: "fac-2", repo: "fac", branch: "factory/gone", state: "landed", started: ago(24 * 20), ended: ago(24 * 20 - 1) });
+});
+afterAll(() => {
+  for (const [k, val] of Object.entries(saved)) if (val === undefined) delete process.env[k]; else process.env[k] = val;
+  rmSync(base, { recursive: true, force: true });
+});
+
+describe("GET /api/jobs", () => {
+  test("lists the jobs in the window, newest first", async () => {
+    const jobs = await (await get("/api/jobs")).json();
+    expect(jobs.map((j: any) => j.name)).toEqual(["oth-1", "fac-9"]);
+    expect(jobs[1].cost).toBeCloseTo(0.75);
+    expect(jobs[1].state).toBe("landed");
+    expect(jobs[1].followups).toEqual(["tidy"]);
+  });
+  test("filters by repo, state and days", async () => {
+    expect((await (await get("/api/jobs?repo=fac")).json()).map((j: any) => j.name)).toEqual(["fac-9"]);
+    expect((await (await get("/api/jobs?state=stuck")).json()).map((j: any) => j.name)).toEqual(["oth-1"]);
+    expect((await (await get("/api/jobs?days=30")).json()).map((j: any) => j.name)).toEqual(["oth-1", "fac-9", "fac-2"]);
+    expect(await (await get("/api/jobs?days=x")).status).toBe(400);
+  });
+  test("?project narrows to one project", async () => {
+    expect((await (await get("/api/jobs?project=oth&days=30")).json()).map((j: any) => j.name)).toEqual(["oth-1"]);
+    expect(await (await get("/api/jobs?project=nope")).json()).toEqual([]);
+  });
+});
+
+describe("GET /api/jobs/:name", () => {
+  test("returns runs in order, the review and the log tails", async () => {
+    const j = await (await get("/api/jobs/fac-9")).json();
+    expect(j.runs.map((r: any) => r.kind)).toEqual(["worker", "worker", "review", "land"]);
+    expect(j.runs[0]).toMatchObject({ state: "failed", cost: 0.5, model: "claude-sonnet-5-5" });
+    expect(j.result).toBe("fixed it\nFOLLOWUP: tidy\n");
+    expect(j.review).toContain("VERDICT: pass");
+    expect(j.checksLog.split("\n")).toHaveLength(80);
+    expect(j.checksLog.endsWith("line 99")).toBe(true);
+    expect(j.stderr).toBe("warn");
+    expect(j.stat).toContain("a.txt");
+    expect(j.trace).toBeUndefined();
+  });
+  test("404 for an unknown name, or another project's job", async () => {
+    expect((await get("/api/jobs/nope")).status).toBe(404);
+    expect((await get("/api/jobs/fac-9?project=oth")).status).toBe(404);
+    expect((await get("/api/jobs/fac-9?project=fac")).status).toBe(200);
+  });
+});
+
+describe("GET /api/jobs/:name/diff", () => {
+  test("returns the branch's diff from its merge base", async () => {
+    const res = await get("/api/jobs/fac-9/diff");
+    expect(res.status).toBe(200);
+    const t = await res.text();
+    expect(t).toContain("+two");
+    expect(t).toContain("a/a.txt");
+  });
+  test("404 when the branch is gone, or the job unknown", async () => {
+    expect((await get("/api/jobs/fac-2/diff?days=30")).status).toBe(404);
+    expect((await get("/api/jobs/oth-1/diff")).status).toBe(404);
+    expect((await get("/api/jobs/zzz/diff")).status).toBe(404);
+    expect((await get("/api/jobs/fac-9/diff?project=oth")).status).toBe(404);
+  });
+});
+
+describe("render", () => {
+  const job: any = {
+    name: "fac-9", repo: "fac", item: { id: 9, title: "Fix <it>" }, state: "landed", started: ago(5), cost: 0.75, defaults: ["a? -> b"], followups: ["tidy"],
+    runs: [
+      { id: "1", kind: "worker", state: "failed", started: ago(5), ended: ago(4), cost: 0.5, model: "m1" },
+      { id: "2", kind: "worker", state: "passed", started: ago(3.5), ended: ago(3), cost: 0.25 },
+      { id: "2-review", kind: "review", state: "passed", started: ago(3) },
+      { id: "3", kind: "land", state: "landed", started: ago(2.5), ended: ago(2) },
+    ],
+    result: "fixed it", review: "Looks right.", checksLog: "## test: exit 1", stderr: "warn", stat: " a.txt | 1 +", trace: "http://lf/sessions/s",
+  };
+  test("the job view shows each run of a fix round", () => {
+    const h = v.renderJob(job);
+    expect(h.match(/class="run run-/g)).toHaveLength(4);
+    for (const t of ["run-worker", "run-review", "run-land", "m1", "fixed it", "Looks right.", "## test: exit 1", "warn", "a.txt | 1 +", 'href="http://lf/sessions/s"', 'data-diff="fac-9"', "Fix &lt;it&gt;"]) expect(h).toContain(t);
+    expect(h).not.toContain("<it>");
+  });
+  test("the list shows jobs with filters, and an empty state", () => {
+    const h = v.renderJobs([job], { repo: "fac", state: "landed" });
+    expect(h).toContain('href="#/jobs/fac-9"');
+    expect(h).toContain('href="#/jobs?state=landed"');
+    expect(h).toContain('aria-current="true"');
+    expect(v.renderJobs([], {})).toContain("No job in this window.");
+  });
+  test("the view and the detail are routed", () => {
+    expect(v.view.path).toBe("/jobs");
+    expect(v.view.group).toBe("factory");
+    expect(v.detail.path).toBe("/jobs/:name");
+    expect(jobView.view).toBe(v.detail);
+  });
+  test("diff lines are coloured and escaped", () => {
+    const h = v.renderDiff("--- a\n+++ b\n+x<y\n-z");
+    expect(h).toContain('<span class="add">+x&lt;y</span>');
+    expect(h).toContain('<span class="del">-z</span>');
+  });
+});
