@@ -56,3 +56,13 @@ test("text from the state is escaped", () => {
     expect(h).toContain("&lt;script&gt;");
   }
 });
+
+test("a needs-you entry has Diff, Land and Drop buttons; a landed one with an open check has Checked", () => {
+  const h = r.renderNeeds(state);
+  for (const v of ["diff", "land", "drop"]) expect(h).toContain(`data-act="${v}" data-name="aleph-27"`);
+  expect(h).toContain("diff-panel");
+  expect(h).toContain('data-cmd="aleph land aleph-27"');
+  const open = { ...state, delivered: [{ ...state.delivered[0], check: "open" }] };
+  expect(r.renderDelivered(open)).toContain('data-act="checked" data-name="aleph-28"');
+  expect(r.renderDelivered(state)).not.toContain("data-act=");
+});

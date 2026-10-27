@@ -17,6 +17,8 @@ export interface Job {
   commit?: string; commitUrl?: string;
   defaults: string[]; followups: string[];
   stat?: string;
+  /** A landed job whose manual check is still open. */
+  check?: "open";
   checks?: { name: string; ok: boolean; seconds: number }[];
 }
 
@@ -117,6 +119,7 @@ export function state(now = new Date()): State {
     }
     const stat = r.stat ?? runs.findLast((e) => e.run.stat)?.run.stat;
     if (r.state === "needs-you" && stat) job.stat = stat;
+    if (r.state === "landed" && r.check === "open") job.check = "open";
     return job;
   };
 

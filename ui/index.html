@@ -166,6 +166,22 @@ section { margin: 0 0 28px; }
 .cmd .hint { font: 400 12px var(--sans); opacity: .8; }
 .cmd .cp { font: 500 11.5px var(--sans); opacity: .7; padding-left: 8px; border-left: 1px solid currentColor; border-left-color: color-mix(in srgb, currentColor 30%, transparent); }
 .cmd.copied .cp { opacity: 1; }
+.act {
+  font: 500 13px var(--sans); padding: 7px 14px; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--surface); color: var(--ink);
+}
+.act:hover { border-color: var(--ink-2); }
+.act.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.act.ask { background: var(--need-bg); color: var(--need); border-color: var(--need); }
+.act:disabled { opacity: .6; cursor: wait; }
+.act-msg { font-size: 12.5px; color: var(--stuck); align-self: center; }
+.diff-panel { margin-top: 12px; border: 1px solid var(--rule); border-radius: 5px; background: var(--sunk); max-height: 480px; overflow: auto; }
+.diff-panel pre { margin: 0; padding: 10px 0; font: 400 12.5px/1.5 var(--mono); }
+.diff-panel .l { display: block; padding: 0 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff-panel .d-add { color: var(--add); }
+.diff-panel .d-del { color: var(--del); }
+.diff-panel .d-hunk, .diff-panel .d-meta { color: var(--muted); }
+.diff-panel .msg { padding: 10px 12px; color: var(--muted); font-size: 13px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---------- item head (shared) ---------- */
@@ -472,6 +488,48 @@ summary .peek { color: var(--muted); margin-left: 6px; }
     };
     if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => done(true), () => done(false));
     else done(false);
+  });
+
+  // Diff, Land, Drop and Checked: each is an `aleph` command the server runs.
+  // Land and Drop ask for a second click, then the view reloads.
+  const diffHtml = (t) => t.trim()
+    ? `<pre>${t.split("\n").map((l) => {
+        const c = l.startsWith("+++") || l.startsWith("---") || l.startsWith("diff ") || l.startsWith("index ") ? "meta" : l[0] === "+" ? "add" : l[0] === "-" ? "del" : l[0] === "@" ? "hunk" : "";
+        return `<span class="l d-${c}">${esc(l)}</span>`;
+      }).join("")}</pre>`
+    : `<p class="msg">No changes from the merge base.</p>`;
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest && e.target.closest("button.act[data-act]");
+    if (!b) return;
+    const { act, name, label } = b.dataset;
+    const note = (m) => { let n = b.parentElement.querySelector(".act-msg"); if (!n) { n = document.createElement("span"); n.className = "act-msg"; n.setAttribute("role", "alert"); b.parentElement.append(n); } n.textContent = m; };
+    if (act === "diff") {
+      const panel = b.closest("article").querySelector(".diff-panel");
+      if (!panel.hidden) { panel.hidden = true; return; }
+      panel.hidden = false;
+      panel.innerHTML = `<p class="msg">Loading…</p>`;
+      try {
+        const res = await fetch(`/api/diff/${encodeURIComponent(name)}`, { cache: "no-store" });
+        const t = await res.text();
+        panel.innerHTML = res.ok ? diffHtml(t) : `<p class="msg">${esc(t)}</p>`;
+      } catch (err) { panel.innerHTML = `<p class="msg">${esc(err.message)}</p>`; }
+      return;
+    }
+    if ((act === "land" || act === "drop") && !b.classList.contains("ask")) {
+      b.classList.add("ask");
+      b.textContent = `${label} ${name}? Click again`;
+      clearTimeout(b._t);
+      b._t = setTimeout(() => { b.classList.remove("ask"); b.textContent = label; }, 5000);
+      return;
+    }
+    clearTimeout(b._t);
+    b.disabled = true;
+    try {
+      const res = await fetch(`/api/${act}/${encodeURIComponent(name)}`, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: "{}" });
+      const r = await res.json().catch(() => ({ code: res.status, stderr: res.statusText }));
+      if (r.code !== 0) { b.disabled = false; b.classList.remove("ask"); b.textContent = label; note(`${act} failed: ${(r.stderr || r.stdout || `code ${r.code}`).trim().split("\n").pop()}`); return; }
+    } catch (err) { b.disabled = false; note(err.message); return; }
+    if (shown) load(shown, false);
   });
 
   async function start() {
