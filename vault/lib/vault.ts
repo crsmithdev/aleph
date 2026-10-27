@@ -75,18 +75,38 @@ export function readNote(path: string, root: string): Note {
 
 function walk(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out;
-  for (const name of readdirSync(dir)) {
-    if (name.startsWith(".")) continue;
-    const p = join(dir, name);
-    if (statSync(p).isDirectory()) walk(p, out);
-    else if (name.endsWith(".md")) out.push(p);
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (e.name.startsWith(".")) continue;
+    const p = join(dir, e.name);
+    // A symlink is followed, as statSync did.
+    const isDir = e.isSymbolicLink() ? statSync(p).isDirectory() : e.isDirectory();
+    if (isDir) walk(p, out);
+    else if (e.name.endsWith(".md")) out.push(p);
   }
   return out;
 }
 
+/** Parsed notes by root and path, valid while a file's mtime and size are unchanged. */
+const cache = new Map<string, { mtimeMs: number; size: number; note: Note }>();
+/** Files `loadVault` has read from disk; a test reads it to see that a second call read none. */
+export const loadStats = { reads: 0 };
+
 /** Every markdown file outside .obsidian/, archive included: archived notes are link targets. */
 export function loadVault(root: string): Note[] {
-  return walk(root).map((p) => readNote(p, root));
+  const seen = new Set<string>();
+  const notes = walk(root).map((p) => {
+    const key = `${root}\0${p}`;
+    seen.add(key);
+    const st = statSync(p);
+    const hit = cache.get(key);
+    if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return { ...hit.note };
+    loadStats.reads++;
+    const note = readNote(p, root);
+    cache.set(key, { mtimeMs: st.mtimeMs, size: st.size, note });
+    return { ...note };
+  });
+  for (const key of cache.keys()) if (key.startsWith(`${root}\0`) && !seen.has(key)) cache.delete(key);
+  return notes;
 }
 
 export function wikiNotes(notes: Note[]): Note[] {
