@@ -43,8 +43,12 @@ function inline(text) {
   return parts.map((p) => {
     if (/^`[^`]+`$/.test(p)) return `<code>${esc(p.slice(1, -1))}</code>`;
     let out = "", last = 0;
-    for (const m of p.matchAll(/\[([^\]]+)\]\(([^)\s]+)\)/g)) {
-      out += emph(esc(p.slice(last, m.index))) + `<a href="${esc(safeHref(m[2]))}">${emph(esc(m[1]))}</a>`;
+    for (const m of p.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]|\[([^\]]+)\]\(([^)\s]+)\)/g)) {
+      out += emph(esc(p.slice(last, m.index)));
+      // [[Title]] or [[Title|label]] links to the vault note's page.
+      out += m[1] !== undefined
+        ? `<a href="#/memory/${encodeURIComponent(m[1].trim())}">${esc((m[2] || m[1]).trim())}</a>`
+        : `<a href="${esc(safeHref(m[4]))}">${emph(esc(m[3]))}</a>`;
       last = m.index + m[0].length;
     }
     return out + emph(esc(p.slice(last)));
@@ -52,7 +56,7 @@ function inline(text) {
 }
 const emph = (s) => s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>");
 
-/** Markdown to HTML: headings, lists, fenced code, paragraphs, inline code and links. Everything else is escaped. */
+/** Markdown to HTML: headings, lists, fenced code, paragraphs, inline code, links and [[wiki links]]. Everything else is escaped. */
 export function md(src) {
   const lines = String(src ?? "").replace(/\r\n?/g, "\n").split("\n");
   const out = [];
