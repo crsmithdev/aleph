@@ -193,6 +193,9 @@ describe("job", () => {
     expect(file(r.json.run, "result.md")).toBe("did commit a.txt");
     expect(file(r.json.run, "checks.log")).toContain("## tests: exit 0");
     expect(file(r.json.run, "checks.log")).not.toContain("android");
+    expect(s.checks.map((c: any) => c.name)).toContain("tests");
+    expect(s.checks.map((c: any) => c.name)).not.toContain("android build");
+    for (const c of s.checks) expect(c).toMatchObject({ ok: true, seconds: expect.any(Number) });
     expect(readFileSync(setupLog, "utf8")).toBe("ran\n");
     expect(told).toContain("demo/alpha passed");
     const args = readFileSync(join(fakeLog, "args"), "utf8");
@@ -685,7 +688,8 @@ describe("a factory run", () => {
     expect(sh(repo, "git", "log", "-1", "--format=%s", "factory/fpass")).toBe("add fpass.txt");
     expect(runsLeft()).toEqual([]);
     expect(file(r.json.run, "prompt.md")).toContain("inside\na sandbox");
-    expect(file(r.json.run, "checks.log")).toContain("## tests: exit 0");
+    expect(s.checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
+    for (const c of s.checks) expect(c).toMatchObject({ ok: true, seconds: expect.any(Number) });
   });
 
   test("the sandbox's environment holds the worker token and nothing of Chris's", () => {
@@ -801,6 +805,7 @@ describe("a factory run", () => {
   test("a follow-up on a stuck job starts from the job's previous branch", async () => {
     const r = await fjob("fagain", "commit FAIL");
     expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "tests failed" });
+    expect(state(r.json.run).checks).toEqual([{ name: "tests", ok: false, seconds: expect.any(Number) }]);
     const f = await fjob("fagain", "branchlog");
     expect(readFileSync(join(fakeLog, "branchlog"), "utf8")).toContain("add FAIL");
     expect(state(f.json.run).state).toBe("passed");

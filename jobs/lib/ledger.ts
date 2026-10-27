@@ -8,6 +8,9 @@ import { join } from "node:path";
 
 export type State = "running" | "passed" | "needs-you" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
+/** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. */
+export interface CheckResult { name: string; ok: boolean; seconds: number }
+
 export interface Run {
   kind: "agent" | "plain" | "land";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
@@ -30,6 +33,8 @@ export interface Run {
   cost?: number;
   /** A factory run: the `DEFAULT: <question> -> <answer>` lines of its result. */
   defaults?: string[];
+  /** An agent or land run: each check that ran, skipped `when` checks left out. */
+  checks?: CheckResult[];
   /** A run that needs Chris for a held path or a test edit: the diff stat. */
   stat?: string;
   /** A land of a held run, by Chris: the commit gets `Held-by: Chris`. */

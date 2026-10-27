@@ -33,6 +33,9 @@ const title = (j) => `<h3>${esc(j.item?.title || j.name)}</h3>`;
 /** A button the page wires to /api/<verb>/<name>; Land and Drop ask for a second click. */
 const act = (verb, name, label, primary = false) =>
   `<button class="act${primary ? " primary" : ""}" type="button" data-act="${verb}" data-name="${esc(name)}" data-label="${esc(label)}">${esc(label)}</button>`;
+/** The checks of a run on one line: `tests 71 s ✓ · types 9 s ✓`. */
+const checksLine = (j) =>
+  j.checks?.length ? `<p class="quiet checks num">${j.checks.map((c) => `${esc(c.name)} ${esc(String(c.seconds))} s ${c.ok ? "✓" : "✗"}`).join(" · ")}</p>` : "";
 const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
 
 export function renderHeader(s) {
@@ -65,6 +68,7 @@ export function renderNeeds(s) {
     return `<article class="need-card"><span class="why">${esc(why)}</span>` +
       `<div class="ih">${itemId(j)}${title(j)}</div>` +
       `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(j.model)) : ""}</dl>` +
+      checksLine(j) +
       (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
       (j.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="trailers">${esc(j.stat)}</pre></div></div>` : "") +
       (j.defaults.length ? `<details open><summary>Defaults taken<span class="peek">${j.defaults.length}</span></summary><div class="body"><ul>${j.defaults.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div></details>` : "") +
@@ -98,6 +102,7 @@ export function renderDelivered(s) {
     const commit = j.commit ? (j.commitUrl ? `<a href="${esc(j.commitUrl)}"><code>${sha}</code></a>` : `<code>${sha}</code>`) : "";
     return `<article class="del"><div class="ih">${itemId(j)}${title(j)}<span class="badge done">Landed</span></div>` +
       `<dl class="facts">${commit ? fact("Commit", commit) : ""}${j.ended ? fact("Landed", esc(clock(j.ended))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}</dl>` +
+      checksLine(j) +
       (j.commit || j.check === "open" ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${j.commit ? cmd(`git show ${j.commit.slice(0, 7)}`) : ""}</div>` : "") + `</article>`;
   }).join("");
   return section("del", "Delivered today", s.delivered.length, rows || empty("Nothing has landed today.", "A landed run shows up here with its commit."), "on origin/main");

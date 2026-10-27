@@ -66,3 +66,11 @@ test("a needs-you entry has Diff, Land and Drop buttons; a landed one with an op
   expect(r.renderDelivered(open)).toContain('data-act="checked" data-name="aleph-28"');
   expect(r.renderDelivered(state)).not.toContain("data-act=");
 });
+
+test("a job with checks shows them on one line; one without shows none", () => {
+  const checks = [{ name: "tests", ok: true, seconds: 71 }, { name: "types", ok: false, seconds: 9 }];
+  expect(r.renderNeeds({ ...state, needs: [{ ...state.needs[0], checks }] })).toContain("tests 71 s ✓ · types 9 s ✗");
+  expect(r.renderDelivered({ ...state, delivered: [{ ...state.delivered[0], checks }] })).toContain("tests 71 s ✓ · types 9 s ✗");
+  expect(r.renderNeeds(state)).not.toContain(" s ✓");
+  expect(r.renderDelivered(state)).not.toContain("checks");
+});

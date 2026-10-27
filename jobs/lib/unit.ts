@@ -10,7 +10,7 @@ import * as todos from "../../todo/lib/todo.ts";
 import { writeList } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { heldRule, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
-import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type Repo, type Run } from "./ledger.ts";
+import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
 import { paused } from "./factory.ts";
 import { FACTS_REF, writeFacts } from "./status.ts";
@@ -104,15 +104,24 @@ export function prompt(id: string, folder: string, run: Run, repo: Repo): string
   return parts.join("\n\n") + "\n";
 }
 
+/** A recorder that starts the run's `checks` over and adds each check that ran. */
+function recorder(folder: string): (c: CheckResult) => void {
+  let all: CheckResult[] = [];
+  updateRun(folder, { checks: all });
+  return (c) => { all = [...all, c]; updateRun(folder, { checks: all }); };
+}
+
 /** Run every check with no `when`, and every check whose globs match a changed file. Returns why one failed. */
-async function runChecks(folder: string, wt: string, repo: Repo, env: Record<string, string | undefined>, changed: string[], phase: (p: string) => void): Promise<string | null> {
+async function runChecks(folder: string, wt: string, repo: Repo, env: Record<string, string | undefined>, changed: string[], phase: (p: string) => void, record: (c: CheckResult) => void): Promise<string | null> {
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
   for (const check of repo.checks) {
     if (check.when && !matches(check.when)) continue;
     phase(`check ${check.name}`);
     const out = join(folder, "check.out");
     writeFileSync(out, "");
+    const t0 = Date.now();
     const r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
+    record({ name: check.name, ok: r.code === 0 && !r.timedOut, seconds: Math.round((Date.now() - t0) / 1000) });
     appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : ""}\n${tail(out, 100)}\n\n`);
     if (r.timedOut) return `timed out: check ${check.name}`;
     if (r.code !== 0) return `${check.name} failed`;
@@ -288,7 +297,7 @@ async function worktreeChecks(folder: string, run: Run, repo: Repo, env: Record<
   if (!existsSync(wt)) return `worktree gone: ${wt}`;
   if (!git(wt, "checkout", "-q", "--detach", commit).ok) return "checkout failed";
   try {
-    return await runChecks(folder, wt, repo, env, changed, phase);
+    return await runChecks(folder, wt, repo, env, changed, phase, recorder(folder));
   } finally {
     git(wt, "checkout", "-q", "-f", run.branch!);
   }
@@ -299,7 +308,7 @@ async function worktreeChecks(folder: string, run: Run, repo: Repo, env: Record<
  * clone in check/: nothing a worker left in work/ runs. Each check's output
  * and exit code go to checklog/, which only this step can write.
  */
-async function checksInSandbox(folder: string, dir: string, bundle: string, ref: string, repo: Repo, changed: string[], phase: (p: string) => void): Promise<string | null> {
+async function checksInSandbox(folder: string, dir: string, bundle: string, ref: string, repo: Repo, changed: string[], phase: (p: string) => void, record?: (c: CheckResult) => void): Promise<string | null> {
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
   const checks = repo.checks.filter((c) => !c.when || matches(c.when));
   const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
@@ -309,7 +318,7 @@ async function checksInSandbox(folder: string, dir: string, bundle: string, ref:
     `git fetch -q ../${bundle} ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
     `{ ${repo.setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1; echo $? > ../checklog/setup.code`,
     `[ "$(cat ../checklog/setup.code)" = 0 ] || exit 0`,
-    ...checks.map((c, i) => `timeout -k 30 ${lim} bash -c ${q(c.run)} > ../checklog/${i}.log 2>&1; echo $? > ../checklog/${i}.code; [ "$(cat ../checklog/${i}.code)" = 0 ] || exit 0`),
+    ...checks.map((c, i) => `t=$(date +%s%N); timeout -k 30 ${lim} bash -c ${q(c.run)} > ../checklog/${i}.log 2>&1; echo $? > ../checklog/${i}.code; echo $(( ($(date +%s%N) - t) / 1000000 )) > ../checklog/${i}.ms; [ "$(cat ../checklog/${i}.code)" = 0 ] || exit 0`),
   ].join("\n");
   phase(checks.length ? `check ${checks.map((c) => c.name).join(", ")}` : "check");
   const r = await sandboxed(dir, script, { read: [bundle], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: join(folder, "check.out"), stderr: join(folder, "check.out") });
@@ -323,6 +332,7 @@ async function checksInSandbox(folder: string, dir: string, bundle: string, ref:
   for (const [i, check] of checks.entries()) {
     const code = read(`${i}.code`);
     const timedOut = code === "124";
+    if (code !== undefined) record?.({ name: check.name, ok: code === "0", seconds: Math.round(Number(read(`${i}.ms`) ?? 0) / 1000) });
     appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${code ?? "none"}${timedOut ? " (timed out)" : ""}\n${tail(join(dir, "checklog", `${i}.log`), 100)}\n\n`);
     if (timedOut) return `timed out: check ${check.name}`;
     if (code !== "0") return `${check.name} failed`;
@@ -338,7 +348,7 @@ async function sandboxChecks(id: string, folder: string, repo: Repo, commit: str
     git(repo.path, "update-ref", ref, commit);
     const b = git(repo.path, "bundle", "create", join(dir, "out", "land.bundle"), ref);
     if (!b.ok) return `bundle failed: ${b.out}`;
-    return await checksInSandbox(folder, dir, "out/land.bundle", ref, repo, changed, phase);
+    return await checksInSandbox(folder, dir, "out/land.bundle", ref, repo, changed, phase, recorder(folder));
   } finally {
     git(repo.path, "update-ref", "-d", ref);
     removeRunFolder(dir);
@@ -559,7 +569,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   }
   stampJob(wt, base, run.job);
   const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
-  const failed = await runChecks(folder, wt, repo, checkEnv, changed, phase);
+  const failed = await runChecks(folder, wt, repo, checkEnv, changed, phase, recorder(folder));
   if (failed) return fail(failed);
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
   // A manual check does not hold the run: it lands with the check open (see land).
@@ -627,7 +637,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (git(repo.path, "rev-list", "--count", `${main}..refs/heads/${branch}`).out === "0") return stuck("no commit", facts);
 
     const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
-    const failed = await checksInSandbox(folder, dir, "out/out.bundle", `refs/heads/${branch}`, repo, changed, phase);
+    const failed = await checksInSandbox(folder, dir, "out/out.bundle", `refs/heads/${branch}`, repo, changed, phase, recorder(folder));
     if (failed) return stuck(failed, facts);
     const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
     if (rule) return { verdict: { state: "needs-you", needs: "held", reason: rule, stat: git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out, ...facts }, code: 0 };

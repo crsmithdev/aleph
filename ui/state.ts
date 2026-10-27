@@ -119,6 +119,8 @@ export function state(now = new Date()): State {
     }
     const stat = r.stat ?? runs.findLast((e) => e.run.stat)?.run.stat;
     if (r.state === "needs-you" && stat) job.stat = stat;
+    const withChecks = runs.findLast((e) => e.run.checks?.length)?.run.checks;
+    if (withChecks) job.checks = withChecks;
     if (r.state === "landed" && r.check === "open") job.check = "open";
     return job;
   };
