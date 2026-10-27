@@ -39,7 +39,7 @@ const d = digest(input.transcript_path ?? "", promptId, input.last_assistant_mes
 const treeChanged = before !== undefined && after !== undefined && after !== null && before !== after;
 const changed = treeChanged || (after === null && d.edits.length > 0);
 
-type Outcome = { verdict: "pass" | "deny"; kind: "unchanged" | "skip" | "forced" | "judged" | "fail-open"; reason: string; score?: number; judgeMs?: number };
+type Outcome = { verdict: "pass" | "deny"; kind: "unchanged" | "skip" | "forced" | "judged" | "fail-open"; reason: string; score?: number; judgeMs?: number; by?: string; jevDeny?: number | null };
 let outcome: Outcome;
 
 if (!changed) {
@@ -57,9 +57,9 @@ if (!changed) {
       outcome = { verdict: "pass", kind: "fail-open", reason: `judge unavailable: ${result.error}`, judgeMs: result.ms };
     } else if (result.verdict.verdict === "deny") {
       put(`gate:${promptId}`, { start: gate?.start ?? started, input: { denials: denials + 1 } });
-      outcome = { verdict: "deny", kind: "judged", reason: result.verdict.reason, score: 0, judgeMs: result.ms };
+      outcome = { verdict: "deny", kind: "judged", reason: result.verdict.reason, score: 0, judgeMs: result.ms, by: result.by, jevDeny: result.jev?.pDeny };
     } else {
-      outcome = { verdict: "pass", kind: "judged", reason: result.verdict.reason, score: 1, judgeMs: result.ms };
+      outcome = { verdict: "pass", kind: "judged", reason: result.verdict.reason, score: 1, judgeMs: result.ms, by: result.by, jevDeny: result.jev?.pDeny };
     }
   }
 }
@@ -92,6 +92,8 @@ if (cfg && outcome.kind !== "unchanged") {
       "langfuse.observation.metadata.digest_chars": d.text.length,
       "langfuse.observation.metadata.edits": d.edits.length,
       "langfuse.observation.metadata.judge_ms": outcome.judgeMs ?? 0,
+      ...(outcome.by ? { "langfuse.observation.metadata.judge_by": outcome.by } : {}),
+      ...(typeof outcome.jevDeny === "number" ? { "langfuse.observation.metadata.jev_p_deny": outcome.jevDeny } : {}),
     }),
   };
   const score = outcome.score === undefined ? Promise.resolve() : postScore(cfg, { traceId, name: "verified", value: outcome.score, comment: `${outcome.kind}: ${outcome.reason}`, environment: sessionEnvironment() });

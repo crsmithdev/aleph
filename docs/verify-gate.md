@@ -51,6 +51,12 @@ explicitly marked unverified. Edits alone back only claims about edits.
 Answer with JSON `{"verdict":"pass"|"deny","reason":"…"}`. On deny, the reason
 names the claim and the concrete run that would back it, in two sentences.
 
+## Jev screen (27 Oct 2026, off by default)
+
+With `ALEPH_JUDGE=jev`, Jev (`typesafe/jev-1.13`, TypeSafe's decision model) screens each turn first, through OpenRouter's `/api/alpha/decisions` endpoint (`hooks/lib/jev.ts`). It answers one `choice` question, pass or deny, with probabilities and no text. A turn whose probability of deny is below `ALEPH_JEV_PASS_BELOW` (default 0.2) passes on Jev's word. Every other turn, and every Jev error, goes on to Haiku as before, so only Haiku can deny and every denial still names its claim. The span records `judge_by` and `jev_p_deny`. The key is `OPENROUTER_API_KEY`, read from the environment or from that one line of `~/.aleph/.env`.
+
+Measured live on the two synthetic digests in `tests/live/judge.test.ts`: deny probability 0.98 for the unbacked claim and 0.01 for the backed one, about $0.000025 a call. The threshold is a guess until Jev is compared with Haiku's 1,362 stored verdicts (to-do 26), which sends those turn digests to OpenRouter.
+
 ## Deferred
 
 - Tuning the rubric against real verdicts: needs a few weeks of scores.
