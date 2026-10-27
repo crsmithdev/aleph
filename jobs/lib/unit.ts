@@ -65,7 +65,7 @@ export function resultText(log: string): string {
 const FIXED = (run: Run, main: string) => `You are a worker on job \`${run.name}\` in \`${run.worktree}\`, branch \`${run.branch}\`. Work
 only there. Commit every change on the branch; the run fails if anything is
 left uncommitted or untracked. Never merge, never push, never touch another
-branch. \`aleph todo\` is not your push: it writes the to-do list on main by
+branch. \`aleph issue\` is not your push: it writes the list of issues on main by
 itself, so use it for every change to the list. If the previous run was a
 failed land, merge \`origin/${main}\` into the branch, resolve the conflicts,
 and commit. If you need a decision from Chris, stop
@@ -142,7 +142,7 @@ export function onMain(repo: Repo, run: Run): { commit: string; how: string } | 
 }
 
 /**
- * After the push: the job's item done in the work store, and a new item for
+ * After the push: the job's issue done in the work store, and a new issue for
  * an open manual check. Returns what happened to each, for the land log.
  */
 function closeItems(repo: Repo, run: Run): { todo?: string; checkItem?: number } {
@@ -158,7 +158,7 @@ function closeItems(repo: Repo, run: Run): { todo?: string; checkItem?: number }
           todos.setStatus(item, "done");
           todos.note(item, `job ${run.name} landed`);
         }
-        todo = item ? "done" : `no item ${run.todo}`;
+        todo = item ? "done" : `no issue ${run.todo}`;
       }
       if (open) checkItem = todos.add(doc, `Check ${run.name}: ${run.say}`, { labels: ["check"] }).id;
       return true;
@@ -174,7 +174,7 @@ function closeItems(repo: Repo, run: Run): { todo?: string; checkItem?: number }
 const TODO_PATH = "docs/todo.md";
 
 const MOVED = "main moved during the land; land again";
-const OWN_LIST = `the branch changes ${TODO_PATH}; change the list with aleph todo`;
+const OWN_LIST = `the branch changes ${TODO_PATH}; change the list with aleph issue`;
 
 /**
  * Wait until no older land of this repo is still live, then hold the repo's
@@ -207,8 +207,8 @@ function landMessage(subjects: string[], run: Run, repo: Repo): string {
 /**
  * Land a job: merge its branch onto origin/<main> in memory, run the checks on
  * that tree, and push one squash commit of exactly that tree with a plain
- * push. A refused push merges again, at most RELANDS times. The job's to-do
- * item closes in the work store after the push. No checkout of the repo
+ * push. A refused push merges again, at most RELANDS times. The job's issue
+ * closes in the work store after the push. No checkout of the repo
  * moves, and every failure leaves the remote as it was.
  */
 async function land(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ verdict: Verdict; code: number }> {
@@ -253,7 +253,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         return { verdict: { state: "done", reason: "no net change" }, code: 0 };
       }
       const changed = git(repo.path, "diff", "--name-only", base, tree).out.split("\n").filter(Boolean);
-      // Only aleph todo writes the list. A worker can go past git-guard with a script, so the land refuses it.
+      // Only aleph issue writes the list. A worker can go past git-guard with a script, so the land refuses it.
       if (changed.includes(TODO_PATH)) return fail(OWN_LIST, { conflicts: [TODO_PATH] });
       const fork = git(repo.path, "merge-base", base, tip.out).out;
       const subjects = git(repo.path, "log", "--reverse", "--no-merges", "--format=%s", `${fork}..${tip.out}`).out.split("\n").filter(Boolean);
@@ -366,7 +366,7 @@ export async function baselineChecks(repo: Repo, commit: string, logs: string): 
 }
 
 /**
- * `aleph todo done` (with `done`) or `aleph todo note` for a job's item, as a
+ * `aleph issue done` (with `done`) or `aleph issue note` for a job's issue, as a
  * commit on origin/<main>. Returns why it could not, for the caller to report.
  */
 export function updateTodo(repo: Repo, id: number, text: string, done: boolean): string | null {
@@ -379,7 +379,7 @@ export function updateTodo(repo: Repo, id: number, text: string, done: boolean):
       if (done) todos.setStatus(item, "done");
       return todos.note(item, text);
     });
-    return found ? null : `no item ${id}`;
+    return found ? null : `no issue ${id}`;
   } catch (e: any) {
     return e?.message ?? String(e);
   }
@@ -489,7 +489,7 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   const cli = join(import.meta.dir, "..", "cli.ts");
   const argv = next === "land" ? ["land", run.name] : ["job", run.repo!, run.name, "--spec", "-", "--land"];
   const note = run.reason === OWN_LIST
-    ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph todo writes the list. The lists live in the work store now. Remove ${TODO_PATH} from the branch, commit, and make each change to the list with aleph todo.`
+    ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph issue writes the list. The lists live in the work store now. Remove ${TODO_PATH} from the branch, commit, and make each change to the list with aleph issue.`
     : `The land conflicted with origin/main in: ${(run.conflicts ?? []).join(", ")}. Merge origin/main into this branch, resolve each conflict so that the change on main and this job's change both survive, run the tests, and commit.`;
   const log = openSync(join(folder, "next.log"), "a");
   const p = Bun.spawn([process.execPath, cli, ...argv], { env: process.env, stdin: next === "worker" ? new Blob([note]) : "ignore", stdout: log, stderr: log });
@@ -643,8 +643,8 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
 }
 
 const REVIEW = `You are the reviewer of job \`%NAME%\`. The working directory is a clone of the
-branch the worker made for the goal item below; read the code there as needed.
-Judge whether the diff does what the item asks, whether the tests cover it, and
+branch the worker made for the goal issue below; read the code there as needed.
+Judge whether the diff does what the issue asks, whether the tests cover it, and
 whether it breaks anything. Do not change files. End with one line:
 \`VERDICT: pass\` or \`VERDICT: hold <one-sentence reason>\`.`;
 
@@ -659,7 +659,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     copyFileSync(join(dir, "out", "out.bundle"), join(rdir, "out", "out.bundle"));
     const spec = readFileSync(join(folder, "..", run.job, "spec.md"), "utf8").trim();
     const diff = git(repo.path, "diff", base, `refs/heads/${branch}`).out;
-    const text = `${REVIEW.replace("%NAME%", run.name)}\n\n## Goal item\n\n${spec}\n\n## Diff from the merge base\n\n${diff}\n`;
+    const text = `${REVIEW.replace("%NAME%", run.name)}\n\n## Goal issue\n\n${spec}\n\n## Diff from the merge base\n\n${diff}\n`;
     writeFileSync(join(folder, "review-prompt.md"), text);
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
     const argv = [process.env.ALEPH_REVIEWER_CMD ?? process.env.ALEPH_WORKER_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
@@ -691,12 +691,12 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
   }
 }
 
-/** A worker's `FOLLOWUP:` lines become items in the repo's list, filed by aleph. */
+/** A worker's `FOLLOWUP:` lines become issues in the repo's list, filed by aleph. */
 function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
   if (!titles.length) return;
   try {
     writeList(repo, `todo: follow-ups from job ${run.name}`, (doc) => {
-      for (const t of titles) todos.add(doc, t, { labels: ["followup"], body: `From job ${run.name}${run.todo !== undefined ? ` on item ${run.todo}` : ""}.` });
+      for (const t of titles) todos.add(doc, t, { labels: ["followup"], body: `From job ${run.name}${run.todo !== undefined ? ` on issue ${run.todo}` : ""}.` });
       return true;
     }, true);
   } catch {}

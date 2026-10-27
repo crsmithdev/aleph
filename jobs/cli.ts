@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
- * aleph <job|run|land|checked|drop|jobs|todo|unit|tick|report|pause|resume|sandbox|status|judge>
- * — detached agent jobs, plain runs, each repo's to-do list, and the factory.
+ * aleph <job|run|land|checked|drop|jobs|issue|unit|tick|report|pause|resume|sandbox|status|judge>
+ * — detached agent jobs, plain runs, each repo's issues, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/jobs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal.
  * See docs/specs/2026-09-24-agent-jobs.md.
@@ -115,8 +115,8 @@ async function job(): Promise<void> {
   let todo: number | undefined;
   if (todoArg !== undefined) {
     todo = Number(todoArg);
-    if (!Number.isInteger(todo)) refuse("--todo takes an item number");
-    if (!todos.find(readTodo(repo), todo!)) refuse(`${repo.key} has no item ${todo}`);
+    if (!Number.isInteger(todo)) refuse("--todo takes an issue number");
+    if (!todos.find(readTodo(repo), todo!)) refuse(`${repo.key} has no issue ${todo}`);
   }
 
   const release = await lock(`job-${repo.key}-${name}`);
@@ -176,7 +176,7 @@ async function plain(): Promise<void> {
 /**
  * Start a land run. The latest agent run must have passed, or need Chris for a
  * held path: his land is the review, and the commit says so. A manual check does
- * not gate the land: the land run keeps it open, as a to-do item, until
+ * not gate the land: the land run keeps it open, as an issue, until
  * `aleph checked`. With --checked, Chris has done the check already. A run
  * from before this rule, needs-you for a manual check, lands the same way.
  * The land unit takes the job lock.
@@ -202,7 +202,7 @@ async function landJob(): Promise<void> {
   await child?.exited;
 }
 
-/** Close the manual check of a job that landed with it open, and its to-do item. */
+/** Close the manual check of a job that landed with it open, and its issue. */
 function checked(): void {
   const name = checkName(positional[0]);
   const last = allJobs().filter((j) => j.at(-1)!.run.name === name).at(-1)?.at(-1);
@@ -211,7 +211,7 @@ function checked(): void {
   const repo = last!.run.repo ? loadRegistry()[last!.run.repo] : undefined;
   const item = last!.run.checkItem;
   const why = repo && item !== undefined ? updateTodo(repo, item, "checked by Chris", true) : null;
-  if (why) console.error(`warn: todo ${item} not closed: ${why}`);
+  if (why) console.error(`warn: issue ${item} not closed: ${why}`);
   out({ job: last!.run.job, name, state: "landed", check: "done" });
 }
 
@@ -222,7 +222,7 @@ function read(folder: string, file: string): string | undefined {
 
 /**
  * The ledger follows git. An open job whose work is on origin/<main> becomes
- * landed, quietly, with its to-do item done. An open job with no branch and
+ * landed, quietly, with its issue done. An open job with no branch and
  * no worktree left is "gone": nothing is left to land. Every other open job
  * is "unlanded". Each repo is fetched once.
  */
@@ -245,7 +245,7 @@ function reconcile(all: Entry[][]): Map<string, string> {
       removeBranch(repo, last.run);
       const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
       const why = todo === undefined ? null : updateTodo(repo, todo, `job ${last.run.name} found on main as ${found.commit.slice(0, 7)}`, true);
-      if (why) console.error(`warn: todo ${todo} not closed: ${why}`);
+      if (why) console.error(`warn: issue ${todo} not closed: ${why}`);
       continue;
     }
     const branch = last.run.branch && git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${last.run.branch}`).ok;
@@ -319,7 +319,7 @@ async function drop(): Promise<void> {
     updateRun(last.folder, { state: "dropped", reason, needs: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
     const why = repo && todo !== undefined ? updateTodo(repo, todo, `job ${name} dropped: ${reason}`, false) : null;
-    if (why) console.error(`warn: todo ${todo} has no note: ${why}`);
+    if (why) console.error(`warn: issue ${todo} has no note: ${why}`);
     out({ job: last.run.job, name, state: "dropped", reason });
   } finally {
     release!();
@@ -327,20 +327,20 @@ async function drop(): Promise<void> {
 }
 
 /**
- * aleph todo <add|list|show|note|done|drop|lint> <repo> ... — every repo in the
+ * aleph issue <add|list|show|note|done|drop|lint> <repo> ... — every repo in the
  * registry has a list in the work store (todo/lib/store.ts). Status is a
  * field, so an item never moves and never gets a new number.
  */
 async function todoCmd(): Promise<void> {
   const [verb, repoKey, ...args] = positional;
-  const sub = verb ?? refuse("usage: aleph todo <add|list|show|note|edit|done|drop|lint> <repo> ...");
+  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|done|drop|lint> <repo> ...");
   if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(sub);
   const repo = loadRegistry()[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
 
   const pick = (doc: todos.Doc): todos.Item => {
     const id = Number(args[0]);
-    if (!Number.isInteger(id)) refuse("name an item by its number");
-    return todos.find(doc, id) ?? refuse(`${repo.key} has no item ${id}`);
+    if (!Number.isInteger(id)) refuse("name an issue by its number");
+    return todos.find(doc, id) ?? refuse(`${repo.key} has no issue ${id}`);
   };
   // Every verb but `add` needs a list on main; `add` starts one.
   const write = <T>(message: string, change: (doc: todos.Doc) => T | null, create = false) => {
@@ -379,7 +379,7 @@ async function todoCmd(): Promise<void> {
     case "list": {
       const rows = listRows(readTodo(repo));
       if (rest.includes("--json")) { out(rows.map(brief)); return; }
-      if (!rows.length) { console.log("no items"); return; }
+      if (!rows.length) { console.log("no issues"); return; }
       printRows(rows);
       return;
     }
@@ -439,7 +439,7 @@ async function todoCmd(): Promise<void> {
       for (const f of findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${findings.length} problem${findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
     }
-    default: refuse("usage: aleph todo <add|list|show|note|edit|done|drop|lint> <repo> ...");
+    default: refuse("usage: aleph issue <add|list|show|note|edit|done|drop|lint> <repo> ...");
   }
 }
 
@@ -480,7 +480,7 @@ function recentRepos(): { repo: Repo; doc: todos.Doc | null }[] {
   return all.filter((r) => last.has(r.repo.key)).sort((a, b) => last.get(b.repo.key)! - last.get(a.repo.key)!);
 }
 
-/** `aleph todo list` and `aleph todo lint` with no repo: each recent repo. */
+/** `aleph issue list` and `aleph issue lint` with no repo: each recent repo. */
 function todoRecent(sub: "list" | "lint"): void {
   const lists = recentRepos().filter((r) => r.doc);
   if (sub === "lint") {
@@ -492,7 +492,7 @@ function todoRecent(sub: "list" | "lint"): void {
   }
   const rows = lists.map(({ repo, doc }) => ({ repo: repo.key, items: listRows(doc!) })).filter((r) => r.items.length);
   if (rest.includes("--json")) { out(rows.map((r) => ({ repo: r.repo, items: r.items.map(brief) }))); return; }
-  if (!rows.length) { console.log("no items"); return; }
+  if (!rows.length) { console.log("no issues"); return; }
   for (const r of rows) { console.log(r.repo); printRows(r.items, "  "); }
 }
 
@@ -545,7 +545,7 @@ function reportCmd(): void {
 }
 
 /**
- * `aleph status <repo>-<n>`: the item's derived state; with no item, see statusRecent. In Chris's session the
+ * `aleph status <repo>-<n>`: the issue's derived state; with no issue, see statusRecent. In Chris's session the
  * facts come from the store and the ledger; in a sandbox, where neither is,
  * they come from the bundle's snapshot at refs/aleph/facts in the current repo.
  */
@@ -565,12 +565,12 @@ function statusCmd(): void {
     if (!snap || snap.repo !== key) refuse(`no repo named ${key} in the registry, and no ${FACTS_REF} for it here`);
     f = snap!;
   }
-  const s = derive(cwd, `refs/remotes/origin/${f!.main}`, f!, Number(n)) ?? refuse(`${key} has no item ${n}`);
+  const s = derive(cwd, `refs/remotes/origin/${f!.main}`, f!, Number(n)) ?? refuse(`${key} has no issue ${n}`);
   if (rest.includes("--json")) return out(s);
   console.log(`${s!.item} ${s!.state}: ${s!.why}`);
 }
 
-/** `aleph status` with no item: the derived state of each open item in each recent repo. */
+/** `aleph status` with no issue: the derived state of each open issue in each recent repo. */
 function statusRecent(): void {
   const states = [];
   for (const { repo, doc } of recentRepos()) {
@@ -615,7 +615,7 @@ try {
     case "unit": await unit(resolve(positional[0])); break;
     case "land": await landJob(); break;
     case "checked": checked(); break;
-    case "todo": await todoCmd(); break;
+    case "issue": case "todo": await todoCmd(); break;
     case "tick": await tickCmd(); break;
     case "status": statusCmd(); break;
     case "report": reportCmd(); break;
@@ -637,7 +637,7 @@ try {
       if (!p.ok) process.exit(1);
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|drop|jobs|todo|tick|report|pause|resume|sandbox|status|judge> ...");
+    default: refuse("usage: aleph <job|run|land|checked|drop|jobs|issue|tick|report|pause|resume|sandbox|status|judge> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;

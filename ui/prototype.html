@@ -421,7 +421,7 @@ body.then .only-now { display: none; }
 
       <!-- DELIVERED
         feed per item:
-          goal, oracle:   aleph todo show aleph <n>  (## Goal, ## Oracle)
+          goal, oracle:   aleph issue show aleph <n>  (## Goal, ## Oracle)
           diff stat:      git show --stat <commit>
           checks:         ~/.aleph/jobs/<agent job>/checks.log and ~/.aleph/jobs/<land job>/checks.log
           commit+trailers git show -s --format=%B <commit>; aleph status aleph-<n>
@@ -568,7 +568,7 @@ body.then .only-now { display: none; }
 
     <aside class="rail">
       <!-- RUNNING
-        feed: aleph jobs (state "running", phase, started) ; time box from aleph todo show aleph <n> (## Time box)
+        feed: aleph jobs (state "running", phase, started) ; time box from aleph issue show aleph <n> (## Time box)
         phase strings seen: "worker", "check tests, types"; land phase name not yet seen
       -->
       <section id="running" aria-labelledby="h-run">
@@ -592,7 +592,7 @@ body.then .only-now { display: none; }
           </div>
           <div class="run-row">
             <div class="ih"><span class="id">aleph-38</span><span class="badge run">Worker</span></div>
-            <div class="t">Jev suggests labels and flags duplicates on aleph todo add</div>
+            <div class="t">Jev suggests labels and flags duplicates on aleph issue add</div>
             <div class="steps" role="img" aria-label="Worker running"><i class="now"></i><i></i><i></i></div>
             <div class="run-meta"><span class="num">Started 09:51, 2 of 40 min</span></div>
           </div>
@@ -610,7 +610,7 @@ body.then .only-now { display: none; }
       </section>
 
       <!-- WAITING
-        feed: aleph todo list aleph --label goal --status open, minus the items with a running job (aleph jobs)
+        feed: aleph issue list aleph --label goal --status open, minus the items with a running job (aleph jobs)
       -->
       <section id="waiting" aria-labelledby="h-wait">
         <div class="sh"><h2 id="h-wait">Waiting</h2><span class="count">0</span></div>

@@ -206,7 +206,7 @@ test("add starts a list for a repo that has none; every other verb refuses", () 
 
 test("an unknown repo and an unknown item both refuse", () => {
   expect(aleph("todo", "list", "nope").err).toContain("no repo named nope");
-  expect(aleph("todo", "show", "proj", "99").err).toContain("has no item 99");
+  expect(aleph("todo", "show", "proj", "99").err).toContain("has no issue 99");
 });
 
 test("dates are local, not UTC", () => {
@@ -312,7 +312,27 @@ test("lint reports a bad date and a waiting_on that names no item, each with the
   const l = aleph("todo", "lint", "proj");
   expect(l.code).toBe(1);
   expect(l.err).toContain("item 4: due: 2026-13-40");
-  expect(l.err).toContain("item 4: waiting_on: proj-99 names no item");
+  expect(l.err).toContain("item 4: waiting_on: proj-99 names no issue");
   expect(aleph("todo", "add", "proj", "Fine", "--waiting-on", "proj-3").code).toBe(0);
   expect(aleph("todo", "lint", "proj").err).not.toContain("item 5");
+});
+
+test("aleph issue and aleph todo are the same command", () => {
+  expect(aleph("issue", "add", "proj", "Under the new name").code).toBe(0);
+  expect(aleph("todo", "add", "proj", "Under the old name").code).toBe(0);
+  const l = JSON.parse(aleph("issue", "list", "proj", "--json").out).slice(-2);
+  expect(l.map((i: any) => i.title)).toEqual(["Under the new name", "Under the old name"]);
+  for (const name of ["issue", "todo"]) {
+    const id = String(name === "issue" ? l[0].id : l[1].id);
+    expect(JSON.parse(aleph(name, "show", "proj", id, "--json").out).title).toContain("Under the");
+    expect(aleph(name, "note", "proj", id, "a note").code).toBe(0);
+    expect(aleph(name, "edit", "proj", id, "--priority", "high").code).toBe(0);
+    expect(aleph(name, "lint", "proj").code).toBe(0);
+  }
+  expect(aleph("issue", "done", "proj", String(l[0].id)).code).toBe(0);
+  expect(aleph("todo", "drop", "proj", String(l[1].id), "no longer").code).toBe(0);
+  expect(aleph("issue", "show", "proj", "99").err).toContain("has no issue 99");
+  const usage = aleph("nonsense").err;
+  expect(usage).toContain("|issue|");
+  expect(usage).not.toContain("todo");
 });

@@ -1,5 +1,5 @@
 /**
- * Jev's triage of a new to-do item: which of the repo's labels it carries and
+ * Jev's triage of a new issue: which of the repo's labels it carries and
  * which open items it may duplicate. One request; any failure, or
  * `aleph judge haiku`, gives an empty triage.
  */

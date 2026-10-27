@@ -16,9 +16,9 @@ export interface Run {
   session?: string; model?: string; commit?: string;
   /** A land run of a job with a manual check: "open" until `aleph checked` makes it "done". */
   check?: "open" | "done";
-  /** The to-do item that holds an open manual check. */
+  /** The issue that holds an open manual check. */
   checkItem?: number;
-  /** The repo's to-do item the job works on: land marks it done, drop adds a note. */
+  /** The repo's issue the job works on: land marks it done, drop adds a note. */
   todo?: number;
   /** An agent run started with --land: it lands when it passes. */
   land?: boolean;

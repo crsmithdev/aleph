@@ -1,5 +1,5 @@
 /**
- * The work store holds every registry repo's to-do items, one file each, in a
+ * The work store holds every registry repo's issues, one file each, in a
  * git repo of its own at $ALEPH_ITEMS or ~/.aleph/items. A repo's items are
  * `<repo>/backlog/tasks/<repo>-<n>.md`, a Backlog.md project, so `backlog
  * browser` in `<repo>/` shows them as a board. A read fetches and reads

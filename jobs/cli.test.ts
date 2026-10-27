@@ -503,10 +503,10 @@ describe("land", () => {
   test("a branch that changes the list is refused, goes back to the worker, and lands without the change", async () => {
     await job("byhand", "own-list byhand.txt");
     const r = await aleph(["land", "byhand"]);
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "the branch changes docs/todo.md; change the list with aleph todo", conflicts: ["docs/todo.md"], next: "worker" });
+    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "the branch changes docs/todo.md; change the list with aleph issue", conflicts: ["docs/todo.md"], next: "worker" });
     const runs = runsOf("byhand");
     expect(runs.map((x) => [x.kind, x.state])).toEqual([["agent", "passed"], ["land", "failed"], ["agent", "passed"], ["land", "landed"]]);
-    expect(file(runs[2].id, "prompt.md")).toContain("Only aleph todo writes the list");
+    expect(file(runs[2].id, "prompt.md")).toContain("Only aleph issue writes the list");
     expect(Bun.spawnSync(["git", "--git-dir", remote, "cat-file", "-e", "main:docs/todo.md"]).exitCode).not.toBe(0);
     expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${runs[3].commit}~1`, runs[3].commit)).toBe("byhand.txt");
   }, 30_000);
@@ -575,7 +575,7 @@ describe("a job tied to a to-do item", () => {
     const before = readdirSync(jobsDir).length;
     const r = await aleph(["job", "demo", "badlink", "--spec", specFile("x"), "--todo", "99"]);
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain("demo has no item 99");
+    expect(r.stderr).toContain("demo has no issue 99");
     expect(readdirSync(jobsDir).length).toBe(before);
   });
 
@@ -989,7 +989,7 @@ describe("milestone 2", () => {
     await fjobFor("fhelditem", "commit held/y.txt", held);
     expect(await status(`fac-${held}`)).toMatchObject({ state: "needs-you" });
     for (const n of ["fstuckitem", "fhelditem"]) await aleph(["drop", n]);
-    expect((await aleph(["status", "fac-999"])).stderr).toContain("fac has no item 999");
+    expect((await aleph(["status", "fac-999"])).stderr).toContain("fac has no issue 999");
   }, 30_000);
 
   test("aleph status with no item gives the derived state of each open item in the recent repos", async () => {

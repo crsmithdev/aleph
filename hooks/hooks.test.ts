@@ -269,7 +269,7 @@ describe("git-guard", () => {
     const env = { ALEPH_ITEMS: join(root, "plain", "items") };
     const out = JSON.parse(await guard(join(root, "plain", "items", "demo", "backlog", "tasks", "demo-3.md"), env));
     expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
-    expect(out.hookSpecificOutput.permissionDecisionReason).toContain("aleph todo edit demo");
+    expect(out.hookSpecificOutput.permissionDecisionReason).toContain("aleph issue edit demo");
     expect(await guard(join(root, "plain", "itemsx", "a.md"), env)).toBe("");
   });
   test("follows a linked directory into a worktree, and allows a new file there", async () => {

@@ -3,7 +3,7 @@
  * PreToolUse on Edit|Write: no edits on main outside a worktree.
  * Exempt: ~/.claude, ~/.aleph and the home directory itself. The vault is
  * allowed on main except VAULT.md, which is human-owned. The work store's
- * files are never edited by hand: `aleph todo` writes them.
+ * files are never edited by hand: `aleph issue` writes them.
  */
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
@@ -31,11 +31,11 @@ function git(...args: string[]): string | null {
   return proc.exitCode === 0 ? proc.stdout.toString().trim() : null;
 }
 
-// A hand edit of the store races every aleph todo commit on its origin/main.
+// A hand edit of the store races every aleph issue commit on its origin/main.
 const items = real(storeDir());
 if (target.startsWith(items + "/")) {
   const repoKey = target.slice(items.length + 1).split("/")[0];
-  console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: `The work store is written by aleph todo, never by hand. Use: aleph todo add ${repoKey} "<title>" --body -, aleph todo edit ${repoKey} <id> [--title ...] [--body -], aleph todo note|done|drop ${repoKey} <id> "<text>". Put measurements in a findings file and link it in a note.` } }));
+  console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: `The work store is written by aleph issue, never by hand. Use: aleph issue add ${repoKey} "<title>" --body -, aleph issue edit ${repoKey} <id> [--title ...] [--body -], aleph issue note|done|drop ${repoKey} <id> "<text>". Put measurements in a findings file and link it in a note.` } }));
   process.exit(0);
 }
 

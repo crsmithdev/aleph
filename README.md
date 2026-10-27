@@ -9,7 +9,7 @@ Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 | Path | Holds |
 |---|---|
 | `skills/` | the skills, invoked as `/aleph:<name>` |
-| `jobs/` | `aleph`: agent jobs, the land, the to-do CLI and the factory (`jobs/lib/sandbox.ts`, `gate.ts`, `factory.ts`); the tick's systemd units |
+| `jobs/` | `aleph`: agent jobs, the land, the issue CLI and the factory (`jobs/lib/sandbox.ts`, `gate.ts`, `factory.ts`); the tick's systemd units |
 | `hooks/` | the hook scripts and `hooks.json`, against the 2.1.x hook API |
 | `vault/cli.ts` | the memory vault's mechanics (each write op commits and pushes): `init`, `write`, `adopt`, `recall`, `lint [--fix]`, `consolidate`, `rename-scope`, `archive`, `compile`, `misses [--days N]` (read-only: recall misses from Langfuse) |
 | `identity/CLAUDE.md` | the global `CLAUDE.md` the hooks assume: the worktree rule, the verification rule, the voice |
@@ -120,30 +120,30 @@ bun vault/cli.ts compile 2026-09-04                    # digest of a day's trace
 
 Notes are `wiki/<kind>/<Title>.md` with `[[Title]]` links and frontmatter `aliases kind scope confidence updated supersedes sources tags`. `write` refuses schema, duplicate, dangling-link, folder/kind, budget and template breaks, and warns on orphans, stale measured claims and same-scope overlap. `VAULT.md` is the human-owned contract. `compile` is the safety net for what the agent did not write on the day.
 
-## To do
+## Issues
 
 Every repo in `~/.aleph/repos.json` has a list in the work store, a private git repo cloned at `~/.aleph/items` (`$ALEPH_ITEMS`). Each item is one file, `<repo>/backlog/tasks/<repo>-<n>.md`: a small frontmatter header, free prose, and a Notes list. **Status is a field, never a filing position** — a finished item stays where it is and keeps its number, because commits, specs and the vault quote that number.
 
 ```bash
-aleph todo add <repo> "<title>" [--body -] [--priority high] [--labels a,b]
-aleph todo list [<repo>] [--status open|done|dropped] [--label <name>] [--json]
-aleph todo show <repo> <id> [--json]
-aleph todo edit <repo> <id> [--title "<title>"] [--body -] [--priority p] [--labels a,b]
-aleph todo note <repo> <id> "<text>"      # appends one timestamped line, never rewrites
-aleph todo done <repo> <id> ["<summary>"]
-aleph todo drop <repo> <id> "<reason>"
-aleph todo lint [<repo>] [--fix]
+aleph issue add <repo> "<title>" [--body -] [--priority high] [--labels a,b]
+aleph issue list [<repo>] [--status open|done|dropped] [--label <name>] [--json]
+aleph issue show <repo> <id> [--json]
+aleph issue edit <repo> <id> [--title "<title>"] [--body -] [--priority p] [--labels a,b]
+aleph issue note <repo> <id> "<text>"      # appends one timestamped line, never rewrites
+aleph issue done <repo> <id> ["<summary>"]
+aleph issue drop <repo> <id> "<reason>"
+aleph issue lint [<repo>] [--fix]
 ```
 
 With no repo, `list` and `lint` cover the recent repos: those with a ledger run or an item update in the last 7 days, the latest first.
 
-The store's `origin/main` is the record. A read fetches and reads it there; a write is one commit on it, made without a working tree, and the store's checkout fast-forwards. No product repo's main moves when an item changes. A job's item closes in the store after the job's landing commit is pushed. git-guard denies an Edit or Write on a store file. Each `<repo>/` folder is a Backlog.md project (pinned 1.55.3 in `~/.aleph/tools`), so `backlog browser` in `~/.aleph/items/<repo>` shows that repo's items as a board. Make changes with `aleph todo`, not the board.
+The store's `origin/main` is the record. A read fetches and reads it there; a write is one commit on it, made without a working tree, and the store's checkout fast-forwards. No product repo's main moves when an item changes. A job's item closes in the store after the job's landing commit is pushed. git-guard denies an Edit or Write on a store file. Each `<repo>/` folder is a Backlog.md project (pinned 1.55.3 in `~/.aleph/tools`), so `backlog browser` in `~/.aleph/items/<repo>` shows that repo's items as a board. Make changes with `aleph issue`, not the board.
 
 Each item carries `id title status created updated priority labels repo`. `note` is append-only, which is the lost update this format exists to stop: two writers add lines, neither erases the other's. `lint` refuses (exit 1) on a missing or malformed key, an unknown status, or a duplicate id; `--fix` repairs what is mechanical — a missing date, a stale `id`, a bare scalar where a list belongs — and still exits 1 if anything is left.
 
 ## Factory
 
-A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo (today: aleph). `/aleph:goal` writes an open item labelled `goal`; the `aleph-tick` timer starts one run for each such item every 30 minutes. Spec: `docs/specs/2026-10-26-seed-factory.md`.
+A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo (today: aleph). `/aleph:goal` writes an open issue labelled `goal`; the `aleph-tick` timer starts one run for each such item every 30 minutes. Spec: `docs/specs/2026-10-26-seed-factory.md`.
 
 - **The run.** The worker is `claude -p` under `srt` (`~/.aleph/tools/bin/srt`), in `~/.aleph/runs/<id>/`. It sees an empty home, the code as a bundle of `origin/main` (and the job's previous `factory/<name>` branch), and the network only to `api.anthropic.com` and npm. Its environment holds the token in `~/.aleph/secrets/worker-token` and nothing else of yours. A second `srt` call bundles the branch, aleph fetches it into the repo as `factory/<name>`, and a third runs the repo's setup and checks on a fresh clone. The run folder goes when the verdict is known.
 - **The gate.** A run is stuck when the last line of the worker's output is not a `result` event with `is_error` false, when it made no commit, when a check fails, or at the time box (`ALEPH_JOB_TIMEOUT`, 40 minutes). A diff that touches a path in the repo's `held` list (test files apart), deletes or renames an existing test, removes or changes a `test`, `it`, `describe` or `expect` line, or adds `.skip`, `.only` or `.todo`, needs you. A diff that only adds to a test file lands by itself. When the checks pass and no rule holds, a fresh reviewer (`claude -p`, `claude-opus-5-5`, under srt with the worker's profile, in a clone of the branch) reads the item and the diff and ends with `VERDICT: pass` or `VERDICT: hold <reason>`; a hold, no verdict, an error or the time box (`ALEPH_REVIEW_TIMEOUT`, 10 minutes) needs you (`needs: review`), and its cost is added to the run's. For the held and the reviewed, `aleph land <name>` lands it with `Held-by: Chris`, `aleph drop <name>` drops it.

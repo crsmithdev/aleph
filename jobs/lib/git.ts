@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // A worker's env carries GIT_CONFIG_* to send its pushes nowhere. aleph's own
-// writes (a to-do commit from a worker) are not the worker's push.
+// writes (an issue commit from a worker) are not the worker's push.
 const baseEnv = (): Record<string, string | undefined> => {
   const env: Record<string, string | undefined> = { ...process.env };
   for (const k of Object.keys(env)) if (k.startsWith("GIT_CONFIG_")) delete env[k];

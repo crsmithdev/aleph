@@ -1,9 +1,9 @@
 /**
  * A repo's `docs/todo.md`: numbered `## N. Title` sections, each with a small
  * frontmatter block and free prose. Status is a field, never a filing
- * position, so nothing moves and nothing is renumbered when an item ships.
+ * position, so nothing moves and nothing is renumbered when an issue ships.
  *
- * The file is parsed as sections and rewritten section by section, so an item
+ * The file is parsed as sections and rewritten section by section, so an issue
  * nobody touched keeps its bytes. Prose is never reflowed.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -22,18 +22,18 @@ export interface Item {
   body: string;
   /** Raw `- YYYY-MM-DD HH:MM: text` lines, in the order they were appended. */
   notes: string[];
-  /** No frontmatter block in the file: an item written before this command existed. */
+  /** No frontmatter block in the file: an issue written before this command existed. */
   legacy: boolean;
 }
 
 export interface Doc {
-  /** Everything above the first item, verbatim. */
+  /** Everything above the first issue, verbatim. */
   head: string;
   items: Item[];
 }
 
 // Local time, not UTC. `toISOString` stamps the UTC date, so west of Greenwich
-// every item filed in the evening carried tomorrow's date.
+// every issue filed in the evening carried tomorrow's date.
 const pad = (n: number): string => String(n).padStart(2, "0");
 
 export const today = (now = new Date()): string =>
@@ -64,7 +64,7 @@ export function todoPath(repoPath: string): string {
   return join(repoPath, "docs", "todo.md");
 }
 
-/** `status`, defaulting a legacy item to open rather than dropping it from every view. */
+/** `status`, defaulting a legacy issue to open rather than dropping it from every view. */
 export function status(item: Item): string {
   return (item.fm.status as string) ?? "open";
 }
@@ -118,7 +118,7 @@ export function render(doc: Doc): string {
 }
 
 /**
- * One item as a work store file: the frontmatter carries `id: <repo>-<n>`,
+ * One issue as a work store file: the frontmatter carries `id: <repo>-<n>`,
  * `title` and `repo` beside the item's own fields, so Backlog.md can read it.
  * The body and the Notes follow as they do in a list section.
  */
@@ -158,7 +158,7 @@ export function write(repoPath: string, doc: Doc): void {
 
 /** The list a repo gets on its first `todo add`. */
 export function blank(repo: string): Doc {
-  return { head: `# To do\n\nThings to build or look at in ${repo}. \`aleph todo\` owns this file.\nItem numbers never change: commits, the spec and the vault quote them.`, items: [] };
+  return { head: `# To do\n\nThings to build or look at in ${repo}. \`aleph issue\` owns this file.\nItem numbers never change: commits, the spec and the vault quote them.`, items: [] };
 }
 
 export const find = (doc: Doc, id: number): Item | undefined => doc.items.find((i) => i.id === id);
@@ -260,7 +260,7 @@ export function lint(doc: Doc, exists?: (repo: string, id: number) => boolean): 
     if (waits !== undefined) {
       const ref = typeof waits === "string" ? parseRef(waits) : null;
       if (!ref) findings.push({ id: item.id, problem: `waiting_on: ${waits} is not <repo>-<n>`, fixable: false });
-      else if (exists && !exists(ref.repo, ref.id)) findings.push({ id: item.id, problem: `waiting_on: ${waits} names no item`, fixable: false });
+      else if (exists && !exists(ref.repo, ref.id)) findings.push({ id: item.id, problem: `waiting_on: ${waits} names no issue`, fixable: false });
     }
     if (item.fm.labels !== undefined && !Array.isArray(item.fm.labels)) findings.push({ id: item.id, problem: "labels must be a list", fixable: true });
     if (item.fm.id !== undefined && Number(item.fm.id) !== item.id) findings.push({ id: item.id, problem: `id says ${item.fm.id} but the heading says ${item.id}`, fixable: true });
