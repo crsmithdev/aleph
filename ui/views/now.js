@@ -35,10 +35,10 @@ const title = (j) => `<h3>${esc(j.item?.title || j.name)}</h3>`;
 /** A button the page wires to /api/<verb>/<name>; Land and Drop ask for a second click. */
 const act = (verb, name, label, primary = false) =>
   `<button class="act${primary ? " primary" : ""}" type="button" data-act="${verb}" data-name="${esc(name)}" data-label="${esc(label)}">${esc(label)}</button>`;
-/** The checks of a run on one line: `tests 71 s ✓ · types 9 s ✓`. */
-const checksLine = (j) =>
-  j.checks?.length ? `<p class="quiet checks num">${j.checks.map((c) => `${esc(c.name)} ${esc(String(c.seconds))} s ${c.ok ? "✓" : "✗"}`).join(" · ")}</p>` : "";
 const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
+/** The checks of a run as facts: `Tests 71 s ✓`. */
+const checkFacts = (j) =>
+  (j.checks || []).map((c) => fact(c.name.charAt(0).toUpperCase() + c.name.slice(1), `${esc(String(c.seconds))} s ${c.ok ? "✓" : "✗"}`)).join("");
 
 /** Above this many runs a day the bar of pips is dropped and the number stands alone. */
 const PIP_MAX = 50;
@@ -71,17 +71,15 @@ export function renderHeader(s) {
   const f = s.factory;
   const pips = f.dayCap > PIP_MAX ? "" : Array.from({ length: f.dayCap }, (_, i) => `<i${i < f.runsToday ? ' class="on"' : ""}></i>`).join("");
   const next = f.nextTick ? `${esc(clock(f.nextTick))}<small>${Date.parse(f.nextTick) > Date.parse(s.now) ? `in ${esc(span(s.now, f.nextTick))}` : "due"}</small>` : "unknown";
-  const probe = f.probe ? `${f.probe.ok ? "Passed" : "Failed"}<small>${f.probe.ok ? `at ${esc(clock(f.probe.at))}` : esc((f.probe.failed || []).join(", "))}</small>` : "none yet";
   const cell = (k, v, cls = "") => `<div class="cell"><div class="k">${k}</div><div class="v${cls}">${v}</div></div>`;
   const health = f.health.length
     ? cell("Health", f.health.map((l) => `<small>${esc(l)}</small>`).join(""), " health")
     : "";
   return `<div class="strip-in"><div class="cells">` +
-    cell("Factory", f.paused ? `<span class="dot off"></span>Paused<small>start: <code>aleph resume</code></small>` : `<span class="dot"></span>On<small>stop: <code>aleph pause</code></small>`) +
+    cell("Factory", f.paused ? `<span class="dot off"></span>Paused<small>start: <code>aleph resume</code></small>` : `<span class="dot"></span>On`) +
     cell("Next tick", next, " num") +
     cell("Runs today", `${f.runsToday} of ${f.dayCap}${pips ? `<span class="pips" aria-hidden="true">${pips}</span>` : ""}`, " num") +
-    cell("Cost today", `${money(f.costToday)}<small>at the API price</small>`, " num") +
-    cell("Sandbox probe", probe, " num") +
+    cell("Cost today", money(f.costToday), " num") +
     health + `</div></div>`;
 }
 
@@ -100,13 +98,12 @@ export function renderNeeds(s) {
       ? `<details class="need-card need-fold"${i === 0 ? " open" : ""}><summary><span class="why">${esc(why)}</span>${itemId(j)}<span class="t">${esc(j.item?.title || j.name)}</span></summary>${inner}</details>`
       : `<article class="need-card"><span class="why">${esc(why)}</span>${inner}</article>`;
     return card((fold ? "" : head) +
-      `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(j.model)) : ""}</dl>` +
-      checksLine(j) +
+      `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(j.model)) : ""}${checkFacts(j)}</dl>` +
       (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
       (j.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="trailers">${statLines(j.stat)}</pre></div></div>` : "") +
       (j.defaults.length ? `<details open><summary>Defaults taken<span class="peek">${j.defaults.length}</span></summary><div class="body"><ul>${j.defaults.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div></details>` : "") +
       (j.followups.length ? `<details><summary>Follow-ups<span class="peek">${j.followups.length}</span></summary><div class="body"><ul>${j.followups.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div></details>` : "") +
-      `<div class="actions">${act("diff", j.name, "Diff")}${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` +
+      `<div class="actions">${act("diff", j.name, "Diff")}${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}</div>` +
       `<div class="diff-panel" data-diff-for="${esc(j.name)}" hidden></div>`);
   }).join("");
   return section("needs", "Needs you", s.needs.length, cards || empty("Nothing needs you.", "A run that stops on a held path or a question shows up here."));
@@ -137,8 +134,7 @@ export function renderDelivered(s) {
     const sha = j.commit ? esc(j.commit.slice(0, 7)) : "";
     const commit = j.commit ? (j.commitUrl ? `<a href="${esc(j.commitUrl)}"><code>${sha}</code></a>` : `<code>${sha}</code>`) : "";
     return `<article class="del"><div class="ih">${itemId(j)}${title(j)}<span class="badge done">Landed</span></div>` +
-      `<dl class="facts">${commit ? fact("Commit", commit) : ""}${j.ended ? fact("Landed", esc(clock(j.ended))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}</dl>` +
-      checksLine(j) +
+      `<dl class="facts">${commit ? fact("Commit", commit) : ""}${j.ended ? fact("Landed", esc(clock(j.ended))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${checkFacts(j)}</dl>` +
       (j.commit || j.check === "open" ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${j.commit ? cmd(`git show ${j.commit.slice(0, 7)}`) : ""}</div>` : "") + `</article>`;
   }).join("");
   return section("del", "Delivered today", s.delivered.length, rows || empty("Nothing has landed today.", "A landed run shows up here with its commit."), "on origin/main");

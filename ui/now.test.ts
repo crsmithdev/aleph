@@ -14,9 +14,10 @@ const state: any = {
   ticks: [{ at: "2026-10-27T16:05:00Z", line: "started none" }],
 };
 
-test("needs shows name, reason, defaults and both commands", () => {
+test("needs shows name, reason and defaults, and no copy commands", () => {
   const h = r.renderNeeds(state);
-  for (const t of ["aleph-27", "Held path: hooks/lib/digest.ts", "Haiku tier per request", "a.ts | 2 +-", 'data-cmd="aleph land aleph-27"', 'data-cmd="aleph drop aleph-27"']) expect(h).toContain(t);
+  for (const t of ["aleph-27", "Held path: hooks/lib/digest.ts", "Haiku tier per request", "a.ts | 2 +-"]) expect(h).toContain(t);
+  expect(h).not.toContain("data-cmd=");
 });
 
 test("stuck, running and delivered show their jobs", () => {
@@ -61,7 +62,6 @@ test("a needs-you entry has Diff, Land and Drop buttons; a landed one with an op
   const h = r.renderNeeds(state);
   for (const v of ["diff", "land", "drop"]) expect(h).toContain(`data-act="${v}" data-name="aleph-27"`);
   expect(h).toContain("diff-panel");
-  expect(h).toContain('data-cmd="aleph land aleph-27"');
   const open = { ...state, delivered: [{ ...state.delivered[0], check: "open" }] };
   expect(r.renderDelivered(open)).toContain('data-act="checked" data-name="aleph-28"');
   expect(r.renderDelivered(state)).not.toContain("data-act=");
@@ -118,12 +118,14 @@ test("the runs bar is dropped above 50 runs", () => {
   const h = r.renderHeader(withFactory({ dayCap: 999 }));
   expect(h).toContain("5 of 999");
   expect(h).not.toContain("pips");
+  for (const t of ["Sandbox probe", "aleph pause", "API price"]) expect(h).not.toContain(t);
 });
 
-test("a job with checks shows them on one line; one without shows none", () => {
+test("a job with checks shows them as facts; one without shows none", () => {
   const checks = [{ name: "tests", ok: true, seconds: 71 }, { name: "types", ok: false, seconds: 9 }];
-  expect(r.renderNeeds({ ...state, needs: [{ ...state.needs[0], checks }] })).toContain("tests 71 s ✓ · types 9 s ✗");
-  expect(r.renderDelivered({ ...state, delivered: [{ ...state.delivered[0], checks }] })).toContain("tests 71 s ✓ · types 9 s ✗");
+  const both = "<div><dt>Tests</dt><dd>71 s ✓</dd></div><div><dt>Types</dt><dd>9 s ✗</dd></div></dl>";
+  expect(r.renderNeeds({ ...state, needs: [{ ...state.needs[0], checks }] })).toContain(both);
+  expect(r.renderDelivered({ ...state, delivered: [{ ...state.delivered[0], checks }] })).toContain(both);
   expect(r.renderNeeds(state)).not.toContain(" s ✓");
   expect(r.renderDelivered(state)).not.toContain("checks");
 });
