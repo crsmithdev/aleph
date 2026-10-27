@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const CLI = join(import.meta.dir, "cli.ts");
-let base: string, remote: string, repo: string, other: string, jobsDir: string, fake: string, fakeLog: string, setupLog: string;
+let base: string, remote: string, repo: string, other: string, items: string, itemsRemote: string, jobsDir: string, fake: string, fakeLog: string, setupLog: string;
 let server: ReturnType<typeof Bun.serve>;
 const told: string[] = [];
 
@@ -18,7 +18,7 @@ function sh(cwd: string, ...args: string[]): string {
 function env(extra: Record<string, string> = {}): Record<string, string> {
   return {
     ...(process.env as Record<string, string>), ...gitEnv,
-    ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOB_FOREGROUND: "1",
+    ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: items, ALEPH_JOB_FOREGROUND: "1",
     ALEPH_WORKER_CMD: fake, XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
     SIDETONE_TELL_URL: `https://127.0.0.1:${server.port}/tell`, ...extra,
   };
@@ -91,6 +91,13 @@ beforeAll(() => {
   sh(seed, "git", "add", "."); sh(seed, "git", "commit", "-qm", "init"); sh(seed, "git", "push", "-q", "origin", "main");
   repo = join(base, "repo");
   other = join(base, "other");
+  // The work store, empty: a list starts with its first item.
+  itemsRemote = join(base, "items.git");
+  items = join(base, "items");
+  sh(base, "git", "init", "-q", "--bare", "-b", "main", itemsRemote);
+  sh(base, "git", "clone", "-q", itemsRemote, items);
+  sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
+  sh(items, "git", "push", "-q", "origin", "main");
   sh(base, "git", "clone", "-q", remote, repo);
   sh(base, "git", "clone", "-q", remote, other);
 
@@ -383,7 +390,7 @@ describe("land", () => {
     expect(remoteHead()).toBe(s.commit);
     const item = (await aleph(["todo", "show", "demo", String(s.checkItem), "--json"])).json;
     expect(item).toMatchObject({ title: "Check phonelater: run it on the phone", status: "open", labels: ["check"] });
-    expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${s.commit}~1`, s.commit).split("\n")).toContain("docs/todo.md");
+    expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${s.commit}~1`, s.commit)).toBe("android/later.txt");
     expect(told).toContain("demo/phonelater landed; check open");
     expect((await aleph(["jobs"])).json.find((j: any) => j.name === "phonelater")).toMatchObject({ check: "open" });
 
@@ -444,7 +451,7 @@ describe("land", () => {
     const runs = runsOf("byhand");
     expect(runs.map((x) => [x.kind, x.state])).toEqual([["agent", "passed"], ["land", "failed"], ["agent", "passed"], ["land", "landed"]]);
     expect(file(runs[2].id, "prompt.md")).toContain("Only aleph todo writes the list");
-    expect(sh(base, "git", "--git-dir", remote, "show", "main:docs/todo.md")).not.toContain("by hand");
+    expect(Bun.spawnSync(["git", "--git-dir", remote, "cat-file", "-e", "main:docs/todo.md"]).exitCode).not.toBe(0);
     expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${runs[3].commit}~1`, runs[3].commit)).toBe("byhand.txt");
   }, 30_000);
 
@@ -466,17 +473,15 @@ describe("land", () => {
     expect(sh(base, "git", "--git-dir", remote, "log", "-2", "--format=%s", "main")).toBe("add race/x.txt\nrace");
   });
 
-  test("a to-do commit during the checks does not fail the land: the squash goes onto the new main", async () => {
-    const list = "# To do\n\n## 1. Something\n---\nid: 1\nstatus: open\ncreated: 2026-09-30\nupdated: 2026-09-30\n---\n";
-    pushFromOther("docs/todo.md", list);
+  test("a to-do write during the checks goes to the work store and leaves the land's main alone", async () => {
     await job("patient", "commit todo-race/patient.txt");
+    const before = remoteHead();
     writeFileSync(join(base, "todo-once"), "");
     const l = await aleph(["land", "patient"]);
     const s = state(l.json.run);
     expect(s).toMatchObject({ state: "landed" });
-    expect(file(l.json.run, "land.log")).toContain("main moved by a to-do commit");
-    expect(sh(base, "git", "--git-dir", remote, "log", "-2", "--format=%s", "main")).toBe("add todo-race/patient.txt\ntodo: a note on item 1");
-    expect(sh(base, "git", "--git-dir", remote, "show", "main:docs/todo.md")).toContain("during the land");
+    expect(sh(base, "git", "--git-dir", remote, "rev-parse", `${s.commit}~1`)).toBe(before);
+    expect(sh(base, "git", "--git-dir", itemsRemote, "show", "main:demo/backlog/tasks/demo-1.md")).toContain("during the land");
   }, 30_000);
 
   test("two lands at once in one repo both reach main, neither undoing the other", async () => {
@@ -501,7 +506,7 @@ describe("land", () => {
 });
 
 describe("a job tied to a to-do item", () => {
-  const list = () => sh(base, "git", "--git-dir", remote, "show", "main:docs/todo.md");
+  const list = () => sh(base, "git", "--git-dir", itemsRemote, "rev-parse", "main");
   const show = async (id: number) => (await aleph(["todo", "show", "demo", String(id), "--json"])).json;
   let landId: number, dropId: number;
   beforeAll(async () => {
@@ -528,8 +533,9 @@ describe("a job tied to a to-do item", () => {
     expect(item.status).toBe("done");
     expect(item.notes.at(-1)).toContain("job widget landed");
     expect(file(r.json.run, "land.log")).toContain(`## todo ${landId} done`);
-    // The item closes in the landing commit itself, and nothing is left changed in the main checkout.
-    expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${s.commit}~1`, s.commit).split("\n")).toEqual(["docs/todo.md", "widget.txt"]);
+    // The item closes in the work store; the landing commit holds only the work.
+    expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${s.commit}~1`, s.commit)).toBe("widget.txt");
+    expect(sh(base, "git", "--git-dir", itemsRemote, "log", "-1", "--format=%s", "main")).toBe("demo: todo: job widget landed");
     expect(sh(repo, "git", "status", "--porcelain", "--untracked-files=no")).toBe("");
   });
 

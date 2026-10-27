@@ -118,7 +118,7 @@ Notes are `wiki/<kind>/<Title>.md` with `[[Title]]` links and frontmatter `alias
 
 ## To do
 
-Every repo in `~/.aleph/repos.json` has a list at `docs/todo.md`: numbered `## N. Title` sections with a small frontmatter header and free prose. **Status is a field, never a filing position** — a finished item stays where it is and keeps its number, because commits, specs and the vault quote that number.
+Every repo in `~/.aleph/repos.json` has a list in the work store, a private git repo cloned at `~/.aleph/items` (`$ALEPH_ITEMS`). Each item is one file, `<repo>/backlog/tasks/<repo>-<n>.md`: a small frontmatter header, free prose, and a Notes list. **Status is a field, never a filing position** — a finished item stays where it is and keeps its number, because commits, specs and the vault quote that number.
 
 ```bash
 aleph todo add <repo> "<title>" [--body -] [--priority high] [--labels a,b]
@@ -131,9 +131,9 @@ aleph todo drop <repo> <id> "<reason>"
 aleph todo lint <repo> [--fix]
 ```
 
-The list lives on `origin/<main>`. A read fetches and reads it there; a write is one commit on `origin/<main>` that changes only `docs/todo.md`, made without a working tree, so the main checkout never holds a changed list and only fast-forwards. A job's item closes inside the job's landing commit. git-guard denies an Edit or Write on a registered repo's `docs/todo.md`, so nobody edits it on a branch.
+The store's `origin/main` is the record. A read fetches and reads it there; a write is one commit on it, made without a working tree, and the store's checkout fast-forwards. No product repo's main moves when an item changes. A job's item closes in the store after the job's landing commit is pushed. git-guard denies an Edit or Write on a store file. Each `<repo>/` folder is a Backlog.md project (pinned 1.55.3 in `~/.aleph/tools`), so `backlog browser` in `~/.aleph/items/<repo>` shows that repo's items as a board. Make changes with `aleph todo`, not the board.
 
-Each item carries `id status created updated priority labels`. `note` is append-only, which is the lost update this format exists to stop: two writers add lines, neither erases the other's. `lint` refuses (exit 1) on a missing or malformed key, an unknown status, or a duplicate id; `--fix` repairs what is mechanical — a missing date, a stale `id`, a bare scalar where a list belongs — and still exits 1 if anything is left. An item written before this command existed has no header, parses fine, and reads as `open`.
+Each item carries `id title status created updated priority labels repo`. `note` is append-only, which is the lost update this format exists to stop: two writers add lines, neither erases the other's. `lint` refuses (exit 1) on a missing or malformed key, an unknown status, or a duplicate id; `--fix` repairs what is mechanical — a missing date, a stale `id`, a bare scalar where a list belongs — and still exits 1 if anything is left.
 
 ## Development
 

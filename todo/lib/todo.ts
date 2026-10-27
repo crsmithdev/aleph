@@ -98,6 +98,35 @@ export function render(doc: Doc): string {
   return parts.join("\n\n") + "\n";
 }
 
+/**
+ * One item as a work store file: the frontmatter carries `id: <repo>-<n>`,
+ * `title` and `repo` beside the item's own fields, so Backlog.md can read it.
+ * The body and the Notes follow as they do in a list section.
+ */
+export function renderItem(repo: string, item: Item): string {
+  const { id: _, ...fields } = item.fm;
+  const fm = serializeFrontmatter({ id: `${repo}-${item.id}`, title: item.title, ...fields, repo });
+  const block: string[] = [];
+  if (item.body.trim()) block.push(item.body.replace(/\n+$/, ""));
+  if (item.notes.length) block.push(["### Notes", "", ...item.notes].join("\n"));
+  return fm + (block.length ? "\n" + block.join("\n\n") + "\n" : "");
+}
+
+export function parseItem(text: string): Item {
+  const { frontmatter, body: rest } = splitFrontmatter(text);
+  const { title, repo: _, id: full, ...fields } = parseFrontmatter(frontmatter ?? "");
+  const id = Number(/-(\d+)$/.exec(String(full))?.[1]);
+  const { body, notes } = splitNotes(rest);
+  return {
+    id,
+    title: String(title ?? ""),
+    fm: { id: String(id), ...fields },
+    body: body.replace(/^\n+/, "").replace(/\n+$/, ""),
+    notes,
+    legacy: false,
+  };
+}
+
 export function read(repoPath: string): Doc {
   const file = todoPath(repoPath);
   if (!existsSync(file)) throw new Error(`no ${file}`);

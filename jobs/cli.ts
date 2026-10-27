@@ -104,7 +104,7 @@ async function job(): Promise<void> {
   if (todoArg !== undefined) {
     todo = Number(todoArg);
     if (!Number.isInteger(todo)) refuse("--todo takes an item number");
-    if (!todos.find(readTodo(repo, `origin/${repo.main}:${store.TODO_PATH}`), todo!)) refuse(`${repo.key} has no item ${todo}`);
+    if (!todos.find(readTodo(repo), todo!)) refuse(`${repo.key} has no item ${todo}`);
   }
 
   const release = await lock(`job-${repo.key}-${name}`);
@@ -311,14 +311,13 @@ async function drop(): Promise<void> {
 
 /**
  * aleph todo <add|list|show|note|done|drop|lint> <repo> ... — every repo in the
- * registry has a list; `docs/todo.md` is the file. Status is a field, so an
- * item never moves and never gets a new number.
+ * registry has a list in the work store (todo/lib/store.ts). Status is a
+ * field, so an item never moves and never gets a new number.
  */
 async function todoCmd(): Promise<void> {
   const [verb, repoKey, ...args] = positional;
   const sub = verb ?? refuse("usage: aleph todo <add|list|show|note|edit|done|drop|lint> <repo> ...");
   const repo = loadRegistry()[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
-  const where = `origin/${repo.main}:${store.TODO_PATH}`;
 
   const pick = (doc: todos.Doc): todos.Item => {
     const id = Number(args[0]);
@@ -355,7 +354,7 @@ async function todoCmd(): Promise<void> {
       const want = flag("status");
       if (want && !todos.STATUSES.includes(want as todos.Status)) refuse(`status must be one of ${todos.STATUSES.join(", ")}`);
       const label = flag("label");
-      const doc = readTodo(repo, where);
+      const doc = readTodo(repo);
       const rows = doc.items
         .filter((i) => (want ? todos.status(i) === want : true))
         .filter((i) => (label ? ((i.fm.labels as string[]) ?? []).includes(label) : true));
@@ -366,7 +365,7 @@ async function todoCmd(): Promise<void> {
       return;
     }
     case "show": {
-      const i = pick(readTodo(repo, where));
+      const i = pick(readTodo(repo));
       if (rest.includes("--json")) { out({ ...brief(i), body: i.body, notes: i.notes }); return; }
       console.log(`## ${i.id}. ${i.title}`);
       console.log(`status ${todos.status(i)}   priority ${i.fm.priority ?? "-"}   labels ${(((i.fm.labels as string[]) ?? []).join(", ")) || "-"}   updated ${i.fm.updated ?? "-"}`);
@@ -409,26 +408,26 @@ async function todoCmd(): Promise<void> {
     case "lint": {
       if (rest.includes("--fix")) {
         const w = write("todo: lint --fix", (doc) => { const fixed = todos.fix(doc); return fixed.length ? { fixed, left: todos.lint(doc) } : null; });
-        const left = w?.value.left ?? todos.lint(readTodo(repo, where));
+        const left = w?.value.left ?? todos.lint(readTodo(repo));
         out({ repo: repo.key, fixed: w?.value.fixed ?? [], remaining: left });
         if (left.length) process.exit(1);
         return;
       }
-      const doc = readTodo(repo, where);
+      const doc = readTodo(repo);
       const findings = todos.lint(doc);
       if (!findings.length) { out({ repo: repo.key, items: doc.items.length, findings: [] }); return; }
       for (const f of findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
-      refuse(`${findings.length} problem${findings.length > 1 ? "s" : ""} in ${where}`);
+      refuse(`${findings.length} problem${findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
     }
     default: refuse("usage: aleph todo <add|list|show|note|edit|done|drop|lint> <repo> ...");
   }
 }
 
-/** The list on origin/<main>; a refusal when main has none or the fetch fails. */
-function readTodo(repo: store.Place, where: string): todos.Doc {
+/** The repo's list in the work store; a refusal when the store has none or the fetch fails. */
+function readTodo(repo: store.Place): todos.Doc {
   let doc: todos.Doc | null = null;
   try { doc = store.readList(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
-  return doc ?? refuse(`no ${where}`);
+  return doc ?? refuse(`the work store has no list for ${repo.key}`);
 }
 
 try {

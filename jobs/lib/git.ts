@@ -34,12 +34,22 @@ export function show(cwd: string, rev: string, path: string): string | null {
 
 /** `tree` with `path` set to `content`, built in a temporary index: no working tree changes. */
 export function treeWith(cwd: string, tree: string, path: string, content: string): string {
-  const blob = gitWith({ stdin: content }, cwd, "hash-object", "-w", "--stdin");
-  if (!blob.ok) throw new Error(`hash-object: ${blob.out}`);
+  return treeWithFiles(cwd, tree, { [path]: content });
+}
+
+/** `tree` with each path in `files` set to its content, or removed when it is null. */
+export function treeWithFiles(cwd: string, tree: string, files: Record<string, string | null>): string {
   const index = join(tmpdir(), `aleph-index-${process.pid}-${crypto.randomUUID()}`);
   const env = { GIT_INDEX_FILE: index };
   try {
-    for (const args of [["read-tree", tree], ["update-index", "--add", "--cacheinfo", `100644,${blob.out},${path}`]]) {
+    const steps = [["read-tree", tree]];
+    for (const [path, content] of Object.entries(files)) {
+      if (content === null) { steps.push(["update-index", "--force-remove", path]); continue; }
+      const blob = gitWith({ stdin: content }, cwd, "hash-object", "-w", "--stdin");
+      if (!blob.ok) throw new Error(`hash-object: ${blob.out}`);
+      steps.push(["update-index", "--add", "--cacheinfo", `100644,${blob.out},${path}`]);
+    }
+    for (const args of steps) {
       const r = gitWith({ env }, cwd, ...args);
       if (!r.ok) throw new Error(`${args[0]}: ${r.out}`);
     }

@@ -1,50 +1,97 @@
 /**
- * A repo's to-do list lives on origin/<main>. A read fetches and reads it
- * there; a write is one commit on origin/<main> that changes only
- * docs/todo.md, made without a working tree. So no checkout is left with a
- * changed list, and the main checkout only fast-forwards.
+ * The work store holds every registry repo's to-do items, one file each, in a
+ * git repo of its own at $ALEPH_ITEMS or ~/.aleph/items. A repo's items are
+ * `<repo>/backlog/tasks/<repo>-<n>.md`, a Backlog.md project, so `backlog
+ * browser` in `<repo>/` shows them as a board. A read fetches and reads
+ * origin/main; a write is one commit on origin/main, made without a working
+ * tree, and the store's checkout follows. No product repo's main moves when
+ * an item changes, and no branch of a product repo can edit its own item.
  */
-import { followMain, git, show, treeWith } from "../../jobs/lib/git.ts";
-import { blank, parse, render, type Doc } from "./todo.ts";
+import { followMain, git, show, treeWithFiles } from "../../jobs/lib/git.ts";
+import { expand } from "../../jobs/lib/ledger.ts";
+import { parseItem, renderItem, type Doc } from "./todo.ts";
 
-export const TODO_PATH = "docs/todo.md";
+export interface Place { key: string }
 
-export interface Place { key: string; path: string; main: string }
-
+const MAIN = "main";
 const ATTEMPTS = 5;
 
-function fetch(repo: Place): void {
-  const r = git(repo.path, "fetch", "-q", "origin", repo.main);
-  if (!r.ok) throw new Error(`fetch failed: ${r.out}`);
+export const storeDir = (): string => expand(process.env.ALEPH_ITEMS ?? "~/.aleph/items");
+const tasksDir = (key: string): string => `${key}/backlog/tasks`;
+export const configPath = (key: string): string => `${key}/backlog/config.yml`;
+export const itemPath = (key: string, id: number): string => `${tasksDir(key)}/${key}-${id}.md`;
+
+/** The Backlog.md project file for a repo: its statuses are aleph's, and Backlog.md never commits. */
+export const config = (key: string): string => [
+  `project_name: "${key}"`, `default_status: "open"`, `statuses: ["open", "done", "dropped"]`, `date_format: yyyy-mm-dd`,
+  `remote_operations: false`, `auto_commit: false`, `check_active_branches: false`, `task_prefix: "${key}"`, "",
+].join("\n");
+
+function fetch(dir: string): void {
+  const r = git(dir, "fetch", "-q", "origin", MAIN);
+  if (!r.ok) throw new Error(`work store fetch failed: ${r.out}`);
 }
 
-/** The list on origin/<main>, or null when main has none. */
+/** The contents of each `rev:path`, in one `git cat-file --batch`. */
+function readFiles(dir: string, specs: string[]): string[] {
+  if (!specs.length) return [];
+  const p = Bun.spawnSync(["git", "cat-file", "--batch"], { cwd: dir, stdin: new Blob([specs.join("\n") + "\n"]), stdout: "pipe", stderr: "pipe" });
+  if (p.exitCode !== 0) throw new Error(`cat-file: ${p.stderr.toString()}`);
+  const buf = p.stdout;
+  const out: string[] = [];
+  let at = 0;
+  for (const _ of specs) {
+    const nl = buf.indexOf(10, at);
+    const size = Number(buf.subarray(at, nl).toString().split(" ")[2]);
+    out.push(buf.subarray(nl + 1, nl + 1 + size).toString());
+    at = nl + 1 + size + 1;
+  }
+  return out;
+}
+
+/** A repo's items at `rev`, in number order, or null when the store has no list for it. */
+function load(dir: string, rev: string, key: string): Doc | null {
+  if (show(dir, rev, configPath(key)) === null) return null;
+  const ls = git(dir, "ls-tree", "--name-only", `${rev}:${tasksDir(key)}`);
+  const names = ls.ok ? ls.out.split("\n").filter((n) => n.endsWith(".md")) : [];
+  const items = readFiles(dir, names.map((n) => `${rev}:${tasksDir(key)}/${n}`)).map(parseItem);
+  return { head: "", items: items.sort((a, b) => a.id - b.id) };
+}
+
+/** The repo's list on the store's origin/main, or null when the store has none. */
 export function readList(repo: Place): Doc | null {
-  fetch(repo);
-  const text = show(repo.path, `origin/${repo.main}`, TODO_PATH);
-  return text === null ? null : parse(text);
+  const dir = storeDir();
+  fetch(dir);
+  return load(dir, `origin/${MAIN}`, repo.key);
 }
 
 /**
- * Apply `change` to the list on origin/<main> and push it as one commit. When
- * the push is refused because main moved, fetch and apply `change` again.
- * `change` returns null to write nothing. A list main does not have yet
- * starts blank only when `create` is set.
+ * Apply `change` to the repo's list on the store's origin/main and push it as
+ * one commit. When the push is refused because main moved, fetch and apply
+ * `change` again. `change` returns null to write nothing. A repo the store
+ * has no list for starts blank only when `create` is set.
  */
 export function writeList<T>(repo: Place, message: string, change: (doc: Doc) => T | null, create = false): { value: T; commit: string; follow: string | null } | null {
+  const dir = storeDir();
   for (let attempt = 1; ; attempt++) {
-    fetch(repo);
-    const base = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
-    const text = show(repo.path, base, TODO_PATH);
-    if (text === null && !create) throw new Error(`origin/${repo.main} has no ${TODO_PATH}`);
-    const doc = text === null ? blank(repo.key) : parse(text);
+    fetch(dir);
+    const base = git(dir, "rev-parse", `origin/${MAIN}`).out;
+    const found = load(dir, base, repo.key);
+    if (found === null && !create) throw new Error(`the work store has no list for ${repo.key}`);
+    const doc = found ?? { head: "", items: [] };
+    const before = new Map(doc.items.map((i) => [i.id, renderItem(repo.key, i)]));
     const value = change(doc);
     if (value === null) return null;
-    const tree = treeWith(repo.path, `${base}^{tree}`, TODO_PATH, render(doc));
-    const commit = git(repo.path, "commit-tree", tree, "-p", base, "-m", message);
+    const files: Record<string, string> = found === null ? { [configPath(repo.key)]: config(repo.key) } : {};
+    for (const item of doc.items) {
+      const text = renderItem(repo.key, item);
+      if (before.get(item.id) !== text) files[itemPath(repo.key, item.id)] = text;
+    }
+    const tree = treeWithFiles(dir, `${base}^{tree}`, files);
+    const commit = git(dir, "commit-tree", tree, "-p", base, "-m", `${repo.key}: ${message}`);
     if (!commit.ok) throw new Error(`commit-tree failed: ${commit.out}`);
-    const push = git(repo.path, "push", "-q", "origin", `${commit.out}:refs/heads/${repo.main}`);
-    if (push.ok) return { value, commit: commit.out, follow: followMain(repo.path, repo.main) };
+    const push = git(dir, "push", "-q", "origin", `${commit.out}:refs/heads/${MAIN}`);
+    if (push.ok) return { value, commit: commit.out, follow: followMain(dir, MAIN) };
     if (attempt === ATTEMPTS) throw new Error(`push refused ${ATTEMPTS} times: ${push.out}`);
   }
 }

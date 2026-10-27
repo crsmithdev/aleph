@@ -7,8 +7,8 @@ import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { TODO_PATH, writeList } from "../../todo/lib/store.ts";
-import { followMain, git, show, treeWith } from "./git.ts";
+import { writeList } from "../../todo/lib/store.ts";
+import { followMain, git } from "./git.ts";
 import { allJobs, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type Repo, type Run } from "./ledger.ts";
 
 export { git };
@@ -127,41 +127,44 @@ export function onMain(repo: Repo, run: Run): { commit: string; how: string } | 
 }
 
 /**
- * The tree to push: the checked tree, with the list from `onto`, the job's
- * item marked done, and a new item for an open manual check.
+ * After the push: the job's item done in the work store, and a new item for
+ * an open manual check. Returns what happened to each, for the land log.
  */
-function squashTree(wt: string, run: Run, onto: string): { tree: string; todo?: string; checkItem?: number } {
-  const head = git(wt, "rev-parse", "HEAD^{tree}").out;
-  const shown = show(wt, onto, TODO_PATH);
+function closeItems(repo: Repo, run: Run): { todo?: string; checkItem?: number } {
   const open = run.check === "open";
-  if (shown === null && !open) return { tree: head, todo: run.todo === undefined ? undefined : `no ${TODO_PATH}` };
-  const text = shown ?? todos.render(todos.blank(run.repo ?? ""));
-  // With nothing to change, the list goes in byte for byte.
-  if (run.todo === undefined && !open) return { tree: text === show(wt, "HEAD", TODO_PATH) ? head : treeWith(wt, head, TODO_PATH, text) };
-  const doc = todos.parse(text);
+  if (run.todo === undefined && !open) return {};
   let todo: string | undefined;
-  if (run.todo !== undefined) {
-    const item = todos.find(doc, run.todo);
-    if (item) {
-      todos.setStatus(item, "done");
-      todos.note(item, `job ${run.name} landed`);
-    }
-    todo = item ? "done" : `no item ${run.todo}`;
+  let checkItem: number | undefined;
+  try {
+    writeList(repo, `todo: job ${run.name} landed`, (doc) => {
+      if (run.todo !== undefined) {
+        const item = todos.find(doc, run.todo);
+        if (item) {
+          todos.setStatus(item, "done");
+          todos.note(item, `job ${run.name} landed`);
+        }
+        todo = item ? "done" : `no item ${run.todo}`;
+      }
+      if (open) checkItem = todos.add(doc, `Check ${run.name}: ${run.say}`, { labels: ["check"] }).id;
+      return true;
+    }, true);
+  } catch (e: any) {
+    todo = e?.message ?? String(e);
   }
-  const checkItem = open ? todos.add(doc, `Check ${run.name}: ${run.say}`, { labels: ["check"] }).id : undefined;
-  return { tree: treeWith(wt, head, TODO_PATH, todos.render(doc)), todo, checkItem };
+  return { todo, checkItem };
 }
 
-const PUSHES = 5;
+// The lists left product repos for the work store. A branch made before that
+// still has the old file, and landing it would bring the file back.
+const TODO_PATH = "docs/todo.md";
+
 const MOVED = "main moved during the land; land again";
 const OWN_LIST = `the branch changes ${TODO_PATH}; change the list with aleph todo`;
 
 /**
  * Land a job: rebase onto origin/<main>, run the checks, push one squash
- * commit as a fast-forward. The job's to-do item closes in that commit. When
- * main moved by a to-do commit alone, the checked tree still holds, so the
- * squash goes onto the new main without a new check. Every failure leaves the
- * remote as it was.
+ * commit as a fast-forward. The job's to-do item closes in the work store
+ * after the push. Every failure leaves the remote as it was.
  */
 async function land(folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ verdict: Verdict; code: number }> {
   const wt = run.worktree!;
@@ -213,25 +216,14 @@ async function land(folder: string, run: Run, repo: Repo, env: Record<string, st
     if (failed) return fail(failed);
     phase("land");
     const message = [subjects[0] ?? run.name, "", ...(subjects.length > 1 ? subjects.map((s) => `- ${s}`) : []), `Job: ${run.job}`].join("\n");
-    let onto = base;
-    let commit = "";
-    let todo: string | undefined;
-    let checkItem: number | undefined;
-    for (let attempt = 1; ; attempt++) {
-      const squash = squashTree(wt, run, onto);
-      todo = squash.todo;
-      checkItem = squash.checkItem;
-      const c = step("commit-tree", "commit-tree", squash.tree, "-p", onto, "-m", message);
-      if (!c.ok) return fail("commit-tree failed");
-      if (step("push", "push", "-q", "origin", `${c.out}:refs/heads/${main}`).ok) { commit = c.out; break; }
+    const c = step("commit-tree", "commit-tree", git(wt, "rev-parse", "HEAD^{tree}").out, "-p", base, "-m", message);
+    if (!c.ok) return fail("commit-tree failed");
+    if (!step("push", "push", "-q", "origin", `${c.out}:refs/heads/${main}`).ok) {
       if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
-      const moved = git(wt, "rev-parse", `origin/${main}`).out;
-      if (moved === onto) return fail("push refused");
-      const between = git(wt, "diff", "--name-only", onto, moved).out.split("\n").filter(Boolean);
-      if (attempt === PUSHES || between.some((f) => f !== TODO_PATH)) return fail(MOVED);
-      log(`main moved by a to-do commit; the squash goes onto ${moved}`);
-      onto = moved;
+      return fail(git(wt, "rev-parse", `origin/${main}`).out === base ? "push refused" : MOVED);
     }
+    const commit = c.out;
+    const { todo, checkItem } = closeItems(repo, run);
     if (todo) log(todo === "done" ? `todo ${run.todo} done` : `todo ${run.todo} not closed: ${todo}`);
     if (checkItem !== undefined) log(`todo ${checkItem} holds the manual check`);
 
@@ -359,7 +351,7 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   const cli = join(import.meta.dir, "..", "cli.ts");
   const argv = next === "land" ? ["land", run.name] : ["job", run.repo!, run.name, "--spec", "-", "--land"];
   const note = run.reason === OWN_LIST
-    ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph todo writes the list. Restore ${TODO_PATH} to its content on origin/main, commit, and make each change to the list with aleph todo.`
+    ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph todo writes the list. The lists live in the work store now. Remove ${TODO_PATH} from the branch, commit, and make each change to the list with aleph todo.`
     : `The land conflicted with origin/main in: ${(run.conflicts ?? []).join(", ")}. Rebase onto origin/main, resolve each conflict so that the change on main and this job's change both survive, run the tests, and commit.`;
   const log = openSync(join(folder, "next.log"), "a");
   const p = Bun.spawn([process.execPath, cli, ...argv], { env: process.env, stdin: next === "worker" ? new Blob([note]) : "ignore", stdout: log, stderr: log });

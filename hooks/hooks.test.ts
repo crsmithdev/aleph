@@ -265,20 +265,12 @@ describe("git-guard", () => {
     const out = JSON.parse(await guard(join(root, "plain", "linked.md")));
     expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
   });
-  test("denies a hand edit of a registered repo's docs/todo.md, on main and in a worktree", async () => {
-    const repos = join(root, "repos.json");
-    writeFileSync(repos, JSON.stringify({ demo: { path: join(root, "repo") } }));
-    const env = { ALEPH_REPOS: repos };
-    for (const p of [join(root, "repo", "docs", "todo.md"), join(root, "repo", ".worktrees", "x", "docs", "todo.md")]) {
-      const out = JSON.parse(await guard(p, env));
-      expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
-      expect(out.hookSpecificOutput.permissionDecisionReason).toContain("aleph todo edit demo");
-    }
-    expect(await guard(join(root, "repo", ".worktrees", "x", "docs", "other.md"), env)).toBe("");
-  });
-  test("allows docs/todo.md in a repo that is not registered", async () => {
-    writeFileSync(join(root, "empty.json"), "{}");
-    expect(await guard(join(root, "repo", ".worktrees", "x", "docs", "todo.md"), { ALEPH_REPOS: join(root, "empty.json") })).toBe("");
+  test("denies a hand edit of a work store file, naming the repo in the commands", async () => {
+    const env = { ALEPH_ITEMS: join(root, "plain", "items") };
+    const out = JSON.parse(await guard(join(root, "plain", "items", "demo", "backlog", "tasks", "demo-3.md"), env));
+    expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(out.hookSpecificOutput.permissionDecisionReason).toContain("aleph todo edit demo");
+    expect(await guard(join(root, "plain", "itemsx", "a.md"), env)).toBe("");
   });
   test("follows a linked directory into a worktree, and allows a new file there", async () => {
     symlinkSync(join(root, "repo", ".worktrees", "x"), join(root, "plain", "wt"));

@@ -103,8 +103,8 @@ something, or get corrected, write the page before the turn ends
 
 ## To do
 
-Every repo in the registry keeps its list at `docs/todo.md`, and `aleph todo`
-owns the file. Every to-do goes there, whoever names it: an ask from Chris, a
+Every repo in the registry keeps its list in the work store at
+`~/.aleph/items`, and `aleph todo` owns it. Every to-do goes there, whoever names it: an ask from Chris, a
 follow-up you name in a summary, a `TODO` you meet in the code. File it in the
 same turn you name it, and quote the item number after that.
 
