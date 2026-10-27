@@ -30,6 +30,27 @@ test("the new rules sit at the top level, outside any @media block", () => {
   }
 });
 
+test("the Memory view's classes have top-level rules, and .two stacks at 720px", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const css = html.match(/<style>([\s\S]*?)<\/style>/)![1].replace(/\/\*[\s\S]*?\*\//g, "").replace(/"[^"\n]*"|'[^'\n]*'/g, "");
+  // Selectors of the rules at brace depth 0; @media preludes are included, their inner rules are not.
+  const top: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < css.length; i++) {
+    if (css[i] === "{") {
+      if (depth === 0) top.push(css.slice(start, i).trim());
+      depth++;
+    } else if (css[i] === "}") {
+      depth--;
+      if (depth === 0) start = i + 1;
+    }
+  }
+  const selectors = top.flatMap((p) => p.split(",").map((s) => s.trim()));
+  for (const cls of [".two", ".search", ".results", ".writes"]) expect(selectors).toContain(cls);
+  expect(css).toMatch(/@media \(max-width: 720px\) \{\s*\.two \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
+});
+
 test("the page builds the sidebar from /api/views and keeps the project filter", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   for (const s of ["/api/views", "/api/projects/keys", 'aria-current="page"', "project=", '"factory", "Factory"', '"memory", "Memory"']) expect(html).toContain(s);
