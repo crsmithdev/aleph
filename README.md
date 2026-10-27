@@ -126,14 +126,16 @@ Every repo in `~/.aleph/repos.json` has a list in the work store, a private git 
 
 ```bash
 aleph todo add <repo> "<title>" [--body -] [--priority high] [--labels a,b]
-aleph todo list <repo> [--status open|done|dropped] [--label <name>] [--json]
+aleph todo list [<repo>] [--status open|done|dropped] [--label <name>] [--json]
 aleph todo show <repo> <id> [--json]
 aleph todo edit <repo> <id> [--title "<title>"] [--body -] [--priority p] [--labels a,b]
 aleph todo note <repo> <id> "<text>"      # appends one timestamped line, never rewrites
 aleph todo done <repo> <id> ["<summary>"]
 aleph todo drop <repo> <id> "<reason>"
-aleph todo lint <repo> [--fix]
+aleph todo lint [<repo>] [--fix]
 ```
+
+With no repo, `list` and `lint` cover the recent repos: those with a ledger run or an item update in the last 7 days, the latest first.
 
 The store's `origin/main` is the record. A read fetches and reads it there; a write is one commit on it, made without a working tree, and the store's checkout fast-forwards. No product repo's main moves when an item changes. A job's item closes in the store after the job's landing commit is pushed. git-guard denies an Edit or Write on a store file. Each `<repo>/` folder is a Backlog.md project (pinned 1.55.3 in `~/.aleph/tools`), so `backlog browser` in `~/.aleph/items/<repo>` shows that repo's items as a board. Make changes with `aleph todo`, not the board.
 
@@ -144,9 +146,9 @@ Each item carries `id title status created updated priority labels repo`. `note`
 A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo (today: aleph). `/aleph:goal` writes an open item labelled `goal`; the `aleph-tick` timer starts one run for each such item every 30 minutes. Spec: `docs/specs/2026-10-26-seed-factory.md`.
 
 - **The run.** The worker is `claude -p` under `srt` (`~/.aleph/tools/bin/srt`), in `~/.aleph/runs/<id>/`. It sees an empty home, the code as a bundle of `origin/main` (and the job's previous `factory/<name>` branch), and the network only to `api.anthropic.com` and npm. Its environment holds the token in `~/.aleph/secrets/worker-token` and nothing else of yours. A second `srt` call bundles the branch, aleph fetches it into the repo as `factory/<name>`, and a third runs the repo's setup and checks on a fresh clone. The run folder goes when the verdict is known.
-- **The gate.** A run is stuck when the last line of the worker's output is not a `result` event with `is_error` false, when it made no commit, when a check fails, or at the time box (`ALEPH_JOB_TIMEOUT`, 40 minutes). A diff that touches a path in the repo's `held` list, or deletes, renames or changes an existing test, or adds `.skip`, `.only` or `.todo`, needs you: `aleph land <name>` lands it with `Held-by: Chris`, `aleph drop <name>` drops it.
+- **The gate.** A run is stuck when the last line of the worker's output is not a `result` event with `is_error` false, when it made no commit, when a check fails, or at the time box (`ALEPH_JOB_TIMEOUT`, 40 minutes). A diff that touches a path in the repo's `held` list (test files apart), deletes or renames an existing test, removes or changes a `test`, `it`, `describe` or `expect` line, or adds `.skip`, `.only` or `.todo`, needs you. A diff that only adds to a test file lands by itself. For the rest, `aleph land <name>` lands it with `Held-by: Chris`, `aleph drop <name>` drops it.
 - **The land.** Lands of one repo go one at a time, in the order they became ready. Each merges the branch onto `origin/main` in memory (`git merge-tree`), runs the checks on that tree, and pushes exactly that tree as one squash commit with a plain push; a refused push merges again. The commit ends with `Item: <repo>-<n>` and `Job: <job>`. No checkout moves: your `git pull` is the review.
-- **The switches.** `aleph pause` and `aleph resume` (`~/.aleph/factory/paused`); 12 runs in any 24 hours; `aleph sandbox probe` checks the isolation, nightly from the tick, and a failed probe starts no run. `aleph report` prints what is new.
+- **The switches.** `aleph pause` and `aleph resume` (`~/.aleph/factory/paused`); 12 runs in any 24 hours (`ALEPH_DAY_CAP`) and 10 live at once (`ALEPH_LIVE_CAP`); `aleph sandbox probe` checks the isolation, nightly from the tick, and a failed probe starts no run. `aleph report` prints what is new.
 
 ```bash
 systemctl --user link ~/aleph/jobs/systemd/aleph-tick.service
@@ -154,6 +156,8 @@ systemctl --user enable --now ~/aleph/jobs/systemd/aleph-tick.timer
 aleph sandbox probe          # criterion 11, from inside the profile
 aleph report                 # runs not yet shown, behind count, health
 aleph status aleph-28        # done from an Item: trailer on origin/main, else the store, the job, open
+aleph status                 # the same for each open item in the recent repos
+aleph jobs                   # open jobs, then the jobs that ended in the last 24 hours
 aleph pause | aleph resume
 ```
 

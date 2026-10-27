@@ -9,7 +9,7 @@
 import { jobArgv, route } from "./lib/route.ts";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Run } from "./lib/ledger.ts";
+import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
 import { git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
@@ -20,8 +20,11 @@ import { probe } from "./lib/probe.ts";
 import { derive, facts, FACTS_REF, readFacts, type Facts } from "./lib/status.ts";
 
 const CLI = import.meta.path;
-const CAP = 5;
+/** The most agent runs live at once; `ALEPH_LIVE_CAP` changes it. */
+const CAP = () => Number(process.env.ALEPH_LIVE_CAP ?? 10);
 const PID_WAIT_MS = 10_000;
+const DAY_MS = 24 * 3600_000;
+const RECENT_DAYS = 7;
 
 class Refusal extends Error {}
 const refuse = (msg: string): never => { throw new Refusal(msg); };
@@ -58,7 +61,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
   try {
     if (run.kind === "agent") {
       const live = allRuns().filter((e) => e.run.kind === "agent" && isLive(e.folder));
-      if (live.length >= CAP) refuse(`${live.length} agent runs are live: ${live.map((e) => e.run.name).join(", ")}`);
+      if (live.length >= CAP()) refuse(`${live.length} agent runs are live: ${live.map((e) => e.run.name).join(", ")}`);
     }
     mkdirSync(jobsDir(), { recursive: true });
     // Runs sort by folder name, so two runs of one job never share a second:
@@ -277,7 +280,13 @@ function jobs(): void {
   const all = allJobs();
   const name = positional[0];
   // A job that landed with its check open stays in the list until `aleph checked`.
-  if (!name) return out(all.filter((j) => isOpen(j) || (j.at(-1)!.run.state === "landed" && j.at(-1)!.run.check === "open")).map((j) => summary(j, fates)));
+  // A job that ended in the last 24 hours follows the open ones, the latest first.
+  if (!name) {
+    const listed = (j: Entry[]) => isOpen(j) || (j.at(-1)!.run.state === "landed" && j.at(-1)!.run.check === "open");
+    const ended = (j: Entry[]) => Date.parse(j.at(-1)!.run.ended ?? "");
+    const recent = all.filter((j) => !listed(j) && Date.now() - ended(j) < DAY_MS).sort((a, b) => ended(b) - ended(a));
+    return out([...all.filter(listed), ...recent].map((j) => summary(j, fates)));
+  }
   const runs = all.filter(isOpen).find((j) => j.at(-1)!.run.name === name) ?? all.filter((j) => j.at(-1)!.run.name === name).at(-1);
   if (!runs) refuse(`no job named ${name}`);
   const last = runs!.at(-1)!;
@@ -325,6 +334,7 @@ async function drop(): Promise<void> {
 async function todoCmd(): Promise<void> {
   const [verb, repoKey, ...args] = positional;
   const sub = verb ?? refuse("usage: aleph todo <add|list|show|note|edit|done|drop|lint> <repo> ...");
+  if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(sub);
   const repo = loadRegistry()[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
 
   const pick = (doc: todos.Doc): todos.Item => {
@@ -349,7 +359,6 @@ async function todoCmd(): Promise<void> {
   const body = bodyArg === undefined ? undefined : (bodyArg === "-" ? await Bun.stdin.text() : bodyArg).trim();
   const labelsArg = flag("labels");
   const labels = labelsArg === undefined ? undefined : labelsArg.split(",").map((s) => s.trim()).filter(Boolean);
-  const brief = (i: todos.Item) => ({ id: i.id, title: i.title, status: todos.status(i), priority: i.fm.priority ?? null, labels: i.fm.labels ?? [], updated: i.fm.updated ?? null, notes: i.notes.length, legacy: i.legacy || undefined });
 
   switch (sub) {
     case "add": {
@@ -363,17 +372,10 @@ async function todoCmd(): Promise<void> {
       return;
     }
     case "list": {
-      const want = flag("status");
-      if (want && !todos.STATUSES.includes(want as todos.Status)) refuse(`status must be one of ${todos.STATUSES.join(", ")}`);
-      const label = flag("label");
-      const doc = readTodo(repo);
-      const rows = doc.items
-        .filter((i) => (want ? todos.status(i) === want : true))
-        .filter((i) => (label ? ((i.fm.labels as string[]) ?? []).includes(label) : true));
+      const rows = listRows(readTodo(repo));
       if (rest.includes("--json")) { out(rows.map(brief)); return; }
       if (!rows.length) { console.log("no items"); return; }
-      const w = String(Math.max(...rows.map((i) => i.id))).length;
-      for (const i of rows) console.log(`${String(i.id).padStart(w)}  ${todos.status(i).padEnd(7)} ${i.title}`);
+      printRows(rows);
       return;
     }
     case "show": {
@@ -435,6 +437,58 @@ async function todoCmd(): Promise<void> {
   }
 }
 
+const brief = (i: todos.Item) => ({ id: i.id, title: i.title, status: todos.status(i), priority: i.fm.priority ?? null, labels: i.fm.labels ?? [], updated: i.fm.updated ?? null, notes: i.notes.length, legacy: i.legacy || undefined });
+
+/** The items of a list that pass `--status` and `--label`. */
+function listRows(doc: todos.Doc): todos.Item[] {
+  const want = flag("status");
+  if (want && !todos.STATUSES.includes(want as todos.Status)) refuse(`status must be one of ${todos.STATUSES.join(", ")}`);
+  const label = flag("label");
+  return doc.items
+    .filter((i) => (want ? todos.status(i) === want : true))
+    .filter((i) => (label ? ((i.fm.labels as string[]) ?? []).includes(label) : true));
+}
+
+function printRows(rows: todos.Item[], indent = ""): void {
+  const w = String(Math.max(...rows.map((i) => i.id))).length;
+  for (const i of rows) console.log(`${indent}${String(i.id).padStart(w)}  ${todos.status(i).padEnd(7)} ${i.title}`);
+}
+
+/**
+ * The registry's repos with a ledger run or an item update in the last 7
+ * days, the latest first, each with its list (null when the store has none).
+ */
+function recentRepos(): { repo: Repo; doc: todos.Doc | null }[] {
+  const since = Date.now() - RECENT_DAYS * DAY_MS;
+  const last = new Map<string, number>();
+  const seen = (key: string, t: number) => { if (t >= since && t > (last.get(key) ?? 0)) last.set(key, t); };
+  for (const e of allRuns()) if (e.run.repo) seen(e.run.repo, Date.parse(e.run.started));
+  const repos = Object.values(loadRegistry());
+  let docs: (todos.Doc | null)[];
+  try { docs = store.readLists(repos); } catch (e: any) { refuse(e?.message ?? String(e)); }
+  const all = repos.map((repo, n) => {
+    for (const i of docs[n]?.items ?? []) if (i.fm.updated) seen(repo.key, Date.parse(String(i.fm.updated)));
+    return { repo, doc: docs[n] };
+  });
+  return all.filter((r) => last.has(r.repo.key)).sort((a, b) => last.get(b.repo.key)! - last.get(a.repo.key)!);
+}
+
+/** `aleph todo list` and `aleph todo lint` with no repo: each recent repo. */
+function todoRecent(sub: "list" | "lint"): void {
+  const lists = recentRepos().filter((r) => r.doc);
+  if (sub === "lint") {
+    const results = lists.map(({ repo, doc }) => ({ repo: repo.key, items: doc!.items.length, findings: todos.lint(doc!) }));
+    for (const r of results) for (const f of r.findings) console.error(`${r.repo} item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
+    out(results);
+    if (results.some((r) => r.findings.length)) process.exit(1);
+    return;
+  }
+  const rows = lists.map(({ repo, doc }) => ({ repo: repo.key, items: listRows(doc!) })).filter((r) => r.items.length);
+  if (rest.includes("--json")) { out(rows.map((r) => ({ repo: r.repo, items: r.items.map(brief) }))); return; }
+  if (!rows.length) { console.log("no items"); return; }
+  for (const r of rows) { console.log(r.repo); printRows(r.items, "  "); }
+}
+
 /**
  * `aleph tick`, from the timer: the nightly probe when it is due, then one run
  * for each open goal item that has no open job. A failed probe starts no run.
@@ -484,12 +538,13 @@ function reportCmd(): void {
 }
 
 /**
- * `aleph status <repo>-<n>`: the item's derived state. In Chris's session the
+ * `aleph status <repo>-<n>`: the item's derived state; with no item, see statusRecent. In Chris's session the
  * facts come from the store and the ledger; in a sandbox, where neither is,
  * they come from the bundle's snapshot at refs/aleph/facts in the current repo.
  */
 function statusCmd(): void {
-  const m = (positional[0] ?? "").match(/^(.+)-(\d+)$/) ?? refuse("usage: aleph status <repo>-<n> [--json]");
+  if (!positional[0]) return statusRecent();
+  const m = (positional[0] ?? "").match(/^(.+)-(\d+)$/) ?? refuse("usage: aleph status [<repo>-<n>] [--json]");
   const [, key, n] = m!;
   const repo = loadRegistry()[key];
   let cwd = process.cwd();
@@ -506,6 +561,22 @@ function statusCmd(): void {
   const s = derive(cwd, `refs/remotes/origin/${f!.main}`, f!, Number(n)) ?? refuse(`${key} has no item ${n}`);
   if (rest.includes("--json")) return out(s);
   console.log(`${s!.item} ${s!.state}: ${s!.why}`);
+}
+
+/** `aleph status` with no item: the derived state of each open item in each recent repo. */
+function statusRecent(): void {
+  const states = [];
+  for (const { repo, doc } of recentRepos()) {
+    const open = (doc?.items ?? []).filter((i) => todos.status(i) === "open");
+    if (!open.length) continue;
+    git(repo.path, "fetch", "-q", "origin");
+    let f: Facts;
+    try { f = facts(repo); } catch (e: any) { console.error(`warn: ${repo.key}: ${e?.message ?? e}`); continue; }
+    for (const i of open) { const s = derive(repo.path, `refs/remotes/origin/${f.main}`, f, i.id); if (s) states.push(s); }
+  }
+  if (rest.includes("--json")) return out(states);
+  if (!states.length) { console.log("no open items"); return; }
+  for (const s of states) console.log(`${s.item} ${s.state}: ${s.why}`);
 }
 
 /** The repo's list in the work store; a refusal when the store has none or the fetch fails. */

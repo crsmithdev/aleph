@@ -70,6 +70,13 @@ export function readList(repo: Place): Doc | null {
   return load(dir, `origin/${MAIN}`, repo.key);
 }
 
+/** Each repo's list on the store's origin/main, after one fetch; null when the store has none. */
+export function readLists(repos: Place[]): (Doc | null)[] {
+  const dir = storeDir();
+  fetch(dir);
+  return repos.map((r) => load(dir, `origin/${MAIN}`, r.key));
+}
+
 /**
  * Apply `change` to the repo's list on the store's origin/main and push it as
  * one commit. When the push is refused because main moved, fetch and apply

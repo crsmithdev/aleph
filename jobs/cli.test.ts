@@ -23,6 +23,8 @@ function env(extra: Record<string, string> = {}): Record<string, string> {
     ALEPH_SANDBOX_CMD: join(base, "pass"), ALEPH_RUNS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_WORKER_TOKEN: join(base, "token"),
     // The tests start more factory runs than a day's cap; the cap has its own test.
     ALEPH_DAY_CAP: "100",
+    // The live cap's test starts six runs against a cap of five.
+    ALEPH_LIVE_CAP: "5",
     SIDETONE_TELL_URL: `https://127.0.0.1:${server.port}/tell`, ...extra,
   };
 }
@@ -218,13 +220,29 @@ describe("job", () => {
     expect(r.stderr).toContain("alpha is open in demo");
   });
 
+  test("with no name, jobs lists the open jobs, then the jobs that ended in the last 24 hours, the latest first", async () => {
+    await job("older", "commit older.txt");
+    await aleph(["drop", "older"]);
+    await job("newer", "commit newer.txt");
+    await aleph(["drop", "newer"]);
+    await job("stale", "commit stale.txt");
+    await aleph(["drop", "stale"]);
+    const folder = (await aleph(["jobs", "stale"])).json.run;
+    const file = join(jobsDir, folder, "state.json");
+    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), ended: new Date(Date.now() - 25 * 3600_000).toISOString() }));
+    await job("open", "commit open.txt");
+    const names = (await aleph(["jobs"])).json.map((j: any) => j.name).filter((n: string) => ["older", "newer", "stale", "open"].includes(n));
+    expect(names).toEqual(["open", "newer", "older"]);
+    await aleph(["drop", "open"]);
+  });
+
   test("drop removes the worktree and branch and ends the job", async () => {
     const r = await aleph(["drop", "alpha", "not", "needed"]);
     expect(r.code).toBe(0);
     expect(r.json).toMatchObject({ state: "dropped", reason: "not needed" });
     expect(existsSync(worktree("alpha"))).toBe(false);
     expect(branchExists("alpha")).toBe(false);
-    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "alpha")).toBeUndefined();
+    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "alpha")).toMatchObject({ state: "dropped" });
     expect((await aleph(["drop", "alpha"])).code).toBe(1);
   });
 
@@ -319,7 +337,7 @@ describe("guards", () => {
     const ends = await Promise.all(started);
     expect(ends.filter((r) => r.code === 0).length).toBe(5);
     for (const j of live) expect(state(j.run).state).toBe("dropped");
-    expect((await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name))).toEqual([]);
+    expect((await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name)).map((j: any) => j.state)).toEqual(live.map(() => "dropped"));
   }, 60_000);
 });
 
@@ -392,7 +410,7 @@ describe("land", () => {
     expect(branchExists("shipit")).toBe(false);
     expect(told).toContain("demo/shipit landed");
     expect(file(r.json.run, "land.log")).toContain("## push: ok");
-    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "shipit")).toBeUndefined();
+    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "shipit")).toMatchObject({ state: "landed" });
   });
 
   test("a manual check does not gate the land; --checked lands with no check open", async () => {
@@ -419,7 +437,7 @@ describe("land", () => {
     const c = await aleph(["checked", "phonelater"]);
     expect(c.code).toBe(0);
     expect((await aleph(["jobs", "phonelater"])).json).toMatchObject({ state: "landed", check: "done" });
-    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "phonelater")).toBeUndefined();
+    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "phonelater")).toMatchObject({ state: "landed", check: "done" });
     expect((await aleph(["todo", "show", "demo", String(s.checkItem), "--json"])).json.status).toBe("done");
     const again = await aleph(["checked", "phonelater"]);
     expect(again.code).toBe(1);
@@ -600,7 +618,7 @@ describe("fate from git", () => {
     sh(other, "git", "cherry-pick", tip);
     sh(other, "git", "push", "-q", "origin", "main");
     const picked = remoteGit("rev-parse", "main");
-    expect(await listed("ported")).toBeUndefined();
+    expect(await listed("ported")).toMatchObject({ state: "landed" });
     expect(state(j.json.run)).toMatchObject({ state: "landed", reason: "found on main (Job trailer)", commit: picked });
     expect(existsSync(worktree("ported"))).toBe(false);
     expect((await aleph(["todo", "show", "demo", String(id), "--json"])).json.status).toBe("done");
@@ -613,7 +631,7 @@ describe("fate from git", () => {
     sh(other, "git", "add", "twice.txt");
     sh(other, "git", "commit", "-qm", "the same change, by hand");
     sh(other, "git", "push", "-q", "origin", "main");
-    expect(await listed("twice")).toBeUndefined();
+    expect(await listed("twice")).toMatchObject({ state: "landed" });
     expect(state(j.json.run)).toMatchObject({ state: "landed", reason: "found on main (content)" });
   });
 
@@ -871,6 +889,15 @@ describe("milestone 2", () => {
     expect(await status(`fac-${held}`)).toMatchObject({ state: "needs-you" });
     for (const n of ["fstuckitem", "fhelditem"]) await aleph(["drop", n]);
     expect((await aleph(["status", "fac-999"])).stderr).toContain("fac has no item 999");
+  }, 30_000);
+
+  test("aleph status with no item gives the derived state of each open item in the recent repos", async () => {
+    const id = (await aleph(["todo", "add", "fac", "listed by status"])).json.added;
+    const r = await aleph(["status", "--json"]);
+    expect(r.code).toBe(0);
+    expect(r.json.find((s: any) => s.item === `fac-${id}`)).toMatchObject({ state: "open" });
+    await aleph(["todo", "done", "fac", String(id)]);
+    expect((await aleph(["status", "--json"])).json.find((s: any) => s.item === `fac-${id}`)).toBeUndefined();
   }, 30_000);
 
   test("aleph status inside the sandbox, from the bundle, says what it says outside", async () => {

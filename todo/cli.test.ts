@@ -252,6 +252,24 @@ test("edit replaces the title, body, priority and labels it is given, and keeps 
   expect(sh(base, "git", "--git-dir", remote, "log", "-1", "--format=%s", "main")).toBe("proj: todo: edit item 4");
 });
 
+test("list and lint with no repo cover the repos with a run or an item update in the last 7 days, the latest first", () => {
+  writeFileSync(join(base, "repos.json"), JSON.stringify({ proj: { path: repo }, fresh: { path: repo } }));
+  const jobs = join(base, "jobs");
+  mkdirSync(jobs);
+  const e = { ALEPH_JOBS_DIR: jobs };
+  expect(alephWith(e, "todo", "add", "fresh", "A new item").code).toBe(0);
+  expect(alephWith(e, "todo", "list").out).toBe("fresh\n  1  open    A new item\n");
+  // proj's only item is from September; a run today makes proj recent, and the latest.
+  mkdirSync(join(jobs, "r1"));
+  writeFileSync(join(jobs, "r1", "state.json"), JSON.stringify({ kind: "agent", name: "x", repo: "proj", job: "r1", state: "landed", started: new Date().toISOString() }));
+  expect(alephWith(e, "todo", "list").out).toBe("proj\n  3  open    An old item\nfresh\n  1  open    A new item\n");
+  expect(JSON.parse(alephWith(e, "todo", "list", "--status", "done", "--json").out)).toEqual([]);
+  const lint = alephWith(e, "todo", "lint");
+  expect(lint.code).toBe(0);
+  expect(JSON.parse(lint.out)).toEqual([{ repo: "proj", items: 1, findings: [] }, { repo: "fresh", items: 1, findings: [] }]);
+  expect(alephWith(e, "todo", "show").code).toBe(1);
+});
+
 test("edit with nothing to change refuses", () => {
   const r = aleph("todo", "edit", "proj", "3");
   expect(r.code).toBe(1);
