@@ -1,7 +1,7 @@
 // The Skills view: how often each skill ran, from Langfuse. `renderSkills` takes
 // /api/skills, `renderSkill` takes /api/skills/:name; neither touches the DOM.
 // The shell takes one view per module, so the detail route is declared in skill.js.
-import { clock, empty, esc } from "../lib.js";
+import { chart, clock, empty, esc } from "../lib.js";
 
 export const view = {
   path: "/skills",
@@ -10,21 +10,41 @@ export const view = {
   order: 20,
   api: "/api/skills",
   render: (d) => renderSkills(d),
+  mount: (root, d) => mountPerDay(root, d),
 };
 
 const href = (name) => `#/skills/${encodeURIComponent(name)}`;
 const sessionHref = (id) => `#/sessions/${encodeURIComponent(id)}`;
 const date = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : `${d.toLocaleDateString([], { day: "numeric", month: "short" })} ${clock(iso)}`; };
 
-/** A small bar chart of per-day counts, inline SVG in the prototype's colours. */
-export function bars(counts, label = "Uses per day") {
-  const w = 4, gap = 1, h = 24, max = Math.max(1, ...counts);
-  const rects = counts.map((n, i) => {
-    const bh = n ? Math.max(2, Math.round((n / max) * h)) : 1;
-    return `<rect x="${i * (w + gap)}" y="${h - bh}" width="${w}" height="${bh}" fill="${n ? "var(--run)" : "var(--rule)"}"></rect>`;
-  }).join("");
-  const width = Math.max(1, counts.length * (w + gap) - gap);
-  return `<svg class="perday" role="img" aria-label="${esc(label)}: ${esc(counts.join(", "))}" width="${width}" height="${h}" viewBox="0 0 ${width} ${h}">${rects}</svg>`;
+/** The mount point of a per-day chart; `mountPerDay` draws into it. `key` finds its data again. */
+export const bars = (key, label = "Uses per day") => `<div class="perday" role="img" aria-label="${esc(label)}" data-skill="${esc(key)}"></div>`;
+
+/** The ECharts option for per-day counts: one bar per day, the days counted on from `since` (YYYY-MM-DD). */
+export function perDayOption(counts, since) {
+  const t0 = Date.parse(since);
+  const days = counts.map((_, i) => (Number.isNaN(t0) ? String(i + 1) : new Date(t0 + i * 864e5).toISOString().slice(0, 10)));
+  return {
+    grid: { left: 2, right: 2, top: 2, bottom: 2 },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${q.value} ${q.value === 1 ? "use" : "uses"}`; } },
+    xAxis: { type: "category", data: days, show: false },
+    yAxis: { type: "value", show: false, min: 0 },
+    series: [{ type: "bar", name: "Uses", data: counts, barCategoryGap: "20%" }],
+  };
+}
+
+let drawn = [];
+/** Draw every per-day chart under `root`: one per skill in the list, one in the detail. */
+export function mountPerDay(root, d) {
+  for (const c of drawn) c.dispose();
+  drawn = [];
+  if (!d) return;
+  const by = new Map((d.skills || []).map((s) => [s.name, s.perDay]));
+  if (d.perDay) by.set(d.name, d.perDay);
+  for (const el of root.querySelectorAll(".perday[data-skill]")) {
+    const counts = by.get(el.dataset.skill);
+    if (counts) drawn.push(chart(el, perDayOption(counts, d.since)));
+  }
 }
 
 const STYLE = `<style>
@@ -39,13 +59,15 @@ const STYLE = `<style>
 .skills table { width: 100%; border-collapse: collapse; }
 .skills th, .skills td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
 .skills th { font-size: 12px; color: var(--muted); font-weight: 600; }
+.skills .perday { width: 150px; height: 28px; }
+.skills p > .perday { width: 100%; max-width: 720px; height: 120px; }
 .skills .unused td { color: var(--muted); }
 </style>`;
 
 const row = (s) =>
   `<tr><td><a href="${href(s.name)}">${esc(s.name)}</a></td><td class="num">${s.uses}<small> (${s.bySlash} slash, ${s.byTool} tool)</small></td>` +
   `<td class="num">${s.sessions}</td><td>${esc(s.projects.join(", "))}</td><td class="num">${esc(date(s.lastUsed))}</td>` +
-  `<td class="num">${s.errors ? `<span class="badge stuck">${s.errors}</span>` : "0"}</td><td>${bars(s.perDay)}</td></tr>`;
+  `<td class="num">${s.errors ? `<span class="badge stuck">${s.errors}</span>` : "0"}</td><td>${bars(s.name)}</td></tr>`;
 
 export function renderSkills(d) {
   const used = d.skills || [];
@@ -70,7 +92,7 @@ export function renderSkill(d) {
   const projects = d.projects.map((p) => `<li>${esc(p.project)} <span class="num">${p.uses}</span></li>`).join("");
   return `${STYLE}<div class="page skills"><p><a href="#/skills">Skills</a></p>` +
     `<div class="sh"><h2>${esc(d.name)}</h2><span class="count">${d.uses}</span><span class="aside">uses in the last ${d.days} days</span></div>` +
-    (d.uses ? `<p>${bars(d.perDay)}</p>` : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
+    (d.uses ? `<p>${bars(d.name)}</p>` : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
     (projects ? `<div class="sh"><h3>Projects</h3></div><ul>${projects}</ul>` : "") +
     (sessions ? `<div class="sh"><h3>Sessions</h3></div><table><thead><tr><th>Session</th><th>Project</th><th>Time</th><th>Started by</th><th>First prompt line</th></tr></thead><tbody>${sessions}</tbody></table>` : "") +
     (tools ? `<div class="sh"><h3>Tools called after it, in the same turn</h3></div><table><thead><tr><th>Tool</th><th>Calls</th></tr></thead><tbody>${tools}</tbody></table>` : "") +

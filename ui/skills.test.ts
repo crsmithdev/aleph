@@ -143,7 +143,8 @@ test("the view lists skills with bars and links, and the detail links sessions",
   const { body } = await get("/api/skills");
   const html = v.renderSkills(body);
   expect(html).toContain('href="#/skills/aleph%3Apickup"');
-  expect(html).toContain("<svg");
+  expect(html).toContain('class="perday"');
+  expect(html).not.toContain("<svg");
   expect(html).toContain("Last used");
   const detail = v.renderSkill((await get("/api/skills/aleph:pickup")).body);
   expect(detail).toContain('href="#/sessions/s1"');
@@ -162,6 +163,16 @@ test("the skills table scrolls inside its own wrapper", async () => {
   const html = v.renderSkills((await get("/api/skills")).body);
   expect(html).toContain('<div class="tscroll"><table>');
   expect(html).toContain(".skills .tscroll { overflow-x: auto;");
+});
+
+test("perDayOption has one bar per day with its count, dated from since", () => {
+  const o = v.perDayOption([0, 3, 1], "2026-10-25");
+  expect(o.xAxis.data).toEqual(["2026-10-25", "2026-10-26", "2026-10-27"]);
+  expect(o.series[0].data).toEqual([0, 3, 1]);
+  expect(o.tooltip.formatter({ name: "2026-10-26", value: 3 })).toBe("2026-10-26<br>3 uses");
+  expect(JSON.stringify(o)).not.toMatch(/#[0-9a-f]{3,6}|rgb/i);
+  expect(typeof v.view.mount).toBe("function");
+  expect(typeof skillView.mount).toBe("function");
 });
 
 test("pages are fetched concurrently, and serve() warms the cache so the first request hits Langfuse zero times", async () => {

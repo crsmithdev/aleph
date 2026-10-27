@@ -7,7 +7,7 @@ import { add, setStatus } from "../todo/lib/todo.ts";
 import { today } from "../todo/lib/todo.ts";
 import { activity, clearCache, routes, summary } from "./api/activity.ts";
 // @ts-ignore activity.js is plain JS, shared with the page
-import { renderActivity, view } from "./views/activity.js";
+import { chartOption, renderActivity, view } from "./views/activity.js";
 
 let obsHits = 0;
 let base: string, jobsDir: string, fake: ReturnType<typeof Bun.serve>;
@@ -189,14 +189,38 @@ describe("routes and view", () => {
     expect(s.days.at(-1).goals).toBe(1);
   });
 
-  test("the chart has one bar per day, in both themes' tokens", async () => {
+  test("the chart has one bar per day, themed by the page tokens", async () => {
     const a = await activity(7, null, now);
     const html = renderActivity({ activity: a, summary: summary(30, null, now) });
-    expect(html.match(/<rect class="col"/g)).toHaveLength(7);
-    expect(html).toContain("var(--run)");
-    expect(html).not.toMatch(/#[0-9a-f]{3,6}/i);
+    expect(html).toContain('class="chart"');
+    expect(html).not.toContain("<svg");
+    const opt = chartOption(a.cost);
+    expect(opt.xAxis.data).toEqual(a.cost.map((c: any) => c.day));
+    expect(opt.series[0].data).toEqual(a.cost.map((c: any) => c.cost));
+    expect(opt.series[0].data).toHaveLength(7);
+    expect(JSON.stringify(opt)).not.toMatch(/#[0-9a-f]{3,6}|rgb/i);
+    expect(opt.tooltip.formatter({ name: "2026-10-27", value: 1.5 })).toBe("2026-10-27<br>$1.5000");
     for (const t of ["Last 30 days", "claude-opus-5-5", "Bash", "verify-gate", "nothing was run", "Factory runs per day"]) expect(html).toContain(t);
     expect(view.group).toBe("activity");
+  });
+
+  test("mount draws the option through chart() with the theme's series colour", async () => {
+    const a = await activity(7, null, now);
+    const calls: any = {};
+    const g: any = globalThis;
+    const saved = { echarts: g.echarts, matchMedia: g.matchMedia, ResizeObserver: g.ResizeObserver, document: g.document, getComputedStyle: g.getComputedStyle };
+    g.document = { documentElement: {} };
+    g.getComputedStyle = () => ({ getPropertyValue: (k: string) => `tok${k}` });
+    g.echarts = { registerTheme: (_n: string, t: any) => (calls.theme = t), init: () => ({ setOption: (o: any) => (calls.option = o), getOption: () => calls.option, dispose() {}, resize() {} }) };
+    g.matchMedia = () => ({ addEventListener() {}, removeEventListener() {} });
+    g.ResizeObserver = class { observe() {} disconnect() {} };
+    try {
+      const el = {};
+      view.mount({ querySelector: () => el }, { activity: a, summary: {} });
+      expect(calls.option.series[0].data).toHaveLength(7);
+      expect(calls.theme.color.slice(0, 4)).toEqual(["tok--run", "tok--done", "tok--need", "tok--stuck"]);
+      expect(calls.theme.color).toHaveLength(6);
+    } finally { Object.assign(g, saved); }
   });
 
   test("a view with no Langfuse says so, and text is escaped", () => {

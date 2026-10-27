@@ -1,7 +1,7 @@
 // The Activity view: a 30-day strip of small numbers, then cost per day as one
 // bar chart, then a table each for models, tools, hooks, verify-gate denials
 // and factory runs. `data` is /api/activity/view: { activity, summary }.
-import { empty, error, esc, money } from "../lib.js";
+import { chart, empty, error, esc, money } from "../lib.js";
 
 export const view = {
   path: "/activity",
@@ -11,6 +11,7 @@ export const view = {
   api: "/api/activity/view?days=7",
   refresh: 60,
   render: (d) => renderActivity(d),
+  mount: (root, d) => mountChart(root, d),
 };
 
 const STYLE = `<style>
@@ -23,10 +24,7 @@ const STYLE = `<style>
 .act .strip30 .d { flex: 1 0 34px; text-align: center; font: 11px var(--sans); color: var(--muted); border-top: 1px solid var(--rule); padding-top: 4px; }
 .act .strip30 b { display: block; font: 500 13px var(--sans); color: var(--ink); font-variant-numeric: tabular-nums; }
 .act .strip30 .z b { color: var(--muted); font-weight: 400; }
-.act .chart { width: 100%; height: auto; max-width: 720px; }
-.act .chart text { fill: var(--muted); font: 11px var(--sans); }
-.act .chart .col { fill: var(--run); }
-.act .chart .axis { stroke: var(--rule); }
+.act .chart { width: 100%; max-width: 720px; height: 200px; }
 </style>`;
 
 const short = (day) => day.slice(5);
@@ -46,21 +44,27 @@ export function renderStrip(s) {
     `<div class="strip30" role="group" aria-label="Last 30 days">${legend}${s.days.map(cell).join("")}</div>`;
 }
 
-/** One bar per day, scaled to the day's cost. Inline SVG on the page's tokens, so both themes read. */
-export function renderChart(days) {
-  const W = 720, H = 180, L = 44, B = 22, T = 8;
-  const max = Math.max(...days.map((d) => d.cost), 0.0001);
-  const slot = (W - L) / Math.max(days.length, 1), bw = Math.max(slot * 0.7, 2);
-  const bars = days.map((d, i) => {
-    const h = Math.round(((H - B - T) * d.cost) / max * 10) / 10;
-    const x = L + i * slot + (slot - bw) / 2;
-    return `<rect class="col" x="${x.toFixed(1)}" y="${(H - B - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h}"><title>${esc(`${d.day}: ${money(d.cost)}`)}</title></rect>` +
-      (days.length <= 14 || i % Math.ceil(days.length / 10) === 0 ? `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${esc(short(d.day))}</text>` : "");
-  }).join("");
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cost per day">` +
-    `<line class="axis" x1="${L}" y1="${H - B}" x2="${W}" y2="${H - B}"/>` +
-    `<text x="${L - 6}" y="${T + 8}" text-anchor="end">${esc(`$${max.toFixed(2)}`)}</text><text x="${L - 6}" y="${H - B}" text-anchor="end">$0</text>` +
-    bars + `</svg>`;
+/** The chart's mount point; `mount` draws into it. */
+export const renderChart = (days) => `<div class="chart" role="img" aria-label="Cost per day" data-days="${days.length}"></div>`;
+
+/** The ECharts option: one bar per day at the day's cost. Colours come from the chart theme. */
+export function chartOption(days) {
+  return {
+    grid: { left: 56, right: 12, top: 12, bottom: 28 },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${money(q.value)}`; } },
+    xAxis: { type: "category", data: days.map((d) => d.day), axisLabel: { formatter: short } },
+    yAxis: { type: "value", axisLabel: { formatter: (v) => `$${v}` } },
+    series: [{ type: "bar", name: "Cost", data: days.map((d) => d.cost) }],
+  };
+}
+
+let drawn = null;
+/** Draw the cost chart into the view's root, after render put its markup there. */
+export function mountChart(root, d) {
+  drawn?.dispose();
+  drawn = null;
+  const el = root.querySelector(".chart");
+  if (el && d?.activity) drawn = chart(el, chartOption(d.activity.cost));
 }
 
 const counts = (rows, word) => rows.length
