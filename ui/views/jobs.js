@@ -43,14 +43,25 @@ const href = (path, params = {}) => {
   return `#${path}${q.toString() ? `?${q}` : ""}`;
 };
 
+const STYLE = `<style>
+.filters { display: flex; flex-wrap: wrap; gap: 10px 24px; margin: 0 0 20px; font: 13px var(--sans); }
+.filters .group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.filters .k { color: var(--muted); font-weight: 500; margin-right: 4px; }
+.filters .pill { padding: 2px 10px; border: 1px solid var(--rule); border-radius: 999px; color: var(--ink); text-decoration: none; white-space: nowrap; }
+.filters .pill:hover { border-color: var(--muted); }
+.filters .pill[aria-current] { background: var(--ink); border-color: var(--ink); color: var(--bg, #fff); }
+@media (max-width: 480px) { .filters { gap: 12px; } .filters .group { flex: 1 1 100%; } }
+</style>`;
+
 export function renderFilters(jobs, f = {}) {
   const repos = [...new Set([...jobs.map((j) => j.repo), f.repo].filter(Boolean))].sort();
   const pill = (label, params, on) => `<a class="pill${on ? " on" : ""}" href="${esc(href("/jobs", params))}"${on ? ' aria-current="true"' : ""}>${esc(label)}</a>`;
   const keep = { repo: f.repo, state: f.state, days: f.days };
+  const group = (label, chips) => `<div class="group" role="group" aria-label="${label}"><span class="k">${label}</span>${chips.join("")}</div>`;
   return `<nav class="filters" aria-label="Filter jobs">` +
-    `<span class="k">Repo</span>${pill("All", { ...keep, repo: "" }, !f.repo)}${repos.map((r) => pill(r, { ...keep, repo: r }, f.repo === r)).join("")}` +
-    `<span class="k">State</span>${pill("All", { ...keep, state: "" }, !f.state)}${STATES.map((s) => pill(s, { ...keep, state: s }, f.state === s)).join("")}` +
-    `<span class="k">Window</span>${[["7 days", ""], ["30 days", "30"], ["90 days", "90"]].map(([l, d]) => pill(l, { ...keep, days: d }, (f.days || "") === d)).join("")}` +
+    group("Repo", [pill("All", { ...keep, repo: "" }, !f.repo), ...repos.map((r) => pill(r, { ...keep, repo: r }, f.repo === r))]) +
+    group("State", [pill("All", { ...keep, state: "" }, !f.state), ...STATES.map((s) => pill(s, { ...keep, state: s }, f.state === s))]) +
+    group("Window", [["7 days", ""], ["30 days", "30"], ["90 days", "90"]].map(([l, d]) => pill(l, { ...keep, days: d }, (f.days || "") === d))) +
     `</nav>`;
 }
 
@@ -60,7 +71,7 @@ export function renderJobs(jobs, f = {}) {
     `<h3>${esc(j.item?.title || j.name)}</h3>${badge(j.state)}</div>` +
     `<dl class="facts">${fact("Repo", esc(j.repo))}${fact("Started", esc(clock(j.started)))}` +
     `${j.ended ? fact("Took", esc(span(j.started, j.ended))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(j.model)) : ""}</dl></article>`).join("");
-  return `<div class="page"><div class="sh"><h1 id="h-jobs">Jobs</h1><span class="count">${jobs.length}</span></div>` +
+  return `${STYLE}<div class="page"><div class="sh"><h1 id="h-jobs">Jobs</h1><span class="count">${jobs.length}</span></div>` +
     renderFilters(jobs, f) + (rows || empty("No job in this window.", "Widen the window or clear a filter.")) + `</div>`;
 }
 

@@ -146,6 +146,10 @@ describe("render", () => {
     expect(h).toContain('href="#/jobs/fac-9"');
     expect(h).toContain('href="#/jobs?state=landed"');
     expect(h).toContain('aria-current="true"');
+    const groups = h.match(/<div class="group"[^>]*>.*?<\/div>/g) ?? [];
+    expect(groups).toHaveLength(3);
+    for (const [i, k] of ["Repo", "State", "Window"].entries()) expect(groups[i]).toContain(`<span class="k">${k}</span>`);
+    expect(h).toContain(".filters .pill[aria-current]");
     expect(v.renderJobs([], {})).toContain("No job in this window.");
   });
   test("the view and the detail are routed", () => {
