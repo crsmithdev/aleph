@@ -127,3 +127,16 @@ test("a job with checks shows them on one line; one without shows none", () => {
   expect(r.renderNeeds(state)).not.toContain(" s ✓");
   expect(r.renderDelivered(state)).not.toContain("checks");
 });
+
+test("the Controls panel shows Resume when paused and Pause when not", () => {
+  const f = { ...state.factory, judge: "jev", liveCap: 10, waitingCap: 5 };
+  const on = r.renderControls({ ...state, factory: f });
+  expect(on).toContain('data-act="pause"');
+  expect(on).not.toContain('data-act="resume"');
+  expect(on).toContain("Switch judge to haiku");
+  const off = r.renderControls({ ...state, factory: { ...f, paused: true, judge: "haiku" } });
+  expect(off).toContain('data-act="resume"');
+  expect(off).not.toContain('data-act="pause"');
+  expect(off).toContain("Switch judge to jev");
+  expect(r.view.render(state)).toContain('id="controls"');
+});

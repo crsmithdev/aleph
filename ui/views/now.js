@@ -19,6 +19,7 @@ export const view = {
     `<section id="stuck" aria-labelledby="h-stuck">${renderStuck(s)}</section>` +
     `<section id="delivered" aria-labelledby="h-del">${renderDelivered(s)}</section>` +
     `</div><aside class="rail">` +
+    `<section id="controls" aria-labelledby="h-ctl">${renderControls(s)}</section>` +
     `<section id="running" aria-labelledby="h-run">${renderRunning(s)}</section>` +
     `<section id="waiting" aria-labelledby="h-wait">${renderWaiting(s)}</section>` +
     `<section id="ticks" aria-labelledby="h-ticks">${renderTicks(s)}</section>` +
@@ -157,3 +158,23 @@ export function renderTicks(s) {
 export function renderAsOf(s) {
   return `As of ${esc(new Date(s.now).toLocaleString([], { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }))}.`;
 }
+
+/** The Controls panel: pause or resume, the judge switch, and the caps in force (read-only). */
+export function renderControls(s) {
+  const f = s.factory;
+  const other = f.judge === "jev" ? "haiku" : "jev";
+  const row = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
+  return `<div class="sh"><h2 id="h-ctl">Controls</h2></div>` +
+    `<dl class="facts">` +
+    row("Factory", f.paused ? "Paused" : "Running") +
+    row("Judge", esc(f.judge || "jev")) +
+    row("Day cap", `<span class="num">${esc(String(f.dayCap))}</span>`) +
+    row("Live cap", `<span class="num">${esc(String(f.liveCap ?? ""))}</span>`) +
+    row("Waiting cap", `<span class="num">${esc(String(f.waitingCap ?? ""))}</span>`) +
+    `</dl><div class="actions">` +
+    (f.paused ? ctl("resume", "Resume", true) : ctl("pause", "Pause")) +
+    ctl("judge", `Switch judge to ${other}`, false, other) +
+    `</div>`;
+}
+const ctl = (verb, label, primary = false, value = "") =>
+  `<button class="act${primary ? " primary" : ""}" type="button" data-act="${verb}" data-label="${esc(label)}"${value ? ` data-value="${esc(value)}"` : ""}>${esc(label)}</button>`;

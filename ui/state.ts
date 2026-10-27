@@ -5,7 +5,8 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DAY_CAP, factoryDir, health, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
+import { judgeChoice } from "../hooks/lib/jev.ts";
+import { DAY_CAP, WAITING_CAP, factoryDir, health, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
 import { allJobs, isOpen, loadRegistry, type Entry, type Repo } from "../jobs/lib/ledger.ts";
 import { readList } from "../todo/lib/store.ts";
 import type { Doc } from "../todo/lib/todo.ts";
@@ -25,7 +26,7 @@ export interface Job {
 export interface State {
   now: string;
   factory: {
-    paused: boolean; dayCap: number; runsToday: number; costToday: number;
+    paused: boolean; judge: "jev" | "haiku"; dayCap: number; liveCap: number; waitingCap: number; runsToday: number; costToday: number;
     nextTick: string | null;
     probe: { at: string; ok: boolean; failed: string[] } | null;
     health: string[];
@@ -158,7 +159,7 @@ export function state(now = new Date()): State {
   return {
     now: now.toISOString(),
     factory: {
-      paused: paused(), dayCap: DAY_CAP(), runsToday: today.length,
+      paused: paused(), judge: judgeChoice(), dayCap: DAY_CAP(), liveCap: Number(process.env.ALEPH_LIVE_CAP ?? 10), waitingCap: WAITING_CAP(), runsToday: today.length,
       costToday: today.reduce((a, e) => a + (e.run.cost ?? 0), 0),
       nextTick: nextTick(), probe, health: health(now.getTime()),
     },

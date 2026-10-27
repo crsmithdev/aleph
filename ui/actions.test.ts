@@ -89,3 +89,22 @@ test("GET /api/diff is the branch's diff from the merge base", async () => {
   expect((await at("/api/diff/nobranch")).status).toBe(404);
   expect((await at("/api/diff/nope")).status).toBe(404);
 });
+
+test("pause, resume and judge run their command", async () => {
+  expect((await post("/api/pause")).status).toBe(200);
+  expect(recorded().at(-1)).toBe("pause");
+  await post("/api/resume");
+  expect(recorded().at(-1)).toBe("resume");
+  await post("/api/judge", { "X-Aleph-UI": "1" }, { judge: "haiku" });
+  expect(recorded().at(-1)).toBe("judge haiku");
+});
+
+test("a bad judge is 400 and the controls without the header are 403, running nothing", async () => {
+  const before = recorded().length;
+  expect((await post("/api/judge", { "X-Aleph-UI": "1" }, { judge: "gpt" })).status).toBe(400);
+  expect((await post("/api/judge", { "X-Aleph-UI": "1" })).status).toBe(400);
+  for (const p of ["/api/pause", "/api/resume"]) expect((await post(p, {})).status).toBe(403);
+  expect((await post("/api/judge", {}, { judge: "jev" })).status).toBe(403);
+  expect((await post("/api/pause", { "X-Aleph-UI": "1", Origin: "https://evil.example" })).status).toBe(403);
+  expect(recorded().length).toBe(before);
+});
