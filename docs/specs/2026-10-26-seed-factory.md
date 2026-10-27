@@ -298,12 +298,14 @@ Milestone 2 adds one seam: the queue on real git, with three branches, an overla
 
 ## Open Questions
 
-- **`srt` on this machine.** A probe by hand on 27 Oct (to-do 32) answered three of four questions:
+- **`srt` on this machine.** A probe by hand on 27 Oct (to-do 32) answered all four questions:
   - kill: `RuntimeMaxSec` ends the unit with `Result=timeout`, and a `setsid` child stops with it;
   - WSL interop: `/run/WSL`, `cmd.exe` and writes to `/mnt/c` are all denied;
   - `bun test`: aleph's suite passes inside the sandbox (167 pass, 9 skip, 0 fail), after `bun install` through the proxy.
 
-  Still untested: whether `claude` works with the token alone. Without a token it starts and prints "Not logged in". A probe must use `curl -f`, because the proxy answers a denied host with HTTP 403.
+  - the token alone: `claude -p "say ok"` with only `CLAUDE_CODE_OAUTH_TOKEN` and the allowed domains ends with a `result` event, `is_error` false (cost $0.0016). It needs no `platform.claude.com`, and it makes no auto memory folder.
+
+  A probe must use `curl -f`, because the proxy answers a denied host with HTTP 403.
 - **Token revocation.** How to revoke a `setup-token` token before its year is unverified.
 - **WSL idle shutdown.** Whether WSL stops the VM, and every user unit with it, when no Windows client is attached is unchecked. A night with the timer and the health line answers it.
 - **Proof sample size.** One run each of to-dos 28 and 27 shows that the path works. It does not measure a rate. A rate needs the factory's first ten goals.
