@@ -497,9 +497,13 @@ From ~/.aleph/reports/Software factory corpus.md section 7.4: (1) openai/symphon
 id: 31
 status: open
 created: 2026-10-25
-updated: 2026-10-25
+updated: 2026-10-27
 priority: high
 labels: [factory]
 ---
 
 First priority (Chris, 2026-10-25). docs/specs/2026-10-25-goal-to-shipped.md, "Bootstrap first": a work store for goals and tasks with state, the loop for code goals (grill, spec, decompose, make, check, land), the digest as a text file, a per-run and per-night budget, and idle when no goal is open. Needs its detailed plan first; items 25, 29 and 30 feed it. Its first goals: routing (26), non-code goals, UI (29), memory (24), the Sidetone desktop app (sidetone 93).
+
+### Notes
+
+- 2026-10-27 02:16: Spec v3 landed in 4f31309: docs/specs/2026-10-26-seed-factory.md, red team in docs/specs/2026-10-26-seed-factory-red-team.md. srt is unverified until socat is installed and aleph sandbox probe runs.
