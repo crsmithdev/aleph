@@ -6,6 +6,7 @@
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal.
  * See docs/specs/2026-09-24-agent-jobs.md.
  */
+import { jobArgv, route } from "./lib/route.ts";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Run } from "./lib/ledger.ts";
@@ -448,7 +449,9 @@ async function tickCmd(): Promise<void> {
     return out({ started: [], skipped: [`the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`] });
   }
   out(await tick(async (repo, name, id, spec) => {
-    const p = Bun.spawn([process.execPath, CLI, "job", repo.key, name, "--spec", "-", "--todo", String(id), "--land"], {
+    const model = await route(spec);
+    factoryLog(`starting ${name} with model ${model ?? "default"}`);
+    const p = Bun.spawn(jobArgv(process.execPath, CLI, repo.key, name, id, model), {
       env: process.env, stdin: new Blob([spec]), stdout: "ignore", stderr: "pipe",
     });
     const code = await p.exited;
