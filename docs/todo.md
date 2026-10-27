@@ -513,7 +513,7 @@ First priority (Chris, 2026-10-25). docs/specs/2026-10-25-goal-to-shipped.md, "B
 ## 32. Install socat and run the first aleph sandbox probe
 ---
 id: 32
-status: open
+status: done
 created: 2026-10-27
 updated: 2026-10-27
 priority: high
