@@ -10,7 +10,7 @@ import { git, show } from "../../jobs/lib/git.ts";
 import { allJobs, loadRegistry, type Entry, type Repo } from "../../jobs/lib/ledger.ts";
 import { storeDir } from "../../todo/lib/store.ts";
 import { parseItem, status, type Item } from "../../todo/lib/todo.ts";
-import { loadVault, vaultDir } from "../../vault/lib/vault.ts";
+import { loadVault, vaultDir, type Note } from "../../vault/lib/vault.ts";
 import type { Routes } from "../server.ts";
 import { githubBase } from "../state.ts";
 
@@ -52,9 +52,12 @@ function baselineOf(repo: Repo): Card["baseline"] {
   } catch { return null; }
 }
 
-const scoped = (repo: Repo) => loadVault(vaultDir()).filter((n) => !n.archived && [n.fm.scope ?? []].flat().includes(repo.key));
+/** The loaders a request reads once; a test swaps them to count reads. */
+export const loaders = { vault: () => loadVault(vaultDir()), jobs: allJobs };
 
-const jobsOf = (repo: Repo): Entry[][] => allJobs().filter((j) => j.at(-1)!.run.repo === repo.key);
+const scoped = (repo: Repo, notes: Note[]) => notes.filter((n) => !n.archived && [n.fm.scope ?? []].flat().includes(repo.key));
+
+const jobsOf = (repo: Repo, jobs: Entry[][]): Entry[][] => jobs.filter((j) => j.at(-1)!.run.repo === repo.key);
 
 function card(repo: Repo, issues: Item[], jobs: Entry[][], notes: number): Card {
   const landed = jobs.map((j) => j.at(-1)!.run).filter((r) => r.state === "landed" && r.ended)
@@ -84,14 +87,15 @@ function commits(repo: Repo): Detail["commits"] {
 const stamp = (s: string | null | undefined) => (s ? Date.parse(s) || 0 : 0);
 
 export function projects(only: string | null): Card[] {
-  return Object.values(loadRegistry()).filter((r) => !only || r.key === only).map((r) => card(r, openIssues(r.key), jobsOf(r), scoped(r).length))
+  const notes = loaders.vault(), jobs = loaders.jobs();
+  return Object.values(loadRegistry()).filter((r) => !only || r.key === only).map((r) => card(r, openIssues(r.key), jobsOf(r, jobs), scoped(r, notes).length))
     .sort((a, b) => stamp(b.activity) - stamp(a.activity) || a.key.localeCompare(b.key));
 }
 
 export function project(key: string): Detail | null {
   const repo = loadRegistry()[key];
   if (!repo) return null;
-  const issues = openIssues(key), jobs = jobsOf(repo), notes = scoped(repo);
+  const issues = openIssues(key), jobs = jobsOf(repo, loaders.jobs()), notes = scoped(repo, loaders.vault());
   return {
     ...card(repo, issues, jobs, notes.length),
     commits: commits(repo),

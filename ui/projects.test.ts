@@ -107,3 +107,26 @@ test("the views render cards and the detail", async () => {
   const d = oneView.render(await (await at("/api/projects/fac")).json());
   for (const t of ["second", "fac-2", "a goal", "B fact"]) expect(d).toContain(t);
 });
+
+test("/api/projects loads the vault and the jobs once for three repos", async () => {
+  const { loaders } = await import("./api/projects.ts");
+  const third = join(base, "third");
+  sh(base, "git", "init", "-q", "-b", "main", third);
+  const prev = process.env.ALEPH_REPOS, real = { ...loaders };
+  const reg = JSON.parse(require("node:fs").readFileSync(prev!, "utf8"));
+  const alt = join(base, "repos3.json");
+  writeFileSync(alt, JSON.stringify({ ...reg, third: { path: third } }));
+  process.env.ALEPH_REPOS = alt;
+  let vaults = 0, jobs = 0;
+  loaders.vault = () => { vaults++; return real.vault(); };
+  loaders.jobs = () => { jobs++; return real.jobs(); };
+  try {
+    const all: any[] = await (await at("/api/projects")).json();
+    expect(all).toHaveLength(3);
+    expect(vaults).toBe(1);
+    expect(jobs).toBe(1);
+  } finally {
+    Object.assign(loaders, real);
+    process.env.ALEPH_REPOS = prev;
+  }
+});
