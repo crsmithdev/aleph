@@ -22,6 +22,13 @@ function tail(value: unknown, max = TAIL): string {
   return text.length <= max ? text : `…${text.slice(-max)}`;
 }
 
+/** A Bash result keeps its first and last TAIL chars: a compound command prints its early output first. */
+function bashResult(value: string): string {
+  if (value.length <= 2 * TAIL) return value;
+  const cut = value.length - 2 * TAIL;
+  return `${value.slice(0, TAIL)}…(${cut} chars cut)…${value.slice(-TAIL)}`;
+}
+
 function head(value: unknown, max = 200): string {
   const text = typeof value === "string" ? value : JSON.stringify(value) ?? "";
   return text.length <= max ? text : `${text.slice(0, max)}…`;
@@ -98,7 +105,7 @@ export function digest(transcriptPath: string, promptId: string, fallbackFinal =
         edits.push(inp.file_path ?? "?");
         items.push(`EDIT ${name} ${inp.file_path ?? "?"}`);
       } else if (name === "Bash") {
-        items.push(`RUN ${head(inp.command, 400)}\n  → ${out ? tail(resultText(out)) : "(no result)"}`);
+        items.push(`RUN ${head(inp.command, 400)}\n  → ${out ? bashResult(resultText(out)) : "(no result)"}`);
       } else {
         items.push(`CALL ${name} ${head(inp)}${out ? `\n  → ${tail(resultText(out), 200)}` : ""}`);
       }
