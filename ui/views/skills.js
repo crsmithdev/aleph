@@ -10,7 +10,7 @@ export const view = {
   order: 20,
   api: "/api/skills",
   render: (d) => renderSkills(d),
-  mount: (root, d) => mountPerDay(root, d),
+  mount: (root, d) => { mountPerDay(root, d); mountSort(root, d); },
 };
 
 const href = (name) => `#/skills/${encodeURIComponent(name)}`;
@@ -49,9 +49,6 @@ export function mountPerDay(root, d) {
 
 const STYLE = `<style>
 .skills .sort-in { position: absolute; opacity: 0; }
-.skills .by-last { display: none; }
-#s-last:checked ~ .tscroll table .by-last { display: table-row-group; }
-#s-last:checked ~ .tscroll table .by-uses { display: none; }
 .skills label.sort { cursor: pointer; padding: 2px 8px; border-radius: 3px; color: var(--muted); }
 #s-uses:checked ~ .sorts label[for="s-uses"], #s-last:checked ~ .sorts label[for="s-last"] { background: var(--sunk); color: var(--ink); font-weight: 600; }
 #s-uses:focus-visible ~ .sorts label[for="s-uses"], #s-last:focus-visible ~ .sorts label[for="s-last"] { outline: 2px solid var(--focus); }
@@ -65,19 +62,37 @@ const STYLE = `<style>
 </style>`;
 
 const row = (s) =>
-  `<tr><td><a href="${href(s.name)}">${esc(s.name)}</a></td><td class="num">${s.uses}<small> (${s.bySlash} slash, ${s.byTool} tool)</small></td>` +
+  `<tr data-name="${esc(s.name)}"><td><a href="${href(s.name)}">${esc(s.name)}</a></td><td class="num">${s.uses}<small> (${s.bySlash} slash, ${s.byTool} tool)</small></td>` +
   `<td class="num">${s.sessions}</td><td>${esc(s.projects.join(", "))}</td><td class="num">${esc(date(s.lastUsed))}</td>` +
   `<td class="num">${s.errors ? `<span class="badge stuck">${s.errors}</span>` : "0"}</td><td>${bars(s.name)}</td></tr>`;
 
+/** The used skills in the order of the Sort control: `by` is "uses" (most first) or "last" (newest first); ties by name. */
+export function sortSkills(skills, by) {
+  const cmp = by === "last" ? (a, b) => b.lastUsed.localeCompare(a.lastUsed) : (a, b) => b.uses - a.uses;
+  return (skills || []).slice().sort((a, b) => cmp(a, b) || a.name.localeCompare(b.name));
+}
+
+/** Wire the Sort control: moving the rows of the used tbody, so the charts in them are not redrawn. */
+export function mountSort(root, d) {
+  const body = root.querySelector("tbody.used");
+  if (!body || !d) return;
+  const rows = new Map([...body.querySelectorAll("tr[data-name]")].map((r) => [r.dataset.name, r]));
+  for (const input of root.querySelectorAll("input.sort-in")) {
+    input.addEventListener("change", () => {
+      if (!input.checked) return;
+      for (const s of sortSkills(d.skills, input.id === "s-last" ? "last" : "uses")) body.appendChild(rows.get(s.name));
+    });
+  }
+}
+
 export function renderSkills(d) {
-  const used = d.skills || [];
-  const byLast = used.slice().sort((a, b) => b.lastUsed.localeCompare(a.lastUsed) || a.name.localeCompare(b.name));
+  const used = sortSkills(d.skills, "uses");
   const unused = (d.unused || []).map((n) => `<tr class="unused"><td>${esc(n)}</td><td colspan="6">Unused in the last ${d.days} days</td></tr>`).join("");
   const head = `<thead><tr><th>Skill</th><th>Uses</th><th>Sessions</th><th>Projects</th><th>Last used</th><th>Errors</th><th>Per day</th></tr></thead>`;
   const body = used.length || unused
     ? `<input class="sort-in" type="radio" name="sort" id="s-uses" checked aria-label="Sort by uses"><input class="sort-in" type="radio" name="sort" id="s-last" aria-label="Sort by last used">` +
       `<p class="sorts quiet">Sort by <label class="sort" for="s-uses">Uses</label><label class="sort" for="s-last">Last used</label></p>` +
-      `<div class="tscroll"><table>${head}<tbody class="by-uses">${used.map(row).join("")}</tbody><tbody class="by-last">${byLast.map(row).join("")}</tbody><tbody>${unused}</tbody></table></div>`
+      `<div class="tscroll"><table>${head}<tbody class="used">${used.map(row).join("")}</tbody><tbody>${unused}</tbody></table></div>`
     : empty("No skill is installed or used.", "Skills come from the plugin's <code>skills/</code> folder.");
   return `${STYLE}<div class="page skills"><div class="sh"><h2>Skills</h2><span class="count">${used.length}</span><span class="aside">last ${d.days} days</span></div>` +
     (used.length ? "" : empty(`No skill was used in the last ${d.days} days.`, "A use is a Skill tool call or a slash command.")) + body + `</div>`;

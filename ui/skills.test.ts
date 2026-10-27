@@ -211,3 +211,22 @@ test("pages are fetched concurrently, and serve() warms the cache so the first r
     process.env.LANGFUSE_BASE_URL = before;
   }
 });
+
+const mk = (name: string, uses: number, lastUsed: string) => ({ name, uses, bySlash: uses, byTool: 0, sessions: 1, projects: ["p"], lastUsed, errors: 0, perDay: [uses] });
+const three = { days: 30, since: "2026-01-01", skills: [mk("b", 2, "2026-01-02T00:00:00Z"), mk("a", 2, "2026-01-05T00:00:00Z"), mk("c", 9, "2026-01-02T00:00:00Z")], unused: ["zz"] };
+
+test("renderSkills draws one chart mount per used skill", () => {
+  const html = v.renderSkills(three);
+  expect(html.match(/class="perday" role="img"[^>]*data-skill/g)?.length).toBe(3);
+});
+
+test("sortSkills orders by uses or by last used, ties by name", () => {
+  expect(v.sortSkills(three.skills, "uses").map((s: any) => s.name)).toEqual(["c", "a", "b"]);
+  expect(v.sortSkills(three.skills, "last").map((s: any) => s.name)).toEqual(["a", "b", "c"]);
+});
+
+test("unused skills are listed once, after the used ones", () => {
+  const html = v.renderSkills(three);
+  expect(html.match(/class="unused"/g)?.length).toBe(1);
+  expect(html.indexOf('class="unused"')).toBeGreaterThan(html.lastIndexOf('data-name="b"'));
+});
