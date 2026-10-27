@@ -35,3 +35,15 @@ test("the page builds the sidebar from /api/views and keeps the project filter",
   for (const s of ["/api/views", "/api/projects/keys", 'aria-current="page"', "project=", '"factory", "Factory"', '"memory", "Memory"']) expect(html).toContain(s);
   expect(html).not.toContain("/render.js");
 });
+
+test("index.html loads Web Awesome and ECharts at pinned versions", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  expect(html).toMatch(/cdn\.jsdelivr\.net\/npm\/@awesome\.me\/webawesome@\d+\.\d+\.\d+\/dist-cdn\/webawesome\.loader\.js/);
+  expect(html).toMatch(/cdn\.jsdelivr\.net\/npm\/echarts@\d+\.\d+\.\d+\/dist\/echarts\.min\.js/);
+  expect(html).toContain("--wa-color-brand-fill-loud: var(--run)");
+});
+
+test("the shell calls a view's mount after render, through mountView", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  expect(html).toMatch(/view\.render\([^]*mountView\(view, \$\("view"\), data\)/);
+});

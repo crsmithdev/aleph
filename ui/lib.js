@@ -92,3 +92,65 @@ export function md(src) {
   flushPara(); flushList();
   return out.join("\n");
 }
+
+/** Call the view's optional `mount(root, data)` after its markup is in `root`. Returns whether it ran. */
+export function mountView(view, root, data) {
+  if (typeof view?.mount !== "function") return false;
+  view.mount(root, data);
+  return true;
+}
+
+const PALETTE_EXTRA = ["#C792EA", "#89DDFF"];
+
+/**
+ * The ECharts theme for a token map ({bg, surface, ink, rule, run, done, need, stuck, sans}).
+ * Series colours run, done, need, stuck, then purple and cyan.
+ */
+export function chartTheme(t) {
+  const axis = { axisLine: { lineStyle: { color: t.rule } }, axisTick: { lineStyle: { color: t.rule } }, axisLabel: { color: t.ink }, splitLine: { lineStyle: { color: t.rule } }, nameTextStyle: { color: t.ink } };
+  return {
+    color: [t.run, t.done, t.need, t.stuck, ...PALETTE_EXTRA],
+    backgroundColor: "transparent",
+    textStyle: { color: t.ink, fontFamily: t.sans },
+    title: { textStyle: { color: t.ink }, subtextStyle: { color: t.ink } },
+    legend: { textStyle: { color: t.ink } },
+    categoryAxis: axis, valueAxis: axis, timeAxis: axis, logAxis: axis,
+    tooltip: { backgroundColor: t.surface, borderColor: t.rule, textStyle: { color: t.ink }, axisPointer: { lineStyle: { color: t.rule }, crossStyle: { color: t.rule } } },
+  };
+}
+
+const TOKENS = ["bg", "surface", "ink", "rule", "run", "done", "need", "stuck", "focus", "sans", "mono"];
+/** Read the page tokens off :root into a token map. */
+export const readTokens = (el = document.documentElement) => {
+  const cs = getComputedStyle(el);
+  return Object.fromEntries(TOKENS.map((k) => [k, cs.getPropertyValue(`--${k}`).trim()]));
+};
+
+let seq = 0;
+/**
+ * Init an ECharts chart on `el` with `option`, themed from the page tokens. It re-themes when
+ * prefers-color-scheme changes and resizes with the element. Returns the chart instance.
+ */
+export function chart(el, option) {
+  const echarts = globalThis.echarts;
+  if (!echarts) throw new Error("ECharts is not loaded");
+  const name = `aleph-${++seq}`;
+  const build = () => { echarts.registerTheme(name, chartTheme(readTokens())); return echarts.init(el, name); };
+  let c = build();
+  c.setOption(option);
+  const mq = matchMedia("(prefers-color-scheme: dark)");
+  const retheme = () => {
+    const opt = c.getOption();
+    c.dispose();
+    c = build();
+    c.setOption(opt);
+  };
+  mq.addEventListener("change", retheme);
+  const ro = new ResizeObserver(() => c.resize());
+  ro.observe(el);
+  return {
+    get instance() { return c; },
+    setOption: (o, ...rest) => c.setOption(o, ...rest),
+    dispose() { mq.removeEventListener("change", retheme); ro.disconnect(); c.dispose(); },
+  };
+}

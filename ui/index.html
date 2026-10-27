@@ -8,6 +8,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/hack-font/3.3.0/web/hack.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/styles/themes/default.css">
+<script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/webawesome.loader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@6.1.0/dist/echarts.min.js"></script>
 <style>
 /* Light is a lavender match for Palenight; dark is Chris's VS Code theme, Palenight (Mild Contrast). */
 :root {
@@ -36,6 +39,34 @@
   --num: var(--sans);     /* numbers: counts, costs, times */
   --mono: 'Hack Nerd Font', 'Hack', ui-monospace, monospace;
 }
+/* Web Awesome reads these; var() follows the tokens into dark, so one block serves both. */
+:root {
+  --wa-color-surface-default: var(--surface);
+  --wa-color-surface-raised: var(--surface);
+  --wa-color-surface-lowered: var(--sunk);
+  --wa-color-surface-border: var(--rule);
+  --wa-color-text-normal: var(--ink);
+  --wa-color-text-quiet: var(--muted);
+  --wa-color-text-link: var(--run);
+  --wa-color-brand-fill-loud: var(--run);
+  --wa-color-brand-fill-normal: var(--run-bg);
+  --wa-color-brand-on-normal: var(--run);
+  --wa-color-brand-border-loud: var(--run);
+  --wa-color-success-fill-loud: var(--done);
+  --wa-color-success-fill-normal: var(--done-bg);
+  --wa-color-success-on-normal: var(--done);
+  --wa-color-warning-fill-loud: var(--need);
+  --wa-color-warning-fill-normal: var(--need-bg);
+  --wa-color-warning-on-normal: var(--need);
+  --wa-color-danger-fill-loud: var(--stuck);
+  --wa-color-danger-fill-normal: var(--stuck-bg);
+  --wa-color-danger-on-normal: var(--stuck);
+  --wa-focus-ring-color: var(--focus);
+  --wa-font-family-body: var(--sans);
+  --wa-font-family-heading: var(--sans);
+  --wa-font-family-code: var(--mono);
+}
+.echart { width: 100%; height: 280px; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #25293A;          /* Palenight (Mild Contrast): sidebar and panels */
@@ -393,10 +424,10 @@ pre.trailers b { color: var(--need); }
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { empty, error, esc } from "/lib.js";
+  import { empty, error, esc, mountView } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
-  // view = { path, title, group, order, render(data, params), api?, refresh? }:
+  // view = { path, title, group, order, render(data, params), mount?(root, data), api?, refresh? }:
   // `api` is the URL its data comes from (":params" filled in from the route),
   // `refresh` the seconds between reloads. The page builds the sidebar from
   // them, routes by hash (#/jobs/aleph-52?project=aleph), and passes the
@@ -460,7 +491,10 @@ pre.trailers b { color: var(--need); }
     }
     if (route !== shown) return;  // the reader moved on while this loaded
     try { $("view").innerHTML = view.render(data, params); }
-    catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} failed to render: ${e.message}`, "This is a bug in the view.")}</div>`; }
+    catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} failed to render: ${e.message}`, "This is a bug in the view.")}</div>`; return; }
+    // `mount` runs after render, for what needs a DOM (the charts); a view without one is left alone.
+    try { mountView(view, $("view"), data); }
+    catch (e) { console.error(view.title, "mount failed", e); }
   }
 
   function route() {

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clock, cmd, empty, error, esc, md, money, span } from "./lib.js";
+import { chartTheme, clock, cmd, empty, error, esc, md, money, mountView, span } from "./lib.js";
 
 test("esc escapes markup", () => {
   expect(esc("<script>alert('x')</script>")).toBe("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;");
@@ -36,4 +36,20 @@ test("formats and states", () => {
   expect(empty("Nothing here.", "Try <code>x</code>.")).toContain('<p class="hint">Try <code>x</code>.</p>');
   expect(error("<b>down</b>")).toContain("&lt;b&gt;down");
   expect(cmd("aleph land a-1", { primary: true })).toContain('data-cmd="aleph land a-1"');
+});
+
+test("chartTheme holds the token colours in the order given", () => {
+  const t = { bg: "#111", surface: "#222", ink: "#eee", rule: "#444", run: "#1", done: "#2", need: "#3", stuck: "#4", sans: "X" };
+  const th = chartTheme(t);
+  expect(th.color).toEqual(["#1", "#2", "#3", "#4", "#C792EA", "#89DDFF"]);
+  expect(th.textStyle.color).toBe("#eee");
+  expect(th.valueAxis.splitLine.lineStyle.color).toBe("#444");
+  expect(th.tooltip.backgroundColor).toBe("#222");
+});
+
+test("mountView calls mount only when the view has one", () => {
+  const calls: unknown[][] = [];
+  expect(mountView({ mount: (...a: unknown[]) => calls.push(a) }, "root", 1)).toBe(true);
+  expect(calls).toEqual([["root", 1]]);
+  expect(mountView({}, "root", 1)).toBe(false);
 });
