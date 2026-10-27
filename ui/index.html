@@ -657,8 +657,11 @@ pre.trailers b { color: var(--need); }
   const panel = document.createElement("details");
   panel.className = "fontpick";
   panel.innerHTML = `<summary title="Fonts (temporary)">Aa</summary><div class="fp">` +
-    ROLES.map(([role, label, list, def]) => `<label>${label} <select data-role="${role}"><option value="">${def ? `Default (${def})` : "Same as text"}</option>` +
-      [...new Set(list)].map((f) => `<option${chosen[role] === f ? " selected" : ""}>${f}</option>`).join("") + `</select></label>`).join("") +
+    ROLES.map(([role, label, list, def]) => `<div class="fp-role"><span>${label}</span><div class="fp-row">` +
+      `<button type="button" data-step="-1" aria-label="Previous ${label.toLowerCase()} font">&lsaquo;</button>` +
+      `<select data-role="${role}" aria-label="${label} font"><option value="">${def ? `Default (${def})` : "Same as text"}</option>` +
+      [...new Set(list)].map((f) => `<option${chosen[role] === f ? " selected" : ""}>${f}</option>`).join("") + `</select>` +
+      `<button type="button" data-step="1" aria-label="Next ${label.toLowerCase()} font">&rsaquo;</button></div></div>`).join("") +
     `<pre class="fp-css"></pre><button type="button" data-reset>Reset</button></div>`;
   const css = panel.querySelector(".fp-css");
   panel.addEventListener("change", (e) => {
@@ -666,6 +669,15 @@ pre.trailers b { color: var(--need); }
     if (!role) return;
     if (e.target.value) chosen[role] = e.target.value; else delete chosen[role];
     save(chosen); apply();
+  });
+  // The arrows step the select next to them and wrap at the ends.
+  panel.addEventListener("click", (e) => {
+    const step = Number(e.target.closest("[data-step]")?.dataset.step);
+    if (!step) return;
+    const sel = e.target.closest(".fp-row").querySelector("select");
+    const n = sel.options.length;
+    sel.selectedIndex = (sel.selectedIndex + step + n) % n;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
   });
   panel.querySelector("[data-reset]").addEventListener("click", () => {
     for (const k of Object.keys(chosen)) delete chosen[k];
@@ -680,10 +692,12 @@ pre.trailers b { color: var(--need); }
 details.fontpick > summary::before, details.fontpick[open] > summary::before { content: none; }
 .fontpick .fp { position: absolute; right: 0; bottom: 48px; width: min(320px, calc(100vw - 32px)); display: grid; gap: 10px; padding: 14px;
   background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; box-shadow: 0 6px 24px rgb(0 0 0 / .25); }
-.fontpick label { display: grid; gap: 4px; color: var(--muted); }
-.fontpick select { font: 13px var(--sans); padding: 4px 6px; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; }
+.fontpick .fp-role { display: grid; gap: 4px; color: var(--muted); }
+.fontpick .fp-row { display: flex; gap: 4px; }
+.fontpick select { flex: 1; min-width: 0; font: 13px var(--sans); padding: 4px 6px; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; }
 .fontpick .fp-css { margin: 0; padding: 8px; font: 12px var(--mono); white-space: pre-wrap; background: var(--sunk); border-radius: 4px; color: var(--ink-2); }
-.fontpick button { justify-self: start; font: 13px var(--sans); padding: 3px 10px; background: none; color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; cursor: pointer; }`;
+.fontpick button { justify-self: start; font: 13px var(--sans); padding: 3px 10px; background: none; color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; cursor: pointer; }
+.fontpick .fp-row button { padding: 0 9px; font-size: 16px; line-height: 1; }`;
   document.head.append(style);
   document.body.append(panel);
   apply();
