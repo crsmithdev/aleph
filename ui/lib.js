@@ -129,13 +129,14 @@ export const readTokens = (el = document.documentElement) => {
 let seq = 0;
 /**
  * Init an ECharts chart on `el` with `option`, themed from the page tokens. It re-themes when
- * prefers-color-scheme changes and resizes with the element. Returns the chart instance.
+ * prefers-color-scheme changes and resizes with the element. Returns a wrapper over the instance.
  */
 export function chart(el, option) {
   const echarts = globalThis.echarts;
   if (!echarts) throw new Error("ECharts is not loaded");
   const name = `aleph-${++seq}`;
   const build = () => { echarts.registerTheme(name, chartTheme(readTokens())); return echarts.init(el, name); };
+  const handlers = [];
   let c = build();
   c.setOption(option);
   const mq = matchMedia("(prefers-color-scheme: dark)");
@@ -144,6 +145,7 @@ export function chart(el, option) {
     c.dispose();
     c = build();
     c.setOption(opt);
+    for (const [ev, fn] of handlers) c.on(ev, fn);
   };
   mq.addEventListener("change", retheme);
   const ro = new ResizeObserver(() => c.resize());
@@ -151,6 +153,8 @@ export function chart(el, option) {
   return {
     get instance() { return c; },
     setOption: (o, ...rest) => c.setOption(o, ...rest),
+    // Handlers are kept so a re-theme, which builds a new instance, attaches them again.
+    on(ev, fn) { handlers.push([ev, fn]); c.on(ev, fn); },
     dispose() { mq.removeEventListener("change", retheme); ro.disconnect(); c.dispose(); },
   };
 }
