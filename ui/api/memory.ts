@@ -52,7 +52,20 @@ function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, p
 }
 
 /** `vault misses --days 7`'s JSON, or null when it fails (no Langfuse keys, offline). */
-async function misses(): Promise<unknown | null> {
+async function misses(): Promise<{ value: unknown; cachedAt: string } | null> {
+  const ttl = ttlMs(), now = Date.now();
+  if (ttl && missesCache && now - missesCache.at < ttl) return missesCache.hit;
+  const value = await runMisses();
+  if (value == null) return null;
+  const hit = { value, cachedAt: new Date(now).toISOString() };
+  if (ttl) missesCache = { at: now, hit };
+  return hit;
+}
+/** `vault misses` is slow (Langfuse), so its answer is kept `ALEPH_UI_CACHE_TTL` seconds (default 300; 0 turns it off). */
+let missesCache: { at: number; hit: { value: unknown; cachedAt: string } } | null = null;
+const ttlMs = () => { const n = Number(process.env.ALEPH_UI_CACHE_TTL ?? 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
+export const clearCache = () => { missesCache = null; };
+async function runMisses(): Promise<unknown | null> {
   try {
     const p = Bun.spawn(["bun", CLI, "misses", "--days", "7"], { env: process.env, stdout: "pipe", stderr: "ignore", timeout: 15_000 });
     const text = await new Response(p.stdout).text();
@@ -62,6 +75,7 @@ async function misses(): Promise<unknown | null> {
 }
 
 async function overview(url: URL): Promise<Response> {
+  const slow = misses();
   const project = url.searchParams.get("project") || null;
   const root = vaultDir();
   const all = existsSync(join(root, "Home.md")) ? loadVault(root) : [];
@@ -80,8 +94,8 @@ async function overview(url: URL): Promise<Response> {
     lint: { refuse: lint.refuse.filter(mine), warn: lint.warn.filter(mine) },
     writes: recentWrites(root, all, keep, project),
   };
-  const m = await misses();
-  if (m) body.misses = m;
+  const m = await slow;
+  if (m) { body.misses = m.value; body.cachedAt = m.cachedAt; }
   return json(body);
 }
 

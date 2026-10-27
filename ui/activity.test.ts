@@ -5,10 +5,11 @@ import { join } from "node:path";
 import { writeList } from "../todo/lib/store.ts";
 import { add, setStatus } from "../todo/lib/todo.ts";
 import { today } from "../todo/lib/todo.ts";
-import { activity, routes, summary } from "./api/activity.ts";
+import { activity, clearCache, routes, summary } from "./api/activity.ts";
 // @ts-ignore activity.js is plain JS, shared with the page
 import { renderActivity, view } from "./views/activity.js";
 
+let obsHits = 0;
 let base: string, jobsDir: string, fake: ReturnType<typeof Bun.serve>;
 const saved: Record<string, string | undefined> = {};
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -62,6 +63,7 @@ beforeAll(() => {
     fetch(req) {
       const url = new URL(req.url);
       if (!req.headers.get("authorization")?.startsWith("Basic ")) return new Response("no", { status: 401 });
+      if (url.pathname === "/api/public/observations") obsHits++;
       if (url.pathname === "/api/public/observations") return Response.json({ data: observations, meta: { totalPages: 1 } });
       if (url.pathname === "/api/public/traces") return Response.json({ data: traces, meta: { totalPages: 1 } });
       return new Response("not found", { status: 404 });
@@ -125,6 +127,29 @@ describe("activity", () => {
     const o = await activity(7, "other", now);
     expect(o.tools.map((t) => t.name)).toEqual(["Edit"]);
     expect(o.runs.at(-1)!.runs).toBe(1);
+  });
+
+  test("a second request within ALEPH_UI_CACHE_TTL does not reach Langfuse; after it, one does", async () => {
+    const saveTtl = process.env.ALEPH_UI_CACHE_TTL;
+    process.env.ALEPH_UI_CACHE_TTL = "0.3";
+    clearCache();
+    try {
+      obsHits = 0;
+      const a = await activity(7, null, now);
+      const b = await activity(7, null, now);
+      expect(obsHits).toBe(1);
+      expect(b.cachedAt).toBe(a.cachedAt);
+      expect(b.tools).toEqual(a.tools);
+      await Bun.sleep(400);
+      const c = await activity(7, null, now);
+      expect(obsHits).toBe(2);
+      expect(c.cachedAt).not.toBe(a.cachedAt);
+      await activity(7, "fac", now);
+      expect(obsHits).toBe(3);
+    } finally {
+      if (saveTtl === undefined) delete process.env.ALEPH_UI_CACHE_TTL; else process.env.ALEPH_UI_CACHE_TTL = saveTtl;
+      clearCache();
+    }
   });
 
   test("without Langfuse keys the ledger half still answers", async () => {

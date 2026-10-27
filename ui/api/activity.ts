@@ -7,7 +7,7 @@
  */
 import { basename } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
-import { fetchObservations, type Observation } from "../../hooks/lib/otlp.ts";
+import type { Observation } from "../../hooks/lib/otlp.ts";
 import { allJobs, allRuns, loadRegistry } from "../../jobs/lib/ledger.ts";
 import { readList } from "../../todo/lib/store.ts";
 import { status, today } from "../../todo/lib/todo.ts";
@@ -43,6 +43,8 @@ export interface Activity {
   hooks: Count[];
   denials: { total: number; recent: { at: string; reason: string }[] };
   runs: { day: string; runs: number; cost: number }[];
+  /** When the Langfuse half was fetched; it is reused for ALEPH_UI_CACHE_TTL seconds. */
+  cachedAt?: string;
 }
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -55,6 +57,30 @@ function costOf(o: any): number {
 }
 const isError = (o: Observation) => (o as any).level === "ERROR";
 
+/** Langfuse reads kept `ALEPH_UI_CACHE_TTL` seconds (default 300; 0 turns the cache off), keyed by their arguments. */
+const cache = new Map<string, { at: number; value: Promise<unknown> }>();
+const ttlMs = () => { const n = Number(process.env.ALEPH_UI_CACHE_TTL ?? 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
+export const clearCache = () => cache.clear();
+function cached<T>(key: string, load: () => Promise<T>): Promise<{ value: T; cachedAt: string }> {
+  const ttl = ttlMs(), hit = cache.get(key), now = Date.now();
+  if (ttl && hit && now - hit.at < ttl) return hit.value as Promise<{ value: T; cachedAt: string }>;
+  const value = load().then((v) => ({ value: v, cachedAt: new Date(now).toISOString() }));
+  if (ttl) {
+    cache.set(key, { at: now, value });
+    value.catch(() => { if (cache.get(key)?.value === value) cache.delete(key); });
+  }
+  return value;
+}
+
+/** Every row of a paged Langfuse list: page 1 says how many pages there are, the rest are fetched together. */
+async function allPages(cfg: LangfuseConfig, path: string, params: Record<string, string>): Promise<any[]> {
+  const page = (n: number) => getJson(cfg, `${path}?${new URLSearchParams({ ...params, limit: "100", page: String(n) })}`);
+  const first = await page(1);
+  const pages = first.meta ? Math.min(Number(first.meta.totalPages) || 1, 499) : 1;
+  const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => page(i + 2)));
+  return [first, ...rest].flatMap((b) => b.data ?? []);
+}
+
 async function getJson(cfg: LangfuseConfig, path: string): Promise<any> {
   const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
   const res = await fetch(`${cfg.baseUrl}${path}`, { headers: { authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(15_000) });
@@ -64,15 +90,11 @@ async function getJson(cfg: LangfuseConfig, path: string): Promise<any> {
 
 /** The ids of the traces of `project`: its session's cwd, or the trace's name, is the key. */
 async function projectTraces(cfg: LangfuseConfig, project: string, from: Date, to: Date): Promise<Set<string>> {
+  const rows = await allPages(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString() });
   const ids = new Set<string>();
-  for (let page = 1; page < 200; page++) {
-    const q = new URLSearchParams({ fromTimestamp: from.toISOString(), toTimestamp: to.toISOString(), limit: "100", page: String(page) });
-    const body = await getJson(cfg, `/api/public/traces?${q}`);
-    for (const t of body.data ?? []) {
-      const cwd = t.metadata?.cwd;
-      if (t.name === project || (typeof cwd === "string" && basename(cwd) === project)) ids.add(t.id);
-    }
-    if (!body.meta || page >= (body.meta.totalPages ?? 1)) break;
+  for (const t of rows) {
+    const cwd = t.metadata?.cwd;
+    if (t.name === project || (typeof cwd === "string" && basename(cwd) === project)) ids.add(t.id);
   }
   return ids;
 }
@@ -102,11 +124,15 @@ export async function activity(days: number, project: string | null, now = new D
   const from = startOf(keys[0]), to = new Date(now.getTime() + 60_000);
   let obs: Observation[];
   try {
-    obs = await fetchObservations(cfg, from, to);
-    if (project) {
-      const mine = await projectTraces(cfg, project, new Date(from.getTime() - DAY), to);
-      obs = obs.filter((o) => o.traceId && mine.has(o.traceId));
-    }
+    const got = await cached(`${cfg.baseUrl}|${keys[0]}|${days}|${project ?? ""}`, async () => {
+      const [all, mine] = await Promise.all([
+        allPages(cfg, "/api/public/observations", { fromStartTime: from.toISOString(), toStartTime: to.toISOString() }) as Promise<Observation[]>,
+        project ? projectTraces(cfg, project, new Date(from.getTime() - DAY), to) : null,
+      ]);
+      return mine ? all.filter((o) => o.traceId && mine.has(o.traceId)) : all;
+    });
+    obs = [...got.value];
+    out.cachedAt = got.cachedAt;
   } catch (e) {
     out.langfuse = "error";
     out.error = e instanceof Error ? e.message : String(e);

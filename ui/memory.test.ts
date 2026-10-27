@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serve } from "./server.ts";
+import { clearCache } from "./api/memory.ts";
 // @ts-ignore plain JS, shared with the page
 import { md } from "./lib.js";
 // @ts-ignore
@@ -93,4 +94,29 @@ test("the views render and the note route is wired", () => {
   const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
   expect(nh).toContain('href="#/memory/U"');
   expect(nh).toContain("Linked from");
+});
+
+test("vault misses runs once within ALEPH_UI_CACHE_TTL, and the answer says when it was fetched", async () => {
+  const bin = join(base, "bin"), log = join(base, "calls");
+  mkdirSync(bin);
+  writeFileSync(join(bin, "bun"), `#!/bin/sh\necho x >> ${log}\necho '{"days":7,"recalls":1}'\n`);
+  chmodSync(join(bin, "bun"), 0o755);
+  const saveEnv = { PATH: process.env.PATH, TTL: process.env.ALEPH_UI_CACHE_TTL };
+  process.env.PATH = `${bin}:${process.env.PATH}`;
+  process.env.ALEPH_UI_CACHE_TTL = "0.3";
+  clearCache();
+  try {
+    const a: any = await (await at("/api/memory")).json();
+    const b: any = await (await at("/api/memory?project=other")).json();
+    expect(readFileSync(log, "utf8").trim().split("\n")).toHaveLength(1);
+    expect(a.misses).toEqual({ days: 7, recalls: 1 });
+    expect(b.cachedAt).toBe(a.cachedAt);
+    await Bun.sleep(400);
+    await at("/api/memory");
+    expect(readFileSync(log, "utf8").trim().split("\n")).toHaveLength(2);
+  } finally {
+    process.env.PATH = saveEnv.PATH;
+    if (saveEnv.TTL === undefined) delete process.env.ALEPH_UI_CACHE_TTL; else process.env.ALEPH_UI_CACHE_TTL = saveEnv.TTL;
+    clearCache();
+  }
 });
