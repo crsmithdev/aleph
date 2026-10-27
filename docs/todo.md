@@ -425,7 +425,7 @@ Report: ~/.aleph/reports/AI agent software factory design.md. Vault: Software Fa
 id: 26
 status: open
 created: 2026-10-25
-updated: 2026-10-25
+updated: 2026-10-27
 priority: medium
 labels: [routing]
 ---
@@ -438,6 +438,7 @@ Today hooks/lib/judge.ts runs every judge as `claude -p --model haiku`, and jobs
 
 - 2026-10-25 19:13: Reference tiering (The VC Corner graphic, Oct 2026, citing Anthropic docs): Fable 5.1 writes the daily plan (Read/Grep/Glob, high effort); Opus 5.5 judges every diff and plans when Fable is unavailable (read-only, high); Sonnet 5.5 does each task in its own worktree (scoped edits, medium); Haiku 5.5 screens every inbox item (no tools, medium). Fable input $10/M vs Haiku 5.5 $0.10/M. Mapping to aleph: lead/planner = Fable, key-2 reviewer = Opus, worker = Sonnet, verify-gate judge and intake screen = Haiku 5.5 or Jev (TypeSafe's Jev or equivalent, per Chris).
 - 2026-10-25 19:25: Part of docs/specs/2026-10-25-goal-to-shipped.md; write this piece's detailed plan from it.
+- 2026-10-27 02:16: TypeSafe publishes no Jev weights or self-host licence; it is API only (TypeSafe direct or OpenRouter, $0.042/M input). Open Jev-style models exist (Laya on ModernBERT-large, Open-Jev on DeBERTa-v3-large, Kev 0.8B-27B on Qwen, said to accept Jev's API); their licences and quality are not verified. Sources: arxiv.org/pdf/2609.26758, openrouter.ai/typesafe/jev-1.13, infrabase.ai/inference-apis/typesafe-jev.
 
 ## 27. verify-gate digest drops grep output: judge said a judge.ts grep returned nothing when it printed line 37
 ---
