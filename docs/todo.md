@@ -426,7 +426,7 @@ id: 26
 status: open
 created: 2026-10-25
 updated: 2026-10-27
-priority: medium
+priority: high
 labels: [routing]
 ---
 
