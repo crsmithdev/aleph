@@ -53,6 +53,14 @@ const STYLE = `<style>
 @media (max-width: 480px) { .filters { gap: 12px; } .filters .group { flex: 1 1 100%; } }
 </style>`;
 
+const JOB_STYLE = `<style>
+dl.facts.job-facts { margin-bottom: 20px; }
+.runs { display: grid; gap: 6px; list-style: none; margin: 0 0 20px; padding: 0; }
+.runs .run { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; font: 13px var(--sans); }
+.runs .run > span { white-space: nowrap; }
+.runs .reason { white-space: normal; flex-basis: 100%; }
+</style>`;
+
 export function renderFilters(jobs, f = {}) {
   const repos = [...new Set([...jobs.map((j) => j.repo), f.repo].filter(Boolean))].sort();
   const pill = (label, params, on) => `<a class="pill${on ? " on" : ""}" href="${esc(href("/jobs", params))}"${on ? ' aria-current="true"' : ""}>${esc(label)}</a>`;
@@ -77,10 +85,12 @@ export function renderJobs(jobs, f = {}) {
 
 export function renderRuns(runs) {
   const rows = runs.map((r) =>
-    `<li class="run run-${esc(r.kind)}"><span class="id">${esc(r.kind)}</span>${badge(r.state)}` +
-    `<span class="num">${esc(clock(r.started))}${r.ended ? `, ${esc(span(r.started, r.ended))}` : ""}</span>` +
-    `${r.cost !== undefined ? `<span class="num">${esc(money(r.cost))}</span>` : ""}${r.model ? `<span class="quiet">${esc(r.model)}</span>` : ""}` +
-    `${r.reason ? `<span class="quiet">${esc(r.reason)}</span>` : ""}</li>`).join("");
+    `<li class="run run-${esc(r.kind)}"><span class="kind">${esc(r.kind)}</span>${badge(r.state)}` +
+    `<span class="start num">${esc(clock(r.started))}</span>` +
+    `${r.ended ? `<span class="took num">${esc(span(r.started, r.ended))}</span>` : ""}` +
+    `${r.cost !== undefined ? `<span class="cost num">${esc(money(r.cost))}</span>` : ""}` +
+    `${r.model ? `<span class="model quiet">${esc(r.model)}</span>` : ""}` +
+    `${r.reason ? `<span class="reason quiet">${esc(r.reason)}</span>` : ""}</li>`).join("");
   return `<div class="sh"><h2>Runs</h2><span class="count">${runs.length}</span></div><ol class="runs">${rows}</ol>`;
 }
 
@@ -91,9 +101,9 @@ const log = (title, body) => body ? `<div class="sh"><h2>${esc(title)}</h2></div
 
 export function renderJob(j) {
   const checks = (j.checks ?? []).map((c) => `<li>${c.ok ? "✓" : "✗"} ${esc(c.name)} <span class="quiet">${esc(c.seconds)} s</span></li>`).join("");
-  return `<div class="page"><p><a href="#/jobs">← Jobs</a></p>` +
+  return `${JOB_STYLE}<div class="page"><p><a href="#/jobs">← Jobs</a></p>` +
     `<div class="ih"><span class="id">${esc(j.name)}</span><h1>${esc(j.item?.title || j.name)}</h1>${badge(j.state)}</div>` +
-    `<dl class="facts">${fact("Repo", esc(j.repo))}${fact("Started", esc(clock(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}` +
+    `<dl class="facts job-facts">${fact("Repo", esc(j.repo))}${fact("Started", esc(clock(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}` +
     `${j.model ? fact("Model", esc(j.model)) : ""}${j.commit ? fact("Commit", j.commitUrl ? `<a href="${esc(j.commitUrl)}"><code>${esc(j.commit.slice(0, 7))}</code></a>` : `<code>${esc(j.commit.slice(0, 7))}</code>`) : ""}` +
     `${j.trace ? fact("Trace", `<a href="${esc(j.trace)}">Langfuse</a>`) : ""}</dl>` +
     (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +

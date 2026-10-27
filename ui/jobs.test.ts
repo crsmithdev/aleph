@@ -158,6 +158,18 @@ describe("render", () => {
     expect(v.detail.path).toBe("/jobs/:name");
     expect(jobView.view).toBe(v.detail);
   });
+  test("each run field is its own element in its row", () => {
+    const h = v.renderRuns([{ id: "1", kind: "worker", state: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed" }]);
+    const row = h.match(/<li class="run run-worker">.*?<\/li>/)?.[0] ?? "";
+    const fields = [...row.matchAll(/<span class="([^"]+)">([^<]*)<\/span>/g)].map((m) => m[1]);
+    expect(fields).toEqual(["kind", "badge stuck", "start num", "took num", "cost num", "model quiet", "reason quiet"]);
+    expect(row).toContain('<span class="kind">worker</span>');
+    expect(row).toContain('<span class="badge stuck">failed</span>');
+    expect(row).toContain('<span class="took num">');
+    expect(row).toContain('<span class="cost num">$1.0276</span>');
+    expect(row).toContain('<span class="model quiet">opus</span>');
+    expect(row).toContain('<span class="reason quiet">checks failed</span>');
+  });
   test("diff lines are coloured and escaped", () => {
     const h = v.renderDiff("--- a\n+++ b\n+x<y\n-z");
     expect(h).toContain('<span class="add">+x&lt;y</span>');
