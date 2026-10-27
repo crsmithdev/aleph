@@ -122,6 +122,8 @@ export function state(now = new Date()): State {
     const withChecks = runs.findLast((e) => e.run.checks?.length)?.run.checks;
     if (withChecks) job.checks = withChecks;
     if (r.state === "landed" && r.check === "open") job.check = "open";
+    const checks = (runs.findLast((e) => (e.run as any).checks)?.run as any)?.checks;
+    if (r.state === "stuck" || r.state === "failed") if (Array.isArray(checks)) job.checks = checks;
     return job;
   };
 

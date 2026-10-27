@@ -67,6 +67,59 @@ test("a needs-you entry has Diff, Land and Drop buttons; a landed one with an op
   expect(r.renderDelivered(state)).not.toContain("data-act=");
 });
 
+const withFactory = (o: object) => ({ ...state, factory: { ...state.factory, health: [], ...o } });
+
+test("a stuck job shows its reason, the failed check and its seconds, and aleph drop", () => {
+  const h = r.renderStuck({ ...state, stuck: [job({ name: "aleph-30", state: "stuck", reason: "types failed", checks: [{ name: "lint", ok: true, seconds: 3 }, { name: "tsc", ok: false, seconds: 41 }] })] });
+  for (const t of ["types failed", "tsc", "41 s", 'data-cmd="aleph drop aleph-30"']) expect(h).toContain(t);
+});
+
+test("four needs-you jobs render one expanded and three collapsed", () => {
+  const needs = [1, 2, 3, 4].map((i) => job({ name: `aleph-${i}`, state: "needs-you", reason: "Held path", item: { id: i, title: `t${i}` } }));
+  const h = r.renderNeeds({ ...state, needs });
+  expect(h.match(/<details class="need-card need-fold" open>/g)?.length).toBe(1);
+  expect(h.match(/<details class="need-card need-fold">/g)?.length).toBe(3);
+  expect(r.renderNeeds({ ...state, needs: needs.slice(0, 2) })).not.toContain("need-fold");
+});
+
+test("each factory condition renders the banner with its text", () => {
+  expect(r.renderBanner(state)).toContain("judge is down");
+  const cases: [object, string][] = [
+    [{ runsToday: 12 }, "day cap is reached"],
+    [{ paused: true }, "paused"],
+    [{ health: ["health: 3 runs wait for Chris; no new run starts"] }, "3 runs wait for Chris"],
+    [{ health: ["health: aleph main is red"] }, "main is red"],
+    [{ probe: { at: "2026-10-27T14:35:00Z", ok: false, failed: ["no network"] } }, "sandbox probe"],
+  ];
+  for (const [o, text] of cases) {
+    const h = r.renderBanner(withFactory(o));
+    expect(h).toContain('class="banner"');
+    expect(h).toContain(text);
+  }
+  expect(r.renderBanner(withFactory({}))).toBe("");
+  expect(r.view.render(withFactory({ paused: true }))).toContain('class="banner"');
+});
+
+test("a running job past 40 minutes says so", () => {
+  const late = r.renderRunning({ ...state, running: [job({ name: "a", started: "2026-10-27T16:19:00Z" })] });
+  expect(late).toContain("past the time box");
+  expect(r.renderRunning({ ...state, running: [job({ name: "a", started: "2026-10-27T16:30:00Z" })] })).not.toContain("past the time box");
+});
+
+test("a 30-file stat shows 12 lines and +18 more files", () => {
+  const stat = Array.from({ length: 30 }, (_, i) => ` f${i}.ts | 2 +-`).join("\n") + "\n 30 files changed, 30 insertions(+), 30 deletions(-)";
+  const h = r.renderNeeds({ ...state, needs: [job({ name: "x", state: "needs-you", stat })] });
+  expect(h.match(/ f\d+\.ts \| 2/g)?.length).toBe(12);
+  expect(h).toContain("+18 more files");
+});
+
+test("the runs bar is dropped above 50 runs", () => {
+  expect(r.renderHeader(state)).toContain('class="pips"');
+  const h = r.renderHeader(withFactory({ dayCap: 999 }));
+  expect(h).toContain("5 of 999");
+  expect(h).not.toContain("pips");
+});
+
 test("a job with checks shows them on one line; one without shows none", () => {
   const checks = [{ name: "tests", ok: true, seconds: 71 }, { name: "types", ok: false, seconds: 9 }];
   expect(r.renderNeeds({ ...state, needs: [{ ...state.needs[0], checks }] })).toContain("tests 71 s ✓ · types 9 s ✗");
