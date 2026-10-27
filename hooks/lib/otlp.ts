@@ -115,3 +115,29 @@ export async function fetchTrace(cfg: LangfuseConfig, traceId: string): Promise<
   const res = await fetch(`${cfg.baseUrl}/api/public/traces/${traceId}`, { headers: { authorization: `Basic ${auth}` } });
   return res.ok ? res.json() : null;
 }
+
+export interface Observation {
+  id?: string;
+  traceId?: string;
+  type?: string;
+  name?: string;
+  input?: unknown;
+  output?: unknown;
+  metadata?: Record<string, any> | null;
+  startTime?: string;
+}
+
+/** Every observation that started in [from, to], paged through the observations API. */
+export async function fetchObservations(cfg: LangfuseConfig, from: Date, to: Date, timeoutMs = 15000): Promise<Observation[]> {
+  const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
+  const found: Observation[] = [];
+  for (let page = 1; page < 500; page++) {
+    const q = new URLSearchParams({ fromStartTime: from.toISOString(), toStartTime: to.toISOString(), limit: "100", page: String(page) });
+    const res = await fetch(`${cfg.baseUrl}/api/public/observations?${q}`, { headers: { authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(timeoutMs) });
+    if (!res.ok) throw new Error(`${res.status} on observations`);
+    const body: any = await res.json();
+    found.push(...(body.data ?? []));
+    if (!body.meta || page >= (body.meta.totalPages ?? 1)) break;
+  }
+  return found;
+}

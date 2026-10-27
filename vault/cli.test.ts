@@ -689,6 +689,62 @@ describe("compile", () => {
   });
 });
 
+describe("misses", () => {
+  let server: ReturnType<typeof Bun.serve>;
+  const ago = (d: number) => new Date(Date.now() - d * 86400_000).toISOString();
+  const bash = (traceId: string, cmd: string, output: string, d = 1) => ({ traceId, name: "Bash", type: "SPAN", input: JSON.stringify({ command: cmd }), output, startTime: ago(d) });
+  const read = (traceId: string, file_path: string) => ({ traceId, name: "Read", input: { file_path }, output: "x", startTime: ago(1) });
+  const hook = (traceId: string, m: any, output?: string) => ({ traceId, name: "vault-recall", metadata: m, output, startTime: ago(1) });
+  const data = [
+    bash("a", "vault recall jev screen", "[]"),
+    bash("a", "vault recall bounded judgment", '[{"title":"Bounded Judgment","path":"wiki/concepts/Bounded Judgment.md"}]'),
+    read("a", "/v/wiki/concepts/Bounded Judgment.md"),
+    read("a", "/v/wiki/concepts/Other Note.md"),
+    bash("b", "vault recall alpha beta", '[{"title":"Alpha"}]'),
+    bash("b", "vault recall alpha delta", '[{"title":"Alpha"}]'),
+    bash("c", "vault recall gamma", "[]"),
+    bash("old", "vault recall ancient", "[]", 30),
+    bash("d", "ls", "x"),
+    read("d", "/v/wiki/concepts/Offered By Hook.md"),
+    hook("d", { candidates: 45, asked: 40, kept: 3, capped: true }, "- Offered By Hook (/v/wiki/concepts/Offered By Hook.md): c"),
+    hook("e", { candidates: 0, asked: 0, kept: 0, capped: false }),
+    hook("f", { candidates: 2, asked: 2, kept: 0, capped: false }),
+    { ...hook("old", { candidates: 0, asked: 0, kept: 0, capped: false }), startTime: ago(30) },
+  ];
+  let seen: URLSearchParams[] = [];
+  beforeAll(() => {
+    server = Bun.serve({ port: 0, fetch: (req) => {
+      const u = new URL(req.url);
+      if (u.pathname !== "/api/public/observations") return new Response("nope", { status: 404 });
+      seen.push(u.searchParams);
+      const from = new Date(u.searchParams.get("fromStartTime")!).getTime();
+      const all = data.filter((o) => new Date(o.startTime).getTime() >= from);
+      const page = Number(u.searchParams.get("page"));
+      return Response.json({ data: all.slice((page - 1) * 5, page * 5), meta: { page, totalPages: Math.ceil(all.length / 5) } });
+    } });
+  });
+  afterAll(() => server.stop());
+  const env = () => ({ ALEPH_VAULT: vault, LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
+  const snapshot = () => Bun.spawnSync(["sh", "-c", `cd '${vault}' && find . -type f -not -path './.git/*' | sort | xargs sha256sum`], { stdout: "pipe" }).stdout.toString();
+
+  test("counts the four signals; old observations and the vault are left alone", async () => {
+    const before = snapshot();
+    const r = await runAsync(env(), "misses", "--days", "7");
+    expect(r.code).toBe(0);
+    expect(JSON.parse(r.stdout)).toEqual({
+      days: 7, recalls: 5, empty: 2, empty_share: 2 / 5, reformulated: 2, unoffered_reads: 1,
+      hook: { runs: 3, zero_candidates: 1, capped: 1, mean_kept: 1 },
+    });
+    expect(snapshot()).toBe(before);
+  });
+  test("without --days the window is 7 days; a wide window counts older calls", async () => {
+    expect(JSON.parse((await runAsync(env(), "misses")).stdout).recalls).toBe(5);
+    const wide = JSON.parse((await runAsync(env(), "misses", "--days", "60")).stdout);
+    expect(wide.recalls).toBe(6);
+    expect(wide.hook.runs).toBe(4);
+  });
+});
+
 describe("provenance and the contradiction screen", () => {
   let v: string;
   let server: ReturnType<typeof Bun.serve>;

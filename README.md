@@ -11,7 +11,7 @@ Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 | `skills/` | the skills, invoked as `/aleph:<name>` |
 | `jobs/` | `aleph`: agent jobs, the land, the to-do CLI and the factory (`jobs/lib/sandbox.ts`, `gate.ts`, `factory.ts`); the tick's systemd units |
 | `hooks/` | the hook scripts and `hooks.json`, against the 2.1.x hook API |
-| `vault/cli.ts` | the memory vault's mechanics (each write op commits and pushes): `init`, `write`, `adopt`, `recall`, `lint [--fix]`, `consolidate`, `rename-scope`, `archive`, `compile` |
+| `vault/cli.ts` | the memory vault's mechanics (each write op commits and pushes): `init`, `write`, `adopt`, `recall`, `lint [--fix]`, `consolidate`, `rename-scope`, `archive`, `compile`, `misses [--days N]` (read-only: recall misses from Langfuse) |
 | `identity/CLAUDE.md` | the global `CLAUDE.md` the hooks assume: the worktree rule, the verification rule, the voice |
 | `compose/langfuse.yml` | self-hosted Langfuse on `127.0.0.1:3010` |
 | `docs/` | the verify-gate and context-gate decision records, and the vault spec |

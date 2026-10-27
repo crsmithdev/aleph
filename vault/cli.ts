@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * vault <init|write|adopt|recall [--scope]|lint [--fix]|consolidate|archive|compile> — the
+ * vault <init|write|adopt|recall [--scope]|lint [--fix]|consolidate|archive|compile|misses [--days N]> — the
  * mechanical half of /aleph:vault.
  * Vault path: $ALEPH_VAULT or ~/.aleph/vault. JSON on stdout, findings on
  * stderr, exit 1 on refusal. See docs/specs/2026-09-04-memory-vault.md.
@@ -9,6 +9,7 @@ import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, real
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { decide, judgeChoice, type Question } from "../hooks/lib/jev.ts";
 import { langfuseConfig } from "../hooks/lib/env.ts";
+import { fetchObservations, type Observation } from "../hooks/lib/otlp.ts";
 import { serializeFrontmatter } from "./lib/frontmatter.ts";
 import { addedDate, commitPaths, git, pushOrigin, tracked, trackedFiles } from "./lib/git.ts";
 import { handoffsFor, traceDigest } from "./lib/compile.ts";
@@ -286,6 +287,70 @@ function recall(): void {
   out(hits.map(({ n, r }) => ({ title: n.title, path: n.rel, rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
 }
 
+// ---------------------------------------------------------------- misses
+const asValue = (v: unknown): any => { if (typeof v === "string") { try { return JSON.parse(v); } catch { return v; } } return v; };
+/** A tool's output as text: a bare string, or the stdout of a result object. */
+function outText(v: unknown): string {
+  const x = asValue(v);
+  if (typeof x === "string") return x.trim();
+  if (x && typeof x === "object" && typeof (x as any).stdout === "string") return (x as any).stdout.trim();
+  return x === undefined || x === null ? "" : JSON.stringify(x);
+}
+const queryWords = (cmd: string) => new Set((cmd.replace(/^\s*vault recall\b/, "").toLowerCase().match(/[^\s"']+/g) ?? []));
+const noteName = (p: string) => basename(p).replace(/\.md$/, "");
+
+async function misses(): Promise<void> {
+  const raw = flag("days");
+  const days = raw === undefined ? 7 : Number(raw);
+  if (!(days > 0)) { console.error("usage: vault misses [--days N]"); process.exit(1); }
+  const cfg = langfuseConfig();
+  if (!cfg) { console.error("no Langfuse keys"); process.exit(1); }
+  const to = new Date();
+  const from = new Date(to.getTime() - days * 86400_000);
+  let obs: Observation[];
+  try { obs = await fetchObservations(cfg, from, new Date(to.getTime() + 60_000)); }
+  catch (e) { console.error(`Langfuse failed: ${e instanceof Error ? e.message : e}`); process.exit(1); }
+  obs = obs.filter((o) => !o.startTime || new Date(o.startTime) >= from).sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));
+
+  const cmdOf = (o: Observation): string => { const i = asValue(o.input); return String(typeof i === "string" ? i : i?.command ?? "").trim(); };
+  const recalls = obs.filter((o) => o.name === "Bash" && /^vault recall\b/.test(cmdOf(o)));
+  const empty = recalls.filter((o) => outText(o.output) === "[]");
+  const byTurn = new Map<string, Observation[]>();
+  for (const o of recalls) byTurn.set(o.traceId ?? "", [...(byTurn.get(o.traceId ?? "") ?? []), o]);
+  const reformulated = [...byTurn.values()].filter((calls) => {
+    if (calls.length < 2) return false;
+    if (outText(calls[0].output) === "[]") return true;
+    const first = queryWords(cmdOf(calls[0]));
+    return calls.slice(1).some((c) => { const w = queryWords(cmdOf(c)); return w.size !== first.size || [...w].some((x) => !first.has(x)); });
+  }).length;
+
+  const spans = obs.filter((o) => o.name === "vault-recall");
+  const offeredIn = new Map<string, string[]>();
+  for (const o of recalls) offeredIn.set(o.traceId ?? "", [...(offeredIn.get(o.traceId ?? "") ?? []), outText(o.output)]);
+  for (const o of spans) offeredIn.set(o.traceId ?? "", [...(offeredIn.get(o.traceId ?? "") ?? []), outText(o.output), String(o.metadata?.offered ?? "")]);
+  const unoffered = obs.filter((o) => {
+    if (o.name !== "Read") return false;
+    const i = asValue(o.input);
+    const path = String(i?.file_path ?? i?.path ?? "");
+    if (!/(^|\/)wiki\/.+\.md$/.test(path)) return false;
+    const seen = offeredIn.get(o.traceId ?? "") ?? [];
+    return !seen.some((t) => t.includes(path) || t.includes(noteName(path)));
+  }).length;
+
+  const num = (v: unknown) => Number(v) || 0;
+  const meta = spans.map((o) => o.metadata ?? {});
+  out({
+    days, recalls: recalls.length, empty: empty.length, empty_share: recalls.length ? empty.length / recalls.length : 0,
+    reformulated, unoffered_reads: unoffered,
+    hook: {
+      runs: spans.length,
+      zero_candidates: meta.filter((m) => num(m.candidates) === 0).length,
+      capped: meta.filter((m) => m.capped === true || m.capped === "true").length,
+      mean_kept: spans.length ? meta.reduce((a, m) => a + num(m.kept), 0) / spans.length : 0,
+    },
+  });
+}
+
 // ---------------------------------------------------------------- lint
 function lint(): void {
   requireVault();
@@ -491,7 +556,8 @@ switch (cmd) {
   case "consolidate": consolidate(); break;
   case "archive": archive(); break;
   case "compile": await compile(); break;
+  case "misses": await misses(); break;
   default:
-    console.error("usage: vault <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|consolidate [--apply]|archive <title> --why <text>|compile [date]>");
+    console.error("usage: vault <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|consolidate [--apply]|archive <title> --why <text>|compile [date]|misses [--days N]>");
     process.exit(2);
 }
