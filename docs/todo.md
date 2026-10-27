@@ -509,3 +509,15 @@ First priority (Chris, 2026-10-25). docs/specs/2026-10-25-goal-to-shipped.md, "B
 ### Notes
 
 - 2026-10-27 02:16: Spec v3 landed in 4f31309: docs/specs/2026-10-26-seed-factory.md, red team in docs/specs/2026-10-26-seed-factory-red-team.md. srt is unverified until socat is installed and aleph sandbox probe runs.
+
+## 32. Install socat and run the first aleph sandbox probe
+---
+id: 32
+status: open
+created: 2026-10-27
+updated: 2026-10-27
+priority: high
+labels: [factory, seed]
+---
+
+Run the root step: sudo apt install socat. Then install srt (@anthropic-ai/sandbox-runtime, pinned) and run the first aleph sandbox probe (seed spec AC 11). It answers the spec's open questions on srt under WSL2: kill behaviour, the /run deny against WSL interop, AF_UNIX and bun test, and claude with the token alone. If the probe fails, the fallback is Docker with --network none. Needs sudo from Chris.
