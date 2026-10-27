@@ -13,6 +13,7 @@ import { heldRule, outcome, tagged } from "./gate.ts";
 import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
 import { paused } from "./factory.ts";
+import { FACTS_REF, writeFacts } from "./status.ts";
 
 export { git };
 
@@ -177,13 +178,14 @@ const OWN_LIST = `the branch changes ${TODO_PATH}; change the list with aleph to
 
 /**
  * Wait until no older land of this repo is still live, then hold the repo's
- * land lock. Land runs sort by the time they were made, which is the time
- * their branch became ready, so the repo's lands go one at a time in that order.
+ * land lock. A land run is made when its branch becomes ready, and `made`
+ * records when, so the repo's lands go one at a time in that order.
  */
-async function landTurn(repo: Repo, id: string): Promise<() => void> {
+async function landTurn(repo: Repo, id: string, made: number): Promise<() => void> {
+  const before = (e: { id: string; run: Run }) => (e.run.made ?? 0) < made || ((e.run.made ?? 0) === made && e.id < id);
   for (;;) {
     const release = (await lock(`land-${repo.key}`, Infinity))!;
-    const older = allRuns().some((e) => e.run.kind === "land" && e.run.repo === repo.key && e.id < id && isLive(e.folder));
+    const older = allRuns().some((e) => e.run.kind === "land" && e.run.repo === repo.key && e.id !== id && before(e) && isLive(e.folder));
     if (!older) return release;
     release();
     await Bun.sleep(200);
@@ -222,7 +224,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
   let releaseRepo: (() => void) | null = null;
   try {
     phase("queued");
-    releaseRepo = await landTurn(repo, id);
+    releaseRepo = await landTurn(repo, id, run.made ?? 0);
     phase("land");
     for (let attempt = 0; ; attempt++) {
       if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
@@ -562,7 +564,8 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
   const prev = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok;
   const dir = makeRunFolder(id);
   try {
-    const b = git(repo.path, "bundle", "create", join(dir, "in.bundle"), main, ...(prev ? [`refs/heads/${branch}`] : []));
+    // The store and ledger facts ride along, so `aleph status` inside answers as it does outside.
+    const b = git(repo.path, "bundle", "create", join(dir, "in.bundle"), main, writeFacts(repo), ...(prev ? [`refs/heads/${branch}`] : []));
     if (!b.ok) return stuck(`bundle failed: ${b.out}`);
     const text = prompt(id, folder, run, repo);
     writeFileSync(join(folder, "prompt.md"), text);
@@ -572,7 +575,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     // Setup output goes to stderr, so the worker's own stdout ends the transcript.
     const script = [
       "set -e", "exec 3>&1 1>&2", "git init -q .",
-      `git fetch -q ../in.bundle ${q(`+${main}:${main}`)}${prev ? ` ${q(`+refs/heads/${branch}:refs/heads/${branch}`)}` : ""}`,
+      `git fetch -q ../in.bundle ${q(`+${main}:${main}`)} ${q(`+${FACTS_REF}:${FACTS_REF}`)}${prev ? ` ${q(`+refs/heads/${branch}:refs/heads/${branch}`)}` : ""}`,
       prev ? `git switch -q ${q(branch)}` : `git switch -q -c ${q(branch)} ${q(`origin/${repo.main}`)}`,
       ...repo.setup, "exec 1>&3 3>&-", `exec ${argv.map(q).join(" ")}`,
     ].join("\n");

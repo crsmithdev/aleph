@@ -36,6 +36,8 @@ export interface Run {
   held?: boolean;
   /** Sidetone's flag: the news line went out. `shown` is the report's. */
   told: boolean; shown?: boolean; started: string; ended?: string;
+  /** Milliseconds since the epoch, set under the dispatch lock: the order runs were made in. */
+  made?: number;
 }
 
 export interface Check { name: string; run: string; when?: string[] }

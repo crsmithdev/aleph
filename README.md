@@ -148,9 +148,11 @@ A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo (today:
 - **The switches.** `aleph pause` and `aleph resume` (`~/.aleph/factory/paused`); 12 runs in any 24 hours; `aleph sandbox probe` checks the isolation, nightly from the tick, and a failed probe starts no run. `aleph report` prints what is new.
 
 ```bash
+systemctl --user link ~/aleph/jobs/systemd/aleph-tick.service
 systemctl --user enable --now ~/aleph/jobs/systemd/aleph-tick.timer
 aleph sandbox probe          # criterion 11, from inside the profile
 aleph report                 # runs not yet shown, behind count, health
+aleph status aleph-28        # done from an Item: trailer on origin/main, else the store, the job, open
 aleph pause | aleph resume
 ```
 

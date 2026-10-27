@@ -1,6 +1,6 @@
 # Seed factory
 
-Written 2026-10-26. Version 3, with the sandbox section corrected by the `srt` probe of 2026-10-27 (to-do 32). Milestone 1 built on 27 Oct apart from the proofs; see "As built". To-do 31.
+Written 2026-10-26. Version 3, with the sandbox section corrected by the `srt` probe of 2026-10-27 (to-do 32). Milestones 1 and 2 built on 27 Oct, apart from the proofs; see "As built". To-do 31.
 
 - Version 1 (`cae4664`) went through a five-lens red team.
 - Version 2 (`ee4d251`) took Chris's answers to it: a separate worker, one copy of aleph and no deploy, the work store in its own repo, and milestones. Version 2 went through a two-lens red team; both rounds are in [`2026-10-26-seed-factory-red-team.md`](2026-10-26-seed-factory-red-team.md).
@@ -262,6 +262,8 @@ Where the code departs from the sections above:
 - **`~/.aleph` inside the sandbox** shows the empty mount points `srt` makes for the run's own paths (`runs/<id>/`, `tools/lib`). No file under it can be read; the probe reads `secrets/`, `jobs/`, `items/` and `vault/`.
 - **The tailnet probe uses port 80**, which answers the host; port 3010 does not, so it proved nothing.
 - **`FOLLOWUP: <title>`** lines in a result become items labelled `followup`.
+- **Milestone 2's queue has no drainer process.** Each land is still its own run in its own unit. It waits, under the repo's land lock, until no older live land of the repo is left, where older means an earlier `made`: the time in milliseconds at which the run was made, under the dispatch lock. Folder names sort by name within a second, so they could not order it. A crash after the push is safe because the land first looks on `origin/main` for its own `Job:` trailer.
+- **`aleph status <repo>-<n>`** derives the state. Inside a sandbox there is no store and no ledger, so a factory run's bundle carries a snapshot of both for its repo, a commit at `refs/aleph/facts`, and `aleph status` reads it there when the registry does not have the repo.
 
 ### Rejected alternatives
 

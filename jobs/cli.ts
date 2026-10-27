@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * aleph <job|run|land|checked|drop|jobs|todo|unit|tick|report|pause|resume|sandbox>
+ * aleph <job|run|land|checked|drop|jobs|todo|unit|tick|report|pause|resume|sandbox|status>
  * — detached agent jobs, plain runs, each repo's to-do list, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/jobs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal.
@@ -14,6 +14,7 @@ import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import { behind, factoryDir, factoryLog, health, lastProbe, paused, probeDue, report, setPaused, tick } from "./lib/factory.ts";
 import { probe } from "./lib/probe.ts";
+import { derive, facts, FACTS_REF, readFacts, type Facts } from "./lib/status.ts";
 
 const CLI = import.meta.path;
 const CAP = 5;
@@ -69,7 +70,8 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
     mkdirSync(folder);
     writeFileSync(join(folder, "command.txt"), quote(["aleph", ...process.argv.slice(2)]) + "\n");
     prep(folder);
-    writeRun(folder, { ...run, job: run.job ?? id } as Run);
+    // `made` orders the land queue: folder names sort by name within a second.
+    writeRun(folder, { ...run, job: run.job ?? id, made: Date.now() } as Run);
 
     if (process.env.ALEPH_JOB_FOREGROUND === "1") {
       child = Bun.spawn([process.execPath, CLI, "unit", folder], { cwd, env: process.env, stdout: "inherit", stderr: "inherit" });
@@ -472,6 +474,31 @@ function reportCmd(): void {
   out({ systemMessage: msg, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: msg } });
 }
 
+/**
+ * `aleph status <repo>-<n>`: the item's derived state. In Chris's session the
+ * facts come from the store and the ledger; in a sandbox, where neither is,
+ * they come from the bundle's snapshot at refs/aleph/facts in the current repo.
+ */
+function statusCmd(): void {
+  const m = (positional[0] ?? "").match(/^(.+)-(\d+)$/) ?? refuse("usage: aleph status <repo>-<n> [--json]");
+  const [, key, n] = m!;
+  const repo = loadRegistry()[key];
+  let cwd = process.cwd();
+  let f: Facts;
+  if (repo) {
+    cwd = repo.path;
+    git(cwd, "fetch", "-q", "origin");
+    try { f = facts(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
+  } else {
+    const snap = readFacts(cwd);
+    if (!snap || snap.repo !== key) refuse(`no repo named ${key} in the registry, and no ${FACTS_REF} for it here`);
+    f = snap!;
+  }
+  const s = derive(cwd, `refs/remotes/origin/${f!.main}`, f!, Number(n)) ?? refuse(`${key} has no item ${n}`);
+  if (rest.includes("--json")) return out(s);
+  console.log(`${s!.item} ${s!.state}: ${s!.why}`);
+}
+
 /** The repo's list in the work store; a refusal when the store has none or the fetch fails. */
 function readTodo(repo: store.Place): todos.Doc {
   let doc: todos.Doc | null = null;
@@ -490,6 +517,7 @@ try {
     case "checked": checked(); break;
     case "todo": await todoCmd(); break;
     case "tick": await tickCmd(); break;
+    case "status": statusCmd(); break;
     case "report": reportCmd(); break;
     case "pause": setPaused(true); out({ paused: true }); break;
     case "resume": setPaused(false); out({ paused: false }); break;
@@ -502,7 +530,7 @@ try {
       if (!p.ok) process.exit(1);
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|drop|jobs|todo|tick|report|pause|resume|sandbox> ...");
+    default: refuse("usage: aleph <job|run|land|checked|drop|jobs|todo|tick|report|pause|resume|sandbox|status> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;
