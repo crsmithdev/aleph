@@ -525,6 +525,7 @@ Run the root step: sudo apt install socat. Then install srt (@anthropic-ai/sandb
 ### Notes
 
 - 2026-10-27 02:41: 27 Oct: socat 1.8.0.0 installed (sudo is passwordless here); srt 0.0.79 in ~/.aleph/tools. Hand probe passed: secrets, /run/WSL, cmd.exe, /mnt/c writes, docker socket, 127.0.0.1, 172.17.0.1, tailnet and example.com denied; Anthropic API and npm reachable; bun install and bun test pass (167/9/0); RuntimeMaxSec kills a setsid child. Spec fixes landed in 4009184. Profile and scripts: ~/.aleph/research_notes/Local agent sandboxing/srt-probe-2026-10-27/. Left: claude -p with the worker token (needs Chris to run claude setup-token), then the aleph sandbox probe command itself (part of item 33).
+- 2026-10-27 04:11: 27 Oct: claude -p with the worker token alone passed in srt (result success, is_error false, $0.0016; no auto memory folder). All four srt open questions are answered. The aleph sandbox probe command is built under item 33.
 
 ## 33. Build seed factory milestone 1
 ---
