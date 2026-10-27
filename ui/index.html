@@ -33,6 +33,7 @@
   --focus: #7E57C2;
   --display: 'Merriweather', Georgia, serif;
   --sans: 'Work Sans', system-ui, sans-serif;
+  --num: var(--sans);     /* numbers: counts, costs, times */
   --mono: 'Hack Nerd Font', 'Hack', ui-monospace, monospace;
 }
 @media (prefers-color-scheme: dark) {
@@ -91,7 +92,7 @@ body {
 ::selection { background: var(--run-bg); color: var(--ink); }
 a { color: inherit; }
 code, .mono { font-family: var(--mono); font-size: 12.5px; }
-.num { font-variant-numeric: tabular-nums; }
+.num, .facts dd, .cell .v, .count { font-family: var(--num); font-variant-numeric: tabular-nums; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
 
 /* ---------- header strip ---------- */
@@ -137,7 +138,7 @@ section { margin: 0 0 28px; }
   margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
 }
 .sh h2 { font: 600 15px/1.3 var(--sans); margin: 0; letter-spacing: -0.005em; }
-.sh .count { font: 500 13px var(--sans); color: var(--muted); }
+.sh .count { font: 500 13px var(--num); color: var(--muted); }
 .sh .aside { margin-left: auto; color: var(--muted); font-size: 12px; }
 
 /* empty state, after old aleph's EmptyState: one sentence, one hint */
@@ -198,7 +199,7 @@ section { margin: 0 0 28px; }
 .facts { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: 8px 0 0; padding: 0; color: var(--ink-2); font-size: 13px; }
 .facts div { display: flex; gap: 6px; }
 .facts dt { color: var(--muted); }
-.facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.facts dd { margin: 0; }
 
 /* ---------- delivered ---------- */
 .del {
@@ -270,6 +271,23 @@ summary .peek { color: var(--muted); margin-left: 6px; }
 .ticks .idle { color: var(--muted); }
 
 .quiet { color: var(--muted); }
+/* ---------- compact lists: Jobs, Issues, Sessions ---------- */
+.list .del { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 18px; padding: 3px 12px; line-height: 1.45; margin: 0; border-radius: 0; border-width: 0 0 1px; box-shadow: none; }
+.list .del:first-child { border-top-width: 1px; }
+.list .ih { flex: 1 1 360px; min-width: 0; flex-wrap: nowrap; gap: 8px; }
+.list .ih .id, ul.issues li .id { flex: none; white-space: nowrap; }
+.list .ih h3 { flex: 1 1 auto; font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.list .facts { margin: 0; gap: 2px 14px; font-size: 12.5px; }
+ul.issues { list-style: none; margin: 0 0 18px; padding: 0; border-top: 1px solid var(--rule-2); }
+ul.issues li { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; line-height: 1.45; border-bottom: 1px solid var(--rule-2); white-space: nowrap; font-size: 13.5px; }
+ul.issues li .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 720px) { ul.issues li { overflow: hidden; } ul.issues li small.quiet { display: none; } }
+.list .tbl { border-collapse: collapse; width: 100%; font-size: 13px; }
+.list .tbl th, .list .tbl td { padding: 3px 10px 3px 0; line-height: 1.45; border-bottom: 1px solid var(--rule-2); text-align: left; vertical-align: baseline; white-space: nowrap; }
+.list .tbl th { font-weight: 600; color: var(--muted); font-size: 12px; }
+.list .tbl td { max-width: 34em; overflow: hidden; text-overflow: ellipsis; }
+.list .tbl .badge { margin-right: 2px; }
+
 .clear { margin: 0 0 28px; padding: 10px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); font-size: 13px; color: var(--ink-2); }
 .clear p { margin: 0; }
 .clear p + p { margin-top: 4px; }
@@ -335,6 +353,7 @@ pre.trailers b { color: var(--need); }
 .nav-group a[aria-current="page"] { background: var(--sunk); color: var(--ink); font-weight: 600; box-shadow: inset 2px 0 0 var(--ink); }
 .error p { margin: 0; color: var(--stuck); }
 .error .hint { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.page h1 { font-family: var(--display); font-weight: 400; }
 .nf h1 { font: 400 26px/1.35 var(--display); margin: 0 0 6px; }
 .md h1, .md h2, .md h3, .md h4 { font: 600 15px/1.35 var(--sans); margin: 14px 0 6px; }
 .md h1 { font-size: 18px; }
@@ -563,6 +582,77 @@ pre.trailers b { color: var(--need); }
     route();
   }
   start();
+</script>
+<!-- TEMPORARY font picker: Chris chooses the fonts, then this block goes. -->
+<script type="module">
+  const SANS = ["Work Sans", "Inter", "Roboto", "Open Sans", "Montserrat", "Lato", "Poppins", "Nunito Sans", "Source Sans 3", "Raleway",
+    "Noto Sans", "Rubik", "DM Sans", "Manrope", "IBM Plex Sans", "Figtree", "Outfit", "Plus Jakarta Sans", "Lexend", "Barlow"];
+  const SERIF = ["Merriweather", "Playfair Display", "Lora", "Roboto Slab", "PT Serif", "Libre Baskerville", "Source Serif 4", "Noto Serif",
+    "EB Garamond", "Crimson Pro", "Fraunces", "DM Serif Display", "Bitter", "Cormorant Garamond", "Spectral"];
+  const MONO = ["Hack Nerd Font", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "Roboto Mono", "Source Code Pro", "Space Mono",
+    "Ubuntu Mono", "Inconsolata", "DM Mono", "Red Hat Mono", "Geist Mono"];
+  const LOCAL = new Set(["Hack Nerd Font"]);
+  const ROLES = [
+    ["display", "Titles", [...SERIF, ...SANS], "Merriweather", "Georgia, serif"],
+    ["sans", "Text", SANS, "Work Sans", "system-ui, sans-serif"],
+    ["num", "Numbers", [...SANS, ...MONO], "", "system-ui, sans-serif"],
+    ["mono", "Code", MONO, "Hack Nerd Font", "ui-monospace, monospace"],
+  ];
+  const KEY = "aleph-fonts";
+  const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; } };
+  const save = (v) => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch {} };
+  const loaded = new Set();
+  // Ask for four weights; a family without them gets a plain request instead.
+  function load(family) {
+    if (!family || LOCAL.has(family) || loaded.has(family)) return;
+    loaded.add(family);
+    const q = family.replaceAll(" ", "+");
+    const link = Object.assign(document.createElement("link"), { rel: "stylesheet", href: `https://fonts.googleapis.com/css2?family=${q}:wght@400;500;600;700&display=swap` });
+    link.onerror = () => { link.href = `https://fonts.googleapis.com/css2?family=${q}&display=swap`; link.onerror = null; };
+    document.head.append(link);
+  }
+  const chosen = read();
+  function apply() {
+    for (const [role, , , , fallback] of ROLES) {
+      const f = chosen[role];
+      if (f) { load(f); document.documentElement.style.setProperty(`--${role}`, `'${f}', ${fallback}`); }
+      else document.documentElement.style.removeProperty(`--${role}`);
+    }
+    css.textContent = ROLES.filter(([r]) => chosen[r]).map(([r, , , , fb]) => `--${r}: '${chosen[r]}', ${fb};`).join("\n") || "(the defaults)";
+  }
+  const panel = document.createElement("details");
+  panel.className = "fontpick";
+  panel.innerHTML = `<summary title="Fonts (temporary)">Aa</summary><div class="fp">` +
+    ROLES.map(([role, label, list, def]) => `<label>${label} <select data-role="${role}"><option value="">${def ? `Default (${def})` : "Same as text"}</option>` +
+      [...new Set(list)].map((f) => `<option${chosen[role] === f ? " selected" : ""}>${f}</option>`).join("") + `</select></label>`).join("") +
+    `<pre class="fp-css"></pre><button type="button" data-reset>Reset</button></div>`;
+  const css = panel.querySelector(".fp-css");
+  panel.addEventListener("change", (e) => {
+    const role = e.target.dataset.role;
+    if (!role) return;
+    if (e.target.value) chosen[role] = e.target.value; else delete chosen[role];
+    save(chosen); apply();
+  });
+  panel.querySelector("[data-reset]").addEventListener("click", () => {
+    for (const k of Object.keys(chosen)) delete chosen[k];
+    for (const s of panel.querySelectorAll("select")) s.value = "";
+    save(chosen); apply();
+  });
+  const style = document.createElement("style");
+  style.textContent = `.fontpick { position: fixed; right: 16px; bottom: 16px; z-index: 50; font: 13px var(--sans); }
+.fontpick > summary { list-style: none; cursor: pointer; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%;
+  background: var(--surface); border: 1px solid var(--rule); color: var(--ink); font: 600 15px var(--display); box-shadow: 0 2px 8px rgb(0 0 0 / .2); }
+.fontpick > summary::-webkit-details-marker { display: none; }
+details.fontpick > summary::before, details.fontpick[open] > summary::before { content: none; }
+.fontpick .fp { position: absolute; right: 0; bottom: 48px; width: min(320px, calc(100vw - 32px)); display: grid; gap: 10px; padding: 14px;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; box-shadow: 0 6px 24px rgb(0 0 0 / .25); }
+.fontpick label { display: grid; gap: 4px; color: var(--muted); }
+.fontpick select { font: 13px var(--sans); padding: 4px 6px; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; }
+.fontpick .fp-css { margin: 0; padding: 8px; font: 12px var(--mono); white-space: pre-wrap; background: var(--sunk); border-radius: 4px; color: var(--ink-2); }
+.fontpick button { justify-self: start; font: 13px var(--sans); padding: 3px 10px; background: none; color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; cursor: pointer; }`;
+  document.head.append(style);
+  document.body.append(panel);
+  apply();
 </script>
 </body>
 </html>

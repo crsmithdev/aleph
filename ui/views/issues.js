@@ -6,8 +6,8 @@ import { empty, esc, md } from "../lib.js";
 export const view = {
   path: "/issues",
   title: "Issues",
-  group: "work",
-  order: 1,
+  group: "factory",
+  order: 2,
   api: "/api/issues",
   render: (rows) => renderIssues(rows, hashOptions()),
 };

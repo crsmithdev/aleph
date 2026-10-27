@@ -49,6 +49,8 @@ export async function serve(port: number) {
   return Bun.serve({
     hostname: "127.0.0.1",
     port,
+    // Bun closes a request after 10 s by default; /api/memory and /api/activity take longer.
+    idleTimeout: 120,
     async fetch(req) {
       const url = new URL(req.url);
       const path = url.pathname;

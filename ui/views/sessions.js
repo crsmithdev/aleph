@@ -21,7 +21,7 @@ export function renderSessions(d) {
     `<td class="num">${esc(day(s.start))}</td><td class="num">${esc(day(s.last))}</td><td class="num">${esc(money(s.cost))}</td>` +
     `<td>${s.taskTypes.map((t) => `<span class="badge">${esc(t)}</span>`).join(" ")}</td></tr>`).join("");
   return `<div class="page"><h1>Sessions</h1>` + (rows
-    ? `<div class="tscroll" style="overflow-x:auto;max-width:100%"><table class="tbl"><thead><tr><th>Session</th><th>Project</th><th>First prompt</th><th>Turns</th><th>Started</th><th>Last</th><th>Cost</th><th>Kinds</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ? `<div class="list"><div class="tscroll" style="overflow-x:auto;max-width:100%"><table class="tbl"><thead><tr><th>Session</th><th>Project</th><th>First prompt</th><th>Turns</th><th>Started</th><th>Last</th><th>Cost</th><th>Kinds</th></tr></thead><tbody>${rows}</tbody></table></div></div>`
     : empty("No session in the last 7 days.", "Sessions appear when the hooks send traces to Langfuse.")) + `</div>`;
 }
 
@@ -62,6 +62,6 @@ export function renderTurn(d) {
     (d.observations.length ? `<ul class="tree">${d.observations.map(node).join("")}</ul>` : empty("No observation in this turn.")) + `</div>`;
 }
 
-export const view = { path: "/sessions", title: "Sessions", group: "activity", order: 1, api: "/api/sessions", refresh: 60, render: renderSessions };
-export const sessionView = { path: "/sessions/:id", title: "Session", group: "activity", order: 1, api: "/api/sessions/:id", render: renderSession };
-export const turnView = { path: "/sessions/:id/turns/:n", title: "Turn", group: "activity", order: 1, api: "/api/sessions/:id/turns/:n", render: renderTurn };
+export const view = { path: "/sessions", title: "Sessions", group: "factory", order: 3, api: "/api/sessions", refresh: 60, render: renderSessions };
+export const sessionView = { path: "/sessions/:id", title: "Session", group: "factory", order: 3, api: "/api/sessions/:id", render: renderSession };
+export const turnView = { path: "/sessions/:id/turns/:n", title: "Turn", group: "factory", order: 3, api: "/api/sessions/:id/turns/:n", render: renderTurn };

@@ -72,7 +72,7 @@ export function renderJobs(jobs, f = {}) {
     `<dl class="facts">${fact("Repo", esc(j.repo))}${fact("Started", esc(clock(j.started)))}` +
     `${j.ended ? fact("Took", esc(span(j.started, j.ended))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(j.model)) : ""}</dl></article>`).join("");
   return `${STYLE}<div class="page"><div class="sh"><h1 id="h-jobs">Jobs</h1><span class="count">${jobs.length}</span></div>` +
-    renderFilters(jobs, f) + (rows || empty("No job in this window.", "Widen the window or clear a filter.")) + `</div>`;
+    renderFilters(jobs, f) + (rows ? `<div class="list">${rows}</div>` : empty("No job in this window.", "Widen the window or clear a filter.")) + `</div>`;
 }
 
 export function renderRuns(runs) {
