@@ -43,3 +43,12 @@ test("other paths are 404 and writes are refused", async () => {
   expect((await fetch(`http://127.0.0.1:${server.port}/nope`)).status).toBe(404);
   expect((await fetch(`http://127.0.0.1:${server.port}/api/state`, { method: "POST" })).status).toBe(405);
 });
+
+test("/ is the page and /render.js its module", async () => {
+  const page = await (await fetch(`http://127.0.0.1:${server.port}/`)).text();
+  expect(page).toContain("/render.js");
+  expect(page).toContain("/api/state");
+  const js = await fetch(`http://127.0.0.1:${server.port}/render.js`);
+  expect(js.headers.get("content-type")).toContain("javascript");
+  expect(await js.text()).toContain("export function renderNeeds");
+});

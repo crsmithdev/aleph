@@ -15,6 +15,7 @@ export function serve(port: number) {
         const page = [join(import.meta.dir, "index.html"), join(import.meta.dir, "prototype.html")].find(existsSync)!;
         return new Response(Bun.file(page), { headers: { "content-type": "text/html; charset=utf-8" } });
       }
+      if (url.pathname === "/render.js") return new Response(Bun.file(join(import.meta.dir, "render.js")), { headers: { "content-type": "text/javascript; charset=utf-8" } });
       return new Response("not found", { status: 404 });
     },
   });
