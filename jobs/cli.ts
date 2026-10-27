@@ -10,7 +10,7 @@ import { jobArgv, route } from "./lib/route.ts";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
-import { git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
+import { baselineChecks, git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
@@ -38,7 +38,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--spec", "--model", "--todo", "--priority", "--labels", "--status", "--label", "--body", "--title"];
+const VALUED = ["--spec", "--model", "--todo", "--priority", "--labels", "--status", "--label", "--body", "--title", "--due", "--waiting-on"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 
 function checkName(name: string | undefined): string {
@@ -189,7 +189,7 @@ async function landJob(): Promise<void> {
   const agent = runs.filter((e) => e.run.kind === "agent").at(-1)!.run;
   const manual = (agent.state === "needs-you" && agent.needs === "manual") || (agent.state === "passed" && agent.say !== undefined);
   const unchecked = manual && !rest.includes("--checked");
-  const held = agent.state === "needs-you" && agent.needs === "held";
+  const held = agent.state === "needs-you" && (agent.needs === "held" || agent.needs === "review");
   if (agent.state !== "passed" && !manual && !held) refuse(`${name} is ${agent.state}${agent.needs ? ` (${agent.needs})` : ""}, not passed`);
   const repo = loadRegistry()[agent.repo!];
   const child = await dispatch({
@@ -359,6 +359,11 @@ async function todoCmd(): Promise<void> {
   const body = bodyArg === undefined ? undefined : (bodyArg === "-" ? await Bun.stdin.text() : bodyArg).trim();
   const labelsArg = flag("labels");
   const labels = labelsArg === undefined ? undefined : labelsArg.split(",").map((s) => s.trim()).filter(Boolean);
+  // `none` removes the field; a bad value is refused before anything is written.
+  const due = flag("due");
+  if (due !== undefined && due !== "none" && !todos.validDate(due)) refuse("--due takes YYYY-MM-DD or none");
+  const waitingOn = flag("waiting-on");
+  if (waitingOn !== undefined && waitingOn !== "none" && !todos.parseRef(waitingOn)) refuse("--waiting-on takes <repo>-<n> or none");
 
   switch (sub) {
     case "add": {
@@ -366,7 +371,7 @@ async function todoCmd(): Promise<void> {
       let existing: todos.Doc | null = null;
       try { existing = store.readList(repo); } catch {}
       const t = await triage(existing, title, body ?? "");
-      const w = write("todo: add an item", (doc) => todos.add(doc, title, { priority: flag("priority"), labels: labels ?? t.labels, body }), true)!;
+      const w = write("todo: add an item", (doc) => todos.add(doc, title, { priority: flag("priority"), labels: labels ?? t.labels, body, due, waitingOn }), true)!;
       for (const m of t.maybeSame) console.error(`aleph-${m.id} may be the same task: ${m.title}`);
       out({ repo: repo.key, added: w.value.id, title: w.value.title, commit: w.commit, ...(t.maybeSame.length ? { maybeSame: t.maybeSame } : {}) });
       return;
@@ -383,6 +388,7 @@ async function todoCmd(): Promise<void> {
       if (rest.includes("--json")) { out({ ...brief(i), body: i.body, notes: i.notes }); return; }
       console.log(`## ${i.id}. ${i.title}`);
       console.log(`status ${todos.status(i)}   priority ${i.fm.priority ?? "-"}   labels ${(((i.fm.labels as string[]) ?? []).join(", ")) || "-"}   updated ${i.fm.updated ?? "-"}`);
+      console.log(`due ${i.fm.due ?? "-"}   waiting_on ${i.fm.waiting_on ?? "-"}`);
       if (i.body.trim()) console.log(`\n${i.body}`);
       if (i.notes.length) console.log(`\n### Notes\n${i.notes.join("\n")}`);
       return;
@@ -396,11 +402,11 @@ async function todoCmd(): Promise<void> {
     case "edit": {
       const title = flag("title")?.trim();
       const priority = flag("priority");
-      if (title === undefined && body === undefined && priority === undefined && labels === undefined) refuse("give --title, --body, --priority or --labels");
+      if (title === undefined && body === undefined && priority === undefined && labels === undefined && due === undefined && waitingOn === undefined) refuse("give --title, --body, --priority, --labels, --due or --waiting-on");
       if (title === "") refuse("the title cannot be empty");
       const w = write(`todo: edit item ${args[0]}`, (doc) => {
         const i = pick(doc);
-        todos.edit(i, { title, body, priority, labels });
+        todos.edit(i, { title, body, priority, labels, due, waitingOn });
         return i;
       })!;
       out({ repo: repo.key, ...brief(w.value), commit: w.commit });
@@ -421,14 +427,14 @@ async function todoCmd(): Promise<void> {
     }
     case "lint": {
       if (rest.includes("--fix")) {
-        const w = write("todo: lint --fix", (doc) => { const fixed = todos.fix(doc); return fixed.length ? { fixed, left: todos.lint(doc) } : null; });
-        const left = w?.value.left ?? todos.lint(readTodo(repo));
+        const w = write("todo: lint --fix", (doc) => { const fixed = todos.fix(doc); return fixed.length ? { fixed, left: todos.lint(doc, itemExists(repo.key, doc)) } : null; });
+        const left = w?.value.left ?? todos.lint(readTodo(repo), itemExists(repo.key));
         out({ repo: repo.key, fixed: w?.value.fixed ?? [], remaining: left });
         if (left.length) process.exit(1);
         return;
       }
       const doc = readTodo(repo);
-      const findings = todos.lint(doc);
+      const findings = todos.lint(doc, itemExists(repo.key, doc));
       if (!findings.length) { out({ repo: repo.key, items: doc.items.length, findings: [] }); return; }
       for (const f of findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${findings.length} problem${findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
@@ -437,7 +443,8 @@ async function todoCmd(): Promise<void> {
   }
 }
 
-const brief = (i: todos.Item) => ({ id: i.id, title: i.title, status: todos.status(i), priority: i.fm.priority ?? null, labels: i.fm.labels ?? [], updated: i.fm.updated ?? null, notes: i.notes.length, legacy: i.legacy || undefined });
+const brief = (i: todos.Item) => ({ id: i.id, title: i.title, status: todos.status(i), priority: i.fm.priority ?? null, labels: i.fm.labels ?? [], updated: i.fm.updated ?? null, due: i.fm.due ?? null, waiting_on: i.fm.waiting_on ?? null, notes: i.notes.length, legacy: i.legacy || undefined });
+const ready = (i: todos.Item) => [i.fm.due ? `due ${i.fm.due}` : "", i.fm.waiting_on ? `waits ${i.fm.waiting_on}` : ""].filter(Boolean).join("  ");
 
 /** The items of a list that pass `--status` and `--label`. */
 function listRows(doc: todos.Doc): todos.Item[] {
@@ -451,7 +458,7 @@ function listRows(doc: todos.Doc): todos.Item[] {
 
 function printRows(rows: todos.Item[], indent = ""): void {
   const w = String(Math.max(...rows.map((i) => i.id))).length;
-  for (const i of rows) console.log(`${indent}${String(i.id).padStart(w)}  ${todos.status(i).padEnd(7)} ${i.title}`);
+  for (const i of rows) console.log(`${indent}${String(i.id).padStart(w)}  ${todos.status(i).padEnd(7)} ${i.title}${ready(i) ? `  (${ready(i)})` : ""}`);
 }
 
 /**
@@ -477,7 +484,7 @@ function recentRepos(): { repo: Repo; doc: todos.Doc | null }[] {
 function todoRecent(sub: "list" | "lint"): void {
   const lists = recentRepos().filter((r) => r.doc);
   if (sub === "lint") {
-    const results = lists.map(({ repo, doc }) => ({ repo: repo.key, items: doc!.items.length, findings: todos.lint(doc!) }));
+    const results = lists.map(({ repo, doc }) => ({ repo: repo.key, items: doc!.items.length, findings: todos.lint(doc!, itemExists(repo.key, doc!)) }));
     for (const r of results) for (const f of r.findings) console.error(`${r.repo} item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
     out(results);
     if (results.some((r) => r.findings.length)) process.exit(1);
@@ -515,7 +522,7 @@ async function tickCmd(): Promise<void> {
     });
     const code = await p.exited;
     return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
-  }));
+  }, baselineChecks));
 }
 
 /**
@@ -577,6 +584,19 @@ function statusRecent(): void {
   if (rest.includes("--json")) return out(states);
   if (!states.length) { console.log("no open items"); return; }
   for (const s of states) console.log(`${s.item} ${s.state}: ${s.why}`);
+}
+
+/** Whether `<repo>-<n>` names an item in the work store; `own` is the list already read for `key`. */
+function itemExists(key: string, own?: todos.Doc): (repo: string, id: number) => boolean {
+  const lists = new Map<string, todos.Doc | null>(own ? [[key, own]] : []);
+  return (r, id) => {
+    if (!lists.has(r)) {
+      let doc: todos.Doc | null = null;
+      try { doc = loadRegistry()[r] ? store.readList({ key: r }) : null; } catch {}
+      lists.set(r, doc);
+    }
+    return !!lists.get(r) && todos.find(lists.get(r)!, id) !== undefined;
+  };
 }
 
 /** The repo's list in the work store; a refusal when the store has none or the fetch fails. */

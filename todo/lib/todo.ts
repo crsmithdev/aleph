@@ -41,6 +41,25 @@ export const today = (now = new Date()): string =>
 export const minute = (now = new Date()): string =>
   `${today(now)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
+/** The current time. `ALEPH_NOW` (anything `Date` parses) fixes it, for tests that cross days. */
+export const clock = (): Date => (process.env.ALEPH_NOW ? new Date(process.env.ALEPH_NOW) : new Date());
+
+const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+/** A real calendar day written `YYYY-MM-DD`: `2026-13-40` is not one. */
+export function validDate(s: string): boolean {
+  const m = DATE.exec(s);
+  if (!m) return false;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3]);
+}
+
+const REF = /^(.+)-(\d+)$/;
+/** `<repo>-<n>` split into its parts, or null. */
+export function parseRef(s: string): { repo: string; id: number } | null {
+  const m = REF.exec(s);
+  return m ? { repo: m[1], id: Number(m[2]) } : null;
+}
+
 export function todoPath(repoPath: string): string {
   return join(repoPath, "docs", "todo.md");
 }
@@ -145,7 +164,7 @@ export function blank(repo: string): Doc {
 export const find = (doc: Doc, id: number): Item | undefined => doc.items.find((i) => i.id === id);
 export const nextId = (doc: Doc): number => doc.items.reduce((m, i) => Math.max(m, i.id), 0) + 1;
 
-export function add(doc: Doc, title: string, o: { priority?: string; labels?: string[]; body?: string; now?: Date } = {}): Item {
+export function add(doc: Doc, title: string, o: { priority?: string; labels?: string[]; body?: string; due?: string; waitingOn?: string; now?: Date } = {}): Item {
   const day = today(o.now);
   const item: Item = {
     id: nextId(doc),
@@ -155,8 +174,18 @@ export function add(doc: Doc, title: string, o: { priority?: string; labels?: st
     notes: [],
     legacy: false,
   };
+  setReadiness(item, o);
   doc.items.push(item);
   return item;
+}
+
+/** Set `due` and `waiting_on` from the values given; `none` removes the field. */
+function setReadiness(item: Item, o: { due?: string; waitingOn?: string }): void {
+  for (const [key, value] of [["due", o.due], ["waiting_on", o.waitingOn]] as const) {
+    if (value === undefined) continue;
+    if (value === "none") delete item.fm[key];
+    else item.fm[key] = value;
+  }
 }
 
 /** Append-only: an existing note line is never rewritten, which is the lost update this format exists to stop. */
@@ -169,12 +198,13 @@ export function note(item: Item, text: string, now = new Date()): string {
 }
 
 /** Replace the fields given. Notes are never edited: they stay append-only. */
-export function edit(item: Item, change: { title?: string; body?: string; priority?: string; labels?: string[] }, now = new Date()): void {
+export function edit(item: Item, change: { title?: string; body?: string; priority?: string; labels?: string[]; due?: string; waitingOn?: string }, now = new Date()): void {
   if (item.legacy) adopt(item, now);
   if (change.title !== undefined) item.title = change.title;
   if (change.body !== undefined) item.body = change.body;
   if (change.priority !== undefined) item.fm.priority = change.priority;
   if (change.labels !== undefined) item.fm.labels = change.labels;
+  setReadiness(item, change);
   item.fm.updated = today(now);
 }
 
@@ -206,7 +236,8 @@ export interface Finding {
   fixable: boolean;
 }
 
-export function lint(doc: Doc): Finding[] {
+/** `exists` says whether `<repo>-<n>` names an item; without it a `waiting_on` is only checked for form. */
+export function lint(doc: Doc, exists?: (repo: string, id: number) => boolean): Finding[] {
   const findings: Finding[] = [];
   const seen = new Map<number, number>();
   for (const item of doc.items) {
@@ -222,6 +253,14 @@ export function lint(doc: Doc): Finding[] {
     for (const key of ["created", "updated"] as const) {
       const v = item.fm[key];
       if (typeof v === "string" && v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) findings.push({ id: item.id, problem: `${key} "${v}" is not YYYY-MM-DD`, fixable: false });
+    }
+    const due = item.fm.due;
+    if (due !== undefined && !(typeof due === "string" && validDate(due))) findings.push({ id: item.id, problem: `due: ${due} is not a date written YYYY-MM-DD`, fixable: false });
+    const waits = item.fm.waiting_on;
+    if (waits !== undefined) {
+      const ref = typeof waits === "string" ? parseRef(waits) : null;
+      if (!ref) findings.push({ id: item.id, problem: `waiting_on: ${waits} is not <repo>-<n>`, fixable: false });
+      else if (exists && !exists(ref.repo, ref.id)) findings.push({ id: item.id, problem: `waiting_on: ${waits} names no item`, fixable: false });
     }
     if (item.fm.labels !== undefined && !Array.isArray(item.fm.labels)) findings.push({ id: item.id, problem: "labels must be a list", fixable: true });
     if (item.fm.id !== undefined && Number(item.fm.id) !== item.id) findings.push({ id: item.id, problem: `id says ${item.fm.id} but the heading says ${item.id}`, fixable: true });

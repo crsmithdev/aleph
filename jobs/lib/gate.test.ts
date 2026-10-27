@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { heldRule, outcome, tagged } from "./gate.ts";
+import { heldRule, verdict, outcome, tagged } from "./gate.ts";
 
 let dir: string;
 const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -55,4 +55,15 @@ test("only a last line that is a result event with is_error false is a finished 
   expect(outcome('{"type":"result","result":"no flag"}').ok).toBe(false);
   expect(outcome("")).toMatchObject({ ok: false, line: "no output" });
   expect(tagged("x\n DEFAULT: a? -> b\nDEFAULT:\nFOLLOWUP: c", "DEFAULT")).toEqual(["a? -> b"]);
+});
+
+test("the reviewer's verdict is its last VERDICT line", () => {
+  expect(verdict("Looked.\nVERDICT: pass")).toEqual({ pass: true });
+  expect(verdict("VERDICT: hold tests do not cover the flag")).toEqual({ pass: false, reason: "tests do not cover the flag" });
+  expect(verdict("VERDICT: hold a\nVERDICT: pass")).toEqual({ pass: true });
+  expect(verdict("VERDICT: hold")).toEqual({ pass: false, reason: "no reason given" });
+  expect(verdict("no verdict here")).toBeNull();
+  expect(verdict("VERDICT: maybe")).toBeNull();
+  expect(verdict("VERDICT: holdup")).toBeNull();
+  expect(verdict("")).toBeNull();
 });

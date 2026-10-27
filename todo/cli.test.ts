@@ -273,5 +273,46 @@ test("list and lint with no repo cover the repos with a run or an item update in
 test("edit with nothing to change refuses", () => {
   const r = aleph("todo", "edit", "proj", "3");
   expect(r.code).toBe(1);
-  expect(r.err).toContain("give --title, --body, --priority or --labels");
+  expect(r.err).toContain("give --title, --body, --priority, --labels, --due or --waiting-on");
+});
+
+test("add --due and --waiting-on write the fields; show and list print them", () => {
+  const a = aleph("todo", "add", "proj", "Later", "--due", "2026-11-02", "--waiting-on", "proj-3");
+  expect(a.code).toBe(0);
+  expect(remoteItem(4)).toContain("due: 2026-11-02\nwaiting_on: proj-3\n");
+  expect(aleph("todo", "show", "proj", "4").out).toContain("due 2026-11-02   waiting_on proj-3");
+  const row = aleph("todo", "list", "proj").out.split("\n").find((l) => l.includes("Later"))!;
+  expect(row).toContain("due 2026-11-02");
+  expect(row).toContain("waits proj-3");
+  expect(JSON.parse(aleph("todo", "show", "proj", "4", "--json").out)).toMatchObject({ due: "2026-11-02", waiting_on: "proj-3" });
+});
+
+test("edit --due none and --waiting-on none remove the fields; a bad --due exits 1 and changes nothing", () => {
+  aleph("todo", "add", "proj", "Later", "--due", "2026-11-02", "--waiting-on", "proj-3");
+  const head = sh(base, "git", "--git-dir", remote, "rev-parse", "main");
+  const bad = aleph("todo", "edit", "proj", "4", "--due", "tomorrow");
+  expect(bad.code).toBe(1);
+  expect(bad.err).toContain("--due");
+  expect(sh(base, "git", "--git-dir", remote, "rev-parse", "main")).toBe(head);
+  expect(aleph("todo", "edit", "proj", "4", "--due", "2026-13-40").code).toBe(1);
+  expect(aleph("todo", "edit", "proj", "4", "--due", "none").code).toBe(0);
+  expect(remoteItem(4)).not.toContain("due:");
+  expect(remoteItem(4)).toContain("waiting_on: proj-3");
+  expect(aleph("todo", "edit", "proj", "4", "--waiting-on", "none").code).toBe(0);
+  expect(remoteItem(4)).not.toContain("waiting_on");
+});
+
+test("lint reports a bad date and a waiting_on that names no item, each with the item number", () => {
+  aleph("todo", "add", "proj", "Broken");
+  const text = remoteItem(4).replace("labels: []", "labels: []\ndue: 2026-13-40\nwaiting_on: proj-99");
+  writeFileSync(join(items, tasks, "proj-4.md"), text);
+  sh(items, "git", "add", "-A");
+  sh(items, "git", "commit", "-qm", "break");
+  sh(items, "git", "push", "-q", "origin", "main");
+  const l = aleph("todo", "lint", "proj");
+  expect(l.code).toBe(1);
+  expect(l.err).toContain("item 4: due: 2026-13-40");
+  expect(l.err).toContain("item 4: waiting_on: proj-99 names no item");
+  expect(aleph("todo", "add", "proj", "Fine", "--waiting-on", "proj-3").code).toBe(0);
+  expect(aleph("todo", "lint", "proj").err).not.toContain("item 5");
 });

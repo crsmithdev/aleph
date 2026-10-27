@@ -3,13 +3,13 @@
  * An agent run is setup, the worker, then the state rule; a plain run is one
  * command. Both end with state.json, then `exit`, then the news.
  */
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { writeList } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
-import { heldRule, outcome, tagged } from "./gate.ts";
+import { heldRule, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
 import { paused } from "./factory.ts";
@@ -345,6 +345,26 @@ async function sandboxChecks(id: string, folder: string, repo: Repo, commit: str
   }
 }
 
+/** The repo's checks, all of them, on `commit` of origin/<main>: null when they pass, else why not. For the factory's baseline. */
+export async function baselineChecks(repo: Repo, commit: string, logs: string): Promise<string | null> {
+  const dir = makeRunFolder(`baseline-${repo.key}`);
+  const ref = `refs/aleph/baseline/${repo.key}`;
+  try {
+    rmSync(logs, { recursive: true, force: true });
+    mkdirSync(logs, { recursive: true });
+    git(repo.path, "update-ref", ref, commit);
+    const b = git(repo.path, "bundle", "create", join(dir, "out", "base.bundle"), ref);
+    if (!b.ok) return `bundle failed: ${b.out}`;
+    const all = git(repo.path, "ls-tree", "-r", "--name-only", commit).out.split("\n").filter(Boolean);
+    return await checksInSandbox(logs, dir, "out/base.bundle", ref, repo, all, () => {});
+  } catch (e) {
+    return `baseline did not run: ${e instanceof Error ? e.message : e}`;
+  } finally {
+    git(repo.path, "update-ref", "-d", ref);
+    removeRunFolder(dir);
+  }
+}
+
 /**
  * `aleph todo done` (with `done`) or `aleph todo note` for a job's item, as a
  * commit on origin/<main>. Returns why it could not, for the caller to report.
@@ -611,9 +631,63 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (failed) return stuck(failed, facts);
     const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
     if (rule) return { verdict: { state: "needs-you", needs: "held", reason: rule, stat: git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out, ...facts }, code: 0 };
+    const stat = git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out;
+    phase("review");
+    const rv = await review(id, folder, run, repo, dir, base, branch);
+    if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
+    if (rv.reason) return { verdict: { state: "needs-you", needs: "review", reason: rv.reason, stat, ...facts }, code: 0 };
     return { verdict: { state: "passed", ...facts }, code: 0 };
   } finally {
     removeRunFolder(dir);
+  }
+}
+
+const REVIEW = `You are the reviewer of job \`%NAME%\`. The working directory is a clone of the
+branch the worker made for the goal item below; read the code there as needed.
+Judge whether the diff does what the item asks, whether the tests cover it, and
+whether it breaks anything. Do not change files. End with one line:
+\`VERDICT: pass\` or \`VERDICT: hold <one-sentence reason>\`.`;
+
+/**
+ * A fresh reviewer reads the passing run: `claude -p` on Opus 5.5 under srt,
+ * with the worker's profile, in its own run folder with a clone of the branch.
+ * Returns the reason to hold, or null on a pass, and the cost. Fails closed.
+ */
+async function review(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string): Promise<{ reason: string | null; cost?: number }> {
+  const rdir = makeRunFolder(`${id}-review`);
+  try {
+    copyFileSync(join(dir, "out", "out.bundle"), join(rdir, "out", "out.bundle"));
+    const spec = readFileSync(join(folder, "..", run.job, "spec.md"), "utf8").trim();
+    const diff = git(repo.path, "diff", base, `refs/heads/${branch}`).out;
+    const text = `${REVIEW.replace("%NAME%", run.name)}\n\n## Goal item\n\n${spec}\n\n## Diff from the merge base\n\n${diff}\n`;
+    writeFileSync(join(folder, "review-prompt.md"), text);
+    const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
+    const argv = [process.env.ALEPH_REVIEWER_CMD ?? process.env.ALEPH_WORKER_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+      "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
+    const script = [
+      "set -e", "exec 3>&1 1>&2", "git init -q .",
+      `git fetch -q ../out/out.bundle ${q(`+refs/heads/${branch}:refs/heads/${branch}`)}`, `git switch -q ${q(branch)}`,
+      "exec 1>&3 3>&-", `exec ${argv.map(q).join(" ")}`,
+    ].join("\n");
+    const log = join(folder, "review.log");
+    const w = await sandboxed(rdir, script, {
+      read: ["out/out.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
+      env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken() },
+      stdout: log, stderr: join(folder, "review.err"), limit: limit("ALEPH_REVIEW_TIMEOUT", 600),
+      onSpawn: (p) => { child = p; },
+    });
+    child = null;
+    const o = outcome(existsSync(log) ? readFileSync(log, "utf8") : "");
+    writeFileSync(join(folder, "review.md"), o.result);
+    const cost = o.cost;
+    const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost });
+    if (w.timedOut) return none("time box");
+    if (!o.ok) return none(o.line || `exit ${w.code}`);
+    const v = reviewVerdict(o.result);
+    if (!v) return none("no VERDICT line");
+    return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost };
+  } finally {
+    removeRunFolder(rdir);
   }
 }
 

@@ -25,6 +25,18 @@ export function outcome(stdout: string): Outcome {
 export const tagged = (result: string, tag: string): string[] =>
   result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith(`${tag}:`)).map((l) => l.slice(tag.length + 1).trim()).filter(Boolean);
 
+/**
+ * The reviewer's verdict: its last `VERDICT:` line. `pass`, or `hold` with
+ * a reason; null when there is no such line or it says neither.
+ */
+export function verdict(result: string): { pass: true } | { pass: false; reason: string } | null {
+  const v = tagged(result, "VERDICT").at(-1);
+  if (v === undefined) return null;
+  if (v === "pass") return { pass: true };
+  if (v === "hold" || v.startsWith("hold ")) return { pass: false, reason: v.slice(4).trim() || "no reason given" };
+  return null;
+}
+
 const TEST = /(^|\/)(tests?|__tests__)\/|\.(test|spec)\.[cm]?[jt]sx?$/;
 const MARK = /\b(test|it|describe)\.(skip|only|todo)\b/;
 const CASE = /\b(test|it|describe|expect)\s*(\.\w+\s*)?\(/;

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const CLI = join(import.meta.dir, "cli.ts");
-let base: string, remote: string, repo: string, other: string, items: string, itemsRemote: string, jobsDir: string, fake: string, fakeLog: string, setupLog: string;
+let base: string, remote: string, repo: string, other: string, items: string, itemsRemote: string, jobsDir: string, fake: string, reviewer: string, fakeLog: string, setupLog: string;
 let server: ReturnType<typeof Bun.serve>;
 const told: string[] = [];
 
@@ -19,7 +19,7 @@ function env(extra: Record<string, string> = {}): Record<string, string> {
   return {
     ...(process.env as Record<string, string>), ...gitEnv,
     ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: items, ALEPH_JOB_FOREGROUND: "1",
-    ALEPH_WORKER_CMD: fake, XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
+    ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
     ALEPH_SANDBOX_CMD: join(base, "pass"), ALEPH_RUNS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_WORKER_TOKEN: join(base, "token"),
     // The tests start more factory runs than a day's cap; the cap has its own test.
     ALEPH_DAY_CAP: "100",
@@ -47,6 +47,20 @@ const state = (run: string) => JSON.parse(readFileSync(join(jobsDir, run, "state
 const file = (run: string, f: string) => readFileSync(join(jobsDir, run, f), "utf8");
 const worktree = (name: string) => join(repo, ".worktrees", `job-${name}`);
 const branchExists = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `job/${name}`]).exitCode === 0;
+
+// The reviewer: it keeps its prompt, then answers as the prompt's item asks (VERDICT in the goal), else passes.
+const REVIEWER = `#!/bin/bash
+prompt=$(cat)
+printf '%s' "$prompt" > "$FAKE_LOG/review-prompt"
+echo x >> "$FAKE_LOG/review-calls"
+case $prompt in
+  *REVIEW:hold*) echo '{"type":"result","is_error":false,"total_cost_usd":0.02,"result":"Looked.\\nVERDICT: hold tests do not cover the new flag"}' ;;
+  *REVIEW:none*) echo '{"type":"result","is_error":false,"total_cost_usd":0.02,"result":"Looks fine to me."}' ;;
+  *REVIEW:error*) echo '{"type":"result","is_error":true,"result":"API Error: 529"}' ;;
+  *REVIEW:pass*) echo '{"type":"result","is_error":false,"total_cost_usd":0.02,"result":"Fine.\\nVERDICT: pass"}' ;;
+  *) echo '{"type":"result","is_error":false,"result":"Fine.\\nVERDICT: pass"}' ;;
+esac
+`;
 
 const FAKE = `#!/bin/bash
 prompt=$(cat)
@@ -93,6 +107,8 @@ beforeAll(() => {
   fakeLog = join(base, "fake");
   setupLog = join(base, "setup.log");
   fake = join(base, "fake-worker");
+  reviewer = join(base, "fake-reviewer");
+  writeFileSync(reviewer, REVIEWER, { mode: 0o755 });
   writeFileSync(fake, FAKE, { mode: 0o755 });
   // The tests' stand-in for srt: the clean environment, and FAKE_LOG for the fake worker.
   writeFileSync(join(base, "pass"), `#!/bin/bash\nshift\nexec env -i FAKE_LOG="$FAKE_LOG" "$@"\n`, { mode: 0o755 });
@@ -723,6 +739,56 @@ describe("a factory run", () => {
     expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain("Held-by: Chris");
   });
 
+  describe("the reviewer", () => {
+    const rjob = (name: string, mark: string, action = `commit ${name}.txt`) =>
+      aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name} ${mark}\nACTION: ${action}\n`)]);
+    const calls = () => existsSync(join(fakeLog, "review-calls")) ? readFileSync(join(fakeLog, "review-calls"), "utf8").length : 0;
+
+    test("a pass lands; the prompt holds the item and the diff; the cost adds up", async () => {
+      const r = await rjob("rpass", "REVIEW:pass");
+      expect(state(r.json.run)).toMatchObject({ state: "passed", cost: 0.03 });
+      const p = readFileSync(join(fakeLog, "review-prompt"), "utf8");
+      expect(p).toContain("Goal: rpass REVIEW:pass");
+      expect(p).toContain("+++ b/rpass.txt");
+      expect(runsLeft()).toEqual([]);
+      expect(state((await aleph(["land", "rpass"])).json.run).state).toBe("landed");
+    });
+
+    test("a hold needs Chris, pushes nothing, and his land adds Held-by", async () => {
+      const r = await rjob("rhold", "REVIEW:hold");
+      expect(state(r.json.run)).toMatchObject({ state: "needs-you", needs: "review", reason: "reviewer: tests do not cover the new flag" });
+      expect(state(r.json.run).stat).toContain("rhold.txt");
+      const before = remoteGit("rev-parse", "main");
+      expect(before).toBe(remoteGit("rev-parse", "main"));
+      expect(remoteGit("log", "-1", "--format=%s", "main")).not.toBe("add rhold.txt");
+      const l = await aleph(["land", "rhold"]);
+      expect(state(l.json.run)).toMatchObject({ state: "landed", held: true });
+      expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain("Held-by: Chris");
+    });
+
+    test("no verdict line, or an error result, holds the run", async () => {
+      expect(state((await rjob("rnone", "REVIEW:none")).json.run)).toMatchObject({ state: "needs-you", needs: "review", reason: expect.stringMatching(/^reviewer: no verdict/) });
+      expect(state((await rjob("rerr", "REVIEW:error")).json.run)).toMatchObject({ state: "needs-you", reason: "reviewer: no verdict (API Error: 529)" });
+      for (const n of ["rnone", "rerr"]) await aleph(["drop", n]);
+    });
+
+    test("a reviewer past the time box holds the run", async () => {
+      const slow = join(base, "slow-reviewer");
+      writeFileSync(slow, "#!/bin/bash\nsleep 60\n", { mode: 0o755 });
+      const t = await aleph(["job", "fac", "rslow2", "--spec", specFile("Goal: g\nACTION: commit rslow2.txt\n")], { ALEPH_REVIEWER_CMD: slow, ALEPH_REVIEW_TIMEOUT: "1" });
+      expect(state(t.json.run)).toMatchObject({ state: "needs-you", reason: "reviewer: no verdict (time box)" });
+      await aleph(["drop", "rslow2"]);
+    });
+
+    test("a held path holds without a review", async () => {
+      const n = calls();
+      const r = await rjob("rheld", "REVIEW:pass", "commit held/r.txt");
+      expect(state(r.json.run)).toMatchObject({ needs: "held" });
+      expect(calls()).toBe(n);
+      await aleph(["drop", "rheld"]);
+    });
+  });
+
   test("a change to an existing test needs Chris; drop leaves the item open", async () => {
     const id = (await aleph(["todo", "add", "fac", "tests"])).json.added;
     const r = await fjob("ftest", "commit old.test.ts", {}, ["--todo", String(id)]);
@@ -808,6 +874,20 @@ describe("a factory run", () => {
     await aleph(["todo", "drop", "fac", String(id), "test over"]);
   }, 30_000);
 
+  test("a tick starts no run while the waiting cap binds, and a drop frees a place", async () => {
+    const env = { ALEPH_WAITING_CAP: "2" };
+    await fjob("fwait1", "commit held/w1.txt");
+    await fjob("fwait2", "commit held/w2.txt");
+    const id = (await aleph(["todo", "add", "fac", "behind the cap", "--labels", "goal", "--body", "-"], {}, "ACTION: commit capped.txt\n")).json.added;
+    const t = await aleph(["tick"], env);
+    expect(t.json.started).toEqual([]);
+    expect(t.json.skipped).toContain(`fac-${id}: 2 runs wait for Chris`);
+    expect((await aleph(["report"], env)).stdout).toContain("health: 2 runs wait for Chris; no new run starts");
+    await aleph(["drop", "fwait1"]);
+    expect((await aleph(["tick"], env)).json.started).toEqual([`fac-${id}`]);
+    await aleph(["drop", "fwait2"]);
+  }, 30_000);
+
   test("pause stops the tick and the unit's follow-up land, but not Chris's land", async () => {
     expect((await aleph(["pause"])).json).toEqual({ paused: true });
     const id = (await aleph(["todo", "add", "fac", "while paused", "--labels", "goal", "--body", "-"], {}, "ACTION: commit paused.txt\n")).json.added;
@@ -822,6 +902,27 @@ describe("a factory run", () => {
     expect((await aleph(["resume"])).json).toEqual({ paused: false });
     expect((await aleph(["tick"])).json.started).toEqual([`fac-${id}`]);
   }, 30_000);
+
+  test("a red main starts no run, is checked once per commit, and clears with a passing commit", async () => {
+    const trees = () => existsSync(join(base, "trees")) ? readFileSync(join(base, "trees"), "utf8").trim().split("\n").length : 0;
+    sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
+    writeFileSync(join(other, "FAIL"), "red\n");
+    sh(other, "git", "add", "FAIL"); sh(other, "git", "commit", "-qm", "break main"); sh(other, "git", "push", "-q", "origin", "main");
+    const sha7 = remoteGit("rev-parse", "main").slice(0, 7);
+    const id = (await aleph(["todo", "add", "fac", "wait for green", "--labels", "goal", "--body", "-"], {}, "ACTION: commit green.txt\n")).json.added;
+    const before = trees();
+    const t = await aleph(["tick"]);
+    expect(t.json.started).toEqual([]);
+    expect(t.json.skipped).toEqual([`fac-${id}: main is red at ${sha7}: tests`]);
+    expect((await aleph(["report"])).stdout).toContain(`health: fac main is red at ${sha7}: tests`);
+    expect(trees()).toBe(before);
+    expect((await aleph(["tick"])).json.skipped).toEqual([`fac-${id}: main is red at ${sha7}: tests`]);
+    expect(trees()).toBe(before);
+    sh(other, "git", "rm", "-q", "FAIL"); sh(other, "git", "commit", "-qm", "fix main"); sh(other, "git", "push", "-q", "origin", "main");
+    expect((await aleph(["tick"])).json.started).toEqual([`fac-${id}`]);
+    expect(trees()).toBeGreaterThan(before);
+    expect((await aleph(["report"])).stdout).not.toContain("main is red");
+  }, 60_000);
 });
 
 describe("milestone 2", () => {
@@ -918,3 +1019,43 @@ describe("milestone 2", () => {
 async function fjobFor(name: string, action: string, id: number) {
   return aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), "--todo", String(id)]);
 }
+
+describe("prospective memory", () => {
+  const NOW = { ALEPH_NOW: "2026-10-27T12:00:00" };
+  // A fresh probe, so the tick does not run one.
+  beforeAll(() => {
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
+  });
+  const add = async (title: string, ...more: string[]) => (await aleph(["todo", "add", "fac", title, ...more])).json.added as number;
+
+  test("a tick skips a goal due tomorrow, and one that waits on an open item, until it is ready", async () => {
+    const later = await add("due tomorrow", "--labels", "goal", "--due", "2026-10-28");
+    const first = await add("the first thing");
+    const second = await add("waits on the first", "--labels", "goal", "--waiting-on", `fac-${first}`);
+    const t = await aleph(["tick"], NOW);
+    expect(t.json.skipped).toContain(`fac-${later}: due 2026-10-28`);
+    expect(t.json.skipped).toContain(`fac-${second}: waiting on fac-${first}`);
+    expect(t.json.started).not.toContain(`fac-${later}`);
+    expect(t.json.started).not.toContain(`fac-${second}`);
+    await aleph(["todo", "done", "fac", String(first)]);
+    expect((await aleph(["tick"], NOW)).json.started).toContain(`fac-${second}`);
+    // The day after, the dated goal starts.
+    expect((await aleph(["tick"], { ALEPH_NOW: "2026-10-28T08:00:00" })).json.started).toContain(`fac-${later}`);
+    for (const id of [later, first, second]) await aleph(["todo", "drop", "fac", String(id), "test over"]);
+  }, 60_000);
+
+  test("one report after a gap lists every item that fell due under 'came due', and the next lists none", async () => {
+    const ids = [await add("due one", "--due", "2026-11-01"), await add("due two", "--due", "2026-11-10"), await add("due three", "--due", "2026-11-20")];
+    const future = await add("due much later", "--due", "2027-01-01");
+    const first = await aleph(["report"], { ALEPH_NOW: "2026-12-01T09:00:00" });
+    expect(first.stdout).toContain("came due");
+    for (const [n, id] of ids.entries()) expect(first.stdout).toContain(`fac-${id} due ${["one", "two", "three"][n]}`);
+    expect(first.stdout).not.toContain(`fac-${future}`);
+    const second = await aleph(["report"], { ALEPH_NOW: "2026-12-01T09:00:00" });
+    expect(second.stdout).not.toContain("came due");
+    for (const id of ids) expect(second.stdout).not.toContain(`fac-${id} `);
+    expect(readFileSync(join(base, "factory", "seen"), "utf8")).toContain(`fac-${ids[0]}`);
+    for (const id of [...ids, future]) await aleph(["todo", "drop", "fac", String(id), "test over"]);
+  }, 60_000);
+});

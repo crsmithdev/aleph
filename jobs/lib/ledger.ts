@@ -11,7 +11,7 @@ export type State = "running" | "passed" | "needs-you" | "failed" | "stuck" | "d
 export interface Run {
   kind: "agent" | "plain" | "land";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
-  state: State; needs?: "manual" | "question" | "held"; phase?: string;
+  state: State; needs?: "manual" | "question" | "held" | "review"; phase?: string;
   reason?: string; question?: string; say?: string;
   session?: string; model?: string; commit?: string;
   /** A land run of a job with a manual check: "open" until `aleph checked` makes it "done". */
