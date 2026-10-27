@@ -4,7 +4,7 @@
  * folder and the bundles; each step is one `srt` call with its own profile.
  * See "Sandbox" in docs/specs/2026-10-26-seed-factory.md.
  */
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expand } from "./ledger.ts";
 
@@ -67,7 +67,7 @@ export function profile(dir: string, o: { read: string[]; write: string[] }): st
   return file;
 }
 
-export interface Step { code: number; timedOut: boolean }
+export interface Step { code: number; timedOut: boolean; stalled: boolean }
 
 /**
  * Run `script` with bash under srt, in `dir/<cwd>`. The environment is built
@@ -76,7 +76,7 @@ export interface Step { code: number; timedOut: boolean }
  * profile: it tests the flow, not the isolation.
  */
 export async function sandboxed(dir: string, script: string, o: {
-  read: string[]; write: string[]; cwd: string; env?: Record<string, string>; stdout: string; stderr: string; limit?: number; stdin?: string;
+  read: string[]; write: string[]; cwd: string; env?: Record<string, string>; stdout: string; stderr: string; limit?: number; stall?: number; stdin?: string;
   onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void;
 }): Promise<Step> {
   const inner: Record<string, string> = {
@@ -98,8 +98,22 @@ export async function sandboxed(dir: string, script: string, o: {
   const start = performance.now();
   const p = Bun.spawn(cmd, { cwd: join(dir, o.cwd), env, stdin: o.stdin === undefined ? "ignore" : new Blob([o.stdin]), stdout: out, stderr: err });
   o.onSpawn?.(p);
+  // Stall watch: when stdout has not grown for `stall` seconds, stop the step the way the time box does.
+  let stalled = false;
+  let size = statSync(o.stdout).size;
+  let last = performance.now();
+  const watch = o.stall ? setInterval(() => {
+    const now = statSync(o.stdout).size;
+    if (now !== size) { size = now; last = performance.now(); return; }
+    if (performance.now() - last < o.stall! * 1000) return;
+    stalled = true;
+    clearInterval(watch);
+    p.kill("SIGTERM");
+    setTimeout(() => p.kill("SIGKILL"), 30_000).unref();
+  }, Math.min(1000, o.stall * 250)) : undefined;
   const code = await p.exited;
+  clearInterval(watch);
   closeSync(out);
   if (err !== out) closeSync(err);
-  return { code, timedOut: o.limit !== undefined && performance.now() - start >= o.limit * 1000 };
+  return { code, timedOut: !stalled && o.limit !== undefined && performance.now() - start >= o.limit * 1000, stalled };
 }

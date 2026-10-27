@@ -626,6 +626,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
       env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken() },
       stdout: join(folder, "output.log"), stderr: join(folder, "stderr.log"), limit: limit("ALEPH_JOB_TIMEOUT", 2400),
+      stall: limit("ALEPH_STALL_SECONDS", 600),
       onSpawn: (p) => { child = p; },
     });
     child = null;
@@ -633,6 +634,10 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     writeFileSync(join(folder, "result.md"), o.result);
     const facts: Partial<Verdict> = { ...(o.cost !== undefined ? { cost: o.cost } : {}), defaults: tagged(o.result, "DEFAULT") };
     fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
+    if (w.stalled) {
+      const s = limit("ALEPH_STALL_SECONDS", 600);
+      return stuck(`stalled: no output for ${s % 60 === 0 ? `${s / 60} minutes` : `${s} seconds`}`, facts);
+    }
     if (w.timedOut) return stuck("time box", facts);
     if (!o.ok) return stuck(o.line, facts);
 

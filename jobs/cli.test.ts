@@ -81,6 +81,8 @@ case $action in
     else mkdir -p docs; echo "$RANDOM" > "$f"; echo "# To do (by hand)" > docs/todo.md; git add "$f" docs/todo.md; git commit -qm "add $f"; fi ;;
   untracked) echo x > stray.txt ;;
   sleep) sleep 60 ;;
+  quiet) echo '{"type":"system"}'; sleep 30 ;;
+  chatty) echo c > c.txt; git add c.txt; git commit -qm "add c.txt"; for i in 1 2 3 4 5; do echo '{"type":"system"}'; sleep 1; done ;;
   exit3) exit 3 ;;
   question) echo '{"type":"result","result":"I looked.\\nQUESTION: which colour?"}'; exit 0 ;;
   error) echo '{"type":"result","is_error":true,"result":"API Error: 500"}'; exit 0 ;;
@@ -772,6 +774,20 @@ describe("a factory run", () => {
       for (const n of ["fixbox", "fixerr"]) await aleph(["drop", n]);
     }, 30_000);
   });
+
+  test("a worker silent for ALEPH_STALL_SECONDS is stuck as stalled, with no fix round", async () => {
+    const t = performance.now();
+    const r = await fjob("fstall", "quiet", { ALEPH_STALL_SECONDS: "2" });
+    expect(performance.now() - t).toBeLessThan(10_000);
+    expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "stalled: no output for 2 seconds" });
+    await aleph(["drop", "fstall"]);
+  }, 30_000);
+
+  test("a worker that keeps printing is not stalled", async () => {
+    const r = await fjob("fchat", "chatty", { ALEPH_STALL_SECONDS: "2" });
+    expect(state(r.json.run).state).not.toBe("stuck");
+    await aleph(["drop", "fchat"]);
+  }, 30_000);
 
   test("a worker past the time box ends stuck as \"time box\"", async () => {
     const r = await fjob("fslow", "sleep", { ALEPH_JOB_TIMEOUT: "1" });
