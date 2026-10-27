@@ -49,6 +49,7 @@ Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 | every event | `obs.ts` | posts one OTLP span per hook event to Langfuse; async except `Stop` and `SessionEnd` |
 | `SessionStart` | `vault-context.ts` | injects the vault's `Home.md` and `MEMORY.md` |
 | `SessionStart` | `aleph report --hook` | the factory runs not yet shown, how far each factory repo's checkout is behind `origin/main`, and the health line |
+| `UserPromptSubmit` | `vault-recall.ts` | Jev picks up to 3 `wiki/` notes that bear on the prompt (title or alias shares a content word; p ≥ 0.7) and injects title, path and claim line. Silent under `aleph judge haiku`, on a Jev error or a prompt under 20 chars |
 | `UserPromptSubmit`, `Stop` | `verify-gate.ts` | snapshots the tree, then judges the final message: every claim of completion must trace to a run after the last edit. Denies with a reason, at most twice per prompt. `docs/verify-gate.md` |
 | `Stop` | `context-gate.ts` | reads the session's context fill from the transcript: warns Chris above 0.75 of the compaction threshold, blocks once the session has compacted and asks for a handoff. `docs/context-gate.md` |
 | `PreToolUse` `Edit\|Write` | `git-guard.ts` | denies edits on `main` outside `.worktrees/`; allows the vault except `VAULT.md` |
