@@ -17,6 +17,7 @@ import * as store from "../todo/lib/store.ts";
 import { triage } from "../todo/lib/triage.ts";
 import { behind, factoryDir, factoryLog, health, lastProbe, paused, probeDue, report, setPaused, tick } from "./lib/factory.ts";
 import { probe } from "./lib/probe.ts";
+import { sweep } from "./lib/deps.ts";
 import { derive, facts, FACTS_REF, readFacts, type Facts } from "./lib/status.ts";
 
 const CLI = import.meta.path;
@@ -527,7 +528,7 @@ function todoRecent(sub: "list" | "lint"): void {
 }
 
 /**
- * `aleph tick`, from the timer: the nightly probe when it is due, then one run
+ * `aleph tick`, from the timer: the nightly probe and dependency sweep when due, then one run
  * for each open goal item that has no open job. A failed probe starts no run.
  */
 async function tickCmd(): Promise<void> {
@@ -538,6 +539,8 @@ async function tickCmd(): Promise<void> {
       const p = await probe(repo, join(factoryDir(), "probe.log"));
       factoryLog(`probe ${p.ok ? "passed" : `failed: ${p.failed.join("; ")}`}`);
     }
+    const proposed = await sweep(Object.values(loadRegistry()).filter((r) => r.sandbox));
+    if (proposed.length) factoryLog(`proposed ${proposed.join("; ")}`);
   }
   const p = lastProbe();
   if (!paused() && p && !p.ok) {

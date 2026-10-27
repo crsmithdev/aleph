@@ -8,6 +8,7 @@ import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { readList, readLists } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
+import { takeFresh } from "./deps.ts";
 import { derive, facts, type Facts } from "./status.ts";
 import { allJobs, allRuns, expand, isLive, isOpen, loadRegistry, updateRun, type Entry, type Repo } from "./ledger.ts";
 
@@ -223,6 +224,8 @@ export function report(now = Date.now()): string {
   const lines = runLines(now);
   const due = cameDue();
   if (due.length) lines.unshift(["came due:", ...due.map((d) => `  ${d}`)].join("\n"));
+  const proposed = takeFresh();
+  if (proposed.length) lines.push(["proposed updates (relabel one `goal` to start it):", ...proposed.map((d) => `  ${d}`)].join("\n"));
   return lines.join("\n");
 }
 

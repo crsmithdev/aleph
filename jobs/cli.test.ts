@@ -26,6 +26,8 @@ function env(extra: Record<string, string> = {}): Record<string, string> {
     ALEPH_SANDBOX_CMD: join(base, "pass"), ALEPH_RUNS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_WORKER_TOKEN: join(base, "token"),
     // The tests start more factory runs than a day's cap; the cap has its own test.
     ALEPH_DAY_CAP: "100",
+    // The nightly sweep finds nothing unless a test gives it a table; no test reaches the registry.
+    ALEPH_OUTDATED_CMD: "true",
     // The live cap's test starts six runs against a cap of five.
     ALEPH_LIVE_CAP: "5",
     // No Langfuse unless a test points one at the fake server.
@@ -1010,6 +1012,45 @@ describe("a factory run", () => {
     await aleph(["todo", "drop", "fac", String(id), "test over"]);
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
   });
+
+  test("the nightly sweep files one proposal per stale package, once, and a moved latest files one more", async () => {
+    const table = (latest: string) => [
+      "| Package          | Current | Update | Latest |",
+      "|------------------|---------|--------|--------|",
+      "| left-pad         | 1.0.0   | 1.0.0  | 1.2.0  |",
+      `| typescript (dev) | 5.8.3   | 5.9.2  | ${latest} |`,
+    ].join("\n");
+    const cmd = join(base, "outdated.sh");
+    // The probe runs with the tick; a claude that answers keeps it from calling the API.
+    mkdirSync(join(base, "fakebin"), { recursive: true });
+    writeFileSync(join(base, "fakebin", "claude"), `#!/bin/bash\necho '{"is_error":false}'\n`, { mode: 0o755 });
+    const path = `${join(base, "fakebin")}:${process.env.PATH}`;
+    const give = (latest: string) => writeFileSync(cmd, `#!/bin/bash\ncat <<'EOF'\n${table(latest)}\nEOF\n`, { mode: 0o755 });
+    const stale = () => rmSync(join(base, "factory", "probe.json"), { force: true });
+    const proposals = async () => ((await aleph(["todo", "list", "fac", "--json"])).json as any[]).filter((r) => r.title.startsWith("Update "));
+    give("5.9.2");
+    stale();
+    await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, PATH: path });
+    const first = await proposals();
+    expect(first.map((r) => r.title).sort()).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update typescript 5.8.3 to 5.9.2"]);
+    for (const r of first) {
+      const item = (await aleph(["todo", "show", "fac", String(r.id), "--json"])).json;
+      expect(item.labels).toEqual(["proposal", "deps"]);
+    }
+    const rep = (await aleph(["report"])).stdout;
+    expect(rep).toContain("Update left-pad 1.0.0 to 1.2.0");
+    expect((await aleph(["report"])).stdout).not.toContain("Update left-pad");
+    stale();
+    await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, PATH: path });
+    expect(await proposals()).toHaveLength(2);
+    give("5.9.3");
+    stale();
+    await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, PATH: path });
+    expect((await proposals()).map((r) => r.title)).toContain("Update typescript 5.8.3 to 5.9.3");
+    expect(await proposals()).toHaveLength(3);
+    for (const r of await proposals()) await aleph(["todo", "drop", "fac", String(r.id), "test over"]);
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
+  }, 120_000);
 
   test("a tick starts one run per open goal, lands it, and then has nothing to start", async () => {
     const id = (await aleph(["todo", "add", "fac", "ship the goal", "--labels", "goal", "--body", "-"], {}, "ACTION: commit goal.txt\n")).json.added;
