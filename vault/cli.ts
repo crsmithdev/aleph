@@ -193,6 +193,9 @@ async function write(): Promise<void> {
     if (!hit) findings.push({ note: draft.title, rule: "supersedes", detail: `supersedes [${title}] but no live wiki note has that title` });
     else old.push(hit);
   }
+  for (const title of Array.isArray(draft.fm.consistent_with) ? draft.fm.consistent_with : []) {
+    if (!wikiNotes(notes).some((n) => n.title.toLowerCase() === String(title).toLowerCase())) findings.push({ note: draft.title, rule: "consistent_with", detail: `consistent_with [${title}] but no live wiki note has that title` });
+  }
   // A draft that already sits at its destination and that no write has ever
   // accepted is invisible to git but not to lint or to [[links]]. Name it; do
   // not delete it. It may be Chris's own note, typed in Obsidian, and b089def
@@ -221,7 +224,7 @@ async function write(): Promise<void> {
           const a = d.answers[`n${i}`];
           return a.type === "noul" && a.noul >= 0.7;
         });
-        if (hits.length) refuse(hits.map((n) => ({ note: n.title, rule: "contradiction", detail: `the draft [${draft.title}] may contradict [${n.title}]` })), "add it to supersedes or fix the draft: this write changed nothing");
+        if (hits.length) refuse(hits.map((n) => ({ note: n.title, rule: "contradiction", detail: `the draft [${draft.title}] may contradict [${n.title}]` })), "add it to supersedes or fix the draft: this write changed nothing; name it in consistent_with if the two agree");
       } catch (e) {
         console.error(`warn contradiction ${draft.title}: screen skipped, ${(e as Error).message}`);
       }

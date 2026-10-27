@@ -816,6 +816,27 @@ describe("provenance and the contradiction screen", () => {
     expect(r.code).toBe(0);
     expect(JSON.stringify(asked)).not.toContain("`Widget Registry`");
   });
+  test("consistent_with writes at p 0.9 and the server is not asked about that note", async () => {
+    await live("Cog Pipeline");
+    reset(0.9);
+    const r = await write(note("Cog Pipeline Agreement", { scope: "screen", consistent_with: "[Cog Pipeline]" }));
+    expect(r.code).toBe(0);
+    expect(JSON.stringify(asked)).not.toContain("`Cog Pipeline`");
+  });
+  test("consistent_with naming no live note is refused and changes nothing", async () => {
+    reset(0.9);
+    const before = snapshot();
+    const r = await write(note("Widget Registry Other", { scope: "screen", consistent_with: "[No Such Note]" }));
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("No Such Note");
+    expect(snapshot()).toBe(before);
+  });
+  test("the refusal hint names consistent_with", async () => {
+    reset(0.9);
+    const r = await write(note("Widget Registry Third", { scope: "screen" }));
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("consistent_with");
+  });
   test("p 0.5 writes", async () => {
     await live("Gadget Ledger");
     reset(0.5);

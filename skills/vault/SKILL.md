@@ -27,7 +27,8 @@ Write a page when you learn how something actually behaves (`gotcha`),
 decide something (`decision`), learn what something is (`entity`, `concept`),
 or change a project's state (`project`). One page per fact. Rewrite the
 existing page rather than writing a second one about the same thing; set
-`supersedes` when the old page is now wrong.
+`supersedes` when the old page is now wrong; list a related page the
+screen flags but that you agree with in `consistent_with: [<title>]`.
 
 **`recall` first.** If a page already covers the fact, rewrite that page.
 

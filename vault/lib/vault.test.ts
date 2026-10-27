@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { links, loadStats, loadVault, readNote } from "./vault.ts";
+import { lintVault, links, loadStats, loadVault, readNote, screenCandidates } from "./vault.ts";
 
 let root: string;
 const N = 300;
@@ -52,4 +52,22 @@ test("a changed, added or removed file is seen", () => {
   notes = loadVault(root);
   expect(notes.length).toBe(N);
   expect(loadStats.reads).toBe(before + 2);
+});
+
+test("consistent_with leaves a note out of screenCandidates and out of the overlap warning", () => {
+  const r = mkdtempSync(join(tmpdir(), "vault-cw-"));
+  mkdirSync(join(r, "wiki", "concepts"), { recursive: true });
+  const w = (t: string, extra: string) => writeFileSync(join(r, "wiki", "concepts", `${t}.md`), `---\nkind: concept\nscope: global\n${extra}updated: 2026-10-01\n---\n# ${t}\n\n**Claim.** as of 2026-10-01 x\n`);
+  w("Pipeline Gate Rules", "");
+  w("Pipeline Gate Draft", "");
+  const get = () => loadVault(r);
+  const draft = () => get().find((n) => n.title === "Pipeline Gate Draft")!;
+  const other = () => get().find((n) => n.title === "Pipeline Gate Rules")!;
+  expect(screenCandidates(draft(), get()).map((n) => n.title)).toContain("Pipeline Gate Rules");
+  expect(lintVault(get(), { overlap: true }).warn.some((f) => f.rule === "overlap")).toBe(true);
+  w("Pipeline Gate Draft", "consistent_with: [Pipeline Gate Rules]\n");
+  expect(screenCandidates(draft(), get()).map((n) => n.title)).not.toContain("Pipeline Gate Rules");
+  expect(other().title).toBe("Pipeline Gate Rules");
+  expect(lintVault(get(), { overlap: true }).warn.some((f) => f.rule === "overlap")).toBe(false);
+  rmSync(r, { recursive: true, force: true });
 });

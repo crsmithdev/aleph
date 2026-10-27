@@ -12,7 +12,7 @@ export type Kind = (typeof KINDS)[number];
 export const FOLDERS: Record<Kind, string> = { decision: "decisions", concept: "concepts", entity: "entities", project: "projects", gotcha: "gotchas" };
 export const CONFIDENCE = ["measured", "reported", "inferred"] as const;
 export const REQUIRED = ["kind", "scope", "confidence", "updated", "supersedes", "sources"] as const;
-export const LISTS = ["aliases", "supersedes", "sources", "tags"] as const;
+export const LISTS = ["aliases", "supersedes", "consistent_with", "sources", "tags"] as const;
 export const LINE_BUDGET = 150;
 
 /**
@@ -190,10 +190,10 @@ export function budgetFindings(notes: Note[]): Finding[] {
 const STOP = new Set("about after also been before being could does doing from have here into just like make more most much must only other over really should some such than that their them then there these they this those very want were what when where which while will with would your".split(" "));
 const screenWords = (s: string) => (s.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) => !STOP.has(w));
 
-/** Live wiki notes in the draft's scope that share a title or alias word with it, minus those it supersedes, at most `max`. */
+/** Live wiki notes in the draft's scope that share a title or alias word with it, minus those it supersedes or says it is consistent with, at most `max`. */
 export function screenCandidates(draft: Note, notes: Note[], max = 20): Note[] {
   const want = new Set(screenWords([draft.title, ...list(draft.fm, "aliases")].join(" ")));
-  const sup = new Set(list(draft.fm, "supersedes").map((t) => t.toLowerCase()));
+  const sup = new Set([...list(draft.fm, "supersedes"), ...list(draft.fm, "consistent_with")].map((t) => t.toLowerCase()));
   return wikiNotes(notes)
     .filter((n) => n.fm.scope === draft.fm.scope && !sup.has(n.title.toLowerCase()))
     .filter((n) => screenWords([n.title, ...list(n.fm, "aliases")].join(" ")).some((w) => want.has(w)))
@@ -309,7 +309,8 @@ export function lintVault(notes: Note[], { read = {}, overlap = false, now = new
     const a = wiki[i], b = wiki[j];
     if (a.fm.scope !== b.fm.scope) continue;
     const sup = (x: Note, y: Note) => list(x.fm, "supersedes").some((t) => t.toLowerCase() === y.title.toLowerCase());
-    if (sup(a, b) || sup(b, a)) continue;
+    const agree = (x: Note, y: Note) => list(x.fm, "consistent_with").some((t) => t.toLowerCase() === y.title.toLowerCase());
+    if (sup(a, b) || sup(b, a) || agree(a, b) || agree(b, a)) continue;
     const wa = words([a.title, ...list(a.fm, "aliases")].join(" "));
     const wb = words([b.title, ...list(b.fm, "aliases")].join(" "));
     const shared = [...wa].filter((w) => wb.has(w));
