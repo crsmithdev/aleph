@@ -521,3 +521,15 @@ labels: [factory, seed]
 ---
 
 Run the root step: sudo apt install socat. Then install srt (@anthropic-ai/sandbox-runtime, pinned) and run the first aleph sandbox probe (seed spec AC 11). It answers the spec's open questions on srt under WSL2: kill behaviour, the /run deny against WSL interop, AF_UNIX and bun test, and claude with the token alone. If the probe fails, the fallback is Docker with --network none. Needs sudo from Chris.
+
+## 33. Build seed factory milestone 1
+---
+id: 33
+status: open
+created: 2026-10-27
+updated: 2026-10-27
+priority: high
+labels: [factory, seed]
+---
+
+Build milestone 1 of docs/specs/2026-10-26-seed-factory.md (AC 1-35): /aleph:goal, the work store migration to ~/.aleph/items, srt runs with bundles, the held-path gate, aleph report, the budget and pause, and the proofs (to-dos 28 and 27). Blocked on the sandbox probe item.
