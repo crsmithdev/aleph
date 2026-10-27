@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { attrs, traceIdFor, truncate, turnSpanIdFor, turnTraceIdFor } from "./lib/otlp.ts";
+import { attrs, fetchObservations, traceIdFor, truncate, turnSpanIdFor, turnTraceIdFor } from "./lib/otlp.ts";
 import { classifyEnvironment, loadDotenv } from "./lib/env.ts";
 import { parseRating } from "./lib/rating.ts";
 import { scanDiff, scanLine } from "./lib/scan.ts";
@@ -515,5 +515,47 @@ describe("secret scan", () => {
       expect((await scan("git commit -am 'all'")).permissionDecisionReason).toContain("notes.txt:1  Slack token");
       expect((await scan(`cd ${repo} && git commit -am 'all'`, "/")).permissionDecisionReason).toContain("notes.txt:1");
     });
+  });
+});
+
+describe("fetchObservations", () => {
+  function fake(failPage?: number) {
+    const state = { open: 0, maxOpen: 0 };
+    const server = Bun.serve({
+      port: 0,
+      fetch: async (req) => {
+        const page = Number(new URL(req.url).searchParams.get("page"));
+        state.maxOpen = Math.max(state.maxOpen, ++state.open);
+        await Bun.sleep(100);
+        state.open--;
+        if (page === failPage) return new Response("boom", { status: 500 });
+        return Response.json({ data: [{ id: `o${page}a` }, { id: `o${page}b` }], meta: { page, totalPages: 4 } });
+      },
+    });
+    const cfg: any = { baseUrl: `http://localhost:${server.port}`, publicKey: "pk", secretKey: "sk" };
+    return { server, state, cfg };
+  }
+
+  test("returns all rows in page order", async () => {
+    const { server, cfg } = fake();
+    try {
+      const rows = await fetchObservations(cfg, new Date(0), new Date());
+      expect(rows.map((r: any) => r.id)).toEqual(["o1a", "o1b", "o2a", "o2b", "o3a", "o3b", "o4a", "o4b"]);
+    } finally { server.stop(true); }
+  });
+
+  test("fetches pages 2..n concurrently", async () => {
+    const { server, state, cfg } = fake();
+    try {
+      await fetchObservations(cfg, new Date(0), new Date());
+      expect(state.maxOpen).toBeGreaterThanOrEqual(2);
+    } finally { server.stop(true); }
+  });
+
+  test("a 500 on page 3 throws", async () => {
+    const { server, cfg } = fake(3);
+    try {
+      await expect(fetchObservations(cfg, new Date(0), new Date())).rejects.toThrow("500 on observations");
+    } finally { server.stop(true); }
   });
 });

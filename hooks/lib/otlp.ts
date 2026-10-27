@@ -130,14 +130,14 @@ export interface Observation {
 /** Every observation that started in [from, to], paged through the observations API. */
 export async function fetchObservations(cfg: LangfuseConfig, from: Date, to: Date, timeoutMs = 15000): Promise<Observation[]> {
   const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
-  const found: Observation[] = [];
-  for (let page = 1; page < 500; page++) {
-    const q = new URLSearchParams({ fromStartTime: from.toISOString(), toStartTime: to.toISOString(), limit: "100", page: String(page) });
+  const page = async (n: number) => {
+    const q = new URLSearchParams({ fromStartTime: from.toISOString(), toStartTime: to.toISOString(), limit: "100", page: String(n) });
     const res = await fetch(`${cfg.baseUrl}/api/public/observations?${q}`, { headers: { authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(timeoutMs) });
     if (!res.ok) throw new Error(`${res.status} on observations`);
-    const body: any = await res.json();
-    found.push(...(body.data ?? []));
-    if (!body.meta || page >= (body.meta.totalPages ?? 1)) break;
-  }
-  return found;
+    return (await res.json()) as any;
+  };
+  const first = await page(1);
+  const pages = first.meta ? Math.min(Number(first.meta.totalPages) || 1, 499) : 1;
+  const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => page(i + 2)));
+  return [first, ...rest].flatMap((b) => b.data ?? []);
 }
