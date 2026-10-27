@@ -10,6 +10,7 @@ import { readList, readLists } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
 import { derive, facts, type Facts } from "./status.ts";
+import { countsLine, triageOpen, type Counts } from "./triage.ts";
 import { allJobs, allRuns, expand, isLive, isOpen, loadRegistry, updateRun, type Entry, type Repo } from "./ledger.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
@@ -37,10 +38,10 @@ export const WAITING_CAP = () => Number(process.env.ALEPH_WAITING_CAP ?? 5);
 
 const sandboxRepos = () => Object.values(loadRegistry()).filter((r) => r.sandbox);
 
-/** Factory agent runs started in the last 24 hours. */
+/** Factory agent and triage runs started in the last 24 hours. */
 export function runsToday(now = Date.now()): Entry[] {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  return allRuns().filter((e) => e.run.kind === "agent" && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
+  return allRuns().filter((e) => (e.run.kind === "agent" || e.run.kind === "triage") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
 }
 
 /** Open jobs in factory repos waiting for Chris (`needs-you`; a stuck run needs no answer). */
@@ -97,15 +98,16 @@ export const goalJob = (repo: Repo, id: number) => `${repo.key}-${id}`;
 /**
  * One tick of the timer. It starts one run for each open goal item with no
  * open job, while the factory is not paused and the caps allow. `start`
- * dispatches the run; it is the CLI's `aleph job`.
+ * dispatches the run; it is the CLI's `aleph job`. Then it triages open
+ * issues that are not goals (triage.ts).
  */
 export async function tick(
   start: (repo: Repo, name: string, id: number, spec: string) => Promise<string | null>,
   checks?: (repo: Repo, commit: string, logs: string) => Promise<string | null>,
-): Promise<{ started: string[]; skipped: string[]; paused?: true }> {
+): Promise<{ started: string[]; skipped: string[]; triaged: Counts; paused?: true }> {
   if (paused()) {
     factoryLog("paused");
-    return { started: [], skipped: [], paused: true };
+    return { started: [], skipped: [], triaged: {}, paused: true };
   }
   const started: string[] = [];
   const skipped: string[] = [];
@@ -135,8 +137,10 @@ export async function tick(
     if (why) skipped.push(`${name}: ${why}`);
     else started.push(name);
   }
-  factoryLog(`started ${started.join(", ") || "none"}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
-  return { started, skipped };
+  const t = await triageOpen(sandboxRepos(), done, () => (runsToday().length >= DAY_CAP() ? `cap of ${DAY_CAP()} runs in 24 hours` : null));
+  skipped.push(...t.skipped);
+  factoryLog(`started ${started.join(", ") || "none"}; triaged ${countsLine(t.triaged)}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
+  return { started, skipped, triaged: t.triaged };
 }
 
 export interface Baseline { repo: string; commit: string; ok: boolean; failed?: string }

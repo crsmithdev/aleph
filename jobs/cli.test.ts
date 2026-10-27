@@ -30,6 +30,8 @@ function env(extra: Record<string, string> = {}): Record<string, string> {
     ALEPH_OUTDATED_CMD: "true",
     // The live cap's test starts six runs against a cap of five.
     ALEPH_LIVE_CAP: "5",
+    // The tick triages no issue unless a test sets a cap and a fake command.
+    ALEPH_TRIAGE_CAP: "0",
     // No Langfuse unless a test points one at the fake server.
     LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "",
     SIDETONE_TELL_URL: `https://127.0.0.1:${server.port}/tell`, ...extra,
@@ -1075,6 +1077,19 @@ describe("a factory run", () => {
     expect(capped.json.started).toEqual([]);
     expect(capped.json.skipped).toContain(`fac-${id}: cap of 0 runs in 24 hours`);
     await aleph(["todo", "drop", "fac", String(id), "test over"]);
+  }, 30_000);
+
+  test("a tick triages an open issue that is not a goal, and its line counts the verdicts", async () => {
+    const cmd = join(base, "triage-fake");
+    writeFileSync(cmd, `#!/bin/bash\ncat > /dev/null\necho '{"verdict":"live","note":"check the live site"}'\n`, { mode: 0o755 });
+    const id = (await aleph(["todo", "add", "fac", "needs a live look"])).json.added;
+    const first = (await aleph(["todo", "list", "fac", "--json"])).json.filter((i: any) => i.status === "open" && !i.labels.some((l: string) => ["goal", "needs-chris", "triaged", "proposal"].includes(l)))[0];
+    const t = await aleph(["tick"], { ALEPH_TRIAGE_CAP: "1", ALEPH_TRIAGE_CMD: cmd });
+    expect(t.json.triaged).toEqual({ live: 1 });
+    expect((await aleph(["todo", "show", "fac", String(first.id), "--json"])).json.labels).toEqual(expect.arrayContaining(["live-check", "triaged"]));
+    expect(readdirSync(jobsDir).filter((d) => d.endsWith("-triage")).map((d) => state(d).kind)).toContain("triage");
+    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("triaged live 1");
+    expect(id).toBeGreaterThan(0);
   }, 30_000);
 
   test("a tick starts no run while the waiting cap binds, and a drop frees a place", async () => {

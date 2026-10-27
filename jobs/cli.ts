@@ -15,6 +15,7 @@ import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import { triage } from "../todo/lib/triage.ts";
+import { LIVE_CAP } from "./lib/triage.ts";
 import { behind, factoryDir, factoryLog, health, lastProbe, paused, probeDue, report, setPaused, tick } from "./lib/factory.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
@@ -22,7 +23,7 @@ import { derive, facts, FACTS_REF, readFacts, type Facts } from "./lib/status.ts
 
 const CLI = import.meta.path;
 /** The most agent runs live at once; `ALEPH_LIVE_CAP` changes it. */
-const CAP = () => Number(process.env.ALEPH_LIVE_CAP ?? 10);
+const CAP = LIVE_CAP;
 const PID_WAIT_MS = 10_000;
 const DAY_MS = 24 * 3600_000;
 const RECENT_DAYS = 7;
@@ -545,7 +546,7 @@ async function tickCmd(): Promise<void> {
   const p = lastProbe();
   if (!paused() && p && !p.ok) {
     factoryLog("the last probe failed; no run started");
-    return out({ started: [], skipped: [`the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`] });
+    return out({ started: [], skipped: [`the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`], triaged: {} });
   }
   out(await tick(async (repo, name, id, spec) => {
     const model = await route(spec);

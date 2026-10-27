@@ -12,7 +12,7 @@ export type State = "running" | "passed" | "needs-you" | "failed" | "stuck" | "d
 export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number }
 
 export interface Run {
-  kind: "agent" | "plain" | "land";
+  kind: "agent" | "plain" | "land" | "triage";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
   state: State; needs?: "manual" | "question" | "held" | "review"; phase?: string;
   reason?: string; question?: string; say?: string;

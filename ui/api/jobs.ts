@@ -8,7 +8,7 @@ import type { Doc } from "../../todo/lib/todo.ts";
 import type { Job } from "../state.ts";
 import type { Routes } from "../server.ts";
 
-export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string }
+export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string }
 export interface JobDetail extends Job {
   runs: RunInfo[]; result?: string; review?: string; stat?: string;
   checksLog?: string; stderr?: string; trace?: string;
@@ -65,7 +65,7 @@ function toJob(runs: Entry[]): Job {
   return job;
 }
 
-const KIND = { agent: "worker", land: "land", plain: "plain" } as const;
+const KIND = { agent: "worker", land: "land", plain: "plain", triage: "triage" } as const;
 function runInfos(runs: Entry[]): RunInfo[] {
   const out: RunInfo[] = [];
   for (const e of runs) {
