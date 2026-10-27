@@ -118,3 +118,10 @@ test("views render, link to Langfuse, and escape", async () => {
   expect(v.renderTurn({ ...t, prompt: "<script>" })).not.toContain("<script>");
   expect(v.view.group).toBe("activity");
 });
+
+test("the sessions tables scroll inside their own wrapper", async () => {
+  const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
+  expect(v.renderSessions(list)).toMatch(/<div class="tscroll" style="overflow-x:auto[^"]*"><table class="tbl">/);
+  const s: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
+  expect(v.renderSession(s)).toMatch(/<div class="tscroll" style="overflow-x:auto[^"]*"><table class="tbl">/);
+});

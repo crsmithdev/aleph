@@ -21,7 +21,7 @@ export function renderSessions(d) {
     `<td class="num">${esc(day(s.start))}</td><td class="num">${esc(day(s.last))}</td><td class="num">${esc(money(s.cost))}</td>` +
     `<td>${s.taskTypes.map((t) => `<span class="badge">${esc(t)}</span>`).join(" ")}</td></tr>`).join("");
   return `<div class="page"><h1>Sessions</h1>` + (rows
-    ? `<table class="tbl"><thead><tr><th>Session</th><th>Project</th><th>First prompt</th><th>Turns</th><th>Started</th><th>Last</th><th>Cost</th><th>Kinds</th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<div class="tscroll" style="overflow-x:auto;max-width:100%"><table class="tbl"><thead><tr><th>Session</th><th>Project</th><th>First prompt</th><th>Turns</th><th>Started</th><th>Last</th><th>Cost</th><th>Kinds</th></tr></thead><tbody>${rows}</tbody></table></div>`
     : empty("No session in the last 7 days.", "Sessions appear when the hooks send traces to Langfuse.")) + `</div>`;
 }
 
@@ -33,7 +33,7 @@ export function renderSession(d) {
     `<td class="num">${esc(dur(t.durationMs))}</td><td class="num">${esc(money(t.cost))}</td><td>${esc(t.model ?? "")}</td></tr>`).join("");
   return `<div class="page"><p><a href="#/sessions">Sessions</a></p><h1>${esc(d.project)} <code>${esc(d.id.slice(0, 8))}</code></h1>` +
     `<p>${d.taskTypes.map((t) => `<span class="badge">${esc(t)}</span>`).join(" ")}</p>` +
-    `<table class="tbl"><thead><tr><th>Turn</th><th>Prompt</th><th>Output</th><th>Tools</th><th>Duration</th><th>Cost</th><th>Model</th></tr></thead><tbody>${rows}</tbody></table>` +
+    `<div class="tscroll" style="overflow-x:auto;max-width:100%"><table class="tbl"><thead><tr><th>Turn</th><th>Prompt</th><th>Output</th><th>Tools</th><th>Duration</th><th>Cost</th><th>Model</th></tr></thead><tbody>${rows}</tbody></table></div>` +
     `<p>${langfuse(d.base, d.turns[0]?.traceId)}</p></div>`;
 }
 

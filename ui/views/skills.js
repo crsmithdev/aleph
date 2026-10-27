@@ -30,11 +30,12 @@ export function bars(counts, label = "Uses per day") {
 const STYLE = `<style>
 .skills .sort-in { position: absolute; opacity: 0; }
 .skills .by-last { display: none; }
-#s-last:checked ~ table .by-last { display: table-row-group; }
-#s-last:checked ~ table .by-uses { display: none; }
+#s-last:checked ~ .tscroll table .by-last { display: table-row-group; }
+#s-last:checked ~ .tscroll table .by-uses { display: none; }
 .skills label.sort { cursor: pointer; padding: 2px 8px; border-radius: 3px; color: var(--muted); }
 #s-uses:checked ~ .sorts label[for="s-uses"], #s-last:checked ~ .sorts label[for="s-last"] { background: var(--sunk); color: var(--ink); font-weight: 600; }
 #s-uses:focus-visible ~ .sorts label[for="s-uses"], #s-last:focus-visible ~ .sorts label[for="s-last"] { outline: 2px solid var(--focus); }
+.skills .tscroll { overflow-x: auto; max-width: 100%; }
 .skills table { width: 100%; border-collapse: collapse; }
 .skills th, .skills td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
 .skills th { font-size: 12px; color: var(--muted); font-weight: 600; }
@@ -54,7 +55,7 @@ export function renderSkills(d) {
   const body = used.length || unused
     ? `<input class="sort-in" type="radio" name="sort" id="s-uses" checked aria-label="Sort by uses"><input class="sort-in" type="radio" name="sort" id="s-last" aria-label="Sort by last used">` +
       `<p class="sorts quiet">Sort by <label class="sort" for="s-uses">Uses</label><label class="sort" for="s-last">Last used</label></p>` +
-      `<table>${head}<tbody class="by-uses">${used.map(row).join("")}</tbody><tbody class="by-last">${byLast.map(row).join("")}</tbody><tbody>${unused}</tbody></table>`
+      `<div class="tscroll"><table>${head}<tbody class="by-uses">${used.map(row).join("")}</tbody><tbody class="by-last">${byLast.map(row).join("")}</tbody><tbody>${unused}</tbody></table></div>`
     : empty("No skill is installed or used.", "Skills come from the plugin's <code>skills/</code> folder.");
   return `${STYLE}<div class="page skills"><div class="sh"><h2>Skills</h2><span class="count">${used.length}</span><span class="aside">last ${d.days} days</span></div>` +
     (used.length ? "" : empty(`No skill was used in the last ${d.days} days.`, "A use is a Skill tool call or a slash command.")) + body + `</div>`;

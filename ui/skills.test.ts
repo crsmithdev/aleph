@@ -157,3 +157,9 @@ test("text is escaped and an empty window shows the empty state", () => {
   const html = v.renderSkills({ days: 30, unused: ["<b>x</b>"], skills: [] });
   expect(html).not.toContain("<b>x");
 });
+
+test("the skills table scrolls inside its own wrapper", async () => {
+  const html = v.renderSkills((await get("/api/skills")).body);
+  expect(html).toContain('<div class="tscroll"><table>');
+  expect(html).toContain(".skills .tscroll { overflow-x: auto;");
+});
