@@ -6,7 +6,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { readList } from "../../todo/lib/store.ts";
+import { readList, readLists } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { derive, facts, type Facts } from "./status.ts";
 import { allJobs, allRuns, expand, isLive, isOpen, loadRegistry, updateRun, type Entry, type Repo } from "./ledger.ts";
@@ -237,10 +237,11 @@ function cameDue(): string[] {
   const done = doneChecker();
   const lines: string[] = [];
   const ids: string[] = [];
-  for (const repo of Object.values(loadRegistry())) {
-    let doc: todos.Doc | null = null;
-    try { doc = readList(repo); } catch { continue; }
-    for (const item of doc?.items ?? []) {
+  const repos = Object.values(loadRegistry());
+  let docs: (todos.Doc | null)[] = [];
+  try { docs = readLists(repos); } catch {}
+  for (const [n, repo] of docs.map((_, n) => [n, repos[n]] as const)) {
+    for (const item of docs[n]?.items ?? []) {
       const id = `${repo.key}-${item.id}`;
       if (todos.status(item) !== "open" || seen.has(id)) continue;
       const due = item.fm.due;
