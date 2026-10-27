@@ -9,8 +9,8 @@ this folder; this file stays the map. Versions 1 to 3 are in git (`4e0da45`,
 Version 4 changes:
 
 - The seed is specified; "Bootstrap first" points at its spec.
-- The order after the seed is concurrency, the UI, non-code goals, routing,
-  memory, then Sidetone.
+- The order after the seed is concurrency, the Jev judge through OpenRouter,
+  the UI, non-code goals, the rest of routing, memory, then Sidetone.
 - The factory runs always on, in parallel with Chris. The seed starts runs
   from a 30-minute timer.
 - The work store is Backlog.md files in a private repo at `~/.aleph/items`.
@@ -225,13 +225,16 @@ in this order:
 
 1. Concurrency: the seed's milestone 2, so that several runs land without
    manual steps.
-2. The UI (piece 4, second half): observability, the report and the waiting
+2. The Jev judge (piece 3, first half): Jev through OpenRouter answers the
+   typed questions that `hooks/lib/judge.ts` sends to Haiku today. Chris, 27
+   Oct: build it early.
+3. The UI (piece 4, second half): observability, the report and the waiting
    queue as a page, and management of goals.
-3. Non-code goals: the rubric and judge checks, and delivery to docs,
+4. Non-code goals: the rubric and judge checks, and delivery to docs,
    artifacts and the vault. This opens the personal scope.
-4. Model routing (piece 3).
-5. Memory (piece 1).
-6. The Sidetone desktop app (piece 5).
+5. The rest of model routing (piece 3): a model tier per stage.
+6. Memory (piece 1).
+7. The Sidetone desktop app (piece 5).
 
 The reviewer, the baseline check on `main` and the report's extras are also
 later factory goals.
@@ -294,10 +297,12 @@ the acceptance run and the report.
 ### 3. Model routing (to-dos 26 and 28)
 
 A fixed tier per stage, not a router per request. Starting point: Fable 5.1
-plans and writes the report, Opus 5.5 reviews, Sonnet 5.5 makes, Haiku 5.5 or
-Jev answers typed questions (is this stop claim backed, does this pass the
-rubric item). Jev is API-only; an open Jev-style model such as Kev is the
-local candidate (to-do 26). Cost accounting must price every model in use first (to-do 28).
+plans and writes the report, Opus 5.5 reviews, Sonnet 5.5 makes, and Jev
+answers typed questions (is this stop claim backed, does this pass the rubric
+item). Jev runs through OpenRouter (Chris, 27 Oct), at $0.042/M input tokens.
+It is the one paid API in the factory; every other stage bills to the
+subscription. Jev is built first, as the second goal after the seed. Cost
+accounting must price every model in use first (to-do 28).
 
 ### 4. Work store, UI and visibility (to-do 29)
 
@@ -321,7 +326,7 @@ channel, but it is built last: the corpus has no evidence on voice intake.
 Each detailed plan settles these with Chris. Recommendations are not decisions.
 The seed settled three of version 3's open decisions: the work store
 (Backlog.md in `~/.aleph/items`), the budget (subscription only, 12 runs in
-any 24 hours) and isolation (`srt`).
+any 24 hours; Jev through OpenRouter is the one paid API) and isolation (`srt`).
 
 | Decision | Options | Recommendation |
 |---|---|---|
