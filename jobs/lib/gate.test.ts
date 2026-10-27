@@ -15,6 +15,7 @@ beforeAll(() => {
   put("a.test.ts", 'test("a", () => {});\n');
   put("src/x.ts", "export const x = 1;\n");
   put("jobs/cli.ts", "// held\n");
+  put("jobs/cli.test.ts", 'test("held", () => {});\n');
   git("add", "."); git("commit", "-qm", "init");
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -33,6 +34,13 @@ test("a held path, a deleted, renamed or changed test, or an added .skip each ne
   expect(rule(() => git("mv", "a.test.ts", "b.test.ts"))).toBe("renames the test a.test.ts to b.test.ts");
   expect(rule(() => put("a.test.ts", 'test("a", () => { expect(1).toBe(1); });\n'))).toBe("changes the test a.test.ts");
   expect(rule(() => put("tests/new.test.ts", 'test.skip("later", () => {});\n'))).toBe("adds .skip, .only or .todo in tests/new.test.ts");
+});
+
+test("additions to an existing test pass the gate, also under a held path", () => {
+  expect(rule(() => put("a.test.ts", 'const run = () => 1;\ntest("a", () => {});\ntest("b", () => { expect(run()).toBe(1); });\n'))).toBeNull();
+  expect(rule(() => put("jobs/cli.test.ts", 'test("held", () => {});\ntest("more", () => {});\n'))).toBeNull();
+  expect(rule(() => put("a.test.ts", 'test("a", () => {});\ntest.only("b", () => {});\n'))).toBe("adds .skip, .only or .todo in a.test.ts");
+  expect(rule(() => put("jobs/cli.test.ts", 'test("held", () => { expect(1).toBe(2); });\n'))).toBe("changes the test jobs/cli.test.ts");
 });
 
 test("new code and a new test pass the gate", () => {

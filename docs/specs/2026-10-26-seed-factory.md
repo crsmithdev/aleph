@@ -137,7 +137,7 @@ Chris wants to give aleph a one-sentence goal and get it built, checked and land
 16. WHEN the timer fires WHILE an open `goal` item has no live run, no held run and no stuck run, the factory is not paused, and the caps allow it THE factory SHALL start one run for that item.
 17. IF the last line of the worker's stdout is not a `stream-json` `result` event with `is_error` false, OR IF the bundle holds no commit beyond `origin/main` THEN THE run SHALL end stuck with that line's text, whatever the exit code.
 18. WHEN Chris runs `aleph job aleph <name>` on a stuck goal THE factory SHALL start a follow-up run whose bundle holds the previous `factory/<job>` branch.
-19. IF the diff touches a held path, deletes or renames an existing test file, changes an existing test file, or adds `.skip`, `.only` or `.todo` to a test THEN THE run SHALL end needs-you with the matched rule and the diff stat, and nothing SHALL be pushed.
+19. IF the diff touches a held path that is not a test file, deletes or renames an existing test file, removes or changes a `test`, `it`, `describe` or `expect` line in an existing test file, or adds `.skip`, `.only` or `.todo` to a test THEN THE run SHALL end needs-you with the matched rule and the diff stat, and nothing SHALL be pushed.
 20. WHEN aleph checks a diff against the held paths THE paths SHALL come from `~/.aleph/repos.json`, and a held-path change on the branch SHALL not change the verdict.
 21. WHEN Chris runs `aleph land <name>` on a needs-you run THE land SHALL proceed and add the trailer `Held-by: Chris`, and WHEN he runs `aleph drop <name>` THE run SHALL be dropped and the item left open.
 22. WHEN a land completes THE `HEAD`, index and working tree of `~/aleph` and of every worktree in `git -C ~/aleph worktree list` SHALL be unchanged.
@@ -226,7 +226,7 @@ A list of globs per repo in `~/.aleph/repos.json`, which the sandbox cannot see.
 - `identity/CLAUDE.md`;
 - `package.json`, `bunfig.toml`, `tsconfig.json`, `bun.lock`.
 
-Plus the test rule in criterion 19. aleph computes the diff in Chris's session from the fetched branch against its merge-base with `origin/main`. The seed works on aleph only, so the other repos get no list yet.
+Plus the test rule in criterion 19. A run that only adds to an existing test file passes, also under a held path (Chris, 27 Oct: nearly every goal adds to a test file, so the old rule held nearly every run). aleph computes the diff in Chris's session from the fetched branch against its merge-base with `origin/main`. The seed works on aleph only, so the other repos get no list yet.
 
 ### Report
 

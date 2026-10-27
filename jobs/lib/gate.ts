@@ -27,26 +27,26 @@ export const tagged = (result: string, tag: string): string[] =>
 
 const TEST = /(^|\/)(tests?|__tests__)\/|\.(test|spec)\.[cm]?[jt]sx?$/;
 const MARK = /\b(test|it|describe)\.(skip|only|todo)\b/;
+const CASE = /\b(test|it|describe|expect)\s*(\.\w+\s*)?\(/;
 
 /**
- * The first rule the diff from `base` to `tip` breaks, or null: a held path,
- * an existing test deleted, renamed or changed, or a `.skip`, `.only` or
- * `.todo` added to a test. The globs come from the registry, which the
- * branch cannot change.
+ * The first rule the diff from `base` to `tip` breaks, or null: a held path
+ * that is not a test, an existing test deleted or renamed, a removed or
+ * changed `test`, `it`, `describe` or `expect` line, or a `.skip`, `.only`
+ * or `.todo` added to a test. A run that only adds to a test file passes.
+ * The globs come from the registry, which the branch cannot change.
  */
 export function heldRule(cwd: string, held: string[], base: string, tip: string): string | null {
   const isHeld = (p: string) => held.some((g) => new Bun.Glob(g).match(p));
   const rows = git(cwd, "diff", "--name-status", "-M", base, tip).out.split("\n").filter(Boolean).map((l) => l.split("\t"));
-  for (const [, ...paths] of rows) for (const p of paths) if (isHeld(p)) return `held path ${p}`;
+  for (const [, ...paths] of rows) for (const p of paths) if (isHeld(p) && !TEST.test(p)) return `held path ${p}`;
+  const lines = (f: string, sign: "+" | "-") => git(cwd, "diff", base, tip, "--", f).out.split("\n").filter((l) => l.startsWith(sign) && !l.startsWith(sign.repeat(3)));
   for (const [status, from, to] of rows) {
     if (!TEST.test(from)) continue;
     if (status === "D") return `deletes the test ${from}`;
     if (status.startsWith("R")) return `renames the test ${from} to ${to}`;
-    if (status === "M") return `changes the test ${from}`;
-    if (status === "A") {
-      const added = git(cwd, "diff", base, tip, "--", from).out.split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++"));
-      if (added.some((l) => MARK.test(l))) return `adds .skip, .only or .todo in ${from}`;
-    }
+    if (status === "M" && lines(from, "-").some((l) => CASE.test(l))) return `changes the test ${from}`;
+    if (lines(from, "+").some((l) => MARK.test(l))) return `adds .skip, .only or .todo in ${from}`;
   }
   return null;
 }
