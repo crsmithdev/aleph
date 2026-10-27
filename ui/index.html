@@ -6,76 +6,78 @@
 <title>aleph</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/hack-font/3.3.0/web/hack.min.css" rel="stylesheet">
 <style>
+/* Light is a lavender match for Palenight; dark is Chris's VS Code theme, Palenight (Mild Contrast). */
 :root {
-  --bg: #f3f5f4;
-  --surface: #ffffff;
-  --sunk: #eaeeec;
-  --ink: #1c2421;
-  --ink-2: #47524e;
-  --muted: #5d6964;
-  --rule: #d9dfdc;
-  --rule-2: #e7ebe9;
-  --need: #8a540b;        /* needs you: ochre */
-  --need-bg: #fbf1e0;
-  --stuck: #a8352a;       /* stuck: brick */
-  --stuck-bg: #f9e7e4;
-  --done: #2a7552;        /* delivered: green */
-  --done-bg: #e3f1ea;
-  --run: #33639b;         /* running: slate blue */
-  --run-bg: #e5edf6;
-  --add: #2a7552;
-  --del: #a8352a;
-  --focus: #33639b;
-  --serif: 'Merriweather', Georgia, serif;
-  --sans: 'IBM Plex Sans', system-ui, sans-serif;
-  --mono: 'IBM Plex Mono', ui-monospace, monospace;
   color-scheme: light dark;
+  --bg: #F4F3FA;
+  --surface: #FFFFFF;
+  --sunk: #ECEAF6;
+  --ink: #292D3E;
+  --ink-2: #4A4F6A;
+  --muted: #62688A;
+  --rule: #DCD9EC;
+  --rule-2: #E8E6F3;
+  --need: #8A5A00;        /* needs you: yellow */
+  --need-bg: #F3EEE6;
+  --stuck: #C0304C;       /* stuck: red */
+  --stuck-bg: #F9EAED;
+  --done: #437018;        /* delivered: green */
+  --done-bg: #EDF2E8;
+  --run: #3B5FC8;         /* running: blue */
+  --run-bg: #EBEFFA;
+  --add: #437018;
+  --del: #C0304C;
+  --focus: #7E57C2;
+  --display: 'Lexend', system-ui, sans-serif;
+  --sans: 'Lexend', system-ui, sans-serif;
+  --mono: 'Hack Nerd Font', 'Hack', ui-monospace, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #131816;
-    --surface: #1a201e;
-    --sunk: #111513;
-    --ink: #e2e8e5;
-    --ink-2: #b4beba;
-    --muted: #87938e;
-    --rule: #2c3431;
-    --rule-2: #232a27;
-    --need: #e0a54a;
-    --need-bg: #2c2414;
-    --stuck: #e8796b;
-    --stuck-bg: #2e1a17;
-    --done: #6cc398;
-    --done-bg: #16291f;
-    --run: #82acdc;
-    --run-bg: #17222f;
-    --add: #6cc398;
-    --del: #e8796b;
-    --focus: #82acdc;
+    --bg: #25293A;          /* Palenight (Mild Contrast): sidebar and panels */
+    --surface: #292D3E;     /* the editor */
+    --sunk: #202331;
+    --ink: #EEF1F8;
+    --ink-2: #BFC7D5;       /* editor.foreground */
+    --muted: #8E96BA;
+    --rule: #3A3F58;
+    --rule-2: #2E3245;      /* editorGroup.border */
+    --need: #FFCB6B;
+    --need-bg: #474344;
+    --stuck: #F07178;
+    --stuck-bg: #463341;
+    --done: #A9C77D;
+    --done-bg: #3B4347;
+    --run: #82AAFF;
+    --run-bg: #353E59;
+    --add: #A9C77D;
+    --del: #F07178;
+    --focus: #C792EA;
   }
 }
 :root[data-theme="dark"] {
-    --bg: #131816;
-    --surface: #1a201e;
-    --sunk: #111513;
-    --ink: #e2e8e5;
-    --ink-2: #b4beba;
-    --muted: #87938e;
-    --rule: #2c3431;
-    --rule-2: #232a27;
-    --need: #e0a54a;
-    --need-bg: #2c2414;
-    --stuck: #e8796b;
-    --stuck-bg: #2e1a17;
-    --done: #6cc398;
-    --done-bg: #16291f;
-    --run: #82acdc;
-    --run-bg: #17222f;
-    --add: #6cc398;
-    --del: #e8796b;
-    --focus: #82acdc;
+    --bg: #25293A;          /* Palenight (Mild Contrast): sidebar and panels */
+    --surface: #292D3E;     /* the editor */
+    --sunk: #202331;
+    --ink: #EEF1F8;
+    --ink-2: #BFC7D5;       /* editor.foreground */
+    --muted: #8E96BA;
+    --rule: #3A3F58;
+    --rule-2: #2E3245;      /* editorGroup.border */
+    --need: #FFCB6B;
+    --need-bg: #474344;
+    --stuck: #F07178;
+    --stuck-bg: #463341;
+    --done: #A9C77D;
+    --done-bg: #3B4347;
+    --run: #82AAFF;
+    --run-bg: #353E59;
+    --add: #A9C77D;
+    --del: #F07178;
+    --focus: #C792EA;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -101,7 +103,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
   max-width: 1280px; margin: 0 auto; padding: 10px 24px;
   display: flex; align-items: center; gap: 28px; flex-wrap: wrap;
 }
-.mark { font: 700 17px/1 var(--serif); letter-spacing: -0.01em; margin-right: 4px; }
+.mark { text-decoration: none; font: 700 17px/1 var(--display); letter-spacing: -0.01em; margin-right: 4px; }
 .cells { display: flex; gap: 0; flex-wrap: wrap; flex: 1; }
 .cell { padding: 2px 18px; border-left: 1px solid var(--rule-2); min-width: 0; }
 .cell:first-child { border-left: 0; padding-left: 0; }
@@ -118,7 +120,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 main { min-width: 0; }
 .page { max-width: 1280px; margin: 0 auto; padding: 28px 24px 64px; }
 .lede {
-  font: 400 26px/1.35 var(--serif); letter-spacing: -0.01em;
+  font: 400 26px/1.35 var(--display); letter-spacing: -0.01em;
   margin: 0 0 6px; max-width: 46ch; text-wrap: balance;
 }
 .lede a { text-decoration: none; border-bottom: 1px solid var(--rule); }
@@ -311,6 +313,7 @@ summary .peek { color: var(--muted); margin-left: 6px; }
 .side select:hover { border-color: var(--ink-2); }
 .nav-group h2 { font: 600 11.5px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; padding: 0 8px; }
 .nav-group ul { list-style: none; margin: 0; padding: 0; }
+.nav-group + .nav-group { margin-top: 14px; }
 .nav-group a {
   display: block; padding: 5px 8px; border-radius: 4px; text-decoration: none;
   color: var(--ink-2); font-size: 13.5px; transition: background-color .15s ease-out;
@@ -319,7 +322,7 @@ summary .peek { color: var(--muted); margin-left: 6px; }
 .nav-group a[aria-current="page"] { background: var(--sunk); color: var(--ink); font-weight: 600; box-shadow: inset 2px 0 0 var(--ink); }
 .error p { margin: 0; color: var(--stuck); }
 .error .hint { color: var(--muted); font-size: 13px; margin-top: 2px; }
-.nf h1 { font: 400 26px/1.35 var(--serif); margin: 0 0 6px; }
+.nf h1 { font: 400 26px/1.35 var(--display); margin: 0 0 6px; }
 .md h1, .md h2, .md h3, .md h4 { font: 600 15px/1.35 var(--sans); margin: 14px 0 6px; }
 .md h1 { font-size: 18px; }
 .md pre { background: var(--sunk); padding: 8px 10px; border-radius: 4px; overflow-x: auto; font: 12px/1.55 var(--mono); }
@@ -333,7 +336,9 @@ summary .peek { color: var(--muted); margin-left: 6px; }
   .side .proj { order: 9; padding: 0; flex: none; }
   .side .proj span { display: none; }
   .side select { width: auto; }
+  #nav { display: flex; gap: 2px; flex: none; }
   .nav-group { flex: none; }
+  .nav-group + .nav-group { margin-top: 0; }
   .nav-group h2 { display: none; }
   .nav-group ul { display: flex; gap: 2px; }
   .nav-group a { white-space: nowrap; padding: 4px 8px; }
@@ -344,7 +349,7 @@ summary .peek { color: var(--muted); margin-left: 6px; }
 <body>
 <div class="shell">
   <nav class="side" aria-label="Views">
-    <span class="mark">aleph</span>
+    <a class="mark" href="#/">aleph</a>
     <label class="proj"><span>Project</span><select id="project"><option value="">All projects</option></select></label>
     <div id="nav"></div>
   </nav>
