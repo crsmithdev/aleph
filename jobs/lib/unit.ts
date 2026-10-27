@@ -416,7 +416,7 @@ export function removeBranch(repo: Repo, run: Run): void {
   if (run.branch) git(repo.path, "branch", "-D", run.branch);
 }
 
-type Verdict = Pick<Run, "state" | "needs" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "cost" | "defaults" | "stat">;
+type Verdict = Pick<Run, "state" | "needs" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat">;
 
 export async function unit(folder: string): Promise<void> {
   // drop sends SIGTERM when no systemd unit is there to stop the cgroup.
@@ -471,6 +471,7 @@ export async function unit(folder: string): Promise<void> {
 }
 
 const BOUNCES = 2;
+const fixRounds = () => Number(process.env.ALEPH_FIX_ROUNDS ?? 2);
 const RELANDS = 3;
 
 /**
@@ -481,12 +482,21 @@ const RELANDS = 3;
  * or its repo lands by itself.
  */
 function nextStep(run: Run, repo: Repo | undefined): Run["next"] {
+  if (run.kind === "agent" && run.failed) return "worker";
   if (run.kind === "agent") return run.state === "passed" && (run.land || repo?.autoland) ? "land" : undefined;
   if (run.kind !== "land" || run.state !== "failed") return undefined;
   const lands = (allJobs().find((j) => j[0].id === run.job) ?? []).filter((e) => e.run.kind === "land").map((e) => e.run);
   if (run.conflicts?.length) return lands.filter((r) => r.conflicts?.length).length <= BOUNCES ? "worker" : undefined;
   if (run.reason === MOVED) return lands.filter((r) => r.reason === MOVED).length <= RELANDS ? "land" : undefined;
   return undefined;
+}
+
+/** The last 80 lines of the named check's section of the run's checks.log. */
+function checkLog(folder: string, name: string): string {
+  const file = join(folder, "checks.log");
+  if (!existsSync(file)) return "";
+  const section = readFileSync(file, "utf8").split(/^## /m).findLast((x) => x.startsWith(`${name}: exit`)) ?? "";
+  return section.split("\n").slice(1).join("\n").trimEnd().split("\n").slice(-80).join("\n");
 }
 
 /** Start the next run through the CLI, as Chris would. Its refusal goes to next.log. */
@@ -498,7 +508,9 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   }
   const cli = join(import.meta.dir, "..", "cli.ts");
   const argv = next === "land" ? ["land", run.name] : ["job", run.repo!, run.name, "--spec", "-", "--land"];
-  const note = run.reason === OWN_LIST
+  const note = run.failed
+    ? `The check \`${run.failed}\` failed on this branch. The last 80 lines of its log:\n\n${checkLog(folder, run.failed)}\n\nFix the cause, run the tests, and commit.`
+    : run.reason === OWN_LIST
     ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph issue writes the list. The lists live in the work store now. Remove ${TODO_PATH} from the branch, commit, and make each change to the list with aleph issue.`
     : `The land conflicted with origin/main in: ${(run.conflicts ?? []).join(", ")}. Merge origin/main into this branch, resolve each conflict so that the change on main and this job's change both survive, run the tests, and commit.`;
   const log = openSync(join(folder, "next.log"), "a");
@@ -636,9 +648,19 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     const base = git(repo.path, "merge-base", main, `refs/heads/${branch}`).out;
     if (git(repo.path, "rev-list", "--count", `${main}..refs/heads/${branch}`).out === "0") return stuck("no commit", facts);
 
+    // Each earlier run of the job that a failed check sent back is a fix round.
+    const done = (allJobs().find((j) => j[0].id === run.job) ?? []).filter((e) => e.id !== id && e.run.kind === "agent" && e.run.failed).length;
+    if (done) facts.round = done;
     const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
     const failed = await checksInSandbox(folder, dir, "out/out.bundle", `refs/heads/${branch}`, repo, changed, phase, recorder(folder));
-    if (failed) return stuck(failed, facts);
+    if (failed) {
+      // A check that failed goes back to the worker, at most FIX_ROUNDS times a job.
+      const check = readRun(folder)?.checks?.findLast((c) => !c.ok)?.name;
+      if (!check || failed !== `${check} failed`) return stuck(failed, facts);
+      const rounds = fixRounds();
+      if (done < rounds) return stuck(failed, { ...facts, failed: check, round: done });
+      return stuck(rounds > 0 ? `${failed} after ${done} fix rounds` : failed, facts);
+    }
     const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
     if (rule) return { verdict: { state: "needs-you", needs: "held", reason: rule, stat: git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out, ...facts }, code: 0 };
     const stat = git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out;

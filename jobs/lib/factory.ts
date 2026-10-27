@@ -201,7 +201,7 @@ const money = (n: number) => `$${n.toFixed(4)}`;
 /** One run as the report gives it. */
 function entry(e: Entry): string {
   const r = e.run;
-  const head = `${r.repo}/${r.name} ${r.state}${r.needs ? ` (${r.needs})` : ""}`;
+  const head = `${r.repo}/${r.name} ${r.state}${r.needs ? ` (${r.needs})` : ""}${r.round && r.state !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
   if (r.state === "landed" && r.commit) lines.push(`  commit ${r.commit.slice(0, 7)}`);
   if (r.state === "needs-you" && (r.needs === "held" || r.needs === "review")) {

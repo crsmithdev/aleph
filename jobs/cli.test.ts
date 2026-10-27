@@ -88,6 +88,10 @@ case $action in
   trailing) echo x > t.txt; git add t.txt; git commit -qm "add t.txt"; echo '{"type":"result","is_error":false,"result":"done"}'; echo 'one more line'; exit 0 ;;
   defaults) echo d > d.txt; git add d.txt; git commit -qm "add d.txt"
     echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"Done.\\nDEFAULT: which colour? -> blue\\nFOLLOWUP: paint the fence"}'; exit 0 ;;
+  fail-then-fix) echo "$RANDOM" > f.txt; git add f.txt
+    if printf '%s' "$prompt" | grep -q 'The check \`tests\` failed'; then git rm -q FAIL; else echo x > FAIL; git add FAIL; fi
+    git commit -qm "work" ;;
+  fail-always) echo "$RANDOM" > f.txt; echo x > FAIL; git add f.txt FAIL; git commit -qm "work" ;;
   branchlog) git log --format=%s > "$FAKE_LOG/branchlog"; git rm -q FAIL; git commit -qm "remove FAIL" ;;
   status\\ *) set -- \${action#status }; cli=$1; shift
     for i in "$@"; do bun "$cli" status "$i" --json; done > "$FAKE_LOG/status-inside"
@@ -155,7 +159,7 @@ beforeAll(() => {
     // The factory: the same clone, its runs under the stand-in sandbox.
     fac: {
       path: repo, sandbox: true, held: ["held/**"], autoland: false,
-      checks: [{ name: "tests", run: "test ! -f FAIL" }, { name: "tree", run: `git rev-parse 'HEAD^{tree}' >> ${join(base, "trees")}` }],
+      checks: [{ name: "tests", run: 'if [ -f FAIL ]; then for i in 1 2 3; do echo "FAIL is present $i"; done; exit 1; fi' }, { name: "tree", run: `git rev-parse 'HEAD^{tree}' >> ${join(base, "trees")}` }],
     },
   }));
 
@@ -722,6 +726,51 @@ describe("a factory run", () => {
     expect(state((await fjob("fidle", "none")).json.run)).toMatchObject({ state: "stuck", reason: "no commit" });
     expect(told).toContain("fac/ferr stuck");
     for (const n of ["ferr", "fnone", "ftrail", "fidle"]) await aleph(["drop", n]);
+  });
+
+  describe("fix rounds", () => {
+    const runs = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-fac-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));
+
+    test("a failed check goes back to the worker, whose note names it with the log; the job passes after 1 fix round", async () => {
+      const r = await fjob("fix1", "fail-then-fix");
+      const rs = runs("fix1");
+      expect(rs.map((x) => [x.kind, x.state])).toEqual([["agent", "stuck"], ["agent", "passed"], ["land", "landed"]]);
+      expect(rs[0]).toMatchObject({ reason: "tests failed", failed: "tests", next: "worker" });
+      expect(rs[1].round).toBe(1);
+      const p = readFileSync(join(fakeLog, "prompt"), "utf8");
+      expect(p).toContain("The check `tests` failed");
+      expect(p).toContain("FAIL is present 3");
+      expect(told).toContain("fac/fix1 stuck; sent back to the worker");
+      expect(runsLeft()).toEqual([]);
+      expect(state(r.json.run).state).toBe("stuck");
+      expect((await aleph(["report"])).stdout).toContain("fac/fix1 passed after 1 fix rounds");
+    }, 30_000);
+
+    test("a worker that keeps failing is stuck after 2 fix rounds, in 3 runs", async () => {
+      await fjob("fixn", "fail-always");
+      const rs = runs("fixn");
+      expect(rs.map((x) => x.state)).toEqual(["stuck", "stuck", "stuck"]);
+      expect(rs.at(-1)).toMatchObject({ reason: "tests failed after 2 fix rounds" });
+      expect(rs.at(-1).next).toBeUndefined();
+      await aleph(["drop", "fixn"]);
+    }, 30_000);
+
+    test("ALEPH_FIX_ROUNDS=0 is stuck at once, as before", async () => {
+      await fjob("fix0", "fail-always", { ALEPH_FIX_ROUNDS: "0" });
+      const rs = runs("fix0");
+      expect(rs.length).toBe(1);
+      expect(rs[0]).toMatchObject({ state: "stuck", reason: "tests failed" });
+      expect(rs[0].next).toBeUndefined();
+      await aleph(["drop", "fix0"]);
+    }, 30_000);
+
+    test("the time box and an error result get no fix round", async () => {
+      await fjob("fixbox", "sleep", { ALEPH_JOB_TIMEOUT: "1" });
+      await fjob("fixerr", "error");
+      expect(runs("fixbox").map((x) => x.reason)).toEqual(["time box"]);
+      expect(runs("fixerr").map((x) => x.reason)).toEqual(["API Error: 500"]);
+      for (const n of ["fixbox", "fixerr"]) await aleph(["drop", n]);
+    }, 30_000);
   });
 
   test("a worker past the time box ends stuck as \"time box\"", async () => {

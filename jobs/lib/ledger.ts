@@ -27,6 +27,10 @@ export interface Run {
   land?: boolean;
   /** A land run's conflicted paths, read before the rebase abort. */
   conflicts?: string[];
+  /** A factory run stopped by a failing check that goes back to its worker: the check's name. */
+  failed?: string;
+  /** A factory run after fix rounds: how many fix rounds the job had before it. */
+  round?: number;
   /** What the unit started after this run ended: the worker again, or another land. */
   next?: "worker" | "land";
   /** A factory run: the price of its worker's `result` event, at API rates. */
