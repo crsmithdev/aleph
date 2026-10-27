@@ -82,6 +82,16 @@ describe("state", () => {
     expect(JSON.parse(before).shown).toBe(false);
   });
 
+  test("trailers: a landed job's from its commit, a needs-you job's as the land will write them", () => {
+    const repo = join(base, "repo");
+    sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "land\n\nItem: fac-1\nJob: fac-7");
+    const commit = sh(repo, "git", "rev-parse", "HEAD").trim();
+    run("20261027-000007-a", { job: "fac-7", name: "fac-7", state: "landed", todo: 1, commit, ended: ago(1), started: ago(2) });
+    const s = state(now);
+    expect(s.delivered.find((j) => j.name === "fac-7")!.trailers).toEqual([{ key: "Item", value: "fac-1" }, { key: "Job", value: "fac-7" }]);
+    expect(s.needs[0].trailers).toEqual([{ key: "Item", value: "fac-1" }, { key: "Job", value: "fac-1" }, { key: "Held-by", value: "Chris" }]);
+  });
+
   test("ticks hold today's lines only", () => {
     const s = state(now);
     expect(s.ticks.map((t) => t.line)).toEqual(["started none"]);

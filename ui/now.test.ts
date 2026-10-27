@@ -142,3 +142,17 @@ test("the Controls panel shows Resume when paused and Pause when not", () => {
   expect(off).toContain("Switch judge to jev");
   expect(r.view.render(state)).toContain('id="controls"');
 });
+
+test("trailers show in a pre.trailers block with each key in <b>, escaped, and only when there are some", () => {
+  const trailers = [{ key: "Item", value: "aleph-27" }, { key: "Job", value: "<script>x</script>" }];
+  const needs = { ...state, needs: [job({ name: "aleph-27", state: "needs-you", trailers })] };
+  const del = { ...state, delivered: [job({ name: "aleph-28", state: "landed", trailers })] };
+  for (const h of [r.renderNeeds(needs), r.renderDelivered(del)]) {
+    expect(h).toContain("<b>Item:</b> aleph-27");
+    expect(h).toContain("&lt;script&gt;");
+    expect(h).not.toContain("<script>");
+  }
+  const bare = { ...state, needs: [job({ name: "aleph-27", state: "needs-you" })] };
+  expect(r.renderNeeds(bare)).not.toContain("trailers");
+  expect(r.renderDelivered(state)).not.toContain("trailers");
+});

@@ -40,6 +40,10 @@ const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
 const checkFacts = (j) =>
   (j.checks || []).map((c) => fact(c.name.charAt(0).toUpperCase() + c.name.slice(1), `${esc(String(c.seconds))} s ${c.ok ? "✓" : "✗"}`)).join("");
 
+/** The commit trailers of a job in a `pre.trailers` block, each key in `<b>`; empty when it has none. */
+const trailerBlock = (j) =>
+  j.trailers?.length ? `<div class="ev one"><div><h4>Trailers</h4><pre class="trailers">${j.trailers.map((t) => `<b>${esc(t.key)}:</b> ${esc(t.value)}`).join("\n")}</pre></div></div>` : "";
+
 /** Above this many runs a day the bar of pips is dropped and the number stands alone. */
 const PIP_MAX = 50;
 const BOX_MIN = 40;
@@ -101,6 +105,7 @@ export function renderNeeds(s) {
       `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(j.model)) : ""}${checkFacts(j)}</dl>` +
       (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
       (j.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="trailers">${statLines(j.stat)}</pre></div></div>` : "") +
+      trailerBlock(j) +
       (j.defaults.length ? `<details open><summary>Defaults taken<span class="peek">${j.defaults.length}</span></summary><div class="body"><ul>${j.defaults.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div></details>` : "") +
       (j.followups.length ? `<details><summary>Follow-ups<span class="peek">${j.followups.length}</span></summary><div class="body"><ul>${j.followups.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div></details>` : "") +
       `<div class="actions">${act("diff", j.name, "Diff")}${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}</div>` +
@@ -135,6 +140,7 @@ export function renderDelivered(s) {
     const commit = j.commit ? (j.commitUrl ? `<a href="${esc(j.commitUrl)}"><code>${sha}</code></a>` : `<code>${sha}</code>`) : "";
     return `<article class="del"><div class="ih">${itemId(j)}${title(j)}<span class="badge done">Landed</span></div>` +
       `<dl class="facts">${commit ? fact("Commit", commit) : ""}${j.ended ? fact("Landed", esc(clock(j.ended))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${checkFacts(j)}</dl>` +
+      trailerBlock(j) +
       (j.commit || j.check === "open" ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${j.commit ? cmd(`git show ${j.commit.slice(0, 7)}`) : ""}</div>` : "") + `</article>`;
   }).join("");
   return section("del", "Delivered today", s.delivered.length, rows || empty("Nothing has landed today.", "A landed run shows up here with its commit."), "on origin/main");

@@ -23,6 +23,8 @@ export interface Job {
   checks?: { name: string; ok: boolean; seconds: number }[];
   /** The hidden check's test counts, when the job's item has hidden checks. */
   hidden?: { passed: number; total: number };
+  /** Delivered: the trailers of the land commit. Needs-you: the trailers the land will write. */
+  trailers?: { key: string; value: string }[];
 }
 
 export interface State {
@@ -67,6 +69,17 @@ function commitUrl(repo: Repo | undefined, commit: string | undefined, bases: Ma
   }
   const base = bases.get(repo.key);
   return base ? `${base}/commit/${commit}` : undefined;
+}
+
+/** The trailers of a commit, from `git log -1 --format=%(trailers:only,unfold)`; none when git fails. */
+function landedTrailers(repo: Repo | undefined, commit: string | undefined): { key: string; value: string }[] {
+  if (!repo || !commit) return [];
+  const p = Bun.spawnSync(["git", "-C", repo.path, "log", "-1", "--format=%(trailers:only,unfold)", commit], { stdout: "pipe", stderr: "ignore" });
+  if (p.exitCode !== 0) return [];
+  return p.stdout.toString().split("\n").flatMap((l) => {
+    const i = l.indexOf(":");
+    return i > 0 ? [{ key: l.slice(0, i).trim(), value: l.slice(i + 1).trim() }] : [];
+  });
 }
 
 const read = (folder: string, f: string): string | undefined => {
@@ -129,6 +142,13 @@ export function state(now = new Date()): State {
     if (r.state === "landed" && r.check === "open") job.check = "open";
     const checks = (runs.findLast((e) => (e.run as any).checks)?.run as any)?.checks;
     if (r.state === "stuck" || r.state === "failed") if (Array.isArray(checks)) job.checks = checks;
+    const trailers = r.state === "landed" ? landedTrailers(repo, commit)
+      : r.state === "needs-you" ? [
+        ...(todo !== undefined ? [{ key: "Item", value: `${r.repo}-${todo}` }] : []),
+        { key: "Job", value: r.job },
+        ...(r.needs === "held" || r.needs === "review" ? [{ key: "Held-by", value: "Chris" }] : []),
+      ] : [];
+    if (trailers.length) job.trailers = trailers;
     return job;
   };
 
