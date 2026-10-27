@@ -213,10 +213,10 @@ One given moves: the map's "`aleph land` is the only path to `main`" becomes "th
 
 ### Work store
 
-- A private GitHub repo, cloned at `~/.aleph/items`. One Backlog.md file per item (v1.55.3, `autoCommit` off), named `<repo>-<n>`.
+- A private GitHub repo (`crsmithdev/aleph-items`), cloned at `~/.aleph/items`. One Backlog.md file per item (v1.55.3, `autoCommit` off), at `<repo>/backlog/tasks/<repo>-<n>.md`. Backlog.md takes one ID prefix per project, so each repo is its own project and has its own board: `backlog browser` in `~/.aleph/items/<repo>`. Built 27 Oct (`9e5c274`).
 - Frontmatter carries every field `aleph todo` has today (number, title, status, priority, labels, created, updated, notes), plus `repo`, `parent` and `links`. The numbers stay per repo, so `aleph todo show aleph 28` keeps working.
 - `aleph todo` keeps its commands and its write path: one commit on the store's `origin/main`, made without a working tree, retried when main moved. The sandbox cannot see the store. aleph files a worker's follow-ups from its result.
-- The migration moves all seven registry repos in one command, so no second write path exists. It removes each `docs/todo.md` in one commit per repo. It switches the land refusal and git-guard's `docs/todo.md` rule to the store path.
+- The migration (`todo/migrate.ts`, run 27 Oct) moves every registry repo in one command; seven of the eight had a list, so no second write path exists. It removes each `docs/todo.md` in one commit per repo. It switches the land refusal and git-guard's `docs/todo.md` rule to the store path.
 
 ### Held paths
 
