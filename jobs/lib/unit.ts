@@ -13,6 +13,7 @@ import { heldRule, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
 import { paused } from "./factory.ts";
+import { postTrace } from "./trace.ts";
 import { FACTS_REF, writeFacts } from "./status.ts";
 
 export { git };
@@ -466,6 +467,7 @@ export async function unit(folder: string): Promise<void> {
   const next = nextStep(ended, repo);
   if (next) ended = updateRun(folder, { next });
   writeFileSync(join(folder, "exit"), String(code));
+  if (run.kind === "agent" && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
   if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });
   if (next) await start(folder, ended, next);
 }

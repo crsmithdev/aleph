@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +6,9 @@ import { join } from "node:path";
 const CLI = join(import.meta.dir, "cli.ts");
 let base: string, remote: string, repo: string, other: string, items: string, itemsRemote: string, jobsDir: string, fake: string, reviewer: string, fakeLog: string, setupLog: string;
 let server: ReturnType<typeof Bun.serve>;
+let lf: ReturnType<typeof Bun.serve>;
+let lfStatus = 200;
+let lfPosts: any[] = [];
 const told: string[] = [];
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -25,6 +28,8 @@ function env(extra: Record<string, string> = {}): Record<string, string> {
     ALEPH_DAY_CAP: "100",
     // The live cap's test starts six runs against a cap of five.
     ALEPH_LIVE_CAP: "5",
+    // No Langfuse unless a test points one at the fake server.
+    LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "",
     SIDETONE_TELL_URL: `https://127.0.0.1:${server.port}/tell`, ...extra,
   };
 }
@@ -166,6 +171,7 @@ beforeAll(() => {
   }));
 
   sh(base, "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "key.pem", "-out", "cert.pem", "-days", "1", "-subj", "/CN=tailnet");
+  lf = Bun.serve({ port: 0, async fetch(req) { lfPosts.push(await req.json()); return new Response("{}", { status: lfStatus }); } });
   server = Bun.serve({
     port: 0,
     tls: { cert: readFileSync(join(base, "cert.pem"), "utf8"), key: readFileSync(join(base, "key.pem"), "utf8") },
@@ -177,6 +183,7 @@ beforeAll(() => {
 });
 afterAll(() => {
   server.stop(true);
+  lf.stop(true);
   rmSync(base, { recursive: true, force: true });
 });
 
@@ -684,6 +691,38 @@ describe("a factory run", () => {
     aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), ...more], extra);
   const factoryBranch = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `factory/${name}`]).exitCode === 0;
   const runsLeft = () => existsSync(join(base, "runs")) ? readdirSync(join(base, "runs")) : [];
+
+  describe("its Langfuse trace", () => {
+    const langfuse = () => ({ LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
+    const spans = () => lfPosts.flatMap((p) => p.resourceSpans.flatMap((r: any) => r.scopeSpans.flatMap((x: any) => x.spans)));
+    beforeEach(() => { lfPosts = []; lfStatus = 200; });
+
+    test("one trace is posted, its session id the job id", async () => {
+      const r = await fjob("ftrace", "commit ftrace.txt", langfuse());
+      expect(state(r.json.run).state).toBe("passed");
+      const all = spans();
+      expect(all.length).toBeGreaterThan(0);
+      const root = all.find((s: any) => !s.parentSpanId);
+      expect(root.name).toBe("worker");
+      expect(new Set(all.map((s: any) => s.traceId)).size).toBe(1);
+      const a = (k: string) => root.attributes.find((x: any) => x.key === k)?.value.stringValue;
+      expect(a("langfuse.session.id")).toBe(state(r.json.run).job);
+      expect(a("langfuse.trace.name")).toBe("factory ftrace");
+      expect(a("langfuse.trace.metadata.state")).toBe("passed");
+    });
+
+    test("with Langfuse answering 500 the verdict is unchanged and one line is logged", async () => {
+      lfStatus = 500;
+      const r = await fjob("ftrace500", "commit ftrace500.txt", langfuse());
+      expect(state(r.json.run).state).toBe("passed");
+      expect(file(r.json.run, "trace.log").trim().split("\n").length).toBe(1);
+    });
+
+    test("with no Langfuse config nothing is posted", async () => {
+      await fjob("ftracenone", "commit ftracenone.txt");
+      expect(lfPosts).toEqual([]);
+    });
+  });
 
   test("the worker's branch comes back as a bundle; the run passes and its run folder is gone", async () => {
     const r = await fjob("fpass", "commit fpass.txt");
