@@ -10,6 +10,7 @@ export const view = {
   order: 2,
   api: "/api/issues",
   render: (rows) => renderIssues(rows, hashOptions()),
+  mount: (root) => mount(root),
 };
 
 /** The filters, from the route's query: ?status=open&label=x&q=text&lens=factory. */
@@ -85,11 +86,29 @@ export function renderLens(rows, o = {}) {
 
 export const BODY_TEMPLATE = "## Goal\n\n\n\n## Oracle\n\n\n\n## Time box\n\n";
 
+/** The Project select's options, one per registry key, `project` selected. */
+export function projectOptions(keys, project) {
+  return keys.map((k) => `<option value="${esc(k)}"${k === project ? " selected" : ""}>${esc(k)}</option>`).join("");
+}
+
+/** Fills the form's Project select from the registry's keys. */
+export async function mount(root) {
+  const select = root.querySelector?.('select[name="repo"]');
+  if (!select) return;
+  try {
+    const res = await fetch("/api/projects/keys");
+    if (!res.ok) return;
+    const keys = await res.json();
+    const cur = select.value;
+    select.innerHTML = projectOptions(keys, keys.includes(cur) ? cur : hashOptions().project);
+  } catch {}
+}
+
 export function renderForm(rows, o = {}) {
   const repos = [...new Set(rows.map((r) => r.repo))];
   return `<details class="new"><summary>File an issue</summary>` +
     `<form data-ui="issue-form" class="stack">` +
-    `<label>Project <input name="repo" required list="issue-repos" value="${esc(o.project ?? "")}"><datalist id="issue-repos">${repos.map((r) => `<option value="${esc(r)}">`).join("")}</datalist></label>` +
+    `<label>Project <select name="repo" required>${projectOptions(o.keys ?? repos, o.project)}</select></label>` +
     `<label>Title <input name="title" required></label>` +
     `<label>Body <textarea name="body" rows="12">${esc(BODY_TEMPLATE)}</textarea></label>` +
     `<label>Labels <input name="labels" placeholder="comma separated"></label>` +

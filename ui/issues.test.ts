@@ -187,3 +187,22 @@ describe("POST /api/issues", () => {
     expect(await Bun.file(argvFile).exists()).toBe(false);
   });
 });
+
+describe("issue form project select", () => {
+  test("renderForm gives a select of the keys", () => {
+    const h = v.renderForm([], { keys: ["aleph", "sidetone"], project: "sidetone" });
+    expect(h).toContain('<select name="repo"');
+    expect(h.match(/<option /g)?.length).toBe(2);
+    expect(h).toContain('<option value="sidetone" selected>');
+  });
+  test("projectOptions escapes and selects", () => {
+    const h = v.projectOptions(["a", "<b>"], "a");
+    expect(h.match(/<option /g)?.length).toBe(2);
+    expect(h).toContain('<option value="a" selected>');
+    expect(h).toContain("&lt;b&gt;");
+    expect(h).not.toContain("<b>");
+  });
+  test("exports mount", () => {
+    expect(typeof v.mount).toBe("function");
+  });
+});
