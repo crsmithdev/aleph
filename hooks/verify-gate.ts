@@ -39,7 +39,7 @@ const d = digest(input.transcript_path ?? "", promptId, input.last_assistant_mes
 const treeChanged = before !== undefined && after !== undefined && after !== null && before !== after;
 const changed = treeChanged || (after === null && d.edits.length > 0);
 
-type Outcome = { verdict: "pass" | "deny"; kind: "unchanged" | "skip" | "forced" | "judged" | "fail-open"; reason: string; score?: number; judgeMs?: number; by?: string; jevDeny?: number | null };
+type Outcome = { verdict: "pass" | "deny"; kind: "unchanged" | "skip" | "forced" | "judged" | "fail-open"; reason: string; score?: number; judgeMs?: number; by?: string; jevClaim?: number | null };
 let outcome: Outcome;
 
 if (!changed) {
@@ -52,14 +52,14 @@ if (!changed) {
   if (denials >= MAX_DENIALS) {
     outcome = { verdict: "pass", kind: "forced", reason: `passed after ${denials} denials`, score: 0.5 };
   } else {
-    const result = await judge(d.text);
+    const result = await judge(d.text, d.finalMessage);
     if (!result.verdict) {
       outcome = { verdict: "pass", kind: "fail-open", reason: `judge unavailable: ${result.error}`, judgeMs: result.ms };
     } else if (result.verdict.verdict === "deny") {
       put(`gate:${promptId}`, { start: gate?.start ?? started, input: { denials: denials + 1 } });
-      outcome = { verdict: "deny", kind: "judged", reason: result.verdict.reason, score: 0, judgeMs: result.ms, by: result.by, jevDeny: result.jev?.pDeny };
+      outcome = { verdict: "deny", kind: "judged", reason: result.verdict.reason, score: 0, judgeMs: result.ms, by: result.by, jevClaim: result.jev?.pClaim };
     } else {
-      outcome = { verdict: "pass", kind: "judged", reason: result.verdict.reason, score: 1, judgeMs: result.ms, by: result.by, jevDeny: result.jev?.pDeny };
+      outcome = { verdict: "pass", kind: "judged", reason: result.verdict.reason, score: 1, judgeMs: result.ms, by: result.by, jevClaim: result.jev?.pClaim };
     }
   }
 }
@@ -93,7 +93,7 @@ if (cfg && outcome.kind !== "unchanged") {
       "langfuse.observation.metadata.edits": d.edits.length,
       "langfuse.observation.metadata.judge_ms": outcome.judgeMs ?? 0,
       ...(outcome.by ? { "langfuse.observation.metadata.judge_by": outcome.by } : {}),
-      ...(typeof outcome.jevDeny === "number" ? { "langfuse.observation.metadata.jev_p_deny": outcome.jevDeny } : {}),
+      ...(typeof outcome.jevClaim === "number" ? { "langfuse.observation.metadata.jev_p_claim": outcome.jevClaim } : {}),
     }),
   };
   const score = outcome.score === undefined ? Promise.resolve() : postScore(cfg, { traceId, name: "verified", value: outcome.score, comment: `${outcome.kind}: ${outcome.reason}`, environment: sessionEnvironment() });

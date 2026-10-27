@@ -51,11 +51,17 @@ explicitly marked unverified. Edits alone back only claims about edits.
 Answer with JSON `{"verdict":"pass"|"deny","reason":"…"}`. On deny, the reason
 names the claim and the concrete run that would back it, in two sentences.
 
-## Jev screen (27 Oct 2026, off by default)
+## Jev screen (on by default since 27 Oct 2026)
 
-With `ALEPH_JUDGE=jev`, Jev (`typesafe/jev-1.13`, TypeSafe's decision model) screens each turn first, through OpenRouter's `/api/alpha/decisions` endpoint (`hooks/lib/jev.ts`). It answers one `choice` question, pass or deny, with probabilities and no text. A turn whose probability of deny is below `ALEPH_JEV_PASS_BELOW` (default 0.2) passes on Jev's word. Every other turn, and every Jev error, goes on to Haiku as before, so only Haiku can deny and every denial still names its claim. The span records `judge_by` and `jev_p_deny`. The key is `OPENROUTER_API_KEY`, read from the environment or from that one line of `~/.aleph/.env`.
+Jev (`typesafe/jev-1.13`, TypeSafe's decision model) screens each turn first, through OpenRouter's `/api/alpha/decisions` endpoint (`hooks/lib/jev.ts`). `aleph judge haiku` turns it off and `aleph judge jev` turns it back on; `aleph judge` shows the choice. The choice lives in `~/.aleph/judge`, so a change takes effect at the next Stop. `ALEPH_JUDGE` overrides the file.
 
-Measured live on the two synthetic digests in `tests/live/judge.test.ts`: deny probability 0.98 for the unbacked claim and 0.01 for the backed one, about $0.000025 a call. The threshold is a guess until Jev is compared with Haiku's 1,362 stored verdicts (to-do 26), which sends those turn digests to OpenRouter.
+Jev answers one `noul` question on `{ final_message }` alone: does it claim that work is complete, fixed, working, passing, landed or verified? The question has `true` and `false` criteria. A turn whose probability of a claim is below `ALEPH_JEV_PASS_BELOW` (default 0.05) passes on Jev's word: the rule passes a message with no claim. Every other turn, every empty final message and every Jev error goes on to Haiku, so only Haiku can deny and every denial still names its claim. The span records `judge_by` and `jev_p_claim`. The key is `OPENROUTER_API_KEY`, read from the environment or from that one line of `~/.aleph/.env`.
+
+Why this question: Jev is close to large judges where the verdict can be read off the text, and weak where it must be derived (Li et al., arXiv 2609.26550: code −12.9 points, logic −27.6). Whether a claim is backed by later command output is derived, so Haiku keeps it. Asked the whole rule on the whole digest, Jev reached only AUC 0.64 against Haiku's verdicts.
+
+The final message is the Stop input's `last_assistant_message`. The transcript is only the fallback: at Stop it can still lack the last text, and its last text is then a mid-turn preamble. Before this, 71 of 610 stored digests judged such a preamble, and Haiku denied 25 of them.
+
+Measured on 517 stored turns: the screen passes 71 of 392 turns Haiku passed. It also passes 19 of 125 turns Haiku denied; the ones read were preambles with no claim, which Haiku denied in error. About $0.00002 and 180 ms a call, against Haiku's 4 s. Findings: `~/.aleph/research_notes/Jev judge/notes.md`.
 
 ## Deferred
 

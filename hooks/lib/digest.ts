@@ -69,7 +69,12 @@ export function readEntries(transcriptPath: string, promptId: string): Entry[] {
   return turn;
 }
 
-export function digest(transcriptPath: string, promptId: string, fallbackFinal = "", maxChars = 12_000): Digest {
+/**
+ * `stopFinal` is the Stop input's last_assistant_message. It wins over the
+ * transcript: at Stop the transcript can still lack the last text, so its last
+ * text is a mid-turn preamble ("I'll check ...").
+ */
+export function digest(transcriptPath: string, promptId: string, stopFinal = "", maxChars = 12_000): Digest {
   const entries = readEntries(transcriptPath, promptId);
   const results = new Map<string, Entry>();
   for (const e of entries) {
@@ -112,7 +117,7 @@ export function digest(transcriptPath: string, promptId: string, fallbackFinal =
     }
     if (texts.length) finalMessage = texts.join("\n");
   }
-  if (!finalMessage) finalMessage = fallbackFinal;
+  if (stopFinal) finalMessage = stopFinal;
 
   let body = items.join("\n");
   if (body.length > maxChars) body = `…(${items.length} items, earliest trimmed)\n${body.slice(-maxChars)}`;

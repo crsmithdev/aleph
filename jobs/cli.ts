@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * aleph <job|run|land|checked|drop|jobs|todo|unit|tick|report|pause|resume|sandbox|status>
+ * aleph <job|run|land|checked|drop|jobs|todo|unit|tick|report|pause|resume|sandbox|status|judge>
  * — detached agent jobs, plain runs, each repo's to-do list, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/jobs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal.
@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join, resolve } from "node:path";
 import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Run } from "./lib/ledger.ts";
 import { git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
+import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import { behind, factoryDir, factoryLog, health, lastProbe, paused, probeDue, report, setPaused, tick } from "./lib/factory.ts";
@@ -521,6 +522,13 @@ try {
     case "report": reportCmd(); break;
     case "pause": setPaused(true); out({ paused: true }); break;
     case "resume": setPaused(false); out({ paused: false }); break;
+    case "judge": {
+      const v = positional[0];
+      if (v === "jev" || v === "haiku") setJudgeChoice(v);
+      else if (v !== undefined) refuse("usage: aleph judge [jev|haiku]");
+      out({ judge: judgeChoice() });
+      break;
+    }
     case "sandbox": {
       if (positional[0] !== "probe") refuse("usage: aleph sandbox probe");
       const repo = Object.values(loadRegistry()).find((r) => r.sandbox) ?? refuse("no repo in the registry has sandbox: true");
@@ -530,7 +538,7 @@ try {
       if (!p.ok) process.exit(1);
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|drop|jobs|todo|tick|report|pause|resume|sandbox|status> ...");
+    default: refuse("usage: aleph <job|run|land|checked|drop|jobs|todo|tick|report|pause|resume|sandbox|status|judge> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;

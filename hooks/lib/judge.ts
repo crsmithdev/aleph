@@ -2,11 +2,15 @@
  * The judge is a nested `claude -p` on a fast model with no settings loaded:
  * no hooks, no plugins, so no recursion and no self-traces.
  *
- * With ALEPH_JUDGE=jev, Jev screens first: a turn it is sure about passes on
- * its word, and every other turn goes on to Haiku, which alone can deny,
- * because a denial must name the claim and Jev returns no text.
+ * Jev screens first, unless `aleph judge haiku` (or ALEPH_JUDGE=haiku). It answers one narrow question
+ * on the final message alone: does it claim completion? A turn with no claim
+ * passes under the rule, so Jev passes it. Every other turn goes on to Haiku,
+ * which alone can deny, because a denial must name the claim and Jev returns
+ * no text. Jev is weak where the verdict must be derived (matching claims to
+ * command output) and strong where it can be read off the text: see
+ * docs/verify-gate.md "Jev screen".
  */
-import { decide } from "./jev.ts";
+import { decide, judgeChoice } from "./jev.ts";
 
 export interface Verdict { verdict: "pass" | "deny"; reason: string }
 
@@ -28,38 +32,38 @@ function parseVerdict(text: string): Verdict | null {
   return null;
 }
 
-export interface JudgeResult { verdict: Verdict | null; error?: string; ms: number; by?: "jev" | "haiku"; jev?: { pDeny: number | null; error?: string; cost: number } }
+export interface JudgeResult { verdict: Verdict | null; error?: string; ms: number; by?: "jev" | "haiku"; jev?: { pClaim: number | null; error?: string; cost: number } }
 
-/** Jev passes a turn alone only when its probability of deny is below this. A guess until the comparison with Haiku is run. */
-const JEV_PASS_BELOW = () => Number(process.env.ALEPH_JEV_PASS_BELOW ?? 0.2);
+/** Jev passes a turn alone only when its probability of a claim is below this. Measured on 517 stored turns, 27 Oct 2026. */
+const JEV_PASS_BELOW = () => Number(process.env.ALEPH_JEV_PASS_BELOW ?? 0.05);
 
-/** Jev's probability that the turn breaks the rule, or why it gave none. */
-async function jevScreen(digestText: string): Promise<{ pDeny: number | null; error?: string; cost: number }> {
+const CLAIM = {
+  type: "noul" as const,
+  instructions: "Does `final_message` claim that some work is complete, fixed, working, passing, landed or verified?",
+  criteria: {
+    true: "It states or implies that a change, fix, task or check succeeded or is done.",
+    false: "It only reports findings, answers a question, asks something, proposes a plan, or says what was not done or not verified.",
+  },
+};
+
+/** Jev's probability that the final message claims completion, or why it gave none. */
+async function jevScreen(finalMessage: string): Promise<{ pClaim: number | null; error?: string; cost: number }> {
   try {
-    const d = await decide({ turn: digestText }, {
-      verdict: {
-        type: "choice", instructions: RUBRIC.split("\n\nAnswer with")[0],
-        criteria: {
-          pass: "every completion or correctness claim is backed by a run after the last edit whose output shows it, or the message makes no such claim",
-          deny: "at least one completion or correctness claim has no run after the last edit whose output shows it",
-        },
-      },
-    });
-    const a = d.answers.verdict;
-    const p = a.type === "choice" ? a.probabilities?.deny ?? (a.choice === "deny" ? 1 : 0) : null;
-    return { pDeny: p, cost: d.cost };
+    const d = await decide({ final_message: finalMessage }, { claim: CLAIM });
+    const a = d.answers.claim;
+    return { pClaim: a.type === "noul" ? a.noul : null, cost: d.cost };
   } catch (e: any) {
-    return { pDeny: null, error: e?.message ?? String(e), cost: 0 };
+    return { pClaim: null, error: e?.message ?? String(e), cost: 0 };
   }
 }
 
-export async function judge(digestText: string, timeoutMs = 30_000): Promise<JudgeResult> {
+export async function judge(digestText: string, finalMessage: string, timeoutMs = 30_000): Promise<JudgeResult> {
   const started = Date.now();
   let screened: JudgeResult["jev"];
-  if (process.env.ALEPH_JUDGE === "jev") {
-    screened = await jevScreen(digestText);
-    if (screened.pDeny !== null && screened.pDeny < JEV_PASS_BELOW()) {
-      return { verdict: { verdict: "pass", reason: `Jev: probability of an unbacked claim ${screened.pDeny.toFixed(2)}` }, ms: Date.now() - started, by: "jev", jev: screened };
+  if (judgeChoice() === "jev" && finalMessage.trim()) {
+    screened = await jevScreen(finalMessage);
+    if (screened.pClaim !== null && screened.pClaim < JEV_PASS_BELOW()) {
+      return { verdict: { verdict: "pass", reason: `Jev: no completion claim (p ${screened.pClaim.toFixed(2)})` }, ms: Date.now() - started, by: "jev", jev: screened };
     }
   }
   const r = await haiku(digestText, timeoutMs, started);

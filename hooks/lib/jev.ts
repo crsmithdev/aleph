@@ -4,11 +4,28 @@
  * text, at $0.042 per million input tokens (OpenRouter, 27 Oct 2026). It
  * cannot be called through chat/completions.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 export const JEV_MODEL = "typesafe/jev-1.13";
+
+export type JudgeChoice = "jev" | "haiku";
+const choiceFile = () => process.env.ALEPH_JUDGE_FILE ?? join(homedir(), ".aleph", "judge");
+
+/**
+ * Whether Jev screens before Haiku, everywhere aleph uses it: ALEPH_JUDGE,
+ * else `aleph judge`'s file, else jev.
+ */
+export function judgeChoice(): JudgeChoice {
+  const v = process.env.ALEPH_JUDGE ?? (existsSync(choiceFile()) ? readFileSync(choiceFile(), "utf8").trim() : "");
+  return v === "haiku" ? "haiku" : "jev";
+}
+
+export function setJudgeChoice(choice: JudgeChoice) {
+  mkdirSync(dirname(choiceFile()), { recursive: true });
+  writeFileSync(choiceFile(), `${choice}\n`);
+}
 const URL = () => process.env.ALEPH_JEV_URL ?? "https://openrouter.ai/api/alpha/decisions";
 
 /** OPENROUTER_API_KEY from the environment, else that one key from ~/.aleph/.env. */

@@ -105,7 +105,7 @@ describe("verify-gate hook", () => {
   async function fire(event: string, promptId: string, extra: object = {}) {
     const proc = Bun.spawn(["bun", join(HOOKS, "verify-gate.ts")], {
       stdin: new TextEncoder().encode(JSON.stringify({ hook_event_name: event, session_id: "s1", prompt_id: promptId, cwd: root, transcript_path: transcriptPath, ...extra })),
-      env: { ...process.env, ALEPH_SPOOL: spool, ALEPH_JUDGE_CMD: join(spool, "claude"), LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" },
+      env: { ...process.env, ALEPH_SPOOL: spool, ALEPH_JUDGE: "haiku", ALEPH_JUDGE_CMD: join(spool, "claude"), LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" },
       stdout: "pipe", stderr: "pipe",
     });
     const code = await proc.exited;
