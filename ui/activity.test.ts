@@ -114,7 +114,7 @@ describe("routes and view", () => {
     const a = await activity(7, null, now);
     const html = renderActivity(a);
     expect(view.title).toBe("Tools");
-    expect(view.group).toBe("activity");
+    expect(view.group).toBe("claude");
     for (const t of ["Tools", "Hooks", "Verify-gate denials", "Bash", "verify-gate", "nothing was run"]) expect(html).toContain(t);
     for (const t of ["Last 30 days", "Cost per day", "Cost per model", "Factory runs per day"]) expect(html).not.toContain(t);
   });

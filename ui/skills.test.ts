@@ -149,7 +149,7 @@ test("the view lists skills with bars and links, and the detail links sessions",
   const detail = v.renderSkill((await get("/api/skills/aleph:pickup")).body);
   expect(detail).toContain('href="#/sessions/s1"');
   expect(detail).toContain("Bash");
-  expect(v.view).toMatchObject({ path: "/skills", group: "activity", api: "/api/skills" });
+  expect(v.view).toMatchObject({ path: "/skills", group: "claude", api: "/api/skills" });
   expect(skillView).toMatchObject({ path: "/skills/:name", api: "/api/skills/:name" });
 });
 

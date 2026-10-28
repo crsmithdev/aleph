@@ -4,7 +4,7 @@ import { mountPerDay, renderSkill } from "./skills.js";
 export const view = {
   path: "/skills/:name",
   title: "Skill",
-  group: "activity",
+  group: "claude",
   api: "/api/skills/:name",
   render: (d) => renderSkill(d),
   mount: (root, d) => mountPerDay(root, d),

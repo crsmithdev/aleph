@@ -62,6 +62,6 @@ export function renderTurn(d) {
     (d.observations.length ? `<ul class="tree">${d.observations.map(node).join("")}</ul>` : empty("No observation in this turn.")) + `</div>`;
 }
 
-export const view = { path: "/sessions", title: "Sessions", group: "factory", order: 3, api: "/api/sessions", refresh: 60, render: renderSessions };
-export const sessionView = { path: "/sessions/:id", title: "Session", group: "factory", order: 3, api: "/api/sessions/:id", render: renderSession };
-export const turnView = { path: "/sessions/:id/turns/:n", title: "Turn", group: "factory", order: 3, api: "/api/sessions/:id/turns/:n", render: renderTurn };
+export const view = { path: "/sessions", title: "Sessions", group: "claude", order: 0, api: "/api/sessions", refresh: 60, render: renderSessions };
+export const sessionView = { path: "/sessions/:id", title: "Session", group: "claude", order: 0, api: "/api/sessions/:id", render: renderSession };
+export const turnView = { path: "/sessions/:id/turns/:n", title: "Turn", group: "claude", order: 0, api: "/api/sessions/:id/turns/:n", render: renderTurn };

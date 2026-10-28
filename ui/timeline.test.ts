@@ -7,7 +7,7 @@ import { add, setStatus } from "../todo/lib/todo.ts";
 import { clearCache } from "./langfuse.ts";
 import { routes, timeline } from "./api/timeline.ts";
 // @ts-ignore plain JS, shared with the page
-import { cancelTarget, duration, mark, mountTimeline, redirect, renderEvent, renderStream, renderTimeline, stripOption, view } from "./views/timeline.js";
+import { cancelTarget, duration, mark, mountTimeline, nextSort, redirect, renderEvent, renderStream, renderTimeline, sortRows, stamp, stripOption, subtypeOf, view } from "./views/timeline.js";
 
 let base: string, jobsDir: string, fake: ReturnType<typeof Bun.serve>;
 const saved: Record<string, string | undefined> = {};
@@ -183,20 +183,33 @@ describe("timeline view", () => {
     expect(typeof view.mount).toBe("function");
   });
 
-  test("each table row holds the compact card of its kind", async () => {
+  test("each row has the eight columns, in order", async () => {
     const t = await timeline({ now });
     const html = renderStream(t.rows!);
     for (const kind of ["job", "land", "issue", "session", "note"]) {
-      expect(html).toMatch(new RegExp(`<tr class="evr" data-kind="${kind}"><td[^>]*>[^<]*</td><td class="cardc"><div class="card compact ${kind}">`));
+      expect(html).toMatch(new RegExp(`<tr class="evr" data-kind="${kind}">(<td class="c-[a-z]+"[^>]*>.*?</td>){8}</tr>`));
     }
-    expect(html.match(/<tr class="evr"/g)!.length).toBe(html.match(/class="card compact /g)!.length);
+    const row = renderEvent(t.rows!.find((r: any) => r.kind === "job")!);
+    expect([...row.matchAll(/<td class="(c-\w+)"/g)].map((m) => m[1])).toEqual(["c-time", "c-status", "c-type", "c-sub", "c-id", "c-title", "c-con", "c-act"]);
   });
 
-  test("a job row has its badge, id link, title, duration, cost and model in the compact card", () => {
-    const h = renderEvent({ at: "2026-10-27T10:00:00", end: "2026-10-27T10:25:00", kind: "job", what: "started", state: "landed", id: "aleph-9", title: "Do it", href: "#/jobs/aleph-9", project: "aleph", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] });
-    for (const t of ['<span class="badge done">Landed</span>', '<a class="id" href="#/jobs/aleph-9">aleph-9</a>', 'title="Do it">Do it</span>', "Took</span> 25m", "Cost</span> $1.50", "Model</span> opus"]) expect(h).toContain(t);
+  test("time is MM/DD HH:MM, or the day alone", () => {
+    expect(stamp({ at: new Date(2026, 9, 7, 9, 5).toISOString() })).toBe("10/07 09:05");
+    expect(stamp({ at: new Date(2026, 9, 7, 9, 5).toISOString(), dateOnly: true })).toBe("10/07");
+  });
+
+  test("a job row has its status badge, type, subtype, id link, title and contents", () => {
+    const h = renderEvent({ at: "2026-10-27T10:00:00", end: "2026-10-27T10:25:00", kind: "job", what: "started", state: "landed", sub: "agent", id: "aleph-9", title: "Do it", href: "#/jobs/aleph-9", project: "aleph", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] });
+    for (const t of ['<span class="badge done">Landed</span>', '<td class="c-type">job</td>', '<td class="c-sub">agent</td>', '<a class="id" href="#/jobs/aleph-9">aleph-9</a>', '<td class="c-title">Do it</td>', "Took</span> 25m", "Cost</span> $1.50", "Model</span> opus", "Project</span> aleph"]) expect(h).toContain(t);
     expect(h.match(/<a /g)).toHaveLength(1);
     expect(h).not.toContain("Running");
+  });
+
+  test("subtypes", () => {
+    expect(subtypeOf({ kind: "job", sub: "land" })).toBe("land");
+    expect(subtypeOf({ kind: "issue", what: "closed" })).toBe("closed");
+    expect(subtypeOf({ kind: "session", details: [["kinds", "debug,fix"]] })).toBe("debug");
+    expect(subtypeOf({ kind: "note" })).toBe("daily");
   });
 
   test("a running job counts its duration to now", () => {
@@ -220,6 +233,7 @@ describe("timeline view", () => {
   test("an issue row shows its labels; a row without cost has an empty cost cell", () => {
     const h = renderEvent({ at: "2026-10-26T00:00:00", kind: "issue", what: "opened", state: "open", title: "aleph-3 x", href: "#/issues/aleph/3", dateOnly: true, details: [["labels", "goal,ui"]] });
     expect(h).toContain("Labels</span> goal, ui");
+    expect(h).toContain('<td class="c-time">10/26</td>');
     expect(h).not.toContain("Cost");
   });
 
@@ -235,7 +249,7 @@ describe("timeline view", () => {
     const html = renderTimeline(t);
     expect(html.match(/<input type="checkbox" data-kind="\w+" checked>/g)).toHaveLength(5);
     expect(html).toContain('id="tl-strip"');
-    expect(html.match(/<th>(\w+)<\/th>/g)!.join("")).toBe("<th>Time</th><th>Event</th>");
+    expect([...html.matchAll(/<th class="c-\w+"[^>]*>(?:<button[^>]*>)?(\w*)/g)].map((m) => m[1])).toEqual(["Time", "Status", "Type", "Subtype", "Id", "Title", "Contents", ""]);
     const all = renderStream(t.rows!);
     expect(new Set(all.match(/data-kind="\w+"/g)).size).toBeGreaterThan(1);
   });
@@ -323,6 +337,37 @@ describe("the List address", () => {
   });
 });
 
+describe("sorting", () => {
+  const rows = [
+    { at: "2026-10-27T10:00:00", kind: "note", what: "written", title: "b", href: "#/x" },
+    { at: "2026-10-27T12:00:00", kind: "job", what: "started", state: "running", title: "a", id: "j2", href: "#/x" },
+    { at: "2026-10-27T11:00:00", kind: "issue", what: "opened", state: "open", title: "c", id: "x-3", href: "#/x" },
+  ];
+  const titles = (r: any[]) => r.map((e) => e.title).join("");
+  test("default is Time, newest first; a second click reverses; the header shows it", () => {
+    expect(titles(sortRows(rows))).toBe("acb");
+    expect(titles(sortRows(rows, { key: "time", dir: 1 }))).toBe("bca");
+    expect(nextSort({ key: "time", dir: -1 }, "time")).toEqual({ key: "time", dir: 1 });
+    expect(nextSort({ key: "time", dir: -1 }, "title")).toEqual({ key: "title", dir: 1 });
+    expect(renderStream(rows)).toContain('aria-sort="descending"><button type="button" data-sort="time">Time ▼');
+    expect(renderStream(rows, 0, Date.now(), 100, { key: "title", dir: 1 })).toContain('aria-sort="ascending"><button type="button" data-sort="title">Title ▲');
+    expect(renderStream(rows)).not.toContain('data-sort="con"');
+  });
+  test("each sortable key orders the rows", () => {
+    expect(titles(sortRows(rows, { key: "type", dir: 1 }))).toBe("cab");
+    expect(titles(sortRows(rows, { key: "title", dir: -1 }))).toBe("cba");
+    expect(titles(sortRows(rows, { key: "id", dir: 1 }))).toBe("bac");
+  });
+  test("clicking a header redraws sorted; a second click reverses", () => {
+    const stream: any = { innerHTML: "", addEventListener(_: string, f: any) { this.h = f; } };
+    mountTimeline({ querySelector: (q: string) => (q === "#tl-stream" ? stream : null), querySelectorAll: () => [] } as any, { rows });
+    const order = () => [...stream.innerHTML.matchAll(/class="c-title">(\w)</g)].map((m) => m[1]).join("");
+    const click = (key: string) => stream.h({ target: { closest: (s: string) => (s.includes("data-sort") ? { dataset: { sort: key } } : null) } });
+    click("title"); expect(order()).toBe("abc");
+    click("title"); expect(order()).toBe("cba");
+  });
+});
+
 describe("Cancel controls", () => {
   const base = { at: at(0), end: undefined, details: [] };
   const job = { ...base, kind: "job", what: "started", state: "running", title: "fac-9", id: "fac-9", href: "#/jobs/fac-9" };
@@ -330,7 +375,7 @@ describe("Cancel controls", () => {
   const open = { ...base, kind: "issue", what: "opened", state: "open", title: "t", id: "fac-3", href: "#/issues/fac/3" };
   const done = { ...base, kind: "issue", what: "closed", state: "done", title: "t", id: "fac-2", href: "#/issues/fac/2" };
 
-  test("a running job and an open issue have Cancel; a landed job and a done issue do not", () => {
+  test("a running job and an open issue have the X; a landed job and a done issue have an empty cell", () => {
     expect(renderEvent(job)).toContain("data-cancel");
     expect(renderEvent(open)).toContain("data-cancel");
     expect(renderEvent(landed)).not.toContain("data-cancel");
@@ -350,7 +395,7 @@ describe("Cancel controls", () => {
     (globalThis as any).alert = () => { calls.push("alert"); };
     const classes = new Set<string>();
     const msg: any = { textContent: "", className: "cmsg" };
-    const btn: any = { dataset: {}, textContent: "Cancel", disabled: false, isConnected: true, remove() {}, classList: { add: (c: string) => classes.add(c), remove: (c: string) => classes.delete(c) } };
+    const btn: any = { dataset: {}, textContent: "✕", disabled: false, isConnected: true, remove() {}, classList: { add: (c: string) => classes.add(c), remove: (c: string) => classes.delete(c) } };
     const tr: any = { querySelector: () => msg, set outerHTML(h: string) { tr.html = h; }, html: "" };
     btn.closest = () => tr;
     let handler: any;
@@ -366,7 +411,7 @@ describe("Cancel controls", () => {
     const c = click([job], () => Response.json({ code: 0, stdout: "{}", stderr: "" }));
     try {
       await c.press();
-      expect(c.btn.textContent).toBe("Confirm cancel");
+      expect(c.btn.textContent).toBe("Confirm?");
       expect(c.sent).toHaveLength(0);
       await c.press();
       expect(c.sent).toHaveLength(1);
@@ -384,7 +429,7 @@ describe("Cancel controls", () => {
       await c.press(); await c.press();
       expect(c.sent.map((x) => x.url)).toEqual(["/api/issues/fac/3/drop"]);
       expect(c.msg.textContent).toBe("no such issue");
-      expect(c.btn.textContent).toBe("Cancel");
+      expect(c.btn.textContent).toBe("✕");
     } finally { c.restore(); }
   });
 });

@@ -6,7 +6,7 @@ import { chart, clock, empty, esc } from "../lib.js";
 export const view = {
   path: "/skills",
   title: "Skills",
-  group: "activity",
+  group: "claude",
   order: 20,
   api: "/api/skills",
   render: (d) => renderSkills(d),

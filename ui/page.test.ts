@@ -110,6 +110,10 @@ test("the sidebar lists Status, Activity (/timeline), then the rest, with Tools 
   const shown = all.filter((v) => !v.path.includes(":") && v.nav !== false);
   const factory = shown.filter((v) => v.group === "factory").sort((a, b) => a.order - b.order);
   expect(factory.slice(0, 2).map((v) => [v.title, v.path])).toEqual([["Status", "/"], ["Activity", "/timeline"]]);
+  const claude = shown.filter((v) => v.group === "claude").sort((a, b) => a.order - b.order).map((v) => v.title);
+  expect(claude).toEqual(["Sessions", "Tools", "Skills"]);
+  expect(factory.some((v) => v.path === "/sessions")).toBe(false);
+  expect(readFileSync(new URL("./index.html", import.meta.url), "utf8")).toContain('["claude", "Claude"]');
   expect(shown.find((v) => v.path === "/activity")?.title).toBe("Tools");
   expect(shown.some((v) => v.path === "/jobs" || v.path === "/projects")).toBe(false);
   expect(all.some((v) => v.path === "/jobs")).toBe(true);

@@ -5,7 +5,7 @@ import { empty, error, esc } from "../lib.js";
 export const view = {
   path: "/activity",
   title: "Tools",
-  group: "activity",
+  group: "claude",
   order: 2,
   api: "/api/activity?days=7",
   refresh: 60,

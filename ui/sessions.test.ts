@@ -116,7 +116,7 @@ test("views render, link to Langfuse, and escape", async () => {
   expect(h).toContain("candidates 5, asked 3, kept 1");
   expect(h).toContain(`${s.base}/trace/t1`);
   expect(v.renderTurn({ ...t, prompt: "<script>" })).not.toContain("<script>");
-  expect(v.view.group).toBe("factory");
+  expect(v.view.group).toBe("claude");
 });
 
 test("the sessions tables scroll inside their own wrapper", async () => {

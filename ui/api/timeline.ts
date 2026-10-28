@@ -28,6 +28,8 @@ export interface TimelineEvent {
   /** A job's state, for its colour. */
   state?: string;
   title: string;
+  /** The kind of job (agent, land, ...): the Subtype column. */
+  sub?: string;
   /** The job name, issue id or session id: the Id column. */
   id?: string;
   href: string;
@@ -90,8 +92,8 @@ function jobEvents(project: string | null, since: number, inGit: (sha: string) =
       if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", title: run.name, id: run.name, commit: run.commit, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model], ["commit", run.commit?.slice(0, 7)]) });
       continue;
     }
-    out.push({ ...base, at: run.started, kind: "job", what: "started", state: "running", title: run.name, id: run.name, end: run.ended || undefined, details: pairs(["model", run.model]) });
-    if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: "ended", state: run.state, title: run.name, id: run.name, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model]) });
+    out.push({ ...base, at: run.started, kind: "job", what: "started", state: "running", sub: run.kind, title: run.name, id: run.name, end: run.ended || undefined, details: pairs(["model", run.model]) });
+    if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: "ended", state: run.state, sub: run.kind, title: run.name, id: run.name, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model]) });
   }
   return out.filter((e) => Date.parse(e.at) >= since);
 }
