@@ -6,6 +6,7 @@
  */
 import { join } from "node:path";
 import { allJobs, loadRegistry, type Repo } from "../../jobs/lib/ledger.ts";
+import { lastReal } from "../../jobs/lib/job.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { itemStates, landedCommits, recentRepos } from "../../jobs/lib/status.ts";
 import { readDecision } from "../../jobs/lib/decision.ts";
@@ -88,7 +89,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const jobs = allJobs()
     .filter((runs) => runs[0].run.repo === repo.key && runs.some((e) => e.run.todo === n))
     .map((runs) => {
-      const r = runs.at(-1)!.run;
+      const r = lastReal(runs).run;
       const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
       return { name: r.name, state: r.state, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null };
     });

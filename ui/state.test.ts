@@ -222,6 +222,10 @@ describe("a land that found the job lock busy", () => {
     const s = state(now);
     expect(s.stuck.map((j) => j.name)).not.toContain("fac-7");
     expect(s.stuck.map((j) => j.name)).toEqual(["fac-3"]);
+    const card = s.running.find((j) => j.name === "fac-7")!;
+    expect(card.state).toBe("passed");
+    expect(card.reason).not.toBe("job lock busy");
+    expect(card.run.kind).toBe("agent");
     expect(facts(loadRegistry().fac).open[2]).toBe("passed");
     for (const id of ["20261027-000040-a", "20261027-000041-a"]) rmSync(join(jobsDir, id), { recursive: true });
   });

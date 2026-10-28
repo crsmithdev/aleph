@@ -1,7 +1,7 @@
 /** `GET /api/jobs`, `/api/jobs/:name`, `/api/jobs/:name/diff`: the Jobs and Job views' data. */
 import { git } from "../../jobs/lib/git.ts";
 import { loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
-import { allJobs, hasFile, latestFile, latestJob, view } from "../../jobs/lib/job.ts";
+import { allJobs, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
 import { jobProjector, type Job } from "../state.ts";
 import type { Routes } from "../server.ts";
 
@@ -76,7 +76,7 @@ export const routes: Routes = {
     const hit: { at: number; job: Job }[] = [];
     const { toJob } = jobProjector();
     for (const runs of allJobs()) {
-      const last = runs.at(-1)!.run;
+      const last = lastReal(runs).run;
       if ((project && last.repo !== project) || (repo && last.repo !== repo) || (state && last.state !== state)) continue;
       const times = runs.flatMap((e) => [e.run.started, e.run.ended]).map((t) => Date.parse(t ?? "")).filter((t) => !Number.isNaN(t));
       const at = Math.max(...times);

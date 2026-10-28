@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { factoryDir } from "../../jobs/lib/factory.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { allJobs, loadRegistry, type Entry, type Repo } from "../../jobs/lib/ledger.ts";
+import { lastReal } from "../../jobs/lib/job.ts";
 import { readFetched } from "../../todo/lib/store.ts";
 import { status, type Item } from "../../todo/lib/todo.ts";
 import { vaultDir, type Note } from "../../vault/lib/vault.ts";
@@ -97,7 +98,7 @@ export function project(key: string): Detail | null {
     commits: commits(repo),
     items: issues.map((i) => ({ id: i.id, title: i.title, labels: labels(i), priority: String(i.fm.priority ?? "medium") })),
     jobs: jobs.slice(-10).reverse().map((j) => {
-      const r = j.at(-1)!.run;
+      const r = lastReal(j).run;
       return { name: r.name, state: r.state, started: j[0].run.started, ...(r.ended ? { ended: r.ended } : {}), item: j.findLast((e) => e.run.todo !== undefined)?.run.todo ?? null };
     }),
     vault: notes.map((n) => ({ title: n.title, kind: String(n.fm.kind ?? ""), updated: String(n.fm.updated ?? "") }))

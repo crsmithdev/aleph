@@ -112,7 +112,7 @@ export interface JobView {
 }
 
 export function view(j: Job): JobView {
-  const last = j.at(-1)!;
+  const last = lastReal(j);
   const r = last.run;
   const latest = <K extends keyof Run>(k: K): Run[K] | undefined => r[k] ?? j.findLast((e) => e.run[k])?.run[k];
   const v: JobView = {

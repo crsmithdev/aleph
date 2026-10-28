@@ -77,6 +77,24 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
+describe("a land that found the job lock busy", () => {
+  test("the job's state is the run that counts; the run list keeps the land", async () => {
+    const ids = ["20261027-000040-a", "20261027-000041-a"];
+    run(ids[0], { job: "fac-7", name: "fac-7", repo: "fac", state: "passed", started: ago(3) });
+    run(ids[1], { kind: "land", job: "fac-7", name: "fac-7", repo: "fac", state: "failed", reason: "job lock busy", started: ago(2) });
+    try {
+      const d = await (await get("/api/jobs/fac-7")).json();
+      expect(d.state).toBe("passed");
+      expect(d.reason).toBeUndefined();
+      expect(d.runs.find((r: any) => r.id === ids[1])).toMatchObject({ state: "failed", reason: "job lock busy" });
+      expect((await (await get("/api/jobs?state=failed")).json()).map((j: any) => j.name)).not.toContain("fac-7");
+      expect((await (await get("/api/jobs?state=passed")).json()).map((j: any) => j.name)).toContain("fac-7");
+    } finally {
+      for (const id of ids) rmSync(join(jobsDir, id), { recursive: true });
+    }
+  });
+});
+
 describe("GET /api/jobs", () => {
   test("lists the jobs in the window, newest first", async () => {
     const jobs = await (await get("/api/jobs")).json();
