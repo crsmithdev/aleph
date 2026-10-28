@@ -21,7 +21,7 @@ import { checkName, checked, drop, land, recheck, refuse, Refusal, repoOf, runDi
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
 import { runReview2 } from "./lib/review2.ts";
-import { derive, FACTS_REF, itemStates, readFacts, type ItemState } from "./lib/status.ts";
+import { derive, facts, FACTS_REF, itemStates, landedIndex, readFacts, type ItemState } from "./lib/status.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -391,7 +391,13 @@ function statusRecent(): void {
   for (const { repo, doc } of listRecent()) {
     const open = (doc?.items ?? []).filter((i) => todos.status(i) === "open");
     if (!open.length) continue;
-    try { states.push(...itemStates(repo, { fetch: true, doc, items: open.map((i) => i.id) })); }
+    try {
+      fetchOrigin(repo.path);
+      const f = facts(repo, doc);
+      const main = `refs/remotes/origin/${f.main}`;
+      const landed = landedIndex(repo.path, main, repo.key);
+      for (const i of open) { const s = derive(repo.path, main, f, i.id, landed); if (s) states.push(s); }
+    }
     catch (e: any) { console.error(`warn: ${repo.key}: ${e?.message ?? e}`); }
   }
   if (rest.includes("--json")) return out(states);
