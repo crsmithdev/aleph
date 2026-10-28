@@ -184,6 +184,8 @@ beforeAll(() => {
       path: repo, sandbox: true, held: ["held/**"], autoland: false,
       checks: [{ name: "tests", run: 'if [ -f FAIL ]; then for i in 1 2 3; do echo "FAIL is present $i"; done; exit 1; fi' }, { name: "flaky", run: `for f in flaky/*; do m=${join(base, "flakym-")}$(basename $f); if [ ! -f $m ]; then touch $m; exit 1; fi; done`, when: ["flaky/**"] }, { name: "tree", run: `git rev-parse 'HEAD^{tree}' >> ${join(base, "trees")}; while [ -f ${join(base, "slowbase")} ]; do sleep 0.1; done` }],
     },
+    // Last, so the unknown-repo listing keeps its order up to fac.
+    aleph: { path: repo, checks: [], autoland: false },
   }));
 
   sh(base, "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "key.pem", "-out", "cert.pem", "-days", "1", "-subj", "/CN=tailnet");
@@ -448,14 +450,13 @@ describe("land", () => {
   test("a passed job lands as one commit on main, and the main checkout does not move", async () => {
     await job("shipit", "commit ship.txt");
     const before = remoteHead();
-    const head = sh(repo, "git", "rev-parse", "HEAD");
     const r = await aleph(["land", "shipit"]);
     expect(r.code).toBe(0);
     const s = state(r.json.run);
     expect(s).toMatchObject({ kind: "land", state: "landed", told: true });
     expect(remoteHead()).toBe(s.commit);
     expect(sh(base, "git", "--git-dir", remote, "log", "-1", "--format=%s%n%b%n%P", "main")).toBe(`add ship.txt\nJob: ${r.json.job}\n\n${before}`);
-    expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(head);
+    expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(s.commit);
     expect(existsSync(worktree("shipit"))).toBe(false);
     expect(branchExists("shipit")).toBe(false);
     expect(told).toContain("demo/shipit landed");
@@ -766,14 +767,13 @@ describe("a factory run", () => {
   test("the land pushes the tested tree with Item and Job trailers, and moves no checkout", async () => {
     const id = (await aleph(["todo", "add", "fac", "a factory item"])).json.added;
     const j = await fjob("fitem", "commit fitem.txt", {}, ["--todo", String(id)]);
-    const head = [sh(repo, "git", "rev-parse", "HEAD"), sh(repo, "git", "status", "--porcelain")];
     const r = await aleph(["land", "fitem"]);
     const s = state(r.json.run);
     expect(s).toMatchObject({ kind: "land", state: "landed" });
     expect(remoteGit("log", "-1", "--format=%B", "main").trim()).toBe(`add fitem.txt\n\nItem: fac-${id}\nJob: ${j.json.job}`);
     expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main").trim()).toBe(`Item: fac-${id}\nJob: ${j.json.job}`);
     expect(readFileSync(join(base, "trees"), "utf8").trim().split("\n").at(-1)).toBe(remoteGit("rev-parse", "main^{tree}"));
-    expect([sh(repo, "git", "rev-parse", "HEAD"), sh(repo, "git", "status", "--porcelain")]).toEqual(head);
+    expect([sh(repo, "git", "rev-parse", "HEAD"), sh(repo, "git", "status", "--porcelain")]).toEqual([remoteGit("rev-parse", "main"), ""]);
     expect(factoryBranch("fitem")).toBe(false);
     expect((await aleph(["todo", "show", "fac", String(id), "--json"])).json.status).toBe("done");
     expect(runsLeft()).toEqual([]);
@@ -1059,6 +1059,8 @@ describe("a factory run", () => {
   });
 
   test("the report hook prints JSON for SessionStart, and nothing when nothing is new", async () => {
+    // Lands move the main checkout now; put it back before the commit that added held/x.txt.
+    sh(repo, "git", "reset", "-q", "--hard", `${sh(repo, "git", "log", "-1", "--format=%H", "--diff-filter=A", "origin/main", "--", "held/x.txt")}~1`);
     const behind = await aleph(["report", "--hook"]);
     expect(behind.json.hookSpecificOutput.additionalContext).toMatch(/repo is \d+ commits? behind origin\/main; git pull brings:\n[\s\S]*held\/x\.txt/);
     sh(repo, "git", "merge", "-q", "--ff-only", "origin/main");
@@ -1756,4 +1758,51 @@ describe("prospective memory", () => {
     expect(readFileSync(join(base, "factory", "seen"), "utf8")).toContain(`fac-${ids[0]}`);
     for (const id of [...ids, future]) await aleph(["todo", "drop", "fac", String(id), "test over"]);
   }, 60_000);
+});
+
+describe("land follows main", () => {
+  const land = async (name: string, action: string, repoKey = "demo", extra: Record<string, string> = {}) => {
+    await job(name, action, {}, repoKey);
+    return aleph(["land", name], extra);
+  };
+
+  test("a clean main checkout moves to the landed commit", async () => {
+    const r = await land("follow1", "commit follow1.txt");
+    expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(state(r.json.run).commit);
+    expect(file(r.json.run, "land.log")).toContain("main checkout updated");
+  });
+
+  test("a tracked change in the main checkout keeps it where it is, and the land still lands", async () => {
+    writeFileSync(join(repo, "README"), "edited\n");
+    const head = sh(repo, "git", "rev-parse", "HEAD");
+    const r = await land("follow2", "commit follow2.txt");
+    expect(state(r.json.run).state).toBe("landed");
+    expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(head);
+    expect(file(r.json.run, "land.log")).toContain("README");
+    sh(repo, "git", "checkout", "README");
+    sh(repo, "git", "merge", "-q", "--ff-only", "origin/main");
+  });
+
+  test("a main checkout on another branch is not moved, and the log says which", async () => {
+    sh(repo, "git", "checkout", "-q", "-b", "elsewhere");
+    const r = await land("follow3", "commit follow3.txt");
+    expect(state(r.json.run).state).toBe("landed");
+    expect(file(r.json.run, "land.log")).toContain("it is on elsewhere");
+    sh(repo, "git", "checkout", "-q", "main");
+    sh(repo, "git", "branch", "-q", "-D", "elsewhere");
+    sh(repo, "git", "merge", "-q", "--ff-only", "origin/main");
+  });
+
+  test("aleph-ui restarts when an aleph land changes ui/, and only then", async () => {
+    const bin = join(base, "systemctl-bin");
+    const rec = join(base, "systemctl.args");
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(join(bin, "systemctl"), `#!/bin/sh\necho "$@" >> ${rec}\n`, { mode: 0o755 });
+    const extra = { PATH: `${bin}:${process.env.PATH}` };
+    await land("follow4", "commit docs-only.txt", "aleph", extra);
+    expect(existsSync(rec)).toBe(false);
+    const r = await land("follow5", "commit ui/x", "aleph", extra);
+    expect(readFileSync(rec, "utf8")).toBe("--user try-restart aleph-ui.service\n");
+    expect(file(r.json.run, "land.log")).toContain("aleph-ui restarted");
+  });
 });

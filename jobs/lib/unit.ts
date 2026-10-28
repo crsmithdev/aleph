@@ -8,7 +8,7 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { readHidden, writeList } from "../../todo/lib/store.ts";
-import { git } from "./git.ts";
+import { followMain, git } from "./git.ts";
 import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
@@ -228,8 +228,8 @@ function landMessage(subjects: string[], run: Run, repo: Repo): string {
  * Land a job: merge its branch onto origin/<main> in memory, run the checks on
  * that tree, and push one squash commit of exactly that tree with a plain
  * push. A refused push merges again, at most RELANDS times. The job's issue
- * closes in the work store after the push. No checkout of the repo
- * moves, and every failure leaves the remote as it was.
+ * closes in the work store after the push, and the main checkout follows
+ * origin/<main> if it is clean. Every failure leaves the remote as it was.
  */
 async function land(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ verdict: Verdict; code: number }> {
   const main = repo.main;
@@ -253,6 +253,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
       if (pushed) {
         log(`already on main as ${pushed}`);
         removeBranch(repo, run);
+        followCheckout(repo, changedBy(repo, pushed), log);
         return { verdict: { state: "landed", commit: pushed }, code: 0 };
       }
       // A commit by hand, or by another job, that names the item: this land must not add a second one.
@@ -296,6 +297,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         if (todo) log(todo === "done" ? `todo ${run.todo} done` : `todo ${run.todo} not closed: ${todo}`);
         if (checkItem !== undefined) log(`todo ${checkItem} holds the manual check`);
         removeBranch(repo, run);
+        followCheckout(repo, changed, log);
         return { verdict: { state: "landed", commit: c.out, checkItem }, code: 0 };
       }
       if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
@@ -307,6 +309,25 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
     releaseRepo?.();
     release();
   }
+}
+
+/** The paths a commit changed. */
+function changedBy(repo: Repo, commit: string): string[] {
+  return git(repo.path, "diff", "--name-only", `${commit}^`, commit).out.split("\n").filter(Boolean);
+}
+
+/**
+ * After the land is on origin/<main>: fast-forward the repo's main checkout,
+ * and restart aleph-ui when the land changed ui/. Neither fails the land; the
+ * log says what happened. A checkout that did not move still holds the old code, so no restart.
+ */
+function followCheckout(repo: Repo, changed: string[], log: (step: string, out?: string) => void): void {
+  const why = followMain(repo.path, repo.main);
+  if (why) { log(why); return; }
+  log("main checkout updated");
+  if (repo.key !== "aleph" || !changed.some((f) => f.startsWith("ui/"))) return;
+  const r = Bun.spawnSync(["systemctl", "--user", "try-restart", "aleph-ui.service"], { stdout: "pipe", stderr: "pipe" });
+  log(r.exitCode === 0 ? "aleph-ui restarted" : `aleph-ui not restarted: ${(r.stderr.toString() || r.stdout.toString() || `exit ${r.exitCode}`).trim()}`);
 }
 
 /** The checks on `commit`, in the job's worktree, which is back on its branch after. */

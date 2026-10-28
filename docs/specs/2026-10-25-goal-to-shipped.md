@@ -177,8 +177,9 @@ which is how Ona's factory ended in chores. The rule:
 ## How the factory runs
 
 - **Always on, in parallel with Chris.** Workers never touch his ports,
-  servers or checkouts. A land changes only `origin/main`; Chris's checkout
-  moves when he runs `git pull`, and for aleph that pull is his review. The
+  servers or checkouts. A land pushes to `origin/main`, then fast-forwards
+  the repo's main checkout if it is clean, and restarts aleph-ui when an aleph
+  land changes `ui/`. The
   seed starts runs from a 30-minute timer, with a cap of 12 runs in any 24
   hours, and idles when no goal is open.
 - **Sandbox.** Each worker and each check runs under `srt`
