@@ -41,7 +41,7 @@ describe("cards", () => {
     const h = landCard(land, "full", now);
     expect(h).toContain('<article class="job-card big del"><div class="ih"><span class="id">aleph-8</span><h3>Landed one</h3><span class="badge done">Landed</span></div>');
     expect(h).toContain("<dt>Commit</dt><dd><code>abcdef1</code></dd>");
-    expect(h).toContain("<dt>Tests</dt><dd>71 s ✓</dd>");
+    expect(h).not.toContain("<dt>Tests</dt>");
   });
 
   test("the triage card is in the land card's style and names the outcome", () => {

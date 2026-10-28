@@ -20,6 +20,14 @@ export const clock12 = (iso) => {
 };
 export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
 
+/** "4:12": minutes and seconds from `from` to `to` (ISO strings); minutes may pass 59. */
+export function elapsed(from, to) {
+  const ms = Date.parse(to) - Date.parse(from);
+  if (!(ms >= 0)) return "0:00";
+  const t = Math.floor(ms / 1000);
+  return `${Math.floor(t / 60)}:${pad(t % 60)}`;
+}
+
 /** "12 min", "2 h 5 min": the span from `from` to `to` (ISO strings). */
 export function span(from, to) {
   const ms = Date.parse(to) - Date.parse(from);

@@ -1,9 +1,9 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { actMessages, clock, denyReasons, clock12, cmd, diffHtml, esc, money, openDiffs, span } from "../lib.js";
+import { actMessages, clock, clock12, denyReasons, diffHtml, elapsed, esc, money, openDiffs } from "../lib.js";
 import { proseDecision } from "../decision.js";
-import { act, actMsg, checkFacts, fact, itemId, landCard, shell as jobCard, title, trailerLine, triageCard } from "./cards.js";
+import { act, actMsg, checkFacts, fact, itemId, landCard, shell as jobCard, title, trailerLine } from "./cards.js";
 
 export const view = {
   path: "/",
@@ -16,8 +16,7 @@ export const view = {
     `<div class="page">${renderMetrics(s)}<p class="lede">${renderLede(s)}</p><div class="head"><p class="asof">${renderAsOf(s)}</p>${renderControls(s)}</div>` +
     `<section id="issues" class="attention" aria-labelledby="h-issues">${renderIssues(s)}</section>` +
     `<div class="cols"><section id="lands" aria-labelledby="h-lands">${renderLands(s)}</section>` +
-    `<section id="jobs" aria-labelledby="h-jobs">${renderJobs(s)}</section></div>` +
-    `<section id="triage" class="wide" aria-labelledby="h-triage">${renderTriage(s)}</section></div>`,
+    `<section id="jobs" aria-labelledby="h-jobs">${renderJobs(s)}</section></div></div>`,
 };
 
 /** The count of a section: `N / cap` where a cap applies. */
@@ -40,23 +39,17 @@ function statLines(stat) {
   return esc(kept.filter((l) => l.includes(" | ")).join("\n")) + `\n<b>+${files.length - STAT_FILES} more files</b>` + (summary.length ? "\n" + esc(summary.join("\n")) : "");
 }
 
-/** "12 · 9/day": a 24-hour count and the 7-day daily average under it. */
-const velocity = (v) => {
-  const avg = Math.round((v?.avg ?? 0) * 10) / 10;
-  return `${v?.day ?? 0} · ${avg}/day`;
-};
-
-/** The row of metric cards: Issues (every open issue), Lands, Running, Waiting; Landed and Triaged are velocity cards. */
+/** The row of metric cards: Issues (every open issue), Lands (active), Running / cap, Queued, Untriaged. */
 export function renderMetrics(s) {
   const card = (href, k, n) => `<a class="metric" href="#${href}"><span class="k">${k}</span><span class="v">${n}</span></a>`;
-  const vcard = (href, k, v) => `<a class="metric" href="#${href}"><span class="k">${k}</span><span class="v">${v?.day ?? 0}</span><span class="sub">${velocity(v)}</span></a>`;
+  const lands = s.landing ?? s.delivered.filter((j) => j.state === "running").length;
+  const cap = s.factory?.liveCap > 0 ? ` <span class="of">/ ${s.factory.liveCap}</span>` : "";
   return `<div class="metrics">` +
     card("issues", "Issues", s.openIssues ?? (s.issues ?? []).length) +
-    card("lands", "Lands", s.delivered.length) +
-    card("jobs", "Running", s.running.length) +
-    card("jobs", "Waiting", s.waiting.length) +
-    vcard("lands", "Landed", s.velocity?.landed) +
-    vcard("triage", "Triaged", s.velocity?.triaged) + `</div>`;
+    card("lands", "Lands", lands) +
+    card("jobs", "Running", `${s.running.length}${cap}`) +
+    card("jobs-queued", "Queued", s.waiting.length) +
+    card("issues", "Untriaged", s.newIssues ?? (s.issues ?? []).length) + `</div>`;
 }
 
 export const FINE = ["Everything is fine.", "All is well.", "Everything is running smoothly.", "The factory is humming along."];
@@ -109,18 +102,13 @@ function runningCard(s, j) {
   const run = j.run ?? { kind: "agent", started: j.started };
   const kind = run.kind === "agent" ? "worker" : run.kind;
   const over = run.kind === "agent" && Date.parse(s.now) - Date.parse(run.started) > BOX_MIN * 60_000;
-  const ago = over ? `<span class="over">${esc(span(run.started, s.now))} ago, past the time box</span>` : `${esc(span(run.started, s.now) || "0 min")} ago`;
   return jobCard("small", "run-row", `<div class="ih">${itemId(j)}<span class="t">${esc(j.item?.title || j.name)}</span></div>` +
-    `<div class="run-meta"><span class="badge run">${esc(kind)}${j.phase && j.phase !== kind ? ` \u00b7 ${esc(j.phase)}` : ""}</span> <span class="num">Started ${esc(clock(run.started))}, ${ago}</span></div>`);
+    `<div class="run-meta"><span class="badge run">${esc(kind)}${j.phase && j.phase !== kind ? ` \u00b7 ${esc(j.phase)}` : ""}</span> <span class="num">Started ${esc(clock12(run.started))} \u00b7 ` +
+    `<span class="elapsed" data-since="${esc(run.started)}">${esc(elapsed(run.started, s.now))}</span> elapsed</span>` +
+    `${over ? ` <span class="over">past the time box</span>` : ""}</div>`);
 }
 
-const waitingCard = (w) => jobCard("small", "run-row", `<div class="ih"><span class="id">${esc(w.repo)}-${esc(w.id)}</span><span class="t">${esc(w.title)}</span></div><div class="run-meta">Waiting to start</div>`);
-
-/** Triage: runs in progress first, then the latest finished, with their outcome. */
-export function renderTriage(s) {
-  const rows = (s.triage ?? []).map((t) => triageCard(t, "full", s.now)).join("");
-  return section("triage", "Triage", (s.triage ?? []).length, rows ? cards(rows) : empty("No issue has been triaged yet."));
-}
+const queuedCard = (w) => jobCard("small", "run-row", `<div class="ih"><span class="id">${esc(w.repo)}-${esc(w.id)}</span><span class="t">${esc(w.title)}</span></div><div class="run-meta">Queued</div>`);
 
 /** Lands: land runs in progress first, then the latest landed. */
 export function renderLands(s) {
@@ -128,20 +116,12 @@ export function renderLands(s) {
   return section("lands", "Lands", s.delivered.length, rows ? cards(rows) : empty("Nothing has landed yet."));
 }
 
-/** The job groups that need nothing from Chris (those that do are in the Needs you section): [id, title, count, cards html]. */
-function jobGroups(s) {
-  return [
-    ["running", "Running", s.running.length, s.running.map((j) => runningCard(s, j)).join("")],
-    ["waiting", "Waiting", s.waiting.length, s.waiting.map(waitingCard).join("")],
-  ];
-}
-
-/** Jobs by state: running, waiting; a group with no job is left out. */
+/** Jobs: the running ones (when there are any), then the Queued list, always. */
 export function renderJobs(s) {
-  const groups = jobGroups(s).filter(([, , n]) => n);
-  const total = groups.reduce((a, [, , n]) => a + n, 0);
-  const body = groups.map(([id, t, n, html]) => `<div class="grp" id="jobs-${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${cards(html)}</div>`).join("");
-  return section("jobs", "Jobs", total, body || empty("No job is open and no goal waits."), 0);
+  const group = (id, t, n, html) => `<div class="grp" id="jobs-${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${html}</div>`;
+  const body = (s.running.length ? group("running", "Running", s.running.length, cards(s.running.map((j) => runningCard(s, j)).join(""))) : "") +
+    group("queued", "Queued", s.waiting.length, s.waiting.length ? cards(s.waiting.map(queuedCard).join("")) : empty("Nothing queued."));
+  return section("jobs", "Jobs", s.running.length + s.waiting.length, body, 0);
 }
 
 /** Lines of the factory's own trouble that are errors: health (a red main among them), the hold, a failed probe; each once. The hold is left out when its stuck run has a row of its own. */

@@ -134,6 +134,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .metric:hover { border-color: var(--muted); }
 .metric .k { color: var(--muted); font-size: 12.5px; }
 .metric .v { font: 600 32px/1.1 var(--num); font-variant-numeric: tabular-nums; }
+.metric .v .of { color: var(--muted); font-size: 0.6em; font-weight: 500; }
 .metric .sub { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .agent { margin: 0; font-size: 12.5px; color: var(--muted); }
 .agent.on { color: var(--ink); font-weight: 600; }
@@ -143,7 +144,7 @@ main { min-width: 0; }
 .page { max-width: 1280px; margin: 0 auto; padding: 28px 24px 64px; }
 .lede {
   font: 400 26px/1.35 var(--display); letter-spacing: -0.01em;
-  margin: 0 0 6px; max-width: 46ch; text-wrap: balance;
+  margin: 0 0 6px; 
 }
 .lede a { text-decoration: none; border-bottom: 1px solid var(--rule); }
 .lede a:hover { border-bottom-color: currentColor; }
@@ -183,6 +184,8 @@ a.act { text-decoration: none; display: inline-block; }
 section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
 .cards > * { min-width: 0; margin: 0; }
+#lands .cards { grid-template-columns: minmax(0, 1fr); }
+.job-card .ih .id { white-space: nowrap; flex: none; }
 .grp + .grp { margin-top: 16px; }
 .grp h3 { display: flex; align-items: baseline; gap: 8px; font: 600 13px/1.3 var(--sans); color: var(--muted); margin: 0 0 8px; }
 .grp h3 .count { font: 500 12.5px var(--num); }
@@ -552,6 +555,14 @@ pre.stat b { color: var(--need); }
     load(shown, true);
     if (m.view.refresh) timer = setInterval(() => load(m, false), m.view.refresh * 1000);
   }
+
+  // Elapsed times tick every second between refreshes: m:ss since the element's data-since.
+  setInterval(() => {
+    document.querySelectorAll("#view .elapsed[data-since]").forEach((el) => {
+      const t = Math.max(0, Math.floor((Date.now() - Date.parse(el.dataset.since)) / 1000));
+      el.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+    });
+  }, 1000);
 
   // In-page anchors (#needs) scroll to their element instead of routing.
   document.addEventListener("click", (e) => {

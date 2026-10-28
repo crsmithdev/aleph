@@ -13,9 +13,22 @@ export const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
 /** The checks of a run as facts: `Tests 71 s ✓`. */
 export const checkFacts = (j) =>
   (j.checks || []).map((c) => fact(c.name.charAt(0).toUpperCase() + c.name.slice(1), `${esc(String(c.seconds))} s ${c.ok ? "✓" : "✗"}`)).join("");
+/** "10/28 4:28 am" from a job folder id like 20261028-042822-aleph-aleph-240-agent: the id's own local time. */
+const idStart = (m) => {
+  const h = Number(m[4]);
+  return `${Number(m[2])}/${Number(m[3])} ${h % 12 || 12}:${m[5]} ${h < 12 ? "am" : "pm"}`;
+};
+const KINDS = { agent: "agent run", land: "land", triage: "triage" };
+/** One trailer as text: Item shows its value alone; a Job folder id is parsed into its run kind and start and links to the job page (raw id in the title). */
+const trailer = (t, j) => {
+  if (t.key === "Item") return esc(t.value);
+  const m = t.key === "Job" && /^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)\d\d-.+-([a-z]+)$/.exec(t.value);
+  if (!m) return `${esc(t.key)} ${esc(t.value)}`;
+  return `<a href="#/jobs/${encodeURIComponent(j.name)}" title="${esc(t.value)}">${esc(KINDS[m[6]] ?? m[6])}, ${esc(idStart(m))}</a>`;
+};
 /** The trailers of a job as one small line; empty when it has none. */
 export const trailerLine = (j) =>
-  j.trailers?.length ? `<p class="trailers-line">${j.trailers.map((t) => `${esc(t.key)} ${esc(t.value)}`).join(" · ")}</p>` : "";
+  j.trailers?.length ? `<p class="trailers-line">${j.trailers.map((t) => trailer(t, j)).join(" · ")}</p>` : "";
 /** One card shell. */
 export const shell = (size, cls, inner, tag = "article") => `<${tag} class="job-card ${size} ${cls}">${inner}</${tag}>`;
 
@@ -63,7 +76,7 @@ export function landCard(j, size = "full", now = new Date().toISOString()) {
     });
   }
   return shell("big", "del", `<div class="ih">${itemId(j)}${title(j)}<span class="badge ${landed ? "done" : "run"}">${landed ? "Landed" : "Landing"}</span></div>` +
-    `<dl class="facts">${j.commit ? fact("Commit", commitHtml(j)) : ""}${landed && j.ended ? fact("Landed", esc(landedAt(j.ended, now))) : ""}${!landed ? fact("Started", esc(clock(j.started))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${checkFacts(j)}</dl>` +
+    `<dl class="facts">${j.commit ? fact("Commit", commitHtml(j)) : ""}${landed && j.ended ? fact("Landed", esc(landedAt(j.ended, now))) : ""}${!landed ? fact("Started", esc(clock(j.started))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}</dl>` +
     trailerLine(j) +
     (j.check === "open" || actMessages.has(j.name) ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${actMsg(j.name)}</div>` : ""));
 }
