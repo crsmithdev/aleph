@@ -236,20 +236,21 @@ export function renderContents(d, o = {}) {
 
 /** The detail view's pieces, shared with views/issue.js. */
 export function renderIssue(d) {
-  const facts = Object.entries(d.frontmatter ?? {}).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(Array.isArray(v) ? v.map(labelName).join(", ") : v)}</dd></div>`).join("");
+  const fm = d.frontmatter ?? {};
+  const facts = Object.entries(fm).filter(([k]) => k !== "labels").map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(Array.isArray(v) ? v.map(labelName).join(", ") : v)}</dd></div>`).join("");
   const notes = d.notes.length ? `<ul class="notes">${d.notes.map((n) => `<li>${esc(n.replace(/^- /, ""))}</li>`).join("")}</ul>` : empty("No notes.");
   const jobs = d.jobs.length
-    ? `<ul class="jobs">${d.jobs.map((j) => `<li><a href="#/jobs/${encodeURIComponent(j.name)}">${esc(j.name)}</a> ${badge(j.state)} <small class="quiet">${esc(j.started)}</small></li>`).join("")}</ul>`
+    ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Job</th><th>State</th><th>Started</th></tr></thead><tbody>${d.jobs.map((j) => `<tr><td>${idLink(j.name, `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${stateBadge(j.state)}</td><td class="time">${esc(when(j.started))}</td></tr>`).join("")}</tbody></table></div>`
     : empty("No job has worked on this.");
   const commits = d.commits.length
-    ? `<ul class="commits">${d.commits.map((c) => {
-      const sha = `<code>${esc(c.hash.slice(0, 7))}</code>`;
-      return `<li>${c.commitUrl ? `<a href="${esc(c.commitUrl)}">${sha}</a>` : sha} ${esc(c.subject)} <small class="quiet">${esc(c.date)}</small></li>`;
-    }).join("")}</ul>`
+    ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Commit</th><th>Subject</th><th>Date</th></tr></thead><tbody>${d.commits.map((c) => {
+      const sha = c.hash.slice(0, 7);
+      return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td><td class="time">${esc(when(c.date))}</td></tr>`;
+    }).join("")}</tbody></table></div>`
     : empty("No commit on main names this issue in its trailers.");
-  return `<div class="page"><p><a href="#/contents">Contents</a></p><div class="ih"><span class="id">${esc(ref(d))}</span><h1>${esc(d.title)}</h1>` +
-    `${d.derived ? stateBadge(d.derived.state) : badge(d.status)}</div>` +
-    (d.derived ? `<p class="quiet">${esc(d.derived.why)}</p>` : "") +
+  return `<div class="page"><p class="quiet"><a href="#/contents">Contents</a></p>` +
+    pageHead(d.title, { count: ref(d), aside: d.derived ? stateBadge(d.derived.state) : badge(d.status) }) +
+    (d.derived ? `<p class="quiet">${esc(d.derived.why)}</p>` : "") + (fm.labels?.length ? `<p>${chips(fm.labels)}</p>` : "") +
     `<dl class="facts">${facts}</dl><section class="body">${md(d.body)}</section>` +
     `<div class="sh"><h2>Notes</h2></div>${notes}<div class="sh"><h2>Jobs</h2></div>${jobs}<div class="sh"><h2>Commits</h2></div>${commits}</div>`;
 }

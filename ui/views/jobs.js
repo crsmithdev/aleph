@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (one job's runs, result, checks,
 // logs, and a diff loaded on demand). Render functions take the /api/jobs
 // objects and return HTML strings, with no DOM, so tests can call them.
-import { STATES, badge, clock, cmd, empty, esc, filterBar, idLink, md, money, pageHead, pager, span, when } from "../lib.js";
+import { STATES, badge, cmd, empty, esc, filterBar, idLink, md, money, pageHead, pager, span, when } from "../lib.js";
 
 
 /** The list's data URL: the filters in the hash go to the API. */
@@ -38,14 +38,6 @@ const href = (path, params = {}) => {
   const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v));
   return `#${path}${q.toString() ? `?${q}` : ""}`;
 };
-
-const JOB_STYLE = `<style>
-dl.facts.job-facts { margin-bottom: 20px; }
-.runs { display: grid; gap: 6px; list-style: none; margin: 0 0 20px; padding: 0; }
-.runs .run { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; font: 13px var(--sans); }
-.runs .run > span { white-space: nowrap; }
-.runs .reason { white-space: normal; flex-basis: 100%; }
-</style>`;
 
 const PAGE = 50;
 
@@ -89,14 +81,13 @@ export function mountJobs(root, _jobs, f = {}) {
 }
 
 export function renderRuns(runs) {
+  // Columns: kind (id), reason (title), state, model, then took, cost, started.
   const rows = runs.map((r) =>
-    `<li class="run run-${esc(r.kind)}"><span class="kind">${esc(r.kind)}</span>${badge(r.state)}` +
-    `<span class="start num">${esc(clock(r.started))}</span>` +
-    `${r.ended ? `<span class="took num">${esc(span(r.started, r.ended))}</span>` : ""}` +
-    `${r.cost !== undefined ? `<span class="cost num">${esc(money(r.cost))}</span>` : ""}` +
-    `${r.model ? `<span class="model quiet">${esc(r.model)}</span>` : ""}` +
-    `${r.reason ? `<span class="reason quiet">${esc(r.reason)}</span>` : ""}</li>`).join("");
-  return `<div class="sh"><h2>Runs</h2><span class="count">${runs.length}</span></div><ol class="runs">${rows}</ol>`;
+    `<tr class="run run-${esc(r.kind)}"><td>${esc(r.kind)}</td><td class="wide" title="${esc(r.reason ?? "")}">${esc(r.reason ?? "")}</td><td>${badge(r.state)}</td><td>${esc(r.model ?? "")}</td>` +
+    `<td class="num">${r.ended ? esc(span(r.started, r.ended)) : ""}</td><td class="num">${r.cost !== undefined ? esc(money(r.cost)) : ""}</td>` +
+    `<td class="time">${esc(when(r.started))}</td></tr>`).join("");
+  return `<div class="sh"><h2>Runs</h2><span class="count">${runs.length}</span></div>` +
+    `<div class="tscroll"><table class="tbl"><thead><tr><th>Run</th><th>Reason</th><th>State</th><th>Model</th><th class="num">Took</th><th class="num">Cost</th><th>Started</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 const list = (title, items, open = false) => items.length
@@ -106,10 +97,10 @@ const log = (title, body) => body ? `<div class="sh"><h2>${esc(title)}</h2></div
 
 export function renderJob(j) {
   const checks = (j.checks ?? []).map((c) => `<li>${c.ok ? "✓" : "✗"} ${esc(c.name)} <span class="quiet">${esc(c.seconds)} s</span></li>`).join("");
-  return `${JOB_STYLE}<div class="page"><p><a href="#/jobs">← Jobs</a></p>` +
-    `<div class="ih"><span class="id">${esc(j.name)}</span><h1>${esc(j.item?.title || j.name)}</h1>${badge(j.state)}</div>` +
-    `<dl class="facts job-facts">${fact("Repo", esc(j.repo))}${fact("Started", esc(clock(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}` +
-    `${j.model ? fact("Model", esc(j.model)) : ""}${j.commit ? fact("Commit", j.commitUrl ? `<a href="${esc(j.commitUrl)}"><code>${esc(j.commit.slice(0, 7))}</code></a>` : `<code>${esc(j.commit.slice(0, 7))}</code>`) : ""}` +
+  return `<div class="page"><p class="quiet"><a href="#/jobs">← Jobs</a></p>` +
+    pageHead(j.item?.title || j.name, { count: j.name, aside: badge(j.state) }) +
+    `<dl class="facts">${fact("Repo", esc(j.repo))}${fact("Started", esc(when(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}` +
+    `${j.model ? fact("Model", esc(j.model)) : ""}${j.commit ? fact("Commit", j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`) : ""}` +
     `${j.trace ? fact("Trace", `<a href="${esc(j.trace)}">Langfuse</a>`) : ""}</dl>` +
     (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
     renderRuns(j.runs ?? []) +

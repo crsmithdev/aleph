@@ -1,8 +1,7 @@
 // The project card and detail renderers, shared by views/project.js. The list of
 // projects is part of views/contents.js.
-import { empty, esc, labelName } from "../lib.js";
+import { badge, chips, empty, esc, idLink, pageHead, when } from "../lib.js";
 
-const day = (iso) => (Number.isNaN(Date.parse(iso)) ? "" : new Date(iso).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }));
 const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
@@ -16,7 +15,7 @@ export function renderBaseline(p) {
 export function renderFacts(p) {
   return `<dl class="facts">` +
     fact("Open issues", String(p.openItems)) +
-    fact("Last landed", p.lastLanded ? `<code>${esc(p.lastLanded.name)}</code> ${esc(day(p.lastLanded.at))}` : "none yet") +
+    fact("Last landed", p.lastLanded ? `<code>${esc(p.lastLanded.name)}</code> ${esc(when(p.lastLanded.at))}` : "none yet") +
     fact("Behind origin", p.behind === null ? "unknown" : p.behind === 0 ? "up to date" : plural(p.behind, "commit")) +
     renderBaseline(p) + fact("Vault notes", String(p.notes)) + `</dl>`;
 }
@@ -30,16 +29,19 @@ export function renderCard(p) {
 
 export function renderDetail(p) {
   const sec = (title, n, body) => `<div class="sh"><h2>${esc(title)}</h2><span class="count">${n}</span></div>${body}`;
+  const table = (heads, rows) => `<div class="tscroll"><table class="tbl"><thead><tr>${heads.map(([h, c]) => `<th${c ? ` class="${c}"` : ""}>${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
   const commits = p.commits.map((c) => {
-    const sha = esc(c.hash.slice(0, 7));
-    return `<li><span class="tm">${esc(day(c.date))}</span> ${c.commitUrl ? `<a href="${esc(c.commitUrl)}"><code>${sha}</code></a>` : `<code>${sha}</code>`} ${esc(c.subject)}${c.item ? ` <span class="id">${esc(c.item)}</span>` : ""}</li>`;
-  }).join("");
-  const items = p.items.map((i) => `<li><span class="id">${esc(p.key)}-${i.id}</span> ${esc(i.title)}${i.labels.map((l) => ` <span class="badge run">${esc(labelName(l))}</span>`).join("")}</li>`).join("");
-  const jobs = p.jobs.map((j) => `<li><span class="id">${esc(j.name)}</span> <span class="badge ${j.state === "landed" ? "done" : "run"}">${esc(j.state)}</span> <span class="tm">${esc(day(j.started))}</span></li>`).join("");
-  const notes = p.vault.map((n) => `<li>${esc(n.title)} <span class="badge run">${esc(n.kind)}</span> <span class="tm">${esc(n.updated)}</span></li>`).join("");
-  return `<div class="page"><p><a href="#/contents?type=project">All projects</a></p>${renderCard(p)}` +
-    sec("Recent commits", p.commits.length, commits ? `<ul class="ticks">${commits}</ul>` : empty("No commits on origin.", "The checkout has not fetched origin yet.")) +
-    sec("Open issues", p.items.length, items ? `<ul class="ticks">${items}</ul>` : empty("No open issue.")) +
-    sec("Jobs", p.jobs.length, jobs ? `<ul class="ticks">${jobs}</ul>` : empty("No job has run here.")) +
-    sec("Vault notes", p.vault.length, notes ? `<ul class="ticks">${notes}</ul>` : empty("No vault note has this scope.")) + `</div>`;
+    const sha = c.hash.slice(0, 7);
+    return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>` +
+      `<td>${c.item ? esc(c.item) : ""}</td><td class="time">${esc(when(c.date))}</td></tr>`;
+  });
+  const items = p.items.map((i) => `<tr><td>${idLink(`${p.key}-${i.id}`, `#/issues/${encodeURIComponent(p.key)}/${i.id}`)}</td><td class="wide" title="${esc(i.title)}">${esc(i.title)}</td><td>${chips(i.labels)}</td></tr>`);
+  const jobs = p.jobs.map((j) => `<tr><td>${idLink(j.name, `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${badge(j.state)}</td><td class="time">${esc(when(j.started))}</td></tr>`);
+  const notes = p.vault.map((n) => `<tr><td class="wide">${esc(n.title)}</td><td>${chips([n.kind])}</td><td class="time">${esc(when(n.updated))}</td></tr>`);
+  return `<div class="page"><p class="quiet"><a href="#/contents?type=project">All projects</a></p>` +
+    pageHead(p.key, { count: p.factory ? "Factory" : "Plain repo", aside: `<code>${esc(p.path)}</code>` }) + renderFacts(p) +
+    sec("Recent commits", p.commits.length, commits.length ? table([["Commit"], ["Subject"], ["Issue"], ["Date"]], commits) : empty("No commits on origin.", "The checkout has not fetched origin yet.")) +
+    sec("Open issues", p.items.length, items.length ? table([["Issue"], ["Title"], ["Labels"]], items) : empty("No open issue.")) +
+    sec("Jobs", p.jobs.length, jobs.length ? table([["Job"], ["State"], ["Started"]], jobs) : empty("No job has run here.")) +
+    sec("Vault notes", p.vault.length, notes.length ? table([["Title"], ["Kind"], ["Updated"]], notes) : empty("No vault note has this scope.")) + `</div>`;
 }

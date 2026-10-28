@@ -228,19 +228,25 @@ describe("render", () => {
   });
   test("each run field is its own element in its row", () => {
     const h = v.renderRuns([{ id: "1", kind: "worker", state: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed" }]);
-    const row = h.match(/<li class="run run-worker">.*?<\/li>/)?.[0] ?? "";
-    const fields = [...row.matchAll(/<span class="([^"]+)">([^<]*)<\/span>/g)].map((m) => m[1]);
-    expect(fields).toEqual(["kind", "badge stuck", "start num", "took num", "cost num", "model quiet", "reason quiet"]);
-    expect(row).toContain('<span class="kind">worker</span>');
-    expect(row).toContain('<span class="badge stuck">failed</span>');
-    expect(row).toContain('<span class="took num">');
-    expect(row).toContain('<span class="cost num">$1.03</span>');
-    expect(row).toContain('<span class="model quiet">opus</span>');
-    expect(row).toContain('<span class="reason quiet">checks failed</span>');
+    const row = h.match(/<tr class="run run-worker">.*?<\/tr>/)?.[0] ?? "";
+    const cells = [...row.matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((m) => m[1]);
+    expect(cells.slice(0, 5)).toEqual(["worker", "checks failed", '<span class="badge stuck">failed</span>', "opus", expect.stringMatching(/\d/)]);
+    expect(cells[5]).toBe("$1.03");
+    expect(h).toContain('<table class="tbl">');
   });
   test("diff lines are coloured and escaped", () => {
     const h = v.renderDiff("--- a\n+++ b\n+x<y\n-z");
     expect(h).toContain('<span class="add">+x&lt;y</span>');
     expect(h).toContain('<span class="del">-z</span>');
   });
+});
+
+test("the issue and job pages use pageHead, table.tbl, idLink and when", async () => {
+  const { renderIssue } = require("./views/contents.js");
+  const issue = renderIssue({ repo: "fac", id: 9, title: "T", status: "open", frontmatter: { labels: ["ui"] }, body: "", notes: [], jobs: [{ name: "fac-9", state: "landed", started: "2026-10-01T10:00:00" }], commits: [{ hash: "abcdef123", subject: "s", date: "2026-10-01T10:00:00", commitUrl: "http://x/c" }] });
+  for (const t of ['<header class="ph">', '<table class="tbl">', 'class="idl"', 'class="chips"', "Oct 01 10:00"]) expect(issue).toContain(t);
+  expect(issue).not.toContain('class="ih"');
+  const job = require("./views/jobs.js").renderJob({ name: "fac-9", repo: "fac", item: { title: "T" }, state: "landed", started: "2026-10-01T10:00:00", runs: [] });
+  for (const t of ['<header class="ph">', "Oct 01 10:00"]) expect(job).toContain(t);
+  expect(job).not.toContain("<style>");
 });

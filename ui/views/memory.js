@@ -1,7 +1,7 @@
 // The Memory view: the vault's counts, Home's sections, health and recent
 // writes, with a search box. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { empty, error, esc, md } from "../lib.js";
+import { empty, error, esc, md, pageHead, when } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -40,7 +40,7 @@ export function renderSearch() {
 }
 
 const table = (rows) => rows.length
-  ? `<table><tbody>${rows.map(([k, v]) => `<tr><th scope="row">${esc(k)}</th><td class="num">${v}</td></tr>`).join("")}</tbody></table>` : "";
+  ? `<table class="tbl"><tbody>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="num">${v}</td></tr>`).join("")}</tbody></table>` : "";
 
 export function renderCounts(m) {
   if (!m.exists) return head("counts", "Notes") + empty("No vault yet.", "Run <code>vault init</code> to make one.");
@@ -72,12 +72,12 @@ export function renderHealth(m) {
 
 export function renderWrites(m) {
   return head("writes", "Recent writes", m.writes.length) + (m.writes.length
-    ? `<ul class="writes">${m.writes.map((w) => `<li><span class="tm">${esc(w.date)} ${esc(w.time)}</span> ${md(w.text).replace(/^<p>|<\/p>$/g, "")}</li>`).join("")}</ul>`
+    ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Write</th><th>When</th></tr></thead><tbody>${m.writes.map((w) => `<tr><td class="wide">${md(w.text).replace(/^<p>|<\/p>$/g, "")}</td><td class="time">${esc(when(`${w.date}T${w.time}`) || `${w.date} ${w.time}`)}</td></tr>`).join("")}</tbody></table></div>`
     : empty("No writes recorded.", "The vault CLI logs each write in the daily note."));
 }
 
 export function renderMemory(m) {
-  return `<div class="page"><h1>Memory</h1>${renderSearch()}` +
+  return `<div class="page">${pageHead("Memory", { count: m.exists ? m.total : 0 })}${renderSearch()}` +
     `<section id="counts">${renderCounts(m)}</section>` +
     `<section id="home">${renderHome(m)}</section>` +
     `<section id="health">${renderHealth(m)}</section>` +
@@ -89,7 +89,7 @@ const crumbs = (t) => (t.length ? `<ul>${t.map((n) => `<li>${link(n.title)} <spa
 /** One note: frontmatter, body (Markdown, [[links]] to notes), outgoing links and backlinks. */
 export function renderNote(n) {
   const fm = Object.entries(n.frontmatter).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(Array.isArray(v) ? v.join(", ") : v)}</dd></div>`).join("");
-  return `<div class="page"><p><a href="#/memory">Memory</a></p><h1>${esc(n.title)}</h1>` +
+  return `<div class="page"><p class="quiet"><a href="#/memory">Memory</a></p>${pageHead(n.title, { count: n.frontmatter?.kind ?? "" })}` +
     (n.archived ? `<p class="quiet">Archived.</p>` : "") +
     `<p class="hint"><code>${esc(n.path)}</code></p>` +
     (fm ? `<dl class="facts">${fm}</dl>` : "") +
