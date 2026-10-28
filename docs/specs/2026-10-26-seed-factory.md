@@ -252,6 +252,18 @@ Check runs and probe runs do not count against the 12. They start no `claude`.
 - **Land queue.** One drainer per repo. It is started by each run that becomes ready and by each timer tick, and held by a lock. It takes ready branches in order and merges each with `git merge-tree --write-tree` onto `origin/main`. It checks the merged tree in a sandbox, then commits and pushes it with a plain push. A refused push merges again. The queue keeps `BOUNCES` and `RELANDS` and records each entry's state, so a crash after the push does not re-merge.
 - **Item state.** Derived from the store, the `origin/main` trailers, the ledger and the queue. The precedence is dropped, done, needs-you, stuck, running, open. Only lines in the trailer block count, and a revert of the commit undoes done. Items done before milestone 2, which have no trailer, keep the store's done. Nothing writes the derived state back to the store.
 
+### Safe default actions for stuck and failed runs (28 Oct)
+
+Chris, 28 Oct: a stuck or failed run gets a default action when the action is safe, so the factory does not wait hours for a person. Every dispatch (`rescueStuck` in `jobs/lib/factory.ts`, before the hold is read) takes it, and writes the reason to the run, the issue note and the news:
+
+1. No commit, and the item is done or its work is on main (its `Job:` trailer): drop the run, as a duplicate. A work-on-main item is closed.
+2. No commit, item open, first time: drop it and let the goal rerun once; the rerun's spec ends with a note that the last run made no commit and the last 20 lines of its `result.md`.
+3. Time box, first time: the same, with the time box note.
+4. Failed with an infrastructure reason (`job lock busy`, `fetch failed`, `systemd-run failed`, `worktree gone`, `bundle failed`): recheck an agent run whose branch exists, land a land run again, once. An agent run with no branch is dropped for one rerun.
+5. Failed checks after a land merge, first time: drop it and rerun the goal on the new main, once, with the last 20 lines of the land's `checks.log`.
+
+Anything else, or the second time one case hits one goal (the run folder's `rescued` file names the case), labels the issue `needs-chris` with a one-line question (also a note and a news line). The run keeps its state, with a `needs-chris` file in its folder, and **does not hold the factory**: other goals keep running, and the goal itself starts no new run until Chris drops or rechecks it. `aleph drop <name> <reason> --quiet` is the dispatch's drop (no note, no dispatch of its own). The pending rerun note is `~/.aleph/factory/rerun/<name>.md`, read once by the goal's start.
+
 ### What dispatches at once, and what only the tick starts (28 Oct)
 
 The tick (`aleph-tick.timer`, every 5 minutes) only starts periodic or scheduled work. Every other transition starts the next step at once, with no wait for the tick: `aleph dispatch` runs in the same process call (a run's end) or detached (`dispatchDetached` in `jobs/lib/factory.ts`, which never fails or holds the caller). `ALEPH_DISPATCH=off` turns the at-once dispatches off, for tests; the tick still dispatches.

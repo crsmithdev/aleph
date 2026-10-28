@@ -241,6 +241,10 @@ describe("a factory run", () => {
   }, 30_000);
 
   test("a tick skips a goal whose job is stuck, and the cap stops it", async () => {
+    // The hold is what this test is about: the safe default actions would clear or release the run.
+    process.env.ALEPH_RESCUE = "off";
+    try {
+      await (async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     const id =(await aleph(["todo", "add", "fac", "a stuck goal", "--labels", "goal", "--body", "-"], {}, "ACTION: error\n")).json.added;
@@ -253,6 +257,10 @@ describe("a factory run", () => {
     expect(capped.json.started).toEqual([]);
     expect(capped.json.skipped).toContain(`fac-${id}: cap of 0 runs in 24 hours`);
     await aleph(["todo", "drop", "fac", String(id), "test over"]);
+      })();
+    } finally {
+      delete process.env.ALEPH_RESCUE;
+    }
   }, 30_000);
 
   test("caps.json sets the day cap, and ALEPH_DAY_CAP wins over it", async () => {
@@ -281,6 +289,10 @@ describe("a factory run", () => {
   }, 60_000);
 
   test("a stuck job holds the factory: no start, no land by itself; Chris's land works; pause is separate; a drop clears it", async () => {
+    // The hold is what this test is about: the safe default actions would clear or release the run.
+    process.env.ALEPH_RESCUE = "off";
+    try {
+      await (async () => {
     // Its ticks run the nightly probe unless a fresh passing one is on file; alone, none is.
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
@@ -318,9 +330,17 @@ describe("a factory run", () => {
     expect(free.json.started).toEqual([`fac-${id}`]);
     await aleph(["drop", `fac-${id}`]);
     await aleph(["todo", "drop", "fac", String(id), "test over"]);
+      })();
+    } finally {
+      delete process.env.ALEPH_RESCUE;
+    }
   }, 60_000);
 
   test("a stuck or failed run holds the factory only once no next run is pending for it", async () => {
+    // The hold is what this test is about: the safe default actions would clear or release the run.
+    process.env.ALEPH_RESCUE = "off";
+    try {
+      await (async () => {
     // Runs written as the ledger holds them: a conflicted land that goes back to its worker, and a stuck run.
     const made: string[] = [];
     const run = (name: string, extra: Record<string, unknown>) => {
@@ -345,6 +365,10 @@ describe("a factory run", () => {
     writeFileSync(join(live, "exit"), "0\n");
     expect((await aleph(["dispatch"])).json.held).toContain("Held: fheldland and 1 more are");
     for (const f of made) rmSync(f, { recursive: true, force: true });
+      })();
+    } finally {
+      delete process.env.ALEPH_RESCUE;
+    }
   }, 60_000);
 
 

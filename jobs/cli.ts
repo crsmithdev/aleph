@@ -387,10 +387,12 @@ async function drop(): Promise<void> {
       updateRun(e.folder, { state: "dropped", reason, needs: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     }
     const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
-    const why = repo && todo !== undefined ? updateTodo(repo, todo, `job ${name} dropped: ${reason}`, false) : null;
+    // --quiet: the factory's own drop writes the note and the news itself, and its dispatch goes on.
+    const quiet = rest.includes("--quiet");
+    const why = repo && todo !== undefined && !quiet ? updateTodo(repo, todo, `job ${name} dropped: ${reason}`, false) : null;
     if (why) console.error(`warn: issue ${todo} has no note: ${why}`);
     out({ job: last.run.job, name, state: "dropped", reason });
-    dispatchDetached();
+    if (!quiet) dispatchDetached();
   } finally {
     release!();
   }
@@ -635,12 +637,27 @@ async function runDispatch() {
     factoryLog("the last probe failed; no run started");
     return { started: [], skipped: [`the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`] };
   }
-  return dispatchGoals(startRun, baselineChecks, landRun);
+  // `ALEPH_RESCUE=off` leaves a stuck or failed run to hold the factory, as before the safe default actions; for tests of the hold.
+  return dispatchGoals(startRun, baselineChecks, landRun, process.env.ALEPH_RESCUE === "off" ? undefined : { drop: dropRun, recheck: recheckRun });
 }
 
 /** A land the hold had kept waiting: `aleph land <name>`. Returns the refusal, or null. */
 async function landRun(name: string): Promise<string | null> {
   const p = Bun.spawn([process.execPath, CLI, "land", name], { env: process.env, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+  const code = await p.exited;
+  return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
+}
+
+/** A safe default drop: `aleph drop <name> <reason> --quiet`; the factory writes the issue note and the news. */
+async function dropRun(name: string, reason: string): Promise<string | null> {
+  const p = Bun.spawn([process.execPath, CLI, "drop", name, reason, "--quiet"], { env: process.env, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+  const code = await p.exited;
+  return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
+}
+
+/** A safe default recheck: `aleph recheck <name>`. */
+async function recheckRun(name: string): Promise<string | null> {
+  const p = Bun.spawn([process.execPath, CLI, "recheck", name], { env: process.env, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
   const code = await p.exited;
   return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
 }

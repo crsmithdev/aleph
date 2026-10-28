@@ -6,12 +6,12 @@
 import { appendFileSync, closeSync, openSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { readList, readLists } from "../../todo/lib/store.ts";
+import { readList, readLists, writeList } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
-import { derive, facts, type Facts } from "./status.ts";
+import { derive, facts, itemOnMain, type Facts } from "./status.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
-import { allJobs, allRuns, expand, isLive, isOpen, LOCK_BUSY, loadRegistry, lock, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allJobs, allRuns, expand, isLive, isOpen, LOCK_BUSY, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
 const pauseFile = () => join(factoryDir(), "paused");
@@ -70,6 +70,11 @@ export function waiting(jobs = allJobs()): number {
 /** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts. */
 const lastReal = (j: Entry[]): Entry => j.findLast((e) => !(e.run.kind === "land" && e.run.state === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
 
+/** A file in a run's folder: the factory labelled the run's issue `needs-chris`, so the run no longer holds the factory. */
+const NEEDS_CHRIS = "needs-chris";
+/** A file in a run's folder: the safe default action taken on it, as its case. */
+const RESCUED = "rescued";
+
 export interface Hold { name: string; state: string; reason?: string; line: string }
 
 /**
@@ -78,6 +83,7 @@ export interface Hold { name: string; state: string; reason?: string; line: stri
  * that does not count (the run asking is that job's own). Separate from the pause.
  * A run with a next run pending (`next` set, or its unit still live) does not count:
  * a conflicted land goes back to its worker by itself, and the hold waits for that.
+ * A run the factory labelled `needs-chris` does not count: Chris answers it when he can.
  */
 export function hold(jobs = allJobs(), except?: string): Hold | null {
   const keys = new Set(sandboxRepos().map((r) => r.key));
@@ -85,7 +91,7 @@ export function hold(jobs = allJobs(), except?: string): Hold | null {
     const last = lastReal(j);
     const r = last.run;
     return isOpen(j) && r.repo && keys.has(r.repo) && (r.state === "stuck" || r.state === "failed") && r.job !== except
-      && !r.next && !isLive(last.folder);
+      && !r.next && !isLive(last.folder) && !existsSync(join(last.folder, NEEDS_CHRIS));
   }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started));
   if (!bad.length) return null;
   const r = bad[0].at(-1)!.run;
@@ -173,6 +179,13 @@ export const dispatchOn = () => process.env.ALEPH_DISPATCH !== "off";
 type Start = (repo: Repo, name: string, id: number, spec: string) => Promise<string | null>;
 type Checks = (repo: Repo, commit: string, logs: string) => Promise<string | null>;
 type Land = (name: string) => Promise<string | null>;
+/** What a safe default action does to a run: both return the refusal, or null. */
+export interface Rescue {
+  /** Drop the job, with the reason; the factory writes the issue note and the news itself. */
+  drop: (name: string, reason: string) => Promise<string | null>;
+  /** Start a recheck of the job. */
+  recheck: (name: string) => Promise<string | null>;
+}
 
 /**
  * Start every ready goal, in order, until the live cap: an open goal item with
@@ -182,11 +195,12 @@ type Land = (name: string) => Promise<string | null>;
  * so two dispatches at once start a goal once. `start` dispatches the run; it
  * is the CLI's `aleph job`.
  */
-export async function dispatchGoals(start: Start, checks?: Checks, land?: Land): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[] }> {
+export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, rescue?: Rescue): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[] }> {
   if (paused()) {
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
   }
+  if (rescue) await rescueStuck(rescue, land);
   const h = hold();
   if (h) {
     factoryLog(h.line);
@@ -229,16 +243,163 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land):
         skipped.push(`${name}: ${waits} runs wait for Chris`);
         continue;
       }
-      const spec = `# ${item.title}\n\n${item.body.trim()}\n`;
+      const again = rerunNote(name);
+      const spec = `# ${item.title}\n\n${item.body.trim()}\n${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
       const why = await start(repo, name, item.id, spec);
       if (why) skipped.push(`${name}: ${why}`);
-      else started.push(name);
+      else { started.push(name); if (again) rmSync(rerunFile(name), { force: true }); }
     } finally {
       release();
     }
   }
   factoryLog(`started ${started.join(", ") || "none"}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
   return { started, skipped, ...(landed.length ? { landed } : {}) };
+}
+
+const rerunFile = (name: string) => join(factoryDir(), "rerun", `${name}.md`);
+const rerunNote = (name: string): string => (existsSync(rerunFile(name)) ? readFileSync(rerunFile(name), "utf8").trim() : "");
+
+/** The last `n` lines of a run's file, or "" when it has none. */
+function tailOf(folder: string, file: string, n: number): string {
+  try { return readFileSync(join(folder, file), "utf8").trimEnd().split("\n").slice(-n).join("\n"); } catch { return ""; }
+}
+
+/** A note on the item, with the label and the done status when asked. Returns why it could not, or null. */
+function writeIssue(repo: Repo, id: number, text: string, opts: { done?: boolean; label?: string } = {}): string | null {
+  try {
+    let found = false;
+    writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
+      const item = todos.find(doc, id);
+      if (!item) return null;
+      found = true;
+      if (opts.done) todos.setStatus(item, "done");
+      const labels = (item.fm.labels as string[]) ?? [];
+      if (opts.label && !labels.includes(opts.label)) todos.edit(item, { labels: [...labels, opts.label] });
+      return todos.note(item, text);
+    });
+    return found ? null : `no issue ${id}`;
+  } catch (e: any) {
+    return e?.message ?? String(e);
+  }
+}
+
+type Case = "duplicate" | "no-commit" | "time-box" | "infra" | "land-checks";
+const INFRA = /^(job lock busy|fetch failed|systemd-run failed|worktree gone|bundle failed)/;
+
+/** Which safe case a stuck or failed run is in, or null: not safe. */
+function caseOf(r: Entry["run"], onMainOrDone: () => boolean): Case | null {
+  const why = r.reason ?? "";
+  if (why === "no commit") return onMainOrDone() ? "duplicate" : "no-commit";
+  if (why === "time box" && r.kind !== "land") return "time-box";
+  if (INFRA.test(why)) return "infra";
+  if (r.kind === "land" && !r.conflicts?.length && /^timed out: check |^[\w-]+ failed$/.test(why)) return "land-checks";
+  return null;
+}
+
+/**
+ * The safe default actions for stuck and failed runs, taken by the dispatch that sees them: a duplicate
+ * is dropped; no commit, a time box and checks that fail after a land merge drop the run for one rerun
+ * of the goal, with a note; an infrastructure failure is rechecked or landed again, once. Each action
+ * writes its reason to the run, the issue note and the news. Anything else, or the second time one
+ * case hits one goal, labels the issue `needs-chris` with a one-line question; such a run holds nothing.
+ */
+async function rescueStuck(act: Rescue, land?: Land): Promise<void> {
+  const keys = new Set(sandboxRepos().map((r) => r.key));
+  const pending = (jobs: Entry[][]) => jobs.filter((j) => {
+    const last = lastReal(j);
+    const r = last.run;
+    return isOpen(j) && r.repo && keys.has(r.repo) && (r.state === "stuck" || r.state === "failed") && !r.next && !isLive(last.folder) && !existsSync(join(last.folder, NEEDS_CHRIS));
+  });
+  for (const first of pending(allJobs())) {
+    const name = first[0].run.name;
+    const release = await lock(`rescue-${first[0].run.repo}-${name}`, 0);
+    if (!release) continue;
+    try {
+      // Read again under the lock: another dispatch may have acted on it.
+      const runs = pending(allJobs()).find((j) => j[0].run.job === first[0].run.job);
+      if (runs) await rescueJob(runs, act, land);
+    } catch (e: any) {
+      factoryLog(`rescue of ${name} failed: ${e?.message ?? e}`);
+    } finally {
+      release();
+    }
+  }
+}
+
+async function rescueJob(runs: Entry[], act: Rescue, land?: Land): Promise<void> {
+  const last = lastReal(runs);
+  const r = last.run;
+  const repo = loadRegistry()[r.repo!];
+  const name = r.name;
+  const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo ?? Number(name.match(/-(\d+)$/)?.[1]);
+  const issue = Number.isInteger(todo) ? todo : undefined;
+  const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${repo.key}/${name}: ${line}`); };
+  const record = (text: string, opts: { done?: boolean; label?: string } = {}) => {
+    const why = issue === undefined ? "no issue" : writeIssue(repo, issue, text, opts);
+    if (why) factoryLog(`${name}: no issue note: ${why}`);
+  };
+  const chris = async (question: string) => {
+    writeFileSync(join(last.folder, NEEDS_CHRIS), question + "\n");
+    record(`needs-chris: ${question}`, { label: "needs-chris" });
+    await say(`needs-chris: ${question}`);
+  };
+
+  let onMain = false;
+  const onMainOrDone = () => {
+    git(repo.path, "fetch", "-q", "origin");
+    if (git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${r.job}$`).out) { onMain = true; return true; }
+    if (itemOnMain(repo, issue)) return true;
+    try {
+      const item = issue === undefined ? undefined : readList(repo)?.items.find((i) => i.id === issue);
+      return !!item && todos.status(item) !== "open";
+    } catch { return false; }
+  };
+  const key = caseOf(r, onMainOrDone);
+  const reason = r.reason ?? r.state;
+  if (!key) return chris(`${name} is ${r.state} (${reason}); drop it, recheck it, or edit the goal?`);
+
+  if (key !== "duplicate") {
+    const before = allRuns().filter((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && tailOf(e.folder, RESCUED, 1) === key).length;
+    if (before) return chris(`${name} hit the same case again (${key}: ${reason}); a rerun did not clear it. Drop it, or change the goal?`);
+  }
+  const tryDo = async (why: string | null, what: string) => {
+    if (why) { rmSync(rerunFile(name), { force: true }); await chris(`${name}: ${what} failed (${why}); ${reason}. What now?`); return false; }
+    return true;
+  };
+  const rerun = (note: string) => { mkdirSync(join(factoryDir(), "rerun"), { recursive: true }); writeFileSync(rerunFile(name), note + "\n"); };
+  const quoted = (file: string) => `\`\`\`\n${tailOf(last.folder, file, 20) || "(empty)"}\n\`\`\``;
+  writeFileSync(join(last.folder, RESCUED), key + "\n");
+
+  if (key === "duplicate") {
+    const text = `${r.kind} run ${last.id} ended with no commit and the item is already ${onMain ? "on main" : "done"}: dropped as a duplicate`;
+    if (!await tryDo(await act.drop(name, text), "drop")) return;
+    record(text, { done: onMain });
+    await say(text);
+  } else if (key === "infra") {
+    const text = `${r.kind} run ${last.id} failed for infrastructure (${reason}): `;
+    const branch = !!r.branch && git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok;
+    if (r.kind === "land") {
+      if (!await tryDo(land ? await land(name) : "no land", "land again")) return;
+      record(`${text}landed again, once`);
+      await say(`${text}landing again`);
+    } else if (branch) {
+      if (!await tryDo(await act.recheck(name), "recheck")) return;
+      record(`${text}rechecked, once`);
+      await say(`${text}rechecking`);
+    } else {
+      rerun(`The last run failed before it made a branch: ${reason}.`);
+      if (!await tryDo(await act.drop(name, `${text}dropped for one rerun`), "drop")) return;
+      record(`${text}dropped; the goal reruns once`);
+      await say(`${text}the goal reruns`);
+    }
+  } else {
+    const why = key === "no-commit" ? "the last run made no commit" : key === "time-box" ? "the time box ran out" : `the checks failed after the land merged main (${reason})`;
+    rerun(`${why[0].toUpperCase()}${why.slice(1)}. The last 20 lines of its ${key === "land-checks" ? "checks.log" : "result.md"}:\n\n${quoted(key === "land-checks" ? "checks.log" : "result.md")}`);
+    const text = `${r.kind} run ${last.id}: ${why}; dropped, and the goal reruns once`;
+    if (!await tryDo(await act.drop(name, text), "drop")) return;
+    record(text);
+    await say(text);
+  }
 }
 
 /** The tick's triage of open issues that are not goals (triage.ts). */

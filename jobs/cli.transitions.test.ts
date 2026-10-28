@@ -127,6 +127,10 @@ describe("every transition dispatches at once", () => {
   }, 60_000);
 
   test("a recheck that clears the factory hold starts the next goal", async () => {
+    // The hold is what this test is about: the safe default actions would release the run.
+    process.env.ALEPH_RESCUE = "off";
+    try {
+      await (async () => {
     const s = track(await add("ends stuck", "commit FAIL", ["--labels", "goal"], { ALEPH_FIX_ROUNDS: "0" }));
     await until(() => runs(s).some((r) => ["stuck", "failed"].includes(state(r).state)));
     const b = track(await add("held behind it", open("hold-b"), ["--labels", "goal"]));
@@ -140,6 +144,10 @@ describe("every transition dispatches at once", () => {
       await until(() => started().includes(`fac-${b}`));
     } finally {
       rmSync(slow, { force: true });
+    }
+      })();
+    } finally {
+      delete process.env.ALEPH_RESCUE;
     }
   }, 90_000);
 
