@@ -6,7 +6,7 @@
 import { appendFileSync, closeSync, openSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { goal, goals, note, readLists, reader } from "../../todo/lib/store.ts";
+import { goal, goals, hasLabel, note, readLists, reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
 import { normalizeDecision, type Decision } from "./decision.ts";
@@ -244,6 +244,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
     const name = goalJob(repo, listed.id);
     const red = reds.get(repo.key);
     if (red) { skipped.push(`${name}: ${red}`); continue; }
+    if (done(`${repo.key}-${listed.id}`)) { skipped.push(`${name}: the item is already done`); continue; }
     const wait = notReady(listed, done);
     if (wait) { skipped.push(`${name}: ${wait}`); continue; }
     // Wait for a dispatch that holds the goal: it may skip it (an open job a drop is closing right now), and a
@@ -262,6 +263,15 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       if (waitNow) { skipped.push(`${name}: ${waitNow}`); continue; }
       const gated = gates({ only: ["live", "day", "waiting"], jobs });
       if (gated) { skipped.push(`${name}: ${gated.why}`); continue; }
+      if (noCommitStreak(repo.key, name) >= NO_COMMIT_LIMIT) {
+        if (!hasLabel(item, "needs-chris")) {
+          const text = `needs-chris: the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
+          const bad = note(repo, item.id, text, { label: "needs-chris" });
+          if (bad) factoryLog(`${name}: no issue note: ${bad}`);
+        }
+        skipped.push(`${name}: ${NO_COMMIT_LIMIT} runs in a row with no commit`);
+        continue;
+      }
       const again = rerunNote(name);
       const drops = jobsNamed(name, null, jobs).filter((j) => j.at(-1)!.run.state === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
       const spec = `# ${item.title}\n\n${item.body.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
@@ -274,6 +284,18 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
   }
   factoryLog(`started ${started.join(", ") || "none"}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
   return { started, skipped, ...(landed.length ? { landed } : {}) };
+}
+
+/** Runs of one goal in a row, newest last, that may end with no commit before dispatch stops starting it. */
+const NO_COMMIT_LIMIT = 3;
+
+/** How many of the goal's newest agent runs, in a row, ended with no commit. */
+function noCommitStreak(repoKey: string, name: string): number {
+  const runs = allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && e.run.kind === "agent" && e.run.state !== "running")
+    .sort((a, b) => Date.parse(a.run.started) - Date.parse(b.run.started));
+  let n = 0;
+  for (const e of runs.reverse()) { if (e.run.reason !== "no commit" && !e.run.noCommit) break; n++; }
+  return n;
 }
 
 const rerunFile = (name: string) => join(factoryDir(), "rerun", `${name}.md`);
@@ -348,11 +370,13 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
     await say(`needs-chris: ${question}`);
   };
 
-  let onMain = false;
+  let onMain: string | null = null;
   const onMainOrDone = () => {
     fetchOrigin(repo.path);
-    if (git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${r.job}$`).out) { onMain = true; return true; }
-    if (itemOnMain(repo, issue)) return true;
+    const mine = git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${r.job}$`).out;
+    if (mine) { onMain = mine.slice(0, 7); return true; }
+    const there = itemOnMain(repo, issue);
+    if (there) { onMain = there; return true; }
     const item = issue === undefined ? undefined : reader().item(repo.key, issue);
     return !!item && todos.status(item) !== "open";
   };
@@ -402,9 +426,9 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
       await say(text);
     }
   } else if (key === "duplicate") {
-    const text = `${r.kind} run ${last.id} ended with no commit and the item is already ${onMain ? "on main" : "done"}: dropped as a duplicate`;
+    const text = `${r.kind} run ${last.id} ended with no commit and the item is already ${onMain ? `on main as ${onMain}` : "done"}: dropped as a duplicate, and the item is closed`;
     if (!await tryDo(await act.drop(name, text), "drop")) return;
-    record(text, { done: onMain });
+    record(text, { done: !!onMain });
     await say(text);
   } else if (key === "infra") {
     const text = `${r.kind} run ${last.id} failed for infrastructure (${reason}): `;

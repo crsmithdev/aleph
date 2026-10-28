@@ -379,7 +379,8 @@ async function drop(): Promise<void> {
     // Chris asked for the drop, so it is not news.
     for (const e of new Set([...live, last])) {
       if (!existsSync(join(e.folder, "exit"))) writeFileSync(join(e.folder, "exit"), "143");
-      updateRun(e.folder, { state: "dropped", reason, needs: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
+      const noCommit = e.run.reason === "no commit" || e.run.noCommit ? { noCommit: true as const } : {};
+      updateRun(e.folder, { ...noCommit, state: "dropped", reason, needs: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     }
     const todo = issueOf(runs);
     // --quiet: the factory's own drop writes the note and the news itself, and its dispatch goes on.

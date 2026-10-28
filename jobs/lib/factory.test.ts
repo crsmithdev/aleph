@@ -255,9 +255,54 @@ test("no commit, the work on main by its Job trailer: dropped as a duplicate and
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`]);
-  expect(notes(id)).toContain("on main: dropped as a duplicate");
+  expect(notes(id)).toMatch(/on main as [0-9a-f]{7}: dropped as a duplicate/);
   expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
   expect(f.specs).toEqual([]);
+});
+
+test("no commit, the item on main by its Item trailer: the open item is closed with a note naming the commit", async () => {
+  const id = goal();
+  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" });
+  sh(join(base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nItem: fac-${id}\nJob: other`);
+  sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
+  const sha = Bun.spawnSync(["git", "rev-parse", "--short=7", "HEAD"], { cwd: join(base, "repo") }).stdout.toString().trim();
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls).toEqual([`drop fac-${id}`]);
+  expect(notes(id)).toContain(`on main as ${sha}: dropped as a duplicate`);
+  expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
+  expect(f.specs).toEqual([]);
+});
+
+test("a goal whose item is done on main is not dispatched", async () => {
+  const id = goal();
+  sh(join(base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nItem: fac-${id}\nJob: other`);
+  sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
+  const f = fakes();
+  const out = await dispatch(f);
+  expect(out.started).toEqual([]);
+  expect(f.specs).toEqual([]);
+});
+
+test("a fourth no-commit run in a row is not dispatched; the item is labelled needs-chris", async () => {
+  const id = goal();
+  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "no commit, run X ended with no commit: dropped as a duplicate", noCommit: true, started: new Date(Date.now() - (4 - i) * 60_000).toISOString() });
+  const f = fakes();
+  const out = await dispatch(f);
+  expect(out.started).toEqual([]);
+  expect(out.skipped.join()).toContain("3 runs in a row with no commit");
+  expect(labels(id)).toContain("needs-chris");
+  expect(notes(id)).toContain("ended with no commit");
+  await dispatch(f);
+  expect(f.specs).toEqual([]);
+});
+
+test("two no-commit runs in a row are still dispatched", async () => {
+  const id = goal();
+  for (let i = 0; i < 2; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: new Date(Date.now() - (3 - i) * 60_000).toISOString() });
+  const f = fakes();
+  const out = await dispatch(f);
+  expect(out.started).toEqual([`fac-${id}`]);
 });
 
 // A claim that the goal is met is checked on origin/main: a new commit there, so the baseline is run again.

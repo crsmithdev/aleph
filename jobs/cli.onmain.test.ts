@@ -34,6 +34,17 @@ describe("an item that is already on main", () => {
     expect(branchExists("handmid")).toBe(false);
   }, 30_000);
 
+  test("a land whose job already pushed (the first land died after the push) still closes the item", async () => {
+    const id = await add("pushed by an earlier land");
+    await withItem("pushedbefore", "commit pushedbefore.txt", id);
+    const [agent] = runsOf("pushedbefore");
+    handLand(`pushedbefore\n\nJob: ${agent.job}`, "pushed-before.txt");
+    const r = await aleph(["land", "pushedbefore"]);
+    expect(state(r.json.run)).toMatchObject({ kind: "land", state: "landed" });
+    const item = (await aleph(["todo", "show", "demo", String(id), "--json"])).json;
+    expect(item.status).toBe("done");
+  }, 30_000);
+
   test("aleph land and a fix-round aleph job refuse when the item is on main", async () => {
     const id = await add("landed by hand first");
     await withItem("handfirst", "commit handfirst.txt", id);
@@ -92,6 +103,18 @@ describe("an item that is already on main", () => {
     }
     await aleph(["drop", "lateitem"]);
   }, 30_000);
+
+  test("drop keeps the fact that a no-commit run ended with no commit", async () => {
+    await job("nocom", "commit nocom.txt");
+    const [agent] = runsOf("nocom");
+    const f = join(jobsDir, agent.id, "state.json");
+    writeFileSync(f, JSON.stringify({ ...JSON.parse(readFileSync(f, "utf8")), state: "stuck", reason: "no commit" }));
+    const r = await aleph(["drop", "nocom", "dropped as a duplicate", "--quiet"]);
+    expect(r.code).toBe(0);
+    const after = JSON.parse(readFileSync(f, "utf8"));
+    expect(after.reason).toBe("dropped as a duplicate");
+    expect(after.noCommit).toBe(true);
+  }, 60_000);
 
   test("drop stops every live run of the job and marks each dropped", async () => {
     await job("twolive", "commit twolive.txt");

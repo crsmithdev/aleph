@@ -337,14 +337,21 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         const pushed = git(repo.path, "log", `origin/${main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${m.run.job}$`).out;
         if (pushed) {
           m.log(`already on main as ${pushed}`);
-          finish(m, { verdict: { state: "landed", commit: pushed }, code: 0, after: () => { removeBranch(repo, m.run); followCheckout(repo, log); } });
+          finish(m, { verdict: { state: "landed", commit: pushed }, code: 0, after: () => {
+            // The land that pushed may have died before it closed the item.
+            const { todo, checkItem } = closeItems(repo, m.run);
+            if (todo) m.log(todo === "done" ? `todo ${m.run.todo} done` : `todo ${m.run.todo} not closed: ${todo}`);
+            if (checkItem !== undefined) m.log(`todo ${checkItem} holds the manual check`);
+            removeBranch(repo, m.run);
+            followCheckout(repo, log);
+          } });
           continue;
         }
         // A commit by hand, or by another job, that names the item: this land must not add a second one.
         const there = itemOnMain(repo, m.run.todo);
         if (there) {
           m.log(`item landed as ${there}`);
-          finish(m, { verdict: { state: "done", reason: `item landed as ${there}` }, code: 0, after: () => removeBranch(repo, m.run) });
+          finish(m, { verdict: { state: "done", reason: `item landed as ${there}` }, code: 0, after: () => { closeItems(repo, { ...m.run, check: undefined }); removeBranch(repo, m.run); } });
           continue;
         }
         const tip = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${m.run.branch}`);
