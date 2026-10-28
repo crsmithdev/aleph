@@ -7,7 +7,7 @@ import { actMessages, openDiffs } from "./lib.js";
 const job = (o: object) => ({ repo: "aleph", item: null, state: "running", started: "2026-10-27T16:00:00Z", defaults: [], followups: [], ...o });
 const state: any = {
   now: "2026-10-27T17:00:00Z",
-  factory: { paused: false, dayCap: 12, runsToday: 5, costToday: 0.25, nextTick: "2026-10-27T17:12:00Z", probe: { at: "2026-10-27T14:35:00Z", ok: true, failed: [] }, health: ["judge is down"] },
+  factory: { paused: false, dayCap: 12, runsToday: 5, costToday: 0.25, ready: 3, live: 5, liveCap: 12, probe: { at: "2026-10-27T14:35:00Z", ok: true, failed: [] }, health: ["judge is down"] },
   needs: [job({ name: "aleph-27", state: "needs-you", reason: "Held path: hooks/lib/digest.ts", stat: " a.ts | 2 +-", defaults: ["Haiku tier per request"], item: { id: 27, title: "Digest head and tail" } })],
   stuck: [job({ name: "aleph-30", state: "stuck", reason: "types failed" })],
   running: [job({ name: "aleph-36", phase: "worker", item: { id: 36, title: "Route tiers" } })],
@@ -51,6 +51,12 @@ test("the metric cards count running, waiting, stuck and needs", () => {
   expect(r.renderMetrics({ ...state, needs: [] })).toContain('class="metric" href="#needs"');
   const page = r.view.render(state);
   for (const t of ["Next tick", "Cost today", "Runs today", 'id="ticks"', 'class="strip"']) expect(page).not.toContain(t);
+});
+
+test("the Queue cell shows the ready goals and the live runs of the cap", () => {
+  const page = r.view.render(state);
+  expect(page).toContain('<span class="k">Queue</span><span class="v">3 ready · 5 of 12 live</span>');
+  expect(page).not.toContain("Next tick");
 });
 
 test("text from the state is escaped", () => {

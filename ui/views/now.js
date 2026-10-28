@@ -71,6 +71,9 @@ function statLines(stat) {
   return esc(kept.filter((l) => l.includes(" | ")).join("\n")) + `\n<b>+${files.length - STAT_FILES} more files</b>` + (summary.length ? "\n" + esc(summary.join("\n")) : "");
 }
 
+/** The queue: ready goals, and live runs against the cap. */
+export const renderQueue = (s) => `${s.factory?.ready ?? s.waiting.length} ready · ${s.factory?.live ?? s.running.length} of ${s.factory?.liveCap ?? "?"} live`;
+
 /** The row of metric cards: a count per section, each a link to it. */
 export function renderMetrics(s) {
   const card = (href, k, n, tone) => `<a class="metric${n && tone ? ` ${tone}` : ""}" href="#${href}"><span class="k">${k}</span><span class="v">${n}</span></a>`;
@@ -78,7 +81,8 @@ export function renderMetrics(s) {
     card("running", "Running", s.running.length) +
     card("waiting", "Waiting", s.waiting.length) +
     card("stuck", "Stuck", s.stuck.length, "stuck") +
-    card("needs", "Need attention", s.needs.length, "need") + `</div>`;
+    card("needs", "Need attention", s.needs.length, "need") +
+    `<a class="metric" href="#waiting"><span class="k">Queue</span><span class="v">${esc(renderQueue(s))}</span></a></div>`;
 }
 
 export function renderLede(s) {
