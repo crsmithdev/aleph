@@ -20,7 +20,7 @@ import { runPath } from "./lib/sandbox.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
 import { runReview2 } from "./lib/review2.ts";
-import { derive, facts, FACTS_REF, itemOnMain, readFacts, type Facts } from "./lib/status.ts";
+import { derive, facts, FACTS_REF, itemOnMain, landedIndex, readFacts, type Facts } from "./lib/status.ts";
 
 const CLI = import.meta.path;
 /** The most agent runs live at once; `ALEPH_LIVE_CAP` or `caps.json` changes it. */
@@ -718,8 +718,10 @@ function statusRecent(): void {
     if (!open.length) continue;
     git(repo.path, "fetch", "-q", "origin");
     let f: Facts;
-    try { f = facts(repo); } catch (e: any) { console.error(`warn: ${repo.key}: ${e?.message ?? e}`); continue; }
-    for (const i of open) { const s = derive(repo.path, `refs/remotes/origin/${f.main}`, f, i.id); if (s) states.push(s); }
+    try { f = facts(repo, doc); } catch (e: any) { console.error(`warn: ${repo.key}: ${e?.message ?? e}`); continue; }
+    const main = `refs/remotes/origin/${f.main}`;
+    const landed = landedIndex(repo.path, main, repo.key);
+    for (const i of open) { const s = derive(repo.path, main, f, i.id, landed); if (s) states.push(s); }
   }
   if (rest.includes("--json")) return out(states);
   if (!states.length) { console.log("no open items"); return; }
