@@ -96,7 +96,10 @@ describe("every transition dispatches at once", () => {
     await until(() => started().length === 2);
     const prompts = () => runs(a).map((r) => join(jobsDir, r, "prompt.md")).filter(existsSync).map((f) => readFileSync(f, "utf8"));
     await until(() => prompts().length === 2);
-    const second = prompts().at(-1)!;
+    // Folder names have one-second precision and readdir has no order: find the rerun by its content.
+    const [second, ...rest] = prompts().filter((p) => p.includes("the card counts the sliced list"));
+    expect(rest).toEqual([]);
+    expect(second).toBeDefined();
     expect(second).toContain("the card counts the sliced list");
     expect(second).toContain("mind the sliced list");
     expect(second.indexOf("ACTION:")).toBeLessThan(second.indexOf("the card counts the sliced list"));
