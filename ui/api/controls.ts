@@ -1,13 +1,12 @@
 /**
  * `POST /api/pause`, `POST /api/resume` and `POST /api/judge` (`{ "judge": "jev" | "haiku" }`).
- * Each is the `aleph` command of that name, run as a subprocess, under the same
+ * Each is the `aleph` command of that name, run as a subprocess by the launcher, under the same
  * header and Origin rule as the job actions.
  */
-import { join } from "node:path";
+import { runCli } from "../../jobs/lib/launch.ts";
 import type { Handler, Routes } from "../server.ts";
 
 const text = (body: string, status: number) => new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
-const cli = () => process.env.ALEPH_CLI || join(import.meta.dir, "..", "..", "bin", "aleph");
 
 function sameSite(req: Request): boolean {
   if (req.headers.get("x-aleph-ui") !== "1") return false;
@@ -16,9 +15,7 @@ function sameSite(req: Request): boolean {
 }
 
 async function run(args: string[]): Promise<Response> {
-  const p = Bun.spawn([cli(), ...args], { stdout: "pipe", stderr: "pipe", stdin: "ignore" });
-  const [stdout, stderr, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
-  return Response.json({ code, stdout, stderr });
+  return Response.json(await runCli(args));
 }
 
 const simple = (verb: "pause" | "resume"): Handler => async (req) => (sameSite(req) ? run([verb]) : text("forbidden", 403));

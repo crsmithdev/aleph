@@ -1,18 +1,15 @@
 /**
  * `GET /api/diff/:name` and `POST /api/land|recheck|drop|checked/:name`. Each action is
- * the `aleph` command of that name, run as a subprocess; the page offers
+ * the `aleph` command of that name, run as a subprocess by the launcher; the page offers
  * nothing the CLI does not. A POST must carry `X-Aleph-UI: 1` and, when it has
  * an Origin, the server's own, so a web page in the browser cannot post here.
  */
-import { join } from "node:path";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import { latestJob } from "../../jobs/lib/job.ts";
+import { runCli } from "../../jobs/lib/launch.ts";
 import type { Handler, Routes } from "../server.ts";
 
 const text = (body: string, status: number) => new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
-
-/** The CLI to run: `ALEPH_CLI`, else bin/aleph of this checkout. */
-const cli = () => process.env.ALEPH_CLI || join(import.meta.dir, "..", "..", "bin", "aleph");
 
 /** The last run of the job called `name`, or undefined when the ledger has none. */
 const find = (name: string) => latestJob(name)?.at(-1);
@@ -46,9 +43,7 @@ const action = (verb: "land" | "recheck" | "drop" | "checked"): Handler => async
     const body: any = await req.json().catch(() => ({}));
     if (typeof body?.reason === "string" && body.reason.trim()) args.push(body.reason.trim());
   }
-  const p = Bun.spawn([cli(), ...args], { stdout: "pipe", stderr: "pipe", stdin: "ignore" });
-  const [stdout, stderr, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
-  return Response.json({ code, stdout, stderr });
+  return Response.json(await runCli(args));
 };
 
 export const routes: Routes = {

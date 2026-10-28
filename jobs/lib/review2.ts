@@ -7,13 +7,14 @@
  * run's owner. The verdict, a `PENDING` line or a last `ERROR: <reason>` line
  * are read back from review2.md (`readReview2`). Nothing lands: Land stays a click.
  */
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { BROWSER, browserStep, changedViews, startUiServer } from "./review2-browser.ts";
 import { hasLabel, reader } from "../../todo/lib/store.ts";
 import { git, gitWith } from "./git.ts";
 import { outcome } from "./gate.ts";
-import { LOW, loadRegistry, parseVerdict, readEnvFile, readRun, type Repo, type Run } from "./ledger.ts";
+import { loadRegistry, parseVerdict, readEnvFile, readRun, type Repo, type Run } from "./ledger.ts";
+import { startUnit } from "./launch.ts";
 import { linkBins, runPath, sandboxed, workerToken, writeHome } from "./sandbox.ts";
 
 /**
@@ -206,22 +207,10 @@ export function startReview2(folder: string): boolean {
   if (!run || existsSync(join(folder, "review2.md")) || run.state !== "needs-you" || (run.needs !== "held" && run.needs !== "review")) return false;
   writeFileSync(join(folder, "review2.md"), "PENDING\n");
   try {
-    const cli = join(import.meta.dir, "..", "cli.ts");
-    if (process.env.ALEPH_JOB_FOREGROUND === "1") {
-      const log = openSync(join(folder, "review2.err"), "a");
-      try {
-        Bun.spawn([process.execPath, cli, "review2", folder], { env: process.env, stdin: "ignore", stdout: log, stderr: log, detached: true }).unref();
-      } finally {
-        closeSync(log);
-      }
-    } else {
-      // Its own transient unit: the run's unit stops its whole cgroup when the run ends.
-      const pass = Object.entries(process.env).filter(([k]) => k.startsWith("ALEPH_") || k.startsWith("SIDETONE_")).map(([k, v]) => `--setenv=${k}=${v}`);
-      const p = Bun.spawnSync(["systemd-run", "--user", "--collect", "--quiet", ...LOW, `--unit=aleph-${basename(folder)}-review2`, `--working-directory=${folder}`,
-        `--property=StandardOutput=append:${join(folder, "review2.err")}`, `--property=StandardError=append:${join(folder, "review2.err")}`,
-        `--setenv=PATH=${runPath()}`, ...pass, process.execPath, cli, "review2", folder], { stdout: "pipe", stderr: "pipe" });
-      if (p.exitCode !== 0) throw new Error(`systemd-run failed: ${p.stderr.toString().trim()}`);
-    }
+    // Its own transient unit: the run's unit stops its whole cgroup when the run ends.
+    const err = join(folder, "review2.err");
+    startUnit(["review2", folder], { unit: `aleph-${basename(folder)}-review2`, cwd: folder, output: { file: err },
+      props: [`--property=StandardOutput=append:${err}`, `--property=StandardError=append:${err}`] });
   } catch (e: any) {
     writeFileSync(join(folder, "review2.md"), `ERROR: could not start: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
     return false;

@@ -3,7 +3,7 @@
  * tick, the report and its health line. Its state lives in ~/.aleph/factory,
  * which no sandbox can see. See docs/specs/2026-10-26-seed-factory.md.
  */
-import { appendFileSync, closeSync, openSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { goal, goals, hasLabel, note, readLists, reader } from "../../todo/lib/store.ts";
@@ -15,6 +15,7 @@ import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { alreadyMet } from "./gate.ts";
+import { detached } from "./launch.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
 const pauseFile = () => join(factoryDir(), "paused");
@@ -203,7 +204,7 @@ export interface Rescue {
  * runs when a run ends, when a goal is added or edited, and from the tick as a
  * fallback. Each start holds a lock on its goal and re-reads the jobs under it,
  * so two dispatches at once start a goal once. `start` dispatches the run; it
- * is the CLI's `aleph job`.
+ * is `aleph job`, in-process (transitions.ts).
  */
 export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, rescue?: Rescue): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[] }> {
   if (gates({ only: ["pause"] })) {
@@ -682,27 +683,11 @@ export async function triageNow(repo: Repo, id: number): Promise<{ triaged: Coun
  */
 export function dispatchDetached(): void {
   if (!dispatchOn()) return;
-  try {
-    mkdirSync(factoryDir(), { recursive: true });
-    const log = openSync(join(factoryDir(), "dispatch.log"), "a");
-    try {
-      Bun.spawn([process.execPath, join(import.meta.dir, "..", "cli.ts"), "dispatch"], { env: process.env, stdin: "ignore", stdout: log, stderr: log, detached: true }).unref();
-    } finally {
-      closeSync(log);
-    }
-  } catch {}
+  detached(["dispatch"], join(factoryDir(), "dispatch.log"));
 }
 
 /** Start `aleph triage <repo>-<id>` detached, for a factory repo's issue; it never fails the caller. */
 export function triageDetached(repo: Repo, id: number): void {
   if (!dispatchOn() || !repo.sandbox) return;
-  try {
-    mkdirSync(factoryDir(), { recursive: true });
-    const log = openSync(join(factoryDir(), "dispatch.log"), "a");
-    try {
-      Bun.spawn([process.execPath, join(import.meta.dir, "..", "cli.ts"), "triage", `${repo.key}-${id}`], { env: process.env, stdin: "ignore", stdout: log, stderr: log, detached: true }).unref();
-    } finally {
-      closeSync(log);
-    }
-  } catch {}
+  detached(["triage", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
 }

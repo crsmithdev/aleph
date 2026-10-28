@@ -28,7 +28,3 @@ export async function route(spec: string): Promise<Tier | null> {
   }
 }
 
-/** The argv for `aleph job` for a goal item, with --model only when routed. */
-export function jobArgv(exec: string, cli: string, key: string, name: string, id: number, model: Tier | null): string[] {
-  return [exec, cli, "job", key, name, "--spec", "-", "--todo", String(id), "--land", ...(model ? ["--model", model] : [])];
-}

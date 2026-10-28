@@ -6,32 +6,26 @@
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal.
  * See docs/specs/2026-09-24-agent-jobs.md.
  */
-import { jobArgv, route } from "./lib/route.ts";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { LOW, allRuns, isLive, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
-import { addNote, allJobs, findJob, goal, isOpen, issue as issueOf, latestJob, openJob, readFile, view, type Job } from "./lib/job.ts";
-import { baselineChecks, git, onMain, removeBranch, reviewBack, unit } from "./lib/unit.ts";
+import { allRuns, isLive, loadRegistry, newsLine, updateRun, type Entry, type Repo } from "./lib/ledger.ts";
+import { allJobs, findJob, goal, isOpen, issue as issueOf, readFile, view, type Job } from "./lib/job.ts";
+import { git, onMain, removeBranch, reviewBack, unit } from "./lib/unit.ts";
 import { clearDecision } from "./lib/decision.ts";
 import { fetchOrigin } from "./lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import { triage } from "../todo/lib/triage.ts";
-import { behind, dispatchDetached, dispatchGoals, factoryDir, factoryLog, gates, health, hold, liveEntries, paused, probeDue, report, setPaused, triageDetached, triageNow, triageStep } from "./lib/factory.ts";
-import { runPath } from "./lib/sandbox.ts";
+import { behind, dispatchDetached, factoryDir, factoryLog, health, hold, paused, probeDue, report, setPaused, triageDetached, triageNow, triageStep } from "./lib/factory.ts";
+import { checkName, checked, drop, land, recheck, refuse, Refusal, repoOf, runDispatch, startJob, startPlain, type Start } from "./lib/transitions.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
 import { runReview2 } from "./lib/review2.ts";
-import { derive, FACTS_REF, itemOnMain, itemStates, readFacts, recentRepos, type ItemState } from "./lib/status.ts";
+import { derive, FACTS_REF, itemStates, readFacts, recentRepos, type ItemState } from "./lib/status.ts";
 
-const CLI = import.meta.path;
-/** How long `dispatch` waits for the unit to write `pid`; `ALEPH_PID_WAIT_MS` changes it. */
-const PID_WAIT_MS = Number(process.env.ALEPH_PID_WAIT_MS) || 10_000;
 const DAY_MS = 24 * 3600_000;
 
-class Refusal extends Error {}
-const refuse = (msg: string): never => { throw new Refusal(msg); };
 const out = (value: unknown) => console.log(JSON.stringify(value, null, 2));
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -44,205 +38,28 @@ function flag(name: string): string | undefined {
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
 const VALUED = ["--spec", "--model", "--todo", "--priority", "--labels", "--status", "--label", "--body", "--title", "--due", "--waiting-on"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
+/** What a start is written down as in its run's `command.txt`: the argv as typed. */
+const command = process.argv.slice(2);
 
-function checkName(name: string | undefined): string {
-  if (!name || !/^[A-Za-z0-9-]+$/.test(name)) refuse("the name must be letters, digits and hyphens");
-  return name!;
-}
-
-const quote = (argv: string[]) => argv.map((a) => /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
-
-/**
- * Create the run folder and start its unit, under the dispatch lock. The lock
- * is held until the unit writes `pid`, so a second dispatch counts this run.
- */
-/** Returns the unit's process in foreground mode, for the caller to wait on after it drops its locks. */
-async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, cwd: string, prep: (folder: string) => void): Promise<ReturnType<typeof Bun.spawn> | undefined> {
-  const release = await lock("dispatch", 120_000); // a queue of starts, each holding it until its unit writes pid
-  if (!release) refuse("another dispatch holds the lock");
-  let child: ReturnType<typeof Bun.spawn> | undefined;
-  let id: string;
-  try {
-    if (run.kind === "agent") {
-      const full = gates({ only: ["live"] });
-      if (full) refuse(`${full.why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
-    }
-    mkdirSync(jobsDir(), { recursive: true });
-    // Runs sort by folder name, so two runs of one job never share a second:
-    // a follow-up started in its land's second would sort before that land.
-    for (;;) {
-      const prefix = `${stamp()}-${tag}-`;
-      id = `${prefix}${run.kind}`;
-      if (!readdirSync(jobsDir()).some((d) => d.startsWith(prefix))) break;
-      await Bun.sleep(200);
-    }
-    const folder = join(jobsDir(), id);
-    mkdirSync(folder);
-    writeFileSync(join(folder, "command.txt"), quote(["aleph", ...process.argv.slice(2)]) + "\n");
-    prep(folder);
-    // `made` orders the land queue: folder names sort by name within a second.
-    writeRun(folder, { ...run, job: run.job ?? id, made: Date.now() } as Run);
-
-    if (process.env.ALEPH_JOB_FOREGROUND === "1") {
-      child = Bun.spawn([process.execPath, CLI, "unit", folder], { cwd, env: process.env, stdout: "inherit", stderr: "inherit" });
-    } else {
-      const pass = Object.entries(process.env).filter(([k]) => k.startsWith("ALEPH_") || k.startsWith("SIDETONE_")).map(([k, v]) => `--setenv=${k}=${v}`);
-      // A factory run's unit is the backstop for its time box: systemd stops the whole cgroup.
-      const factory = run.kind === "agent" && run.repo && loadRegistry()[run.repo]?.sandbox;
-      const max = factory ? [`--property=RuntimeMaxSec=${Number(process.env.ALEPH_JOB_TIMEOUT ?? 2400) + 3600}`] : [];
-      const p = Bun.spawnSync(["systemd-run", "--user", "--collect", "--quiet", ...LOW, `--unit=aleph-${id}`, `--working-directory=${cwd}`, ...max,
-        `--setenv=PATH=${runPath()}`, ...pass, process.execPath, CLI, "unit", folder], { stdout: "pipe", stderr: "pipe" });
-      if (p.exitCode !== 0) {
-        updateRun(folder, { state: "failed", reason: `systemd-run failed: ${p.stderr.toString().trim()}`, ended: new Date().toISOString() });
-        refuse(`systemd-run failed: ${p.stderr.toString().trim()}`);
-      }
-    }
-    // Wait for `pid`, but not for a unit that cannot write it: one that has exited, or whose folder is gone.
-    const deadline = Date.now() + PID_WAIT_MS;
-    while (!existsSync(join(folder, "pid")) && Date.now() < deadline && existsSync(folder) && child?.exitCode == null) await Bun.sleep(25);
-    if (!existsSync(join(folder, "pid"))) {
-      const why = !existsSync(folder) ? "its folder is gone" : child?.exitCode != null ? `the unit exited ${child.exitCode}` : `no pid in ${PID_WAIT_MS / 1000} s`;
-      console.error(`warn: ${id} wrote no pid: ${why}`);
-    }
-  } finally {
-    release!();
-  }
-  out({ run: id!, job: run.job ?? id!, folder: join(jobsDir(), id!) });
-  return child;
+/** Print the started run, then wait for a foreground unit: the transition has dropped its locks. */
+async function started(s: Start): Promise<void> {
+  out(s.started);
+  await s.child?.exited;
 }
 
 async function job(): Promise<void> {
-  const [repoArg, nameArg] = positional;
-  const registry = loadRegistry();
-  const key = (repoArg ?? "").toLowerCase().replace(/\s+/g, "");
-  const repo = registry[key] ?? refuse(`unknown repo "${repoArg ?? ""}"; known: ${Object.keys(registry).join(", ")}`);
-  const name = checkName(nameArg);
+  repoOf(positional[0]);
+  checkName(positional[1]);
   const specArg = flag("spec") ?? refuse("--spec <file|-> is required");
+  const [repo, name] = positional;
   const spec = specArg === "-" ? await Bun.stdin.text() : readFileSync(specArg, "utf8");
   const todoArg = flag("todo");
-  let todo: number | undefined;
-  if (todoArg !== undefined) {
-    todo = Number(todoArg);
-    if (!Number.isInteger(todo)) refuse("--todo takes an issue number");
-    if (!todos.find(readTodo(repo), todo!)) refuse(`${repo.key} has no issue ${todo}`);
-  }
-
-  const release = await lock(`job-${repo.key}-${name}`);
-  if (!release) refuse(`job ${name} is busy`);
-  let child: ReturnType<typeof Bun.spawn> | undefined;
-  try {
-    const open = openJob(name);
-    const last = open?.at(-1);
-    if (last && last.run.repo !== repo.key) refuse(last.run.repo ? `${name} is open in ${last.run.repo}` : `${name} is running as ${last.id}`);
-    if (last && isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
-    const first = open?.[0];
-    const item = todo ?? (open && issueOf(open));
-    if (first && item !== undefined) fetchOrigin(repo.path);
-    const landedAs = first ? itemOnMain(repo, item) : null;
-    if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
-    // A factory run has no worktree: its branch comes and goes as a bundle.
-    const worktree = repo.sandbox ? undefined : first?.run.worktree ?? join(repo.path, ".worktrees", `job-${name}`);
-    const model = flag("model");
-    // A follow-up without --todo keeps the item the job started with.
-    todo ??= (open && issueOf(open));
-    child = await dispatch({
-      kind: "agent", job: first?.id, name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, ...(worktree ? { worktree } : {}),
-      state: "running", phase: "starting", session: crypto.randomUUID(), ...(model ? { model } : {}),
-      ...(todo !== undefined ? { todo } : {}), ...(rest.includes("--land") ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
-    }, `${repo.key}-${name}`, repo.path, (folder) => {
-      if (!first) return writeFileSync(join(folder, "spec.md"), spec);
-      addNote(open!, spec);
-    });
-  } finally {
-    release!();
-  }
-  await child?.exited;
+  await started(await startJob({ repo, name, spec, todo: todoArg === undefined ? undefined : Number(todoArg), model: flag("model"), land: rest.includes("--land") }, { command }));
 }
 
 async function plain(): Promise<void> {
   const dash = rest.indexOf("--");
-  const name = checkName(rest[0]);
-  const argv = dash >= 0 ? rest.slice(dash + 1) : [];
-  if (!argv.length) refuse("usage: aleph run <name> -- <command> [args...]");
-  const release = await lock(`job--${name}`);
-  if (!release) refuse(`${name} is busy`);
-  let child: ReturnType<typeof Bun.spawn> | undefined;
-  try {
-    const live = openJob(name);
-    if (live) refuse(`${name} is open as ${live.at(-1)!.id}`);
-    // A command inside a registered repo gets that repo's env file, as scripts/job gave Sidetone's.
-    const cwd = process.cwd();
-    const home = Object.values(loadRegistry()).find((r) => r.env && (cwd === r.path || cwd.startsWith(r.path + "/")));
-    if (home?.env) process.env.ALEPH_RUN_ENV = home.env;
-    child = await dispatch({ kind: "plain", name, state: "running", phase: "command", told: false, started: new Date().toISOString() }, name, cwd, (folder) => {
-      writeFileSync(join(folder, "command.txt"), quote(argv) + "\n");
-    });
-  } finally {
-    release!();
-  }
-  await child?.exited;
-}
-
-/**
- * Start a land run. The latest agent run must have passed, or need Chris for a
- * held path: his land is the review, and the commit says so. A manual check does
- * not gate the land: the land run keeps it open, as an issue, until
- * `aleph checked`. With --checked, Chris has done the check already. A run
- * from before this rule, needs-you for a manual check, lands the same way.
- * The land unit takes the job lock.
- */
-async function landJob(): Promise<void> {
-  const name = checkName(positional[0]);
-  // Two lands of one job at once (the dispatch's batch pull and the leader's) each pass the live check below: it and the start share a lock.
-  const repoKey = openJob(name)?.at(-1)!.run.repo;
-  const release = await lock(`land-start-${repoKey}-${name}`, 30_000);
-  if (!release) refuse(`${name}: another land is starting`);
-  let child: ReturnType<typeof Bun.spawn> | undefined;
-  try {
-    child = await landStart(name);
-  } finally {
-    release!();
-  }
-  await child?.exited;
-}
-
-async function landStart(name: string): Promise<ReturnType<typeof Bun.spawn> | undefined> {
-  const runs = openJob(name) ?? refuse(`no open job named ${name}`);
-  const live = runs.find((e) => isLive(e.folder));
-  if (live) refuse(`${name} is running as ${live.id}`);
-  const agent = runs.filter((e) => e.run.kind === "agent" || e.run.kind === "recheck").at(-1)!.run;
-  const manual = (agent.state === "needs-you" && agent.needs === "manual") || (agent.state === "passed" && agent.say !== undefined);
-  const unchecked = manual && !rest.includes("--checked");
-  const held = agent.state === "needs-you" && (agent.needs === "held" || agent.needs === "review");
-  if (agent.state !== "passed" && !manual && !held) refuse(`${name} is ${agent.state}${agent.needs ? ` (${agent.needs})` : ""}, not passed`);
-  const repo = loadRegistry()[agent.repo!];
-  if (agent.todo !== undefined) fetchOrigin(repo.path);
-  const landedAs = itemOnMain(repo, agent.todo);
-  if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
-  const child = await dispatch({
-    kind: "land", job: agent.job, name, repo: agent.repo, branch: agent.branch, worktree: agent.worktree,
-    state: "running", phase: "land", told: false, shown: false, started: new Date().toISOString(),
-    ...(unchecked ? { check: "open" as const, say: agent.say } : {}),
-    ...(held ? { held: true } : {}),
-    ...(agent.checkedBase ? { checkedBase: agent.checkedBase } : {}),
-    ...(agent.checkedTip ? { checkedTip: agent.checkedTip } : {}),
-    ...(agent.todo !== undefined ? { todo: agent.todo } : {}),
-  }, `${repo.key}-${name}`, repo.path, () => {});
-  return child;
-}
-
-/** Close the manual check of a job that landed with it open, and its issue. */
-function checked(): void {
-  const name = checkName(positional[0]);
-  const last = latestJob(name)?.at(-1);
-  if (!last || last.run.state !== "landed" || last.run.check !== "open") refuse(`${name} has no open check`);
-  updateRun(last!.folder, { check: "done" });
-  const repo = last!.run.repo ? loadRegistry()[last!.run.repo] : undefined;
-  const item = last!.run.checkItem;
-  const why = repo && item !== undefined ? store.close(repo, item, "checked by Chris") : null;
-  if (why) console.error(`warn: issue ${item} not closed: ${why}`);
-  out({ job: last!.run.job, name, state: "landed", check: "done" });
-  dispatchDetached();
+  await started(await startPlain({ name: rest[0], argv: dash >= 0 ? rest.slice(dash + 1) : [], cwd: process.cwd() }, { command }));
 }
 
 /**
@@ -317,81 +134,6 @@ function jobs(): void {
     ...summary(runs!, fates), question: last.run.question, result: readFile(last, "result.md"),
     checks: checks?.trimEnd().split("\n").slice(-40).join("\n"), land: readFile(last, "land.log"),
   });
-}
-
-/**
- * Start a recheck run: the last run of an open job is an agent or recheck run
- * that ended stuck or failed, and its branch still exists. The run merges main
- * into the branch and runs the checks and the reviewer again; no worker starts.
- */
-async function recheck(): Promise<void> {
-  const name = checkName(positional[0]);
-  const found = openJob(name) ?? refuse(`no open job named ${name}`);
-  const release = await lock(`job-${found.at(-1)!.run.repo ?? ""}-${name}`);
-  if (!release) refuse(`job ${name} is busy`);
-  let child: ReturnType<typeof Bun.spawn> | undefined;
-  try {
-    const runs = openJob(name) ?? refuse(`no open job named ${name}`);
-    const last = runs.at(-1)!;
-    if (isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
-    const r = last.run;
-    if (r.kind !== "agent" && r.kind !== "recheck") refuse(`${name}: the last run is a ${r.kind} run, not an agent run`);
-    if (r.state !== "stuck" && r.state !== "failed") refuse(`${name} is ${r.state}, not stuck or failed`);
-    const repo = loadRegistry()[r.repo ?? ""];
-    if (!repo?.sandbox) refuse(`${name} is not a factory job`);
-    if (!r.branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok) refuse(`${name} has no branch: drop it`);
-    const todo = issueOf(runs);
-    child = await dispatch({
-      kind: "recheck", job: runs[0].id, name, repo: repo.key, branch: r.branch, state: "running", phase: "starting",
-      ...(todo !== undefined ? { todo } : {}), ...(runs.some((e) => e.run.land) ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
-    }, `${repo.key}-${name}`, repo.path, () => {});
-  } finally {
-    release!();
-  }
-  // The recheck is live now, so the hold it was under no longer counts.
-  dispatchDetached();
-  await child?.exited;
-}
-
-async function drop(): Promise<void> {
-  const name = checkName(positional[0]);
-  const reason = positional.slice(1).join(" ") || "dropped by Chris";
-  const runs = openJob(name) ?? refuse(`no open job named ${name}`);
-  const last = runs.at(-1)!;
-  const release = await lock(`job-${last.run.repo ?? ""}-${name}`);
-  if (!release) refuse(`job ${name} is busy`);
-  try {
-    if (runs.some((e) => e.run.kind === "land" && isLive(e.folder))) refuse("landing");
-    const repo = last.run.repo ? loadRegistry()[last.run.repo] : undefined;
-    const live = runs.filter((e) => isLive(e.folder));
-    for (const e of live) {
-      Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}`], { stdout: "ignore", stderr: "ignore" });
-      if (isLive(e.folder)) process.kill(Number(readFileSync(join(e.folder, "pid"), "utf8")), "SIGTERM");
-      const deadline = Date.now() + 35_000;
-      while (isLive(e.folder) && Date.now() < deadline) await Bun.sleep(50);
-    }
-    // A held run's review2 is its own unit: stop it too, and take its scratch clone.
-    for (const e of runs) {
-      Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}-review2`], { stdout: "ignore", stderr: "ignore" });
-      if (existsSync(join(e.folder, "review2.md"))) rmSync(join(e.folder, "review2"), { recursive: true, force: true });
-    }
-    if (repo) removeBranch(repo, last.run);
-    // Chris asked for the drop, so it is not news.
-    for (const e of new Set([...live, last])) {
-      if (!existsSync(join(e.folder, "exit"))) writeFileSync(join(e.folder, "exit"), "143");
-      const noCommit = e.run.reason === "no commit" || e.run.noCommit ? { noCommit: true as const } : {};
-      updateRun(e.folder, { ...noCommit, state: "dropped", reason, needs: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
-    }
-    const todo = issueOf(runs);
-    // --quiet: the factory's own drop writes the note and the news itself, and its dispatch goes on.
-    const quiet = rest.includes("--quiet");
-    const why = repo && todo !== undefined && !quiet ? store.note(repo, todo, `job ${name} dropped: ${reason}`) : null;
-    if (why) console.error(`warn: issue ${todo} has no note: ${why}`);
-    out({ job: last.run.job, name, state: "dropped", reason });
-    if (!quiet) dispatchDetached();
-  } finally {
-    release!();
-  }
 }
 
 /** After `aleph issue add` or `edit` of an open goal in a factory repo: a dispatch, so the goal starts at once. It never fails the write. */
@@ -621,48 +363,6 @@ function todoRecent(sub: "list" | "lint"): void {
   for (const r of rows) { console.log(r.repo); printRows(r.items, "  "); }
 }
 
-/** Start the run for a goal: `ALEPH_START_CMD` (tests) or `aleph job`. Returns the refusal, or null. */
-async function startRun(repo: Repo, name: string, id: number, spec: string): Promise<string | null> {
-  const model = await route(spec);
-  factoryLog(`starting ${name} with model ${model ?? "default"}`);
-  const argv = process.env.ALEPH_START_CMD ? [process.env.ALEPH_START_CMD, repo.key, name, String(id)] : jobArgv(process.execPath, CLI, repo.key, name, id, model);
-  const p = Bun.spawn(argv, { env: process.env, stdin: new Blob([spec]), stdout: "ignore", stderr: "pipe" });
-  const code = await p.exited;
-  return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
-}
-
-/** One dispatch of the ready goals. A failed probe starts no run. */
-async function runDispatch() {
-  const g = gates({ only: ["pause", "probe"] });
-  if (g?.gate === "probe") {
-    factoryLog("the last probe failed; no run started");
-    return { started: [], skipped: [g.why] };
-  }
-  // `ALEPH_RESCUE=off` leaves a stuck or failed run to hold the factory, as before the safe default actions; for tests of the hold.
-  return dispatchGoals(startRun, baselineChecks, landRun, process.env.ALEPH_RESCUE === "off" ? undefined : { drop: dropRun, recheck: recheckRun });
-}
-
-/** A land the hold had kept waiting: `aleph land <name>`. Returns the refusal, or null. */
-async function landRun(name: string): Promise<string | null> {
-  const p = Bun.spawn([process.execPath, CLI, "land", name], { env: process.env, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
-  const code = await p.exited;
-  return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
-}
-
-/** A safe default drop: `aleph drop <name> <reason> --quiet`; the factory writes the issue note and the news. */
-async function dropRun(name: string, reason: string): Promise<string | null> {
-  const p = Bun.spawn([process.execPath, CLI, "drop", name, reason, "--quiet"], { env: process.env, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
-  const code = await p.exited;
-  return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
-}
-
-/** A safe default recheck: `aleph recheck <name>`. */
-async function recheckRun(name: string): Promise<string | null> {
-  const p = Bun.spawn([process.execPath, CLI, "recheck", name], { env: process.env, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
-  const code = await p.exited;
-  return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
-}
-
 /** `aleph triage <repo>-<n>`: triage one issue now, under the dispatch's gates. */
 async function triageCmd(): Promise<void> {
   const ref = todos.parseRef(rest[0] ?? "") ?? refuse("usage: aleph triage <repo>-<n>");
@@ -776,17 +476,17 @@ try {
     case "job": await job(); break;
     case "run": await plain(); break;
     case "jobs": jobs(); break;
-    case "recheck": await recheck(); break;
+    case "recheck": await started(await recheck(positional[0], { command })); break;
     case "review2": {
       const folder = resolve(positional[0] ?? refuse("usage: aleph review2 <run-folder>"));
       try { await runReview2(folder); } catch (e: any) { refuse(e.message); }
       await reviewBack(folder);
       break;
     }
-    case "drop": await drop(); break;
+    case "drop": out(await drop(positional[0], { reason: positional.slice(1).join(" "), quiet: rest.includes("--quiet") })); break;
     case "unit": await unit(resolve(positional[0])); break;
-    case "land": await landJob(); break;
-    case "checked": checked(); break;
+    case "land": await started(await land(positional[0], { checked: rest.includes("--checked") }, { command })); break;
+    case "checked": out(checked(positional[0])); break;
     case "issue": case "todo": await todoCmd(); break;
     case "tick": await tickCmd(); break;
     case "dispatch": await dispatchCmd(); break;

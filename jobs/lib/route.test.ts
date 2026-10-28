@@ -2,7 +2,8 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { jobArgv, route } from "./route.ts";
+import { route } from "./route.ts";
+import { jobCommand } from "./transitions.ts";
 
 let dir: string;
 let server: ReturnType<typeof Bun.serve>;
@@ -47,7 +48,7 @@ test("ALEPH_JUDGE=haiku gives no model and Jev is not asked", async () => {
   expect(asked).toEqual([]);
 });
 
-test("the job argv carries --model only when routed", () => {
-  expect(jobArgv("bun", "cli.ts", "r", "r-1", 1, "opus").slice(-2)).toEqual(["--model", "opus"]);
-  expect(jobArgv("bun", "cli.ts", "r", "r-1", 1, null)).not.toContain("--model");
+test("the job command carries --model only when routed", () => {
+  expect(jobCommand({ repo: "r", name: "r-1", spec: "", todo: 1, land: true, model: "opus" })).toEqual(["job", "r", "r-1", "--spec", "-", "--todo", "1", "--land", "--model", "opus"]);
+  expect(jobCommand({ repo: "r", name: "r-1", spec: "", todo: 1, land: true })).not.toContain("--model");
 });

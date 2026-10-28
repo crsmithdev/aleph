@@ -9,12 +9,14 @@ import { basename, join } from "node:path";
 import { closeAndFile, file, readHidden } from "../../todo/lib/store.ts";
 import { fetchOrigin, followMain, git } from "./git.ts";
 import { ALREADY_MET, heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
-import { LOW, checkSlot, readReview2, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { checkSlot, readReview2, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
 import { dispatchOn, gates, triageDetached, recordFlake, waitingToLand } from "./factory.ts";
 import { startReview2 } from "./review2.ts";
 import { postTrace } from "./trace.ts";
+import { runLogged, startUnit } from "./launch.ts";
+import { land as startLand, startJob } from "./transitions.ts";
 import { FACTS_REF, itemOnMain, writeFacts } from "./status.ts";
 
 export { git };
@@ -262,15 +264,11 @@ async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
     const last = openJob(n, null, jobs)?.at(-1)!.run;
     return last && last.repo === repo.key && !last.next && last.job !== run.job;
   }).slice(0, room);
-  const cli = join(import.meta.dir, "..", "cli.ts");
   const jobsOf = names.map((n) => openJob(n, null, jobs)![0].run.job);
   // Their own units: a child of this land's unit would die with its cgroup when the leader exits.
   for (const n of names) {
     const unit = `aleph-pull-${repo.key}-${n}-${Date.now()}`.replace(/[^A-Za-z0-9:_.-]/g, "-");
-    const pass = Object.entries(process.env).filter(([k]) => k.startsWith("ALEPH_") || k.startsWith("SIDETONE_")).map(([k, v]) => `--setenv=${k}=${v}`);
-    const argv = process.env.ALEPH_JOB_FOREGROUND === "1" ? [process.execPath, cli, "land", n]
-      : ["systemd-run", "--user", "--collect", "--quiet", ...LOW, `--unit=${unit}`, `--working-directory=${repo.path}`, `--setenv=PATH=${runPath()}`, ...pass, process.execPath, cli, "land", n];
-    Bun.spawn(argv, { env: process.env, stdin: "ignore", stdout: "ignore", stderr: "ignore", detached: true }).unref();
+    try { startUnit(["land", n], { unit, cwd: repo.path }); } catch {}
   }
   const deadline = Date.now() + 10_000;
   const queued = (job: string) => allRuns().some((e) => e.run.kind === "land" && e.run.job === job && e.run.state === "running");
@@ -716,12 +714,7 @@ export async function unit(folder: string): Promise<void> {
 
 /** A run ended, so a slot may be free: `aleph dispatch` starts the ready goals. Its output goes to dispatch.log. */
 async function dispatchFree(folder: string): Promise<void> {
-  const log = openSync(join(folder, "dispatch.log"), "a");
-  try {
-    const p = Bun.spawn([process.execPath, join(import.meta.dir, "..", "cli.ts"), "dispatch"], { env: process.env, stdin: "ignore", stdout: log, stderr: log });
-    await p.exited;
-  } catch {}
-  closeSync(log);
+  await runLogged(["dispatch"], join(folder, "dispatch.log"));
 }
 
 const BOUNCES = 2;
@@ -764,7 +757,7 @@ function hiddenNote(folder: string, run: Run): string {
   return `${run.reason}\n${names.length ? `\nThe failing tests:\n${names.map((n) => `- ${n}`).join("\n")}\n` : ""}\nThe tests are hidden: their source and log are not available. Fix the cause, run the tests, and commit.`;
 }
 
-/** Start the next run through the CLI, as Chris would. Its refusal goes to next.log. */
+/** Start the next run as `aleph land` or `aleph job` would, in-process. What it prints and its refusal go to next.log. */
 async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): Promise<void> {
   if (gates({ only: ["pause"] })) {
     appendFileSync(join(folder, "next.log"), `paused: no ${next} started\n`);
@@ -786,8 +779,6 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
     updateRun(folder, { next: undefined });
     return;
   }
-  const cli = join(import.meta.dir, "..", "cli.ts");
-  const argv = next === "land" ? ["land", run.name] : ["job", run.repo!, run.name, "--spec", "-", "--land"];
   const note = run.failed === "hidden"
     ? hiddenNote(folder, run)
     : run.failed === "review"
@@ -797,11 +788,17 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
     : run.reason === OWN_LIST
     ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph issue writes the list. The lists live in the work store now. Remove ${TODO_PATH} from the branch, commit, and make each change to the list with aleph issue.`
     : `The land conflicted with origin/main in: ${(run.conflicts ?? []).join(", ")}. Merge origin/main into this branch, resolve each conflict so that the change on main and this job's change both survive, run the tests, and commit.`;
-  const log = openSync(join(folder, "next.log"), "a");
-  const p = Bun.spawn([process.execPath, cli, ...argv], { env: { ...process.env, PATH: runPath() }, stdin: next === "worker" ? new Blob([note]) : "ignore", stdout: log, stderr: log });
-  const code = await p.exited;
-  closeSync(log);
-  if (code !== 0) updateRun(folder, { next: undefined });
+  const log = join(folder, "next.log");
+  try {
+    const s = next === "land"
+      ? await startLand(run.name, {}, { output: { file: log } })
+      : await startJob({ repo: run.repo!, name: run.name, spec: note, land: true }, { output: { file: log } });
+    appendFileSync(log, JSON.stringify(s.started, null, 2) + "\n");
+    await s.child?.exited;
+  } catch (e: any) {
+    appendFileSync(log, `${String(e?.message ?? e)}\n`);
+    updateRun(folder, { next: undefined });
+  }
 }
 
 async function agent(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>, checkEnv: Record<string, string | undefined>): Promise<{ verdict: Verdict; code: number }> {

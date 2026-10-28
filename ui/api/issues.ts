@@ -4,7 +4,7 @@
  * only that project. A read is the work store's origin/main; a write runs
  * `aleph todo add`, so the CLI stays the one writer.
  */
-import { join } from "node:path";
+import { runCli } from "../../jobs/lib/launch.ts";
 import { allJobs, lastReal } from "../../jobs/lib/job.ts";
 import { loadRegistry, type Repo } from "../../jobs/lib/ledger.ts";
 import { git } from "../../jobs/lib/git.ts";
@@ -102,11 +102,6 @@ function detail(params: Record<string, string>, url: URL): Response {
   return Response.json({ ...row(repo.key, item), body: item.body, notes: item.notes, frontmatter: item.fm, derived: state, jobs, commits });
 }
 
-/** The command that runs the CLI: `$ALEPH_CLI` when set (the tests' fake), else bun on jobs/cli.ts. */
-function cliArgv(): string[] {
-  return process.env.ALEPH_CLI ? [process.env.ALEPH_CLI] : [process.execPath, join(import.meta.dir, "..", "..", "jobs", "cli.ts")];
-}
-
 async function create(req: Request, url: URL): Promise<Response> {
   const origin = req.headers.get("origin");
   if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -119,14 +114,13 @@ async function create(req: Request, url: URL): Promise<Response> {
   if (!loadRegistry()[repo]) return Response.json({ error: repo ? `no repo named ${repo}` : "name a project" }, { status: 400 });
   if (project && project !== repo) return Response.json({ error: `this view is filtered to ${project}` }, { status: 400 });
   const labels = (Array.isArray(b.labels) ? b.labels : String(b.labels ?? "").split(",")).map((s: unknown) => String(s).trim()).filter(Boolean);
-  const args = [...cliArgv(), "todo", "add", repo, title, "--body", "-"];
+  const args = ["todo", "add", repo, title, "--body", "-"];
   if (labels.length) args.push("--labels", labels.join(","));
   const waits = str(b.waitingOn ?? b.waiting_on)?.trim();
   if (waits) args.push("--waiting-on", waits);
   const due = str(b.due)?.trim();
   if (due) args.push("--due", due);
-  const p = Bun.spawn(args, { stdin: new Blob([String(b.body ?? "")]), stdout: "pipe", stderr: "pipe", env: process.env });
-  const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
+  const { stdout: out, stderr: err, code } = await runCli(args, { stdin: String(b.body ?? "") });
   if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
   let added: unknown = {};
   try { added = JSON.parse(out); } catch { added = { output: out.trim() }; }
@@ -146,8 +140,7 @@ async function drop(req: Request, params: Record<string, string>, url: URL): Pro
   if (!doc || !todos.find(doc, n)) return none;
   const body: any = await req.json().catch(() => ({}));
   const reason = typeof body?.reason === "string" && body.reason.trim() ? body.reason.trim() : "cancelled from the Activity page";
-  const p = Bun.spawn([...cliArgv(), "issue", "drop", repo.key, String(n), reason], { stdin: "ignore", stdout: "pipe", stderr: "pipe", env: process.env });
-  const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
+  const { stdout: out, stderr: err, code } = await runCli(["issue", "drop", repo.key, String(n), reason]);
   if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
   try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }
 }
@@ -181,8 +174,7 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
     if (!rec) return Response.json({ error: "this issue has no recommendation to approve" }, { status: 400 });
     note = `Chris decided: ${rec}`;
   }
-  const p = Bun.spawn([...cliArgv(), "issue", "decide", repo.key, String(n), ...(waitingOn ? ["--waiting-on", waitingOn] : []), note], { stdin: "ignore", stdout: "pipe", stderr: "pipe", env: process.env });
-  const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
+  const { stdout: out, stderr: err, code } = await runCli(["issue", "decide", repo.key, String(n), ...(waitingOn ? ["--waiting-on", waitingOn] : []), note]);
   if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
   try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }
 }
