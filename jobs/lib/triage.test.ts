@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
-import { parseVerdict, triageOpen } from "./triage.ts";
+import { parseVerdict, prompt, triageOpen } from "./triage.ts";
 import { readRun, type Repo } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -88,6 +88,13 @@ test("each of the four verdicts leaves the item in its state", async () => {
 
   expect(labels(4)).toEqual(expect.arrayContaining(["live-check", "triaged"]));
   expect(item(4).notes.at(-1)).toContain("check the prod dashboard");
+});
+
+test("the prompt says the factory runs the checks, and names no aleph check command", () => {
+  const p = prompt(repo, { id: 1, title: "t", body: "", notes: [], fm: {} } as unknown as todos.Item);
+  expect(p).toContain("The factory runs this repo's checks itself");
+  expect(p).toContain("There is no `aleph check` command");
+  expect(p).not.toMatch(/aleph check\s+\S/);
 });
 
 test("a triage is a job in the ledger, of kind triage", async () => {

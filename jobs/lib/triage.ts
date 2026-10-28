@@ -58,8 +58,10 @@ Reply with one JSON object and nothing else, with one of these verdicts:
 - {"verdict": "goal", "body": "<goal body>"}: the issue is work a factory run can do alone. "body" replaces the issue's body, in the goal format:
   ## Goal (what and why, short)
   ## Edit surface (the files the run may change)
-  ## Oracle (the checks that tell it is done: tests that pass, commands with their output)
+  ## Oracle (the checks that tell it is done)
   ## Time box (default: 45 minutes, one run)
+
+  The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun test\`), or a new test that asserts the end state. There is no \`aleph check\` command: never name one.
 - {"verdict": "close", "reason": "<why>"}: it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
 - {"verdict": "chris", "question": "<one question>"}: it needs a plan or a choice only Chris can make.
 - {"verdict": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.
