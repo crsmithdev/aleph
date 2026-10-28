@@ -183,71 +183,10 @@ export const PAGE = 50;
 /** The issues that have a closed or dropped row. */
 const closedIssues = (rows) => new Set(rows.filter((e) => e.kind === "issue" && (e.what === "closed" || e.what === "dropped")).map((e) => e.href));
 
-/** The stream's header row: `columns` are [key, label], only keys in `sortable` get a sort button. */
-function streamHead(sort, columns = COLUMNS, sortable = SORT) {
-  return `<thead><tr>${columns.map(([k, label]) => sortable[k] ? sortHead(label, k, sort) : `<th>${label}</th>`).join("")}</tr></thead>`;
+/** The stream's header row: the sortable columns get a sort button. */
+function streamHead(sort) {
+  return `<thead><tr>${COLUMNS.map(([k, label]) => SORT[k] ? sortHead(label, k, sort) : `<th>${label}</th>`).join("")}</tr></thead>`;
 }
-
-// Contents (views/contents.js) still draws its tables with these two, the page's old CSS and header.
-// Delete them when Contents moves to the shared parts.
-/** The old table CSS, for Contents. */
-export const STYLE = `<style>
-.tl .kinds { display: inline-flex; margin: 0 0 8px; font: 13px var(--sans); border: 1px solid var(--rule-2); border-radius: 6px; overflow: hidden; }
-.tl .kinds button { all: unset; box-sizing: border-box; padding: 3px 12px; cursor: pointer; color: var(--muted); border-left: 1px solid var(--rule-2); }
-.tl .kinds button:first-child { border-left: 0; }
-.tl .kinds button:hover { color: var(--ink); }
-.tl .kinds button[aria-pressed="true"] { color: var(--ink); background: var(--rule-2); font-weight: 600; }
-.tl .kinds button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
-.tl .strip { width: 100%; height: 230px; margin-bottom: 12px; }
-.tl .tbl { border-collapse: collapse; width: 100%; font-size: 13px; }
-.tl .tbl th { padding: 3px 10px 3px 0; font: 600 12px var(--sans); color: var(--muted); text-align: left; white-space: nowrap; }
-.tl .tbl th button { all: unset; cursor: pointer; }
-.tl .tbl th button:hover, .tl .tbl th button:focus-visible { color: var(--ink); }
-.tl .tbl th[aria-sort] { color: var(--ink); }
-.tl .tbl td { padding: 6px 10px 6px 0; border-top: 1px solid var(--rule-2); text-align: left; vertical-align: middle; white-space: nowrap; }
-.tl .tbl .c-title { width: 100%; white-space: normal; overflow-wrap: anywhere; font-weight: 500; }
-.tl .tbl td.c-time { color: var(--muted); font-variant-numeric: tabular-nums; }
-.tl .tbl td.c-id a, .tl .tbl td.c-id span { font: 500 12.5px var(--mono); }
-.tl .tbl td.c-con { max-width: 34ch; overflow: hidden; text-overflow: ellipsis; }
-.tl .tbl .k { color: var(--muted); font-weight: 700; }
-.tl .tbl .c-con > span + span { margin-left: 8px; }
-.tl .tbl tr.evr { cursor: pointer; }
-.tl .tbl tr.evr:hover td { background: var(--rule-2); }
-.tl .tbl tr.more td { padding: 6px 10px 10px 0; white-space: normal; background: var(--rule-2); }
-.tl .tbl tr.more dl { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0; }
-.tl .tbl tr.more dl > div { overflow-wrap: anywhere; }
-.tl .tbl tr.more dt, .tl .tbl tr.more dd { display: inline; margin: 0; }
-.tl .tbl tr.more .open { display: inline-block; margin-top: 6px; }
-.tl .tbl .c-con .badge { margin-right: 4px; }
-.tl .tbl .c-act { position: relative; width: 28px; padding: 0; text-align: right; }
-.tl .pager { display: flex; align-items: center; gap: 12px; padding: 10px 0; font: 13px var(--sans); color: var(--muted); }
-.tl .tbl .cancel { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 4px; color: var(--muted); cursor: pointer; }
-.tl .tbl .cancel svg { width: 14px; height: 14px; pointer-events: none; }
-.tl .tbl .cancel:hover { color: var(--stuck); background: var(--rule-2); }
-.tl .tbl .cancel:focus-visible { color: var(--stuck); outline: 2px solid currentColor; outline-offset: 1px; }
-.tl .tbl .cancel.arm { color: var(--stuck); background: var(--rule-2); }
-.tl .tbl .cancel[disabled] { opacity: .5; cursor: default; }
-.tl .tbl .cmsg { position: absolute; right: 30px; top: 50%; transform: translateY(-50%); font: 12px var(--sans); color: var(--muted); background: var(--bg, #fff); white-space: nowrap; }
-.tl .tbl .cmsg.err { color: var(--stuck); }
-@media (max-width: 760px) {
-  .tl .tbl, .tl .tbl tbody, .tl .tbl thead { display: block; }
-  .tl .tbl tr { display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 6px 0; }
-  .tl .tbl tbody tr { border-top: 1px solid var(--rule-2); }
-  .tl .tbl th, .tl .tbl td { width: auto; padding: 0; border: 0; }
-  .tl .tbl .c-title, .tl .tbl .c-con { flex: 1 1 100%; max-width: none; }
-  .tl .tbl .c-con { order: 9; }
-  .tl .tbl .c-act { margin-left: auto; width: 24px; }
-}
-</style>`;
-/** A sortable header row: `columns` are [key, label], only keys in `sortable` get a button. */
-export function head(sort, columns = COLUMNS, sortable = SORT) {
-  return `<thead><tr>${columns.map(([k, label]) => {
-    if (!sortable[k]) return `<th class="c-${k}">${label}</th>`;
-    const on = sort.key === k;
-    return `<th class="c-${k}"${on ? ` aria-sort="${sort.dir > 0 ? "ascending" : "descending"}"` : ""}><button type="button" data-sort="${k}">${label}${on ? (sort.dir > 0 ? " ▲" : " ▼") : ""}</button></th>`;
-  }).join("")}</tr></thead>`;
-}
-
 
 /** The first `shown` rows in `sort` order (50 to start), with the pager under them. */
 export function renderStream(rows, shown = PAGE, now = Date.now(), sort = { key: "time", dir: -1 }, open = new Set()) {
