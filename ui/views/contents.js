@@ -1,5 +1,5 @@
 // The Contents view: the state to browse, not the process: every project and every issue of every repo, in rows styled like Activity's (its CSS, header and X are imported from timeline.js),
-// two tables and a form that files an issue. `data` is /api/contents: { issues, projects }.
+// three tables and a form that files an issue. `data` is /api/contents: { issues, projects, specs }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { empty, esc, labelName, md } from "../lib.js";
 import { STYLE, X_ICON, confirmCancel, head as header } from "./timeline.js";
@@ -39,12 +39,13 @@ const STYLE_CONTENTS = `<style>
 export const DEFAULT_STATUS = "open";
 const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STATUS : s === "any" ? "" : s);
 
-/** The filters and sorts, from the route's query: ?status=open&project=x&label=x&q=text&sort=title&dir=asc (the Issues table), &psort=open&pdir=desc (the Projects table). */
+/** The filters and sorts, from the route's query: ?status=open&project=x&label=x&q=text&sort=title&dir=asc (the Issues table), &psort=open&pdir=desc (the Projects table), &ssort=date&sdir=desc (the Specs table). */
 export function hashOptions(q = new URLSearchParams()) {
   return {
     status: statusOf(q.get("status")), project: q.get("project") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "",
     sort: { key: q.get("sort") || "updated", dir: q.get("dir") === "asc" ? 1 : -1 },
     psort: { key: q.get("psort") || "updated", dir: q.get("pdir") === "asc" ? 1 : -1 },
+    ssort: { key: q.get("ssort") || "date", dir: q.get("sdir") === "asc" ? 1 : -1 },
   };
 }
 
@@ -67,6 +68,11 @@ export function projectRows(d) {
   return (d?.projects ?? []).map((p) => ({ project: p.key, open: p.openItems ?? 0, at: p.activity, href: projectHref(p) }));
 }
 
+/** The spec rows from the API data. */
+export function specRows(d) {
+  return (d?.specs ?? []).map((s) => ({ date: s.date, title: s.title, project: s.project, at: s.date, href: `#/specs/${encodeURIComponent(s.project)}/${encodeURIComponent(s.file)}` }));
+}
+
 /** The issue rows that pass the filters. */
 export function filterRows(rows, o = {}) {
   const q = (o.q ?? "").trim().toLowerCase();
@@ -78,6 +84,8 @@ export function filterRows(rows, o = {}) {
 /** The project rows that pass the Project filter. */
 export const filterProjects = (rows, o = {}) => rows.filter((r) => !o.project || r.project === o.project);
 
+export const SPEC_COLUMNS = [["date", "Date"], ["title", "Title"], ["project", "Project"]];
+const SPEC_SORT = { date: (r) => r.date, title: (r) => r.title, project: (r) => r.project };
 export const COLUMNS = [["project", "Project"], ["status", "Status"], ["id", "Id"], ["title", "Title"], ["labels", "Labels"], ["updated", "Updated"], ["act", ""]];
 export const PROJECT_COLUMNS = [["title", "Name"], ["open", "Open issues"], ["updated", "Last activity"]];
 const SORT = {
@@ -87,7 +95,7 @@ const PROJECT_SORT = { title: (r) => r.project, open: (r) => r.open, updated: (r
 
 /** The rows ordered by `sort` = { key, dir } (dir 1 up, -1 down). Ties keep newest first. */
 export function sortRows(rows, sort = { key: "updated", dir: -1 }, by = SORT) {
-  const f = by[sort.key] ?? by.updated;
+  const f = by[sort.key] ?? by.updated ?? by.date;
   return [...rows].sort((a, b) => {
     const x = f(a), y = f(b);
     const c = typeof x === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true });
@@ -120,9 +128,21 @@ export function renderProjectRow(r) {
     `<td class="c-open">${r.open}</td><td class="c-time">${esc(day(r.at))}</td></tr>`;
 }
 
+/** One spec row; the whole row is the link. */
+export function renderSpecRow(r) {
+  return `<tr class="evr crow" data-kind="spec"><td class="c-date">${esc(r.date)}</td>` +
+    `<td class="c-title"><a href="${esc(r.href)}">${esc(r.title)}</a></td><td class="c-project">${esc(r.project)}</td></tr>`;
+}
+
+export function renderSpecsTable(rows, o = {}) {
+  const shown = sortRows(filterProjects(rows, o), o.ssort, SPEC_SORT);
+  if (!shown.length) return empty("No spec matches.", "A repo's docs/specs folder lists its specs here.");
+  return `<div class="list"><table class="tbl">${header(o.ssort ?? { key: "date", dir: -1 }, SPEC_COLUMNS, SPEC_SORT)}<tbody>${shown.map(renderSpecRow).join("")}</tbody></table></div>`;
+}
+
 export function renderFilters(d, o = {}) {
   const issues = issueRows(d);
-  const projects = [...new Set([...projectRows(d).map((r) => r.project), ...issues.map((r) => r.project)])].sort();
+  const projects = [...new Set([...projectRows(d).map((r) => r.project), ...issues.map((r) => r.project), ...specRows(d).map((r) => r.project)])].sort();
   const labels = [...new Set(issues.flatMap((r) => r.labels))].sort();
   const opt = (v, cur, text = v) => `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(text)}</option>`;
   return `<form class="filters" data-ui="contents-filter" onsubmit="return false">` +
@@ -191,11 +211,13 @@ export function renderForm(rows, o = {}) {
 }
 
 export function renderContents(d, o = {}) {
-  const issues = issueRows(d), projects = projectRows(d);
+  const issues = issueRows(d), projects = projectRows(d), specs = specRows(d);
+  const shownSpecs = filterProjects(specs, o).length;
   const shownProjects = filterProjects(projects, o).length, shownIssues = filterRows(issues, o).length;
   return `${STYLE}${STYLE_CONTENTS}<div class="page tl"><h1>Contents</h1>${renderFilters(d, o)}` +
     `<h2>Projects <small class="quiet">${shownProjects}</small></h2><div id="projects-table">${renderProjectsTable(projects, o)}</div>` +
     `<h2>Issues <small class="quiet">${shownIssues}</small></h2><div id="issues-table">${renderTable(issues, o)}</div>` +
+    `<h2>Specs <small class="quiet">${shownSpecs}</small></h2><div id="specs-table">${renderSpecsTable(specs, o)}</div>` +
     renderForm(d?.issues ?? [], o) + `</div>`;
 }
 
@@ -230,11 +252,11 @@ if (typeof document !== "undefined") {
     location.hash = path + (q.toString() ? `?${q}` : "");
   };
   document.addEventListener("click", (e) => {
-    const b = e.target.closest && e.target.closest("#issues-table button[data-sort], #projects-table button[data-sort]");
+    const b = e.target.closest && e.target.closest("#issues-table button[data-sort], #projects-table button[data-sort], #specs-table button[data-sort]");
     if (!b) return;
     const o = hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? ""));
-    const p = b.closest("#projects-table") ? "p" : "", cur = p ? o.psort : o.sort;
-    const key = b.dataset.sort, dir = cur.key === key ? -cur.dir : key === "updated" || key === "open" ? -1 : 1;
+    const p = b.closest("#projects-table") ? "p" : b.closest("#specs-table") ? "s" : "", cur = p === "p" ? o.psort : p === "s" ? o.ssort : o.sort;
+    const key = b.dataset.sort, dir = cur.key === key ? -cur.dir : key === "updated" || key === "open" || key === "date" ? -1 : 1;
     setQuery(`${p}sort`, key); setQuery(`${p}dir`, dir > 0 ? "asc" : "desc");
   });
   document.addEventListener("change", (e) => {
