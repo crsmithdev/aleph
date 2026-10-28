@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { judgeChoice } from "../hooks/lib/jev.ts";
 import { DAY_CAP, LIVE_CAP, WAITING_CAP, health, hold, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
-import { allJobs, isOpen, loadRegistry, readReview2, type Entry, type Repo } from "../jobs/lib/ledger.ts";
+import { allJobs, allRuns, isOpen, loadRegistry, readReview2, type Entry, type Repo } from "../jobs/lib/ledger.ts";
 import { readList } from "../todo/lib/store.ts";
 import { status, type Doc } from "../todo/lib/todo.ts";
 
@@ -21,6 +21,8 @@ export interface Job {
   commit?: string; commitUrl?: string;
   defaults: string[]; followups: string[];
   stat?: string;
+  /** A live run exists for this job: a next run or a rerun. */
+  agent?: boolean;
   /** Needs-you: the review2 verdict of the held run. */
   review2?: { verdict: string; reason?: string };
   /** A landed job whose manual check is still open. */
@@ -48,6 +50,8 @@ export interface State {
   landing: number;
   /** Open issues in factory repos that are not goals and not yet triaged. */
   newIssues: number;
+  /** Jobs landed and issues triaged in the last 24 hours, with the 7-day daily average. */
+  velocity: { landed: { day: number; avg: number }; triaged: { day: number; avg: number } };
 }
 
 /** Labels that mark an issue as already sorted. */
@@ -171,6 +175,7 @@ export function state(now = new Date()): State {
   let landing = 0;
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
   const delivered: { at: number; job: Job }[] = [];
+  const liveJobs = new Set<string>(), liveItems = new Set<string>();
   const landRuns: Job[] = [];
   const openNames = new Set<string>();
   for (const runs of jobs) {
@@ -180,6 +185,8 @@ export function state(now = new Date()): State {
       if (last.state === "needs-you") needs.push(toJob(runs));
       else if (last.state === "stuck" || last.state === "failed") stuck.push(toJob(runs));
       else {
+        liveJobs.add(last.job);
+        if (last.todo !== undefined) liveItems.add(`${last.repo}/${last.todo}`);
         const job = toJob(runs);
         running.push(job);
         if (last.kind === "land") { landing++; landRuns.push(job); }
@@ -189,6 +196,19 @@ export function state(now = new Date()): State {
       delivered.push({ at, job: toJob(runs) });
     }
   }
+
+  for (const j of [...needs, ...stuck]) {
+    const todo = j.item?.id;
+    j.agent = liveJobs.has(j.name) || (todo !== undefined && liveItems.has(`${j.repo}/${todo}`));
+  }
+
+  const DAY_MS = 86_400_000, t0 = now.getTime();
+  const rate = (times: number[]) => ({
+    day: times.filter((t) => t0 - t < DAY_MS).length,
+    avg: times.filter((t) => t0 - t < 7 * DAY_MS).length / 7,
+  });
+  const landedAt = delivered.map((d) => d.at).filter((t) => t <= t0);
+  const triagedAt = allRuns().filter((e) => e.run.kind === "triage" && e.run.state === "done").map((e) => Date.parse(e.run.ended ?? e.run.started)).filter((t) => t <= t0);
 
   let newIssues = 0;
   for (const repo of Object.values(registry)) {
@@ -209,6 +229,7 @@ export function state(now = new Date()): State {
       nextTick: nextTick(), probe, health: health(now.getTime()), hold: hold(jobs)?.line ?? null,
     },
     needs, stuck, running, landing, newIssues,
+    velocity: { landed: rate(landedAt), triaged: rate(triagedAt) },
     // Lands: land runs in progress first, then the latest landed, DELIVERED in all.
     delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).map((d) => d.job)].slice(0, DELIVERED),
     waiting: openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`))

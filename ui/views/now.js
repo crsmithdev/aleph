@@ -14,7 +14,6 @@ export const view = {
     `<div class="page">${renderMetrics(s)}<p class="lede">${renderLede(s)}</p><div class="head">${renderControls(s)}<span class="sep" aria-hidden="true">|</span><p class="asof">${renderAsOf(s)}</p></div>` +
     `<div class="grid"><div>` +
     `<section id="needs" aria-labelledby="h-needs">${renderNeeds(s)}</section>` +
-    `<section id="stuck" aria-labelledby="h-stuck">${renderStuck(s)}</section>` +
     `<section id="delivered" aria-labelledby="h-del">${renderLands(s)}</section>` +
     `</div><aside class="rail">` +
     `<section id="running" aria-labelledby="h-run">${renderRunning(s)}</section>` +
@@ -61,16 +60,24 @@ function statLines(stat) {
   return esc(kept.filter((l) => l.includes(" | ")).join("\n")) + `\n<b>+${files.length - STAT_FILES} more files</b>` + (summary.length ? "\n" + esc(summary.join("\n")) : "");
 }
 
-/** The row of metric cards: a count per section, each a link to it. */
+/** "12 · 9/day": a 24-hour count and the 7-day daily average under it. */
+const velocity = (v) => {
+  const avg = Math.round((v?.avg ?? 0) * 10) / 10;
+  return `${v?.day ?? 0} · ${avg}/day`;
+};
+
+/** The row of metric cards: a count per section, each a link to it; Landed and Triaged are velocity cards. */
 export function renderMetrics(s) {
   const card = (href, k, n, tone) => `<a class="metric${n && tone ? ` ${tone}` : ""}" href="#${href}"><span class="k">${k}</span><span class="v">${n}</span></a>`;
+  const vcard = (href, k, v) => `<a class="metric" href="#${href}"><span class="k">${k}</span><span class="v">${v?.day ?? 0}</span><span class="sub">${velocity(v)}</span></a>`;
   return `<div class="metrics">` +
     card("running", "Running", s.running.length) +
     card("waiting", "Waiting", s.waiting.length) +
-    card("stuck", "Stuck", s.stuck.length, "stuck") +
-    card("needs", "Need attention", s.needs.length, "need") +
+    card("needs", "Need attention", s.needs.length + s.stuck.length, "need") +
     card("running", "Landing", s.landing ?? 0) +
-    card("waiting", "New", s.newIssues ?? 0) + `</div>`;
+    card("waiting", "New", s.newIssues ?? 0) +
+    vcard("delivered", "Landed", s.velocity?.landed) +
+    vcard("delivered", "Triaged", s.velocity?.triaged) + `</div>`;
 }
 
 /** What is wrong, first; with nothing wrong, one plain phrase and no numbers. */
@@ -78,7 +85,7 @@ export function renderLede(s) {
   const f = s.factory;
   const parts = [];
   if (s.needs.length) parts.push(`<a href="#needs" class="need">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you</a>`);
-  if (s.stuck.length) parts.push(`<a href="#stuck" class="need">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`);
+  if (s.stuck.length) parts.push(`<a href="#needs" class="need">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`);
   const health = [...(f.health || [])];
   if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   for (const l of health) parts.push(esc(l.replace(/^health:\s*/, "")));
@@ -98,7 +105,15 @@ function reviewLine(j) {
   return `<p class="review2 quiet" data-verdict="${esc(r.verdict)}"><strong>${esc(REVIEW2[r.verdict] ?? r.verdict)}</strong>${r.reason ? `: ${esc(r.reason)}` : ""}</p>`;
 }
 
+/** "Agent working" when a live run exists for the job, else "No agent working". */
+const agentLine = (j) => `<p class="agent ${j.agent ? "on" : "off"}">${j.agent ? "Agent working" : "No agent working"}</p>`;
+
+/** Needs attention: the held runs first, then the stuck and failed ones. */
 export function renderNeeds(s) {
+  return section("needs", "Needs attention", s.needs.length + s.stuck.length, renderHeld(s) + renderStuck(s) || empty("Nothing needs attention."));
+}
+
+function renderHeld(s) {
   const fold = s.needs.length >= 3;
   const cards = s.needs.map((j, i) => {
     const why = j.reason || j.needs || "needs you";
@@ -106,7 +121,7 @@ export function renderNeeds(s) {
     const card = (inner) => fold
       ? `<details class="job-card big need-card need-fold" data-keep="need:${esc(j.name)}"${i === 0 ? " open" : ""}><summary><span class="why">${esc(why)}</span>${itemId(j)}<span class="t">${esc(j.item?.title || j.name)}</span></summary>${inner}</details>`
       : `<article class="job-card big need-card"><span class="why">${esc(why)}</span>${inner}</article>`;
-    return card((fold ? "" : head) +
+    return card((fold ? "" : head) + agentLine(j) +
       `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(j.model)) : ""}${checkFacts(j)}</dl>` +
       (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
       (j.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(j.stat)}</pre></div></div>` : "") +
@@ -117,19 +132,19 @@ export function renderNeeds(s) {
       `<div class="actions">${act("diff", j.name, "Diff")}${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}${actMsg(j.name)}</div>` +
       `<div class="diff-panel" data-diff-for="${esc(j.name)}"${openDiffs.has(j.name) ? `>${diffHtml(openDiffs.get(j.name))}` : " hidden>"}</div>`);
   }).join("");
-  return section("needs", "Needs you", s.needs.length, cards || empty("Nothing needs you."), s.factory.waitingCap);
+  return cards;
 }
 
 const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 
-export function renderStuck(s) {
+function renderStuck(s) {
   const rows = s.stuck.map((j) =>
-    `<article class="job-card big del"><div class="ih">${itemId(j)}${title(j)}<span class="badge stuck">${esc(j.state === "failed" ? "Failed" : "Stuck")}</span></div>` +
+    `<article class="job-card big del"><div class="ih">${itemId(j)}${title(j)}<span class="badge stuck">${esc(j.state === "failed" ? "Failed" : "Stuck")}</span></div>` + agentLine(j) +
     (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
     (failed(j) ? `<p class="quiet q">Last check that failed: <b>${esc(failed(j).name)}</b>, ${esc(failed(j).seconds)} s</p>` : "") +
     `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}</dl>` + trailerLine(j) +
     `<div class="actions">${act("recheck", j.name, "Re-check")}${act("drop", j.name, "Drop")}${actMsg(j.name)}</div></article>`).join("");
-  return section("stuck", "Stuck", s.stuck.length, rows || empty("No run is stuck."));
+  return rows;
 }
 
 export function renderRunning(s) {

@@ -22,8 +22,8 @@ test("needs shows name, reason and defaults, and no copy commands", () => {
 });
 
 test("stuck, running and delivered show their jobs", () => {
-  expect(r.renderStuck(state)).toContain("types failed");
-  expect(r.renderStuck(state)).toContain("aleph-30");
+  expect(r.renderNeeds(state)).toContain("types failed");
+  expect(r.renderNeeds(state)).toContain("aleph-30");
   expect(r.renderRunning(state)).toContain("aleph-36");
   expect(r.renderRunning(state)).toContain("worker");
 });
@@ -36,22 +36,38 @@ test("a commitUrl becomes a link", () => {
 
 test("an empty section shows its empty state", () => {
   expect(r.renderWaiting(state)).toContain("No goal waits to start.");
-  expect(r.renderNeeds({ ...state, needs: [] })).toContain("Nothing needs you.");
-  expect(r.renderStuck({ ...state, stuck: [] })).toContain("No run is stuck.");
+  expect(r.renderNeeds({ ...state, needs: [], stuck: [] })).toContain("Nothing needs attention.");
   expect(r.renderRunning({ ...state, running: [] })).toContain("Nothing is running.");
   expect(r.renderLands({ ...state, delivered: [] })).toContain("Nothing has landed yet.");
   // One line only, with no hint under it.
-  expect(r.renderNeeds({ ...state, needs: [] }).match(/<p/g)?.length).toBe(1);
+  expect(r.renderNeeds({ ...state, needs: [], stuck: [] }).match(/<p/g)?.length).toBe(1);
 });
 
-test("the metric cards count running, waiting, stuck, needs, landing and new", () => {
-  const h = r.renderMetrics({ ...state, landing: 2, newIssues: 3 });
-  expect(h.match(/class="metric[ "]/g)?.length).toBe(6);
-  for (const [k, n] of [["Running", 1], ["Waiting", 0], ["Stuck", 1], ["Need attention", 1], ["Landing", 2], ["New", 3]]) expect(h).toContain(`<span class="k">${k}</span><span class="v">${n}</span>`);
+test("the metric cards count running, waiting, need attention, landing, new, landed and triaged", () => {
+  const velocity = { landed: { day: 12, avg: 9 }, triaged: { day: 4, avg: 2.5 } };
+  const h = r.renderMetrics({ ...state, landing: 2, newIssues: 3, velocity });
+  expect(h.match(/class="metric[ "]/g)?.length).toBe(7);
+  for (const [k, n] of [["Running", 1], ["Waiting", 0], ["Need attention", 2], ["Landing", 2], ["New", 3], ["Landed", 12], ["Triaged", 4]]) expect(h).toContain(`<span class="k">${k}</span><span class="v">${n}</span>`);
+  expect(h).not.toContain(">Stuck<");
+  expect(h).toContain('<span class="sub">12 · 9/day</span>');
+  expect(h).toContain('<span class="sub">4 · 2.5/day</span>');
   expect(h).toContain('class="metric need" href="#needs"');
-  expect(r.renderMetrics({ ...state, needs: [] })).toContain('class="metric" href="#needs"');
+  expect(r.renderMetrics({ ...state, needs: [], stuck: [] })).toContain('class="metric" href="#needs"');
   const page = r.view.render(state);
-  for (const t of ["Next tick", "Cost today", "Runs today", 'id="ticks"', 'class="strip"']) expect(page).not.toContain(t);
+  for (const t of ["Next tick", "Cost today", "Runs today", 'id="ticks"', 'class="strip"', 'id="stuck"']) expect(page).not.toContain(t);
+  expect(page).toContain('<section id="needs"');
+});
+
+test("Needs attention holds the held runs before the stuck and failed ones, each saying whether an agent works", () => {
+  const s = { ...state, stuck: [job({ name: "aleph-30", state: "failed", agent: true }), job({ name: "aleph-31", state: "stuck" })], needs: [{ ...state.needs[0], agent: false }] };
+  const h = r.renderNeeds(s);
+  expect(h).toContain(">Needs attention</h2>");
+  expect(h.indexOf("aleph-27")).toBeLessThan(h.indexOf("aleph-30"));
+  expect(h.indexOf("aleph-30")).toBeLessThan(h.indexOf("aleph-31"));
+  expect(h.match(/>Agent working</g)?.length).toBe(1);
+  expect(h.match(/>No agent working</g)?.length).toBe(2);
+  expect(h).not.toContain("aleph drop");
+  expect(h).not.toContain("data-cmd");
 });
 
 test("text from the state is escaped", () => {
@@ -81,7 +97,7 @@ test("a land from another day shows its date", () => {
 const withFactory = (o: object) => ({ ...state, factory: { ...state.factory, health: [], ...o } });
 
 test("a stuck job shows its reason, the failed check and its seconds, and Re-check and Drop buttons", () => {
-  const h = r.renderStuck({ ...state, stuck: [job({ name: "aleph-30", state: "stuck", reason: "types failed", checks: [{ name: "lint", ok: true, seconds: 3 }, { name: "tsc", ok: false, seconds: 41 }] })] });
+  const h = r.renderNeeds({ ...state, needs: [], stuck: [job({ name: "aleph-30", state: "stuck", reason: "types failed", checks: [{ name: "lint", ok: true, seconds: 3 }, { name: "tsc", ok: false, seconds: 41 }] })] });
   for (const t of ["types failed", "tsc", "41 s", 'data-act="recheck" data-name="aleph-30"', 'data-act="drop" data-name="aleph-30"']) expect(h).toContain(t);
   expect(h).not.toContain("data-cmd");
 });
@@ -189,15 +205,15 @@ test("trailers show on one line joined by ' · ', escaped, and only when there a
   expect(r.renderLands(state)).not.toContain("trailers");
 });
 
-test("every section renders its jobs with the job-card class: big for needs, stuck and lands, small for running and waiting", () => {
+test("every section renders its jobs with the job-card class: big for needs and lands, small for running and waiting", () => {
   const w = { ...state, waiting: [{ repo: "aleph", id: 9, title: "w" }] };
-  for (const [h, size] of [[r.renderNeeds(state), "big"], [r.renderStuck(state), "big"], [r.renderLands(state), "big"], [r.renderRunning(state), "small"], [r.renderWaiting(w), "small"]] as const) {
+  for (const [h, size] of [[r.renderNeeds(state), "big"], [r.renderLands(state), "big"], [r.renderRunning(state), "small"], [r.renderWaiting(w), "small"]] as const) {
     expect(h).toMatch(new RegExp(`class="job-card ${size}[ "]`));
     expect(h).not.toContain(size === "big" ? "job-card small" : "job-card big");
   }
 });
 
-test("Lands lists a running land before landed ones, has no origin/main aside, and counts Running and Needs you against their caps", () => {
+test("Lands lists a running land before landed ones, has no origin/main aside, and counts Running against its cap and Needs attention in all", () => {
   const lands = { ...state, delivered: [job({ name: "land-1", state: "running" }), ...state.delivered] };
   const h = r.renderLands(lands);
   expect(h).toContain(">Lands</h2>");
@@ -207,8 +223,7 @@ test("Lands lists a running land before landed ones, has no origin/main aside, a
   const run = Array.from({ length: 3 }, (_, i) => job({ name: `r${i}` }));
   const need = Array.from({ length: 2 }, (_, i) => job({ name: `n${i}`, state: "needs-you" }));
   expect(r.renderRunning({ ...state, factory: f, running: run })).toContain('<span class="count">3 / 12</span>');
-  expect(r.renderNeeds({ ...state, factory: f, needs: need })).toContain('<span class="count">2 / 5</span>');
-  expect(r.renderStuck(state)).toContain('<span class="count">1</span>');
+  expect(r.renderNeeds({ ...state, factory: f, needs: need })).toContain('<span class="count">3</span>');
 });
 
 const two: any = { ...state, needs: [job({ name: "job-a", state: "needs-you", defaults: [] }), job({ name: "job-b", state: "needs-you", defaults: [] })] };

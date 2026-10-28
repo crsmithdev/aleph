@@ -83,6 +83,22 @@ describe("state", () => {
     expect(JSON.parse(before).shown).toBe(false);
   });
 
+  test("velocity counts lands and done triage runs over 24 hours and 7 days; agent marks a job with a live run", () => {
+    run("20261027-000020-a", { kind: "triage", job: "fac-t1", name: "fac-t1", state: "done", started: ago(5), ended: ago(4) });
+    run("20261027-000021-a", { kind: "triage", job: "fac-t2", name: "fac-t2", state: "failed", started: ago(5), ended: ago(4) });
+    run("20261027-000022-a", { kind: "triage", job: "fac-t3", name: "fac-t3", state: "done", started: ago(49), ended: ago(48) });
+    const s = state(now);
+    expect(s.velocity.triaged.day).toBe(1);
+    expect(s.velocity.triaged.avg).toBeCloseTo(2 / 7);
+    expect(s.velocity.landed.day).toBe(1);
+    expect(s.velocity.landed.avg).toBeCloseTo(2 / 7);
+    // fac-4 runs on item 4; fac-1 and fac-3 have no live run.
+    expect(s.needs[0].agent).toBe(false);
+    run("20261027-000023-a", { job: "fac-1b", name: "fac-1b", state: "running", todo: 1 });
+    expect(state(now).needs[0].agent).toBe(true);
+    for (const id of ["20261027-000020-a", "20261027-000021-a", "20261027-000022-a", "20261027-000023-a"]) rmSync(join(jobsDir, id), { recursive: true });
+  });
+
   test("landing counts land runs in progress; New counts open unlabelled issues, not goals or labelled ones", () => {
     writeList({ key: "fac" }, "more", (doc) => {
       add(doc, "labelled", { labels: ["triaged"] });
