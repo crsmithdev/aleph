@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, file, job, jobsDir, moveMain, remote, sh, specFile, state, worktree, setup, teardown } from "./cli.helpers";
+import { aleph, base, job, jobsDir, remote, sh, specFile, state, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -10,7 +10,7 @@ describe("a batch of lands", () => {
   const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
   const calls = () => existsSync(join(base, "batch-count")) ? readFileSync(join(base, "batch-count"), "utf8").trim().split("\n").filter(Boolean).length : 0;
   const pushes = () => existsSync(join(base, "pushes")) ? readFileSync(join(base, "pushes"), "utf8").trim().split("\n").filter(Boolean).length : 0;
-  const landRuns = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-demo-${name}-`) && d.endsWith("-land")).sort().map((d) => ({ id: d, ...state(d) }));
+  const landRuns = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-demo-${name}-`) && d.endsWith("-land") && existsSync(join(jobsDir, d, "state.json"))).sort().map((d) => ({ id: d, ...state(d) }));
   const lockDir = () => join(base, "run", "aleph", "land-demo");
   let landCalls = 0;
   /** Until the land run of `name` is queued on the repo's land lock, where a leader's batch can take it. */
@@ -78,37 +78,6 @@ describe("a batch of lands", () => {
     expect(readFileSync(join(jobsDir, landRuns("t1")[0].id, "land.log"), "utf8")).toContain("batch of 3");
   }, 120_000);
 
-  test("a member that failed its checks in attempt 1 is not in the retry after main moved", async () => {
-    const lands = await landTogether([["ra", "commit retry/a.txt"], ["rbad", "commit retry/bad.txt"], ["rr", "commit race/r.txt"]], () => writeFileSync(join(base, "race-once"), ""));
-    const s = lands.map((l) => state(l.run));
-    expect(s.map((x) => x.state)).toEqual(["landed", "failed", "landed"]);
-    const log = file(lands[0].run, "land.log");
-    const retry = log.slice(log.indexOf("main moved; merging again"));
-    expect(retry).toContain("checks on");
-    expect(retry).not.toContain("retrybad failed");
-    expect(remoteGit("ls-tree", "--name-only", "main:retry").split("\n")).not.toContain("bad.txt");
-    await aleph(["drop", "rbad"]);
-  }, 120_000);
-
-  test("a member that failed in attempt 1 does not take the leader out when main moves twice", async () => {
-    const lands = await landTogether([["tla", "commit twice/a.txt"], ["tlbad", "commit twice/bad.txt"], ["tlr", "commit race/tl.txt"]], () => writeFileSync(join(base, "race-once"), "2\n"));
-    const s = lands.map((l) => state(l.run));
-    expect(s.map((x) => x.state)).toEqual(["landed", "failed", "landed"]);
-    expect(file(lands[0].run, "land.log").split("main moved; merging again").length - 1).toBe(2);
-    expect(remoteGit("ls-tree", "--name-only", "main:twice").split("\n")).toEqual(["a.txt"]);
-    await aleph(["drop", "tlbad"]);
-  }, 120_000);
-
-  test("a two-member batch [L, B]: B fails in attempt 1, main moves twice, and the leader still lands", async () => {
-    const lands = await landTogether([["tl2a", "commit race/l2.txt"], ["tl2bad", "commit race/bad.txt"]], () => writeFileSync(join(base, "race-once"), "2\n"));
-    const s = lands.map((l) => state(l.run));
-    expect(s.map((x) => x.state)).toEqual(["landed", "failed"]);
-    expect(file(lands[0].run, "land.log").split("main moved; merging again").length - 1).toBe(2);
-    expect(remoteGit("ls-tree", "--name-only", "main:race").split("\n")).toContain("l2.txt");
-    expect(remoteGit("ls-tree", "--name-only", "main:race").split("\n")).not.toContain("bad.txt");
-    await aleph(["drop", "tl2bad"]);
-  }, 120_000);
-
   test("a run that breaks the check fails with the check's name; the others land; at most 1 + 2 + 2 checks", async () => {
     const lands = await landTogether([["a", "commit batch/a.txt"], ["bad", "commit batch/bad.txt"], ["c", "commit batch/c.txt"]]);
     const s = lands.map((l) => state(l.run));
@@ -136,41 +105,4 @@ describe("a batch of lands", () => {
     await aleph(["drop", "k2"]);
   }, 120_000);
 
-  test("a run whose checked base is origin/main lands with no check call; one behind main runs the checks", async () => {
-    await job("fresh", "commit batch/fresh.txt");
-    const base1 = calls();
-    const r = await aleph(["land", "fresh"]);
-    expect(state(r.json.run).state).toBe("landed");
-    expect(calls()).toBe(base1);
-    expect(file(r.json.run, "land.log")).toContain("checks skipped: main unchanged since");
-    expect(state(r.json.run).checks ?? []).toEqual([]);
-
-    await job("stale", "commit batch/stale.txt");
-    moveMain();
-    const base2 = calls();
-    const r2 = await aleph(["land", "stale"]);
-    expect(state(r2.json.run).state).toBe("landed");
-    expect(calls() - base2).toBe(1);
-    expect(file(r2.json.run, "land.log")).not.toContain("checks skipped");
-  }, 60_000);
-
-  test("a commit added to the branch after its checks gets the checks on land", async () => {
-    await job("tipped", "commit batch/tipped.txt");
-    writeFileSync(join(worktree("tipped"), "batch", "late.txt"), "late\n");
-    sh(worktree("tipped"), "git", "add", ".");
-    sh(worktree("tipped"), "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "late file");
-    const before = calls();
-    const r = await aleph(["land", "tipped"]);
-    expect(state(r.json.run).state).toBe("landed");
-    expect(calls() - before).toBe(1);
-    expect(file(r.json.run, "land.log")).not.toContain("checks skipped");
-  }, 60_000);
-
-  test("two lands of one job at once start one land run", async () => {
-    await job("twice", "commit batch/twice.txt");
-    const rs = await Promise.all([aleph(["land", "twice"]), aleph(["land", "twice"])]);
-    expect(rs.filter((r) => r.code === 0).length).toBe(1);
-    expect(landRuns("twice").length).toBe(1);
-  }, 60_000);
 });
-

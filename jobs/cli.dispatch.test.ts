@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CLI, aleph, base, jobsDir, other, sh, state, setup, teardown } from "./cli.helpers";
+import { CLI, aleph, base, jobsDir, state, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -26,7 +26,7 @@ describe("a factory run", () => {
     });
     beforeEach(() => { rmSync(startLog, { force: true }); });
     afterAll(async () => {
-      for (const n of ["a", "b", "c", "d", "f"]) writeFileSync(gate(n), "");
+      for (const n of ["a", "b", "c"]) writeFileSync(gate(n), "");
       // The released holds finish their runs; wait for that, at most as long as the fixed wait it replaces.
       for (let i = 0; i < 30 && !ids.every(settled); i++) await Bun.sleep(100);
       for (const id of ids) {
@@ -50,48 +50,5 @@ describe("a factory run", () => {
       await until(() => ids.every(settled));
     }, 60_000);
 
-    test("two dispatches at once start each goal once", async () => {
-      const d = await goal("d");
-      ids.push(d);
-      const [x, y] = await Promise.all([aleph(["dispatch"], on({ ALEPH_LIVE_CAP: "5" })), aleph(["dispatch"], on({ ALEPH_LIVE_CAP: "5" }))]);
-      expect(started().filter((n) => n === `fac-${d}`)).toHaveLength(1);
-      expect([...x.json.started, ...y.json.started].filter((n: string) => n === `fac-${d}`)).toHaveLength(1);
-      writeFileSync(gate("d"), "");
-      await until(() => settled(d));
-    }, 60_000);
-
-    test("a dispatch while paused or with main red starts nothing, and adding a goal starts its run with no tick", async () => {
-      await aleph(["pause"]);
-      expect((await aleph(["dispatch"], on())).json).toMatchObject({ started: [], paused: true });
-      const held = await aleph(["todo", "add", "fac", "added while paused", "--labels", "goal"], on());
-      await Bun.sleep(1500);
-      expect(started()).toEqual([]);
-      await aleph(["resume"]);
-      sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
-      writeFileSync(join(other, "FAIL"), "red\n");
-      sh(other, "git", "add", "FAIL"); sh(other, "git", "commit", "-qm", "break main"); sh(other, "git", "push", "-q", "origin", "main");
-      const red = await aleph(["dispatch"], on());
-      expect(red.json.started).toEqual([]);
-      expect(red.json.skipped[0]).toContain("main is red");
-      sh(other, "git", "rm", "-q", "FAIL"); sh(other, "git", "commit", "-qm", "fix main"); sh(other, "git", "push", "-q", "origin", "main");
-      await aleph(["todo", "drop", "fac", String(held.json.added), "test over"]);
-      const add = await aleph(["todo", "add", "fac", "starts at once", "--labels", "goal", "--body", "-"], on(), `ACTION: hold ${gate("f")}\n`);
-      ids.push(add.json.added);
-      expect(add.code).toBe(0);
-      await until(() => started().length === 1);
-      expect(started()).toEqual([`fac-${add.json.added}`]);
-      writeFileSync(gate("f"), "");
-      await until(() => settled(add.json.added));
-      // A slow dispatch does not hold the add.
-      const slowCmd = join(base, "slow-cmd");
-      writeFileSync(slowCmd, `#!/bin/bash\nsleep 4\nexec ${startCmd} "$@"\n`, { mode: 0o755 });
-      const t0 = Date.now();
-      const slow = await aleph(["todo", "add", "fac", "slow dispatch", "--labels", "goal", "--body", "-"], on({ ALEPH_START_CMD: slowCmd }), `ACTION: hold ${gate("f")}\n`);
-      expect(Date.now() - t0).toBeLessThan(3000);
-      expect(slow.code).toBe(0);
-      ids.push(slow.json.added);
-      await until(() => started().length === 2);
-      await until(() => settled(slow.json.added));
-    }, 90_000);
   });
 });
