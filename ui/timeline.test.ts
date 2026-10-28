@@ -461,20 +461,22 @@ describe("timeline view", () => {
 describe("issue events from the work store's git log", () => {
   // The items are written at the real time, so the window must reach past it; `now` (23:00) is earlier after 23:01.
   const issueEvents = async () => (await timeline({ now: new Date(Math.max(now.getTime(), Date.now()) + 60_000), days: 30 })).rows!.filter((e) => e.kind === "issue");
+  // Each commit gets its own fixed committer date, so the times asserted do not depend on the clock or on how fast the sandbox is.
+  const writeAt = (date: string, message: string, change: Parameters<typeof writeList>[2]) => {
+    process.env.GIT_COMMITTER_DATE = date;
+    try { writeList({ key: "fac" }, message, change); } finally { delete process.env.GIT_COMMITTER_DATE; }
+  };
   test("opened sits at the commit that added the item, closed at the last commit that changed it", async () => {
-    const t0 = Date.now();
-    writeList({ key: "fac" }, "open", (doc) => { add(doc, "fresh issue", { now: new Date() }); return true; });
-    const t1 = Date.now();
-    writeList({ key: "fac" }, "later", (doc) => { setStatus(doc.items.find((i) => i.title === "fresh issue")!, "done", new Date()); return true; });
+    const t0 = at(2, 8, 30), t1 = at(2, 9, 45);
+    writeAt(t0, "open", (doc) => { add(doc, "fresh issue", { now: new Date() }); return true; });
+    writeAt(t1, "later", (doc) => { setStatus(doc.items.find((i) => i.title === "fresh issue")!, "done", new Date()); return true; });
     const evs = await issueEvents();
     const opened = evs.find((e) => e.what === "opened" && e.title === "fresh issue")!;
     const closed = evs.find((e) => e.what === "closed" && e.title === "fresh issue")!;
     expect(opened.dateOnly).toBeUndefined();
     expect(closed.dateOnly).toBeUndefined();
-    expect(Math.abs(Date.parse(opened.at) - t0)).toBeLessThan(60_000);
-    expect(Date.parse(closed.at)).toBeGreaterThanOrEqual(Math.floor(t1 / 1000) * 1000);
-    expect(Date.parse(closed.at)).toBeGreaterThanOrEqual(Date.parse(opened.at));
-    expect(Date.parse(closed.at) - Date.now()).toBeLessThan(2000);
+    expect(opened.at).toBe(t0);
+    expect(closed.at).toBe(t1);
   });
   test("a Chris decided note gives a decided row at its minute; no note, no row; an old note is outside the window", async () => {
     const stamp = (d: Date) => `${d.toLocaleDateString("sv")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -498,9 +500,12 @@ describe("issue events from the work store's git log", () => {
   });
   test("git log runs once per repo, not once per item", async () => {
     writeList({ key: "fac" }, "many", (doc) => { for (let i = 0; i < 200; i++) add(doc, `bulk ${i}`, { now: new Date() }); return true; });
-    const t = performance.now();
-    const evs = await issueEvents();
-    expect(performance.now() - t).toBeLessThan(1000);
+    // The store's log is the one that lists file names; the land rows run their own log on the code repo.
+    const spawn = Bun.spawnSync, logs: string[][] = [];
+    (Bun as any).spawnSync = (cmd: any, ...rest: any[]) => { if (Array.isArray(cmd) && cmd[0] === "git" && cmd.includes("log") && cmd.includes("--name-only")) logs.push(cmd); return (spawn as any)(cmd, ...rest); };
+    let evs;
+    try { evs = await issueEvents(); } finally { (Bun as any).spawnSync = spawn; }
+    expect(logs.length).toBe(1);
     expect(evs.filter((e) => e.what === "opened").length).toBeGreaterThanOrEqual(200);
   });
 });
