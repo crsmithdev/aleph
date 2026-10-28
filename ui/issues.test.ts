@@ -173,52 +173,67 @@ describe("views", () => {
     expect(v.view.group).toBe("factory");
     expect(v.redirect("#/issues")).toBe("#/contents");
     expect(v.redirect("#/issues?status=open")).toBe("#/contents");
-    expect(v.redirect("#/projects")).toBe("#/contents?type=project");
+    expect(v.redirect("#/projects")).toBe("#/contents");
     expect(v.redirect("#/issues/fac/1")).toBeNull();
     expect(v.redirect("#/projects/fac")).toBeNull();
     expect(v.redirect("#/contents")).toBeNull();
   });
 
-  test("issue rows: Type, Status, Id, Title, Labels, Updated and an X on an open issue only", async () => {
+  const section = (h: string, id: string) => h.split(`<div id="${id}">`)[1]?.split("</table>")[0] ?? "";
+
+  test("two tables: Projects first with Name, Open issues, Last activity; Issues after", async () => {
     const d = await getJson("/api/contents");
-    const h = v.view.render(d, {}, new URLSearchParams("type=issue&status=any"));
-    const th = [...h.matchAll(/<th class="c-(\w+)"/g)].map((m) => m[1]);
-    expect(th).toEqual(["type", "project", "status", "id", "title", "labels", "open", "updated", "act"]);
-    expect(h).toContain('class="tbl"');
-    expect(h).toContain('<td class="c-type">issue</td>');
+    const h = v.view.render(d, {}, new URLSearchParams("status=any"));
+    expect(h.indexOf("<h2>Projects")).toBeGreaterThan(-1);
+    expect(h.indexOf("<h2>Projects")).toBeLessThan(h.indexOf("<h2>Issues"));
+    const ths = (html: string) => [...html.matchAll(/<th class="c-(\w+)"/g)].map((m) => m[1]);
+    expect(ths(section(h, "projects-table"))).toEqual(["title", "open", "updated"]);
+    expect(ths(section(h, "issues-table"))).toEqual(["project", "status", "id", "title", "labels", "updated", "act"]);
+    expect(h).not.toContain("c-type");
+    expect(h).not.toContain('data-filter="type"');
+    expect(h).toContain(`<h2>Projects <small class="quiet">${d.projects.length}</small></h2>`);
+    expect(h).toContain(`<h2>Issues <small class="quiet">${d.issues.length}</small></h2>`);
+  });
+
+  test("issue rows: Project, Status, Id, Title, Labels, Updated and an X on an open issue only", async () => {
+    const d = await getJson("/api/contents");
+    const h = section(v.view.render(d, {}, new URLSearchParams("status=any")), "issues-table");
     expect(h).toContain('href="#/issues/fac/1"');
-    expect(h).not.toContain('<td class="c-type">project</td>');
+    expect(h).not.toContain('href="#/projects/');
     const rows = h.split("<tr class=\"evr crow\"").slice(1);
     for (const r of rows) expect(r.includes("data-cancel")).toBe(r.includes(">open</span>"));
     expect(rows.some((r: string) => r.includes(">done</span>"))).toBe(true);
-    expect(h).toContain("File an issue");
+    expect(v.view.render(d, {}, new URLSearchParams())).toContain("File an issue");
   });
 
-  test("project rows: Type, Name, open issues, last activity", async () => {
+  test("project rows: every registered project, open issues, last activity; no X", async () => {
     const d = await getJson("/api/contents");
-    const h = v.view.render(d, {}, new URLSearchParams("type=project"));
-    expect(h).toContain('<td class="c-type">project</td>');
+    const h = section(v.view.render(d, {}, new URLSearchParams()), "projects-table");
     expect(h).toContain('<a href="#/projects/fac">fac</a>');
-    expect(h).toContain('<td class="c-project">fac</td>');
-    expect(h).not.toContain('<td class="c-type">issue</td>');
+    expect(h).toContain('<a href="#/projects/oth">oth</a>');
     expect(h).not.toContain("data-cancel");
     const fac = d.projects.find((p: any) => p.key === "fac");
     expect(h).toContain(`<td class="c-open">${fac.openItems}</td>`);
+    const rows = v.projectRows({ projects: [{ key: "empty", openItems: 0, activity: null }, { key: "b", openItems: 2, activity: "2026-10-01T00:00:00Z" }] });
+    const html = v.renderProjectsTable(rows, { psort: { key: "title", dir: 1 } });
+    expect(html).toContain('<td class="c-open">0</td>');
+    expect(html.indexOf(">b<")).toBeLessThan(html.indexOf(">empty<"));
   });
 
-  test("the Type filter: All shows both, and an unknown type is All", async () => {
+  test("the filters apply to Issues; the Project filter also narrows Projects; there is no Type filter", async () => {
     const d = await getJson("/api/contents");
-    const all = v.view.render(d, {}, new URLSearchParams());
-    expect(all).toContain('<td class="c-type">issue</td>');
-    expect(all).toContain('<td class="c-type">project</td>');
-    for (const t of ["All", "Issues", "Projects"]) expect(all).toContain(`>${t}</option>`);
-    expect(v.view.render(d, {}, new URLSearchParams("type=junk"))).toContain('<td class="c-type">project</td>');
-    const rows = v.contentRows(d);
-    expect(v.filterRows(rows, { type: "project" }).every((r: any) => r.type === "project")).toBe(true);
-    expect(v.filterRows(rows, { status: "done" }).every((r: any) => r.type === "issue" && r.status === "done")).toBe(true);
+    expect(v.hashOptions(new URLSearchParams("type=project"))).not.toHaveProperty("type");
+    const h = v.view.render(d, {}, new URLSearchParams("project=oth&status=any"));
+    expect(section(h, "projects-table")).toContain("#/projects/oth");
+    expect(section(h, "projects-table")).not.toContain("#/projects/fac");
+    const rows = v.issueRows(d);
+    expect(v.filterRows(rows, { status: "done" }).every((r: any) => r.status === "done")).toBe(true);
     expect(v.filterRows(rows, { project: "oth" }).every((r: any) => r.project === "oth")).toBe(true);
-    expect(v.filterRows(rows, { project: "oth" }).some((r: any) => r.type === "issue")).toBe(true);
+    expect(v.filterRows(rows, { project: "oth" }).length).toBeGreaterThan(0);
     expect(v.filterRows(rows, { q: "plain" }).map((r: any) => r.title)).toEqual(["plain task"]);
+    // the Projects table is not narrowed by Status, Label or Title
+    const s = v.view.render(d, {}, new URLSearchParams("status=done&q=zzzz"));
+    expect(section(s, "projects-table")).toContain("#/projects/fac");
   });
 
   test("the Status filter defaults to Open, newest first; Any shows every status", async () => {
@@ -226,16 +241,15 @@ describe("views", () => {
     expect(v.hashOptions(new URLSearchParams()).status).toBe("open");
     expect(v.hashOptions(new URLSearchParams("status=any")).status).toBe("");
     expect(v.hashOptions(new URLSearchParams("status=done")).status).toBe("done");
-    const def = v.view.render(d, {}, new URLSearchParams("type=issue"));
-    expect(def).not.toContain(">done</span>");
-    expect(def).toContain(">open</span>");
+    const def = v.view.render(d, {}, new URLSearchParams());
+    const issues = section(def, "issues-table");
+    expect(issues).not.toContain(">done</span>");
+    expect(issues).toContain(">open</span>");
     expect(def).toContain('<option value="open" selected>');
-    expect(v.view.render(d, {}, new URLSearchParams("type=issue&status=any"))).toContain(">done</span>");
-    expect(v.view.render(d, {}, new URLSearchParams("type=issue&status=any"))).toContain('<option value="any" selected>Any</option>');
+    expect(v.view.render(d, {}, new URLSearchParams("status=any"))).toContain(">done</span>");
+    expect(v.view.render(d, {}, new URLSearchParams("status=any"))).toContain('<option value="any" selected>Any</option>');
     const t = (h: string) => [...h.matchAll(/<td class="c-time">([^<]*)</g)].map((m) => m[1]);
-    expect(t(def)).toEqual([...t(def)].sort().reverse());
-    // projects stay in the default view
-    expect(v.view.render(d, {}, new URLSearchParams())).toContain('<td class="c-type">project</td>');
+    expect(t(issues)).toEqual([...t(issues)].sort().reverse());
   });
 
   test("the filter bar has a Project select; the row is the link, the title plain text", async () => {
@@ -243,7 +257,7 @@ describe("views", () => {
     const h = v.view.render(d, {}, new URLSearchParams("project=oth&status=any"));
     expect(h).toContain('<select data-filter="project">');
     expect(h).toContain('<option value="oth" selected>oth</option>');
-    expect(h).not.toContain('<td class="c-project">fac</td>');
+    expect(section(h, "issues-table")).not.toContain('<td class="c-project">fac</td>');
     expect(h).toContain('<td class="c-project">oth</td>');
     expect(h).toContain("tr.crow { position: relative; }");
     expect(h).toContain('.c-title a { color: inherit; text-decoration: none; }');
@@ -258,13 +272,13 @@ describe("views", () => {
     expect(ids("sort=id&dir=asc")).toEqual([...ids("sort=id&dir=asc")].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
     expect(ids("sort=id&dir=desc")).toEqual(ids("sort=id&dir=asc").reverse());
     expect(v.view.render(d, {}, new URLSearchParams("sort=title&dir=asc"))).toContain('aria-sort="ascending"');
+    expect(section(v.view.render(d, {}, new URLSearchParams("psort=open&pdir=asc")), "projects-table")).toContain('aria-sort="ascending"');
   });
 
   test("the X drops through the issue's drop route", async () => {
     const d = await getJson("/api/contents");
-    const open = v.contentRows(d).find((r: any) => r.type === "issue" && r.status === "open");
+    const open = v.issueRows(d).find((r: any) => r.status === "open");
     expect(v.dropTarget(open)).toMatchObject({ url: `/api/issues/${open.repo}/${open.n}/drop` });
-    expect(v.dropTarget(v.contentRows(d).find((r: any) => r.type === "project"))).toBeNull();
     expect(v.dropTarget({ ...open, status: "done" })).toBeNull();
   });
 });
