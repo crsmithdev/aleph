@@ -98,9 +98,13 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
         refuse(`systemd-run failed: ${p.stderr.toString().trim()}`);
       }
     }
+    // Wait for `pid`, but not for a unit that cannot write it: one that has exited, or whose folder is gone.
     const deadline = Date.now() + PID_WAIT_MS;
-    while (!existsSync(join(folder, "pid")) && Date.now() < deadline) await Bun.sleep(25);
-    if (!existsSync(join(folder, "pid"))) console.error(`warn: ${id} wrote no pid in ${PID_WAIT_MS / 1000} s`);
+    while (!existsSync(join(folder, "pid")) && Date.now() < deadline && existsSync(folder) && child?.exitCode == null) await Bun.sleep(25);
+    if (!existsSync(join(folder, "pid"))) {
+      const why = !existsSync(folder) ? "its folder is gone" : child?.exitCode != null ? `the unit exited ${child.exitCode}` : `no pid in ${PID_WAIT_MS / 1000} s`;
+      console.error(`warn: ${id} wrote no pid: ${why}`);
+    }
   } finally {
     release!();
   }
