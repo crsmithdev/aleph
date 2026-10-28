@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CLI, aleph, env, base, jobsDir, state as stateOf, setup, teardown } from "./cli.helpers";
+import { aleph, env, base, jobsDir, startScript, state as stateOf, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -29,7 +29,7 @@ describe("every transition dispatches at once", () => {
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     startLog = join(base, "tstart.log");
     startCmd = join(base, "tstart-cmd");
-    writeFileSync(startCmd, `#!/bin/bash\necho "$2" >> "$START_LOG"\nALEPH_JOB_FOREGROUND=1 bun ${CLI} job "$1" "$2" --spec - --todo "$3" > /dev/null 2>&1 < /dev/stdin &\nJ=$!\nfor i in $(seq 100); do ls ${jobsDir}/*-fac-"$2"-*/pid > /dev/null 2>&1 && exit 0; kill -0 $J 2>/dev/null || exit 1; sleep 0.1; done\nexit 1\n`, { mode: 0o755 });
+    startScript(startCmd, jobsDir);
   });
   beforeEach(async () => {
     rmSync(startLog, { force: true });
@@ -74,6 +74,8 @@ describe("every transition dispatches at once", () => {
     const b = track(await add("needs the slot", open("slot-b"), ["--labels", "goal"], { ALEPH_LIVE_CAP: "1" }));
     await Bun.sleep(1500);
     expect(started()).toEqual([`fac-${a}`]);
+    // Drop the issue first: an open goal whose run is dropped starts again, and would keep the slot.
+    await aleph(["todo", "drop", "fac", String(a), "slot test"]);
     expect((await aleph(["drop", `fac-${a}`], on({ ALEPH_LIVE_CAP: "1" }))).code).toBe(0);
     await until(() => started().includes(`fac-${b}`));
   }, 60_000);
