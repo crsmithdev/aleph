@@ -140,7 +140,7 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .mark svg { width: 22px; height: 22px; flex: none; }
 
 /* ---------- Now: metric cards ---------- */
-.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 0 0 24px; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; margin: 0 0 24px; }
 .metric { display: grid; gap: 10px; min-width: 0; padding: 20px 22px 18px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); color: var(--ink); text-decoration: none; }
 .metric:hover { border-color: var(--muted); }
 .metric .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -190,12 +190,10 @@ a.act { text-decoration: none; display: inline-block; }
 .grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
 .rail { position: sticky; top: 16px; }
 /* Status: Issues rows, then Lands 2/3 beside Jobs 1/3, then Triage; sections hold grids of cards */
-.cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 28px; align-items: start; margin: 0 0 28px; }
-.cols > section, section.wide { margin: 0; min-width: 0; }
+.page > section, section.wide { margin: 0 0 28px; min-width: 0; }
 section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
 .cards > * { min-width: 0; margin: 0; }
-#lands .cards { grid-template-columns: minmax(0, 1fr); }
 .job-card .ih .id { white-space: nowrap; flex: none; }
 .grp + .grp { margin-top: 16px; }
 .grp h3 { display: flex; align-items: baseline; gap: 8px; font: 600 var(--fs-sm)/1.3 var(--sans); color: var(--muted); margin: 0 0 8px; }
@@ -443,7 +441,6 @@ details.fold { margin: 0 0 8px; }
 }
 @media (max-width: 720px) {
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cols { grid-template-columns: minmax(0, 1fr); }
   .page { padding: 20px 16px 48px; }
   .lede { font-size: var(--fs-xl); }
   .ev { grid-template-columns: minmax(0, 1fr); }
