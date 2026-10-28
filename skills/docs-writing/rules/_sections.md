@@ -7,22 +7,22 @@ All 9 categories with ordering, impact, and rules. The ID in parentheses is the 
 ## 1. Voice & Tone (voice)
 
 **Impact:** CRITICAL
-**4 rules:** voice defaults (active voice, contractions, second person with the tutorial "we" allowance, professional tone, reader-centric framing), no jargon, no anthropomorphism, requirements language (must for requirements, should only for recommendations, no please).
+**4 rules:** voice defaults (5 checks), no jargon, no anthropomorphism, requirements language.
 
 ## 2. Structure & Organization (structure)
 
 **Impact:** CRITICAL
-**9 rules:** Diataxis one-type-per-file (with the compass), bottom line up front, conditions before instructions, heading followed by an orienting sentence, next steps, one idea per section (and per page), every section earns its place, clear procedures, quick start for getting-started docs.
+**9 rules:** Diataxis one-type-per-file, bottom line up front, conditions before instructions, heading followed by an orienting sentence, next steps, one idea per section, every section earns its place, clear procedures, quick start for getting-started docs.
 
 ## 3. Clarity & Language (clarity)
 
 **Impact:** HIGH
-**5 rules:** clarity defaults (plain language, cut filler, be specific, global audience, short paragraphs; the source of truth for paragraph length), serial comma, no Latin abbreviations, no nominalizations, one idea per sentence.
+**5 rules:** clarity defaults (5 checks; the source of truth for paragraph length), serial comma, no Latin abbreviations, no nominalizations, one idea per sentence.
 
 ## 4. Code Examples (code)
 
 **Impact:** HIGH
-**8 rules:** runnable examples (with why-not-what comments and a language tag on every fence), code-to-context ratio, isolated-to-full layering, multiple languages, error descriptions, named functions, realistic example names, placeholders and test credentials.
+**8 rules:** runnable examples, code-to-context ratio, isolated-to-full layering, multiple languages, error descriptions, named functions, realistic example names, placeholders and test credentials.
 
 ## 5. Formatting & Syntax (format)
 
@@ -37,7 +37,7 @@ All 9 categories with ordering, impact, and rules. The ID in parentheses is the 
 ## 7. Scanability & Readability (scan)
 
 **Impact:** MEDIUM
-**2 rules:** scan defaults (white space between logical groups, diagrams and tables over prose), request and response examples beside each API reference entry.
+**2 rules:** scan defaults (2 checks), request and response examples beside each API reference entry.
 
 ## 8. Content Hygiene (hygiene)
 
@@ -47,4 +47,4 @@ All 9 categories with ordering, impact, and rules. The ID in parentheses is the 
 ## 9. Review & Testing (review)
 
 **Impact:** LOW-MEDIUM
-**3 rules:** review defaults (fresh-reader test, read aloud and cut, verify against implementation), verify links, docs change with the code (same PR, prose lint in CI).
+**3 rules:** review defaults (3 checks), verify links, docs change with the code.

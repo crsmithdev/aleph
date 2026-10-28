@@ -6,7 +6,7 @@ tags: maintenance, outdated, deletion
 
 ## Delete outdated docs, don't leave them to rot
 
-Outdated docs are worse than none: they mislead with authority. Delete docs for removed features; update docs when behavior changes. Where a migration needs the old behavior for context, put it in a collapsed `<details>` block (Markdown has no equivalent, so raw HTML is right here) rather than leaving stale prose inline.
+Outdated docs are worse than none: they mislead with authority. Delete docs for removed features. Where a migration needs the old behavior for context, put it in a collapsed `<details>` block (Markdown has no equivalent, so raw HTML is right here) rather than leaving stale prose inline.
 
 **Incorrect (doc for a removed feature still in navigation):**
 

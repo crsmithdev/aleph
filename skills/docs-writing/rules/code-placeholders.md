@@ -35,6 +35,4 @@ Replace the following:
 - `PAYMENT_SOURCE_ID`: the ID of a saved card or bank account on that customer
 ````
 
-A full-length live-looking sample is not just a reader hazard: GitHub push protection blocks the commit that carries it, including the commit that adds this rule. Write the prefix plus a named placeholder, never a plausible key body.
-
 Reference: [Google developer documentation style guide: Placeholders](https://developers.google.com/style/placeholders), [Stripe: API keys](https://docs.stripe.com/keys)

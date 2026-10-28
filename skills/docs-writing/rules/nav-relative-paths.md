@@ -8,13 +8,13 @@ tags: links, paths, relative
 
 Link between docs with relative paths. Absolute paths break when docs are hosted at different base URLs or built into subfolders.
 
-**Incorrect (absolute path, vague link text):**
+**Incorrect (absolute path):**
 
 ```markdown
-See [here](/docs/reference/api.md) for more info.
+See [API authentication methods](/docs/reference/api.md#authentication) for token setup.
 ```
 
-**Correct (relative path, descriptive context):**
+**Correct (relative path):**
 
 ```markdown
 See [API authentication methods](../reference/api.md#authentication) for token setup.

@@ -6,7 +6,7 @@ tags: llms-txt, agents, markdown, machine-readable
 
 ## Publish llms.txt and a Markdown variant of every page
 
-A growing share of docs-site traffic is coding agents fetching pages on a developer's behalf, and an agent reading rendered HTML pays for navigation, scripts, and tab widgets before it reaches the content. Two conventions fix that: an `/llms.txt` index at the site root (an H1, a one-paragraph blockquote summary, then H2 sections of `[title](url): one-line description` links, with an `## Optional` section for what an agent can skip), and a clean Markdown variant of each page at the same URL with `.md` appended. Stripe, Vale, and Supabase all serve both. Content rules follow from the same reader: every code fence carries a language tag, and no fact lives only in an image or a collapsed tab.
+A growing share of docs-site traffic is coding agents fetching pages on a developer's behalf, and an agent reading rendered HTML pays for navigation, scripts, and tab widgets before it reaches the content. Two conventions fix that: an `/llms.txt` index at the site root (an H1, a one-paragraph blockquote summary, then H2 sections of `[title](url): one-line description` links, with an `## Optional` section for what an agent can skip), and a clean Markdown variant of each page at the same URL with `.md` appended. Stripe, Vale, and Supabase all serve both. Content rules follow from the same reader: no fact lives only in an image or a collapsed tab, and code fences carry the language tag that `code-runnable-examples` requires.
 
 The docs author decides what the index lists and writes the one-line descriptions; the site build generates the file.
 

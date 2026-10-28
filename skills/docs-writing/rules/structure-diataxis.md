@@ -10,7 +10,7 @@ Per Diataxis, each document is exactly one type: tutorial, how-to guide, referen
 
 | | Acquisition | Application |
 |---|---|---|
-| **Action** | Tutorial: a lesson, "we" voice, reliable result, no options | How-to: a task for a competent reader, no teaching |
+| **Action** | Tutorial: a lesson with a reliable result, no options | How-to: a task for a competent reader, no teaching |
 | **Cognition** | Explanation: "About X", context and alternatives | Reference: neutral description mirroring the product's structure |
 
 When one page answers differently for different sections, split it into separate files and link between them. Name each by its type: a how-to says exactly what it shows ("Rotate API tokens"), an explanation reads with an implicit "About" ("How authentication works").

@@ -6,7 +6,7 @@ tags: api-docs, layout, reference, examples
 
 ## Keep request and response examples beside each API reference entry
 
-Stripe's API reference puts parameters in one column and a request plus its response in the other, so the reader never scrolls between "what does this take" and "what does the call look like." Docs frameworks (Mintlify, Fern, Redocly, Docusaurus OpenAPI) render that two-pane layout from the source; what the author controls is that every endpoint entry carries its own request example and response example, in that order, immediately after its parameters. A reference page that describes ten endpoints and then dumps all the examples at the bottom has the same content and none of the usefulness.
+Stripe's API reference puts parameters in one column and a request plus its response in the other, so the reader never scrolls between "what does this take" and "what does the call look like." Docs frameworks (Mintlify, Fern, Redocly, Docusaurus OpenAPI) render that two-pane layout from the source; what the author controls is that every endpoint entry carries its own request example and response example, in that order, immediately after its parameters.
 
 **Incorrect (examples gathered at the end, away from the parameters they show):**
 

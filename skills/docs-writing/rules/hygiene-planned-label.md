@@ -11,18 +11,18 @@ Document-driven development writes the page before the feature exists. Published
 **Incorrect (unshipped endpoint documented as current behavior):**
 
 ```markdown
-## Batch processing endpoint
+## Export endpoint
 
-Send up to 1000 items in a single request using the
-`/api/batch` endpoint. Batches are processed in the order received.
+Export a report with the `/api/export` endpoint. Exports
+run in the order received.
 ```
 
 **Correct (marked, future tense, tracked):**
 
 ```markdown
-## [PLANNED] Batch processing endpoint
+## [PLANNED] Export endpoint
 
-This endpoint will accept up to 1000 items per request.
+This endpoint will export a report on request.
 Implementation is tracked in
 [#1234](https://github.com/example/repo/issues/1234).
 ```

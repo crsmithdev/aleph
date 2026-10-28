@@ -8,7 +8,7 @@ tags: voice, requirements, must, should, precision
 
 Readers act on the modal verb. "Must" states a requirement: the task fails without it. "Should" states a recommendation the reader can weigh. The failure is using "should" for a requirement, which lets a reader skip the step and then debug the result. Don't add "please" to instructions: it implies the step is optional and adds nothing when it isn't.
 
-The rule is not "ban should." Google's word list keeps "should" for expected or recommended practice. Flag it only where the sentence describes something that breaks when skipped.
+Flag "should" only where skipping the step breaks something.
 
 **Incorrect (a requirement dressed as a suggestion, plus "please"):**
 

@@ -6,7 +6,7 @@ tags: sentence-length, readability, conciseness
 
 ## One idea per sentence, max 25 words
 
-Long compound sentences lose readers. Split at conjunctions; more than one "and" or "but" signals a split. GOV.UK sets the same threshold: check any sentence over 25 words to see if it splits.
+Long compound sentences lose readers. Split at conjunctions; more than one "and" or "but" signals a split.
 
 **Incorrect (compound sentence buries multiple ideas):**
 

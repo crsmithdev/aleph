@@ -6,7 +6,7 @@ tags: location, organization, directory
 
 ## All documentation lives in the docs/ directory
 
-A reader who can't find a page assumes it doesn't exist and asks, or guesses. Keep docs in `docs/` (or the project's established equivalent), with subdirectories by Diataxis type so the folder tells a reader which kind of page they are opening. Subdirectory READMEs are the exception: they describe that specific directory. Docs living next to the code they describe is also what lets a docs change ride in the same PR (`review-docs-with-code`).
+A reader who can't find a page assumes it doesn't exist and asks, or guesses. Keep docs in `docs/` (or the project's established equivalent), with subdirectories by Diataxis type so the folder tells a reader which kind of page they are opening. Subdirectory READMEs are the exception: they describe that specific directory.
 
 **Incorrect (docs scattered across the repo):**
 

@@ -6,7 +6,7 @@ tags: errors, troubleshooting, status-codes
 
 ## Document errors with codes, meanings, and fixes
 
-Readers reach for error docs when stuck, so a bare code-to-label table sends them away with nothing to do. For each error, show the message as the reader sees it, state the cause, and give the fix, with a link to where the fix happens. Google's error-message guidance names the two questions to answer: what went wrong, and how does the reader fix it.
+Readers reach for error docs when stuck, so a bare code-to-label table sends them away with nothing to do. For each error, show the message as the reader sees it, state the cause, and give the fix, with a link to where the fix happens.
 
 **Incorrect (error code with no actionable guidance):**
 

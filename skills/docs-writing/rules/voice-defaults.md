@@ -11,7 +11,7 @@ Default behaviors, codified as the project standard:
 - [ ] **Active voice, present tense**: actor before action. Use passive only when the actor is unknown or irrelevant.
 - [ ] **Contractions**: use common ones (don't, it's, you'll); avoid unusual ones (mightn't, shan't).
 - [ ] **Second person**: address the reader as "you." Reserve "the user" for someone other than the reader. "We" is fine for the authoring organization ("we recommend") and, in tutorials only, for the tutor-learner voice Diataxis describes ("In this tutorial, we build...").
-- [ ] **Professional, not promotional**: replace superlatives with measurable facts. No marketing hype, no "simply" or "easy."
+- [ ] **Professional, not promotional**: no marketing hype. `clarity-defaults` covers replacing superlatives and filler.
 - [ ] **Reader-centric framing**: lead with what the reader can accomplish, not what the product does.
 
 **Incorrect (passive, formal, promotional, product-centric):**
