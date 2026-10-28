@@ -14,11 +14,8 @@ export const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
 /** The checks of a run as facts: `Tests 71 s ✓`. */
 export const checkFacts = (j) =>
   (j.checks || []).map((c) => fact(c.name.charAt(0).toUpperCase() + c.name.slice(1), `${esc(String(c.seconds))} s ${c.ok ? "✓" : "✗"}`)).join("");
-/** "10/28 4:28 am" from a job folder id like 20261028-042822-aleph-aleph-240-agent: the id's own local time. */
-const idStart = (m) => {
-  const h = Number(m[4]);
-  return `${Number(m[2])}/${Number(m[3])} ${h % 12 || 12}:${m[5]} ${h < 12 ? "am" : "pm"}`;
-};
+/** "Oct 28 04:28" from a job folder id like 20261028-042822-aleph-aleph-240-agent: the id's own local time, as `when` shows it. */
+const idStart = (m) => when(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])));
 const KINDS = { agent: "agent run", land: "land", triage: "triage" };
 /** One trailer as text: Item shows its value alone; a Job folder id is parsed into its run kind and start and links to the job page (raw id in the title). */
 const trailer = (t, j) => {

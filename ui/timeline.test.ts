@@ -201,16 +201,16 @@ describe("timeline view", () => {
 
   test("a job's end row has the verb as its badge, type, project, #id link, title and contents of run kind, model, cost, took", () => {
     const h = renderEvent({ at: "2026-10-27T10:25:00", kind: "job", what: "landed", state: "landed", sub: "agent", id: "aleph-9", title: "Do it", href: "#/jobs/aleph-9", project: "aleph", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] });
-    for (const t of ['<span class="badge done">landed</span>', '<td class="c-type">job</td>', '<td class="c-project">aleph</td>', '<a class="idl" href="#/jobs/aleph-9">#9</a>', '<td class="c-title wide" title="Do it">Do it</td>']) expect(h).toContain(t);
+    for (const t of ['<span class="badge done">landed</span>', '<td class="c-type">job</td>', '<td class="c-project">aleph</td>', '<a class="idl" href="#/jobs/aleph-9">aleph-9</a>', '<td class="c-title wide" title="Do it">Do it</td>']) expect(h).toContain(t);
     expect(contentsText({ kind: "job", sub: "agent", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] })).toBe("run: agent  model: opus  cost: $1.50  took: 25m");
     expect(h).not.toContain("Project");
     expect(h).not.toContain("Cost");
     expect(h.match(/<a /g)).toHaveLength(1);
   });
 
-  test("ids are #number, a sha stays a sha", () => {
-    expect(idText({ kind: "issue", id: "aleph-247" })).toBe("#247");
-    expect(idText({ kind: "job", id: "fac-1" })).toBe("#1");
+  test("ids are the full id, a sha stays a sha", () => {
+    expect(idText({ kind: "issue", id: "aleph-247" })).toBe("aleph-247");
+    expect(idText({ kind: "job", id: "fac-1" })).toBe("fac-1");
     expect(idText({ kind: "land", id: "abc1234" })).toBe("abc1234");
     expect(renderEvent({ at: "2026-10-27T10:00:00", kind: "land", what: "landed", state: "landed", title: "t", id: "abc1234", href: "#/projects/fac", project: "fac", sub: "direct", details: [["commit", "abc1234"]] })).toContain('href="#/projects/fac">abc1234</a>');
   });

@@ -64,6 +64,7 @@ export function mark(e) {
 }
 
 const pad = (n) => String(n).padStart(2, "0");
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** "25m", "1h05m": the span of a started row, which counts to `now` while the job runs. "" for the rest. */
 export function duration(e, now = Date.now()) {
   if (e.kind !== "job" || e.what !== "started") return "";
@@ -96,12 +97,8 @@ export function statusOf(e) {
 }
 
 const idOf = (e) => e.id ?? (e.kind === "job" || e.kind === "land" ? e.title : "");
-/** The Id cell's text: "#247" for a job or issue (its trailing number), a commit's short sha as it is. */
-export function idText(e) {
-  const id = idOf(e);
-  const m = /-(\d+)$/.exec(id);
-  return m ? `#${m[1]}` : id;
-}
+/** The Id cell's text: the job or issue id as it is ("aleph-247"), a commit's short sha. */
+export const idText = idOf;
 const SORT = {
   time: (e) => Date.parse(e.at) || 0, status: (e) => statusOf(e).text, type: (e) => e.kind, project: (e) => e.project ?? "",
   id: idOf, title: (e) => e.title ?? "",
@@ -250,7 +247,7 @@ export function stripOption(strip, kinds = KINDS.map(([k]) => k), now = Date.now
     grid: { left: 36, right: 12, top: 28, bottom: 28 },
     legend: { show: false },
     tooltip: { trigger: "axis" },
-    xAxis: { type: "category", boundaryGap: false, data: days, axisLabel: { hideOverlap: true, formatter: (v) => v.slice(5) } },
+    xAxis: { type: "category", boundaryGap: false, data: days, axisLabel: { hideOverlap: true, formatter: (v) => `${MONTHS_SHORT[Number(v.slice(5, 7)) - 1]} ${v.slice(8)}` } },
     yAxis: { type: "value", minInterval: 1 },
     series: shown.map(([k, name]) => {
       const color = t[SERIES_TONE[k]] || t.ink;

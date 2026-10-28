@@ -15,7 +15,7 @@ export const view = {
 
 const STEP = 50;
 const STYLE = `<style>
-.act td.bad { color: var(--stuck); }
+.tools td.bad { color: var(--stuck); }
 </style>`;
 
 const sh = (title, aside = "") => `<div class="sh"><h2>${esc(title)}</h2>${aside ? `<span class="aside">${esc(aside)}</span>` : ""}</div>`;
@@ -33,8 +33,8 @@ function body(a, shown) {
   const n = (k) => shown[k] ?? STEP;
   const lf = a.langfuse === "off" ? empty("Langfuse is not configured.", "Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in <code>~/.aleph/.env</code>.")
     : a.langfuse === "error" ? error(`Langfuse failed: ${a.error}`, "Check that Langfuse is running, then reload.") : "";
-  return pageHead("Tools") + (lf ||
-    sh("Tools") + counts("tools", a.tools, "Tool", n("tools")) +
+  return pageHead("Tools", { count: lf ? "" : String(a.tools.length) }) + (lf ||
+    counts("tools", a.tools, "Tool", n("tools")) +
     sh("Hooks") + counts("hooks", a.hooks, "Hook", n("hooks")) +
     sh("Verify-gate denials", String(a.denials.total)) +
     (a.denials.recent.length ? table("denials", [["Reason"], ["When"]], a.denials.recent.map((r) => `<tr><td class="wide">${esc(r.reason)}</td><td class="time">${esc(when(r.at))}</td></tr>`), n("denials")) : empty("The gate denied nothing in this period.")));
@@ -42,11 +42,11 @@ function body(a, shown) {
 
 export function renderActivity(a) {
   if (!a) return `<div class="page">${error("No data.")}</div>`;
-  return `${STYLE}<div class="page act">${body(a, {})}</div>`;
+  return `${STYLE}<div class="page tools">${body(a, {})}</div>`;
 }
 
 export function mountActivity(root, d) {
-  const page = root.querySelector?.(".act");
+  const page = root.querySelector?.(".tools");
   if (!page || !d) return;
   const shown = {};
   page.addEventListener("click", (ev) => {

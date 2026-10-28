@@ -290,7 +290,7 @@ test("a running job past 40 minutes says so", () => {
 test("a land run is measured from its own start and never past the time box", () => {
   const h = withAttn({ ...state, now: "2026-10-27T16:55:00Z", running: [job({ name: "a", started: "2026-10-27T16:00:00Z", run: { kind: "land", started: "2026-10-27T16:50:00Z" } })] });
   expect(h).toContain("land");
-  expect(h).toMatch(/Started \d{1,2}:\d\d (am|pm) \u00b7 <span class="elapsed" data-since="2026-10-27T16:50:00Z">5:00<\/span> elapsed/);
+  expect(h).toMatch(/Started [A-Z][a-z]{2} \d\d \d\d:\d\d \u00b7 <span class="elapsed" data-since="2026-10-27T16:50:00Z">5:00<\/span> elapsed/);
   expect(h).not.toContain("past the time box");
 });
 
@@ -352,9 +352,9 @@ test("the Job trailer is parsed into run kind and start, linked to the job page 
   const id = "20261028-042822-aleph-aleph-240-agent";
   const del = { ...state, delivered: [job({ name: "aleph-240", state: "landed", trailers: [{ key: "Item", value: "aleph-240" }, { key: "Job", value: id }] })] };
   const h = r.renderLands(del);
-  expect(h).toContain(`<p class="trailers-line">aleph-240 \u00b7 <a href="#/jobs/aleph-240" title="${id}">agent run, 10/28 4:28 am</a></p>`);
+  expect(h).toContain(`<p class="trailers-line">aleph-240 \u00b7 <a href="#/jobs/aleph-240" title="${id}">agent run, Oct 28 04:28</a></p>`);
   expect(h.replace(/title="[^"]*"/, "")).not.toContain(id);
-  expect(r.renderLands({ ...del, delivered: [{ ...del.delivered[0], trailers: [{ key: "Job", value: id.replace("agent", "land").replace("042822", "134500") }] }] })).toContain(">land, 10/28 1:45 pm<");
+  expect(r.renderLands({ ...del, delivered: [{ ...del.delivered[0], trailers: [{ key: "Job", value: id.replace("agent", "land").replace("042822", "134500") }] }] })).toContain(">land, Oct 28 13:45<");
 });
 
 test("Lands lists a running land before landed ones, has no origin/main aside, and counts its cards", () => {
