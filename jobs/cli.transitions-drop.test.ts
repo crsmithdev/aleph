@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, env, base, jobsDir, startScript, state as stateOf, setup, teardown } from "./cli.helpers";
+import { aleph, env, base, jobsDir, startScript, stateNow as state, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -18,8 +18,6 @@ describe("every transition dispatches at once", () => {
   const settled = (id: number) => runs(id).every((r) => state(r).state !== "running");
   const add = async (title: string, action: string, extra: string[] = [], env: Record<string, string> = {}) =>
     (await aleph(["todo", "add", "fac", title, ...extra, "--body", "-"], on(env), `ACTION: ${action}\n`)).json.added as number;
-  // A run's folder exists a moment before its state.json.
-  const state = (r: string) => { try { return stateOf(r); } catch { return { state: "" }; } };
   const gates = new Set<string>();
   const open = (name: string) => { gates.add(name); return `hold ${gate(name)}`; };
   const ids: number[] = [];

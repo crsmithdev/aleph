@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, jobsDir, startScript, state, setup, teardown } from "./cli.helpers";
+import { aleph, base, jobsDir, startScript, stateNow, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -16,7 +16,7 @@ describe("a factory run", () => {
     const goal = async (n: string) =>
       (await aleph(["todo", "add", "fac", `dispatch ${n}`, "--labels", "goal", "--body", "-"], {}, `ACTION: hold ${gate(n)}\n`)).json.added as number;
     const until = async (f: () => boolean) => { for (let i = 0; i < 300 && !f(); i++) await Bun.sleep(100); expect(f()).toBe(true); };
-    const settled = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`)).every((r) => state(r).state === "passed");
+    const settled = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`)).every((r) => stateNow(r).state === "passed");
     const ids: number[] = [];
     beforeAll(() => {
       startLog = join(base, "start.log");

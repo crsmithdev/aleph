@@ -84,6 +84,8 @@ export function moveMain(): void {
   sh(other, "git", "push", "-q", "origin", "main");
 }
 export const state = (run: string) => JSON.parse(readFileSync(join(jobsDir, run, "state.json"), "utf8"));
+/** `state` for a run that may be starting: its folder exists a moment before its state.json, so a missing file reads as no state yet. */
+export const stateNow = (run: string): { state: string } => { try { return state(run); } catch { return { state: "" }; } };
 export const file = (run: string, f: string) => readFileSync(join(jobsDir, run, f), "utf8");
 export const worktree = (name: string) => join(repo, ".worktrees", `job-${name}`);
 export const branchExists = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `job/${name}`]).exitCode === 0;
