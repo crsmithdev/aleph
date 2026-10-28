@@ -41,8 +41,8 @@ ${o.tsc ? `   - \`bunx tsc --noEmit\` (the clone has the repo's node_modules). W
 ${o.ui ? `5. The goal is labelled \`ui\`. You cannot start a browser; the harness loads the views for you. Start \`bun ui/server.ts --port <free port>\` in the background (it listens on 127.0.0.1).
    Write the URL of each changed view, one per line (\`http://127.0.0.1:<port>/...\`, at most 8), to \`${o.folder}/tmp/views.part\`, then
    \`mv\` it to \`${o.folder}/${VIEWS}\`. The harness takes that file and loads each view at 1440 and 390 px wide, in light and dark, and writes
-   \`${o.folder}/${BROWSER}/report.md\` last: wait for it (poll up to 5 minutes), then read it and look at the screenshots it names.
-   Record page errors and horizontal scroll for each view, and write one line \`Browser: <what you saw>\`, or \`Browser: ERROR <the report's error>\` when
+   \`${o.folder}/${BROWSER}/report.md\` last: wait for it (poll up to 5 minutes), then read it and look at the screenshots it names for anything else.
+   Take page errors and horizontal scroll (the \`overflow:\` line of each width and theme) from the report, not from the screenshots; record them for each view, and write one line \`Browser: <what you saw>\`, or \`Browser: ERROR <the report's error>\` when
    the report has an ERROR line or never came, and go on. Stop the server.
 ` : ""}
 Write down what you found, then end with exactly one line:

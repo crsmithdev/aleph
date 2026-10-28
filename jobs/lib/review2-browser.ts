@@ -124,7 +124,29 @@ class Pipe {
   }
 }
 
-interface Shot { width: number; scheme: string; file: string; scroll: boolean | null; errors: string[] }
+interface Shot { width: number; scheme: string; file: string; overflow: string; errors: string[] }
+
+const evalValue = async (cdp: Pipe, sessionId: string, expression: string): Promise<any> => {
+  const r = await cdp.send("Runtime.evaluate", { expression, returnByValue: true }, sessionId);
+  if (r.exceptionDetails) throw new Error(`Runtime.evaluate: ${r.exceptionDetails.text ?? "exception"}`);
+  const v = r.result?.value;
+  if (typeof v === "string") { try { return JSON.parse(v); } catch { return v; } }
+  return v;
+};
+
+/** Up to 3 elements whose right edge is past the viewport, as tag#id.class and width. Runs in the page. */
+const OFFENDERS = `JSON.stringify([...document.querySelectorAll("body *")].map((e) => [e, e.getBoundingClientRect()]).filter(([, r]) => r.width > 0 && r.right > document.documentElement.clientWidth + 0.5).slice(0, 3).map(([e, r]) => ({ selector: e.tagName.toLowerCase() + (e.id ? "#" + e.id : "") + (typeof e.className === "string" && e.className.trim() ? "." + e.className.trim().split(/\\s+/)[0] : ""), width: Math.round(r.width) })))`;
+
+/** `overflow: none`, or `overflow: <scrollWidth> > <clientWidth>` and up to 3 offending elements. */
+async function measure(cdp: Pipe, sessionId: string): Promise<string> {
+  const w = await evalValue(cdp, sessionId, "JSON.stringify({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth })");
+  const sw = Number(w?.scrollWidth), cw = Number(w?.clientWidth);
+  if (!Number.isFinite(sw) || !Number.isFinite(cw)) throw new Error("scrollWidth and clientWidth unreadable");
+  if (!(sw > cw)) return "overflow: none";
+  let els: { selector: string; width: number }[] = [];
+  try { const v = await evalValue(cdp, sessionId, OFFENDERS); if (Array.isArray(v)) els = v.slice(0, 3); } catch { /* the widths stand */ }
+  return `overflow: ${sw} > ${cw}${els.length ? ` — ${els.map((e) => `${String(e.selector).replace(/[|\s]+/g, " ")} (${e.width}px)`).join(", ")}` : ""}`;
+}
 
 /** One view at one size and scheme, in its own tab. */
 async function shoot(cdp: Pipe, url: string, width: number, height: number, scheme: string, file: string): Promise<Shot> {
@@ -149,11 +171,11 @@ async function shoot(cdp: Pipe, url: string, width: number, height: number, sche
     await Promise.race([load, Bun.sleep(15_000)]);
     // A moment for the view's scripts to draw after load.
     await Bun.sleep(Number(process.env.ALEPH_REVIEW2_SETTLE_MS ?? 500));
-    const r = await cdp.send("Runtime.evaluate", { expression: "document.documentElement.scrollWidth > window.innerWidth", returnByValue: true }, sessionId);
+    const overflow = await measure(cdp, sessionId);
     const shotH = await cdp.send("Page.getLayoutMetrics", {}, sessionId).then((m) => Math.min(4000, Math.max(height, Math.ceil(m.cssContentSize?.height ?? height)))).catch(() => height);
     const png = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width, height: shotH, scale: 1 } }, sessionId);
     writeFileSync(file, Buffer.from(png.data, "base64"));
-    return { width, scheme, file, scroll: typeof r.result?.value === "boolean" ? r.result.value : null, errors };
+    return { width, scheme, file, overflow, errors };
   } finally {
     off();
     await cdp.send("Target.closeTarget", { targetId }).catch(() => {});
@@ -200,16 +222,16 @@ export async function browserStep(folder: string, urls: string[], pid: number | 
     let n = 0;
     for (const url of urls) {
       n++;
-      lines.push(`## ${n}. ${url}`, "", "| width | scheme | horizontal scroll | errors | screenshot |", "|---|---|---|---|---|");
+      lines.push(`## ${n}. ${url}`, "", "| width | scheme | overflow | errors | screenshot |", "|---|---|---|---|---|");
       const errs: string[] = [];
       for (const [w, h] of SIZES) for (const scheme of SCHEMES) {
         const file = join(out, `${n}-${w}-${scheme}.png`);
         try {
           const s = await shoot(cdp, url, w, h, scheme, file);
-          lines.push(`| ${w} | ${scheme} | ${s.scroll === null ? "?" : s.scroll ? "yes" : "no"} | ${s.errors.length} | ${file} |`);
+          lines.push(`| ${w} | ${scheme} | ${s.overflow} | ${s.errors.length} | ${file} |`);
           errs.push(...s.errors.map((e) => `- ${w} ${scheme}: ${e.replace(/\s+/g, " ").slice(0, 300)}`));
         } catch (e: any) {
-          lines.push(`| ${w} | ${scheme} | ? | ? | ERROR: ${String(e?.message ?? e).replace(/\s+/g, " ")} |`);
+          lines.push(`| ${w} | ${scheme} | overflow: ? | ? | ERROR: CDP failed: ${String(e?.message ?? e).replace(/\s+/g, " ")} |`);
         }
       }
       lines.push("", ...(errs.length ? ["Errors:", ...errs] : ["No page errors."]), "");

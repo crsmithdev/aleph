@@ -33,7 +33,13 @@ createReadStream("", { fd: 3 }).on("data", (d) => {
     else if (m.method === "Target.attachToTarget") result = { sessionId: "s" + n };
     else if (m.method === "Emulation.setDeviceMetricsOverride") widths[s] = m.params.width;
     else if (m.method === "Page.navigate") urls[s] = m.params.url;
-    else if (m.method === "Runtime.evaluate") result = { result: { value: widths[s] === 390 } };
+    else if (m.method === "Runtime.evaluate") {
+      const e = m.params.expression;
+      if (urls[s].includes("fail")) { send({ id: m.id, error: { message: "Cannot find context" }, sessionId: s }); continue; }
+      const over = widths[s] === 390 && !urls[s].includes("boom");
+      if (e.includes("scrollWidth")) result = { result: { value: JSON.stringify({ scrollWidth: over ? 412 : widths[s], clientWidth: widths[s] }) } };
+      else result = { result: { value: JSON.stringify([{ selector: "div#wide.card", width: 412 }]) } };
+    }
     else if (m.method === "Page.getLayoutMetrics") result = { cssContentSize: { width: widths[s], height: 1200 } };
     else if (m.method === "Page.captureScreenshot") result = { data: Buffer.from("PNG").toString("base64") };
     send({ id: m.id, result, ...(s ? { sessionId: s } : {}) });
@@ -150,8 +156,8 @@ describe("review2 browser step", () => {
     const report = readFileSync(join(folder, "browser/report.md"), "utf8");
     expect(report).toContain("FakeChrome/1");
     expect(report).toContain("## 1. http://127.0.0.1:4100/status");
-    expect(report).toContain(`| 390 | dark | yes | 0 | ${join(folder, "browser/1-390-dark.png")} |`);
-    expect(report).toContain(`| 1440 | light | no | 0 | ${join(folder, "browser/1-1440-light.png")} |`);
+    expect(report).toContain(`| 390 | dark | overflow: 412 > 390 — div#wide.card (412px) | 0 | ${join(folder, "browser/1-390-dark.png")} |`);
+    expect(report).toContain(`| 1440 | light | overflow: none | 0 | ${join(folder, "browser/1-1440-light.png")} |`);
     expect(report).toContain("- 1440 light: TypeError: x is undefined");
     expect(report).toContain("1 line(s) of tmp/views.txt dropped");
     expect(report).not.toContain("example.com");
@@ -162,6 +168,20 @@ describe("review2 browser step", () => {
     const argv: string[] = JSON.parse(readFileSync(argvFile, "utf8"));
     expect(argv).toContain("--remote-debugging-pipe");
     expect(argv).not.toContain("--no-sandbox");
+  }, 30_000);
+
+  test("a CDP failure on one view is written for that view and the others go on", async () => {
+    const { runReview2 } = await import("./review2.ts");
+    writeFileSync(join(base, "chrome-fail"), FAKE_CHROME(join(base, "argv-fail")), { mode: 0o755 });
+    process.env.ALEPH_REVIEW2_CHROME = join(base, "chrome-fail");
+    const folder = held("ui-fail");
+    process.env.ALEPH_REVIEW2_CMD = fakeReviewer(["http://127.0.0.1:4100/fail", "http://127.0.0.1:4100/status"]);
+    await runReview2(folder);
+    const report = readFileSync(join(folder, "browser/report.md"), "utf8");
+    const [first, second] = report.split("## 2.");
+    expect(first).toContain("CDP failed: Cannot find context");
+    expect(second).toContain("overflow: 412 > 390");
+    expect(second).toContain("overflow: none");
   }, 30_000);
 
   test("when Chrome's sandbox cannot start, the report says so with the log tail and the review goes on", async () => {
