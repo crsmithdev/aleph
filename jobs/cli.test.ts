@@ -1231,6 +1231,7 @@ describe("a factory run", () => {
       await aleph(["pause"]);
       expect((await aleph(["dispatch"], on())).json).toMatchObject({ started: [], paused: true });
       const held = await aleph(["todo", "add", "fac", "added while paused", "--labels", "goal"], on());
+      await Bun.sleep(1500);
       expect(started()).toEqual([]);
       await aleph(["resume"]);
       sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
@@ -1244,9 +1245,20 @@ describe("a factory run", () => {
       const add = await aleph(["todo", "add", "fac", "starts at once", "--labels", "goal", "--body", "-"], on(), `ACTION: hold ${gate("f")}\n`);
       ids.push(add.json.added);
       expect(add.code).toBe(0);
+      await until(() => started().length === 1);
       expect(started()).toEqual([`fac-${add.json.added}`]);
       writeFileSync(gate("f"), "");
       await until(() => settled(add.json.added));
+      // A slow dispatch does not hold the add.
+      const slowCmd = join(base, "slow-cmd");
+      writeFileSync(slowCmd, `#!/bin/bash\nsleep 10\nexec ${startCmd} "$@"\n`, { mode: 0o755 });
+      const t0 = Date.now();
+      const slow = await aleph(["todo", "add", "fac", "slow dispatch", "--labels", "goal", "--body", "-"], on({ ALEPH_START_CMD: slowCmd }), `ACTION: hold ${gate("f")}\n`);
+      expect(Date.now() - t0).toBeLessThan(3000);
+      expect(slow.code).toBe(0);
+      ids.push(slow.json.added);
+      await until(() => started().length === 2);
+      await until(() => settled(slow.json.added));
     }, 90_000);
   });
 });

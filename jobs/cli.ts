@@ -7,7 +7,7 @@
  * See docs/specs/2026-09-24-agent-jobs.md.
  */
 import { jobArgv, route } from "./lib/route.ts";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
 import { baselineChecks, git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
@@ -330,7 +330,16 @@ async function drop(): Promise<void> {
 /** After `aleph issue add` or `edit` of an open goal in a factory repo: a dispatch, so the goal starts at once. It never fails the write. */
 async function dispatchAfterGoal(repo: Repo, item: todos.Item): Promise<void> {
   if (!dispatchOn() || !repo.sandbox || todos.status(item) !== "open" || !((item.fm.labels as string[]) ?? []).includes("goal")) return;
-  try { await runDispatch(); } catch (e: any) { console.error(`warn: dispatch failed: ${e?.message ?? e}`); }
+  try {
+    // Detached: the dispatch may run the baseline checks for minutes, and the write must not wait for them.
+    mkdirSync(factoryDir(), { recursive: true });
+    const log = openSync(join(factoryDir(), "dispatch.log"), "a");
+    try {
+      Bun.spawn([process.execPath, CLI, "dispatch"], { env: process.env, stdin: "ignore", stdout: log, stderr: log, detached: true }).unref();
+    } finally {
+      closeSync(log);
+    }
+  } catch (e: any) { console.error(`warn: dispatch failed: ${e?.message ?? e}`); }
 }
 
 /**
