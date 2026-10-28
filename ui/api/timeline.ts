@@ -5,30 +5,28 @@
  * The first page (no `before`) also carries `strip`: the items of the last 30 days for the swimlanes,
  * each with kind, start, end (null for a point, or a job still running) and name.
  * One event is one thing that happened at one time, with a verb in `what`. Sources: the ledger
- * (job runs), the work store (issues and their timestamped notes), `git log` of the registry repos
- * (lands) and the vault's daily note lines (notes). Sessions have their own page.
+ * (job runs, triage runs left out: the issue's own triaged row records them), the work store (issues
+ * and their timestamped notes) and `git log` of the registry repos (lands). Sessions have their own page.
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { allRuns, loadRegistry } from "../../jobs/lib/ledger.ts";
 import { itemPath, readList, storeDir } from "../../todo/lib/store.ts";
 import { status, today } from "../../todo/lib/todo.ts";
-import { linkTargets, links, loadVault, vaultDir } from "../../vault/lib/vault.ts";
 import type { Routes } from "../server.ts";
 
-export const KINDS = ["job", "land", "issue", "note"] as const;
+export const KINDS = ["job", "land", "issue"] as const;
 export type Kind = (typeof KINDS)[number];
 const HORIZON_DAYS = 90, STRIP_DAYS = 30;
 
 export interface TimelineEvent {
   at: string;
   kind: Kind;
-  /** The verb: started, passed, held, landed, dropped, failed, stuck, opened, triaged, decided, closed, noted. */
+  /** The verb: started, passed, held, landed, dropped, failed, stuck, opened, triaged, decided, closed. */
   what: string;
   /** A job's state, for its colour. */
   state?: string;
   title: string;
-  /** The kind of job (agent, land, ...): the Subtype column. */
+  /** A job's run kind (agent, land, plain, recheck); a land's "by hand" (Held-by: Chris) or "direct" (no job made it). */
   sub?: string;
   /** The job name or issue id: the Id column. */
   id?: string;
@@ -93,8 +91,8 @@ function issueTitle(repo: string | undefined, id: number | undefined, docs: Map<
   return docs.get(repo)!.get(id);
 }
 
-/** What a land landed: a factory run, or a held run Chris landed by hand. */
-const landSub = (held?: boolean) => (held ? "by hand" : "agent run");
+/** How a land came about: a held run Chris landed by hand, a commit no job made, or a plain factory run (none). */
+const landSub = (job: boolean, held?: boolean) => (!job ? "direct" : held ? "by hand" : undefined);
 
 function jobEvents(project: string | null, since: number, inGit: (sha: string) => boolean): TimelineEvent[] {
   const out: TimelineEvent[] = [];
@@ -103,10 +101,11 @@ function jobEvents(project: string | null, since: number, inGit: (sha: string) =
     if (project && run.repo !== project) continue;
     const href = `#/jobs/${enc(run.name)}`;
     const base = { href, project: run.repo };
+    if (run.kind === "triage") continue;
     const isLand = run.kind === "land" && !!run.commit && run.state === "landed";
     if (isLand) {
       // A land that git log already shows is that commit's event.
-      if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", sub: landSub(run.held), title: run.name, id: run.name, commit: run.commit, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model], ["commit", run.commit?.slice(0, 7)]) });
+      if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", sub: landSub(true, run.held), title: run.name, id: run.name, commit: run.commit, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model], ["commit", run.commit?.slice(0, 7)]) });
       continue;
     }
     const title = issueTitle(run.repo, run.todo, docs) ?? run.name;
@@ -141,9 +140,8 @@ function issueEvents(project: string | null, since: number): TimelineEvent[] {
     for (const item of doc?.items ?? []) {
       const git = times.get(itemPath(repo.key, item.id));
       const labels = Array.isArray(item.fm.labels) ? item.fm.labels.map(String) : [];
-      const sub = ["goal", "followup", "needs-chris"].find((l) => labels.includes(l)) ?? "issue";
-      const base = { href: `#/issues/${enc(repo.key)}/${item.id}`, project: repo.key, title: item.title, sub, id: `${repo.key}-${item.id}`, ...(git ? {} : { dateOnly: true }), kind: "issue" as const,
-        details: pairs(["labels", (Array.isArray(item.fm.labels) ? item.fm.labels : []).join(",")], ["notes", item.notes.length || ""]) };
+      const base = { href: `#/issues/${enc(repo.key)}/${item.id}`, project: repo.key, title: item.title, id: `${repo.key}-${item.id}`, ...(git ? {} : { dateOnly: true }), kind: "issue" as const,
+        details: pairs(["labels", labels.join(",")], ["notes", item.notes.length || ""]) };
       const created = String(item.fm.created ?? ""), updated = String(item.fm.updated ?? "");
       const st = status(item);
       // A 'triage: …' note is a triage, a 'Chris decided: …' or 'Claude decided: …' note a decision, at the note's time.
@@ -175,32 +173,9 @@ function commitEvents(project: string | null, since: number, landed: Map<string,
       const job = landed.get(full);
       shas.add(full);
       out.push({
-        at: new Date(Number(ct) * 1000).toISOString(), kind: "land", what: "landed", state: "landed", sub: job ? landSub(held.has(full)) : undefined, title: subject.join("\t"), id: job ?? short,
+        at: new Date(Number(ct) * 1000).toISOString(), kind: "land", what: "landed", state: "landed", sub: landSub(!!job, held.has(full)), title: subject.join("\t"), id: job ?? short,
         href: job ? `#/jobs/${enc(job)}` : `#/projects/${enc(repo.key)}`, project: repo.key, commit: short, details: pairs(["commit", short]),
       });
-    }
-  }
-  return out;
-}
-
-function noteEvents(project: string | null, since: number): TimelineEvent[] {
-  const dir = join(vaultDir(), "daily");
-  if (!existsSync(dir)) return [];
-  const notes = project ? loadVault(vaultDir()) : [];
-  const targets = linkTargets(notes);
-  const out: TimelineEvent[] = [];
-  for (const f of readdirSync(dir).filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f))) {
-    for (const l of readFileSync(join(dir, f), "utf8").split("\n")) {
-      const m = /^- (\d{2}:\d{2}) (.*)$/.exec(l);
-      if (!m) continue;
-      const at = new Date(`${f.slice(0, 10)}T${m[1]}:00`);
-      if (Number.isNaN(at.getTime()) || at.getTime() < since) continue;
-      const t = links(m[2])[0];
-      if (project) {
-        const hit = t ? targets.get(t.toLowerCase()) : undefined;
-        if (!hit || String(hit.fm.scope ?? "") !== project) continue;
-      }
-      out.push({ at: at.toISOString(), kind: "note", what: "noted", title: m[2], href: t ? `#/memory/${enc(t)}` : "#/memory" });
     }
   }
   return out;
@@ -215,10 +190,7 @@ export async function events(project: string | null, now = new Date()): Promise<
   const shas = new Set<string>();
   const commits = commitEvents(project, since, landed, held, shas);
   const inGit = (sha: string) => [...shas].some((f) => f.startsWith(sha) || sha.startsWith(f));
-  const all = [
-    ...jobEvents(project, since, inGit), ...issueEvents(project, since), ...commits,
-    ...noteEvents(project, since),
-  ].filter((e) => dayOf(e.at) && Date.parse(e.at) >= since && Date.parse(e.at) <= now.getTime() + 60_000);
+  const all = [...jobEvents(project, since, inGit), ...issueEvents(project, since), ...commits].filter((e) => dayOf(e.at) && Date.parse(e.at) >= since && Date.parse(e.at) <= now.getTime() + 60_000);
   all.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   return all;
 }

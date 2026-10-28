@@ -1,7 +1,8 @@
 // The Activity view: an ECharts stacked area chart (events per day, 30 days, one series per
-// kind), then a sortable table (Time, Status, Type, Subtype, Id, Title, Contents, X): one row per
-// event (a job started, passed or failed; an issue opened, triaged, decided or closed; a land; a note), 100 to a
-// page with Older and Newer controls. `data` is /api/timeline: { rows, now, strip }.
+// kind), a segmented kind filter (All, Jobs, Lands, Issues; the state is `?kinds=` in the hash), then a
+// sortable table (Time, Status, Type, Project, Id, Title, Contents, X): one row per event (a job started,
+// passed or failed; an issue opened, triaged, decided or closed; a land), 100 to a page with Older and
+// Newer controls. `data` is /api/timeline: { rows, now, strip }.
 import { chart, empty, esc, money, readTokens } from "../lib.js";
 
 export const view = {
@@ -10,8 +11,8 @@ export const view = {
   group: "factory",
   order: 1,
   api: "/api/timeline",
-  render: (d) => renderTimeline(d),
-  mount: (root, d) => mountTimeline(root, d),
+  render: (d, _params, query) => renderTimeline(d, query),
+  mount: (root, d, query) => mountTimeline(root, d, query),
 };
 
 /**
@@ -24,11 +25,15 @@ export function redirect(hash) {
   return path.replace(/\/$/, "") === "/list" ? "#/timeline" : null;
 }
 
-export const KINDS = [["job", "Jobs"], ["land", "Lands"], ["issue", "Issues"], ["note", "Notes"]];
+export const KINDS = [["job", "Jobs"], ["land", "Lands"], ["issue", "Issues"]];
 
 export const STYLE = `<style>
-.tl .kinds { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 8px; font: 13px var(--sans); }
-.tl .kinds label { cursor: pointer; }
+.tl .kinds { display: inline-flex; margin: 0 0 8px; font: 13px var(--sans); border: 1px solid var(--rule-2); border-radius: 6px; overflow: hidden; }
+.tl .kinds button { all: unset; box-sizing: border-box; padding: 3px 12px; cursor: pointer; color: var(--muted); border-left: 1px solid var(--rule-2); }
+.tl .kinds button:first-child { border-left: 0; }
+.tl .kinds button:hover { color: var(--ink); }
+.tl .kinds button[aria-pressed="true"] { color: var(--ink); background: var(--rule-2); font-weight: 600; }
+.tl .kinds button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .tl .strip { width: 100%; height: 230px; margin-bottom: 12px; }
 .tl .tbl { border-collapse: collapse; width: 100%; font-size: 13px; }
 .tl .tbl th { padding: 3px 10px 3px 0; font: 600 12px var(--sans); color: var(--muted); text-align: left; white-space: nowrap; }
@@ -40,8 +45,8 @@ export const STYLE = `<style>
 .tl .tbl td.c-time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .tl .tbl td.c-id a, .tl .tbl td.c-id span { font: 500 12.5px var(--mono); }
 .tl .tbl td.c-con { max-width: 34ch; overflow: hidden; text-overflow: ellipsis; }
-.tl .tbl .k { color: var(--muted); }
 .tl .tbl .sep { margin: 0 6px; color: var(--muted); }
+.tl .tbl .c-con .badge { margin-right: 4px; }
 .tl .tbl .c-act { position: relative; width: 28px; padding: 0; text-align: right; }
 .tl .pager { display: flex; align-items: center; gap: 12px; padding: 10px 0; font: 13px var(--sans); color: var(--muted); }
 .tl .tbl .cancel { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 4px; color: var(--muted); cursor: pointer; }
@@ -66,7 +71,7 @@ export const STYLE = `<style>
 const TONE = { running: "run", landed: "done", passed: "done", done: "done", "needs-you": "need", failed: "stuck", stuck: "stuck", dropped: "quiet" };
 const GLYPH = {
   job: { started: "▷", passed: "■", held: "■", landed: "■", dropped: "■", failed: "■", stuck: "■" },
-  land: { landed: "⬆" }, issue: { opened: "○", triaged: "◇", decided: "◆", closed: "✓", dropped: "✕" }, note: { noted: "✎" },
+  land: { landed: "⬆" }, issue: { opened: "○", triaged: "◇", decided: "◆", closed: "✓", dropped: "✕" },
 };
 
 /** The tone of an event: a job's or land's follows its state, an issue's its verb. */
@@ -107,26 +112,23 @@ export function stamp(e) {
   return e.dateOnly ? day : `${day} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-/** The Status cell: { text, tone }. The text is the event's verb, past tense (started, passed, held, landed, dropped, failed, stuck, opened, triaged, decided, closed, noted). */
+/** The Status cell: { text, tone }. The text is the event's verb, past tense (started, passed, held, landed, dropped, failed, stuck, opened, triaged, decided, closed). */
 export function statusOf(e) {
   return { text: e.what ?? "", tone: toneOf(e) };
 }
 
-/** The Subtype cell: the kind of land, job, issue or note. */
-export function subtypeOf(e) {
-  if (e.sub) return e.sub;
-  if (e.kind === "job") return "agent";
-  if (e.kind === "land") return e.commit && !e.id?.includes("-") ? "commit" : "job";
-  if (e.kind === "issue") return "issue";
-  return "daily";
-}
-
 const idOf = (e) => e.id ?? (e.kind === "job" || e.kind === "land" ? e.title : "");
+/** The Id cell's text: "#247" for a job or issue (its trailing number), a commit's short sha as it is. */
+export function idText(e) {
+  const id = idOf(e);
+  const m = /-(\d+)$/.exec(id);
+  return m ? `#${m[1]}` : id;
+}
 const SORT = {
-  time: (e) => Date.parse(e.at) || 0, status: (e) => statusOf(e).text, type: (e) => e.kind, sub: subtypeOf,
+  time: (e) => Date.parse(e.at) || 0, status: (e) => statusOf(e).text, type: (e) => e.kind, project: (e) => e.project ?? "",
   id: idOf, title: (e) => e.title ?? "",
 };
-export const COLUMNS = [["time", "Time"], ["status", "Status"], ["type", "Type"], ["sub", "Subtype"], ["id", "Id"], ["title", "Title"], ["con", "Contents"], ["act", ""]];
+export const COLUMNS = [["time", "Time"], ["status", "Status"], ["type", "Type"], ["project", "Project"], ["id", "Id"], ["title", "Title"], ["con", "Contents"], ["act", ""]];
 
 /** The rows ordered by `sort` = { key, dir } (dir 1 up, -1 down). Ties keep newest first. */
 export function sortRows(rows, sort = { key: "time", dir: -1 }) {
@@ -140,28 +142,35 @@ export function sortRows(rows, sort = { key: "time", dir: -1 }) {
 /** A click on a header: the same column reverses, another starts (Time descending, the rest ascending). */
 export const nextSort = (sort, key) => sort.key === key ? { key, dir: -sort.dir } : { key, dir: key === "time" ? -1 : 1 };
 
-/** The Contents cell as plain text, one line: "Project aleph · Labels followup, goal · Notes 2". */
-export function contentsText(e, now) {
-  const cap = (k) => k[0].toUpperCase() + k.slice(1);
-  const parts = [["Project", e.project], ["Took", duration(e, now)], ["Cost", e.cost == null ? "" : money(e.cost)],
-    ...(e.details ?? []).map(([k, v]) => [cap(k), k === "labels" ? v.split(",").join(", ") : v])];
-  return parts.filter(([, v]) => v).map(([k, v]) => `${k} ${v}`).join(" · ");
+/**
+ * The Contents cell as parts, only what is unique to the row's type: a job's run kind, model, cost and
+ * took; a land's commit and "by hand" or "direct"; an issue's labels (chips) and note count.
+ */
+export function contentsParts(e, now) {
+  const d = Object.fromEntries(e.details ?? []);
+  const plain = (...texts) => texts.filter(Boolean).map((text) => ({ text }));
+  if (e.kind === "job") return plain(e.sub ?? "agent", d.model, e.cost == null ? "" : money(e.cost), duration(e, now) || d.took);
+  if (e.kind === "land") return plain(d.commit ?? e.commit?.slice(0, 7), e.sub);
+  const labels = (d.labels ?? "").split(",").filter(Boolean).map((text) => ({ text, chip: true }));
+  return [...labels, ...plain(d.notes ? `${d.notes} ${d.notes === "1" ? "note" : "notes"}` : "")];
 }
+/** The Contents cell as plain text, one line: "goal · followup · 2 notes". */
+export const contentsText = (e, now) => contentsParts(e, now).map((p) => p.text).join(" · ");
 function contents(e, now) {
-  return contentsText(e, now).split(" · ").filter(Boolean).map((f) => { const i = f.indexOf(" "); return `<span class="k">${esc(f.slice(0, i))}</span> ${esc(f.slice(i + 1))}`; }).join('<span class="sep">·</span>');
+  return contentsParts(e, now).map((p) => p.chip ? `<span class="badge">${esc(p.text)}</span>` : `<span>${esc(p.text)}</span>`).join('<span class="sep">·</span>');
 }
 
 export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 
-/** One stream row, aligned in the columns: Time, Status, Type, Subtype, Id, Title, Contents and an X where one applies. */
+/** One stream row, aligned in the columns: Time, Status, Type, Project, Id, Title, Contents and an X where one applies. */
 export function renderEvent(e, now = Date.now(), closed = new Set()) {
-  const st = statusOf(e), id = idOf(e);
+  const st = statusOf(e), id = idText(e);
   const idCell = !id ? "" : e.href ? `<a class="id" href="${esc(e.href)}">${esc(id)}</a>` : `<span class="id">${esc(id)}</span>`;
   const x = cancelTarget(e, closed)
     ? `<button type="button" class="cancel" data-cancel aria-label="Stop or drop ${esc(id || e.title)}" title="Stop or drop">${X_ICON}</button>` : "";
   return `<tr class="evr" data-kind="${esc(e.kind)}"><td class="c-time">${esc(stamp(e))}</td>` +
     `<td class="c-status">${st.text ? `<span class="badge ${st.tone}">${esc(st.text)}</span>` : ""}</td>` +
-    `<td class="c-type">${esc(e.kind)}</td><td class="c-sub">${esc(subtypeOf(e))}</td><td class="c-id">${idCell}</td>` +
+    `<td class="c-type">${esc(e.kind)}</td><td class="c-project">${esc(e.project ?? "")}</td><td class="c-id">${idCell}</td>` +
     `<td class="c-title">${esc(e.title)}</td><td class="c-con" title="${esc(contentsText(e, now))}">${contents(e, now)}</td>` +
     `<td class="c-act">${x}<span class="cmsg" role="status"></span></td></tr>`;
 }
@@ -191,18 +200,34 @@ export function renderStream(rows, page = 0, now = Date.now(), size = PAGE, sort
   return `<div class="list"><table class="tbl">${head(sort)}<tbody>${body}</tbody></table></div>${ctl}`;
 }
 
-export function renderTimeline(d) {
+/** The kinds shown by the hash query `?kinds=job,land`; none named, or none valid, is all. */
+export function parseKinds(query) {
+  const named = String(query?.get?.("kinds") ?? "").split(",").filter((k) => KINDS.some(([x]) => x === k));
+  return new Set(named.length ? named : KINDS.map(([k]) => k));
+}
+/** The hash for a set of kinds: the Activity address with `?kinds=` unless all are on. */
+export function kindsHash(on) {
+  return on.size === KINDS.length ? "#/timeline" : `#/timeline?kinds=${KINDS.filter(([k]) => on.has(k)).map(([k]) => k).join(",")}`;
+}
+
+/** The kind control: All, then one button per kind, pressed while shown. */
+export function renderKinds(on) {
+  const all = on.size === KINDS.length;
+  const b = (k, label, pressed) => `<button type="button" data-kind="${k}" aria-pressed="${pressed}">${esc(label)}</button>`;
+  return `<div class="kinds" role="group" aria-label="Kinds">${b("all", "All", all)}${KINDS.map(([k, label]) => b(k, label, !all && on.has(k))).join("")}</div>`;
+}
+
+export function renderTimeline(d, query) {
   if (!d) return `<div class="page">${empty("No data.")}</div>`;
-  const rows = d.rows ?? [];
-  return `${STYLE}<div class="page tl"><h1>Activity</h1>` +
-    `<div class="kinds" role="group" aria-label="Kinds">${KINDS.map(([k, label]) => `<label><input type="checkbox" data-kind="${k}" checked> ${esc(label)}</label>`).join("")}</div>` +
+  const rows = d.rows ?? [], on = parseKinds(query);
+  return `${STYLE}<div class="page tl"><h1>Activity</h1>${renderKinds(on)}` +
     `<div class="strip" id="tl-strip" role="img" aria-label="Events per day by kind, stacked, last 30 days"></div>` +
-    `<div id="tl-stream">${renderStream(rows, 0, d.now ? Date.parse(d.now) : Date.now())}</div>` +
-    (rows.length ? "" : empty("Nothing happened yet.", "Jobs, issues, lands and notes show up here.")) + `</div>`;
+    `<div id="tl-stream">${renderStream(rows.filter((e) => on.has(e.kind)), 0, d.now ? Date.parse(d.now) : Date.now())}</div>` +
+    (rows.length ? "" : empty("Nothing happened yet.", "Jobs, issues and lands show up here.")) + `</div>`;
 }
 
 const DAYS = 30;
-const SERIES_TONE = { job: "run", land: "done", issue: "need", note: "ink" };
+const SERIES_TONE = { job: "run", land: "done", issue: "need" };
 
 /**
  * The strip's ECharts option: a stacked area chart of events per day, one line series per shown
@@ -230,17 +255,22 @@ export function stripOption(strip, kinds = KINDS.map(([k]) => k), now = Date.now
   };
 }
 
-/** Shift-click on a kind: show only that kind; on the only kind shown, show all kinds again. */
-export function soloKind(on, kind) {
-  if (on.size === 1 && on.has(kind)) for (const [k] of KINDS) on.add(k);
-  else { on.clear(); on.add(kind); }
+/**
+ * A click on the kind control: All shows every kind; a plain click on a kind shows only it; a click with
+ * shift, Ctrl or Cmd toggles it and keeps the others (toggling the last one off shows all).
+ */
+export function pickKind(on, kind, multi) {
+  const all = () => { for (const [k] of KINDS) on.add(k); };
+  if (kind === "all") all();
+  else if (!multi) { on.clear(); on.add(kind); }
+  else { if (on.has(kind)) on.delete(kind); else on.add(kind); if (!on.size) all(); }
   return on;
 }
 
-export function mountTimeline(root, d) {
+export function mountTimeline(root, d, query) {
   const stream = root.querySelector("#tl-stream");
   if (!stream) return;
-  const on = new Set(KINDS.map(([k]) => k));
+  const on = parseKinds(query ?? (typeof location === "undefined" ? undefined : new URLSearchParams(location.hash.split("?")[1] ?? "")));
   const now = d?.now ? Date.parse(d.now) : Date.now();
   let page = 0, c = null, sort = { key: "time", dir: -1 };
 
@@ -250,19 +280,18 @@ export function mountTimeline(root, d) {
   };
   if (d?.strip && globalThis.echarts) {
     try {
-      c = chart(root.querySelector("#tl-strip"), stripOption(d.strip, undefined, now));
+      c = chart(root.querySelector("#tl-strip"), stripOption(d.strip, [...on], now));
     } catch (e) { console.error("timeline strip failed", e); }
   }
-  const boxes = [...root.querySelectorAll(".kinds input")];
-  // A click on a label text reaches the box as a second, synthetic click that may lose the shift key.
-  let labelShift = false;
+  const buttons = [...(root.querySelectorAll?.(".kinds button") ?? [])];
   root.querySelector(".kinds")?.addEventListener("click", (ev) => {
-    const box = ev.target;
-    if (!boxes.includes(box)) { labelShift = !!ev.shiftKey; return; }
-    const shift = ev.shiftKey || labelShift;
-    labelShift = false;
-    if (shift) soloKind(on, box.dataset.kind); else box.checked ? on.add(box.dataset.kind) : on.delete(box.dataset.kind);
-    for (const b of boxes) b.checked = on.has(b.dataset.kind);
+    const btn = ev.target?.closest?.("button[data-kind]");
+    if (!btn) return;
+    pickKind(on, btn.dataset.kind, !!(ev.shiftKey || ev.ctrlKey || ev.metaKey));
+    const all = on.size === KINDS.length;
+    for (const b of buttons) b.setAttribute("aria-pressed", String(b.dataset.kind === "all" ? all : !all && on.has(b.dataset.kind)));
+    // The hash keeps the state over a reload; replaceState does not reload the view.
+    if (typeof history !== "undefined" && typeof location !== "undefined") history.replaceState(null, "", kindsHash(on));
     page = 0; show(); c?.setOption(stripOption(d?.strip ?? [], [...on], now), true);
   });
   // Rows by position on the page, so a click finds its event again after a redraw.
