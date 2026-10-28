@@ -175,13 +175,16 @@ describe("guards", () => {
   test("six starts at once: five run, one is refused", async () => {
     const names = ["one", "two", "three", "four", "five", "six"];
     const started = names.map((n) => job(n, "sleep"));
-    const deadline = Date.now() + 30_000;
+    const deadline = Date.now() + 90_000;
     let refused: Awaited<ReturnType<typeof aleph>> | undefined;
     // Five sleep for a minute; the sixth comes back refused.
-    refused = await Promise.race([Promise.any(started.map(async (p) => { const r = await p; if (r.code !== 1) throw 0; return r; })), Bun.sleep(30_000).then(() => undefined)]);
+    refused = await Promise.race([Promise.any(started.map(async (p) => { const r = await p; if (r.code !== 1) throw 0; return r; })), Bun.sleep(90_000).then(() => undefined)]);
     expect(Date.now()).toBeLessThan(deadline);
     expect(refused?.stderr).toContain("5 agent runs are live");
-    const live = (await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name));
+    // The refusal comes as soon as the fifth unit wrote `pid`; on a loaded machine some are still in phase setup.
+    const mine = async () => (await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name));
+    let live = await mine();
+    for (const end = Date.now() + 90_000; Date.now() < end && !(live.length === 5 && live.every((j: any) => j.state === "running" && j.phase === "worker")); live = await mine()) await Bun.sleep(100);
     expect(live.length).toBe(5);
     expect(live.every((j: any) => j.state === "running" && j.phase === "worker")).toBe(true);
     for (const j of live) expect((await aleph(["drop", j.name])).code).toBe(0);
@@ -189,7 +192,7 @@ describe("guards", () => {
     expect(ends.filter((r) => r.code === 0).length).toBe(5);
     for (const j of live) expect(state(j.run).state).toBe("dropped");
     expect((await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name)).map((j: any) => j.state)).toEqual(live.map(() => "dropped"));
-  }, 60_000);
+  }, 180_000);
 });
 
 describe("news", () => {

@@ -58,7 +58,7 @@ const quote = (argv: string[]) => argv.map((a) => /^[\w@%+=:,./-]+$/.test(a) ? a
  */
 /** Returns the unit's process in foreground mode, for the caller to wait on after it drops its locks. */
 async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, cwd: string, prep: (folder: string) => void): Promise<ReturnType<typeof Bun.spawn> | undefined> {
-  const release = await lock("dispatch");
+  const release = await lock("dispatch", 120_000); // a queue of starts, each holding it until its unit writes pid
   if (!release) refuse("another dispatch holds the lock");
   let child: ReturnType<typeof Bun.spawn> | undefined;
   let id: string;
