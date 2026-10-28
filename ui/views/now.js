@@ -63,8 +63,6 @@ export function renderLede(s) {
   if (s.stuck.length) problems.push(["error", `<a href="#issues">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`]);
   const needing = s.needsIssues ?? [];
   if (needing.length) problems.push(["warning", `<a href="#issues">${needing.length} ${needing.length === 1 ? "issue needs" : "issues need"} a decision</a>`]);
-  const fresh = s.issues ?? [];
-  if (fresh.length) problems.push(["warning", `<a href="#issues">${fresh.length} new ${fresh.length === 1 ? "issue waits" : "issues wait"} for triage</a>`]);
   const health = [...(f.health || [])];
   if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   for (const l of health) {
@@ -197,14 +195,12 @@ function decideRow(i) {
     `<div class="actions">${decideButtons(i, d, prose || { recommendation: null })}${open(i)}</div>` +
     (body ? `<div class="decision">${body}</div>` : "") + `</article>`;
 }
-const newRow = (i) => row("new", "Wait for triage", i.id, i.title, open(i));
 const errorRow = (l) => row("error", `${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`, "", "", "");
 
-/** Issues: the rows that need Chris (held, stuck or failed runs, needs-chris issues, errors), then the newly filed issues. */
+/** Issues: the rows that need Chris (held, stuck or failed runs, needs-chris issues, errors). Issues that wait for triage are the factory's, so they are only a count on the Untriaged card. */
 export function renderIssues(s) {
   const errors = errorLines(s);
-  const needing = s.needs.map(heldRow).concat(s.stuck.map(stuckRow), (s.needsIssues ?? []).map(decideRow), errors.map(errorRow));
-  const rows = needing.concat((s.issues ?? []).map(newRow));
+  const rows = s.needs.map(heldRow).concat(s.stuck.map(stuckRow), (s.needsIssues ?? []).map(decideRow), errors.map(errorRow));
   return section("issues", "Issues", rows.length, rows.length ? `<div class="rows">${rows.join("")}</div>` : empty("No issues."), 0);
 }
 

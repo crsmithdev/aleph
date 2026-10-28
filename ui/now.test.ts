@@ -75,12 +75,12 @@ test("the metric cards are Issues, Lands, Running / cap, Queued and Untriaged", 
   expect(r.view.render(s).indexOf('class="metrics"')).toBeLessThan(r.view.render(s).indexOf('class="lede"'));
 });
 
-test("Issues lists the rows that need Chris, then the new issues; every section header has a count", () => {
+test("Issues lists the rows that need Chris and no new issues; every section header has a count", () => {
   const i = r.renderIssues(full);
-  // 1 held, 1 stuck, 1 error (judge is down), 2 new issues.
-  expect(i).toContain('<h2 id="h-issues">Issues</h2><span class="count">5</span>');
-  expect(i.indexOf("aleph-27")).toBeLessThan(i.indexOf("Issue 1"));
-  expect(i).toContain("Issue 1");
+  // 1 held, 1 stuck, 1 error (judge is down); the 2 new issues wait for triage and are not rows.
+  expect(i).toContain('<h2 id="h-issues">Issues</h2><span class="count">3</span>');
+  expect(i).toContain("aleph-27");
+  expect(i).not.toContain("Issue 1");
   expect(i).not.toContain("job-card");
   for (const h of [i, r.renderLands(full), r.renderJobs(full)]) expect(h).toMatch(/^<div class="sh"><h2 id="h-[a-z]+">[A-Za-z]+<\/h2><span class="count">\d+<\/span><\/div>/);
 });
@@ -148,10 +148,12 @@ test("a held run says why: no verdict, a verdict with its reason, a failed revie
   expect(why({ verdict: "pending" })).not.toContain("running");
 });
 
-test("new issues are rows of the same kind, after the rows that need Chris", () => {
-  const i = r.renderIssues({ ...full, needs: [], stuck: [], factory: { ...full.factory, health: [] } });
-  expect(rows(i).length).toBe(2);
-  expect(rows(i).every((x) => x.startsWith("new"))).toBe(true);
+test("issues that wait for triage are not rows and not in the status line: triage is the factory's", () => {
+  const s = { ...full, needs: [], stuck: [], needsIssues: [], factory: { ...full.factory, health: [], hold: undefined, paused: false } };
+  expect(rows(r.renderIssues(s)).length).toBe(0);
+  expect(r.renderIssues(s)).toContain("No issues.");
+  expect(r.renderLede(s)).not.toContain("attention");
+  expect(r.renderLede(s)).not.toContain("triage");
 });
 
 test("with nothing at all the Issues section says so; the page still has it", () => {
@@ -434,7 +436,7 @@ test("an old prose needs-chris note is readable: paragraphs, code, the recommend
 
 test("the status line is not 'All is well.' when the Issues section has an item", () => {
   const calm = { ...state, needs: [], stuck: [], issues: [], needsIssues: [], factory: { ...state.factory, health: [], hold: undefined, paused: false } };
-  for (const o of [{ needsIssues: [{ ...issue(7), labels: ["needs-chris"], question: "q" }] }, { issues: [issue(8)] }]) {
+  for (const o of [{ needsIssues: [{ ...issue(7), labels: ["needs-chris"], question: "q" }] }]) {
     const h = r.renderLede({ ...calm, ...o });
     for (const v of r.FINE) expect(h).not.toContain(v);
     expect(h).toContain("One thing needs your attention.");
