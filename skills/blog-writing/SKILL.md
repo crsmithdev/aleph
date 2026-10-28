@@ -86,11 +86,8 @@ Flag and rewrite each of these.
 - "At [X], we believe...": state the belief.
 - Filler transitions: "That being said", "It's worth noting that", "At the end of the day", "Without further ado", "As you might know".
 
-**Stock AI words and moves:**
-- Puffery: pivotal, crucial, vital, testament, enduring legacy.
-- Empty "-ing" phrases: ensuring reliability, showcasing features, highlighting capabilities.
-- Overused vocabulary: delve, multifaceted, foster, realm, tapestry.
-- Formatting overuse: excessive bullets, emoji, bold on every other word.
+**Stock AI words and moves:** flag the puffery, empty "-ing" phrases, overused vocabulary and formatting overuse that `aleph:humanizer` lists in §12, §13, §15, §19 and §20.
+Also flag "vital", "multifaceted", "realm" and excessive bullets, which humanizer does not list.
 
 **Rhythm tells:** `aleph:humanizer` owns staccato fragments and smug simplicity (§2), bumper-sticker aphorisms (§3), and three-beat reveals (§1, §6), with before and after examples. Two blog tells are only partly covered there, so flag them here:
 - Parallel ad copy, a contrast with no negation. Bad: "Metrics tell you what's broken. Traces tell you why." Good: "Metrics show what's broken, but traces are where you'll actually figure out why." (Related to §1.)
