@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -176,4 +176,43 @@ test("parseVerdict wants the field its verdict needs", () => {
   expect(parseVerdict('{"verdict":"close","reason":" stale "}')).toEqual({ verdict: "close", reason: "stale" });
   expect(parseVerdict('{"verdict":"goal"}')).toBe("goal without a body");
   expect(parseVerdict("[]")).toBe("no JSON");
+});
+
+// Triage at once: `triageNow` is what `aleph triage <repo>-<n>` runs, after an add, an answer or a follow-up.
+describe("triage at once", () => {
+  beforeAll(() => { process.env.ALEPH_FACTORY_DIR = join(base, "factory"); });
+  test("a non-goal issue is triaged with no tick; a goal is not", async () => {
+    reset([{ title: "a", body: "VERDICT:close" }, { title: "g", body: "VERDICT:close", labels: ["goal"] }]);
+    const { triageNow } = await import("./factory.ts");
+    expect((await triageNow(repo, 1)).triaged).toEqual({ close: 1 });
+    expect(todos.status(item(1))).toBe("done");
+    expect((await triageNow(repo, 2)).triaged).toEqual({});
+    expect(calls()).toBe(1);
+  });
+
+  test("the prompt carries the notes, and a paused factory triages nothing", async () => {
+    reset([{ title: "c", body: "VERDICT:chris" }]);
+    const { triageNow, setPaused } = await import("./factory.ts");
+    await triageNow(repo, 1);
+    expect(labels(1)).toContain("needs-chris");
+    // Chris's answer: the label goes, the note stays, the triage sees it.
+    writeList(repo, "answer", (doc) => { const i = todos.find(doc, 1)!; todos.note(i, "Plan B, VERDICT:close"); todos.edit(i, { labels: [] }); return true; });
+    setPaused(true);
+    expect((await triageNow(repo, 1)).triaged).toEqual({});
+    expect(calls()).toBe(1);
+    setPaused(false);
+    expect((await triageNow(repo, 1)).triaged).toEqual({ close: 1 });
+    const prompts = readdirSync(join(base, "jobs")).filter((d) => d.includes(`-triage-${repo.key}-1-`)).map((d) => readFileSync(join(base, "jobs", d, "prompt.md"), "utf8"));
+    expect(prompts.some((p) => p.includes("Plan B"))).toBe(true);
+  });
+
+  test("a failed probe triages nothing; the tick does after it passes", async () => {
+    reset([{ title: "p", body: "VERDICT:close" }]);
+    const f = await import("./factory.ts");
+    f.saveProbe({ at: new Date().toISOString(), ok: false, failed: ["x"] });
+    expect((await f.triageNow(repo, 1)).triaged).toEqual({});
+    expect(calls()).toBe(0);
+    f.saveProbe({ at: new Date().toISOString(), ok: true, failed: [] });
+    expect((await run()).triaged).toEqual({ close: 1 });
+  });
 });

@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
-import { allRuns, isLive, jobsDir, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
+import { allRuns, isLive, jobsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
 /** The most agent runs live at once; `ALEPH_LIVE_CAP` changes it. */
@@ -141,6 +141,59 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   return written?.value === true ? `${repo.key}-${id}: no verdict in ${n} triages; labelled needs-chris` : null;
 }
 
+/** One triage run of one item and its verdict applied; counts and skipped lines are added to. */
+async function triageItem(repo: Repo, item: todos.Item, triaged: Counts, skipped: string[]): Promise<void> {
+  const name = `${repo.key}-${item.id}`;
+  // One triage of an item at a time: an issue write's run and the tick may meet.
+  const release = await lock(`triage-${name}`, 0);
+  if (!release) { skipped.push(`${name}: another triage is running`); return; }
+  try {
+    const folder = makeRun(repo, item);
+    // A triage that gives no verdict is still done: it is not a job to land or drop, and the item is unchanged.
+    const end = (reason: string) => updateRun(folder, { state: "done", reason, phase: undefined, ended: new Date().toISOString() });
+    try {
+      const v = parseVerdict(await ask(repo, item, folder));
+      if (typeof v === "string") {
+        const reason = `malformed verdict: ${v}`;
+        end(reason);
+        skipped.push(giveUp(repo, item.id, reason) ?? `${name}: triage gave a malformed verdict: ${v}`);
+        return;
+      }
+      if (apply(repo, item.id, v)) {
+        triaged[v.verdict] = (triaged[v.verdict] ?? 0) + 1;
+        end(v.verdict);
+      } else {
+        end("the item changed during the run");
+        skipped.push(`${name}: changed during the triage`);
+      }
+    } catch (e: any) {
+      const reason = `failed: ${e?.message ?? e}`;
+      end(reason);
+      skipped.push(giveUp(repo, item.id, reason) ?? `${name}: triage failed: ${e?.message ?? e}`);
+    }
+  } finally {
+    release();
+  }
+}
+
+/** Triage one open issue now, if it is one the tick would triage; `blocked` as in triageOpen. */
+export async function triageIssue(repo: Repo, id: number, done: (ref: string) => boolean, blocked: () => string | null): Promise<{ triaged: Counts; skipped: string[] }> {
+  const triaged: Counts = {};
+  const skipped: string[] = [];
+  let item: todos.Item | undefined;
+  try { item = todos.find(readList(repo)!, id); } catch {}
+  if (!item || todos.status(item) !== "open") return { triaged, skipped };
+  if (((item.fm.labels as string[]) ?? []).some((l) => SKIP_LABELS.includes(l))) return { triaged, skipped };
+  const waits = item.fm.waiting_on;
+  if (typeof waits === "string" && !done(waits)) return { triaged, skipped };
+  const live = allRuns().filter((e) => e.run.kind === "agent" && isLive(e.folder)).length;
+  if (live >= LIVE_CAP()) { skipped.push(`triage: ${live} agent runs are live`); return { triaged, skipped }; }
+  const why = blocked();
+  if (why) { skipped.push(`triage: ${why}`); return { triaged, skipped }; }
+  await triageItem(repo, item, triaged, skipped);
+  return { triaged, skipped };
+}
+
 /**
  * Triage the open issues that are not goals, oldest first, at most
  * `ALEPH_TRIAGE_CAP`, while live agent runs are below the live cap.
@@ -166,35 +219,12 @@ export async function triageOpen(repos: Repo[], done: (ref: string) => boolean, 
   let n = 0;
   for (const { repo, item } of queue) {
     if (n >= TRIAGE_CAP()) break;
-    const name = `${repo.key}-${item.id}`;
     const live = allRuns().filter((e) => e.run.kind === "agent" && isLive(e.folder)).length;
     if (live >= LIVE_CAP()) { skipped.push(`triage: ${live} agent runs are live`); break; }
     const why = blocked();
     if (why) { skipped.push(`triage: ${why}`); break; }
     n++;
-    const folder = makeRun(repo, item);
-    // A triage that gives no verdict is still done: it is not a job to land or drop, and the item is unchanged.
-    const end = (reason: string) => updateRun(folder, { state: "done", reason, phase: undefined, ended: new Date().toISOString() });
-    try {
-      const v = parseVerdict(await ask(repo, item, folder));
-      if (typeof v === "string") {
-        const reason = `malformed verdict: ${v}`;
-        end(reason);
-        skipped.push(giveUp(repo, item.id, reason) ?? `${name}: triage gave a malformed verdict: ${v}`);
-        continue;
-      }
-      if (apply(repo, item.id, v)) {
-        triaged[v.verdict] = (triaged[v.verdict] ?? 0) + 1;
-        end(v.verdict);
-      } else {
-        end("the item changed during the run");
-        skipped.push(`${name}: changed during the triage`);
-      }
-    } catch (e: any) {
-      const reason = `failed: ${e?.message ?? e}`;
-      end(reason);
-      skipped.push(giveUp(repo, item.id, reason) ?? `${name}: triage failed: ${e?.message ?? e}`);
-    }
+    await triageItem(repo, item, triaged, skipped);
   }
   return { triaged, skipped };
 }

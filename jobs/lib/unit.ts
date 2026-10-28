@@ -12,7 +12,7 @@ import { git } from "./git.ts";
 import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
-import { dispatchOn, hold, paused, recordFlake } from "./factory.ts";
+import { dispatchOn, hold, triageDetached, paused, recordFlake } from "./factory.ts";
 import { postTrace } from "./trace.ts";
 import { FACTS_REF, writeFacts } from "./status.ts";
 
@@ -870,9 +870,8 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
 function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
   if (!titles.length) return;
   try {
-    writeList(repo, `todo: follow-ups from job ${run.name}`, (doc) => {
-      for (const t of titles) todos.add(doc, t, { labels: ["followup"], body: `From job ${run.name}${run.todo !== undefined ? ` on issue ${run.todo}` : ""}.` });
-      return true;
-    }, true);
+    const w = writeList(repo, `todo: follow-ups from job ${run.name}`, (doc) =>
+      titles.map((t) => todos.add(doc, t, { labels: ["followup"], body: `From job ${run.name}${run.todo !== undefined ? ` on issue ${run.todo}` : ""}.` }).id), true);
+    for (const id of w?.value ?? []) triageDetached(repo, id);
   } catch {}
 }

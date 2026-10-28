@@ -15,7 +15,7 @@ import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import { triage } from "../todo/lib/triage.ts";
-import { behind, dispatchGoals, dispatchOn, factoryDir, factoryLog, LIVE_CAP, health, hold, lastProbe, paused, probeDue, report, setPaused, triageStep } from "./lib/factory.ts";
+import { behind, dispatchGoals, dispatchOn, factoryDir, factoryLog, LIVE_CAP, health, hold, lastProbe, paused, probeDue, report, setPaused, triageDetached, triageNow, triageStep } from "./lib/factory.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
 import { derive, facts, FACTS_REF, readFacts, type Facts } from "./lib/status.ts";
@@ -423,6 +423,7 @@ async function todoCmd(): Promise<void> {
       for (const m of t.maybeSame) console.error(`aleph-${m.id} may be the same task: ${m.title}`);
       out({ repo: repo.key, added: w.value.id, title: w.value.title, commit: w.commit, ...(t.maybeSame.length ? { maybeSame: t.maybeSame } : {}) });
       await dispatchAfterGoal(repo, w.value);
+      if (!((w.value.fm.labels as string[]) ?? []).includes("goal")) triageDetached(repo, w.value.id);
       return;
     }
     case "list": {
@@ -471,8 +472,18 @@ async function todoCmd(): Promise<void> {
     }
     case "note": {
       const text = args.slice(1).join(" ").trim() || refuse("give the note some text");
-      const w = write(`todo: a note on item ${args[0]}`, (doc) => { const i = pick(doc); return { id: i.id, line: todos.note(i, text) }; })!;
+      // Chris's answer to a `needs-chris` issue: not a worker's note (ALEPH_JOB_ID) and not the factory's own.
+      const answer = !process.env.ALEPH_JOB_ID && !/^(triage|job \S+ landed)\b/.test(text);
+      const w = write(`todo: a note on item ${args[0]}`, (doc) => {
+        const i = pick(doc);
+        const line = todos.note(i, text);
+        const ls = (i.fm.labels as string[]) ?? [];
+        const answered = answer && ls.includes("needs-chris");
+        if (answered) todos.edit(i, { labels: ls.filter((l) => l !== "needs-chris") });
+        return { id: i.id, line, answered };
+      })!;
       out({ repo: repo.key, id: w.value.id, note: w.value.line, commit: w.commit });
+      if (w.value.answered) triageDetached(repo, w.value.id);
       return;
     }
     case "edit": {
@@ -603,6 +614,13 @@ async function landRun(name: string): Promise<string | null> {
   return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
 }
 
+/** `aleph triage <repo>-<n>`: triage one issue now, under the dispatch's gates. */
+async function triageCmd(): Promise<void> {
+  const ref = todos.parseRef(rest[0] ?? "") ?? refuse("usage: aleph triage <repo>-<n>");
+  const repo = loadRegistry()[ref.repo] ?? refuse(`no repo ${ref.repo}`);
+  out(await triageNow(repo, ref.id));
+}
+
 /** `aleph dispatch`: start every ready goal up to the live cap. A run's end and `aleph issue` call it. */
 async function dispatchCmd(): Promise<void> {
   out(await runDispatch());
@@ -728,6 +746,7 @@ try {
     case "issue": case "todo": await todoCmd(); break;
     case "tick": await tickCmd(); break;
     case "dispatch": await dispatchCmd(); break;
+    case "triage": await triageCmd(); break;
     case "status": statusCmd(); break;
     case "report": reportCmd(); break;
     case "pause": setPaused(true); out({ paused: true }); break;

@@ -3,14 +3,14 @@
  * tick, the report and its health line. Its state lives in ~/.aleph/factory,
  * which no sandbox can see. See docs/specs/2026-10-26-seed-factory.md.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, openSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { readList, readLists } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
 import { derive, facts, type Facts } from "./status.ts";
-import { countsLine, LIVE_CAP, triageOpen, type Counts } from "./triage.ts";
+import { countsLine, LIVE_CAP, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allJobs, allRuns, expand, isLive, isOpen, loadRegistry, lock, updateRun, type Entry, type Repo } from "./ledger.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
@@ -205,7 +205,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land):
 /** The tick's triage of open issues that are not goals (triage.ts). */
 export async function triageStep(): Promise<{ triaged: Counts; skipped: string[] }> {
   if (paused() || hold()) return { triaged: {}, skipped: [] };
-  const t = await triageOpen(sandboxRepos(), doneChecker(), () => (runsToday().length >= DAY_CAP() ? `cap of ${DAY_CAP()} runs in 24 hours` : null));
+  const t = await triageOpen(sandboxRepos(), doneChecker(), dayCapped);
   factoryLog(`triaged ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
   return t;
 }
@@ -362,4 +362,34 @@ function runLines(now: number): string[] {
   const cost = today.reduce((a, e) => a + (e.run.cost ?? 0), 0);
   if (lines.length) lines.push(`runs in the last 24 hours: ${today.length} of ${DAY_CAP()}, ${money(cost)} at the API price${paused() ? "; the factory is paused" : ""}`);
   return lines;
+}
+
+/** The day-cap reason, or null. */
+const dayCapped = () => (runsToday().length >= DAY_CAP() ? `cap of ${DAY_CAP()} runs in 24 hours` : null);
+
+/**
+ * Triage one issue at once, as `aleph issue add`, a note that answers `needs-chris`, and a
+ * worker's follow-ups do. The gates are the dispatch's: paused, the hold, a failed probe, the
+ * day cap. A gated issue is left for the tick.
+ */
+export async function triageNow(repo: Repo, id: number): Promise<{ triaged: Counts; skipped: string[] }> {
+  const p = lastProbe();
+  if (paused() || hold() || (p && !p.ok)) return { triaged: {}, skipped: [] };
+  const t = await triageIssue(repo, id, doneChecker(), dayCapped);
+  factoryLog(`triaged ${repo.key}-${id}: ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
+  return t;
+}
+
+/** Start `aleph triage <repo>-<id>` detached, for a factory repo's issue; it never fails the caller. */
+export function triageDetached(repo: Repo, id: number): void {
+  if (!dispatchOn() || !repo.sandbox) return;
+  try {
+    mkdirSync(factoryDir(), { recursive: true });
+    const log = openSync(join(factoryDir(), "dispatch.log"), "a");
+    try {
+      Bun.spawn([process.execPath, join(import.meta.dir, "..", "cli.ts"), "triage", `${repo.key}-${id}`], { env: process.env, stdin: "ignore", stdout: log, stderr: log, detached: true }).unref();
+    } finally {
+      closeSync(log);
+    }
+  } catch {}
 }
