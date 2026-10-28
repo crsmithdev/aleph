@@ -25,7 +25,7 @@ describe("a factory run", () => {
     });
     beforeEach(() => { rmSync(startLog, { force: true }); });
     afterAll(async () => {
-      for (const n of ["d"]) writeFileSync(gate(n), "");
+      for (const n of ["d", "e", "f"]) writeFileSync(gate(n), "");
       // The released holds finish their runs; wait for that, at most as long as the fixed wait it replaces.
       for (let i = 0; i < 30 && !ids.every(settled); i++) await Bun.sleep(100);
       for (const id of ids) {
@@ -42,6 +42,20 @@ describe("a factory run", () => {
       expect([...x.json.started, ...y.json.started].filter((n: string) => n === `fac-${d}`)).toHaveLength(1);
       writeFileSync(gate("d"), "");
       await until(() => settled(d));
+    }, 60_000);
+
+    test("two dispatches at once with a live cap of 1 start only one goal", async () => {
+      const e = await goal("e");
+      const f = await goal("f");
+      ids.push(e, f);
+      const [x, y] = await Promise.all([aleph(["dispatch"], on({ ALEPH_LIVE_CAP: "1" })), aleph(["dispatch"], on({ ALEPH_LIVE_CAP: "1" }))]);
+      expect([...new Set([...x.json.started, ...y.json.started])]).toHaveLength(1);
+      // A run is live while its pid is written and its exit is not.
+      const live = readdirSync(jobsDir).filter((r) => [`-fac-fac-${e}-`, `-fac-fac-${f}-`].some((p) => r.includes(p)) && existsSync(join(jobsDir, r, "pid")) && !existsSync(join(jobsDir, r, "exit")));
+      expect(live).toHaveLength(1);
+      writeFileSync(gate("e"), "");
+      writeFileSync(gate("f"), "");
+      await until(() => settled(e) && settled(f));
     }, 60_000);
 
   });
