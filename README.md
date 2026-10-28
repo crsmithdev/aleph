@@ -178,7 +178,7 @@ To add a view, add two files and touch no shared one:
 ## Development
 
 ```bash
-bun test                          # hooks and the vault CLI, with a mock Langfuse
+bun run test                      # the suite, in parallel: hooks and the vault CLI, with a mock Langfuse
 ALEPH_LIVE=1 bun test tests/live  # posts a span and fetches the trace back; headless sessions through the vault; the factory sandbox
 ```
 
