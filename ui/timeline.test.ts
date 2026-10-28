@@ -68,12 +68,14 @@ beforeAll(() => {
   Object.assign(process.env, gitEnv);
   clearCache();
 
+  process.env.GIT_COMMITTER_DATE = at(4);
   writeList({ key: "fac" }, "seed", (doc) => {
     add(doc, "an issue", { now: new Date(at(1)) });
     add(doc, "closed issue", { now: new Date(at(4)) });
     setStatus(doc.items[1], "done", new Date(at(1)));
     return true;
   }, true);
+  delete process.env.GIT_COMMITTER_DATE;
   run("20261027-000001-a", { job: "fac-1", name: "fac-1", repo: "fac", state: "needs-you", started: at(0, 9), ended: at(0, 10) });
   run("20261027-000002-a", { job: "fac-2", name: "fac-2", repo: "fac", state: "running", started: at(0, 11) });
   run("20261027-000003-a", { job: "oth-1", name: "oth-1", repo: "other", state: "failed", started: at(1, 9), ended: at(1, 10) });
@@ -230,6 +232,32 @@ describe("timeline view", () => {
     expect(ended.details).toContainEqual(["took", "1h00m"]);
     const sess = (await timeline({ now, before: at(2, 23) })).days[0].events.find((e) => e.kind === "session")!;
     expect(sess.details).toContainEqual(["turns", "1"]);
+  });
+});
+
+describe("issue events from the work store's git log", () => {
+  const issueEvents = async () => (await timeline({ now, days: 30 })).rows!.filter((e) => e.kind === "issue");
+  test("opened sits at the commit that added the item, closed at the last commit that changed it", async () => {
+    const t0 = Date.now();
+    writeList({ key: "fac" }, "open", (doc) => { add(doc, "fresh issue", { now: new Date() }); return true; });
+    const t1 = Date.now();
+    writeList({ key: "fac" }, "later", (doc) => { setStatus(doc.items.find((i) => i.title === "fresh issue")!, "done", new Date()); return true; });
+    const evs = await issueEvents();
+    const opened = evs.find((e) => e.what === "opened" && e.title === "fresh issue")!;
+    const closed = evs.find((e) => e.what === "closed" && e.title === "fresh issue")!;
+    expect(opened.dateOnly).toBeUndefined();
+    expect(closed.dateOnly).toBeUndefined();
+    expect(Math.abs(Date.parse(opened.at) - t0)).toBeLessThan(60_000);
+    expect(Date.parse(closed.at)).toBeGreaterThanOrEqual(Math.floor(t1 / 1000) * 1000);
+    expect(Date.parse(closed.at)).toBeGreaterThanOrEqual(Date.parse(opened.at));
+    expect(Date.parse(closed.at) - Date.now()).toBeLessThan(2000);
+  });
+  test("git log runs once per repo, not once per item", async () => {
+    writeList({ key: "fac" }, "many", (doc) => { for (let i = 0; i < 200; i++) add(doc, `bulk ${i}`, { now: new Date() }); return true; });
+    const t = performance.now();
+    const evs = await issueEvents();
+    expect(performance.now() - t).toBeLessThan(1000);
+    expect(evs.filter((e) => e.what === "opened").length).toBeGreaterThanOrEqual(200);
   });
 });
 

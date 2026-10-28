@@ -10,7 +10,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { allRuns, loadRegistry } from "../../jobs/lib/ledger.ts";
-import { readList } from "../../todo/lib/store.ts";
+import { itemPath, readList, storeDir } from "../../todo/lib/store.ts";
 import { status, today } from "../../todo/lib/todo.ts";
 import { linkTargets, links, loadVault, vaultDir } from "../../vault/lib/vault.ts";
 import type { Routes } from "../server.ts";
@@ -96,17 +96,39 @@ function jobEvents(project: string | null, since: number, inGit: (sha: string) =
   return out.filter((e) => Date.parse(e.at) >= since);
 }
 
+/** Per item file of the repo in the work store: the time of the commit that added it and of the last that changed it, from one `git log`. */
+function itemTimes(key: string): Map<string, { added: number; changed: number }> {
+  const out = new Map<string, { added: number; changed: number }>();
+  const p = Bun.spawnSync(["git", "-C", storeDir(), "log", "origin/main", "--format=%ct", "--name-only", "--", `${key}/backlog/tasks`], { stdout: "pipe", stderr: "ignore" });
+  if (p.exitCode !== 0) return out;
+  let ct = 0;
+  for (const line of p.stdout.toString().split("\n")) {
+    if (!line) continue;
+    if (/^\d+$/.test(line)) { ct = Number(line) * 1000; continue; }
+    const t = out.get(line);
+    if (t) t.added = ct; else out.set(line, { added: ct, changed: ct });
+  }
+  return out;
+}
+
 function issueEvents(project: string | null, since: number): TimelineEvent[] {
   const out: TimelineEvent[] = [];
   for (const repo of Object.values(loadRegistry())) {
     if (project && repo.key !== project) continue;
     let doc = null;
     try { doc = readList({ key: repo.key }); } catch {}
+    const times = itemTimes(repo.key);
     for (const item of doc?.items ?? []) {
-      const base = { href: `#/issues/${enc(repo.key)}/${item.id}`, project: repo.key, title: item.title, id: `${repo.key}-${item.id}`, dateOnly: true, kind: "issue" as const,
+      const git = times.get(itemPath(repo.key, item.id));
+      const base = { href: `#/issues/${enc(repo.key)}/${item.id}`, project: repo.key, title: item.title, id: `${repo.key}-${item.id}`, ...(git ? {} : { dateOnly: true }), kind: "issue" as const,
         details: pairs(["labels", (Array.isArray(item.fm.labels) ? item.fm.labels : []).join(",")], ["notes", item.notes.length || ""]) };
       const created = String(item.fm.created ?? ""), updated = String(item.fm.updated ?? "");
       const st = status(item);
+      if (git) {
+        out.push({ ...base, at: new Date(git.added).toISOString(), what: "opened", state: "open" });
+        if (st !== "open") out.push({ ...base, at: new Date(git.changed).toISOString(), what: st === "done" ? "closed" : "dropped", state: st });
+        continue;
+      }
       if (created) out.push({ ...base, at: `${created.slice(0, 10)}T00:00:00`, what: "opened", state: "open" });
       if (st !== "open" && updated) out.push({ ...base, at: `${updated.slice(0, 10)}T00:00:00`, what: st === "done" ? "closed" : "dropped", state: st });
     }
