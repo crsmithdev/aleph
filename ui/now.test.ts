@@ -112,10 +112,12 @@ test("four needs-you jobs render one expanded and three collapsed", () => {
   expect(r.renderNeeds({ ...state, needs: needs.slice(0, 2) })).not.toContain("need-fold");
 });
 
-test("the lede names what is wrong first, with counts, and the page has no banner", () => {
+test("the lede leads with a count and the items, colored; the page has no banner", () => {
   const h = r.renderLede(withFactory({}));
+  expect(h).toContain("Two things need your attention.");
   expect(h).toContain("1 job needs you");
   expect(h).toContain("1 job is stuck or failed");
+  expect(h).toContain('class="say error"');
   expect(h.indexOf("needs you")).toBeLessThan(h.indexOf("stuck"));
   const cases: [object, string][] = [
     [{ runsToday: 12 }, "day cap is reached"],
@@ -130,16 +132,34 @@ test("the lede names what is wrong first, with counts, and the page has no banne
   expect(page).toMatch(/<p class="lede">[^]*main is red/);
 });
 
-test("with nothing wrong the lede is one plain phrase with no digit; paused says paused", () => {
+test("warning-only problems get the warning class; a failed probe gets error", () => {
   const calm = { ...withFactory({}), needs: [], stuck: [] };
-  const h = r.renderLede(calm);
-  expect(h).not.toMatch(/\d/);
-  expect(h).toContain("The factory is running.");
-  expect(r.renderLede({ ...calm, factory: { ...calm.factory, paused: true } })).toContain("paused");
+  expect(r.renderLede({ ...calm, factory: { ...calm.factory, paused: true } })).toMatch(/say warning">One thing needs your attention\. The factory is paused/);
+  expect(r.renderLede({ ...calm, factory: { ...calm.factory, paused: true, runsToday: 12 } })).toContain("Two things need your attention");
+  expect(r.renderLede(withFactory({ needs: [], probe: { at: "x", ok: false, failed: [] } }))).toContain('say error">');
 });
 
-test("the as-of line says Updated … ago", () => {
-  expect(r.renderAsOf(state)).toMatch(/^Updated .+ ago$/);
+test("with nothing wrong the lede is one of the fine variants, with no count", () => {
+  const calm = { ...withFactory({}), needs: [], stuck: [] };
+  for (let i = 0; i < 20; i++) {
+    const h = r.renderLede(calm);
+    const text = h.replace(/<[^>]*>/g, "");
+    expect(r.FINE).toContain(text);
+    expect(h).toContain('class="say fine"');
+    expect(h).not.toMatch(/\d|attention/);
+  }
+});
+
+test("a flake line alone gives a fine lede plus a muted notice", () => {
+  const calm = { ...withFactory({ health: ["health: aleph check tests passed on rerun 4 times in 7 days"] }), needs: [], stuck: [] };
+  const h = r.renderLede(calm);
+  expect(h).toContain('class="say fine"');
+  expect(h).not.toContain("attention");
+  expect(h).toContain('<span class="notice">aleph check tests passed on rerun 4 times in 7 days</span>');
+});
+
+test("the as-of line is hh:mm", () => {
+  expect(r.renderAsOf(state)).toMatch(/^\d{2}:\d{2}$/);
 });
 
 test("a running job past 40 minutes says so", () => {

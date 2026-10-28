@@ -80,20 +80,32 @@ export function renderMetrics(s) {
     vcard("delivered", "Triaged", s.velocity?.triaged) + `</div>`;
 }
 
-/** What is wrong, first; with nothing wrong, one plain phrase and no numbers. */
+export const FINE = ["Everything is fine.", "All is well.", "Nothing needs you.", "All quiet."];
+const NUMBER_WORDS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+
+/** The status sentence: all fine, or a count of what needs attention and the items as links; notices under it, muted. */
 export function renderLede(s) {
   const f = s.factory;
-  const parts = [];
-  if (s.needs.length) parts.push(`<a href="#needs" class="need">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you</a>`);
-  if (s.stuck.length) parts.push(`<a href="#needs" class="need">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`);
+  const problems = []; // [tone, html]
+  const notices = [];
+  if (s.needs.length) problems.push(["warning", `<a href="#needs">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you</a>`]);
+  if (s.stuck.length) problems.push(["error", `<a href="#needs">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`]);
   const health = [...(f.health || [])];
   if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
-  for (const l of health) parts.push(esc(l.replace(/^health:\s*/, "")));
-  if (f.hold) parts.push(esc(f.hold));
-  if (f.paused) parts.push("The factory is paused");
-  if (f.dayCap > 0 && f.runsToday >= f.dayCap) parts.push("The day cap is reached");
-  if (parts.length) return parts.join(". ") + ".";
-  return "All clear. The factory is running.";
+  for (const l of health) {
+    const text = l.replace(/^health:\s*/, "");
+    if (/passed on rerun/.test(text)) notices.push(text);
+    else problems.push(["error", `<a href="#needs">${esc(text)}</a>`]);
+  }
+  if (f.hold) problems.push(["error", `<a href="#needs">${esc(f.hold)}</a>`]);
+  if (f.paused) problems.push(["warning", "The factory is paused"]);
+  if (f.dayCap > 0 && f.runsToday >= f.dayCap) problems.push(["warning", "The day cap is reached"]);
+  const n = problems.length;
+  const small = notices.length ? `<span class="notices">${notices.map((l) => `<span class="notice">${esc(l)}</span>`).join("")}</span>` : "";
+  if (!n) return `<span class="say fine">${FINE[Math.floor(Math.random() * FINE.length)]}</span>${small}`;
+  const tone = problems.some(([t]) => t === "error") ? "error" : "warning";
+  const count = `${n < 10 ? NUMBER_WORDS[n] : n} ${n === 1 ? "thing needs" : "things need"} your attention.`;
+  return `<span class="say ${tone}">${count} ${problems.map(([, h]) => h).join(". ")}.</span>${small}`;
 }
 
 const REVIEW2 = { land: "Review: land", back: "Review: back", chris: "Review: for you", pending: "Review running", error: "Review failed" };
@@ -184,9 +196,9 @@ export function renderWaiting(s) {
   return section("wait", "Waiting", s.waiting.length, rows || empty("No goal waits to start."));
 }
 
-/** "Updated 2 min ago": the age of the state at the time of the render. */
+/** "09:05": the time of the state, 24-hour, no date. */
 export function renderAsOf(s) {
-  return `Updated ${esc(span(s.now, new Date().toISOString()) || "0 min")} ago`;
+  return esc(clock(s.now));
 }
 
 /** The Pause or Resume button of the page head. */
