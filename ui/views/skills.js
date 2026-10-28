@@ -1,7 +1,7 @@
 // The Skills view: how often each skill ran, from Langfuse. `renderSkills` takes
 // /api/skills, `renderSkill` takes /api/skills/:name; neither touches the DOM.
 // The shell takes one view per module, so the detail route is declared in skill.js.
-import { badge, chart, empty, esc, idLink, pageHead, sortHead, when } from "../lib.js";
+import { badge, chart, empty, esc, idLink, pageHead, sortHead, span, when } from "../lib.js";
 
 export const view = {
   path: "/skills",
@@ -94,6 +94,11 @@ export function mountSort(root, d) {
   };
 }
 
+/** When the last reload failed, the page shows the last good rows and says how old they are. */
+export const staleNote = (d, now = new Date()) => d.failed
+  ? `<p class="quiet stale" role="status">Langfuse failed: ${esc(d.failed)}. Showing the data from ${esc(when(d.asOf, now))} (${esc(span(d.asOf, now.toISOString()) || "0 min")} ago).</p>`
+  : "";
+
 export function renderSkills(d) {
   const used = sortSkills(d.skills);
   const unused = (d.unused || []).map((n) => `<tr class="unused"><td>${esc(n)}</td><td colspan="6">Unused in the last ${d.days} days</td></tr>`).join("");
@@ -102,7 +107,7 @@ export function renderSkills(d) {
   const body = used.length || unused
     ? `<div ${SCROLL}><table class="tbl skills-tbl">${head}<tbody class="used">${used.map(row).join("")}</tbody><tbody>${unused}</tbody></table></div>`
     : empty("No skill is installed or used.", "Skills come from the plugin's <code>skills/</code> folder.");
-  return `${STYLE}<div class="page skills">${pageHead("Skills", { count: used.length, aside: `last ${d.days} days` })}` +
+  return `${STYLE}<div class="page skills">${pageHead("Skills", { count: used.length, aside: `last ${d.days} days` })}${staleNote(d)}` +
     (used.length ? "" : empty(`No skill was used in the last ${d.days} days.`, "A use is a Skill tool call or a slash command.")) + body + `</div>`;
 }
 
@@ -119,7 +124,7 @@ export function renderSkill(d) {
   const tools = d.tools.map((t) => `<tr><td><code>${esc(t.tool)}</code></td><td class="num">${t.count}</td></tr>`).join("");
   const projects = d.projects.map((p) => `<tr><td>${esc(p.project)}</td><td class="num">${p.uses}</td></tr>`).join("");
   return `${STYLE}<div class="page skills"><p><a href="#/skills">Skills</a></p>` +
-    pageHead(d.name, { count: d.uses, aside: `uses in the last ${d.days} days` }) +
+    pageHead(d.name, { count: d.uses, aside: `uses in the last ${d.days} days` }) + staleNote(d) +
     (d.uses ? `<p>${bars(d.name)}</p>` : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
     (projects ? `<div class="sh"><h3>Projects</h3></div>${table("<th>Project</th><th class=\"num\">Uses</th>", projects)}` : "") +
     (sessions ? `<div class="sh"><h3>Sessions</h3></div>${table("<th>Session</th><th>First prompt line</th><th>Project</th><th>Started by</th><th>Time</th>", sessions)}` : "") +

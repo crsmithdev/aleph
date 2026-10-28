@@ -1,24 +1,30 @@
 /**
  * `GET /api/skills` and `GET /api/skills/:name`: skill use from Langfuse. A use
  * is a `Skill` tool call or a turn whose prompt starts with a slash command.
- * Both take `?days=` (default 30) and `?project=<key>`; an analysis is reloaded at most every 30 s, and an older one is served while it reloads.
+ * Both take `?days=` (default 30) and `?project=<key>`; an analysis is reloaded at most every 2 min, and an older one is served while it reloads.
+ * A reload fetches only the rows that are new since the last one (see `sync`). When it fails, the
+ * last good rows are analysed and the answer says so: `asOf` is when they were fetched, `failed` why the reload failed.
  */
-import { existsSync, readdirSync } from "node:fs";
-import { basename, join } from "node:path";
-import { langfuseConfig } from "../../hooks/lib/env.ts";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, join } from "node:path";
+import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
 import type { Observation } from "../../hooks/lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
 import { staleAsync } from "../stale.ts";
 
 const DAY = 86400_000;
-const TTL = 30_000;
+const TTL = 120_000;
+const PAGE = 100, POOL = 4, MAX_PAGES = 2000, PAGE_TIMEOUT = 30_000;
+const OVERLAP = 2 * 3600_000;
+const REBUILD = DAY;
 
 interface Use { skill: string; via: "tool" | "slash"; trace: string; session: string; project: string; time: string; prompt: string; start: string }
 interface TraceInfo { id: string; sessionId?: string; metadata?: Record<string, any> | null; tags?: string[] }
 
 const cache = staleAsync<Analysis>();
-export const clearCache = () => cache.clear();
+export const clearCache = () => { cache.clear(); store = null; };
 
 const asValue = (v: unknown): any => { if (typeof v === "string") { try { return JSON.parse(v); } catch { return v; } } return v; };
 const day = (iso: string) => iso.slice(0, 10);
@@ -46,34 +52,144 @@ function projectOf(cwd: string | undefined, tags: string[] | undefined): string 
   return tags?.find((t) => t.startsWith("project:"))?.slice(8) ?? "";
 }
 
-async function getJson(cfg: { baseUrl: string; publicKey: string; secretKey: string }, path: string, q: Record<string, string>): Promise<any> {
+async function getJson(cfg: LangfuseConfig, path: string, q: Record<string, string>): Promise<any> {
   const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
-  const res = await fetch(`${cfg.baseUrl}${path}?${new URLSearchParams(q)}`, { headers: { authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(15000) });
+  const res = await fetch(`${cfg.baseUrl}${path}?${new URLSearchParams(q)}`, { headers: { authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(PAGE_TIMEOUT) });
   if (!res.ok) throw new Error(`${res.status} on ${path}`);
   return res.json();
 }
 
-/** Every row of a paged Langfuse list: page 1 says how many pages there are, the rest are fetched together. */
-async function allPages<T>(cfg: any, path: string, q: Record<string, string>): Promise<T[]> {
-  const page = (n: number) => getJson(cfg, path, { ...q, limit: "100", page: String(n) });
+/**
+ * Every row of a paged Langfuse list: page 1 says how many pages there are, the rest are fetched
+ * POOL at a time, each tried twice. All pages at once overloaded Langfuse and every page timed out.
+ * Logs the page count and the time per page, so the journal shows what a load costs.
+ */
+async function allPages<T>(cfg: LangfuseConfig, path: string, q: Record<string, string>, label: string): Promise<T[]> {
+  const t0 = Date.now();
+  const page = (n: number) => getJson(cfg, path, { ...q, limit: String(PAGE), page: String(n) }).catch(() => getJson(cfg, path, { ...q, limit: String(PAGE), page: String(n) }));
   const first = await page(1);
-  const pages = first.meta ? Math.min(Number(first.meta.totalPages) || 1, 499) : 1;
-  const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => page(i + 2)));
-  return [first, ...rest].flatMap((b) => b.data ?? []);
+  const pages = first.meta ? Math.min(Number(first.meta.totalPages) || 1, MAX_PAGES) : 1;
+  const out: any[][] = [first.data ?? []];
+  let next = 2;
+  const worker = async () => { for (let n = next++; n <= pages; n = next++) out[n - 1] = (await page(n)).data ?? []; };
+  await Promise.all(Array.from({ length: Math.min(POOL, pages - 1) }, worker));
+  const rows = out.flat();
+  const ms = Date.now() - t0;
+  console.log(`skills: ${label}: ${rows.length} rows, ${pages} pages in ${(ms / 1000).toFixed(1)} s (${Math.round(ms / pages)} ms per page, ${POOL} at a time)`);
+  return rows as T[];
 }
 
-const fetchObservations = (cfg: any, from: Date, to: Date) => allPages<Observation>(cfg, "/api/public/observations", { fromStartTime: from.toISOString(), toStartTime: to.toISOString() });
-const fetchTraces = (cfg: any, from: Date, to: Date) => allPages<TraceInfo>(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString() });
+/** Only the fields `analyse` reads: the store holds 30 days of rows, in memory and on disk. */
+function compact(o: any): Observation {
+  const isSkill = o.metadata?.tool === "Skill" || o.name === "Skill" || o.name?.startsWith("skill:");
+  const failed = String(o.level ?? "").toUpperCase() === "ERROR" || o.statusMessage;
+  const m = o.metadata ?? {};
+  const metadata = Object.fromEntries(["tool", "cwd", "session_id"].filter((k) => m[k] != null).map((k) => [k, m[k]]));
+  return {
+    id: o.id, traceId: o.traceId, type: o.type, name: o.name, startTime: o.startTime, metadata,
+    ...(o.level && o.level !== "DEFAULT" ? { level: o.level } : {}),
+    ...(o.statusMessage ? { statusMessage: String(o.statusMessage).slice(0, 200) } : {}),
+    ...(o.sessionId ? { sessionId: o.sessionId } : {}),
+    ...(o.name === "turn" ? { input: text(o.input).slice(0, 4000) } : isSkill ? { input: { skill: asValue(o.input)?.skill } } : {}),
+    ...(failed ? { output: text(o.output).slice(0, 200) } : {}),
+  } as Observation;
+}
+const compactTrace = (t: any): TraceInfo => ({ id: t.id, sessionId: t.sessionId, metadata: t.metadata?.cwd ? { cwd: t.metadata.cwd } : {}, tags: (t.tags ?? []).filter((x: string) => x.startsWith("project:")) });
 
-interface Analysis { uses: Use[]; tools: Map<string, Map<string, number>>; errors: Map<string, { trace: string; message: string }>; since: Date; days: number }
+/**
+ * Skills reads turns (type AGENT) and tool calls (type TOOL) only: model calls (GENERATION) are
+ * most of the rows and are not fetched. Traces come without their input and output.
+ */
+async function fetchRows(cfg: LangfuseConfig, from: Date, to: Date): Promise<{ obs: Observation[]; traces: TraceInfo[] }> {
+  const span = { fromStartTime: from.toISOString(), toStartTime: to.toISOString() };
+  const [agents, tools, traces] = await Promise.all([
+    allPages<any>(cfg, "/api/public/observations", { ...span, type: "AGENT" }, "turns"),
+    allPages<any>(cfg, "/api/public/observations", { ...span, type: "TOOL" }, "tool calls"),
+    allPages<any>(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString(), fields: "core" }, "traces"),
+  ]);
+  return { obs: [...agents, ...tools].map(compact), traces: traces.map(compactTrace) };
+}
+
+/**
+ * The rows of the last good fetch, kept across reloads and restarts (the UI server restarts on
+ * every land). A reload fetches only rows that started since `through` minus OVERLAP: a tool span
+ * is sent when the call ends, with the start time of the call. Once a day the store is fetched
+ * whole, to pick up rows that came later than that.
+ */
+interface Store { base: string; from: number; through: number; built: number; synced: number; obs: Map<string, Observation>; traces: Map<string, TraceInfo> }
+export const storeFile = () => process.env.ALEPH_SKILLS_STORE ?? join(homedir(), ".aleph", "skills-store.json");
+let store: Store | null = null;
+let queue: Promise<unknown> = Promise.resolve();
+
+function loadStore(base: string): Store | null {
+  try {
+    const d = JSON.parse(readFileSync(storeFile(), "utf8"));
+    if (d.v !== 1 || d.base !== base) return null;
+    return { ...d, synced: 0, obs: new Map(d.obs.map((o: Observation) => [o.id, o])), traces: new Map(d.traces.map((t: TraceInfo) => [t.id, t])) };
+  } catch { return null; }
+}
+function saveStore(s: Store): void {
+  try {
+    const f = storeFile();
+    mkdirSync(dirname(f), { recursive: true });
+    writeFileSync(`${f}.tmp`, JSON.stringify({ v: 1, base: s.base, from: s.from, through: s.through, built: s.built, obs: [...s.obs.values()], traces: [...s.traces.values()] }));
+    renameSync(`${f}.tmp`, f);
+  } catch (e) { console.error(`skills: store not saved: ${(e as Error).message}`); }
+}
+
+/** Brings the store up to now and back to `since`; one sync runs at a time. A failed sync leaves the store as it was. */
+function sync(cfg: LangfuseConfig, since: number): Promise<Store> {
+  const run = queue.then(async () => {
+    const now = Date.now();
+    let s = store?.base === cfg.baseUrl ? store : loadStore(cfg.baseUrl);
+    if (s && now - s.synced < TTL && since >= s.from) return s;
+    const to = new Date(now + 60_000);
+    const add = (into: Store, rows: { obs: Observation[]; traces: TraceInfo[] }) => {
+      for (const o of rows.obs) if (o.id) into.obs.set(o.id, o);
+      for (const t of rows.traces) into.traces.set(t.id, t);
+    };
+    const full = async (): Promise<Store> => {
+      const fresh: Store = { base: cfg.baseUrl, from: since, through: now, built: now, synced: now, obs: new Map(), traces: new Map() };
+      add(fresh, await fetchRows(cfg, new Date(since), to));
+      return fresh;
+    };
+    const newRows = async (old: Store): Promise<Store> => {
+      const next: Store = { ...old, obs: new Map(old.obs), traces: new Map(old.traces) };
+      if (since < old.from) { add(next, await fetchRows(cfg, new Date(since), new Date(old.from + OVERLAP))); next.from = since; }
+      add(next, await fetchRows(cfg, new Date(old.through - OVERLAP), to));
+      next.through = now; next.synced = now;
+      return next;
+    };
+    if (!s) s = await full();
+    else if (now - s.built > REBUILD) {
+      // A failed daily fetch does not stop the small ones; it is tried again in an hour.
+      const old = s;
+      s = await full().catch((e) => { console.error(`skills: daily full fetch failed: ${(e as Error).message}`); return newRows({ ...old, built: now - REBUILD + 3600_000 }); });
+    } else s = await newRows(s);
+    store = s;
+    saveStore(s);
+    return s;
+  });
+  queue = run.catch(() => {});
+  return run;
+}
+
+interface Analysis { uses: Use[]; tools: Map<string, Map<string, number>>; errors: Map<string, { trace: string; message: string }>; since: Date; days: number; asOf: string; failed?: string }
 
 async function analyse(days: number, project: string | null): Promise<Analysis> {
   const cfg = langfuseConfig();
   if (!cfg) throw new Error("no Langfuse keys");
   const to = new Date();
   const since = new Date(Math.floor(to.getTime() / DAY) * DAY - (days - 1) * DAY);
-  const [obs, traces] = await Promise.all([fetchObservations(cfg, since, new Date(to.getTime() + 60_000)), fetchTraces(cfg, since, new Date(to.getTime() + 60_000))]);
-  const info = new Map(traces.map((t) => [t.id, t]));
+  let s: Store, failed: string | undefined;
+  try { s = await sync(cfg, since.getTime()); }
+  catch (e) {
+    // The last good rows, with their age, beat an empty page.
+    const last = store?.base === cfg.baseUrl ? store : loadStore(cfg.baseUrl);
+    if (!last) throw e;
+    s = store = last; failed = (e as Error).message;
+  }
+  const info = s.traces, obs = s.obs.values();
   const byTrace = new Map<string, Observation[]>();
   for (const o of obs) {
     if (!o.traceId || !o.startTime || new Date(o.startTime) < since) continue;
@@ -112,7 +228,7 @@ async function analyse(days: number, project: string | null): Promise<Analysis> 
       if (failed.length) errors.set(`${use.skill}\0${trace}`, { trace, message: String(text(failed[0].output) || failed[0].name || "error").slice(0, 200) });
     }
   }
-  return { uses, tools, errors, since, days };
+  return { uses, tools, errors, since, days, asOf: new Date(s.through).toISOString(), ...(failed ? { failed } : {}) };
 }
 
 const perDay = (uses: Use[], a: Analysis): number[] => {
@@ -137,7 +253,7 @@ function summary(a: Analysis) {
     };
   }).sort((x, y) => y.uses - x.uses || x.name.localeCompare(y.name));
   const unused = folders().filter((f) => !names.some((n) => short(n) === f));
-  return { days: a.days, since: day(a.since.toISOString()), skills, unused };
+  return { days: a.days, since: day(a.since.toISOString()), asOf: a.asOf, ...(a.failed ? { failed: a.failed } : {}), skills, unused };
 }
 
 function detail(a: Analysis, name: string) {
@@ -148,7 +264,7 @@ function detail(a: Analysis, name: string) {
   for (const u of mine) if (u.project) projects.set(u.project, (projects.get(u.project) ?? 0) + 1);
   const turns = new Map(mine.map((u) => [u.trace, u]));
   return {
-    name, days: a.days, since: day(a.since.toISOString()), uses: mine.length, perDay: perDay(mine, a),
+    name, days: a.days, since: day(a.since.toISOString()), asOf: a.asOf, ...(a.failed ? { failed: a.failed } : {}), uses: mine.length, perDay: perDay(mine, a),
     projects: [...projects].map(([project, uses]) => ({ project, uses })).sort((x, y) => y.uses - x.uses || x.project.localeCompare(y.project)),
     sessions: mine.map((u) => ({ id: u.session, project: u.project, time: u.time, prompt: u.prompt, via: u.via })),
     tools: [...counts].map(([tool, count]) => ({ tool, count })).sort((x, y) => y.count - x.count || x.tool.localeCompare(y.tool)),

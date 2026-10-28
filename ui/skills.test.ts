@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearCache } from "./api/skills.ts";
@@ -12,9 +12,9 @@ import { view as skillView } from "./views/skill.js";
 const today = new Date().toISOString().slice(0, 10);
 const daysAgo = (n: number, time = "10:00:00") => new Date(Date.parse(today) - n * 86400_000).toISOString().slice(0, 10) + `T${time}.000Z`;
 
-let tmp: string, lf: ReturnType<typeof Bun.serve>, app: Awaited<ReturnType<typeof serve>>, down = false, hits = 0;
+let tmp: string, lf: ReturnType<typeof Bun.serve>, app: Awaited<ReturnType<typeof serve>>, down = false, hits = 0, asked: URL[] = [];
 const saved: Record<string, string | undefined> = {};
-const ob = (o: object): any => ({ type: "SPAN", level: "DEFAULT", ...o });
+const ob = (o: any): any => ({ type: o.name === "turn" ? "AGENT" : "TOOL", level: "DEFAULT", ...o });
 const observations = [
   // t1: aleph project, Skill tool call, then Read + Bash + a failing Edit in the same turn; Read before the skill does not count
   ob({ id: "1", traceId: "t1", name: "turn", input: "pickup the work", startTime: daysAgo(0, "09:00:00") }),
@@ -54,13 +54,15 @@ beforeAll(async () => {
       hits++;
       if (down) return new Response("down", { status: 503 });
       const u = new URL(req.url);
+      asked.push(u);
       const from = Date.parse(u.searchParams.get("fromStartTime") ?? u.searchParams.get("fromTimestamp") ?? "0");
-      if (u.pathname === "/api/public/observations") return Response.json({ data: observations.filter((o) => Date.parse(o.startTime) >= from), meta: { totalPages: 1 } });
+      const type = u.searchParams.get("type");
+      if (u.pathname === "/api/public/observations") return Response.json({ data: observations.filter((o) => Date.parse(o.startTime) >= from && (!type || o.type === type)), meta: { totalPages: 1 } });
       if (u.pathname === "/api/public/traces") return Response.json({ data: traces, meta: { totalPages: 1 } });
       return new Response("not found", { status: 404 });
     },
   });
-  for (const [k, val] of Object.entries({ LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SKILLS_DIR: join(tmp, "skills"), ALEPH_REPOS: join(tmp, "repos.json") })) {
+  for (const [k, val] of Object.entries({ LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SKILLS_DIR: join(tmp, "skills"), ALEPH_SKILLS_STORE: join(tmp, "store.json"), ALEPH_REPOS: join(tmp, "repos.json") })) {
     saved[k] = process.env[k];
     process.env[k] = val;
   }
@@ -70,7 +72,7 @@ afterAll(() => {
   app.stop(true); lf.stop(true);
   for (const [k, val] of Object.entries(saved)) val === undefined ? delete process.env[k] : (process.env[k] = val);
 });
-beforeEach(() => { clearCache(); down = false; });
+beforeEach(() => { clearCache(); rmSync(join(tmp, "store.json"), { force: true }); down = false; asked = []; });
 
 const get = async (p: string) => { const r = await fetch(`http://127.0.0.1:${app.port}${p}`); return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() as any : await r.text() }; };
 
@@ -139,6 +141,65 @@ test("Langfuse down gives a 502", async () => {
   expect((await get("/api/skills/aleph:pickup")).status).toBe(502);
 });
 
+test("only turns and tool calls are fetched, and traces without their input and output", async () => {
+  await get("/api/skills");
+  const obs = asked.filter((u) => u.pathname === "/api/public/observations").map((u) => u.searchParams.get("type")).sort();
+  expect(obs).toEqual(["AGENT", "TOOL"]);
+  expect(asked.find((u) => u.pathname === "/api/public/traces")!.searchParams.get("fields")).toBe("core");
+});
+
+test("after a restart, a reload fetches only the rows of the last two hours and keeps the older ones", async () => {
+  await get("/api/skills");
+  clearCache(); // as a restart: the rows are on disk only
+  asked = [];
+  const { status, body } = await get("/api/skills");
+  expect(status).toBe(200);
+  const from = Date.parse(asked.find((u) => u.pathname === "/api/public/observations")!.searchParams.get("fromStartTime")!);
+  expect(Date.now() - from).toBeLessThan(2 * 3600_000 + 60_000);
+  expect(Date.now() - from).toBeGreaterThan(2 * 3600_000 - 60_000);
+  expect(body.skills.find((s: any) => s.name === "aleph:pickup")).toMatchObject({ uses: 2, errors: 1 }); // t2 is two days old
+});
+
+test("a failed reload serves the last good rows, with their age and the error", async () => {
+  await get("/api/skills");
+  clearCache();
+  down = true;
+  const { status, body } = await get("/api/skills");
+  expect(status).toBe(200);
+  expect(body.failed).toContain("503");
+  expect(Date.now() - Date.parse(body.asOf)).toBeLessThan(60_000);
+  expect(body.skills.find((s: any) => s.name === "aleph:pickup").uses).toBe(2);
+  expect(v.renderSkills(body)).toContain("Langfuse failed: ");
+  expect(v.staleNote({ failed: "timed out", asOf: "2026-10-28T07:00:00Z" }, new Date("2026-10-28T09:05:00Z"))).toContain("(2 h 5 min ago)");
+  expect(v.staleNote({ asOf: "2026-10-28T07:00:00Z" })).toBe("");
+  expect((await get("/api/skills/aleph:pickup")).body.failed).toContain("503");
+});
+
+test("pages are fetched four at a time", async () => {
+  let active = 0, peak = 0, calls = 0;
+  const paged = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      const u = new URL(req.url);
+      if (u.pathname !== "/api/public/observations" || u.searchParams.get("type") !== "TOOL") return Response.json({ data: [], meta: { totalPages: 1 } });
+      calls++; active++; peak = Math.max(peak, active);
+      await Bun.sleep(20);
+      active--;
+      return Response.json({ data: [], meta: { totalPages: 12 } });
+    },
+  });
+  const before = process.env.LANGFUSE_BASE_URL;
+  process.env.LANGFUSE_BASE_URL = `http://127.0.0.1:${paged.port}`;
+  try {
+    expect((await get("/api/skills")).status).toBe(200);
+    expect(calls).toBe(12);
+    expect(peak).toBe(4);
+  } finally {
+    paged.stop(true);
+    process.env.LANGFUSE_BASE_URL = before;
+  }
+});
+
 test("the view lists skills with bars and links, and the detail links sessions", async () => {
   const { body } = await get("/api/skills");
   const html = v.renderSkills(body);
@@ -196,7 +257,7 @@ test("pages are fetched concurrently, and serve() warms the cache so the first r
   clearCache();
   const warmed = await serve(0);
   try {
-    for (let i = 0; i < 100 && calls < 8; i++) await Bun.sleep(20); // 2 lists x 4 pages
+    for (let i = 0; i < 100 && calls < 12; i++) await Bun.sleep(20); // 3 lists x 4 pages
     await Bun.sleep(200);
     expect(peak["/api/public/traces"]).toBeGreaterThan(1);
     expect(peak["/api/public/observations"]).toBeGreaterThan(1);
