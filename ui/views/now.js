@@ -63,6 +63,8 @@ export function renderLede(s) {
   if (s.stuck.length) problems.push(["error", `<a href="#issues">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`]);
   const needing = s.needsIssues ?? [];
   if (needing.length) problems.push(["warning", `<a href="#issues">${needing.length} ${needing.length === 1 ? "issue needs" : "issues need"} a decision</a>`]);
+  const props = s.proposals ?? [];
+  if (props.length) problems.push(["warning", `<a href="#issues">${props.length} ${props.length === 1 ? "proposal waits" : "proposals wait"} for Yes or No</a>`]);
   const health = [...(f.health || [])];
   if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   for (const l of health) {
@@ -214,12 +216,21 @@ function decideRow(i) {
   const ask = oneSentence(d ? d.question : prose.paragraphs[0] ?? i.question) || "Your decision is needed.";
   return row("decide", ask, i.id, i.href, i.title, `${decideButtons(i, d, prose || { recommendation: null })}${open(i)}`, body ? more(i.id, body) : "");
 }
+const KIND_WORDS = { check: "a check", "claude-md": "a CLAUDE.md line", skill: "a skill change" };
+const isUrl = (u) => /^https?:\/\//.test(u);
+
+/** A proposal row: the lesson sentence, Yes and No; the signals are folded in Details. */
+function proposalRow(p) {
+  const signals = (p.signals ?? []).map((g) => `<li>${esc(g.at)} ${esc(g.source)}: ${esc(g.quote)}${isUrl(g.link) ? ` <a href="${esc(g.link)}">link</a>` : ""}</li>`).join("");
+  return row("decide", p.sentence, p.id, "", `Proposal: ${KIND_WORDS[p.kind] ?? KIND_WORDS.skill}`,
+    `${act("approve", p.id, "Yes", true)}${act("decline", p.id, "No")}${actMsg(p.id)}`, signals ? more(p.id, `<ul>${signals}</ul>`) : "");
+}
 const errorRow = (l) => row("error", `${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`, "", "", "", "");
 
 /** Issues: the rows that need Chris (held, stuck or failed runs, needs-chris issues, errors). Issues that wait for triage are the factory's, so they are only a count on the Untriaged card. */
 export function renderIssues(s) {
   const errors = errorLines(s);
-  const rows = s.needs.map(heldRow(s)).concat(s.stuck.map(stuckRow(s)), (s.needsIssues ?? []).map(decideRow), errors.map(errorRow));
+  const rows = s.needs.map(heldRow(s)).concat(s.stuck.map(stuckRow(s)), (s.needsIssues ?? []).map(decideRow), (s.proposals ?? []).map(proposalRow), errors.map(errorRow));
   return section("issues", "Issues", rows.length, rows.length ? `<div class="rows">${rows.join("")}</div>` : empty("No issues."), 0);
 }
 

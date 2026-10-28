@@ -474,3 +474,89 @@ test("a planner run is shown like a triage: Planning while it runs, Split once i
   expect(triageCard({ ...plan, state: "done", reason: "malformed plan: x" }, "compact", state.now)).toContain(">No plan<");
   expect(r.renderJobs({ ...state, running: [job({ name: "plan-aleph-5", run: plan.run })] })).toContain('<span class="badge run">planner');
 });
+
+// ---- proposals ----
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { readList, labels as itemLabels } from "../todo/lib/store.ts";
+import { routes as proposalRoutes } from "./api/proposals.ts";
+
+const prop = { id: "l-1234abcd", kind: "check", sentence: "Do not mock the db.", count: 3, signals: [
+  { source: "chris", at: "2026-10-27T10:00:00Z", quote: "No, <script>alert(1)</script>", link: "https://lf/trace/t2" },
+  { source: "gate", at: "2026-10-27T11:00:00Z", quote: "deny", link: "" },
+] };
+
+test("a proposal is a decide row with Yes and No and its signals folded", () => {
+  const h = r.renderIssues({ ...state, proposals: [prop] });
+  const row = h.match(/<article class="issue-row decide"[^]*?<\/article>/)![0];
+  expect(row).toContain("Proposal: a check");
+  expect(row).toContain('<span class="verb">Do not mock the db.</span>');
+  expect(row).toContain('class="act primary" type="button" data-act="approve" data-name="l-1234abcd" data-label="Yes">Yes<');
+  expect(row).toContain('data-act="decline" data-name="l-1234abcd" data-label="No">No<');
+  expect(row.match(/<details/g)?.length).toBe(1);
+  expect(row).toContain('<a href="https://lf/trace/t2">');
+  expect(row).not.toContain("<script>");
+  expect(row).toContain("&lt;script&gt;");
+  expect(row).not.toContain("<a href=\"#/");
+});
+
+test("rows are ordered held, stuck, needs-chris, proposal, error", () => {
+  const s = { ...state, proposals: [prop], needsIssues: [{ id: "aleph-5", title: "T", href: "#/x", question: "Pick one?" }], factory: { ...state.factory, health: ["main is red"] } };
+  const h = r.renderIssues(s);
+  const at = ["held", "stuck", "decide", "decide", "error"].reduce<number[]>((a, k) => [...a, h.indexOf(`data-kind="${k}"`, (a.at(-1) ?? -1) + 1)], []);
+  expect(at.every((n) => n >= 0)).toBe(true);
+  expect(h.indexOf("aleph-5")).toBeLessThan(h.indexOf("l-1234abcd"));
+  expect(h.indexOf("l-1234abcd")).toBeLessThan(h.indexOf("main is red"));
+  expect(h).toContain(">5<");
+});
+
+test("the lede counts proposals as one warning", () => {
+  const s = { ...state, needs: [], stuck: [], factory: { ...state.factory, health: [] }, proposals: [prop] };
+  expect(r.renderLede(s)).toContain("One thing needs your attention. <a href=\"#issues\">1 proposal waits for Yes or No</a>");
+  expect(r.renderLede({ ...s, proposals: [prop, prop] })).toContain("2 proposals wait for Yes or No");
+});
+
+test("approve and decline handlers", async () => {
+  const base = mkdtempSync(join(tmpdir(), "aleph-prop-"));
+  const keys = ["ALEPH_FACTORY_DIR", "ALEPH_ITEMS", "ALEPH_REPOS", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
+  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  const sh = (cwd: string, ...a: string[]) => { const p = Bun.spawnSync(a, { cwd, stdout: "pipe", stderr: "pipe" }); if (p.exitCode) throw new Error(String(p.stderr)); };
+  try {
+    Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
+      ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ITEMS: join(base, "items"), ALEPH_REPOS: join(base, "repos.json") });
+    sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
+    sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
+    sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
+    sh(join(base, "items"), "git", "push", "-q", "origin", "main");
+    writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: base, sandbox: true } }));
+    mkdirSync(join(base, "factory"), { recursive: true });
+    const sig = [{ id: "s", source: "chris", at: "2026-10-27T10:00:00Z", quote: "q", link: "" }];
+    const lesson = (id: string) => ({ id, sentence: "S " + id, state: "proposed", signals: sig, count: 3, kind: "check" });
+    const file = join(base, "factory", "corrections.json");
+    writeFileSync(file, JSON.stringify({ minedAt: "", lessons: [lesson("l-a"), lesson("l-b")] }));
+    const stored = () => JSON.parse(readFileSync(file, "utf8")).lessons;
+    const post = (p: string, h: Record<string, string> = { "x-aleph-ui": "1" }) => new Request(`http://x/api/${p}`, { method: "POST", headers: h });
+    const call = (key: string, p: string, id: string, h?: Record<string, string>) => (proposalRoutes as any)[key](post(p, h), { id }, new URL("http://x/"));
+
+    expect((await call("POST /api/approve/:id", "approve/l-a", "l-a", {})).status).toBe(403);
+    expect(stored()[0].state).toBe("proposed");
+    const ok = await call("POST /api/approve/:id", "approve/l-a", "l-a");
+    const body = await ok.json();
+    expect(body.code).toBe(0);
+    expect(stored()[0].state).toBe("approved");
+    const items = readList({ key: "fac" })!.items;
+    expect(items.length).toBe(1);
+    expect(itemLabels(items[0])).toEqual(["goal", "memory"]);
+    const again = await call("POST /api/approve/:id", "approve/l-a", "l-a");
+    expect(again.status).toBe(422);
+    expect((await again.json()).code).toBe(1);
+
+    const d = await call("POST /api/decline/:id", "decline/l-b", "l-b");
+    expect(await d.json()).toEqual({ code: 0, stdout: "declined", stderr: "" });
+    expect(stored()[1].state).toBe("declined");
+  } finally {
+    for (const k of keys) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+    rmSync(base, { recursive: true, force: true });
+  }
+});
