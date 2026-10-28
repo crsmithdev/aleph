@@ -229,7 +229,9 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
     if (red) { skipped.push(`${name}: ${red}`); continue; }
     const wait = notReady(listed, done);
     if (wait) { skipped.push(`${name}: ${wait}`); continue; }
-    const release = await lock(`goal-${name}`, 0);
+    // Wait for a dispatch that holds the goal: it may skip it (an open job a drop is closing right now), and a
+    // dispatch that skipped here too would leave the goal until the next tick. Under the lock all is read again.
+    const release = await lock(`goal-${name}`);
     if (!release) { skipped.push(`${name}: another dispatch is starting it`); continue; }
     try {
       const jobs = allJobs();

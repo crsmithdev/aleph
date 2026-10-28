@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, jobsDir, startScript, state as stateOf, setup, teardown } from "./cli.helpers";
+import { aleph, base, jobsDir, startScript, state as stateOf, setup, teardown, dispatching, starting, unitAlive, until } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -13,9 +13,10 @@ describe("every transition dispatches at once", () => {
   const on = (extra: Record<string, string> = {}) => ({ ALEPH_DISPATCH: "on", ALEPH_START_CMD: startCmd, START_LOG: startLog, ...extra });
   const started = () => (existsSync(startLog) ? readFileSync(startLog, "utf8").trim().split("\n").filter(Boolean) : []);
   const gate = (n: string) => join(base, `tgate-${n}`);
-  const until = async (f: () => boolean) => { for (let i = 0; i < 300 && !f(); i++) await Bun.sleep(100); expect(f()).toBe(true); };
   const runs = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`));
-  const settled = (id: number) => runs(id).every((r) => state(r).state !== "running");
+  // Settled: no start is in flight (its run folder may not be there yet), and every run has ended and its unit,
+  // with its run-end dispatch, has exited.
+  const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).state !== "running" && !unitAlive(join(jobsDir, r)));
   const add = async (title: string, action: string, extra: string[] = [], env: Record<string, string> = {}) =>
     (await aleph(["todo", "add", "fac", title, ...extra, "--body", "-"], on(env), `ACTION: ${action}\n`)).json.added as number;
   // A run's folder exists a moment before its state.json.
@@ -37,9 +38,16 @@ describe("every transition dispatches at once", () => {
     for (const g of gates) writeFileSync(gate(g), "");
     for (const id of ids.splice(0)) {
       await until(() => settled(id));
-      await aleph(["drop", `fac-${id}`]);
-      await aleph(["todo", "drop", "fac", String(id), "test over"]);
+      // The issue goes first: while it is open and has no live job, a detached dispatch can rerun it.
+      expect((await aleph(["todo", "drop", "fac", String(id), "test over"])).code).toBe(0);
+      // A job that passed, landed or was dropped has no open job to drop. Any other refusal leaves it open,
+      // and a stuck or failed one holds every later dispatch.
+      const d = await aleph(["drop", `fac-${id}`]);
+      if (d.code !== 0) expect(d.stderr).toContain("no open job");
+      await until(() => settled(id));
     }
+    // A detached dispatch from this test may still hold a lock that the next test's dispatch meets.
+    await until(() => !dispatching());
     await Bun.sleep(300);
     rmSync(startLog, { force: true });
   }, 120_000);

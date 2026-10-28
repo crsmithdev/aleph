@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -14,9 +14,13 @@ export let onTell: ((text: string) => void) | undefined;
 /**
  * Writes the fake start command: it starts the job in the background, as `systemd-run` does, and exits 0 once
  * a run folder that was not there before the start has a pid. It exits 1 when the job process is gone or after 10 s.
+ * While it runs, `$START_LOG.busy.<pid>` exists: see `starting`.
  */
 export function startScript(path: string, jobsDir: string): void {
   writeFileSync(path, `#!/bin/bash
+busy="$START_LOG.busy.$$"
+touch "$busy"
+trap 'rm -f "$busy"' EXIT
 echo "$2" >> "$START_LOG"
 before=$(ls -d ${jobsDir}/*-fac-"$2"-* 2>/dev/null)
 ALEPH_JOB_FOREGROUND=1 bun ${CLI} job "$1" "$2" --spec - --todo "$3" > /dev/null 2>&1 < /dev/stdin &
@@ -30,6 +34,51 @@ for i in $(seq 100); do
 done
 exit 1
 `, { mode: 0o755 });
+}
+
+/** A start command from `startScript` that logs to `startLog` has not exited: its run folder may not be there yet. */
+export const starting = (startLog: string): boolean => {
+  const dir = join(startLog, ".."), name = startLog.slice(dir.length + 1) + ".busy.";
+  return readdirSync(dir).some((f) => f.startsWith(name));
+};
+
+/**
+ * A run's unit process is alive. Unlike `isLive`, this ignores `exit`: the unit writes `exit` and then awaits its
+ * run-end dispatch, which may still start goals or hold the dispatch locks.
+ */
+export const unitAlive = (folder: string): boolean => {
+  try {
+    const pid = Number(readFileSync(join(folder, "pid"), "utf8").trim());
+    return Number.isInteger(pid) && pid > 0 && readFileSync(`/proc/${pid}/cmdline`, "utf8").replaceAll("\0", " ").includes(folder);
+  } catch {
+    return false;
+  }
+};
+
+/** An `aleph dispatch` or `aleph triage` of this test file's factory is running, e.g. a detached one from a transition. */
+export const dispatching = (): boolean => {
+  const mine = `ALEPH_FACTORY_DIR=${join(base, "factory")}\0`;
+  return readdirSync("/proc").filter((p) => /^\d+$/.test(p)).some((p) => {
+    try {
+      const cmd = readFileSync(`/proc/${p}/cmdline`, "utf8").split("\0");
+      return cmd.includes(CLI) && ["dispatch", "triage"].includes(cmd[cmd.indexOf(CLI) + 1]) && readFileSync(`/proc/${p}/environ`, "utf8").includes(mine);
+    } catch {
+      return false;
+    }
+  });
+};
+
+const tail = (f: string, n = 15) => (existsSync(f) ? readFileSync(f, "utf8").trimEnd().split("\n").slice(-n).join("\n") : "(none)");
+/**
+ * Waits up to 30 s for `f`. When it fails, the error holds the tails of the factory's tick.log (every dispatch
+ * writes why it skipped a goal there) and dispatch.log, and of the run-end dispatch logs, so a flake names its cause.
+ */
+export async function until(f: () => boolean): Promise<void> {
+  for (let i = 0; i < 300 && !f(); i++) await Bun.sleep(100);
+  if (f()) return;
+  const runEnd = existsSync(jobsDir) ? readdirSync(jobsDir).sort().slice(-4).map((r) => `--- ${r}/dispatch.log\n${tail(join(jobsDir, r, "dispatch.log"), 5)}`) : [];
+  throw new Error([`until: not true after 30 s`, `--- factory/tick.log\n${tail(join(base, "factory", "tick.log"))}`,
+    `--- factory/dispatch.log\n${tail(join(base, "factory", "dispatch.log"))}`, ...runEnd].join("\n"));
 }
 
 export const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
