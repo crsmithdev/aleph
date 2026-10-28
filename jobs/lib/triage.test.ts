@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
+import { readDecision } from "./decision.ts";
 import { parseVerdict, prompt, triageOpen } from "./triage.ts";
 import { readRun, type Repo } from "./ledger.ts";
 
@@ -24,6 +25,7 @@ case $prompt in
   *VERDICT:goal*) echo '{"verdict":"goal","body":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}' ;;
   *VERDICT:close*) echo 'Looked at it. {"verdict":"close","reason":"duplicate of tri-1"}' ;;
   *VERDICT:chris*) echo '{"verdict":"chris","question":"Which plan, A or B?"}' ;;
+  *VERDICT:structured*) echo '{"verdict":"chris","question":"A or B?","options":[{"label":"A","line":"do a"},{"label":"B","line":"do b"}],"recommended":"B","why":["one","two"]}' ;;
   *VERDICT:live*) echo '{"verdict":"live","note":"check the prod dashboard"}' ;;
   *VERDICT:fail*) exit 3 ;;
   *VERDICT:bad*) echo '{"verdict":"maybe"}' ;;
@@ -105,6 +107,15 @@ test("a triage is a job in the ledger, of kind triage", async () => {
   // The runs go one after another, but the folder order is not the item order.
   const first = folders.map((f) => readRun(join(base, "jobs", f))).find((r) => r?.name === `triage-${repo.key}-1`);
   expect(first).toMatchObject({ kind: "triage", repo: repo.key, state: "done", name: `triage-${repo.key}-1`, todo: 1 });
+});
+
+test("a chris verdict with options is stored as fields next to the prose note; a malformed structure keeps the question", async () => {
+  reset([{ title: "a", body: "VERDICT:structured" }]);
+  await run();
+  expect(readDecision(item(1))).toEqual({ question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["one", "two"] });
+  expect(item(1).notes.at(-1)).toContain("A or B? Options: A: do a; B: do b. My recommendation is B.");
+  const bad = parseVerdict('{"verdict":"chris","question":"Q?","options":[{"label":"A","line":"x"}],"recommended":"A"}');
+  expect(bad).toEqual({ verdict: "chris", question: "Q?" });
 });
 
 test("items labelled needs-chris, triaged, proposal or goal, or waiting on an open item, are not triaged", async () => {

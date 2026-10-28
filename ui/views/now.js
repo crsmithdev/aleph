@@ -1,7 +1,8 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { actMessages, clock, clock12, cmd, diffHtml, esc, money, openDiffs, span } from "../lib.js";
+import { actMessages, clock, denyReasons, clock12, cmd, diffHtml, esc, money, openDiffs, span } from "../lib.js";
+import { proseDecision } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, landCard, shell as jobCard, title, trailerLine, triageCard } from "./cards.js";
 
 export const view = {
@@ -178,8 +179,44 @@ const fold = (j, held) => details(j, held ? `<div class="actions">${act("diff", 
 const heldRow = (j) => row("held", `Review, then land or drop: ${heldWhy(j)}`, j.name, j.item?.title || "", `${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}${actMsg(j.name)}`, fold(j, true));
 const stuckRow = (j) => row("stuck", `Clear: ${j.state === "failed" ? "failed" : "stuck"}${j.reason ? ` with ${j.reason}` : ""}`, j.name, j.item?.title || "", `${act("recheck", j.name, "Re-check")}${act("drop", j.name, "Drop")}${actMsg(j.name)}`, fold(j, false));
 const open = (i) => `<a class="act" href="${esc(i.href)}">Open</a>`;
-const decideNote = (i) => i.question ? `<details class="more" data-keep="more:${esc(i.id)}"><summary>Details</summary><div class="body"><p class="quiet q">${esc(i.question)}</p></div></details>` : "";
-const decideRow = (i) => row("decide", "Decide", i.id, i.title, open(i), decideNote(i));
+/** Text with `inline code` as <code>, everything else escaped. */
+const code = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
+
+/** The options, recommended mark and context of a decision with fields. */
+function decisionBody(d) {
+  return `<p class="dq">${code(d.question)}</p>` +
+    `<ul class="opts">${d.options.map((o) => `<li${o.label === d.recommended ? ' class="rec"' : ""}><b>${code(o.label)}</b>${o.label === d.recommended ? ' <span class="badge run">Recommended</span>' : ""} <span class="line">${code(o.line)}</span></li>`).join("")}</ul>` +
+    (d.why?.length ? `<ul class="why">${d.why.map((w) => `<li>${code(w)}</li>`).join("")}</ul>` : "");
+}
+
+/** A needs-chris note without fields: its paragraphs, the recommendation sentence picked out. */
+function proseBody(p) {
+  return p.paragraphs.map((t) => `<p class="dp${t === p.recommendation ? " rec" : ""}">${code(t)}</p>`).join("");
+}
+
+/** The Approve buttons (recommended first, primary), the optional reason and Deny. */
+function decideButtons(i, d, prose) {
+  const [repo, n] = i.id.split(/-(?=\d+$)/);
+  const at = `data-repo="${esc(repo)}" data-id="${esc(n)}"`;
+  const btn = (verb, label, extra = "", primary = false) =>
+    `<button class="act${primary ? " primary" : ""}" type="button" data-act="${verb}" ${at}${extra} data-label="${esc(label)}">${esc(label)}</button>`;
+  const approve = d
+    ? [...d.options].sort((a, b) => (b.label === d.recommended) - (a.label === d.recommended))
+        .map((o) => btn("decide", `Approve ${o.label}`, ` data-option="${esc(o.label)}"`, o.label === d.recommended)).join("")
+    : prose.recommendation ? btn("decide", "Approve recommendation", ' data-recommendation="1"', true) : "";
+  return approve + `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason to deny (optional)" aria-label="Reason to deny ${esc(i.id)}" ${at} value="${esc(denyReasons.get(i.id) ?? "")}">` + btn("deny", "Deny");
+}
+
+/** A needs-chris row: the id and title, the question with its options and context, then the buttons in the row. */
+function decideRow(i) {
+  const d = i.decision;
+  const prose = d ? null : proseDecision(i.question);
+  const body = d ? decisionBody(d) : prose.paragraphs.length ? proseBody(prose) : "";
+  return `<article class="issue-row decide" data-kind="decide"><div class="row-main"><span class="verb">Decide</span>` +
+    ` <span class="id">${esc(i.id)}</span> <span class="t">${esc(i.title)}</span></div>` +
+    `<div class="actions">${decideButtons(i, d, prose || { recommendation: null })}${open(i)}</div>` +
+    (body ? `<div class="decision">${body}</div>` : "") + `</article>`;
+}
 const newRow = (i) => row("new", "Wait for triage", i.id, i.title, open(i));
 const errorRow = (l) => row("error", `${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`, "", "", "");
 

@@ -8,6 +8,9 @@ import { join } from "node:path";
 import { allJobs, loadRegistry, allRuns, type Repo } from "../../jobs/lib/ledger.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { derive, facts, landedCommits, landedIndex } from "../../jobs/lib/status.ts";
+import { readDecision } from "../../jobs/lib/decision.ts";
+// @ts-ignore plain JS, shared with the page
+import { proseDecision } from "../decision.js";
 import { readList, readLists } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
@@ -162,8 +165,42 @@ async function drop(req: Request, params: Record<string, string>, url: URL): Pro
   try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }
 }
 
+/**
+ * `aleph issue decide <repo> <id> <note>`: Chris's answer to a needs-chris issue. The body names an option's
+ * `label`, or `recommendation: true` for an issue whose question is prose; the note is built here from the issue's own text.
+ */
+async function decide(req: Request, params: Record<string, string>, url: URL): Promise<Response> {
+  const origin = req.headers.get("origin");
+  if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
+  const repo = loadRegistry()[params.repo];
+  const n = Number(params.id);
+  if (!repo || !Number.isInteger(n)) return Response.json({ error: "no such issue" }, { status: 404 });
+  let doc: todos.Doc | null;
+  try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
+  const item = doc && todos.find(doc, n);
+  if (!item) return Response.json({ error: "no such issue" }, { status: 404 });
+  if (todos.status(item) !== "open" || !labelsOf(item).includes("needs-chris")) return Response.json({ error: "this issue is not waiting for a decision" }, { status: 409 });
+  const body: any = await req.json().catch(() => ({}));
+  const d = readDecision(item);
+  let note: string;
+  if (d) {
+    const o = d.options.find((x) => x.label === body?.label);
+    if (!o) return Response.json({ error: `no option named ${JSON.stringify(body?.label ?? null)}` }, { status: 400 });
+    note = `Chris decided: ${o.label}: ${o.line}`;
+  } else {
+    const rec = body?.recommendation === true ? proseDecision(item.notes.at(-1)).recommendation : null;
+    if (!rec) return Response.json({ error: "this issue has no recommendation to approve" }, { status: 400 });
+    note = `Chris decided: ${rec}`;
+  }
+  const p = Bun.spawn([...cliArgv(), "issue", "decide", repo.key, String(n), note], { stdin: "ignore", stdout: "pipe", stderr: "pipe", env: process.env });
+  const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
+  if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
+  try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }
+}
+
 export const routes: Routes = {
   "POST /api/issues/:repo/:id/drop": (req, params, url) => drop(req, params, url),
+  "POST /api/issues/:repo/:id/decide": (req, params, url) => decide(req, params, url),
   "GET /api/issues": (_req, _p, url) => list(url),
   "GET /api/issues/:repo/:n": (_req, params, url) => detail(params, url),
   "POST /api/issues": (req, _p, url) => create(req, url),

@@ -2,8 +2,10 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeList } from "../todo/lib/store.ts";
+import { readList, writeList } from "../todo/lib/store.ts";
 import { add } from "../todo/lib/todo.ts";
+import * as todos from "../todo/lib/todo.ts";
+import { writeDecision } from "../jobs/lib/decision.ts";
 import { serve } from "./server.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/issues.js";
@@ -230,5 +232,58 @@ describe("issue form project select", () => {
   });
   test("exports mount", () => {
     expect(typeof v.mount).toBe("function");
+  });
+});
+
+describe("POST /api/issues/:repo/:id/decide and deny", () => {
+  const h = { "x-aleph-ui": "1", "content-type": "application/json" };
+  const item = (n: number) => readList({ key: "fac" })!.items.find((i) => i.id === n)!;
+  async function withRealCli(fn: () => Promise<void>) {
+    const real = process.env.ALEPH_CLI, wrap = join(base, "real-aleph");
+    writeFileSync(wrap, `#!/bin/sh\nexec ${process.execPath} ${join(import.meta.dir, "..", "jobs", "cli.ts")} "$@"\n`);
+    chmodSync(wrap, 0o755);
+    process.env.ALEPH_CLI = wrap;
+    try { await fn(); } finally { if (real === undefined) delete process.env.ALEPH_CLI; else process.env.ALEPH_CLI = real; }
+  }
+  const ask = (decision: boolean) => writeList({ key: "fac" }, "seed", (doc) => {
+    const i = add(doc, "which way", { labels: ["needs-chris"], body: "x" });
+    if (decision) writeDecision(i, { question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] });
+    else todos.note(i, "triage: for Chris: Should it be A or B? My recommendation is B, it is smaller.");
+    return i.id;
+  })!.value;
+
+  test("approving an option writes the note, swaps needs-chris for goal and clears the fields", async () => {
+    const n = ask(true);
+    await withRealCli(async () => {
+      expect((await at(`/api/issues/fac/${n}/decide`, { method: "POST", body: "{}" })).status).toBe(403);
+      expect((await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "Z" }) })).status).toBe(400);
+      const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) });
+      expect(r.status).toBe(200);
+      const i = item(n);
+      expect(i.notes.at(-1)).toContain("Chris decided: A: do a");
+      expect(i.fm.labels).toEqual(["goal"]);
+      expect(i.fm.question).toBeUndefined();
+      expect((await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) })).status).toBe(409);
+    });
+  });
+
+  test("an old prose note is approved by its recommendation sentence", async () => {
+    const n = ask(false);
+    await withRealCli(async () => {
+      const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ recommendation: true }) });
+      expect(r.status).toBe(200);
+      expect(item(n).notes.at(-1)).toContain("Chris decided: My recommendation is B, it is smaller.");
+      expect(item(n).fm.labels).toEqual(["goal"]);
+    });
+  });
+
+  test("denying drops the issue with the reason", async () => {
+    const n = ask(true);
+    await withRealCli(async () => {
+      const r = await at(`/api/issues/fac/${n}/drop`, { method: "POST", headers: h, body: JSON.stringify({ reason: "Chris denied: not now" }) });
+      expect(r.status).toBe(200);
+      expect(todos.status(item(n))).toBe("dropped");
+      expect(item(n).notes.at(-1)).toContain("not now");
+    });
   });
 });

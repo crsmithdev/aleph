@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { judgeChoice } from "../hooks/lib/jev.ts";
 import { DAY_CAP, LIVE_CAP, WAITING_CAP, health, hold, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
 import { allJobs, allRuns, isOpen, loadRegistry, readReview2, type Entry, type Repo } from "../jobs/lib/ledger.ts";
+import { readDecision, type Decision } from "../jobs/lib/decision.ts";
 import { readList } from "../todo/lib/store.ts";
 import { status, type Doc } from "../todo/lib/todo.ts";
 
@@ -39,7 +40,9 @@ export interface Job {
 /** A new issue of a factory repo, in the shape of the Issue card. */
 export interface NewIssue { id: string; title: string; status: string; href: string; labels: string[]; notes: number; created: string; updated: string;
   /** A needs-chris issue: what Chris is asked, from its last note. */
-  question?: string }
+  question?: string;
+  /** A needs-chris issue that carries a structured decision: its fields. */
+  decision?: Decision }
 
 export interface State {
   now: string;
@@ -249,6 +252,8 @@ export function state(now = new Date()): State {
         const c = card();
         const q = item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
         if (q) c.question = q;
+        const d = readDecision(item);
+        if (d) c.decision = d;
         waitingOnChris.push(c);
       }
       else if (!labels.some((l) => SORTED.includes(l))) fresh.push(card());

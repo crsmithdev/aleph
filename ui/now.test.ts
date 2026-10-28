@@ -398,18 +398,33 @@ test("a held row shows the review2 verdict and its reason in its verb phrase", (
   expect(withAttn(state)).toContain("the reviewer gave no verdict");
 });
 
-test("a needs-chris issue with a long note is a one-line row with the note in a collapsed detail", () => {
-  const note = "Long triage note. ".repeat(40).trim();
-  const s = { ...state, needs: [], stuck: [], issues: [], factory: { ...state.factory, health: [] }, needsIssues: [{ ...issue(152), labels: ["needs-chris"], title: "Which tier?", question: note }] };
+test("a needs-chris issue with fields shows the question, the options, the recommended mark, the context and the buttons in the row", () => {
+  const decision = { question: "Haiku or Sonnet for the `digest`?", options: [{ label: "Haiku", line: "Cheaper, `fast`" }, { label: "Sonnet", line: "Better summaries" }], recommended: "Sonnet", why: ["Digests run daily", "Quality matters more"] };
+  const s = { ...state, needs: [], stuck: [], issues: [], factory: { ...state.factory, health: [] }, needsIssues: [{ ...issue(152), labels: ["needs-chris"], title: "Which tier?", question: "prose", decision }] };
   const [row] = rows(r.renderIssues(s));
-  const main = row.match(/<div class="row-main">[^]*?<\/div>/)![0];
-  expect(main).toContain("Decide");
-  expect(main).toContain("aleph-152");
-  expect(main).toContain("Which tier?");
-  expect(main).not.toContain("Long triage note");
-  const det = row.match(/<details class="more"[^>]*>[^]*?<\/details>/)![0];
-  expect(det).not.toContain(" open");
-  expect(det).toContain(note);
+  expect(row).toContain('<p class="dq">Haiku or Sonnet for the <code>digest</code>?</p>');
+  expect(row).toContain("<code>fast</code>");
+  expect(row).toMatch(/<li class="rec"><b>Sonnet<\/b> <span class="badge run">Recommended<\/span>/);
+  expect(row).toContain("Digests run daily");
+  expect(row).not.toContain("<details");
+  expect(row).toContain('href="#/issues/aleph/152"');
+  const buttons = [...row.matchAll(/<button class="act( primary)?"[^>]*data-act="(\w+)"[^>]*data-label="([^"]*)"/g)].map((m) => [m[2], m[3], !!m[1]]);
+  expect(buttons).toEqual([["decide", "Approve Sonnet", true], ["decide", "Approve Haiku", false], ["deny", "Deny", false]]);
+  expect(row).toContain('data-option="Sonnet"');
+  expect(row).toContain('class="reason"');
+});
+
+test("an old prose needs-chris note is readable: paragraphs, code, the recommendation picked out, Approve recommendation and Deny", () => {
+  const note = "2026-10-28 04:00: triage: for Chris: Should `ui/x.ts` use A or B?\nA is simpler. My recommendation is A, because it is simpler. Then more words.";
+  const s = { ...state, needs: [], stuck: [], issues: [], factory: { ...state.factory, health: [] }, needsIssues: [{ ...issue(152), labels: ["needs-chris"], title: "Which?", question: note }] };
+  const [row] = rows(r.renderIssues(s));
+  expect(row).toContain("<code>ui/x.ts</code>");
+  expect(row).not.toContain("triage: for Chris");
+  expect(row).toContain('<p class="dp rec">My recommendation is A, because it is simpler.</p>');
+  expect(row).toContain('data-label="Approve recommendation"');
+  expect(row).toContain('data-recommendation="1"');
+  expect(row).toContain('data-label="Deny"');
+  expect(row).not.toContain("<details");
 });
 
 test("the status line is not 'All is well.' when the Issues section has an item", () => {

@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { basename, join, resolve } from "node:path";
 import { LOW, allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, readReview2, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
 import { baselineChecks, git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
+import { clearDecision } from "./lib/decision.ts";
 import { fetchOrigin } from "./lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
@@ -417,7 +418,7 @@ function dispatchAfterGoal(repo: Repo, item: todos.Item): void {
  */
 async function todoCmd(): Promise<void> {
   const [verb, repoKey, ...args] = positional;
-  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|done|drop|hidden|lint> <repo> ...");
+  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|hidden|lint> <repo> ...");
   if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(sub);
   const repo = loadRegistry()[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
 
@@ -522,6 +523,22 @@ async function todoCmd(): Promise<void> {
       })!;
       out({ repo: repo.key, id: w.value.id, note: w.value.line, commit: w.commit });
       if (w.value.answered) triageDetached(repo, w.value.id);
+      return;
+    }
+    case "decide": {
+      // Chris's answer to a `needs-chris` issue, in one write: the decision note, `needs-chris` out, `goal` in.
+      const text = args.slice(1).join(" ").trim() || refuse("give the decision");
+      const w = write(`todo: item ${args[0]}: decided`, (doc) => {
+        const i = pick(doc);
+        const ls = (i.fm.labels as string[]) ?? [];
+        if (todos.status(i) !== "open" || !ls.includes("needs-chris")) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
+        todos.note(i, text);
+        clearDecision(i);
+        todos.edit(i, { labels: [...ls.filter((l) => l !== "needs-chris"), ...(ls.includes("goal") ? [] : ["goal"])] });
+        return i;
+      })!;
+      out({ repo: repo.key, ...brief(w.value), commit: w.commit });
+      dispatchAfterGoal(repo, w.value);
       return;
     }
     case "edit": {

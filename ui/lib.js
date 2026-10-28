@@ -235,6 +235,8 @@ export function restoreState(root, state) {
 /** UI state that survives the Now view's refresh: job name to its open diff text, and to its last action message. */
 export const openDiffs = new Map();
 export const actMessages = new Map();
+/** The reason typed in a Decide row, by issue id, so a refresh keeps it. */
+export const denyReasons = new Map();
 
 /** A diff as HTML: one span per line, marked by kind. An empty diff says so. */
 export const diffHtml = (t) => String(t ?? "").trim()

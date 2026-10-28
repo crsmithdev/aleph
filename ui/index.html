@@ -161,6 +161,15 @@ main { min-width: 0; }
 .issue-row.stuck .verb, .issue-row.error .verb { color: var(--stuck); }
 .issue-row .id { font: 500 12.5px var(--mono); color: var(--muted); }
 .issue-row .actions { margin-top: 0; align-items: center; }
+.issue-row .decision { flex: 1 1 100%; font-size: 13.5px; max-width: 80ch; }
+.issue-row .decision p { margin: 0 0 6px; }
+.issue-row .decision .dq { font-weight: 600; font-size: 15px; }
+.issue-row .decision ul { margin: 0 0 6px; padding-left: 20px; }
+.issue-row .decision .why { color: var(--muted); }
+.issue-row .decision li.rec b { color: var(--run); }
+.issue-row .decision .dp.rec { font-weight: 600; border-left: 3px solid var(--run); padding-left: 8px; }
+.issue-row .decision code { background: var(--sunk); padding: 0 3px; border-radius: 2px; }
+.issue-row input.reason { font: inherit; font-size: 12.5px; padding: 3px 8px; min-width: 200px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: inherit; }
 .issue-row details.more { flex: 1 1 100%; font-size: 12.5px; }
 a.act { text-decoration: none; display: inline-block; }
 .head { display: flex; align-items: center; gap: 12px; margin: 0 0 28px; }
@@ -442,7 +451,7 @@ pre.stat b { color: var(--need); }
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { actMessages, diffHtml, empty, error, esc, failMessage, loading, mountView, openDiffs, recordState, restoreState } from "/lib.js";
+  import { actMessages, denyReasons, diffHtml, empty, error, esc, failMessage, loading, mountView, openDiffs, recordState, restoreState } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, render(data, params), mount?(root, data), api?, refresh? }, and
@@ -574,6 +583,11 @@ pre.stat b { color: var(--need); }
     else done(false);
   });
 
+  document.addEventListener("input", (e) => {
+    const f = e.target.closest && e.target.closest("input.reason[data-id]");
+    if (f) f.value ? denyReasons.set(`${f.dataset.repo}-${f.dataset.id}`, f.value) : denyReasons.delete(`${f.dataset.repo}-${f.dataset.id}`);
+  });
+
   // Diff, Land, Drop and Checked: each is an `aleph` command the server runs.
   // Land and Drop ask for a second click, then the view reloads.
   document.addEventListener("click", async (e) => {
@@ -595,7 +609,7 @@ pre.stat b { color: var(--need); }
       } catch (err) { openDiffs.delete(name); panel.innerHTML = `<p class="msg">${esc(err.message)}</p>`; }
       return;
     }
-    if ((act === "land" || act === "drop" || act === "pause") && !b.classList.contains("ask")) {
+    if ((act === "land" || act === "drop" || act === "pause" || act === "deny") && !b.classList.contains("ask")) {
       b.classList.add("ask");
       b.textContent = name ? `${label} ${name}? Click again` : `${label}? Click again`;
       clearTimeout(b._t);
@@ -603,6 +617,22 @@ pre.stat b { color: var(--need); }
       return;
     }
     clearTimeout(b._t);
+    if (act === "decide" || act === "deny") {
+      // A Decide row: approve one option, or deny with the reason typed beside the button.
+      const { repo, id, option, recommendation } = b.dataset;
+      const reason = b.closest(".actions").querySelector("input.reason")?.value.trim() ?? "";
+      const bs = [...b.closest(".actions").querySelectorAll("button.act")];
+      bs.forEach((x) => { x.disabled = true; });
+      try {
+        const res = await fetch(`/api/issues/${encodeURIComponent(repo)}/${encodeURIComponent(id)}/${act === "deny" ? "drop" : "decide"}`, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" },
+          body: JSON.stringify(act === "deny" ? { reason: reason ? `Chris denied: ${reason}` : "Chris denied it" } : recommendation ? { recommendation: true } : { label: option }) });
+        const r = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(r.error || res.statusText);
+        denyReasons.delete(`${repo}-${id}`);
+      } catch (err) { bs.forEach((x) => { x.disabled = false; x.classList.remove("ask"); x.textContent = x.dataset.label; }); note(`${act} failed: ${err.message}`); return; }
+      if (shown) load(shown, false);
+      return;
+    }
     b.disabled = true;
     if (name) actMessages.delete(name);
     try {

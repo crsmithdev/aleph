@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
+import { decisionNote, normalizeDecision, writeDecision, type Decision } from "./decision.ts";
 import { allRuns, isLive, jobsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
@@ -22,7 +23,7 @@ export const SKIP_LABELS = ["goal", "needs-chris", "triaged", "proposal"];
 export type Verdict =
   | { verdict: "goal"; body: string }
   | { verdict: "close"; reason: string }
-  | { verdict: "chris"; question: string }
+  | { verdict: "chris"; question: string; decision?: Decision }
   | { verdict: "live"; note: string };
 
 export type Counts = Partial<Record<Verdict["verdict"], number>>;
@@ -40,7 +41,7 @@ export function parseVerdict(output: string): Verdict | string {
   switch (raw.verdict) {
     case "goal": { const body = field("body"); return body ? { verdict: "goal", body } : "goal without a body"; }
     case "close": { const reason = field("reason"); return reason ? { verdict: "close", reason } : "close without a reason"; }
-    case "chris": { const question = field("question"); return question ? { verdict: "chris", question } : "chris without a question"; }
+    case "chris": { const question = field("question"); if (!question) return "chris without a question"; const decision = normalizeDecision(raw); return decision ? { verdict: "chris", question: decision.question, decision } : { verdict: "chris", question }; }
     case "live": { const note = field("note"); return note ? { verdict: "live", note } : "live without a note"; }
     default: return `unknown verdict ${JSON.stringify(raw.verdict)}`;
   }
@@ -63,7 +64,7 @@ Reply with one JSON object and nothing else, with one of these verdicts:
 
   The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun test\`), or a new test that asserts the end state. There is no \`aleph check\` command: never name one.
 - {"verdict": "close", "reason": "<why>"}: it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
-- {"verdict": "chris", "question": "<one question>"}: it needs a plan or a choice only Chris can make.
+- {"verdict": "chris", "question": "<one sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a plan or a choice only Chris can make. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
 - {"verdict": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.
 `;
 }
@@ -113,7 +114,8 @@ function apply(repo: Repo, id: number, v: Verdict): boolean {
       todos.note(item, `triage: closed: ${v.reason}`);
     } else if (v.verdict === "chris") {
       todos.edit(item, { labels: [...labels, "needs-chris"] });
-      todos.note(item, `triage: for Chris: ${v.question}`);
+      if (v.decision) writeDecision(item, v.decision);
+      todos.note(item, `triage: for Chris: ${v.decision ? decisionNote(v.decision) : v.question}`);
     } else {
       todos.edit(item, { labels: [...labels, "live-check", "triaged"] });
       todos.note(item, `triage: a live check: ${v.note}`);
