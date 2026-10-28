@@ -75,7 +75,7 @@ export function waitingToLand(jobs = allJobs()): string[] {
   return jobs.filter((j) => {
     const last = j.at(-1)!;
     const r = last.run;
-    return isOpen(j) && r.kind === "agent" && r.state === "passed" && !isLive(last.folder) && (r.land || (r.repo && repos[r.repo]?.autoland));
+    return isOpen(j) && (r.kind === "agent" || r.kind === "recheck") && r.state === "passed" && !isLive(last.folder) && (r.land || (r.repo && repos[r.repo]?.autoland));
   }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started)).map((j) => j.at(-1)!.run.name);
 }
 

@@ -117,7 +117,7 @@ export function renderStuck(s) {
     (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
     (failed(j) ? `<p class="quiet q">Last check that failed: <b>${esc(failed(j).name)}</b>, ${esc(failed(j).seconds)} s</p>` : "") +
     `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}</dl>` +
-    `<div class="actions">${cmd(`aleph drop ${j.name}`)}</div></article>`).join("");
+    `<div class="actions">${act("recheck", j.name, "Re-check")}${act("drop", j.name, "Drop")}${actMsg(j.name)}</div></article>`).join("");
   return section("stuck", "Stuck", s.stuck.length, rows || empty("No run is stuck."));
 }
 

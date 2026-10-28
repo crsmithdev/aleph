@@ -499,6 +499,8 @@ export async function unit(folder: string): Promise<void> {
       verdict = code === 0 ? { state: "done" } : { state: "failed", reason: `exited ${code}` };
     } else if (run.kind === "land") {
       ({ verdict, code } = await land(id, folder, run, repo!, checkEnv));
+    } else if (run.kind === "recheck") {
+      ({ verdict, code } = await recheck(id, folder, run, repo!));
     } else if (repo!.sandbox) {
       ({ verdict, code } = await factoryAgent(id, folder, run, repo!));
     } else {
@@ -513,7 +515,7 @@ export async function unit(folder: string): Promise<void> {
   const next = nextStep(ended, repo);
   if (next) ended = updateRun(folder, { next });
   writeFileSync(join(folder, "exit"), String(code));
-  if (run.kind === "agent" && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
+  if ((run.kind === "agent" || run.kind === "recheck") && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
   if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });
   if (next) await start(folder, ended, next);
   if (run.kind !== "plain" && dispatchOn()) await dispatchFree(folder);
@@ -542,7 +544,7 @@ const RELANDS = 3;
  */
 function nextStep(run: Run, repo: Repo | undefined): Run["next"] {
   if (run.kind === "agent" && run.failed) return "worker";
-  if (run.kind === "agent") return run.state === "passed" && (run.land || repo?.autoland) ? "land" : undefined;
+  if (run.kind === "agent" || run.kind === "recheck") return run.state === "passed" && (run.land || repo?.autoland) ? "land" : undefined;
   if (run.kind !== "land" || run.state !== "failed") return undefined;
   const lands = (allJobs().find((j) => j[0].id === run.job) ?? []).filter((e) => e.run.kind === "land").map((e) => e.run);
   if (run.conflicts?.length) return lands.filter((r) => r.conflicts?.length).length <= BOUNCES ? "worker" : undefined;
@@ -744,14 +746,62 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       if (done < rounds) return stuck(failed, { ...facts, failed: check, round: done });
       return stuck(rounds > 0 ? `${failed} after ${done} fix rounds` : failed, facts);
     }
-    const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
-    if (rule) return { verdict: { state: "needs-you", needs: "held", reason: rule, stat: git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out, ...facts }, code: 0 };
-    const stat = git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out;
-    phase("review");
-    const rv = await review(id, folder, run, repo, dir, base, branch, testFindings(repo.path, base, `refs/heads/${branch}`));
-    if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
-    if (rv.reason) return { verdict: { state: "needs-you", needs: "review", reason: rv.reason, stat, ...facts }, code: 0 };
-    return { verdict: { state: "passed", ...facts }, code: 0 };
+    return await heldAndReview(id, folder, run, repo, dir, base, branch, facts);
+  } finally {
+    removeRunFolder(dir);
+  }
+}
+
+/** After the checks pass: the held rule, then the reviewer. */
+async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, facts: Partial<Verdict>): Promise<{ verdict: Verdict; code: number }> {
+  const phase = (p: string) => updateRun(folder, { phase: p });
+  const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
+  if (rule) return { verdict: { state: "needs-you", needs: "held", reason: rule, stat: git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out, ...facts }, code: 0 };
+  const stat = git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out;
+  phase("review");
+  const rv = await review(id, folder, run, repo, dir, base, branch, testFindings(repo.path, base, `refs/heads/${branch}`));
+  if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
+  if (rv.reason) return { verdict: { state: "needs-you", needs: "review", reason: rv.reason, stat, ...facts }, code: 0 };
+  return { verdict: { state: "passed", ...facts }, code: 0 };
+}
+
+/**
+ * A recheck: no worker. The run branch takes origin/<main> by a merge made in
+ * memory (a conflict makes the run stuck and names the files), the checks run
+ * in the sandbox on the result, then the held rule and the reviewer, as after a worker.
+ */
+async function recheck(id: string, folder: string, run: Run, repo: Repo): Promise<{ verdict: Verdict; code: number }> {
+  const branch = run.branch!;
+  const ref = `refs/heads/${branch}`;
+  const main = `refs/remotes/origin/${repo.main}`;
+  const phase = (p: string) => updateRun(folder, { phase: p });
+  const stuck = (reason: string, extra: Partial<Verdict> = {}) => ({ verdict: { state: "stuck" as const, reason, ...extra }, code: 1 });
+  phase("setup");
+  if (!git(repo.path, "fetch", "-q", "origin").ok) return stuck("fetch failed");
+  const tip = git(repo.path, "rev-parse", "--verify", "-q", ref);
+  if (!tip.ok) return stuck(`branch gone: ${branch}`);
+  const upstream = git(repo.path, "rev-parse", main).out;
+  phase("merge");
+  if (!git(repo.path, "merge-base", "--is-ancestor", upstream, tip.out).ok) {
+    const merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", tip.out, upstream);
+    const lines = merged.out.split("\n");
+    if (!merged.ok) {
+      const conflicts = lines.slice(1, lines.indexOf("") < 0 ? undefined : lines.indexOf("")).filter(Boolean);
+      return stuck(`merge conflict: ${conflicts.join(", ")}`, { conflicts });
+    }
+    const c = git(repo.path, "commit-tree", lines[0], "-p", tip.out, "-p", upstream, "-m", `Merge ${repo.main} into ${branch}`);
+    if (!c.ok || !git(repo.path, "update-ref", ref, c.out, tip.out).ok) return stuck(`merge failed: ${c.out}`);
+  }
+  const dir = makeRunFolder(id);
+  try {
+    const b = git(repo.path, "bundle", "create", join(dir, "out", "out.bundle"), ref);
+    if (!b.ok) return stuck(`bundle failed: ${b.out}`);
+    const base = git(repo.path, "merge-base", main, ref).out;
+    if (git(repo.path, "rev-list", "--count", `${main}..${ref}`).out === "0") return stuck("no commit");
+    const changed = git(repo.path, "diff", "--name-only", base, ref).out.split("\n").filter(Boolean);
+    const failed = await checksInSandbox(folder, dir, "out/out.bundle", ref, repo, changed, phase, recorder(folder), hiddenOf(repo, run));
+    if (failed) return stuck(failed);
+    return await heldAndReview(id, folder, run, repo, dir, base, branch, {});
   } finally {
     removeRunFolder(dir);
   }

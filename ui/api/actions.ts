@@ -1,5 +1,5 @@
 /**
- * `GET /api/diff/:name` and `POST /api/land|drop|checked/:name`. Each action is
+ * `GET /api/diff/:name` and `POST /api/land|recheck|drop|checked/:name`. Each action is
  * the `aleph` command of that name, run as a subprocess; the page offers
  * nothing the CLI does not. A POST must carry `X-Aleph-UI: 1` and, when it has
  * an Origin, the server's own, so a web page in the browser cannot post here.
@@ -37,7 +37,7 @@ const diff: Handler = (_req, { name }) => {
   return d.exitCode === 0 ? text(d.stdout.toString(), 200) : text(d.stderr.toString(), 500);
 };
 
-const action = (verb: "land" | "drop" | "checked"): Handler => async (req, { name }) => {
+const action = (verb: "land" | "recheck" | "drop" | "checked"): Handler => async (req, { name }) => {
   if (!sameSite(req)) return text("forbidden", 403);
   if (!find(name)) return text(`no job named ${name}`, 404);
   const args = [verb, name];
@@ -53,6 +53,7 @@ const action = (verb: "land" | "drop" | "checked"): Handler => async (req, { nam
 export const routes: Routes = {
   "GET /api/diff/:name": diff,
   "POST /api/land/:name": action("land"),
+  "POST /api/recheck/:name": action("recheck"),
   "POST /api/drop/:name": action("drop"),
   "POST /api/checked/:name": action("checked"),
 };

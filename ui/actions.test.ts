@@ -56,6 +56,13 @@ test("POST /api/land runs `aleph land x` and returns its code", async () => {
   expect(recorded()).toEqual(["land x"]);
 });
 
+test("POST /api/recheck runs `aleph recheck x`", async () => {
+  const res = await post("/api/recheck/x");
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ code: 0, stdout: "out\n", stderr: "" });
+  expect(recorded().at(-1)).toBe("recheck x");
+});
+
 test("a POST without the header, or from another origin, is 403 and runs nothing", async () => {
   const before = recorded().length;
   expect((await post("/api/land/x", {})).status).toBe(403);

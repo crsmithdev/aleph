@@ -79,9 +79,10 @@ test("a land from another day shows its date", () => {
 
 const withFactory = (o: object) => ({ ...state, factory: { ...state.factory, health: [], ...o } });
 
-test("a stuck job shows its reason, the failed check and its seconds, and aleph drop", () => {
+test("a stuck job shows its reason, the failed check and its seconds, and Re-check and Drop buttons", () => {
   const h = r.renderStuck({ ...state, stuck: [job({ name: "aleph-30", state: "stuck", reason: "types failed", checks: [{ name: "lint", ok: true, seconds: 3 }, { name: "tsc", ok: false, seconds: 41 }] })] });
-  for (const t of ["types failed", "tsc", "41 s", 'data-cmd="aleph drop aleph-30"']) expect(h).toContain(t);
+  for (const t of ["types failed", "tsc", "41 s", 'data-act="recheck" data-name="aleph-30"', 'data-act="drop" data-name="aleph-30"']) expect(h).toContain(t);
+  expect(h).not.toContain("data-cmd");
 });
 
 test("four needs-you jobs render one expanded and three collapsed", () => {

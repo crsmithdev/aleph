@@ -65,7 +65,7 @@ function toJob(runs: Entry[]): Job {
   return job;
 }
 
-const KIND = { agent: "worker", land: "land", plain: "plain", triage: "triage" } as const;
+const KIND = { agent: "worker", recheck: "worker", land: "land", plain: "plain", triage: "triage" } as const;
 function runInfos(runs: Entry[]): RunInfo[] {
   const out: RunInfo[] = [];
   for (const e of runs) {
@@ -77,7 +77,7 @@ function runInfos(runs: Entry[]): RunInfo[] {
     if (r.reason) info.reason = r.reason;
     out.push(info);
     // The reviewer runs inside the worker's run folder and leaves review.md there.
-    if (r.kind === "agent" && existsSync(join(e.folder, "review.md"))) {
+    if ((r.kind === "agent" || r.kind === "recheck") && existsSync(join(e.folder, "review.md"))) {
       out.push({ id: `${e.id}-review`, kind: "review", state: r.state, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: "claude-opus-5-5" });
     }
   }

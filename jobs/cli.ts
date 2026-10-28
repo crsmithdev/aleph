@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * aleph <job|run|land|checked|drop|jobs|issue|unit|tick|report|pause|resume|sandbox|status|judge>
+ * aleph <job|run|land|checked|recheck|drop|jobs|issue|unit|tick|report|pause|resume|sandbox|status|judge>
  * — detached agent jobs, plain runs, each repo's issues, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/jobs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal.
@@ -187,7 +187,7 @@ async function landJob(): Promise<void> {
   const runs = allJobs().find((j) => isOpen(j) && j.at(-1)!.run.name === name) ?? refuse(`no open job named ${name}`);
   const live = runs.find((e) => isLive(e.folder));
   if (live) refuse(`${name} is running as ${live.id}`);
-  const agent = runs.filter((e) => e.run.kind === "agent").at(-1)!.run;
+  const agent = runs.filter((e) => e.run.kind === "agent" || e.run.kind === "recheck").at(-1)!.run;
   const manual = (agent.state === "needs-you" && agent.needs === "manual") || (agent.state === "passed" && agent.say !== undefined);
   const unchecked = manual && !rest.includes("--checked");
   const held = agent.state === "needs-you" && (agent.needs === "held" || agent.needs === "review");
@@ -296,6 +296,38 @@ function jobs(): void {
     ...summary(runs!, fates), question: last.run.question, result: read(last.folder, "result.md"),
     checks: checks?.trimEnd().split("\n").slice(-40).join("\n"), land: read(last.folder, "land.log"),
   });
+}
+
+/**
+ * Start a recheck run: the last run of an open job is an agent or recheck run
+ * that ended stuck or failed, and its branch still exists. The run merges main
+ * into the branch and runs the checks and the reviewer again; no worker starts.
+ */
+async function recheck(): Promise<void> {
+  const name = checkName(positional[0]);
+  const found = allJobs().find((j) => isOpen(j) && j.at(-1)!.run.name === name) ?? refuse(`no open job named ${name}`);
+  const release = await lock(`job-${found.at(-1)!.run.repo ?? ""}-${name}`);
+  if (!release) refuse(`job ${name} is busy`);
+  let child: ReturnType<typeof Bun.spawn> | undefined;
+  try {
+    const runs = allJobs().find((j) => isOpen(j) && j.at(-1)!.run.name === name) ?? refuse(`no open job named ${name}`);
+    const last = runs.at(-1)!;
+    if (isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
+    const r = last.run;
+    if (r.kind !== "agent" && r.kind !== "recheck") refuse(`${name}: the last run is a ${r.kind} run, not an agent run`);
+    if (r.state !== "stuck" && r.state !== "failed") refuse(`${name} is ${r.state}, not stuck or failed`);
+    const repo = loadRegistry()[r.repo ?? ""];
+    if (!repo?.sandbox) refuse(`${name} is not a factory job`);
+    if (!r.branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok) refuse(`${name} has no branch: drop it`);
+    const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
+    child = await dispatch({
+      kind: "recheck", job: runs[0].id, name, repo: repo.key, branch: r.branch, state: "running", phase: "starting",
+      ...(todo !== undefined ? { todo } : {}), ...(runs.some((e) => e.run.land) ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
+    }, `${repo.key}-${name}`, repo.path, () => {});
+  } finally {
+    release!();
+  }
+  await child?.exited;
 }
 
 async function drop(): Promise<void> {
@@ -688,6 +720,7 @@ try {
     case "job": await job(); break;
     case "run": await plain(); break;
     case "jobs": jobs(); break;
+    case "recheck": await recheck(); break;
     case "drop": await drop(); break;
     case "unit": await unit(resolve(positional[0])); break;
     case "land": await landJob(); break;
@@ -715,7 +748,7 @@ try {
       if (!p.ok) process.exit(1);
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|drop|jobs|issue|tick|report|pause|resume|sandbox|status|judge|dispatch> ...");
+    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|report|pause|resume|sandbox|status|judge|dispatch> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;
