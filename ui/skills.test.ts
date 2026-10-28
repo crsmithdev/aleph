@@ -69,7 +69,7 @@ beforeAll(async () => {
     saved[k] = process.env[k];
     process.env[k] = val;
   }
-  app = await serve(0);
+  app = await serve(0, { warm: false });
 });
 afterAll(() => {
   app.stop(true); lf.stop(true);
