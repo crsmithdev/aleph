@@ -1,9 +1,9 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { actMessages, clock, clock12, denyReasons, diffHtml, elapsed, esc, money, openDiffs } from "../lib.js";
+import { clock, clock12, denyReasons, diffHtml, elapsed, esc, idLink, money, openDiffs } from "../lib.js";
 import { proseDecision } from "../decision.js";
-import { act, actMsg, checkFacts, fact, itemId, landCard, shell as jobCard, title, trailerLine } from "./cards.js";
+import { act, actMsg, checkFacts, fact, itemId, landCard, shell as jobCard, trailerLine } from "./cards.js";
 
 export const view = {
   path: "/",
@@ -82,7 +82,10 @@ export function renderLede(s) {
 
 const cards = (html) => `<div class="cards">${html}</div>`;
 
-/** The details of a held or stuck job, folded under its compact card. */
+/** The one folded "Details" of an Issues row; `key` keeps it open across refreshes. */
+const more = (key, body) => `<details class="more" data-keep="more:${esc(key)}"><summary>Details</summary><div class="body">${body}</div></details>`;
+
+/** The details of a held or stuck job: everything the row's one sentence leaves out. */
 function details(j, extra = "") {
   const parts = extra + (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
     `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(j.model)) : ""}${checkFacts(j)}</dl>` +
@@ -91,7 +94,7 @@ function details(j, extra = "") {
     trailerLine(j) +
     (j.defaults.length ? `<h4>Defaults taken</h4><ul>${j.defaults.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>` : "") +
     (j.followups.length ? `<h4>Follow-ups</h4><ul>${j.followups.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>` : "");
-  return `<details class="more" data-keep="more:${esc(j.name)}"><summary>Details</summary><div class="body">${parts}</div></details>`;
+  return more(j.name, parts);
 }
 
 const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
@@ -131,31 +134,49 @@ function errorLines(s) {
   return [...new Set(out)];
 }
 
-/** Why a held run needs Chris, in words: its reason, then what the reviewer said. */
-function heldWhy(j) {
+/** One plain sentence from a note: code spans, file paths and line numbers dropped, the first sentence, cut at 160 characters. */
+export function oneSentence(text) {
+  const t = String(text ?? "")
+    .replace(/`([^`]*)`/g, (_, c) => (/[\/]|\.\w{1,5}$/.test(c) ? "" : c))
+    .replace(/[\w.-]*\/[\w./-]+/g, "")
+    .replace(/[\w-]+\.(?:js|ts|tsx|md|json|html|css|py|sh|ya?ml)\b(?::\d+(?:-\d+)?)?/g, "")
+    .replace(/\(?\blines? \d+(?:-\d+)?\)?/gi, "")
+    .replace(/\s+/g, " ").replace(/\s+([,.;:?!])/g, "$1").replace(/\(\s*\)/g, "").trim();
+  const first = (/^.*?[.?!](?=\s|$)/.exec(t)?.[0] ?? t);
+  if (/:$/.test(first)) return ""; // only a lead-in was left once the path went
+  return first.length > 160 ? `${first.slice(0, 159).trimEnd()}\u2026` : first;
+}
+
+/** What the reviewer said of a held run, in words; "" while the review runs. */
+function reviewNote(j) {
   const r = j.review2;
-  const review = !r ? "the reviewer gave no verdict"
+  return !r ? "the reviewer gave no verdict"
     : r.verdict === "pending" ? ""
     : r.verdict === "land" ? `the reviewer says land${r.reason ? `: ${r.reason}` : ""}`
     : r.verdict === "back" ? `the reviewer sent it back${r.reason ? `: ${r.reason}` : ""}`
     : r.verdict === "chris" ? `the reviewer left it to you${r.reason ? `: ${r.reason}` : ""}`
     : r.verdict === "error" ? "the review failed"
     : `review: ${r.verdict}`;
-  return [j.reason || (j.needs && j.needs !== "held" && j.needs !== "review" ? j.needs : ""), review].filter(Boolean).join("; ");
 }
 
-/** One Issues row: a verb phrase saying what to do, the id and title, the buttons; `fold` sits behind the row. */
-function row(kind, verb, id, ttl, buttons, fold = "") {
-  return `<article class="issue-row ${kind}" data-kind="${kind}"><div class="row-main"><span class="verb">${esc(verb)}</span>` +
-    `${id ? ` <span class="id">${esc(id)}</span>` : ""}${ttl ? ` <span class="t">${esc(ttl)}</span>` : ""}</div>` +
+/** The hold reason of a held run, whole. */
+const holdReason = (j) => j.reason || (j.needs && j.needs !== "held" && j.needs !== "review" ? j.needs : "");
+
+/** One Issues row: the id, the title, one sentence of why Chris is needed, the buttons; `fold` is the one Details behind the row. */
+function row(kind, why, id, href, ttl, buttons, fold = "") {
+  return `<article class="issue-row ${kind}" data-kind="${kind}"><div class="row-main">` +
+    `${id ? `${href ? idLink(id, href) : `<span class="id">${esc(id)}</span>`} ` : ""}${ttl ? `<span class="t">${esc(ttl)}</span> ` : ""}<span class="verb">${esc(why)}</span></div>` +
     `<div class="actions">${buttons}</div>${fold}</article>`;
 }
 
-/** The fold behind a held or stuck row: Diff (held), then the job's details. */
-const fold = (j, held) => details(j, held ? `<div class="actions">${act("diff", j.name, "Diff")}</div><div class="diff-panel" data-diff-for="${esc(j.name)}"${openDiffs.has(j.name) ? `>${diffHtml(openDiffs.get(j.name))}` : " hidden>"}</div>` : "");
+/** The one Details behind a held or stuck row: the whole reason, the reviewer's note and Diff (held), then the job's details. */
+const fold = (j, held) => details(j, held
+  ? `${holdReason(j) ? `<p class="quiet q">${esc(holdReason(j))}</p>` : ""}${reviewNote(j) ? `<p class="quiet q">Reviewer: ${esc(reviewNote(j))}</p>` : ""}<div class="actions">${act("diff", j.name, "Diff")}</div><div class="diff-panel" data-diff-for="${esc(j.name)}"${openDiffs.has(j.name) ? `>${diffHtml(openDiffs.get(j.name))}` : " hidden>"}</div>`
+  : j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "");
 
-const heldRow = (j) => row("held", `Review, then land or drop: ${heldWhy(j)}`, j.name, j.item?.title || "", `${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}${actMsg(j.name)}`, fold(j, true));
-const stuckRow = (j) => row("stuck", `Clear: ${j.state === "failed" ? "failed" : "stuck"}${j.reason ? ` with ${j.reason}` : ""}`, j.name, j.item?.title || "", `${act("recheck", j.name, "Re-check")}${act("drop", j.name, "Drop")}${actMsg(j.name)}`, fold(j, false));
+const jobHref = (j) => `#/jobs/${encodeURIComponent(j.name)}`;
+const heldRow = (j) => row("held", oneSentence(holdReason(j)) || "Review the run, then land or drop it.", j.name, jobHref(j), j.item?.title || "", `${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}${actMsg(j.name)}`, fold(j, true));
+const stuckRow = (j) => row("stuck", `${j.state === "failed" ? "Failed" : "Stuck"}${j.reason ? ` with ${oneSentence(j.reason).replace(/\.$/, "")}` : ""}.`, j.name, jobHref(j), j.item?.title || "", `${act("recheck", j.name, "Re-check")}${act("drop", j.name, "Drop")}${actMsg(j.name)}`, fold(j, false));
 const open = (i) => `<a class="act" href="${esc(i.href)}">Open</a>`;
 /** Text with `inline code` as <code>, everything else escaped. */
 const code = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
@@ -185,17 +206,15 @@ function decideButtons(i, d, prose) {
   return approve + `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason to deny (optional)" aria-label="Reason to deny ${esc(i.id)}" ${at} value="${esc(denyReasons.get(i.id) ?? "")}">` + btn("deny", "Deny");
 }
 
-/** A needs-chris row: the id and title, the question with its options and context, then the buttons in the row. */
+/** A needs-chris row: the id, the title, the question as one sentence, the buttons; the options, the context and the rest are folded in Details. */
 function decideRow(i) {
   const d = i.decision;
   const prose = d ? null : proseDecision(i.question);
   const body = d ? decisionBody(d) : prose.paragraphs.length ? proseBody(prose) : "";
-  return `<article class="issue-row decide" data-kind="decide"><div class="row-main"><span class="verb">Decide</span>` +
-    ` <span class="id">${esc(i.id)}</span> <span class="t">${esc(i.title)}</span></div>` +
-    `<div class="actions">${decideButtons(i, d, prose || { recommendation: null })}${open(i)}</div>` +
-    (body ? `<div class="decision">${body}</div>` : "") + `</article>`;
+  const ask = oneSentence(d ? d.question : prose.paragraphs[0] ?? i.question) || "Your decision is needed.";
+  return row("decide", ask, i.id, i.href, i.title, `${decideButtons(i, d, prose || { recommendation: null })}${open(i)}`, body ? more(i.id, body) : "");
 }
-const errorRow = (l) => row("error", `${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`, "", "", "");
+const errorRow = (l) => row("error", `${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`, "", "", "", "");
 
 /** Issues: the rows that need Chris (held, stuck or failed runs, needs-chris issues, errors). Issues that wait for triage are the factory's, so they are only a count on the Untriaged card. */
 export function renderIssues(s) {

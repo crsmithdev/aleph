@@ -27,7 +27,7 @@ describe("cards", () => {
       expect(compact).toContain('class="card compact');
       expect(compact).not.toContain("<dl");
       expect(compact).toContain('class="badge');
-      expect(compact).toContain('class="id"');
+      expect(compact).toContain('class="idl"');
     });
     test(`${name} compact is at most two lines: two block children`, () => {
       const c = make("compact");
@@ -39,14 +39,14 @@ describe("cards", () => {
 
   test("the full land card is the Status page card", () => {
     const h = landCard(land, "full", now);
-    expect(h).toContain('<article class="job-card big del"><div class="ih"><span class="id">aleph-8</span><h3>Landed one</h3><span class="badge done">Landed</span></div>');
+    expect(h).toContain('<article class="job-card big del"><div class="ih"><a class="idl" href="#/jobs/aleph-8">aleph-8</a><h3>Landed one</h3><span class="badge done">landed</span></div>');
     expect(h).toContain("<dt>Commit</dt><dd><code>abcdef1</code></dd>");
     expect(h).not.toContain("<dt>Tests</dt>");
   });
 
   test("the triage card is in the land card's style and names the outcome", () => {
     const h = triageCard(triage, "full", now);
-    expect(h).toContain('<article class="job-card big del triage"><div class="ih"><span class="id">triage-aleph-3</span><h3>Sort &lt;it&gt;</h3><span class="badge need">Needs Chris</span></div>');
+    expect(h).toContain('<article class="job-card big del triage"><div class="ih"><a class="idl" href="#/jobs/triage-aleph-3">triage-aleph-3</a><h3>Sort &lt;it&gt;</h3><span class="badge need">Needs Chris</span></div>');
     expect(h).toContain("<dt>Took</dt><dd>4m</dd>");
     expect(triageCard({ ...triage, outcome: "goal" }, "full", now)).toContain('<span class="badge done">To factory</span>');
     expect(triageCard({ ...triage, outcome: "closed" }, "full", now)).toContain(">Closed<");
@@ -57,7 +57,7 @@ describe("cards", () => {
 
   test("titles are escaped; ids link when there is an href", () => {
     expect(jobCard(job, "compact", now)).toContain("Do &lt;it&gt;");
-    expect(jobCard(job, "compact", now)).toContain('<a class="id" href="#/jobs/aleph-9">');
+    expect(jobCard(job, "compact", now)).toContain('<a class="idl" href="#/jobs/aleph-9">');
     expect(issueCard(issue, "full")).toContain("<dt>Labels</dt><dd>factory, ui</dd>");
   });
 });

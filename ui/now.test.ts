@@ -31,7 +31,7 @@ test("stuck, running and delivered show their jobs", () => {
 test("a commitUrl becomes a link", () => {
   expect(r.renderLands(state)).toContain('<a href="https://github.com/o/r/commit/50f301fabc"><code>50f301f</code></a>');
   const none = r.renderLands({ ...state, delivered: [{ ...state.delivered[0], commitUrl: undefined }] });
-  expect(none).not.toContain("<a ");
+  expect(none).not.toContain("commit/");
 });
 
 test("an empty section shows its empty state", () => {
@@ -113,17 +113,17 @@ test("a held run, a stuck run, a needs-chris issue and a red main are one Issues
   const rs = rows(top);
   expect(rs.length).toBe(4);
   expect(rs.map((x) => x.match(/^(\w+)/)![1])).toEqual(["held", "stuck", "decide", "error"]);
-  expect(verb(rs[0])).toStartWith("Review, then land or drop: ");
-  expect(verb(rs[0])).toContain("the reviewer left it to you: touches hooks");
-  expect(verb(rs[1])).toBe("Clear: stuck with no commit");
-  expect(verb(rs[2])).toBe("Decide");
-  expect(rs[2]).toContain("Haiku or Sonnet for the digest?");
+  expect(verb(rs[0])).toBe("Review the run, then land or drop it."); // the reason is only a path
+  expect(rs[0]).toContain("Reviewer: the reviewer left it to you: touches hooks");
+  expect(verb(rs[1])).toBe("Stuck with no commit.");
+  expect(verb(rs[2])).toBe("Haiku or Sonnet for the digest?");
   expect(verb(rs[3])).toBe("Fix: aleph main is red at abc1234: tests");
-  // The verb phrase comes first, then the id and title, then the buttons.
+  // The id comes first, then the title and the one sentence, then the buttons.
   for (const [row, id, title, btns] of [[rs[0], "aleph-27", "Digest head and tail", ["land", "drop"]], [rs[1], "aleph-30", "Fix it", ["recheck", "drop"]], [rs[2], "aleph-7", "Which tier?", []]] as const) {
-    expect(row.indexOf("verb")).toBeLessThan(row.indexOf(id));
     expect(row.indexOf(id)).toBeLessThan(row.indexOf(title));
-    expect(row.indexOf(title)).toBeLessThan(row.indexOf('class="actions"'));
+    expect(row.indexOf(title)).toBeLessThan(row.indexOf("verb"));
+    expect(row.indexOf("verb")).toBeLessThan(row.indexOf('class="actions"'));
+    expect(row.match(/<details/g)?.length ?? 0).toBeLessThanOrEqual(1);
     for (const b of btns) expect(row).toContain(`data-act="${b}"`);
   }
   // Diff and Details sit behind the row; a needs-chris issue links to the issue.
@@ -137,15 +137,19 @@ test("a held run, a stuck run, a needs-chris issue and a red main are one Issues
   expect(section(page, "jobs")).not.toContain("aleph-27");
   expect(section(page, "jobs")).toContain("aleph-36");
   // A needs-chris issue is not run together: its parts are separate elements.
-  expect(rs[2]).toContain('<span class="id">aleph-7</span> <span class="t">Which tier?</span>');
+  expect(rs[2]).toContain('<a class="idl" href="#/issues/aleph/7">aleph-7</a> <span class="t">Which tier?</span> <span class="verb">');
 });
 
 test("a held run says why: no verdict, a verdict with its reason, a failed review; a running review is left out", () => {
-  const why = (review2: any) => verb(rows(r.renderIssues({ ...state, stuck: [], factory: { ...state.factory, health: [] }, needs: [{ ...state.needs[0], reason: undefined, review2 }] }))[0]);
-  expect(why(undefined)).toBe("Review, then land or drop: the reviewer gave no verdict");
-  expect(why({ verdict: "back", reason: "lost an assertion" })).toBe("Review, then land or drop: the reviewer sent it back: lost an assertion");
-  expect(why({ verdict: "error" })).toBe("Review, then land or drop: the review failed");
-  expect(why({ verdict: "pending" })).not.toContain("running");
+  const why = (review2: any) => rows(r.renderIssues({ ...state, stuck: [], factory: { ...state.factory, health: [] }, needs: [{ ...state.needs[0], reason: undefined, review2 }] }))[0];
+  expect(why(undefined)).toContain("Reviewer: the reviewer gave no verdict");
+  expect(why({ verdict: "back", reason: "lost an assertion" })).toContain("Reviewer: the reviewer sent it back: lost an assertion");
+  expect(why({ verdict: "error" })).toContain("Reviewer: the review failed");
+  expect(why({ verdict: "pending" })).not.toContain("Reviewer:");
+  // The row's one sentence is the hold reason, with no file paths or line numbers.
+  const held = (reason: string) => verb(rows(r.renderIssues({ ...state, stuck: [], factory: { ...state.factory, health: [] }, needs: [{ ...state.needs[0], reason }] }))[0]);
+  expect(held("Touches `hooks/lib/digest.ts:12-30` and the `digest` tier. More words.")).toBe("Touches and the digest tier.");
+  expect(held("Review ui/now.js line 40 before landing.")).toBe("Review before landing.");
 });
 
 test("issues that wait for triage are not rows and not in the status line: triage is the factory's", () => {
@@ -168,7 +172,7 @@ test("Issues holds the held runs before the stuck and failed ones, and none says
   expect(h).toContain(">Issues</h2>");
   expect(h.indexOf("aleph-27")).toBeLessThan(h.indexOf("aleph-30"));
   expect(h.indexOf("aleph-30")).toBeLessThan(h.indexOf("aleph-31"));
-  expect(h).toContain("Clear: failed");
+  expect(h).toContain('<span class="verb">Failed.</span>');
   expect(h).not.toContain("Agent working");
   expect(h).not.toContain("aleph drop");
   expect(h).not.toContain("data-cmd");
@@ -194,8 +198,8 @@ test("a needs-you entry has Diff, Land and Drop buttons; a landed one with an op
 
 test("a land from another day shows its date", () => {
   const old = { ...state, delivered: [{ ...state.delivered[0], ended: "2026-10-25T16:30:00Z" }] };
-  expect(r.renderLands(old)).toMatch(/<dt>Landed<\/dt><dd>25 Oct \d\d:\d\d<\/dd>/);
-  expect(r.renderLands(state)).toMatch(/<dt>Landed<\/dt><dd>\d\d:\d\d<\/dd>/);
+  expect(r.renderLands(old)).toMatch(/<dt>Landed<\/dt><dd>Oct 25 \d\d:\d\d<\/dd>/);
+  expect(r.renderLands(state)).toMatch(/<dt>Landed<\/dt><dd>Oct 27 \d\d:\d\d<\/dd>/);
 });
 
 const withFactory = (o: object) => ({ ...state, factory: { ...state.factory, health: [], ...o } });
@@ -400,7 +404,7 @@ test("a held row shows the review2 verdict and its reason in its verb phrase", (
   const withReview = (review2: object) => ({ ...state, needs: [{ ...state.needs[0], review2 }] });
   const h = withAttn(withReview({ verdict: "back", reason: "a test lost <an> assertion" }));
   expect(h).toContain("the reviewer sent it back: a test lost &lt;an&gt; assertion");
-  expect(h.indexOf("sent it back")).toBeLessThan(h.indexOf('data-act="land"'));
+  expect(h.indexOf("sent it back")).toBeGreaterThan(h.indexOf("<details"));
   expect(withAttn(withReview({ verdict: "land" }))).toContain("the reviewer says land");
   expect(withAttn(state)).toContain("the reviewer gave no verdict");
 });
@@ -413,7 +417,10 @@ test("a needs-chris issue with fields shows the question, the options, the recom
   expect(row).toContain("<code>fast</code>");
   expect(row).toMatch(/<li class="rec"><b>Sonnet<\/b> <span class="badge run">Recommended<\/span>/);
   expect(row).toContain("Digests run daily");
-  expect(row).not.toContain("<details");
+  // The row says the question in one sentence; the options and context are in the one Details.
+  expect(row).toContain('<span class="verb">Haiku or Sonnet for the digest?</span>');
+  expect(row.match(/<details/g)?.length).toBe(1);
+  expect(row.indexOf("<details")).toBeLessThan(row.indexOf('<p class="dq">'));
   expect(row).toContain('href="#/issues/aleph/152"');
   const buttons = [...row.matchAll(/<button class="act( primary)?"[^>]*data-act="(\w+)"[^>]*data-label="([^"]*)"/g)].map((m) => [m[2], m[3], !!m[1]]);
   expect(buttons).toEqual([["decide", "Approve Sonnet", true], ["decide", "Approve Haiku", false], ["deny", "Deny", false]]);
@@ -431,7 +438,8 @@ test("an old prose needs-chris note is readable: paragraphs, code, the recommend
   expect(row).toContain('data-label="Approve recommendation"');
   expect(row).toContain('data-recommendation="1"');
   expect(row).toContain('data-label="Deny"');
-  expect(row).not.toContain("<details");
+  expect(row).toContain('<span class="verb">Should use A or B?</span>');
+  expect(row.match(/<details/g)?.length).toBe(1);
 });
 
 test("the status line is not 'All is well.' when the Issues section has an item", () => {
