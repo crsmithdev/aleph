@@ -1105,13 +1105,50 @@ describe("a factory run", () => {
     expect((await aleph(["tick"])).json.started).toEqual([`fac-${id}`]);
     const again = await aleph(["tick"]);
     expect(again.json.started).toEqual([]);
-    expect(again.json.skipped).toContain(`fac-${id}: stuck`);
+    expect(again.json.skipped).toEqual([expect.stringContaining(`Held: fac-${id} is stuck`)]);
     await aleph(["drop", `fac-${id}`]);
     const capped = await aleph(["tick"], { ALEPH_DAY_CAP: "0" });
     expect(capped.json.started).toEqual([]);
     expect(capped.json.skipped).toContain(`fac-${id}: cap of 0 runs in 24 hours`);
     await aleph(["todo", "drop", "fac", String(id), "test over"]);
   }, 30_000);
+
+  test("a stuck job holds the factory: no start, no land by itself; Chris's land works; pause is separate; a drop clears it", async () => {
+    const stuckId = (await aleph(["todo", "add", "fac", "the stuck one", "--labels", "goal", "--body", "-"], {}, "ACTION: error\n")).json.added;
+    expect((await aleph(["tick"])).json.started).toEqual([`fac-${stuckId}`]);
+    const id = (await aleph(["todo", "add", "fac", "behind the hold", "--labels", "goal", "--body", "-"], {}, "ACTION: commit behind.txt\n")).json.added;
+    const d = await aleph(["dispatch"]);
+    expect(d.json.started).toEqual([]);
+    expect(d.json.held).toContain(`Held: fac-${stuckId} is stuck`);
+    expect(d.json.skipped).toEqual([d.json.held]);
+    expect((await aleph(["tick"])).json.held).toContain(`fac-${stuckId}`);
+    expect((await aleph(["report"])).stdout).toContain(`Held: fac-${stuckId} is stuck`);
+    // a run that passes waits, and lands once the hold clears
+    const r = await fjob("fheld", "commit fheld.txt", {}, ["--land"]);
+    expect(state(r.json.run).state).toBe("passed");
+    expect(file(r.json.run, "next.log")).toContain("held:");
+    expect((await aleph(["dispatch"])).json.landed).toBeUndefined();
+    expect(state(r.json.run).state).toBe("passed");
+    // pause and the hold are independent
+    await aleph(["pause"]);
+    await aleph(["resume"]);
+    expect((await aleph(["dispatch"])).json.held).toContain(`fac-${stuckId}`);
+    // Chris's land still works while held
+    const other2 = await fjob("fheld2", "commit fheld2.txt");
+    expect(state((await aleph(["land", "fheld2"])).json.run).state).toBe("landed");
+    expect(other2.code).toBe(0);
+    await aleph(["drop", `fac-${stuckId}`]);
+    await aleph(["todo", "drop", "fac", String(stuckId), "test over"]);
+    await aleph(["pause"]);
+    expect((await aleph(["dispatch"])).json).toMatchObject({ paused: true });
+    await aleph(["resume"]);
+    const free = await aleph(["dispatch"]);
+    expect(free.json.held).toBeUndefined();
+    expect(free.json.landed).toEqual(["fheld"]);
+    expect(free.json.started).toEqual([`fac-${id}`]);
+    await aleph(["drop", `fac-${id}`]);
+    await aleph(["todo", "drop", "fac", String(id), "test over"]);
+  }, 60_000);
 
   test("a tick triages an open issue that is not a goal, and its line counts the verdicts", async () => {
     const cmd = join(base, "triage-fake");
@@ -1378,6 +1415,9 @@ describe("prospective memory", () => {
     expect(t.json.started).not.toContain(`fac-${second}`);
     await aleph(["todo", "done", "fac", String(first)]);
     expect((await aleph(["tick"], NOW)).json.started).toContain(`fac-${second}`);
+    // The second goal's run may end stuck, which holds the factory: clear it.
+    await aleph(["drop", `fac-${second}`]);
+    await aleph(["todo", "drop", "fac", String(second), "test over"]);
     // The day after, the dated goal starts.
     expect((await aleph(["tick"], { ALEPH_NOW: "2026-10-28T08:00:00" })).json.started).toContain(`fac-${later}`);
     for (const id of [later, first, second]) await aleph(["todo", "drop", "fac", String(id), "test over"]);

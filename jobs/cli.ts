@@ -15,7 +15,7 @@ import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import { triage } from "../todo/lib/triage.ts";
-import { behind, dispatchGoals, dispatchOn, factoryDir, factoryLog, LIVE_CAP, health, lastProbe, paused, probeDue, report, setPaused, triageStep } from "./lib/factory.ts";
+import { behind, dispatchGoals, dispatchOn, factoryDir, factoryLog, LIVE_CAP, health, hold, lastProbe, paused, probeDue, report, setPaused, triageStep } from "./lib/factory.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
 import { derive, facts, FACTS_REF, readFacts, type Facts } from "./lib/status.ts";
@@ -561,7 +561,14 @@ async function runDispatch() {
     factoryLog("the last probe failed; no run started");
     return { started: [], skipped: [`the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`] };
   }
-  return dispatchGoals(startRun, baselineChecks);
+  return dispatchGoals(startRun, baselineChecks, landRun);
+}
+
+/** A land the hold had kept waiting: `aleph land <name>`. Returns the refusal, or null. */
+async function landRun(name: string): Promise<string | null> {
+  const p = Bun.spawn([process.execPath, CLI, "land", name], { env: process.env, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+  const code = await p.exited;
+  return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
 }
 
 /** `aleph dispatch`: start every ready goal up to the live cap. A run's end and `aleph issue` call it. */
@@ -589,7 +596,7 @@ async function tickCmd(): Promise<void> {
   }
   const d = await runDispatch();
   const p = lastProbe();
-  const t = !paused() && !(p && !p.ok) ? await triageStep() : { triaged: {}, skipped: [] };
+  const t = !paused() && !(p && !p.ok) && !d.held ? await triageStep() : { triaged: {}, skipped: [] };
   out({ ...d, skipped: [...d.skipped, ...t.skipped], triaged: t.triaged });
 }
 
@@ -604,6 +611,8 @@ function reportCmd(): void {
     git(repo.path, "fetch", "-q", "origin");
     lines.push(behind(repo) ?? "");
   }
+  const h = hold();
+  if (h) lines.push(h.line);
   lines.push(...health());
   const text = lines.filter(Boolean).join("\n\n");
   if (!rest.includes("--hook")) { console.log(text || "nothing new"); return; }

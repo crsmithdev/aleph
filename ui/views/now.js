@@ -54,6 +54,7 @@ export function renderBanner(s) {
   const f = s.factory;
   const lines = [...f.health];
   if (f.probe && !f.probe.ok && !lines.some((l) => /probe/.test(l))) lines.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
+  if (f.hold) lines.push(f.hold);
   if (f.paused) lines.push("The factory is paused; no new run starts. Start it with aleph resume.");
   if (f.dayCap > 0 && f.runsToday >= f.dayCap) lines.push(`The day cap is reached: ${f.runsToday} of ${f.dayCap} runs today; no new run starts.`);
   if (!lines.length) return "";

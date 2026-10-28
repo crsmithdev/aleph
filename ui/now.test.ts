@@ -99,6 +99,7 @@ test("each factory condition renders the banner with its text", () => {
   const cases: [object, string][] = [
     [{ runsToday: 12 }, "day cap is reached"],
     [{ paused: true }, "paused"],
+    [{ hold: "Held: aleph-116 is stuck (merge conflict). No run starts or lands until it is cleared." }, "Held: aleph-116 is stuck (merge conflict). No run starts or lands until it is cleared."],
     [{ health: ["health: 3 runs wait for Chris; no new run starts"] }, "3 runs wait for Chris"],
     [{ health: ["health: aleph main is red"] }, "main is red"],
     [{ probe: { at: "2026-10-27T14:35:00Z", ok: false, failed: ["no network"] } }, "sandbox probe"],

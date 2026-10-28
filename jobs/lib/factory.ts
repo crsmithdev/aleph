@@ -50,6 +50,35 @@ export function waiting(jobs = allJobs()): number {
   return jobs.filter((j) => isOpen(j) && j.at(-1)!.run.repo && keys.has(j.at(-1)!.run.repo!) && j.at(-1)!.run.state === "needs-you").length;
 }
 
+export interface Hold { name: string; state: string; reason?: string; line: string }
+
+/**
+ * The factory's own hold: on while any open job in a factory repo is `stuck` or
+ * `failed`. No run starts or lands by itself until it clears. `except` is a job
+ * that does not count (the run asking is that job's own). Separate from the pause.
+ */
+export function hold(jobs = allJobs(), except?: string): Hold | null {
+  const keys = new Set(sandboxRepos().map((r) => r.key));
+  const bad = jobs.filter((j) => {
+    const r = j.at(-1)!.run;
+    return isOpen(j) && r.repo && keys.has(r.repo) && (r.state === "stuck" || r.state === "failed") && r.job !== except;
+  }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started));
+  if (!bad.length) return null;
+  const r = bad[0].at(-1)!.run;
+  const more = bad.length > 1 ? ` and ${bad.length - 1} more` : "";
+  return { name: r.name, state: r.state, reason: r.reason, line: `Held: ${r.name}${more} ${bad.length > 1 ? "are" : "is"} ${r.state}${r.reason ? ` (${r.reason})` : ""}. No run starts or lands until ${bad.length > 1 ? "they are" : "it is"} cleared.` };
+}
+
+/** Passed agent runs waiting to land by themselves (`--land` or an autoland repo), oldest first. */
+export function waitingToLand(jobs = allJobs()): string[] {
+  const repos = loadRegistry();
+  return jobs.filter((j) => {
+    const last = j.at(-1)!;
+    const r = last.run;
+    return isOpen(j) && r.kind === "agent" && r.state === "passed" && !isLive(last.folder) && (r.land || (r.repo && repos[r.repo]?.autoland));
+  }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started)).map((j) => j.at(-1)!.run.name);
+}
+
 /** The open items labelled `goal` in each factory repo. */
 export function openGoals(): { repo: Repo; item: todos.Item }[] {
   const out: { repo: Repo; item: todos.Item }[] = [];
@@ -105,6 +134,7 @@ export const dispatchOn = () => process.env.ALEPH_DISPATCH !== "off";
 
 type Start = (repo: Repo, name: string, id: number, spec: string) => Promise<string | null>;
 type Checks = (repo: Repo, commit: string, logs: string) => Promise<string | null>;
+type Land = (name: string) => Promise<string | null>;
 
 /**
  * Start every ready goal, in order, until the live cap: an open goal item with
@@ -114,10 +144,23 @@ type Checks = (repo: Repo, commit: string, logs: string) => Promise<string | nul
  * so two dispatches at once start a goal once. `start` dispatches the run; it
  * is the CLI's `aleph job`.
  */
-export async function dispatchGoals(start: Start, checks?: Checks): Promise<{ started: string[]; skipped: string[]; paused?: true }> {
+export async function dispatchGoals(start: Start, checks?: Checks, land?: Land): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[] }> {
   if (paused()) {
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
+  }
+  const h = hold();
+  if (h) {
+    factoryLog(h.line);
+    return { started: [], skipped: [h.line], held: h.line };
+  }
+  const landed: string[] = [];
+  if (land) {
+    for (const name of waitingToLand()) {
+      const why = await land(name);
+      if (!why) landed.push(name);
+    }
+    if (landed.length) factoryLog(`landed ${landed.join(", ")}`);
   }
   const started: string[] = [];
   const skipped: string[] = [];
@@ -156,12 +199,12 @@ export async function dispatchGoals(start: Start, checks?: Checks): Promise<{ st
     }
   }
   factoryLog(`started ${started.join(", ") || "none"}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
-  return { started, skipped };
+  return { started, skipped, ...(landed.length ? { landed } : {}) };
 }
 
 /** The tick's triage of open issues that are not goals (triage.ts). */
 export async function triageStep(): Promise<{ triaged: Counts; skipped: string[] }> {
-  if (paused()) return { triaged: {}, skipped: [] };
+  if (paused() || hold()) return { triaged: {}, skipped: [] };
   const t = await triageOpen(sandboxRepos(), doneChecker(), () => (runsToday().length >= DAY_CAP() ? `cap of ${DAY_CAP()} runs in 24 hours` : null));
   factoryLog(`triaged ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
   return t;

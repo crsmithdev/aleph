@@ -12,7 +12,7 @@ import { git } from "./git.ts";
 import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
-import { dispatchOn, paused, recordFlake } from "./factory.ts";
+import { dispatchOn, hold, paused, recordFlake } from "./factory.ts";
 import { postTrace } from "./trace.ts";
 import { FACTS_REF, writeFacts } from "./status.ts";
 
@@ -573,6 +573,12 @@ function hiddenNote(folder: string, run: Run): string {
 async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): Promise<void> {
   if (paused()) {
     appendFileSync(join(folder, "next.log"), `paused: no ${next} started\n`);
+    updateRun(folder, { next: undefined });
+    return;
+  }
+  const h = next === "land" ? hold(undefined, run.job) : null;
+  if (h) {
+    appendFileSync(join(folder, "next.log"), `held: ${h.line}\n`);
     updateRun(folder, { next: undefined });
     return;
   }
