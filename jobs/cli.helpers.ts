@@ -69,6 +69,15 @@ export const dispatching = (): boolean => {
 };
 
 const tail = (f: string, n = 15) => (existsSync(f) ? readFileSync(f, "utf8").trimEnd().split("\n").slice(-n).join("\n") : "(none)");
+/** What a failed concurrency test needs to name its cause: the runs of the given goal ids with their pid and exit, and the factory logs. */
+export function diagnose(label: string, ids: number[], ...results: { code: number; stdout: string; stderr: string }[]): string {
+  const runs = existsSync(jobsDir) ? readdirSync(jobsDir).sort().filter((r) => ids.some((id) => r.includes(`-fac-fac-${id}-`)))
+    .map((r) => `--- ${r}: pid ${tail(join(jobsDir, r, "pid"), 1)}, exit ${tail(join(jobsDir, r, "exit"), 1)}`) : [];
+  return [`${label}`, ...results.map((x, i) => `--- dispatch ${"xy"[i] ?? i}: exit ${x.code}\nstdout: ${x.stdout.trim()}\nstderr: ${tail_(x.stderr)}`), ...runs,
+    `--- factory/tick.log\n${tail(join(base, "factory", "tick.log"))}`, `--- factory/dispatch.log\n${tail(join(base, "factory", "dispatch.log"))}`].join("\n");
+}
+const tail_ = (s: string) => s.trimEnd().split("\n").slice(-15).join("\n");
+
 /**
  * Waits up to 30 s for `f`. When it fails, the error holds the tails of the factory's tick.log (every dispatch
  * writes why it skipped a goal there) and dispatch.log, and of the run-end dispatch logs, so a flake names its cause.
