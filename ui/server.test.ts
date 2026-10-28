@@ -96,3 +96,10 @@ test("other paths are 404 and writes are refused", async () => {
   expect((await at("/api/state", { method: "POST" })).status).toBe(405);
   expect((await at("/", { method: "POST" })).status).toBe(405);
 });
+
+test("every API answer carries the server's version; the page and its modules are revalidated on each load", async () => {
+  const { VERSION } = await import("./server.ts");
+  const a = await at("/api/_test/x");
+  expect(a.headers.get("x-aleph-version")).toBe(VERSION);
+  for (const p of ["/", "/lib.js", "/views/_test.js"]) expect((await at(p)).headers.get("cache-control")).toBe("no-cache");
+});

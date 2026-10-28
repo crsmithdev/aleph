@@ -481,7 +481,15 @@ pre.stat b { color: var(--need); }
     }
     return null;
   }
-  function api(url) { return fetch(url, { cache: "no-store" }); }
+  // The page imports each view once; when the server restarts with new code, reload to load it, unless the reader is typing.
+  let version = null;
+  async function api(url) {
+    const res = await fetch(url, { cache: "no-store" });
+    const v = res.headers.get("x-aleph-version");
+    if (v && version && v !== version && !document.activeElement?.matches("input, textarea, select")) location.reload();
+    if (v && !version) version = v;
+    return res;
+  }
 
   function nav(path) {
     // The entry whose path is the longest segment prefix of the route is active: #/jobs/x marks Jobs.

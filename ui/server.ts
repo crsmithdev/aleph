@@ -12,7 +12,10 @@ export type Routes = Record<string, Handler>;
 
 interface Route { method: string; pattern: RegExp; names: string[]; handler: Handler }
 
-const JS = { "content-type": "text/javascript; charset=utf-8" };
+/** The page and its modules are revalidated on every load, so a reload after a land gets the new code. */
+const JS = { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" };
+/** This process's start time. Every API answer carries it, so an open page sees that the server restarted and reloads its modules. */
+export const VERSION = String(Date.now());
 const VIEW_FILE = /^[\w-]+\.js$/;
 /** The modules in ui/ that views import (`from "../lib.js"`), served at the root. */
 const SHARED = new Set(["/lib.js", "/decision.js"]);
@@ -72,14 +75,16 @@ export async function serve(port: number, { warm = true }: { warm?: boolean } = 
         if (r.method !== req.method) { allowed = true; continue; }
         const params: Record<string, string> = {};
         r.names.forEach((n, i) => { params[n] = decodeURIComponent(m[i + 1]); });
-        return r.handler(req, params, url);
+        const res = await r.handler(req, params, url);
+        res.headers.set("x-aleph-version", VERSION);
+        return res;
       }
       if (allowed) return new Response("method not allowed", { status: 405 });
       if (req.method !== "GET") return new Response("method not allowed", { status: 405 });
       if (path === "/api/views") return Response.json(views(join(dir, "views")));
       if (path === "/") {
         const page = join(dir, "index.html");
-        return new Response(Bun.file(page), { headers: { "content-type": "text/html; charset=utf-8" } });
+        return new Response(Bun.file(page), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       }
       if (SHARED.has(path)) return new Response(Bun.file(join(dir, path.slice(1))), { headers: JS });
       const v = path.match(/^\/views\/([^/]+)$/);
