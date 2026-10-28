@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CLI, aleph, base, jobsDir, state, setup, teardown } from "./cli.helpers";
+import { aleph, base, jobsDir, startScript, state, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -21,8 +21,7 @@ describe("a factory run", () => {
     beforeAll(() => {
       startLog = join(base, "start.log");
       startCmd = join(base, "start-cmd");
-      // Starts the job in the background, as `systemd-run` does, and returns once its unit has a pid.
-      writeFileSync(startCmd, `#!/bin/bash\necho "$2" >> "$START_LOG"\nALEPH_JOB_FOREGROUND=1 bun ${CLI} job "$1" "$2" --spec - --todo "$3" > /dev/null 2>&1 < /dev/stdin &\nfor i in $(seq 100); do ls ${jobsDir}/*-fac-"$2"-*/pid > /dev/null 2>&1 && exit 0; sleep 0.1; done\n`, { mode: 0o755 });
+      startScript(startCmd, jobsDir);
     });
     beforeEach(() => { rmSync(startLog, { force: true }); });
     afterAll(async () => {

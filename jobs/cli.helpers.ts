@@ -11,6 +11,27 @@ export let lfPosts: any[] = [];
 export const told: string[] = [];
 export let onTell: ((text: string) => void) | undefined;
 
+/**
+ * Writes the fake start command: it starts the job in the background, as `systemd-run` does, and exits 0 once
+ * a run folder that was not there before the start has a pid. It exits 1 when the job process is gone or after 10 s.
+ */
+export function startScript(path: string, jobsDir: string): void {
+  writeFileSync(path, `#!/bin/bash
+echo "$2" >> "$START_LOG"
+before=$(ls -d ${jobsDir}/*-fac-"$2"-* 2>/dev/null)
+ALEPH_JOB_FOREGROUND=1 bun ${CLI} job "$1" "$2" --spec - --todo "$3" > /dev/null 2>&1 < /dev/stdin &
+job=$!
+for i in $(seq 100); do
+  for d in $(ls -d ${jobsDir}/*-fac-"$2"-* 2>/dev/null); do
+    [ -e "$d/pid" ] && ! grep -qxF "$d" <<< "$before" && exit 0
+  done
+  kill -0 $job 2>/dev/null || exit 1
+  sleep 0.1
+done
+exit 1
+`, { mode: 0o755 });
+}
+
 export const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export function sh(cwd: string, ...args: string[]): string {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
