@@ -441,10 +441,10 @@ pre.stat b { color: var(--need); }
     const q = h.indexOf("?");
     return { path: q < 0 ? h : h.slice(0, q), query: new URLSearchParams(q < 0 ? "" : h.slice(q + 1)) };
   }
-  function match(path) {
+  function match(path, query) {
     for (const v of views) {
       const m = path.match(v._route.re);
-      if (m) return { view: v, params: Object.fromEntries(v._route.names.map((n, i) => [n, decodeURIComponent(m[i + 1])])) };
+      if (m) return { view: v, query, params: Object.fromEntries(v._route.names.map((n, i) => [n, decodeURIComponent(m[i + 1])])) };
     }
     return null;
   }
@@ -468,10 +468,10 @@ pre.stat b { color: var(--need); }
   }
 
   async function load(route, first) {
-    const { view, params } = route;
+    const { view, params, query } = route;
     let data = null;
     if (view.api) {
-      const url = typeof view.api === "function" ? view.api(params) : view.api.replace(/:(\w+)/g, (_, n) => encodeURIComponent(params[n] ?? ""));
+      const url = typeof view.api === "function" ? view.api(params, query) : view.api.replace(/:(\w+)/g, (_, n) => encodeURIComponent(params[n] ?? ""));
       try {
         const res = await api(url);
         if (!res.ok) throw new Error(failMessage(url, res.status, await res.text().catch(() => "")));
@@ -490,12 +490,12 @@ pre.stat b { color: var(--need); }
     // Keyed <details> also keep their open state by data-keep.
     const kept = new Map();
     if (!first) $("view").querySelectorAll("details[data-keep]").forEach((d) => kept.set(d.dataset.keep, d.open));
-    try { $("view").innerHTML = view.render(data, params); }
+    try { $("view").innerHTML = view.render(data, params, query); }
     catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} failed to render: ${e.message}`, "This is a bug in the view.")}</div>`; return; }
     if (saved) restoreState($("view"), saved);
     $("view").querySelectorAll("details[data-keep]").forEach((d) => { if (kept.has(d.dataset.keep)) d.open = kept.get(d.dataset.keep); });
     // `mount` runs after render, for what needs a DOM (the charts); a view without one is left alone.
-    try { mountView(view, $("view"), data); }
+    try { mountView(view, $("view"), data, query); }
     catch (e) { console.error(view.title, "mount failed", e); }
   }
 
@@ -517,7 +517,7 @@ pre.stat b { color: var(--need); }
     }
     nav(path);
     clearInterval(timer);
-    const m = match(path);
+    const m = match(path, query);
     shown = m ?? { view: null };
     if (!m) {
       document.title = "Not found · aleph";

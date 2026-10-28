@@ -152,6 +152,17 @@ describe("render", () => {
     expect(h).toContain(".filters .pill[aria-current]");
     expect(v.renderJobs([], {})).toContain("No job in this window.");
   });
+  test("the list reads the route query from its argument", () => {
+    expect(v.view.api({}, new URLSearchParams("state=stuck&repo=fac"))).toBe("/api/jobs?repo=fac&state=stuck");
+    expect(v.view.api({}, new URLSearchParams())).toBe("/api/jobs");
+    const h = v.view.render([job], {}, new URLSearchParams("state=stuck"));
+    expect(h).toMatch(/href="#\/jobs\?state=stuck"[^>]*aria-current="true"|aria-current="true"[^>]*href="#\/jobs\?state=stuck"/);
+  });
+  test("no render or api function reads location.hash", () => {
+    expect(String(v.view.api)).not.toContain("location.hash");
+    expect(String(v.view.render)).not.toContain("location.hash");
+    expect(String(v.renderJobs)).not.toContain("location.hash");
+  });
   test("the view and the detail are routed", () => {
     expect(v.view.path).toBe("/jobs");
     expect(v.view.group).toBe("factory");

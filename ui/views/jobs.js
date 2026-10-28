@@ -6,11 +6,8 @@ import { clock, cmd, empty, esc, md, money, span } from "../lib.js";
 const STATES = ["running", "passed", "needs-you", "failed", "stuck", "done", "landed", "dropped"];
 const BADGE = { landed: "done", done: "done", running: "run", passed: "run", failed: "stuck", stuck: "stuck", "needs-you": "stuck" };
 
-const hashQuery = () => (typeof location === "undefined" ? new URLSearchParams() : new URLSearchParams(location.hash.split("?")[1] ?? ""));
-
 /** The list's data URL: the filters in the hash go to the API. */
-const listUrl = () => {
-  const q = hashQuery();
+const listUrl = (_params, q = new URLSearchParams()) => {
   const out = new URLSearchParams();
   for (const k of ["repo", "state", "days"]) if (q.get(k)) out.set(k, q.get(k));
   const s = out.toString();
@@ -25,7 +22,7 @@ export const view = {
   order: 1,
   api: listUrl,
   refresh: 30,
-  render: (jobs) => renderJobs(jobs, Object.fromEntries(hashQuery())),
+  render: (jobs, _params, query) => renderJobs(jobs, Object.fromEntries(query ?? [])),
 };
 
 /** The Job view, routed at `#/jobs/<name>` through ui/views/job.js. */
@@ -132,7 +129,7 @@ if (typeof document !== "undefined") {
     const b = e.target.closest?.("[data-diff]");
     if (!b) return;
     const out = document.getElementById("diff");
-    const project = hashQuery().get("project");
+    const project = new URLSearchParams(location.hash.split("?")[1] ?? "").get("project");
     b.disabled = true;
     try {
       const res = await fetch(`/api/jobs/${encodeURIComponent(b.dataset.diff)}/diff${project ? `?project=${encodeURIComponent(project)}` : ""}`);

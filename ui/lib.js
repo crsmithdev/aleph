@@ -110,9 +110,9 @@ export function md(src) {
 }
 
 /** Call the view's optional `mount(root, data)` after its markup is in `root`. Returns whether it ran. */
-export function mountView(view, root, data) {
+export function mountView(view, root, data, query) {
   if (typeof view?.mount !== "function") return false;
-  view.mount(root, data);
+  view.mount(root, data, query);
   return true;
 }
 

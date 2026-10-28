@@ -147,6 +147,13 @@ describe("views", () => {
     expect(h).toContain("waits on fac-4");
   });
 
+  test("the view renders with the route query it is given", async () => {
+    const rows = await getJson("/api/issues?repo=fac");
+    const h = v.view.render(rows, {}, new URLSearchParams("status=done"));
+    expect(h).not.toContain("first goal</span>");
+    expect(h).toContain("fac-2");
+  });
+
   test("the list groups by repo and filters by title", async () => {
     const rows = await getJson("/api/issues");
     const h = v.renderIssues(rows, {});

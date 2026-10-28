@@ -59,6 +59,13 @@ test("mountView calls mount only when the view has one", () => {
   expect(mountView({}, "root", 1)).toBe(false);
 });
 
+test("mountView passes the route query as the third argument", () => {
+  const calls: unknown[][] = [];
+  const q = new URLSearchParams("a=1");
+  mountView({ mount: (...a: unknown[]) => calls.push(a) }, "root", 1, q);
+  expect(calls).toEqual([["root", 1, q]]);
+});
+
 test("chart on() attaches a handler that survives a re-theme", () => {
   const g = globalThis as any;
   const made: any[] = [];

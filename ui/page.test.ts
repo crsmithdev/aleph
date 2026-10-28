@@ -66,7 +66,7 @@ test("index.html loads Web Awesome and ECharts at pinned versions", () => {
 
 test("the shell calls a view's mount after render, through mountView", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
-  expect(html).toMatch(/view\.render\([^]*mountView\(view, \$\("view"\), data\)/);
+  expect(html).toMatch(/view\.render\([^]*mountView\(view, \$\("view"\), data, query\)/);
 });
 
 test("route writes the loading line to the view before the first load", () => {

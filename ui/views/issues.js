@@ -9,15 +9,12 @@ export const view = {
   group: "factory",
   order: 2,
   api: "/api/issues",
-  render: (rows) => renderIssues(rows, hashOptions()),
-  mount: (root) => mount(root),
+  render: (rows, _params, query) => renderIssues(rows, hashOptions(query)),
+  mount: (root, _data, query) => mount(root, query),
 };
 
 /** The filters, from the route's query: ?status=open&label=x&q=text&lens=factory. */
-export function hashOptions() {
-  if (typeof location === "undefined") return {};
-  const h = location.hash.replace(/^#/, "");
-  const q = new URLSearchParams(h.includes("?") ? h.slice(h.indexOf("?") + 1) : "");
+export function hashOptions(q = new URLSearchParams()) {
   return { status: q.get("status") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", lens: q.get("lens") === "factory", project: q.get("project") ?? "" };
 }
 
@@ -92,7 +89,7 @@ export function projectOptions(keys, project) {
 }
 
 /** Fills the form's Project select from the registry's keys. */
-export async function mount(root) {
+export async function mount(root, query) {
   const select = root.querySelector?.('select[name="repo"]');
   if (!select) return;
   try {
@@ -100,7 +97,7 @@ export async function mount(root) {
     if (!res.ok) return;
     const keys = await res.json();
     const cur = select.value;
-    select.innerHTML = projectOptions(keys, keys.includes(cur) ? cur : hashOptions().project);
+    select.innerHTML = projectOptions(keys, keys.includes(cur) ? cur : hashOptions(query).project);
   } catch {}
 }
 
