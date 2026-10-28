@@ -13,7 +13,7 @@ is all the worker gets, so it must say what done is and how to check it.
 
 ## 1. Read before you ask
 
-Find the repo (default: the current one, if it is in `~/.aleph/repos.json`)
+Find the repo (default: the current one, if the factory tracks it)
 and read what the goal touches: the files, `git log` on them, and the open
 issues (`aleph issue list <repo>`). If the goal is an existing issue, read it
 with `aleph issue show <repo> <n>`: the run edits that issue, not a new one.
@@ -31,8 +31,11 @@ issue; take the rest from the code.
 - **Goal**: the end state, as Chris would check it.
 - **Edit surface**: the files or folders the run may change.
 - **Oracle**: the check that proves it, which the worker cannot edit: a new
-  test that asserts the end state, a command and its output, or a value
-  with its source URL. "The tests pass" alone is not an oracle.
+  test that asserts the end state, a command whose output proves it, or a
+  value with its source URL. The factory runs the repo's checks from
+  `~/.aleph/repos.json` after every run, so an oracle names only real
+  commands, for example `bun test <file>`, never a command that does not
+  exist, such as `aleph check`. "The tests pass" alone is not an oracle.
 - **Time box**: default 40 minutes and one run.
 
 If Chris answers "use your defaults", take every recommended answer. Write
