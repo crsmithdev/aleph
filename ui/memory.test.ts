@@ -113,7 +113,10 @@ test("vault misses runs once within ALEPH_UI_CACHE_TTL, and the answer says when
     expect(b.cachedAt).toBe(a.cachedAt);
     await Bun.sleep(400);
     await at("/api/memory");
-    expect(readFileSync(log, "utf8").trim().split("\n")).toHaveLength(2);
+    // The stale answer comes back at once; the reload runs in the background.
+    const lines = () => readFileSync(log, "utf8").trim().split("\n").length;
+    for (let i = 0; i < 100 && lines() < 2; i++) await Bun.sleep(20);
+    expect(lines()).toBe(2);
   } finally {
     process.env.PATH = saveEnv.PATH;
     if (saveEnv.TTL === undefined) delete process.env.ALEPH_UI_CACHE_TTL; else process.env.ALEPH_UI_CACHE_TTL = saveEnv.TTL;

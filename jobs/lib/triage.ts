@@ -20,7 +20,7 @@ const TIME_BOX_MS = () => Number(process.env.ALEPH_TRIAGE_TIMEOUT ?? 600) * 1000
 export const SKIP_LABELS = ["goal", "needs-chris", "triaged", "proposal"];
 
 export type Verdict =
-  | { verdict: "goal"; body: string }
+  | { verdict: "goal"; body: string; waitingOn?: string }
   | { verdict: "close"; reason: string }
   | { verdict: "chris"; question: string; decision?: Decision }
   | { verdict: "live"; note: string };
@@ -38,7 +38,11 @@ export function parseVerdict(output: string): Verdict | string {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no JSON";
   const field = (key: string) => text(raw[key]);
   switch (raw.verdict) {
-    case "goal": { const body = field("body"); return body ? { verdict: "goal", body } : "goal without a body"; }
+    case "goal": {
+      const body = field("body"), wait = field("waiting_on") ?? "";
+      if (!body) return "goal without a body";
+      return /^[a-z0-9-]+-\d+$/.test(wait) ? { verdict: "goal", body, waitingOn: wait } : { verdict: "goal", body };
+    }
     case "close": { const reason = field("reason"); return reason ? { verdict: "close", reason } : "close without a reason"; }
     case "chris": { const question = field("question"); if (!question) return "chris without a question"; const decision = normalizeDecision(raw); return decision ? { verdict: "chris", question: decision.question, decision } : { verdict: "chris", question }; }
     case "live": { const note = field("note"); return note ? { verdict: "live", note } : "live without a note"; }
@@ -55,7 +59,7 @@ ${item.body.trim() || "(no body)"}
 ${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}
 Reply with one JSON object and nothing else, with one of these verdicts:
 
-- {"verdict": "goal", "body": "<goal body>"}: the issue is work a factory run can do alone. "body" replaces the issue's body, in the goal format:
+- {"verdict": "goal", "body": "<goal body>", "waiting_on": "<optional <repo>-<n>>"}: the issue is work a factory run can do alone. "body" replaces the issue's body, in the goal format:
   ## Goal (what and why, short)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)
@@ -63,7 +67,9 @@ Reply with one JSON object and nothing else, with one of these verdicts:
 
   The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun test\`), or a new test that asserts the end state. There is no \`aleph check\` command: never name one.
 - {"verdict": "close", "reason": "<why>"}: it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
-- {"verdict": "chris", "question": "<one sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>", "waiting_on": "<optional <repo>-<n>: set only when choosing this option means waiting for that issue first>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a plan or a choice only Chris can make. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
+- {"verdict": "chris", "question": "<one plain sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>", "waiting_on": "<optional <repo>-<n>: set only when choosing this option means waiting for that issue first>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first. Write the question and the options in plain words a user of the product reads: no file paths, function names, line numbers or code. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
+
+Never ask Chris about how to build it: code structure, which module or helper, naming, test shape, whether to wait for another open issue, or whether a refactor is worth it. Decide those yourself: pick the best option and return "goal" (with "waiting_on" when the work must wait for an open issue), or "close" when it is not worth doing or is already done.
 - {"verdict": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.
 `;
 }
@@ -106,8 +112,8 @@ function apply(repo: Repo, id: number, v: Verdict): boolean {
     const labels = (item.fm.labels as string[]) ?? [];
     if (labels.some((l) => SKIP_LABELS.includes(l))) return null;
     if (v.verdict === "goal") {
-      todos.edit(item, { body: v.body, labels: [...labels, "goal"] });
-      todos.note(item, "triage: rewritten as a goal");
+      todos.edit(item, { body: v.body, labels: [...labels, "goal"], ...(v.waitingOn ? { waitingOn: v.waitingOn } : {}) });
+      todos.note(item, v.waitingOn ? `triage: rewritten as a goal; waits on ${v.waitingOn}` : "triage: rewritten as a goal");
     } else if (v.verdict === "close") {
       todos.setStatus(item, "done");
       todos.note(item, `triage: closed: ${v.reason}`);

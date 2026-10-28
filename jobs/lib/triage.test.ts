@@ -198,6 +198,8 @@ test("a blocked day cap or live cap starts no triage", async () => {
 test("parseVerdict wants the field its verdict needs", () => {
   expect(parseVerdict('{"verdict":"close","reason":" stale "}')).toEqual({ verdict: "close", reason: "stale" });
   expect(parseVerdict('{"verdict":"goal"}')).toBe("goal without a body");
+  expect(parseVerdict('{"verdict":"goal","body":"b","waiting_on":"aleph-265"}')).toEqual({ verdict: "goal", body: "b", waitingOn: "aleph-265" });
+  expect(parseVerdict('{"verdict":"goal","body":"b","waiting_on":"soon"}')).toEqual({ verdict: "goal", body: "b" });
   expect(parseVerdict("[]")).toBe("no JSON");
 });
 
@@ -238,4 +240,11 @@ describe("triage at once", () => {
     f.saveProbe({ at: new Date().toISOString(), ok: true, failed: [] });
     expect((await run()).triaged).toEqual({ close: 1 });
   });
+});
+
+test("the prompt keeps how-to-build questions away from Chris and asks him in plain words", () => {
+  const p = prompt(repo, { id: 1, title: "t", body: "", notes: [], fm: {} } as unknown as todos.Item);
+  expect(p).toContain("Never ask Chris about how to build it");
+  expect(p).toContain("no file paths, function names, line numbers or code");
+  expect(p).toContain('"waiting_on": "<optional <repo>-<n>>"');
 });
