@@ -27,7 +27,7 @@ beforeAll(async () => {
   // A view added the way a view goal adds one: two new files, no edit to server.ts.
   writeFileSync(testView, `export const view = { path: "/_test/:id", title: "Test", group: "work", order: 9, api: "/api/_test/:id", render: (d) => d.id };\n`);
   writeFileSync(testApi, `import type { Routes } from "../server.ts";\nexport const routes: Routes = { "GET /api/_test/:id": (_req, params, url) => Response.json({ id: params.id, project: url.searchParams.get("project") }) };\n`);
-  server = await serve(0);
+  server = await serve(0, { warm: false });
 });
 afterAll(() => {
   server.stop(true);

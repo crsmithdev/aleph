@@ -62,7 +62,7 @@ beforeAll(async () => {
     add(doc, "plain issue");
     return true;
   }, true);
-  server = await serve(0);
+  server = await serve(0, { warm: false });
 });
 afterAll(() => {
   server.stop(true);

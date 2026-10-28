@@ -69,7 +69,7 @@ beforeAll(async () => {
   writeList({ key: "oth" }, "seed", (doc) => { add(doc, "other thing"); return true; }, true);
   run("20261027-000001-a", { job: "fac-1", name: "fac-1", repo: "fac", state: "landed", todo: 1 });
   run("20261027-000002-a", { job: "oth-1", name: "oth-1", repo: "oth", state: "running", todo: 1 });
-  server = await serve(0);
+  server = await serve(0, { warm: false });
 });
 afterAll(() => {
   server.stop(true);

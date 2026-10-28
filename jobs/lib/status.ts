@@ -25,8 +25,8 @@ export interface Facts {
   touched: number[];
 }
 
-export function facts(repo: Repo): Facts {
-  const doc = readList(repo);
+/** `doc` is the repo's list when the caller has read it already. */
+export function facts(repo: Repo, doc: todos.Doc | null = readList(repo)): Facts {
   const store: Record<string, string> = {};
   for (const i of doc?.items ?? []) store[i.id] = todos.status(i);
   const open: Record<string, State> = {};
@@ -62,12 +62,24 @@ export function readFacts(cwd: string): Facts | null {
  * that says `Item:` does not.
  */
 export function landedCommits(cwd: string, main: string, key: string, n: number): string[] {
-  const want = `${key}-${n}`;
+  return landedIndex(cwd, main, key).get(n) ?? [];
+}
+
+/** Each of the repo's items that a commit on `main` names in an `Item:` trailer, to those commits, less the reverted ones: two git calls for every item. */
+export function landedIndex(cwd: string, main: string, key: string): Map<number, string[]> {
+  const out = new Map<number, string[]>();
   const rows = git(cwd, "log", main, "--format=%H%x09%(trailers:key=Item,valueonly,separator=%x2C)").out.split("\n").filter(Boolean);
-  const hits = rows.map((r) => r.split("\t")).filter(([, v]) => (v ?? "").split(",").map((s) => s.trim()).includes(want)).map(([h]) => h);
-  if (!hits.length) return [];
+  const hits: [string, number][] = [];
+  for (const [h, v] of rows.map((r) => r.split("\t"))) {
+    for (const s of new Set((v ?? "").split(",").map((s) => s.trim()))) {
+      const m = s.startsWith(`${key}-`) ? /^\d+$/.exec(s.slice(key.length + 1)) : null;
+      if (m) hits.push([h, Number(m[0])]);
+    }
+  }
+  if (!hits.length) return out;
   const reverted = new Set([...git(cwd, "log", main, "-E", "--grep=^This reverts commit [0-9a-f]{40}", "--format=%B").out.matchAll(/This reverts commit ([0-9a-f]{40})/g)].map((m) => m[1]));
-  return hits.filter((h) => !reverted.has(h));
+  for (const [h, n] of hits) if (!reverted.has(h)) out.set(n, [...(out.get(n) ?? []), h]);
+  return out;
 }
 
 /** The short sha of a commit on origin/<main> that names the item, or null. It reads the ref as it is: the caller fetches. */
@@ -79,14 +91,14 @@ export function itemOnMain(repo: { path: string; key: string; main: string } | u
 
 export interface ItemState { item: string; state: "dropped" | "done" | "needs-you" | "stuck" | "running" | "open"; why: string }
 
-/** One item's state, from the repo at `cwd`, its main ref and the facts. */
-export function derive(cwd: string, main: string, f: Facts, n: number): ItemState | null {
+/** One item's state, from the repo at `cwd`, its main ref and the facts. `landed` is `landedIndex` of the same, when the caller derives many items. */
+export function derive(cwd: string, main: string, f: Facts, n: number, landed?: Map<number, string[]>): ItemState | null {
   const item = `${f.repo}-${n}`;
   const store = f.store[n];
   if (store === undefined) return null;
   if (store === "dropped") return { item, state: "dropped", why: "the store says dropped" };
-  const landed = landedCommits(cwd, main, f.repo, n);
-  if (landed.length) return { item, state: "done", why: `commit ${landed[0].slice(0, 7)} on ${main.replace(/^refs\/remotes\//, "")}` };
+  const hits = landed ? landed.get(n) ?? [] : landedCommits(cwd, main, f.repo, n);
+  if (hits.length) return { item, state: "done", why: `commit ${hits[0].slice(0, 7)} on ${main.replace(/^refs\/remotes\//, "")}` };
   // An item done before the trailers, or by hand, keeps the store's done; a factory item needs its trailer.
   if (store === "done" && !f.touched.includes(n)) return { item, state: "done", why: "the store says done" };
   const run = f.open[n];

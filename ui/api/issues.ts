@@ -7,7 +7,7 @@
 import { join } from "node:path";
 import { allJobs, loadRegistry, allRuns, type Repo } from "../../jobs/lib/ledger.ts";
 import { git } from "../../jobs/lib/git.ts";
-import { derive, facts, landedCommits } from "../../jobs/lib/status.ts";
+import { derive, facts, landedCommits, landedIndex } from "../../jobs/lib/status.ts";
 import { readList, readLists } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
@@ -33,13 +33,15 @@ function row(repo: string, i: todos.Item): Row {
   };
 }
 
-function derived(repo: Repo, rows: Row[]): void {
+/** Each goal's state, from the list already read and one pass over main's trailers. */
+function derived(repo: Repo, doc: todos.Doc, rows: Row[]): void {
   const goals = rows.filter((r) => r.labels.includes("goal"));
   if (!goals.length) return;
-  let f;
-  try { f = facts(repo); } catch { return; }
+  const main = `refs/remotes/origin/${repo.main}`;
+  let f, landed;
+  try { f = facts(repo, doc); landed = landedIndex(repo.path, main, repo.key); } catch { return; }
   for (const r of goals) {
-    const s = derive(repo.path, `refs/remotes/origin/${repo.main}`, f, r.id);
+    const s = derive(repo.path, main, f, r.id, landed);
     if (s) { r.state = s.state; r.why = s.why; }
   }
 }
@@ -72,7 +74,7 @@ function list(url: URL): Response {
     const doc = docs[n];
     if (!doc) continue;
     const rows = doc.items.map((i) => row(repos[n].key, i));
-    derived(repos[n], rows);
+    derived(repos[n], doc, rows);
     const items = rows.filter((r) => (!status || r.status === status) && (!label || r.labels.includes(label)));
     if (items.length) out.push(...items);
   }

@@ -7,7 +7,7 @@
  * tree, and the store's checkout follows. No product repo's main moves when
  * an item changes, and no branch of a product repo can edit its own item.
  */
-import { followMain, git, show, treeWithFiles } from "../../jobs/lib/git.ts";
+import { followMain, git, treeWithFiles } from "../../jobs/lib/git.ts";
 import { expand } from "../../jobs/lib/ledger.ts";
 import { parseItem, renderItem, type Doc } from "./todo.ts";
 
@@ -71,12 +71,13 @@ function readFiles(dir: string, specs: string[]): string[] {
   return out;
 }
 
-/** A repo's items at `rev`, in number order, or null when the store has no list for it. */
+/** A repo's items at `rev`, in number order, or null when the store has no list for it. One ls-tree finds the config and the items. */
 function load(dir: string, rev: string, key: string): Doc | null {
-  if (show(dir, rev, configPath(key)) === null) return null;
-  const ls = git(dir, "ls-tree", "--name-only", `${rev}:${tasksDir(key)}`);
-  const names = ls.ok ? ls.out.split("\n").filter((n) => n.endsWith(".md")) : [];
-  const items = readFiles(dir, names.map((n) => `${rev}:${tasksDir(key)}/${n}`)).map(parseItem);
+  const ls = git(dir, "ls-tree", "-r", "-z", "--name-only", rev, "--", configPath(key), `${tasksDir(key)}/`);
+  const paths = ls.ok ? ls.out.split("\0") : [];
+  if (!paths.includes(configPath(key))) return null;
+  const names = paths.filter((p) => p.startsWith(`${tasksDir(key)}/`) && p.endsWith(".md") && !p.slice(tasksDir(key).length + 1).includes("/"));
+  const items = readFiles(dir, names.map((p) => `${rev}:${p}`)).map(parseItem);
   return { head: "", items: items.sort((a, b) => a.id - b.id) };
 }
 

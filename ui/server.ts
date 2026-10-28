@@ -48,7 +48,8 @@ export function views(dir = join(import.meta.dir, "views")): string[] {
   return existsSync(dir) ? readdirSync(dir).filter((f) => VIEW_FILE.test(f)).sort() : [];
 }
 
-export async function serve(port: number) {
+/** `warm: false` skips the warm-ups: a test that does not test them keeps Langfuse and the vault out of its process. */
+export async function serve(port: number, { warm = true }: { warm?: boolean } = {}) {
   const dir = import.meta.dir;
   // Every read of the work store in this process reuses a fetch for ALEPH_UI_FETCH_TTL seconds.
   cacheFetches(uiFetchTtl());
@@ -85,7 +86,7 @@ export async function serve(port: number) {
     },
   });
   // One background call per slow route, so the first visit finds its cache filled.
-  for (const { file, warm } of warmers) warm().catch((e) => console.error(`ui/api/${file}: warm-up failed: ${e instanceof Error ? e.message : e}`));
+  if (warm) for (const w of warmers) w.warm().catch((e) => console.error(`ui/api/${w.file}: warm-up failed: ${e instanceof Error ? e.message : e}`));
   return server;
 }
 
