@@ -142,12 +142,21 @@ test("warning-only problems get the warning class; a failed probe gets error", (
 test("with nothing wrong the lede is one of the fine variants, with no count", () => {
   const calm = { ...withFactory({}), needs: [], stuck: [] };
   for (let i = 0; i < 20; i++) {
-    const h = r.renderLede(calm);
+    const h = r.renderLede({ ...calm, now: new Date(Date.UTC(2026, 9, 28, 12, i * 10)).toISOString() });
     const text = h.replace(/<[^>]*>/g, "");
     expect(r.FINE).toContain(text);
     expect(h).toContain('class="say fine"');
     expect(h).not.toMatch(/\d|attention/);
   }
+});
+
+test("the fine sentence is stable within a 10-minute window and varies across windows; every variant is positive", () => {
+  const calm = { ...withFactory({}), needs: [], stuck: [] };
+  const at = (min: number) => r.renderLede({ ...calm, now: new Date(Date.UTC(2026, 9, 28, 12, 0, 0) + min * 60_000).toISOString() });
+  expect(at(1)).toBe(at(2));
+  expect(at(10)).toBe(at(11));
+  expect(new Set(Array.from({ length: 10 }, (_, i) => at(i * 10))).size).toBeGreaterThan(1);
+  for (const v of r.FINE) expect(v).not.toMatch(/\bnot\b|\bno |nothing|never/i);
 });
 
 test("a flake line alone gives a fine lede plus a muted notice", () => {

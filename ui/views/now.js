@@ -80,7 +80,7 @@ export function renderMetrics(s) {
     vcard("delivered", "Triaged", s.velocity?.triaged) + `</div>`;
 }
 
-export const FINE = ["Everything is fine.", "All is well.", "Nothing needs you.", "All quiet."];
+export const FINE = ["Everything is fine.", "All is well.", "Everything is running smoothly.", "The factory is humming along."];
 const NUMBER_WORDS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
 
 /** The status sentence: all fine, or a count of what needs attention and the items as links; notices under it, muted. */
@@ -102,7 +102,7 @@ export function renderLede(s) {
   if (f.dayCap > 0 && f.runsToday >= f.dayCap) problems.push(["warning", "The day cap is reached"]);
   const n = problems.length;
   const small = notices.length ? `<span class="notices">${notices.map((l) => `<span class="notice">${esc(l)}</span>`).join("")}</span>` : "";
-  if (!n) return `<span class="say fine">${FINE[Math.floor(Math.random() * FINE.length)]}</span>${small}`;
+  if (!n) return `<span class="say fine">${FINE[Math.floor((Date.parse(s.now) || Date.now()) / 600000) % FINE.length]}</span>${small}`;
   const tone = problems.some(([t]) => t === "error") ? "error" : "warning";
   const count = `${n < 10 ? NUMBER_WORDS[n] : n} ${n === 1 ? "thing needs" : "things need"} your attention.`;
   return `<span class="say ${tone}">${count} ${problems.map(([, h]) => h).join(". ")}.</span>${small}`;
