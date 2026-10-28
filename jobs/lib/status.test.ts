@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git } from "./git.ts";
-import { itemStates, recentRepos } from "./status.ts";
-import type { Repo } from "./ledger.ts";
+import { facts, itemStates, recentRepos } from "./status.ts";
+import { writeRun } from "./ledger.ts";
+import type { Repo, Run } from "./ledger.ts";
 import type { Doc } from "../../todo/lib/todo.ts";
 
 let base: string, remote: string, clone: string, repo: Repo;
@@ -60,6 +61,26 @@ test("a reverted commit does not make the item done", () => {
   sh(clone, "git", "revert", "--no-edit", sha);
   sh(clone, "git", "push", "-q", "origin", "HEAD:main");
   expect(itemStates(repo, { fetch: true, doc, items: [1] })[0].state).toBe("open");
+});
+
+test("a triage run does not make its item touched; an agent run does", () => {
+  const sandbox: Repo = { ...repo, sandbox: true };
+  const done: Doc = { head: "", items: [item(5, "done"), item(6, "done")] };
+  const run = (job: string, kind: Run["kind"], todo: number, state: Run["state"]) => {
+    const folder = join(base, "jobs", job);
+    mkdirSync(folder, { recursive: true });
+    writeRun(folder, { kind, job, name: job, repo: "demo", todo, state, told: true, shown: true, started: new Date().toISOString() });
+  };
+  run("20261028-000001-demo-5-triage", "triage", 5, "done");
+  run("20261028-000002-demo-6-agent", "agent", 6, "done");
+
+  const f = facts(sandbox, done);
+  expect(f.touched).toEqual([6]);
+  const states = itemStates(sandbox, { fetch: false, doc: done, items: [5, 6] });
+  expect(states.map((s) => [s.item, s.state, s.why])).toEqual([
+    ["demo-5", "done", "the store says done"],
+    ["demo-6", "open", "no commit on main names it"],
+  ]);
 });
 
 test("recentRepos keeps repos with an item updated in the last week, latest first", () => {
