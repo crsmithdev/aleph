@@ -174,3 +174,15 @@ export function chart(el, option) {
     dispose() { mq.removeEventListener("change", retheme); ro.disconnect(); c.dispose(); },
   };
 }
+
+/** UI state that survives the Now view's refresh: job name to its open diff text, and to its last action message. */
+export const openDiffs = new Map();
+export const actMessages = new Map();
+
+/** A diff as HTML: one span per line, marked by kind. An empty diff says so. */
+export const diffHtml = (t) => String(t ?? "").trim()
+  ? `<pre>${String(t).split("\n").map((l) => {
+      const c = l.startsWith("+++") || l.startsWith("---") || l.startsWith("diff ") || l.startsWith("index ") ? "meta" : l[0] === "+" ? "add" : l[0] === "-" ? "del" : l[0] === "@" ? "hunk" : "";
+      return `<span class="l d-${c}">${esc(l)}</span>`;
+    }).join("")}</pre>`
+  : `<p class="msg">No changes from the merge base.</p>`;

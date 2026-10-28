@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as r from "./views/now.js";
+// @ts-ignore
+import { actMessages, openDiffs } from "./lib.js";
 
 const job = (o: object) => ({ repo: "aleph", item: null, state: "running", started: "2026-10-27T16:00:00Z", defaults: [], followups: [], ...o });
 const state: any = {
@@ -156,4 +158,39 @@ test("trailers show in a pre.trailers block with each key in <b>, escaped, and o
   const bare = { ...state, needs: [job({ name: "aleph-27", state: "needs-you" })] };
   expect(r.renderNeeds(bare)).not.toContain("trailers");
   expect(r.renderDelivered(state)).not.toContain("trailers");
+});
+
+const two: any = { ...state, needs: [job({ name: "job-a", state: "needs-you", defaults: [] }), job({ name: "job-b", state: "needs-you", defaults: [] })] };
+const panel = (h: string, n: string) => h.match(new RegExp(`<div class="diff-panel" data-diff-for="${n}"[^>]*>`))![0];
+
+test("an open diff survives a render; other panels stay hidden", () => {
+  openDiffs.set("job-a", "@@ -1 +1 @@\n-old\n+new");
+  try {
+    const h = r.renderNeeds(two);
+    expect(panel(h, "job-a")).not.toContain("hidden");
+    expect(panel(h, "job-b")).toContain("hidden");
+    expect(h).toContain("+new");
+    expect(h).toContain("-old");
+  } finally { openDiffs.clear(); }
+});
+
+test("an action message survives a render; none when empty", () => {
+  actMessages.set("job-a", "land failed: conflict");
+  try {
+    const h = r.renderNeeds(two);
+    expect(h).toContain('<span class="act-msg" role="alert">land failed: conflict</span>');
+    expect(h.match(/act-msg/g)!.length).toBe(1);
+  } finally { actMessages.clear(); }
+  expect(r.renderNeeds(two)).not.toContain("act-msg");
+});
+
+test("message and diff text are escaped", () => {
+  actMessages.set("job-a", "<b>x</b>");
+  openDiffs.set("job-a", "+<script>alert(1)</script>");
+  try {
+    const h = r.renderNeeds(two);
+    expect(h).toContain("&lt;b&gt;x&lt;/b&gt;");
+    expect(h).toContain("&lt;script&gt;");
+    expect(h).not.toContain("<script>");
+  } finally { actMessages.clear(); openDiffs.clear(); }
 });

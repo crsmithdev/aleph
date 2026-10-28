@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { clock, cmd, esc, money, span } from "../lib.js";
+import { actMessages, clock, cmd, diffHtml, esc, money, openDiffs, span } from "../lib.js";
 
 export const view = {
   path: "/",
@@ -31,6 +31,8 @@ const section = (id, title, n, body, aside = "") =>
 const itemId = (j) => `<span class="id">${esc(j.name)}</span>`;
 const title = (j) => `<h3>${esc(j.item?.title || j.name)}</h3>`;
 /** A button the page wires to /api/<verb>/<name>; Land and Drop ask for a second click. */
+const actMsg = (name) => (actMessages.has(name) ? `<span class="act-msg" role="alert">${esc(actMessages.get(name))}</span>` : "");
+
 const act = (verb, name, label, primary = false) =>
   `<button class="act${primary ? " primary" : ""}" type="button" data-act="${verb}" data-name="${esc(name)}" data-label="${esc(label)}">${esc(label)}</button>`;
 const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
@@ -100,8 +102,8 @@ export function renderNeeds(s) {
       trailerBlock(j) +
       (j.defaults.length ? `<details open><summary>Defaults taken<span class="peek">${j.defaults.length}</span></summary><div class="body"><ul>${j.defaults.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div></details>` : "") +
       (j.followups.length ? `<details><summary>Follow-ups<span class="peek">${j.followups.length}</span></summary><div class="body"><ul>${j.followups.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div></details>` : "") +
-      `<div class="actions">${act("diff", j.name, "Diff")}${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}</div>` +
-      `<div class="diff-panel" data-diff-for="${esc(j.name)}" hidden></div>`);
+      `<div class="actions">${act("diff", j.name, "Diff")}${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}${actMsg(j.name)}</div>` +
+      `<div class="diff-panel" data-diff-for="${esc(j.name)}"${openDiffs.has(j.name) ? `>${diffHtml(openDiffs.get(j.name))}` : " hidden>"}</div>`);
   }).join("");
   return section("needs", "Needs you", s.needs.length, cards || empty("Nothing needs you."));
 }
@@ -138,7 +140,7 @@ export function renderDelivered(s) {
     return `<article class="del"><div class="ih">${itemId(j)}${title(j)}<span class="badge done">Landed</span></div>` +
       `<dl class="facts">${commit ? fact("Commit", commit) : ""}${j.ended ? fact("Landed", esc(landedAt(j.ended, s.now))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${checkFacts(j)}</dl>` +
       trailerBlock(j) +
-      (j.check === "open" ? `<div class="actions">${act("checked", j.name, "Checked", true)}</div>` : "") + `</article>`;
+      (j.check === "open" || actMessages.has(j.name) ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${actMsg(j.name)}</div>` : "") + `</article>`;
   }).join("");
   return section("del", "Delivered", s.delivered.length, rows || empty("Nothing has landed yet."), "the last 10, on origin/main");
 }

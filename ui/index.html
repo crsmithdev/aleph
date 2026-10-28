@@ -416,7 +416,7 @@ pre.trailers b { color: var(--need); }
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { empty, error, esc, failMessage, loading, mountView } from "/lib.js";
+  import { actMessages, diffHtml, empty, error, esc, failMessage, loading, mountView, openDiffs } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, render(data, params), mount?(root, data), api?, refresh? }, and
@@ -566,27 +566,23 @@ pre.trailers b { color: var(--need); }
 
   // Diff, Land, Drop and Checked: each is an `aleph` command the server runs.
   // Land and Drop ask for a second click, then the view reloads.
-  const diffHtml = (t) => t.trim()
-    ? `<pre>${t.split("\n").map((l) => {
-        const c = l.startsWith("+++") || l.startsWith("---") || l.startsWith("diff ") || l.startsWith("index ") ? "meta" : l[0] === "+" ? "add" : l[0] === "-" ? "del" : l[0] === "@" ? "hunk" : "";
-        return `<span class="l d-${c}">${esc(l)}</span>`;
-      }).join("")}</pre>`
-    : `<p class="msg">No changes from the merge base.</p>`;
   document.addEventListener("click", async (e) => {
     const b = e.target.closest && e.target.closest("button.act[data-act]");
     if (!b) return;
     const { act, name, label } = b.dataset;
-    const note = (m) => { let n = b.parentElement.querySelector(".act-msg"); if (!n) { n = document.createElement("span"); n.className = "act-msg"; n.setAttribute("role", "alert"); b.parentElement.append(n); } n.textContent = m; };
+    const note = (m) => { let n = b.parentElement.querySelector(".act-msg"); if (!n) { n = document.createElement("span"); n.className = "act-msg"; n.setAttribute("role", "alert"); b.parentElement.append(n); } n.textContent = m; if (name) actMessages.set(name, m); };
     if (act === "diff") {
       const panel = b.closest("article").querySelector(".diff-panel");
-      if (!panel.hidden) { panel.hidden = true; return; }
+      if (!panel.hidden) { panel.hidden = true; openDiffs.delete(name); return; }
       panel.hidden = false;
+      openDiffs.set(name, "");
       panel.innerHTML = `<p class="msg">Loading…</p>`;
       try {
         const res = await fetch(`/api/diff/${encodeURIComponent(name)}`, { cache: "no-store" });
         const t = await res.text();
         panel.innerHTML = res.ok ? diffHtml(t) : `<p class="msg">${esc(t)}</p>`;
-      } catch (err) { panel.innerHTML = `<p class="msg">${esc(err.message)}</p>`; }
+        if (res.ok) openDiffs.set(name, t); else openDiffs.delete(name);
+      } catch (err) { openDiffs.delete(name); panel.innerHTML = `<p class="msg">${esc(err.message)}</p>`; }
       return;
     }
     if ((act === "land" || act === "drop" || act === "pause") && !b.classList.contains("ask")) {
@@ -598,6 +594,7 @@ pre.trailers b { color: var(--need); }
     }
     clearTimeout(b._t);
     b.disabled = true;
+    if (name) actMessages.delete(name);
     try {
       const res = await fetch(name ? `/api/${act}/${encodeURIComponent(name)}` : `/api/${act}`, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(act === "judge" ? { judge: b.dataset.value } : {}) });
       const r = await res.json().catch(() => ({ code: res.status, stderr: res.statusText }));
