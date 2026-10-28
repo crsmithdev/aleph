@@ -26,8 +26,8 @@ const STYLE_CONTENTS = `<style>
 .contents td.wide a { color: inherit; text-decoration: none; }
 .contents td.wide a::after { content: ""; position: absolute; inset: 0; }
 .contents tr.crow:hover td.wide a, .contents td.wide a:focus-visible { text-decoration: underline; }
-.contents td a.idl, .contents td.act { position: relative; z-index: 1; }
-.contents td.act { width: 28px; padding: 0; text-align: right; }
+.contents td a.idl, .contents td.drop { position: relative; z-index: 1; }
+.contents td.drop { width: 28px; padding: 0; text-align: right; }
 .contents .cancel { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 4px; color: var(--muted); cursor: pointer; }
 .contents .cancel svg { width: 14px; height: 14px; pointer-events: none; }
 .contents .cancel:hover { color: var(--stuck); background: var(--rule-2); }
@@ -131,7 +131,7 @@ export function renderRow(r) {
   return `<tr class="crow" data-repo="${esc(r.repo)}" data-n="${r.n}"><td>${idLink(r.id, r.href)}</td>` +
     `<td class="wide"><a href="${esc(r.href)}">${esc(r.title)}</a></td>` +
     `<td>${badge(r.status)}</td><td>${esc(r.project)}</td><td>${chips(r.labels)}</td>` +
-    `<td class="time">${esc(when(r.at))}</td><td class="act">${x}<span class="cmsg" role="status"></span></td></tr>`;
+    `<td class="time">${esc(when(r.at))}</td><td class="drop">${x}<span class="cmsg" role="status"></span></td></tr>`;
 }
 
 /** One project row; the whole row is the link. */

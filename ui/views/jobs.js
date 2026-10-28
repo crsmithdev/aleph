@@ -52,7 +52,7 @@ const PAGE = 50;
 export function renderFilters(jobs, f = {}) {
   const repos = [...new Set([...jobs.map((j) => j.repo), f.repo].filter(Boolean))].sort();
   return filterBar([
-    { label: "Repo", name: "repo", value: f.repo || "", options: [{ value: "", label: "All" }, ...repos] },
+    { label: "Project", name: "repo", value: f.repo || "", options: [{ value: "", label: "All" }, ...repos] },
     { label: "State", name: "state", value: f.state || "", options: [{ value: "", label: "All" }, ...STATES] },
     { label: "Window", name: "days", value: f.days || "", options: [{ value: "", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }] },
   ]);

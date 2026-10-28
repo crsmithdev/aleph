@@ -207,8 +207,9 @@ section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 section { margin: 0 0 28px; }
 .sh {
   display: flex; align-items: baseline; gap: 10px;
-  margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+  margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
 }
+.sh:first-child { margin-top: 0; }
 .sh h2 { font: 600 var(--fs-lg)/1.3 var(--sans); margin: 0; letter-spacing: -0.005em; }
 .sh .count { font: 500 var(--fs-sm) var(--num); color: var(--muted); }
 .sh .aside { margin-left: auto; color: var(--muted); font-size: var(--fs-xs); }
@@ -378,8 +379,8 @@ table.tbl th .arr { display: inline-block; width: 1em; margin-left: 2px; font-si
 .tscroll { overflow-x: auto; max-width: 100%; }
 a.idl { font: 500 var(--fs-xs) var(--mono); color: var(--muted); text-decoration: none; }
 a.idl:hover, a.idl:focus-visible { color: var(--ink); text-decoration: underline; }
-.chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
-.chip { font-size: var(--fs-xs); line-height: 1.5; padding: 0 7px; border-radius: 999px; background: var(--sunk); color: var(--ink-2); white-space: nowrap; }
+.chips { display: inline; white-space: normal; }
+.chip { display: inline-block; margin: 0 4px 2px 0; font-size: var(--fs-xs); line-height: 1.5; padding: 0 7px; border-radius: 999px; background: var(--sunk); color: var(--ink-2); white-space: nowrap; }
 
 /* ---------- page header (pageHead) ---------- */
 .ph { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; margin: 0 0 16px; }
