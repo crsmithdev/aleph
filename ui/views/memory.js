@@ -180,8 +180,8 @@ export function renderMemory(m) {
     `<a class="job-card small" href="#h-${id}"><strong>${name}</strong><span class="num">${esc(n)} <span class="quiet">${esc(unit)}</span></span><span class="hint">last write ${ago(last)}</span></a>`).join("")}</nav>`;
   return `<div class="page">${pageHead("Memory", { count: m.exists ? m.total : 0 })}${renderSearch()}${cards}` +
     `<details class="fold"><summary>Health and recent writes</summary><section id="health">${renderHealth(m)}</section><section id="writes">${renderWrites(m)}</section></details>` +
-    types.map(([id, name, n, , , body]) => `<section id="${id}">${head(id, name, n)}${body}</section>`).join("") +
-    `<section id="gates">${head("gates", "Factory memory gates")}${renderGates(t.gates)}</section></div>`;
+    types.map(([id, name, n, , , body]) => `<details class="fold" id="${id}"><summary>${head(id, name, n)}</summary>${body}</details>`).join("") +
+    `<details class="fold" id="gates"><summary>${head("gates", "Factory memory gates")}</summary>${renderGates(t.gates)}</details></div>`;
 }
 
 const crumbs = (t) => (t.length ? `<ul>${t.map((n) => `<li>${link(n.title)} <span class="hint">${esc([n.kind, n.scope].filter(Boolean).join(" · "))}</span></li>`).join("")}</ul>` : `<p class="quiet">None.</p>`);
