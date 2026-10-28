@@ -196,19 +196,24 @@ describe("render", () => {
   test("the list shows jobs with filters, and an empty state", () => {
     const h = v.renderJobs([job], { repo: "fac", state: "landed" });
     expect(h).toContain('href="#/jobs/fac-9"');
-    expect(h).toContain('href="#/jobs?state=landed"');
-    expect(h).toContain('aria-current="true"');
-    const groups = h.match(/<div class="group"[^>]*>.*?<\/div>/g) ?? [];
-    expect(groups).toHaveLength(3);
-    for (const [i, k] of ["Repo", "State", "Window"].entries()) expect(groups[i]).toContain(`<span class="k">${k}</span>`);
-    expect(h).toContain(".filters .pill[aria-current]");
+    expect(h).toContain('<table class="tbl">');
+    expect(h.match(/<th[ >]/g)).toHaveLength(8);
+    expect(h).toContain('<select name="state"');
+    expect(h).toContain('<option value="landed" selected>');
+    expect(h).toContain('aria-pressed="true"');
+    expect(h).not.toContain("<style>");
+    expect(h).not.toContain("data-more");
+    const many = v.renderJobs(Array.from({ length: 51 }, (_, i) => ({ ...job, name: `fac-${i}` })), {});
+    expect(many.match(/<tr hidden>/g)).toHaveLength(1);
+    expect(many).toContain('data-more="1"');
+    expect(many).toContain("50 of 51");
     expect(v.renderJobs([], {})).toContain("No job in this window.");
   });
   test("the list reads the route query from its argument", () => {
     expect(v.view.api({}, new URLSearchParams("state=stuck&repo=fac"))).toBe("/api/jobs?repo=fac&state=stuck");
     expect(v.view.api({}, new URLSearchParams())).toBe("/api/jobs");
     const h = v.view.render([job], {}, new URLSearchParams("state=stuck"));
-    expect(h).toMatch(/href="#\/jobs\?state=stuck"[^>]*aria-current="true"|aria-current="true"[^>]*href="#\/jobs\?state=stuck"/);
+    expect(h).toContain('<option value="stuck" selected>');
   });
   test("no render or api function reads location.hash", () => {
     expect(String(v.view.api)).not.toContain("location.hash");

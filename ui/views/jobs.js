@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (one job's runs, result, checks,
 // logs, and a diff loaded on demand). Render functions take the /api/jobs
 // objects and return HTML strings, with no DOM, so tests can call them.
-import { STATES, clock, cmd, empty, esc, md, money, span, tone } from "../lib.js";
+import { STATES, badge, clock, cmd, empty, esc, filterBar, idLink, md, money, pageHead, pager, span, when } from "../lib.js";
 
 
 /** The list's data URL: the filters in the hash go to the API. */
@@ -21,6 +21,7 @@ export const view = {
   api: listUrl,
   refresh: 30,
   render: (jobs, _params, query) => renderJobs(jobs, Object.fromEntries(query ?? [])),
+  mount: (root, jobs, query) => mountJobs(root, jobs, Object.fromEntries(query ?? [])),
 };
 
 /** The Job view, routed at `#/jobs/<name>` through ui/views/job.js. */
@@ -32,22 +33,11 @@ export const detail = {
   render: (job) => renderJob(job),
 };
 
-const badge = (state) => `<span class="badge ${tone(state)}">${esc(state)}</span>`;
 const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
 const href = (path, params = {}) => {
   const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v));
   return `#${path}${q.toString() ? `?${q}` : ""}`;
 };
-
-const STYLE = `<style>
-.filters { display: flex; flex-wrap: wrap; gap: 10px 24px; margin: 0 0 20px; font: 13px var(--sans); }
-.filters .group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
-.filters .k { color: var(--muted); font-weight: 500; margin-right: 4px; }
-.filters .pill { padding: 2px 10px; border: 1px solid var(--rule); border-radius: 999px; color: var(--ink); text-decoration: none; white-space: nowrap; }
-.filters .pill:hover { border-color: var(--muted); }
-.filters .pill[aria-current] { background: var(--ink); border-color: var(--ink); color: var(--bg, #fff); }
-@media (max-width: 480px) { .filters { gap: 12px; } .filters .group { flex: 1 1 100%; } }
-</style>`;
 
 const JOB_STYLE = `<style>
 dl.facts.job-facts { margin-bottom: 20px; }
@@ -57,26 +47,45 @@ dl.facts.job-facts { margin-bottom: 20px; }
 .runs .reason { white-space: normal; flex-basis: 100%; }
 </style>`;
 
+const PAGE = 50;
+
 export function renderFilters(jobs, f = {}) {
   const repos = [...new Set([...jobs.map((j) => j.repo), f.repo].filter(Boolean))].sort();
-  const pill = (label, params, on) => `<a class="pill${on ? " on" : ""}" href="${esc(href("/jobs", params))}"${on ? ' aria-current="true"' : ""}>${esc(label)}</a>`;
-  const keep = { repo: f.repo, state: f.state, days: f.days };
-  const group = (label, chips) => `<div class="group" role="group" aria-label="${label}"><span class="k">${label}</span>${chips.join("")}</div>`;
-  return `<nav class="filters" aria-label="Filter jobs">` +
-    group("Repo", [pill("All", { ...keep, repo: "" }, !f.repo), ...repos.map((r) => pill(r, { ...keep, repo: r }, f.repo === r))]) +
-    group("State", [pill("All", { ...keep, state: "" }, !f.state), ...STATES.map((s) => pill(s, { ...keep, state: s }, f.state === s))]) +
-    group("Window", [["7 days", ""], ["30 days", "30"], ["90 days", "90"]].map(([l, d]) => pill(l, { ...keep, days: d }, (f.days || "") === d))) +
-    `</nav>`;
+  return filterBar([
+    { label: "Repo", name: "repo", value: f.repo || "", options: [{ value: "", label: "All" }, ...repos] },
+    { label: "State", name: "state", value: f.state || "", options: [{ value: "", label: "All" }, ...STATES] },
+    { label: "Window", name: "days", value: f.days || "", options: [{ value: "", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }] },
+  ]);
 }
 
 export function renderJobs(jobs, f = {}) {
-  const rows = jobs.map((j) =>
-    `<article class="del"><div class="ih"><a class="id" href="${esc(href(`/jobs/${encodeURIComponent(j.name)}`))}">${esc(j.name)}</a>` +
-    `<h3>${esc(j.item?.title || j.name)}</h3>${badge(j.state)}</div>` +
-    `<dl class="facts">${fact("Repo", esc(j.repo))}${fact("Started", esc(clock(j.started)))}` +
-    `${j.ended ? fact("Took", esc(span(j.started, j.ended))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(j.model)) : ""}</dl></article>`).join("");
-  return `${STYLE}<div class="page"><div class="sh"><h1 id="h-jobs">Jobs</h1><span class="count">${jobs.length}</span></div>` +
-    renderFilters(jobs, f) + (rows ? `<div class="list">${rows}</div>` : empty("No job in this window.", "Widen the window or clear a filter.")) + `</div>`;
+  // Columns: id, title, state, project, then started, took, cost, model. Rows past the first page are hidden until the pager shows them.
+  const rows = jobs.map((j, i) =>
+    `<tr${i >= PAGE ? " hidden" : ""}><td>${idLink(j.name, href(`/jobs/${encodeURIComponent(j.name)}`))}</td>` +
+    `<td class="wide" title="${esc(j.item?.title || j.name)}">${esc(j.item?.title || j.name)}</td><td>${badge(j.state)}</td><td>${esc(j.repo)}</td>` +
+    `<td class="time">${esc(when(j.started))}</td><td class="num">${j.ended ? esc(span(j.started, j.ended)) : ""}</td>` +
+    `<td class="num">${j.cost !== undefined ? esc(money(j.cost)) : ""}</td><td>${esc(j.model ?? "")}</td></tr>`).join("");
+  return `<div class="page">${pageHead("Jobs", { count: jobs.length })}${renderFilters(jobs, f)}` + (rows
+    ? `<div class="tscroll" style="overflow-x:auto;max-width:100%"><table class="tbl"><thead><tr><th>Job</th><th>Title</th><th>State</th><th>Project</th><th>Started</th><th class="num">Took</th><th class="num">Cost</th><th>Model</th></tr></thead><tbody>${rows}</tbody></table></div>` +
+      (jobs.length > PAGE ? pager(PAGE, jobs.length, PAGE) : "")
+    : empty("No job in this window.", "Widen the window or clear a filter.")) + `</div>`;
+}
+
+/** Wire the filter bar (a change goes to the hash, keeping the other filters) and the pager's "Show more". */
+export function mountJobs(root, _jobs, f = {}) {
+  const go = (name, value) => { location.hash = href("/jobs", { repo: f.repo, state: f.state, days: f.days, [name]: value }); };
+  root.onclick = (e) => {
+    const b = e.target.closest?.(".seg button");
+    if (b) return go(b.parentElement.dataset.name, b.dataset.value);
+    const m = e.target.closest?.("[data-more]");
+    if (!m) return;
+    const hidden = [...root.querySelectorAll("tbody tr[hidden]")];
+    const total = root.querySelectorAll("tbody tr").length;
+    hidden.slice(0, Number(m.dataset.more)).forEach((tr) => { tr.hidden = false; });
+    const shown = total - hidden.length + Math.min(hidden.length, Number(m.dataset.more));
+    m.closest(".pager").outerHTML = pager(shown, total, PAGE);
+  };
+  root.onchange = (e) => { if (e.target.matches?.(".fbar select")) go(e.target.name, e.target.value); };
 }
 
 export function renderRuns(runs) {
