@@ -110,15 +110,23 @@ function commitUrl(repo: Repo | undefined, commit: string | undefined, bases: Ma
   return base ? `${base}/commit/${commit}` : undefined;
 }
 
+/** Each commit's trailers, by repo path and hash: a commit never changes, so one git call per commit per process. */
+const trailers = new Map<string, { key: string; value: string }[]>();
+
 /** The trailers of a commit, from `git log -1 --format=%(trailers:only,unfold)`; none when git fails. */
 function landedTrailers(repo: Repo | undefined, commit: string | undefined): { key: string; value: string }[] {
   if (!repo || !commit) return [];
+  const id = `${repo.path}\0${commit}`;
+  const hit = trailers.get(id);
+  if (hit) return hit;
   const p = Bun.spawnSync(["git", "-C", repo.path, "log", "-1", "--format=%(trailers:only,unfold)", commit], { stdout: "pipe", stderr: "ignore" });
   if (p.exitCode !== 0) return [];
-  return p.stdout.toString().split("\n").flatMap((l) => {
+  const out = p.stdout.toString().split("\n").flatMap((l) => {
     const i = l.indexOf(":");
     return i > 0 ? [{ key: l.slice(0, i).trim(), value: l.slice(i + 1).trim() }] : [];
   });
+  trailers.set(id, out);
+  return out;
 }
 
 const read = (folder: string, f: string): string | undefined => {

@@ -1,8 +1,9 @@
-/** Langfuse reads for the Sessions views: one authenticated GET, cached in memory for 30 s. */
+/** Langfuse reads for the Sessions views: one authenticated GET, reloaded at most every 30 s; an older answer is served while it reloads. */
 import { langfuseConfig, type LangfuseConfig } from "../hooks/lib/env.ts";
+import { staleAsync } from "./stale.ts";
 
 export const CACHE_MS = 30_000;
-const cache = new Map<string, { at: number; value: unknown }>();
+const cache = staleAsync<unknown>();
 
 export function clearCache(): void { cache.clear(); }
 
@@ -19,16 +20,14 @@ export function config(): LangfuseConfig {
 /** GET `path?query` on the public API; failures are not cached. */
 export async function get(cfg: LangfuseConfig, path: string, query: Record<string, string>): Promise<any> {
   const url = `${cfg.baseUrl}${path}?${new URLSearchParams(query)}`;
-  const hit = cache.get(url);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.value;
-  const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
-  let res: Response;
-  try { res = await fetch(url, { headers: { authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(15000) }); }
-  catch (e) { throw new LangfuseError(`Langfuse is unreachable at ${cfg.baseUrl}: ${(e as Error).message}`); }
-  if (!res.ok) throw new LangfuseError(`Langfuse answered ${res.status} on ${path}`);
-  const value = await res.json();
-  cache.set(url, { at: Date.now(), value });
-  return value;
+  return cache.get(url, CACHE_MS, async () => {
+    const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
+    let res: Response;
+    try { res = await fetch(url, { headers: { authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(15000) }); }
+    catch (e) { throw new LangfuseError(`Langfuse is unreachable at ${cfg.baseUrl}: ${(e as Error).message}`); }
+    if (!res.ok) throw new LangfuseError(`Langfuse answered ${res.status} on ${path}`);
+    return res.json();
+  });
 }
 
 /** Every row of a paged list endpoint. */

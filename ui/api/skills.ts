@@ -1,7 +1,7 @@
 /**
  * `GET /api/skills` and `GET /api/skills/:name`: skill use from Langfuse. A use
  * is a `Skill` tool call or a turn whose prompt starts with a slash command.
- * Both take `?days=` (default 30) and `?project=<key>`; answers are cached 30 s.
+ * Both take `?days=` (default 30) and `?project=<key>`; an analysis is reloaded at most every 30 s, and an older one is served while it reloads.
  */
 import { existsSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -9,6 +9,7 @@ import { langfuseConfig } from "../../hooks/lib/env.ts";
 import type { Observation } from "../../hooks/lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
+import { staleAsync } from "../stale.ts";
 
 const DAY = 86400_000;
 const TTL = 30_000;
@@ -16,7 +17,7 @@ const TTL = 30_000;
 interface Use { skill: string; via: "tool" | "slash"; trace: string; session: string; project: string; time: string; prompt: string; start: string }
 interface TraceInfo { id: string; sessionId?: string; metadata?: Record<string, any> | null; tags?: string[] }
 
-const cache = new Map<string, { at: number; value: unknown }>();
+const cache = staleAsync<Analysis>();
 export const clearCache = () => cache.clear();
 
 const asValue = (v: unknown): any => { if (typeof v === "string") { try { return JSON.parse(v); } catch { return v; } } return v; };
@@ -165,14 +166,11 @@ async function cached(url: URL, make: (a: Analysis) => unknown | null): Promise<
   const d = Number(url.searchParams.get("days"));
   const days = d > 0 ? Math.min(Math.floor(d), 365) : 30;
   const project = url.searchParams.get("project") || null;
-  const key = `${process.env.LANGFUSE_BASE_URL}\0${url.pathname}\0${days}\0${project}`;
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL) return hit.value ? Response.json(hit.value) : new Response("no such skill", { status: 404 });
+  const key = `${process.env.LANGFUSE_BASE_URL}\0${days}\0${project}`;
   let a: Analysis;
-  try { a = await analyse(days, project); }
+  try { a = await cache.get(key, TTL, () => analyse(days, project)); }
   catch (e) { return Response.json({ error: `Langfuse failed: ${(e as Error).message}` }, { status: 502 }); }
   const value = make(a);
-  cache.set(key, { at: Date.now(), value });
   return value ? Response.json(value) : new Response("no such skill", { status: 404 });
 }
 

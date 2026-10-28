@@ -2,6 +2,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Routes } from "../server.ts";
+import { staleAsync, staleSync } from "../stale.ts";
+import { uiFetchTtl } from "../../todo/lib/store.ts";
 import { KINDS, linkTargets, links, lintVault, loadVault, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 
 const CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
@@ -51,31 +53,26 @@ function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, p
   return out;
 }
 
-/** `vault misses --days 7`'s JSON, or null when it fails (no Langfuse keys, offline). */
+/** `vault misses --days 7`'s JSON with when it was fetched, or null when it fails (no Langfuse keys, offline). */
 async function misses(): Promise<{ value: unknown; cachedAt: string } | null> {
-  const ttl = ttlMs(), now = Date.now();
-  if (ttl && missesCache && now - missesCache.at < ttl) return missesCache.hit;
-  // A request that arrives while the warm-up (or another request) runs waits for it.
-  if (inflight) return inflight;
-  inflight = (async () => {
+  return missesCache.get("misses", ttlMs(), async () => {
     const value = await runMisses();
-    if (value == null) return null;
-    const hit = { value, cachedAt: new Date(now).toISOString() };
-    if (ttl) missesCache = { at: now, hit };
-    return hit;
-  })().finally(() => { inflight = null; });
-  return inflight;
+    if (value == null) throw new Error("vault misses failed");
+    return { value, cachedAt: new Date().toISOString() };
+  }).catch(() => null);
 }
-let inflight: Promise<{ value: unknown; cachedAt: string } | null> | null = null;
 
 /** Fills the misses cache; throws when `vault misses` fails. */
 export async function warm(): Promise<void> {
   if (!(await misses())) throw new Error("memory warm-up: vault misses failed");
 }
-/** `vault misses` is slow (Langfuse), so its answer is kept `ALEPH_UI_CACHE_TTL` seconds (default 300; 0 turns it off). */
-let missesCache: { at: number; hit: { value: unknown; cachedAt: string } } | null = null;
+/** `vault misses` is slow (Langfuse), so its answer is kept `ALEPH_UI_CACHE_TTL` seconds (default 300; 0 turns it off); an older one is served while it reloads. */
+const missesCache = staleAsync<{ value: unknown; cachedAt: string }>();
 const ttlMs = () => { const n = Number(process.env.ALEPH_UI_CACHE_TTL ?? 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
-export const clearCache = () => { missesCache = null; };
+/** The vault's notes, reloaded at most every ALEPH_UI_FETCH_TTL seconds: a load stats every file, which is slow on /mnt/c. */
+const notes = staleSync<Note[]>();
+export const vaultNotes = (root: string): Note[] => notes.get(root, uiFetchTtl() * 1000, () => loadVault(root));
+export const clearCache = () => { missesCache.clear(); notes.clear(); };
 async function runMisses(): Promise<unknown | null> {
   try {
     const p = Bun.spawn(["bun", CLI, "misses", "--days", "7"], { env: process.env, stdout: "pipe", stderr: "ignore", timeout: 15_000 });
@@ -89,7 +86,7 @@ async function overview(url: URL): Promise<Response> {
   const slow = misses();
   const project = url.searchParams.get("project") || null;
   const root = vaultDir();
-  const all = existsSync(join(root, "Home.md")) ? loadVault(root) : [];
+  const all = existsSync(join(root, "Home.md")) ? vaultNotes(root) : [];
   const keep = inScope(project);
   const wiki = wikiNotes(all).filter(keep);
   const names = new Set(wiki.map((n) => n.title));
@@ -129,7 +126,7 @@ function note(url: URL): Response {
   const title = (url.searchParams.get("title") ?? "").trim();
   const project = url.searchParams.get("project") || null;
   const root = vaultDir();
-  const all = existsSync(join(root, "Home.md")) ? loadVault(root) : [];
+  const all = existsSync(join(root, "Home.md")) ? vaultNotes(root) : [];
   const targets = linkTargets(all);
   const hit = title ? targets.get(title.toLowerCase()) : undefined;
   // Under a project filter, a note outside the project does not exist.

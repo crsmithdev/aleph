@@ -6,11 +6,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { factoryDir } from "../../jobs/lib/factory.ts";
-import { git, show } from "../../jobs/lib/git.ts";
+import { git } from "../../jobs/lib/git.ts";
 import { allJobs, loadRegistry, type Entry, type Repo } from "../../jobs/lib/ledger.ts";
-import { storeDir } from "../../todo/lib/store.ts";
-import { parseItem, status, type Item } from "../../todo/lib/todo.ts";
-import { loadVault, vaultDir, type Note } from "../../vault/lib/vault.ts";
+import { readFetched } from "../../todo/lib/store.ts";
+import { status, type Item } from "../../todo/lib/todo.ts";
+import { vaultDir, type Note } from "../../vault/lib/vault.ts";
+import { vaultNotes } from "./memory.ts";
 import type { Routes } from "../server.ts";
 import { githubBase } from "../state.ts";
 
@@ -36,12 +37,7 @@ const labels = (i: Item): string[] => (Array.isArray(i.fm.labels) ? (i.fm.labels
 
 /** The repo's open issues on the work store's last-fetched origin/main; no fetch. */
 function openIssues(key: string): Item[] {
-  const dir = storeDir(), rev = "origin/main", tasks = `${key}/backlog/tasks`;
-  const ls = git(dir, "ls-tree", "--name-only", `${rev}:${tasks}`);
-  if (!ls.ok) return [];
-  const names = ls.out.split("\n").filter((n) => n.endsWith(".md"));
-  const items = names.map((n) => show(dir, rev, `${tasks}/${n}`)).filter((t): t is string => t !== null).map(parseItem);
-  return items.filter((i) => status(i) === "open").sort((a, b) => a.id - b.id);
+  return (readFetched({ key })?.items ?? []).filter((i) => status(i) === "open");
 }
 
 function baselineOf(repo: Repo): Card["baseline"] {
@@ -53,7 +49,7 @@ function baselineOf(repo: Repo): Card["baseline"] {
 }
 
 /** The loaders a request reads once; a test swaps them to count reads. */
-export const loaders = { vault: () => loadVault(vaultDir()), jobs: allJobs };
+export const loaders = { vault: () => vaultNotes(vaultDir()), jobs: allJobs };
 
 const scoped = (repo: Repo, notes: Note[]) => notes.filter((n) => !n.archived && [n.fm.scope ?? []].flat().includes(repo.key));
 

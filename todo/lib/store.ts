@@ -45,10 +45,19 @@ let reuse = 0;
 /** Reuse a fetch of the store for `seconds` in this process. Only the UI server turns it on; the CLI always fetches. */
 export function cacheFetches(seconds: number): void { reuse = seconds; }
 
-/** Fetch origin/main, unless this process fetched the store less than `reuse` seconds ago. */
+/**
+ * Fetch origin/main, unless this process fetched the store less than `reuse` seconds ago.
+ * With `reuse` on, only the first fetch waits: a later one runs in the background and
+ * this read uses the refs of the last fetch, so no UI request waits on the network.
+ */
 function fetch(dir: string): void {
   const last = fetchedAt.get(dir);
   if (reuse > 0 && last !== undefined && Date.now() - last < reuse * 1000) return;
+  if (reuse > 0 && last !== undefined) {
+    fetchedAt.set(dir, Date.now());
+    Bun.spawn(["git", "fetch", "-q", "origin", MAIN], { cwd: dir, env: process.env, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+    return;
+  }
   // Every aleph process reads the store, so two fetches at once race on the ref's lock: fetchOrigin retries that.
   const r = fetchOrigin(dir, MAIN);
   if (!r.ok) throw new Error(`work store fetch failed: ${r.out}`);
@@ -87,6 +96,11 @@ export function readList(repo: Place): Doc | null {
   const dir = storeDir();
   fetch(dir);
   return load(dir, `origin/${MAIN}`, repo.key);
+}
+
+/** The repo's list on the store's origin/main as last fetched, with no fetch; null when the store has none. */
+export function readFetched(repo: Place): Doc | null {
+  return load(storeDir(), `origin/${MAIN}`, repo.key);
 }
 
 /** Each repo's list on the store's origin/main, after one fetch; null when the store has none. */

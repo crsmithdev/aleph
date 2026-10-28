@@ -70,7 +70,7 @@ describe("activity", () => {
     expect(o.tools.map((t) => t.name)).toEqual(["Edit"]);
   });
 
-  test("a second request within ALEPH_UI_CACHE_TTL does not reach Langfuse; after it, one does", async () => {
+  test("a second request within ALEPH_UI_CACHE_TTL does not reach Langfuse; after it, the old answer comes back at once and one reload runs", async () => {
     const saveTtl = process.env.ALEPH_UI_CACHE_TTL;
     process.env.ALEPH_UI_CACHE_TTL = "0.3";
     clearCache();
@@ -83,8 +83,12 @@ describe("activity", () => {
       expect(b.tools).toEqual(a.tools);
       await Bun.sleep(400);
       const c = await activity(7, null, now);
+      expect(c.cachedAt).toBe(a.cachedAt);
+      await activity(7, null, now);
+      await Bun.sleep(50);
       expect(obsHits).toBe(2);
-      expect(c.cachedAt).not.toBe(a.cachedAt);
+      const d = await activity(7, null, now);
+      expect(d.cachedAt).not.toBe(a.cachedAt);
       await activity(7, "fac", now);
       expect(obsHits).toBe(3);
     } finally {

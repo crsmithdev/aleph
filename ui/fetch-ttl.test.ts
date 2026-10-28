@@ -44,7 +44,7 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-test("the UI fetches the work store at most once per 30 s, across reads and requests", async () => {
+test("the UI fetches the work store at most once per 30 s, across reads and requests, and only the first fetch waits", async () => {
   const t0 = Date.now() + 1_000_000;
   const now = spyOn(Date, "now");
   now.mockReturnValue(t0);
@@ -57,8 +57,10 @@ test("the UI fetches the work store at most once per 30 s, across reads and requ
   expect(fetches()).toBe(before + 1);
   now.mockReturnValue(t0 + 31_000);
   state();
-  expect(fetches()).toBe(before + 2);
   now.mockRestore();
+  // After the first, a fetch runs in the background.
+  for (let i = 0; i < 100 && fetches() < before + 2; i++) await Bun.sleep(20);
+  expect(fetches()).toBe(before + 2);
 });
 
 test("with the cache off, as in the CLI, every read fetches", () => {

@@ -111,10 +111,16 @@ function jobEvents(project: string | null, since: number, inGit: (sha: string) =
   return out.filter((e) => Date.parse(e.at) >= since);
 }
 
-/** Per item file of the repo in the work store: the time of the commit that added it and of the last that changed it, from one `git log`. */
-function itemTimes(key: string): Map<string, { added: number; changed: number }> {
+/** Item times for the store's origin/main, kept by its commit: the history below a commit never changes. */
+let timesAt: { rev: string; times: Map<string, { added: number; changed: number }> } | null = null;
+
+/** Per item file in the work store: the time of the commit that added it and of the last that changed it, from one `git log` per new origin/main. */
+function itemTimes(): Map<string, { added: number; changed: number }> {
+  const rev = Bun.spawnSync(["git", "-C", storeDir(), "rev-parse", "origin/main"], { stdout: "pipe", stderr: "ignore" });
+  const head = rev.exitCode === 0 ? rev.stdout.toString().trim() : "";
+  if (head && timesAt?.rev === head) return timesAt.times;
   const out = new Map<string, { added: number; changed: number }>();
-  const p = Bun.spawnSync(["git", "-C", storeDir(), "log", "origin/main", "--format=%ct", "--name-only", "--", `${key}/backlog/tasks`], { stdout: "pipe", stderr: "ignore" });
+  const p = Bun.spawnSync(["git", "-C", storeDir(), "log", head || "origin/main", "--format=%ct", "--name-only"], { stdout: "pipe", stderr: "ignore" });
   if (p.exitCode !== 0) return out;
   let ct = 0;
   for (const line of p.stdout.toString().split("\n")) {
@@ -123,6 +129,7 @@ function itemTimes(key: string): Map<string, { added: number; changed: number }>
     const t = out.get(line);
     if (t) t.added = ct; else out.set(line, { added: ct, changed: ct });
   }
+  if (head) timesAt = { rev: head, times: out };
   return out;
 }
 
@@ -131,11 +138,11 @@ const lastNote = (notes: string[]): string => (notes.at(-1) ?? "").split("\n")[0
 
 function issueEvents(project: string | null, since: number): TimelineEvent[] {
   const out: TimelineEvent[] = [];
+  const times = itemTimes();
   for (const repo of Object.values(loadRegistry())) {
     if (project && repo.key !== project) continue;
     let doc = null;
     try { doc = readList({ key: repo.key }); } catch {}
-    const times = itemTimes(repo.key);
     for (const item of doc?.items ?? []) {
       const git = times.get(itemPath(repo.key, item.id));
       const labels = Array.isArray(item.fm.labels) ? item.fm.labels.map(String) : [];
