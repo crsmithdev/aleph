@@ -16,7 +16,7 @@ import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entr
 import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { alreadyMet } from "./gate.ts";
 import { detached } from "./launch.ts";
-import { PLANNED, planGoal, type Rate } from "./plan.ts";
+import { PLANNED, needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import type { Tier } from "./route.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
@@ -215,9 +215,10 @@ export interface Rescue {
  * so two dispatches at once start a goal once. `start` dispatches the run; it
  * is `aleph job`, in-process (transitions.ts). With `rate`, a large goal's
  * first run is a planner run instead (plan.ts), and a goal labelled `planned`
- * is never started: it is closed once its children are all done.
+ * is never started: it is closed once its children are all done. `plan`
+ * starts a large goal's planner detached; the dispatch does not wait for it.
  */
-export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[]; planned?: string[] }> {
+export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[]; planned?: string[] }> {
   if (gates({ only: ["pause"] })) {
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
@@ -275,6 +276,8 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       // The item may have gained a waiting_on or a due date since it was read, while the baseline ran or an earlier goal started.
       const waitNow = notReady(item, done);
       if (waitNow) { skipped.push(`${name}: ${waitNow}`); continue; }
+      // A plan job runs detached: the goal gets no second planner and no worker while it does.
+      if (await planning(repo, item.id)) { skipped.push(`${name}: planning`); continue; }
       const gated = gates({ only: ["live", "day", "waiting"], jobs });
       if (gated) { skipped.push(`${name}: ${gated.why}`); continue; }
       const marked = streakMark(name) !== null;
@@ -293,10 +296,9 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       const spec = `# ${item.title}\n\n${item.body.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
       let tier: Tier | null | undefined;
       if (rate) {
-        const p = await planGoal(repo, item, spec, rate);
-        if ("planned" in p) { planned.push(`${name} into ${p.planned.join(",")}`); continue; }
+        const p = await needsPlan(repo, item, spec, rate);
+        if ("plan" in p) { plan(repo, item.id); planned.push(name); continue; }
         tier = p.tier;
-        if (p.why) factoryLog(`${name}: ${p.why}`);
       }
       const why = await start(repo, name, item.id, spec, tier);
       if (why) skipped.push(`${name}: ${why}`);
@@ -305,9 +307,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       release();
     }
   }
-  factoryLog(`started ${started.join(", ") || "none"}${planned.length ? `; planned ${planned.join("; ")}` : ""}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
-  // The children a planner filed start at once, as a triage's goal does, from a dispatch of their own.
-  if (planned.length) dispatchDetached();
+  factoryLog(`started ${started.join(", ") || "none"}${planned.length ? `; planning ${planned.join(", ")}` : ""}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
   return { started, skipped, ...(landed.length ? { landed } : {}), ...(planned.length ? { planned } : {}) };
 }
 
@@ -739,4 +739,25 @@ export function dispatchDetached(): void {
 export function triageDetached(repo: Repo, id: number): void {
   if (!dispatchOn() || !repo.sandbox) return;
   detached(["triage", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
+}
+
+/** Start `aleph plan <repo>-<id>` detached, for a large goal; it never fails the caller. */
+export function planDetached(repo: Repo, id: number): void {
+  if (!dispatchOn() || !repo.sandbox) return;
+  detached(["plan", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
+}
+
+/**
+ * Plan one goal at once, as `aleph plan` does, under the dispatch's gates: not paused, no hold,
+ * no failed probe, a factory repo. When it ends, the children or the fallback worker start from
+ * a dispatch of their own.
+ */
+export async function planNow(repo: Repo, id: number): Promise<{ planned: string[] } | { why: string }> {
+  const gated = gates({ only: ["pause", "hold", "probe"] });
+  if (gated) return { why: gated.why };
+  if (!repo.sandbox) return { why: `${repo.key} is not a factory repo` };
+  const r = await runPlan(repo, id);
+  factoryLog(`plan ${repo.key}-${id}: ${"planned" in r ? `into ${r.planned.join(",")}` : r.why}`);
+  dispatchDetached();
+  return r;
 }

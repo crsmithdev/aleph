@@ -8,8 +8,8 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { GOAL, NEEDS_CHRIS, hasLabel, isGoal, label, labels as labelsOf, note, writeList } from "../../todo/lib/store.ts";
-import { allRuns, jobsDir, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
+import { GOAL, NEEDS_CHRIS, readList, hasLabel, isGoal, label, labels as labelsOf, note, writeList } from "../../todo/lib/store.ts";
+import { allRuns, jobsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 import { jobsNamed } from "./job.ts";
 import type { Tier } from "./route.ts";
 
@@ -169,43 +169,78 @@ export const isChild = (item: todos.Item): boolean => /^Part of [a-z0-9-]+-\d+\.
 const badPlans = (repo: Repo, id: number) =>
   allRuns().filter((e) => e.run.kind === "plan" && e.run.repo === repo.key && e.run.todo === id && /^(malformed plan|failed):/.test(e.run.reason ?? "")).length;
 
-export type Plan = { planned: string[] } | { tier: Tier | null; why?: string };
+export type Plan = { plan: true } | { tier: Tier | null };
 
 /**
  * The decision before a goal's worker run, for a caller that holds the goal's
- * lock: a goal that has had no run, is not a planner's child and is large gets
- * planner runs until one reply passes the check, at most PLAN_TRIES. It returns
- * the children filed, or the tier for the worker run (with why it was not
- * planned when the planner failed).
+ * lock: a goal that has had no run, is not a planner's child, is not planned
+ * and is large, and has had fewer than PLAN_TRIES failed planner runs, is
+ * planned (`plan`); any other gets a worker run at the rated tier.
  */
-export async function planGoal(repo: Repo, item: todos.Item, spec: string, rate: Rate): Promise<Plan> {
-  const name = `${repo.key}-${item.id}`;
+export async function needsPlan(repo: Repo, item: todos.Item, spec: string, rate: Rate): Promise<Plan> {
   const tier = await rate(spec);
-  if (jobsNamed(name).length || isChild(item) || hasLabel(item, PLANNED) || !isLarge(tier, item.body)) return { tier };
-  // The caller holds the goal's lock, so a plan run of this goal still running was left by a process that died.
-  for (const e of allRuns()) {
-    if (e.run.kind === "plan" && e.run.repo === repo.key && e.run.todo === item.id && e.run.state === "running") {
-      updateRun(e.folder, { state: "done", phase: undefined, reason: "failed: its process ended before a reply", ended: new Date().toISOString() });
+  if (jobsNamed(`${repo.key}-${item.id}`).length || isChild(item) || hasLabel(item, PLANNED) || !isLarge(tier, item.body)) return { tier };
+  return badPlans(repo, item.id) >= PLAN_TRIES ? { tier } : { plan: true };
+}
+
+const planLock = (repo: Repo, id: number) => lock(`plan-${repo.key}-${id}`, 0);
+
+/**
+ * Whether a plan run of the goal is going. A plan process holds the goal's plan
+ * lock for the whole run, so a lock taken with no wait means no process is
+ * planning it: a plan run left `running` is then ended as failed, and the goal
+ * is planned again.
+ */
+export async function planning(repo: Repo, id: number): Promise<boolean> {
+  const release = await planLock(repo, id);
+  if (!release) return true;
+  try {
+    for (const e of allRuns()) {
+      if (e.run.kind === "plan" && e.run.repo === repo.key && e.run.todo === id && e.run.state === "running") {
+        updateRun(e.folder, { state: "done", phase: undefined, reason: "failed: its process ended before a reply", ended: new Date().toISOString() });
+      }
     }
+    return false;
+  } finally {
+    release();
   }
-  if (badPlans(repo, item.id) >= PLAN_TRIES) return { tier };
-  let why = "";
-  while (badPlans(repo, item.id) < PLAN_TRIES) {
-    const folder = makeRun(repo, item);
-    const end = (reason: string) => updateRun(folder, { state: "done", reason, phase: undefined, ended: new Date().toISOString() });
-    try {
-      const plan = parsePlan(await ask(repo, item, folder));
-      if (typeof plan === "string") { why = `malformed plan: ${plan}`; end(why); continue; }
-      const refs = fileChildren(repo, item.id, plan);
-      if (!refs) { end("the goal changed during the run"); return { tier, why: "the goal changed during the planner run" }; }
-      end("planned");
-      return { planned: refs };
-    } catch (e: any) {
-      why = `failed: ${e?.message ?? e}`;
-      end(why);
+}
+
+export type Planned = { planned: string[] } | { why: string };
+
+/**
+ * Plan one goal now, as `aleph plan` does: planner runs until one reply passes
+ * the check, at most PLAN_TRIES. It returns the children filed, or why it filed
+ * none (then the goal runs as one worker run).
+ */
+export async function runPlan(repo: Repo, id: number): Promise<Planned> {
+  const release = await planLock(repo, id);
+  if (!release) return { why: "another plan run holds the goal" };
+  try {
+    const item = todos.find(readList(repo)!, id);
+    if (!item || !isGoal(item) || todos.status(item) !== "open") return { why: "not an open goal" };
+    if (hasLabel(item, PLANNED)) return { why: "already planned" };
+    if (badPlans(repo, id) >= PLAN_TRIES) return { why: `${PLAN_TRIES} plan runs failed already` };
+    let why = "";
+    while (badPlans(repo, id) < PLAN_TRIES) {
+      const folder = makeRun(repo, item);
+      const end = (reason: string) => updateRun(folder, { state: "done", reason, phase: undefined, ended: new Date().toISOString() });
+      try {
+        const plan = parsePlan(await ask(repo, item, folder));
+        if (typeof plan === "string") { why = `malformed plan: ${plan}`; end(why); continue; }
+        const refs = fileChildren(repo, id, plan);
+        if (!refs) { end("the goal changed during the run"); return { why: "the goal changed during the planner run" }; }
+        end("planned");
+        return { planned: refs };
+      } catch (e: any) {
+        why = `failed: ${e?.message ?? e}`;
+        end(why);
+      }
     }
+    const text = `planner: no plan passed the check in ${PLAN_TRIES} runs (last: ${why}); the goal runs as one worker run`;
+    const bad = note(repo, id, text);
+    return { why: bad ? `${text}; no issue note: ${bad}` : text };
+  } finally {
+    release();
   }
-  const text = `planner: no plan passed the check in ${PLAN_TRIES} runs (last: ${why}); the goal runs as one worker run`;
-  const bad = note(repo, item.id, text);
-  return { tier, why: bad ? `${text}; no issue note: ${bad}` : text };
 }

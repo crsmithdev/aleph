@@ -16,7 +16,7 @@ import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import * as issues from "../todo/lib/issues.ts";
-import { behind, dispatchDetached, factoryDir, factoryLog, health, hold, paused, probeDue, report, setPaused, triageDetached, triageNow, triageStep } from "./lib/factory.ts";
+import { behind, dispatchDetached, factoryDir, factoryLog, health, hold, paused, planNow, probeDue, report, setPaused, triageDetached, triageNow, triageStep } from "./lib/factory.ts";
 import { checkName, checked, drop, land, recheck, refuse, Refusal, repoOf, runDispatch, startJob, startPlain, type Start } from "./lib/transitions.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
@@ -302,6 +302,13 @@ async function triageCmd(): Promise<void> {
   out(await triageNow(repo, ref.id));
 }
 
+/** `aleph plan <repo>-<n>`: plan one goal now, under the dispatch's gates. */
+async function planCmd(): Promise<void> {
+  const ref = todos.parseRef(rest[0] ?? "") ?? refuse("usage: aleph plan <repo>-<n>");
+  const repo = loadRegistry()[ref.repo] ?? refuse(`no repo ${ref.repo}`);
+  out(await planNow(repo, ref.id));
+}
+
 /** `aleph dispatch`: start every ready goal up to the live cap. A run's end and `aleph issue` call it. */
 async function dispatchCmd(): Promise<void> {
   out(await runDispatch());
@@ -409,6 +416,7 @@ try {
     case "tick": await tickCmd(); break;
     case "dispatch": await dispatchCmd(); break;
     case "triage": await triageCmd(); break;
+    case "plan": await planCmd(); break;
     case "status": statusCmd(); break;
     case "report": reportCmd(); break;
     case "pause": setPaused(true); out({ paused: true }); break;
