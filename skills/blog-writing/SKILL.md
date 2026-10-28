@@ -92,13 +92,9 @@ Flag and rewrite each of these.
 - Overused vocabulary: delve, multifaceted, foster, realm, tapestry.
 - Formatting overuse: excessive bullets, emoji, bold on every other word.
 
-**Rhythm tells:**
-- Staccato fragments. Bad: "No errors. No warnings. Everything green." Good: "There were no errors, no warnings, everything looked fine."
-- Bumper-sticker aphorisms. Bad: "You can't fix what you can't see." Good: "Without visibility into the full request lifecycle, you're guessing."
-- Three-beat reveals. Bad: "Not a config issue. Not a code bug. The deploy was stale." Good: "It wasn't a config issue or a code bug. The deploy was stale."
-- Smug simplicity. Bad: [code block] "That's it. That's all you need." Good: [code block] then say what the code does, or move on.
-- Parallel ad copy. Bad: "Metrics tell you what's broken. Traces tell you why." Good: "Metrics show what's broken, but traces are where you'll actually figure out why."
-- Personality only in the bookends: a personal opening, a clinical middle, a call to action at the end. The writer's voice runs through the whole post, with asides such as "this is the part that tripped me up".
+**Rhythm tells:** `aleph:humanizer` owns staccato fragments and smug simplicity (§2), bumper-sticker aphorisms (§3), and three-beat reveals (§1, §6), with before and after examples. Two blog tells are only partly covered there, so flag them here:
+- Parallel ad copy, a contrast with no negation. Bad: "Metrics tell you what's broken. Traces tell you why." Good: "Metrics show what's broken, but traces are where you'll actually figure out why." (Related to §1.)
+- Personality only in the bookends: a personal opening, a clinical middle, a call to action at the end. The writer's voice runs through the whole post, with asides such as "this is the part that tripped me up". (Humanizer's "Voice" section covers flat register.)
 
 When a draft still reads as machine-written and you can't say why, search [`signs-of-ai-writing.md`](signs-of-ai-writing.md) (Wikipedia's field guide, about 25,000 tokens) for the pattern instead of reading it whole.
 
