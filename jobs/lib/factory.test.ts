@@ -324,6 +324,40 @@ test("no commit, the item open, first time: dropped and the goal reruns once, wi
   expect(notes(id)).toContain("made no commit");
 });
 
+test("the second no-commit run with no claim goes back to triage: the goal label is off, no needs-chris, the note quotes result.md", async () => {
+  const id = goal();
+  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
+  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(30) });
+  const out = await dispatch(f);
+  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`, `drop fac-${id}`]);
+  expect(out.held).toBeUndefined();
+  expect(labels(id)).not.toContain("goal");
+  expect(labels(id)).not.toContain("needs-chris");
+  expect(notes(id)).toContain("went back to triage");
+  expect(notes(id)).toContain("line 11 | line 12");
+  expect(notes(id)).toContain("line 30");
+  expect(notes(id)).not.toContain("line 10 |");
+});
+
+test("a repeated no-commit run on an issue already sent back to triage once gets needs-chris", async () => {
+  const id = goal();
+  const f = fakes();
+  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
+  await dispatch(f);
+  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
+  await dispatch(f);
+  expect(labels(id)).not.toContain("goal");
+  // Triage rewrote the goal; the goal label is back and the run ends with no commit again.
+  await change(id, (item) => todos.edit(item, { labels: ["goal"] }));
+  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
+  await dispatch(f);
+  expect(labels(id)).toContain("needs-chris");
+  expect(labels(id)).toContain("goal");
+});
+
 test("time box, first time: dropped and the goal reruns once, with the last 20 lines of result.md", async () => {
   const id = goal();
   mk(`fac-${id}`, "agent", "stuck", { reason: "time box" }, { "result.md": lines(25) });

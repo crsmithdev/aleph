@@ -337,7 +337,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
   const todo = issueOf(runs) ?? Number(name.match(/-(\d+)$/)?.[1]);
   const issue = Number.isInteger(todo) ? todo : undefined;
   const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${repo.key}/${name}: ${line}`); };
-  const record = (text: string, opts: { done?: boolean; label?: string; decision?: Decision } = {}) => {
+  const record = (text: string, opts: { done?: boolean; label?: string; unlabel?: string; decision?: Decision } = {}) => {
     const why = issue === undefined ? "no issue" : note(repo, issue, text, opts);
     if (why) factoryLog(`${name}: no issue note: ${why}`);
   };
@@ -361,16 +361,26 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
   const choice = (question: string, why: string[]) => normalizeDecision({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.state}`, `Reason: ${reason}`, ...why] })!;
   if (!key) return chris(`${name} is ${r.state} (${reason}); drop it, recheck it, or edit the goal?`, choice(`${name} is ${r.state} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
 
-  if (key !== "duplicate") {
-    const before = allRuns().filter((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key).length;
-    if (before) return chris(`${name} hit the same case again (${key}: ${reason}); a rerun did not clear it. Drop it, or change the goal?`, choice(`${name} hit the same case again (${key}): how should the factory go on?`, ["A rerun did not clear it"]));
-  }
   const tryDo = async (why: string | null, what: string) => {
     if (why) { rmSync(rerunFile(name), { force: true }); await chris(`${name}: ${what} failed (${why}); ${reason}. What now?`, choice(`${name}: ${what} failed: how should the factory go on?`, [`Failure: ${why}`])); return false; }
     return true;
   };
   const rerun = (note: string) => { mkdirSync(join(factoryDir(), "rerun"), { recursive: true }); writeFileSync(rerunFile(name), note + "\n"); };
   const quoted = (file: "checks.log" | "result.md") => `\`\`\`\n${tailOf(last, file, 20) || "(empty)"}\n\`\`\``;
+  if (key !== "duplicate") {
+    const before = allRuns().filter((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key).length;
+    // A no-commit run with no claim, twice: the goal is the likely fault, so the issue goes back to triage, once.
+    const sentBack = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === "triaged");
+    if (before && key === "no-commit" && !sentBack && issue !== undefined) {
+      markRescued(last, "triaged");
+      const text = `${r.kind} run ${last.id} ended with no commit again, and the worker did not say the goal is already met: dropped, and the issue went back to triage to rewrite the goal, close the issue, or ask Chris. The last 20 lines of its result.md (a note is one line, so lines are joined with " | "): ${tailOf(last, "result.md", 20).split("\n").map((l) => l.trim()).filter(Boolean).join(" | ") || "(empty)"}`;
+      if (!await tryDo(await act.drop(name, text), "drop")) return;
+      record(text, { unlabel: "goal" });
+      await say(`no commit twice; the issue went back to triage`);
+      return;
+    }
+    if (before) return chris(`${name} hit the same case again (${key}: ${reason}); a rerun did not clear it. Drop it, or change the goal?`, choice(`${name} hit the same case again (${key}): how should the factory go on?`, ["A rerun did not clear it"]));
+  }
   markRescued(last, key);
 
   if (key === "claimed") {

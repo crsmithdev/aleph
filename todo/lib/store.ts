@@ -282,13 +282,13 @@ const why = (e: any): string => e?.message ?? String(e);
  * `label` it gains that label, with `decision` it carries that decision.
  * Returns why it could not, or null.
  */
-export function note(repo: Place, id: number, text: string, opts: { done?: boolean; label?: string; decision?: Decision } = {}): string | null {
+export function note(repo: Place, id: number, text: string, opts: { done?: boolean; label?: string; unlabel?: string; decision?: Decision } = {}): string | null {
   try {
     const w = writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
       const item = todos.find(doc, id);
       if (!item) return null;
       if (opts.done) todos.setStatus(item, "done");
-      if (opts.label) label(item, [opts.label]);
+      if (opts.label || opts.unlabel) label(item, opts.label ? [opts.label] : [], opts.unlabel ? [opts.unlabel] : []);
       if (opts.decision) writeDecision(item, opts.decision);
       return todos.note(item, text);
     });
