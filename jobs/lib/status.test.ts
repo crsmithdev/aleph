@@ -83,6 +83,21 @@ test("a triage run does not make its item touched; an agent run does", () => {
   ]);
 });
 
+test("a passed agent run whose later land found the job lock busy leaves the item running, not stuck", () => {
+  const open: Doc = { head: "", items: [item(7, "open")] };
+  const job = "20261028-000003-demo-7-agent";
+  const write = (folder: string, run: Partial<Run>) => {
+    mkdirSync(join(base, "jobs", folder), { recursive: true });
+    writeRun(join(base, "jobs", folder), { kind: "agent", job, name: job, repo: "demo", todo: 7, state: "passed", told: true, shown: true, started: new Date().toISOString(), ...run } as Run);
+  };
+  write("20261028-000003-demo-7-agent", {});
+  write("20261028-000004-demo-7-land", { kind: "land", state: "failed", reason: "job lock busy" });
+
+  expect(itemStates(repo, { fetch: false, doc: open, items: [7] }).map((s) => [s.item, s.state, s.why])).toEqual([
+    ["demo-7", "running", "its job is passed"],
+  ]);
+});
+
 test("recentRepos keeps repos with an item updated in the last week, latest first", () => {
   const mk = (key: string): Repo => ({ ...repo, key });
   const at = (days: number) => ({ ...doc, items: [{ ...item(1, "open"), fm: { status: "open", updated: new Date(Date.now() - days * 86400_000).toISOString() } }] });
