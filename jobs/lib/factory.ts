@@ -244,7 +244,8 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
         continue;
       }
       const again = rerunNote(name);
-      const spec = `# ${item.title}\n\n${item.body.trim()}\n${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
+      const drops = jobs.filter((j) => j[0].run.name === name && j.at(-1)!.run.state === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
+      const spec = `# ${item.title}\n\n${item.body.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
       const why = await start(repo, name, item.id, spec);
       if (why) skipped.push(`${name}: ${why}`);
       else { started.push(name); if (again) rmSync(rerunFile(name), { force: true }); }

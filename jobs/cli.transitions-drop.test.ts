@@ -87,4 +87,18 @@ describe("every transition dispatches at once", () => {
     await aleph(["drop", `fac-${q}`], on({ ALEPH_WAITING_CAP: "1" }));
     await until(() => started().includes(`fac-${b}`));
   }, 60_000);
+
+  test("a rerun's prompt holds the reasons of the earlier drops and the issue's notes", async () => {
+    const a = track(await add("steered", open("steer"), ["--labels", "goal"]));
+    await until(() => started().includes(`fac-${a}`));
+    await aleph(["todo", "note", "fac", String(a), "mind the sliced list"]);
+    expect((await aleph(["drop", `fac-${a}`, "the card counts the sliced list"], on())).code).toBe(0);
+    await until(() => started().length === 2);
+    const prompts = () => runs(a).map((r) => join(jobsDir, r, "prompt.md")).filter(existsSync).map((f) => readFileSync(f, "utf8"));
+    await until(() => prompts().length === 2);
+    const second = prompts().at(-1)!;
+    expect(second).toContain("the card counts the sliced list");
+    expect(second).toContain("mind the sliced list");
+    expect(second.indexOf("ACTION:")).toBeLessThan(second.indexOf("the card counts the sliced list"));
+  }, 60_000);
 });
