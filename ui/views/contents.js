@@ -1,4 +1,4 @@
-// The Contents view: the state to browse, not the process: every project and every issue of every repo, in rows styled like Activity's (its CSS, header and X are imported from timeline.js),
+// The Contents view: the state to browse, not the process: every project and every issue of every repo, in rows styled like Activity's (its CSS and header are its own, and only the X icon and the cancel confirm come from timeline.js),
 // three tables and a form that files an issue. `data` is /api/contents: { issues, projects, specs }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { badge, chips, empty, esc, filterBar, idLink, labelName, md, pageHead, pager, sortHead, when } from "../lib.js";
