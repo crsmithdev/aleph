@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { chart, chartTheme, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span } from "./lib.js";
+import { chart, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span } from "./lib.js";
 
 test("esc escapes markup", () => {
   expect(esc("<script>alert('x')</script>")).toBe("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;");
@@ -38,6 +38,11 @@ test("formats and states", () => {
   expect(money(undefined)).toBe("$0.00");
   expect(span("2026-10-27T10:00:00Z", "2026-10-27T12:05:00Z")).toBe("2 h 5 min");
   expect(clock("nope")).toBe("");
+  expect(clock12("nope")).toBe("");
+  expect(clock12(new Date(2026, 9, 28, 2, 24).toISOString())).toBe("2:24 am");
+  expect(clock12(new Date(2026, 9, 28, 0, 5).toISOString())).toBe("12:05 am");
+  expect(clock12(new Date(2026, 9, 28, 12, 0).toISOString())).toBe("12:00 pm");
+  expect(clock12(new Date(2026, 9, 28, 15, 7).toISOString())).toBe("3:07 pm");
   expect(empty("Nothing here.", "Try <code>x</code>.")).toContain('<p class="hint">Try <code>x</code>.</p>');
   expect(error("<b>down</b>")).toContain("&lt;b&gt;down");
   expect(cmd("aleph land a-1", { primary: true })).toContain('data-cmd="aleph land a-1"');

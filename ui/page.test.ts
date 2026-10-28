@@ -21,7 +21,7 @@ test("the new rules sit at the top level, outside any @media block", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   const css = html.match(/<style>([\s\S]*?)<\/style>/)![1].replace(/\/\*[\s\S]*?\*\//g, "").replace(/"[^"\n]*"|'[^'\n]*'/g, "");
   let depth = 0;
-  for (const sel of [".metric.need", ".ev.one", "#offline", "main {"]) {
+  for (const sel of [".metric:hover", ".ev.one", "#offline", "main {"]) {
     const i = css.indexOf(sel === "main {" ? "\nmain {" : "\n" + sel);
     expect(i).toBeGreaterThan(-1);
     depth = 0;
@@ -51,9 +51,10 @@ test("the Memory view's classes have top-level rules, and .two stacks at 720px",
   expect(css).toMatch(/@media \(max-width: 720px\) \{\s*\.two \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
 });
 
-test("the page builds the sidebar from /api/views and keeps the project filter", () => {
+test("the page builds the sidebar from /api/views and has no project selector", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
-  for (const s of ["/api/views", "/api/projects/keys", 'aria-current="page"', "project=", '"factory", "Factory"', '"memory", "Memory"']) expect(html).toContain(s);
+  for (const s of ["/api/views", 'aria-current="page"', '"factory", "Factory"', '"memory", "Memory"']) expect(html).toContain(s);
+  for (const s of ['id="project"', 'class="proj"', "All projects", "/api/projects/keys"]) expect(html).not.toContain(s);
   expect(html).not.toContain("/render.js");
 });
 

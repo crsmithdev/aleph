@@ -37,7 +37,9 @@ export interface Job {
 }
 
 /** A new issue of a factory repo, in the shape of the Issue card. */
-export interface NewIssue { id: string; title: string; status: string; href: string; labels: string[]; notes: number; created: string; updated: string }
+export interface NewIssue { id: string; title: string; status: string; href: string; labels: string[]; notes: number; created: string; updated: string;
+  /** A needs-chris issue: what Chris is asked, from its last note. */
+  question?: string }
 
 export interface State {
   now: string;
@@ -59,6 +61,8 @@ export interface State {
   needsIssues: NewIssue[];
   /** How many such issues there are in all. */
   newIssues: number;
+  /** Every open issue in factory repos, whatever its labels: the count of the Issues metric card. */
+  openIssues: number;
   /** Triage runs: those running, then the latest finished. */
   triage: Job[];
   /** Jobs landed and issues triaged in the last 24 hours, with the 7-day daily average. */
@@ -233,13 +237,20 @@ export function state(now = new Date()): State {
 
   const fresh: NewIssue[] = [];
   const waitingOnChris: NewIssue[] = [];
+  let openIssues = 0;
   for (const repo of Object.values(registry)) {
     if (!repo.sandbox) continue;
     for (const item of list(repo.key)?.items ?? []) {
       const labels = (item.fm.labels as string[]) ?? [];
       const card = (): NewIssue => ({ id: `${repo.key}-${item.id}`, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}`, labels, notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? "") });
       if (status(item) !== "open") continue;
-      if (labels.includes("needs-chris")) waitingOnChris.push(card());
+      openIssues++;
+      if (labels.includes("needs-chris")) {
+        const c = card();
+        const q = item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
+        if (q) c.question = q;
+        waitingOnChris.push(c);
+      }
       else if (!labels.some((l) => SORTED.includes(l))) fresh.push(card());
     }
   }
@@ -254,7 +265,7 @@ export function state(now = new Date()): State {
       costToday: today.reduce((a, e) => a + (e.run.cost ?? 0), 0),
       nextTick: nextTick(), probe, health: health(now.getTime()), hold: hold(jobs)?.line ?? null,
     },
-    needs, stuck, running, landing, newIssues: fresh.length, issues: fresh.slice(0, NEW_ISSUES), needsIssues: waitingOnChris,
+    needs, stuck, running, landing, newIssues: fresh.length, openIssues, issues: fresh.slice(0, NEW_ISSUES), needsIssues: waitingOnChris,
     triage: triageRuns.sort((a, b) => b.at - a.at).slice(0, TRIAGED).map((t) => t.job),
     velocity: { landed: rate(landedAt), triaged: rate(triagedAt) },
     // Lands: land runs in progress first, then the latest landed, DELIVERED in all.

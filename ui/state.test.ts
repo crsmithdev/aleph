@@ -124,6 +124,21 @@ describe("state", () => {
     expect(s.newIssues).toBe(6);
   });
 
+  test("openIssues counts every open issue, past the 10 that issues lists and whatever the labels", () => {
+    const before = state(now);
+    writeList({ key: "fac" }, "many", (doc) => {
+      for (let i = 0; i < 12; i++) add(doc, `bulk ${i}`);
+      add(doc, "sorted", { labels: ["triaged"] });
+      return true;
+    }, true);
+    const s = state(now);
+    expect(s.openIssues).toBe(before.openIssues + 13);
+    expect(s.openIssues).toBeGreaterThan(10);
+    expect(s.issues.length).toBe(10);
+    expect(s.newIssues).toBe(before.newIssues + 12);
+    expect(s.openIssues).toBeGreaterThan(s.newIssues);
+  });
+
   test("a running job's run is its last run; started stays the first run's", () => {
     run("20261027-000010-a", { job: "fac-9", name: "fac-9", state: "done", started: ago(2) });
     run("20261027-000011-a", { kind: "land", job: "fac-9", name: "fac-9", state: "running", started: ago(1) });

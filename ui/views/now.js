@@ -1,8 +1,8 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { actMessages, clock, cmd, diffHtml, esc, money, openDiffs, span } from "../lib.js";
-import { act, actMsg, checkFacts, fact, issueCard, itemId, landCard, shell as jobCard, title, trailerLine, triageCard } from "./cards.js";
+import { actMessages, clock, clock12, cmd, diffHtml, esc, money, openDiffs, span } from "../lib.js";
+import { act, actMsg, checkFacts, fact, itemId, landCard, shell as jobCard, title, trailerLine, triageCard } from "./cards.js";
 
 export const view = {
   path: "/",
@@ -12,12 +12,11 @@ export const view = {
   api: "/api/state",
   refresh: 15,
   render: (s) =>
-    `<div class="page"><p class="lede">${renderLede(s)}</p><div class="head">${renderControls(s)}<span class="sep" aria-hidden="true">|</span><p class="asof">${renderAsOf(s)}</p></div>` +
-    renderAttention(s) + renderMetrics(s) +
-    `<div class="pipeline">` +
-    [["issues", renderIssues], ["triage", renderTriage], ["lands", renderLands], ["jobs", renderJobs]]
-      .map(([id, f]) => `<section id="${id}" aria-labelledby="h-${id}">${f(s)}</section>`).join("") +
-    `</div></div>`,
+    `<div class="page">${renderMetrics(s)}<p class="lede">${renderLede(s)}</p><div class="head"><p class="asof">${renderAsOf(s)}</p>${renderControls(s)}</div>` +
+    `<section id="issues" class="attention" aria-labelledby="h-issues">${renderIssues(s)}</section>` +
+    `<div class="cols"><section id="lands" aria-labelledby="h-lands">${renderLands(s)}</section>` +
+    `<section id="jobs" aria-labelledby="h-jobs">${renderJobs(s)}</section></div>` +
+    `<section id="triage" class="wide" aria-labelledby="h-triage">${renderTriage(s)}</section></div>`,
 };
 
 /** The count of a section: `N / cap` where a cap applies. */
@@ -46,16 +45,13 @@ const velocity = (v) => {
   return `${v?.day ?? 0} · ${avg}/day`;
 };
 
-/** The row of metric cards: a count per section (Jobs by state), each a link to it; Landed and Triaged are velocity cards. */
+/** The row of metric cards: Issues (every open issue), Lands, Running, Waiting; Landed and Triaged are velocity cards. */
 export function renderMetrics(s) {
-  const card = (href, k, n, tone) => `<a class="metric${n && tone ? ` ${tone}` : ""}" href="#${href}"><span class="k">${k}</span><span class="v">${n}</span></a>`;
+  const card = (href, k, n) => `<a class="metric" href="#${href}"><span class="k">${k}</span><span class="v">${n}</span></a>`;
   const vcard = (href, k, v) => `<a class="metric" href="#${href}"><span class="k">${k}</span><span class="v">${v?.day ?? 0}</span><span class="sub">${velocity(v)}</span></a>`;
   return `<div class="metrics">` +
-    card("issues", "Issues", (s.issues ?? []).length) +
-    card("triage", "Triage", (s.triage ?? []).length) +
+    card("issues", "Issues", s.openIssues ?? (s.issues ?? []).length) +
     card("lands", "Lands", s.delivered.length) +
-    card("attention", "Needs you", s.needs.length, "need") +
-    card("attention", "Stuck or failed", s.stuck.length, "stuck") +
     card("jobs", "Running", s.running.length) +
     card("jobs", "Waiting", s.waiting.length) +
     vcard("lands", "Landed", s.velocity?.landed) +
@@ -69,44 +65,30 @@ const NUMBER_WORDS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Sev
 export function renderLede(s) {
   const f = s.factory;
   const problems = []; // [tone, html]
-  const notices = [];
-  if (s.needs.length) problems.push(["warning", `<a href="#attention">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you</a>`]);
-  if (s.stuck.length) problems.push(["error", `<a href="#attention">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`]);
+  if (s.needs.length) problems.push(["warning", `<a href="#issues">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you</a>`]);
+  if (s.stuck.length) problems.push(["error", `<a href="#issues">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`]);
   const health = [...(f.health || [])];
   if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   for (const l of health) {
     const text = l.replace(/^health:\s*/, "");
-    if (/passed on rerun/.test(text)) notices.push(text);
-    else problems.push(["error", `<a href="#attention">${esc(text)}</a>`]);
+    if (/passed on rerun/.test(text)) continue;
+    problems.push(["error", `<a href="#issues">${esc(text)}</a>`]);
   }
-  if (f.hold) problems.push(["error", `<a href="#attention">${esc(f.hold)}</a>`]);
+  if (f.hold) problems.push(["error", `<a href="#issues">${esc(f.hold)}</a>`]);
   if (f.paused) problems.push(["warning", "The factory is paused"]);
   if (f.dayCap > 0 && f.runsToday >= f.dayCap) problems.push(["warning", "The day cap is reached"]);
   const n = problems.length;
-  const small = notices.length ? `<span class="notices">${notices.map((l) => `<span class="notice">${esc(l)}</span>`).join("")}</span>` : "";
-  if (!n) return `<span class="say fine">${FINE[Math.floor((Date.parse(s.now) || Date.now()) / 600000) % FINE.length]}</span>${small}`;
+  if (!n) return `<span class="say fine">${FINE[Math.floor((Date.parse(s.now) || Date.now()) / 600000) % FINE.length]}</span>`;
   const tone = problems.some(([t]) => t === "error") ? "error" : "warning";
   const count = `${n < 10 ? NUMBER_WORDS[n] : n} ${n === 1 ? "thing needs" : "things need"} your attention.`;
-  return `<span class="say ${tone}">${count} ${problems.map(([, h]) => h).join(". ")}.</span>${small}`;
+  return `<span class="say ${tone}">${count} ${problems.map(([, h]) => h).join(". ")}.</span>`;
 }
-
-const REVIEW2 = { land: "Review: land", back: "Review: back", chris: "Review: for you", pending: "Review running", error: "Review failed" };
-
-/** The review2 verdict and its reason, above the buttons. */
-function reviewLine(j) {
-  const r = j.review2;
-  if (!r) return "";
-  return `<p class="review2 quiet" data-verdict="${esc(r.verdict)}"><strong>${esc(REVIEW2[r.verdict] ?? r.verdict)}</strong>${r.reason ? `: ${esc(r.reason)}` : ""}</p>`;
-}
-
-/** "Agent working" when a live run exists for the job, else "No agent working". */
-const agentLine = (j) => `<p class="agent ${j.agent ? "on" : "off"}">${j.agent ? "Agent working" : "No agent working"}</p>`;
 
 const cards = (html) => `<div class="cards">${html}</div>`;
 
 /** The details of a held or stuck job, folded under its compact card. */
-function details(j) {
-  const parts = (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
+function details(j, extra = "") {
+  const parts = extra + (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
     `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(j.model)) : ""}${checkFacts(j)}</dl>` +
     (failed(j) ? `<p class="quiet q">Last check that failed: <b>${esc(failed(j).name)}</b>, ${esc(failed(j).seconds)} s</p>` : "") +
     (j.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(j.stat)}</pre></div></div>` : "") +
@@ -118,36 +100,16 @@ function details(j) {
 
 const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 
-/** A held or stuck job as a compact card: line 1 id, title, badge; line 2 the reason, the agent line, the review; its buttons; its details. */
-function attentionCard(j, held) {
-  const why = held ? j.reason || j.needs || "needs you" : j.reason || "";
-  const badge = held ? `<span class="badge need">Needs you</span>` : `<span class="badge stuck">${esc(j.state === "failed" ? "Failed" : "Stuck")}</span>`;
-  const buttons = held
-    ? `${act("diff", j.name, "Diff")}${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}`
-    : `${act("recheck", j.name, "Re-check")}${act("drop", j.name, "Drop")}`;
-  return jobCard("small", held ? "need-card" : "stuck-card",
-    `<div class="ih">${itemId(j)}${title(j)}${badge}</div>` +
-    `<div class="run-meta">${why ? `<span class="why">${esc(why)}</span> ` : ""}${agentLine(j)}${held ? reviewLine(j) : ""}</div>` +
-    `<div class="actions">${buttons}${actMsg(j.name)}</div>` + details(j) +
-    (held ? `<div class="diff-panel" data-diff-for="${esc(j.name)}"${openDiffs.has(j.name) ? `>${diffHtml(openDiffs.get(j.name))}` : " hidden>"}</div>` : ""));
-}
-
 function runningCard(s, j) {
   const run = j.run ?? { kind: "agent", started: j.started };
   const kind = run.kind === "agent" ? "worker" : run.kind;
   const over = run.kind === "agent" && Date.parse(s.now) - Date.parse(run.started) > BOX_MIN * 60_000;
   const ago = over ? `<span class="over">${esc(span(run.started, s.now))} ago, past the time box</span>` : `${esc(span(run.started, s.now) || "0 min")} ago`;
   return jobCard("small", "run-row", `<div class="ih">${itemId(j)}<span class="t">${esc(j.item?.title || j.name)}</span></div>` +
-    `<div class="run-meta"><span class="badge run">${esc(kind)}${j.phase && j.phase !== kind ? ` \u00b7 ${esc(j.phase)}` : ""}</span> <span class="num">Started ${esc(clock(run.started))}, ${ago}</span> ${agentLine(j)}</div>`);
+    `<div class="run-meta"><span class="badge run">${esc(kind)}${j.phase && j.phase !== kind ? ` \u00b7 ${esc(j.phase)}` : ""}</span> <span class="num">Started ${esc(clock(run.started))}, ${ago}</span></div>`);
 }
 
 const waitingCard = (w) => jobCard("small", "run-row", `<div class="ih"><span class="id">${esc(w.repo)}-${esc(w.id)}</span><span class="t">${esc(w.title)}</span></div><div class="run-meta">Waiting to start</div>`);
-
-/** Issues: filed recently and not yet triaged, as full Issue cards. */
-export function renderIssues(s) {
-  const rows = (s.issues ?? []).map((i) => issueCard(i, "full")).join("");
-  return section("issues", "Issues", (s.issues ?? []).length, rows ? cards(rows) : empty("No new issues."));
-}
 
 /** Triage: runs in progress first, then the latest finished, with their outcome. */
 export function renderTriage(s) {
@@ -177,28 +139,56 @@ export function renderJobs(s) {
   return section("jobs", "Jobs", total, body || empty("No job is open and no goal waits."), 0);
 }
 
-/** Lines of the factory's own trouble that are errors: health (a red main among them), the hold, a failed probe. */
+/** Lines of the factory's own trouble that are errors: health (a red main among them), the hold, a failed probe; each once. The hold is left out when its stuck run has a row of its own. */
 function errorLines(s) {
   const f = s.factory;
   const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter((l) => !/passed on rerun/.test(l));
   if (f.probe && !f.probe.ok && !(f.health || []).some((l) => /probe/.test(l))) out.push(`the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
-  if (f.hold) out.push(f.hold);
-  return out;
+  if (f.hold && !s.stuck.some((j) => f.hold.includes(j.name))) out.push(f.hold);
+  return [...new Set(out)];
 }
 
-/** The Needs you section: everything that needs Chris or is wrong, with its actions, right under the status sentence. Left out when there is none. */
-export function renderAttention(s) {
-  const errors = errorLines(s).map((l) => `<div class="card error-row"><span class="badge stuck">Error</span> <span class="why">${esc(l)}</span></div>`).join("");
-  const issues = (s.needsIssues ?? []).map((i) => issueCard(i, "compact")).join("");
-  const html = s.needs.map((j) => attentionCard(j, true)).join("") + s.stuck.map((j) => attentionCard(j, false)).join("") + issues + errors;
-  const n = s.needs.length + s.stuck.length + (s.needsIssues ?? []).length + errorLines(s).length;
-  if (!n) return "";
-  return `<section id="attention" class="attention" aria-labelledby="h-attention">${section("attention", "Needs you", n, cards(html), 0)}</section>`;
+/** Why a held run needs Chris, in words: its reason, then what the reviewer said. */
+function heldWhy(j) {
+  const r = j.review2;
+  const review = !r ? "the reviewer gave no verdict"
+    : r.verdict === "pending" ? ""
+    : r.verdict === "land" ? `the reviewer says land${r.reason ? `: ${r.reason}` : ""}`
+    : r.verdict === "back" ? `the reviewer sent it back${r.reason ? `: ${r.reason}` : ""}`
+    : r.verdict === "chris" ? `the reviewer left it to you${r.reason ? `: ${r.reason}` : ""}`
+    : r.verdict === "error" ? "the review failed"
+    : `review: ${r.verdict}`;
+  return [j.reason || (j.needs && j.needs !== "held" && j.needs !== "review" ? j.needs : ""), review].filter(Boolean).join("; ");
 }
 
-/** "09:05": the time of the state, 24-hour, no date. */
+/** One Issues row: a verb phrase saying what to do, the id and title, the buttons; `fold` sits behind the row. */
+function row(kind, verb, id, ttl, buttons, fold = "") {
+  return `<article class="issue-row ${kind}" data-kind="${kind}"><div class="row-main"><span class="verb">${esc(verb)}</span>` +
+    `${id ? ` <span class="id">${esc(id)}</span>` : ""}${ttl ? ` <span class="t">${esc(ttl)}</span>` : ""}</div>` +
+    `<div class="actions">${buttons}</div>${fold}</article>`;
+}
+
+/** The fold behind a held or stuck row: Diff (held), then the job's details. */
+const fold = (j, held) => details(j, held ? `<div class="actions">${act("diff", j.name, "Diff")}</div><div class="diff-panel" data-diff-for="${esc(j.name)}"${openDiffs.has(j.name) ? `>${diffHtml(openDiffs.get(j.name))}` : " hidden>"}</div>` : "");
+
+const heldRow = (j) => row("held", `Review, then land or drop: ${heldWhy(j)}`, j.name, j.item?.title || "", `${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}${actMsg(j.name)}`, fold(j, true));
+const stuckRow = (j) => row("stuck", `Clear: ${j.state === "failed" ? "failed" : "stuck"}${j.reason ? ` with ${j.reason}` : ""}`, j.name, j.item?.title || "", `${act("recheck", j.name, "Re-check")}${act("drop", j.name, "Drop")}${actMsg(j.name)}`, fold(j, false));
+const open = (i) => `<a class="act" href="${esc(i.href)}">Open</a>`;
+const decideRow = (i) => row("decide", `Decide: ${i.question || "the question in the issue"}`, i.id, i.title, open(i));
+const newRow = (i) => row("new", "Wait for triage", i.id, i.title, open(i));
+const errorRow = (l) => row("error", `${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`, "", "", "");
+
+/** Issues: the rows that need Chris (held, stuck or failed runs, needs-chris issues, errors), then the newly filed issues. */
+export function renderIssues(s) {
+  const errors = errorLines(s);
+  const needing = s.needs.map(heldRow).concat(s.stuck.map(stuckRow), (s.needsIssues ?? []).map(decideRow), errors.map(errorRow));
+  const rows = needing.concat((s.issues ?? []).map(newRow));
+  return section("issues", "Issues", rows.length, rows.length ? `<div class="rows">${rows.join("")}</div>` : empty("No issue is open that needs a look."), 0);
+}
+
+/** "2:24 am": the time of the state, no date. */
 export function renderAsOf(s) {
-  return esc(clock(s.now));
+  return esc(clock12(s.now));
 }
 
 /** The Pause or Resume button of the page head. */

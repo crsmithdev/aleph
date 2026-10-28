@@ -137,8 +137,6 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .metric .sub { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .agent { margin: 0; font-size: 12.5px; color: var(--muted); }
 .agent.on { color: var(--ink); font-weight: 600; }
-.metric.need .v { color: var(--need); }
-.metric.stuck .v { color: var(--stuck); }
 
 /* ---------- page ---------- */
 main { min-width: 0; }
@@ -151,21 +149,29 @@ main { min-width: 0; }
 .lede a:hover { border-bottom-color: currentColor; }
 .lede .say.error, .lede .say.error a { color: var(--stuck); }
 .lede .say.warning, .lede .say.warning a { color: var(--need); }
-.lede .notices { display: block; margin-top: 6px; font: 400 13px/1.4 var(--sans); color: var(--muted); }
-.lede .notice { display: block; }
 .attention { margin: 0 0 20px; padding: 12px 14px; border: 1px solid var(--stuck); border-radius: 8px; background: var(--surface); }
 .attention .sh { margin-bottom: 8px; }
-.attention .cards { display: grid; gap: 8px; }
-.attention .error-row { padding: 8px 12px; border: 1px solid var(--rule); border-radius: 6px; }
-.head { display: flex; align-items: center; gap: 10px; margin: 0 0 28px; }
-.head .sep { color: var(--rule); }
+.rows { display: grid; gap: 8px; }
+.issue-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+.issue-row.held, .issue-row.decide { border-color: var(--need); }
+.issue-row.stuck, .issue-row.error { border-color: var(--stuck); }
+.issue-row .row-main { flex: 1 1 360px; min-width: 0; overflow-wrap: anywhere; }
+.issue-row .verb { font-weight: 600; }
+.issue-row.held .verb, .issue-row.decide .verb { color: var(--need); }
+.issue-row.stuck .verb, .issue-row.error .verb { color: var(--stuck); }
+.issue-row .id { font: 500 12.5px var(--mono); color: var(--muted); }
+.issue-row .actions { margin-top: 0; align-items: center; }
+.issue-row details.more { flex: 1 1 100%; font-size: 12.5px; }
+a.act { text-decoration: none; display: inline-block; }
+.head { display: flex; align-items: center; gap: 12px; margin: 0 0 28px; }
 .asof { color: var(--muted); font-size: 12.5px; margin: 0; }
 
 .grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
 .rail { position: sticky; top: 16px; }
-/* Status: the pipeline, one column of sections with the same gap, each a grid of cards */
-.pipeline { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
-.pipeline > section { margin: 0; min-width: 0; }
+/* Status: Issues rows, then Lands 2/3 beside Jobs 1/3, then Triage; sections hold grids of cards */
+.cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 28px; align-items: start; margin: 0 0 28px; }
+.cols > section, section.wide { margin: 0; min-width: 0; }
+section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
 .cards > * { min-width: 0; margin: 0; }
 .grp + .grp { margin-top: 16px; }
@@ -353,6 +359,7 @@ ul.issues li .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow:
 }
 @media (max-width: 720px) {
   .metrics { grid-template-columns: 1fr 1fr; }
+  .cols { grid-template-columns: minmax(0, 1fr); }
   .page { padding: 20px 16px 48px; }
   .lede { font-size: 21px; }
   .ev { grid-template-columns: minmax(0, 1fr); }
@@ -381,12 +388,6 @@ pre.stat b { color: var(--need); }
   display: flex; flex-direction: column; gap: 14px;
 }
 .side .mark { display: block; padding: 2px 8px 0; }
-.side .proj { display: flex; flex-direction: column; gap: 4px; padding: 0 8px; font-size: 12px; color: var(--muted); }
-.side select {
-  font: 500 13px var(--sans); color: var(--ink); background: var(--sunk);
-  border: 1px solid var(--rule); border-radius: 5px; padding: 5px 6px; width: 100%;
-}
-.side select:hover { border-color: var(--ink-2); }
 .nav-group h2 { font: 600 11.5px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; padding: 0 8px; }
 .nav-group ul { list-style: none; margin: 0; padding: 0; }
 .nav-group + .nav-group { margin-top: 14px; }
@@ -410,9 +411,6 @@ pre.stat b { color: var(--need); }
     border-right: 0; border-bottom: 1px solid var(--rule); padding: 8px 16px; overflow-x: auto;
   }
   .side .mark { padding: 0; flex: none; }
-  .side .proj { order: 9; padding: 0; flex: none; }
-  .side .proj span { display: none; }
-  .side select { width: auto; }
   #nav { display: flex; gap: 2px; flex: none; }
   .nav-group { flex: none; }
   .nav-group + .nav-group { margin-top: 0; }
@@ -434,7 +432,6 @@ pre.stat b { color: var(--need); }
 <div class="shell">
   <nav class="side" aria-label="Views">
     <a class="mark" href="#/">aleph</a>
-    <label class="proj"><span>Project</span><select id="project"><option value="">All projects</option></select></label>
     <div id="nav"></div>
   </nav>
   <main>
@@ -538,10 +535,6 @@ pre.stat b { color: var(--need); }
     if (!query.has("project") && project) {
       history.replaceState(null, "", "#" + withProject(location.hash.replace(/^#/, "") || "/"));
     } else project = p;
-    if ($("project").value !== project) {
-      if (project && ![...$("project").options].some((o) => o.value === project)) $("project").add(new Option(project, project));
-      $("project").value = project;
-    }
     nav(path);
     clearInterval(timer);
     const m = match(path, query);
@@ -557,14 +550,6 @@ pre.stat b { color: var(--need); }
     load(shown, true);
     if (m.view.refresh) timer = setInterval(() => load(m, false), m.view.refresh * 1000);
   }
-
-  $("project").addEventListener("change", (e) => {
-    project = e.target.value;
-    const { path, query } = parseHash();
-    if (project) query.set("project", project); else query.delete("project");
-    const q = query.toString();
-    location.hash = path + (q ? `?${q}` : "");
-  });
 
   // In-page anchors (#needs) scroll to their element instead of routing.
   document.addEventListener("click", (e) => {
@@ -636,11 +621,7 @@ pre.stat b { color: var(--need); }
   });
 
   async function start() {
-    const [names, keys] = await Promise.all([
-      fetch("/api/views", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
-      fetch("/api/projects/keys", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
-    ]);
-    for (const k of keys) $("project").add(new Option(k, k));
+    const names = await fetch("/api/views", { cache: "no-store" }).then((r) => r.json()).catch(() => []);
     const mods = await Promise.all(names.map((n) => import(`/views/${n}`).then((m) => (typeof m.redirect === "function" && redirects.push(m.redirect), m.view), (e) => { console.error(n, e); return null; })));
     views = mods.filter((v) => v && typeof v.path === "string" && typeof v.render === "function")
       .map((v) => ({ ...v, _route: compile(v.path) }));

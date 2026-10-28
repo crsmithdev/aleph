@@ -13,6 +13,11 @@ export const clock = (iso) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? "" : `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+/** "2:24 am" in local time, or "" for a bad date. */
+export const clock12 = (iso) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : `${d.getHours() % 12 || 12}:${pad(d.getMinutes())} ${d.getHours() < 12 ? "am" : "pm"}`;
+};
 export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
 
 /** "12 min", "2 h 5 min": the span from `from` to `to` (ISO strings). */
