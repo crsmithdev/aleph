@@ -1024,16 +1024,16 @@ describe("a factory run", () => {
       `| typescript (dev) | 5.8.3   | 5.9.2  | ${latest} |`,
     ].join("\n");
     const cmd = join(base, "outdated.sh");
-    // The probe runs with the tick; a claude that answers keeps it from calling the API.
-    mkdirSync(join(base, "fakebin"), { recursive: true });
-    writeFileSync(join(base, "fakebin", "claude"), `#!/bin/bash\necho '{"is_error":false}'\n`, { mode: 0o755 });
-    const path = `${join(base, "fakebin")}:${process.env.PATH}`;
+    // The probe runs with the tick; the hook makes it pass without the sandbox.
     const give = (latest: string) => writeFileSync(cmd, `#!/bin/bash\ncat <<'EOF'\n${table(latest)}\nEOF\n`, { mode: 0o755 });
     const stale = () => rmSync(join(base, "factory", "probe.json"), { force: true });
     const proposals = async () => ((await aleph(["todo", "list", "fac", "--json"])).json as any[]).filter((r) => r.title.startsWith("Update "));
     give("5.9.2");
     stale();
-    await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, PATH: path });
+    await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "fail" });
+    expect(await proposals()).toHaveLength(0);
+    stale();
+    await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "pass" });
     const first = await proposals();
     expect(first.map((r) => r.title).sort()).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update typescript 5.8.3 to 5.9.2"]);
     for (const r of first) {
@@ -1044,11 +1044,11 @@ describe("a factory run", () => {
     expect(rep).toContain("Update left-pad 1.0.0 to 1.2.0");
     expect((await aleph(["report"])).stdout).not.toContain("Update left-pad");
     stale();
-    await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, PATH: path });
+    await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "pass" });
     expect(await proposals()).toHaveLength(2);
     give("5.9.3");
     stale();
-    await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, PATH: path });
+    await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "pass" });
     expect((await proposals()).map((r) => r.title)).toContain("Update typescript 5.8.3 to 5.9.3");
     expect(await proposals()).toHaveLength(3);
     for (const r of await proposals()) await aleph(["todo", "drop", "fac", String(r.id), "test over"]);

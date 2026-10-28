@@ -40,6 +40,14 @@ function denied(): [string, string][] {
 export interface ProbeResult extends Probe { results: { name: string; ok: boolean }[] }
 
 export async function probe(repo: Repo, log: string): Promise<ProbeResult> {
+  // Test hook: ALEPH_PROBE_FAKE=pass|fail records that result without running the sandbox.
+  const fake = process.env.ALEPH_PROBE_FAKE;
+  if (fake === "pass" || fake === "fail") {
+    const failed = fake === "pass" ? [] : ["faked"];
+    const p = { at: new Date().toISOString(), ok: !failed.length, failed };
+    saveProbe(p);
+    return { ...p, results: [] };
+  }
   const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
   const dir = makeRunFolder(`probe-${Date.now()}`);
   try {

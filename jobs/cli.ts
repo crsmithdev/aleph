@@ -529,8 +529,9 @@ function todoRecent(sub: "list" | "lint"): void {
 }
 
 /**
- * `aleph tick`, from the timer: the nightly probe and dependency sweep when due, then one run
- * for each open goal item that has no open job. A failed probe starts no run.
+ * `aleph tick`, from the timer: the nightly probe when due, and the dependency sweep only after a
+ * passing probe, then one run for each open goal item that has no open job. A failed probe starts
+ * no run and no sweep.
  */
 async function tickCmd(): Promise<void> {
   if (!paused() && probeDue()) {
@@ -539,9 +540,11 @@ async function tickCmd(): Promise<void> {
       mkdirSync(factoryDir(), { recursive: true });
       const p = await probe(repo, join(factoryDir(), "probe.log"));
       factoryLog(`probe ${p.ok ? "passed" : `failed: ${p.failed.join("; ")}`}`);
+      if (p.ok) {
+        const proposed = await sweep(Object.values(loadRegistry()).filter((r) => r.sandbox));
+        if (proposed.length) factoryLog(`proposed ${proposed.join("; ")}`);
+      }
     }
-    const proposed = await sweep(Object.values(loadRegistry()).filter((r) => r.sandbox));
-    if (proposed.length) factoryLog(`proposed ${proposed.join("; ")}`);
   }
   const p = lastProbe();
   if (!paused() && p && !p.ok) {
