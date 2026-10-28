@@ -295,6 +295,18 @@ The planner runs detached, as a triage does. When a large goal is due its plan, 
 
 A reply that fails the check, or a planner that exits non-zero, is retried once at once. After a second failure the goal starts as one worker run, as before, with a note on the issue that says why; the ledger's two failed plan runs keep it from being planned again. Plan runs count toward the day cap, and the UI shows them like triage runs ("Planning", "Split", "No plan"); a `planned` parent is not in the Queued list.
 
+### Acceptance run (28 Oct)
+
+A done goal's own Oracle runs again on origin/main (`jobs/lib/acceptance.ts`, the `acceptanceStep` of `jobs/lib/factory.ts`, at the start of each dispatch that has checks). A goal is done for it when the store says done, it carries the `goal` label, and either its land is on origin/main (an `Item:` trailer) or it is a `planned` parent closed once its last child was done. Only goals updated in the last 2 days are taken, so the first run does not accept the whole history.
+
+The commands run are those in backticks in the issue's `## Oracle` section that start with `bun test`, `bun run` or `bunx tsc`; each runs in order, in a clone of origin/main made from a bundle, after the repo's setup, under srt like the repo's checks (`ALEPH_SANDBOX_CMD` replaces srt in tests), with the check time box. An Oracle with no such command is skipped with a log line, and the goal stays done.
+
+- Pass: the note `acceptance: pass at <sha>` (the short sha of origin/main that ran).
+- First failure: the issue reopens with the note `acceptance: fail at <sha>: <command> exited <code>: <last 40 lines>` (an issue note is one line, so the lines are joined with ` ⏎ `). The next dispatch starts one more worker run; its spec carries the issue's notes, so the failing output is in the prompt. The reopened goal counts as done again only by a commit that is not at or before the origin/main commit it failed on (`afterReopen`, used by `landedIndex` in `jobs/lib/status.ts`), so the rerun can land.
+- Second failure: the issue gets the label `needs-chris` and a note that names the command that failed, stays done, and starts nothing.
+
+The result of each goal is in `<factory>/acceptance/<repo>-<n>.json` (result, sha, command, number of failures), which keeps the step from running a goal twice. `aleph report` lists each new result once (`fac-12 acceptance: pass at abc1234`), and the Status Lands card shows it as an Acceptance fact.
+
 ### As built (27 Oct)
 
 Where the code departs from the sections above:

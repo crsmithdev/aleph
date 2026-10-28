@@ -1,0 +1,165 @@
+/**
+ * The acceptance run: a done goal's own Oracle, run again on origin/<main> under srt.
+ * See "Acceptance run" in docs/specs/2026-10-26-seed-factory.md.
+ *
+ * The result of each goal is kept in <factory>/acceptance/<repo>-<n>.json. A first failure
+ * reopens the goal for one more worker run; a second labels it `needs-chris`.
+ */
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import * as todos from "../../todo/lib/todo.ts";
+import { note, writeList } from "../../todo/lib/store.ts";
+import { git } from "./git.ts";
+import { expand, type Repo } from "./ledger.ts";
+import { section } from "./plan.ts";
+import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
+
+const dir = () => join(expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory"), "acceptance");
+const file = (key: string, id: number) => join(dir(), `${key}-${id}.json`);
+
+export interface Accepted {
+  /** `pass`, `skipped` (no runnable command), or `fail`. */
+  result: "pass" | "skipped" | "fail";
+  /** The short sha of origin/<main> the Oracle ran on. */
+  sha?: string;
+  /** The command that failed. */
+  command?: string;
+  /** How many runs of the Oracle failed. */
+  fails: number;
+  /** After a failure: the origin/<main> commit the reopened goal's earlier landings are at or before. */
+  since?: string;
+  /** The report has listed this result. */
+  shown?: boolean;
+}
+
+export function readRecord(key: string, id: number): Accepted | null {
+  try { return JSON.parse(readFileSync(file(key, id), "utf8")); } catch { return null; }
+}
+
+function writeRecord(key: string, id: number, r: Accepted): void {
+  mkdirSync(dir(), { recursive: true });
+  writeFileSync(file(key, id), JSON.stringify(r, null, 2) + "\n");
+}
+
+/** The result as one line for the report and the Lands card, or null when the goal has none. */
+export function resultLine(key: string, id: number): string | null {
+  const r = readRecord(key, id);
+  if (!r) return null;
+  if (r.result === "pass") return `acceptance: pass at ${r.sha}`;
+  if (r.result === "skipped") return "acceptance: skipped, no runnable command";
+  return `acceptance: fail${r.fails >= 2 ? " twice" : ", rerun"}: ${r.command}`;
+}
+
+/** A record that ends the goal's acceptance: nothing runs again for it. */
+export const final = (r: Accepted | null): boolean => !!r && (r.result !== "fail" || r.fails >= 2);
+
+/** The commits of `hits` the goal's reopening has not already counted: those that are not at or before its `since`. */
+export function afterReopen(cwd: string, key: string, id: number, hits: string[]): string[] {
+  const since = readRecord(key, id)?.since;
+  return since ? hits.filter((h) => !git(cwd, "merge-base", "--is-ancestor", h, since).ok) : hits;
+}
+
+const RUNNABLE = /^(bun test|bun run|bunx tsc)(\s|$)/;
+
+/** The commands in backticks in the issue's `## Oracle` section that start with a command the repo's checks use. */
+export function oracleCommands(body: string): string[] {
+  return [...section(body, "Oracle").matchAll(/`([^`\n]+)`/g)].map((m) => m[1].trim()).filter((c) => RUNNABLE.test(c));
+}
+
+export interface Ran { code: number; output: string }
+/** Run one command on the commit `sha` of the repo's main. */
+export type Runner = (repo: Repo, sha: string, command: string) => Promise<Ran>;
+
+const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
+
+/** The default runner: the commit goes in as a bundle, and the repo's setup and then the command run under srt, as the checks do. */
+export const sandboxRunner: Runner = async (repo, sha, command) => {
+  const run = makeRunFolder(`accept-${repo.key}`);
+  const ref = `refs/aleph/accept/${repo.key}`;
+  try {
+    git(repo.path, "update-ref", ref, sha);
+    const b = git(repo.path, "bundle", "create", join(run, "out", "accept.bundle"), ref);
+    if (!b.ok) return { code: 1, output: `bundle failed: ${b.out}` };
+    const script = [
+      "set -e", "git init -q .", `git fetch -q ../out/accept.bundle ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
+      `{ ${repo.setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1 || { echo setup failed >> ../checklog/out.log; cat ../checklog/setup.log >> ../checklog/out.log; echo 1 > ../checklog/code; exit 0; }`,
+      `timeout -k 30 1200 bash -c ${q(command)} > ../checklog/out.log 2>&1; echo $? > ../checklog/code`,
+    ].join("\n");
+    const logs = join(run, "stdout.log");
+    const r = await sandboxed(run, script, { read: ["out"], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: logs, stderr: logs });
+    const at = (f: string) => join(run, "checklog", f);
+    if (!existsSync(at("code"))) return { code: r.code || 1, output: `the command did not start (exit ${r.code})` };
+    return { code: Number(readFileSync(at("code"), "utf8").trim()), output: existsSync(at("out.log")) ? readFileSync(at("out.log"), "utf8") : "" };
+  } finally {
+    git(repo.path, "update-ref", "-d", ref);
+    removeRunFolder(run);
+  }
+};
+
+/** The last `n` lines of `text`, on one line (an issue note is one line), each cut to 200 characters. */
+export const lastLines = (text: string, n = 40): string =>
+  text.replace(/\s+$/, "").split("\n").slice(-n).map((l) => l.slice(0, 200)).join(" ⏎ ");
+
+/** Item `id` open again, with `text` as a note. Returns why it could not, or null. */
+function reopen(repo: Repo, id: number, text: string): string | null {
+  try {
+    const w = writeList(repo, `todo: item ${id}: ${text.slice(0, 80)}`, (doc) => {
+      const item = todos.find(doc, id);
+      if (!item) return null;
+      todos.setStatus(item, "open");
+      return todos.note(item, text);
+    });
+    return w ? null : `no issue ${id}`;
+  } catch (e: any) {
+    return e?.message ?? String(e);
+  }
+}
+
+/**
+ * Run the Oracle of the done goal `item` on origin/<main>, and record what came of it.
+ * Returns a line for the log. The caller has fetched and holds the goal's lock.
+ */
+export async function accept(repo: Repo, item: todos.Item, run: Runner = sandboxRunner): Promise<string> {
+  const name = `${repo.key}-${item.id}`;
+  const prev = readRecord(repo.key, item.id);
+  const sha = git(repo.path, "rev-parse", "--short=7", `origin/${repo.main}`).out;
+  if (!sha) return `${name}: acceptance not run: no origin/${repo.main}`;
+  const full = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
+  const commands = oracleCommands(item.body);
+  if (!commands.length) {
+    writeRecord(repo.key, item.id, { result: "skipped", fails: prev?.fails ?? 0 });
+    return `${name}: acceptance skipped: the Oracle has no command that starts with bun test, bun run or bunx tsc`;
+  }
+  for (const command of commands) {
+    const r = await run(repo, full, command);
+    if (r.code === 0) continue;
+    const fails = (prev?.fails ?? 0) + 1;
+    const out = `\`${command}\` exited ${r.code}: ${lastLines(r.output)}`;
+    if (fails < 2) {
+      const bad = reopen(repo, item.id, `acceptance: fail at ${sha}: ${out}`);
+      if (bad) return `${name}: acceptance failed but the issue was not reopened: ${bad}`;
+      writeRecord(repo.key, item.id, { result: "fail", sha, command, fails, since: full });
+      return `${name}: acceptance failed at ${sha} (${command}); reopened for one more run`;
+    }
+    const bad = note(repo, item.id, `acceptance: fail again at ${sha}: ${out} | needs-chris: the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, { label: "needs-chris" });
+    writeRecord(repo.key, item.id, { result: "fail", sha, command, fails, since: full });
+    return `${name}: acceptance failed again at ${sha} (${command}); needs-chris${bad ? ` (no issue note: ${bad})` : ""}`;
+  }
+  const bad = note(repo, item.id, `acceptance: pass at ${sha}`);
+  writeRecord(repo.key, item.id, { result: "pass", sha, fails: prev?.fails ?? 0 });
+  return `${name}: acceptance passed at ${sha}${bad ? ` (no issue note: ${bad})` : ""}`;
+}
+
+/** The results the report has not listed, oldest file first; each is then marked shown. */
+export function unshown(): string[] {
+  if (!existsSync(dir())) return [];
+  const lines: string[] = [];
+  for (const f of readdirSync(dir()).filter((f) => f.endsWith(".json")).sort()) {
+    const m = /^(.+)-(\d+)\.json$/.exec(f);
+    const r = m && readRecord(m[1], Number(m[2]));
+    if (!m || !r || r.shown) continue;
+    lines.push(`${m[1]}-${m[2]} ${resultLine(m[1], Number(m[2]))}`);
+    writeRecord(m[1], Number(m[2]), { ...r, shown: true });
+  }
+  return lines;
+}

@@ -14,6 +14,7 @@ import { itemOnMain, itemStates, type ItemState } from "./status.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
+import { accept, final, readRecord, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
 import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
@@ -241,6 +242,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
     names.forEach((name, i) => { if (!whys[i]) landed.push(name); });
     if (landed.length) factoryLog(`landed ${landed.join(", ")}`);
   }
+  if (checks) await acceptanceStep();
   const started: string[] = [];
   const skipped: string[] = [];
   const planned: string[] = [];
@@ -340,6 +342,40 @@ async function closePlanned(repo: Repo, id: number, done: (ref: string) => boole
   } finally {
     release();
   }
+}
+
+/** Done goals older than this many days are not accepted: the step starts with the goals closed lately. */
+const ACCEPTANCE_DAYS = 2;
+
+/**
+ * The acceptance run: every done goal (one whose land is on origin/<main>, or a `planned` parent
+ * closed as done) whose Oracle has not been run since it was done gets it run on origin/<main>,
+ * under srt. Pass: a note; first failure: the goal reopens with the output as a note and the
+ * dispatch starts it again; second: `needs-chris`. See acceptance.ts.
+ */
+export async function acceptanceStep(run: Runner = sandboxRunner, now = todos.clock()): Promise<string[]> {
+  const lines: string[] = [];
+  const since = todos.today(new Date(now.getTime() - ACCEPTANCE_DAYS * 86_400_000));
+  for (const repo of sandboxRepos()) {
+    const list = reader().list(repo.key)?.items ?? [];
+    const due = list.filter((i) => hasLabel(i, "goal") && todos.status(i) === "done" && String(i.fm.updated ?? "") >= since && !final(readRecord(repo.key, i.id)));
+    if (!due.length) continue;
+    if (!fetchOrigin(repo.path).ok) { lines.push(`${repo.key}: acceptance not run: fetch failed`); continue; }
+    for (const listed of due) {
+      const release = await lock(`acceptance-${repo.key}-${listed.id}`, 0);
+      if (!release) continue;
+      try {
+        const item = reader().item(repo.key, listed.id);
+        if (!item || todos.status(item) !== "done" || final(readRecord(repo.key, item.id))) continue;
+        if (!hasLabel(item, PLANNED) && !itemOnMain(repo, item.id)) continue;
+        lines.push(await accept(repo, item, run));
+      } finally {
+        release();
+      }
+    }
+  }
+  for (const l of lines) factoryLog(l);
+  return lines;
 }
 
 /** Runs of one goal in a row, newest last, that may end with no commit before dispatch stops starting it. */
@@ -707,6 +743,7 @@ export function report(now = Date.now()): string {
   const lines = runLines(now);
   const due = cameDue();
   if (due.length) lines.unshift(["came due:", ...due.map((d) => `  ${d}`)].join("\n"));
+  lines.push(...unshown());
   const eps = newEpisodes();
   if (eps.length) lines.push(["episodes:", ...eps.map((t) => `  ${t}`)].join("\n"));
   const proposed = takeFresh();

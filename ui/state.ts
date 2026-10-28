@@ -3,6 +3,7 @@
  * the ledger, the factory directory and the work store. It marks no run
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
+import { resultLine } from "../jobs/lib/acceptance.ts";
 import { judgeChoice } from "../hooks/lib/jev.ts";
 import { DAY_CAP, LIVE_CAP, WAITING_CAP, health, hold, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
 import { allRuns, loadRegistry, type Repo } from "../jobs/lib/ledger.ts";
@@ -34,6 +35,8 @@ export interface Job {
   trailers?: { key: string; value: string }[];
   /** A triage run: its verdict as `goal`, `closed`, `needs-chris` or `live-check`; none while it runs or when it gave no verdict. */
   outcome?: string;
+  /** Lands: the acceptance run's result for the job's goal, as `acceptance: pass at <sha>`. */
+  acceptance?: string;
 }
 
 /** A new issue of a factory repo, in the shape of the Issue card. */
@@ -154,6 +157,8 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
     if (v.checks) job.checks = v.checks;
     if (v.hidden) job.hidden = v.hidden;
     if (v.check === "open") job.check = "open";
+    const accepted = v.state === "landed" && todo !== undefined && v.repo ? resultLine(v.repo, todo) : null;
+    if (accepted) job.acceptance = accepted;
     const trailers = v.state === "landed" ? landedTrailers(repo, v.commit)
       : v.state === "needs-you" ? [
         ...(todo !== undefined ? [{ key: "Item", value: `${v.repo}-${todo}` }] : []),

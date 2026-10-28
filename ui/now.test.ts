@@ -475,6 +475,14 @@ test("a planner run is shown like a triage: Planning while it runs, Split once i
   expect(r.renderJobs({ ...state, running: [job({ name: "plan-aleph-5", run: plan.run })] })).toContain('<span class="badge run">planner');
 });
 
+test("a land shows the acceptance result of its goal, escaped, and nothing without one", () => {
+  const h = r.renderLands({ ...state, delivered: [{ ...state.delivered[0], acceptance: "acceptance: pass at abc1234" }] });
+  expect(h).toContain("<dt>Acceptance</dt><dd>pass at abc1234</dd>");
+  const bad = r.renderLands({ ...state, delivered: [{ ...state.delivered[0], acceptance: "acceptance: fail, rerun: `bun test <x>`" }] });
+  expect(bad).toContain("fail, rerun: `bun test &lt;x&gt;`");
+  expect(r.renderLands(state)).not.toContain("Acceptance");
+});
+
 // ---- proposals ----
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

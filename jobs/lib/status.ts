@@ -7,6 +7,7 @@
  * commit at refs/aleph/facts, so `aleph status` inside the sandbox gives the
  * same answer as Chris's session from the same bundle.
  */
+import { afterReopen } from "./acceptance.ts";
 import { readList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import { fetchOrigin, git, gitWith } from "./git.ts";
@@ -82,6 +83,11 @@ export function landedIndex(cwd: string, main: string, key: string): Map<number,
   if (!hits.length) return out;
   const reverted = new Set([...git(cwd, "log", main, "-E", "--grep=^This reverts commit [0-9a-f]{40}", "--format=%B").out.matchAll(/This reverts commit ([0-9a-f]{40})/g)].map((m) => m[1]));
   for (const [h, n] of hits) if (!reverted.has(h)) out.set(n, [...(out.get(n) ?? []), h]);
+  // A goal the acceptance run reopened is done again only by a commit after the reopening.
+  for (const [n, hs] of out) {
+    const later = afterReopen(cwd, key, n, hs);
+    if (later.length) out.set(n, later); else out.delete(n);
+  }
   return out;
 }
 

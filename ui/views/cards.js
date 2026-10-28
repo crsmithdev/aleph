@@ -55,6 +55,9 @@ const dur = (a, b) => {
   return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}m`;
 };
 
+/** The acceptance result without its `acceptance: ` prefix. */
+const acceptanceHtml = (j) => esc((j.acceptance || "").replace(/^acceptance: /, ""));
+
 /**
  * A land: a state job `j` ({ name, item, state, commit, commitUrl, started, ended, cost, checks,
  * trailers, check, href? }) at `size` "full" or "compact"; `now` is the server's clock.
@@ -64,12 +67,12 @@ export function landCard(j, size = "full", now = new Date().toISOString()) {
   if (size === "compact") {
     return compactCard({
       kind: "land", id: j.name, href: j.href, title: j.item?.title || j.name, badge: { state: landed ? "landed" : "landing" },
-      facts: [["Commit", commitHtml(j)], landed && j.ended ? ["Landed", at(j.ended, now)] : ["Started", at(j.started, now)], ["Cost", j.cost !== undefined ? esc(money(j.cost)) : ""],
+      facts: [["Commit", commitHtml(j)], landed && j.ended ? ["Landed", at(j.ended, now)] : ["Started", at(j.started, now)], ["Cost", j.cost !== undefined ? esc(money(j.cost)) : ""], ["Acceptance", acceptanceHtml(j)],
         ...(j.checks || []).map((c) => [label(c.name), `${esc(String(c.seconds))} s ${c.ok ? "✓" : "✗"}`])],
     });
   }
   return shell("big", "del", `<div class="ih">${itemId(j)}${title(j)}${badge(landed ? "landed" : "landing")}</div>` +
-    `<dl class="facts">${j.commit ? fact("Commit", commitHtml(j)) : ""}${landed && j.ended ? fact("Landed", at(j.ended, now)) : ""}${!landed ? fact("Started", at(j.started, now)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}</dl>` +
+    `<dl class="facts">${j.commit ? fact("Commit", commitHtml(j)) : ""}${landed && j.ended ? fact("Landed", at(j.ended, now)) : ""}${!landed ? fact("Started", at(j.started, now)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.acceptance ? fact("Acceptance", acceptanceHtml(j)) : ""}</dl>` +
     trailerLine(j, now) +
     (j.check === "open" || actMessages.has(j.name) ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${actMsg(j.name)}</div>` : ""));
 }
