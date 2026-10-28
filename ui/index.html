@@ -135,7 +135,9 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .num, .facts dd, .count { font-family: var(--num); font-variant-numeric: tabular-nums; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
 
-.mark { text-decoration: none; font: 700 var(--fs-lg)/1 var(--display); letter-spacing: -0.01em; margin-right: 4px; }
+/* The sidebar's mark and title. The title stays in Merriweather when the font picker changes --display. */
+.mark { display: flex; align-items: center; gap: 8px; text-decoration: none; font: 700 20px/1 'Merriweather', Georgia, serif; letter-spacing: -0.01em; margin-right: 4px; }
+.mark svg { width: 22px; height: 22px; flex: none; }
 
 /* ---------- Now: metric cards ---------- */
 .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 0 0 24px; }
@@ -452,7 +454,7 @@ pre.stat b { color: var(--need); }
   border-right: 1px solid var(--rule); background: var(--surface); padding: 14px 12px 20px;
   display: flex; flex-direction: column; gap: 14px;
 }
-.side .mark { display: block; padding: 2px 8px 0; }
+.side .mark { padding: 2px 8px 0; }
 .nav-group h2 { font: 600 var(--fs-xs)/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; padding: 0 8px; }
 .nav-group ul { list-style: none; margin: 0; padding: 0; }
 .nav-group + .nav-group { margin-top: 14px; }
@@ -496,7 +498,12 @@ pre.stat b { color: var(--need); }
 <body>
 <div class="shell">
   <nav class="side" aria-label="Views">
-    <a class="mark" href="#/">aleph</a>
+    <a class="mark" href="#/">
+      <!-- The small aleph mark: the outer circle and the point. The full mark has a third circle between them, too fine at this size. -->
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="39" fill="none" stroke="currentColor" stroke-width="12"/>
+        <circle cx="35.5" cy="64.5" r="20" fill="currentColor"/>
+      </svg>aleph</a>
     <div id="nav"></div>
   </nav>
   <main>
