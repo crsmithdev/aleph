@@ -98,15 +98,40 @@ export function argSummary(input: unknown, max = 100): string {
 }
 const pretty = (input: unknown) => { const o = inputObject(input); return o ? JSON.stringify(o, null, 2) : text(input); };
 
-/** A turn's tool calls in start order, without those a subagent made (the turn page has those). */
+/**
+ * Each subagent's `agent` span paired with the `Agent` tool span that launched it (hooks/obs.ts writes it as the tool span's sibling): agent span id → tool span id.
+ * The agent span lies inside the tool span in time; of several overlapping calls, the one whose `subagent_type` (default `general-purpose`) is the agent_type wins.
+ */
+export function pairAgents(obs: any[]): Map<string, string> {
+  const tools = obs.filter((o) => isType(o, "tool") && o.name === "Agent");
+  const taken = new Set<string>();
+  const out = new Map<string, string>();
+  const agents = obs.filter((o) => isType(o, "agent") && o.name !== "turn").sort((a, b) => ms(a.startTime) - ms(b.startTime));
+  for (const a of agents) {
+    const from = ms(a.startTime), to = a.endTime ? ms(a.endTime) : from;
+    const type = a.metadata?.agent_type ?? a.name;
+    const inside = tools.filter((t) => !taken.has(t.id) && ms(t.startTime) <= from && (!t.endTime || to <= ms(t.endTime)));
+    const subtype = (t: any) => { const v = inputObject(t.input)?.subagent_type; return typeof v === "string" && v ? v : "general-purpose"; };
+    const best = inside.find((t) => subtype(t) === type) ?? inside[0];
+    if (!best) continue;
+    taken.add(best.id);
+    out.set(a.id, best.id);
+  }
+  return out;
+}
+
+/** A turn's tool calls in start order; a subagent's calls nest under the `Agent` call that launched it, and those of an unpaired subagent are left to the turn page. */
 function toolCalls(obs: any[]) {
   const agents = new Set(obs.filter((o) => isType(o, "agent") && o.name !== "turn").map((o) => o.id));
-  return obs.filter((o) => isType(o, "tool") && !agents.has(o.parentObservationId))
-    .sort((a, b) => ms(a.startTime) - ms(b.startTime))
-    .map((o) => ({
-      name: o.name, args: argSummary(o.input), input: pretty(o.input), output: text(o.output),
-      error: o.level === "ERROR" ? o.statusMessage || "error" : null, durationMs: durationMs(o),
-    }));
+  const spanOf = new Map([...pairAgents(obs)].map(([a, t]) => [t, a]));
+  const call = (o: any): any => ({
+    name: o.name, args: argSummary(o.input), input: pretty(o.input), output: text(o.output),
+    error: o.level === "ERROR" ? o.statusMessage || "error" : null, durationMs: durationMs(o),
+    children: spanOf.has(o.id) ? list((p) => p === spanOf.get(o.id)) : [],
+  });
+  const list = (under: (parent: string | undefined) => boolean) =>
+    obs.filter((o) => isType(o, "tool") && under(o.parentObservationId)).sort((a, b) => ms(a.startTime) - ms(b.startTime)).map(call);
+  return list((p) => !agents.has(p as string));
 }
 
 export const routes: Routes = {
@@ -207,9 +232,11 @@ export const routes: Routes = {
         return out as any;
       };
       const nodes = new Map<string, any>(obs.map((o) => [o.id, node(o)]));
+      const paired = pairAgents(obs); // a subagent hangs off its `Agent` tool span, not off the turn
       const roots: any[] = [];
       for (const o of obs) {
-        const parent = o.parentObservationId ? nodes.get(o.parentObservationId) : undefined;
+        const pid = paired.get(o.id) ?? o.parentObservationId;
+        const parent = pid ? nodes.get(pid) : undefined;
         (parent ? parent.children : roots).push(nodes.get(o.id));
       }
       // The turn span is the tree's root; show its children as the top level.

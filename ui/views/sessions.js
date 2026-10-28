@@ -109,7 +109,8 @@ function toolLine(c) {
   return `<details class="tool${c.error ? " err" : ""}"><summary><span class="tn">${esc(c.name)}</span>` +
     `${c.args ? `<code class="ta">${esc(c.args)}</code>` : ""}${c.error ? `<span class="terr">Error</span>` : ""}` +
     `<span class="td">${esc(dur(c.durationMs))}</span></summary>` +
-    `<div class="tio">${io("Input", c.input)}${c.error ? io("Error", c.error) : ""}${io("Output", c.output)}</div></details>`;
+    `<div class="tio">${io("Input", c.input)}${c.error ? io("Error", c.error) : ""}${io("Output", c.output)}</div>` +
+    `${c.children?.length ? `<div class="tools sub">${c.children.map(toolLine).join("")}</div>` : ""}</details>`;
 }
 
 function toolList(tools) {

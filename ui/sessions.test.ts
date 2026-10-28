@@ -96,6 +96,38 @@ test("a turn is a tree of tools, hook spans and errors", async () => {
   expect((await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/9", { id: "s1", n: "9" })).status).toBe(404);
 });
 
+test("a subagent's span and tools nest under the Agent tool span that launched it", async () => {
+  const at = (m: number) => new Date(now - 90 * 60000 + m * 1000).toISOString();
+  TRACES.push(trace("t4", "s3", "aleph", at(0)));
+  OBS.t4 = [
+    { id: "p0", type: "AGENT", name: "turn", startTime: at(0) },
+    { id: "ta", parentObservationId: "p0", type: "TOOL", name: "Agent", input: { subagent_type: "Explore", prompt: "look" }, startTime: at(1), endTime: at(30) },
+    { id: "tb", parentObservationId: "p0", type: "TOOL", name: "Agent", input: { prompt: "do" }, startTime: at(2), endTime: at(40) },
+    { id: "sa", parentObservationId: "p0", type: "AGENT", name: "Explore", metadata: { agent_id: "1", agent_type: "Explore" }, startTime: at(3), endTime: at(20) },
+    { id: "sb", parentObservationId: "p0", type: "AGENT", name: "general-purpose", metadata: { agent_id: "2", agent_type: "general-purpose" }, startTime: at(4), endTime: at(35) },
+    { id: "sx", parentObservationId: "p0", type: "AGENT", name: "Plan", metadata: { agent_type: "Plan" }, startTime: at(50), endTime: at(55) },
+    { id: "xa", parentObservationId: "sa", type: "TOOL", name: "Grep", input: "foo", startTime: at(5) },
+    { id: "xb", parentObservationId: "sb", type: "TOOL", name: "Read", input: "f", startTime: at(6) },
+    { id: "xx", parentObservationId: "sx", type: "TOOL", name: "Bash", input: "ls", startTime: at(51) },
+  ];
+  try {
+    const d: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s3/turns/1", { id: "s3", n: "1" })).json();
+    const by = (list: any[], id: string) => list.find((o: any) => o.id === id);
+    expect(d.observations.map((o: any) => o.id)).toEqual(["ta", "tb", "sx"]);
+    expect(by(d.observations, "ta").children.map((o: any) => o.id)).toEqual(["sa"]);
+    expect(by(d.observations, "ta").children[0].children.map((o: any) => o.name)).toEqual(["Grep"]);
+    expect(by(d.observations, "tb").children.map((o: any) => o.id)).toEqual(["sb"]);
+    expect(by(d.observations, "tb").children[0].children.map((o: any) => o.name)).toEqual(["Read"]);
+    expect(by(d.observations, "sx").children.map((o: any) => o.name)).toEqual(["Bash"]);
+    const c: any = await (await call("GET /api/sessions/:id/chat", "/api/sessions/s3/chat", { id: "s3" })).json();
+    const tools = c.turns[0].tools;
+    expect(tools.map((t: any) => t.name)).toEqual(["Agent", "Agent"]);
+    expect(tools[0].children.map((t: any) => t.name)).toEqual(["Grep"]);
+    expect(tools[1].children.map((t: any) => t.name)).toEqual(["Read"]);
+    expect(v.chatTurn("s3", c.turns[0])).toContain('<div class="tools sub">');
+  } finally { TRACES.pop(); delete OBS.t4; }
+});
+
 test("a Langfuse 500 is a 502 with a message", async () => {
   status = 500;
   const r = await call("GET /api/sessions", "/api/sessions");
