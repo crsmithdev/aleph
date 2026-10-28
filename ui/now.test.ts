@@ -275,8 +275,10 @@ test("a flake line is not shown on the Status page", () => {
   expect(r.renderIssues(calm)).not.toContain("rerun");
 });
 
-test("the as-of line is h:mm with am or pm", () => {
-  expect(r.renderAsOf(state)).toMatch(/^\d{1,2}:\d{2} (am|pm)$/);
+test("the as-of line reads like every Status time: Oct 28 09:17", () => {
+  expect(r.renderAsOf({ now: new Date(2026, 9, 28, 9, 17).toISOString() })).toBe("Oct 28 09:17");
+  expect(r.renderAsOf({ now: new Date(2026, 9, 28, 21, 5).toISOString() })).toBe("Oct 28 21:05");
+  expect(r.renderAsOf(state)).toMatch(/^[A-Z][a-z]{2} \d{2} \d{2}:\d{2}$/);
 });
 
 test("a running job past 40 minutes says so", () => {

@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { clock, clock12, denyReasons, diffHtml, elapsed, esc, idLink, money, openDiffs, shortModel } from "../lib.js";
+import { clock, clock12, denyReasons, diffHtml, elapsed, esc, idLink, money, openDiffs, shortModel, when } from "../lib.js";
 import { proseDecision } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, landCard, shell as jobCard, trailerLine } from "./cards.js";
 
@@ -223,9 +223,9 @@ export function renderIssues(s) {
   return section("issues", "Issues", rows.length, rows.length ? `<div class="rows">${rows.join("")}</div>` : empty("No issues."), 0);
 }
 
-/** "2:24 am": the time of the state, no date. */
+/** "Oct 28 09:17": the time of the state, as every Status time reads (a date for another year). */
 export function renderAsOf(s) {
-  return esc(clock12(s.now));
+  return esc(when(s.now, new Date(s.now)));
 }
 
 /** The Pause or Resume button of the page head. */
