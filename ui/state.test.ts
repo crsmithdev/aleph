@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -187,6 +187,31 @@ describe("state", () => {
     expect(s.delivered[0].state).not.toBe("landed");
     expect(s.delivered.slice(0, 4).map((j) => j.name)).toEqual(["fac-8", "fac-7", "fac-5", "fac-6"]);
     expect(s.delivered.map((j) => j.name)).not.toContain("fac-l10");
+  });
+
+  test("only the shown lands are projected: no git log for the older commits, yet velocity counts them all", () => {
+    const ids: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const id = `20261027-0002${String(i).padStart(2, "0")}-a`;
+      ids.push(id);
+      run(id, { job: `fac-p${i}`, name: `fac-p${i}`, state: "landed", commit: `c0ffee${String(i).padStart(2, "0")}`, ended: ago(0.1 + i / 100), started: ago(1) });
+    }
+    const spy = spyOn(Bun, "spawnSync");
+    try {
+      const s = state(now);
+      const logged = spy.mock.calls.map((c) => (c[0] as string[]).join(" ")).filter((c) => c.includes(" log "));
+      const landRuns = s.delivered.filter((j) => j.state !== "landed").length;
+      const shown = 10 - landRuns;
+      for (let i = 0; i < 12; i++) {
+        const asked = logged.some((c) => c.includes(`c0ffee${String(i).padStart(2, "0")}`));
+        // Newest first: fac-p0 is the newest, so only the first `shown` are asked for.
+        expect(asked).toBe(i < shown);
+      }
+      expect(s.velocity.landed.day).toBeGreaterThanOrEqual(12);
+    } finally {
+      spy.mockRestore();
+      for (const id of ids) rmSync(join(jobsDir, id), { recursive: true });
+    }
   });
 });
 

@@ -184,17 +184,15 @@ export function state(now = new Date()): State {
 
   let landing = 0;
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
-  const delivered: { at: number; job: Job }[] = [];
+  const delivered: { at: number; runs: Runs }[] = [];
   const liveJobs = new Set<string>(), liveItems = new Set<string>();
   const landRuns: Job[] = [];
   const openNames = new Set<string>();
-  const triageRuns: { at: number; job: Job }[] = [];
+  const triageRuns: { at: number; runs: Runs; reason?: string }[] = [];
   for (const runs of jobs) {
     const last = runs.at(-1)!.run;
     if (last.kind === "triage") {
-      const job = toJob(runs);
-      if (OUTCOME[last.reason ?? ""]) job.outcome = OUTCOME[last.reason!];
-      triageRuns.push({ at: Date.parse(last.state === "running" ? "9999-01-01" : last.ended ?? last.started), job });
+      triageRuns.push({ at: Date.parse(last.state === "running" ? "9999-01-01" : last.ended ?? last.started), runs, reason: last.reason });
       continue;
     }
     if (isOpen(runs)) {
@@ -211,7 +209,7 @@ export function state(now = new Date()): State {
       }
     } else if (last.state === "landed" && last.ended) {
       const at = Date.parse(last.ended);
-      delivered.push({ at, job: toJob(runs) });
+      delivered.push({ at, runs });
     }
   }
 
@@ -261,10 +259,14 @@ export function state(now = new Date()): State {
       nextTick: nextTick(), probe, health: health(now.getTime()), hold: hold(jobs)?.line ?? null,
     },
     needs, stuck, running, landing, newIssues: fresh.length, openIssues, issues: fresh.slice(0, NEW_ISSUES), needsIssues: waitingOnChris,
-    triage: triageRuns.sort((a, b) => b.at - a.at).slice(0, TRIAGED).map((t) => t.job),
+    triage: triageRuns.sort((a, b) => b.at - a.at).slice(0, TRIAGED).map((t) => {
+      const job = toJob(t.runs);
+      if (OUTCOME[t.reason ?? ""]) job.outcome = OUTCOME[t.reason!];
+      return job;
+    }),
     velocity: { landed: rate(landedAt), triaged: rate(triagedAt) },
     // Lands: land runs in progress first, then the latest landed, DELIVERED in all.
-    delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).map((d) => d.job)].slice(0, DELIVERED),
+    delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).slice(0, Math.max(0, DELIVERED - landRuns.length)).map((d) => toJob(d.runs))].slice(0, DELIVERED),
     waiting: openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`))
       .map(({ repo, item }) => ({ repo: repo.key, id: item.id, title: item.title })),
   };
