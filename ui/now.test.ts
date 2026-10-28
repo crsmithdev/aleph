@@ -66,12 +66,14 @@ test("the metric cards are Issues, Lands, Running / cap, Queued and Untriaged", 
   expect([...h.matchAll(/<span class="k">([^<]+)<\/span>/g)].map((m) => m[1])).toEqual(["Issues", "Lands", "Running", "Queued", "Untriaged"]);
   for (const k of ["Needs you", "Stuck or failed", "Triage", "Landed", "Waiting"]) expect(h).not.toContain(k);
   // 37 open issues, though the state lists 2 new ones.
-  expect(h).toContain('href="#issues"><span class="k">Issues</span><span class="v">37</span>');
+  expect(h).toContain('class="metric" href="#issues"><span class="k">Issues</span><span class="v">37</span>');
   // Lands counts the lands going on now, not the delivered list.
-  expect(h).toContain('<span class="k">Lands</span><span class="v">1</span>');
-  expect(h).toContain('<span class="k">Running</span><span class="v">1 <span class="of">/ 12</span></span>');
+  expect(h).toContain('<a class="metric done" href="#lands"><span class="k">Lands</span><span class="v">1</span>');
+  expect(h).toContain('<a class="metric run" href="#jobs"><span class="k">Running</span><span class="v">1 <span class="of">/ 12</span></span>');
   expect(h).toContain('<span class="k">Queued</span><span class="v">1</span>');
   expect(h).toContain('<span class="k">Untriaged</span><span class="v">6</span>');
+  // Untriaged is ink, never --need.
+  expect(h).toContain('<a class="metric" href="#issues"><span class="k">Untriaged</span>');
   expect(r.view.render(s).indexOf('class="metrics"')).toBeLessThan(r.view.render(s).indexOf('class="lede"'));
 });
 

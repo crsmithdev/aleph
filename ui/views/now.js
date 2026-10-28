@@ -41,13 +41,13 @@ function statLines(stat) {
 
 /** The row of metric cards: Issues (every open issue), Lands (active), Running / cap, Queued, Untriaged. */
 export function renderMetrics(s) {
-  const card = (href, k, n) => `<a class="metric" href="#${href}"><span class="k">${k}</span><span class="v">${n}</span></a>`;
+  const card = (href, k, n, tone = "") => `<a class="metric${tone ? " " + tone : ""}" href="#${href}"><span class="k">${k}</span><span class="v">${n}</span></a>`;
   const lands = s.landing ?? s.delivered.filter((j) => j.state === "running").length;
   const cap = s.factory?.liveCap > 0 ? ` <span class="of">/ ${s.factory.liveCap}</span>` : "";
   return `<div class="metrics">` +
     card("issues", "Issues", s.openIssues ?? (s.issues ?? []).length) +
-    card("lands", "Lands", lands) +
-    card("jobs", "Running", `${s.running.length}${cap}`) +
+    card("lands", "Lands", lands, "done") +
+    card("jobs", "Running", `${s.running.length}${cap}`, "run") +
     card("jobs-queued", "Queued", s.waiting.length) +
     card("issues", "Untriaged", s.newIssues ?? (s.issues ?? []).length) + `</div>`;
 }

@@ -45,6 +45,7 @@
   --fs-md: 14px;          /* body */
   --fs-lg: 15px;          /* section headings */
   --fs-xl: 26px;          /* page title, in --display */
+  --fs-metric: 52px;      /* the numbers on the Status metric cards, in --display */
 }
 /* Web Awesome reads these; var() follows the tokens into dark, so one block serves both. */
 :root {
@@ -137,12 +138,13 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 
 /* ---------- Now: metric cards ---------- */
 .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 0 0 24px; }
-.metric { display: grid; gap: 2px; padding: 12px 16px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); color: var(--ink); text-decoration: none; }
+.metric { display: grid; gap: 10px; min-width: 0; padding: 20px 22px 18px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); color: var(--ink); text-decoration: none; }
 .metric:hover { border-color: var(--muted); }
-.metric .k { color: var(--muted); font-size: var(--fs-sm); }
-.metric .v { font: 600 var(--fs-xl)/1.1 var(--num); font-variant-numeric: tabular-nums; }
-.metric .v .of { color: var(--muted); font-size: 0.6em; font-weight: 500; }
-.metric .sub { color: var(--muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.metric .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+.metric .v { font: 700 var(--fs-metric)/1 var(--display); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); white-space: nowrap; }
+.metric.done .v { color: var(--done); }
+.metric.run .v { color: var(--run); }
+.metric .v .of { font: 400 22px/1 var(--display); color: var(--muted); }
 .agent { margin: 0; font-size: var(--fs-sm); color: var(--muted); }
 .agent.on { color: var(--ink); font-weight: 600; }
 
@@ -420,7 +422,7 @@ a.idl:hover, a.idl:focus-visible { color: var(--ink); text-decoration: underline
   .rail { position: static; }
 }
 @media (max-width: 720px) {
-  .metrics { grid-template-columns: 1fr 1fr; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cols { grid-template-columns: minmax(0, 1fr); }
   .page { padding: 20px 16px 48px; }
   .lede { font-size: var(--fs-xl); }
