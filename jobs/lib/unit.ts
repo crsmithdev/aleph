@@ -849,7 +849,10 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
   try {
     copyFileSync(join(dir, "out", "out.bundle"), join(rdir, "out", "out.bundle"));
     const spec = readFileSync(join(folder, "..", run.job, "spec.md"), "utf8").trim();
-    const diff = git(repo.path, "diff", base, `refs/heads/${branch}`).out;
+    const whole = git(repo.path, "diff", base, `refs/heads/${branch}`).out;
+    const max = limit("ALEPH_REVIEW_DIFF_MAX", 200000);
+    const diff = whole.length <= max ? whole
+      : `${git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out}\n\n${whole.slice(0, max)}\n\n(diff cut at ${max} of ${whole.length} characters; read the changed files in the working directory)`;
     const text = reviewPrompt(run.name, spec, diff, findings);
     writeFileSync(join(folder, "review-prompt.md"), text);
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;

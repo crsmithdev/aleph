@@ -82,6 +82,7 @@ env > "$FAKE_LOG/env"
 action=$(printf '%s\\n' "$prompt" | grep '^ACTION:' | tail -1 | cut -d' ' -f2-)
 case $action in
   commit\\ *) f=\${action#commit }; mkdir -p "$(dirname "$f")"; echo "$RANDOM" > "$f"; git add "$f"; git commit -qm "add $f" ;;
+  commit-big\\ *) f=\${action#commit-big }; for i in $(seq 1 60); do echo "line $i of the big file"; done > "$f"; git add "$f"; git commit -qm "add $f" ;;
   commit-fixed\\ *) f=\${action#commit-fixed }; echo same > "$f"; git add "$f"; git commit -qm "add $f" ;;
   resolve-later\\ *) f=\${action#resolve-later }
     if printf '%s' "$prompt" | grep -q 'The land conflicted'; then git fetch -q origin && git rebase -q -X theirs origin/main
@@ -944,8 +945,8 @@ describe("a factory run", () => {
   });
 
   describe("the reviewer", () => {
-    const rjob = (name: string, mark: string, action = `commit ${name}.txt`) =>
-      aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name} ${mark}\nACTION: ${action}\n`)]);
+    const rjob = (name: string, mark: string, action = `commit ${name}.txt`, extra: Record<string, string> = {}) =>
+      aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name} ${mark}\nACTION: ${action}\n`)], extra);
     const calls = () => existsSync(join(fakeLog, "review-calls")) ? readFileSync(join(fakeLog, "review-calls"), "utf8").length : 0;
 
     test("a pass lands; the prompt holds the item and the diff; the cost adds up", async () => {
@@ -956,6 +957,27 @@ describe("a factory run", () => {
       expect(p).toContain("+++ b/rpass.txt");
       expect(runsLeft()).toEqual([]);
       expect(state((await aleph(["land", "rpass"])).json.run).state).toBe("landed");
+    });
+
+    test("a diff over ALEPH_REVIEW_DIFF_MAX is cut: the stat, the head of the diff, a line that says so", async () => {
+      const r = await rjob("rbig", "REVIEW:pass", "commit-big rbig.txt", { ALEPH_REVIEW_DIFF_MAX: "200" });
+      expect(state(r.json.run)).toMatchObject({ state: "passed" });
+      const p = readFileSync(join(fakeLog, "review-prompt"), "utf8");
+      const m = p.match(/diff cut at 200 of (\d+) characters/);
+      expect(m).not.toBeNull();
+      expect(Number(m![1])).toBeGreaterThan(200);
+      expect(p).toContain("rbig.txt |");
+      const body = p.slice(p.indexOf("diff --git"), p.indexOf("(diff cut at"));
+      expect(body.trim().length).toBeLessThanOrEqual(200);
+      expect(p).not.toContain("line 60 of the big file");
+    });
+
+    test("under the default cap the whole diff goes in and no line says it was cut", async () => {
+      const r = await rjob("rwhole", "REVIEW:pass", "commit-big rwhole.txt");
+      expect(state(r.json.run)).toMatchObject({ state: "passed" });
+      const p = readFileSync(join(fakeLog, "review-prompt"), "utf8");
+      expect(p).toContain("line 60 of the big file");
+      expect(p).not.toContain("diff cut");
     });
 
     test("a hold needs Chris, pushes nothing, and his land adds Held-by", async () => {
