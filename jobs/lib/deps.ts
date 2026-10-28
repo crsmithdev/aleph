@@ -8,8 +8,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import * as todos from "../../todo/lib/todo.ts";
-import { writeList } from "../../todo/lib/store.ts";
+import { file, readList } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { factoryDir } from "./factory.ts";
 import { type Repo } from "./ledger.ts";
@@ -81,24 +80,22 @@ export function propose(repo: Repo, found: Proposal[]): string[] {
   const rec = load();
   const fresh = found.filter((p) => !(`${repo.key}:${p.name}@${p.latest}` in rec.proposed));
   if (!fresh.length) return [];
-  const filed = writeList(repo, "dependency proposals", (doc) => {
-    const ids: [Proposal, number][] = [];
-    for (const p of fresh) {
-      const title = `Update ${p.name} ${p.current} to ${p.latest}`;
-      const had = doc.items.find((i) => i.title === title);
-      const item = had ?? todos.add(doc, title, {
-        priority: "low", labels: ["proposal", "deps"],
-        body: `Proposed by the nightly dependency sweep: \`bun outdated\` shows ${p.name} at ${p.current} in the lockfile and ${p.latest} as the latest.\nRelabel it \`goal\` to have the factory update it.\n`,
-      });
-      ids.push([p, item.id]);
-    }
-    return ids;
-  });
-  if (!filed) return [];
+  const titleOf = (p: Proposal) => `Update ${p.name} ${p.current} to ${p.latest}`;
+  const list = readList(repo);
+  if (!list) throw new Error(`the work store has no list for ${repo.key}`);
+  const had = new Map(list.items.map((i) => [i.title, i.id]));
+  const missing = fresh.filter((p) => !had.has(titleOf(p)));
+  const made = file(repo, "dependency proposals", missing.map((p) => ({
+    title: titleOf(p), priority: "low", labels: ["proposal", "deps"],
+    body: `Proposed by the nightly dependency sweep: \`bun outdated\` shows ${p.name} at ${p.current} in the lockfile and ${p.latest} as the latest.\nRelabel it \`goal\` to have the factory update it.\n`,
+  })));
+  if (made.length !== missing.length) return [];
+  missing.forEach((p, i) => had.set(titleOf(p), made[i]));
   const titles: string[] = [];
-  for (const [p, id] of filed.value) {
+  for (const p of fresh) {
+    const id = had.get(titleOf(p))!;
     rec.proposed[`${repo.key}:${p.name}@${p.latest}`] = id;
-    titles.push(`${repo.key}-${id} Update ${p.name} ${p.current} to ${p.latest}`);
+    titles.push(`${repo.key}-${id} ${titleOf(p)}`);
   }
   rec.fresh.push(...titles);
   save(rec);
