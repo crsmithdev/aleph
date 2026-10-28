@@ -12,7 +12,7 @@ import { git } from "./git.ts";
 import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
-import { paused, recordFlake } from "./factory.ts";
+import { dispatchOn, paused, recordFlake } from "./factory.ts";
 import { postTrace } from "./trace.ts";
 import { FACTS_REF, writeFacts } from "./status.ts";
 
@@ -516,6 +516,17 @@ export async function unit(folder: string): Promise<void> {
   if (run.kind === "agent" && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
   if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });
   if (next) await start(folder, ended, next);
+  if (run.kind !== "plain" && dispatchOn()) await dispatchFree(folder);
+}
+
+/** A run ended, so a slot may be free: `aleph dispatch` starts the ready goals. Its output goes to dispatch.log. */
+async function dispatchFree(folder: string): Promise<void> {
+  const log = openSync(join(folder, "dispatch.log"), "a");
+  try {
+    const p = Bun.spawn([process.execPath, join(import.meta.dir, "..", "cli.ts"), "dispatch"], { env: process.env, stdin: "ignore", stdout: log, stderr: log });
+    await p.exited;
+  } catch {}
+  closeSync(log);
 }
 
 const BOUNCES = 2;

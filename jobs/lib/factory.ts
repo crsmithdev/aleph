@@ -10,8 +10,8 @@ import { readList, readLists } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
 import { derive, facts, type Facts } from "./status.ts";
-import { countsLine, triageOpen, type Counts } from "./triage.ts";
-import { allJobs, allRuns, expand, isLive, isOpen, loadRegistry, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { countsLine, LIVE_CAP, triageOpen, type Counts } from "./triage.ts";
+import { allJobs, allRuns, expand, isLive, isOpen, loadRegistry, lock, updateRun, type Entry, type Repo } from "./ledger.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
 const pauseFile = () => join(factoryDir(), "paused");
@@ -95,24 +95,32 @@ export function notReady(item: todos.Item, done: (ref: string) => boolean, now =
 /** The job name for a goal item: its store id, as `aleph-28`. */
 export const goalJob = (repo: Repo, id: number) => `${repo.key}-${id}`;
 
+export { LIVE_CAP };
+
+/** Agent runs live now. */
+export const liveRuns = (): number => allRuns().filter((e) => e.run.kind === "agent" && isLive(e.folder)).length;
+
+/** Dispatch is off when `ALEPH_DISPATCH=off`: a run's end and `aleph issue` then start nothing; the tick still does. */
+export const dispatchOn = () => process.env.ALEPH_DISPATCH !== "off";
+
+type Start = (repo: Repo, name: string, id: number, spec: string) => Promise<string | null>;
+type Checks = (repo: Repo, commit: string, logs: string) => Promise<string | null>;
+
 /**
- * One tick of the timer. It starts one run for each open goal item with no
- * open job, while the factory is not paused and the caps allow. `start`
- * dispatches the run; it is the CLI's `aleph job`. Then it triages open
- * issues that are not goals (triage.ts).
+ * Start every ready goal, in order, until the live cap: an open goal item with
+ * no open job, while the factory is not paused and the other gates allow. It
+ * runs when a run ends, when a goal is added or edited, and from the tick as a
+ * fallback. Each start holds a lock on its goal and re-reads the jobs under it,
+ * so two dispatches at once start a goal once. `start` dispatches the run; it
+ * is the CLI's `aleph job`.
  */
-export async function tick(
-  start: (repo: Repo, name: string, id: number, spec: string) => Promise<string | null>,
-  checks?: (repo: Repo, commit: string, logs: string) => Promise<string | null>,
-): Promise<{ started: string[]; skipped: string[]; triaged: Counts; paused?: true }> {
+export async function dispatchGoals(start: Start, checks?: Checks): Promise<{ started: string[]; skipped: string[]; paused?: true }> {
   if (paused()) {
     factoryLog("paused");
-    return { started: [], skipped: [], triaged: {}, paused: true };
+    return { started: [], skipped: [], paused: true };
   }
   const started: string[] = [];
   const skipped: string[] = [];
-  const jobs = allJobs();
-  const waits = waiting(jobs);
   const reds = new Map<string, string | null>();
   const done = doneChecker();
   for (const { repo, item } of openGoals()) {
@@ -120,28 +128,47 @@ export async function tick(
     if (checks && !reds.has(repo.key)) reds.set(repo.key, await baseline(repo, checks));
     const red = reds.get(repo.key);
     if (red) { skipped.push(`${name}: ${red}`); continue; }
-    const open = jobs.find((j) => isOpen(j) && j.at(-1)!.run.name === name);
-    if (open) { skipped.push(`${name}: ${open.at(-1)!.run.state}`); continue; }
     const wait = notReady(item, done);
     if (wait) { skipped.push(`${name}: ${wait}`); continue; }
-    if (runsToday().length >= DAY_CAP()) {
-      skipped.push(`${name}: cap of ${DAY_CAP()} runs in 24 hours`);
-      continue;
+    const release = await lock(`goal-${name}`, 0);
+    if (!release) { skipped.push(`${name}: another dispatch is starting it`); continue; }
+    try {
+      const jobs = allJobs();
+      const open = jobs.find((j) => isOpen(j) && j.at(-1)!.run.name === name);
+      if (open) { skipped.push(`${name}: ${open.at(-1)!.run.state}`); continue; }
+      const live = liveRuns();
+      if (live >= LIVE_CAP()) { skipped.push(`${name}: ${live} agent runs are live`); continue; }
+      if (runsToday().length >= DAY_CAP()) {
+        skipped.push(`${name}: cap of ${DAY_CAP()} runs in 24 hours`);
+        continue;
+      }
+      const waits = waiting(jobs);
+      if (waits >= WAITING_CAP()) {
+        skipped.push(`${name}: ${waits} runs wait for Chris`);
+        continue;
+      }
+      const spec = `# ${item.title}\n\n${item.body.trim()}\n`;
+      const why = await start(repo, name, item.id, spec);
+      if (why) skipped.push(`${name}: ${why}`);
+      else started.push(name);
+    } finally {
+      release();
     }
-    if (waits >= WAITING_CAP()) {
-      skipped.push(`${name}: ${waits} runs wait for Chris`);
-      continue;
-    }
-    const spec = `# ${item.title}\n\n${item.body.trim()}\n`;
-    const why = await start(repo, name, item.id, spec);
-    if (why) skipped.push(`${name}: ${why}`);
-    else started.push(name);
   }
-  const t = await triageOpen(sandboxRepos(), done, () => (runsToday().length >= DAY_CAP() ? `cap of ${DAY_CAP()} runs in 24 hours` : null));
-  skipped.push(...t.skipped);
-  factoryLog(`started ${started.join(", ") || "none"}; triaged ${countsLine(t.triaged)}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
-  return { started, skipped, triaged: t.triaged };
+  factoryLog(`started ${started.join(", ") || "none"}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
+  return { started, skipped };
 }
+
+/** The tick's triage of open issues that are not goals (triage.ts). */
+export async function triageStep(): Promise<{ triaged: Counts; skipped: string[] }> {
+  if (paused()) return { triaged: {}, skipped: [] };
+  const t = await triageOpen(sandboxRepos(), doneChecker(), () => (runsToday().length >= DAY_CAP() ? `cap of ${DAY_CAP()} runs in 24 hours` : null));
+  factoryLog(`triaged ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
+  return t;
+}
+
+/** One tick of the timer: a dispatch, as the fallback. */
+export const tick = dispatchGoals;
 
 export interface Flake { repo: string; check: string; run: string; at: string }
 const flakyFile = () => join(factoryDir(), "flaky.json");

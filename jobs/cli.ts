@@ -15,8 +15,7 @@ import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import { triage } from "../todo/lib/triage.ts";
-import { LIVE_CAP } from "./lib/triage.ts";
-import { behind, factoryDir, factoryLog, health, lastProbe, paused, probeDue, report, setPaused, tick } from "./lib/factory.ts";
+import { behind, dispatchGoals, dispatchOn, factoryDir, factoryLog, LIVE_CAP, health, lastProbe, paused, probeDue, report, setPaused, triageStep } from "./lib/factory.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
 import { derive, facts, FACTS_REF, readFacts, type Facts } from "./lib/status.ts";
@@ -328,6 +327,12 @@ async function drop(): Promise<void> {
   }
 }
 
+/** After `aleph issue add` or `edit` of an open goal in a factory repo: a dispatch, so the goal starts at once. It never fails the write. */
+async function dispatchAfterGoal(repo: Repo, item: todos.Item): Promise<void> {
+  if (!dispatchOn() || !repo.sandbox || todos.status(item) !== "open" || !((item.fm.labels as string[]) ?? []).includes("goal")) return;
+  try { await runDispatch(); } catch (e: any) { console.error(`warn: dispatch failed: ${e?.message ?? e}`); }
+}
+
 /**
  * aleph issue <add|list|show|note|done|drop|lint> <repo> ... — every repo in the
  * registry has a list in the work store (todo/lib/store.ts). Status is a
@@ -376,6 +381,7 @@ async function todoCmd(): Promise<void> {
       const w = write("todo: add an item", (doc) => todos.add(doc, title, { priority: flag("priority"), labels: labels ?? t.labels, body, due, waitingOn }), true)!;
       for (const m of t.maybeSame) console.error(`aleph-${m.id} may be the same task: ${m.title}`);
       out({ repo: repo.key, added: w.value.id, title: w.value.title, commit: w.commit, ...(t.maybeSame.length ? { maybeSame: t.maybeSame } : {}) });
+      await dispatchAfterGoal(repo, w.value);
       return;
     }
     case "list": {
@@ -439,6 +445,7 @@ async function todoCmd(): Promise<void> {
         return i;
       })!;
       out({ repo: repo.key, ...brief(w.value), commit: w.commit });
+      await dispatchAfterGoal(repo, w.value);
       return;
     }
     case "done":
@@ -528,10 +535,35 @@ function todoRecent(sub: "list" | "lint"): void {
   for (const r of rows) { console.log(r.repo); printRows(r.items, "  "); }
 }
 
+/** Start the run for a goal: `ALEPH_START_CMD` (tests) or `aleph job`. Returns the refusal, or null. */
+async function startRun(repo: Repo, name: string, id: number, spec: string): Promise<string | null> {
+  const model = await route(spec);
+  factoryLog(`starting ${name} with model ${model ?? "default"}`);
+  const argv = process.env.ALEPH_START_CMD ? [process.env.ALEPH_START_CMD, repo.key, name, String(id)] : jobArgv(process.execPath, CLI, repo.key, name, id, model);
+  const p = Bun.spawn(argv, { env: process.env, stdin: new Blob([spec]), stdout: "ignore", stderr: "pipe" });
+  const code = await p.exited;
+  return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
+}
+
+/** One dispatch of the ready goals. A failed probe starts no run. */
+async function runDispatch() {
+  const p = lastProbe();
+  if (!paused() && p && !p.ok) {
+    factoryLog("the last probe failed; no run started");
+    return { started: [], skipped: [`the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`] };
+  }
+  return dispatchGoals(startRun, baselineChecks);
+}
+
+/** `aleph dispatch`: start every ready goal up to the live cap. A run's end and `aleph issue` call it. */
+async function dispatchCmd(): Promise<void> {
+  out(await runDispatch());
+}
+
 /**
  * `aleph tick`, from the timer: the nightly probe when due, and the dependency sweep only after a
- * passing probe, then one run for each open goal item that has no open job. A failed probe starts
- * no run and no sweep.
+ * passing probe, then a dispatch as the fallback for what no run's end and no issue write has
+ * started. A failed probe starts no run and no sweep.
  */
 async function tickCmd(): Promise<void> {
   if (!paused() && probeDue()) {
@@ -546,20 +578,10 @@ async function tickCmd(): Promise<void> {
       }
     }
   }
+  const d = await runDispatch();
   const p = lastProbe();
-  if (!paused() && p && !p.ok) {
-    factoryLog("the last probe failed; no run started");
-    return out({ started: [], skipped: [`the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`], triaged: {} });
-  }
-  out(await tick(async (repo, name, id, spec) => {
-    const model = await route(spec);
-    factoryLog(`starting ${name} with model ${model ?? "default"}`);
-    const p = Bun.spawn(jobArgv(process.execPath, CLI, repo.key, name, id, model), {
-      env: process.env, stdin: new Blob([spec]), stdout: "ignore", stderr: "pipe",
-    });
-    const code = await p.exited;
-    return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
-  }, baselineChecks));
+  const t = !paused() && !(p && !p.ok) ? await triageStep() : { triaged: {}, skipped: [] };
+  out({ ...d, skipped: [...d.skipped, ...t.skipped], triaged: t.triaged });
 }
 
 /**
@@ -654,6 +676,7 @@ try {
     case "checked": checked(); break;
     case "issue": case "todo": await todoCmd(); break;
     case "tick": await tickCmd(); break;
+    case "dispatch": await dispatchCmd(); break;
     case "status": statusCmd(); break;
     case "report": reportCmd(); break;
     case "pause": setPaused(true); out({ paused: true }); break;
@@ -674,7 +697,7 @@ try {
       if (!p.ok) process.exit(1);
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|drop|jobs|issue|tick|report|pause|resume|sandbox|status|judge> ...");
+    default: refuse("usage: aleph <job|run|land|checked|drop|jobs|issue|tick|report|pause|resume|sandbox|status|judge|dispatch> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;
