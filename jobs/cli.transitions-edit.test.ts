@@ -74,8 +74,11 @@ describe("every transition dispatches at once", () => {
   }, 60_000);
 
   test("an edit that sets the status back to open starts the goal", async () => {
-    const x = track(await add("dropped, then reopened", open("reopen"), ["--labels", "goal"], { ALEPH_DISPATCH: "off" }));
+    // A dispatch left by an earlier test's run may still be alive. It starts any open goal it sees, so the
+    // issue is not a goal while it is open: it gets the label only once dropped, with dispatch off.
+    const x = track(await add("dropped, then reopened", open("reopen"), ["--labels", "needs-chris"], { ALEPH_DISPATCH: "off" }));
     await aleph(["todo", "drop", "fac", String(x), "not now"]);
+    expect((await aleph(["todo", "edit", "fac", String(x), "--labels", "goal"], on({ ALEPH_DISPATCH: "off" }))).code).toBe(0);
     await Bun.sleep(300);
     expect(started()).toEqual([]);
     expect((await aleph(["todo", "edit", "fac", String(x), "--status", "open"], on())).code).toBe(0);
