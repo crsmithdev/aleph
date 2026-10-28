@@ -243,10 +243,12 @@ describe("render", () => {
 
 test("the issue and job pages use pageHead, table.tbl, idLink and when", async () => {
   const { renderIssue } = require("./views/contents.js");
-  const issue = renderIssue({ repo: "fac", id: 9, title: "T", status: "open", frontmatter: { labels: ["ui"] }, body: "", notes: [], jobs: [{ name: "fac-9", state: "landed", started: "2026-10-01T10:00:00" }], commits: [{ hash: "abcdef123", subject: "s", date: "2026-10-01T10:00:00", commitUrl: "http://x/c" }] });
+  // This year's date, so when() prints "Oct 01 10:00" whatever the clock says.
+  const started = `${new Date().getFullYear()}-10-01T10:00:00`;
+  const issue = renderIssue({ repo: "fac", id: 9, title: "T", status: "open", frontmatter: { labels: ["ui"] }, body: "", notes: [], jobs: [{ name: "fac-9", state: "landed", started }], commits: [{ hash: "abcdef123", subject: "s", date: started, commitUrl: "http://x/c" }] });
   for (const t of ['<header class="ph">', '<table class="tbl">', 'class="idl"', 'class="chips"', "Oct 01 10:00"]) expect(issue).toContain(t);
   expect(issue).not.toContain('class="ih"');
-  const job = require("./views/jobs.js").renderJob({ name: "fac-9", repo: "fac", item: { title: "T" }, state: "landed", started: "2026-10-01T10:00:00", runs: [] });
+  const job = require("./views/jobs.js").renderJob({ name: "fac-9", repo: "fac", item: { title: "T" }, state: "landed", started, runs: [] });
   for (const t of ['<header class="ph">', "Oct 01 10:00"]) expect(job).toContain(t);
   expect(job).not.toContain("<style>");
 });
