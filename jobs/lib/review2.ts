@@ -2,13 +2,14 @@
  * review2: the review a held run gets before it reaches Chris. One `claude -p`
  * under srt in a scratch clone of the repo, which merges the run branch onto origin/main,
  * runs the checks, reads the test diff, lists the changes outside the goal's
- * edit surface, and for a `ui` goal loads the changed views in a browser. It
- * writes review2.md in the run folder, and only that: state.json belongs to the
+ * edit surface, and for a `ui` goal has the harness load the changed views in
+ * Chrome (review2-browser.ts), outside the sandbox. It writes review2.md in the run folder, and only that: state.json belongs to the
  * run's owner. The verdict, a `PENDING` line or a last `ERROR: <reason>` line
  * are read back from review2.md (`readReview2`). Nothing lands: Land stays a click.
  */
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { BROWSER, VIEWS, watchViews } from "./review2-browser.ts";
 import { hasLabel, reader } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { outcome } from "./gate.ts";
@@ -17,8 +18,9 @@ import { linkBins, runPath, sandboxed, workerToken, writeHome } from "./sandbox.
 
 /**
  * The reviewer's profile: it reads the run folder, writes only in review2/ (its
- * clone and home) and tmp/, and reaches the Anthropic API and localhost, which
- * a `ui` goal's server needs, with local binding.
+ * clone and home) and tmp/ (where its browse request, tmp/views.txt, goes), and
+ * reaches the Anthropic API and localhost, which a `ui` goal's server needs, with
+ * local binding. No Unix sockets: Chrome runs in the harness (review2-browser.ts).
  */
 export const REVIEW2_SANDBOX = {
   read: ["."], write: ["review2", "tmp"], net: { domains: ["api.anthropic.com", "localhost"], localBinding: true },
@@ -26,16 +28,22 @@ export const REVIEW2_SANDBOX = {
 
 export { parseVerdict };
 
-const RECIPE = (o: { name: string; branch: string; main: string; checks: string[]; ui: boolean; spec: string }) => `You review job \`${o.name}\`, a run held for Chris. You are in a scratch clone of the repo
+const RECIPE = (o: { name: string; branch: string; main: string; checks: string[]; tsc: boolean; ui: boolean; folder: string; spec: string }) => `You review job \`${o.name}\`, a run held for Chris. You are in a scratch clone of the repo
 and may change nothing outside it. The clone has the run branch \`${o.branch}\` checked out and
 \`origin-main\` as a local branch at origin/${o.main}. Nothing you do is pushed.
 
 1. Merge \`${o.branch}\` onto \`origin-main\` in this clone (\`git switch -c review origin-main && git merge ${o.branch}\`). A conflict is a reason to go back.
 2. Run the repo's checks on the merge result:
 ${o.checks.map((c) => `   - \`${c}\``).join("\n")}
-3. Diff the tests (\`git diff origin-main...${o.branch}\` on test files) for dropped or weakened assertions: removed tests, removed expect lines, .skip/.only, loosened matchers.
+${o.tsc ? `   - \`bunx tsc --noEmit\` (the clone has the repo's node_modules). Write one line \`Type check: pass\` or \`Type check: fail <n> errors\`, and name the errors the branch adds.
+` : ""}3. Diff the tests (\`git diff origin-main...${o.branch}\` on test files) for dropped or weakened assertions: removed tests, removed expect lines, .skip/.only, loosened matchers.
 4. List the changes outside the goal's edit surface (the "Edit surface" in the spec below).
-${o.ui ? `5. The goal is labelled \`ui\`. Start a one-off \`bun ui/server.ts\` on a free port, and with Playwright and \`/usr/bin/google-chrome\` load each changed view at 1440 and 390 px wide, in light and dark. Record page errors and horizontal scroll for each. Stop the server.
+${o.ui ? `5. The goal is labelled \`ui\`. You cannot start a browser; the harness loads the views for you. Start \`bun ui/server.ts --port <free port>\` in the background (it listens on 127.0.0.1).
+   Write the URL of each changed view, one per line (\`http://127.0.0.1:<port>/...\`, at most 8), to \`${o.folder}/tmp/views.part\`, then
+   \`mv\` it to \`${o.folder}/${VIEWS}\`. The harness takes that file and loads each view at 1440 and 390 px wide, in light and dark, and writes
+   \`${o.folder}/${BROWSER}/report.md\` last: wait for it (poll up to 5 minutes), then read it and look at the screenshots it names.
+   Record page errors and horizontal scroll for each view, and write one line \`Browser: <what you saw>\`, or \`Browser: ERROR <the report's error>\` when
+   the report has an ERROR line or never came, and go on. Stop the server.
 ` : ""}
 Write down what you found, then end with exactly one line:
 VERDICT: land
@@ -96,15 +104,26 @@ async function review(folder: string): Promise<void> {
       const g = git(scratch, ...args);
       if (!g.ok) return void fail(`scratch clone failed: ${g.out.slice(0, 200)}`);
     }
+    // The repo's node_modules, copied: the sandbox reads nothing outside the run folder, and npm is out of reach.
+    if (existsSync(join(repo.path, "node_modules"))) {
+      const cp = Bun.spawnSync(["cp", "-a", "--reflink=auto", join(repo.path, "node_modules"), join(work, "node_modules")], { stdout: "pipe", stderr: "pipe" });
+      if (cp.exitCode !== 0) return void fail(`node_modules copy failed: ${cp.stderr.toString().slice(0, 200)}`);
+    }
+    const ui = isUi(repo, run);
     const spec = readFileSync(join(folder, "..", run.job, "spec.md"), "utf8").trim();
-    const text = RECIPE({ name: run.name, branch: run.branch, main: repo.main, checks: repo.checks.map((c) => c.run), ui: isUi(repo, run), spec });
+    const text = RECIPE({
+      name: run.name, branch: run.branch, main: repo.main, checks: repo.checks.map((c) => c.run),
+      tsc: existsSync(join(work, "tsconfig.json")) && existsSync(join(work, "node_modules", "typescript")), ui, folder, spec,
+    });
     writeFileSync(join(folder, "review2-prompt.md"), text);
     // The reviewer's home is in the scratch folder, so its settings and git identity are writable there.
     // srt's sockets and the reviewer's tmp/ sit in the run folder, as a worker's do in its own.
     const home = join(scratch, "home");
     writeHome(home);
     linkBins(folder);
-    for (const d of ["sock", "tmp"]) mkdirSync(join(folder, d), { recursive: true });
+    // browser/ exists before the sandbox starts, so the profile's read of "." holds it: the reviewer reads the harness's report there.
+    for (const d of ["sock", "tmp", BROWSER]) mkdirSync(join(folder, d), { recursive: true });
+    rmSync(join(folder, VIEWS), { force: true });
     const env: Record<string, string> = {
       ...readEnvFile(repo.env ?? process.env.ALEPH_RUN_ENV), CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN || workerToken(),
       HOME: home, CLAUDE_CONFIG_DIR: join(home, ".claude"),
@@ -114,10 +133,12 @@ async function review(folder: string): Promise<void> {
     const argv = [process.env.ALEPH_REVIEW2_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
     const log = join(folder, "review2.log");
+    let root: number | undefined;
+    const views = ui ? watchViews(folder, () => root, { sandbox: !process.env.ALEPH_SANDBOX_CMD }) : null;
     const r = await sandboxed(folder, `exec ${argv.map(q).join(" ")}`, {
       ...REVIEW2_SANDBOX, cwd: "review2/work", env, stdin: text, stdout: log, stderr: log,
-      limit: Number(process.env.ALEPH_REVIEW2_TIMEOUT ?? 1500),
-    });
+      limit: Number(process.env.ALEPH_REVIEW2_TIMEOUT ?? 1500), onSpawn: (p) => { root = p.pid; },
+    }).finally(() => views?.stop());
     const o = outcome(existsSync(log) ? readFileSync(log, "utf8") : "");
     writeFileSync(md, o.result.trimEnd() + "\n");
     if (r.timedOut) return void fail("time box");

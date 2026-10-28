@@ -39,5 +39,7 @@ test("makeRunFolder finds claude in ~/.local/bin when PATH lacks it", () => {
   try {
     const dir = makeRunFolder("r2");
     expect(realpathSync(join(dir, "bin/claude"))).toBe(realpathSync(join(bin, "claude")));
+    // git too: a step's own server (ui/server.ts) spawns it.
+    expect(realpathSync(join(dir, "bin/git"))).toBe(realpathSync(Bun.which("git", { PATH: "/usr/bin:/bin" })!));
   } finally { process.env.HOME = old.HOME; process.env.PATH = old.PATH; }
 });

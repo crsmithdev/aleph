@@ -36,11 +36,11 @@ export function writeHome(home: string): void {
   writeFileSync(join(home, ".gitconfig"), "[user]\n\tname = aleph factory\n\temail = factory@aleph.invalid\n[init]\n\tdefaultBranch = main\n");
 }
 
-/** `dir/bin` with links to the pinned claude and bun, and bunx, which is bun started by that name. */
+/** `dir/bin` with links to the pinned claude and bun, to git (a step's own server spawns it), and bunx, which is bun started by that name. */
 export function linkBins(dir: string): void {
   rmSync(join(dir, "bin"), { recursive: true, force: true });
   mkdirSync(join(dir, "bin"), { recursive: true });
-  for (const name of ["claude", "bun"]) {
+  for (const name of ["claude", "bun", "git"]) {
     const real = resolveBin(name);
     if (real) symlinkSync(real, join(dir, "bin", name));
   }
@@ -51,8 +51,8 @@ export function linkBins(dir: string): void {
 /**
  * A new run folder: home/ with Claude Code settings and a git identity, work/,
  * tmp/, sock/ for srt's own sockets, out/ for the bundle the worker hands
- * back, check/ and checklog/ for the checks, and bin/ with links to claude, bun
- * and bunx.
+ * back, check/ and checklog/ for the checks, and bin/ with links to claude, bun,
+ * bunx and git.
  */
 export function makeRunFolder(id: string): string {
   const dir = join(runsDir(), id);
@@ -77,7 +77,7 @@ const WORKER_NET: Net = { domains: ["api.anthropic.com", "registry.npmjs.org"], 
  */
 export function profile(dir: string, o: { read: string[]; write: string[]; net?: Net }): string {
   const vendor = join(expand("~/.aleph/tools/lib/node_modules/@anthropic-ai/sandbox-runtime"), "vendor");
-  const bins = ["claude", "bun"].map((b) => { try { return realpathSync(join(dir, "bin", b)); } catch { return null; } }).filter(Boolean) as string[];
+  const bins = ["claude", "bun", "git"].map((b) => { try { return realpathSync(join(dir, "bin", b)); } catch { return null; } }).filter(Boolean) as string[];
   const net = o.net ?? WORKER_NET;
   // A read entry that holds a write entry must not be bound read-only over it: bwrap binds in order and the
   // read-only parent would cover the writable child. "." becomes the folder's entries without the write roots.
