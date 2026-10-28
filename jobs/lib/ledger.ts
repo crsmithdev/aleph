@@ -43,8 +43,6 @@ export interface Run {
   checkedBase?: string;
   /** A run that needs Chris for a held path or a test edit: the diff stat. */
   stat?: string;
-  /** A held run: the review2 verdict. "pending" while it runs, "error" when it gave none. */
-  review2?: { verdict: "land" | "back" | "chris" | "pending" | "error"; reason?: string };
   /** A land of a held run, by Chris: the commit gets `Held-by: Chris`. */
   held?: boolean;
   /** Sidetone's flag: the news line went out. `shown` is the report's. */
@@ -242,4 +240,29 @@ export async function tell(line: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export type Review2 = { verdict: "land" | "back" | "chris" | "pending" | "error"; reason?: string };
+
+/** The last `VERDICT:` line of a review: `land`, `back <reason>` or `chris <question>`; null when it is none of them. */
+export function parseVerdict(result: string): Review2 | null {
+  const v = result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("VERDICT:")).map((l) => l.slice(8).trim()).at(-1);
+  if (v === undefined) return null;
+  if (v === "land") return { verdict: "land" };
+  const m = v.match(/^(back|chris)\s+(\S.*)$/);
+  return m ? { verdict: m[1] as "back" | "chris", reason: m[2] } : null;
+}
+
+/**
+ * The review2 of the run in `folder`, derived from its review2.md: a lone
+ * `PENDING` line, a last line `ERROR: <reason>`, or the review ending in a
+ * `VERDICT:` line. Undefined when there is no review2.md.
+ */
+export function readReview2(folder: string): Review2 | undefined {
+  let text: string;
+  try { text = readFileSync(join(folder, "review2.md"), "utf8"); } catch { return undefined; }
+  const last = text.trim().split("\n").at(-1)?.trim() ?? "";
+  if (last === "PENDING") return { verdict: "pending" };
+  if (last.startsWith("ERROR:")) return { verdict: "error", reason: last.slice(6).trim() };
+  return parseVerdict(text) ?? { verdict: "error", reason: "no VERDICT line" };
 }

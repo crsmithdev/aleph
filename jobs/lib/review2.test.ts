@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Review2 } from "./ledger.ts";
 
 let base: string, jobs: string;
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -50,9 +51,10 @@ const fakeClaude = (result: string) => {
   return f;
 };
 const state = (folder: string) => JSON.parse(readFileSync(join(folder, "state.json"), "utf8"));
+const review2 = async (folder: string) => (await import("./ledger.ts")).readReview2(folder);
 
 describe("review2", () => {
-  const cases: [string, string, object][] = [
+  const cases: [string, string, Review2][] = [
     ["VERDICT: land", "land", { verdict: "land" }],
     ["Looked.\nVERDICT: back a test lost an assertion", "back", { verdict: "back", reason: "a test lost an assertion" }],
     ["VERDICT: chris keep the old name?", "chris", { verdict: "chris", reason: "keep the old name?" }],
@@ -64,7 +66,8 @@ describe("review2", () => {
       process.env.ALEPH_REVIEW2_CMD = fakeClaude(text);
       await runReview2(folder);
       expect(readFileSync(join(folder, "review2.md"), "utf8")).toContain(text);
-      expect(state(folder).review2).toEqual(want);
+      expect(await review2(folder)).toEqual(want);
+      expect(state(folder).review2).toBeUndefined();
       expect(state(folder)).toMatchObject({ state: "needs-you", needs: "held" });
       expect(existsSync(join(folder, "review2"))).toBe(false);
     });
@@ -75,7 +78,7 @@ describe("review2", () => {
     const folder = held("bad");
     process.env.ALEPH_REVIEW2_CMD = fakeClaude("VERDICT: maybe");
     await runReview2(folder);
-    expect(state(folder).review2.verdict).toBe("error");
+    expect((await review2(folder))?.verdict).toBe("error");
     expect(state(folder)).toMatchObject({ state: "needs-you", needs: "held" });
   });
 
@@ -85,8 +88,23 @@ describe("review2", () => {
     const folder = held("once");
     expect(startReview2(folder)).toBe(true);
     expect(startReview2(folder)).toBe(false);
-    for (let i = 0; i < 100 && state(folder).review2.verdict === "pending"; i++) await Bun.sleep(100);
-    expect(state(folder).review2).toEqual({ verdict: "land" });
+    for (let i = 0; i < 100 && (await review2(folder))?.verdict === "pending"; i++) await Bun.sleep(100);
+    expect(await review2(folder)).toEqual({ verdict: "land" });
+  });
+
+  test("a drop that writes state.json while review2 runs loses no field", async () => {
+    const { runReview2 } = await import("./review2.ts");
+    const { updateRun } = await import("./ledger.ts");
+    const folder = held("race");
+    const slow = join(base, "claude-slow");
+    writeFileSync(slow, `#!/bin/bash\ncat > /dev/null\nsleep 1\nprintf '%s\\n' '${JSON.stringify({ type: "result", is_error: false, result: "VERDICT: land" })}'\n`, { mode: 0o755 });
+    process.env.ALEPH_REVIEW2_CMD = slow;
+    const running = runReview2(folder);
+    await Bun.sleep(300);
+    updateRun(folder, { state: "dropped", reason: "dropped by Chris" });
+    await running;
+    expect(state(folder)).toMatchObject({ state: "dropped", reason: "dropped by Chris", needs: "held", branch: "job/x" });
+    expect(await review2(folder)).toEqual({ verdict: "land" });
   });
 
   test("a run that is not held starts none", async () => {
@@ -118,7 +136,7 @@ describe("review2 under srt", () => {
     const [home, cwd] = readFileSync(seen, "utf8").trim().split("|");
     expect(home).toBe(join(folder, "review2", "home"));
     expect(cwd).toBe(join(folder, "review2", "work"));
-    expect(state(folder).review2).toEqual({ verdict: "land" });
+    expect(await review2(folder)).toEqual({ verdict: "land" });
   });
 });
 

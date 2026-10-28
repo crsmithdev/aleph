@@ -9,7 +9,7 @@
 import { jobArgv, route } from "./lib/route.ts";
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
+import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, readReview2, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
 import { baselineChecks, git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
@@ -272,7 +272,7 @@ function summary(runs: Entry[], fates = new Map<string, string>()) {
   const goal = (read(first.folder, "spec.md") ?? read(first.folder, "command.txt") ?? "").trim().split("\n")[0];
   return {
     name: r.name, repo: r.repo, kind: r.kind, job: r.job, run: last.id, goal, state: r.state, needs: r.needs, phase: r.phase,
-    reason: r.reason, say: r.say, review2: r.review2, ...(r.state === "landed" && r.check ? { check: r.check } : {}), fate: fates.get(r.job), session: r.session, started: first.run.started, ended: r.ended,
+    reason: r.reason, say: r.say, review2: readReview2(last.folder), ...(r.state === "landed" && r.check ? { check: r.check } : {}), fate: fates.get(r.job), session: r.session, started: first.run.started, ended: r.ended,
     ...(isLost(last.folder) ? { lost: true } : {}),
   };
 }

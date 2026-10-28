@@ -1,17 +1,18 @@
 /**
  * review2: the review a held run gets before it reaches Chris. One `claude -p`
- * under srt in a scratch clone of the repo, which merges the run branch onto
- * origin/main, runs the checks, reads the test diff, lists the changes outside
- * the goal's edit surface, and for a `ui` goal loads the changed views in a
- * browser. It writes review2.md in the run folder; its `VERDICT:` line lands on
- * the run as `review2: { verdict, reason }`. Nothing lands on it: Land stays a click.
+ * under srt in a scratch clone of the repo, which merges the run branch onto origin/main,
+ * runs the checks, reads the test diff, lists the changes outside the goal's
+ * edit surface, and for a `ui` goal loads the changed views in a browser. It
+ * writes review2.md in the run folder, and only that: state.json belongs to the
+ * run's owner. The verdict, a `PENDING` line or a last `ERROR: <reason>` line
+ * are read back from review2.md (`readReview2`). Nothing lands: Land stays a click.
  */
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readList } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
-import { outcome, tagged } from "./gate.ts";
-import { loadRegistry, readEnvFile, readRun, updateRun, type Repo, type Run } from "./ledger.ts";
+import { outcome } from "./gate.ts";
+import { loadRegistry, parseVerdict, readEnvFile, readRun, type Repo, type Run } from "./ledger.ts";
 import { linkBins, sandboxed, workerToken, writeHome } from "./sandbox.ts";
 
 /**
@@ -23,14 +24,7 @@ export const REVIEW2_SANDBOX = {
   read: ["."], write: ["review2", "tmp"], net: { domains: ["api.anthropic.com", "localhost"], localBinding: true },
 };
 
-/** The last `VERDICT:` line: `land`, `back <reason>` or `chris <question>`; null when it is none of them. */
-export function parseVerdict(result: string): NonNullable<Run["review2"]> | null {
-  const v = tagged(result, "VERDICT").at(-1);
-  if (v === undefined) return null;
-  if (v === "land") return { verdict: "land" };
-  const m = v.match(/^(back|chris)\s+(\S.*)$/);
-  return m ? { verdict: m[1] as "back" | "chris", reason: m[2] } : null;
-}
+export { parseVerdict };
 
 const RECIPE = (o: { name: string; branch: string; main: string; checks: string[]; ui: boolean; spec: string }) => `You review job \`${o.name}\`, a run held for Chris. You are in a scratch clone of the repo
 and may change nothing outside it. The clone has the run branch \`${o.branch}\` checked out and
@@ -67,7 +61,11 @@ export async function runReview2(folder: string): Promise<void> {
   const run = readRun(folder)!;
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
   const scratch = join(folder, "review2");
-  const fail = (reason: string) => updateRun(folder, { review2: { verdict: "error", reason } });
+  const md = join(folder, "review2.md");
+  const fail = (reason: string) => {
+    const prior = existsSync(md) ? readFileSync(md, "utf8").trimEnd() : "";
+    writeFileSync(md, `${prior === "PENDING" ? "" : prior + "\n"}ERROR: ${reason.replace(/\s+/g, " ")}\n`);
+  };
   try {
     if (!repo || !run.branch) return void fail("no repo or branch");
     rmSync(scratch, { recursive: true, force: true });
@@ -101,12 +99,10 @@ export async function runReview2(folder: string): Promise<void> {
       limit: Number(process.env.ALEPH_REVIEW2_TIMEOUT ?? 1500),
     });
     const o = outcome(existsSync(log) ? readFileSync(log, "utf8") : "");
-    writeFileSync(join(folder, "review2.md"), o.result);
+    writeFileSync(md, o.result.trimEnd() + "\n");
     if (r.timedOut) return void fail("time box");
     if (!o.ok) return void fail(o.line || `exit ${r.code}`);
-    const v = parseVerdict(o.result);
-    if (!v) return void fail("no VERDICT line");
-    updateRun(folder, { review2: v });
+    if (!parseVerdict(o.result)) return void fail("no VERDICT line");
   } catch (e: any) {
     fail(`error: ${e?.message ?? e}`);
   } finally {
@@ -115,14 +111,13 @@ export async function runReview2(folder: string): Promise<void> {
 }
 
 /**
- * When a run is held, start `aleph review2 <folder>` detached, once: the run's
- * `review2` field is set before the spawn, so a second pass finds it taken.
+ * When a run is held, start `aleph review2 <folder>` detached, once: review2.md is written (PENDING) before the spawn, so a second pass finds it taken.
  * Returns whether it started one.
  */
 export function startReview2(folder: string): boolean {
   const run = readRun(folder);
-  if (!run || run.review2 || run.state !== "needs-you" || (run.needs !== "held" && run.needs !== "review")) return false;
-  updateRun(folder, { review2: { verdict: "pending" } });
+  if (!run || existsSync(join(folder, "review2.md")) || run.state !== "needs-you" || (run.needs !== "held" && run.needs !== "review")) return false;
+  writeFileSync(join(folder, "review2.md"), "PENDING\n");
   try {
     const log = openSync(join(folder, "review2.err"), "a");
     try {
@@ -131,7 +126,7 @@ export function startReview2(folder: string): boolean {
       closeSync(log);
     }
   } catch (e: any) {
-    updateRun(folder, { review2: { verdict: "error", reason: `could not start: ${e?.message ?? e}` } });
+    writeFileSync(join(folder, "review2.md"), `ERROR: could not start: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
     return false;
   }
   return true;

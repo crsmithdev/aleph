@@ -1060,8 +1060,7 @@ describe("a factory run", () => {
     expect(s).toMatchObject({ state: "needs-you", needs: "held", reason: "held path held/x.txt" });
     expect(s.stat).toContain("held/x.txt");
     const run = r.json.run;
-    for (let i = 0; i < 100 && state(run).review2?.verdict === "pending"; i++) await Bun.sleep(100);
-    expect(state(run).review2).toEqual({ verdict: "back", reason: "fix the held path" });
+    for (let i = 0; i < 100 && !file(run, "review2.md").includes("VERDICT"); i++) await Bun.sleep(100);
     expect(file(run, "review2.md")).toContain("VERDICT: back fix the held path");
     expect((await aleph(["jobs", "fheld"])).json.review2).toEqual({ verdict: "back", reason: "fix the held path" });
     const before = remoteGit("rev-parse", "main");

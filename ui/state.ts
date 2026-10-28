@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { judgeChoice } from "../hooks/lib/jev.ts";
 import { DAY_CAP, LIVE_CAP, WAITING_CAP, health, hold, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
-import { allJobs, isOpen, loadRegistry, type Entry, type Repo } from "../jobs/lib/ledger.ts";
+import { allJobs, isOpen, loadRegistry, readReview2, type Entry, type Repo } from "../jobs/lib/ledger.ts";
 import { readList } from "../todo/lib/store.ts";
 import { status, type Doc } from "../todo/lib/todo.ts";
 
@@ -149,7 +149,8 @@ export function state(now = new Date()): State {
     }
     const stat = r.stat ?? runs.findLast((e) => e.run.stat)?.run.stat;
     if (r.state === "needs-you" && stat) job.stat = stat;
-    if (r.state === "needs-you" && r.review2) job.review2 = r.review2;
+    const review2 = r.state === "needs-you" ? readReview2(last.folder) : undefined;
+    if (review2) job.review2 = review2;
     const withChecks = runs.findLast((e) => e.run.checks?.length)?.run.checks;
     if (withChecks) job.checks = withChecks;
     const hid = runs.findLast((e) => e.run.checks?.some((c) => c.name === "hidden" && c.total))?.run.checks?.find((c) => c.name === "hidden");
