@@ -113,6 +113,16 @@ function recorder(folder: string): (c: CheckResult) => void {
   return (c) => { all = [...all, c]; updateRun(folder, { checks: all }); };
 }
 
+/** Run `fn` holding a check slot: the slot is freed when `fn` settles, also when it throws. */
+export async function withSlot<T>(fn: () => T | Promise<T>): Promise<T> {
+  const free = await checkSlot();
+  try {
+    return await fn();
+  } finally {
+    free();
+  }
+}
+
 /** Run every check with no `when`, and every check whose globs match a changed file. Returns why one failed. */
 async function runChecks(folder: string, wt: string, repo: Repo, env: Record<string, string | undefined>, changed: string[], phase: (p: string) => void, record: (c: CheckResult) => void): Promise<string | null> {
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
@@ -122,20 +132,21 @@ async function runChecks(folder: string, wt: string, repo: Repo, env: Record<str
     const out = join(folder, "check.out");
     writeFileSync(out, "");
     // The wait for a slot is outside the time limit and outside the check's seconds.
-    const free = await checkSlot();
-    const t0 = Date.now();
-    let r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
-    let again = false;
-    if (r.code !== 0 && !r.timedOut) {
-      // One more run on the same tree: a pass the second time is a flake, recorded and counted as passed.
-      appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${r.code}, run again\n${tail(out, 100)}\n\n`);
-      again = true;
-      r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
-      if (r.code === 0 && !r.timedOut) recordFlake(repo.key, check.name, basename(folder));
-    }
-    free();
+    const { r, again, seconds } = await withSlot(async () => {
+      const t0 = Date.now();
+      let r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
+      let again = false;
+      if (r.code !== 0 && !r.timedOut) {
+        // One more run on the same tree: a pass the second time is a flake, recorded and counted as passed.
+        appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${r.code}, run again\n${tail(out, 100)}\n\n`);
+        again = true;
+        r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
+        if (r.code === 0 && !r.timedOut) recordFlake(repo.key, check.name, basename(folder));
+      }
+      return { r, again, seconds: Math.round((Date.now() - t0) / 1000) };
+    });
     const rerun = again && r.code === 0 && !r.timedOut;
-    record({ name: check.name, ok: r.code === 0 && !r.timedOut, seconds: Math.round((Date.now() - t0) / 1000), ...(rerun ? { rerun: true } : {}) });
+    record({ name: check.name, ok: r.code === 0 && !r.timedOut, seconds, ...(rerun ? { rerun: true } : {}) });
     appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : ""}${again ? " (second run)" : ""}\n${tail(out, 100)}\n\n`);
     if (r.timedOut) return `timed out: check ${check.name}`;
     if (r.code !== 0) return `${check.name} failed`;
@@ -554,8 +565,7 @@ async function checksInSandbox(folder: string, dir: string, bundle: string, ref:
     }),
   ].join("\n");
   phase(checks.length ? `check ${checks.map((c) => c.name).join(", ")}` : "check");
-  const free = await checkSlot();
-  const r = await sandboxed(dir, script, { read: [bundle, ...(hasHidden ? ["hidden"] : [])], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: join(folder, "check.out"), stderr: join(folder, "check.out") }).finally(free);
+  const r = await withSlot(() => sandboxed(dir, script, { read: [bundle, ...(hasHidden ? ["hidden"] : [])], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: join(folder, "check.out"), stderr: join(folder, "check.out") }));
   const read = (f: string) => existsSync(join(dir, "checklog", f)) ? readFileSync(join(dir, "checklog", f), "utf8").trim() : undefined;
   const setup = read("setup.code");
   if (setup === undefined) return `checks did not start (exit ${r.code})`;
