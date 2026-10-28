@@ -7,7 +7,7 @@
  * See docs/specs/2026-09-24-agent-jobs.md.
  */
 import { jobArgv, route } from "./lib/route.ts";
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, readReview2, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
 import { baselineChecks, git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
@@ -356,6 +356,11 @@ async function drop(): Promise<void> {
       if (isLive(e.folder)) process.kill(Number(readFileSync(join(e.folder, "pid"), "utf8")), "SIGTERM");
       const deadline = Date.now() + 35_000;
       while (isLive(e.folder) && Date.now() < deadline) await Bun.sleep(50);
+    }
+    // A held run's review2 is its own unit: stop it too, and take its scratch clone.
+    for (const e of runs) {
+      Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}-review2`], { stdout: "ignore", stderr: "ignore" });
+      if (existsSync(join(e.folder, "review2.md"))) rmSync(join(e.folder, "review2"), { recursive: true, force: true });
     }
     if (repo) removeBranch(repo, last.run);
     // Chris asked for the drop, so it is not news.
@@ -754,7 +759,11 @@ try {
     case "run": await plain(); break;
     case "jobs": jobs(); break;
     case "recheck": await recheck(); break;
-    case "review2": await runReview2(positional[0] ?? refuse("usage: aleph review2 <run-folder>")); break;
+    case "review2": {
+      const folder = resolve(positional[0] ?? refuse("usage: aleph review2 <run-folder>"));
+      try { await runReview2(folder); } catch (e: any) { refuse(e.message); }
+      break;
+    }
     case "drop": await drop(); break;
     case "unit": await unit(resolve(positional[0])); break;
     case "land": await landJob(); break;

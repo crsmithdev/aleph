@@ -29,6 +29,7 @@ beforeAll(() => {
   writeFileSync(join(base, "pass"), `#!/bin/bash\nshift\nexec env -i "$@"\n`, { mode: 0o755 });
   process.env.ALEPH_SANDBOX_CMD = join(base, "pass");
   process.env.ALEPH_RUNS_DIR = join(base, "runs");
+  process.env.ALEPH_JOB_FOREGROUND = "1";
 });
 afterAll(() => {
   delete process.env.ALEPH_SANDBOX_CMD;
@@ -105,6 +106,31 @@ describe("review2", () => {
     await running;
     expect(state(folder)).toMatchObject({ state: "dropped", reason: "dropped by Chris", needs: "held", branch: "job/x" });
     expect(await review2(folder)).toEqual({ verdict: "land" });
+  });
+
+  test("a second review2 on a folder refuses while one runs", async () => {
+    const { runReview2 } = await import("./review2.ts");
+    const folder = held("twice");
+    const slow = join(base, "claude-slow2");
+    writeFileSync(slow, `#!/bin/bash\ncat > /dev/null\nsleep 1\nprintf '%s\\n' '${JSON.stringify({ type: "result", is_error: false, result: "VERDICT: land" })}'\n`, { mode: 0o755 });
+    process.env.ALEPH_REVIEW2_CMD = slow;
+    const first = runReview2(folder);
+    await Bun.sleep(300);
+    await expect(runReview2(folder)).rejects.toThrow("already running");
+    await first;
+    expect(await review2(folder)).toEqual({ verdict: "land" });
+  });
+
+  test("a drop that removes the run folder does not throw from review2", async () => {
+    const { runReview2 } = await import("./review2.ts");
+    const folder = held("gone");
+    const slow = join(base, "claude-slow3");
+    writeFileSync(slow, `#!/bin/bash\ncat > /dev/null\nsleep 1\necho nothing\n`, { mode: 0o755 });
+    process.env.ALEPH_REVIEW2_CMD = slow;
+    const running = runReview2(folder);
+    await Bun.sleep(300);
+    rmSync(folder, { recursive: true, force: true });
+    await running;
   });
 
   test("a run that is not held starts none", async () => {
