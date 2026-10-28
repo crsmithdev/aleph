@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { DAY_CAP, WAITING_CAP, health, lastProbe, liveRuns, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
+import { DAY_CAP, WAITING_CAP, health, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
 import { allJobs, isOpen, loadRegistry, type Entry, type Repo } from "../jobs/lib/ledger.ts";
 import { readList } from "../todo/lib/store.ts";
 import type { Doc } from "../todo/lib/todo.ts";
@@ -31,7 +31,7 @@ export interface State {
   now: string;
   factory: {
     paused: boolean; judge: "jev" | "haiku"; dayCap: number; liveCap: number; waitingCap: number; runsToday: number; costToday: number;
-    ready: number; live: number;
+    nextTick: string | null;
     probe: { at: string; ok: boolean; failed: string[] } | null;
     health: string[];
   };
@@ -41,6 +41,19 @@ export interface State {
 
 /** The Now page shows this many of the latest lands. */
 const DELIVERED = 10;
+
+/** The next firing of aleph-tick.timer, or null when systemctl fails or lists no such timer. */
+export function nextTick(): string | null {
+  try {
+    const p = Bun.spawnSync(["systemctl", "--user", "list-timers", "aleph-tick.timer", "--no-pager"], { stdout: "pipe", stderr: "ignore" });
+    if (p.exitCode !== 0) return null;
+    const line = p.stdout.toString().split("\n").find((l) => l.includes("aleph-tick.timer"));
+    const m = line?.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})(?: (UTC|GMT|Z))?/);
+    if (!m) return null;
+    const d = new Date(m[3] ? `${m[1]}T${m[2]}Z` : `${m[1]}T${m[2]}`);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  } catch { return null; }
+}
 
 /** `https://github.com/<owner>/<name>` from an origin URL in https or git@github.com: form. */
 export function githubBase(url: string): string | null {
@@ -155,7 +168,6 @@ export function state(now = new Date()): State {
     }
   }
 
-  const waitingGoals = openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`));
   const today = runsToday(now.getTime());
   const probe = lastProbe();
   return {
@@ -163,11 +175,11 @@ export function state(now = new Date()): State {
     factory: {
       paused: paused(), judge: judgeChoice(), dayCap: DAY_CAP(), liveCap: Number(process.env.ALEPH_LIVE_CAP ?? 10), waitingCap: WAITING_CAP(), runsToday: today.length,
       costToday: today.reduce((a, e) => a + (e.run.cost ?? 0), 0),
-      ready: waitingGoals.length, live: liveRuns(), probe, health: health(now.getTime()),
+      nextTick: nextTick(), probe, health: health(now.getTime()),
     },
     needs, stuck, running,
     delivered: delivered.sort((a, b) => b.at - a.at).slice(0, DELIVERED).map((d) => d.job),
-    waiting: waitingGoals
+    waiting: openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`))
       .map(({ repo, item }) => ({ repo: repo.key, id: item.id, title: item.title })),
   };
 }
