@@ -2,7 +2,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { heldRule, verdict, outcome, tagged } from "./gate.ts";
+import { reviewPrompt } from "./unit.ts";
+import { heldRule, testFindings, verdict, outcome, tagged } from "./gate.ts";
 
 let dir: string;
 const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -28,23 +29,32 @@ function rule(change: () => void): string | null {
   return heldRule(dir, ["jobs/**"], "main", "b");
 }
 
-test("a held path, a deleted, renamed or changed test, or an added .skip each need Chris", () => {
+const findings = (change: () => void) => { rule(change); return testFindings(dir, "main", "b"); };
+
+test("a held path that is not a test needs Chris; test changes are findings, not holds", () => {
   expect(rule(() => put("jobs/cli.ts", "// changed\n"))).toBe("held path jobs/cli.ts");
-  expect(rule(() => git("rm", "-q", "a.test.ts"))).toBe("deletes the test a.test.ts");
-  expect(rule(() => git("mv", "a.test.ts", "b.test.ts"))).toBe("renames the test a.test.ts to b.test.ts");
-  expect(rule(() => put("a.test.ts", 'test("a", () => { expect(1).toBe(1); });\n'))).toBe("changes the test a.test.ts");
-  expect(rule(() => put("tests/new.test.ts", 'test.skip("later", () => {});\n'))).toBe("adds .skip, .only or .todo in tests/new.test.ts");
+  expect(rule(() => git("rm", "-q", "a.test.ts"))).toBeNull();
+  expect(findings(() => git("rm", "-q", "a.test.ts"))).toEqual(["deletes the test a.test.ts"]);
+  expect(findings(() => git("mv", "a.test.ts", "b.test.ts"))).toEqual(["renames the test a.test.ts to b.test.ts"]);
+  expect(findings(() => put("a.test.ts", 'test("a", () => { expect(1).toBe(1); });\n'))).toEqual(["changes the test a.test.ts"]);
+  expect(findings(() => put("tests/new.test.ts", 'test.skip("later", () => {});\n'))).toEqual(["adds .skip, .only or .todo in tests/new.test.ts"]);
 });
 
-test("additions to an existing test pass the gate, also under a held path", () => {
-  expect(rule(() => put("a.test.ts", 'const run = () => 1;\ntest("a", () => {});\ntest("b", () => { expect(run()).toBe(1); });\n'))).toBeNull();
-  expect(rule(() => put("jobs/cli.test.ts", 'test("held", () => {});\ntest("more", () => {});\n'))).toBeNull();
-  expect(rule(() => put("a.test.ts", 'test("a", () => {});\ntest.only("b", () => {});\n'))).toBe("adds .skip, .only or .todo in a.test.ts");
-  expect(rule(() => put("jobs/cli.test.ts", 'test("held", () => { expect(1).toBe(2); });\n'))).toBe("changes the test jobs/cli.test.ts");
+test("additions to an existing test give no finding, also under a held path", () => {
+  expect(findings(() => put("a.test.ts", 'const run = () => 1;\ntest("a", () => {});\ntest("b", () => { expect(run()).toBe(1); });\n'))).toEqual([]);
+  expect(findings(() => put("jobs/cli.test.ts", 'test("held", () => {});\ntest("more", () => {});\n'))).toEqual([]);
+  expect(rule(() => put("jobs/cli.test.ts", 'test("held", () => { expect(1).toBe(2); });\n'))).toBeNull();
+  expect(findings(() => put("a.test.ts", 'test("a", () => {});\ntest.only("b", () => {});\n'))).toEqual(["adds .skip, .only or .todo in a.test.ts"]);
+});
+
+test("the reviewer prompt names a deleted test; without findings it has no test section", () => {
+  const f = findings(() => git("rm", "-q", "a.test.ts"));
+  expect(reviewPrompt("n", "goal", "diff", f)).toContain("The diff deletes the test a.test.ts");
+  expect(reviewPrompt("n", "goal", "diff", [])).not.toContain("Test changes");
 });
 
 test("new code and a new test pass the gate", () => {
-  expect(rule(() => { put("src/y.ts", "export const y = 2;\n"); put("src/y.test.ts", 'test("y", () => {});\n'); })).toBeNull();
+  expect(findings(() => { put("src/y.ts", "export const y = 2;\n"); put("src/y.test.ts", 'test("y", () => {});\n'); })).toEqual([]);
 });
 
 test("only a last line that is a result event with is_error false is a finished run", () => {

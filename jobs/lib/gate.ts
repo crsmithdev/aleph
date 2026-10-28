@@ -42,23 +42,33 @@ const MARK = /\b(test|it|describe)\.(skip|only|todo)\b/;
 const CASE = /\b(test|it|describe|expect)\s*(\.\w+\s*)?\(/;
 
 /**
- * The first rule the diff from `base` to `tip` breaks, or null: a held path
- * that is not a test, an existing test deleted or renamed, a removed or
- * changed `test`, `it`, `describe` or `expect` line, or a `.skip`, `.only`
- * or `.todo` added to a test. A run that only adds to a test file passes.
- * The globs come from the registry, which the branch cannot change.
+ * The held rule the diff from `base` to `tip` breaks, or null: a path in the
+ * `held` list that is not a test. The globs come from the registry, which the
+ * branch cannot change. Test changes are `testFindings`, for the reviewer.
  */
 export function heldRule(cwd: string, held: string[], base: string, tip: string): string | null {
   const isHeld = (p: string) => held.some((g) => new Bun.Glob(g).match(p));
   const rows = git(cwd, "diff", "--name-status", "-M", base, tip).out.split("\n").filter(Boolean).map((l) => l.split("\t"));
   for (const [, ...paths] of rows) for (const p of paths) if (isHeld(p) && !TEST.test(p)) return `held path ${p}`;
+  return null;
+}
+
+/**
+ * What the diff does to tests, one finding each: an existing test deleted or
+ * renamed, a removed or changed `test`, `it`, `describe` or `expect` line, or
+ * a `.skip`, `.only` or `.todo` added. A run that only adds tests gives none.
+ * The reviewer judges them against the goal; they do not hold the run.
+ */
+export function testFindings(cwd: string, base: string, tip: string): string[] {
+  const rows = git(cwd, "diff", "--name-status", "-M", base, tip).out.split("\n").filter(Boolean).map((l) => l.split("\t"));
   const lines = (f: string, sign: "+" | "-") => git(cwd, "diff", base, tip, "--", f).out.split("\n").filter((l) => l.startsWith(sign) && !l.startsWith(sign.repeat(3)));
+  const found: string[] = [];
   for (const [status, from, to] of rows) {
     if (!TEST.test(from)) continue;
-    if (status === "D") return `deletes the test ${from}`;
-    if (status.startsWith("R")) return `renames the test ${from} to ${to}`;
-    if (status === "M" && lines(from, "-").some((l) => CASE.test(l))) return `changes the test ${from}`;
-    if (lines(from, "+").some((l) => MARK.test(l))) return `adds .skip, .only or .todo in ${from}`;
+    if (status === "D") found.push(`deletes the test ${from}`);
+    else if (status.startsWith("R")) found.push(`renames the test ${from} to ${to}`);
+    else if (status === "M" && lines(from, "-").some((l) => CASE.test(l))) found.push(`changes the test ${from}`);
+    else if (lines(from, "+").some((l) => MARK.test(l))) found.push(`adds .skip, .only or .todo in ${from}`);
   }
-  return null;
+  return found;
 }

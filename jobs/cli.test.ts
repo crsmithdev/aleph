@@ -954,10 +954,11 @@ describe("a factory run", () => {
     });
   });
 
-  test("a change to an existing test needs Chris; drop leaves the item open", async () => {
+  test("a change to an existing test goes to the reviewer; its hold needs a review; drop leaves the item open", async () => {
     const id = (await aleph(["todo", "add", "fac", "tests"])).json.added;
-    const r = await fjob("ftest", "commit old.test.ts", {}, ["--todo", String(id)]);
-    expect(state(r.json.run)).toMatchObject({ state: "needs-you", needs: "held", reason: "changes the test old.test.ts" });
+    const r = await aleph(["job", "fac", "ftest", "--spec", specFile("Goal: ftest REVIEW:hold\nACTION: commit old.test.ts\n"), "--todo", String(id)]);
+    expect(state(r.json.run)).toMatchObject({ state: "needs-you", needs: "review", reason: expect.stringMatching(/^reviewer: hold|^reviewer: tests do not/) });
+    expect(readFileSync(join(fakeLog, "review-prompt"), "utf8")).toContain("The diff changes the test old.test.ts");
     expect((await aleph(["drop", "ftest"])).code).toBe(0);
     expect((await aleph(["todo", "show", "fac", String(id), "--json"])).json.status).toBe("open");
     expect(factoryBranch("ftest")).toBe(false);

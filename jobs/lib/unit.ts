@@ -9,7 +9,7 @@ import { basename, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { readHidden, writeList } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
-import { heldRule, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
+import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
 import { paused } from "./factory.ts";
@@ -711,7 +711,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (rule) return { verdict: { state: "needs-you", needs: "held", reason: rule, stat: git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out, ...facts }, code: 0 };
     const stat = git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out;
     phase("review");
-    const rv = await review(id, folder, run, repo, dir, base, branch);
+    const rv = await review(id, folder, run, repo, dir, base, branch, testFindings(repo.path, base, `refs/heads/${branch}`));
     if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
     if (rv.reason) return { verdict: { state: "needs-you", needs: "review", reason: rv.reason, stat, ...facts }, code: 0 };
     return { verdict: { state: "passed", ...facts }, code: 0 };
@@ -726,18 +726,28 @@ Judge whether the diff does what the issue asks, whether the tests cover it, and
 whether it breaks anything. Do not change files. End with one line:
 \`VERDICT: pass\` or \`VERDICT: hold <one-sentence reason>\`.`;
 
+const TESTS = `The diff changes tests. Judge each finding below against the goal: hold only
+when the goal does not call for the change, or the change weakens a check the
+goal keeps. A change the goal calls for passes.`;
+
+/** The reviewer's prompt: the instructions, the test findings if any, the goal and the diff. */
+export function reviewPrompt(name: string, spec: string, diff: string, findings: string[]): string {
+  const tests = findings.length ? `\n\n## Test changes\n\n${TESTS}\n\n${findings.map((f) => `- The diff ${f}`).join("\n")}` : "";
+  return `${REVIEW.replace("%NAME%", name)}${tests}\n\n## Goal issue\n\n${spec}\n\n## Diff from the merge base\n\n${diff}\n`;
+}
+
 /**
  * A fresh reviewer reads the passing run: `claude -p` on Opus 5.5 under srt,
  * with the worker's profile, in its own run folder with a clone of the branch.
  * Returns the reason to hold, or null on a pass, and the cost. Fails closed.
  */
-async function review(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string): Promise<{ reason: string | null; cost?: number }> {
+async function review(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, findings: string[]): Promise<{ reason: string | null; cost?: number }> {
   const rdir = makeRunFolder(`${id}-review`);
   try {
     copyFileSync(join(dir, "out", "out.bundle"), join(rdir, "out", "out.bundle"));
     const spec = readFileSync(join(folder, "..", run.job, "spec.md"), "utf8").trim();
     const diff = git(repo.path, "diff", base, `refs/heads/${branch}`).out;
-    const text = `${REVIEW.replace("%NAME%", run.name)}\n\n## Goal issue\n\n${spec}\n\n## Diff from the merge base\n\n${diff}\n`;
+    const text = reviewPrompt(run.name, spec, diff, findings);
     writeFileSync(join(folder, "review-prompt.md"), text);
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
     const argv = [process.env.ALEPH_REVIEWER_CMD ?? process.env.ALEPH_WORKER_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
