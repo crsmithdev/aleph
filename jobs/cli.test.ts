@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -458,7 +458,7 @@ describe("land", () => {
     await aleph(["drop", "unpassed"]);
   });
 
-  test("a passed job lands as one commit on main, and the main checkout does not move", async () => {
+  test("a passed job lands as one commit on main, and the main checkout follows", async () => {
     await job("shipit", "commit ship.txt");
     const before = remoteHead();
     const r = await aleph(["land", "shipit"]);
@@ -885,7 +885,7 @@ describe("a factory run", () => {
     expect(env).not.toMatch(/^(ALEPH_[A-Z_]+|SIDETONE_[A-Z_]+|GIT_AUTHOR_NAME|XDG_RUNTIME_DIR)=/m);
   });
 
-  test("the land pushes the tested tree with Item and Job trailers, and moves no checkout", async () => {
+  test("the land pushes the tested tree with Item and Job trailers, and the clean main checkout follows", async () => {
     const id = (await aleph(["todo", "add", "fac", "a factory item"])).json.added;
     const j = await fjob("fitem", "commit fitem.txt", {}, ["--todo", String(id)]);
     const r = await aleph(["land", "fitem"]);
@@ -1948,7 +1948,32 @@ describe("land follows main", () => {
     await land("follow4", "commit docs-only.txt", "aleph", extra);
     expect(existsSync(rec)).toBe(false);
     const r = await land("follow5", "commit ui/x", "aleph", extra);
-    expect(readFileSync(rec, "utf8")).toBe("--user try-restart aleph-ui.service\n");
+    expect(readFileSync(rec, "utf8")).toBe("--user try-restart --no-block aleph-ui.service\n");
     expect(file(r.json.run, "land.log")).toContain("aleph-ui restarted");
+  });
+
+  test("a failed restart leaves the land landed, and a later land restarts for an earlier ui/ commit", async () => {
+    const bin = join(base, "systemctl-bin2");
+    const rec = join(base, "systemctl2.args");
+    mkdirSync(bin, { recursive: true });
+    // A PATH with the tools the land needs and no systemctl: spawning it throws.
+    const bare = join(base, "bare-bin");
+    mkdirSync(bare, { recursive: true });
+    for (const tool of ["bun", "git", "sh", "bash", "env", "timeout"]) {
+      const found = Bun.which(tool);
+      if (found && !existsSync(join(bare, tool))) symlinkSync(found, join(bare, tool));
+    }
+    const nopath = { PATH: bare };
+    // systemctl cannot be spawned: the land still lands.
+    sh(repo, "git", "checkout", "-q", "main");
+    writeFileSync(join(repo, "README"), "dirty\n");
+    const a = await land("follow6", "commit ui/y", "aleph", nopath);
+    expect(state(a.json.run).state).toBe("landed");
+    sh(repo, "git", "checkout", "README");
+    // The checkout was dirty, so it did not move; the next land moves it across ui/y.
+    writeFileSync(join(bin, "systemctl"), `#!/bin/sh\necho "$@" >> ${rec}\n`, { mode: 0o755 });
+    const b = await land("follow7", "commit other.txt", "aleph", { PATH: `${bin}:${process.env.PATH}` });
+    expect(readFileSync(rec, "utf8")).toBe("--user try-restart --no-block aleph-ui.service\n");
+    expect(file(b.json.run, "land.log")).toContain("aleph-ui restarted");
   });
 });

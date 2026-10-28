@@ -328,7 +328,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         const pushed = git(repo.path, "log", `origin/${main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${m.run.job}$`).out;
         if (pushed) {
           m.log(`already on main as ${pushed}`);
-          finish(m, { verdict: { state: "landed", commit: pushed }, code: 0, after: () => { removeBranch(repo, m.run); followCheckout(repo, changedBy(repo, pushed), log); } });
+          finish(m, { verdict: { state: "landed", commit: pushed }, code: 0, after: () => { removeBranch(repo, m.run); followCheckout(repo, log); } });
           continue;
         }
         // A commit by hand, or by another job, that names the item: this land must not add a second one.
@@ -423,7 +423,6 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
       if (ok.length) {
         phase("land");
         if (step("push", "push", "-q", "origin", `${result.tip}:refs/heads/${main}`).ok) {
-          const changed = git(repo.path, "diff", "--name-only", base0, result.tip).out.split("\n").filter(Boolean);
           const checks = readRun(folder)?.checks;
           for (const { m, commit } of ok) {
             const { todo, checkItem } = closeItems(repo, m.run);
@@ -433,7 +432,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
             if (m !== leader) m.log(`landed as ${commit} with ${run.name}; the checks ran in ${id}`);
             finish(m, { verdict: { state: "landed", commit, checkItem }, code: 0 });
           }
-          followCheckout(repo, changed, log);
+          followCheckout(repo, log);
           return conclude(leader, done, checks);
         }
         if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
@@ -464,23 +463,26 @@ function conclude(leader: Member, done: Map<Member, Outcome & { after?: () => vo
   return done.get(leader) ?? { verdict: { state: "failed", reason: "not landed" }, code: 1 };
 }
 
-/** The paths a commit changed. */
-function changedBy(repo: Repo, commit: string): string[] {
-  return git(repo.path, "diff", "--name-only", `${commit}^`, commit).out.split("\n").filter(Boolean);
-}
-
 /**
  * After the land is on origin/<main>: fast-forward the repo's main checkout,
- * and restart aleph-ui when the land changed ui/. Neither fails the land; the
- * log says what happened. A checkout that did not move still holds the old code, so no restart.
+ * and restart aleph-ui when the paths between the checkout's old and new HEAD
+ * include ui/. Neither fails the land; the log says what happened. A checkout
+ * that did not move still holds the old code, so no restart.
  */
-function followCheckout(repo: Repo, changed: string[], log: (step: string, out?: string) => void): void {
+function followCheckout(repo: Repo, log: (step: string, out?: string) => void): void {
+  const old = git(repo.path, "rev-parse", "HEAD").out;
   const why = followMain(repo.path, repo.main);
   if (why) { log(why); return; }
   log("main checkout updated");
-  if (repo.key !== "aleph" || !changed.some((f) => f.startsWith("ui/"))) return;
-  const r = Bun.spawnSync(["systemctl", "--user", "try-restart", "aleph-ui.service"], { stdout: "pipe", stderr: "pipe" });
-  log(r.exitCode === 0 ? "aleph-ui restarted" : `aleph-ui not restarted: ${(r.stderr.toString() || r.stdout.toString() || `exit ${r.exitCode}`).trim()}`);
+  if (repo.key !== "aleph") return;
+  const moved = git(repo.path, "diff", "--name-only", old, "HEAD").out.split("\n").filter(Boolean);
+  if (!moved.some((f) => f.startsWith("ui/"))) return;
+  try {
+    const r = Bun.spawnSync(["systemctl", "--user", "try-restart", "--no-block", "aleph-ui.service"], { stdout: "pipe", stderr: "pipe" });
+    log(r.exitCode === 0 ? "aleph-ui restarted" : `aleph-ui not restarted: ${(r.stderr.toString() || r.stdout.toString() || `exit ${r.exitCode}`).trim()}`);
+  } catch (e) {
+    log(`aleph-ui not restarted: ${e instanceof Error ? e.message : e}`);
+  }
 }
 
 /** The checks on `commit`, in the job's worktree, which is back on its branch after. */
