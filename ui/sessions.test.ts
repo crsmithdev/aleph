@@ -122,7 +122,20 @@ test("views render, link to Langfuse, and escape", async () => {
 
 test("the sessions tables scroll inside their own wrapper", async () => {
   const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
-  expect(v.renderSessions(list)).toMatch(/<div class="tscroll" style="overflow-x:auto[^"]*"><table class="tbl">/);
+  expect(v.renderSessions(list)).toMatch(/<div class="tscroll"><table class="tbl">/);
   const s: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
-  expect(v.renderSession(s)).toMatch(/<div class="tscroll" style="overflow-x:auto[^"]*"><table class="tbl">/);
+  expect(v.renderSession(s)).toMatch(/<div class="tscroll"><table class="tbl">/);
+});
+
+test("the list has a filter bar, 50 rows and a pager; the turn is a table", async () => {
+  const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
+  const h = v.renderSessions(list);
+  expect(h).toContain('class="fbar"');
+  expect(h).toContain('name="q"');
+  expect(h).toContain('<span class="of">2 of 2</span>');
+  expect(h).toContain('<span class="chips">');
+  const many = { ...list, sessions: Array.from({ length: 60 }, (_, i) => ({ ...list.sessions[0], id: `s${i}` })) };
+  expect(v.renderSessions(many)).toContain('data-more="10"');
+  const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/1", { id: "s1", n: "1" })).json();
+  expect(v.renderTurn(t)).toContain('<table class="tbl">');
 });
