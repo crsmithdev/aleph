@@ -25,7 +25,8 @@ import { derive, facts, FACTS_REF, itemOnMain, landedIndex, readFacts, type Fact
 const CLI = import.meta.path;
 /** The most agent runs live at once; `ALEPH_LIVE_CAP` or `caps.json` changes it. */
 const CAP = LIVE_CAP;
-const PID_WAIT_MS = 10_000;
+/** How long `dispatch` waits for the unit to write `pid`; `ALEPH_PID_WAIT_MS` changes it. */
+const PID_WAIT_MS = Number(process.env.ALEPH_PID_WAIT_MS) || 10_000;
 const DAY_MS = 24 * 3600_000;
 const RECENT_DAYS = 7;
 

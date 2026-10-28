@@ -15,7 +15,7 @@ describe("run units get a low priority", () => {
     chmodSync(join(base, "fakebin", "systemd-run"), 0o755);
     writeFileSync(argvLog(), "");
   });
-  const viaSystemd = () => ({ ALEPH_JOB_FOREGROUND: "0", PATH: `${join(base, "fakebin")}:${process.env.PATH}` });
+  const viaSystemd = () => ({ ALEPH_JOB_FOREGROUND: "0", ALEPH_PID_WAIT_MS: "200", PATH: `${join(base, "fakebin")}:${process.env.PATH}` });
 
   test("the systemd-run argv of an agent run and of a land has CPUWeight=20 and --nice=10", async () => {
     await aleph(["job", "demo", "unitprio", "--spec", specFile("Goal: unitprio\nACTION: commit unitprio.txt\n")], viaSystemd());
