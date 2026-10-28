@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { Routes } from "../server.ts";
 import { staleAsync, staleSync } from "../stale.ts";
 import { uiFetchTtl } from "../../todo/lib/store.ts";
+import { memoryTypes } from "./memory-types.ts";
 import { KINDS, linkTargets, links, lintVault, loadVault, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 
 const CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
@@ -104,6 +105,7 @@ async function overview(url: URL): Promise<Response> {
   };
   const m = await slow;
   if (m) { body.misses = m.value; body.cachedAt = m.cachedAt; }
+  body.types = await memoryTypes(root, wiki, m?.value);
   return json(body);
 }
 

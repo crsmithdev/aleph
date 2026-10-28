@@ -360,6 +360,7 @@ async function misses(): Promise<void> {
   out({
     days, recalls: recalls.length, empty: empty.length, empty_share: recalls.length ? empty.length / recalls.length : 0,
     reformulated, unoffered_reads: unoffered,
+    missed: empty.slice(-10).reverse().map((o) => ({ query: cmdOf(o).replace(/^vault recall\s*/, ""), at: o.startTime ?? "" })),
     hook: {
       runs: spans.length,
       zero_candidates: meta.filter((m) => num(m.candidates) === 0).length,

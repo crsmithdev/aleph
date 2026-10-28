@@ -30,6 +30,14 @@ beforeAll(async () => {
   note("decisions", "Use Bun", "decision", "aleph", "**Claim.** We use Bun.\n\n## Related\n[[Other trap]]");
   note("gotchas", "Other trap", "gotcha", "other", "**Claim.** A trap; see [[Use Bun]].");
   note("concepts", "Bunny", "concept", "aleph", "**Claim.** Mentions bun in the body.");
+  writeFileSync(join(root, "MEMORY.md"), "# Memory\n\nChris prefers short answers.\n");
+  mkdirSync(join(root, "wiki", "episodes"), { recursive: true });
+  note("episodes", "Goal aleph-1", "episode", "aleph", "**Claim.** It went fine.");
+  const hand = join(base, "handoffs");
+  mkdirSync(hand);
+  writeFileSync(join(hand, "current.md"), "# Handoff\n\n## Intent\n\nFinish the memory tab.\n");
+  writeFileSync(join(hand, "2026-10-01-120000-x.md"), "## Intent\nOld work.\n");
+  saved.ALEPH_HANDOFFS_DIR = process.env.ALEPH_HANDOFFS_DIR; process.env.ALEPH_HANDOFFS_DIR = hand;
   writeFileSync(join(root, "daily", `${today}.md`), `# ${today}\n\n- 10:00 write [[Use Bun]] — why\n- 10:05 write [[Other trap]] — why\n`);
   for (const [k, val] of Object.entries({ ALEPH_VAULT: root, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" })) { saved[k] = process.env[k]; process.env[k] = val; }
   server = await serve(0);
@@ -42,13 +50,36 @@ afterAll(() => {
 
 test("counts by kind and scope, Home's sections, recent writes", async () => {
   const m: any = await (await at("/api/memory")).json();
-  expect(m.total).toBe(3);
-  expect(m.byKind).toMatchObject({ decision: 1, gotcha: 1, concept: 1, entity: 0, project: 0 });
-  expect(m.byScope).toEqual({ aleph: 2, other: 1 });
+  expect(m.total).toBe(4);
+  expect(m.byKind).toMatchObject({ decision: 1, gotcha: 1, concept: 1, entity: 0, project: 0, episode: 1 });
+  expect(m.byScope).toEqual({ aleph: 3, other: 1 });
   expect(m.home[0]).toEqual({ heading: "Decisions", entries: [{ title: "Use Bun", hook: "why we run on Bun" }] });
   expect(m.writes.map((w: any) => w.time)).toEqual(["10:05", "10:00"]);
   expect(m.lint.refuse).toBeDefined();
   expect(m.misses).toBeUndefined();
+});
+
+test("every memory type has its block", async () => {
+  const t: any = (await (await at("/api/memory")).json()).types;
+  expect(t.working.current.intent).toBe("Finish the memory tab.");
+  expect(t.working.archived.map((h: any) => [h.date, h.intent])).toEqual([["2026-10-01", "Old work."]]);
+  expect(t.semantic.memory.first).toBe("Chris prefers short answers.");
+  expect(t.semantic.notes.map((n: any) => n.title)).toContain("Use Bun");
+  expect(t.episodic.episodes.map((n: any) => n.title)).toEqual(["Goal aleph-1"]);
+  expect(t.episodic.daily.latest).toEqual([today]);
+  expect(t.procedural.skills).toContain("vault");
+  expect(t.procedural.claudeMd.path).toBe("identity/CLAUDE.md");
+  for (const k of ["retrieval", "prospective", "gates"]) expect(t[k]).toBeDefined();
+});
+
+test("the page shows all seven types, and an empty one says what fills it", () => {
+  const h = v.renderMemory({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [] });
+  for (const t of ["Working", "Semantic", "Episodic", "Procedural", "Retrieval", "Prospective", "Parametric", "Kept facts", "Proposals"]) expect(h).toContain(t);
+  for (const id of ["working", "semantic", "episodic", "procedural", "retrieval", "prospective", "parametric"]) expect(h).toContain(`href="#h-${id}"`);
+  expect(h).toContain("No handoff yet.");
+  expect(h).toContain("aleph-352");
+  const many = v.renderMemory({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [], types: { episodic: { episodes: Array.from({ length: 12 }, (_, i) => ({ title: `E${i}`, scope: "a", updated: "" })), daily: { total: 0, latest: [] }, sessions: [], last: "" } } });
+  expect(many).toContain("2 more");
 });
 
 test("?project= keeps only that project's data", async () => {
@@ -90,7 +121,7 @@ test("the views render and the note route is wired", () => {
   expect(noteView.path).toBe("/memory/:title");
   expect(noteView.api({ title: "A b" })).toBe("/api/memory/note?title=A%20b");
   const h = v.renderMemory({ exists: true, total: 1, byKind: { decision: 1 }, byScope: { aleph: 1 }, home: [{ heading: "Decisions", entries: [{ title: "Use Bun", hook: "h" }] }], lint: { refuse: [], warn: [] }, writes: [], misses: { days: 7, recalls: 2, empty: 1, empty_share: 0.5, reformulated: 0, unoffered_reads: 0 } });
-  for (const t of ["Use Bun", "#/memory/Use%20Bun", "By scope", "50%", "Search the vault"]) expect(h).toContain(t);
+  for (const t of ["Use Bun", "#/memory/Use%20Bun", "Counts by kind and scope", "50%", "Search the vault"]) expect(h).toContain(t);
   const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
   expect(nh).toContain('href="#/memory/U"');
   expect(nh).toContain("Linked from");

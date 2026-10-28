@@ -731,7 +731,11 @@ describe("misses", () => {
     const before = snapshot();
     const r = await runAsync(env(), "misses", "--days", "7");
     expect(r.code).toBe(0);
-    expect(JSON.parse(r.stdout)).toEqual({
+    const out = JSON.parse(r.stdout);
+    expect(out.missed).toHaveLength(2);  // the two empty recalls, newest first
+    expect(out.missed[0].at >= out.missed[1].at).toBe(true);
+    delete out.missed;
+    expect(out).toEqual({
       days: 7, recalls: 5, empty: 2, empty_share: 2 / 5, reformulated: 2, unoffered_reads: 1,
       hook: { runs: 3, zero_candidates: 1, capped: 1, mean_kept: 1 },
     });
