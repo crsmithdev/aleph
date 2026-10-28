@@ -48,6 +48,7 @@ hook extracts facts. \`vault compile\` is the safety net, run on demand.
 | \`wiki/entities/\` | a tool, service, repo, person | |
 | \`wiki/projects/\` | status and next steps of a project | |
 | \`wiki/gotchas/\` | how something actually behaves, against expectation | |
+| \`wiki/episodes/\` | one page per finished goal, written by the factory's report writer | |
 | \`daily/\` | \`YYYY-MM-DD.md\`, append-only log of writes and notes | today only |
 | \`archive/\` | superseded notes; never deleted | by supersession only |
 | \`attachments/\` | images and files pasted from Obsidian | |
@@ -59,7 +60,7 @@ are bare \`[[Title]]\`. Frontmatter:
 
 \`\`\`yaml
 aliases: []                 # optional
-kind: decision|concept|entity|project|gotcha
+kind: decision|concept|entity|project|gotcha|episode
 scope: <repo name>|global
 confidence: measured|reported|inferred
 updated: YYYY-MM-DD

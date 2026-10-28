@@ -864,3 +864,34 @@ describe("provenance and the contradiction screen", () => {
     expect(Object.keys(asked[0].questions).length).toBe(20);
   });
 });
+
+describe("episode", () => {
+  const episodeBody = (word: string, skip?: string) => ["Goal", "What landed", "How it went", "Cost", "What went wrong"]
+    .filter((h) => h !== skip).map((h) => `## ${h}\n${word} ${h.toLowerCase()}\n`).join("\n");
+  const episode = (title: string, word: string, skip?: string) => note(title, { kind: "episode" }, episodeBody(word, skip));
+  test("init makes wiki/episodes/", () => {
+    expect(existsSync(join(vault, "wiki/episodes/.gitkeep"))).toBe(true);
+  });
+  test("a draft with the five sections is written to wiki/episodes/", () => {
+    const r = cli("write", episode("Ledger Episode", "ledger"), "--why", "x");
+    expect(r.code).toBe(0);
+    expect(r.stderr).not.toContain("refuse template");
+    expect(r.json.path).toBe("wiki/episodes/Ledger Episode.md");
+  });
+  test("a draft without ## Cost is refused", () => {
+    const r = cli("write", episode("Costless Episode", "ledger", "Cost"), "--why", "x");
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("## Cost");
+  });
+  test("recall --episodes returns only episodes, plain recall none", () => {
+    cli("write", note("Ledger Gotcha", {}, "**Claim.** the ledger lies, as of 2026-09-04.\n\n## Details\nledger\n\n## Evidence\n\n## Related\n[[Home]]\n"), "--why", "x");
+    expect(cli("recall", "--episodes", "ledger").json.map((h: any) => h.title)).toEqual(["Ledger Episode"]);
+    expect(cli("recall", "ledger").json.map((h: any) => h.title)).toEqual(["Ledger Gotcha"]);
+  });
+  test("recall --episodes returns the top 3", () => {
+    for (const t of ["Quartz One", "Quartz Two", "Quartz Three", "Quartz Four"]) expect(cli("write", episode(t, "quartz"), "--why", "x").code).toBe(0);
+    const hits = cli("recall", "--episodes", "quartz").json;
+    expect(hits.length).toBe(3);
+    expect(hits[0].rank).toBeGreaterThan(0);
+  });
+});

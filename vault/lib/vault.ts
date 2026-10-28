@@ -7,9 +7,9 @@ import { homedir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "./frontmatter.ts";
 
-export const KINDS = ["decision", "concept", "entity", "project", "gotcha"] as const;
+export const KINDS = ["decision", "concept", "entity", "project", "gotcha", "episode"] as const;
 export type Kind = (typeof KINDS)[number];
-export const FOLDERS: Record<Kind, string> = { decision: "decisions", concept: "concepts", entity: "entities", project: "projects", gotcha: "gotchas" };
+export const FOLDERS: Record<Kind, string> = { decision: "decisions", concept: "concepts", entity: "entities", project: "projects", gotcha: "gotchas", episode: "episodes" };
 export const CONFIDENCE = ["measured", "reported", "inferred"] as const;
 export const REQUIRED = ["kind", "scope", "confidence", "updated", "supersedes", "sources"] as const;
 export const LISTS = ["aliases", "supersedes", "consistent_with", "sources", "tags"] as const;
@@ -29,7 +29,7 @@ export const HOME_KINDS: readonly string[] = ["decision", "project", "concept", 
  * decision decays slowly and a transient gotcha decays fast; a project note
  * describes current state, so it decays fastest of all.
  */
-export const DECAY_DAYS: Record<Kind, number> = { project: 30, gotcha: 60, decision: 180, concept: 365, entity: 365 };
+export const DECAY_DAYS: Record<Kind, number> = { project: 30, gotcha: 60, decision: 180, concept: 365, entity: 365, episode: 365 };
 
 /**
  * Freshness and authority are different axes. A six-month-old claim someone
@@ -143,6 +143,9 @@ export function validTitle(title: string): boolean {
   return !/[\/\\:*?"<>|]/.test(title) && title.trim() === title && title.length > 0;
 }
 
+/** The sections of an episode page, in order. */
+const EPISODE_SECTIONS = ["Goal", "What landed", "How it went", "Cost", "What went wrong"] as const;
+
 /** Refuse-class findings for one wiki note against the rest of the vault. */
 export function validateNote(note: Note, others: Note[]): Finding[] {
   const f: Finding[] = [];
@@ -168,6 +171,15 @@ export function validateNote(note: Note, others: Note[]): Finding[] {
   const all = linkTargets([...others.filter((o) => o.path !== note.path), note]);
   for (const target of links(note.body)) if (!all.has(target.toLowerCase())) add("dangling", `[[${target}]] resolves to nothing`);
 
+  if (kind === "episode") {
+    let from = 0;
+    for (const h of EPISODE_SECTIONS) {
+      const m = new RegExp(`^## ${h}\\s*$`, "m").exec(note.body.slice(from));
+      if (!m) { add("template", `missing section ## ${h}, or it is out of order (the order is ${EPISODE_SECTIONS.map((s) => `## ${s}`).join(", ")})`); break; }
+      from += m.index + m[0].length;
+    }
+    return f;
+  }
   const body = note.body.replace(/^\s*#[^\n]*\n/, "").trimStart();
   const claim = body.split(/\n\s*\n/)[0] ?? "";
   if (!claim.startsWith("**Claim.**")) add("template", "body must open with a paragraph beginning **Claim.**");
@@ -188,7 +200,7 @@ export function budgetFindings(notes: Note[]): Finding[] {
 }
 
 const STOP = new Set("about after also been before being could does doing from have here into just like make more most much must only other over really should some such than that their them then there these they this those very want were what when where which while will with would your".split(" "));
-const screenWords = (s: string) => (s.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) => !STOP.has(w));
+export const screenWords = (s: string) => (s.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) => !STOP.has(w));
 
 /** Live wiki notes in the draft's scope that share a title or alias word with it, minus those it supersedes or says it is consistent with, at most `max`. */
 export function screenCandidates(draft: Note, notes: Note[], max = 20): Note[] {
