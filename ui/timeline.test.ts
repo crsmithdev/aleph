@@ -170,7 +170,7 @@ describe("timeline view", () => {
 
   test("a job ended row has its state, project, cost and Details in their cells", () => {
     const h = renderEvent({ at: "2026-10-27T10:25:00Z", kind: "job", what: "ended", state: "landed", title: "aleph-9", href: "#/jobs/aleph-9", project: "aleph", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] });
-    for (const t of ['<span class="badge">landed</span>', "<td>aleph</td>", '<td class="num">$1.5000</td>', '<td class="det"><span class="k">took 25m</span><span class="k">model opus</span></td>', 'href="#/jobs/aleph-9"']) expect(h).toContain(t);
+    for (const t of ['<span class="badge">landed</span>', "<td>aleph</td>", '<td class="num">$1.50</td>', '<td class="det"><span class="k">took 25m</span><span class="k">model opus</span></td>', 'href="#/jobs/aleph-9"']) expect(h).toContain(t);
   });
 
   test("an issue row shows its labels; a row without cost has an empty cost cell", () => {

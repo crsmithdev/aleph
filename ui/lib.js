@@ -13,7 +13,7 @@ export const clock = (iso) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? "" : `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
-export const money = (n) => `$${(n ?? 0).toFixed(4)}`;
+export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
 
 /** "12 min", "2 h 5 min": the span from `from` to `to` (ISO strings). */
 export function span(from, to) {

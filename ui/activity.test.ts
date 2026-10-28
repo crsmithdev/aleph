@@ -199,7 +199,7 @@ describe("routes and view", () => {
     expect(opt.series[0].data).toEqual(a.cost.map((c: any) => c.cost));
     expect(opt.series[0].data).toHaveLength(7);
     expect(JSON.stringify(opt)).not.toMatch(/#[0-9a-f]{3,6}|rgb/i);
-    expect(opt.tooltip.formatter({ name: "2026-10-27", value: 1.5 })).toBe("2026-10-27<br>$1.5000");
+    expect(opt.tooltip.formatter({ name: "2026-10-27", value: 1.5 })).toBe("2026-10-27<br>$1.50");
     for (const t of ["Last 30 days", "claude-opus-5-5", "Bash", "verify-gate", "nothing was run", "Factory runs per day"]) expect(html).toContain(t);
     expect(view.group).toBe("activity");
   });

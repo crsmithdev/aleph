@@ -300,7 +300,7 @@ export function behind(repo: Repo): string | null {
   return `${repo.path} is ${n} commit${n > 1 ? "s" : ""} behind origin/${repo.main}; git pull brings:\n${git(repo.path, "diff", "--stat", "HEAD", `origin/${repo.main}`).out}`;
 }
 
-const money = (n: number) => `$${n.toFixed(4)}`;
+const money = (n: number) => (n > 0 && n < 0.005 ? "<$0.01" : `$${n.toFixed(2)}`);
 
 /** One run as the report gives it. */
 function entry(e: Entry): string {

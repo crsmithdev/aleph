@@ -1020,10 +1020,10 @@ describe("a factory run", () => {
     const rep = await aleph(["report"]);
     expect(rep.stdout).toContain("fac/fdefault passed");
     expect(rep.stdout).toContain("DEFAULT: which colour? -> blue");
-    expect(rep.stdout).toContain("cost $0.2500 at the API price");
+    expect(rep.stdout).toContain("cost $0.25 at the API price");
     expect(rep.stdout).toContain("fac/fheld needs-you (held): held path held/x.txt");
     expect(rep.stdout).toContain("aleph land fheld");
-    expect(rep.stdout).toMatch(/runs in the last 24 hours: \d+ of 100, \$\d+\.\d{4} at the API price/);
+    expect(rep.stdout).toMatch(/runs in the last 24 hours: \d+ of 100, \$\d+\.\d{2} at the API price/);
     expect(state(r.json.run)).toMatchObject({ shown: true, told: true });
     expect((await aleph(["report"])).stdout).not.toContain("fdefault");
     await aleph(["drop", "fdefault"]);

@@ -30,7 +30,12 @@ test("md drops javascript: links and quotes in hrefs", () => {
 });
 
 test("formats and states", () => {
-  expect(money(0.25)).toBe("$0.2500");
+  expect(money(0.25)).toBe("$0.25");
+  expect(money(1.5)).toBe("$1.50");
+  expect(money(1.0276)).toBe("$1.03");
+  expect(money(0.004)).toBe("<$0.01");
+  expect(money(0)).toBe("$0.00");
+  expect(money(undefined)).toBe("$0.00");
   expect(span("2026-10-27T10:00:00Z", "2026-10-27T12:05:00Z")).toBe("2 h 5 min");
   expect(clock("nope")).toBe("");
   expect(empty("Nothing here.", "Try <code>x</code>.")).toContain('<p class="hint">Try <code>x</code>.</p>');

@@ -166,7 +166,7 @@ describe("render", () => {
     expect(row).toContain('<span class="kind">worker</span>');
     expect(row).toContain('<span class="badge stuck">failed</span>');
     expect(row).toContain('<span class="took num">');
-    expect(row).toContain('<span class="cost num">$1.0276</span>');
+    expect(row).toContain('<span class="cost num">$1.03</span>');
     expect(row).toContain('<span class="model quiet">opus</span>');
     expect(row).toContain('<span class="reason quiet">checks failed</span>');
   });

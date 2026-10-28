@@ -51,7 +51,7 @@ export const renderChart = (days) => `<div class="chart" role="img" aria-label="
 export function chartOption(days) {
   return {
     grid: { left: 56, right: 12, top: 12, bottom: 28 },
-    tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${money(q.value)}`; } },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${esc(money(q.value))}`; } },
     xAxis: { type: "category", data: days.map((d) => d.day), axisLabel: { formatter: short } },
     yAxis: { type: "value", axisLabel: { formatter: (v) => `$${v}` } },
     series: [{ type: "bar", name: "Cost", data: days.map((d) => d.cost) }],
@@ -78,14 +78,14 @@ export function renderActivity(d) {
   const lf = a.langfuse === "off" ? empty("Langfuse is not configured.", "Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in <code>~/.aleph/.env</code>.")
     : a.langfuse === "error" ? error(`Langfuse failed: ${a.error}`, "Check that Langfuse is running, then reload.") : "";
   return `${STYLE}<div class="page act"><h1>Activity</h1>` + renderStrip(s) +
-    sh(`Cost per day, last ${a.days.length} days`, money(total) + " in all") + (lf || renderChart(a.cost)) +
+    sh(`Cost per day, last ${a.days.length} days`, esc(money(total)) + " in all") + (lf || renderChart(a.cost)) +
     (lf ? "" :
-      sh("Cost per model") + (a.models.length ? table([["Model"], ["Calls", 1], ["Cost", 1]], a.models.map((m) => `<tr><td>${esc(m.model)}</td><td class="n">${m.calls}</td><td class="n">${money(m.cost)}</td></tr>`)) : empty("No model calls in this period.")) +
+      sh("Cost per model") + (a.models.length ? table([["Model"], ["Calls", 1], ["Cost", 1]], a.models.map((m) => `<tr><td>${esc(m.model)}</td><td class="n">${m.calls}</td><td class="n">${esc(money(m.cost))}</td></tr>`)) : empty("No model calls in this period.")) +
       sh("Tools") + counts(a.tools, "Tool") +
       sh("Hooks") + counts(a.hooks, "Hook") +
       sh("Verify-gate denials", String(a.denials.total)) +
       (a.denials.recent.length ? table([["When"], ["Reason"]], a.denials.recent.map((r) => `<tr><td>${esc(r.at.slice(0, 16).replace("T", " "))}</td><td>${esc(r.reason)}</td></tr>`)) : empty("The gate denied nothing in this period."))) +
     sh("Factory runs per day") +
-    table([["Day"], ["Runs", 1], ["Cost", 1]], a.runs.map((r) => `<tr><td>${esc(r.day)}</td><td class="n">${r.runs}</td><td class="n">${money(r.cost)}</td></tr>`)) +
+    table([["Day"], ["Runs", 1], ["Cost", 1]], a.runs.map((r) => `<tr><td>${esc(r.day)}</td><td class="n">${r.runs}</td><td class="n">${esc(money(r.cost))}</td></tr>`)) +
     `</div>`;
 }
