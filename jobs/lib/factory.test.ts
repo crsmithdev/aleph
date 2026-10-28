@@ -96,6 +96,21 @@ test("a goal given a waiting_on while an earlier goal starts is not started", as
   expect(out.skipped).toEqual([`fac-${second}: waiting on fac-${other}`]);
 });
 
+// The list is read after the baselines, so the label gap is between that read and a goal's lock: an earlier goal's start removes it.
+test("a goal whose label is removed while an earlier goal starts is not started", async () => {
+  const first = goal();
+  const second = goal();
+  const calls: string[] = [];
+  const out = await dispatchGoals(async (_repo, name) => {
+    calls.push(name);
+    if (name === `fac-${first}`) await change(second, (item) => todos.edit(item, { labels: [] }));
+    return null;
+  }, async () => null);
+  expect(calls).toEqual([`fac-${first}`]);
+  expect(out.started).toEqual([`fac-${first}`]);
+  expect(out.skipped).toEqual([`fac-${second}: not a goal`]);
+});
+
 // A dispatch that finds the baseline held skips with `main baseline running`; the holder starts the goal.
 test("a goal added while another dispatch holds the baseline is started by the holder", async () => {
   goal();
