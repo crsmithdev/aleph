@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { writeList } from "../todo/lib/store.ts";
 import { add } from "../todo/lib/todo.ts";
 import { state } from "./state.ts";
+import { loadRegistry } from "../jobs/lib/ledger.ts";
+import { facts } from "../jobs/lib/status.ts";
 
 let base: string, jobsDir: string, factory: string;
 const saved: Record<string, string | undefined> = {};
@@ -185,5 +187,17 @@ describe("state", () => {
     expect(s.delivered[0].state).not.toBe("landed");
     expect(s.delivered.slice(0, 4).map((j) => j.name)).toEqual(["fac-8", "fac-7", "fac-5", "fac-6"]);
     expect(s.delivered.map((j) => j.name)).not.toContain("fac-l10");
+  });
+});
+
+describe("a land that found the job lock busy", () => {
+  test("does not make the job stuck, in the UI or in the facts", () => {
+    run("20261027-000040-a", { job: "fac-7", name: "fac-7", state: "passed", todo: 2, started: ago(3) });
+    run("20261027-000041-a", { kind: "land", job: "fac-7", name: "fac-7", state: "failed", reason: "job lock busy", todo: 2, started: ago(2) });
+    const s = state(now);
+    expect(s.stuck.map((j) => j.name)).not.toContain("fac-7");
+    expect(s.stuck.map((j) => j.name)).toEqual(["fac-3"]);
+    expect(facts(loadRegistry().fac).open[2]).toBe("passed");
+    for (const id of ["20261027-000040-a", "20261027-000041-a"]) rmSync(join(jobsDir, id), { recursive: true });
   });
 });

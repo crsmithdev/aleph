@@ -272,6 +272,9 @@ export function readReview2(folder: string): Review2 | undefined {
 /** The reason of a land that found the job lock taken: it did nothing to the job. */
 export const LOCK_BUSY = "job lock busy";
 
+/** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts. */
+export const lastReal = (j: Entry[]): Entry => j.findLast((e) => !(e.run.kind === "land" && e.run.state === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
+
 /** How many check runs of the test suite may run at once across the factory: ALEPH_CHECK_SLOTS, default 2. */
 export const checkSlots = () => Math.max(1, Math.floor(Number(process.env.ALEPH_CHECK_SLOTS)) || 2);
 

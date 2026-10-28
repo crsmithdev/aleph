@@ -10,7 +10,7 @@
 import { readList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import { git, gitWith } from "./git.ts";
-import { allJobs, isOpen, type Repo, type State } from "./ledger.ts";
+import { allJobs, isOpen, lastReal, type Repo, type State } from "./ledger.ts";
 
 export const FACTS_REF = "refs/aleph/facts";
 
@@ -35,7 +35,7 @@ export function facts(repo: Repo, doc: todos.Doc | null = readList(repo)): Facts
     const item = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
     if (item === undefined || runs[0].run.repo !== repo.key) continue;
     if (repo.sandbox) touched.add(item);
-    if (isOpen(runs)) open[item] = runs.at(-1)!.run.state;
+    if (isOpen(runs)) open[item] = lastReal(runs).run.state;
   }
   return { repo: repo.key, main: repo.main, store, open, touched: [...touched].sort((a, b) => a - b) };
 }

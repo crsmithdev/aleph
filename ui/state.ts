@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { judgeChoice } from "../hooks/lib/jev.ts";
 import { DAY_CAP, LIVE_CAP, WAITING_CAP, health, hold, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
-import { allJobs, allRuns, isOpen, loadRegistry, readReview2, type Entry, type Repo } from "../jobs/lib/ledger.ts";
+import { allJobs, allRuns, isOpen, lastReal, loadRegistry, readReview2, type Entry, type Repo } from "../jobs/lib/ledger.ts";
 import { readDecision, type Decision } from "../jobs/lib/decision.ts";
 import { readList } from "../todo/lib/store.ts";
 import { status, type Doc } from "../todo/lib/todo.ts";
@@ -217,15 +217,16 @@ export function state(now = new Date()): State {
       continue;
     }
     if (isOpen(runs)) {
+      const real = lastReal(runs).run;
       openNames.add(`${last.repo}/${last.name}`);
-      if (last.state === "needs-you") needs.push(toJob(runs));
-      else if (last.state === "stuck" || last.state === "failed") stuck.push(toJob(runs));
+      if (real.state === "needs-you") needs.push(toJob(runs));
+      else if (real.state === "stuck" || real.state === "failed") stuck.push(toJob(runs));
       else {
-        liveJobs.add(last.job);
-        if (last.todo !== undefined) liveItems.add(`${last.repo}/${last.todo}`);
+        liveJobs.add(real.job);
+        if (real.todo !== undefined) liveItems.add(`${real.repo}/${real.todo}`);
         const job = toJob(runs);
         running.push(job);
-        if (last.kind === "land") { landing++; landRuns.push(job); }
+        if (real.kind === "land") { landing++; landRuns.push(job); }
       }
     } else if (last.state === "landed" && last.ended) {
       const at = Date.parse(last.ended);

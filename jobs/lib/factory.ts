@@ -12,7 +12,7 @@ import { takeFresh } from "./deps.ts";
 import { normalizeDecision, writeDecision, type Decision } from "./decision.ts";
 import { derive, facts, itemOnMain, type Facts } from "./status.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
-import { allJobs, allRuns, expand, isLive, isOpen, LOCK_BUSY, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allJobs, allRuns, expand, isLive, isOpen, lastReal, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
 const pauseFile = () => join(factoryDir(), "paused");
@@ -68,15 +68,20 @@ export function waiting(jobs = allJobs()): number {
   return jobs.filter((j) => isOpen(j) && j.at(-1)!.run.repo && keys.has(j.at(-1)!.run.repo!) && j.at(-1)!.run.state === "needs-you").length;
 }
 
-/** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts. */
-const lastReal = (j: Entry[]): Entry => j.findLast((e) => !(e.run.kind === "land" && e.run.state === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
-
 /** A file in a run's folder: the factory labelled the run's issue `needs-chris`, so the run no longer holds the factory. */
 const NEEDS_CHRIS = "needs-chris";
 /** A file in a run's folder: the safe default action taken on it, as its case. */
 const RESCUED = "rescued";
 
 export interface Hold { name: string; state: string; reason?: string; line: string }
+
+/** Whether an open job holds the factory: its last real run is stuck or failed, with no next run pending and no `needs-chris` label. */
+function holds(j: Entry[], keys: Set<string>, except?: string): boolean {
+  const last = lastReal(j);
+  const r = last.run;
+  return isOpen(j) && !!r.repo && keys.has(r.repo) && (r.state === "stuck" || r.state === "failed") && r.job !== except
+    && !r.next && !isLive(last.folder) && !existsSync(join(last.folder, NEEDS_CHRIS));
+}
 
 /**
  * The factory's own hold: on while any open job in a factory repo is `stuck` or
@@ -88,14 +93,9 @@ export interface Hold { name: string; state: string; reason?: string; line: stri
  */
 export function hold(jobs = allJobs(), except?: string): Hold | null {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  const bad = jobs.filter((j) => {
-    const last = lastReal(j);
-    const r = last.run;
-    return isOpen(j) && r.repo && keys.has(r.repo) && (r.state === "stuck" || r.state === "failed") && r.job !== except
-      && !r.next && !isLive(last.folder) && !existsSync(join(last.folder, NEEDS_CHRIS));
-  }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started));
+  const bad = jobs.filter((j) => holds(j, keys, except)).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started));
   if (!bad.length) return null;
-  const r = bad[0].at(-1)!.run;
+  const r = lastReal(bad[0]).run;
   const more = bad.length > 1 ? ` and ${bad.length - 1} more` : "";
   return { name: r.name, state: r.state, reason: r.reason, line: `Held: ${r.name}${more} ${bad.length > 1 ? "are" : "is"} ${r.state}${r.reason ? ` (${r.reason})` : ""}. No run starts or lands until ${bad.length > 1 ? "they are" : "it is"} cleared.` };
 }
@@ -335,11 +335,7 @@ const RESCUE_WAIT_MS = () => Number(process.env.ALEPH_RESCUE_WAIT_MS ?? 60_000);
  */
 async function rescueStuck(act: Rescue, land?: Land): Promise<void> {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  const pending = (jobs: Entry[][]) => jobs.filter((j) => {
-    const last = lastReal(j);
-    const r = last.run;
-    return isOpen(j) && r.repo && keys.has(r.repo) && (r.state === "stuck" || r.state === "failed") && !r.next && !isLive(last.folder) && !existsSync(join(last.folder, NEEDS_CHRIS));
-  });
+  const pending = (jobs: Entry[][]) => jobs.filter((j) => holds(j, keys));
   for (const first of pending(allJobs())) {
     const name = first[0].run.name;
     // Wait: the dispatch that holds it may have read the job before this run ended, and would not act on it.
