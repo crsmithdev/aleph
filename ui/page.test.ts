@@ -102,7 +102,7 @@ test("load records the open state of details[data-keep] before the render and re
   expect(body.slice(0, rec)).toContain("first");
 });
 
-test("the sidebar lists Status, Activity (/timeline), then the rest, with Other for /activity and no Jobs or Projects", async () => {
+test("the sidebar lists Status, Activity (/timeline), then the rest, with Tools for /activity and no Jobs or Projects", async () => {
   const dir = new URL("./views/", import.meta.url);
   const names = (await import("node:fs")).readdirSync(dir).filter((n) => n.endsWith(".js"));
   const all: any[] = [];
@@ -110,7 +110,7 @@ test("the sidebar lists Status, Activity (/timeline), then the rest, with Other 
   const shown = all.filter((v) => !v.path.includes(":") && v.nav !== false);
   const factory = shown.filter((v) => v.group === "factory").sort((a, b) => a.order - b.order);
   expect(factory.slice(0, 2).map((v) => [v.title, v.path])).toEqual([["Status", "/"], ["Activity", "/timeline"]]);
-  expect(shown.find((v) => v.path === "/activity")?.title).toBe("Other");
+  expect(shown.find((v) => v.path === "/activity")?.title).toBe("Tools");
   expect(shown.some((v) => v.path === "/jobs" || v.path === "/projects")).toBe(false);
   expect(all.some((v) => v.path === "/jobs")).toBe(true);
   expect(all.some((v) => v.path === "/jobs/:name" || v.path === "/projects/:key")).toBe(true);
