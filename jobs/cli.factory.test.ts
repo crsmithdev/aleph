@@ -97,7 +97,8 @@ describe("a factory run", () => {
     // A tick's probe runs the sandbox; a passing probe is written as the other tick tests do.
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
-    await aleph(["tick"]);
+    const tick = await aleph(["tick"]);
+    expect(tick.json.episodes).toEqual(expect.any(Array));
     expect(state(r.json.run)).toMatchObject({ state: "dropped", reason: expect.stringContaining("the item is done") });
     expect((await aleph(["todo", "show", "fac", String(id), "--json"])).json.status).toBe("done");
     expect(runsLeft()).toEqual([]);

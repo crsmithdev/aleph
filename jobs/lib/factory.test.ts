@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { labels as itemLabels, readList, writeList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
-import { dispatchGoals, gates, notReady, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
+import { dispatchGoals, episodeStep, report, gates, notReady, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
 import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -601,4 +601,61 @@ test("notReady: a waiting_on list is ready when every part is done, and names on
   const item = { fm: { waiting_on: "fac-1, fac-2" } } as unknown as todos.Item;
   expect(notReady(item, () => true)).toBeNull();
   expect(notReady(item, (r) => r === "fac-1")).toBe("waiting on fac-2");
+});
+
+/** A temp vault under ALEPH_VAULT for one test; the old value is restored by `done`. */
+function withVault(): { vault: string; done: () => void } {
+  const old = process.env.ALEPH_VAULT;
+  const vault = join(base, "vault");
+  process.env.ALEPH_VAULT = vault;
+  const init = Bun.spawnSync(["bun", join(import.meta.dir, "..", "..", "vault", "cli.ts"), "init"], { env: process.env, stdout: "pipe", stderr: "pipe" });
+  if (init.exitCode !== 0) throw new Error(`vault init: ${init.stderr}`);
+  return { vault, done: () => { if (old === undefined) delete process.env.ALEPH_VAULT; else process.env.ALEPH_VAULT = old; } };
+}
+
+test("report lists each new episode page once, and nothing without a wiki/episodes folder", () => {
+  const v = withVault();
+  try {
+    rmSync(join(v.vault, "wiki", "episodes"), { recursive: true, force: true });
+    expect(report()).not.toContain("episodes:");
+    mkdirSync(join(v.vault, "wiki", "episodes"), { recursive: true });
+    writeFileSync(join(v.vault, "wiki", "episodes", "fac-1 Ship it.md"), "x\n");
+    writeFileSync(join(v.vault, "wiki", "episodes", "fac-2 Other.md"), "x\n");
+    const first = report();
+    expect(first).toContain("episodes:\n  fac-1 Ship it\n  fac-2 Other");
+    const second = report();
+    expect(second).not.toContain("fac-1 Ship it");
+    expect(second).not.toContain("fac-2 Other");
+  } finally { v.done(); }
+});
+
+test("episodeStep writes nothing while paused", async () => {
+  const v = withVault();
+  try {
+    setPaused(true);
+    expect(await episodeStep()).toEqual([]);
+    expect(existsSync(join(v.vault, "wiki", "episodes")) ? readdirSync(join(v.vault, "wiki", "episodes")).filter((f) => f.endsWith(".md")) : []).toEqual([]);
+  } finally { v.done(); }
+});
+
+test("episodeStep writes the page of a done goal and logs its title", async () => {
+  const v = withVault();
+  try {
+    const id = writeList({ key: "fac" }, "add", (doc) => {
+      const item = todos.add(doc, "ship it", { labels: ["goal"], body: "## Goal\nShip it." });
+      todos.setStatus(item, "done");
+      return item.id;
+    }, true)!.value;
+    const repo = join(base, "repo");
+    writeFileSync(join(repo, "f.txt"), "x\n");
+    sh(repo, "git", "add", ".");
+    sh(repo, "git", "commit", "-q", "-m", "ship thing", "-m", `Item: fac-${id}`);
+    sh(repo, "git", "push", "-q", "origin", "main");
+    const folder = join(base, "jobs", `20261028-100000-fac-${id}-agent`);
+    mkdirSync(folder, { recursive: true });
+    writeRun(folder, { kind: "agent", job: "j", name: `fac-${id}`, repo: "fac", state: "landed", told: true, todo: id, started: "2026-10-28T10:00:00Z", ended: "2026-10-28T10:20:00Z" });
+    expect(await episodeStep()).toEqual([`fac-${id} ship it`]);
+    expect(readdirSync(join(v.vault, "wiki", "episodes")).filter((f) => f.endsWith(".md"))).toEqual([`fac-${id} ship it.md`]);
+    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain(`episodes fac-${id} ship it\n`);
+  } finally { v.done(); }
 });

@@ -14,6 +14,9 @@ import { itemOnMain, itemStates, type ItemState } from "./status.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
+import { writeEpisodes } from "./episode.ts";
+import { vaultDir } from "../../vault/lib/vault.ts";
+import { readdirSync } from "node:fs";
 import { alreadyMet } from "./gate.ts";
 import { detached } from "./launch.ts";
 import { PLANNED, needsPlan, planning, runPlan, type Rate } from "./plan.ts";
@@ -541,6 +544,20 @@ export async function triageStep(): Promise<{ triaged: Counts; skipped: string[]
   return t;
 }
 
+/** The tick's episode pages for goals that finished (episode.ts); never throws. */
+export async function episodeStep(): Promise<string[]> {
+  try {
+    if (gates({ only: ["pause"] })) return [];
+    const r = await writeEpisodes(sandboxRepos());
+    factoryLog(`episodes ${r.written.join(", ") || "none"}`);
+    for (const f of r.failed) factoryLog(`episode failed: ${f}`);
+    return r.written;
+  } catch (e: any) {
+    try { factoryLog(`episodes failed: ${e?.message ?? e}`); } catch {}
+    return [];
+  }
+}
+
 /** One tick of the timer: a dispatch, as the fallback. */
 export const tick = dispatchGoals;
 
@@ -661,9 +678,26 @@ export function report(now = Date.now()): string {
   const lines = runLines(now);
   const due = cameDue();
   if (due.length) lines.unshift(["came due:", ...due.map((d) => `  ${d}`)].join("\n"));
+  const eps = newEpisodes();
+  if (eps.length) lines.push(["episodes:", ...eps.map((t) => `  ${t}`)].join("\n"));
   const proposed = takeFresh();
   if (proposed.length) lines.push(["proposed updates (relabel one `goal` to start it):", ...proposed.map((d) => `  ${d}`)].join("\n"));
   return lines.join("\n");
+}
+
+const episodesSeenFile = () => join(factoryDir(), "episodes-seen");
+
+/** The episode page titles under the vault's wiki/episodes/ that no report has listed; each is then appended to the seen file. */
+function newEpisodes(): string[] {
+  let titles: string[] = [];
+  try { titles = readdirSync(join(vaultDir(), "wiki", "episodes")).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).sort(); } catch { return []; }
+  const seen = new Set(existsSync(episodesSeenFile()) ? readFileSync(episodesSeenFile(), "utf8").split("\n").filter(Boolean) : []);
+  const fresh = titles.filter((t) => !seen.has(t));
+  if (fresh.length) {
+    mkdirSync(factoryDir(), { recursive: true });
+    appendFileSync(episodesSeenFile(), fresh.join("\n") + "\n");
+  }
+  return fresh;
 }
 
 const seenFile = () => join(factoryDir(), "seen");
