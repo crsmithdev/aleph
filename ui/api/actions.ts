@@ -14,7 +14,7 @@ const text = (body: string, status: number) => new Response(body, { status, head
 const cli = () => process.env.ALEPH_CLI || join(import.meta.dir, "..", "..", "bin", "aleph");
 
 /** The last run of the job called `name`, or undefined when the ledger has none. */
-const find = (name: string) => allJobs().find((j) => j.at(-1)!.run.name === name)?.at(-1);
+const find = (name: string) => allJobs().findLast((j) => j.at(-1)!.run.name === name)?.at(-1);
 
 function sameSite(req: Request): boolean {
   if (req.headers.get("x-aleph-ui") !== "1") return false;

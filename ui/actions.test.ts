@@ -97,6 +97,19 @@ test("GET /api/diff is the branch's diff from the merge base", async () => {
   expect((await at("/api/diff/nope")).status).toBe(404);
 });
 
+test("a name reused by a dropped job and its rerun acts on the newer job", async () => {
+  for (const [id, extra] of [["20261027-090000-r-dup-agent", { state: "dropped" }], ["20261027-110000-r-dup-agent", { state: "landed", branch: "job/x" }]] as const) {
+    const folder = join(base, "jobs", id);
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "agent", started: new Date().toISOString(), name: "dup", job: `dup-${extra.state}`, repo: "r", ...extra }));
+  }
+  const res = await at("/api/diff/dup");
+  expect(res.status).toBe(200);
+  expect(await res.text()).toContain("+two");
+  expect((await post("/api/land/dup")).status).toBe(200);
+  expect(recorded().at(-1)).toBe("land dup");
+});
+
 test("pause, resume and judge run their command", async () => {
   expect((await post("/api/pause")).status).toBe(200);
   expect(recorded().at(-1)).toBe("pause");

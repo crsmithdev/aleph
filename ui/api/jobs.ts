@@ -99,7 +99,7 @@ async function traceUrl(runs: Entry[]): Promise<string | undefined> {
 }
 
 const find = (name: string, project: string | null): Entry[] | undefined =>
-  allJobs().find((runs) => runs.at(-1)!.run.name === name && (!project || runs.at(-1)!.run.repo === project));
+  allJobs().findLast((runs) => runs.at(-1)!.run.name === name && (!project || runs.at(-1)!.run.repo === project));
 
 /** The branch of a job, if it still exists in the repo, with the repo path and its merge base. */
 function branchRange(runs: Entry[]): { path: string; base: string; ref: string } | null {

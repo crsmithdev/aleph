@@ -108,6 +108,19 @@ describe("GET /api/jobs/:name", () => {
   });
 });
 
+describe("a name reused by a dropped job and its rerun", () => {
+  test("the job and its diff are the newest job's", async () => {
+    run("20261001-000001-a", { job: "dup-old", name: "fac-dup", repo: "fac", branch: "factory/gone", state: "dropped", started: ago(24 * 40), ended: ago(24 * 40 - 1) });
+    run("20261001-000002-a", { job: "dup-new", name: "fac-dup", repo: "fac", branch: "factory/fac-9", state: "landed", started: ago(24 * 39), ended: ago(24 * 39 - 1), commit: "def5678" });
+    const j = await (await get("/api/jobs/fac-dup?days=60")).json();
+    expect(j.state).toBe("landed");
+    expect(j.runs.map((r: any) => r.state)).toEqual(["landed"]);
+    const d = await get("/api/jobs/fac-dup/diff?days=60");
+    expect(d.status).toBe(200);
+    expect(await d.text()).toContain("+two");
+  });
+});
+
 describe("GET /api/jobs/:name/diff", () => {
   test("returns the branch's diff from its merge base", async () => {
     const res = await get("/api/jobs/fac-9/diff");
