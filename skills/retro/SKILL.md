@@ -30,7 +30,7 @@ For the observations of one trace, call `/api/public/observations?traceId=<trace
 - **No-ops**: look for instructions in steering files that don't modify the agent's behavior. _Use when_ the steering files are large and unwieldy.
 - **Information access**: look for opportunities to increase the agent's access to information. Teeing dev server logs, readonly access to third-party services. _Use when_ a crucial piece of information was not available to the agent.
 
-4. Present these candidates to the user, in order of severity, each with the evidence from the trace and the proposed change. Don't apply anything until asked.
+4. Present these candidates to the user, each with the evidence from the trace and the proposed change. Don't apply anything until asked.
 
 Done when **every category in step 3 has a verdict** (a candidate with trace evidence, or "none found"), the candidates are in order of severity, and each cites a span or a transcript line.
 

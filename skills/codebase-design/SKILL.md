@@ -32,7 +32,7 @@ Use these terms exactly. Consistent language is the whole point.
 
 ## Deep vs shallow
 
-**Deep module** = small interface + lots of implementation:
+**Deep module**:
 
 ```
 ┌─────────────────────┐
@@ -44,7 +44,7 @@ Use these terms exactly. Consistent language is the whole point.
 └─────────────────────┘
 ```
 
-**Shallow module** = large interface + little implementation (avoid):
+**Shallow module** (avoid):
 
 ```
 ┌─────────────────────────────────┐

@@ -100,11 +100,7 @@ revision. Do not auto-dismiss them.
 
 The reviewers are adversarial: their job is to surface flaws, not validate.
 The synthesis is direct and unhedged. If the verdict is "don't land this",
-say so. If several reviewers independently reached the same fatal finding,
-name that convergence.
-
-If a finding is wrong, the
-author pushes back via SendMessage and the reviewer updates.
+say so.
 
 ## Adapting the lens set
 

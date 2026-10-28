@@ -62,7 +62,7 @@ Docs writing progress:
 
 For a README, start from `readme-template.md`.
 
-Step 5 is the exit criterion: a doc ships when its examples ran and its links resolved, not when it "reads well". Length follows what the reader has to do, not the template: drop a section the page does not need rather than filling it.
+Length follows what the reader has to do, not the template: drop a section the page does not need rather than filling it.
 
 ## Type-gating table
 
@@ -115,7 +115,7 @@ For the full rule list per category, read `rules/_sections.md`. The `*-defaults.
 
 ## Gotchas
 
-- Doc-type misclassification is the top false-positive source. A missing quick start on an explanation page, or a "Next steps" section demanded of a reference page, is a finding against Diataxis, not for it. Check the type-gating table before reporting.
+- Doc-type misclassification is the top false-positive source. A missing quick start on an explanation page, or a "Next steps" section demanded of a reference page, is a finding against Diataxis, not for it.
 - Cite the specific failing check in a `*-defaults.md` bundle ("`voice-defaults`: passive voice"), not just the filename, or the author can't locate the issue.
 - Rule files carry their own false-positive guidance (the "should" check, sample credentials, hand-typed dates, series openers). Read the rule before you flag a finding against it.
 

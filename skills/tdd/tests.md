@@ -22,7 +22,7 @@ Characteristics:
 
 ## Bad Tests
 
-**Implementation-detail tests**: Coupled to internal structure.
+**Implementation-detail tests**:
 
 ```typescript
 // BAD: Tests implementation details

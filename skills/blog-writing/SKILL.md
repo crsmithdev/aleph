@@ -41,7 +41,7 @@ For a deep dive, also: what did not work, and what are the known limits.
 - Weak: "Background", "Architecture", "Results", "Conclusion"
 - Strong: "Why pre-aggregation destroys debugging context", "Where this breaks down: the cardinality wall"
 
-**Paragraphs.** One idea per paragraph. Break at a contrast point: when a sentence turns on "but", "however" or a new view, start a new paragraph. One-sentence paragraphs are fine for emphasis.
+**Paragraphs.** Break at a contrast point: when a sentence turns on "but", "however" or a new view, start a new paragraph. One-sentence paragraphs are fine for emphasis.
 
 **Numbers over adjectives.** A claim of size or speed carries the number.
 - Bad: "This significantly reduced our processing time."

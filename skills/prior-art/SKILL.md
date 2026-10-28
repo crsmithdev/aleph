@@ -139,8 +139,7 @@ skipped; write it.
 **What to take**, ranked by value over cost. Each take names the project it
 comes from, what changes in the anchor, an estimate in agent time, and the
 evidence. Lead with any take that answers a failure the anchor already had
-and name that failure. Where a project publishes a number for the mechanism,
-quote it as theirs.
+and name that failure.
 
 **What to skip**, with the reason each is wrong for this anchor: excluded by
 its threat model, disproportionate at its scale, or already solved by

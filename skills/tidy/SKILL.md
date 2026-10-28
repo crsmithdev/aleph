@@ -103,11 +103,11 @@ Each row passes or fails. Nothing here is scored: a number averages a leaked cre
 
 | Gate | How it passes |
 |---|---|
-| **Cold clone** | Clone to a temp dir, follow the README's quickstart verbatim, and reach the result it promises. POLISH.md has the procedure |
+| **Cold clone** | Clone to a temp dir, follow the README's quickstart verbatim, and reach the result it promises. |
 | **Secrets in history** | No credential in `git log -p`, not merely none in `HEAD` |
 | **Personal artifacts** | No absolute path carrying a username, no machine-local config, no `.env`, no editor or agent directory the repo does not mean to ship |
 | **License** | A `LICENSE` file exists, the manifest's license field agrees with it, and no vendored file carries an incompatible one |
-| **Required files** | The ones this repo's kind implies are present and say something. POLISH.md has the matrix |
+| **Required files** | The ones this repo's kind implies are present and say something. |
 | **CI** | Green on the current commit, and running the same commands the README tells a human to run |
 
 ## 10. Act, or stop

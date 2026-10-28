@@ -39,6 +39,6 @@ Each sub-agent outputs:
 
 ### 3. Present and compare
 
-Present designs sequentially so the user can absorb each one, then compare them in prose. Contrast by **depth** (leverage at the interface), **locality** (where change concentrates), and **seam placement**.
+Present designs sequentially so the user can absorb each one, then compare them in prose. Contrast by **depth**, **locality** and **seam placement**.
 
 After comparing, give your own recommendation: which design you think is strongest and why. If elements from different designs would combine well, propose a hybrid. Be opinionated: the user wants a strong read, not a menu.
