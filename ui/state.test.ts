@@ -72,7 +72,8 @@ describe("state", () => {
     expect(s.needs[0].item).toEqual({ id: 1, title: "needs item" });
     expect(s.stuck.map((j) => j.name)).toEqual(["fac-3"]);
     expect(s.running.map((j) => j.name)).toEqual(["fac-4"]);
-    expect(s.delivered.map((j) => j.name)).toEqual(["fac-5"]);
+    // Delivered is the latest lands, not only today's: fac-6 landed 30 hours ago.
+    expect(s.delivered.map((j) => j.name)).toEqual(["fac-5", "fac-6"]);
     expect(s.delivered[0].commitUrl).toBe("https://github.com/chris/demo/commit/abcdef1234567");
     expect(s.waiting).toEqual([{ repo: "fac", id: 2, title: "waiting goal" }]);
     expect(s.factory.runsToday).toBe(4);
@@ -92,8 +93,11 @@ describe("state", () => {
     expect(s.needs[0].trailers).toEqual([{ key: "Item", value: "fac-1" }, { key: "Job", value: "fac-1" }, { key: "Held-by", value: "Chris" }]);
   });
 
-  test("ticks hold today's lines only", () => {
+  test("delivered holds the 10 latest lands, newest first", () => {
+    for (let i = 0; i < 11; i++) run(`20261027-0001${String(i).padStart(2, "0")}-a`, { job: `fac-l${i}`, name: `fac-l${i}`, state: "landed", commit: "abcdef1234567", ended: ago(40 + i), started: ago(41 + i) });
     const s = state(now);
-    expect(s.ticks.map((t) => t.line)).toEqual(["started none"]);
+    expect(s.delivered).toHaveLength(10);
+    expect(s.delivered.slice(0, 3).map((j) => j.name)).toEqual(["fac-7", "fac-5", "fac-6"]);
+    expect(s.delivered.map((j) => j.name)).not.toContain("fac-l10");
   });
 });

@@ -11,7 +11,6 @@ const state: any = {
   running: [job({ name: "aleph-36", phase: "worker", item: { id: 36, title: "Route tiers" } })],
   delivered: [job({ name: "aleph-28", state: "landed", ended: "2026-10-27T16:30:00Z", commit: "50f301fabc", commitUrl: "https://github.com/o/r/commit/50f301fabc" })],
   waiting: [],
-  ticks: [{ at: "2026-10-27T16:05:00Z", line: "started none" }],
 };
 
 test("needs shows name, reason and defaults, and no copy commands", () => {
@@ -38,16 +37,18 @@ test("an empty section shows its empty state", () => {
   expect(r.renderNeeds({ ...state, needs: [] })).toContain("Nothing needs you.");
   expect(r.renderStuck({ ...state, stuck: [] })).toContain("No run is stuck.");
   expect(r.renderRunning({ ...state, running: [] })).toContain("Nothing is running.");
-  expect(r.renderDelivered({ ...state, delivered: [] })).toContain("Nothing has landed today.");
+  expect(r.renderDelivered({ ...state, delivered: [] })).toContain("Nothing has landed yet.");
+  // One line only, with no hint under it.
+  expect(r.renderNeeds({ ...state, needs: [] }).match(/<p/g)?.length).toBe(1);
 });
 
-test("header and ticks render", () => {
-  const h = r.renderHeader(state);
-  expect(h).toContain("5 of 12");
-  expect(h).toContain("$0.2500");
-  expect(h).toContain("judge is down");
-  expect(r.renderHeader({ ...state, factory: { ...state.factory, paused: true } })).toContain("Paused");
-  expect(r.renderTicks(state)).toContain("started none");
+test("the metric cards count running, waiting, stuck and needs", () => {
+  const h = r.renderMetrics(state);
+  for (const [k, n] of [["Running", 1], ["Waiting", 0], ["Stuck", 1], ["Need attention", 1]]) expect(h).toContain(`<span class="k">${k}</span><span class="v">${n}</span>`);
+  expect(h).toContain('class="metric need" href="#needs"');
+  expect(r.renderMetrics({ ...state, needs: [] })).toContain('class="metric" href="#needs"');
+  const page = r.view.render(state);
+  for (const t of ["Next tick", "Cost today", "Runs today", 'id="ticks"', 'class="strip"']) expect(page).not.toContain(t);
 });
 
 test("text from the state is escaped", () => {
@@ -65,6 +66,13 @@ test("a needs-you entry has Diff, Land and Drop buttons; a landed one with an op
   const open = { ...state, delivered: [{ ...state.delivered[0], check: "open" }] };
   expect(r.renderDelivered(open)).toContain('data-act="checked" data-name="aleph-28"');
   expect(r.renderDelivered(state)).not.toContain("data-act=");
+  expect(r.renderDelivered(state)).not.toContain("data-cmd=");
+});
+
+test("a land from another day shows its date", () => {
+  const old = { ...state, delivered: [{ ...state.delivered[0], ended: "2026-10-25T16:30:00Z" }] };
+  expect(r.renderDelivered(old)).toMatch(/<dt>Landed<\/dt><dd>25 Oct \d\d:\d\d<\/dd>/);
+  expect(r.renderDelivered(state)).toMatch(/<dt>Landed<\/dt><dd>\d\d:\d\d<\/dd>/);
 });
 
 const withFactory = (o: object) => ({ ...state, factory: { ...state.factory, health: [], ...o } });
@@ -113,14 +121,6 @@ test("a 30-file stat shows 12 lines and +18 more files", () => {
   expect(h).toContain("+18 more files");
 });
 
-test("the runs bar is dropped above 50 runs", () => {
-  expect(r.renderHeader(state)).toContain('class="pips"');
-  const h = r.renderHeader(withFactory({ dayCap: 999 }));
-  expect(h).toContain("5 of 999");
-  expect(h).not.toContain("pips");
-  for (const t of ["Sandbox probe", "aleph pause", "API price"]) expect(h).not.toContain(t);
-});
-
 test("a job with checks shows them as facts; one without shows none", () => {
   const checks = [{ name: "tests", ok: true, seconds: 71 }, { name: "types", ok: false, seconds: 9 }];
   const both = "<div><dt>Tests</dt><dd>71 s ✓</dd></div><div><dt>Types</dt><dd>9 s ✗</dd></div></dl>";
@@ -130,16 +130,15 @@ test("a job with checks shows them as facts; one without shows none", () => {
   expect(r.renderDelivered(state)).not.toContain("checks");
 });
 
-test("the Controls panel shows Resume when paused and Pause when not", () => {
+test("the Controls panel shows Resume when paused and Pause when not, and nothing else", () => {
   const f = { ...state.factory, judge: "jev", liveCap: 10, waitingCap: 5 };
   const on = r.renderControls({ ...state, factory: f });
   expect(on).toContain('data-act="pause"');
   expect(on).not.toContain('data-act="resume"');
-  expect(on).toContain("Switch judge to haiku");
   const off = r.renderControls({ ...state, factory: { ...f, paused: true, judge: "haiku" } });
   expect(off).toContain('data-act="resume"');
   expect(off).not.toContain('data-act="pause"');
-  expect(off).toContain("Switch judge to jev");
+  for (const h of [on, off]) for (const t of ["judge", "Judge", "cap", "<dl"]) expect(h).not.toContain(t);
   expect(r.view.render(state)).toContain('id="controls"');
 });
 

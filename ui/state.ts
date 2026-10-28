@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { DAY_CAP, WAITING_CAP, factoryDir, health, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
+import { DAY_CAP, WAITING_CAP, health, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
 import { allJobs, isOpen, loadRegistry, type Entry, type Repo } from "../jobs/lib/ledger.ts";
 import { readList } from "../todo/lib/store.ts";
 import type { Doc } from "../todo/lib/todo.ts";
@@ -37,10 +37,10 @@ export interface State {
   };
   needs: Job[]; stuck: Job[]; running: Job[]; delivered: Job[];
   waiting: { repo: string; id: number; title: string }[];
-  ticks: { at: string; line: string }[];
 }
 
-const DAY = 24 * 3600_000;
+/** The Now page shows this many of the latest lands. */
+const DELIVERED = 10;
 
 /** The next firing of aleph-tick.timer, or null when systemctl fails or lists no such timer. */
 export function nextTick(): string | null {
@@ -164,22 +164,12 @@ export function state(now = new Date()): State {
       else running.push(toJob(runs));
     } else if (last.state === "landed" && last.ended) {
       const at = Date.parse(last.ended);
-      if (now.getTime() - at < DAY) delivered.push({ at, job: toJob(runs) });
+      delivered.push({ at, job: toJob(runs) });
     }
   }
 
   const today = runsToday(now.getTime());
   const probe = lastProbe();
-  const day = now.toDateString();
-  const ticks: { at: string; line: string }[] = [];
-  const log = read(factoryDir(), "tick.log");
-  for (const l of log?.split("\n") ?? []) {
-    const sp = l.indexOf(" ");
-    const at = sp < 0 ? "" : l.slice(0, sp);
-    const t = Date.parse(at);
-    if (!Number.isNaN(t) && new Date(t).toDateString() === day) ticks.push({ at, line: l.slice(sp + 1) });
-  }
-
   return {
     now: now.toISOString(),
     factory: {
@@ -188,9 +178,8 @@ export function state(now = new Date()): State {
       nextTick: nextTick(), probe, health: health(now.getTime()),
     },
     needs, stuck, running,
-    delivered: delivered.sort((a, b) => b.at - a.at).map((d) => d.job),
+    delivered: delivered.sort((a, b) => b.at - a.at).slice(0, DELIVERED).map((d) => d.job),
     waiting: openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`))
       .map(({ repo, item }) => ({ repo: repo.key, id: item.id, title: item.title })),
-    ticks,
   };
 }

@@ -21,7 +21,7 @@ test("the new rules sit at the top level, outside any @media block", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   const css = html.match(/<style>([\s\S]*?)<\/style>/)![1].replace(/\/\*[\s\S]*?\*\//g, "").replace(/"[^"\n]*"|'[^'\n]*'/g, "");
   let depth = 0;
-  for (const sel of [".dot.off", ".ev.one", "#offline", "main {"]) {
+  for (const sel of [".metric.need", ".ev.one", "#offline", "main {"]) {
     const i = css.indexOf(sel === "main {" ? "\nmain {" : "\n" + sel);
     expect(i).toBeGreaterThan(-1);
     depth = 0;

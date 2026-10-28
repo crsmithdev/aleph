@@ -123,30 +123,19 @@ body {
 ::selection { background: var(--run-bg); color: var(--ink); }
 a { color: inherit; }
 code, .mono { font-family: var(--mono); font-size: 12.5px; }
-.num, .facts dd, .cell .v, .count { font-family: var(--num); font-variant-numeric: tabular-nums; }
+.num, .facts dd, .count { font-family: var(--num); font-variant-numeric: tabular-nums; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
 
-/* ---------- header strip ---------- */
-.strip {
-  border-bottom: 1px solid var(--rule);
-  background: var(--surface);
-}
-.strip-in {
-  max-width: 1280px; margin: 0 auto; padding: 10px 24px;
-  display: flex; align-items: center; gap: 28px; flex-wrap: wrap;
-}
 .mark { text-decoration: none; font: 700 17px/1 var(--display); letter-spacing: -0.01em; margin-right: 4px; }
-.cells { display: flex; gap: 0; flex-wrap: wrap; flex: 1; }
-.cell { padding: 2px 18px; border-left: 1px solid var(--rule-2); min-width: 0; }
-.cell:first-child { border-left: 0; padding-left: 0; }
-.cell .k { color: var(--muted); font-size: 12px; }
-.cell .v { font-weight: 600; font-size: 13.5px; white-space: nowrap; }
-.cell .v small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
-.cell .v small code { font-size: 11.5px; color: var(--ink-2); }
-.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--done); margin-right: 6px; vertical-align: 1px; }
-.pips { display: inline-flex; gap: 1px; width: 96px; margin-left: 6px; vertical-align: 1px; }
-.pips i { flex: 1 1 0; min-width: 1px; max-width: 5px; height: 9px; border-radius: 1px; background: var(--rule); }
-.pips i.on { background: var(--ink-2); }
+
+/* ---------- Now: metric cards ---------- */
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 24px; }
+.metric { display: grid; gap: 2px; padding: 12px 16px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); color: var(--ink); text-decoration: none; }
+.metric:hover { border-color: var(--muted); }
+.metric .k { color: var(--muted); font-size: 12.5px; }
+.metric .v { font: 600 32px/1.1 var(--num); font-variant-numeric: tabular-nums; }
+.metric.need .v { color: var(--need); }
+.metric.stuck .v { color: var(--stuck); }
 
 /* ---------- page ---------- */
 main { min-width: 0; }
@@ -330,9 +319,7 @@ ul.issues li .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow:
   .rail { position: static; }
 }
 @media (max-width: 720px) {
-  .strip-in { padding: 10px 16px; gap: 10px; }
-  .cells { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 0; flex-basis: 100%; }
-  .cell { border-left: 0; padding: 0; }
+  .metrics { grid-template-columns: 1fr 1fr; }
   .page { padding: 20px 16px 48px; }
   .lede { font-size: 21px; }
   .ev { grid-template-columns: minmax(0, 1fr); }
@@ -354,8 +341,6 @@ ul.issues li .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow:
 .need-fold + .need-fold { margin-top: 0; }
 pre.trailers b { color: var(--need); }
 @media (max-width: 720px) { .banner { padding: 8px 16px; } }
-.dot.off { background: var(--need); }
-.cell .v.health small { color: var(--stuck); }
 .ev.one { grid-template-columns: minmax(0, 1fr); }
 .q { margin: 10px 0 0; font-size: 13px; max-width: 76ch; }
 #offline { margin: 0; padding: 6px 24px; background: var(--stuck-bg); color: var(--stuck); font-size: 13px; text-align: center; }

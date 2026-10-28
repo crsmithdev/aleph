@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { clock, cmd, empty, esc, money, span } from "../lib.js";
+import { clock, cmd, esc, money, span } from "../lib.js";
 
 export const view = {
   path: "/",
@@ -12,8 +12,7 @@ export const view = {
   refresh: 15,
   render: (s) =>
     renderBanner(s) +
-    `<header class="strip">${renderHeader(s)}</header>` +
-    `<div class="page"><p class="lede">${renderLede(s)}</p><p class="asof">${renderAsOf(s)}</p>` +
+    `<div class="page">${renderMetrics(s)}<p class="lede">${renderLede(s)}</p><p class="asof">${renderAsOf(s)}</p>` +
     `<div class="grid"><div>` +
     `<section id="needs" aria-labelledby="h-needs">${renderNeeds(s)}</section>` +
     `<section id="stuck" aria-labelledby="h-stuck">${renderStuck(s)}</section>` +
@@ -22,7 +21,6 @@ export const view = {
     `<section id="controls" aria-labelledby="h-ctl">${renderControls(s)}</section>` +
     `<section id="running" aria-labelledby="h-run">${renderRunning(s)}</section>` +
     `<section id="waiting" aria-labelledby="h-wait">${renderWaiting(s)}</section>` +
-    `<section id="ticks" aria-labelledby="h-ticks">${renderTicks(s)}</section>` +
     `</aside></div></div>`,
 };
 
@@ -44,8 +42,8 @@ const checkFacts = (j) =>
 const trailerBlock = (j) =>
   j.trailers?.length ? `<div class="ev one"><div><h4>Trailers</h4><pre class="trailers">${j.trailers.map((t) => `<b>${esc(t.key)}:</b> ${esc(t.value)}`).join("\n")}</pre></div></div>` : "";
 
-/** Above this many runs a day the bar of pips is dropped and the number stands alone. */
-const PIP_MAX = 50;
+/** An empty section on this page: one quiet line. */
+const empty = (line) => `<div class="empty"><p class="hint">${esc(line)}</p></div>`;
 const BOX_MIN = 40;
 const STAT_FILES = 12;
 
@@ -71,26 +69,20 @@ function statLines(stat) {
   return esc(kept.filter((l) => l.includes(" | ")).join("\n")) + `\n<b>+${files.length - STAT_FILES} more files</b>` + (summary.length ? "\n" + esc(summary.join("\n")) : "");
 }
 
-export function renderHeader(s) {
-  const f = s.factory;
-  const pips = f.dayCap > PIP_MAX ? "" : Array.from({ length: f.dayCap }, (_, i) => `<i${i < f.runsToday ? ' class="on"' : ""}></i>`).join("");
-  const next = f.nextTick ? `${esc(clock(f.nextTick))}<small>${Date.parse(f.nextTick) > Date.parse(s.now) ? `in ${esc(span(s.now, f.nextTick))}` : "due"}</small>` : "unknown";
-  const cell = (k, v, cls = "") => `<div class="cell"><div class="k">${k}</div><div class="v${cls}">${v}</div></div>`;
-  const health = f.health.length
-    ? cell("Health", f.health.map((l) => `<small>${esc(l)}</small>`).join(""), " health")
-    : "";
-  return `<div class="strip-in"><div class="cells">` +
-    cell("Factory", f.paused ? `<span class="dot off"></span>Paused<small>start: <code>aleph resume</code></small>` : `<span class="dot"></span>On`) +
-    cell("Next tick", next, " num") +
-    cell("Runs today", `${f.runsToday} of ${f.dayCap}${pips ? `<span class="pips" aria-hidden="true">${pips}</span>` : ""}`, " num") +
-    cell("Cost today", money(f.costToday), " num") +
-    health + `</div></div>`;
+/** The row of metric cards: a count per section, each a link to it. */
+export function renderMetrics(s) {
+  const card = (href, k, n, tone) => `<a class="metric${n && tone ? ` ${tone}` : ""}" href="#${href}"><span class="k">${k}</span><span class="v">${n}</span></a>`;
+  return `<div class="metrics">` +
+    card("running", "Running", s.running.length) +
+    card("waiting", "Waiting", s.waiting.length) +
+    card("stuck", "Stuck", s.stuck.length, "stuck") +
+    card("needs", "Need attention", s.needs.length, "need") + `</div>`;
 }
 
 export function renderLede(s) {
   const n = (a) => (a.length ? String(a.length) : "none");
-  if (s.needs.length) return `<a href="#needs" class="need">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you.</a> ${s.delivered.length} delivered, ${s.running.length} running, ${n(s.stuck)} stuck.`;
-  return `Nothing needs you. <a href="#delivered">${s.delivered.length} delivered</a>, <a href="#running">${s.running.length} running</a>, ${n(s.stuck)} stuck, ${s.waiting.length ? `${s.waiting.length} waiting` : "no goal waiting"}.`;
+  if (s.needs.length) return `<a href="#needs" class="need">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you.</a> ${s.running.length} running, ${n(s.stuck)} stuck.`;
+  return `Nothing needs you. <a href="#running">${s.running.length} running</a>, ${n(s.stuck)} stuck, ${s.waiting.length ? `${s.waiting.length} waiting` : "no goal waiting"}.`;
 }
 
 export function renderNeeds(s) {
@@ -111,7 +103,7 @@ export function renderNeeds(s) {
       `<div class="actions">${act("diff", j.name, "Diff")}${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}</div>` +
       `<div class="diff-panel" data-diff-for="${esc(j.name)}" hidden></div>`);
   }).join("");
-  return section("needs", "Needs you", s.needs.length, cards || empty("Nothing needs you.", "A run that stops on a held path or a question shows up here."));
+  return section("needs", "Needs you", s.needs.length, cards || empty("Nothing needs you."));
 }
 
 const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
@@ -123,7 +115,7 @@ export function renderStuck(s) {
     (failed(j) ? `<p class="quiet q">Last check that failed: <b>${esc(failed(j).name)}</b>, ${esc(failed(j).seconds)} s</p>` : "") +
     `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}</dl>` +
     `<div class="actions">${cmd(`aleph drop ${j.name}`)}</div></article>`).join("");
-  return section("stuck", "Stuck", s.stuck.length, rows || empty("No run is stuck.", "A run that fails its checks or stops without a result shows up here."));
+  return section("stuck", "Stuck", s.stuck.length, rows || empty("No run is stuck."));
 }
 
 export function renderRunning(s) {
@@ -131,52 +123,39 @@ export function renderRunning(s) {
     `<div class="run-row"><div class="ih">${itemId(j)}<span class="badge run">${esc(j.phase || j.state)}</span></div>` +
     `<div class="t">${esc(j.item?.title || j.name)}</div>` +
     `<div class="run-meta"><span class="num">Started ${esc(clock(j.started))}, ${Date.parse(s.now) - Date.parse(j.started) > BOX_MIN * 60_000 ? `<span class="over">${esc(span(j.started, s.now))} ago, past the time box</span>` : `${esc(span(j.started, s.now) || "0 min")} ago`}</span></div></div>`).join("");
-  return section("run", "Running", s.running.length, rows || empty("Nothing is running.", "The next tick starts a run for each open goal."));
+  return section("run", "Running", s.running.length, rows || empty("Nothing is running."));
 }
+
+/** "14:05" for a land today, "26 Oct 14:05" for an older one. */
+const landedAt = (iso, now) =>
+  new Date(iso).toDateString() === new Date(now).toDateString() ? clock(iso)
+    : `${new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} ${clock(iso)}`;
 
 export function renderDelivered(s) {
   const rows = s.delivered.map((j) => {
     const sha = j.commit ? esc(j.commit.slice(0, 7)) : "";
     const commit = j.commit ? (j.commitUrl ? `<a href="${esc(j.commitUrl)}"><code>${sha}</code></a>` : `<code>${sha}</code>`) : "";
     return `<article class="del"><div class="ih">${itemId(j)}${title(j)}<span class="badge done">Landed</span></div>` +
-      `<dl class="facts">${commit ? fact("Commit", commit) : ""}${j.ended ? fact("Landed", esc(clock(j.ended))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${checkFacts(j)}</dl>` +
+      `<dl class="facts">${commit ? fact("Commit", commit) : ""}${j.ended ? fact("Landed", esc(landedAt(j.ended, s.now))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${checkFacts(j)}</dl>` +
       trailerBlock(j) +
-      (j.commit || j.check === "open" ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${j.commit ? cmd(`git show ${j.commit.slice(0, 7)}`) : ""}</div>` : "") + `</article>`;
+      (j.check === "open" ? `<div class="actions">${act("checked", j.name, "Checked", true)}</div>` : "") + `</article>`;
   }).join("");
-  return section("del", "Delivered today", s.delivered.length, rows || empty("Nothing has landed today.", "A landed run shows up here with its commit."), "on origin/main");
+  return section("del", "Delivered", s.delivered.length, rows || empty("Nothing has landed yet."), "the last 10, on origin/main");
 }
 
 export function renderWaiting(s) {
   const rows = s.waiting.map((w) => `<div class="run-row"><div class="ih"><span class="id">${esc(w.repo)}-${esc(w.id)}</span></div><div class="t">${esc(w.title)}</div></div>`).join("");
-  return section("wait", "Waiting", s.waiting.length, rows || empty("No goal waits to start.", "Run <code>/aleph:goal</code> to add one. The next tick picks it up."));
-}
-
-export function renderTicks(s) {
-  const rows = s.ticks.slice().reverse().map((t) =>
-    `<li><span class="tm">${esc(clock(t.at))}</span><span${/started none/.test(t.line) ? ' class="idle"' : ""}>${esc(t.line)}</span></li>`).join("");
-  return `<div class="sh"><h2 id="h-ticks">Ticks today</h2></div>` + (rows ? `<ul class="ticks">${rows}</ul>` : empty("No tick yet today.", "The timer fires every half hour."));
+  return section("wait", "Waiting", s.waiting.length, rows || empty("No goal waits to start."));
 }
 
 export function renderAsOf(s) {
   return `As of ${esc(new Date(s.now).toLocaleString([], { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }))}.`;
 }
 
-/** The Controls panel: pause or resume, the judge switch, and the caps in force (read-only). */
+/** The Controls panel: pause or resume. */
 export function renderControls(s) {
-  const f = s.factory;
-  const other = f.judge === "jev" ? "haiku" : "jev";
-  const row = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
   return `<div class="sh"><h2 id="h-ctl">Controls</h2></div>` +
-    `<dl class="facts">` +
-    row("Factory", f.paused ? "Paused" : "Running") +
-    row("Judge", esc(f.judge || "jev")) +
-    row("Day cap", `<span class="num">${esc(String(f.dayCap))}</span>`) +
-    row("Live cap", `<span class="num">${esc(String(f.liveCap ?? ""))}</span>`) +
-    row("Waiting cap", `<span class="num">${esc(String(f.waitingCap ?? ""))}</span>`) +
-    `</dl><div class="actions">` +
-    (f.paused ? ctl("resume", "Resume", true) : ctl("pause", "Pause")) +
-    ctl("judge", `Switch judge to ${other}`, false, other) +
-    `</div>`;
+    `<div class="actions">${s.factory.paused ? ctl("resume", "Resume", true) : ctl("pause", "Pause")}</div>`;
 }
-const ctl = (verb, label, primary = false, value = "") =>
-  `<button class="act${primary ? " primary" : ""}" type="button" data-act="${verb}" data-label="${esc(label)}"${value ? ` data-value="${esc(value)}"` : ""}>${esc(label)}</button>`;
+const ctl = (verb, label, primary = false) =>
+  `<button class="act${primary ? " primary" : ""}" type="button" data-act="${verb}" data-label="${esc(label)}">${esc(label)}</button>`;
