@@ -459,7 +459,8 @@ describe("timeline view", () => {
 });
 
 describe("issue events from the work store's git log", () => {
-  const issueEvents = async () => (await timeline({ now, days: 30 })).rows!.filter((e) => e.kind === "issue");
+  // The items are written at the real time, so the window must reach past it; `now` (23:00) is earlier after 23:01.
+  const issueEvents = async () => (await timeline({ now: new Date(Math.max(now.getTime(), Date.now()) + 60_000), days: 30 })).rows!.filter((e) => e.kind === "issue");
   test("opened sits at the commit that added the item, closed at the last commit that changed it", async () => {
     const t0 = Date.now();
     writeList({ key: "fac" }, "open", (doc) => { add(doc, "fresh issue", { now: new Date() }); return true; });
