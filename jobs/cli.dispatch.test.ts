@@ -84,7 +84,7 @@ describe("a factory run", () => {
       await until(() => settled(add.json.added));
       // A slow dispatch does not hold the add.
       const slowCmd = join(base, "slow-cmd");
-      writeFileSync(slowCmd, `#!/bin/bash\nsleep 10\nexec ${startCmd} "$@"\n`, { mode: 0o755 });
+      writeFileSync(slowCmd, `#!/bin/bash\nsleep 4\nexec ${startCmd} "$@"\n`, { mode: 0o755 });
       const t0 = Date.now();
       const slow = await aleph(["todo", "add", "fac", "slow dispatch", "--labels", "goal", "--body", "-"], on({ ALEPH_START_CMD: slowCmd }), `ACTION: hold ${gate("f")}\n`);
       expect(Date.now() - t0).toBeLessThan(3000);
