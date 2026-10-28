@@ -154,6 +154,8 @@ prompt=$(cat)
 printf '%s' "$prompt" > "$FAKE_LOG/review-prompt"
 echo x >> "$FAKE_LOG/review-calls"
 case $prompt in
+  *REVIEW:holdonce*) if [ -e "$FAKE_LOG/holdonce" ]; then echo '{"type":"result","is_error":false,"result":"Fine.\\nVERDICT: pass"}'; else touch "$FAKE_LOG/holdonce"; echo '{"type":"result","is_error":false,"result":"Looked.\\nVERDICT: hold the flag has no test"}'; fi ;;
+  *REVIEW:noneonce*) if [ -e "$FAKE_LOG/noneonce" ]; then echo '{"type":"result","is_error":false,"result":"Fine.\\nVERDICT: pass"}'; else touch "$FAKE_LOG/noneonce"; echo '{"type":"result","is_error":true,"result":"API Error: 529"}'; fi ;;
   *REVIEW:hold*) echo '{"type":"result","is_error":false,"total_cost_usd":0.02,"result":"Looked.\\nVERDICT: hold tests do not cover the new flag"}' ;;
   *REVIEW:none*) echo '{"type":"result","is_error":false,"total_cost_usd":0.02,"result":"Looks fine to me."}' ;;
   *REVIEW:error*) echo '{"type":"result","is_error":true,"result":"API Error: 529"}' ;;
@@ -222,7 +224,16 @@ export function setup(): void {
   fake = join(base, "fake-worker");
   reviewer = join(base, "fake-reviewer");
   writeFileSync(reviewer, REVIEWER, { mode: 0o755 });
-  writeFileSync(join(base, "fake-review2"), `#!/bin/bash\ncat > /dev/null\necho '{"type":"result","is_error":false,"result":"Checked.\\nVERDICT: back fix the held path"}'\n`, { mode: 0o755 });
+  // The verdict follows a REVIEW2:back or REVIEW2:land mark in the goal; otherwise Chris is asked.
+  writeFileSync(join(base, "fake-review2"), `#!/bin/bash
+p=$(cat)
+case "$p" in
+  *REVIEW2:back*) v="VERDICT: back fix the held path" ;;
+  *REVIEW2:land*) v="VERDICT: land" ;;
+  *) v="VERDICT: chris decide the held path" ;;
+esac
+echo '{"type":"result","is_error":false,"result":"Checked.\\n'"$v"'"}'
+`, { mode: 0o755 });
   writeFileSync(fake, FAKE, { mode: 0o755 });
   // The tests' stand-in for srt: the clean environment, and FAKE_LOG for the fake worker.
   writeFileSync(join(base, "pass"), `#!/bin/bash\nshift\nexec env -i FAKE_LOG="$FAKE_LOG" "$@"\n`, { mode: 0o755 });

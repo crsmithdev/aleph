@@ -9,7 +9,7 @@ import { basename, join } from "node:path";
 import { closeAndFile, file, readHidden } from "../../todo/lib/store.ts";
 import { fetchOrigin, followMain, git } from "./git.ts";
 import { ALREADY_MET, heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
-import { LOW, checkSlot, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { LOW, checkSlot, readReview2, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
 import { dispatchOn, gates, triageDetached, recordFlake, waitingToLand } from "./factory.ts";
@@ -783,6 +783,8 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   const argv = next === "land" ? ["land", run.name] : ["job", run.repo!, run.name, "--spec", "-", "--land"];
   const note = run.failed === "hidden"
     ? hiddenNote(folder, run)
+    : run.failed === "review"
+    ? `The reviewer sent this branch back: ${run.reason}\n\nFix what it names, run the tests, and commit.`
     : run.failed
     ? `The check \`${run.failed}\` failed on this branch. The last 80 lines of its log:\n\n${checkLog(folder, run.failed)}\n\nFix the cause, run the tests, and commit.`
     : run.reason === OWN_LIST
@@ -929,7 +931,8 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (git(repo.path, "rev-list", "--count", `${main}..refs/heads/${branch}`).out === "0") return stuck("no commit", facts);
 
     // Each earlier run of the job that a failed check sent back is a fix round.
-    const done = (jobById(run.job) ?? []).filter((e) => e.id !== id && e.run.kind === "agent" && e.run.failed).length;
+    const earlier = (jobById(run.job) ?? []).filter((e) => e.id !== id && e.run.kind === "agent" && e.run.failed).map((e) => e.run);
+    const done = earlier.length;
     if (done) facts.round = done;
     const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
     const failed = await checksInSandbox(folder, dir, "out/out.bundle", `refs/heads/${branch}`, repo, changed, phase, recorder(folder), hiddenOf(repo, run));
@@ -943,23 +946,64 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     }
     facts.checkedBase = base;
     facts.checkedTip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
-    return await heldAndReview(id, folder, run, repo, dir, base, branch, facts);
+    return await heldAndReview(id, folder, run, repo, dir, base, branch, facts, earlier);
   } finally {
     removeRunFolder(dir);
   }
 }
 
-/** After the checks pass: the held rule, then the reviewer. */
-async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, facts: Partial<Verdict>): Promise<{ verdict: Verdict; code: number }> {
+/** "once", "twice", "3 times". */
+const times = (n: number) => n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
+
+/**
+ * After the checks pass: the held rule, then the reviewer. `earlier` is the runs
+ * of the job that were sent back (a worker run; a recheck has none): a reviewer
+ * finding goes back to the worker like a failed check, while rounds are left.
+ */
+async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, facts: Partial<Verdict>, earlier?: Run[]): Promise<{ verdict: Verdict; code: number }> {
   const phase = (p: string) => updateRun(folder, { phase: p });
   const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
   if (rule) return { verdict: { state: "needs-you", needs: "held", reason: rule, stat: git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out, ...facts }, code: 0 };
   const stat = git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out;
   phase("review");
-  const rv = await review(id, folder, run, repo, dir, base, branch, testFindings(repo.path, base, `refs/heads/${branch}`));
+  const findings = testFindings(repo.path, base, `refs/heads/${branch}`);
+  let rv = await review(id, folder, run, repo, dir, base, branch, findings);
   if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
-  if (rv.reason) return { verdict: { state: "needs-you", needs: "review", reason: rv.reason, stat, ...facts }, code: 0 };
-  return { verdict: { state: "passed", ...facts }, code: 0 };
+  // A reviewer that gave no verdict runs once more; a second miss is a finding.
+  if (rv.none) {
+    rv = await review(id, folder, run, repo, dir, base, branch, findings);
+    if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
+  }
+  if (!rv.reason) return { verdict: { state: "passed", ...facts }, code: 0 };
+  if (earlier) {
+    if (earlier.length < fixRounds()) return { verdict: { state: "stuck", reason: rv.reason, stat, ...facts, failed: "review", round: earlier.length }, code: 1 };
+    const back = earlier.filter((r) => r.failed === "review").length;
+    if (back) return { verdict: { state: "needs-you", needs: "review", reason: sentBack(back, rv.reason), stat, ...facts }, code: 0 };
+  }
+  return { verdict: { state: "needs-you", needs: "review", reason: rv.reason, stat, ...facts }, code: 0 };
+}
+
+/** The reason of a run that came back from the reviewer after the last fix round. */
+const sentBack = (n: number, reason: string) => `the reviewer sent it back ${times(n)}: ${reason.replace(/^reviewer:\s*/, "")}`;
+
+/**
+ * A held run whose review2 says `back` goes to the worker as a fix round, while
+ * rounds are left; after the last round it stays with Chris, its reason saying so.
+ * Called by `aleph review2` when the review ends.
+ */
+export async function reviewBack(folder: string): Promise<void> {
+  const run = readRun(folder);
+  const r2 = readReview2(folder);
+  if (!run || run.kind !== "agent" || run.state !== "needs-you" || r2?.verdict !== "back") return;
+  const earlier = (jobById(run.job) ?? []).filter((e) => e.id !== basename(folder) && e.run.kind === "agent" && e.run.failed).map((e) => e.run);
+  const reason = r2.reason ?? "no reason given";
+  if (earlier.length < fixRounds()) {
+    const ended = updateRun(folder, { state: "stuck", needs: undefined, reason, failed: "review", round: earlier.length, next: "worker" });
+    await start(folder, ended, "worker");
+    return;
+  }
+  const back = earlier.filter((r) => r.failed === "review").length;
+  if (back) updateRun(folder, { reason: sentBack(back, reason) });
 }
 
 /**
@@ -1025,7 +1069,7 @@ export function reviewPrompt(name: string, spec: string, diff: string, findings:
  * with the worker's profile, in its own run folder with a clone of the branch.
  * Returns the reason to hold, or null on a pass, and the cost. Fails closed.
  */
-async function review(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, findings: string[]): Promise<{ reason: string | null; cost?: number }> {
+async function review(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, findings: string[]): Promise<{ reason: string | null; cost?: number; none?: boolean }> {
   const rdir = makeRunFolder(`${id}-review`);
   try {
     copyFileSync(join(dir, "out", "out.bundle"), join(rdir, "out", "out.bundle"));
@@ -1055,7 +1099,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     const o = outcome(existsSync(log) ? readFileSync(log, "utf8") : "");
     writeFileSync(join(folder, "review.md"), o.result);
     const cost = o.cost;
-    const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost });
+    const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true });
     if (w.timedOut) return none("time box");
     if (!o.ok) return none(o.line || `exit ${w.code}`);
     const v = reviewVerdict(o.result);

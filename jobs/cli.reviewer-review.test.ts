@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, fakeLog, remote, sh, specFile, state, setup, teardown } from "./cli.helpers";
+import { aleph, base, fakeLog, jobsDir, remote, sh, specFile, state, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -10,9 +10,10 @@ describe("a factory run", () => {
   const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
   const runsLeft = () => existsSync(join(base, "runs")) ? readdirSync(join(base, "runs")) : [];
   describe("the reviewer", () => {
+    // These runs never meet review2: a background review2 would rewrite the needs-you reason the assertions read.
     const rjob = (name: string, mark: string, action = `commit ${name}.txt`, extra: Record<string, string> = {}) =>
-      aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name} ${mark}\nACTION: ${action}\n`)], extra);
-    const calls = () => existsSync(join(fakeLog, "review-calls")) ? readFileSync(join(fakeLog, "review-calls"), "utf8").length : 0;
+      aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name} ${mark}\nACTION: ${action}\n`)], { ALEPH_REVIEW2_CMD: "/bin/false", ...extra });
+    const calls = () => existsSync(join(fakeLog, "review-calls")) ? readFileSync(join(fakeLog, "review-calls"), "utf8").split("\n").length - 1 : 0;
 
     test("a pass lands; the prompt holds the item and the diff; the cost adds up", async () => {
       const r = await rjob("rpass", "REVIEW:pass");
@@ -45,28 +46,54 @@ describe("a factory run", () => {
       expect(p).not.toContain("diff cut");
     });
 
-    test("a hold needs Chris, pushes nothing, and his land adds Held-by", async () => {
-      const r = await rjob("rhold", "REVIEW:hold");
-      expect(state(r.json.run)).toMatchObject({ state: "needs-you", needs: "review", reason: "reviewer: tests do not cover the new flag" });
-      expect(state(r.json.run).stat).toContain("rhold.txt");
+    const runsOf = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-fac-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));
+
+    test("a finding goes back to the worker as a fix round; the rerun passes", async () => {
+      rmSync(join(fakeLog, "holdonce"), { force: true });
+      await rjob("rback", "REVIEW:holdonce");
+      const rs = runsOf("rback");
+      expect(rs.map((x) => [x.state, x.failed])).toEqual([["stuck", "review"], ["passed", undefined], ["landed", undefined]]);
+      expect(rs[0]).toMatchObject({ reason: "reviewer: the flag has no test", next: "worker", round: 0 });
+      expect(rs[1].round).toBe(1);
+      expect(readFileSync(join(fakeLog, "prompt"), "utf8")).toContain("The reviewer sent this branch back: reviewer: the flag has no test");
+    }, 30_000);
+
+    test("a finding after the last fix round needs Chris, and the row says why in one sentence", async () => {
+      await rjob("rhold", "REVIEW:hold");
+      const rs = runsOf("rhold");
+      expect(rs.map((x) => x.state)).toEqual(["stuck", "stuck", "needs-you"]);
+      expect(rs.at(-1)).toMatchObject({ needs: "review", reason: "the reviewer sent it back twice: tests do not cover the new flag" });
+      expect(rs.at(-1).stat).toContain("rhold.txt");
       const before = remoteGit("rev-parse", "main");
       expect(before).toBe(remoteGit("rev-parse", "main"));
       expect(remoteGit("log", "-1", "--format=%s", "main")).not.toBe("add rhold.txt");
       const l = await aleph(["land", "rhold"]);
       expect(state(l.json.run)).toMatchObject({ state: "landed", held: true });
       expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain("Held-by: Chris");
-    });
+    }, 30_000);
 
-    test("no verdict line, or an error result, holds the run", async () => {
-      expect(state((await rjob("rnone", "REVIEW:none")).json.run)).toMatchObject({ state: "needs-you", needs: "review", reason: expect.stringMatching(/^reviewer: no verdict/) });
-      expect(state((await rjob("rerr", "REVIEW:error")).json.run)).toMatchObject({ state: "needs-you", reason: "reviewer: no verdict (API Error: 529)" });
+    test("a reviewer with no verdict is run again, once; its pass passes the run", async () => {
+      rmSync(join(fakeLog, "noneonce"), { force: true });
+      const n = calls();
+      const r = await rjob("rretry", "REVIEW:noneonce");
+      expect(state(r.json.run).state).toBe("passed");
+      expect(runsOf("rretry").length).toBe(1);
+      expect(calls() - n).toBe(2);
+    }, 30_000);
+
+    test("a second miss is a finding: with no fix rounds, no verdict line or an error result holds the run", async () => {
+      const none = { ALEPH_FIX_ROUNDS: "0" };
+      const n = calls();
+      expect(state((await rjob("rnone", "REVIEW:none", "commit rnone.txt", none)).json.run)).toMatchObject({ state: "needs-you", needs: "review", reason: expect.stringMatching(/^reviewer: no verdict/) });
+      expect(calls() - n).toBe(2);
+      expect(state((await rjob("rerr", "REVIEW:error", "commit rerr.txt", none)).json.run)).toMatchObject({ state: "needs-you", reason: "reviewer: no verdict (API Error: 529)" });
       for (const n of ["rnone", "rerr"]) await aleph(["drop", n]);
     });
 
     test("a reviewer past the time box holds the run", async () => {
       const slow = join(base, "slow-reviewer");
       writeFileSync(slow, "#!/bin/bash\nsleep 60\n", { mode: 0o755 });
-      const t = await aleph(["job", "fac", "rslow2", "--spec", specFile("Goal: g\nACTION: commit rslow2.txt\n")], { ALEPH_REVIEWER_CMD: slow, ALEPH_REVIEW_TIMEOUT: "1" });
+      const t = await aleph(["job", "fac", "rslow2", "--spec", specFile("Goal: g\nACTION: commit rslow2.txt\n")], { ALEPH_REVIEWER_CMD: slow, ALEPH_REVIEW_TIMEOUT: "1", ALEPH_FIX_ROUNDS: "0" });
       expect(state(t.json.run)).toMatchObject({ state: "needs-you", reason: "reviewer: no verdict (time box)" });
       await aleph(["drop", "rslow2"]);
     });

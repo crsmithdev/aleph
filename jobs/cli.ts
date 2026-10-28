@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { basename, join, resolve } from "node:path";
 import { LOW, allRuns, isLive, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
 import { addNote, allJobs, findJob, goal, isOpen, issue as issueOf, latestJob, openJob, readFile, view, type Job } from "./lib/job.ts";
-import { baselineChecks, git, onMain, removeBranch, unit } from "./lib/unit.ts";
+import { baselineChecks, git, onMain, removeBranch, reviewBack, unit } from "./lib/unit.ts";
 import { clearDecision } from "./lib/decision.ts";
 import { fetchOrigin } from "./lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
@@ -779,6 +779,7 @@ try {
     case "review2": {
       const folder = resolve(positional[0] ?? refuse("usage: aleph review2 <run-folder>"));
       try { await runReview2(folder); } catch (e: any) { refuse(e.message); }
+      await reviewBack(folder);
       break;
     }
     case "drop": await drop(); break;
