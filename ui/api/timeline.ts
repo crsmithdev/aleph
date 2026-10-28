@@ -4,8 +4,9 @@
  * `before` (default now); `next` is the `before` for the page after it, null at the end.
  * The first page (no `before`) also carries `strip`: the items of the last 30 days for the swimlanes,
  * each with kind, start, end (null for a point, or a job still running) and name.
- * Sources: the ledger (job runs), the work store (issues), Langfuse sessions (the sessions
- * route), `git log` of the registry repos (lands) and the vault's daily note lines (notes).
+ * One event is one thing that happened at one time, with a verb in `what`. Sources: the ledger
+ * (job runs), the work store (issues and their timestamped notes), `git log` of the registry repos
+ * (lands) and the vault's daily note lines (notes). Sessions have their own page.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -14,23 +15,22 @@ import { itemPath, readList, storeDir } from "../../todo/lib/store.ts";
 import { status, today } from "../../todo/lib/todo.ts";
 import { linkTargets, links, loadVault, vaultDir } from "../../vault/lib/vault.ts";
 import type { Routes } from "../server.ts";
-import { routes as sessionRoutes } from "./sessions.ts";
 
-export const KINDS = ["job", "land", "issue", "session", "note"] as const;
+export const KINDS = ["job", "land", "issue", "note"] as const;
 export type Kind = (typeof KINDS)[number];
 const HORIZON_DAYS = 90, STRIP_DAYS = 30;
 
 export interface TimelineEvent {
   at: string;
   kind: Kind;
-  /** started, ended, landed, opened, closed, dropped, written. */
+  /** The verb: started, passed, held, landed, dropped, failed, stuck, opened, triaged, decided, closed, noted. */
   what: string;
   /** A job's state, for its colour. */
   state?: string;
   title: string;
   /** The kind of job (agent, land, ...): the Subtype column. */
   sub?: string;
-  /** The job name, issue id or session id: the Id column. */
+  /** The job name or issue id: the Id column. */
   id?: string;
   href: string;
   project?: string;
@@ -38,7 +38,7 @@ export interface TimelineEvent {
   dateOnly?: boolean;
   cost?: number;
   commit?: string;
-  /** A bar's end: a job's ended, a session's last turn. */
+  /** A bar's end: the end of the job a started row belongs to. */
   end?: string;
   /** The item's own fields as key/value pairs: the Details column. */
   details?: [string, string][];
@@ -46,7 +46,7 @@ export interface TimelineEvent {
 export interface StripItem {
   kind: Kind;
   start: string;
-  /** Jobs and sessions are bars; a job with no end runs to now. Others are points (null). */
+  /** Jobs are bars; a job with no end runs to now. Others are points (null). */
   end: string | null;
   name: string;
   state?: string;
@@ -57,9 +57,8 @@ export interface StripItem {
 export interface Timeline {
   days: { day: string; events: TimelineEvent[] }[];
   next: string | null;
-  langfuse: "ok" | "off" | "error";
   strip?: StripItem[];
-  /** The first page only: every row of the stream table, newest first, one row per job. */
+  /** The first page only: every row of the stream table, newest first: one row per event. */
   rows?: TimelineEvent[];
   /** The server's clock, for the duration of running jobs. */
   now?: string;
@@ -80,6 +79,9 @@ const took = (a?: string, b?: string) => {
   return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}m`;
 };
 
+/** The verb of a job's end row, by its state. */
+const OUTCOME: Record<string, string> = { done: "passed", "needs-you": "held" };
+
 function jobEvents(project: string | null, since: number, inGit: (sha: string) => boolean): TimelineEvent[] {
   const out: TimelineEvent[] = [];
   for (const { run } of allRuns()) {
@@ -92,8 +94,8 @@ function jobEvents(project: string | null, since: number, inGit: (sha: string) =
       if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", title: run.name, id: run.name, commit: run.commit, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model], ["commit", run.commit?.slice(0, 7)]) });
       continue;
     }
-    out.push({ ...base, at: run.started, kind: "job", what: "started", state: "running", sub: run.kind, title: run.name, id: run.name, end: run.ended || undefined, details: pairs(["model", run.model]) });
-    if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: "ended", state: run.state, sub: run.kind, title: run.name, id: run.name, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model]) });
+    out.push({ ...base, at: run.started, kind: "job", what: "started", state: run.ended ? run.state : "running", sub: run.kind, title: run.name, id: run.name, end: run.ended || undefined, details: pairs(["model", run.model]) });
+    if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: OUTCOME[run.state] ?? run.state, state: run.state, sub: run.kind, title: run.name, id: run.name, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model]) });
   }
   return out.filter((e) => Date.parse(e.at) >= since);
 }
@@ -126,6 +128,11 @@ function issueEvents(project: string | null, since: number): TimelineEvent[] {
         details: pairs(["labels", (Array.isArray(item.fm.labels) ? item.fm.labels : []).join(",")], ["notes", item.notes.length || ""]) };
       const created = String(item.fm.created ?? ""), updated = String(item.fm.updated ?? "");
       const st = status(item);
+      // A 'triage: …' note is a triage, a 'Chris decided: …' or 'Claude decided: …' note a decision, at the note's time.
+      for (const line of item.notes) {
+        const m = /^- (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}): (triage:|(?:Chris|Claude) decided:)/.exec(line.trim());
+        if (m) out.push({ ...base, at: new Date(`${m[1]}T${m[2]}:00`).toISOString(), what: m[3] === "triage:" ? "triaged" : "decided", state: st, dateOnly: undefined });
+      }
       if (git) {
         out.push({ ...base, at: new Date(git.added).toISOString(), what: "opened", state: "open" });
         if (st !== "open") out.push({ ...base, at: new Date(git.changed).toISOString(), what: st === "done" ? "closed" : "dropped", state: st });
@@ -158,25 +165,6 @@ function commitEvents(project: string | null, since: number, landed: Map<string,
   return out;
 }
 
-async function sessionEvents(project: string | null, days: number): Promise<{ events: TimelineEvent[]; langfuse: Timeline["langfuse"] }> {
-  const url = new URL(`http://x/api/sessions?days=${days}${project ? `&project=${enc(project)}` : ""}`);
-  let res: Response;
-  try { res = await (sessionRoutes["GET /api/sessions"](new Request(url), {}, url) as Promise<Response>); }
-  catch { return { events: [], langfuse: "error" }; }
-  if (!res.ok) {
-    const off = ((await res.json().catch(() => ({}))) as any).error?.includes?.("not configured");
-    return { events: [], langfuse: off ? "off" : "error" };
-  }
-  const body: any = await res.json();
-  return {
-    langfuse: "ok",
-    events: (body.sessions ?? []).map((s: any): TimelineEvent => ({
-      at: s.start, end: s.last, kind: "session", what: "started", title: s.firstPrompt || s.id, id: s.id, href: `#/sessions/${enc(s.id)}`, project: s.project, cost: s.cost,
-      details: pairs(["turns", s.turns], ["kinds", (s.taskTypes ?? []).join(",")]),
-    })),
-  };
-}
-
 function noteEvents(project: string | null, since: number): TimelineEvent[] {
   const dir = join(vaultDir(), "daily");
   if (!existsSync(dir)) return [];
@@ -194,38 +182,26 @@ function noteEvents(project: string | null, since: number): TimelineEvent[] {
         const hit = t ? targets.get(t.toLowerCase()) : undefined;
         if (!hit || String(hit.fm.scope ?? "") !== project) continue;
       }
-      out.push({ at: at.toISOString(), kind: "note", what: "written", title: m[2], href: t ? `#/memory/${enc(t)}` : "#/memory" });
+      out.push({ at: at.toISOString(), kind: "note", what: "noted", title: m[2], href: t ? `#/memory/${enc(t)}` : "#/memory" });
     }
   }
   return out;
 }
 
 /** Every event of the last 90 days, newest first. */
-export async function events(project: string | null, now = new Date()): Promise<{ events: TimelineEvent[]; langfuse: Timeline["langfuse"] }> {
+export async function events(project: string | null, now = new Date()): Promise<TimelineEvent[]> {
   const since = startOf(today(new Date(now.getFullYear(), now.getMonth(), now.getDate() - HORIZON_DAYS + 1, 12))).getTime();
   const landed = new Map<string, string>();
   for (const { run } of allRuns()) if (run.kind === "land" && run.commit) landed.set(run.commit, run.name);
-  const s = await sessionEvents(project, HORIZON_DAYS);
   const shas = new Set<string>();
   const commits = commitEvents(project, since, landed, shas);
   const inGit = (sha: string) => [...shas].some((f) => f.startsWith(sha) || sha.startsWith(f));
   const all = [
     ...jobEvents(project, since, inGit), ...issueEvents(project, since), ...commits,
-    ...s.events, ...noteEvents(project, since),
+    ...noteEvents(project, since),
   ].filter((e) => dayOf(e.at) && Date.parse(e.at) >= since && Date.parse(e.at) <= now.getTime() + 60_000);
   all.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  return { events: all, langfuse: s.langfuse };
-}
-
-/** The stream table's rows: a job is one row at its start, with its end, state and cost once it has ended. */
-export function tableRows(all: TimelineEvent[]): TimelineEvent[] {
-  const ended = new Map<string, TimelineEvent>();
-  for (const e of all) if (e.kind === "job" && e.what === "ended") ended.set(e.title, e);
-  return all.filter((e) => !(e.kind === "job" && e.what === "ended")).map((e) => {
-    if (e.kind !== "job") return e;
-    const x = ended.get(e.title);
-    return x ? { ...e, end: x.at, state: x.state, cost: x.cost, details: x.details } : e;
-  });
+  return all;
 }
 
 export async function timeline(opts: { before?: string | null; days?: number; project?: string | null; now?: Date }): Promise<Timeline> {
@@ -233,7 +209,7 @@ export async function timeline(opts: { before?: string | null; days?: number; pr
   const project = opts.project ?? null;
   const cut = opts.before ? Date.parse(opts.before) : now.getTime() + 1;
   const take = Math.max(1, Math.min(opts.days ?? 1, 30));
-  const { events: all, langfuse } = await events(project, now);
+  const all = await events(project, now);
   const older = all.filter((e) => Date.parse(e.at) < cut);
   const byDay = new Map<string, TimelineEvent[]>();
   for (const e of older) {
@@ -244,14 +220,13 @@ export async function timeline(opts: { before?: string | null; days?: number; pr
   const days = [...byDay].map(([day, evs]) => ({ day, events: evs }));
   const last = days.at(-1);
   const rest = last ? older.some((e) => dayOf(e.at)! < last.day) : false;
-  const out: Timeline = { days, next: last && rest ? startOf(last.day).toISOString() : null, langfuse };
+  const out: Timeline = { days, next: last && rest ? startOf(last.day).toISOString() : null };
   if (!opts.before) {
-    out.rows = tableRows(all);
+    out.rows = all;
     out.now = now.toISOString();
     const from = startOf(today(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (STRIP_DAYS - 1), 12))).getTime();
-    const bar = (e: TimelineEvent) => e.kind === "job" || e.kind === "session";
-    out.strip = all.filter((e) => Date.parse(e.at) >= from && !(e.kind === "job" && e.what === "ended")).reverse().map((e) => ({
-      kind: e.kind, start: e.at, end: bar(e) ? e.end ?? null : null, name: e.title, state: e.state, href: e.href, day: dayOf(e.at)!,
+    out.strip = all.filter((e) => Date.parse(e.at) >= from && (e.kind !== "job" || e.what === "started")).reverse().map((e) => ({
+      kind: e.kind, start: e.at, end: e.kind === "job" ? e.end ?? null : null, name: e.title, state: e.state, href: e.href, day: dayOf(e.at)!,
     }));
   }
   return out;
