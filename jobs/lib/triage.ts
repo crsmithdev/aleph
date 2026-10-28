@@ -8,11 +8,10 @@ import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
 import { decisionNote, normalizeDecision, writeDecision, type Decision } from "./decision.ts";
-import { allRuns, isLive, jobsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
+import { allRuns, jobsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
-export { LIVE_CAP } from "./factory.ts";
-import { LIVE_CAP } from "./factory.ts";
+import { gates } from "./factory.ts";
 /** Triage runs that end with no verdict, for one item, before it is labelled `needs-chris`; `ALEPH_TRIAGE_TRIES` changes it. */
 export const TRIAGE_TRIES = () => Number(process.env.ALEPH_TRIAGE_TRIES ?? 2);
 const TIME_BOX_MS = () => Number(process.env.ALEPH_TRIAGE_TIMEOUT ?? 600) * 1000;
@@ -180,8 +179,8 @@ async function triageItem(repo: Repo, item: todos.Item, triaged: Counts, skipped
   }
 }
 
-/** Triage one open issue now, if it is one the tick would triage; `blocked` as in triageOpen. */
-export async function triageIssue(repo: Repo, id: number, done: (ref: string) => boolean, blocked: () => string | null): Promise<{ triaged: Counts; skipped: string[] }> {
+/** Triage one open issue now, if it is one the tick would triage. */
+export async function triageIssue(repo: Repo, id: number, done: (ref: string) => boolean): Promise<{ triaged: Counts; skipped: string[] }> {
   const triaged: Counts = {};
   const skipped: string[] = [];
   let item: todos.Item | undefined;
@@ -190,20 +189,17 @@ export async function triageIssue(repo: Repo, id: number, done: (ref: string) =>
   if (((item.fm.labels as string[]) ?? []).some((l) => SKIP_LABELS.includes(l))) return { triaged, skipped };
   const waits = item.fm.waiting_on;
   if (typeof waits === "string" && !done(waits)) return { triaged, skipped };
-  const live = allRuns().filter((e) => e.run.kind === "agent" && isLive(e.folder)).length;
-  if (live >= LIVE_CAP()) { skipped.push(`triage: ${live} agent runs are live`); return { triaged, skipped }; }
-  const why = blocked();
-  if (why) { skipped.push(`triage: ${why}`); return { triaged, skipped }; }
+  const blocked = gates({ only: ["live", "day"] });
+  if (blocked) { skipped.push(`triage: ${blocked.why}`); return { triaged, skipped }; }
   await triageItem(repo, item, triaged, skipped);
   return { triaged, skipped };
 }
 
 /**
  * Triage the open issues that are not goals, oldest first, at most
- * `ALEPH_TRIAGE_CAP`, while live agent runs are below the live cap.
- * `blocked` names a reason no run may start (the day cap), or null.
+ * `ALEPH_TRIAGE_CAP`, while the live and day gates allow.
  */
-export async function triageOpen(repos: Repo[], done: (ref: string) => boolean, blocked: () => string | null): Promise<{ triaged: Counts; skipped: string[] }> {
+export async function triageOpen(repos: Repo[], done: (ref: string) => boolean): Promise<{ triaged: Counts; skipped: string[] }> {
   const triaged: Counts = {};
   const skipped: string[] = [];
   const queue: { repo: Repo; item: todos.Item }[] = [];
@@ -223,10 +219,8 @@ export async function triageOpen(repos: Repo[], done: (ref: string) => boolean, 
   let n = 0;
   for (const { repo, item } of queue) {
     if (n >= TRIAGE_CAP()) break;
-    const live = allRuns().filter((e) => e.run.kind === "agent" && isLive(e.folder)).length;
-    if (live >= LIVE_CAP()) { skipped.push(`triage: ${live} agent runs are live`); break; }
-    const why = blocked();
-    if (why) { skipped.push(`triage: ${why}`); break; }
+    const blocked = gates({ only: ["live", "day"] });
+    if (blocked) { skipped.push(`triage: ${blocked.why}`); break; }
     n++;
     await triageItem(repo, item, triaged, skipped);
   }

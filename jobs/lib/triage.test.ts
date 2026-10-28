@@ -44,7 +44,7 @@ function reset(items: { title: string; body?: string; labels?: string[]; waiting
 }
 const item = (id: number) => todos.find(readList(repo)!, id)!;
 const labels = (id: number) => item(id).fm.labels as string[];
-const run = (blocked: () => string | null = () => null, done: (r: string) => boolean = () => false) => triageOpen([repo], done, blocked);
+const run = (done: (r: string) => boolean = () => false) => triageOpen([repo], done);
 
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-triage-"));
@@ -128,7 +128,7 @@ test("items labelled needs-chris, triaged, proposal or goal, or waiting on an op
   expect(t.triaged).toEqual({ chris: 1 });
   expect(labels(6)).toContain("needs-chris");
   // Once what it waits on is done, it is triaged.
-  const again = await run(() => null, (ref) => ref === "tri-9");
+  const again = await run((ref) => ref === "tri-9");
   expect(again.triaged).toEqual({});
   expect(calls()).toBe(2);
 });
@@ -188,7 +188,8 @@ test("ALEPH_TRIAGE_TRIES=1 labels the item after the first malformed run", async
 
 test("a blocked day cap or live cap starts no triage", async () => {
   reset([{ title: "a", body: "VERDICT:live" }]);
-  const t = await run(() => "cap of 0 runs in 24 hours");
+  process.env.ALEPH_DAY_CAP = "0";
+  const t = await run().finally(() => { delete process.env.ALEPH_DAY_CAP; });
   expect(t.triaged).toEqual({});
   expect(t.skipped).toEqual(["triage: cap of 0 runs in 24 hours"]);
   expect(calls()).toBe(0);

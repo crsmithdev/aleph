@@ -13,7 +13,7 @@ import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } fro
 import { LOW, checkSlot, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
-import { dispatchOn, hold, triageDetached, paused, recordFlake, waitingToLand } from "./factory.ts";
+import { dispatchOn, gates, triageDetached, recordFlake, waitingToLand } from "./factory.ts";
 import { startReview2 } from "./review2.ts";
 import { postTrace } from "./trace.ts";
 import { FACTS_REF, itemOnMain, writeFacts } from "./status.ts";
@@ -271,7 +271,7 @@ function queuedLands(repo: Repo, id: string, run: Run, cap: number): Member[] {
  * while the factory is paused or held, as the dispatch would not land them.
  */
 async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
-  if (room <= 0 || paused() || hold(undefined, run.job)) return;
+  if (room <= 0 || gates({ only: ["pause", "hold"], except: run.job })) return;
   const jobs = allJobs();
   const names = waitingToLand(jobs).filter((n) => {
     const last = openJob(n, null, jobs)?.at(-1)!.run;
@@ -794,7 +794,7 @@ function hiddenNote(folder: string, run: Run): string {
 
 /** Start the next run through the CLI, as Chris would. Its refusal goes to next.log. */
 async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): Promise<void> {
-  if (paused()) {
+  if (gates({ only: ["pause"] })) {
     appendFileSync(join(folder, "next.log"), `paused: no ${next} started\n`);
     updateRun(folder, { next: undefined });
     return;
@@ -808,9 +808,9 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
     updateRun(folder, { next: undefined });
     return;
   }
-  const h = next === "land" ? hold(undefined, run.job) : null;
+  const h = next === "land" ? gates({ only: ["hold"], except: run.job }) : null;
   if (h) {
-    appendFileSync(join(folder, "next.log"), `held: ${h.line}\n`);
+    appendFileSync(join(folder, "next.log"), `held: ${h.why}\n`);
     updateRun(folder, { next: undefined });
     return;
   }

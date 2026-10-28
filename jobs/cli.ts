@@ -18,7 +18,7 @@ import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import { triage } from "../todo/lib/triage.ts";
-import { behind, dispatchDetached, dispatchGoals, factoryDir, factoryLog, LIVE_CAP, health, hold, lastProbe, paused, probeDue, report, setPaused, triageDetached, triageNow, triageStep } from "./lib/factory.ts";
+import { behind, dispatchDetached, dispatchGoals, factoryDir, factoryLog, gates, health, hold, liveEntries, paused, probeDue, report, setPaused, triageDetached, triageNow, triageStep } from "./lib/factory.ts";
 import { runPath } from "./lib/sandbox.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
@@ -26,8 +26,6 @@ import { runReview2 } from "./lib/review2.ts";
 import { derive, FACTS_REF, itemOnMain, itemStates, readFacts, recentRepos, type ItemState } from "./lib/status.ts";
 
 const CLI = import.meta.path;
-/** The most agent runs live at once; `ALEPH_LIVE_CAP` or `caps.json` changes it. */
-const CAP = LIVE_CAP;
 /** How long `dispatch` waits for the unit to write `pid`; `ALEPH_PID_WAIT_MS` changes it. */
 const PID_WAIT_MS = Number(process.env.ALEPH_PID_WAIT_MS) || 10_000;
 const DAY_MS = 24 * 3600_000;
@@ -66,8 +64,8 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
   let id: string;
   try {
     if (run.kind === "agent") {
-      const live = allRuns().filter((e) => e.run.kind === "agent" && isLive(e.folder));
-      if (live.length >= CAP()) refuse(`${live.length} agent runs are live: ${live.map((e) => e.run.name).join(", ")}`);
+      const full = gates({ only: ["live"] });
+      if (full) refuse(`${full.why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
     }
     mkdirSync(jobsDir(), { recursive: true });
     // Runs sort by folder name, so two runs of one job never share a second:
@@ -637,10 +635,10 @@ async function startRun(repo: Repo, name: string, id: number, spec: string): Pro
 
 /** One dispatch of the ready goals. A failed probe starts no run. */
 async function runDispatch() {
-  const p = lastProbe();
-  if (!paused() && p && !p.ok) {
+  const g = gates({ only: ["pause", "probe"] });
+  if (g?.gate === "probe") {
     factoryLog("the last probe failed; no run started");
-    return { started: [], skipped: [`the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`] };
+    return { started: [], skipped: [g.why] };
   }
   // `ALEPH_RESCUE=off` leaves a stuck or failed run to hold the factory, as before the safe default actions; for tests of the hold.
   return dispatchGoals(startRun, baselineChecks, landRun, process.env.ALEPH_RESCUE === "off" ? undefined : { drop: dropRun, recheck: recheckRun });
@@ -698,8 +696,7 @@ async function tickCmd(): Promise<void> {
     }
   }
   const d = await runDispatch();
-  const p = lastProbe();
-  const t = !paused() && !(p && !p.ok) && !d.held ? await triageStep() : { triaged: {}, skipped: [] };
+  const t = !d.held ? await triageStep() : { triaged: {}, skipped: [] };
   out({ ...d, skipped: [...d.skipped, ...t.skipped], triaged: t.triaged });
 }
 

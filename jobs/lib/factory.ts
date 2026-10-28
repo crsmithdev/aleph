@@ -79,6 +79,12 @@ function holds(j: Job, keys: Set<string>, except?: string): boolean {
     && !r.next && !isLive(last.folder) && !needsChris(last);
 }
 
+/** The open jobs that hold the factory, in the order given: hold's filter, which rescueStuck uses too. */
+const holders = (jobs: Job[], except?: string): Job[] => {
+  const keys = new Set(sandboxRepos().map((r) => r.key));
+  return jobs.filter((j) => holds(j, keys, except));
+};
+
 /**
  * The factory's own hold: on while any open job in a factory repo is `stuck` or
  * `failed`. No run starts or lands by itself until it clears. `except` is a job
@@ -88,8 +94,7 @@ function holds(j: Job, keys: Set<string>, except?: string): boolean {
  * A run the factory labelled `needs-chris` does not count: Chris answers it when he can.
  */
 export function hold(jobs = allJobs(), except?: string): Hold | null {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  const bad = jobs.filter((j) => holds(j, keys, except)).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started));
+  const bad = holders(jobs, except).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started));
   if (!bad.length) return null;
   const r = lastReal(bad[0]).run;
   const more = bad.length > 1 ? ` and ${bad.length - 1} more` : "";
@@ -167,7 +172,42 @@ export function notReady(item: todos.Item, done: (ref: string) => boolean, now =
 export const goalJob = (repo: Repo, id: number) => `${repo.key}-${id}`;
 
 /** Agent runs live now. */
-export const liveRuns = (): number => allRuns().filter((e) => e.run.kind === "agent" && isLive(e.folder)).length;
+export const liveEntries = (): Entry[] => allRuns().filter((e) => e.run.kind === "agent" && isLive(e.folder));
+export const liveRuns = (): number => liveEntries().length;
+
+/** The gates, in the order `gates` checks them. */
+export const GATES = ["pause", "hold", "probe", "live", "day", "waiting"] as const;
+export type Gate = (typeof GATES)[number];
+
+/**
+ * The first reason no run may start (or land), or null. The one place the
+ * gates are checked, in the order of GATES: the pause, the hold, a failed
+ * probe, the live cap, the day cap, the runs waiting for Chris. `only` limits
+ * it to some of them (a caller whose other gates are met elsewhere or do not
+ * apply); `jobs` and `except` are hold's and the waiting count's.
+ */
+export function gates(opts: { only?: readonly Gate[]; jobs?: Job[]; except?: string } = {}): { gate: Gate; why: string } | null {
+  const on = (g: Gate) => !opts.only || opts.only.includes(g);
+  if (on("pause") && paused()) return { gate: "pause", why: "paused" };
+  if (on("hold")) {
+    const h = hold(opts.jobs, opts.except);
+    if (h) return { gate: "hold", why: h.line };
+  }
+  if (on("probe")) {
+    const p = lastProbe();
+    if (p && !p.ok) return { gate: "probe", why: `the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}` };
+  }
+  if (on("live")) {
+    const live = liveRuns();
+    if (live >= LIVE_CAP()) return { gate: "live", why: `${live} agent runs are live` };
+  }
+  if (on("day") && runsToday().length >= DAY_CAP()) return { gate: "day", why: `cap of ${DAY_CAP()} runs in 24 hours` };
+  if (on("waiting")) {
+    const waits = waiting(opts.jobs);
+    if (waits >= WAITING_CAP()) return { gate: "waiting", why: `${waits} runs wait for Chris` };
+  }
+  return null;
+}
 
 /** Dispatch is off when `ALEPH_DISPATCH=off`: a run's end and `aleph issue` then start nothing; the tick still does. */
 export const dispatchOn = () => process.env.ALEPH_DISPATCH !== "off";
@@ -192,15 +232,15 @@ export interface Rescue {
  * is the CLI's `aleph job`.
  */
 export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, rescue?: Rescue): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[] }> {
-  if (paused()) {
+  if (gates({ only: ["pause"] })) {
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
   }
   if (rescue) await rescueStuck(rescue, land);
-  const h = hold();
-  if (h) {
-    factoryLog(h.line);
-    return { started: [], skipped: [h.line], held: h.line };
+  const held = gates({ only: ["hold"] });
+  if (held) {
+    factoryLog(held.why);
+    return { started: [], skipped: [held.why], held: held.why };
   }
   const landed: string[] = [];
   if (land) {
@@ -246,17 +286,8 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       // The item may have gained a waiting_on or a due date since it was read, while the baseline ran or an earlier goal started.
       const waitNow = notReady(item, done);
       if (waitNow) { skipped.push(`${name}: ${waitNow}`); continue; }
-      const live = liveRuns();
-      if (live >= LIVE_CAP()) { skipped.push(`${name}: ${live} agent runs are live`); continue; }
-      if (runsToday().length >= DAY_CAP()) {
-        skipped.push(`${name}: cap of ${DAY_CAP()} runs in 24 hours`);
-        continue;
-      }
-      const waits = waiting(jobs);
-      if (waits >= WAITING_CAP()) {
-        skipped.push(`${name}: ${waits} runs wait for Chris`);
-        continue;
-      }
+      const gated = gates({ only: ["live", "day", "waiting"], jobs });
+      if (gated) { skipped.push(`${name}: ${gated.why}`); continue; }
       const again = rerunNote(name);
       const drops = jobs.filter((j) => j[0].run.name === name && j.at(-1)!.run.state === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
       const spec = `# ${item.title}\n\n${item.body.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
@@ -324,8 +355,7 @@ const RESCUE_WAIT_MS = () => Number(process.env.ALEPH_RESCUE_WAIT_MS ?? 60_000);
  * case hits one goal, labels the issue `needs-chris` with a one-line question; such a run holds nothing.
  */
 async function rescueStuck(act: Rescue, land?: Land): Promise<void> {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  const pending = (jobs: Job[]) => jobs.filter((j) => holds(j, keys));
+  const pending = (jobs: Job[]) => holders(jobs);
   for (const first of pending(allJobs())) {
     const name = first[0].run.name;
     // Wait: the dispatch that holds it may have read the job before this run ended, and would not act on it.
@@ -422,8 +452,8 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land): Promise<void> {
 
 /** The tick's triage of open issues that are not goals (triage.ts). */
 export async function triageStep(): Promise<{ triaged: Counts; skipped: string[] }> {
-  if (paused() || hold()) return { triaged: {}, skipped: [] };
-  const t = await triageOpen(sandboxRepos(), doneChecker(), dayCapped);
+  if (gates({ only: ["pause", "hold", "probe"] })) return { triaged: {}, skipped: [] };
+  const t = await triageOpen(sandboxRepos(), doneChecker());
   factoryLog(`triaged ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
   if (t.triaged.goal) dispatchDetached();
   return t;
@@ -600,18 +630,14 @@ function runLines(now: number): string[] {
   return lines;
 }
 
-/** The day-cap reason, or null. */
-const dayCapped = () => (runsToday().length >= DAY_CAP() ? `cap of ${DAY_CAP()} runs in 24 hours` : null);
-
 /**
  * Triage one issue at once, as `aleph issue add`, a note that answers `needs-chris`, and a
  * worker's follow-ups do. The gates are the dispatch's: paused, the hold, a failed probe, the
  * day cap. A gated issue is left for the tick.
  */
 export async function triageNow(repo: Repo, id: number): Promise<{ triaged: Counts; skipped: string[] }> {
-  const p = lastProbe();
-  if (paused() || hold() || (p && !p.ok)) return { triaged: {}, skipped: [] };
-  const t = await triageIssue(repo, id, doneChecker(), dayCapped);
+  if (gates({ only: ["pause", "hold", "probe"] })) return { triaged: {}, skipped: [] };
+  const t = await triageIssue(repo, id, doneChecker());
   factoryLog(`triaged ${repo.key}-${id}: ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
   if (t.triaged.goal) dispatchDetached();
   return t;

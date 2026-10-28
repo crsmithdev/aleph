@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
-import { dispatchGoals, hold, waitingToLand, type Rescue } from "./factory.ts";
+import { dispatchGoals, gates, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
 import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -149,6 +149,33 @@ test("a goal that stays open and labelled is started exactly once", async () => 
 
 const entry = (kind: string, state: string, reason?: string): any =>
   ({ id: `x-${kind}-${state}`, folder: join(base, "none", `${kind}-${state}`), run: { kind, job: "j1", name: "n1", repo: "fac", state, started: "2026-10-28T00:00:00Z", ...(reason ? { reason } : {}) } });
+
+test("gates returns the first reason, in the order pause, hold, probe, live cap, day cap, waiting", () => {
+  const stuck = [[entry("agent", "stuck")]];
+  const order = () => gates({ jobs: stuck as any })?.gate;
+  Object.assign(process.env, { ALEPH_LIVE_CAP: "0", ALEPH_DAY_CAP: "0", ALEPH_WAITING_CAP: "0" });
+  try {
+    setPaused(true);
+    saveProbe({ at: "2026-10-28T00:00:00Z", ok: false, failed: ["x"] });
+    expect(order()).toBe("pause");
+    setPaused(false);
+    expect(order()).toBe("hold");
+    expect(gates({ jobs: [] })?.gate).toBe("probe");
+    saveProbe({ at: "2026-10-28T00:00:00Z", ok: true, failed: [] });
+    expect(gates({ jobs: [] })?.gate).toBe("live");
+    process.env.ALEPH_LIVE_CAP = "5";
+    expect(gates({ jobs: [] })?.gate).toBe("day");
+    process.env.ALEPH_DAY_CAP = "100";
+    expect(gates({ jobs: [] })?.gate).toBe("waiting");
+    process.env.ALEPH_WAITING_CAP = "5";
+    expect(gates({ jobs: [] })).toBeNull();
+    // `only` leaves the others out.
+    process.env.ALEPH_DAY_CAP = "0";
+    expect(gates({ jobs: stuck as any, only: ["day"] })?.gate).toBe("day");
+  } finally {
+    delete process.env.ALEPH_WAITING_CAP;
+  }
+});
 
 test("a land that failed 'job lock busy' does not hold the factory", () => {
   expect(hold([[entry("agent", "passed"), entry("land", "failed", "job lock busy")]])).toBeNull();
