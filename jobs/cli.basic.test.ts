@@ -174,10 +174,10 @@ describe("guards", () => {
 
   test("six starts at once: five run, one is refused", async () => {
     const names = ["one", "two", "three", "four", "five", "six"];
-    const started = names.map((n) => job(n, "sleep"));
+    const started = names.map((n) => job(n, `hold ${join(fakeLog, "never-created")}`));
     const deadline = Date.now() + 90_000;
     let refused: Awaited<ReturnType<typeof aleph>> | undefined;
-    // Five sleep for a minute; the sixth comes back refused.
+    // Five hold on a gate file nobody creates, so none ends before the drops; the sixth comes back refused.
     refused = await Promise.race([Promise.any(started.map(async (p) => { const r = await p; if (r.code !== 1) throw 0; return r; })), Bun.sleep(90_000).then(() => undefined)]);
     expect(Date.now()).toBeLessThan(deadline);
     expect(refused?.stderr).toContain("5 agent runs are live");
