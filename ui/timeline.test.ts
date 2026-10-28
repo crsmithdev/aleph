@@ -6,7 +6,7 @@ import { writeList } from "../todo/lib/store.ts";
 import { add, note, setStatus } from "../todo/lib/todo.ts";
 import { routes, timeline } from "./api/timeline.ts";
 // @ts-ignore plain JS, shared with the page
-import { cancelTarget, contentsText, duration, idText, kindsHash, mark, mountTimeline, nextSort, parseKinds, pickKind, redirect, renderEvent, renderStream, renderTimeline, sortRows, stamp, stripOption, statusOf, view } from "./views/timeline.js";
+import { cancelTarget, contentsText, duration, idText, kindsHash, mark, mountTimeline, nextSort, parseKinds, pickKind, redirect, renderEvent, renderMore, renderStream, rowKey, parseOpen, renderTimeline, sortRows, stamp, stripOption, statusOf, view } from "./views/timeline.js";
 
 let base: string, jobsDir: string;
 const saved: Record<string, string | undefined> = {};
@@ -183,7 +183,7 @@ describe("timeline view", () => {
     const t = await timeline({ now });
     const html = renderStream(t.rows!, 0, now.getTime());
     for (const kind of ["job", "land", "issue"]) {
-      expect(html).toMatch(new RegExp(`<tr class="evr" data-kind="${kind}">(<td class="c-[a-z]+"[^>]*>.*?</td>){8}</tr>`));
+      expect(html).toMatch(new RegExp(`<tr class="evr" data-kind="${kind}"[^>]*>(<td class="c-[a-z]+"[^>]*>.*?</td>){8}</tr>`));
     }
     const row = renderEvent(t.rows!.find((r: any) => r.kind === "job")!);
     expect([...row.matchAll(/<td class="(c-\w+)"/g)].map((m) => m[1])).toEqual(["c-time", "c-status", "c-type", "c-project", "c-id", "c-title", "c-con", "c-act"]);
@@ -197,7 +197,7 @@ describe("timeline view", () => {
   test("a job's end row has the verb as its badge, type, project, #id link, title and contents of run kind, model, cost, took", () => {
     const h = renderEvent({ at: "2026-10-27T10:25:00", kind: "job", what: "landed", state: "landed", sub: "agent", id: "aleph-9", title: "Do it", href: "#/jobs/aleph-9", project: "aleph", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] });
     for (const t of ['<span class="badge done">landed</span>', '<td class="c-type">job</td>', '<td class="c-project">aleph</td>', '<a class="id" href="#/jobs/aleph-9">#9</a>', '<td class="c-title">Do it</td>']) expect(h).toContain(t);
-    expect(contentsText({ kind: "job", sub: "agent", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] })).toBe("agent · opus · $1.50 · 25m");
+    expect(contentsText({ kind: "job", sub: "agent", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] })).toBe("run: agent  model: opus  cost: $1.50  took: 25m");
     expect(h).not.toContain("Project");
     expect(h).not.toContain("Cost");
     expect(h.match(/<a /g)).toHaveLength(1);
@@ -211,14 +211,88 @@ describe("timeline view", () => {
   });
 
   test("a land's contents are its commit and by hand or direct; an issue's are label chips and the note count", () => {
-    expect(contentsText({ kind: "land", sub: "by hand", commit: "abcdef0123", details: [["took", "5m"], ["model", "m"], ["commit", "abcdef0"]] })).toBe("abcdef0 · by hand");
-    expect(contentsText({ kind: "land", sub: "direct", details: [["commit", "abc1234"]] })).toBe("abc1234 · direct");
-    expect(contentsText({ kind: "land", details: [["commit", "abc1234"]] })).toBe("abc1234");
+    expect(contentsText({ kind: "land", sub: "by hand", commit: "abcdef0123", details: [["took", "5m"], ["model", "m"], ["commit", "abcdef0"]] })).toBe("commit: abcdef0  landed: by hand");
+    expect(contentsText({ kind: "land", sub: "direct", details: [["commit", "abc1234"]] })).toBe("commit: abc1234  landed: direct");
+    expect(contentsText({ kind: "land", details: [["commit", "abc1234"]] })).toBe("commit: abc1234");
     const h = renderEvent({ at: "2026-10-26T00:00:00", kind: "issue", what: "opened", state: "open", title: "t", id: "aleph-3", href: "#/issues/aleph/3", project: "aleph", details: [["labels", "followup,goal"], ["notes", "2"]] });
     expect(h).toContain('<span class="badge">followup</span>');
     expect(h).toContain('<span class="badge">factory</span>');
-    expect(h).toContain("<span>2 notes</span>");
+    expect(h).toContain('<span><b class="k">notes:</b> 2</span>');
+    expect(h).toContain('<b class="k">labels:</b> <span class="badge">followup</span>');
     expect(h).not.toContain("Labels");
+  });
+
+  test("contents are key: value pairs with a bold key, separated by space, no dot", () => {
+    const h = renderEvent({ at: "2026-10-27T10:25:00", kind: "job", what: "passed", state: "done", sub: "agent", id: "a-9", title: "t", href: "#/jobs/a-9", cost: 0.42, details: [["took", "3m"], ["model", "opus"]] });
+    expect(h).toContain('<b class="k">run:</b> agent</span> <span><b class="k">model:</b> opus</span> <span><b class="k">cost:</b> $0.42</span> <span><b class="k">took:</b> 3m</span>');
+    expect(h).not.toContain("·");
+    expect(h).not.toContain("sep");
+    expect(renderTimeline({ rows: [] })).not.toContain(".sep");
+    expect(renderTimeline({ rows: [] })).toMatch(/\.k \{ color: var\(--muted\)/);
+  });
+
+  describe("expanding rows", () => {
+    const job = { at: "2026-10-27T10:25:00", kind: "job", what: "held", state: "needs-you", sub: "agent", id: "a-9", title: "t", href: "#/jobs/a-9", cost: 1.5, details: [["state", "needs-you"], ["reason", "held path"], ["took", "3m"], ["branch", "factory/a-9"], ["folder", "a-9-x"]] };
+    const issue = { at: "2026-10-26T10:00:00", kind: "issue", what: "opened", state: "open", id: "a-3", title: "x".repeat(70), href: "#/issues/a/3", details: [["status", "open"], ["labels", "goal"], ["waiting on", "a-2"], ["last note", "did it"]] };
+
+    test("the extra row lists every detail as key: value, the long title, and a link to the page", () => {
+      const h = renderMore(job, Date.now());
+      for (const t of ['<td colspan="8">', '<b class="k">reason:</b> held path', '<b class="k">branch:</b> factory/a-9', '<b class="k">folder:</b> a-9-x', '<b class="k">cost:</b> $1.50', '<b class="k">run:</b> agent', 'href="#/jobs/a-9"']) expect(h).toContain(t);
+      const i = renderMore(issue, Date.now());
+      for (const t of ['<b class="k">waiting on:</b> a-2', '<b class="k">last note:</b> did it', '<b class="k">labels:</b> factory', `<b class="k">title:</b> ${issue.title}`, 'href="#/issues/a/3"']) expect(i).toContain(t);
+      expect(renderMore(job, 0)).not.toContain('class="k">title:');
+    });
+
+    test("only rows in the open set get an extra row", () => {
+      expect(renderStream([job, issue])).not.toContain('class="more"');
+      const h = renderStream([job, issue], 0, Date.now(), 100, undefined, new Set([rowKey(job)]));
+      expect(h.match(/<tr class="more"/g)).toHaveLength(1);
+      expect(h).toContain('aria-expanded="true"');
+      expect(h).toContain('aria-expanded="false"');
+    });
+
+    test("the open rows live in the hash, next to the kinds", () => {
+      const k = rowKey(job);
+      const hash = kindsHash(new Set(["job", "land", "issue"]), new Set([k]));
+      expect(hash.startsWith("#/timeline?open=")).toBe(true);
+      expect(parseOpen(new URLSearchParams(hash.split("?")[1])).has(k)).toBe(true);
+      expect(kindsHash(new Set(["job"]), new Set([k]))).toContain("kinds=job&open=");
+      expect(kindsHash(new Set(["job", "land", "issue"]))).toBe("#/timeline");
+      expect(renderTimeline({ rows: [job] }, new URLSearchParams(hash.split("?")[1]))).toContain('<tr class="more"');
+    });
+
+    function mount(query?: URLSearchParams) {
+      const stream: any = { innerHTML: "", addEventListener(_: string, f: any) { this.h = f; } };
+      const keys: any = {};
+      (globalThis as any).document = { addEventListener: (_: string, f: any) => { keys.f = f; }, removeEventListener() {} };
+      mountTimeline({ querySelector: (q: string) => (q === "#tl-stream" ? stream : null), querySelectorAll: () => [] } as any, { rows: [job, issue] }, query ?? new URLSearchParams());
+      const rowEl = () => ({ dataset: { key: rowKey(job) } });
+      const click = (hit: string | null) => stream.h({ target: { closest: (s: string) => (hit && s.includes(hit) ? rowEl() : null) } });
+      return { stream, keys, click };
+    }
+    const extra = (s: any) => s.innerHTML.match(/<tr class="more"/g)?.length ?? 0;
+
+    test("a click on a row opens its extra row, a second click or Escape closes it", () => {
+      const m = mount();
+      try {
+        m.click("tr.evr"); expect(extra(m.stream)).toBe(1);
+        m.click("tr.evr"); expect(extra(m.stream)).toBe(0);
+        m.click("tr.evr"); expect(extra(m.stream)).toBe(1);
+        m.keys.f({ key: "a" }); expect(extra(m.stream)).toBe(1);
+        m.keys.f({ key: "Escape" }); expect(extra(m.stream)).toBe(0);
+      } finally { delete (globalThis as any).document; }
+    });
+
+    test("a click on a link or button inside the row does not expand it; a reload keeps open rows", () => {
+      const m = mount();
+      try {
+        m.stream.h({ target: { closest: (s: string) => (s === "a, button" ? {} : null) } });
+        expect(extra(m.stream)).toBe(0);
+        const again = mount(new URLSearchParams({ open: rowKey(job) }));
+        // the hash had it open, so a click closes it (the stream is drawn by render, not by mount)
+        again.click("tr.evr"); expect(extra(again.stream)).toBe(0);
+      } finally { delete (globalThis as any).document; }
+    });
   });
 
   test("the status is the event's verb, not the thing's state", () => {
@@ -231,9 +305,9 @@ describe("timeline view", () => {
 
   test("contents is one line, with its full text in the title", () => {
     const e = { at: "2026-10-26T00:00:00", kind: "issue", what: "opened", state: "open", title: "t", id: "aleph-3", href: "#/issues/aleph/3", project: "aleph", details: [["labels", "followup,goal"], ["notes", "2"]] };
-    expect(contentsText(e)).toBe("followup · factory · 2 notes");
+    expect(contentsText(e)).toBe("labels: followup factory  notes: 2");
     const h = renderEvent(e);
-    expect(h).toContain('<td class="c-con" title="followup · factory · 2 notes">');
+    expect(h).toContain('<td class="c-con" title="labels: followup factory  notes: 2">');
     expect(h).not.toContain("<br");
     expect(renderTimeline({ rows: [] })).toContain("text-overflow: ellipsis");
   });
@@ -368,6 +442,12 @@ describe("timeline view", () => {
     const ended = evs.find((e) => e.kind === "job" && e.what === "held")!;
     expect(ended).toMatchObject({ state: "needs-you", project: "fac", title: "fac-1" });
     expect(ended.details).toContainEqual(["took", "1h00m"]);
+    expect(ended.details).toContainEqual(["state", "needs-you"]);
+    expect(ended.details!.map(([k]) => k)).toContain("run");
+    const issue = (await timeline({ now, days: 30 })).rows!.find((e) => e.kind === "issue" && e.title === "an issue")!;
+    expect(issue.details).toContainEqual(["status", "open"]);
+    const land = (await timeline({ now, days: 30 })).rows!.find((e) => e.kind === "land")!;
+    expect(land.details!.map(([k]) => k)).toContain("message");
   });
 });
 

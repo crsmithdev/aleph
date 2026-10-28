@@ -45,7 +45,15 @@ export const STYLE = `<style>
 .tl .tbl td.c-time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .tl .tbl td.c-id a, .tl .tbl td.c-id span { font: 500 12.5px var(--mono); }
 .tl .tbl td.c-con { max-width: 34ch; overflow: hidden; text-overflow: ellipsis; }
-.tl .tbl .sep { margin: 0 6px; color: var(--muted); }
+.tl .tbl .k { color: var(--muted); font-weight: 700; }
+.tl .tbl .c-con > span + span { margin-left: 8px; }
+.tl .tbl tr.evr { cursor: pointer; }
+.tl .tbl tr.evr:hover td { background: var(--rule-2); }
+.tl .tbl tr.more td { padding: 6px 10px 10px 0; white-space: normal; background: var(--rule-2); }
+.tl .tbl tr.more dl { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0; }
+.tl .tbl tr.more dl > div { overflow-wrap: anywhere; }
+.tl .tbl tr.more dt, .tl .tbl tr.more dd { display: inline; margin: 0; }
+.tl .tbl tr.more .open { display: inline-block; margin-top: 6px; }
 .tl .tbl .c-con .badge { margin-right: 4px; }
 .tl .tbl .c-act { position: relative; width: 28px; padding: 0; text-align: right; }
 .tl .pager { display: flex; align-items: center; gap: 12px; padding: 10px 0; font: 13px var(--sans); color: var(--muted); }
@@ -148,27 +156,46 @@ export const nextSort = (sort, key) => sort.key === key ? { key, dir: -sort.dir 
  */
 export function contentsParts(e, now) {
   const d = Object.fromEntries(e.details ?? []);
-  const plain = (...texts) => texts.filter(Boolean).map((text) => ({ text }));
-  if (e.kind === "job") return plain(e.sub ?? "agent", d.model, e.cost == null ? "" : money(e.cost), duration(e, now) || d.took);
-  if (e.kind === "land") return plain(d.commit ?? e.commit?.slice(0, 7), e.sub);
+  const plain = (...kv) => kv.filter(([, text]) => text).map(([key, text]) => ({ key, text }));
+  if (e.kind === "job") return plain(["run", e.sub ?? "agent"], ["model", d.model], ["cost", e.cost == null ? "" : money(e.cost)], ["took", duration(e, now) || d.took]);
+  if (e.kind === "land") return plain(["commit", d.commit ?? e.commit?.slice(0, 7)], ["landed", e.sub]);
   const labels = (d.labels ?? "").split(",").filter(Boolean).map((l) => ({ text: labelName(l), chip: true }));
-  return [...labels, ...plain(d.notes ? `${d.notes} ${d.notes === "1" ? "note" : "notes"}` : "")];
+  return [...(labels.length ? [{ key: "labels", chips: labels }] : []), ...plain(["notes", d.notes])];
 }
-/** The Contents cell as plain text, one line: "factory · followup · 2 notes". */
-export const contentsText = (e, now) => contentsParts(e, now).map((p) => p.text).join(" · ");
-function contents(e, now) {
-  return contentsParts(e, now).map((p) => p.chip ? `<span class="badge">${esc(p.text)}</span>` : `<span>${esc(p.text)}</span>`).join('<span class="sep">·</span>');
+const partText = (p) => `${p.key}: ${p.chips ? p.chips.map((c) => c.text).join(" ") : p.text}`;
+/** The Contents cell as plain text, one line of `key: value` pairs two spaces apart: "labels: factory followup  notes: 2". */
+export const contentsText = (e, now) => contentsParts(e, now).map(partText).join("  ");
+/** One `key: value` pair: the key bold and muted, the value as it is (chips for labels). */
+const pair = (p) => `<span><b class="k">${esc(p.key)}:</b> ${p.chips ? p.chips.map((c) => `<span class="badge">${esc(c.text)}</span>`).join(" ") : esc(p.text)}</span>`;
+const contents = (e, now) => contentsParts(e, now).map(pair).join(" ");
+
+/** A row's identity in the hash: kind, verb, id and time, unique per event. */
+export const rowKey = (e) => `${e.kind}.${e.what}.${idOf(e)}.${Date.parse(e.at) || 0}`;
+/**
+ * The extra row under an expanded event: every `details` pair of the event as `key: value` (plus
+ * the cost, the run kind and a long title when the details lack them), and a link to its page.
+ */
+export function renderMore(e, now) {
+  const kv = (e.details ?? []).map(([key, text]) => ({ key, text: key === "labels" ? text.split(",").map(labelName).join(" ") : text }));
+  const has = (k) => kv.some((p) => p.key === k);
+  if (e.kind === "job" && e.cost != null && !has("cost")) kv.push({ key: "cost", text: money(e.cost) });
+  if (e.kind === "job" && e.sub && !has("run")) kv.splice(1, 0, { key: "run", text: e.sub });
+  if (e.kind === "job" && e.what === "started" && !has("took") && duration(e, now)) kv.push({ key: "took", text: duration(e, now) });
+  if (String(e.title ?? "").length > 60) kv.unshift({ key: "title", text: e.title });
+  const list = kv.map((p) => `<div>${pair(p)}</div>`).join("");
+  const link = e.href ? `<a class="open" href="${esc(e.href)}">Open ${e.kind} page →</a>` : "";
+  return `<tr class="more" data-key="${esc(rowKey(e))}"><td colspan="${COLUMNS.length}"><dl>${list}</dl>${link}</td></tr>`;
 }
 
 export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 
 /** One stream row, aligned in the columns: Time, Status, Type, Project, Id, Title, Contents and an X where one applies. */
-export function renderEvent(e, now = Date.now(), closed = new Set()) {
+export function renderEvent(e, now = Date.now(), closed = new Set(), open = false) {
   const st = statusOf(e), id = idText(e);
   const idCell = !id ? "" : e.href ? `<a class="id" href="${esc(e.href)}">${esc(id)}</a>` : `<span class="id">${esc(id)}</span>`;
   const x = cancelTarget(e, closed)
     ? `<button type="button" class="cancel" data-cancel aria-label="Stop or drop ${esc(id || e.title)}" title="Stop or drop">${X_ICON}</button>` : "";
-  return `<tr class="evr" data-kind="${esc(e.kind)}"><td class="c-time">${esc(stamp(e))}</td>` +
+  return `<tr class="evr" data-kind="${esc(e.kind)}" data-key="${esc(rowKey(e))}" aria-expanded="${open}"><td class="c-time">${esc(stamp(e))}</td>` +
     `<td class="c-status">${st.text ? `<span class="badge ${st.tone}">${esc(st.text)}</span>` : ""}</td>` +
     `<td class="c-type">${esc(e.kind)}</td><td class="c-project">${esc(e.project ?? "")}</td><td class="c-id">${idCell}</td>` +
     `<td class="c-title">${esc(e.title)}</td><td class="c-con" title="${esc(contentsText(e, now))}">${contents(e, now)}</td>` +
@@ -189,12 +216,12 @@ export function head(sort, columns = COLUMNS, sortable = SORT) {
 }
 
 /** Page `page` (0 = first) of the rows in `sort` order, 100 to a page, with Older and Newer controls. */
-export function renderStream(rows, page = 0, now = Date.now(), size = PAGE, sort = { key: "time", dir: -1 }) {
+export function renderStream(rows, page = 0, now = Date.now(), size = PAGE, sort = { key: "time", dir: -1 }, open = new Set()) {
   const pages = Math.max(1, Math.ceil(rows.length / size));
   const p = Math.min(Math.max(0, page), pages - 1);
   // An issue that has a closed or dropped row is no longer open, whatever its opened row says.
   const closed = closedIssues(rows);
-  const body = sortRows(rows, sort).slice(p * size, (p + 1) * size).map((e) => renderEvent(e, now, closed)).join("");
+  const body = sortRows(rows, sort).slice(p * size, (p + 1) * size).map((e) => open.has(rowKey(e)) ? renderEvent(e, now, closed, true) + renderMore(e, now) : renderEvent(e, now, closed)).join("");
   const ctl = `<div class="pager"><button type="button" data-page="${p + 1}"${p + 1 >= pages ? " disabled" : ""}>Older</button>` +
     `<span>Page ${p + 1} of ${pages}</span><button type="button" data-page="${p - 1}"${p === 0 ? " disabled" : ""}>Newer</button></div>`;
   return `<div class="list"><table class="tbl">${head(sort)}<tbody>${body}</tbody></table></div>${ctl}`;
@@ -205,9 +232,16 @@ export function parseKinds(query) {
   const named = String(query?.get?.("kinds") ?? "").split(",").filter((k) => KINDS.some(([x]) => x === k));
   return new Set(named.length ? named : KINDS.map(([k]) => k));
 }
-/** The hash for a set of kinds: the Activity address with `?kinds=` unless all are on. */
-export function kindsHash(on) {
-  return on.size === KINDS.length ? "#/timeline" : `#/timeline?kinds=${KINDS.filter(([k]) => on.has(k)).map(([k]) => k).join(",")}`;
+/** The expanded rows named by `?open=`, keys joined by "~". */
+export function parseOpen(query) {
+  return new Set(String(query?.get?.("open") ?? "").split("~").filter(Boolean));
+}
+/** The hash for a set of kinds and expanded rows: the Activity address with `?kinds=` unless all are on, and `?open=` when rows are open. */
+export function kindsHash(on, open = new Set()) {
+  const q = [];
+  if (on.size !== KINDS.length) q.push(`kinds=${KINDS.filter(([k]) => on.has(k)).map(([k]) => k).join(",")}`);
+  if (open.size) q.push(`open=${[...open].map(encodeURIComponent).join("~")}`);
+  return q.length ? `#/timeline?${q.join("&")}` : "#/timeline";
 }
 
 /** The kind control: All, then one button per kind, pressed while shown. */
@@ -222,7 +256,7 @@ export function renderTimeline(d, query) {
   const rows = d.rows ?? [], on = parseKinds(query);
   return `${STYLE}<div class="page tl"><h1>Activity</h1>${renderKinds(on)}` +
     `<div class="strip" id="tl-strip" role="img" aria-label="Events per day by kind, stacked, last 30 days"></div>` +
-    `<div id="tl-stream">${renderStream(rows.filter((e) => on.has(e.kind)), 0, d.now ? Date.parse(d.now) : Date.now())}</div>` +
+    `<div id="tl-stream">${renderStream(rows.filter((e) => on.has(e.kind)), 0, d.now ? Date.parse(d.now) : Date.now(), PAGE, undefined, parseOpen(query))}</div>` +
     (rows.length ? "" : empty("Nothing happened yet.", "Jobs, issues and lands show up here.")) + `</div>`;
 }
 
@@ -272,12 +306,23 @@ export function mountTimeline(root, d, query) {
   if (!stream) return;
   const on = parseKinds(query ?? (typeof location === "undefined" ? undefined : new URLSearchParams(location.hash.split("?")[1] ?? "")));
   const now = d?.now ? Date.parse(d.now) : Date.now();
+  const open = parseOpen(query ?? (typeof location === "undefined" ? undefined : new URLSearchParams(location.hash.split("?")[1] ?? "")));
   let page = 0, c = null, sort = { key: "time", dir: -1 };
 
   const show = () => {
     const rows = (d?.rows ?? []).filter((e) => on.has(e.kind));
-    stream.innerHTML = renderStream(rows, page, now, PAGE, sort);
+    stream.innerHTML = renderStream(rows, page, now, PAGE, sort, open);
   };
+  const saveHash = () => {
+    // The hash keeps the state over a reload; replaceState does not reload the view.
+    if (typeof history !== "undefined" && typeof location !== "undefined") history.replaceState(null, "", kindsHash(on, open));
+  };
+  const toggle = (key, to = !open.has(key)) => { if (to) open.add(key); else open.delete(key); saveHash(); show(); };
+  const onKey = (ev) => {
+    if (stream.isConnected === false) return document.removeEventListener("keydown", onKey);
+    if (ev.key === "Escape" && open.size) { open.clear(); saveHash(); show(); }
+  };
+  if (typeof document !== "undefined") document.addEventListener("keydown", onKey);
   if (d?.strip && globalThis.echarts) {
     try {
       c = chart(root.querySelector("#tl-strip"), stripOption(d.strip, [...on], now));
@@ -290,8 +335,7 @@ export function mountTimeline(root, d, query) {
     pickKind(on, btn.dataset.kind, !!(ev.shiftKey || ev.ctrlKey || ev.metaKey));
     const all = on.size === KINDS.length;
     for (const b of buttons) b.setAttribute("aria-pressed", String(b.dataset.kind === "all" ? all : !all && on.has(b.dataset.kind)));
-    // The hash keeps the state over a reload; replaceState does not reload the view.
-    if (typeof history !== "undefined" && typeof location !== "undefined") history.replaceState(null, "", kindsHash(on));
+    saveHash();
     page = 0; show(); c?.setOption(stripOption(d?.strip ?? [], [...on], now), true);
   });
   // Rows by position on the page, so a click finds its event again after a redraw.
@@ -301,14 +345,21 @@ export function mountTimeline(root, d, query) {
     const sb = ev.target.closest?.("button[data-sort]");
     if (sb) { sort = nextSort(sort, sb.dataset.sort); page = 0; return show(); }
     const b = ev.target.closest?.("button[data-page]");
-    if (!b || b.disabled) return;
+    if (!b) {
+      // A click on a row, not on its id link or another control, opens or closes its extra row.
+      if (ev.target.closest?.("a, button")) return;
+      const row = ev.target.closest?.("tr.evr");
+      if (row?.dataset?.key) toggle(row.dataset.key);
+      return;
+    }
+    if (b.disabled) return;
     page = Number(b.dataset.page); show();
     stream.scrollIntoView?.({ block: "start" });
   });
   async function cancelClick(btn) {
     const tr = btn.closest("tr"), msg = tr.querySelector(".cmsg");
     const rows = sortRows((d?.rows ?? []).filter((e) => on.has(e.kind)), sort).slice(page * PAGE, (page + 1) * PAGE);
-    const e = rows[[...stream.querySelectorAll("tbody tr")].indexOf(tr)];
+    const e = rows[[...stream.querySelectorAll("tbody tr.evr")].indexOf(tr)];
     const closed = closedIssues(d?.rows ?? []);
     const target = e && cancelTarget(e, closed);
     if (!target) return;
@@ -316,8 +367,8 @@ export function mountTimeline(root, d, query) {
       // The row shows its new state, and keeps it when the page redraws.
       if (e.kind === "issue") { e.state = j.status ?? "dropped"; e.what = e.state === "done" ? "closed" : "dropped"; }
       else { e.state = "dropped"; e.what = "dropped"; e.end = new Date().toISOString(); }
-      tr.outerHTML = renderEvent(e, now, closed);
-      const done = [...stream.querySelectorAll("tbody tr")][rows.indexOf(e)]?.querySelector(".cmsg");
+      tr.outerHTML = renderEvent(e, now, closed, open.has(rowKey(e)));
+      const done = [...stream.querySelectorAll("tbody tr.evr")][rows.indexOf(e)]?.querySelector(".cmsg");
       if (done) done.textContent = e.kind === "issue" ? `Now ${e.state}` : "Dropped";
     });
   }

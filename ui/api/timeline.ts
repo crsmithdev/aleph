@@ -105,12 +105,13 @@ function jobEvents(project: string | null, since: number, inGit: (sha: string) =
     const isLand = run.kind === "land" && !!run.commit && run.state === "landed";
     if (isLand) {
       // A land that git log already shows is that commit's event.
-      if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", sub: landSub(true, run.held), title: run.name, id: run.name, commit: run.commit, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model], ["commit", run.commit?.slice(0, 7)]) });
+      if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", sub: landSub(true, run.held), title: run.name, id: run.name, commit: run.commit, cost: run.cost, details: pairs(["state", run.state], ["run", run.kind], ["model", run.model], ["took", took(run.started, run.ended)], ["commit", run.commit?.slice(0, 7)], ["job", run.name], ["branch", run.branch], ["folder", run.job]) });
       continue;
     }
     const title = issueTitle(run.repo, run.todo, docs) ?? run.name;
-    out.push({ ...base, at: run.started, kind: "job", what: "started", state: run.ended ? run.state : "running", sub: run.kind, title, id: run.name, end: run.ended || undefined, details: pairs(["model", run.model]) });
-    if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: OUTCOME[run.state] ?? run.state, state: run.state, sub: run.kind, title, id: run.name, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model]) });
+    const state = run.ended ? run.state : "running";
+    out.push({ ...base, at: run.started, kind: "job", what: "started", state, sub: run.kind, title, id: run.name, end: run.ended || undefined, details: pairs(["state", state], ["reason", run.reason], ["run", run.kind], ["model", run.model], ["branch", run.branch], ["folder", run.job]) });
+    if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: OUTCOME[run.state] ?? run.state, state: run.state, sub: run.kind, title, id: run.name, cost: run.cost, details: pairs(["state", run.state], ["reason", run.reason], ["run", run.kind], ["model", run.model], ["took", took(run.started, run.ended)], ["branch", run.branch], ["folder", run.job]) });
   }
   return out.filter((e) => Date.parse(e.at) >= since);
 }
@@ -130,6 +131,9 @@ function itemTimes(key: string): Map<string, { added: number; changed: number }>
   return out;
 }
 
+/** The first line of an issue's last note, without its leading "- ". */
+const lastNote = (notes: string[]): string => (notes.at(-1) ?? "").split("\n")[0].replace(/^\s*-\s*/, "").trim();
+
 function issueEvents(project: string | null, since: number): TimelineEvent[] {
   const out: TimelineEvent[] = [];
   for (const repo of Object.values(loadRegistry())) {
@@ -141,7 +145,7 @@ function issueEvents(project: string | null, since: number): TimelineEvent[] {
       const git = times.get(itemPath(repo.key, item.id));
       const labels = Array.isArray(item.fm.labels) ? item.fm.labels.map(String) : [];
       const base = { href: `#/issues/${enc(repo.key)}/${item.id}`, project: repo.key, title: item.title, id: `${repo.key}-${item.id}`, ...(git ? {} : { dateOnly: true }), kind: "issue" as const,
-        details: pairs(["labels", labels.join(",")], ["notes", item.notes.length || ""]) };
+        details: pairs(["status", status(item)], ["labels", labels.join(",")], ["waiting on", item.fm.waiting_on], ["notes", item.notes.length || ""], ["last note", lastNote(item.notes)]) };
       const created = String(item.fm.created ?? ""), updated = String(item.fm.updated ?? "");
       const st = status(item);
       // A 'triage: …' note is a triage, a 'Chris decided: …' or 'Claude decided: …' note a decision, at the note's time.
@@ -174,7 +178,7 @@ function commitEvents(project: string | null, since: number, landed: Map<string,
       shas.add(full);
       out.push({
         at: new Date(Number(ct) * 1000).toISOString(), kind: "land", what: "landed", state: "landed", sub: landSub(!!job, held.has(full)), title: subject.join("\t"), id: job ?? short,
-        href: job ? `#/jobs/${enc(job)}` : `#/projects/${enc(repo.key)}`, project: repo.key, commit: short, details: pairs(["commit", short]),
+        href: job ? `#/jobs/${enc(job)}` : `#/projects/${enc(repo.key)}`, project: repo.key, commit: short, details: pairs(["commit", short], ["message", subject.join("\t")], ["job", job]),
       });
     }
   }
