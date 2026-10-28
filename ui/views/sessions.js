@@ -20,12 +20,16 @@ const visible = (d) => {
 const DAYS = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }];
 const windowOf = (query) => (DAYS.some((o) => o.value === query?.get("days")) ? query.get("days") : "7");
 
+/** The session's id link: the job name when it is a factory session, else the id's first 8 characters; the title is the full id. */
+const sessionLink = (s) =>
+  idLink(s.label ?? s.id.slice(0, 8), href(`/sessions/${encodeURIComponent(s.id)}`)).replace('<a class="idl"', `<a class="idl" title="${esc(s.id)}"`);
+
 function sessionsBody(d, days) {
   const all = visible(d);
   if (!all.length) return empty(d.sessions.length ? "No session matches." : `No session in the last ${days} days.`, d.sessions.length ? "Clear the search." : "Sessions appear when the hooks send traces to Langfuse.");
   // Columns: id, title (the first prompt), project, labels (kinds), numbers, times last.
   const rows = all.slice(0, state.shown).map((s) =>
-    `<tr><td>${idLink(s.id.slice(0, 8), href(`/sessions/${encodeURIComponent(s.id)}`))}</td>` +
+    `<tr><td>${sessionLink(s)}</td>` +
     `<td class="wide" title="${esc(s.firstPrompt)}">${esc(s.firstPrompt)}</td><td>${esc(s.project)}</td>` +
     `<td>${chips(s.taskTypes)}</td><td class="num">${s.turns}</td><td class="num">${esc(money(s.cost))}</td>` +
     `<td class="time">${esc(when(s.start))}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
@@ -81,7 +85,7 @@ export function renderSession(d) {
     `<tr><td class="num"><a href="${esc(href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}">${t.n}</a></td>` +
     `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td>${esc(line(t.output))}</td><td>${esc(shortModel(t.model))}</td><td class="num">${t.tools}</td>` +
     `<td class="num">${esc(dur(t.durationMs))}</td><td class="num">${esc(money(t.cost))}</td><td class="time">${esc(when(t.start))}</td></tr>`).join("");
-  const aside = [idLink(d.id.slice(0, 8), href(`/sessions/${encodeURIComponent(d.id)}`)), langfuse(d.base, d.turns[0]?.traceId)].filter(Boolean).join(" ");
+  const aside = [sessionLink(d), langfuse(d.base, d.turns[0]?.traceId)].filter(Boolean).join(" ");
   return `<div class="page"><p class="quiet"><a href="#/sessions">← Sessions</a></p>${pageHead(d.project, { count: d.turns.length, aside })}` +
     `${d.taskTypes?.length ? `<p>${chips(d.taskTypes)}</p>` : ""}` +
     `<div class="tscroll"><table class="tbl"><thead><tr><th class="num">Turn</th><th>Prompt</th><th>Output</th><th>Model</th><th class="num">Tools</th><th class="num">Duration</th><th class="num">Cost</th><th>Started</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
@@ -105,7 +109,7 @@ export function renderTurn(d) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
   const sid = encodeURIComponent(d.id);
   const nav = (n, label) => (n >= 1 && n <= d.total ? `<a href="${esc(href(`/sessions/${sid}/turns/${n}`))}">${label}</a>` : "");
-  return `<div class="page"><p class="quiet"><a href="#/sessions">← Sessions</a> / ${idLink(d.id.slice(0, 8), href(`/sessions/${sid}`))}</p>` +
+  return `<div class="page"><p class="quiet"><a href="#/sessions">← Sessions</a> / ${sessionLink(d)}</p>` +
     pageHead(`Turn ${d.n} of ${d.total}`, { aside: [nav(d.n - 1, "Previous"), nav(d.n + 1, "Next"), langfuse(d.base, d.traceId)].filter(Boolean).join(" ") }) +
     `<dl class="facts"><div><dt>Started</dt><dd>${esc(when(d.start))}</dd></div><div><dt>Cost</dt><dd>${esc(money(d.cost))}</dd></div><div><dt>Duration</dt><dd>${esc(dur(d.durationMs))}</dd></div></dl>` +
     `<h2>Prompt</h2><pre>${esc(d.prompt)}</pre><h2>Output</h2><pre>${esc(d.output)}</pre><h2>Observations</h2>` +

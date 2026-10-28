@@ -1,7 +1,7 @@
 /** `/api/sessions`, `/api/sessions/:id`, `/api/sessions/:id/turns/:n`: the Sessions views' data, from Langfuse. */
 import { basename } from "node:path";
 import { LangfuseError, config, observations, traces } from "../langfuse.ts";
-import { loadRegistry } from "../../jobs/lib/ledger.ts";
+import { allRuns, loadRegistry } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
 
 const line = (s: unknown, max: number) => {
@@ -31,6 +31,20 @@ const taskTypes = (ts: any[]): string[] => {
 
 const byTime = (a: any, b: any) => ms(a.timestamp) - ms(b.timestamp);
 const isType = (o: any, type: string) => String(o.type ?? "").toLowerCase() === type;
+
+/** Job id → name and ledger cost (the sum over the job's runs), read once per request. */
+function jobs(): Map<string, { name: string; cost: number }> {
+  const out = new Map<string, { name: string; cost: number }>();
+  for (const { run } of allRuns()) {
+    if (!run.job) continue;
+    const j = out.get(run.job) ?? { name: run.name, cost: 0 };
+    j.cost += run.cost ?? 0;
+    out.set(run.job, j);
+  }
+  return out;
+}
+
+const labelOf = (id: string) => { const j = jobs().get(id); return j ? { label: j.name } : {}; };
 
 function fail(e: unknown): Response {
   if (e instanceof LangfuseError) return Response.json({ error: e.message }, { status: e.status });
@@ -65,16 +79,20 @@ export const routes: Routes = {
       const all = (await traces(cfg, { fromTimestamp: from })).filter((t) => t.sessionId && matches(t, project));
       const groups = new Map<string, any[]>();
       for (const t of all) groups.set(t.sessionId, [...(groups.get(t.sessionId) ?? []), t]);
+      const ledger = jobs();
       const sessions = [...groups].map(([id, ts]) => {
         ts.sort(byTime);
+        const job = ledger.get(id);
+        const langfuse = ts.reduce((n, t) => n + (t.totalCost ?? 0), 0);
         return {
           id,
+          ...(job ? { label: job.name } : {}),
           project: projectOf(ts[0]),
           firstPrompt: line(ts[0].input, 160),
           turns: ts.length,
           start: ts[0].timestamp,
           last: ts[ts.length - 1].timestamp,
-          cost: ts.reduce((n, t) => n + (t.totalCost ?? 0), 0),
+          cost: langfuse || job?.cost || 0,
           taskTypes: taskTypes(ts),
         };
       }).sort((a, b) => ms(b.last) - ms(a.last));
@@ -98,7 +116,7 @@ export const routes: Routes = {
         cost: t.totalCost ?? 0,
         model: modelOf(all[i]),
       }));
-      return Response.json({ base: cfg.baseUrl, id: params.id, project: projectOf(ts[0]), taskTypes: taskTypes(ts), turns });
+      return Response.json({ base: cfg.baseUrl, id: params.id, ...labelOf(params.id), project: projectOf(ts[0]), taskTypes: taskTypes(ts), turns });
     } catch (e) { return fail(e); }
   },
 
@@ -130,7 +148,7 @@ export const routes: Routes = {
       // The turn span is the tree's root; show its children as the top level.
       const top = roots.length === 1 && roots[0].name === "turn" ? roots[0].children : roots;
       return Response.json({
-        base: cfg.baseUrl, id: params.id, n, total: ts.length, traceId: t.id, project: projectOf(t), start: t.timestamp,
+        base: cfg.baseUrl, id: params.id, ...labelOf(params.id), n, total: ts.length, traceId: t.id, project: projectOf(t), start: t.timestamp,
         prompt: cut(t.input, 400), output: cut(t.output, 400), cost: t.totalCost ?? 0, durationMs: durationMs(t), observations: top,
       });
     } catch (e) { return fail(e); }
