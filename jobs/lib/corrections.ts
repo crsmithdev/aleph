@@ -12,14 +12,24 @@ import { decide } from "../../hooks/lib/jev.ts";
 import { fetchObservations } from "../../hooks/lib/otlp.ts";
 import { factoryLog, factoryDir } from "./factory.ts";
 import { allRuns } from "./ledger.ts";
+import { file as fileIssues, type Place } from "../../todo/lib/store.ts";
 
 export const CORRECTION_AT = 0.7;
+/** How many signals make a lesson a proposal. */
+export const PROPOSE_AT = (): number => {
+  const n = Number(process.env.ALEPH_PROPOSE_AT);
+  return Number.isFinite(n) && n >= 1 ? n : 3;
+};
 const WINDOW = 14 * 24 * 3600_000;
 const QUOTE = 300;
 const SENTENCE = 160;
 
 export interface Signal { id: string; source: "chris" | "gate" | "drop"; at: string; quote: string; link: string }
-export interface Lesson { id: string; sentence: string; state: "open"; signals: Signal[]; count: number }
+export type Kind = "check" | "claude-md" | "skill";
+export interface Lesson {
+  id: string; sentence: string; state: "open" | "proposed" | "approved" | "declined"; signals: Signal[]; count: number;
+  kind?: Kind; issue?: string; declinedAt?: string;
+}
 export interface Store { minedAt: string; lessons: Lesson[] }
 
 const file = () => join(factoryDir(), "corrections.json");
@@ -165,7 +175,82 @@ export async function mine(now = Date.now()): Promise<Store> {
   signals.push(...dropSignals(from, seen));
   signals.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   for (const s of signals) await group(store.lessons, s);
+  await propose(store.lessons);
   store.minedAt = new Date(now).toISOString();
   writeStore(store);
   return store;
+}
+
+/** Every open lesson at PROPOSE_AT() signals becomes a proposal of the kind Jev finds. A Jev failure leaves it open. */
+async function propose(lessons: Lesson[]): Promise<void> {
+  for (const l of lessons) {
+    if (l.state !== "open" || l.count < PROPOSE_AT()) continue;
+    try {
+      const d = await decide(
+        { lesson: l.sentence, signals: l.signals.map((s) => s.quote) },
+        {
+          check: { type: "noul", instructions: "Can a test or a lint catch this before a run ends?" },
+          rule: { type: "noul", instructions: "Is this one rule a repo CLAUDE.md line can state?" },
+        },
+      );
+      const yes = (id: string) => { const a = d.answers[id]; return a?.type === "noul" && a.noul >= 0.5; };
+      l.kind = yes("check") ? "check" : yes("rule") ? "claude-md" : "skill";
+      l.state = "proposed";
+    } catch (e) {
+      factoryLog(`corrections: jev failed on proposal ${l.id}: ${(e as Error).message}`);
+    }
+  }
+}
+
+/** The lessons waiting for Chris's Yes or No. */
+export const proposals = (): Lesson[] => readStore().lessons.filter((l) => l.state === "proposed");
+
+const KIND_TITLE: Record<Kind, string> = { check: "Add a check", "claude-md": "Add a CLAUDE.md line", skill: "Change a skill" };
+
+/** The proposed lesson `id`, or why there is none. */
+function pending(store: Store, id: string, verb: string): Lesson | string {
+  const l = store.lessons.find((x) => x.id === id);
+  if (!l) return `no lesson ${id}`;
+  if (l.state !== "proposed") return `lesson ${id} is ${l.state}, not proposed; it cannot be ${verb}`;
+  return l;
+}
+
+/** Files the goal issue for a proposal; its ref, or a refusal string. Writes no CLAUDE.md, skill or check. */
+export function approve(id: string, repo: Place): string {
+  const store = readStore();
+  const l = pending(store, id, "approved");
+  if (typeof l === "string") return l;
+  const kind = l.kind ?? "skill";
+  const body = [
+    `Chris approved a proposal from the correction memory: ${KIND_TITLE[kind]}.`,
+    "",
+    `Kind: ${kind}`,
+    `Lesson: ${l.sentence}`,
+    "",
+    "Signals:",
+    ...l.signals.map((s) => `- ${s.at} ${s.source}: "${s.quote}" (${s.link})`),
+    "",
+  ].join("\n");
+  let ids: number[];
+  try {
+    ids = fileIssues(repo, `memory: ${KIND_TITLE[kind]}`, [{ title: `${KIND_TITLE[kind]}: ${l.sentence}`, labels: ["goal", "memory"], body }]);
+  } catch (e) {
+    return `the work store refused: ${(e as Error).message}`;
+  }
+  if (ids.length !== 1 || !ids[0]) return "the work store refused the issue";
+  l.state = "approved";
+  l.issue = `${repo.key}-${ids[0]}`;
+  writeStore(store);
+  return l.issue;
+}
+
+/** Marks a proposal declined for good; "" when done, else a refusal string. */
+export function decline(id: string, now = Date.now()): string {
+  const store = readStore();
+  const l = pending(store, id, "declined");
+  if (typeof l === "string") return l;
+  l.state = "declined";
+  l.declinedAt = new Date(now).toISOString();
+  writeStore(store);
+  return "";
 }
