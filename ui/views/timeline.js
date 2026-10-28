@@ -178,6 +178,11 @@ export const rowKey = (e) => `${e.kind}.${e.what}.${idOf(e)}.${Date.parse(e.at) 
 export function renderMore(e, now) {
   const kv = (e.details ?? []).map(([key, text]) => ({ key, text: key === "labels" ? text.split(",").map(labelName).join(" ") : text }));
   const has = (k) => kv.some((p) => p.key === k);
+  // The API leaves out pairs the row repeats at top level; put them back.
+  if (e.state && !has("state") && e.kind !== "issue") kv.unshift({ key: "state", text: e.state });
+  if (e.kind === "land" && e.commit && !has("commit")) kv.push({ key: "commit", text: e.commit.slice(0, 7) });
+  if (e.kind === "land" && e.sub !== "direct" && e.id && !has("job")) kv.push({ key: "job", text: e.id });
+  if (e.kind === "land" && e.title && e.title !== e.id && !has("message")) kv.push({ key: "message", text: e.title });
   if (e.kind === "job" && e.cost != null && !has("cost")) kv.push({ key: "cost", text: money(e.cost) });
   if (e.kind === "job" && e.sub && !has("run")) kv.splice(1, 0, { key: "run", text: e.sub });
   if (e.kind === "job" && e.what === "started" && !has("took") && duration(e, now)) kv.push({ key: "took", text: duration(e, now) });

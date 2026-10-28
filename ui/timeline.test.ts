@@ -75,33 +75,38 @@ afterAll(() => {
 });
 
 describe("timeline api", () => {
-  test("the first page is the newest day, newest event first, with the strip", async () => {
+  test("the first page leaves out days and carries strip items of kind and day only", async () => {
     const t = await timeline({ now });
+    expect(t.days).toBeUndefined();
+    expect(Object.keys(t.strip![0]).sort()).toEqual(["day", "kind"]);
+  });
+
+  test("the newest day, newest event first", async () => {
+    const t = await timeline({ now, before: new Date(now.getTime() + 1).toISOString() });
     expect(t.days).toHaveLength(1);
-    expect(t.days[0].day).toBe(dayKey(0));
-    const times = t.days[0].events.map((e) => e.at);
+    expect(t.days![0].day).toBe(dayKey(0));
+    const times = t.days![0].events.map((e) => e.at);
     expect(times).toEqual([...times].sort().reverse());
-    expect(t.days[0].events.map((e) => [e.kind, e.what, e.title])).toContainEqual(["job", "started", "fac-2"]);
-    expect(t.strip!.length).toBeGreaterThan(0);
+    expect(t.days![0].events.map((e) => [e.kind, e.what, e.title])).toContainEqual(["job", "started", "fac-2"]);
     expect(t.next).not.toBeNull();
   });
 
   test("before pages back one day at a time until the end", async () => {
     const seen: string[] = [];
-    let p = await timeline({ now });
-    seen.push(p.days[0].day);
+    let p = await timeline({ now, before: new Date(now.getTime() + 1).toISOString() });
+    seen.push(p.days![0].day);
     while (p.next) {
       p = await timeline({ now, before: p.next });
       expect(p.days).toHaveLength(1);
-      expect(p.days[0].day < seen.at(-1)!).toBe(true);
-      seen.push(p.days[0].day);
+      expect(p.days![0].day < seen.at(-1)!).toBe(true);
+      seen.push(p.days![0].day);
     }
     expect(seen).toContain(dayKey(1));
     expect(seen).toContain(dayKey(4));
   });
 
   test("each kind has its mark and link", async () => {
-    const all = (await Promise.all([0, 1, 2, 3, 4].map(async (n) => (await timeline({ now, before: at(n, 23, 30) })).days[0]?.events ?? []))).flat();
+    const all = (await Promise.all([0, 1, 2, 3, 4].map(async (n) => (await timeline({ now, before: at(n, 23, 30) })).days![0]?.events ?? []))).flat();
     const find = (kind: string, what: string) => all.find((e) => e.kind === kind && e.what === what)!;
     expect(find("job", "started").href).toBe("#/jobs/fac-2");
     expect(find("job", "held")).toMatchObject({ state: "needs-you", href: "#/jobs/fac-1" });
@@ -129,7 +134,7 @@ describe("timeline api", () => {
 
   test("the project filter keeps one project", async () => {
     const t = await timeline({ now, project: "other", before: at(0, 23) });
-    expect(t.days[0].events.map((e) => e.title)).toEqual(["oth-1", "oth-1"]);
+    expect(t.days![0].events.map((e) => e.title)).toEqual(["oth-1", "oth-1"]);
     const s = await timeline({ now, project: "other" });
     expect(s.strip!.filter((i) => i.kind === "job")).toHaveLength(1);
   });
@@ -140,8 +145,7 @@ describe("timeline api", () => {
     expect(n("job")).toBe(4);
     expect(n("session")).toBe(0);
     expect(n("note")).toBe(0);
-    expect(t.strip!.some((i) => i.kind === "job" && i.name === "fac-1" && i.start === at(0, 9) && i.end === at(0, 10))).toBe(true);
-    expect(t.strip!.find((i) => i.name === "fac-2")).toMatchObject({ kind: "job", end: null, day: dayKey(0) });
+    expect(t.strip!.filter((i) => i.kind === "job" && i.day === dayKey(0))).toHaveLength(2);
     const opt = stripOption(t.strip!, undefined, now.getTime());
     expect(opt.series.map((x: any) => x.name)).toEqual(["Jobs", "Lands", "Issues"]);
     for (const x of opt.series) expect(x).toMatchObject({ type: "line", stack: "events" }), expect(x.areaStyle).toBeDefined();
@@ -438,16 +442,16 @@ describe("timeline view", () => {
   });
 
   test("api events carry details, cost and state", async () => {
-    const evs = (await timeline({ now })).days[0].events;
+    const evs = (await timeline({ now, before: new Date(now.getTime() + 1).toISOString() })).days![0].events;
     const ended = evs.find((e) => e.kind === "job" && e.what === "held")!;
     expect(ended).toMatchObject({ state: "needs-you", project: "fac", title: "fac-1" });
     expect(ended.details).toContainEqual(["took", "1h00m"]);
-    expect(ended.details).toContainEqual(["state", "needs-you"]);
-    expect(ended.details!.map(([k]) => k)).toContain("run");
+    expect(ended.details!.map(([k]) => k)).not.toContain("state");
+    expect(ended.details!.map(([k]) => k)).not.toContain("run");
     const issue = (await timeline({ now, days: 30 })).rows!.find((e) => e.kind === "issue" && e.title === "an issue")!;
     expect(issue.details).toContainEqual(["status", "open"]);
     const land = (await timeline({ now, days: 30 })).rows!.find((e) => e.kind === "land")!;
-    expect(land.details!.map(([k]) => k)).toContain("message");
+    expect(land.details!.map(([k]) => k)).not.toContain("message");
   });
 });
 

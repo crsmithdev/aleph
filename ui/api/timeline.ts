@@ -3,7 +3,7 @@
  * newest first. A page is the latest `days` local days, each with events, that end before
  * `before` (default now); `next` is the `before` for the page after it, null at the end.
  * The first page (no `before`) also carries `strip`: the items of the last 30 days for the swimlanes,
- * each with kind, start, end (null for a point, or a job still running) and name.
+ * each with its kind and local day.
  * One event is one thing that happened at one time, with a verb in `what`. Sources: the ledger
  * (job runs, triage runs left out: the issue's own triaged row records them), the work store (issues
  * and their timestamped notes) and `git log` of the registry repos (lands). Sessions have their own page.
@@ -38,22 +38,17 @@ export interface TimelineEvent {
   commit?: string;
   /** A bar's end: the end of the job a started row belongs to. */
   end?: string;
-  /** The item's own fields as key/value pairs: the Details column. */
+  /** The item's own fields as key/value pairs, less those the row repeats at top level (state, run, commit, job, message): the view puts them back. */
   details?: [string, string][];
 }
 export interface StripItem {
   kind: Kind;
-  start: string;
-  /** Jobs are bars; a job with no end runs to now. Others are points (null). */
-  end: string | null;
-  name: string;
-  state?: string;
-  href: string;
   /** The local day the item starts on: where a click scrolls the stream. */
   day: string;
 }
 export interface Timeline {
-  days: { day: string; events: TimelineEvent[] }[];
+  /** Later pages only: the first page leaves it out, the view reads its rows and strip. */
+  days?: { day: string; events: TimelineEvent[] }[];
   next: string | null;
   strip?: StripItem[];
   /** The first page only: every row of the stream table, newest first: one row per event. */
@@ -105,13 +100,13 @@ function jobEvents(project: string | null, since: number, inGit: (sha: string) =
     const isLand = run.kind === "land" && !!run.commit && run.state === "landed";
     if (isLand) {
       // A land that git log already shows is that commit's event.
-      if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", sub: landSub(true, run.held), title: run.name, id: run.name, commit: run.commit, cost: run.cost, details: pairs(["state", run.state], ["run", run.kind], ["model", run.model], ["took", took(run.started, run.ended)], ["commit", run.commit?.slice(0, 7)], ["job", run.name], ["branch", run.branch], ["folder", run.job]) });
+      if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", sub: landSub(true, run.held), title: run.name, id: run.name, commit: run.commit, cost: run.cost, details: pairs(["model", run.model], ["took", took(run.started, run.ended)], ["branch", run.branch], ["folder", run.job]) });
       continue;
     }
     const title = issueTitle(run.repo, run.todo, docs) ?? run.name;
     const state = run.ended ? run.state : "running";
-    out.push({ ...base, at: run.started, kind: "job", what: "started", state, sub: run.kind, title, id: run.name, end: run.ended || undefined, details: pairs(["state", state], ["reason", run.reason], ["run", run.kind], ["model", run.model], ["branch", run.branch], ["folder", run.job]) });
-    if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: OUTCOME[run.state] ?? run.state, state: run.state, sub: run.kind, title, id: run.name, cost: run.cost, details: pairs(["state", run.state], ["reason", run.reason], ["run", run.kind], ["model", run.model], ["took", took(run.started, run.ended)], ["branch", run.branch], ["folder", run.job]) });
+    out.push({ ...base, at: run.started, kind: "job", what: "started", state, sub: run.kind, title, id: run.name, end: run.ended || undefined, details: pairs(["reason", run.reason], ["model", run.model], ["branch", run.branch], ["folder", run.job]) });
+    if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: OUTCOME[run.state] ?? run.state, state: run.state, sub: run.kind, title, id: run.name, cost: run.cost, details: pairs(["reason", run.reason], ["model", run.model], ["took", took(run.started, run.ended)], ["branch", run.branch], ["folder", run.job]) });
   }
   return out.filter((e) => Date.parse(e.at) >= since);
 }
@@ -178,7 +173,7 @@ function commitEvents(project: string | null, since: number, landed: Map<string,
       shas.add(full);
       out.push({
         at: new Date(Number(ct) * 1000).toISOString(), kind: "land", what: "landed", state: "landed", sub: landSub(!!job, held.has(full)), title: subject.join("\t"), id: job ?? short,
-        href: job ? `#/jobs/${enc(job)}` : `#/projects/${enc(repo.key)}`, project: repo.key, commit: short, details: pairs(["commit", short], ["message", subject.join("\t")], ["job", job]),
+        href: job ? `#/jobs/${enc(job)}` : `#/projects/${enc(repo.key)}`, project: repo.key, commit: short, details: [],
       });
     }
   }
@@ -215,14 +210,13 @@ export async function timeline(opts: { before?: string | null; days?: number; pr
   const days = [...byDay].map(([day, evs]) => ({ day, events: evs }));
   const last = days.at(-1);
   const rest = last ? older.some((e) => dayOf(e.at)! < last.day) : false;
-  const out: Timeline = { days, next: last && rest ? startOf(last.day).toISOString() : null };
-  if (!opts.before) {
+  const out: Timeline = { next: last && rest ? startOf(last.day).toISOString() : null };
+  if (opts.before) out.days = days;
+  else {
     out.rows = all;
     out.now = now.toISOString();
     const from = startOf(today(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (STRIP_DAYS - 1), 12))).getTime();
-    out.strip = all.filter((e) => Date.parse(e.at) >= from && (e.kind !== "job" || e.what === "started")).reverse().map((e) => ({
-      kind: e.kind, start: e.at, end: e.kind === "job" ? e.end ?? null : null, name: e.title, state: e.state, href: e.href, day: dayOf(e.at)!,
-    }));
+    out.strip = all.filter((e) => Date.parse(e.at) >= from && (e.kind !== "job" || e.what === "started")).reverse().map((e) => ({ kind: e.kind, day: dayOf(e.at)! }));
   }
   return out;
 }
