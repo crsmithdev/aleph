@@ -149,7 +149,7 @@ export function renderSpecRow(r) {
 export function renderSpecsTable(rows, o = {}) {
   const shown = sortRows(filterProjects(rows, o), o.ssort, SPEC_SORT);
   if (!shown.length) return empty("No spec matches.", "A repo's docs/specs folder lists its specs here.");
-  return `<table class="tbl">${header(o.ssort ?? { key: "date", dir: -1 }, SPEC_COLUMNS, SPEC_SORT)}<tbody>${shown.map(renderSpecRow).join("")}</tbody></table>`;
+  return `<div class="tscroll"><table class="tbl">${header(o.ssort ?? { key: "date", dir: -1 }, SPEC_COLUMNS, SPEC_SORT)}<tbody>${shown.map(renderSpecRow).join("")}</tbody></table></div>`;
 }
 
 export function renderFilters(d, o = {}) {
@@ -167,14 +167,14 @@ export function renderFilters(d, o = {}) {
 export function renderProjectsTable(rows, o = {}) {
   const shown = sortRows(filterProjects(rows, o), o.psort, PROJECT_SORT);
   if (!shown.length) return empty("No project matches.", "Register one, or clear the Project filter.");
-  return `<table class="tbl">${header(o.psort ?? { key: "updated", dir: -1 }, PROJECT_COLUMNS, PROJECT_SORT)}<tbody>${shown.map(renderProjectRow).join("")}</tbody></table>`;
+  return `<div class="tscroll"><table class="tbl">${header(o.psort ?? { key: "updated", dir: -1 }, PROJECT_COLUMNS, PROJECT_SORT)}<tbody>${shown.map(renderProjectRow).join("")}</tbody></table></div>`;
 }
 
 export function renderTable(rows, o = {}) {
   const all = sortRows(filterRows(rows, o), o.sort);
   if (!all.length) return empty("Nothing matches.", "File an issue below, or loosen the filters.");
   const shown = all.slice(0, o.limit ?? PAGE);
-  return `<table class="tbl">${header(o.sort ?? { key: "updated", dir: -1 }, COLUMNS, SORT)}<tbody>${shown.map(renderRow).join("")}</tbody></table>${pager(shown.length, all.length, PAGE)}`;
+  return `<div class="tscroll"><table class="tbl">${header(o.sort ?? { key: "updated", dir: -1 }, COLUMNS, SORT)}<tbody>${shown.map(renderRow).join("")}</tbody></table></div>${pager(shown.length, all.length, PAGE)}`;
 }
 
 export const BODY_TEMPLATE = "## Outcome\n\n\n\n## Oracle\n\n\n\n## Time box\n\n";
