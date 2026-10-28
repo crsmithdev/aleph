@@ -7,6 +7,7 @@
 import { basename } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
 import type { Observation } from "../../hooks/lib/otlp.ts";
+import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import { today } from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { staleAsync } from "../stale.ts";
@@ -30,11 +31,12 @@ const dayOf = (iso: string | number | undefined): string | null => {
 };
 const startOf = (key: string) => new Date(`${key}T00:00:00`);
 
-export interface Count { name: string; calls: number; errors: number }
+export interface Count { name: string; calls: number; errors: number; lastAt?: string }
 export interface Activity {
   days: string[];
   langfuse: "ok" | "off" | "error";
   error?: string;
+  projects: string[];
   tools: Count[];
   hooks: Count[];
   denials: { total: number; recent: { at: string; reason: string }[] };
@@ -83,6 +85,7 @@ export async function activity(days: number, project: string | null, now = new D
   const keys = dayKeys(days, now);
   const out: Activity = {
     days: keys, langfuse: "off",
+    projects: Object.keys(loadRegistry()).sort(),
     tools: [], hooks: [], denials: { total: 0, recent: [] },
   };
   const cfg = langfuseConfig();
@@ -108,9 +111,11 @@ export async function activity(days: number, project: string | null, now = new D
 
   const inRange = new Set(keys);
   const tools = new Map<string, Count>(), hooks = new Map<string, Count>();
+  // Observations arrive newest first, so the first one seen is the last call.
   const bump = (m: Map<string, Count>, name: string, o: Observation) => {
     const c = m.get(name) ?? { name, calls: 0, errors: 0 };
     c.calls++;
+    if (o.startTime && !c.lastAt) c.lastAt = new Date(o.startTime).toISOString();
     if (isError(o)) c.errors++;
     m.set(name, c);
   };

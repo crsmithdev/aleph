@@ -53,12 +53,15 @@ describe("activity", () => {
   test("counts tools and their errors, leaving skills to their own view", async () => {
     const a = await activity(7, null, now);
     expect(a.langfuse).toBe("ok");
-    expect(a.tools).toEqual([{ name: "Bash", calls: 2, errors: 1 }, { name: "Edit", calls: 1, errors: 0 }, { name: "Read", calls: 1, errors: 0 }]);
+    expect(a.tools.map(({ lastAt, ...c }) => c)).toEqual([{ name: "Bash", calls: 2, errors: 1 }, { name: "Edit", calls: 1, errors: 0 }, { name: "Read", calls: 1, errors: 0 }]);
+    const last = a.tools[0]?.lastAt ?? "";
+    expect(new Date(last).toISOString()).toBe(last);
+    expect(Array.isArray(a.projects)).toBe(true);
   });
 
   test("hook runs with errors, and the verify-gate denials", async () => {
     const a = await activity(7, null, now);
-    expect(a.hooks).toEqual([{ name: "verify-gate", calls: 2, errors: 0 }, { name: "vault-recall", calls: 1, errors: 1 }]);
+    expect(a.hooks.map(({ lastAt, ...c }) => c)).toEqual([{ name: "verify-gate", calls: 2, errors: 0 }, { name: "vault-recall", calls: 1, errors: 1 }]);
     expect(a.denials.total).toBe(1);
     expect(a.denials.recent[0].reason).toBe("nothing was run");
   });
@@ -131,12 +134,28 @@ describe("routes and view", () => {
   });
 });
 
+test("view.api carries days and project", () => {
+  expect(view.api({}, new URLSearchParams("days=30&project=fac"))).toBe("/api/activity?days=30&project=fac");
+  expect(view.api({}, new URLSearchParams())).toBe("/api/activity?days=7");
+});
+
 describe("Tools page parts", () => {
   test("uses the shared header and table, orders name, numbers; 50 rows and a pager", () => {
     const tools = Array.from({ length: 70 }, (_, i) => ({ name: `T${i}`, calls: i, errors: i % 2 }));
     const html = renderActivity({ langfuse: "ok", tools, hooks: [], denials: { total: 1, recent: [{ at: "2026-10-27T10:25:00", reason: "nothing ran" }] } });
     expect(html).toContain('<header class="ph"><h1>Tools</h1>');
-    expect(html).toContain('<table class="tbl"');
+    expect(html).toContain('<table class="tbl fit"');
+    expect(html).not.toContain('<table class="tbl"');
+    expect(html).toContain('class="fbar"');
+    expect(html).toContain('data-name="project"');
+    expect(html).toContain('data-name="days"');
+    expect(html).toContain('<td class="num bad">1</td>');
+    expect(html).toContain('<td class="num">0</td>');
+    expect([...html.split("</table>")[0].matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1])).toEqual(["Tool", "Calls", "Errors", "Last"]);
+    expect(html).toContain('<div class="sh"><h2>Hooks</h2></div>');
+    expect(html).toContain('<h2>Verify-gate denials</h2><span class="count">1</span>');
+    expect(html).not.toContain("<style>");
+    expect(html).not.toMatch(/td\.bad|<td class="bad"/);
     expect(html.match(/<td class="wide">T/g)).toHaveLength(50);
     expect(html).toContain('data-more="20">Show 20 more');
     expect(html).toContain("50 of 70");
