@@ -419,14 +419,15 @@ pre.trailers b { color: var(--need); }
   import { empty, error, esc, failMessage, loading, mountView } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
-  // view = { path, title, group, order, render(data, params), mount?(root, data), api?, refresh? }:
+  // view = { path, title, group, order, render(data, params), mount?(root, data), api?, refresh? }, and
+  // may export redirect(hash) -> new hash | null for an address it took over:
   // `api` is the URL its data comes from (":params" filled in from the route),
   // `refresh` the seconds between reloads. The page builds the sidebar from
   // them, routes by hash (#/jobs/aleph-52?project=aleph), and passes the
   // project to every /api fetch.
   const GROUPS = [["factory", "Factory"], ["work", "Work"], ["activity", "Activity"], ["memory", "Memory"]];
   const $ = (id) => document.getElementById(id);
-  let views = [], project = "", timer = 0, shown = null;
+  let views = [], redirects = [], project = "", timer = 0, shown = null;
 
   function compile(path) {
     const names = [];
@@ -490,6 +491,11 @@ pre.trailers b { color: var(--need); }
   }
 
   function route() {
+    // A view may take over an old address (#/list becomes #/timeline).
+    for (const r of redirects) {
+      const to = r(location.hash);
+      if (to) { history.replaceState(null, "", to); break; }
+    }
     const { path, query } = parseHash();
     const p = query.get("project") ?? "";
     // Keep the project when a link leaves it out.
@@ -602,7 +608,7 @@ pre.trailers b { color: var(--need); }
       fetch("/api/projects/keys", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
     ]);
     for (const k of keys) $("project").add(new Option(k, k));
-    const mods = await Promise.all(names.map((n) => import(`/views/${n}`).then((m) => m.view, (e) => { console.error(n, e); return null; })));
+    const mods = await Promise.all(names.map((n) => import(`/views/${n}`).then((m) => (typeof m.redirect === "function" && redirects.push(m.redirect), m.view), (e) => { console.error(n, e); return null; })));
     views = mods.filter((v) => v && typeof v.path === "string" && typeof v.render === "function")
       .map((v) => ({ ...v, _route: compile(v.path) }));
     addEventListener("hashchange", route);

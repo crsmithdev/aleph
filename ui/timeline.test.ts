@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../todo/lib/store.ts";
@@ -7,7 +7,7 @@ import { add, setStatus } from "../todo/lib/todo.ts";
 import { clearCache } from "./langfuse.ts";
 import { routes, timeline } from "./api/timeline.ts";
 // @ts-ignore plain JS, shared with the page
-import { mark, renderDay, renderTimeline, stripOption, view } from "./views/timeline.js";
+import { mark, redirect, renderDay, renderEvent, renderTimeline, stripOption, view } from "./views/timeline.js";
 
 let base: string, jobsDir: string, fake: ReturnType<typeof Bun.serve>;
 const saved: Record<string, string | undefined> = {};
@@ -166,5 +166,57 @@ describe("timeline view", () => {
     expect(renderDay({ day: "2026-01-02", events: [] })).toContain("<section");
     expect(view.path).toBe("/timeline");
     expect(typeof view.mount).toBe("function");
+  });
+
+  test("a job ended row has its state, project, cost and Details in their cells", () => {
+    const h = renderEvent({ at: "2026-10-27T10:25:00Z", kind: "job", what: "ended", state: "landed", title: "aleph-9", href: "#/jobs/aleph-9", project: "aleph", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] });
+    for (const t of ['<span class="badge">landed</span>', "<td>aleph</td>", '<td class="num">$1.5000</td>', '<td class="det"><span class="k">took 25m</span><span class="k">model opus</span></td>', 'href="#/jobs/aleph-9"']) expect(h).toContain(t);
+  });
+
+  test("an issue row shows its labels; a row without cost has an empty cost cell", () => {
+    const h = renderEvent({ at: "2026-10-26T00:00:00", kind: "issue", what: "opened", state: "open", title: "aleph-3 x", href: "#/issues/aleph/3", dateOnly: true, details: [["labels", "goal,ui"]] });
+    expect(h).toContain("labels goal,ui");
+    expect(h).toContain('<td class="num"></td>');
+  });
+
+  test("the title is HTML-escaped", () => {
+    const h = renderEvent({ at: "2026-10-27T10:00:00Z", kind: "job", what: "started", title: "Fix <it>", href: "#/jobs/x", details: [["model", "<b>"]] });
+    expect(h).toContain("Fix &lt;it&gt;");
+    expect(h).not.toContain("<it>");
+    expect(h).toContain("model &lt;b&gt;");
+  });
+
+  test("the page has all five kinds checked, the strip, a header row and rows of several kinds", async () => {
+    const t = await timeline({ now });
+    const html = renderTimeline(t);
+    expect(html.match(/<input type="checkbox" data-kind="\w+" checked>/g)).toHaveLength(5);
+    expect(html).toContain('id="tl-strip"');
+    for (const c of ["<th>Time</th>", "<th>Kind</th>", "<th>Project</th>", "<th>Title</th>", "<th>State</th>", "<th>Cost</th>", "<th>Details</th>"]) expect(html).toContain(c);
+    const all = (await Promise.all([0, 1, 2, 3].map(async (n) => renderDay((await timeline({ now, before: at(n, 23, 30) })).days[0] ?? { day: "x", events: [] })))).join("");
+    expect(new Set(all.match(/data-kind="\w+"/g)).size).toBeGreaterThan(1);
+  });
+
+  test("api events carry details, cost and state", async () => {
+    const evs = (await timeline({ now })).days[0].events;
+    const ended = evs.find((e) => e.kind === "job" && e.what === "ended")!;
+    expect(ended).toMatchObject({ state: "needs-you", project: "fac", title: "fac-1" });
+    expect(ended.details).toContainEqual(["took", "1h00m"]);
+    const sess = (await timeline({ now, before: at(2, 23) })).days[0].events.find((e) => e.kind === "session")!;
+    expect(sess.details).toContainEqual(["turns", "1"]);
+  });
+});
+
+describe("the List address", () => {
+  test("#/list opens the Timeline and drops the List query", () => {
+    expect(redirect("#/list")).toBe("#/timeline");
+    expect(redirect("#/list?set=issues")).toBe("#/timeline");
+    expect(redirect("#/list?set=jobs&project=aleph")).toBe("#/timeline?project=aleph");
+    expect(redirect("#/timeline?set=x")).toBeNull();
+    expect(redirect("#/listing")).toBeNull();
+  });
+  test("the view is Timeline at /timeline in the factory group, and no List view is left", () => {
+    expect(view).toMatchObject({ path: "/timeline", title: "Timeline", group: "factory" });
+    expect(existsSync(new URL("./views/list.js", import.meta.url).pathname)).toBe(false);
+    expect(readFileSync(new URL("./index.html", import.meta.url), "utf8")).toContain("redirect");
   });
 });

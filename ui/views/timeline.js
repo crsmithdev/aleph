@@ -7,12 +7,24 @@ import { chart, clock, empty, esc, money } from "../lib.js";
 export const view = {
   path: "/timeline",
   title: "Timeline",
-  group: "activity",
-  order: 1,
+  group: "factory",
+  order: 4,
   api: "/api/timeline?days=1",
   render: (d) => renderTimeline(d),
   mount: (root, d) => mountTimeline(root, d),
 };
+
+/**
+ * The old List address: `#/list?set=jobs` becomes `#/timeline`. The List query is dropped;
+ * only the project filter carries over. Any other hash gives null. The shell asks every view.
+ */
+export function redirect(hash) {
+  const h = String(hash ?? "").replace(/^#/, "");
+  const [path, query = ""] = h.split("?");
+  if (path.replace(/\/$/, "") !== "/list") return null;
+  const project = new URLSearchParams(query).get("project");
+  return `#/timeline${project ? `?project=${encodeURIComponent(project)}` : ""}`;
+}
 
 export const KINDS = [["job", "Jobs"], ["land", "Lands"], ["issue", "Issues"], ["session", "Sessions"], ["note", "Notes"]];
 
@@ -21,15 +33,19 @@ const STYLE = `<style>
 .tl .kinds label { cursor: pointer; }
 .tl .strip { width: 100%; height: 150px; margin-bottom: 12px; }
 .tl .day h2 { position: sticky; top: 0; z-index: 1; margin: 0; padding: 6px 0; background: var(--bg); border-bottom: 1px solid var(--rule); font: 600 13px var(--sans); }
-.tl .ev { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--rule-2); font: 13px var(--sans); }
-.tl .ev .t { flex: 0 0 42px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.tl .ev .mark { flex: 0 0 18px; text-align: center; }
-.tl .ev .mark.run { color: var(--run); } .tl .ev .mark.done { color: var(--done); }
-.tl .ev .mark.need { color: var(--need); } .tl .ev .mark.stuck { color: var(--stuck); }
-.tl .ev .mark.quiet { color: var(--muted); }
-.tl .ev .what { color: var(--muted); }
-.tl .ev .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tl .ev .cost { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tl .tscroll { overflow-x: auto; max-width: 100%; }
+.tl .tbl { border-collapse: collapse; width: 100%; font-size: 13px; }
+.tl .tbl td { padding: 3px 10px 3px 0; line-height: 1.45; border-bottom: 1px solid var(--rule-2); text-align: left; vertical-align: baseline; white-space: nowrap; max-width: 28em; overflow: hidden; text-overflow: ellipsis; }
+.tl .tbl th { padding: 3px 10px 3px 0; font: 600 12px var(--sans); color: var(--muted); text-align: left; white-space: nowrap; }
+.tl .tbl .t { color: var(--muted); }
+.tl .tbl .mark { margin-right: 4px; }
+.tl .tbl .mark.run { color: var(--run); } .tl .tbl .mark.done { color: var(--done); }
+.tl .tbl .mark.need { color: var(--need); } .tl .tbl .mark.stuck { color: var(--stuck); }
+.tl .tbl .mark.quiet { color: var(--muted); }
+.tl .tbl .num { font-variant-numeric: tabular-nums; }
+.tl .tbl td.det { color: var(--muted); font-size: 12.5px; }
+.tl .tbl td.det .k { margin-left: 8px; }
+.tl .tbl td.det .k:first-child { margin-left: 0; }
 .tl .sentinel { height: 1px; }
 .tl .more { color: var(--muted); font: 12px var(--sans); padding: 8px 0; }
 </style>`;
@@ -49,17 +65,22 @@ export function mark(e) {
   return { glyph, tone };
 }
 
+/** One stream row: the List view's shared columns, then the Details cell. */
 export function renderEvent(e) {
   const m = mark(e);
-  const extra = e.kind === "session" ? `<span class="cost">${esc(money(e.cost))}</span>` : e.commit ? `<code class="cost">${esc(e.commit)}</code>` : "";
-  return `<div class="ev" data-kind="${esc(e.kind)}"><span class="t">${e.dateOnly ? "" : esc(clock(e.at))}</span>` +
-    `<span class="mark ${m.tone}" title="${esc(`${e.kind} ${e.what}${e.state ? `: ${e.state}` : ""}`)}">${m.glyph}</span>` +
-    `<span class="what">${esc(e.what)}</span><a class="title" href="${esc(e.href)}">${esc(e.title)}</a>${extra}</div>`;
+  const det = (e.details ?? []).map(([k, v]) => `<span class="k">${esc(k)} ${esc(v)}</span>`).join("");
+  return `<tr class="evr" data-kind="${esc(e.kind)}"><td class="t num">${e.dateOnly ? "" : esc(clock(e.at))}</td>` +
+    `<td><span class="mark ${m.tone}" title="${esc(`${e.kind} ${e.what}${e.state ? `: ${e.state}` : ""}`)}">${m.glyph}</span>${esc(e.kind)} ${esc(e.what)}</td>` +
+    `<td>${esc(e.project ?? "")}</td><td><a class="title" href="${esc(e.href)}">${esc(e.title)}</a></td>` +
+    `<td>${e.state ? `<span class="badge">${esc(e.state)}</span>` : ""}</td><td class="num">${e.cost == null ? "" : esc(money(e.cost))}</td>` +
+    `<td class="det">${det}</td></tr>`;
 }
 
 const dayLabel = (day) => new Date(`${day}T12:00:00`).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 export const renderDay = (d) =>
-  `<section class="day" id="tl-${esc(d.day)}" data-day="${esc(d.day)}"><h2>${esc(dayLabel(d.day))}</h2>${d.events.map(renderEvent).join("")}</section>`;
+  `<section class="day" id="tl-${esc(d.day)}" data-day="${esc(d.day)}"><h2>${esc(dayLabel(d.day))}</h2>` +
+  `<div class="list"><div class="tscroll"><table class="tbl"><thead><tr><th>Time</th><th>Kind</th><th>Project</th><th>Title</th><th>State</th><th>Cost</th><th>Details</th></tr></thead>` +
+  `<tbody>${d.events.map(renderEvent).join("")}</tbody></table></div></div></section>`;
 
 export function renderTimeline(d) {
   if (!d) return `<div class="page">${empty("No data.")}</div>`;
@@ -96,8 +117,8 @@ export function mountTimeline(root, d) {
   const project = new URLSearchParams(location.hash.split("?")[1] ?? "").get("project") ?? "";
 
   const filter = () => {
-    for (const ev of days.querySelectorAll(".ev")) ev.hidden = !on.has(ev.dataset.kind);
-    for (const s of days.querySelectorAll(".day")) s.hidden = !s.querySelector(".ev:not([hidden])");
+    for (const ev of days.querySelectorAll(".evr")) ev.hidden = !on.has(ev.dataset.kind);
+    for (const s of days.querySelectorAll(".day")) s.hidden = !s.querySelector(".evr:not([hidden])");
     c?.setOption(stripOption(d.strip ?? [], [...on]), true);
   };
   const loadMore = () => {

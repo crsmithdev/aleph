@@ -33,6 +33,8 @@ export interface TimelineEvent {
   dateOnly?: boolean;
   cost?: number;
   commit?: string;
+  /** The item's own fields as key/value pairs: the Details column. */
+  details?: [string, string][];
 }
 export interface Timeline {
   days: { day: string; events: TimelineEvent[] }[];
@@ -47,6 +49,14 @@ const dayOf = (iso: string): string | null => {
 };
 const startOf = (day: string) => new Date(`${day}T00:00:00`);
 const enc = encodeURIComponent;
+const pairs = (...kv: [string, unknown][]): [string, string][] =>
+  kv.filter(([, v]) => v !== undefined && v !== null && v !== "").map(([k, v]) => [k, String(v)]);
+const took = (a?: string, b?: string) => {
+  const ms = Date.parse(b ?? "") - Date.parse(a ?? "");
+  if (!(ms >= 0)) return "";
+  const m = Math.round(ms / 60000);
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}m`;
+};
 
 function jobEvents(project: string | null, since: number, inGit: (sha: string) => boolean): TimelineEvent[] {
   const out: TimelineEvent[] = [];
@@ -57,11 +67,11 @@ function jobEvents(project: string | null, since: number, inGit: (sha: string) =
     const isLand = run.kind === "land" && !!run.commit && run.state === "landed";
     if (isLand) {
       // A land that git log already shows is that commit's event.
-      if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", title: run.name, commit: run.commit });
+      if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", title: run.name, commit: run.commit, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model], ["commit", run.commit?.slice(0, 7)]) });
       continue;
     }
-    out.push({ ...base, at: run.started, kind: "job", what: "started", state: "running", title: run.name });
-    if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: "ended", state: run.state, title: run.name });
+    out.push({ ...base, at: run.started, kind: "job", what: "started", state: "running", title: run.name, details: pairs(["model", run.model]) });
+    if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: "ended", state: run.state, title: run.name, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model]) });
   }
   return out.filter((e) => Date.parse(e.at) >= since);
 }
@@ -73,11 +83,12 @@ function issueEvents(project: string | null, since: number): TimelineEvent[] {
     let doc = null;
     try { doc = readList({ key: repo.key }); } catch {}
     for (const item of doc?.items ?? []) {
-      const base = { href: `#/issues/${enc(repo.key)}/${item.id}`, project: repo.key, title: `${repo.key}-${item.id} ${item.title}`, dateOnly: true, kind: "issue" as const };
+      const base = { href: `#/issues/${enc(repo.key)}/${item.id}`, project: repo.key, title: `${repo.key}-${item.id} ${item.title}`, dateOnly: true, kind: "issue" as const,
+        details: pairs(["labels", (Array.isArray(item.fm.labels) ? item.fm.labels : []).join(",")], ["notes", item.notes.length || ""]) };
       const created = String(item.fm.created ?? ""), updated = String(item.fm.updated ?? "");
       const st = status(item);
-      if (created) out.push({ ...base, at: `${created.slice(0, 10)}T00:00:00`, what: "opened" });
-      if (st !== "open" && updated) out.push({ ...base, at: `${updated.slice(0, 10)}T00:00:00`, what: st === "done" ? "closed" : "dropped" });
+      if (created) out.push({ ...base, at: `${created.slice(0, 10)}T00:00:00`, what: "opened", state: "open" });
+      if (st !== "open" && updated) out.push({ ...base, at: `${updated.slice(0, 10)}T00:00:00`, what: st === "done" ? "closed" : "dropped", state: st });
     }
   }
   return out.filter((e) => !Number.isNaN(Date.parse(e.at)) && new Date(e.at).getTime() >= since);
@@ -96,7 +107,7 @@ function commitEvents(project: string | null, since: number, landed: Map<string,
       shas.add(full);
       out.push({
         at: new Date(Number(ct) * 1000).toISOString(), kind: "land", what: "landed", state: "landed", title: subject.join("\t"),
-        href: job ? `#/jobs/${enc(job)}` : `#/projects/${enc(repo.key)}`, project: repo.key, commit: short,
+        href: job ? `#/jobs/${enc(job)}` : `#/projects/${enc(repo.key)}`, project: repo.key, commit: short, details: pairs(["commit", short]),
       });
     }
   }
@@ -117,6 +128,7 @@ async function sessionEvents(project: string | null, days: number): Promise<{ ev
     langfuse: "ok",
     events: (body.sessions ?? []).map((s: any): TimelineEvent => ({
       at: s.start, kind: "session", what: "started", title: s.firstPrompt || s.id, href: `#/sessions/${enc(s.id)}`, project: s.project, cost: s.cost,
+      details: pairs(["turns", s.turns], ["kinds", (s.taskTypes ?? []).join(",")]),
     })),
   };
 }
