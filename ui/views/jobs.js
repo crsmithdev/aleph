@@ -80,6 +80,13 @@ export function mountJobs(root, _jobs, f = {}) {
   root.onchange = (e) => { if (e.target.matches?.(".fbar select")) go(e.target.name, e.target.value); };
 }
 
+// The Job page's own CSS: each run's fields get a gap, and the facts line has space below it. Nothing shared changes.
+const JOB_STYLE = `<style>
+.job-runs table.tbl th, .job-runs table.tbl td { padding-right: 20px; }
+.job-runs table.tbl th:last-child, .job-runs table.tbl td:last-child { padding-right: 0; }
+dl.facts.job-facts { margin: 8px 0 18px; }
+</style>`;
+
 export function renderRuns(runs) {
   // Columns: kind (id), reason (title), state, model, then took, cost, started.
   const rows = runs.map((r) =>
@@ -87,7 +94,7 @@ export function renderRuns(runs) {
     `<td class="num">${r.ended ? esc(span(r.started, r.ended)) : ""}</td><td class="num">${r.cost !== undefined ? esc(money(r.cost)) : ""}</td>` +
     `<td class="time">${esc(when(r.started))}</td></tr>`).join("");
   return `<div class="sh"><h2>Runs</h2><span class="count">${runs.length}</span></div>` +
-    `<div class="tscroll"><table class="tbl"><thead><tr><th>Run</th><th>Reason</th><th>State</th><th>Model</th><th class="num">Took</th><th class="num">Cost</th><th>Started</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    `<div class="tscroll job-runs"><table class="tbl"><thead><tr><th>Run</th><th>Reason</th><th>State</th><th>Model</th><th class="num">Took</th><th class="num">Cost</th><th>Started</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 const list = (title, items, open = false) => items.length
@@ -97,9 +104,9 @@ const log = (title, body) => body ? `<div class="sh"><h2>${esc(title)}</h2></div
 
 export function renderJob(j) {
   const checks = (j.checks ?? []).map((c) => `<li>${c.ok ? "✓" : "✗"} ${esc(c.name)} <span class="quiet">${esc(c.seconds)} s</span></li>`).join("");
-  return `<div class="page"><p class="quiet"><a href="#/jobs">← Jobs</a></p>` +
+  return `${JOB_STYLE}<div class="page"><p class="quiet"><a href="#/jobs">← Jobs</a></p>` +
     pageHead(j.item?.title || j.name, { count: j.name, aside: badge(j.state) }) +
-    `<dl class="facts">${fact("Repo", esc(j.repo))}${fact("Started", esc(when(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}` +
+    `<dl class="facts job-facts">${fact("Repo", esc(j.repo))}${fact("Started", esc(when(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}` +
     `${j.model ? fact("Model", esc(shortModel(j.model))) : ""}${j.commit ? fact("Commit", j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`) : ""}` +
     `${j.trace ? fact("Trace", `<a href="${esc(j.trace)}">Langfuse</a>`) : ""}</dl>` +
     (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +

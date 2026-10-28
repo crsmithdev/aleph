@@ -233,6 +233,7 @@ describe("render", () => {
     expect(cells.slice(0, 5)).toEqual(["worker", "checks failed", '<span class="badge stuck">failed</span>', "opus", expect.stringMatching(/\d/)]);
     expect(cells[5]).toBe("$1.03");
     expect(h).toContain('<table class="tbl">');
+    expect(h).toContain('class="tscroll job-runs"');
   });
   test("diff lines are coloured and escaped", () => {
     const h = v.renderDiff("--- a\n+++ b\n+x<y\n-z");
@@ -250,5 +251,6 @@ test("the issue and job pages use pageHead, table.tbl, idLink and when", async (
   expect(issue).not.toContain('class="ih"');
   const job = require("./views/jobs.js").renderJob({ name: "fac-9", repo: "fac", item: { title: "T" }, state: "landed", started, runs: [] });
   for (const t of ['<header class="ph">', "Oct 01 10:00"]) expect(job).toContain(t);
-  expect(job).not.toContain("<style>");
+  expect(job.match(/<style>/g)).toHaveLength(1);
+  expect(job).toContain('<dl class="facts job-facts">');
 });
