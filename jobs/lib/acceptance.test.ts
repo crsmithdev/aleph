@@ -167,3 +167,14 @@ test("the default runner runs the command on origin/main in a clone", async () =
   expect(bad.code).toBe(3);
   expect(bad.output).toContain("boom");
 });
+
+test("sandboxRunner: two runs for one repo at the same time do not remove each other's folder", async () => {
+  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
+  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
+  const repo = { key: "fac", path: repoDir(), main: "main", setup: [] } as any;
+  const [a, b] = await Promise.all([sandboxRunner(repo, sha, "bun run ok"), sandboxRunner(repo, sha, "bun run bad")]);
+  expect(a.output).not.toContain("bundle failed");
+  expect(b.output).not.toContain("bundle failed");
+  expect(a.code).toBe(0);
+  expect(b.code).toBe(3);
+});

@@ -73,9 +73,12 @@ export type Runner = (repo: Repo, sha: string, command: string) => Promise<Ran>;
 const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
 /** The default runner: the commit goes in as a bundle, and the repo's setup and then the command run under srt, as the checks do. */
+let calls = 0;
 export const sandboxRunner: Runner = async (repo, sha, command) => {
-  const run = makeRunFolder(`accept-${repo.key}`);
-  const ref = `refs/aleph/accept/${repo.key}`;
+  // Each call has its own folder and ref, so overlapping runs for one repo cannot remove or overwrite each other's files.
+  const uid = `${process.pid}-${++calls}`;
+  const run = makeRunFolder(`accept-${repo.key}-${uid}`);
+  const ref = `refs/aleph/accept/${repo.key}/${uid}`;
   try {
     git(repo.path, "update-ref", ref, sha);
     const b = git(repo.path, "bundle", "create", join(run, "out", "accept.bundle"), ref);
