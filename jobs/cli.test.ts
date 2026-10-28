@@ -1161,6 +1161,9 @@ describe("a factory run", () => {
     mkdirSync(own.ALEPH_JOBS_DIR);
     const ids: number[] = [];
     for (const n of [1, 2, 3]) ids.push((await aleph(["todo", "add", "fac", `caps goal ${n}`, "--labels", "goal", "--body", "-"], {}, "ACTION: error\n")).json.added);
+    mkdirSync(join(base, "factory"), { recursive: true });
+    // A fresh passing probe, so the tick does not run the sandbox probe when this test runs alone.
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     writeFileSync(file, JSON.stringify({ day: 2 }));
     try {
       const t = await aleph(["tick"], { ...own, ALEPH_DAY_CAP: "" });
