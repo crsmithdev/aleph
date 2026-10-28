@@ -1,10 +1,10 @@
 /**
  * review2: the review a held run gets before it reaches Chris. One `claude -p`
- * in a scratch clone of the repo, which merges the run branch onto origin/main,
- * runs the checks, reads the test diff, lists the changes outside the goal's
- * edit surface, and for a `ui` goal loads the changed views in a browser. It
- * writes review2.md in the run folder; its `VERDICT:` line lands on the run as
- * `review2: { verdict, reason }`. Nothing lands on it: Land stays a click.
+ * under srt in a scratch clone of the repo, which merges the run branch onto
+ * origin/main, runs the checks, reads the test diff, lists the changes outside
+ * the goal's edit surface, and for a `ui` goal loads the changed views in a
+ * browser. It writes review2.md in the run folder; its `VERDICT:` line lands on
+ * the run as `review2: { verdict, reason }`. Nothing lands on it: Land stays a click.
  */
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -12,7 +12,16 @@ import { readList } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { outcome, tagged } from "./gate.ts";
 import { loadRegistry, readEnvFile, readRun, updateRun, type Repo, type Run } from "./ledger.ts";
-import { runPath, workerToken } from "./sandbox.ts";
+import { linkBins, sandboxed, workerToken, writeHome } from "./sandbox.ts";
+
+/**
+ * The reviewer's profile: it reads the run folder, writes only in review2/ (its
+ * clone and home) and tmp/, and reaches the Anthropic API and localhost, which
+ * a `ui` goal's server needs, with local binding.
+ */
+export const REVIEW2_SANDBOX = {
+  read: ["."], write: ["review2", "tmp"], net: { domains: ["api.anthropic.com", "localhost"], localBinding: true },
+};
 
 /** The last `VERDICT:` line: `land`, `back <reason>` or `chris <question>`; null when it is none of them. */
 export function parseVerdict(result: string): NonNullable<Run["review2"]> | null {
@@ -72,25 +81,29 @@ export async function runReview2(folder: string): Promise<void> {
     const spec = readFileSync(join(folder, "..", run.job, "spec.md"), "utf8").trim();
     const text = RECIPE({ name: run.name, branch: run.branch, main: repo.main, checks: repo.checks.map((c) => c.run), ui: isUi(repo, run), spec });
     writeFileSync(join(folder, "review2-prompt.md"), text);
-    const env: Record<string, string | undefined> = {
-      ...process.env, ...readEnvFile(repo.env ?? process.env.ALEPH_RUN_ENV), PATH: runPath(),
-      CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN ?? (workerToken() || undefined),
+    // The reviewer's home is in the scratch folder, so its settings and git identity are writable there.
+    // srt's sockets and the reviewer's tmp/ sit in the run folder, as a worker's do in its own.
+    const home = join(scratch, "home");
+    writeHome(home);
+    linkBins(folder);
+    for (const d of ["sock", "tmp"]) mkdirSync(join(folder, d), { recursive: true });
+    const env: Record<string, string> = {
+      ...readEnvFile(repo.env ?? process.env.ALEPH_RUN_ENV), CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN || workerToken(),
+      HOME: home, CLAUDE_CONFIG_DIR: join(home, ".claude"),
     };
     delete env.ANTHROPIC_API_KEY;
-    delete env.CLAUDECODE;
+    const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
     const argv = [process.env.ALEPH_REVIEW2_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
     const log = join(folder, "review2.log");
-    const fd = openSync(log, "a");
-    const limit = Number(process.env.ALEPH_REVIEW2_TIMEOUT ?? 1500);
-    const start = performance.now();
-    const p = Bun.spawn(["timeout", "--kill-after=30", String(limit), ...argv], { cwd: work, env, stdin: new Blob([text]), stdout: fd, stderr: fd });
-    const code = await p.exited;
-    closeSync(fd);
+    const r = await sandboxed(folder, `exec ${argv.map(q).join(" ")}`, {
+      ...REVIEW2_SANDBOX, cwd: "review2/work", env, stdin: text, stdout: log, stderr: log,
+      limit: Number(process.env.ALEPH_REVIEW2_TIMEOUT ?? 1500),
+    });
     const o = outcome(existsSync(log) ? readFileSync(log, "utf8") : "");
     writeFileSync(join(folder, "review2.md"), o.result);
-    if (performance.now() - start >= limit * 1000) return void fail("time box");
-    if (!o.ok) return void fail(o.line || `exit ${code}`);
+    if (r.timedOut) return void fail("time box");
+    if (!o.ok) return void fail(o.line || `exit ${r.code}`);
     const v = parseVerdict(o.result);
     if (!v) return void fail("no VERDICT line");
     updateRun(folder, { review2: v });

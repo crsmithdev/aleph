@@ -24,8 +24,15 @@ beforeAll(() => {
   process.env.ALEPH_JOBS_DIR = jobs;
   process.env.ALEPH_REPOS = join(base, "repos.json");
   process.env.ALEPH_ITEMS = join(base, "items");
+  // The stand-in for srt: the clean environment, as cli.test.ts has it.
+  writeFileSync(join(base, "pass"), `#!/bin/bash\nshift\nexec env -i "$@"\n`, { mode: 0o755 });
+  process.env.ALEPH_SANDBOX_CMD = join(base, "pass");
+  process.env.ALEPH_RUNS_DIR = join(base, "runs");
 });
-afterAll(() => rmSync(base, { recursive: true, force: true }));
+afterAll(() => {
+  delete process.env.ALEPH_SANDBOX_CMD;
+  rmSync(base, { recursive: true, force: true });
+});
 
 /** A held run in a job folder, with the spec. */
 function held(id: string, extra: object = {}): string {
@@ -86,6 +93,32 @@ describe("review2", () => {
     const { startReview2 } = await import("./review2.ts");
     expect(startReview2(held("passed", { state: "passed", needs: undefined }))).toBe(false);
     expect(startReview2(held("manual", { needs: "manual" }))).toBe(false);
+  });
+});
+
+describe("review2 under srt", () => {
+  test("the profile reads the run folder, writes review2/ and tmp/, and reaches the API and localhost", async () => {
+    const { profile } = await import("./sandbox.ts");
+    const { REVIEW2_SANDBOX } = await import("./review2.ts");
+    const folder = held("profile");
+    const s = JSON.parse(readFileSync(profile(folder, REVIEW2_SANDBOX), "utf8"));
+    expect(s.network).toEqual({ allowedDomains: ["api.anthropic.com", "localhost"], allowLocalBinding: true, deniedDomains: [] });
+    expect(s.filesystem.allowRead).toContain(folder);
+    expect(s.filesystem.allowRead).not.toContain(join(base));
+    expect(s.filesystem.allowWrite).toEqual([join(folder, "review2"), join(folder, "tmp")]);
+  });
+
+  test("the reviewer runs with its own home and the run folder as its only read", async () => {
+    const { runReview2 } = await import("./review2.ts");
+    const folder = held("home");
+    const seen = join(base, "seen");
+    writeFileSync(join(base, "claude-home"), `#!/bin/bash\ncat > /dev/null\necho "$HOME|$PWD" > "${seen}"\necho '{"type":"result","is_error":false,"result":"VERDICT: land"}'\n`, { mode: 0o755 });
+    process.env.ALEPH_REVIEW2_CMD = join(base, "claude-home");
+    await runReview2(folder);
+    const [home, cwd] = readFileSync(seen, "utf8").trim().split("|");
+    expect(home).toBe(join(folder, "review2", "home"));
+    expect(cwd).toBe(join(folder, "review2", "work"));
+    expect(state(folder).review2).toEqual({ verdict: "land" });
   });
 });
 

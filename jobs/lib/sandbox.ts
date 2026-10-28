@@ -29,40 +29,58 @@ function resolveBin(name: string): string | null {
   return p ? realpathSync(p) : null;
 }
 
-/**
- * A new run folder: home/ with Claude Code settings (auto memory off, no
- * plugins) and a git identity, work/, tmp/, sock/ for srt's own sockets, out/
- * for the bundle the worker hands back, check/ and checklog/ for the checks,
- * and bin/ with links to claude, bun and bunx.
- */
-export function makeRunFolder(id: string): string {
-  const dir = join(runsDir(), id);
-  rmSync(dir, { recursive: true, force: true });
-  for (const d of ["home/.claude", "work", "tmp", "sock", "out", "check", "checklog", "bin"]) mkdirSync(join(dir, d), { recursive: true });
-  writeFileSync(join(dir, "home/.claude/settings.json"), JSON.stringify({ autoMemoryEnabled: false, enabledPlugins: {} }, null, 2) + "\n");
-  writeFileSync(join(dir, "home/.gitconfig"), "[user]\n\tname = aleph factory\n\temail = factory@aleph.invalid\n[init]\n\tdefaultBranch = main\n");
+/** A home for a step: Claude Code settings (auto memory off, no plugins) and a git identity. */
+export function writeHome(home: string): void {
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  writeFileSync(join(home, ".claude/settings.json"), JSON.stringify({ autoMemoryEnabled: false, enabledPlugins: {} }, null, 2) + "\n");
+  writeFileSync(join(home, ".gitconfig"), "[user]\n\tname = aleph factory\n\temail = factory@aleph.invalid\n[init]\n\tdefaultBranch = main\n");
+}
+
+/** `dir/bin` with links to the pinned claude and bun, and bunx, which is bun started by that name. */
+export function linkBins(dir: string): void {
+  rmSync(join(dir, "bin"), { recursive: true, force: true });
+  mkdirSync(join(dir, "bin"), { recursive: true });
   for (const name of ["claude", "bun"]) {
     const real = resolveBin(name);
     if (real) symlinkSync(real, join(dir, "bin", name));
   }
   // bun runs as bunx when it is started by that name.
   if (existsSync(join(dir, "bin", "bun"))) symlinkSync(realpathSync(join(dir, "bin", "bun")), join(dir, "bin", "bunx"));
+}
+
+/**
+ * A new run folder: home/ with Claude Code settings and a git identity, work/,
+ * tmp/, sock/ for srt's own sockets, out/ for the bundle the worker hands
+ * back, check/ and checklog/ for the checks, and bin/ with links to claude, bun
+ * and bunx.
+ */
+export function makeRunFolder(id: string): string {
+  const dir = join(runsDir(), id);
+  rmSync(dir, { recursive: true, force: true });
+  for (const d of ["home", "work", "tmp", "sock", "out", "check", "checklog"]) mkdirSync(join(dir, d), { recursive: true });
+  writeHome(join(dir, "home"));
+  linkBins(dir);
   return dir;
 }
 
 export const removeRunFolder = (dir: string) => rmSync(dir, { recursive: true, force: true });
 
+/** The network a step reaches: the domains it may name, and whether it may listen on a local port. */
+export interface Net { domains: string[]; localBinding: boolean }
+const WORKER_NET: Net = { domains: ["api.anthropic.com", "registry.npmjs.org"], localBinding: false };
+
 /**
  * The profile for one step: reads denied on /home and the other private
  * places, apart from the bundles, the pinned binaries and srt's own helper;
  * writes only where the step needs them. The network reaches the Anthropic
- * API and npm, and nothing else.
+ * API and npm, and nothing else, unless `net` says otherwise.
  */
-export function profile(dir: string, o: { read: string[]; write: string[] }): string {
+export function profile(dir: string, o: { read: string[]; write: string[]; net?: Net }): string {
   const vendor = join(expand("~/.aleph/tools/lib/node_modules/@anthropic-ai/sandbox-runtime"), "vendor");
   const bins = ["claude", "bun"].map((b) => { try { return realpathSync(join(dir, "bin", b)); } catch { return null; } }).filter(Boolean) as string[];
+  const net = o.net ?? WORKER_NET;
   const settings = {
-    network: { allowedDomains: ["api.anthropic.com", "registry.npmjs.org"], allowLocalBinding: false, deniedDomains: [] },
+    network: { allowedDomains: net.domains, allowLocalBinding: net.localBinding, deniedDomains: [] },
     filesystem: {
       denyRead: ["/home", "/root", "/mnt", "/run", "/var/run", "/srv", "/tmp"],
       allowRead: [...bins, vendor, join(dir, "bin"), join(dir, "sock"), ...o.read.map((p) => join(dir, p))],
@@ -84,7 +102,7 @@ export interface Step { code: number; timedOut: boolean; stalled: boolean }
  * profile: it tests the flow, not the isolation.
  */
 export async function sandboxed(dir: string, script: string, o: {
-  read: string[]; write: string[]; cwd: string; env?: Record<string, string>; stdout: string; stderr: string; limit?: number; stall?: number; stdin?: string;
+  read: string[]; write: string[]; net?: Net; cwd: string; env?: Record<string, string>; stdout: string; stderr: string; limit?: number; stall?: number; stdin?: string;
   onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void;
 }): Promise<Step> {
   const inner: Record<string, string> = {
