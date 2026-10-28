@@ -1,7 +1,7 @@
 // The Skills view: how often each skill ran, from Langfuse. `renderSkills` takes
 // /api/skills, `renderSkill` takes /api/skills/:name; neither touches the DOM.
 // The shell takes one view per module, so the detail route is declared in skill.js.
-import { chart, clock, empty, esc } from "../lib.js";
+import { badge, chart, empty, esc, idLink, pageHead, sortHead, when } from "../lib.js";
 
 export const view = {
   path: "/skills",
@@ -15,7 +15,6 @@ export const view = {
 
 const href = (name) => `#/skills/${encodeURIComponent(name)}`;
 const sessionHref = (id) => `#/sessions/${encodeURIComponent(id)}`;
-const date = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : `${d.toLocaleDateString([], { day: "numeric", month: "short" })} ${clock(iso)}`; };
 
 /** The mount point of a per-day chart; `mountPerDay` draws into it. `key` finds its data again. */
 export const bars = (key, label = "Uses per day") => `<div class="perday" role="img" aria-label="${esc(label)}" data-skill="${esc(key)}"></div>`;
@@ -48,69 +47,83 @@ export function mountPerDay(root, d) {
 }
 
 const STYLE = `<style>
-.skills .sort-in { position: absolute; opacity: 0; }
-.skills label.sort { cursor: pointer; padding: 2px 8px; border-radius: 3px; color: var(--muted); }
-#s-uses:checked ~ .sorts label[for="s-uses"], #s-last:checked ~ .sorts label[for="s-last"] { background: var(--sunk); color: var(--ink); font-weight: 600; }
-#s-uses:focus-visible ~ .sorts label[for="s-uses"], #s-last:focus-visible ~ .sorts label[for="s-last"] { outline: 2px solid var(--focus); }
-.skills .tscroll { overflow-x: auto; max-width: 100%; }
-.skills table { width: 100%; border-collapse: collapse; }
-.skills th, .skills td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
-.skills th { font-size: 12px; color: var(--muted); font-weight: 600; }
 .skills .perday { width: 150px; height: 28px; }
 .skills p > .perday { width: 100%; max-width: 720px; height: 120px; }
 .skills .unused td { color: var(--muted); }
 </style>`;
+const SCROLL = `class="tscroll" style="overflow-x:auto;max-width:100%"`;
 
+/** The Projects cell: at most three names and "+N", the full list in the title. */
+const projectsCell = (ps) => `<td title="${esc(ps.join(", "))}">${esc(ps.slice(0, 3).join(", "))}${ps.length > 3 ? ` +${ps.length - 3}` : ""}</td>`;
+
+// Columns: name, errors (badge), projects, numbers, per-day chart, time last.
 const row = (s) =>
-  `<tr data-name="${esc(s.name)}"><td><a href="${href(s.name)}">${esc(s.name)}</a></td><td class="num">${s.uses}<small> (${s.bySlash} slash, ${s.byTool} tool)</small></td>` +
-  `<td class="num">${s.sessions}</td><td>${esc(s.projects.join(", "))}</td><td class="num">${esc(date(s.lastUsed))}</td>` +
-  `<td class="num">${s.errors ? `<span class="badge stuck">${s.errors}</span>` : "0"}</td><td>${bars(s.name)}</td></tr>`;
+  `<tr data-name="${esc(s.name)}"><td>${idLink(s.name, href(s.name))}</td>` +
+  `<td>${s.errors ? badge(`${s.errors} ${s.errors === 1 ? "error" : "errors"}`) : ""}</td>${projectsCell(s.projects)}` +
+  `<td class="num" title="${s.bySlash} slash, ${s.byTool} tool">${s.uses}</td><td class="num">${s.sessions}</td>` +
+  `<td>${bars(s.name)}</td><td class="time">${esc(when(s.lastUsed))}</td></tr>`;
 
-/** The used skills in the order of the Sort control: `by` is "uses" (most first) or "last" (newest first); ties by name. */
-export function sortSkills(skills, by) {
-  const cmp = by === "last" ? (a, b) => b.lastUsed.localeCompare(a.lastUsed) : (a, b) => b.uses - a.uses;
+/** The used skills in the order of `sort` ({key, dir}; dir 1 up, -1 down): key is "name", "uses", "sessions" or "last". Ties by name. */
+export function sortSkills(skills, sort = { key: "uses", dir: -1 }) {
+  if (typeof sort === "string") sort = { key: sort, dir: -1 };
+  const val = { name: (s) => s.name, uses: (s) => s.uses, sessions: (s) => s.sessions, last: (s) => s.lastUsed }[sort.key] ?? ((s) => s.uses);
+  const cmp = (a, b) => { const x = val(a), y = val(b); return (x < y ? -1 : x > y ? 1 : 0) * sort.dir; };
   return (skills || []).slice().sort((a, b) => cmp(a, b) || a.name.localeCompare(b.name));
 }
 
-/** Wire the Sort control: moving the rows of the used tbody, so the charts in them are not redrawn. */
+const COLS = [["Skill", "name", false], ["Uses", "uses", true], ["Sessions", "sessions", true], ["Last used", "last", false]];
+const heads = (sort) => Object.fromEntries(COLS.map(([label, key, num]) => [key, sortHead(label, key, sort, { num })]));
+
+/** Wire the sortable headers: moving the rows of the used tbody, so the charts in them are not redrawn. */
 export function mountSort(root, d) {
   const body = root.querySelector("tbody.used");
   if (!body || !d) return;
   const rows = new Map([...body.querySelectorAll("tr[data-name]")].map((r) => [r.dataset.name, r]));
-  for (const input of root.querySelectorAll("input.sort-in")) {
-    input.addEventListener("change", () => {
-      if (!input.checked) return;
-      for (const s of sortSkills(d.skills, input.id === "s-last" ? "last" : "uses")) body.appendChild(rows.get(s.name));
-    });
-  }
+  let sort = { key: "uses", dir: -1 };
+  root.onclick = (e) => {
+    const b = e.target.closest?.("button[data-sort]");
+    if (!b || !root.contains(b) || !b.closest("table.skills-tbl")) return;
+    const key = b.dataset.sort;
+    sort = { key, dir: sort.key === key ? -sort.dir : key === "name" ? 1 : -1 };
+    for (const s of sortSkills(d.skills, sort)) body.appendChild(rows.get(s.name));
+    const h = heads(sort);
+    for (const th of root.querySelectorAll("table.skills-tbl th")) {
+      const k = th.querySelector("button[data-sort]")?.dataset.sort;
+      if (k) th.outerHTML = h[k];
+    }
+  };
 }
 
 export function renderSkills(d) {
-  const used = sortSkills(d.skills, "uses");
+  const used = sortSkills(d.skills);
   const unused = (d.unused || []).map((n) => `<tr class="unused"><td>${esc(n)}</td><td colspan="6">Unused in the last ${d.days} days</td></tr>`).join("");
-  const head = `<thead><tr><th>Skill</th><th>Uses</th><th>Sessions</th><th>Projects</th><th>Last used</th><th>Errors</th><th>Per day</th></tr></thead>`;
+  const sort = { key: "uses", dir: -1 }, h = heads(sort);
+  const head = `<thead><tr>${h.name}<th>Errors</th><th>Projects</th>${h.uses}${h.sessions}<th>Per day</th>${h.last}</tr></thead>`;
   const body = used.length || unused
-    ? `<input class="sort-in" type="radio" name="sort" id="s-uses" checked aria-label="Sort by uses"><input class="sort-in" type="radio" name="sort" id="s-last" aria-label="Sort by last used">` +
-      `<p class="sorts quiet">Sort by <label class="sort" for="s-uses">Uses</label><label class="sort" for="s-last">Last used</label></p>` +
-      `<div class="tscroll"><table>${head}<tbody class="used">${used.map(row).join("")}</tbody><tbody>${unused}</tbody></table></div>`
+    ? `<div ${SCROLL}><table class="tbl skills-tbl">${head}<tbody class="used">${used.map(row).join("")}</tbody><tbody>${unused}</tbody></table></div>`
     : empty("No skill is installed or used.", "Skills come from the plugin's <code>skills/</code> folder.");
-  return `${STYLE}<div class="page skills"><div class="sh"><h2>Skills</h2><span class="count">${used.length}</span><span class="aside">last ${d.days} days</span></div>` +
+  return `${STYLE}<div class="page skills">${pageHead("Skills", { count: used.length, aside: `last ${d.days} days` })}` +
     (used.length ? "" : empty(`No skill was used in the last ${d.days} days.`, "A use is a Skill tool call or a slash command.")) + body + `</div>`;
 }
 
+const sessionCell = (id) => (id ? idLink(id.slice(0, 8), sessionHref(id)) : "");
+const table = (head, rows) => `<div ${SCROLL}><table class="tbl"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+
 export function renderSkill(d) {
+  // Columns: session, title (prompt or message), project, numbers, time last.
   const sessions = d.sessions.map((s) =>
-    `<tr><td>${s.id ? `<a href="${sessionHref(s.id)}"><code>${esc(s.id.slice(0, 8))}</code></a>` : ""}</td><td>${esc(s.project)}</td><td class="num">${esc(date(s.time))}</td><td>${s.via === "slash" ? "slash command" : "Skill tool"}</td><td>${esc(s.prompt)}</td></tr>`).join("");
+    `<tr><td>${sessionCell(s.id)}</td><td class="wide" title="${esc(s.prompt)}">${esc(s.prompt)}</td><td>${esc(s.project)}</td>` +
+    `<td>${s.via === "slash" ? "slash command" : "Skill tool"}</td><td class="time">${esc(when(s.time))}</td></tr>`).join("");
   const errors = d.errors.map((e) =>
-    `<tr><td>${e.session ? `<a href="${sessionHref(e.session)}"><code>${esc(e.session.slice(0, 8))}</code></a>` : ""}</td><td>${esc(e.project)}</td><td class="num">${esc(date(e.time))}</td><td>${esc(e.message)}</td></tr>`).join("");
+    `<tr><td>${sessionCell(e.session)}</td><td class="wide" title="${esc(e.message)}">${esc(e.message)}</td><td>${esc(e.project)}</td><td class="time">${esc(when(e.time))}</td></tr>`).join("");
   const tools = d.tools.map((t) => `<tr><td><code>${esc(t.tool)}</code></td><td class="num">${t.count}</td></tr>`).join("");
-  const projects = d.projects.map((p) => `<li>${esc(p.project)} <span class="num">${p.uses}</span></li>`).join("");
+  const projects = d.projects.map((p) => `<tr><td>${esc(p.project)}</td><td class="num">${p.uses}</td></tr>`).join("");
   return `${STYLE}<div class="page skills"><p><a href="#/skills">Skills</a></p>` +
-    `<div class="sh"><h2>${esc(d.name)}</h2><span class="count">${d.uses}</span><span class="aside">uses in the last ${d.days} days</span></div>` +
+    pageHead(d.name, { count: d.uses, aside: `uses in the last ${d.days} days` }) +
     (d.uses ? `<p>${bars(d.name)}</p>` : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
-    (projects ? `<div class="sh"><h3>Projects</h3></div><ul>${projects}</ul>` : "") +
-    (sessions ? `<div class="sh"><h3>Sessions</h3></div><table><thead><tr><th>Session</th><th>Project</th><th>Time</th><th>Started by</th><th>First prompt line</th></tr></thead><tbody>${sessions}</tbody></table>` : "") +
-    (tools ? `<div class="sh"><h3>Tools called after it, in the same turn</h3></div><table><thead><tr><th>Tool</th><th>Calls</th></tr></thead><tbody>${tools}</tbody></table>` : "") +
-    (errors ? `<div class="sh"><h3>Turns with errors</h3><span class="count">${d.errors.length}</span></div><table><thead><tr><th>Session</th><th>Project</th><th>Time</th><th>Error</th></tr></thead><tbody>${errors}</tbody></table>` : "") +
+    (projects ? `<div class="sh"><h3>Projects</h3></div>${table("<th>Project</th><th class=\"num\">Uses</th>", projects)}` : "") +
+    (sessions ? `<div class="sh"><h3>Sessions</h3></div>${table("<th>Session</th><th>First prompt line</th><th>Project</th><th>Started by</th><th>Time</th>", sessions)}` : "") +
+    (tools ? `<div class="sh"><h3>Tools called after it, in the same turn</h3></div>${table("<th>Tool</th><th class=\"num\">Calls</th>", tools)}` : "") +
+    (errors ? `<div class="sh"><h3>Turns with errors</h3><span class="count">${d.errors.length}</span></div>${table("<th>Session</th><th>Error</th><th>Project</th><th>Time</th>", errors)}` : "") +
     `</div>`;
 }

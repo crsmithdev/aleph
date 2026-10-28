@@ -145,7 +145,7 @@ test("the view lists skills with bars and links, and the detail links sessions",
   expect(html).toContain('href="#/skills/aleph%3Apickup"');
   expect(html).toContain('class="perday"');
   expect(html).not.toContain("<svg");
-  expect(html).toContain("Last used");
+  expect(html).toContain('data-sort="last"');
   const detail = v.renderSkill((await get("/api/skills/aleph:pickup")).body);
   expect(detail).toContain('href="#/sessions/s1"');
   expect(detail).toContain("Bash");
@@ -161,8 +161,7 @@ test("text is escaped and an empty window shows the empty state", () => {
 
 test("the skills table scrolls inside its own wrapper", async () => {
   const html = v.renderSkills((await get("/api/skills")).body);
-  expect(html).toContain('<div class="tscroll"><table>');
-  expect(html).toContain(".skills .tscroll { overflow-x: auto;");
+  expect(html).toContain('class="tscroll" style="overflow-x:auto;max-width:100%"><table class="tbl');
 });
 
 test("perDayOption has one bar per day with its count, dated from since", () => {
@@ -223,6 +222,17 @@ test("renderSkills draws one chart mount per used skill", () => {
 test("sortSkills orders by uses or by last used, ties by name", () => {
   expect(v.sortSkills(three.skills, "uses").map((s: any) => s.name)).toEqual(["c", "a", "b"]);
   expect(v.sortSkills(three.skills, "last").map((s: any) => s.name)).toEqual(["a", "b", "c"]);
+  expect(v.sortSkills(three.skills, { key: "name", dir: 1 }).map((s: any) => s.name)).toEqual(["a", "b", "c"]);
+  expect(v.sortSkills(three.skills, { key: "uses", dir: 1 }).map((s: any) => s.name)).toEqual(["a", "b", "c"]);
+});
+
+test("a skills row has one number for uses, three projects at most, and a when time", () => {
+  const html = v.renderSkills({ ...three, skills: [{ ...mk("a", 4, "2026-01-05T00:00:00Z"), bySlash: 3, byTool: 1, projects: ["p1", "p2", "p3", "p4", "p5"], errors: 2 }] });
+  expect(html).toContain('title="3 slash, 1 tool">4</td>');
+  expect(html).toContain('title="p1, p2, p3, p4, p5">p1, p2, p3 +2</td>');
+  expect(html).toContain('class="badge');
+  expect(html).toContain("Jan 05");
+  expect(html).not.toContain("Sort by");
 });
 
 test("unused skills are listed once, after the used ones", () => {
