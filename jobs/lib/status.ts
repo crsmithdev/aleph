@@ -70,6 +70,13 @@ export function landedCommits(cwd: string, main: string, key: string, n: number)
   return hits.filter((h) => !reverted.has(h));
 }
 
+/** The short sha of a commit on origin/<main> that names the item, or null. It reads the ref as it is: the caller fetches. */
+export function itemOnMain(repo: { path: string; key: string; main: string } | undefined, n: number | undefined): string | null {
+  if (!repo || n === undefined) return null;
+  const hit = landedCommits(repo.path, `origin/${repo.main}`, repo.key, n)[0];
+  return hit ? hit.slice(0, 7) : null;
+}
+
 export interface ItemState { item: string; state: "dropped" | "done" | "needs-you" | "stuck" | "running" | "open"; why: string }
 
 /** One item's state, from the repo at `cwd`, its main ref and the facts. */

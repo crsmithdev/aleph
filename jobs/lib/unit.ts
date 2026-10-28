@@ -14,7 +14,7 @@ import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, re
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
 import { dispatchOn, hold, triageDetached, paused, recordFlake } from "./factory.ts";
 import { postTrace } from "./trace.ts";
-import { FACTS_REF, writeFacts } from "./status.ts";
+import { FACTS_REF, itemOnMain, writeFacts } from "./status.ts";
 
 export { git };
 
@@ -253,6 +253,13 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         log(`already on main as ${pushed}`);
         removeBranch(repo, run);
         return { verdict: { state: "landed", commit: pushed }, code: 0 };
+      }
+      // A commit by hand, or by another job, that names the item: this land must not add a second one.
+      const there = itemOnMain(repo, run.todo);
+      if (there) {
+        log(`item landed as ${there}`);
+        removeBranch(repo, run);
+        return { verdict: { state: "done", reason: `item landed as ${there}` }, code: 0 };
       }
       const tip = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${run.branch}`);
       if (!tip.ok) return fail(`branch gone: ${run.branch}`);
@@ -575,6 +582,15 @@ function hiddenNote(folder: string, run: Run): string {
 async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): Promise<void> {
   if (paused()) {
     appendFileSync(join(folder, "next.log"), `paused: no ${next} started\n`);
+    updateRun(folder, { next: undefined });
+    return;
+  }
+  const dropped = (allJobs().find((j) => j[0].id === run.job) ?? []).some((e) => e.run.state === "dropped");
+  const repo = run.repo ? loadRegistry()[run.repo] : undefined;
+  if (repo && !dropped && run.todo !== undefined) git(repo.path, "fetch", "-q", "origin");
+  const there = dropped ? null : itemOnMain(repo, run.todo);
+  if (dropped || there) {
+    appendFileSync(join(folder, "next.log"), dropped ? `dropped: no ${next} started\n` : `item landed as ${there}: no ${next} started\n`);
     updateRun(folder, { next: undefined });
     return;
   }

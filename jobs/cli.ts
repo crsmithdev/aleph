@@ -18,7 +18,7 @@ import { triage } from "../todo/lib/triage.ts";
 import { behind, dispatchGoals, dispatchOn, factoryDir, factoryLog, LIVE_CAP, health, hold, lastProbe, paused, probeDue, report, setPaused, triageDetached, triageNow, triageStep } from "./lib/factory.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
-import { derive, facts, FACTS_REF, readFacts, type Facts } from "./lib/status.ts";
+import { derive, facts, FACTS_REF, itemOnMain, readFacts, type Facts } from "./lib/status.ts";
 
 const CLI = import.meta.path;
 /** The most agent runs live at once; `ALEPH_LIVE_CAP` changes it. */
@@ -129,6 +129,10 @@ async function job(): Promise<void> {
     if (last && last.run.repo !== repo.key) refuse(last.run.repo ? `${name} is open in ${last.run.repo}` : `${name} is running as ${last.id}`);
     if (last && isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
     const first = open?.[0];
+    const item = todo ?? open?.findLast((e) => e.run.todo !== undefined)?.run.todo;
+    if (first && item !== undefined) git(repo.path, "fetch", "-q", "origin");
+    const landedAs = first ? itemOnMain(repo, item) : null;
+    if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
     // A factory run has no worktree: its branch comes and goes as a bundle.
     const worktree = repo.sandbox ? undefined : first?.run.worktree ?? join(repo.path, ".worktrees", `job-${name}`);
     const model = flag("model");
@@ -193,6 +197,9 @@ async function landJob(): Promise<void> {
   const held = agent.state === "needs-you" && (agent.needs === "held" || agent.needs === "review");
   if (agent.state !== "passed" && !manual && !held) refuse(`${name} is ${agent.state}${agent.needs ? ` (${agent.needs})` : ""}, not passed`);
   const repo = loadRegistry()[agent.repo!];
+  if (agent.todo !== undefined) git(repo.path, "fetch", "-q", "origin");
+  const landedAs = itemOnMain(repo, agent.todo);
+  if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
   const child = await dispatch({
     kind: "land", job: agent.job, name, repo: agent.repo, branch: agent.branch, worktree: agent.worktree,
     state: "running", phase: "land", told: false, shown: false, started: new Date().toISOString(),
@@ -339,17 +346,20 @@ async function drop(): Promise<void> {
   if (!release) refuse(`job ${name} is busy`);
   try {
     if (runs.some((e) => e.run.kind === "land" && isLive(e.folder))) refuse("landing");
-    if (isLive(last.folder)) {
-      Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${last.id}`], { stdout: "ignore", stderr: "ignore" });
-      if (isLive(last.folder)) process.kill(Number(readFileSync(join(last.folder, "pid"), "utf8")), "SIGTERM");
-      const deadline = Date.now() + 35_000;
-      while (isLive(last.folder) && Date.now() < deadline) await Bun.sleep(50);
-    }
-    if (!existsSync(join(last.folder, "exit"))) writeFileSync(join(last.folder, "exit"), "143");
     const repo = last.run.repo ? loadRegistry()[last.run.repo] : undefined;
+    const live = runs.filter((e) => isLive(e.folder));
+    for (const e of live) {
+      Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}`], { stdout: "ignore", stderr: "ignore" });
+      if (isLive(e.folder)) process.kill(Number(readFileSync(join(e.folder, "pid"), "utf8")), "SIGTERM");
+      const deadline = Date.now() + 35_000;
+      while (isLive(e.folder) && Date.now() < deadline) await Bun.sleep(50);
+    }
     if (repo) removeBranch(repo, last.run);
     // Chris asked for the drop, so it is not news.
-    updateRun(last.folder, { state: "dropped", reason, needs: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
+    for (const e of new Set([...live, last])) {
+      if (!existsSync(join(e.folder, "exit"))) writeFileSync(join(e.folder, "exit"), "143");
+      updateRun(e.folder, { state: "dropped", reason, needs: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
+    }
     const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
     const why = repo && todo !== undefined ? updateTodo(repo, todo, `job ${name} dropped: ${reason}`, false) : null;
     if (why) console.error(`warn: issue ${todo} has no note: ${why}`);
