@@ -59,7 +59,11 @@ export function afterReopen(cwd: string, key: string, id: number, hits: string[]
   return since ? hits.filter((h) => !git(cwd, "merge-base", "--is-ancestor", h, since).ok) : hits;
 }
 
-const RUNNABLE = /^(bun test|bun run|bunx tsc)(\s|$)/;
+const CHECK = "(?:bun test|bun run|bunx tsc)";
+/** A plain check command, or a shell `for` loop whose body runs one. */
+const RUNNABLE = new RegExp(`^${CHECK}(\\s|$)|^for\\s.*;\\s*do\\b.*[\\s;&|(]${CHECK}(?=[\\s;&|)]|$)`);
+/** A `bun test` summary line that counts failures, such as ` 2 fail`. */
+const FAIL_SUMMARY = /^\s*[1-9]\d* fail\s*$/m;
 
 /** The commands in backticks in the issue's `## Oracle` section that start with a command the repo's checks use. */
 export function oracleCommands(body: string): string[] {
@@ -131,13 +135,14 @@ export async function accept(repo: Repo, item: todos.Item, run: Runner = sandbox
   const commands = oracleCommands(item.body);
   if (!commands.length) {
     writeRecord(repo.key, item.id, { result: "skipped", fails: prev?.fails ?? 0 });
-    return `${name}: acceptance skipped: the Oracle has no command that starts with bun test, bun run or bunx tsc`;
+    return `${name}: acceptance skipped: the Oracle has no command that starts with bun test, bun run or bunx tsc, or loops over one`;
   }
   for (const command of commands) {
     const r = await run(repo, full, command);
-    if (r.code === 0) continue;
+    const failedTests = r.code === 0 && FAIL_SUMMARY.test(r.output);
+    if (r.code === 0 && !failedTests) continue;
     const fails = (prev?.fails ?? 0) + 1;
-    const out = `\`${command}\` exited ${r.code}: ${lastLines(r.output)}`;
+    const out = `\`${command}\` exited ${r.code}${failedTests ? " with failing tests" : ""}: ${lastLines(r.output)}`;
     if (fails < 2) {
       const bad = reopen(repo, item.id, `acceptance: fail at ${sha}: ${out}`);
       if (bad) return `${name}: acceptance failed but the issue was not reopened: ${bad}`;

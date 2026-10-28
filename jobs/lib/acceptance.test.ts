@@ -74,6 +74,25 @@ test("only backtick commands that start like the repo's checks are runnable", ()
   expect(oracleCommands("## Oracle\nIt works.")).toEqual([]);
 });
 
+test("shell loops that run a check are runnable; loops that run no check are not", () => {
+  const a = "for i in 1 2 3 4; do bun test jobs/cli.basic.test.ts & done; wait";
+  const b = "for j in 1 2 3 4; do (for i in $(seq 5); do bun test x || exit 1; done) & done; wait";
+  const c = "for i in $(seq 10); do bun test x.test.ts || exit 1; done";
+  const body = `## Oracle\n\`${a}\`\n\`${b}\`\n\`${c}\`\n\`bun test y\`\n\`ls -la\` \`bunx prettier\` \`for i in 1 2; do echo hi; done\``;
+  expect(oracleCommands(body)).toEqual([a, b, c, "bun test y"]);
+});
+
+test("a run with exit 0 whose bun test summary reports failures fails; with 0 fail it passes", async () => {
+  const id = doneGoal("`for i in 1 2; do bun test x & done; wait`");
+  await acceptanceStep(runner(0, "bun test\n 3 pass\n 1 fail\nRan 4 tests"));
+  expect(notes(id)).toContain("acceptance: fail at");
+  expect(todos.status(item(id))).toBe("open");
+  expect(resultLine("fac", id)).toContain("fail");
+  const id2 = doneGoal("`bun test x`");
+  await acceptanceStep(runner(0, "bun test\n 4 pass\n 0 fail\nRan 4 tests"));
+  expect(notes(id2)).toContain("acceptance: pass at");
+});
+
 test("a done goal whose Oracle command passes gets the pass note and stays done", async () => {
   const id = doneGoal("`bun test jobs/lib/a.test.ts`");
   const sha = sh(repoDir(), "git", "rev-parse", "--short=7", "origin/main");

@@ -20,7 +20,7 @@ function sh(cwd: string, ...args: string[]): string {
 }
 
 const real = new Date();
-const now = new Date(real.getFullYear(), real.getMonth(), real.getDate(), 23, 0, 0);
+const now = new Date(real.getFullYear(), real.getMonth(), real.getDate(), 23, 59, 0);
 const at = (daysAgo: number, hour = 10, min = 0) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, hour, min).toISOString();
 const dayKey = (daysAgo: number) => at(daysAgo, 12).slice(0, 10) === "" ? "" : new Date(at(daysAgo, 12)).toLocaleDateString("sv");
 function run(id: string, extra: Record<string, unknown>) {
