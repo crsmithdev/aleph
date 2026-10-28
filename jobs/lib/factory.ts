@@ -7,7 +7,7 @@ import { appendFileSync, closeSync, openSync, existsSync, mkdirSync, readFileSyn
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { readList, readLists, writeList } from "../../todo/lib/store.ts";
-import { git } from "./git.ts";
+import { fetchOrigin, git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
 import { derive, facts, itemOnMain, type Facts } from "./status.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
@@ -150,7 +150,7 @@ export function doneChecker(): (ref: string) => boolean {
     const repo = r && reg[r.repo];
     if (!r || !repo) return false;
     if (!known.has(r.repo)) {
-      git(repo.path, "fetch", "-q", "origin");
+      fetchOrigin(repo.path);
       try { known.set(r.repo, facts(repo)); } catch { known.set(r.repo, null); }
     }
     const f = known.get(r.repo);
@@ -347,7 +347,7 @@ async function rescueJob(runs: Entry[], act: Rescue, land?: Land): Promise<void>
 
   let onMain = false;
   const onMainOrDone = () => {
-    git(repo.path, "fetch", "-q", "origin");
+    fetchOrigin(repo.path);
     if (git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${r.job}$`).out) { onMain = true; return true; }
     if (itemOnMain(repo, issue)) return true;
     try {
@@ -446,7 +446,7 @@ const infraError = (why: string) => /^(checks did not start|bundle failed|baseli
  * the checks from running is reported but tried again by the next dispatch.
  */
 async function baseline(repo: Repo, checks: (repo: Repo, commit: string, logs: string) => Promise<string | null>): Promise<string | null> {
-  if (!git(repo.path, "fetch", "-q", "origin").ok) return "main is unchecked: fetch failed";
+  if (!fetchOrigin(repo.path).ok) return "main is unchecked: fetch failed";
   const commit = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
   if (!commit) return `main is unchecked: no origin/${repo.main}`;
   const known = () => { const b = baselines()[repo.key]; return b && b.commit === commit ? b : undefined; };

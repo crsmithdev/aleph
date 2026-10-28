@@ -26,6 +26,16 @@ export function gitWith(o: { env?: Record<string, string>; stdin?: string }, cwd
   return { ok: p.exitCode === 0, out: (p.stdout.toString() + (p.exitCode === 0 ? "" : p.stderr.toString())).trimEnd() };
 }
 
+/** `git fetch -q origin <refs>`, tried again (up to 5 times) when another process holds the ref lock. Returns the last result. */
+export function fetchOrigin(cwd: string, ...refs: string[]): { ok: boolean; out: string } {
+  let r = git(cwd, "fetch", "-q", "origin", ...refs);
+  for (let i = 1; i < 5 && !r.ok && r.out.includes("cannot lock ref"); i++) {
+    Bun.sleepSync(100 + Math.random() * 200);
+    r = git(cwd, "fetch", "-q", "origin", ...refs);
+  }
+  return r;
+}
+
 /** The file at `path` in `rev`, or null when `rev` has no such file. */
 export function show(cwd: string, rev: string, path: string): string | null {
   const r = git(cwd, "show", `${rev}:${path}`);

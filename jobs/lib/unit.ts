@@ -8,7 +8,7 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { readHidden, writeList } from "../../todo/lib/store.ts";
-import { followMain, git } from "./git.ts";
+import { fetchOrigin, followMain, git } from "./git.ts";
 import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { LOW, allJobs, checkSlot, testParallel, allRuns, isLive, isOpen, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
@@ -309,7 +309,8 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
   const main = repo.main;
   const logFile = join(folder, "land.log");
   const log = (step: string, out = "") => appendFileSync(logFile, `## ${step}\n${out ? out + "\n" : ""}\n`);
-  const step = (name: string, ...args: string[]) => { const r = git(repo.path, ...args); log(`${name}: ${r.ok ? "ok" : "failed"}`, r.out); return r; };
+  const logged = (name: string, r: { ok: boolean; out: string }) => { log(`${name}: ${r.ok ? "ok" : "failed"}`, r.out); return r; };
+  const step = (name: string, ...args: string[]) => logged(name, git(repo.path, ...args));
   const phase = (p: string) => updateRun(folder, { phase: p });
   const failed = (reason: string, extra: Partial<Verdict> = {}): Outcome => ({ verdict: { state: "failed", reason, ...extra }, code: 1 });
   const fail = (reason: string, extra: Partial<Verdict> = {}) => { log(`failed: ${reason}`); return failed(reason, extra); };
@@ -338,7 +339,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
     // Members that failed in an earlier attempt keep their verdict and are not tried again.
     const failedBefore = new Map<Member, Outcome & { after?: () => void }>();
     for (let attempt = 0; ; attempt++) {
-      if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
+      if (!logged("fetch", fetchOrigin(repo.path)).ok) return fail("fetch failed");
       const base0 = git(repo.path, "rev-parse", `origin/${main}`).out;
       const done = new Map<Member, Outcome & { after?: () => void }>(failedBefore);
       const finish = (m: Member, o: Outcome & { after?: () => void }) => { done.set(m, o); if (o.verdict.state === "failed") m.log(`failed: ${o.verdict.reason}`); };
@@ -463,7 +464,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
           followCheckout(repo, log);
           return conclude(leader, done, checksOf);
         }
-        if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
+        if (!logged("fetch", fetchOrigin(repo.path)).ok) return fail("fetch failed");
         const refused = git(repo.path, "rev-parse", `origin/${main}`).out === base0;
         if (refused || attempt >= RELANDS) {
           for (const { m } of ok) done.set(m, failed(refused ? "push refused" : MOVED));
@@ -802,7 +803,7 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   }
   const dropped = (allJobs().find((j) => j[0].id === run.job) ?? []).some((e) => e.run.state === "dropped");
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
-  if (repo && !dropped && run.todo !== undefined) git(repo.path, "fetch", "-q", "origin");
+  if (repo && !dropped && run.todo !== undefined) fetchOrigin(repo.path);
   const there = dropped ? null : itemOnMain(repo, run.todo);
   if (dropped || there) {
     appendFileSync(join(folder, "next.log"), dropped ? `dropped: no ${next} started\n` : `item landed as ${there}: no ${next} started\n`);
@@ -840,7 +841,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   // A new job starts from origin/<main>, after it clears what an ended job of that name left.
   if (run.job === id || !existsSync(wt)) {
     phase("setup");
-    if (!git(repo.path, "fetch", "-q", "origin").ok) return fail("fetch failed");
+    if (!fetchOrigin(repo.path).ok) return fail("fetch failed");
     git(repo.path, "worktree", "remove", "--force", wt);
     git(repo.path, "worktree", "prune");
     git(repo.path, "branch", "-D", branch);
@@ -884,7 +885,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   if (question) return { verdict: { state: "needs-you", needs: "question", question: question.slice("QUESTION:".length).trim() }, code: 0 };
   const dirty = git(wt, "status", "--porcelain").out;
   if (dirty) return fail(`uncommitted: ${dirty.split("\n")[0].slice(3)}`);
-  if (!git(wt, "fetch", "-q", "origin").ok) return fail("fetch failed");
+  if (!fetchOrigin(wt).ok) return fail("fetch failed");
   const base = git(wt, "merge-base", `origin/${repo.main}`, "HEAD").out;
   if (git(wt, "rev-list", "--count", `${base}..HEAD`).out === "0") {
     removeBranch(repo, run);
@@ -913,7 +914,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
   const phase = (p: string) => updateRun(folder, { phase: p });
   const stuck = (reason: string, extra: Partial<Verdict> = {}) => ({ verdict: { state: "stuck" as const, reason, ...extra }, code: 1 });
   phase("setup");
-  if (!git(repo.path, "fetch", "-q", "origin").ok) return stuck("fetch failed");
+  if (!fetchOrigin(repo.path).ok) return stuck("fetch failed");
   const prev = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok;
   const dir = makeRunFolder(id);
   try {
@@ -1010,7 +1011,7 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
   const phase = (p: string) => updateRun(folder, { phase: p });
   const stuck = (reason: string, extra: Partial<Verdict> = {}) => ({ verdict: { state: "stuck" as const, reason, ...extra }, code: 1 });
   phase("setup");
-  if (!git(repo.path, "fetch", "-q", "origin").ok) return stuck("fetch failed");
+  if (!fetchOrigin(repo.path).ok) return stuck("fetch failed");
   const tip = git(repo.path, "rev-parse", "--verify", "-q", ref);
   if (!tip.ok) return stuck(`branch gone: ${branch}`);
   const upstream = git(repo.path, "rev-parse", main).out;
