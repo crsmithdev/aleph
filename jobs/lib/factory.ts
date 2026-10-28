@@ -14,6 +14,7 @@ import { itemOnMain, itemStates, type ItemState } from "./status.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
+import { mine, proposals, readStore } from "./corrections.ts";
 import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
@@ -535,6 +536,34 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
   }
 }
 
+const localDay = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+
+/** True from 03:00 local, when the store has not been mined on this local date. */
+export function correctionsDue(now = Date.now()): boolean {
+  if (new Date(now).getHours() < 3) return false;
+  const at = readStore().minedAt;
+  const t = Date.parse(at);
+  return !at || Number.isNaN(t) || localDay(t) !== localDay(now);
+}
+
+/** The tick's daily correction mining (corrections.ts), under the pause and probe gates. An error is logged, never thrown. */
+export async function correctionsStep(now = Date.now()): Promise<{ signals: number; lessons: number; proposed: number } | null> {
+  if (gates({ only: ["pause", "probe"] }) || !correctionsDue(now)) return null;
+  try {
+    const store = await mine(now);
+    const r = {
+      signals: store.lessons.reduce((n, l) => n + l.signals.length, 0),
+      lessons: store.lessons.length,
+      proposed: store.lessons.filter((l) => l.state === "proposed").length,
+    };
+    factoryLog(`corrections: ${r.signals} signals, ${r.lessons} lessons, ${r.proposed} proposed`);
+    return r;
+  } catch (e) {
+    factoryLog(`corrections: failed: ${(e as Error).message}`);
+    return null;
+  }
+}
+
 /** The tick's triage of open issues that are not goals (triage.ts). */
 export async function triageStep(): Promise<{ triaged: Counts; skipped: string[] }> {
   if (gates({ only: ["pause", "hold", "probe"] })) return { triaged: {}, skipped: [] };
@@ -682,6 +711,8 @@ export function report(now = Date.now()): string {
   if (eps.length) lines.push(["episodes:", ...eps.map((t) => `  ${t}`)].join("\n"));
   const proposed = takeFresh();
   if (proposed.length) lines.push(["proposed updates (relabel one `goal` to start it):", ...proposed.map((d) => `  ${d}`)].join("\n"));
+  const lessons = proposals();
+  if (lessons.length) lines.push(["proposed lessons (Yes or No on Status):", ...lessons.map((l) => `  ${l.id} ${l.kind}: ${l.sentence} (${l.count} signals)`)].join("\n"));
   return lines.join("\n");
 }
 

@@ -16,7 +16,7 @@ import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import * as issues from "../todo/lib/issues.ts";
-import { behind, dispatchDetached, factoryDir, factoryLog, health, hold, paused, planNow, probeDue, report, setPaused, triageDetached, triageNow, triageStep, episodeStep } from "./lib/factory.ts";
+import { behind, correctionsStep, dispatchDetached, factoryDir, factoryLog, health, hold, paused, planNow, probeDue, report, setPaused, triageDetached, triageNow, triageStep, episodeStep } from "./lib/factory.ts";
 import { checkName, checked, drop, land, recheck, refuse, Refusal, repoOf, runDispatch, startJob, startPlain, type Start } from "./lib/transitions.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
@@ -332,6 +332,7 @@ async function tickCmd(): Promise<void> {
       }
     }
   }
+  await correctionsStep();
   const d = await runDispatch();
   const t = !d.held ? await triageStep() : { triaged: {}, skipped: [] };
   const episodes = await episodeStep();

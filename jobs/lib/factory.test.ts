@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { labels as itemLabels, readList, writeList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
-import { dispatchGoals, episodeStep, report, gates, notReady, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
+import { correctionsDue, dispatchGoals, episodeStep, report, gates, notReady, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
 import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -601,6 +601,33 @@ test("notReady: a waiting_on list is ready when every part is done, and names on
   const item = { fm: { waiting_on: "fac-1, fac-2" } } as unknown as todos.Item;
   expect(notReady(item, () => true)).toBeNull();
   expect(notReady(item, (r) => r === "fac-1")).toBe("waiting on fac-2");
+});
+
+const storeAt = (lessons: unknown[], minedAt = "") => {
+  mkdirSync(join(base, "factory"), { recursive: true });
+  writeFileSync(join(base, "factory", "corrections.json"), JSON.stringify({ minedAt, lessons }));
+};
+
+test("correctionsDue: from 03:00 local, once per local day", () => {
+  const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).getTime();
+  expect(correctionsDue(at(28, 2, 59))).toBe(false);
+  expect(correctionsDue(at(28, 3))).toBe(true);
+  storeAt([], new Date(at(28, 3, 1)).toISOString());
+  expect(correctionsDue(at(28, 15))).toBe(false);
+  expect(correctionsDue(at(29, 2, 59))).toBe(false);
+  expect(correctionsDue(at(29, 3))).toBe(true);
+});
+
+test("report lists a proposed lesson on every report until decided", () => {
+  storeAt([{ id: "L1", sentence: "run the tests before ending", state: "proposed", kind: "check", signals: [], count: 3 }]);
+  const line = "  L1 check: run the tests before ending (3 signals)";
+  expect(report()).toContain(`proposed lessons (Yes or No on Status):\n${line}`);
+  expect(report()).toContain(line);
+});
+
+test("report prints no proposed lessons block with none", () => {
+  storeAt([{ id: "L2", sentence: "x", state: "open", signals: [], count: 1 }]);
+  expect(report()).not.toContain("proposed lessons");
 });
 
 /** A temp vault under ALEPH_VAULT for one test; the old value is restored by `done`. */
