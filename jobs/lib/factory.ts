@@ -218,6 +218,9 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
   const skipped: string[] = [];
   const reds = new Map<string, string | null>();
   const done = doneChecker();
+  // Baselines run first, then the goals are read again: a goal written during a baseline is in the list below,
+  // so a dispatch that skipped with `main baseline running` has its goal started by the one that held the baseline.
+  if (checks) for (const { repo } of openGoals()) if (!reds.has(repo.key)) reds.set(repo.key, await baseline(repo, checks));
   for (const { repo, item } of openGoals()) {
     const name = goalJob(repo, item.id);
     if (checks && !reds.has(repo.key)) reds.set(repo.key, await baseline(repo, checks));

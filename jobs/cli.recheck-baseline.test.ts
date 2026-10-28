@@ -51,6 +51,28 @@ describe("a factory run", () => {
     expect((await first).json.started).toEqual([`fac-${id}`]);
   }, 60_000);
 
+  test("a goal added during the baseline is started by the dispatch that runs it", async () => {
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
+    const trees = () => existsSync(join(base, "trees")) ? readFileSync(join(base, "trees"), "utf8").trim().split("\n").length : 0;
+    sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
+    writeFileSync(join(other, "late.txt"), `${Math.random()}\n`);
+    sh(other, "git", "add", "late.txt"); sh(other, "git", "commit", "-qm", "late commit"); sh(other, "git", "push", "-q", "origin", "main");
+    const early = (await aleph(["todo", "add", "fac", "first late goal", "--labels", "goal", "--body", "-"], {}, "ACTION: commit late1.txt\n")).json.added;
+    const before = trees();
+    writeFileSync(join(base, "slowbase"), "");
+    const tick = aleph(["tick"]);
+    for (let i = 0; i < 300 && trees() === before; i++) await Bun.sleep(100);
+    const late = (await aleph(["todo", "add", "fac", "second late goal", "--labels", "goal", "--body", "-"], {}, "ACTION: commit late2.txt\n")).json.added;
+    const second = await aleph(["tick"]);
+    expect(second.json.started).toEqual([]);
+    expect(second.json.skipped).toContain(`fac-${late}: main baseline running`);
+    rmSync(join(base, "slowbase"));
+    const started = (await tick).json.started;
+    expect(started).toContain(`fac-${early}`);
+    expect(started).toContain(`fac-${late}`);
+  }, 60_000);
+
   test("a baseline whose checks cannot start records no red, and the next dispatch runs it again", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));

@@ -65,7 +65,7 @@ test("a goal whose label is removed during the baseline is not started", async (
   });
   expect(baselined).toBe(true);
   expect(calls).toEqual([]);
-  expect(out.skipped).toEqual([`fac-${id}: not a goal`]);
+  expect(out.skipped).toEqual([]);
 });
 
 test("a goal closed during the baseline is not started", async () => {
@@ -76,7 +76,7 @@ test("a goal closed during the baseline is not started", async () => {
     return null;
   });
   expect(calls).toEqual([]);
-  expect(out.skipped).toEqual([`fac-${id}: not a goal`]);
+  expect(out.skipped).toEqual([]);
 });
 
 test("a goal that stays open and labelled is started exactly once", async () => {
