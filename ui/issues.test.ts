@@ -186,21 +186,20 @@ describe("views", () => {
     const h = v.view.render(d, {}, new URLSearchParams("status=any"));
     expect(h.indexOf("<h2>Projects")).toBeGreaterThan(-1);
     expect(h.indexOf("<h2>Projects")).toBeLessThan(h.indexOf("<h2>Issues"));
-    const ths = (html: string) => [...html.matchAll(/<th class="c-(\w+)"/g)].map((m) => m[1]);
+    const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
     expect(ths(section(h, "projects-table"))).toEqual(["title", "open", "updated"]);
-    expect(ths(section(h, "issues-table"))).toEqual(["project", "status", "id", "title", "labels", "updated", "act"]);
-    expect(h).not.toContain("c-type");
-    expect(h).not.toContain('data-filter="type"');
-    expect(h).toContain(`<h2>Projects <small class="quiet">${d.projects.length}</small></h2>`);
-    expect(h).toContain(`<h2>Issues <small class="quiet">${d.issues.length}</small></h2>`);
+    expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "status", "project", "labels", "updated", ""]);
+    expect(h).not.toContain('data-name="type"');
+    expect(h).toContain(`<div class="sh"><h2>Projects</h2><span class="count">${d.projects.length}</span></div>`);
+    expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
   });
 
-  test("issue rows: Project, Status, Id, Title, Labels, Updated and an X on an open issue only", async () => {
+  test("issue rows: Id, Title, Status, Project, Labels, Updated and an X on an open issue only", async () => {
     const d = await getJson("/api/contents");
     const h = section(v.view.render(d, {}, new URLSearchParams("status=any")), "issues-table");
     expect(h).toContain('href="#/issues/fac/1"');
     expect(h).not.toContain('href="#/projects/');
-    const rows = h.split("<tr class=\"evr crow\"").slice(1);
+    const rows = h.split("<tr class=\"crow\"").slice(1);
     for (const r of rows) expect(r.includes("data-cancel")).toBe(r.includes(">open</span>"));
     expect(rows.some((r: string) => r.includes(">done</span>"))).toBe(true);
     expect(v.view.render(d, {}, new URLSearchParams())).toContain("File an issue");
@@ -213,10 +212,10 @@ describe("views", () => {
     expect(h).toContain('<a href="#/projects/oth">oth</a>');
     expect(h).not.toContain("data-cancel");
     const fac = d.projects.find((p: any) => p.key === "fac");
-    expect(h).toContain(`<td class="c-open">${fac.openItems}</td>`);
+    expect(h).toContain(`<td class="num">${fac.openItems}</td>`);
     const rows = v.projectRows({ projects: [{ key: "empty", openItems: 0, activity: null }, { key: "b", openItems: 2, activity: "2026-10-01T00:00:00Z" }] });
     const html = v.renderProjectsTable(rows, { psort: { key: "title", dir: 1 } });
-    expect(html).toContain('<td class="c-open">0</td>');
+    expect(html).toContain('<td class="num">0</td>');
     expect(html.indexOf(">b<")).toBeLessThan(html.indexOf(">empty<"));
   });
 
@@ -245,34 +244,47 @@ describe("views", () => {
     const issues = section(def, "issues-table");
     expect(issues).not.toContain(">done</span>");
     expect(issues).toContain(">open</span>");
-    expect(def).toContain('<option value="open" selected>');
+    expect(def).toContain('data-value="open" aria-pressed="true"');
     expect(v.view.render(d, {}, new URLSearchParams("status=any"))).toContain(">done</span>");
-    expect(v.view.render(d, {}, new URLSearchParams("status=any"))).toContain('<option value="any" selected>Any</option>');
-    const t = (h: string) => [...h.matchAll(/<td class="c-time">([^<]*)</g)].map((m) => m[1]);
+    expect(v.view.render(d, {}, new URLSearchParams("status=any"))).toContain('data-value="any" aria-pressed="true"');
+    const t = (h: string) => [...h.matchAll(/<td class="time">([^<]*)</g)].map((m) => m[1]);
     expect(t(issues)).toEqual([...t(issues)].sort().reverse());
   });
 
-  test("the filter bar has a Project select; the row is the link, the title plain text", async () => {
+  test("the filter bar is one filterBar; the row is the link, the title plain text", async () => {
     const d = await getJson("/api/contents");
     const h = v.view.render(d, {}, new URLSearchParams("project=oth&status=any"));
-    expect(h).toContain('<select data-filter="project">');
-    expect(h).toContain('<option value="oth" selected>oth</option>');
-    expect(section(h, "issues-table")).not.toContain('<td class="c-project">fac</td>');
-    expect(h).toContain('<td class="c-project">oth</td>');
+    expect(h.match(/class="fbar"/g)).toHaveLength(1);
+    for (const n of ["project", "status", "label"]) expect(h).toContain(`data-name="${n}"`);
+    expect(h).toContain('name="q"');
+    expect(h).toContain('data-value="oth" aria-pressed="true"');
+    expect(section(h, "issues-table")).not.toContain("<td>fac</td>");
+    expect(h).toContain("<td>oth</td>");
     expect(h).toContain("tr.crow { position: relative; }");
-    expect(h).toContain('.c-title a { color: inherit; text-decoration: none; }');
-    expect(h).toContain('.c-title a::after { content: ""; position: absolute; inset: 0; }');
-    expect(h).toContain("flex-wrap: wrap");
-    expect(h).toContain('<td class="c-title"><a href="#/issues/oth/1">other thing</a></td>');
+    expect(h).toContain('td.wide a::after { content: ""; position: absolute; inset: 0; }');
+    expect(h).toContain('<td class="wide"><a href="#/issues/oth/1">other thing</a></td>');
   });
 
   test("the header sorts: a query key and direction order the rows", async () => {
     const d = await getJson("/api/contents");
-    const ids = (q: string) => [...v.view.render(d, {}, new URLSearchParams(q + "&type=issue&status=any")).matchAll(/class="id" href="[^"]*">([^<]+)</g)].map((m) => m[1]);
+    const ids = (q: string) => [...v.view.render(d, {}, new URLSearchParams(q + "&type=issue&status=any")).matchAll(/class="idl" href="[^"]*">([^<]+)</g)].map((m) => m[1]);
     expect(ids("sort=id&dir=asc")).toEqual([...ids("sort=id&dir=asc")].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
     expect(ids("sort=id&dir=desc")).toEqual(ids("sort=id&dir=asc").reverse());
     expect(v.view.render(d, {}, new URLSearchParams("sort=title&dir=asc"))).toContain('aria-sort="ascending"');
     expect(section(v.view.render(d, {}, new URLSearchParams("psort=open&pdir=asc")), "projects-table")).toContain('aria-sort="ascending"');
+  });
+
+  test("the Issues table shows 50 rows and a pager that asks for 50 more", () => {
+    const rows = Array.from({ length: 120 }, (_, i) => ({ id: 100 + i, repo: "fac", title: `t${i}`, status: "open", labels: [], updated: "2026-10-01T00:00:00Z" }));
+    const d = { issues: rows, projects: [], specs: [] };
+    const h = v.view.render(d, {}, new URLSearchParams());
+    expect(h.match(/<tr class="crow"/g)).toHaveLength(50);
+    expect(h).toContain('<span class="of">50 of 120</span>');
+    expect(h).toContain('data-more="50"');
+    expect(v.hashOptions(new URLSearchParams("limit=100")).limit).toBe(100);
+    const more = v.view.render(d, {}, new URLSearchParams("limit=100"));
+    expect(more.match(/<tr class="crow"/g)).toHaveLength(100);
+    expect(more).toContain('data-more="20"');
   });
 
   test("the X drops through the issue's drop route", async () => {

@@ -1,8 +1,8 @@
 // The Contents view: the state to browse, not the process: every project and every issue of every repo, in rows styled like Activity's (its CSS, header and X are imported from timeline.js),
 // three tables and a form that files an issue. `data` is /api/contents: { issues, projects, specs }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { empty, esc, labelName, md, tone } from "../lib.js";
-import { STYLE, X_ICON, confirmCancel, head as header } from "./timeline.js";
+import { badge, chips, empty, esc, filterBar, idLink, labelName, md, pageHead, pager, sortHead, when } from "../lib.js";
+import { X_ICON, confirmCancel } from "./timeline.js";
 
 export const view = {
   path: "/contents",
@@ -20,28 +20,38 @@ export function redirect(hash) {
   return path === "/issues" ? "#/contents" : path === "/projects" ? "#/contents" : null;
 }
 
+// Only what nothing shared covers: the whole-row link and the X button.
 const STYLE_CONTENTS = `<style>
-.tl .filters { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin: 0 0 12px; font: 13px var(--sans); }
-.tl .filters label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
-.tl .filters select, .tl .filters input { font: 13px var(--sans); padding: 4px 8px; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; min-width: 0; }
-.tl .filters select:hover, .tl .filters input:hover { border-color: var(--ink-2); }
-.tl .filters select:focus-visible, .tl .filters input:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; }
-.tl .tbl tr.crow { position: relative; }
-.tl .tbl tr.crow:hover { background: var(--rule-2); }
-.tl .tbl .c-title a { color: inherit; text-decoration: none; }
-.tl .tbl .c-title a::after { content: ""; position: absolute; inset: 0; }
-.tl .tbl tr.crow:hover .c-title a, .tl .tbl .c-title a:focus-visible { text-decoration: underline; }
-.tl .tbl td.c-id a, .tl .tbl .c-act { position: relative; z-index: 1; }
-@media (max-width: 480px) { .tl .filters label { flex: 1 1 100%; } .tl .filters select, .tl .filters input { flex: 1; } }
+.contents tr.crow { position: relative; }
+.contents td.wide a { color: inherit; text-decoration: none; }
+.contents td.wide a::after { content: ""; position: absolute; inset: 0; }
+.contents tr.crow:hover td.wide a, .contents td.wide a:focus-visible { text-decoration: underline; }
+.contents td a.idl, .contents td.act { position: relative; z-index: 1; }
+.contents td.act { width: 28px; padding: 0; text-align: right; }
+.contents .cancel { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 4px; color: var(--muted); cursor: pointer; }
+.contents .cancel svg { width: 14px; height: 14px; pointer-events: none; }
+.contents .cancel:hover { color: var(--stuck); background: var(--rule-2); }
+.contents .cancel:focus-visible { color: var(--stuck); outline: 2px solid currentColor; outline-offset: 1px; }
+.contents .cancel.arm { color: var(--stuck); background: var(--rule-2); }
+.contents .cancel[disabled] { opacity: .5; cursor: default; }
+.contents .cmsg { position: absolute; right: 30px; top: 50%; transform: translateY(-50%); font: var(--fs-xs) var(--sans); color: var(--muted); background: var(--bg); white-space: nowrap; }
+.contents .cmsg.err { color: var(--stuck); }
 </style>`;
+
+/** A section heading, the same as the rest of the UI: the h2 and a muted count. */
+const section = (title, n) => `<div class="sh"><h2>${esc(title)}</h2><span class="count">${n}</span></div>`;
+
+/** The Issues table shows this many rows, and this many more for each press of the pager's button. */
+export const PAGE = 50;
 
 /** The Status filter's default is Open; "any" (the Any option) shows every status. */
 export const DEFAULT_STATUS = "open";
 const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STATUS : s === "any" ? "" : s);
 
-/** The filters and sorts, from the route's query: ?status=open&project=x&label=x&q=text&sort=title&dir=asc (the Issues table), &psort=open&pdir=desc (the Projects table), &ssort=date&sdir=desc (the Specs table). */
+/** The filters and sorts, from the route's query: ?status=open&project=x&label=x&q=text&sort=title&dir=asc (the Issues table), &psort=open&pdir=desc (the Projects table), &ssort=date&sdir=desc (the Specs table), &limit=100 (the Issues rows shown). */
 export function hashOptions(q = new URLSearchParams()) {
   return {
+    limit: Math.max(PAGE, Number.parseInt(q.get("limit"), 10) || PAGE),
     status: statusOf(q.get("status")), project: q.get("project") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "",
     sort: { key: q.get("sort") || "updated", dir: q.get("dir") === "asc" ? 1 : -1 },
     psort: { key: q.get("psort") || "updated", dir: q.get("pdir") === "asc" ? 1 : -1 },
@@ -52,11 +62,9 @@ export function hashOptions(q = new URLSearchParams()) {
 export const ref = (r) => `${r.repo}-${r.id}`;
 export const href = (r) => `#/issues/${encodeURIComponent(r.repo)}/${r.id}`;
 const projectHref = (p) => `#/projects/${encodeURIComponent(p.key)}`;
-const badge = (text, cls = "") => `<span class="badge ${cls}">${esc(text)}</span>`;
-const stateBadge = (s) => badge(s, tone(s));
+const stateBadge = (s) => badge(s);
 
-const STATUS_TONE = { open: "run", done: "done", dropped: "quiet" };
-const when = (s) => Date.parse(s) || 0;
+const ms = (s) => Date.parse(s) || 0;
 
 /** The issue rows from the API data. */
 export function issueRows(d) {
@@ -84,14 +92,15 @@ export function filterRows(rows, o = {}) {
 /** The project rows that pass the Project filter. */
 export const filterProjects = (rows, o = {}) => rows.filter((r) => !o.project || r.project === o.project);
 
-export const SPEC_COLUMNS = [["date", "Date"], ["title", "Title"], ["project", "Project"]];
+// Column order: id or name, title, state badge, project, labels, numbers, time last. [key, label, { num }]
+export const SPEC_COLUMNS = [["title", "Title"], ["project", "Project"], ["date", "Date"]];
 const SPEC_SORT = { date: (r) => r.date, title: (r) => r.title, project: (r) => r.project };
-export const COLUMNS = [["project", "Project"], ["status", "Status"], ["id", "Id"], ["title", "Title"], ["labels", "Labels"], ["updated", "Updated"], ["act", ""]];
-export const PROJECT_COLUMNS = [["title", "Name"], ["open", "Open issues"], ["updated", "Last activity"]];
+export const COLUMNS = [["id", "Id"], ["title", "Title"], ["status", "Status"], ["project", "Project"], ["labels", "Labels"], ["updated", "Updated"], ["act", ""]];
+export const PROJECT_COLUMNS = [["title", "Name"], ["open", "Open issues", { num: true }], ["updated", "Last activity"]];
 const SORT = {
-  project: (r) => r.project, status: (r) => r.status, id: (r) => r.id, title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => when(r.at),
+  project: (r) => r.project, status: (r) => r.status, id: (r) => r.id, title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => ms(r.at),
 };
-const PROJECT_SORT = { title: (r) => r.project, open: (r) => r.open, updated: (r) => when(r.at) };
+const PROJECT_SORT = { title: (r) => r.project, open: (r) => r.open, updated: (r) => ms(r.at) };
 
 /** The rows ordered by `sort` = { key, dir } (dir 1 up, -1 down). Ties keep newest first. */
 export function sortRows(rows, sort = { key: "updated", dir: -1 }, by = SORT) {
@@ -106,62 +115,66 @@ export function sortRows(rows, sort = { key: "updated", dir: -1 }, by = SORT) {
 /** "YYYY-MM-DD", from a date or a timestamp; "" when there is none. */
 const day = (s) => (Number.isNaN(Date.parse(s)) ? "" : String(s).slice(0, 10));
 
+/** A table's header row: sortable columns are sort buttons. */
+const header = (sort, columns, by) =>
+  `<thead><tr>${columns.map(([k, label, o]) => (by[k] ? sortHead(label, k, sort, o) : `<th>${esc(label)}</th>`)).join("")}</tr></thead>`;
+
 /** The request an issue row's X sends, or null for a row that is not an open issue. */
 export function dropTarget(r) {
   return r.status === "open" ? { url: `/api/issues/${encodeURIComponent(r.repo)}/${r.n}/drop`, body: { reason: "dropped from the Contents page" } } : null;
 }
 
-/** One issue row, aligned in the columns of the Activity table. */
+/** One issue row: id, title, state, project, labels, time, and the X. */
 export function renderRow(r) {
   const x = dropTarget(r)
     ? `<button type="button" class="cancel" data-cancel aria-label="Drop ${esc(r.id)}" title="Stop or drop">${X_ICON}</button>` : "";
-  return `<tr class="evr crow" data-repo="${esc(r.repo)}" data-n="${r.n}"><td class="c-project">${esc(r.project)}</td>` +
-    `<td class="c-status">${badge(r.status, STATUS_TONE[r.status] ?? "")}</td><td class="c-id"><a class="id" href="${esc(r.href)}">${esc(r.id)}</a></td>` +
-    `<td class="c-title"><a href="${esc(r.href)}">${esc(r.title)}</a></td>` +
-    `<td class="c-labels">${r.labels.map((l) => badge(labelName(l))).join(" ")}</td>` +
-    `<td class="c-time">${esc(day(r.at))}</td><td class="c-act">${x}<span class="cmsg" role="status"></span></td></tr>`;
+  return `<tr class="crow" data-repo="${esc(r.repo)}" data-n="${r.n}"><td>${idLink(r.id, r.href)}</td>` +
+    `<td class="wide"><a href="${esc(r.href)}">${esc(r.title)}</a></td>` +
+    `<td>${badge(r.status)}</td><td>${esc(r.project)}</td><td>${chips(r.labels)}</td>` +
+    `<td class="time">${esc(when(r.at))}</td><td class="act">${x}<span class="cmsg" role="status"></span></td></tr>`;
 }
 
 /** One project row; the whole row is the link. */
 export function renderProjectRow(r) {
-  return `<tr class="evr crow" data-kind="project"><td class="c-title"><a href="${esc(r.href)}">${esc(r.project)}</a></td>` +
-    `<td class="c-open">${r.open}</td><td class="c-time">${esc(day(r.at))}</td></tr>`;
+  return `<tr class="crow" data-kind="project"><td class="wide"><a href="${esc(r.href)}">${esc(r.project)}</a></td>` +
+    `<td class="num">${r.open}</td><td class="time">${esc(when(r.at))}</td></tr>`;
 }
 
 /** One spec row; the whole row is the link. */
 export function renderSpecRow(r) {
-  return `<tr class="evr crow" data-kind="spec"><td class="c-date">${esc(r.date)}</td>` +
-    `<td class="c-title"><a href="${esc(r.href)}">${esc(r.title)}</a></td><td class="c-project">${esc(r.project)}</td></tr>`;
+  return `<tr class="crow" data-kind="spec"><td class="wide"><a href="${esc(r.href)}">${esc(r.title)}</a></td>` +
+    `<td>${esc(r.project)}</td><td class="time">${esc(day(r.date))}</td></tr>`;
 }
 
 export function renderSpecsTable(rows, o = {}) {
   const shown = sortRows(filterProjects(rows, o), o.ssort, SPEC_SORT);
   if (!shown.length) return empty("No spec matches.", "A repo's docs/specs folder lists its specs here.");
-  return `<div class="list"><table class="tbl">${header(o.ssort ?? { key: "date", dir: -1 }, SPEC_COLUMNS, SPEC_SORT)}<tbody>${shown.map(renderSpecRow).join("")}</tbody></table></div>`;
+  return `<table class="tbl">${header(o.ssort ?? { key: "date", dir: -1 }, SPEC_COLUMNS, SPEC_SORT)}<tbody>${shown.map(renderSpecRow).join("")}</tbody></table>`;
 }
 
 export function renderFilters(d, o = {}) {
   const issues = issueRows(d);
   const projects = [...new Set([...projectRows(d).map((r) => r.project), ...issues.map((r) => r.project), ...specRows(d).map((r) => r.project)])].sort();
   const labels = [...new Set(issues.flatMap((r) => r.labels))].sort();
-  const opt = (v, cur, text = v) => `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(text)}</option>`;
-  return `<form class="filters" data-ui="contents-filter" onsubmit="return false">` +
-    `<label>Project <select data-filter="project">${opt("", o.project, "All")}${projects.map((k) => opt(k, o.project)).join("")}</select></label>` +
-    `<label>Status <select data-filter="status">${opt("any", o.status || "any", "Any")}${["open", "done", "dropped"].map((s) => opt(s, o.status)).join("")}</select></label>` +
-    `<label>Label <select data-filter="label">${opt("", o.label, "Any")}${labels.map((l) => opt(l, o.label, labelName(l))).join("")}</select></label>` +
-    `<label>Title <input type="search" data-filter="q" value="${esc(o.q ?? "")}" placeholder="text in the title"></label></form>`;
+  return `<div data-ui="contents-filter">${filterBar([
+    { label: "Project", name: "project", value: o.project ?? "", options: [{ value: "", label: "All" }, ...projects] },
+    { label: "Status", name: "status", value: o.status || "any", options: [{ value: "any", label: "Any" }, "open", "done", "dropped"] },
+    { label: "Label", name: "label", value: o.label ?? "", options: [{ value: "", label: "Any" }, ...labels.map((l) => ({ value: l, label: labelName(l) }))] },
+    { label: "Title", name: "q", search: true, value: o.q ?? "", placeholder: "text in the title" },
+  ])}</div>`;
 }
 
 export function renderProjectsTable(rows, o = {}) {
   const shown = sortRows(filterProjects(rows, o), o.psort, PROJECT_SORT);
   if (!shown.length) return empty("No project matches.", "Register one, or clear the Project filter.");
-  return `<div class="list"><table class="tbl">${header(o.psort ?? { key: "updated", dir: -1 }, PROJECT_COLUMNS, PROJECT_SORT)}<tbody>${shown.map(renderProjectRow).join("")}</tbody></table></div>`;
+  return `<table class="tbl">${header(o.psort ?? { key: "updated", dir: -1 }, PROJECT_COLUMNS, PROJECT_SORT)}<tbody>${shown.map(renderProjectRow).join("")}</tbody></table>`;
 }
 
 export function renderTable(rows, o = {}) {
-  const shown = sortRows(filterRows(rows, o), o.sort);
-  if (!shown.length) return empty("Nothing matches.", "File an issue below, or loosen the filters.");
-  return `<div class="list"><table class="tbl">${header(o.sort ?? { key: "updated", dir: -1 }, COLUMNS, SORT)}<tbody>${shown.map(renderRow).join("")}</tbody></table></div>`;
+  const all = sortRows(filterRows(rows, o), o.sort);
+  if (!all.length) return empty("Nothing matches.", "File an issue below, or loosen the filters.");
+  const shown = all.slice(0, o.limit ?? PAGE);
+  return `<table class="tbl">${header(o.sort ?? { key: "updated", dir: -1 }, COLUMNS, SORT)}<tbody>${shown.map(renderRow).join("")}</tbody></table>${pager(shown.length, all.length, PAGE)}`;
 }
 
 export const BODY_TEMPLATE = "## Outcome\n\n\n\n## Oracle\n\n\n\n## Time box\n\n";
@@ -214,10 +227,10 @@ export function renderContents(d, o = {}) {
   const issues = issueRows(d), projects = projectRows(d), specs = specRows(d);
   const shownSpecs = filterProjects(specs, o).length;
   const shownProjects = filterProjects(projects, o).length, shownIssues = filterRows(issues, o).length;
-  return `${STYLE}${STYLE_CONTENTS}<div class="page tl"><h1>Contents</h1>${renderFilters(d, o)}` +
-    `<h2>Projects <small class="quiet">${shownProjects}</small></h2><div id="projects-table">${renderProjectsTable(projects, o)}</div>` +
-    `<h2>Issues <small class="quiet">${shownIssues}</small></h2><div id="issues-table">${renderTable(issues, o)}</div>` +
-    `<h2>Specs <small class="quiet">${shownSpecs}</small></h2><div id="specs-table">${renderSpecsTable(specs, o)}</div>` +
+  return `${STYLE_CONTENTS}<div class="page contents">${pageHead("Contents")}${renderFilters(d, o)}` +
+    `${section("Projects", shownProjects)}<div id="projects-table">${renderProjectsTable(projects, o)}</div>` +
+    `${section("Issues", shownIssues)}<div id="issues-table">${renderTable(issues, o)}</div>` +
+    `${section("Specs", shownSpecs)}<div id="specs-table">${renderSpecsTable(specs, o)}</div>` +
     renderForm(d?.issues ?? [], o) + `</div>`;
 }
 
@@ -259,10 +272,16 @@ if (typeof document !== "undefined") {
     const key = b.dataset.sort, dir = cur.key === key ? -cur.dir : key === "updated" || key === "open" || key === "date" ? -1 : 1;
     setQuery(`${p}sort`, key); setQuery(`${p}dir`, dir > 0 ? "asc" : "desc");
   });
+  const FILTERS = '[data-ui="contents-filter"]';
   document.addEventListener("change", (e) => {
-    const f = e.target.closest && e.target.closest("[data-filter]");
-    if (!f) return;
-    setQuery(f.dataset.filter, f.value);
+    const f = e.target.closest && e.target.closest(`${FILTERS} [name]`);
+    if (f) setQuery(f.name, f.value);
+  });
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest(`${FILTERS} .seg button`);
+    if (b) return setQuery(b.closest(".seg").dataset.name, b.dataset.value);
+    const more = e.target.closest && e.target.closest("#issues-table button[data-more]");
+    if (more) setQuery("limit", String(hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? "")).limit + Number(more.dataset.more)));
   });
   document.addEventListener("submit", async (e) => {
     const form = e.target.closest && e.target.closest('form[data-ui="issue-form"]');

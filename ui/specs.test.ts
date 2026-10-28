@@ -71,13 +71,13 @@ describe("specs", () => {
     }
   });
 
-  test("Contents shows a Specs table after Issues: Date, Title, Project, rows link to the spec page", async () => {
+  test("Contents shows a Specs table after Issues: Title, Project, Date, rows link to the spec page", async () => {
     const d = await getJson("/api/contents");
     const h = v.view.render(d, {}, new URLSearchParams());
     expect(h.indexOf("<h2>Issues")).toBeLessThan(h.indexOf("<h2>Specs"));
-    expect(h).toContain('<h2>Specs <small class="quiet">3</small></h2>');
+    expect(h).toContain('<div class="sh"><h2>Specs</h2><span class="count">3</span></div>');
     const t = h.split('<div id="specs-table">')[1].split("</table>")[0];
-    expect([...t.matchAll(/<th class="c-(\w+)"/g)].map((m) => m[1])).toEqual(["date", "title", "project"]);
+    expect([...t.matchAll(/data-sort="(\w+)"/g)].map((m) => m[1])).toEqual(["title", "project", "date"]);
     expect(t).toContain('data-sort="date"');
     expect(t).toContain('<a href="#/specs/a/2026-10-01-alpha.md">Alpha spec</a>');
     expect(t.indexOf("2026-10-05")).toBeLessThan(t.indexOf("2026-09-01"));
@@ -86,7 +86,7 @@ describe("specs", () => {
   test("the Project filter and the header sort apply to the Specs table", async () => {
     const d = await getJson("/api/contents");
     const h = v.view.render(d, {}, new URLSearchParams("project=b"));
-    expect(h).toContain('<h2>Specs <small class="quiet">1</small></h2>');
+    expect(h).toContain('<div class="sh"><h2>Specs</h2><span class="count">1</span></div>');
     expect(h).toContain("Gamma");
     expect(h.split('<div id="specs-table">')[1]).not.toContain("Alpha spec");
     expect(v.view.render({ specs: [] }, {}, new URLSearchParams())).toContain("No spec matches.");
