@@ -113,6 +113,15 @@ export function openGoals(): { repo: Repo; item: todos.Item }[] {
   return out;
 }
 
+/** Whether the item is still open in the store now: a fresh read, not the one openGoals() made. A store that cannot be read is not open. */
+function stillOpen(repo: Repo, id: number): boolean {
+  try {
+    const doc = readList(repo);
+    const item = doc && todos.find(doc, id);
+    return !!item && todos.status(item) === "open";
+  } catch { return false; }
+}
+
 /**
  * Whether `<repo>-<n>` is done, by the derived state `aleph status` gives. A
  * repo outside the registry, or an item the store lacks, is not done.
@@ -195,6 +204,8 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land):
     const release = await lock(`goal-${name}`, 0);
     if (!release) { skipped.push(`${name}: another dispatch is starting it`); continue; }
     try {
+      // The baseline can take minutes, so the goal may have closed since openGoals(): re-read it under the lock.
+      if (!stillOpen(repo, item.id)) { skipped.push(`${name}: closed`); continue; }
       const jobs = allJobs();
       const open = jobs.find((j) => isOpen(j) && j.at(-1)!.run.name === name);
       if (open) { skipped.push(`${name}: ${open.at(-1)!.run.state}`); continue; }
