@@ -90,7 +90,9 @@ test("each of the four verdicts leaves the item in its state", async () => {
 test("a triage is a job in the ledger, of kind triage", async () => {
   const folders = readdirSync(join(base, "jobs")).filter((d) => d.endsWith("-triage") && d.includes("-triage-tri1-"));
   expect(folders.length).toBe(4);
-  expect(readRun(join(base, "jobs", folders[0]))).toMatchObject({ kind: "triage", repo: "tri1", state: "done", name: "triage-tri1-1", todo: 1 });
+  // The four runs start together, so the folder order is not the item order.
+  const first = folders.map((f) => readRun(join(base, "jobs", f))).find((r) => r?.name === "triage-tri1-1");
+  expect(first).toMatchObject({ kind: "triage", repo: "tri1", state: "done", name: "triage-tri1-1", todo: 1 });
 });
 
 test("items labelled needs-chris, triaged, proposal or goal, or waiting on an open item, are not triaged", async () => {
