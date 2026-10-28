@@ -29,8 +29,8 @@ test("stuck, running and delivered show their jobs", () => {
 });
 
 test("a commitUrl becomes a link", () => {
-  expect(r.renderDelivered(state)).toContain('<a href="https://github.com/o/r/commit/50f301fabc"><code>50f301f</code></a>');
-  const none = r.renderDelivered({ ...state, delivered: [{ ...state.delivered[0], commitUrl: undefined }] });
+  expect(r.renderLands(state)).toContain('<a href="https://github.com/o/r/commit/50f301fabc"><code>50f301f</code></a>');
+  const none = r.renderLands({ ...state, delivered: [{ ...state.delivered[0], commitUrl: undefined }] });
   expect(none).not.toContain("<a ");
 });
 
@@ -39,7 +39,7 @@ test("an empty section shows its empty state", () => {
   expect(r.renderNeeds({ ...state, needs: [] })).toContain("Nothing needs you.");
   expect(r.renderStuck({ ...state, stuck: [] })).toContain("No run is stuck.");
   expect(r.renderRunning({ ...state, running: [] })).toContain("Nothing is running.");
-  expect(r.renderDelivered({ ...state, delivered: [] })).toContain("Nothing has landed yet.");
+  expect(r.renderLands({ ...state, delivered: [] })).toContain("Nothing has landed yet.");
   // One line only, with no hint under it.
   expect(r.renderNeeds({ ...state, needs: [] }).match(/<p/g)?.length).toBe(1);
 });
@@ -67,15 +67,15 @@ test("a needs-you entry has Diff, Land and Drop buttons; a landed one with an op
   for (const v of ["diff", "land", "drop"]) expect(h).toContain(`data-act="${v}" data-name="aleph-27"`);
   expect(h).toContain("diff-panel");
   const open = { ...state, delivered: [{ ...state.delivered[0], check: "open" }] };
-  expect(r.renderDelivered(open)).toContain('data-act="checked" data-name="aleph-28"');
-  expect(r.renderDelivered(state)).not.toContain("data-act=");
-  expect(r.renderDelivered(state)).not.toContain("data-cmd=");
+  expect(r.renderLands(open)).toContain('data-act="checked" data-name="aleph-28"');
+  expect(r.renderLands(state)).not.toContain("data-act=");
+  expect(r.renderLands(state)).not.toContain("data-cmd=");
 });
 
 test("a land from another day shows its date", () => {
   const old = { ...state, delivered: [{ ...state.delivered[0], ended: "2026-10-25T16:30:00Z" }] };
-  expect(r.renderDelivered(old)).toMatch(/<dt>Landed<\/dt><dd>25 Oct \d\d:\d\d<\/dd>/);
-  expect(r.renderDelivered(state)).toMatch(/<dt>Landed<\/dt><dd>\d\d:\d\d<\/dd>/);
+  expect(r.renderLands(old)).toMatch(/<dt>Landed<\/dt><dd>25 Oct \d\d:\d\d<\/dd>/);
+  expect(r.renderLands(state)).toMatch(/<dt>Landed<\/dt><dd>\d\d:\d\d<\/dd>/);
 });
 
 const withFactory = (o: object) => ({ ...state, factory: { ...state.factory, health: [], ...o } });
@@ -89,8 +89,8 @@ test("a stuck job shows its reason, the failed check and its seconds, and Re-che
 test("four needs-you jobs render one expanded and three collapsed", () => {
   const needs = [1, 2, 3, 4].map((i) => job({ name: `aleph-${i}`, state: "needs-you", reason: "Held path", item: { id: i, title: `t${i}` } }));
   const h = r.renderNeeds({ ...state, needs });
-  expect(h.match(/<details class="need-card need-fold" data-keep="need:[^"]*" open>/g)?.length).toBe(1);
-  expect(h.match(/<details class="need-card need-fold" data-keep="need:[^"]*">/g)?.length).toBe(3);
+  expect(h.match(/<details class="job-card big need-card need-fold" data-keep="need:[^"]*" open>/g)?.length).toBe(1);
+  expect(h.match(/<details class="job-card big need-card need-fold" data-keep="need:[^"]*">/g)?.length).toBe(3);
   expect(h.match(/data-keep="need:/g)?.length).toBe(4);
   for (const i of [1, 2, 3, 4]) expect(h).toContain(`data-keep="need:aleph-${i}"`);
   expect(r.renderNeeds({ ...state, needs: needs.slice(0, 2) })).not.toContain("need-fold");
@@ -143,9 +143,9 @@ test("a job with checks shows them as facts; one without shows none", () => {
   const checks = [{ name: "tests", ok: true, seconds: 71 }, { name: "types", ok: false, seconds: 9 }];
   const both = "<div><dt>Tests</dt><dd>71 s ✓</dd></div><div><dt>Types</dt><dd>9 s ✗</dd></div></dl>";
   expect(r.renderNeeds({ ...state, needs: [{ ...state.needs[0], checks }] })).toContain(both);
-  expect(r.renderDelivered({ ...state, delivered: [{ ...state.delivered[0], checks }] })).toContain(both);
+  expect(r.renderLands({ ...state, delivered: [{ ...state.delivered[0], checks }] })).toContain(both);
   expect(r.renderNeeds(state)).not.toContain(" s ✓");
-  expect(r.renderDelivered(state)).not.toContain("checks");
+  expect(r.renderLands(state)).not.toContain("checks");
 });
 
 test("the Pause or Resume button sits in the page head before the updated line; no Controls panel", () => {
@@ -161,18 +161,41 @@ test("the Pause or Resume button sits in the page head before the updated line; 
   expect(page.indexOf('data-act="pause"')).toBeLessThan(page.indexOf('class="asof"'));
 });
 
-test("trailers show in a pre.trailers block with each key in <b>, escaped, and only when there are some", () => {
-  const trailers = [{ key: "Item", value: "aleph-27" }, { key: "Job", value: "<script>x</script>" }];
+test("trailers show on one line joined by ' · ', escaped, and only when there are some", () => {
+  const trailers = [{ key: "Item", value: "aleph-27" }, { key: "Job", value: "<script>x</script>" }, { key: "Held-by", value: "Chris" }];
   const needs = { ...state, needs: [job({ name: "aleph-27", state: "needs-you", trailers })] };
   const del = { ...state, delivered: [job({ name: "aleph-28", state: "landed", trailers })] };
-  for (const h of [r.renderNeeds(needs), r.renderDelivered(del)]) {
-    expect(h).toContain("<b>Item:</b> aleph-27");
-    expect(h).toContain("&lt;script&gt;");
+  for (const h of [r.renderNeeds(needs), r.renderLands(del)]) {
+    expect(h).toContain("Item aleph-27 · Job &lt;script&gt;x&lt;/script&gt; · Held-by Chris");
     expect(h).not.toContain("<script>");
+    expect(h).not.toContain("pre.trailers");
+    expect(h).not.toContain('<pre class="trailers"');
   }
   const bare = { ...state, needs: [job({ name: "aleph-27", state: "needs-you" })] };
   expect(r.renderNeeds(bare)).not.toContain("trailers");
-  expect(r.renderDelivered(state)).not.toContain("trailers");
+  expect(r.renderLands(state)).not.toContain("trailers");
+});
+
+test("every section renders its jobs with the job-card class: big for needs, stuck and lands, small for running and waiting", () => {
+  const w = { ...state, waiting: [{ repo: "aleph", id: 9, title: "w" }] };
+  for (const [h, size] of [[r.renderNeeds(state), "big"], [r.renderStuck(state), "big"], [r.renderLands(state), "big"], [r.renderRunning(state), "small"], [r.renderWaiting(w), "small"]] as const) {
+    expect(h).toMatch(new RegExp(`class="job-card ${size}[ "]`));
+    expect(h).not.toContain(size === "big" ? "job-card small" : "job-card big");
+  }
+});
+
+test("Lands lists a running land before landed ones, has no origin/main aside, and counts Running and Needs you against their caps", () => {
+  const lands = { ...state, delivered: [job({ name: "land-1", state: "running" }), ...state.delivered] };
+  const h = r.renderLands(lands);
+  expect(h).toContain(">Lands</h2>");
+  expect(h).not.toContain("origin/main");
+  expect(h.indexOf("land-1")).toBeLessThan(h.indexOf("aleph-28"));
+  const f = { ...state.factory, liveCap: 12, waitingCap: 5 };
+  const run = Array.from({ length: 3 }, (_, i) => job({ name: `r${i}` }));
+  const need = Array.from({ length: 2 }, (_, i) => job({ name: `n${i}`, state: "needs-you" }));
+  expect(r.renderRunning({ ...state, factory: f, running: run })).toContain('<span class="count">3 / 12</span>');
+  expect(r.renderNeeds({ ...state, factory: f, needs: need })).toContain('<span class="count">2 / 5</span>');
+  expect(r.renderStuck(state)).toContain('<span class="count">1</span>');
 });
 
 const two: any = { ...state, needs: [job({ name: "job-a", state: "needs-you", defaults: [] }), job({ name: "job-b", state: "needs-you", defaults: [] })] };

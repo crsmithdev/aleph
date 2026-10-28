@@ -23,7 +23,7 @@ export interface Job {
   checks?: { name: string; ok: boolean; seconds: number }[];
   /** The hidden check's test counts, when the job's item has hidden checks. */
   hidden?: { passed: number; total: number };
-  /** Delivered: the trailers of the land commit. Needs-you: the trailers the land will write. */
+  /** Lands: the trailers of the land commit. Needs-you: the trailers the land will write. */
   trailers?: { key: string; value: string }[];
 }
 
@@ -164,6 +164,7 @@ export function state(now = new Date()): State {
   let landing = 0;
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
   const delivered: { at: number; job: Job }[] = [];
+  const landRuns: Job[] = [];
   const openNames = new Set<string>();
   for (const runs of jobs) {
     const last = runs.at(-1)!.run;
@@ -172,8 +173,9 @@ export function state(now = new Date()): State {
       if (last.state === "needs-you") needs.push(toJob(runs));
       else if (last.state === "stuck" || last.state === "failed") stuck.push(toJob(runs));
       else {
-        running.push(toJob(runs));
-        if (last.kind === "land") landing++;
+        const job = toJob(runs);
+        running.push(job);
+        if (last.kind === "land") { landing++; landRuns.push(job); }
       }
     } else if (last.state === "landed" && last.ended) {
       const at = Date.parse(last.ended);
@@ -200,7 +202,8 @@ export function state(now = new Date()): State {
       nextTick: nextTick(), probe, health: health(now.getTime()), hold: hold(jobs)?.line ?? null,
     },
     needs, stuck, running, landing, newIssues,
-    delivered: delivered.sort((a, b) => b.at - a.at).slice(0, DELIVERED).map((d) => d.job),
+    // Lands: land runs in progress first, then the latest landed, DELIVERED in all.
+    delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).map((d) => d.job)].slice(0, DELIVERED),
     waiting: openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`))
       .map(({ repo, item }) => ({ repo: repo.key, id: item.id, title: item.title })),
   };

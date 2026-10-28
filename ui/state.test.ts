@@ -129,7 +129,9 @@ describe("state", () => {
     for (let i = 0; i < 11; i++) run(`20261027-0001${String(i).padStart(2, "0")}-a`, { job: `fac-l${i}`, name: `fac-l${i}`, state: "landed", commit: "abcdef1234567", ended: ago(40 + i), started: ago(41 + i) });
     const s = state(now);
     expect(s.delivered).toHaveLength(10);
-    expect(s.delivered.slice(0, 3).map((j) => j.name)).toEqual(["fac-7", "fac-5", "fac-6"]);
+    // The land in progress (fac-8) comes first, then the landed ones, newest first.
+    expect(s.delivered[0].state).not.toBe("landed");
+    expect(s.delivered.slice(0, 4).map((j) => j.name)).toEqual(["fac-8", "fac-7", "fac-5", "fac-6"]);
     expect(s.delivered.map((j) => j.name)).not.toContain("fac-l10");
   });
 });

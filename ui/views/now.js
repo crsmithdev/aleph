@@ -15,16 +15,16 @@ export const view = {
     `<div class="grid"><div>` +
     `<section id="needs" aria-labelledby="h-needs">${renderNeeds(s)}</section>` +
     `<section id="stuck" aria-labelledby="h-stuck">${renderStuck(s)}</section>` +
-    `<section id="delivered" aria-labelledby="h-del">${renderDelivered(s)}</section>` +
+    `<section id="delivered" aria-labelledby="h-del">${renderLands(s)}</section>` +
     `</div><aside class="rail">` +
     `<section id="running" aria-labelledby="h-run">${renderRunning(s)}</section>` +
     `<section id="waiting" aria-labelledby="h-wait">${renderWaiting(s)}</section>` +
     `</aside></div></div>`,
 };
 
-const count = (n) => `<span class="count">${n}</span>`;
-const section = (id, title, n, body, aside = "") =>
-  `<div class="sh"><h2 id="h-${id}">${esc(title)}</h2>${count(n)}${aside ? `<span class="aside">${esc(aside)}</span>` : ""}</div>${body}`;
+/** The count of a section: `N / cap` where a cap applies. */
+const section = (id, title, n, body, cap) =>
+  `<div class="sh"><h2 id="h-${id}">${esc(title)}</h2><span class="count">${n}${cap > 0 ? ` / ${cap}` : ""}</span></div>${body}`;
 
 const itemId = (j) => `<span class="id">${esc(j.name)}</span>`;
 const title = (j) => `<h3>${esc(j.item?.title || j.name)}</h3>`;
@@ -38,9 +38,12 @@ const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
 const checkFacts = (j) =>
   (j.checks || []).map((c) => fact(c.name.charAt(0).toUpperCase() + c.name.slice(1), `${esc(String(c.seconds))} s ${c.ok ? "✓" : "✗"}`)).join("");
 
-/** The commit trailers of a job in a `pre.trailers` block, each key in `<b>`; empty when it has none. */
-const trailerBlock = (j) =>
-  j.trailers?.length ? `<div class="ev one"><div><h4>Trailers</h4><pre class="trailers">${j.trailers.map((t) => `<b>${esc(t.key)}:</b> ${esc(t.value)}`).join("\n")}</pre></div></div>` : "";
+/** The trailers of a job as one small line: `Item aleph-114 · Job 20261027-… · Held-by Chris`; empty when it has none. */
+const trailerLine = (j) =>
+  j.trailers?.length ? `<p class="trailers-line">${j.trailers.map((t) => `${esc(t.key)} ${esc(t.value)}`).join(" · ")}</p>` : "";
+
+/** One job card, large (id and title, facts, a trailers line) or small (two lines). */
+const jobCard = (size, cls, inner, tag = "article") => `<${tag} class="job-card ${size} ${cls}">${inner}</${tag}>`;
 
 /** An empty section on this page: one quiet line. */
 const empty = (line) => `<div class="empty"><p class="hint">${esc(line)}</p></div>`;
@@ -92,39 +95,38 @@ export function renderNeeds(s) {
     const why = j.reason || j.needs || "needs you";
     const head = `<div class="ih">${itemId(j)}${title(j)}</div>`;
     const card = (inner) => fold
-      ? `<details class="need-card need-fold" data-keep="need:${esc(j.name)}"${i === 0 ? " open" : ""}><summary><span class="why">${esc(why)}</span>${itemId(j)}<span class="t">${esc(j.item?.title || j.name)}</span></summary>${inner}</details>`
-      : `<article class="need-card"><span class="why">${esc(why)}</span>${inner}</article>`;
+      ? `<details class="job-card big need-card need-fold" data-keep="need:${esc(j.name)}"${i === 0 ? " open" : ""}><summary><span class="why">${esc(why)}</span>${itemId(j)}<span class="t">${esc(j.item?.title || j.name)}</span></summary>${inner}</details>`
+      : `<article class="job-card big need-card"><span class="why">${esc(why)}</span>${inner}</article>`;
     return card((fold ? "" : head) +
       `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(j.model)) : ""}${checkFacts(j)}</dl>` +
       (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
-      (j.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="trailers">${statLines(j.stat)}</pre></div></div>` : "") +
-      trailerBlock(j) +
+      (j.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(j.stat)}</pre></div></div>` : "") +
+      trailerLine(j) +
       (j.defaults.length ? `<details open><summary>Defaults taken<span class="peek">${j.defaults.length}</span></summary><div class="body"><ul>${j.defaults.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div></details>` : "") +
       (j.followups.length ? `<details><summary>Follow-ups<span class="peek">${j.followups.length}</span></summary><div class="body"><ul>${j.followups.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div></details>` : "") +
       `<div class="actions">${act("diff", j.name, "Diff")}${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}${actMsg(j.name)}</div>` +
       `<div class="diff-panel" data-diff-for="${esc(j.name)}"${openDiffs.has(j.name) ? `>${diffHtml(openDiffs.get(j.name))}` : " hidden>"}</div>`);
   }).join("");
-  return section("needs", "Needs you", s.needs.length, cards || empty("Nothing needs you."));
+  return section("needs", "Needs you", s.needs.length, cards || empty("Nothing needs you."), s.factory.waitingCap);
 }
 
 const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 
 export function renderStuck(s) {
   const rows = s.stuck.map((j) =>
-    `<article class="del"><div class="ih">${itemId(j)}${title(j)}<span class="badge stuck">${esc(j.state === "failed" ? "Failed" : "Stuck")}</span></div>` +
+    `<article class="job-card big del"><div class="ih">${itemId(j)}${title(j)}<span class="badge stuck">${esc(j.state === "failed" ? "Failed" : "Stuck")}</span></div>` +
     (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
     (failed(j) ? `<p class="quiet q">Last check that failed: <b>${esc(failed(j).name)}</b>, ${esc(failed(j).seconds)} s</p>` : "") +
-    `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}</dl>` +
+    `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}</dl>` + trailerLine(j) +
     `<div class="actions">${act("recheck", j.name, "Re-check")}${act("drop", j.name, "Drop")}${actMsg(j.name)}</div></article>`).join("");
   return section("stuck", "Stuck", s.stuck.length, rows || empty("No run is stuck."));
 }
 
 export function renderRunning(s) {
   const rows = s.running.map((j) =>
-    `<div class="run-row"><div class="ih">${itemId(j)}<span class="badge run">${esc(j.phase || j.state)}</span></div>` +
-    `<div class="t">${esc(j.item?.title || j.name)}</div>` +
-    `<div class="run-meta"><span class="num">Started ${esc(clock(j.started))}, ${Date.parse(s.now) - Date.parse(j.started) > BOX_MIN * 60_000 ? `<span class="over">${esc(span(j.started, s.now))} ago, past the time box</span>` : `${esc(span(j.started, s.now) || "0 min")} ago`}</span></div></div>`).join("");
-  return section("run", "Running", s.running.length, rows || empty("Nothing is running."));
+    jobCard("small", "run-row", `<div class="ih">${itemId(j)}<span class="t">${esc(j.item?.title || j.name)}</span></div>` +
+      `<div class="run-meta"><span class="badge run">${esc(j.phase || j.state)}</span> <span class="num">Started ${esc(clock(j.started))}, ${Date.parse(s.now) - Date.parse(j.started) > BOX_MIN * 60_000 ? `<span class="over">${esc(span(j.started, s.now))} ago, past the time box</span>` : `${esc(span(j.started, s.now) || "0 min")} ago`}</span></div>`, "div")).join("");
+  return section("run", "Running", s.running.length, rows || empty("Nothing is running."), s.factory.liveCap);
 }
 
 /** "14:05" for a land today, "26 Oct 14:05" for an older one. */
@@ -132,20 +134,23 @@ const landedAt = (iso, now) =>
   new Date(iso).toDateString() === new Date(now).toDateString() ? clock(iso)
     : `${new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} ${clock(iso)}`;
 
-export function renderDelivered(s) {
+/** Lands: land runs in progress first, then the latest landed. */
+export function renderLands(s) {
   const rows = s.delivered.map((j) => {
+    const landed = j.state === "landed";
     const sha = j.commit ? esc(j.commit.slice(0, 7)) : "";
     const commit = j.commit ? (j.commitUrl ? `<a href="${esc(j.commitUrl)}"><code>${sha}</code></a>` : `<code>${sha}</code>`) : "";
-    return `<article class="del"><div class="ih">${itemId(j)}${title(j)}<span class="badge done">Landed</span></div>` +
-      `<dl class="facts">${commit ? fact("Commit", commit) : ""}${j.ended ? fact("Landed", esc(landedAt(j.ended, s.now))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${checkFacts(j)}</dl>` +
-      trailerBlock(j) +
-      (j.check === "open" || actMessages.has(j.name) ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${actMsg(j.name)}</div>` : "") + `</article>`;
+    return jobCard("big", "del", `<div class="ih">${itemId(j)}${title(j)}<span class="badge ${landed ? "done" : "run"}">${landed ? "Landed" : "Landing"}</span></div>` +
+      `<dl class="facts">${commit ? fact("Commit", commit) : ""}${landed && j.ended ? fact("Landed", esc(landedAt(j.ended, s.now))) : ""}${!landed ? fact("Started", esc(clock(j.started))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${checkFacts(j)}</dl>` +
+      trailerLine(j) +
+      (j.check === "open" || actMessages.has(j.name) ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${actMsg(j.name)}</div>` : ""));
   }).join("");
-  return section("del", "Delivered", s.delivered.length, rows || empty("Nothing has landed yet."), "the last 10, on origin/main");
+  return section("del", "Lands", s.delivered.length, rows || empty("Nothing has landed yet."));
 }
+export const renderDelivered = renderLands;
 
 export function renderWaiting(s) {
-  const rows = s.waiting.map((w) => `<div class="run-row"><div class="ih"><span class="id">${esc(w.repo)}-${esc(w.id)}</span></div><div class="t">${esc(w.title)}</div></div>`).join("");
+  const rows = s.waiting.map((w) => jobCard("small", "run-row", `<div class="ih"><span class="id">${esc(w.repo)}-${esc(w.id)}</span><span class="t">${esc(w.title)}</span></div><div class="run-meta">Waiting to start</div>`, "div")).join("");
   return section("wait", "Waiting", s.waiting.length, rows || empty("No goal waits to start."));
 }
 
