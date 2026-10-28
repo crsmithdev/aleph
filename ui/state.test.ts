@@ -83,6 +83,25 @@ describe("state", () => {
     expect(JSON.parse(before).shown).toBe(false);
   });
 
+  test("caps.json gives the caps when the environment does not, and a bad file gives the defaults", () => {
+    const keep = { d: process.env.ALEPH_DAY_CAP, l: process.env.ALEPH_LIVE_CAP, w: process.env.ALEPH_WAITING_CAP };
+    delete process.env.ALEPH_DAY_CAP; delete process.env.ALEPH_LIVE_CAP; delete process.env.ALEPH_WAITING_CAP;
+    const file = join(factory, "caps.json");
+    try {
+      let f = state(now).factory;
+      expect([f.dayCap, f.liveCap, f.waitingCap]).toEqual([12, 10, 5]);
+      writeFileSync(file, JSON.stringify({ day: 999, live: 12 }));
+      f = state(now).factory;
+      expect([f.dayCap, f.liveCap, f.waitingCap]).toEqual([999, 12, 5]);
+      writeFileSync(file, "not json");
+      f = state(now).factory;
+      expect([f.dayCap, f.liveCap, f.waitingCap]).toEqual([12, 10, 5]);
+    } finally {
+      rmSync(file, { force: true });
+      for (const [k, v] of [["ALEPH_DAY_CAP", keep.d], ["ALEPH_LIVE_CAP", keep.l], ["ALEPH_WAITING_CAP", keep.w]] as const) if (v !== undefined) process.env[k] = v;
+    }
+  });
+
   test("trailers: a landed job's from its commit, a needs-you job's as the land will write them", () => {
     const repo = join(base, "repo");
     sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "land\n\nItem: fac-1\nJob: fac-7");

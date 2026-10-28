@@ -10,8 +10,8 @@ import { readList, writeList } from "../../todo/lib/store.ts";
 import { allRuns, isLive, jobsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
-/** The most agent runs live at once; `ALEPH_LIVE_CAP` changes it. */
-export const LIVE_CAP = () => Number(process.env.ALEPH_LIVE_CAP ?? 10);
+export { LIVE_CAP } from "./factory.ts";
+import { LIVE_CAP } from "./factory.ts";
 /** Triage runs that end with no verdict, for one item, before it is labelled `needs-chris`; `ALEPH_TRIAGE_TRIES` changes it. */
 export const TRIAGE_TRIES = () => Number(process.env.ALEPH_TRIAGE_TRIES ?? 2);
 const TIME_BOX_MS = () => Number(process.env.ALEPH_TRIAGE_TIMEOUT ?? 600) * 1000;

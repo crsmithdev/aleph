@@ -10,15 +10,32 @@ import { readList, readLists } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
 import { derive, facts, type Facts } from "./status.ts";
-import { countsLine, LIVE_CAP, triageIssue, triageOpen, type Counts } from "./triage.ts";
+import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allJobs, allRuns, expand, isLive, isOpen, loadRegistry, lock, updateRun, type Entry, type Repo } from "./ledger.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
 const pauseFile = () => join(factoryDir(), "paused");
 const probeFile = () => join(factoryDir(), "probe.json");
 
+/** `caps.json` in the factory directory: `{ "day", "live", "waiting" }`. A missing or bad file is empty. */
+function capsFile(): Record<string, unknown> {
+  try {
+    const c = JSON.parse(readFileSync(join(factoryDir(), "caps.json"), "utf8"));
+    return c && typeof c === "object" && !Array.isArray(c) ? c : {};
+  } catch { return {}; }
+}
+/** The environment variable first, then caps.json, then the default. */
+function cap(envName: string, key: string, dflt: number): number {
+  const e = process.env[envName];
+  if (e !== undefined && e !== "") return Number(e);
+  const f = capsFile()[key];
+  return typeof f === "number" && Number.isFinite(f) ? f : dflt;
+}
+
 /** Runs that start a worker, in any 24 hours. Checks and probes start none. */
-export const DAY_CAP = () => Number(process.env.ALEPH_DAY_CAP ?? 12);
+export const DAY_CAP = () => cap("ALEPH_DAY_CAP", "day", 12);
+/** The most agent runs live at once. */
+export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", 10);
 const DAY = 24 * 3600_000;
 
 export const paused = () => existsSync(pauseFile());
@@ -34,7 +51,7 @@ export function factoryLog(line: string): void {
   appendFileSync(join(factoryDir(), "tick.log"), `${new Date().toISOString()} ${line}\n`);
 }
 
-export const WAITING_CAP = () => Number(process.env.ALEPH_WAITING_CAP ?? 5);
+export const WAITING_CAP = () => cap("ALEPH_WAITING_CAP", "waiting", 5);
 
 const sandboxRepos = () => Object.values(loadRegistry()).filter((r) => r.sandbox);
 
@@ -123,8 +140,6 @@ export function notReady(item: todos.Item, done: (ref: string) => boolean, now =
 
 /** The job name for a goal item: its store id, as `aleph-28`. */
 export const goalJob = (repo: Repo, id: number) => `${repo.key}-${id}`;
-
-export { LIVE_CAP };
 
 /** Agent runs live now. */
 export const liveRuns = (): number => allRuns().filter((e) => e.run.kind === "agent" && isLive(e.folder)).length;

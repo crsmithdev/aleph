@@ -1118,6 +1118,28 @@ describe("a factory run", () => {
     await aleph(["todo", "drop", "fac", String(id), "test over"]);
   }, 30_000);
 
+  test("caps.json sets the day cap, and ALEPH_DAY_CAP wins over it", async () => {
+    const file = join(base, "factory", "caps.json");
+    const own = { ALEPH_JOBS_DIR: join(base, "caps-jobs") };
+    mkdirSync(own.ALEPH_JOBS_DIR);
+    const ids: number[] = [];
+    for (const n of [1, 2, 3]) ids.push((await aleph(["todo", "add", "fac", `caps goal ${n}`, "--labels", "goal", "--body", "-"], {}, "ACTION: error\n")).json.added);
+    writeFileSync(file, JSON.stringify({ day: 2 }));
+    try {
+      const t = await aleph(["tick"], { ...own, ALEPH_DAY_CAP: "" });
+      expect(t.json.started.length).toBe(2);
+      expect(t.json.skipped.some((x: string) => x.includes("cap of 2 runs in 24 hours"))).toBe(true);
+      expect((await aleph(["report"], { ...own, ALEPH_DAY_CAP: "" })).stdout).toContain("of 2");
+      // the two runs fail and hold the factory; drop them so the next tick can start one
+      for (const job of t.json.started) await aleph(["drop", job], own);
+      const wins = await aleph(["tick"], { ...own, ALEPH_DAY_CAP: "3" });
+      expect(wins.json.started.length).toBe(1);
+    } finally {
+      rmSync(file, { force: true });
+      for (const id of ids) await aleph(["todo", "drop", "fac", String(id), "test over"]);
+    }
+  }, 60_000);
+
   test("a stuck job holds the factory: no start, no land by itself; Chris's land works; pause is separate; a drop clears it", async () => {
     const stuckId = (await aleph(["todo", "add", "fac", "the stuck one", "--labels", "goal", "--body", "-"], {}, "ACTION: error\n")).json.added;
     expect((await aleph(["tick"])).json.started).toEqual([`fac-${stuckId}`]);

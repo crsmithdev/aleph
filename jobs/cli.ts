@@ -21,7 +21,7 @@ import { sweep } from "./lib/deps.ts";
 import { derive, facts, FACTS_REF, itemOnMain, readFacts, type Facts } from "./lib/status.ts";
 
 const CLI = import.meta.path;
-/** The most agent runs live at once; `ALEPH_LIVE_CAP` changes it. */
+/** The most agent runs live at once; `ALEPH_LIVE_CAP` or `caps.json` changes it. */
 const CAP = LIVE_CAP;
 const PID_WAIT_MS = 10_000;
 const DAY_MS = 24 * 3600_000;
