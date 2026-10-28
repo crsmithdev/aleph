@@ -329,6 +329,8 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
       const done = new Map<Member, Outcome & { after?: () => void }>(failedBefore);
       const finish = (m: Member, o: Outcome & { after?: () => void }) => { done.set(m, o); if (o.verdict.state === "failed") m.log(`failed: ${o.verdict.reason}`); };
       const tips = new Map<Member, string>();
+      // The checks of the last check call that covered each member; that call decided its verdict.
+      const checksOf = new Map<Member, Run["checks"]>();
 
       // Runs that need no merge: already on main, their item on main, or no branch.
       const open: Member[] = [];
@@ -391,6 +393,8 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         const first = items[0].m.run;
         if (items.length === 1 && base === base0 && first.checkedBase === base0 && first.checkedTip === tips.get(items[0].m)) {
           log(`checks skipped: main unchanged since ${base0}`);
+          // The run's own checks passed on this base; a failed call that covered it earlier does not decide its verdict.
+          checksOf.set(items[0].m, first.checks);
           return null;
         }
         const tip = items.at(-1)!.commit;
@@ -406,6 +410,8 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
           const owner = items.map((i) => i.m.run).find((r) => r.worktree && existsSync(r.worktree)) ?? first;
           why = await worktreeChecks(folder, owner, repo, env, tip, changed, phase);
         }
+        const list = readRun(folder)?.checks;
+        for (const i of items) checksOf.set(i.m, list);
         if (why && items.length === 1 && items[0].m !== leader && existsSync(join(folder, "checks.log"))) items[0].m.log("checks.log", readFileSync(join(folder, "checks.log"), "utf8").slice(before));
         return why;
       };
@@ -432,7 +438,6 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
       if (ok.length) {
         phase("land");
         if (step("push", "push", "-q", "origin", `${result.tip}:refs/heads/${main}`).ok) {
-          const checks = readRun(folder)?.checks;
           for (const { m, commit } of ok) {
             const { todo, checkItem } = closeItems(repo, m.run);
             if (todo) m.log(todo === "done" ? `todo ${m.run.todo} done` : `todo ${m.run.todo} not closed: ${todo}`);
@@ -442,14 +447,14 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
             finish(m, { verdict: { state: "landed", commit, checkItem }, code: 0 });
           }
           followCheckout(repo, log);
-          return conclude(leader, done, checks);
+          return conclude(leader, done, checksOf);
         }
         if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
         const refused = git(repo.path, "rev-parse", `origin/${main}`).out === base0;
         if (refused || attempt >= RELANDS) {
           for (const { m } of ok) done.set(m, failed(refused ? "push refused" : MOVED));
           for (const { m } of ok) m.log(`failed: ${refused ? "push refused" : MOVED}`);
-          return conclude(leader, done);
+          return conclude(leader, done, checksOf);
         }
         log("main moved; merging again");
         for (const [m, o] of done) {
@@ -459,7 +464,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         }
         continue;
       }
-      return conclude(leader, done);
+      return conclude(leader, done, checksOf);
     }
   } finally {
     releaseRepo?.();
@@ -468,12 +473,15 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
 }
 
 /** Run the deferred steps of the runs that ended without a push, give the queued runs their verdicts, and return the leader's. */
-function conclude(leader: Member, done: Map<Member, Outcome & { after?: () => void }>, checks?: Run["checks"]): Outcome {
+function conclude(leader: Member, done: Map<Member, Outcome & { after?: () => void }>, checksOf: Map<Member, Run["checks"]>): Outcome {
   for (const [m, o] of done) {
     o.after?.();
     if (m === leader) continue;
-    writeFileSync(join(m.folder, "batch.json"), JSON.stringify({ verdict: o.verdict, code: o.code, ...(o.verdict.state === "landed" && checks ? { checks } : {}) }));
+    const checks = checksOf.get(m);
+    writeFileSync(join(m.folder, "batch.json"), JSON.stringify({ verdict: o.verdict, code: o.code, ...(checks ? { checks } : {}) }));
   }
+  const own = checksOf.get(leader);
+  if (own) updateRun(leader.folder, { checks: own });
   return done.get(leader) ?? { verdict: { state: "failed", reason: "not landed" }, code: 1 };
 }
 

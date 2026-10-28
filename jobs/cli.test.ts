@@ -697,6 +697,11 @@ describe("a batch of lands", () => {
     const s = lands.map((l) => state(l.run));
     expect(s.map((x) => x.state)).toEqual(["landed", "failed", "landed"]);
     expect(s[1].reason).toBe("batchbad failed");
+    expect(s[1].checks).toContainEqual(expect.objectContaining({ name: "batchbad", ok: false }));
+    for (const i of [0, 2]) {
+      expect(s[i].checks?.length).toBeGreaterThan(0);
+      expect(s[i].checks!.every((c: { ok: boolean }) => c.ok)).toBe(true);
+    }
     expect(landCalls).toBeLessThanOrEqual(1 + 2 + 2);
     expect(remoteGit("ls-tree", "--name-only", "main:batch").split("\n")).toEqual(expect.arrayContaining(["a.txt", "c.txt"]));
     expect(remoteGit("ls-tree", "--name-only", "main:batch").split("\n")).not.toContain("bad.txt");
