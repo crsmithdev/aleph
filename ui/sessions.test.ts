@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { clearCache } from "./langfuse.ts";
+// @ts-ignore plain JS, shared with the page
+import { idLink, pageHead, when } from "./lib.js";
 import { routes } from "./api/sessions.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/sessions.js";
@@ -139,4 +141,25 @@ test("the list has a filter bar, 50 rows and a pager; the turn is a table", asyn
   expect(v.renderSessions(many)).toContain('data-more="10"');
   const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/1", { id: "s1", n: "1" })).json();
   expect(v.renderTurn(t)).toContain('<table class="tbl">');
+});
+
+test("the Session page uses pageHead, idLink and when, in the shared column order", async () => {
+  const s: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
+  const h = v.renderSession(s);
+  expect(h).toContain('<header class="ph"><h1>aleph</h1><span class="count">2</span>');
+  expect(h).toContain(idLink("s1", "#/sessions/s1"));
+  const heads = [...h.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
+  expect(heads).toEqual(["Turn", "Prompt", "Output", "Model", "Tools", "Duration", "Cost", "Started"]);
+  expect(h).toContain(`<td class="time">${when(s.turns[0].start)}</td>`);
+  expect(h.match(/<h1/g)?.length).toBe(1);
+});
+
+test("the Turn page uses pageHead, idLink and when", async () => {
+  const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/2", { id: "s1", n: "2" })).json();
+  expect(t.start).toBe(TRACES[1].timestamp);
+  const h = v.renderTurn(t);
+  expect(h).toContain(pageHead("Turn 2 of 2").replace("</header>", ""));
+  expect(h).toContain(`/ ${idLink("s1", "#/sessions/s1")}`);
+  expect(h).toContain(`<dt>Started</dt><dd>${when(t.start)}</dd>`);
+  expect(h.match(/<h1/g)?.length).toBe(1);
 });

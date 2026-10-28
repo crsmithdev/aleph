@@ -72,14 +72,13 @@ export function renderSession(d) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
   // Columns: turn (id), prompt (title), output, model, numbers, time last.
   const rows = d.turns.map((t) =>
-    `<tr><td>${idLink(t.n, href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}</td>` +
-    `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td>${esc(line(t.output))}</td><td>${esc(t.model ?? "")}</td>` +
-    `<td class="num">${t.tools}</td><td class="num">${esc(dur(t.durationMs))}</td><td class="num">${esc(money(t.cost))}</td>` +
-    `<td class="time">${esc(when(t.start))}</td></tr>`).join("");
-  return `<div class="page"><p class="quiet"><a href="#/sessions">Sessions</a></p>` +
-    pageHead(`${d.project} ${d.id.slice(0, 8)}`, { count: `${d.turns.length} turns`, aside: langfuse(d.base, d.turns[0]?.traceId) }) +
-    (d.taskTypes?.length ? `<p>${chips(d.taskTypes)}</p>` : "") +
-    `<div class="tscroll"><table class="tbl"><thead><tr><th>Turn</th><th>Prompt</th><th>Output</th><th>Model</th><th class="num">Tools</th><th class="num">Duration</th><th class="num">Cost</th><th>Started</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    `<tr><td class="num"><a href="${esc(href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}">${t.n}</a></td>` +
+    `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td>${esc(line(t.output))}</td><td>${esc(t.model ?? "")}</td><td class="num">${t.tools}</td>` +
+    `<td class="num">${esc(dur(t.durationMs))}</td><td class="num">${esc(money(t.cost))}</td><td class="time">${esc(when(t.start))}</td></tr>`).join("");
+  const aside = [idLink(d.id.slice(0, 8), href(`/sessions/${encodeURIComponent(d.id)}`)), langfuse(d.base, d.turns[0]?.traceId)].filter(Boolean).join(" ");
+  return `<div class="page"><p class="quiet"><a href="#/sessions">Sessions</a></p>${pageHead(d.project, { count: d.turns.length, aside })}` +
+    `${d.taskTypes?.length ? `<p>${chips(d.taskTypes)}</p>` : ""}` +
+    `<div class="tscroll"><table class="tbl"><thead><tr><th class="num">Turn</th><th>Prompt</th><th>Output</th><th>Model</th><th class="num">Tools</th><th class="num">Duration</th><th class="num">Cost</th><th>Started</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 
 // One row per observation, children after their parent and indented by depth; input and output fold under the name.
@@ -100,9 +99,9 @@ export function renderTurn(d) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
   const sid = encodeURIComponent(d.id);
   const nav = (n, label) => (n >= 1 && n <= d.total ? `<a href="${esc(href(`/sessions/${sid}/turns/${n}`))}">${label}</a>` : "");
-  return `<div class="page"><p class="quiet"><a href="#/sessions">Sessions</a> / <a href="${esc(href(`/sessions/${sid}`))}">${esc(d.id.slice(0, 8))}</a></p>` +
-    pageHead(`Turn ${d.n} of ${d.total}`, { count: d.start ? when(d.start) : "", aside: [nav(d.n - 1, "Previous"), nav(d.n + 1, "Next"), langfuse(d.base, d.traceId)].filter(Boolean).join(" ") }) +
-    `<dl class="facts"><div><dt>Cost</dt><dd>${esc(money(d.cost))}</dd></div><div><dt>Duration</dt><dd>${esc(dur(d.durationMs))}</dd></div></dl>` +
+  return `<div class="page"><p class="quiet"><a href="#/sessions">Sessions</a> / ${idLink(d.id.slice(0, 8), href(`/sessions/${sid}`))}</p>` +
+    pageHead(`Turn ${d.n} of ${d.total}`, { aside: [nav(d.n - 1, "Previous"), nav(d.n + 1, "Next"), langfuse(d.base, d.traceId)].filter(Boolean).join(" ") }) +
+    `<dl class="facts"><div><dt>Started</dt><dd>${esc(when(d.start))}</dd></div><div><dt>Cost</dt><dd>${esc(money(d.cost))}</dd></div><div><dt>Duration</dt><dd>${esc(dur(d.durationMs))}</dd></div></dl>` +
     `<h2>Prompt</h2><pre>${esc(d.prompt)}</pre><h2>Output</h2><pre>${esc(d.output)}</pre><h2>Observations</h2>` +
     (d.observations.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Kind</th><th>Name</th><th>Detail</th><th class="num">Duration</th></tr></thead><tbody>${d.observations.map((o) => obsRows(o, 0)).join("")}</tbody></table></div>` : empty("No observation in this turn.")) + `</div>`;
 }
