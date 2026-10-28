@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { tagged } from "./gate.ts";
 import { jobsDir, stamp, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
@@ -28,7 +29,7 @@ export function parseFacts(result: string): { facts: Fact[]; unsourced: string[]
 export const FACTS_MODEL = "claude-opus-5-5";
 const TIME_BOX_MS = () => Number(process.env.ALEPH_FACTS_TIMEOUT ?? 600) * 1000;
 
-export interface Verdict { fact: string; source: string; verdict: "keep" | "reject"; reason: string; scope: string; title: string }
+export interface Verdict { fact: string; source: string; verdict: "keep" | "reject"; reason: string; scope: string; title: string; kind?: "gotcha" | "concept" }
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
@@ -47,7 +48,7 @@ export function parseVerdicts(output: string): Verdict[] | string {
     if (v.verdict !== "keep" && v.verdict !== "reject") return `entry ${i + 1} has verdict ${JSON.stringify(v.verdict)}`;
     const reason = str(v.reason);
     if (!reason) return `entry ${i + 1} has no reason`;
-    out.push({ fact, source: "", verdict: v.verdict, reason, scope: str(v.scope) || "global", title: str(v.title) });
+    out.push({ fact, source: "", verdict: v.verdict, reason, scope: str(v.scope) || "global", title: str(v.title), ...(v.kind === "gotcha" || v.kind === "concept" ? { kind: v.kind } : {}) });
   }
   return out;
 }
@@ -117,5 +118,57 @@ export async function reviewFacts(repo: Repo, landed: Entry, facts: Fact[], comm
     const why = `failed: ${e?.message ?? e}`;
     end(why);
     return { folder, verdicts: rejectAll(why) };
+  }
+}
+
+const VAULT_CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
+
+/** The note kind for a kept fact: the reviewer's `kind`, else concept when its scope or reason says so, else gotcha. */
+export const kindOf = (v: Verdict): "gotcha" | "concept" => v.kind ?? (/concept/i.test(`${v.scope} ${v.reason}`) ? "concept" : "gotcha");
+
+/** Writes a kept fact to the vault as a draft through `vault write`. A refusal (schema, duplicate title, contradiction screen) is a rejection, not an error. */
+export async function writeFact(v: Verdict, job: string, kind: "gotcha" | "concept"): Promise<{ written: true; path: string } | { written: false; reason: string }> {
+  const title = v.title.replace(/[\/\\:*?"<>|\n\r]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!title) return { written: false, reason: "the verdict has no title" };
+  // `vault write` replaces a note of the same title; the gate must not.
+  const root = process.env.ALEPH_VAULT ?? join(homedir(), ".aleph", "vault");
+  for (const d of ["decisions", "concepts", "entities", "projects", "gotchas", "episodes"].map((f) => join("wiki", f)).concat("archive")) {
+    if (existsSync(join(root, d, `${title}.md`))) return { written: false, reason: `a note titled ${title} already exists in ${d}/` };
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const one = (s: string) => s.replace(/\s+/g, " ").trim();
+  const text = `---
+kind: ${kind}
+scope: ${v.scope}
+confidence: reported
+updated: ${today}
+supersedes: []
+sources: [${v.source}, job:${job}]
+written_by: factory
+---
+**Claim.** ${one(v.fact).replace(/\.$/, "")} as of ${today}.
+
+## Details
+${v.reason}
+
+## Evidence
+${v.source}
+
+## Related
+`;
+  const dir = mkdtempSync(join(tmpdir(), "fact-"));
+  try {
+    const draft = join(dir, `${title}.md`);
+    writeFileSync(draft, text);
+    const env: Record<string, string | undefined> = { ...process.env };
+    delete env.CLAUDE_CODE_SESSION_ID;
+    const p = Bun.spawn(["bun", VAULT_CLI, "write", draft, "--why", `facts run of job ${job}`], { env, stdout: "pipe", stderr: "pipe" });
+    const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
+    if (code !== 0) return { written: false, reason: one(err) || `vault write exited ${code}` };
+    let path = `wiki/${kind === "concept" ? "concepts" : "gotchas"}/${title}.md`;
+    try { path = JSON.parse(out).path ?? path; } catch {}
+    return { written: true, path };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 }

@@ -1,5 +1,5 @@
-import { expect, test } from "bun:test";
-import { parseFacts } from "./facts.ts";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { parseFacts, writeFact, kindOf, parseVerdicts, type Verdict } from "./facts.ts";
 
 test("sourced FACT lines give facts with their sources", () => {
   const r = parseFacts("done\nFACT: bun test runs everything [source: package.json:7]\nFACT: the gate lives in gate.ts [source: abc1234]\nFACT: docs [source: https://example.com/a]");
@@ -22,7 +22,7 @@ test("no FACT lines gives empty lists; DEFAULT and FOLLOWUP are not facts", () =
   expect(parseFacts("DEFAULT: q -> a [source: x.ts]\nFOLLOWUP: t [source: x.ts]")).toEqual({ facts: [], unsourced: [] });
 });
 
-import { mkdtempSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reviewFacts } from "./facts.ts";
@@ -73,4 +73,71 @@ test("a command that exits 1 ends the run failed", async () => {
   const { r, state } = await review("exit 1");
   expect(state.reason).toStartWith("failed:");
   expect(r.verdicts.every((v) => v.verdict === "reject")).toBe(true);
+});
+
+describe("writeFact", () => {
+  let base: string, vault: string, server: ReturnType<typeof Bun.serve>, answer = 0.9;
+  const git = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+  const saved: Record<string, string | undefined> = {};
+  const set = (k: string, val: string) => { saved[k] = process.env[k]; process.env[k] = val; };
+  const verdict = (title: string, over: Partial<Verdict> = {}): Verdict => ({ fact: `${title} behaves oddly`, source: "src/a.ts:3", verdict: "keep", reason: "a.ts shows it", scope: "screen", title, ...over });
+  const files = () => Bun.spawnSync(["bash", "-c", `cd ${vault} && find wiki -type f | sort`], { stdout: "pipe" }).stdout.toString();
+
+  beforeAll(() => {
+    base = mkdtempSync(join(tmpdir(), "facts-vault-"));
+    vault = join(base, "vault");
+    for (const [k, val] of Object.entries(git)) set(k, val);
+    set("ALEPH_VAULT", vault); set("ALEPH_JUDGE", "haiku");
+    expect(Bun.spawnSync(["bun", join(import.meta.dir, "..", "..", "vault", "cli.ts"), "init"], { env: process.env }).exitCode).toBe(0);
+    server = Bun.serve({ port: 0, async fetch(req) {
+      const body: any = await req.json();
+      const answers = Object.fromEntries(Object.keys(body.questions).map((k) => [k, { type: "noul", noul: answer }]));
+      return Response.json({ answers, model: "m", usage: { cost: 0 } });
+    } });
+    set("ALEPH_JEV_URL", `http://127.0.0.1:${server.port}/`); set("OPENROUTER_API_KEY", "k");
+    set("CLAUDE_CODE_SESSION_ID", "leaky");
+  });
+  afterAll(() => {
+    server.stop(true);
+    for (const [k, val] of Object.entries(saved)) { if (val === undefined) delete process.env[k]; else process.env[k] = val; }
+    rmSync(base, { recursive: true, force: true });
+  });
+
+  test("a kept fact lands under wiki/gotchas, stamped factory, with no session", async () => {
+    process.env.ALEPH_JUDGE = "haiku";
+    const r = await writeFact(verdict("Zebra Quirk"), "job-9", "gotcha");
+    expect(r).toEqual({ written: true, path: "wiki/gotchas/Zebra Quirk.md" });
+    const text = readFileSync(join(vault, "wiki", "gotchas", "Zebra Quirk.md"), "utf8");
+    expect(text).toContain("written_by: factory");
+    expect(text).toMatch(/sources: \[src\/a\.ts:3, job:job-9\]/);
+    expect(text).not.toContain("session:");
+    expect(text).toContain("confidence: reported");
+  });
+  test("a concept goes to wiki/concepts", async () => {
+    const r = await writeFact(verdict("Yak Model"), "job-9", kindOf(verdict("Yak Model", { kind: "concept" })));
+    expect(r).toMatchObject({ written: true });
+    expect(existsSync(join(vault, "wiki", "concepts", "Yak Model.md"))).toBe(true);
+  });
+  test("the contradiction screen refusal is a rejection naming the note", async () => {
+    expect((await writeFact(verdict("Widget Registry"), "j", "gotcha")).written).toBe(true);
+    process.env.ALEPH_JUDGE = "jev"; answer = 0.9;
+    const before = files();
+    const r = await writeFact(verdict("Widget Registry Rules"), "j", "gotcha");
+    process.env.ALEPH_JUDGE = "haiku";
+    expect(r.written).toBe(false);
+    expect((r as any).reason).toContain("Widget Registry");
+    expect((r as any).reason).not.toContain("\n");
+    expect(files()).toBe(before);
+  });
+  test("a title the vault already holds is rejected", async () => {
+    const r = await writeFact(verdict("Zebra Quirk", { fact: "different claim" }), "job-10", "gotcha");
+    expect(r.written).toBe(false);
+    expect(readFileSync(join(vault, "wiki", "gotchas", "Zebra Quirk.md"), "utf8")).toContain("Zebra Quirk behaves oddly");
+  });
+  test("kindOf and the parser's kind field", () => {
+    expect(kindOf(verdict("A", { scope: "concept" }))).toBe("concept");
+    expect(kindOf(verdict("A"))).toBe("gotcha");
+    const p = parseVerdicts('{"verdicts":[{"fact":"f","verdict":"keep","reason":"r","kind":"concept"}]}');
+    expect((p as Verdict[])[0].kind).toBe("concept");
+  });
 });
