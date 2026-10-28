@@ -147,7 +147,10 @@ describe("review2 under srt", () => {
     const folder = held("profile");
     const s = JSON.parse(readFileSync(profile(folder, REVIEW2_SANDBOX), "utf8"));
     expect(s.network).toEqual({ allowedDomains: ["api.anthropic.com", "localhost"], allowLocalBinding: true, deniedDomains: [] });
-    expect(s.filesystem.allowRead).toContain(folder);
+    expect(s.filesystem.allowRead).not.toContain(folder);
+    expect(s.filesystem.allowRead).toContain(join(folder, "state.json"));
+    expect(s.filesystem.allowRead).not.toContain(join(folder, "review2"));
+    expect(s.filesystem.allowRead).not.toContain(join(folder, "tmp"));
     expect(s.filesystem.allowRead).not.toContain(join(base));
     expect(s.filesystem.allowWrite).toEqual([join(folder, "review2"), join(folder, "tmp")]);
   });

@@ -4,7 +4,7 @@
  * folder and the bundles; each step is one `srt` call with its own profile.
  * See "Sandbox" in docs/specs/2026-10-26-seed-factory.md.
  */
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { expand } from "./ledger.ts";
@@ -79,11 +79,15 @@ export function profile(dir: string, o: { read: string[]; write: string[]; net?:
   const vendor = join(expand("~/.aleph/tools/lib/node_modules/@anthropic-ai/sandbox-runtime"), "vendor");
   const bins = ["claude", "bun"].map((b) => { try { return realpathSync(join(dir, "bin", b)); } catch { return null; } }).filter(Boolean) as string[];
   const net = o.net ?? WORKER_NET;
+  // A read entry that holds a write entry must not be bound read-only over it: bwrap binds in order and the
+  // read-only parent would cover the writable child. "." becomes the folder's entries without the write roots.
+  const roots = new Set(o.write.map((p) => p.split("/")[0]));
+  const read = o.read.flatMap((p) => p === "." ? readdirSync(dir).filter((e) => !roots.has(e)) : [p]);
   const settings = {
     network: { allowedDomains: net.domains, allowLocalBinding: net.localBinding, deniedDomains: [] },
     filesystem: {
       denyRead: ["/home", "/root", "/mnt", "/run", "/var/run", "/srv", "/tmp"],
-      allowRead: [...bins, vendor, join(dir, "bin"), join(dir, "sock"), ...o.read.map((p) => join(dir, p))],
+      allowRead: [...bins, vendor, join(dir, "bin"), join(dir, "sock"), ...read.map((p) => join(dir, p))],
       allowWrite: o.write.map((p) => join(dir, p)),
       denyWrite: [],
     },
