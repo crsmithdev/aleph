@@ -1,0 +1,4 @@
+{
+  "demo": { "main": "main", "checks": [{ "name": "test", "run": "bun test" }] },
+  "tools": { "main": "main", "checks": [{ "name": "test", "run": "bun test" }] }
+}

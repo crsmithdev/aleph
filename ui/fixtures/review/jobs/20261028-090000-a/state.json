@@ -1,0 +1,1 @@
+{"kind":"agent","job":"demo-1","name":"demo-1","repo":"demo","branch":"factory/demo-1","state":"passed","todo":1,"told":true,"started":"2026-10-28T09:00:00.000Z","ended":"2026-10-28T09:20:00.000Z","cost":0.41,"model":"claude-sonnet-5-5","checks":[{"name":"test","ok":true,"seconds":12,"passed":40,"total":40}]}

@@ -1,0 +1,1 @@
+{"kind":"agent","job":"demo-2","name":"demo-2","repo":"demo","branch":"factory/demo-2","state":"dropped","reason":"dropped by Chris: the upload is gone","todo":2,"told":true,"started":"2026-10-28T09:30:00.000Z","ended":"2026-10-28T09:50:00.000Z","cost":0.12,"model":"claude-sonnet-5-5"}

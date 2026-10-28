@@ -1,0 +1,19 @@
+{
+  "demo": [
+    { "title": "Show the build time on the status page", "labels": ["goal"], "priority": "high", "body": "The status page lists builds without how long each took.\n\n## Goal\nAdd a duration column.", "status": "done" },
+    { "title": "Retry flaky uploads", "labels": ["goal"], "status": "dropped", "notes": ["Dropped: the upload is gone."] },
+    { "title": "Rename the config keys", "labels": ["goal"], "priority": "low", "body": "Held: touches a protected path." },
+    { "title": "Cache the index page", "labels": ["goal"], "waitingOn": "demo-3", "due": "2026-11-15" },
+    { "title": "Which license should the repo carry?", "labels": ["needs-chris"], "body": "MIT or Apache-2.0.", "notes": ["Triage: only Chris can decide."] },
+    { "title": "Crash on an empty config", "labels": ["bug", "triaged"], "priority": "high" },
+    { "title": "Check the dark theme on the phone", "labels": ["live-check"] },
+    { "title": "Add a dry-run flag", "labels": ["proposal"] },
+    { "title": "Typo in the README", "labels": [] }
+  ],
+  "tools": [
+    { "title": "Parse dates in the import command", "labels": ["goal"], "body": "Dates in the CSV come through as text." },
+    { "title": "Flaky test in the parser suite", "labels": ["goal"], "priority": "high" },
+    { "title": "Old export format", "labels": ["bug"], "status": "done" },
+    { "title": "Support a second input file", "labels": ["proposal"] }
+  ]
+}

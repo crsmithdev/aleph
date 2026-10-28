@@ -38,7 +38,7 @@ ${o.checks.map((c) => `   - \`${c}\``).join("\n")}
 ${o.tsc ? `   - \`bunx tsc --noEmit\` (the clone has the repo's node_modules). Write one line \`Type check: pass\` or \`Type check: fail <n> errors\`, and name the errors the branch adds.
 ` : ""}3. Diff the tests (\`git diff origin-main...${o.branch}\` on test files) for dropped or weakened assertions: removed tests, removed expect lines, .skip/.only, loosened matchers.
 4. List the changes outside the goal's edit surface (the "Edit surface" in the spec below).
-${o.ui ? `5. The goal is labelled \`ui\`. You cannot start a browser; the harness loads the views for you. Start \`bun ui/server.ts --port <free port>\` in the background (it listens on 127.0.0.1).
+${o.ui ? `5. The goal is labelled \`ui\`. You cannot start a browser; the harness loads the views for you. Start \`bun ui/server.ts --port <free port>\` in the background (it listens on 127.0.0.1). Its jobs, issues, projects and notes are a small made-up set (ALEPH_* in your environment); it is not Chris's data.
    Write the URL of each changed view, one per line (\`http://127.0.0.1:<port>/...\`, at most 8), to \`${o.folder}/tmp/views.part\`, then
    \`mv\` it to \`${o.folder}/${VIEWS}\`. The harness takes that file and loads each view at 1440 and 390 px wide, in light and dark, and writes
    \`${o.folder}/${BROWSER}/report.md\` last: wait for it (poll up to 5 minutes), then read it and look at the screenshots it names for anything else.
@@ -54,6 +54,21 @@ VERDICT: chris <question, one line: what only Chris can decide>
 
 ${o.spec}
 `;
+
+/**
+ * The made-up jobs, issues, projects and notes of ui/fixtures/review in the clone, laid out under `dest` by this
+ * repo's builder (the clone's own code does not run outside the sandbox), as the ALEPH_* variables the UI reads.
+ * A clone without the fixture gets an empty home. A string is the builder's error.
+ */
+function fixtureEnv(work: string, dest: string): Record<string, string> | string {
+  const src = join(work, "ui", "fixtures", "review");
+  const env: Record<string, string> = { LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" };
+  if (!existsSync(src)) return env;
+  const p = Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "..", "ui", "fixtures", "review", "build.ts"), dest, src], { stdout: "pipe", stderr: "pipe" });
+  if (p.exitCode !== 0) return `review fixture failed: ${p.stderr.toString().slice(0, 200)}`;
+  for (const l of p.stdout.toString().split("\n")) { const i = l.indexOf("="); if (i > 0) env[l.slice(0, i)] = l.slice(i + 1); }
+  return env;
+}
 
 /** Whether the run's goal carries the `ui` label. */
 function isUi(repo: Repo, run: Run): boolean {
@@ -129,6 +144,11 @@ async function review(folder: string): Promise<void> {
       HOME: home, CLAUDE_CONFIG_DIR: join(home, ".claude"),
     };
     delete env.ANTHROPIC_API_KEY;
+    if (ui) {
+      const fx = fixtureEnv(work, join(scratch, "fixture"));
+      if (typeof fx === "string") return void fail(fx);
+      Object.assign(env, fx);
+    }
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
     const argv = [process.env.ALEPH_REVIEW2_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
