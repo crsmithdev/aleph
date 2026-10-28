@@ -5,8 +5,9 @@
  * waits on them and is labelled `planned`. Each run is a job in the ledger,
  * kind `plan`. See docs/specs/2026-10-26-seed-factory.md, "Planner".
  */
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { vaultDir } from "../../vault/lib/vault.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import { GOAL, NEEDS_CHRIS, readList, hasLabel, isGoal, label, labels as labelsOf, note, writeList } from "../../todo/lib/store.ts";
 import { allRuns, jobsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
@@ -82,13 +83,47 @@ export function parsePlan(output: string): Child[] | string {
   return children;
 }
 
-export function prompt(repo: Repo, item: todos.Item): string {
+export interface Episode { title: string; body: string }
+
+const REPO_ROOT = join(import.meta.dir, "..", "..");
+
+/**
+ * The 3 episodes most like a goal, from the vault's `recall --episodes`. Any
+ * failure (no vault, a bad exit, bad JSON, a missing page) gives `[]`.
+ */
+export async function recallEpisodes(query: string): Promise<Episode[]> {
+  try {
+    const p = Bun.spawn(["bun", join(REPO_ROOT, "vault", "cli.ts"), "recall", "--episodes", query], { env: process.env, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+    const [out, , code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
+    if (code !== 0) return [];
+    const hits = JSON.parse(out);
+    if (!Array.isArray(hits)) return [];
+    const found: Episode[] = [];
+    for (const h of hits.slice(0, 3)) {
+      try {
+        if (typeof h?.title !== "string" || typeof h?.path !== "string") continue;
+        found.push({ title: h.title, body: readFileSync(join(vaultDir(), h.path), "utf8") });
+      } catch {}
+    }
+    return found;
+  } catch {
+    return [];
+  }
+}
+
+/** The part of an episode page the planner reads: how it went and what went wrong. */
+function episodeText(e: Episode): string {
+  const parts = ["How it went", "What went wrong"].map((n) => [n, section(e.body, n)] as const).filter(([, t]) => t);
+  return `## ${e.title}\n${parts.map(([n, t]) => `\n### ${n}\n${t}\n`).join("")}`;
+}
+
+export function prompt(repo: Repo, item: todos.Item, episodes: Episode[] = []): string {
   return `You plan one large goal of the repo ${repo.key}, which is your working directory. You have read-only tools: read the code to plan. Change nothing.
 
 # Goal ${repo.key}-${item.id}: ${item.title}
 
 ${item.body.trim() || "(no body)"}
-${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}
+${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}${episodes.length ? `\n# How similar goals went\n\n${episodes.map(episodeText).join("\n")}` : ""}
 Split it into 2 to 6 child goals. Each child is work one factory run can do alone, in one run of under an hour, and the children together do the whole goal. Reply with one JSON object and nothing else:
 
 {"children": [{"title": "<short title>", "body": "<child goal body>", "waits_on": [<optional numbers of earlier children, from 1>]}]}
@@ -120,7 +155,7 @@ function makeRun(repo: Repo, item: todos.Item): string {
 }
 
 async function ask(repo: Repo, item: todos.Item, folder: string): Promise<string> {
-  const input = prompt(repo, item);
+  const input = prompt(repo, item, await recallEpisodes(`${item.title}\n${section(item.body, "Goal")}`));
   writeFileSync(join(folder, "prompt.md"), input);
   const argv = [process.env.ALEPH_PLAN_CMD ?? "claude", "-p", "--model", PLAN_MODEL, "--tools", "Read", "Grep", "Glob"];
   const p = Bun.spawn(argv, { cwd: existsSync(repo.path) ? repo.path : undefined, env: process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });

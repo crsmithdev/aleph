@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +6,7 @@ import { labels as itemLabels, readList, writeList } from "../../todo/lib/store.
 import * as todos from "../../todo/lib/todo.ts";
 import { dispatchGoals, planNow } from "./factory.ts";
 import { readRun, writeRun } from "./ledger.ts";
-import { isLarge, parsePlan, realOracle, topFolders } from "./plan.ts";
+import { isLarge, parsePlan, prompt, realOracle, runPlan, topFolders } from "./plan.ts";
 import type { Tier } from "./route.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -235,4 +235,52 @@ test("a plan job left running by a dead process is ended as failed, and the goal
   expect(planCalls().length).toBe(1);
   expect(planRuns().filter((r) => r.reason === "planned").length).toBe(1);
   expect(out.planned).toEqual([expect.stringContaining(`fac-${id} into`)]);
+});
+
+describe("the planner prompt's similar episodes", () => {
+  let vaultSaved: string | undefined;
+  beforeEach(() => { vaultSaved = process.env.ALEPH_VAULT; });
+  afterEach(() => { if (vaultSaved === undefined) delete process.env.ALEPH_VAULT; else process.env.ALEPH_VAULT = vaultSaved; });
+
+  const bigGoal = (): number => writeList({ key: "fac" }, "add a goal", (doc) =>
+    todos.add(doc, "Add a second report line", { labels: ["goal"], body: body("three").replace("A big thing.", "Add a second line to the report.") }).id, true)!.value;
+  const lastPrompt = () => {
+    const d = readdirSync(join(base, "jobs")).filter((x) => x.endsWith("-plan")).sort().at(-1)!;
+    return readFileSync(join(base, "jobs", d, "prompt.md"), "utf8");
+  };
+  const page = ["Goal", "What landed", "How it went", "Cost", "What went wrong"]
+    .map((h) => `## ${h}\n${h === "How it went" ? "one agent run dropped: no commit" : `fac ${h.toLowerCase()} text`}\n`).join("\n");
+
+  test("the top episodes are put in the planner's prompt, and only two of their sections", async () => {
+    const vault = join(base, "vault");
+    process.env.ALEPH_VAULT = vault;
+    sh(base, "bun", join(import.meta.dir, "..", "..", "vault", "cli.ts"), "init");
+    writeFileSync(join(vault, "wiki/episodes/fac-7 Add a report line.md"),
+      `---\nkind: episode\nscope: fac\nconfidence: high\nupdated: 2026-10-01\nsupersedes: []\nsources: []\n---\n# fac-7 Add a report line\n\n${page}`);
+    const id = bigGoal();
+    expect(await runPlan({ key: "fac", path: join(base, "repo") } as any, id)).toEqual({ planned: expect.any(Array) });
+    const p = lastPrompt();
+    expect(p).toContain("# How similar goals went");
+    expect(p).toContain("fac-7 Add a report line");
+    expect(p).toContain("one agent run dropped: no commit");
+    expect(p).toContain("fac what went wrong text");
+    expect(p).not.toContain("fac cost text");
+    expect(p).not.toContain("kind: episode");
+  });
+
+  test("an empty vault leaves the section out and the planner still runs", async () => {
+    const empty = join(base, "empty");
+    mkdirSync(empty);
+    process.env.ALEPH_VAULT = empty;
+    const id = bigGoal();
+    expect(await runPlan({ key: "fac", path: join(base, "repo") } as any, id)).toEqual({ planned: expect.any(Array) });
+    expect(lastPrompt()).not.toContain("# How similar goals went");
+  });
+
+  test("no episodes leaves the prompt as it was", () => {
+    const it = { id: 1, title: "t", body: "b", notes: ["n"] } as any;
+    expect(prompt({ key: "fac" } as any, it)).toBe(prompt({ key: "fac" } as any, it, []));
+    expect(prompt({ key: "fac" } as any, it)).not.toContain("How similar goals went");
+    expect(prompt({ key: "fac" } as any, it)).toContain("Notes:\nn\n\nSplit it into");
+  });
 });
