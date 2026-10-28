@@ -129,7 +129,7 @@ export const routes: Routes = {
       // The turn span is the tree's root; show its children as the top level.
       const top = roots.length === 1 && roots[0].name === "turn" ? roots[0].children : roots;
       return Response.json({
-        base: cfg.baseUrl, id: params.id, n, total: ts.length, traceId: t.id, project: projectOf(t),
+        base: cfg.baseUrl, id: params.id, n, total: ts.length, traceId: t.id, project: projectOf(t), start: t.timestamp,
         prompt: cut(t.input, 400), output: cut(t.output, 400), cost: t.totalCost ?? 0, durationMs: durationMs(t), observations: top,
       });
     } catch (e) { return fail(e); }

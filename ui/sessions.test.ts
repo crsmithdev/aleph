@@ -86,6 +86,7 @@ test("a turn is a tree of tools, hook spans and errors", async () => {
   expect(by("Read").error).toBe("nope");
   expect(by("vault-recall").recall).toEqual({ candidates: 5, asked: 3, kept: 1 });
   expect(d.traceId).toBe("t1");
+  expect(d.start).toBe(TRACES[0].timestamp);
   expect((await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/9", { id: "s1", n: "9" })).status).toBe(404);
 });
 
