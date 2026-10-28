@@ -21,13 +21,32 @@ export function redirect(hash) {
   return path === "/issues" ? "#/contents" : path === "/projects" ? "#/contents?type=project" : null;
 }
 
+const STYLE_CONTENTS = `<style>
+.tl .filters { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin: 0 0 12px; font: 13px var(--sans); }
+.tl .filters label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.tl .filters select, .tl .filters input { font: 13px var(--sans); padding: 4px 8px; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; min-width: 0; }
+.tl .filters select:hover, .tl .filters input:hover { border-color: var(--ink-2); }
+.tl .filters select:focus-visible, .tl .filters input:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; }
+.tl .tbl tr.crow { position: relative; }
+.tl .tbl tr.crow:hover { background: var(--rule-2); }
+.tl .tbl .c-title a { color: inherit; text-decoration: none; }
+.tl .tbl .c-title a::after { content: ""; position: absolute; inset: 0; }
+.tl .tbl tr.crow:hover .c-title a, .tl .tbl .c-title a:focus-visible { text-decoration: underline; }
+.tl .tbl td.c-id a, .tl .tbl .c-act { position: relative; z-index: 1; }
+@media (max-width: 480px) { .tl .filters label { flex: 1 1 100%; } .tl .filters select, .tl .filters input { flex: 1; } }
+</style>`;
+
 export const TYPES = [["", "All"], ["issue", "Issues"], ["project", "Projects"]];
+
+/** The Status filter's default is Open; "any" (the Any option) shows every status. */
+export const DEFAULT_STATUS = "open";
+const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STATUS : s === "any" ? "" : s);
 
 /** The filters and sort, from the route's query: ?type=issue&status=open&label=x&q=text&sort=title&dir=asc. */
 export function hashOptions(q = new URLSearchParams()) {
   const type = q.get("type") ?? "";
   return {
-    type: TYPES.some(([t]) => t === type) ? type : "", status: q.get("status") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "",
+    type: TYPES.some(([t]) => t === type) ? type : "", status: statusOf(q.get("status")), project: q.get("project") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "",
     sort: { key: q.get("sort") || "updated", dir: q.get("dir") === "asc" ? 1 : -1 },
   };
 }
@@ -44,22 +63,22 @@ const when = (s) => Date.parse(s) || 0;
 /** One list of rows from the API data: an issue row and a project row each. */
 export function contentRows(d) {
   return [
-    ...(d?.issues ?? []).map((r) => ({ type: "issue", status: r.status, id: ref(r), title: r.title, labels: r.labels ?? [], at: r.updated, href: href(r), repo: r.repo, n: r.id })),
-    ...(d?.projects ?? []).map((p) => ({ type: "project", status: "", id: "", title: p.key, labels: [], open: p.openItems, at: p.activity, href: projectHref(p) })),
+    ...(d?.issues ?? []).map((r) => ({ type: "issue", status: r.status, id: ref(r), project: r.repo, title: r.title, labels: r.labels ?? [], at: r.updated, href: href(r), repo: r.repo, n: r.id })),
+    ...(d?.projects ?? []).map((p) => ({ type: "project", status: "", id: "", project: p.key, title: p.key, labels: [], open: p.openItems, at: p.activity, href: projectHref(p) })),
   ];
 }
 
-/** The rows that pass the filters; a status or label filter leaves no project, which has neither. */
+/** The rows that pass the filters; a project has no status (it passes Open, the default) and no label. */
 export function filterRows(rows, o = {}) {
   const q = (o.q ?? "").trim().toLowerCase();
   return rows.filter((r) =>
-    (!o.type || r.type === o.type) && (!o.status || r.status === o.status) && (!o.label || r.labels.includes(o.label)) &&
+    (!o.type || r.type === o.type) && (!o.status || r.status === o.status || (r.type === "project" && o.status === "open")) && (!o.project || r.project === o.project) && (!o.label || r.labels.includes(o.label)) &&
     (!q || r.title.toLowerCase().includes(q)));
 }
 
-export const COLUMNS = [["type", "Type"], ["status", "Status"], ["id", "Id"], ["title", "Title"], ["labels", "Labels"], ["open", "Open issues"], ["updated", "Updated"], ["act", ""]];
+export const COLUMNS = [["type", "Type"], ["project", "Project"], ["status", "Status"], ["id", "Id"], ["title", "Title"], ["labels", "Labels"], ["open", "Open issues"], ["updated", "Updated"], ["act", ""]];
 const SORT = {
-  type: (r) => r.type, status: (r) => r.status, id: (r) => r.id, title: (r) => r.title, labels: (r) => r.labels.join(","),
+  type: (r) => r.type, project: (r) => r.project, status: (r) => r.status, id: (r) => r.id, title: (r) => r.title, labels: (r) => r.labels.join(","),
   open: (r) => r.open ?? -1, updated: (r) => when(r.at),
 };
 
@@ -86,7 +105,7 @@ export function renderRow(r) {
   const idCell = r.id ? `<a class="id" href="${esc(r.href)}">${esc(r.id)}</a>` : "";
   const x = dropTarget(r)
     ? `<button type="button" class="cancel" data-cancel aria-label="Drop ${esc(r.id)}" title="Stop or drop">${X_ICON}</button>` : "";
-  return `<tr class="evr" data-kind="${esc(r.type)}"${r.repo ? ` data-repo="${esc(r.repo)}" data-n="${r.n}"` : ""}><td class="c-type">${esc(r.type)}</td>` +
+  return `<tr class="evr crow" data-kind="${esc(r.type)}"${r.repo ? ` data-repo="${esc(r.repo)}" data-n="${r.n}"` : ""}><td class="c-type">${esc(r.type)}</td><td class="c-project">${esc(r.project)}</td>` +
     `<td class="c-status">${r.status ? badge(r.status, STATUS_TONE[r.status] ?? "") : ""}</td><td class="c-id">${idCell}</td>` +
     `<td class="c-title"><a href="${esc(r.href)}">${esc(r.title)}</a></td>` +
     `<td class="c-labels">${r.labels.map((l) => badge(l)).join(" ")}</td><td class="c-open">${r.open ?? ""}</td>` +
@@ -94,11 +113,13 @@ export function renderRow(r) {
 }
 
 export function renderFilters(rows, o = {}) {
+  const projects = [...new Set(rows.map((r) => r.project))].sort();
   const labels = [...new Set(rows.flatMap((r) => r.labels))].sort();
   const opt = (v, cur, text = v) => `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(text)}</option>`;
   return `<form class="filters" data-ui="contents-filter" onsubmit="return false">` +
     `<label>Type <select data-filter="type">${TYPES.map(([t, text]) => opt(t, o.type, text)).join("")}</select></label>` +
-    `<label>Status <select data-filter="status">${opt("", o.status, "Any")}${["open", "done", "dropped"].map((s) => opt(s, o.status)).join("")}</select></label>` +
+    `<label>Project <select data-filter="project">${opt("", o.project, "All")}${projects.map((k) => opt(k, o.project)).join("")}</select></label>` +
+    `<label>Status <select data-filter="status">${opt("any", o.status || "any", "Any")}${["open", "done", "dropped"].map((s) => opt(s, o.status)).join("")}</select></label>` +
     `<label>Label <select data-filter="label">${opt("", o.label, "Any")}${labels.map((l) => opt(l, o.label)).join("")}</select></label>` +
     `<label>Title <input type="search" data-filter="q" value="${esc(o.q ?? "")}" placeholder="text in the title"></label></form>`;
 }
@@ -157,7 +178,7 @@ export function renderForm(rows, o = {}) {
 
 export function renderContents(d, o = {}) {
   const rows = contentRows(d);
-  return `${STYLE}<div class="page tl"><h1>Contents</h1>${renderFilters(rows, o)}<div id="contents-table">${renderTable(rows, o)}</div>` +
+  return `${STYLE}${STYLE_CONTENTS}<div class="page tl"><h1>Contents</h1>${renderFilters(rows, o)}<div id="contents-table">${renderTable(rows, o)}</div>` +
     renderForm(d?.issues ?? [], o) + `</div>`;
 }
 

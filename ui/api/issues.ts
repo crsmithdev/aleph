@@ -1,6 +1,6 @@
 /**
  * `GET /api/issues`, `GET /api/issues/:repo/:n` and `POST /api/issues`: the
- * Issues and Issue views' data. Every route takes `?project=<key>` and shows
+ * Issues and Issue views' data. `?all=1` lists every repo, not only the recent ones. Every route takes `?project=<key>` and shows
  * only that project. A read is the work store's origin/main; a write runs
  * `aleph todo add`, so the CLI stays the one writer.
  */
@@ -71,7 +71,7 @@ function list(url: URL): Response {
   if (wantRepo) repos = repos.filter((r) => r.key === wantRepo);
   let docs: (todos.Doc | null)[];
   try { docs = readLists(repos); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
-  const order = wantRepo ? repos.map((_, n) => n) : recentRepos(repos, docs);
+  const order = wantRepo || url.searchParams.get("all") ? repos.map((_, n) => n) : recentRepos(repos, docs);
   const out = [];
   for (const n of order) {
     const doc = docs[n];

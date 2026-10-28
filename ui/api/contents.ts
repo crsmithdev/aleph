@@ -8,7 +8,9 @@ import { projects } from "./projects.ts";
 
 export const routes: Routes = {
   "GET /api/contents": async (req, params, url) => {
-    const res = await issueRoutes["GET /api/issues"](req, params, url);
+    const all = new URL(url);
+    all.searchParams.set("all", "1");
+    const res = await issueRoutes["GET /api/issues"](req, params, all);
     if (!res.ok) return res;
     return Response.json({ issues: await res.json(), projects: projects(url.searchParams.get("project") || null) });
   },
