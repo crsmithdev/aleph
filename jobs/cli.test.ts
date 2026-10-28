@@ -1097,6 +1097,8 @@ describe("a factory run", () => {
     const give = (latest: string) => writeFileSync(cmd, `#!/bin/bash\ncat <<'EOF'\n${table(latest)}\nEOF\n`, { mode: 0o755 });
     const stale = () => rmSync(join(base, "factory", "probe.json"), { force: true });
     const proposals = async () => ((await aleph(["todo", "list", "fac", "--json"])).json as any[]).filter((r) => r.title.startsWith("Update "));
+    // The sweep files into the fac list, and the store has no list until an item is added to it.
+    await aleph(["todo", "add", "fac", "the list the nightly sweep files into", "--body", "Added so that fac has a list on main."]);
     give("5.9.2");
     stale();
     await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "fail" });
