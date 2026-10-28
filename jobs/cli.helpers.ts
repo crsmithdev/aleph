@@ -181,6 +181,7 @@ case $action in
   error) echo '{"type":"result","is_error":true,"result":"API Error: 500"}'; exit 0 ;;
   noresult) echo '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'; exit 0 ;;
   trailing) echo x > t.txt; git add t.txt; git commit -qm "add t.txt"; echo '{"type":"result","is_error":false,"result":"done"}'; echo 'one more line'; exit 0 ;;
+  already-met) echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"result":"Looked.\\nGoal: Already met — main has the change"}'; echo '{"type":"command_lifecycle","phase":"end"}'; exit 0 ;;
   defaults) echo d > d.txt; git add d.txt; git commit -qm "add d.txt"
     echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"Done.\\nDEFAULT: which colour? -> blue\\nFOLLOWUP: paint the fence"}'; exit 0 ;;
   fail-then-fix) echo "$RANDOM" > f.txt; git add f.txt

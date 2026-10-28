@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reviewPrompt } from "./unit.ts";
-import { heldRule, testFindings, verdict, outcome, tagged } from "./gate.ts";
+import { heldRule, testFindings, verdict, outcome, tagged, alreadyMet } from "./gate.ts";
 
 let dir: string;
 const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -65,6 +65,25 @@ test("only a last line that is a result event with is_error false is a finished 
   expect(outcome('{"type":"result","result":"no flag"}').ok).toBe(false);
   expect(outcome("")).toMatchObject({ ok: false, line: "no output" });
   expect(tagged("x\n DEFAULT: a? -> b\nDEFAULT:\nFOLLOWUP: c", "DEFAULT")).toEqual(["a? -> b"]);
+});
+
+test("the reason is the result event's text, not a command_lifecycle line after it", () => {
+  const life = '{"type":"command_lifecycle","phase":"end"}';
+  const failed = '{"type":"result","is_error":true,"result":"Goal: Already met\\nmain has it"}';
+  expect(outcome(`${failed}\n${life}\n`)).toMatchObject({ ok: false, line: "Goal: Already met\nmain has it" });
+  expect(outcome(`${failed}\n${life}\n${life}\n`)).toMatchObject({ ok: false, line: "Goal: Already met\nmain has it" });
+  expect(outcome(`${life}\n`)).toMatchObject({ ok: false, line: "no output" });
+  expect(outcome(`{"type":"result","is_error":false,"result":"done"}\n${life}\n`)).toMatchObject({ ok: true, result: "done" });
+});
+
+test("a worker's claim that the goal is already met is its last such line, with the reason", () => {
+  expect(alreadyMet("Looked.\nGoal: Already met — timeline.ts uses itemTimes")).toBe("timeline.ts uses itemTimes");
+  expect(alreadyMet("goal: already met\nGoal: Already met: main has it")).toBe("main has it");
+  expect(alreadyMet("Goal: Already met")).toBe("no reason given");
+  expect(alreadyMet("Goal: Already met elsewhere\nDone.")).toBe("elsewhere");
+  expect(alreadyMet("Goal: Already metal")).toBeNull();
+  expect(alreadyMet("Goal: not met yet")).toBeNull();
+  expect(alreadyMet("")).toBeNull();
 });
 
 test("the reviewer's verdict is its last VERDICT line", () => {

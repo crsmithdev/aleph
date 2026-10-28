@@ -13,7 +13,8 @@ import { normalizeDecision, type Decision } from "./decision.ts";
 import { itemOnMain, itemStates, type ItemState } from "./status.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
-import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, rescued, tailOf, type Job } from "./job.ts";
+import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
+import { alreadyMet } from "./gate.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
 const pauseFile = () => join(factoryDir(), "paused");
@@ -209,7 +210,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
   }
-  if (rescue) await rescueStuck(rescue, land);
+  if (rescue) await rescueStuck(rescue, land, checks);
   const held = gates({ only: ["hold"] });
   if (held) {
     factoryLog(held.why);
@@ -283,13 +284,15 @@ const RERUN_OPTIONS = [
   { label: "Another way", line: "Start the goal again, taking a different route than the run that failed" },
 ];
 
-type Case = "duplicate" | "no-commit" | "time-box" | "infra" | "land-checks";
+type Case = "duplicate" | "no-commit" | "claimed" | "time-box" | "infra" | "land-checks";
 const INFRA = /^(job lock busy|fetch failed|systemd-run failed|worktree gone|bundle failed)/;
+/** A baseline that has not answered yet (see `baseline`): the claim is waited on, not decided. */
+const UNCHECKED = /^main (is unchecked|baseline running)/;
 
-/** Which safe case a stuck or failed run is in, or null: not safe. */
-function caseOf(r: Entry["run"], onMainOrDone: () => boolean): Case | null {
+/** Which safe case a stuck or failed run is in, or null: not safe. `claim` is the worker's "already met" reason, if it made one. */
+function caseOf(r: Entry["run"], onMainOrDone: () => boolean, claim: string | null): Case | null {
   const why = r.reason ?? "";
-  if (why === "no commit") return onMainOrDone() ? "duplicate" : "no-commit";
+  if (why === "no commit") return onMainOrDone() ? "duplicate" : claim !== null ? "claimed" : "no-commit";
   if (why === "time box" && r.kind !== "land") return "time-box";
   if (INFRA.test(why)) return "infra";
   if (r.kind === "land" && !r.conflicts?.length && /^timed out: check |^[\w-]+ failed$/.test(why)) return "land-checks";
@@ -301,12 +304,13 @@ const RESCUE_WAIT_MS = () => Number(process.env.ALEPH_RESCUE_WAIT_MS ?? 60_000);
 
 /**
  * The safe default actions for stuck and failed runs, taken by the dispatch that sees them: a duplicate
- * is dropped; no commit, a time box and checks that fail after a land merge drop the run for one rerun
+ * is dropped; a no-commit run whose worker says the goal is already met is checked on main, and closed when
+ * the checks pass there; no commit, a time box and checks that fail after a land merge drop the run for one rerun
  * of the goal, with a note; an infrastructure failure is rechecked or landed again, once. Each action
  * writes its reason to the run, the issue note and the news. Anything else, or the second time one
  * case hits one goal, labels the issue `needs-chris` with a one-line question; such a run holds nothing.
  */
-async function rescueStuck(act: Rescue, land?: Land): Promise<void> {
+async function rescueStuck(act: Rescue, land?: Land, checks?: Checks): Promise<void> {
   const pending = (jobs: Job[]) => holders(jobs);
   for (const first of pending(allJobs())) {
     const name = first[0].run.name;
@@ -316,7 +320,7 @@ async function rescueStuck(act: Rescue, land?: Land): Promise<void> {
     try {
       // Read again under the lock: another dispatch may have acted on it.
       const runs = pending(allJobs()).find((j) => j[0].run.job === first[0].run.job);
-      if (runs) await rescueJob(runs, act, land);
+      if (runs) await rescueJob(runs, act, land, checks);
     } catch (e: any) {
       factoryLog(`rescue of ${name} failed: ${e?.message ?? e}`);
     } finally {
@@ -325,7 +329,7 @@ async function rescueStuck(act: Rescue, land?: Land): Promise<void> {
   }
 }
 
-async function rescueJob(runs: Job, act: Rescue, land?: Land): Promise<void> {
+async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): Promise<void> {
   const last = lastReal(runs);
   const r = last.run;
   const repo = loadRegistry()[r.repo!];
@@ -351,7 +355,8 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land): Promise<void> {
     const item = issue === undefined ? undefined : reader().item(repo.key, issue);
     return !!item && todos.status(item) !== "open";
   };
-  const key = caseOf(r, onMainOrDone);
+  const claim = r.reason === "no commit" ? alreadyMet(readFile(last, "result.md") ?? "") : null;
+  const key = caseOf(r, onMainOrDone, claim);
   const reason = r.reason ?? r.state;
   const choice = (question: string, why: string[]) => normalizeDecision({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.state}`, `Reason: ${reason}`, ...why] })!;
   if (!key) return chris(`${name} is ${r.state} (${reason}); drop it, recheck it, or edit the goal?`, choice(`${name} is ${r.state} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
@@ -368,7 +373,24 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land): Promise<void> {
   const quoted = (file: "checks.log" | "result.md") => `\`\`\`\n${tailOf(last, file, 20) || "(empty)"}\n\`\`\``;
   markRescued(last, key);
 
-  if (key === "duplicate") {
+  if (key === "claimed") {
+    // The worker says the goal is met: the repo's checks on origin/<main> decide. Green closes the item; red reruns
+    // the goal with the claim as its note. An unchecked main is waited on: the run stays for the next dispatch.
+    const red = checks ? await baseline(repo, checks) : "main is unchecked: no checks";
+    if (red && UNCHECKED.test(red)) { factoryLog(`${name}: the claim waits: ${red}`); return; }
+    if (!red) {
+      const text = `${r.kind} run ${last.id} says the goal is already met (${claim}), and the checks pass on origin/${repo.main}: dropped, and the item is done`;
+      if (!await tryDo(await act.drop(name, text), "drop")) return;
+      record(text, { done: true });
+      await say(text);
+    } else {
+      rerun(`The last run said the goal is already met (${claim}), but the checks do not pass on origin/${repo.main} (${red}). Make the change the goal asks for.`);
+      const text = `${r.kind} run ${last.id} says the goal is already met (${claim}), but ${red}; dropped, and the goal reruns once`;
+      if (!await tryDo(await act.drop(name, text), "drop")) return;
+      record(text);
+      await say(text);
+    }
+  } else if (key === "duplicate") {
     const text = `${r.kind} run ${last.id} ended with no commit and the item is already ${onMain ? "on main" : "done"}: dropped as a duplicate`;
     if (!await tryDo(await act.drop(name, text), "drop")) return;
     record(text, { done: onMain });

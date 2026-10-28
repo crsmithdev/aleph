@@ -260,6 +260,56 @@ test("no commit, the work on main by its Job trailer: dropped as a duplicate and
   expect(f.specs).toEqual([]);
 });
 
+// A claim that the goal is met is checked on origin/main: a new commit there, so the baseline is run again.
+const claimed = (name: string, result: string) => {
+  sh(join(base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `main for ${name}`);
+  sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
+  return mk(name, "agent", "stuck", { reason: "no commit" }, { "result.md": result });
+};
+const withChecks = (f: ReturnType<typeof fakes>, checks: (repo: unknown, commit: string, logs: string) => Promise<string | null>) =>
+  dispatchGoals(f.start, checks, f.land, f.rescue);
+
+test("no commit and the worker says the goal is already met, the checks pass on main: dropped and the item done", async () => {
+  const id = goal();
+  claimed(`fac-${id}`, "Looked.\nGoal: Already met — timeline.ts uses itemTimes\n");
+  const f = fakes();
+  const out = await withChecks(f, async () => null);
+  expect(f.calls).toEqual([`drop fac-${id}`]);
+  expect(f.specs).toEqual([]);
+  expect(out.held).toBeUndefined();
+  expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
+  expect(notes(id)).toContain("says the goal is already met (timeline.ts uses itemTimes), and the checks pass on origin/main");
+  expect(labels(id)).not.toContain("needs-chris");
+  expect(allRuns()[0].run.reason).toContain("the item is done");
+});
+
+test("no commit and the worker says the goal is already met, but main is red: dropped with the claim; the goal reruns once main is green", async () => {
+  const id = goal();
+  claimed(`fac-${id}`, "Goal: Already met — main has it\n");
+  const f = fakes();
+  // Red main holds every start, so the goal waits; the rerun is the next dispatch on green main.
+  await withChecks(f, async () => "tests failed");
+  expect(f.calls).toEqual([`drop fac-${id}`]);
+  expect(notes(id)).toContain("but main is red at");
+  expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
+  expect(labels(id)).not.toContain("needs-chris");
+  sh(join(base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", "fix main");
+  sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
+  await withChecks(f, async () => null);
+  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
+  expect(f.specs[0]).toContain("The last run said the goal is already met (main has it)");
+});
+
+test("no commit and the claim, but main cannot be checked: the run waits for the next dispatch", async () => {
+  const id = goal();
+  claimed(`fac-${id}`, "Goal: Already met\n");
+  const f = fakes();
+  await withChecks(f, async () => "checks did not start");
+  expect(f.calls).toEqual([]);
+  expect(allRuns()[0].run.state).toBe("stuck");
+  expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
+});
+
 test("no commit, the item open, first time: dropped and the goal reruns once, with the last 20 lines of result.md", async () => {
   const id = goal();
   mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(30) });

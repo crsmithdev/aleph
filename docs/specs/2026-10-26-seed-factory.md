@@ -136,7 +136,7 @@ Chris wants to give aleph a one-sentence goal and get it built, checked and land
 14. WHEN a worker runs THE environment inside the sandbox SHALL hold the worker token and no variable from Chris's environment or the repo env file.
 15. WHEN aleph takes a worker's result THE only operation on worker data SHALL be `git fetch` of `factory/<job>` from the run's `out.bundle`.
 16. WHEN the timer fires WHILE an open `goal` item has no live run, no held run and no stuck run, the factory is not paused, and the caps allow it THE factory SHALL start one run for that item.
-17. IF the last line of the worker's stdout is not a `stream-json` `result` event with `is_error` false, OR IF the bundle holds no commit beyond `origin/main` THEN THE run SHALL end stuck with that line's text, whatever the exit code.
+17. IF the last line of the worker's stdout that is not a `command_lifecycle` event is not a `stream-json` `result` event with `is_error` false, OR IF the bundle holds no commit beyond `origin/main` THEN THE run SHALL end stuck with that line's text (the result event's text, when it is one), whatever the exit code.
 18. WHEN Chris runs `aleph job aleph <name>` on a stuck goal THE factory SHALL start a follow-up run whose bundle holds the previous `factory/<job>` branch.
 19. IF the diff touches a held path that is not a test file, deletes or renames an existing test file, removes or changes a `test`, `it`, `describe` or `expect` line in an existing test file, or adds `.skip`, `.only` or `.todo` to a test THEN THE run SHALL end needs-you with the matched rule and the diff stat, and nothing SHALL be pushed.
 20. WHEN aleph checks a diff against the held paths THE paths SHALL come from `~/.aleph/repos.json`, and a held-path change on the branch SHALL not change the verdict.
@@ -257,6 +257,7 @@ Check runs and probe runs do not count against the 12. They start no `claude`.
 Chris, 28 Oct: a stuck or failed run gets a default action when the action is safe, so the factory does not wait hours for a person. Every dispatch (`rescueStuck` in `jobs/lib/factory.ts`, before the hold is read) takes it, and writes the reason to the run, the issue note and the news:
 
 1. No commit, and the item is done or its work is on main (its `Job:` trailer): drop the run, as a duplicate. A work-on-main item is closed.
+1a. No commit, the worker's result says `Goal: Already met` (its reason after the words), and the item is open: the repo's checks run on origin/<main> (the baseline). IF they pass THEN drop the run, and the item is closed as done with a note that names the claim. IF they do not, or main cannot be checked yet, drop the run with the claim and the failing check as the goal's rerun note (once main is green, the goal reruns). An unchecked main leaves the run stuck until the next dispatch. A claim is never a question for Chris.
 2. No commit, item open, first time: drop it and let the goal rerun once; the rerun's spec ends with a note that the last run made no commit and the last 20 lines of its `result.md`.
 3. Time box, first time: the same, with the time box note.
 4. Failed with an infrastructure reason (`job lock busy`, `fetch failed`, `systemd-run failed`, `worktree gone`, `bundle failed`): recheck an agent run whose branch exists, land a land run again, once. An agent run with no branch is dropped for one rerun.

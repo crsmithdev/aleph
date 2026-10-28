@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, base, fakeLog, file, lf, lfPosts, remote, repo, resetLf, setLfStatus, sh, specFile, state, told, setup, teardown } from "./cli.helpers";
 
@@ -89,6 +89,19 @@ describe("a factory run", () => {
     expect(told).toContain("fac/ferr stuck");
     for (const n of ["ferr", "fnone", "ftrail", "fidle"]) await aleph(["drop", n]);
   });
+
+  test("a worker that says the goal is already met, with the checks green on main, closes the item", async () => {
+    const id = (await aleph(["todo", "add", "fac", "timeline already uses itemTimes"])).json.added;
+    const r = await fjob("fmet", "already-met", {}, ["--todo", String(id)]);
+    expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "no commit" });
+    // A tick's probe runs the sandbox; a passing probe is written as the other tick tests do.
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
+    await aleph(["tick"]);
+    expect(state(r.json.run)).toMatchObject({ state: "dropped", reason: expect.stringContaining("the item is done") });
+    expect((await aleph(["todo", "show", "fac", String(id), "--json"])).json.status).toBe("done");
+    expect(runsLeft()).toEqual([]);
+  }, 60_000);
 
   test("a worker silent for ALEPH_STALL_SECONDS is stuck as stalled, with no fix round", async () => {
     const t = performance.now();

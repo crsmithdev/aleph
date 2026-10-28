@@ -6,13 +6,18 @@ import { git } from "./git.ts";
 
 export interface Outcome { ok: boolean; line: string; result: string; cost?: number }
 
+const lifecycle = (line: string): boolean => {
+  try { return JSON.parse(line)?.type === "command_lifecycle"; } catch { return false; }
+};
+
 /**
  * The last line of the worker's stdout decides: it must be a `stream-json`
  * `result` event with `is_error` false. Anything else, whatever the exit
- * code, is a run that did not finish.
+ * code, is a run that did not finish. The `command_lifecycle` lines the
+ * command adds after the worker's output are not the worker's, so they are skipped.
  */
 export function outcome(stdout: string): Outcome {
-  const line = stdout.trimEnd().split("\n").at(-1) ?? "";
+  const line = stdout.trimEnd().split("\n").findLast((l) => !lifecycle(l)) ?? "";
   let ev: any;
   try { ev = JSON.parse(line); } catch { return { ok: false, line: line.slice(0, 300) || "no output", result: "" }; }
   const result = typeof ev?.result === "string" ? ev.result : "";
@@ -24,6 +29,15 @@ export function outcome(stdout: string): Outcome {
 /** The text after `<tag>:` on each line of the result that starts with it. */
 export const tagged = (result: string, tag: string): string[] =>
   result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith(`${tag}:`)).map((l) => l.slice(tag.length + 1).trim()).filter(Boolean);
+
+/**
+ * The worker's claim that the goal is already met, as its last `Goal: Already met`
+ * line: the reason given after it, or "no reason given". Null when there is no claim.
+ */
+export function alreadyMet(result: string): string | null {
+  const m = result.split("\n").map((l) => /^Goal:\s*already met\b[\s:.\-—]*(.*)$/i.exec(l.trim())).filter(Boolean).at(-1);
+  return m ? (m[1].trim() || "no reason given") : null;
+}
 
 /**
  * The reviewer's verdict: its last `VERDICT:` line. `pass`, or `hold` with
