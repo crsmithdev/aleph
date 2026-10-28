@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { basename, join, resolve } from "node:path";
 import { LOW, allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, readReview2, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
 import { baselineChecks, git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
+import { fetchOrigin } from "./lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
@@ -133,7 +134,7 @@ async function job(): Promise<void> {
     if (last && isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
     const first = open?.[0];
     const item = todo ?? open?.findLast((e) => e.run.todo !== undefined)?.run.todo;
-    if (first && item !== undefined) git(repo.path, "fetch", "-q", "origin");
+    if (first && item !== undefined) fetchOrigin(repo.path);
     const landedAs = first ? itemOnMain(repo, item) : null;
     if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
     // A factory run has no worktree: its branch comes and goes as a bundle.
@@ -214,7 +215,7 @@ async function landStart(name: string): Promise<ReturnType<typeof Bun.spawn> | u
   const held = agent.state === "needs-you" && (agent.needs === "held" || agent.needs === "review");
   if (agent.state !== "passed" && !manual && !held) refuse(`${name} is ${agent.state}${agent.needs ? ` (${agent.needs})` : ""}, not passed`);
   const repo = loadRegistry()[agent.repo!];
-  if (agent.todo !== undefined) git(repo.path, "fetch", "-q", "origin");
+  if (agent.todo !== undefined) fetchOrigin(repo.path);
   const landedAs = itemOnMain(repo, agent.todo);
   if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
   const child = await dispatch({
@@ -265,7 +266,7 @@ function reconcile(all: Entry[][]): Map<string, string> {
     if (!repo || last.run.kind === "plain" || isLive(last.folder)) continue;
     if (!fetched.has(repo.key)) {
       fetched.add(repo.key);
-      git(repo.path, "fetch", "-q", "origin");
+      fetchOrigin(repo.path);
     }
     const found = onMain(repo, last.run);
     if (found) {
@@ -707,7 +708,7 @@ async function tickCmd(): Promise<void> {
 function reportCmd(): void {
   const lines = [report()];
   for (const repo of Object.values(loadRegistry()).filter((r) => r.sandbox)) {
-    git(repo.path, "fetch", "-q", "origin");
+    fetchOrigin(repo.path);
     lines.push(behind(repo) ?? "");
   }
   const h = hold();
@@ -734,7 +735,7 @@ function statusCmd(): void {
   let f: Facts;
   if (repo) {
     cwd = repo.path;
-    git(cwd, "fetch", "-q", "origin");
+    fetchOrigin(cwd);
     try { f = facts(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
   } else {
     const snap = readFacts(cwd);
@@ -752,7 +753,7 @@ function statusRecent(): void {
   for (const { repo, doc } of recentRepos()) {
     const open = (doc?.items ?? []).filter((i) => todos.status(i) === "open");
     if (!open.length) continue;
-    git(repo.path, "fetch", "-q", "origin");
+    fetchOrigin(repo.path);
     let f: Facts;
     try { f = facts(repo, doc); } catch (e: any) { console.error(`warn: ${repo.key}: ${e?.message ?? e}`); continue; }
     const main = `refs/remotes/origin/${f.main}`;

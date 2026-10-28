@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { git } from "./git.ts";
+import { fetchOrigin, git } from "./git.ts";
 import { type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
 import { saveProbe, type Probe } from "./factory.ts";
@@ -51,7 +51,7 @@ export async function probe(repo: Repo, log: string): Promise<ProbeResult> {
   const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
   const dir = makeRunFolder(`probe-${Date.now()}`);
   try {
-    git(repo.path, "fetch", "-q", "origin");
+    fetchOrigin(repo.path);
     git(repo.path, "bundle", "create", join(dir, "in.bundle"), `refs/remotes/origin/${repo.main}`);
     const main = `refs/remotes/origin/${repo.main}`;
     writeFileSync(log, "");

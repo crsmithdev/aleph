@@ -10,7 +10,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { writeList } from "../../todo/lib/store.ts";
-import { git } from "./git.ts";
+import { fetchOrigin, git } from "./git.ts";
 import { factoryDir } from "./factory.ts";
 import { type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
@@ -60,7 +60,7 @@ async function outdated(repo: Repo): Promise<string | null> {
   const log = join(dir, "out", "outdated.log");
   try {
     const main = `refs/remotes/origin/${repo.main}`;
-    git(repo.path, "fetch", "-q", "origin");
+    fetchOrigin(repo.path);
     if (!git(repo.path, "bundle", "create", join(dir, "in.bundle"), main).ok) return null;
     writeFileSync(log, "");
     const script = [
