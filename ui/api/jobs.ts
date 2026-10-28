@@ -5,7 +5,7 @@ import { allJobs, hasFile, latestFile, latestJob, lastReal, view } from "../../j
 import { jobProjector, type Job } from "../state.ts";
 import type { Routes } from "../server.ts";
 
-export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string }
+export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan" | "facts"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string }
 export interface JobDetail extends Job {
   runs: RunInfo[]; result?: string; review?: string; stat?: string;
   checksLog?: string; stderr?: string; trace?: string;
@@ -18,7 +18,7 @@ export const lastLines = (s: string | undefined, n = 80): string | undefined => 
   const lines = s.replace(/\n+$/, "").split("\n");
   return lines.slice(-n).join("\n");
 };
-const KIND = { agent: "worker", recheck: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan" } as const;
+const KIND = { agent: "worker", recheck: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts" } as const;
 function runInfos(runs: Entry[]): RunInfo[] {
   const out: RunInfo[] = [];
   for (const e of runs) {

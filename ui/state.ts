@@ -180,8 +180,8 @@ export function state(now = new Date()): State {
   const triageRuns: { at: number; runs: Runs; reason?: string }[] = [];
   for (const runs of jobs) {
     const last = runs.at(-1)!.run;
-    // A planner run is shown like a triage: it sorts a goal and never lands.
-    if (last.kind === "triage" || last.kind === "plan") {
+    // A planner or facts run is shown like a triage: it sorts a goal and never lands.
+    if (last.kind === "triage" || last.kind === "plan" || last.kind === "facts") {
       triageRuns.push({ at: Date.parse(last.state === "running" ? "9999-01-01" : last.ended ?? last.started), runs, reason: last.reason });
       continue;
     }
