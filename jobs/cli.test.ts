@@ -180,7 +180,7 @@ beforeAll(() => {
     // The factory: the same clone, its runs under the stand-in sandbox.
     fac: {
       path: repo, sandbox: true, held: ["held/**"], autoland: false,
-      checks: [{ name: "tests", run: 'if [ -f FAIL ]; then for i in 1 2 3; do echo "FAIL is present $i"; done; exit 1; fi' }, { name: "flaky", run: `for f in flaky/*; do m=${join(base, "flakym-")}$(basename $f); if [ ! -f $m ]; then touch $m; exit 1; fi; done`, when: ["flaky/**"] }, { name: "tree", run: `git rev-parse 'HEAD^{tree}' >> ${join(base, "trees")}` }],
+      checks: [{ name: "tests", run: 'if [ -f FAIL ]; then for i in 1 2 3; do echo "FAIL is present $i"; done; exit 1; fi' }, { name: "flaky", run: `for f in flaky/*; do m=${join(base, "flakym-")}$(basename $f); if [ ! -f $m ]; then touch $m; exit 1; fi; done`, when: ["flaky/**"] }, { name: "tree", run: `git rev-parse 'HEAD^{tree}' >> ${join(base, "trees")}; while [ -f ${join(base, "slowbase")} ]; do sleep 0.1; done` }],
     },
   }));
 
@@ -1340,6 +1340,39 @@ describe("a factory run", () => {
     expect((await aleph(["tick"])).json.started).toEqual([`fac-${id}`]);
     expect(trees()).toBeGreaterThan(before);
     expect((await aleph(["report"])).stdout).not.toContain("main is red");
+  }, 60_000);
+
+  test("two dispatches at once run the baseline once; the second reports it running", async () => {
+    const trees = () => existsSync(join(base, "trees")) ? readFileSync(join(base, "trees"), "utf8").trim().split("\n").length : 0;
+    sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
+    writeFileSync(join(other, "new.txt"), `${Math.random()}\n`);
+    sh(other, "git", "add", "new.txt"); sh(other, "git", "commit", "-qm", "new commit"); sh(other, "git", "push", "-q", "origin", "main");
+    const id = (await aleph(["todo", "add", "fac", "baseline once", "--labels", "goal", "--body", "-"], {}, "ACTION: commit once.txt\n")).json.added;
+    const before = trees();
+    writeFileSync(join(base, "slowbase"), "");
+    const first = aleph(["tick"]);
+    for (let i = 0; i < 300 && trees() === before; i++) await Bun.sleep(100);
+    const second = await aleph(["tick"]);
+    expect(second.json.started).toEqual([]);
+    expect(second.json.skipped).toEqual([`fac-${id}: main baseline running`]);
+    expect(trees() - before).toBe(1);
+    rmSync(join(base, "slowbase"));
+    expect((await first).json.started).toEqual([`fac-${id}`]);
+  }, 60_000);
+
+  test("a baseline whose checks cannot start records no red, and the next dispatch runs it again", async () => {
+    sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
+    writeFileSync(join(other, "new.txt"), `${Math.random()}\n`);
+    sh(other, "git", "add", "new.txt"); sh(other, "git", "commit", "-qm", "another commit"); sh(other, "git", "push", "-q", "origin", "main");
+    const id = (await aleph(["todo", "add", "fac", "baseline retried", "--labels", "goal", "--body", "-"], {}, "ACTION: commit retried.txt\n")).json.added;
+    const broken = join(base, "broken-sandbox");
+    // Only the baseline's script fails to start; the probe and the runs go through.
+    writeFileSync(broken, `#!/bin/bash\ncase "\${@: -1}" in *base.bundle*) exit 3 ;; esac\nexec ${join(base, "pass")} "$@"\n`, { mode: 0o755 });
+    const t = await aleph(["tick"], { ALEPH_SANDBOX_CMD: broken });
+    expect(t.json.started).toEqual([]);
+    expect(t.json.skipped[0]).toContain(`fac-${id}: main is unchecked: checks did not start`);
+    expect((await aleph(["report"])).stdout).not.toContain("main is red");
+    expect((await aleph(["tick"])).json.started).toEqual([`fac-${id}`]);
   }, 60_000);
 
   describe("dispatch", () => {

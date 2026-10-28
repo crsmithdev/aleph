@@ -252,21 +252,38 @@ const baselines = (): Record<string, Baseline> => {
 const failedCheck = (why: string) => why.replace(/^timed out: check /, "").replace(/ failed$/, "");
 const redLine = (b: Baseline) => `main is red at ${b.commit.slice(0, 7)}: ${b.failed}`;
 
+/** A baseline that could not run its checks, as against a check that failed: never recorded. */
+const infraError = (why: string) => /^(checks did not start|bundle failed|baseline did not run|worktree gone)/.test(why);
+
 /**
  * Whether the repo's checks pass on its current origin/<main>: run once per
  * commit, kept in baseline.json. Returns the red line, or null when green.
+ * One baseline runs per repo at a time, under a lock; a dispatch that finds it
+ * taken starts nothing. Only a failed check is recorded: an error that kept
+ * the checks from running is reported but tried again by the next dispatch.
  */
 async function baseline(repo: Repo, checks: (repo: Repo, commit: string, logs: string) => Promise<string | null>): Promise<string | null> {
   if (!git(repo.path, "fetch", "-q", "origin").ok) return "main is unchecked: fetch failed";
   const commit = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
   if (!commit) return `main is unchecked: no origin/${repo.main}`;
-  const all = baselines();
-  let b = all[repo.key];
-  if (!b || b.commit !== commit) {
-    const why = await checks(repo, commit, join(factoryDir(), "baseline", repo.key));
-    b = { repo: repo.key, commit, ok: !why, ...(why ? { failed: failedCheck(why) } : {}) };
-    mkdirSync(factoryDir(), { recursive: true });
-    writeFileSync(baselineFile(), JSON.stringify({ ...baselines(), [repo.key]: b }, null, 2) + "\n");
+  const known = () => { const b = baselines()[repo.key]; return b && b.commit === commit ? b : undefined; };
+  let b = known();
+  if (!b) {
+    const release = await lock(`baseline-${repo.key}`, 0);
+    if (!release) return "main baseline running";
+    try {
+      // Another dispatch may have recorded this commit between the read and the lock.
+      b = known();
+      if (!b) {
+        const why = await checks(repo, commit, join(factoryDir(), "baseline", repo.key));
+        if (why && infraError(why)) return `main is unchecked: ${why}`;
+        b = { repo: repo.key, commit, ok: !why, ...(why ? { failed: failedCheck(why) } : {}) };
+        mkdirSync(factoryDir(), { recursive: true });
+        writeFileSync(baselineFile(), JSON.stringify({ ...baselines(), [repo.key]: b }, null, 2) + "\n");
+      }
+    } finally {
+      release();
+    }
   }
   return b.ok ? null : redLine(b);
 }
