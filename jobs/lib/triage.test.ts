@@ -56,6 +56,8 @@ beforeAll(() => {
   Object.assign(process.env, gitEnv, {
     ALEPH_ITEMS: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_TRIAGE_CMD: join(base, "fake"),
     FAKE_LOG: join(base, "calls"), ALEPH_LIVE_CAP: "10",
+    // Locks live in $XDG_RUNTIME_DIR/aleph, shared by every process on the machine; keep this process's own.
+    XDG_RUNTIME_DIR: join(base, "run"),
   });
 });
 afterAll(() => rmSync(base, { recursive: true, force: true }));
@@ -89,11 +91,13 @@ test("each of the four verdicts leaves the item in its state", async () => {
 });
 
 test("a triage is a job in the ledger, of kind triage", async () => {
-  const folders = readdirSync(join(base, "jobs")).filter((d) => d.endsWith("-triage") && d.includes("-triage-tri1-"));
+  reset([1, 2, 3, 4].map((n) => ({ title: `item ${n}`, body: "VERDICT:live" })));
+  await run();
+  const folders = readdirSync(join(base, "jobs")).filter((d) => d.includes(`-triage-${repo.key}-`));
   expect(folders.length).toBe(4);
-  // The four runs start together, so the folder order is not the item order.
-  const first = folders.map((f) => readRun(join(base, "jobs", f))).find((r) => r?.name === "triage-tri1-1");
-  expect(first).toMatchObject({ kind: "triage", repo: "tri1", state: "done", name: "triage-tri1-1", todo: 1 });
+  // The runs go one after another, but the folder order is not the item order.
+  const first = folders.map((f) => readRun(join(base, "jobs", f))).find((r) => r?.name === `triage-${repo.key}-1`);
+  expect(first).toMatchObject({ kind: "triage", repo: repo.key, state: "done", name: `triage-${repo.key}-1`, todo: 1 });
 });
 
 test("items labelled needs-chris, triaged, proposal or goal, or waiting on an open item, are not triaged", async () => {
