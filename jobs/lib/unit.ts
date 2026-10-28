@@ -8,7 +8,7 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { closeAndFile, file, readHidden } from "../../todo/lib/store.ts";
 import { fetchOrigin, followMain, git } from "./git.ts";
-import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
+import { ALREADY_MET, heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { LOW, checkSlot, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
@@ -82,7 +82,10 @@ and never push. If the previous run's land conflicted, merge \`origin/${main}\`
 into the branch and resolve the conflicts so that both changes survive. Nobody
 answers questions during the run: when you must choose, take the answer you
 would recommend and print a line \`DEFAULT: <question> -> <answer>\`. For work
-you find but do not do, print a line \`FOLLOWUP: <title>\`. Run the repo's
+you find but do not do, print a line \`FOLLOWUP: <title>\`. If the goal already
+holds on your branch and no edit is needed, make no commit, run the repo's tests,
+and print exactly one line \`${ALREADY_MET}: <evidence>\`, the evidence being the
+files, the lines and the commit on \`${main}\` that show it. Run the repo's
 tests before you end. End with a short summary of what you did and what you ran.`;
 
 /** The fixed text, the spec, every note in order, and the previous run's files. */

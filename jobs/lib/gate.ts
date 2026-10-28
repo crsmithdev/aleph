@@ -30,6 +30,9 @@ export function outcome(stdout: string): Outcome {
 export const tagged = (result: string, tag: string): string[] =>
   result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith(`${tag}:`)).map((l) => l.slice(tag.length + 1).trim()).filter(Boolean);
 
+/** The marker a worker's claim that the goal is already met starts with; the FACTORY prompt asks for it. */
+export const ALREADY_MET = "Goal: Already met";
+
 /**
  * The worker's claim that the goal is already met, as its last `Goal: Already met`
  * line: the reason given after it, or "no reason given". Null when there is no claim.
