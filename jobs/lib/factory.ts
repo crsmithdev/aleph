@@ -12,7 +12,8 @@ import { takeFresh } from "./deps.ts";
 import { normalizeDecision, writeDecision, type Decision } from "./decision.ts";
 import { itemOnMain, itemStates, type ItemState } from "./status.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
-import { allJobs, allRuns, expand, isLive, isOpen, lastReal, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allJobs, isOpen, issue as issueOf, lastReal, markNeedsChris, markRescued, needsChris, openJob, rescued, tailOf, type Job } from "./job.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
 const pauseFile = () => join(factoryDir(), "paused");
@@ -68,19 +69,14 @@ export function waiting(jobs = allJobs()): number {
   return jobs.filter((j) => isOpen(j) && j.at(-1)!.run.repo && keys.has(j.at(-1)!.run.repo!) && j.at(-1)!.run.state === "needs-you").length;
 }
 
-/** A file in a run's folder: the factory labelled the run's issue `needs-chris`, so the run no longer holds the factory. */
-const NEEDS_CHRIS = "needs-chris";
-/** A file in a run's folder: the safe default action taken on it, as its case. */
-const RESCUED = "rescued";
-
 export interface Hold { name: string; state: string; reason?: string; line: string }
 
 /** Whether an open job holds the factory: its last real run is stuck or failed, with no next run pending and no `needs-chris` label. */
-function holds(j: Entry[], keys: Set<string>, except?: string): boolean {
+function holds(j: Job, keys: Set<string>, except?: string): boolean {
   const last = lastReal(j);
   const r = last.run;
   return isOpen(j) && !!r.repo && keys.has(r.repo) && (r.state === "stuck" || r.state === "failed") && r.job !== except
-    && !r.next && !isLive(last.folder) && !existsSync(join(last.folder, NEEDS_CHRIS));
+    && !r.next && !isLive(last.folder) && !needsChris(last);
 }
 
 /**
@@ -242,7 +238,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
     if (!release) { skipped.push(`${name}: another dispatch is starting it`); continue; }
     try {
       const jobs = allJobs();
-      const open = jobs.find((j) => isOpen(j) && j.at(-1)!.run.name === name);
+      const open = openJob(name, null, jobs);
       if (open) { skipped.push(`${name}: ${open.at(-1)!.run.state}`); continue; }
       // Read after the jobs: a note added before the last run's drop is in the rerun's spec.
       const item = stillGoal(repo, listed.id);
@@ -279,10 +275,6 @@ const rerunFile = (name: string) => join(factoryDir(), "rerun", `${name}.md`);
 const rerunNote = (name: string): string => (existsSync(rerunFile(name)) ? readFileSync(rerunFile(name), "utf8").trim() : "");
 
 /** The last `n` lines of a run's file, or "" when it has none. */
-function tailOf(folder: string, file: string, n: number): string {
-  try { return readFileSync(join(folder, file), "utf8").trimEnd().split("\n").slice(-n).join("\n"); } catch { return ""; }
-}
-
 /** A note on the item, with the label and the done status when asked. Returns why it could not, or null. */
 function writeIssue(repo: Repo, id: number, text: string, opts: { done?: boolean; label?: string; decision?: Decision } = {}): string | null {
   try {
@@ -333,7 +325,7 @@ const RESCUE_WAIT_MS = () => Number(process.env.ALEPH_RESCUE_WAIT_MS ?? 60_000);
  */
 async function rescueStuck(act: Rescue, land?: Land): Promise<void> {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  const pending = (jobs: Entry[][]) => jobs.filter((j) => holds(j, keys));
+  const pending = (jobs: Job[]) => jobs.filter((j) => holds(j, keys));
   for (const first of pending(allJobs())) {
     const name = first[0].run.name;
     // Wait: the dispatch that holds it may have read the job before this run ended, and would not act on it.
@@ -351,12 +343,12 @@ async function rescueStuck(act: Rescue, land?: Land): Promise<void> {
   }
 }
 
-async function rescueJob(runs: Entry[], act: Rescue, land?: Land): Promise<void> {
+async function rescueJob(runs: Job, act: Rescue, land?: Land): Promise<void> {
   const last = lastReal(runs);
   const r = last.run;
   const repo = loadRegistry()[r.repo!];
   const name = r.name;
-  const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo ?? Number(name.match(/-(\d+)$/)?.[1]);
+  const todo = issueOf(runs) ?? Number(name.match(/-(\d+)$/)?.[1]);
   const issue = Number.isInteger(todo) ? todo : undefined;
   const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${repo.key}/${name}: ${line}`); };
   const record = (text: string, opts: { done?: boolean; label?: string; decision?: Decision } = {}) => {
@@ -364,7 +356,7 @@ async function rescueJob(runs: Entry[], act: Rescue, land?: Land): Promise<void>
     if (why) factoryLog(`${name}: no issue note: ${why}`);
   };
   const chris = async (question: string, decision?: Decision) => {
-    writeFileSync(join(last.folder, NEEDS_CHRIS), question + "\n");
+    markNeedsChris(last, question);
     record(`needs-chris: ${question}`, { label: "needs-chris", decision });
     await say(`needs-chris: ${question}`);
   };
@@ -385,7 +377,7 @@ async function rescueJob(runs: Entry[], act: Rescue, land?: Land): Promise<void>
   if (!key) return chris(`${name} is ${r.state} (${reason}); drop it, recheck it, or edit the goal?`, choice(`${name} is ${r.state} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
 
   if (key !== "duplicate") {
-    const before = allRuns().filter((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && tailOf(e.folder, RESCUED, 1) === key).length;
+    const before = allRuns().filter((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key).length;
     if (before) return chris(`${name} hit the same case again (${key}: ${reason}); a rerun did not clear it. Drop it, or change the goal?`, choice(`${name} hit the same case again (${key}): how should the factory go on?`, ["A rerun did not clear it"]));
   }
   const tryDo = async (why: string | null, what: string) => {
@@ -393,8 +385,8 @@ async function rescueJob(runs: Entry[], act: Rescue, land?: Land): Promise<void>
     return true;
   };
   const rerun = (note: string) => { mkdirSync(join(factoryDir(), "rerun"), { recursive: true }); writeFileSync(rerunFile(name), note + "\n"); };
-  const quoted = (file: string) => `\`\`\`\n${tailOf(last.folder, file, 20) || "(empty)"}\n\`\`\``;
-  writeFileSync(join(last.folder, RESCUED), key + "\n");
+  const quoted = (file: "checks.log" | "result.md") => `\`\`\`\n${tailOf(last, file, 20) || "(empty)"}\n\`\`\``;
+  markRescued(last, key);
 
   if (key === "duplicate") {
     const text = `${r.kind} run ${last.id} ended with no commit and the item is already ${onMain ? "on main" : "done"}: dropped as a duplicate`;

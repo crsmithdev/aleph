@@ -3,14 +3,15 @@
  * An agent run is setup, the worker, then the state rule; a plain run is one
  * command. Both end with state.json, then `exit`, then the news.
  */
-import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { readHidden, writeList } from "../../todo/lib/store.ts";
 import { fetchOrigin, followMain, git } from "./git.ts";
 import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
-import { LOW, allJobs, checkSlot, testParallel, allRuns, isLive, isOpen, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { LOW, checkSlot, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
 import { dispatchOn, hold, triageDetached, paused, recordFlake, waitingToLand } from "./factory.ts";
 import { startReview2 } from "./review2.ts";
@@ -89,18 +90,15 @@ tests before you end. End with a short summary of what you did and what you ran.
 export function prompt(id: string, folder: string, run: Run, repo: Repo): string {
   const first = join(folder, "..", run.job);
   const parts = [(repo.sandbox ? FACTORY : FIXED)(run, repo.main), `## Spec\n\n${readFileSync(join(first, "spec.md"), "utf8").trim()}`];
-  const notesDir = join(first, "notes");
-  if (existsSync(notesDir)) {
-    for (const n of readdirSync(notesDir).sort()) parts.push(`## Note ${basename(n, ".md")}\n\n${readFileSync(join(notesDir, n), "utf8").trim()}`);
-  }
-  const runs = allJobs().find((j) => j[0].id === run.job) ?? [];
+  const runs = jobById(run.job) ?? [];
+  if (runs.length) for (const n of notes(runs)) parts.push(`## Note ${n.name}\n\n${n.text.trim()}`);
   const prev = runs[runs.findIndex((e) => e.id === id) - 1];
   if (prev) {
     const p = prev.run;
     parts.push(`## Previous run: ${p.kind}, ${p.state}${p.needs ? ` (${p.needs})` : ""}${p.reason ? `: ${p.reason}` : ""}`);
-    for (const f of ["result.md", "checks.log", "land.log"]) {
-      const file = join(prev.folder, f);
-      if (existsSync(file)) parts.push(`### ${f}\n\n${readFileSync(file, "utf8").trim()}`);
+    for (const f of ["result.md", "checks.log", "land.log"] as const) {
+      const text = readFile(prev, f);
+      if (text !== undefined) parts.push(`### ${f}\n\n${text.trim()}`);
     }
   }
   return parts.join("\n\n") + "\n";
@@ -255,11 +253,11 @@ function landable(agent: Run | undefined): boolean {
 function queuedLands(repo: Repo, id: string, run: Run, cap: number): Member[] {
   const seen = new Set([run.job]);
   const out: Member[] = [];
-  const queued = allRuns().filter((e) => e.run.kind === "land" && e.run.repo === repo.key && e.id !== id && e.run.state === "running" && isLive(e.folder) && !existsSync(join(e.folder, "batch.json")))
+  const queued = allRuns().filter((e) => e.run.kind === "land" && e.run.repo === repo.key && e.id !== id && e.run.state === "running" && isLive(e.folder) && !hasFile(e, "batch.json"))
     .sort((a, b) => (a.run.made ?? 0) - (b.run.made ?? 0) || (a.id < b.id ? -1 : 1));
   for (const e of queued) {
     if (out.length >= cap || seen.has(e.run.job)) continue;
-    const runs = allJobs().find((j) => j[0].id === e.run.job);
+    const runs = jobById(e.run.job);
     if (!runs || !isOpen(runs) || !landable(runs.filter((x) => x.run.kind === "agent" || x.run.kind === "recheck").at(-1)?.run)) continue;
     seen.add(e.run.job);
     out.push({ id: e.id, folder: e.folder, run: e.run, log: (step, o = "") => appendFileSync(join(e.folder, "land.log"), `## ${step}\n${o ? o + "\n" : ""}\n`) });
@@ -276,11 +274,11 @@ async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
   if (room <= 0 || paused() || hold(undefined, run.job)) return;
   const jobs = allJobs();
   const names = waitingToLand(jobs).filter((n) => {
-    const last = jobs.find((j) => j.at(-1)!.run.name === n && isOpen(j))?.at(-1)!.run;
+    const last = openJob(n, null, jobs)?.at(-1)!.run;
     return last && last.repo === repo.key && !last.next && last.job !== run.job;
   }).slice(0, room);
   const cli = join(import.meta.dir, "..", "cli.ts");
-  const jobsOf = names.map((n) => jobs.find((j) => j.at(-1)!.run.name === n && isOpen(j))![0].run.job);
+  const jobsOf = names.map((n) => openJob(n, null, jobs)![0].run.job);
   // Their own units: a child of this land's unit would die with its cgroup when the leader exits.
   for (const n of names) {
     const unit = `aleph-pull-${repo.key}-${n}-${Date.now()}`.replace(/[^A-Za-z0-9:_.-]/g, "-");
@@ -769,7 +767,7 @@ function nextStep(run: Run, repo: Repo | undefined): Run["next"] {
   if (run.kind === "agent" && run.failed) return "worker";
   if (run.kind === "agent" || run.kind === "recheck") return run.state === "passed" && (run.land || repo?.autoland) ? "land" : undefined;
   if (run.kind !== "land" || run.state !== "failed") return undefined;
-  const lands = (allJobs().find((j) => j[0].id === run.job) ?? []).filter((e) => e.run.kind === "land").map((e) => e.run);
+  const lands = (jobById(run.job) ?? []).filter((e) => e.run.kind === "land").map((e) => e.run);
   if (run.conflicts?.length) return lands.filter((r) => r.conflicts?.length).length <= BOUNCES ? "worker" : undefined;
   if (run.reason === MOVED) return lands.filter((r) => r.reason === MOVED).length <= RELANDS ? "land" : undefined;
   return undefined;
@@ -801,7 +799,7 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
     updateRun(folder, { next: undefined });
     return;
   }
-  const dropped = (allJobs().find((j) => j[0].id === run.job) ?? []).some((e) => e.run.state === "dropped");
+  const dropped = (jobById(run.job) ?? []).some((e) => e.run.state === "dropped");
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
   if (repo && !dropped && run.todo !== undefined) fetchOrigin(repo.path);
   const there = dropped ? null : itemOnMain(repo, run.todo);
@@ -966,7 +964,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (git(repo.path, "rev-list", "--count", `${main}..refs/heads/${branch}`).out === "0") return stuck("no commit", facts);
 
     // Each earlier run of the job that a failed check sent back is a fix round.
-    const done = (allJobs().find((j) => j[0].id === run.job) ?? []).filter((e) => e.id !== id && e.run.kind === "agent" && e.run.failed).length;
+    const done = (jobById(run.job) ?? []).filter((e) => e.id !== id && e.run.kind === "agent" && e.run.failed).length;
     if (done) facts.round = done;
     const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
     const failed = await checksInSandbox(folder, dir, "out/out.bundle", `refs/heads/${branch}`, repo, changed, phase, recorder(folder), hiddenOf(repo, run));

@@ -5,7 +5,8 @@
  * an Origin, the server's own, so a web page in the browser cannot post here.
  */
 import { join } from "node:path";
-import { allJobs, loadRegistry } from "../../jobs/lib/ledger.ts";
+import { loadRegistry } from "../../jobs/lib/ledger.ts";
+import { latestJob } from "../../jobs/lib/job.ts";
 import type { Handler, Routes } from "../server.ts";
 
 const text = (body: string, status: number) => new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
@@ -14,7 +15,7 @@ const text = (body: string, status: number) => new Response(body, { status, head
 const cli = () => process.env.ALEPH_CLI || join(import.meta.dir, "..", "..", "bin", "aleph");
 
 /** The last run of the job called `name`, or undefined when the ledger has none. */
-const find = (name: string) => allJobs().findLast((j) => j.at(-1)!.run.name === name)?.at(-1);
+const find = (name: string) => latestJob(name)?.at(-1);
 
 function sameSite(req: Request): boolean {
   if (req.headers.get("x-aleph-ui") !== "1") return false;

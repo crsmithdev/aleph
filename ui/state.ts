@@ -3,11 +3,10 @@
  * the ledger, the factory directory and the work store. It marks no run
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { judgeChoice } from "../hooks/lib/jev.ts";
 import { DAY_CAP, LIVE_CAP, WAITING_CAP, health, hold, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
-import { allJobs, allRuns, isOpen, lastReal, loadRegistry, readReview2, type Entry, type Repo } from "../jobs/lib/ledger.ts";
+import { allRuns, loadRegistry, type Repo } from "../jobs/lib/ledger.ts";
+import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { readDecision, type Decision } from "../jobs/lib/decision.ts";
 import { readList } from "../todo/lib/store.ts";
 import { status, type Doc } from "../todo/lib/todo.ts";
@@ -129,17 +128,12 @@ function landedTrailers(repo: Repo | undefined, commit: string | undefined): { k
   return out;
 }
 
-const read = (folder: string, f: string): string | undefined => {
-  const p = join(folder, f);
-  return existsSync(p) ? readFileSync(p, "utf8") : undefined;
-};
-
-const tagged = (text: string, tag: string): string[] =>
-  text.split("\n").map((l) => l.trim()).filter((l) => l.startsWith(`${tag}:`)).map((l) => l.slice(tag.length + 1).trim());
-
-export function state(now = new Date()): State {
-  const registry = loadRegistry();
-  const jobs = allJobs();
+/**
+ * The UI's job: the Job module's `view`, with the item's title, the commit's
+ * URL and the trailers. One projector per request: it reads each work list
+ * and each origin URL once.
+ */
+export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
   const lists = new Map<string, Doc | null>();
   const list = (key: string): Doc | null => {
     if (!lists.has(key)) {
@@ -151,55 +145,42 @@ export function state(now = new Date()): State {
   };
   const bases = new Map<string, string | null>();
 
-  const toJob = (runs: Entry[]): Job => {
-    const last = runs.at(-1)!;
-    const r = last.run;
-    const repo = r.repo ? registry[r.repo] : undefined;
-    const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
-    const found = todo !== undefined && r.repo ? list(r.repo)?.items.find((i) => i.id === todo) : undefined;
-    const withDefaults = runs.findLast((e) => e.run.defaults !== undefined);
-    const withResult = runs.findLast((e) => e.run.kind === "agent" && existsSync(join(e.folder, "result.md")));
-    const commit = r.commit ?? runs.findLast((e) => e.run.commit)?.run.commit;
-    const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
+  const toJob = (runs: Runs, v: JobView = view(runs)): Job => {
+    const repo = v.repo ? registry[v.repo] : undefined;
+    const todo = v.item;
+    const found = todo !== undefined && v.repo ? list(v.repo)?.items.find((i) => i.id === todo) : undefined;
     const job: Job = {
-      name: r.name, repo: r.repo ?? "", item: found ? { id: found.id, title: found.title } : todo !== undefined ? { id: todo, title: "" } : null,
-      state: r.state, started: runs[0].run.started, run: { kind: r.kind, started: r.started },
-      defaults: withDefaults?.run.defaults ?? [],
-      followups: withResult ? tagged(read(withResult.folder, "result.md") ?? "", "FOLLOWUP") : [],
+      name: v.name, repo: v.repo ?? "", item: found ? { id: found.id, title: found.title } : todo !== undefined ? { id: todo, title: "" } : null,
+      state: v.state, started: v.started, run: { kind: v.run.kind, started: v.run.started },
+      defaults: v.defaults, followups: v.followups,
     };
-    if (r.needs) job.needs = r.needs;
-    if (r.phase) job.phase = r.phase;
-    if (r.reason) job.reason = r.reason;
-    if (r.question) job.question = r.question;
-    if (r.ended) job.ended = r.ended;
-    if (cost !== undefined) job.cost = cost;
-    const model = r.model ?? runs.findLast((e) => e.run.model)?.run.model;
-    if (model) job.model = model;
-    if (commit) {
-      job.commit = commit;
-      const url = commitUrl(repo, commit, bases);
+    for (const k of ["needs", "phase", "reason", "question", "ended", "cost", "model"] as const) if (v[k] !== undefined) (job as any)[k] = v[k];
+    if (v.commit) {
+      job.commit = v.commit;
+      const url = commitUrl(repo, v.commit, bases);
       if (url) job.commitUrl = url;
     }
-    const stat = r.stat ?? runs.findLast((e) => e.run.stat)?.run.stat;
-    if (r.state === "needs-you" && stat) job.stat = stat;
-    const review2 = r.state === "needs-you" ? readReview2(last.folder) : undefined;
-    if (review2) job.review2 = review2;
-    const withChecks = runs.findLast((e) => e.run.checks?.length)?.run.checks;
-    if (withChecks) job.checks = withChecks;
-    const hid = runs.findLast((e) => e.run.checks?.some((c) => c.name === "hidden" && c.total))?.run.checks?.find((c) => c.name === "hidden");
-    if (hid?.total) job.hidden = { passed: hid.passed ?? 0, total: hid.total };
-    if (r.state === "landed" && r.check === "open") job.check = "open";
-    const checks = (runs.findLast((e) => (e.run as any).checks)?.run as any)?.checks;
-    if (r.state === "stuck" || r.state === "failed") if (Array.isArray(checks)) job.checks = checks;
-    const trailers = r.state === "landed" ? landedTrailers(repo, commit)
-      : r.state === "needs-you" ? [
-        ...(todo !== undefined ? [{ key: "Item", value: `${r.repo}-${todo}` }] : []),
-        { key: "Job", value: r.job },
-        ...(r.needs === "held" || r.needs === "review" ? [{ key: "Held-by", value: "Chris" }] : []),
+    if (v.state === "needs-you" && v.stat) job.stat = v.stat;
+    if (v.state === "needs-you" && v.review2) job.review2 = v.review2;
+    if (v.checks) job.checks = v.checks;
+    if (v.hidden) job.hidden = v.hidden;
+    if (v.check === "open") job.check = "open";
+    const trailers = v.state === "landed" ? landedTrailers(repo, v.commit)
+      : v.state === "needs-you" ? [
+        ...(todo !== undefined ? [{ key: "Item", value: `${v.repo}-${todo}` }] : []),
+        { key: "Job", value: v.job },
+        ...(v.needs === "held" || v.needs === "review" ? [{ key: "Held-by", value: "Chris" }] : []),
       ] : [];
     if (trailers.length) job.trailers = trailers;
     return job;
   };
+  return { list, toJob };
+}
+
+export function state(now = new Date()): State {
+  const registry = loadRegistry();
+  const jobs = allJobs();
+  const { list, toJob } = jobProjector(registry);
 
   let landing = 0;
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];

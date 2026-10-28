@@ -9,7 +9,8 @@
 import { jobArgv, route } from "./lib/route.ts";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { LOW, allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, readReview2, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
+import { LOW, allRuns, isLive, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
+import { addNote, allJobs, findJob, goal, isOpen, issue as issueOf, latestJob, openJob, readFile, view, type Job } from "./lib/job.ts";
 import { baselineChecks, git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
 import { clearDecision } from "./lib/decision.ts";
 import { fetchOrigin } from "./lib/git.ts";
@@ -132,12 +133,12 @@ async function job(): Promise<void> {
   if (!release) refuse(`job ${name} is busy`);
   let child: ReturnType<typeof Bun.spawn> | undefined;
   try {
-    const open = allJobs().find((j) => isOpen(j) && j.at(-1)!.run.name === name);
+    const open = openJob(name);
     const last = open?.at(-1);
     if (last && last.run.repo !== repo.key) refuse(last.run.repo ? `${name} is open in ${last.run.repo}` : `${name} is running as ${last.id}`);
     if (last && isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
     const first = open?.[0];
-    const item = todo ?? open?.findLast((e) => e.run.todo !== undefined)?.run.todo;
+    const item = todo ?? (open && issueOf(open));
     if (first && item !== undefined) fetchOrigin(repo.path);
     const landedAs = first ? itemOnMain(repo, item) : null;
     if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
@@ -145,16 +146,14 @@ async function job(): Promise<void> {
     const worktree = repo.sandbox ? undefined : first?.run.worktree ?? join(repo.path, ".worktrees", `job-${name}`);
     const model = flag("model");
     // A follow-up without --todo keeps the item the job started with.
-    todo ??= open?.findLast((e) => e.run.todo !== undefined)?.run.todo;
+    todo ??= (open && issueOf(open));
     child = await dispatch({
       kind: "agent", job: first?.id, name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, ...(worktree ? { worktree } : {}),
       state: "running", phase: "starting", session: crypto.randomUUID(), ...(model ? { model } : {}),
       ...(todo !== undefined ? { todo } : {}), ...(rest.includes("--land") ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
     }, `${repo.key}-${name}`, repo.path, (folder) => {
       if (!first) return writeFileSync(join(folder, "spec.md"), spec);
-      const notes = join(first.folder, "notes");
-      mkdirSync(notes, { recursive: true });
-      writeFileSync(join(notes, `${String(readdirSync(notes).length + 1).padStart(3, "0")}.md`), spec);
+      addNote(open!, spec);
     });
   } finally {
     release!();
@@ -171,7 +170,7 @@ async function plain(): Promise<void> {
   if (!release) refuse(`${name} is busy`);
   let child: ReturnType<typeof Bun.spawn> | undefined;
   try {
-    const live = allJobs().find((j) => isOpen(j) && j.at(-1)!.run.name === name);
+    const live = openJob(name);
     if (live) refuse(`${name} is open as ${live.at(-1)!.id}`);
     // A command inside a registered repo gets that repo's env file, as scripts/job gave Sidetone's.
     const cwd = process.cwd();
@@ -197,7 +196,7 @@ async function plain(): Promise<void> {
 async function landJob(): Promise<void> {
   const name = checkName(positional[0]);
   // Two lands of one job at once (the dispatch's batch pull and the leader's) each pass the live check below: it and the start share a lock.
-  const repoKey = allJobs().find((j) => isOpen(j) && j.at(-1)!.run.name === name)?.at(-1)!.run.repo;
+  const repoKey = openJob(name)?.at(-1)!.run.repo;
   const release = await lock(`land-start-${repoKey}-${name}`, 30_000);
   if (!release) refuse(`${name}: another land is starting`);
   let child: ReturnType<typeof Bun.spawn> | undefined;
@@ -210,7 +209,7 @@ async function landJob(): Promise<void> {
 }
 
 async function landStart(name: string): Promise<ReturnType<typeof Bun.spawn> | undefined> {
-  const runs = allJobs().find((j) => isOpen(j) && j.at(-1)!.run.name === name) ?? refuse(`no open job named ${name}`);
+  const runs = openJob(name) ?? refuse(`no open job named ${name}`);
   const live = runs.find((e) => isLive(e.folder));
   if (live) refuse(`${name} is running as ${live.id}`);
   const agent = runs.filter((e) => e.run.kind === "agent" || e.run.kind === "recheck").at(-1)!.run;
@@ -237,7 +236,7 @@ async function landStart(name: string): Promise<ReturnType<typeof Bun.spawn> | u
 /** Close the manual check of a job that landed with it open, and its issue. */
 function checked(): void {
   const name = checkName(positional[0]);
-  const last = allJobs().filter((j) => j.at(-1)!.run.name === name).at(-1)?.at(-1);
+  const last = latestJob(name)?.at(-1);
   if (!last || last.run.state !== "landed" || last.run.check !== "open") refuse(`${name} has no open check`);
   updateRun(last!.folder, { check: "done" });
   const repo = last!.run.repo ? loadRegistry()[last!.run.repo] : undefined;
@@ -246,11 +245,6 @@ function checked(): void {
   if (why) console.error(`warn: issue ${item} not closed: ${why}`);
   out({ job: last!.run.job, name, state: "landed", check: "done" });
   dispatchDetached();
-}
-
-function read(folder: string, file: string): string | undefined {
-  const p = join(folder, file);
-  return existsSync(p) ? readFileSync(p, "utf8") : undefined;
 }
 
 /**
@@ -276,7 +270,7 @@ function reconcile(all: Entry[][]): Map<string, string> {
     if (found) {
       updateRun(last.folder, { state: "landed", commit: found.commit, reason: `found on main (${found.how})`, needs: undefined, told: true });
       removeBranch(repo, last.run);
-      const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
+      const todo = issueOf(runs);
       const why = todo === undefined ? null : updateTodo(repo, todo, `job ${last.run.name} found on main as ${found.commit.slice(0, 7)}`, true);
       if (why) console.error(`warn: issue ${todo} not closed: ${why}`);
       continue;
@@ -287,15 +281,12 @@ function reconcile(all: Entry[][]): Map<string, string> {
   return fates;
 }
 
-function summary(runs: Entry[], fates = new Map<string, string>()) {
-  const first = runs[0];
-  const last = runs.at(-1)!;
-  const r = last.run;
-  const goal = (read(first.folder, "spec.md") ?? read(first.folder, "command.txt") ?? "").trim().split("\n")[0];
+function summary(runs: Job, fates = new Map<string, string>()) {
+  const v = view(runs);
   return {
-    name: r.name, repo: r.repo, kind: r.kind, job: r.job, run: last.id, goal, state: r.state, needs: r.needs, phase: r.phase,
-    reason: r.reason, say: r.say, review2: readReview2(last.folder), ...(r.state === "landed" && r.check ? { check: r.check } : {}), fate: fates.get(r.job), session: r.session, started: first.run.started, ended: r.ended,
-    ...(isLost(last.folder) ? { lost: true } : {}),
+    name: v.name, repo: v.repo, kind: v.run.kind, job: v.job, run: v.run.id, goal: goal(runs), state: v.state, needs: v.needs, phase: v.phase,
+    reason: v.reason, say: v.say, review2: v.review2, ...(v.check ? { check: v.check } : {}), fate: fates.get(v.job), session: v.session, started: v.started, ended: v.ended,
+    ...(v.lost ? { lost: true } : {}),
   };
 }
 
@@ -320,13 +311,13 @@ function jobs(): void {
     const recent = all.filter((j) => !listed(j) && Date.now() - ended(j) < DAY_MS).sort((a, b) => ended(b) - ended(a));
     return out([...all.filter(listed), ...recent].map((j) => summary(j, fates)));
   }
-  const runs = all.filter(isOpen).find((j) => j.at(-1)!.run.name === name) ?? all.filter((j) => j.at(-1)!.run.name === name).at(-1);
+  const runs = findJob(name, null, all);
   if (!runs) refuse(`no job named ${name}`);
   const last = runs!.at(-1)!;
-  const checks = read(last.folder, "checks.log");
+  const checks = readFile(last, "checks.log");
   out({
-    ...summary(runs!, fates), question: last.run.question, result: read(last.folder, "result.md"),
-    checks: checks?.trimEnd().split("\n").slice(-40).join("\n"), land: read(last.folder, "land.log"),
+    ...summary(runs!, fates), question: last.run.question, result: readFile(last, "result.md"),
+    checks: checks?.trimEnd().split("\n").slice(-40).join("\n"), land: readFile(last, "land.log"),
   });
 }
 
@@ -337,12 +328,12 @@ function jobs(): void {
  */
 async function recheck(): Promise<void> {
   const name = checkName(positional[0]);
-  const found = allJobs().find((j) => isOpen(j) && j.at(-1)!.run.name === name) ?? refuse(`no open job named ${name}`);
+  const found = openJob(name) ?? refuse(`no open job named ${name}`);
   const release = await lock(`job-${found.at(-1)!.run.repo ?? ""}-${name}`);
   if (!release) refuse(`job ${name} is busy`);
   let child: ReturnType<typeof Bun.spawn> | undefined;
   try {
-    const runs = allJobs().find((j) => isOpen(j) && j.at(-1)!.run.name === name) ?? refuse(`no open job named ${name}`);
+    const runs = openJob(name) ?? refuse(`no open job named ${name}`);
     const last = runs.at(-1)!;
     if (isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
     const r = last.run;
@@ -351,7 +342,7 @@ async function recheck(): Promise<void> {
     const repo = loadRegistry()[r.repo ?? ""];
     if (!repo?.sandbox) refuse(`${name} is not a factory job`);
     if (!r.branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok) refuse(`${name} has no branch: drop it`);
-    const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
+    const todo = issueOf(runs);
     child = await dispatch({
       kind: "recheck", job: runs[0].id, name, repo: repo.key, branch: r.branch, state: "running", phase: "starting",
       ...(todo !== undefined ? { todo } : {}), ...(runs.some((e) => e.run.land) ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
@@ -367,7 +358,7 @@ async function recheck(): Promise<void> {
 async function drop(): Promise<void> {
   const name = checkName(positional[0]);
   const reason = positional.slice(1).join(" ") || "dropped by Chris";
-  const runs = allJobs().find((j) => isOpen(j) && j.at(-1)!.run.name === name) ?? refuse(`no open job named ${name}`);
+  const runs = openJob(name) ?? refuse(`no open job named ${name}`);
   const last = runs.at(-1)!;
   const release = await lock(`job-${last.run.repo ?? ""}-${name}`);
   if (!release) refuse(`job ${name} is busy`);
@@ -392,7 +383,7 @@ async function drop(): Promise<void> {
       if (!existsSync(join(e.folder, "exit"))) writeFileSync(join(e.folder, "exit"), "143");
       updateRun(e.folder, { state: "dropped", reason, needs: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     }
-    const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
+    const todo = issueOf(runs);
     // --quiet: the factory's own drop writes the note and the news itself, and its dispatch goes on.
     const quiet = rest.includes("--quiet");
     const why = repo && todo !== undefined && !quiet ? updateTodo(repo, todo, `job ${name} dropped: ${reason}`, false) : null;
