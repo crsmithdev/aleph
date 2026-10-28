@@ -245,3 +245,13 @@ test("message and diff text are escaped", () => {
     expect(h).not.toContain("<script>");
   } finally { actMessages.clear(); openDiffs.clear(); }
 });
+
+test("a needs-you card shows the review2 verdict and its reason", () => {
+  const withReview = (review2: object) => ({ ...state, needs: [{ ...state.needs[0], review2 }] });
+  const h = r.renderNeeds(withReview({ verdict: "back", reason: "a test lost <an> assertion" }));
+  expect(h).toContain("Review: back");
+  expect(h).toContain("a test lost &lt;an&gt; assertion");
+  expect(h.indexOf("Review: back")).toBeLessThan(h.indexOf('data-act="land"'));
+  expect(r.renderNeeds(withReview({ verdict: "land" }))).toContain("Review: land");
+  expect(r.renderNeeds(state)).not.toContain("Review");
+});

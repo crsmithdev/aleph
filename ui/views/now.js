@@ -89,6 +89,15 @@ export function renderLede(s) {
   return "All clear. The factory is running.";
 }
 
+const REVIEW2 = { land: "Review: land", back: "Review: back", chris: "Review: for you", pending: "Review running", error: "Review failed" };
+
+/** The review2 verdict and its reason, above the buttons. */
+function reviewLine(j) {
+  const r = j.review2;
+  if (!r) return "";
+  return `<p class="review2 quiet" data-verdict="${esc(r.verdict)}"><strong>${esc(REVIEW2[r.verdict] ?? r.verdict)}</strong>${r.reason ? `: ${esc(r.reason)}` : ""}</p>`;
+}
+
 export function renderNeeds(s) {
   const fold = s.needs.length >= 3;
   const cards = s.needs.map((j, i) => {
@@ -102,6 +111,7 @@ export function renderNeeds(s) {
       (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
       (j.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(j.stat)}</pre></div></div>` : "") +
       trailerLine(j) +
+      reviewLine(j) +
       (j.defaults.length ? `<details open><summary>Defaults taken<span class="peek">${j.defaults.length}</span></summary><div class="body"><ul>${j.defaults.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div></details>` : "") +
       (j.followups.length ? `<details><summary>Follow-ups<span class="peek">${j.followups.length}</span></summary><div class="body"><ul>${j.followups.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div></details>` : "") +
       `<div class="actions">${act("diff", j.name, "Diff")}${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}${actMsg(j.name)}</div>` +

@@ -19,6 +19,7 @@ import { behind, dispatchGoals, dispatchOn, factoryDir, factoryLog, LIVE_CAP, he
 import { runPath } from "./lib/sandbox.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
+import { runReview2 } from "./lib/review2.ts";
 import { derive, facts, FACTS_REF, itemOnMain, readFacts, type Facts } from "./lib/status.ts";
 
 const CLI = import.meta.path;
@@ -270,7 +271,7 @@ function summary(runs: Entry[], fates = new Map<string, string>()) {
   const goal = (read(first.folder, "spec.md") ?? read(first.folder, "command.txt") ?? "").trim().split("\n")[0];
   return {
     name: r.name, repo: r.repo, kind: r.kind, job: r.job, run: last.id, goal, state: r.state, needs: r.needs, phase: r.phase,
-    reason: r.reason, say: r.say, ...(r.state === "landed" && r.check ? { check: r.check } : {}), fate: fates.get(r.job), session: r.session, started: first.run.started, ended: r.ended,
+    reason: r.reason, say: r.say, review2: r.review2, ...(r.state === "landed" && r.check ? { check: r.check } : {}), fate: fates.get(r.job), session: r.session, started: first.run.started, ended: r.ended,
     ...(isLost(last.folder) ? { lost: true } : {}),
   };
 }
@@ -750,6 +751,7 @@ try {
     case "run": await plain(); break;
     case "jobs": jobs(); break;
     case "recheck": await recheck(); break;
+    case "review2": await runReview2(positional[0] ?? refuse("usage: aleph review2 <run-folder>")); break;
     case "drop": await drop(); break;
     case "unit": await unit(resolve(positional[0])); break;
     case "land": await landJob(); break;

@@ -21,6 +21,8 @@ export interface Job {
   commit?: string; commitUrl?: string;
   defaults: string[]; followups: string[];
   stat?: string;
+  /** Needs-you: the review2 verdict of the held run. */
+  review2?: { verdict: string; reason?: string };
   /** A landed job whose manual check is still open. */
   check?: "open";
   checks?: { name: string; ok: boolean; seconds: number }[];
@@ -147,6 +149,7 @@ export function state(now = new Date()): State {
     }
     const stat = r.stat ?? runs.findLast((e) => e.run.stat)?.run.stat;
     if (r.state === "needs-you" && stat) job.stat = stat;
+    if (r.state === "needs-you" && r.review2) job.review2 = r.review2;
     const withChecks = runs.findLast((e) => e.run.checks?.length)?.run.checks;
     if (withChecks) job.checks = withChecks;
     const hid = runs.findLast((e) => e.run.checks?.some((c) => c.name === "hidden" && c.total))?.run.checks?.find((c) => c.name === "hidden");

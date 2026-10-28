@@ -41,6 +41,8 @@ export interface Run {
   checks?: CheckResult[];
   /** A run that needs Chris for a held path or a test edit: the diff stat. */
   stat?: string;
+  /** A held run: the review2 verdict. "pending" while it runs, "error" when it gave none. */
+  review2?: { verdict: "land" | "back" | "chris" | "pending" | "error"; reason?: string };
   /** A land of a held run, by Chris: the commit gets `Held-by: Chris`. */
   held?: boolean;
   /** Sidetone's flag: the news line went out. `shown` is the report's. */

@@ -13,6 +13,7 @@ import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } fro
 import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
 import { dispatchOn, hold, triageDetached, paused, recordFlake } from "./factory.ts";
+import { startReview2 } from "./review2.ts";
 import { postTrace } from "./trace.ts";
 import { FACTS_REF, itemOnMain, writeFacts } from "./status.ts";
 
@@ -522,6 +523,7 @@ export async function unit(folder: string): Promise<void> {
   const next = nextStep(ended, repo);
   if (next) ended = updateRun(folder, { next });
   writeFileSync(join(folder, "exit"), String(code));
+  if (run.kind === "agent" || run.kind === "recheck") startReview2(folder);
   if ((run.kind === "agent" || run.kind === "recheck") && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
   if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });
   if (next) await start(folder, ended, next);

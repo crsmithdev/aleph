@@ -23,7 +23,7 @@ function env(extra: Record<string, string> = {}): Record<string, string> {
   return {
     ...(process.env as Record<string, string>), ...gitEnv,
     ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: items, ALEPH_JOB_FOREGROUND: "1",
-    ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
+    ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, ALEPH_REVIEW2_CMD: join(base, "fake-review2"), XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
     ALEPH_SANDBOX_CMD: join(base, "pass"), ALEPH_RUNS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_WORKER_TOKEN: join(base, "token"),
     // The tests start more factory runs than a day's cap; the cap has its own test.
     ALEPH_DAY_CAP: "100",
@@ -133,6 +133,7 @@ beforeAll(() => {
   fake = join(base, "fake-worker");
   reviewer = join(base, "fake-reviewer");
   writeFileSync(reviewer, REVIEWER, { mode: 0o755 });
+  writeFileSync(join(base, "fake-review2"), `#!/bin/bash\ncat > /dev/null\necho '{"type":"result","is_error":false,"result":"Checked.\\nVERDICT: back fix the held path"}'\n`, { mode: 0o755 });
   writeFileSync(fake, FAKE, { mode: 0o755 });
   // The tests' stand-in for srt: the clean environment, and FAKE_LOG for the fake worker.
   writeFileSync(join(base, "pass"), `#!/bin/bash\nshift\nexec env -i FAKE_LOG="$FAKE_LOG" "$@"\n`, { mode: 0o755 });
@@ -937,6 +938,11 @@ describe("a factory run", () => {
     const s = state(r.json.run);
     expect(s).toMatchObject({ state: "needs-you", needs: "held", reason: "held path held/x.txt" });
     expect(s.stat).toContain("held/x.txt");
+    const run = r.json.run;
+    for (let i = 0; i < 100 && state(run).review2?.verdict === "pending"; i++) await Bun.sleep(100);
+    expect(state(run).review2).toEqual({ verdict: "back", reason: "fix the held path" });
+    expect(file(run, "review2.md")).toContain("VERDICT: back fix the held path");
+    expect((await aleph(["jobs", "fheld"])).json.review2).toEqual({ verdict: "back", reason: "fix the held path" });
     const before = remoteGit("rev-parse", "main");
     expect(remoteGit("rev-parse", "main")).toBe(before);
     const l = await aleph(["land", "fheld"]);
