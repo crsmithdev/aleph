@@ -124,3 +124,12 @@ test("the sidebar lists Status, Activity (/timeline), Contents (/contents), then
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   expect(html).toContain("v.nav !== false");
 });
+
+test("the Status metric numbers use --metric, which has its own picker role apart from Titles", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  expect(html).toContain("--metric: 'Merriweather', Georgia, serif;");
+  expect(html).toContain(".metric .v { font: 700 var(--fs-metric)/1 var(--metric);");
+  expect(html).toContain(".metric .v .of { font: 400 22px/1 var(--metric);");
+  expect(html).toContain('["metric", "Big numbers", [...SERIF, ...SANS], "Merriweather", "Georgia, serif"],');
+  expect(html.indexOf('["display", "Titles"')).toBeLessThan(html.indexOf('["metric", "Big numbers"'));
+});

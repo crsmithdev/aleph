@@ -35,6 +35,7 @@
   --del: #C0304C;
   --focus: #7E57C2;
   --display: 'Merriweather', Georgia, serif;
+  --metric: 'Merriweather', Georgia, serif;  /* the big numbers on the Status metric cards */
   --sans: 'Work Sans', system-ui, sans-serif;
   --num: var(--sans);     /* numbers: counts, costs, times */
   --mono: 'Hack Nerd Font', 'Hack', ui-monospace, monospace;
@@ -45,7 +46,7 @@
   --fs-md: 14px;          /* body */
   --fs-lg: 15px;          /* section headings */
   --fs-xl: 26px;          /* page title, in --display */
-  --fs-metric: 52px;      /* the numbers on the Status metric cards, in --display */
+  --fs-metric: 52px;      /* the numbers on the Status metric cards, in --metric */
 }
 /* Web Awesome reads these; var() follows the tokens into dark, so one block serves both. */
 :root {
@@ -141,10 +142,10 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .metric { display: grid; gap: 10px; min-width: 0; padding: 20px 22px 18px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); color: var(--ink); text-decoration: none; }
 .metric:hover { border-color: var(--muted); }
 .metric .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
-.metric .v { font: 700 var(--fs-metric)/1 var(--display); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); white-space: nowrap; }
+.metric .v { font: 700 var(--fs-metric)/1 var(--metric); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); white-space: nowrap; }
 .metric.done .v { color: var(--done); }
 .metric.run .v { color: var(--run); }
-.metric .v .of { font: 400 22px/1 var(--display); color: var(--muted); }
+.metric .v .of { font: 400 22px/1 var(--metric); color: var(--muted); }
 .agent { margin: 0; font-size: var(--fs-sm); color: var(--muted); }
 .agent.on { color: var(--ink); font-weight: 600; }
 
@@ -735,6 +736,7 @@ pre.stat b { color: var(--need); }
   const LOCAL = new Set(["Hack Nerd Font"]);
   const ROLES = [
     ["display", "Titles", [...SERIF, ...SANS], "Merriweather", "Georgia, serif"],
+    ["metric", "Big numbers", [...SERIF, ...SANS], "Merriweather", "Georgia, serif"],
     ["sans", "Text", SANS, "Work Sans", "system-ui, sans-serif"],
     ["num", "Numbers", [...SANS, ...MONO], "", "system-ui, sans-serif"],
     ["mono", "Code", MONO, "Hack Nerd Font", "ui-monospace, monospace"],
