@@ -25,6 +25,9 @@ export const openJob = (name: string, repo?: string | null, jobs = allJobs()): J
 /** The newest job called `name` (in `repo`, when given), open or not. */
 export const latestJob = (name: string, repo?: string | null, jobs = allJobs()): Job | undefined => jobs.findLast(nameIs(name, repo));
 
+/** Every job called `name` (in `repo`, when given), oldest first. */
+export const jobsNamed = (name: string, repo?: string | null, jobs = allJobs()): Job[] => jobs.filter(nameIs(name, repo));
+
 /** The open job called `name`, else the newest. */
 export const findJob = (name: string, repo?: string | null, jobs = allJobs()): Job | undefined => openJob(name, repo, jobs) ?? latestJob(name, repo, jobs);
 

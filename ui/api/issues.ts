@@ -5,8 +5,8 @@
  * `aleph todo add`, so the CLI stays the one writer.
  */
 import { join } from "node:path";
-import { allJobs, loadRegistry, type Repo } from "../../jobs/lib/ledger.ts";
-import { lastReal } from "../../jobs/lib/job.ts";
+import { allJobs, lastReal } from "../../jobs/lib/job.ts";
+import { loadRegistry, type Repo } from "../../jobs/lib/ledger.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { itemStates, landedCommits, recentRepos } from "../../jobs/lib/status.ts";
 import { readDecision } from "../../jobs/lib/decision.ts";

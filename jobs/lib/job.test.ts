@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addNote, allJobs, batch, findJob, goal, hasFile, issue, jobById, lastReal, latestFile, latestJob, markNeedsChris, markRescued, needsChris, notes, openJob, readFile, rescued, stateOf, tailOf, view } from "./job.ts";
+import { addNote, allJobs, batch, findJob, goal, hasFile, issue, jobById, lastReal, latestFile, jobsNamed, latestJob, markNeedsChris, markRescued, needsChris, notes, openJob, readFile, rescued, stateOf, tailOf, view } from "./job.ts";
 import { writeRun, type Run } from "./ledger.ts";
 
 let base: string;
@@ -38,6 +38,8 @@ describe("lookups", () => {
     expect(latestJob("n1")![0].id).toBe("20261028-000003-a03");
     expect(findJob("n1")![0].id).toBe("20261028-000002-a02");
     expect(latestJob("n1", "fac")![0].id).toBe("20261028-000002-a02");
+    expect(jobsNamed("n1").map((j) => j[0].id)).toEqual(["20261028-000001-a01", "20261028-000002-a02", "20261028-000003-a03"]);
+    expect(jobsNamed("n1", "oth").length).toBe(1);
     expect(openJob("n1", "oth")).toBeUndefined();
     expect(findJob("n1", "oth")![0].id).toBe("20261028-000003-a03");
     expect(findJob("nope")).toBeUndefined();

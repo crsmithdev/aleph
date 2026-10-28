@@ -13,7 +13,7 @@ import { normalizeDecision, writeDecision, type Decision } from "./decision.ts";
 import { itemOnMain, itemStates, type ItemState } from "./status.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
-import { allJobs, isOpen, issue as issueOf, lastReal, markNeedsChris, markRescued, needsChris, openJob, rescued, tailOf, type Job } from "./job.ts";
+import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, rescued, tailOf, type Job } from "./job.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
 const pauseFile = () => join(factoryDir(), "paused");
@@ -289,7 +289,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       const gated = gates({ only: ["live", "day", "waiting"], jobs });
       if (gated) { skipped.push(`${name}: ${gated.why}`); continue; }
       const again = rerunNote(name);
-      const drops = jobs.filter((j) => j[0].run.name === name && j.at(-1)!.run.state === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
+      const drops = jobsNamed(name, null, jobs).filter((j) => j.at(-1)!.run.state === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
       const spec = `# ${item.title}\n\n${item.body.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
       const why = await start(repo, name, item.id, spec);
       if (why) skipped.push(`${name}: ${why}`);
