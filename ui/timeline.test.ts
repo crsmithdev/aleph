@@ -7,7 +7,7 @@ import { add, setStatus } from "../todo/lib/todo.ts";
 import { clearCache } from "./langfuse.ts";
 import { routes, timeline } from "./api/timeline.ts";
 // @ts-ignore plain JS, shared with the page
-import { duration, mark, redirect, renderEvent, renderStream, renderTimeline, stripOption, view, mountTimeline } from "./views/timeline.js";
+import { cancelTarget, duration, mark, mountTimeline, redirect, renderEvent, renderStream, renderTimeline, stripOption, view } from "./views/timeline.js";
 
 let base: string, jobsDir: string, fake: ReturnType<typeof Bun.serve>;
 const saved: Record<string, string | undefined> = {};
@@ -305,5 +305,71 @@ describe("the List address", () => {
     expect(view).toMatchObject({ path: "/timeline", title: "Activity", group: "factory", order: 1 });
     expect(existsSync(new URL("./views/list.js", import.meta.url).pathname)).toBe(false);
     expect(readFileSync(new URL("./index.html", import.meta.url), "utf8")).toContain("redirect");
+  });
+});
+
+describe("Cancel controls", () => {
+  const base = { at: at(0), end: undefined, details: [] };
+  const job = { ...base, kind: "job", what: "started", state: "running", title: "fac-9", id: "fac-9", href: "#/jobs/fac-9" };
+  const landed = { ...base, kind: "job", what: "started", state: "landed", end: at(0, 11), title: "fac-8", id: "fac-8", href: "#/jobs/fac-8" };
+  const open = { ...base, kind: "issue", what: "opened", state: "open", title: "t", id: "fac-3", href: "#/issues/fac/3" };
+  const done = { ...base, kind: "issue", what: "closed", state: "done", title: "t", id: "fac-2", href: "#/issues/fac/2" };
+
+  test("a running job and an open issue have Cancel; a landed job and a done issue do not", () => {
+    expect(renderEvent(job)).toContain("data-cancel");
+    expect(renderEvent(open)).toContain("data-cancel");
+    expect(renderEvent(landed)).not.toContain("data-cancel");
+    expect(renderEvent(done)).not.toContain("data-cancel");
+    // the opened row of an issue that was since closed gets none either
+    expect(renderStream([done, { ...open, href: done.href }])).not.toContain("data-cancel");
+    expect(cancelTarget(job)!.url).toBe("/api/drop/fac-9");
+    expect(cancelTarget(open)!.url).toBe("/api/issues/fac/3/drop");
+  });
+
+  function click(rows: any[], respond: () => Response) {
+    const sent: { url: string; init: any }[] = [];
+    const calls: string[] = [];
+    const real = { fetch: globalThis.fetch, confirm: (globalThis as any).confirm, alert: (globalThis as any).alert };
+    (globalThis as any).fetch = async (url: string, init: any) => { sent.push({ url, init }); return respond(); };
+    (globalThis as any).confirm = () => { calls.push("confirm"); return true; };
+    (globalThis as any).alert = () => { calls.push("alert"); };
+    const classes = new Set<string>();
+    const msg: any = { textContent: "", className: "cmsg" };
+    const btn: any = { dataset: {}, textContent: "Cancel", disabled: false, isConnected: true, remove() {}, classList: { add: (c: string) => classes.add(c), remove: (c: string) => classes.delete(c) } };
+    const tr: any = { querySelector: () => msg, set outerHTML(h: string) { tr.html = h; }, html: "" };
+    btn.closest = () => tr;
+    let handler: any;
+    const stream: any = { innerHTML: "", addEventListener: (_: string, h: any) => { handler = h; }, querySelectorAll: () => [tr] };
+    const root: any = { querySelector: (sel: string) => (sel === "#tl-stream" ? stream : null), querySelectorAll: () => [] };
+    mountTimeline(root, { rows, now: new Date().toISOString() });
+    const ev = { target: { closest: (sel: string) => (sel.includes("data-cancel") ? btn : null) } };
+    const restore = () => Object.assign(globalThis, real);
+    return { sent, calls, btn, msg, tr, press: () => handler(ev), restore };
+  }
+
+  test("one click arms and sends nothing; a second sends one request; no dialog", async () => {
+    const c = click([job], () => Response.json({ code: 0, stdout: "{}", stderr: "" }));
+    try {
+      await c.press();
+      expect(c.btn.textContent).toBe("Confirm cancel");
+      expect(c.sent).toHaveLength(0);
+      await c.press();
+      expect(c.sent).toHaveLength(1);
+      expect(c.sent[0].url).toBe("/api/drop/fac-9");
+      expect(JSON.parse(c.sent[0].init.body).reason).toBe("cancelled from the Activity page");
+      expect(c.tr.html).not.toContain("data-cancel");
+      expect(c.tr.html).toContain("dropped");
+      expect(c.calls).toEqual([]);
+    } finally { c.restore(); }
+  });
+
+  test("an issue's Cancel posts to the issue route and a failure shows the server's error", async () => {
+    const c = click([open], () => Response.json({ error: "no such issue" }, { status: 404 }));
+    try {
+      await c.press(); await c.press();
+      expect(c.sent.map((x) => x.url)).toEqual(["/api/issues/fac/3/drop"]);
+      expect(c.msg.textContent).toBe("no such issue");
+      expect(c.btn.textContent).toBe("Cancel");
+    } finally { c.restore(); }
   });
 });

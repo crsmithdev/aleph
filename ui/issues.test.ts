@@ -105,6 +105,25 @@ describe("GET /api/issues", () => {
   });
 });
 
+describe("POST /api/issues/:repo/:id/drop", () => {
+  test("drops the issue through the real CLI and returns its status; an unknown id is 404", async () => {
+    const real = process.env.ALEPH_CLI, wrap = join(base, "real-aleph");
+    writeFileSync(wrap, `#!/bin/sh\nexec ${process.execPath} ${join(import.meta.dir, "..", "jobs", "cli.ts")} "$@"\n`);
+    chmodSync(wrap, 0o755);
+    process.env.ALEPH_CLI = wrap;
+    try {
+      const h = { "x-aleph-ui": "1", "content-type": "application/json" };
+      expect((await at("/api/issues/fac/99/drop", { method: "POST", headers: h })).status).toBe(404);
+      expect((await at("/api/issues/nope/1/drop", { method: "POST", headers: h })).status).toBe(404);
+      expect((await at("/api/issues/fac/3/drop", { method: "POST" })).status).toBe(403);
+      const r = await at("/api/issues/fac/3/drop", { method: "POST", headers: h, body: JSON.stringify({}) });
+      expect(r.status).toBe(200);
+      expect(await r.json()).toMatchObject({ repo: "fac", id: 3, status: "dropped" });
+      expect((await getJson("/api/issues/fac/3")).status).toBe("dropped");
+    } finally { if (real === undefined) delete process.env.ALEPH_CLI; else process.env.ALEPH_CLI = real; }
+  });
+});
+
 describe("GET /api/issues/:repo/:n", () => {
   test("lists the job and the trailer commit, not the prose one", async () => {
     const d = await getJson("/api/issues/fac/1");

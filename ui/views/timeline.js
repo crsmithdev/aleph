@@ -44,6 +44,11 @@ const STYLE = `<style>
 .tl .tbl .num { font-variant-numeric: tabular-nums; }
 .tl .tbl td.det { color: var(--muted); font-size: 12.5px; }
 .tl .tbl td.det .k { margin-left: 8px; }
+.tl .tbl td.act { white-space: normal; }
+.tl .tbl .cancel { font: 12px var(--sans); cursor: pointer; }
+.tl .tbl .cancel.arm { color: var(--stuck); }
+.tl .tbl .cmsg { margin-left: 8px; font: 12px var(--sans); color: var(--muted); }
+.tl .tbl .cmsg.err { color: var(--stuck); }
 .tl .tbl td.det .k:first-child { margin-left: 0; }
 </style>`;
 
@@ -83,8 +88,16 @@ export function duration(e, now = Date.now()) {
 
 const running = (e) => e.kind === "job" && e.state === "running" && !e.end;
 
-/** One stream row: Time, Duration, Kind chip, Id link, Title, Cost, Details. */
-export function renderEvent(e, now = Date.now()) {
+/** The request a row's Cancel sends, or null when the row is not cancellable: a running job or land, or an open issue. */
+export function cancelTarget(e, closed = new Set()) {
+  if (running(e)) return { url: `/api/drop/${encodeURIComponent(e.id ?? e.title)}`, body: { reason: CANCEL_REASON } };
+  const m = e.kind === "issue" && e.what === "opened" && e.state === "open" && !closed.has(e.href) && /^#\/issues\/([^/]+)\/(\d+)$/.exec(e.href ?? "");
+  return m ? { url: `/api/issues/${m[1]}/${m[2]}/drop`, body: { reason: CANCEL_REASON } } : null;
+}
+const CANCEL_REASON = "cancelled from the Activity page";
+
+/** One stream row: Time, Duration, Kind chip, Id link, Title, Cost, Details, and a Cancel control where one applies. */
+export function renderEvent(e, now = Date.now(), closed = new Set()) {
   const det = (e.details ?? []).map(([k, v]) => `<span class="k">${esc(k)} ${esc(v)}</span>`).join("");
   const m = mark(e);
   const chip = `<span class="chip ${m.tone}" title="${esc(`${e.kind} ${e.what}${e.state ? `: ${e.state}` : ""}`)}">${esc(e.kind)}</span>` +
@@ -93,17 +106,20 @@ export function renderEvent(e, now = Date.now()) {
   return `<tr class="evr" data-kind="${esc(e.kind)}"><td class="t num">${esc(when(e))}</td><td class="num">${esc(duration(e, now))}</td>` +
     `<td>${chip}</td><td>${id ? `<a href="${esc(e.href)}">${esc(id)}</a>` : ""}</td>` +
     `<td class="ttl">${esc(e.title)}</td><td class="num">${e.cost == null ? "" : esc(money(e.cost))}</td>` +
-    `<td class="det">${det}</td></tr>`;
+    `<td class="det">${det}</td>` +
+    `<td class="act">${cancelTarget(e, closed) ? `<button type="button" class="cancel" data-cancel>Cancel</button>` : ""}<span class="cmsg" role="status"></span></td></tr>`;
 }
 
 export const PAGE = 100;
-const HEAD = "<thead><tr><th>Time</th><th>Duration</th><th>Kind</th><th>Id</th><th>Title</th><th>Cost</th><th>Details</th></tr></thead>";
+const HEAD = "<thead><tr><th>Time</th><th>Duration</th><th>Kind</th><th>Id</th><th>Title</th><th>Cost</th><th>Details</th><th></th></tr></thead>";
 
 /** Page `page` (0 = newest) of the rows, 100 to a page, with Older and Newer controls. */
 export function renderStream(rows, page = 0, now = Date.now(), size = PAGE) {
   const pages = Math.max(1, Math.ceil(rows.length / size));
   const p = Math.min(Math.max(0, page), pages - 1);
-  const body = rows.slice(p * size, (p + 1) * size).map((e) => renderEvent(e, now)).join("");
+  // An issue that has a closed or dropped row is no longer open, whatever its opened row says.
+  const closed = new Set(rows.filter((e) => e.kind === "issue" && e.what !== "opened").map((e) => e.href));
+  const body = rows.slice(p * size, (p + 1) * size).map((e) => renderEvent(e, now, closed)).join("");
   const ctl = `<div class="pager"><button type="button" data-page="${p + 1}"${p + 1 >= pages ? " disabled" : ""}>Older</button>` +
     `<span>Page ${p + 1} of ${pages}</span><button type="button" data-page="${p - 1}"${p === 0 ? " disabled" : ""}>Newer</button></div>`;
   return `<div class="list"><div class="tscroll"><table class="tbl">${HEAD}<tbody>${body}</tbody></table></div></div>${ctl}`;
@@ -223,10 +239,44 @@ export function mountTimeline(root, d) {
     for (const b of boxes) b.checked = on.has(b.dataset.kind);
     page = 0; show(); c?.setOption(stripOption(d?.strip ?? [], [...on]), true);
   });
-  stream.addEventListener("click", (ev) => {
+  // Rows by position on the page, so a click finds its event again after a redraw.
+  const CONFIRM_MS = 5000;
+  stream.addEventListener("click", async (ev) => {
+    const cb = ev.target.closest?.("button[data-cancel]");
+    if (cb) return cancelClick(cb);
     const b = ev.target.closest?.("button[data-page]");
     if (!b || b.disabled) return;
     page = Number(b.dataset.page); show();
     stream.scrollIntoView?.({ block: "start" });
   });
+  async function cancelClick(btn) {
+    const tr = btn.closest("tr"), msg = tr.querySelector(".cmsg");
+    const rows = (d?.rows ?? []).filter((e) => on.has(e.kind)).slice(page * PAGE, (page + 1) * PAGE);
+    const e = rows[[...stream.querySelectorAll("tbody tr")].indexOf(tr)];
+    const closed = new Set((d?.rows ?? []).filter((x) => x.kind === "issue" && x.what !== "opened").map((x) => x.href));
+    const target = e && cancelTarget(e, closed);
+    if (!target) return;
+    if (!btn.dataset.armed) {
+      btn.dataset.armed = "1"; btn.textContent = "Confirm cancel"; btn.classList.add("arm"); msg.textContent = "";
+      setTimeout(() => { if (!btn.isConnected || btn.dataset.sent) return; delete btn.dataset.armed; btn.textContent = "Cancel"; btn.classList.remove("arm"); }, CONFIRM_MS);
+      return;
+    }
+    if (btn.dataset.sent) return;
+    btn.dataset.sent = "1"; btn.disabled = true; msg.className = "cmsg"; msg.textContent = "Cancelling…";
+    try {
+      const res = await fetch(target.url, { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify(target.body) });
+      const j = await res.json().catch(() => ({}));
+      const err = !res.ok ? (j.error ?? `HTTP ${res.status}`) : j.code ? (j.stderr || j.stdout || `aleph exited ${j.code}`).trim() : "";
+      if (err) throw new Error(err);
+      // The row shows its new state, and keeps it when the page redraws.
+      if (e.kind === "issue") e.state = j.status ?? "dropped";
+      else { e.state = "dropped"; e.end = new Date().toISOString(); }
+      tr.outerHTML = renderEvent(e, now, closed);
+      const done = [...stream.querySelectorAll("tbody tr")][rows.indexOf(e)]?.querySelector(".cmsg");
+      if (done) done.textContent = e.kind === "issue" ? `Now ${e.state}` : "Dropped";
+    } catch (x) {
+      delete btn.dataset.sent; delete btn.dataset.armed; btn.disabled = false; btn.textContent = "Cancel"; btn.classList.remove("arm");
+      msg.className = "cmsg err"; msg.textContent = x?.message ?? String(x);
+    }
+  }
 }

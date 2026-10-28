@@ -143,7 +143,27 @@ async function create(req: Request, url: URL): Promise<Response> {
   return Response.json(added);
 }
 
+/** `aleph issue drop <repo> <id>`: the CLI's own command, so the CLI stays the one writer. Answers with its JSON (the new status). */
+async function drop(req: Request, params: Record<string, string>, url: URL): Promise<Response> {
+  const origin = req.headers.get("origin");
+  if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
+  const repo = loadRegistry()[params.repo];
+  const n = Number(params.id);
+  const none = Response.json({ error: "no such issue" }, { status: 404 });
+  if (!repo || !Number.isInteger(n)) return none;
+  let doc: todos.Doc | null;
+  try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
+  if (!doc || !todos.find(doc, n)) return none;
+  const body: any = await req.json().catch(() => ({}));
+  const reason = typeof body?.reason === "string" && body.reason.trim() ? body.reason.trim() : "cancelled from the Activity page";
+  const p = Bun.spawn([...cliArgv(), "issue", "drop", repo.key, String(n), reason], { stdin: "ignore", stdout: "pipe", stderr: "pipe", env: process.env });
+  const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
+  if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
+  try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }
+}
+
 export const routes: Routes = {
+  "POST /api/issues/:repo/:id/drop": (req, params, url) => drop(req, params, url),
   "GET /api/issues": (_req, _p, url) => list(url),
   "GET /api/issues/:repo/:n": (_req, params, url) => detail(params, url),
   "POST /api/issues": (req, _p, url) => create(req, url),
