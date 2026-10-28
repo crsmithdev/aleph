@@ -1,7 +1,7 @@
 // Sessions, Session and Turn: the conversations Langfuse recorded. One module
 // holds the three views; sessions-session.js and sessions-turn.js re-export
 // the last two, because the page reads one `view` per file.
-import { chips, empty, error, esc, filterBar, idLink, money, pageHead, pager, when } from "../lib.js";
+import { chips, empty, error, esc, filterBar, idLink, money, pageHead, pager, shortModel, when } from "../lib.js";
 
 const dur = (ms) => (ms == null ? "" : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`);
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
@@ -73,10 +73,10 @@ export function renderSession(d) {
   // Columns: turn (id), prompt (title), output, model, numbers, time last.
   const rows = d.turns.map((t) =>
     `<tr><td class="num"><a href="${esc(href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}">${t.n}</a></td>` +
-    `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td>${esc(line(t.output))}</td><td>${esc(t.model ?? "")}</td><td class="num">${t.tools}</td>` +
+    `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td>${esc(line(t.output))}</td><td>${esc(shortModel(t.model))}</td><td class="num">${t.tools}</td>` +
     `<td class="num">${esc(dur(t.durationMs))}</td><td class="num">${esc(money(t.cost))}</td><td class="time">${esc(when(t.start))}</td></tr>`).join("");
   const aside = [idLink(d.id.slice(0, 8), href(`/sessions/${encodeURIComponent(d.id)}`)), langfuse(d.base, d.turns[0]?.traceId)].filter(Boolean).join(" ");
-  return `<div class="page"><p class="quiet"><a href="#/sessions">Sessions</a></p>${pageHead(d.project, { count: d.turns.length, aside })}` +
+  return `<div class="page"><p class="quiet"><a href="#/sessions">← Sessions</a></p>${pageHead(d.project, { count: d.turns.length, aside })}` +
     `${d.taskTypes?.length ? `<p>${chips(d.taskTypes)}</p>` : ""}` +
     `<div class="tscroll"><table class="tbl"><thead><tr><th class="num">Turn</th><th>Prompt</th><th>Output</th><th>Model</th><th class="num">Tools</th><th class="num">Duration</th><th class="num">Cost</th><th>Started</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
@@ -86,7 +86,7 @@ function obsRows(o, depth) {
   const detail = [
     o.recall ? `candidates ${esc(o.recall.candidates ?? "?")}, asked ${esc(o.recall.asked ?? "?")}, kept ${esc(o.recall.kept ?? "?")}` : "",
     o.verify ? `${esc(o.verify.kind ?? "")} ${esc(o.verify.verdict ?? "")}` : "",
-    o.model ? esc(o.model) : "",
+    o.model ? esc(shortModel(o.model)) : "",
     o.error ? `Error: ${esc(o.error)}` : "",
   ].filter(Boolean).join("; ");
   const fold = (label, text) => (text ? `<details><summary>${label}</summary><pre>${esc(text)}</pre></details>` : "");
@@ -99,7 +99,7 @@ export function renderTurn(d) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
   const sid = encodeURIComponent(d.id);
   const nav = (n, label) => (n >= 1 && n <= d.total ? `<a href="${esc(href(`/sessions/${sid}/turns/${n}`))}">${label}</a>` : "");
-  return `<div class="page"><p class="quiet"><a href="#/sessions">Sessions</a> / ${idLink(d.id.slice(0, 8), href(`/sessions/${sid}`))}</p>` +
+  return `<div class="page"><p class="quiet"><a href="#/sessions">← Sessions</a> / ${idLink(d.id.slice(0, 8), href(`/sessions/${sid}`))}</p>` +
     pageHead(`Turn ${d.n} of ${d.total}`, { aside: [nav(d.n - 1, "Previous"), nav(d.n + 1, "Next"), langfuse(d.base, d.traceId)].filter(Boolean).join(" ") }) +
     `<dl class="facts"><div><dt>Started</dt><dd>${esc(when(d.start))}</dd></div><div><dt>Cost</dt><dd>${esc(money(d.cost))}</dd></div><div><dt>Duration</dt><dd>${esc(dur(d.durationMs))}</dd></div></dl>` +
     `<h2>Prompt</h2><pre>${esc(d.prompt)}</pre><h2>Output</h2><pre>${esc(d.output)}</pre><h2>Observations</h2>` +

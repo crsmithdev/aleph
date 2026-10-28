@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (one job's runs, result, checks,
 // logs, and a diff loaded on demand). Render functions take the /api/jobs
 // objects and return HTML strings, with no DOM, so tests can call them.
-import { STATES, badge, cmd, empty, esc, filterBar, idLink, md, money, pageHead, pager, span, when } from "../lib.js";
+import { STATES, badge, cmd, empty, esc, filterBar, idLink, md, money, pageHead, pager, shortModel, span, when } from "../lib.js";
 
 
 /** The list's data URL: the filters in the hash go to the API. */
@@ -56,7 +56,7 @@ export function renderJobs(jobs, f = {}) {
     `<tr${i >= PAGE ? " hidden" : ""}><td>${idLink(j.name, href(`/jobs/${encodeURIComponent(j.name)}`))}</td>` +
     `<td class="wide" title="${esc(j.item?.title || j.name)}">${esc(j.item?.title || j.name)}</td><td>${badge(j.state)}</td><td>${esc(j.repo)}</td>` +
     `<td class="time">${esc(when(j.started))}</td><td class="num">${j.ended ? esc(span(j.started, j.ended)) : ""}</td>` +
-    `<td class="num">${j.cost !== undefined ? esc(money(j.cost)) : ""}</td><td>${esc(j.model ?? "")}</td></tr>`).join("");
+    `<td class="num">${j.cost !== undefined ? esc(money(j.cost)) : ""}</td><td>${esc(shortModel(j.model))}</td></tr>`).join("");
   return `<div class="page">${pageHead("Jobs", { count: jobs.length })}${renderFilters(jobs, f)}` + (rows
     ? `<div class="tscroll" style="overflow-x:auto;max-width:100%"><table class="tbl"><thead><tr><th>Job</th><th>Title</th><th>State</th><th>Project</th><th>Started</th><th class="num">Took</th><th class="num">Cost</th><th>Model</th></tr></thead><tbody>${rows}</tbody></table></div>` +
       (jobs.length > PAGE ? pager(PAGE, jobs.length, PAGE) : "")
@@ -83,7 +83,7 @@ export function mountJobs(root, _jobs, f = {}) {
 export function renderRuns(runs) {
   // Columns: kind (id), reason (title), state, model, then took, cost, started.
   const rows = runs.map((r) =>
-    `<tr class="run run-${esc(r.kind)}"><td>${esc(r.kind)}</td><td class="wide" title="${esc(r.reason ?? "")}">${esc(r.reason ?? "")}</td><td>${badge(r.state)}</td><td>${esc(r.model ?? "")}</td>` +
+    `<tr class="run run-${esc(r.kind)}"><td>${esc(r.kind)}</td><td class="wide" title="${esc(r.reason ?? "")}">${esc(r.reason ?? "")}</td><td>${badge(r.state)}</td><td>${esc(shortModel(r.model))}</td>` +
     `<td class="num">${r.ended ? esc(span(r.started, r.ended)) : ""}</td><td class="num">${r.cost !== undefined ? esc(money(r.cost)) : ""}</td>` +
     `<td class="time">${esc(when(r.started))}</td></tr>`).join("");
   return `<div class="sh"><h2>Runs</h2><span class="count">${runs.length}</span></div>` +
@@ -100,7 +100,7 @@ export function renderJob(j) {
   return `<div class="page"><p class="quiet"><a href="#/jobs">← Jobs</a></p>` +
     pageHead(j.item?.title || j.name, { count: j.name, aside: badge(j.state) }) +
     `<dl class="facts">${fact("Repo", esc(j.repo))}${fact("Started", esc(when(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}` +
-    `${j.model ? fact("Model", esc(j.model)) : ""}${j.commit ? fact("Commit", j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`) : ""}` +
+    `${j.model ? fact("Model", esc(shortModel(j.model))) : ""}${j.commit ? fact("Commit", j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`) : ""}` +
     `${j.trace ? fact("Trace", `<a href="${esc(j.trace)}">Langfuse</a>`) : ""}</dl>` +
     (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
     renderRuns(j.runs ?? []) +

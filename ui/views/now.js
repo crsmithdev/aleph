@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { clock, clock12, denyReasons, diffHtml, elapsed, esc, idLink, money, openDiffs } from "../lib.js";
+import { clock, clock12, denyReasons, diffHtml, elapsed, esc, idLink, money, openDiffs, shortModel } from "../lib.js";
 import { proseDecision } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, landCard, shell as jobCard, trailerLine } from "./cards.js";
 
@@ -88,7 +88,7 @@ const more = (key, body) => `<details class="more" data-keep="more:${esc(key)}">
 /** The details of a held or stuck job: everything the row's one sentence leaves out. */
 function details(j, extra = "") {
   const parts = extra + (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
-    `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(j.model)) : ""}${checkFacts(j)}</dl>` +
+    `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(shortModel(j.model))) : ""}${checkFacts(j)}</dl>` +
     (failed(j) ? `<p class="quiet q">Last check that failed: <b>${esc(failed(j).name)}</b>, ${esc(failed(j).seconds)} s</p>` : "") +
     (j.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(j.stat)}</pre></div></div>` : "") +
     trailerLine(j) +

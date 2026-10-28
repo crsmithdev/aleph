@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { STATES, badge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, when, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone } from "./lib.js";
+import { STATES, badge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, shortModel, when, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone } from "./lib.js";
 
 test("esc escapes markup", () => {
   expect(esc("<script>alert('x')</script>")).toBe("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;");
@@ -252,4 +252,8 @@ test("pager shows how many of the total, and the next step while rows are left",
 test("sortHead marks the sorted column with the arrow", () => {
   expect(sortHead("Cost", "cost", { key: "cost", dir: -1 }, { num: true })).toBe('<th class="num" aria-sort="descending"><button type="button" data-sort="cost">Cost<span class="arr" aria-hidden="true">▼</span></button></th>');
   expect(sortHead("Name", "name", { key: "cost", dir: 1 })).toBe('<th><button type="button" data-sort="name">Name<span class="arr" aria-hidden="true"></span></button></th>');
+});
+
+test("shortModel gives one short name for a model", () => {
+  expect([shortModel("claude-opus-5-5"), shortModel("sonnet"), shortModel("claude-haiku-5-5"), shortModel(undefined)]).toEqual(["opus", "sonnet", "haiku", ""]);
 });

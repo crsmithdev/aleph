@@ -38,7 +38,7 @@ export function renderDetail(p) {
   const items = p.items.map((i) => `<tr><td>${idLink(`${p.key}-${i.id}`, `#/issues/${encodeURIComponent(p.key)}/${i.id}`)}</td><td class="wide" title="${esc(i.title)}">${esc(i.title)}</td><td>${chips(i.labels)}</td></tr>`);
   const jobs = p.jobs.map((j) => `<tr><td>${idLink(j.name, `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${badge(j.state)}</td><td class="time">${esc(when(j.started))}</td></tr>`);
   const notes = p.vault.map((n) => `<tr><td class="wide">${esc(n.title)}</td><td>${chips([n.kind])}</td><td class="time">${esc(when(n.updated))}</td></tr>`);
-  return `<div class="page"><p class="quiet"><a href="#/contents?type=project">All projects</a></p>` +
+  return `<div class="page"><p class="quiet"><a href="#/contents?type=project">← Projects</a></p>` +
     pageHead(p.key, { count: p.factory ? "Factory" : "Plain repo", aside: `<code>${esc(p.path)}</code>` }) + renderFacts(p) +
     sec("Recent commits", p.commits.length, commits.length ? table([["Commit"], ["Subject"], ["Issue"], ["Date"]], commits) : empty("No commits on origin.", "The checkout has not fetched origin yet.")) +
     sec("Open issues", p.items.length, items.length ? table([["Issue"], ["Title"], ["Labels"]], items) : empty("No open issue.")) +

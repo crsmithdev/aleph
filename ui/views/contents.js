@@ -237,7 +237,7 @@ export function renderContents(d, o = {}) {
 /** The detail view's pieces, shared with views/issue.js. */
 export function renderIssue(d) {
   const fm = d.frontmatter ?? {};
-  const facts = Object.entries(fm).filter(([k]) => k !== "labels").map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(Array.isArray(v) ? v.map(labelName).join(", ") : v)}</dd></div>`).join("");
+  const facts = Object.entries(fm).filter(([k]) => !["labels", "id", "status"].includes(k)).map(([k, v]) => `<div><dt>${esc(k[0].toUpperCase() + k.slice(1))}</dt><dd>${esc(Array.isArray(v) ? v.map(labelName).join(", ") : v)}</dd></div>`).join("");
   const notes = d.notes.length ? `<ul class="notes">${d.notes.map((n) => `<li>${esc(n.replace(/^- /, ""))}</li>`).join("")}</ul>` : empty("No notes.");
   const jobs = d.jobs.length
     ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Job</th><th>State</th><th>Started</th></tr></thead><tbody>${d.jobs.map((j) => `<tr><td>${idLink(j.name, `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${stateBadge(j.state)}</td><td class="time">${esc(when(j.started))}</td></tr>`).join("")}</tbody></table></div>`
@@ -248,10 +248,10 @@ export function renderIssue(d) {
       return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td><td class="time">${esc(when(c.date))}</td></tr>`;
     }).join("")}</tbody></table></div>`
     : empty("No commit on main names this issue in its trailers.");
-  return `<div class="page"><p class="quiet"><a href="#/contents">Contents</a></p>` +
+  return `<div class="page"><p class="quiet"><a href="#/contents">← Contents</a></p>` +
     pageHead(d.title, { count: ref(d), aside: d.derived ? stateBadge(d.derived.state) : badge(d.status) }) +
     (d.derived ? `<p class="quiet">${esc(d.derived.why)}</p>` : "") + (fm.labels?.length ? `<p>${chips(fm.labels)}</p>` : "") +
-    `<dl class="facts">${facts}</dl><section class="body">${md(d.body)}</section>` +
+    (facts ? `<dl class="facts">${facts}</dl>` : "") + `<div class="md">${md(d.body)}</div>` +
     `<div class="sh"><h2>Notes</h2></div>${notes}<div class="sh"><h2>Jobs</h2></div>${jobs}<div class="sh"><h2>Commits</h2></div>${commits}</div>`;
 }
 

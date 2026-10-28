@@ -280,6 +280,9 @@ export function when(ts, now = new Date()) {
     : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** A model as its short name: "claude-opus-5-5" and "opus" are both "opus"; "" for none. */
+export const shortModel = (m) => String(m ?? "").replace(/^claude-/, "").replace(/(-\d+)+(\[.*\])?$/, "");
+
 /** An id as a link: mono, small, muted, underlined on hover. */
 export const idLink = (id, href) => `<a class="idl" href="${esc(safeHref(href))}">${esc(id)}</a>`;
 

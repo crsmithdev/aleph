@@ -1,7 +1,7 @@
 // The Memory view: the vault's counts, Home's sections, health and recent
 // writes, with a search box. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { empty, error, esc, md, pageHead, when } from "../lib.js";
+import { empty, error, esc, filterBar, md, pageHead, when } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -36,11 +36,11 @@ export function renderResults(r) {
 }
 
 export function renderSearch() {
-  return `<form class="search" role="search" onsubmit="return memorySearch(this)"><input name="q" type="search" placeholder="Search the vault" aria-label="Search the vault"> <button type="submit">Search</button></form><div id="memory-results" aria-live="polite"></div>`;
+  return `<form role="search" onsubmit="return memorySearch(this)">${filterBar([{ label: "Search", name: "q", search: true, placeholder: "Search the vault" }])}</form><div id="memory-results" aria-live="polite"></div>`;
 }
 
 const table = (rows) => rows.length
-  ? `<table class="tbl"><tbody>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="num">${v}</td></tr>`).join("")}</tbody></table>` : "";
+  ? `<table class="tbl"><tbody>${rows.map(([k, v]) => `<tr><td>${esc(k === "" ? "(none)" : k)}</td><td class="num">${v}</td></tr>`).join("")}</tbody></table>` : "";
 
 export function renderCounts(m) {
   if (!m.exists) return head("counts", "Notes") + empty("No vault yet.", "Run <code>vault init</code> to make one.");
@@ -89,7 +89,7 @@ const crumbs = (t) => (t.length ? `<ul>${t.map((n) => `<li>${link(n.title)} <spa
 /** One note: frontmatter, body (Markdown, [[links]] to notes), outgoing links and backlinks. */
 export function renderNote(n) {
   const fm = Object.entries(n.frontmatter).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(Array.isArray(v) ? v.join(", ") : v)}</dd></div>`).join("");
-  return `<div class="page"><p class="quiet"><a href="#/memory">Memory</a></p>${pageHead(n.title, { count: n.frontmatter?.kind ?? "" })}` +
+  return `<div class="page"><p class="quiet"><a href="#/memory">← Memory</a></p>${pageHead(n.title, { count: n.frontmatter?.kind ?? "" })}` +
     (n.archived ? `<p class="quiet">Archived.</p>` : "") +
     `<p class="hint"><code>${esc(n.path)}</code></p>` +
     (fm ? `<dl class="facts">${fm}</dl>` : "") +

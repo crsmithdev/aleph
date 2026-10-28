@@ -2,7 +2,7 @@
 // land card: id, title, state badge, key facts. "compact" keeps the look in at most 2 lines
 // (two block children: id, badge and title; then one line of facts) for a table or a list.
 // Pure string functions, no DOM.
-import { actMessages, badge, esc, idLink, labelName, money, when } from "../lib.js";
+import { actMessages, badge, esc, idLink, labelName, money, shortModel, when } from "../lib.js";
 
 /** A job's id, linking to its page. */
 export const itemId = (j) => idLink(j.name, j.href || `#/jobs/${encodeURIComponent(j.name)}`);
@@ -104,11 +104,11 @@ export function jobCard(j, size = "full", now = new Date().toISOString()) {
   if (size === "compact") {
     return compactCard({
       kind: "job", id: j.name, href: j.href, title: j.item?.title || j.name, badge: b,
-      facts: [["Started", j.started ? at(j.started, now) : ""], ["Took", esc(took)], ["Phase", esc(j.phase ?? "")], ["Model", esc(j.model ?? "")], ["Cost", j.cost !== undefined ? esc(money(j.cost)) : ""]],
+      facts: [["Started", j.started ? at(j.started, now) : ""], ["Took", esc(took)], ["Phase", esc(j.phase ?? "")], ["Model", esc(shortModel(j.model))], ["Cost", j.cost !== undefined ? esc(money(j.cost)) : ""]],
     });
   }
   return shell("big", "del", `<div class="ih">${itemId(j)}${title(j)}${badge(state)}</div>` +
-    `<dl class="facts">${j.started ? fact("Started", at(j.started, now)) : ""}${took ? fact("Took", esc(took)) : ""}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.model ? fact("Model", esc(j.model)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}</dl>` + trailerLine(j));
+    `<dl class="facts">${j.started ? fact("Started", at(j.started, now)) : ""}${took ? fact("Took", esc(took)) : ""}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.model ? fact("Model", esc(shortModel(j.model))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}</dl>` + trailerLine(j));
 }
 
 /** An issue: { id, title, status, href, labels: string[], notes, created, updated }. */

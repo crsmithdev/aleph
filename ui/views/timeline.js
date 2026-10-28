@@ -2,7 +2,7 @@
 // kind), a segmented kind filter (All, Jobs, Lands, Issues; the state is `?kinds=` in the hash), then a
 // sortable table (Id, Title, Status, Type, Project, Contents, Time, X): one row per event (a job started,
 // passed or failed; an issue opened, triaged, decided or closed; a land), 50 rows and a "Show 50 more" pager. `data` is /api/timeline: { rows, now, strip }.
-import { chart, chips, empty, esc, filterBar, idLink, labelName, money, pageHead, pager, readTokens, sortHead, tone, when } from "../lib.js";
+import { chart, chips, empty, esc, filterBar, idLink, labelName, money, pageHead, pager, readTokens, shortModel, sortHead, tone, when } from "../lib.js";
 
 export const view = {
   path: "/timeline",
@@ -127,7 +127,7 @@ export const nextSort = (sort, key) => sort.key === key ? { key, dir: -sort.dir 
 export function contentsParts(e, now) {
   const d = Object.fromEntries(e.details ?? []);
   const plain = (...kv) => kv.filter(([, text]) => text).map(([key, text]) => ({ key, text }));
-  if (e.kind === "job") return plain(["run", e.sub ?? "agent"], ["model", d.model], ["cost", e.cost == null ? "" : money(e.cost)], ["took", duration(e, now) || d.took]);
+  if (e.kind === "job") return plain(["run", e.sub ?? "agent"], ["model", shortModel(d.model)], ["cost", e.cost == null ? "" : money(e.cost)], ["took", duration(e, now) || d.took]);
   if (e.kind === "land") return plain(["commit", d.commit ?? e.commit?.slice(0, 7)], ["landed", e.sub]);
   const labels = (d.labels ?? "").split(",").filter(Boolean).map((l) => ({ text: labelName(l), raw: l }));
   return [...(labels.length ? [{ key: "labels", chips: labels }] : []), ...plain(["notes", d.notes])];
