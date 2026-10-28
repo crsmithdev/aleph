@@ -449,11 +449,10 @@ pre.stat b { color: var(--need); }
   // may export redirect(hash) -> new hash | null for an address it took over:
   // `api` is the URL its data comes from (":params" filled in from the route),
   // `refresh` the seconds between reloads. The page builds the sidebar from
-  // them, routes by hash (#/jobs/aleph-52?project=aleph), and passes the
-  // project to every /api fetch.
+  // them, and routes by hash (#/jobs/aleph-52).
   const GROUPS = [["factory", "Factory"], ["work", "Work"], ["claude", "Claude"], ["memory", "Memory"]];
   const $ = (id) => document.getElementById(id);
-  let views = [], redirects = [], project = "", timer = 0, shown = null;
+  let views = [], redirects = [], timer = 0, shown = null;
 
   function compile(path) {
     const names = [];
@@ -472,8 +471,7 @@ pre.stat b { color: var(--need); }
     }
     return null;
   }
-  const withProject = (href) => (project ? `${href}${href.includes("?") ? "&" : "?"}project=${encodeURIComponent(project)}` : href);
-  function api(url) { return fetch(withProject(url), { cache: "no-store" }); }
+  function api(url) { return fetch(url, { cache: "no-store" }); }
 
   function nav(path) {
     // The entry whose path is the longest segment prefix of the route is active: #/jobs/x marks Jobs.
@@ -487,7 +485,7 @@ pre.stat b { color: var(--need); }
       const items = views.filter((v) => v.group === key && !v.path.includes(":") && v.nav !== false).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
       if (!items.length) return "";
       return `<div class="nav-group"><h2>${esc(label)}</h2><ul>${items.map((v) =>
-        `<li><a href="#${esc(withProject(v.path))}"${v === active ? ' aria-current="page"' : ""}>${esc(v.title)}</a></li>`).join("")}</ul></div>`;
+        `<li><a href="#${esc(v.path)}"${v === active ? ' aria-current="page"' : ""}>${esc(v.title)}</a></li>`).join("")}</ul></div>`;
     }).join("");
   }
 
@@ -530,18 +528,13 @@ pre.stat b { color: var(--need); }
       if (to) { history.replaceState(null, "", to); break; }
     }
     const { path, query } = parseHash();
-    const p = query.get("project") ?? "";
-    // Keep the project when a link leaves it out.
-    if (!query.has("project") && project) {
-      history.replaceState(null, "", "#" + withProject(location.hash.replace(/^#/, "") || "/"));
-    } else project = p;
     nav(path);
     clearInterval(timer);
     const m = match(path, query);
     shown = m ?? { view: null };
     if (!m) {
       document.title = "Not found · aleph";
-      $("view").innerHTML = `<div class="page nf"><h1>Nothing at ${esc(path)}</h1>${empty("No view has this address.", `Go to <a href="#${esc(withProject("/"))}">Now</a> or pick a view from the list.`)}</div>`;
+      $("view").innerHTML = `<div class="page nf"><h1>Nothing at ${esc(path)}</h1>${empty("No view has this address.", `Go to <a href="#/">Now</a> or pick a view from the list.`)}</div>`;
       $("offline").hidden = true;
       return;
     }
