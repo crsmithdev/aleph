@@ -47,8 +47,8 @@ afterEach(() => {
 });
 
 /** A new open item in the store's factory list `fac`, with the given labels; returns its id. */
-const goal = (labels = ["goal"]): number =>
-  writeList({ key: "fac" }, "add a goal", (doc) => todos.add(doc, "ship it", { labels, body: "Do the thing." }).id, true)!.value;
+const goal = (labels = ["goal"], key = "fac"): number =>
+  writeList({ key }, "add a goal", (doc) => todos.add(doc, "ship it", { labels, body: "Do the thing." }).id, true)!.value;
 
 /** Change item `id` in the store, as Chris would while the baseline runs. */
 const change = (id: number, f: (item: todos.Item) => void) =>
@@ -94,6 +94,48 @@ test("a goal given a waiting_on while an earlier goal starts is not started", as
   expect(calls).toEqual([`fac-${first}`]);
   expect(out.started).toEqual([`fac-${first}`]);
   expect(out.skipped).toEqual([`fac-${second}: waiting on fac-${other}`]);
+});
+
+// A dispatch that finds the baseline held skips with `main baseline running`; the holder starts the goal.
+test("a goal added while another dispatch holds the baseline is started by the holder", async () => {
+  goal();
+  let added = 0;
+  let b: Awaited<ReturnType<typeof dispatchGoals>> | undefined;
+  const a = await dispatchGoals(async () => null, async () => {
+    added = goal();
+    b = await dispatchGoals(async () => null, async () => null);
+    return null;
+  });
+  expect(b!.started).toEqual([]);
+  expect(b!.skipped).toContain(`fac-${added}: main baseline running`);
+  expect(a.started).toContain(`fac-${added}`);
+});
+
+// The baseline of a repo that joins the list while another baseline runs is itself run before the goals start.
+test("a goal added while the baseline of a repo that joined the list runs is started by the holder", async () => {
+  sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "two.git"));
+  sh(base, "git", "clone", "-q", join(base, "two.git"), join(base, "two"));
+  sh(join(base, "two"), "git", "commit", "-q", "--allow-empty", "-m", "init");
+  sh(join(base, "two"), "git", "push", "-q", "origin", "main");
+  writeFileSync(join(base, "repos.json"), JSON.stringify({
+    fac: { path: join(base, "repo"), sandbox: true, autoland: false },
+    two: { path: join(base, "two"), sandbox: true, autoland: false },
+  }));
+  goal();
+  let first = 0, second = 0;
+  let b: Awaited<ReturnType<typeof dispatchGoals>> | undefined;
+  const a = await dispatchGoals(async () => null, async (repo) => {
+    if (repo.key === "fac") first = goal(["goal"], "two");
+    else {
+      second = goal(["goal"], "two");
+      b = await dispatchGoals(async () => null, async () => null);
+    }
+    return null;
+  });
+  expect(b!.skipped).toContain(`two-${first}: main baseline running`);
+  expect(b!.skipped).toContain(`two-${second}: main baseline running`);
+  expect(a.started).toContain(`two-${first}`);
+  expect(a.started).toContain(`two-${second}`);
 });
 
 test("a goal that stays open and labelled is started exactly once", async () => {

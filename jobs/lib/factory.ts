@@ -219,12 +219,20 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
   const skipped: string[] = [];
   const reds = new Map<string, string | null>();
   const done = doneChecker();
-  // Baselines run first, then the goals are read again: a goal written during a baseline is in the list below,
-  // so a dispatch that skipped with `main baseline running` has its goal started by the one that held the baseline.
-  if (checks) for (const { repo } of openGoals()) if (!reds.has(repo.key)) reds.set(repo.key, await baseline(repo, checks));
-  for (const { repo, item: listed } of openGoals()) {
+  // Baselines run for the repos in the list, then the list is read again, until every repo in it has one. The start loop
+  // works from that last list, so a goal written during any baseline is in it: a dispatch that skipped with
+  // `main baseline running` has its goal started by the one that held the baseline.
+  let goals = openGoals();
+  if (checks) {
+    for (;;) {
+      const missing = goals.filter(({ repo }) => !reds.has(repo.key));
+      if (!missing.length) break;
+      for (const { repo } of missing) if (!reds.has(repo.key)) reds.set(repo.key, await baseline(repo, checks));
+      goals = openGoals();
+    }
+  }
+  for (const { repo, item: listed } of goals) {
     const name = goalJob(repo, listed.id);
-    if (checks && !reds.has(repo.key)) reds.set(repo.key, await baseline(repo, checks));
     const red = reds.get(repo.key);
     if (red) { skipped.push(`${name}: ${red}`); continue; }
     const wait = notReady(listed, done);
