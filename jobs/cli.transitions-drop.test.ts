@@ -92,6 +92,20 @@ describe("every transition dispatches at once", () => {
     await until(() => started().includes(`fac-${b}`));
   }, 60_000);
 
+  test("a drop's rerun waits while the issue waits on an open item", async () => {
+    const blocker = track(await add("holds the line", open("blocker"), ["--labels", "goal"]));
+    await until(() => started().includes(`fac-${blocker}`));
+    const a = track(await add("starts first", open("waiter"), ["--labels", "goal"]));
+    await until(() => started().includes(`fac-${a}`));
+    expect((await aleph(["todo", "edit", "fac", String(a), "--waiting-on", `fac-${blocker}`], on())).code).toBe(0);
+    expect((await aleph(["drop", `fac-${a}`, "waits now"], on())).code).toBe(0);
+    await Bun.sleep(2000);
+    expect(started().filter((n) => n === `fac-${a}`)).toEqual([`fac-${a}`]);
+    // A dispatch from any other path holds it too.
+    await aleph(["dispatch"], on());
+    expect(started().filter((n) => n === `fac-${a}`)).toEqual([`fac-${a}`]);
+  }, 60_000);
+
   test("a rerun's prompt holds the reasons of the earlier drops and the issue's notes", async () => {
     const a = track(await add("steered", open("steer"), ["--labels", "goal"]));
     await until(() => started().includes(`fac-${a}`));

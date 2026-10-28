@@ -129,13 +129,13 @@ export function openGoals(): { repo: Repo; item: todos.Item }[] {
  * Whether item `id` is still an open goal in the store, read now. Dispatch
  * calls it under the goal lock: `baseline` can take minutes, and the item may
  * have been closed or had its `goal` label removed since `openGoals` read it.
- * A store that cannot be read counts as not a goal.
+ * It returns the item as it is now, or null. A store that cannot be read counts as not a goal.
  */
-function stillGoal(repo: Repo, id: number): boolean {
+function stillGoal(repo: Repo, id: number): todos.Item | null {
   let doc: todos.Doc | null = null;
-  try { doc = readList(repo); } catch { return false; }
+  try { doc = readList(repo); } catch { return null; }
   const item = doc?.items.find((i) => i.id === id);
-  return !!item && isGoal(item);
+  return item && isGoal(item) ? item : null;
 }
 
 /**
@@ -228,7 +228,11 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
     const release = await lock(`goal-${name}`, 0);
     if (!release) { skipped.push(`${name}: another dispatch is starting it`); continue; }
     try {
-      if (!stillGoal(repo, item.id)) { skipped.push(`${name}: not a goal`); continue; }
+      const fresh = stillGoal(repo, item.id);
+      if (!fresh) { skipped.push(`${name}: not a goal`); continue; }
+      // The item may have gained a waiting_on or a due date since it was read, while the baseline ran or an earlier goal started.
+      const waitNow = notReady(fresh, done);
+      if (waitNow) { skipped.push(`${name}: ${waitNow}`); continue; }
       const jobs = allJobs();
       const open = jobs.find((j) => isOpen(j) && j.at(-1)!.run.name === name);
       if (open) { skipped.push(`${name}: ${open.at(-1)!.run.state}`); continue; }
@@ -245,7 +249,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       }
       const again = rerunNote(name);
       const drops = jobs.filter((j) => j[0].run.name === name && j.at(-1)!.run.state === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
-      const spec = `# ${item.title}\n\n${item.body.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
+      const spec = `# ${fresh.title}\n\n${fresh.body.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${fresh.notes.length ? `\n## Notes on the issue\n\n${fresh.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
       const why = await start(repo, name, item.id, spec);
       if (why) skipped.push(`${name}: ${why}`);
       else { started.push(name); if (again) rmSync(rerunFile(name), { force: true }); }
