@@ -104,7 +104,7 @@ test("load records the open state of details[data-keep] before the render and re
 
 test("the sidebar lists Status, Activity (/timeline), then the rest, with Tools for /activity and no Jobs or Projects", async () => {
   const dir = new URL("./views/", import.meta.url);
-  const names = (await import("node:fs")).readdirSync(dir).filter((n) => n.endsWith(".js"));
+  const names = (await import("node:fs")).readdirSync(dir).filter((n) => n.endsWith(".js") && !n.startsWith("_"));
   const all: any[] = [];
   for (const n of names) for (const m of Object.values(await import(new URL(n, dir).href))) if (m && typeof (m as any).path === "string") all.push(m);
   const shown = all.filter((v) => !v.path.includes(":") && v.nav !== false);
