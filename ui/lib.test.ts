@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { STATES, badge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, shortModel, when, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone } from "./lib.js";
+import { STATES, badge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, numCell, nameLink, shortModel, when, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone } from "./lib.js";
 
 test("esc escapes markup", () => {
   expect(esc("<script>alert('x')</script>")).toBe("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;");
@@ -256,4 +256,16 @@ test("sortHead marks the sorted column with the arrow", () => {
 
 test("shortModel gives one short name for a model", () => {
   expect([shortModel("claude-opus-5-5"), shortModel("sonnet"), shortModel("claude-haiku-5-5"), shortModel(undefined)]).toEqual(["opus", "sonnet", "haiku", ""]);
+});
+
+test("sectionHead, numCell and nameLink", () => {
+  expect(sectionHead("Hooks", { count: 3 })).toBe('<div class="sh"><h2>Hooks</h2><span class="count">3</span></div>');
+  expect(sectionHead("A<", { aside: "<i>x</i>" })).toBe('<div class="sh"><h2>A&lt;</h2><span class="aside"><i>x</i></span></div>');
+  expect(numCell(0)).toBe('<td class="num">0</td>');
+  expect(numCell(2)).toBe('<td class="num bad">2</td>');
+  expect(numCell(0, { bad: true })).toBe('<td class="num bad">0</td>');
+  const l = nameLink("<b>", "#/x");
+  expect(l).toContain('class="nml"');
+  expect(l).toContain("&lt;b&gt;");
+  expect(l).not.toContain("<b>");
 });

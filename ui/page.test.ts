@@ -133,3 +133,23 @@ test("the Status metric numbers use --metric, which has its own picker role apar
   expect(html).toContain('["metric", "Big numbers", [...SERIF, ...SANS], "Merriweather", "Georgia, serif"],');
   expect(html.indexOf('["display", "Titles"')).toBeLessThan(html.indexOf('["metric", "Big numbers"'));
 });
+
+test("the shared table parts have top-level rules, and .sh h2/h3 share one", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const css = html.match(/<style>([\s\S]*?)<\/style>/)![1].replace(/\/\*[\s\S]*?\*\//g, "").replace(/"[^"\n]*"|'[^'\n]*'/g, "");
+  const top: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < css.length; i++) {
+    if (css[i] === "{") {
+      if (depth === 0) top.push(css.slice(start, i).trim());
+      depth++;
+    } else if (css[i] === "}") {
+      depth--;
+      if (depth === 0) start = i + 1;
+    }
+  }
+  const selectors = top.flatMap((p) => p.split(",").map((s) => s.trim()));
+  for (const sel of ["table.tbl td.num.bad", "table.tbl.fit", "table.tbl .spark", "table.tbl tr.muted td", "a.nml"]) expect(selectors).toContain(sel);
+  expect(top).toContain(".sh h2, .sh h3");
+});

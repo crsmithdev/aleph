@@ -322,3 +322,10 @@ export function sortHead(label, key, sort, { num = false } = {}) {
   const on = sort?.key === key;
   return `<th${num ? ' class="num"' : ""}${on ? ` aria-sort="${sort.dir > 0 ? "ascending" : "descending"}"` : ""}><button type="button" data-sort="${esc(key)}">${esc(label)}<span class="arr" aria-hidden="true">${on ? (sort.dir > 0 ? "▲" : "▼") : ""}</span></button></th>`;
 }
+
+export const sectionHead = (title, { count, aside } = {}) =>
+  `<div class="sh"><h2>${esc(title)}</h2>${count != null ? `<span class="count">${esc(count)}</span>` : ""}${aside ? `<span class="aside">${aside}</span>` : ""}</div>`;
+
+export const numCell = (n, { bad = n > 0 } = {}) => `<td class="num${bad ? " bad" : ""}">${esc(n)}</td>`;
+
+export const nameLink = (name, href) => `<a class="nml" href="${esc(href)}">${esc(name)}</a>`;
