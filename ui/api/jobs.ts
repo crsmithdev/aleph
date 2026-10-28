@@ -28,8 +28,7 @@ export const lastLines = (s: string | undefined, n = 80): string | undefined => 
 const tagged = (s: string, tag: string): string[] =>
   s.split("\n").map((l) => l.trim()).filter((l) => l.startsWith(`${tag}:`)).map((l) => l.slice(tag.length + 1).trim());
 
-const lists = new Map<string, Doc | null>();
-function itemOf(repo: string, id: number): { id: number; title: string } {
+function itemOf(lists: Map<string, Doc | null>, repo: string, id: number): { id: number; title: string } {
   if (!lists.has(repo)) {
     let doc: Doc | null = null;
     try { doc = readList({ key: repo }); } catch {}
@@ -38,7 +37,7 @@ function itemOf(repo: string, id: number): { id: number; title: string } {
   return { id, title: lists.get(repo)?.items.find((i) => i.id === id)?.title ?? "" };
 }
 
-function toJob(runs: Entry[]): Job {
+function toJob(runs: Entry[], lists: Map<string, Doc | null>): Job {
   const last = runs.at(-1)!.run;
   const todo = runs.findLast((e) => e.run.todo !== undefined)?.run.todo;
   const withResult = runs.findLast((e) => e.run.kind === "agent" && existsSync(join(e.folder, "result.md")));
@@ -47,7 +46,7 @@ function toJob(runs: Entry[]): Job {
   const stat = last.stat ?? runs.findLast((e) => e.run.stat)?.run.stat;
   const checks = (runs.findLast((e) => (e.run as any).checks) as any)?.run.checks;
   const job: Job = {
-    name: last.name, repo: last.repo ?? "", item: todo !== undefined && last.repo ? itemOf(last.repo, todo) : null,
+    name: last.name, repo: last.repo ?? "", item: todo !== undefined && last.repo ? itemOf(lists, last.repo, todo) : null,
     state: last.state, started: runs[0].run.started, run: { kind: last.kind, started: last.started },
     defaults: runs.findLast((e) => e.run.defaults !== undefined)?.run.defaults ?? [],
     followups: withResult ? tagged(text(withResult.folder, "result.md") ?? "", "FOLLOWUP") : [],
@@ -121,6 +120,7 @@ export const routes: Routes = {
     const days = dq === null || dq === "" ? 7 : Number(dq);
     if (!(days >= 0)) return Response.json({ error: "days must be a number" }, { status: 400 });
     const since = Date.now() - days * DAY;
+    const lists = new Map<string, Doc | null>();
     const hit: { at: number; job: Job }[] = [];
     for (const runs of allJobs()) {
       const last = runs.at(-1)!.run;
@@ -128,7 +128,7 @@ export const routes: Routes = {
       const times = runs.flatMap((e) => [e.run.started, e.run.ended]).map((t) => Date.parse(t ?? "")).filter((t) => !Number.isNaN(t));
       const at = Math.max(...times);
       if (!(at >= since)) continue;
-      hit.push({ at, job: toJob(runs) });
+      hit.push({ at, job: toJob(runs, lists) });
     }
     return Response.json(hit.sort((a, b) => b.at - a.at).map((h) => h.job));
   },
@@ -140,7 +140,7 @@ export const routes: Routes = {
     const withReview = runs.findLast((e) => existsSync(join(e.folder, "review.md")));
     const withChecks = runs.findLast((e) => existsSync(join(e.folder, "checks.log")));
     const withErr = runs.findLast((e) => existsSync(join(e.folder, "stderr.log")));
-    const detail: JobDetail = { ...toJob(runs), runs: runInfos(runs) };
+    const detail: JobDetail = { ...toJob(runs, new Map()), runs: runInfos(runs) };
     if (withResult) detail.result = text(withResult.folder, "result.md");
     if (withReview) detail.review = text(withReview.folder, "review.md");
     if (withChecks) detail.checksLog = lastLines(text(withChecks.folder, "checks.log"));

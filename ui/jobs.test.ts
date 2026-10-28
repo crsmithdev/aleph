@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readList, writeList } from "../todo/lib/store.ts";
+import { add } from "../todo/lib/todo.ts";
 import { routes } from "./api/jobs.ts";
 // @ts-ignore jobs.js is plain JS, shared with the page
 import * as v from "./views/jobs.js";
@@ -50,10 +52,17 @@ beforeAll(() => {
   writeFileSync(join(fac, "a.txt"), "one\ntwo\n");
   sh(fac, "git", "commit", "-qam", "work");
   sh(fac, "git", "switch", "-q", "main");
+  const itemsRemote = join(base, "items.git"), items = join(base, "items");
+  sh(base, "git", "init", "-q", "--bare", "-b", "main", itemsRemote);
+  sh(base, "git", "clone", "-q", itemsRemote, items);
+  sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
+  sh(items, "git", "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: fac }, oth: { path: oth } }));
-  for (const [k, val] of Object.entries({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: join(base, "none"), LANGFUSE_PUBLIC_KEY: "" })) {
+  for (const [k, val] of Object.entries({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: items, LANGFUSE_PUBLIC_KEY: "" })) {
     saved[k] = process.env[k]; process.env[k] = val;
   }
+  Object.assign(process.env, gitEnv);
+  writeList({ key: "fac" }, "seed", (doc) => { add(doc, "old title"); return true; }, true);
   // fac-9: a worker, a fix round with a reviewer, then a land.
   run("20261027-000001-a", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", state: "failed", reason: "review held", started: ago(5), ended: ago(4), cost: 0.5, model: "claude-sonnet-5-5" },
     { "result.md": "first\nFOLLOWUP: tidy\n", "checks.log": "## test: exit 1\n" + Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n") + "\n", "stderr.log": "warn\n" });
@@ -85,6 +94,18 @@ describe("GET /api/jobs", () => {
   test("?project narrows to one project", async () => {
     expect((await (await get("/api/jobs?project=oth&days=30")).json()).map((j: any) => j.name)).toEqual(["oth-1"]);
     expect(await (await get("/api/jobs?project=nope")).json()).toEqual([]);
+  });
+});
+
+describe("item titles", () => {
+  test("a rename between two requests shows in the second", async () => {
+    run("20261027-000006-a", { job: "fac-7", name: "fac-7", repo: "fac", state: "running", todo: 1 });
+    const title = async () => (await (await get("/api/jobs")).json()).find((j: any) => j.name === "fac-7").item.title;
+    expect(await title()).toBe("old title");
+    writeList({ key: "fac" }, "rename", (doc) => { doc.items.find((i) => i.id === 1)!.title = "new title"; return true; });
+    expect(readList({ key: "fac" })!.items[0].title).toBe("new title");
+    expect(await title()).toBe("new title");
+    expect((await (await get("/api/jobs/fac-7")).json()).item.title).toBe("new title");
   });
 });
 
