@@ -14,7 +14,7 @@ export const view = {
   refresh: 15,
   render: (s) =>
     `<div class="page">${renderMetrics(s)}<p class="lede">${renderLede(s)}</p><div class="head"><p class="asof">${renderAsOf(s)}</p>${renderControls(s)}</div>` +
-    `<section id="issues" class="attention" aria-labelledby="h-issues">${renderIssues(s)}</section>` +
+    `<section id="issues" aria-labelledby="h-issues">${renderIssues(s)}</section>` +
     `<div class="cols"><section id="lands" aria-labelledby="h-lands">${renderLands(s)}</section>` +
     `<section id="jobs" aria-labelledby="h-jobs">${renderJobs(s)}</section></div></div>`,
 };
@@ -205,7 +205,7 @@ export function renderIssues(s) {
   const errors = errorLines(s);
   const needing = s.needs.map(heldRow).concat(s.stuck.map(stuckRow), (s.needsIssues ?? []).map(decideRow), errors.map(errorRow));
   const rows = needing.concat((s.issues ?? []).map(newRow));
-  return section("issues", "Issues", rows.length, rows.length ? `<div class="rows">${rows.join("")}</div>` : empty("No issue is open that needs a look."), 0);
+  return section("issues", "Issues", rows.length, rows.length ? `<div class="rows">${rows.join("")}</div>` : empty("No issues."), 0);
 }
 
 /** "2:24 am": the time of the state, no date. */

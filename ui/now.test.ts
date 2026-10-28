@@ -36,7 +36,7 @@ test("a commitUrl becomes a link", () => {
 
 test("an empty section shows its empty state", () => {
   expect(r.renderJobs({ ...state, needs: [], stuck: [], running: [] })).toContain("Nothing queued.");
-  expect(r.renderIssues({ ...state, needs: [], stuck: [], issues: [], factory: { ...state.factory, health: [] } })).toContain("No issue is open that needs a look.");
+  expect(r.renderIssues({ ...state, needs: [], stuck: [], issues: [], factory: { ...state.factory, health: [] } })).toContain("No issues.");
   expect(r.renderLands({ ...state, delivered: [] })).toContain("Nothing has landed yet.");
   // One line only, with no hint under it.
   expect(r.renderJobs({ ...state, needs: [], stuck: [], running: [] }).match(/<p/g)?.length).toBe(1);
@@ -156,7 +156,7 @@ test("new issues are rows of the same kind, after the rows that need Chris", () 
 
 test("with nothing at all the Issues section says so; the page still has it", () => {
   const calm = { ...full, needs: [], stuck: [], issues: [], needsIssues: [], factory: { ...full.factory, health: [] } };
-  expect(r.renderIssues(calm)).toContain("No issue is open that needs a look.");
+  expect(r.renderIssues(calm)).toContain("No issues.");
   expect(r.view.render(calm)).toContain('id="issues"');
 });
 
