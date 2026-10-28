@@ -11,6 +11,7 @@ import { fetchOrigin, git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
 import { normalizeDecision, type Decision } from "./decision.ts";
 import { itemOnMain, itemStates, type ItemState } from "./status.ts";
+import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
@@ -65,6 +66,8 @@ export function factoryLog(line: string): void {
 export const WAITING_CAP = () => cap("ALEPH_WAITING_CAP", "waiting", 5);
 
 const sandboxRepos = () => Object.values(loadRegistry()).filter((r) => r.sandbox);
+/** The registry's factory repos: those whose runs are sandboxed. */
+export const factoryRepos = sandboxRepos;
 
 /** Factory agent and triage runs started in the last 24 hours. */
 export function runsToday(now = Date.now()): Entry[] {
@@ -404,6 +407,11 @@ function noCommitStreak(repoKey: string, name: string): number {
 }
 
 const rerunFile = (name: string) => join(factoryDir(), "rerun", `${name}.md`);
+/** The note the goal's next run reads, under "Note on the last run". */
+export function writeRerun(name: string, note: string): void {
+  mkdirSync(dirname(rerunFile(name)), { recursive: true });
+  writeFileSync(rerunFile(name), note + "\n");
+}
 const rerunNote = (name: string): string => (existsSync(rerunFile(name)) ? readFileSync(rerunFile(name), "utf8").trim() : "");
 
 const RERUN_OPTIONS = [
@@ -495,7 +503,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
     if (why) { rmSync(rerunFile(name), { force: true }); await chris(`${name}: ${what} failed (${why}); ${reason}. What now?`, choice(`${name}: ${what} failed: how should the factory go on?`, [`Failure: ${why}`])); return false; }
     return true;
   };
-  const rerun = (note: string) => { mkdirSync(join(factoryDir(), "rerun"), { recursive: true }); writeFileSync(rerunFile(name), note + "\n"); };
+  const rerun = (note: string) => writeRerun(name, note);
   const quoted = (file: "checks.log" | "result.md") => `\`\`\`\n${tailOf(last, file, 20) || "(empty)"}\n\`\`\``;
   if (key !== "duplicate") {
     const before = allRuns().filter((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key).length;
@@ -609,6 +617,33 @@ export async function triageStep(): Promise<{ triaged: Counts; skipped: string[]
   return t;
 }
 
+/**
+ * The tick's firefighter (firefighter.ts): a snapshot every tick, and one run only when it holds
+ * something new. Under the pause alone: the hold is what it clears. An error is logged, never thrown.
+ */
+export async function firefighterStep(ports?: Ports): Promise<Fired | null> {
+  if (gates({ only: ["pause"] })) return null;
+  try {
+    const f = await firefight(ports);
+    if (f.run) factoryLog(`firefighter ${f.run}: ${f.events.length} new events; ${f.applied.length} applied, ${f.refused.length} refused, ${f.chris.length} to Chris`);
+    if (f.applied.length) dispatchDetached();
+    return f;
+  } catch (e: any) {
+    factoryLog(`firefighter: failed: ${e?.message ?? e}`);
+    return null;
+  }
+}
+
+/** The firefighter's lines of the factory log in the last 24 hours, newest last, at most `n`: what the Status page shows. */
+export function firefighterLines(now = Date.now(), n = 8): { at: string; line: string }[] {
+  let text = "";
+  try { text = readFileSync(join(factoryDir(), "tick.log"), "utf8"); } catch { return []; }
+  return text.split("\n").flatMap((l) => {
+    const m = /^(\S+) (firefighter[: ].*)$/.exec(l);
+    return m && now - Date.parse(m[1]) < DAY ? [{ at: m[1], line: m[2] }] : [];
+  }).slice(-n);
+}
+
 /** The tick's episode pages for goals that finished (episode.ts); never throws. */
 export async function episodeStep(): Promise<string[]> {
   try {
@@ -642,6 +677,8 @@ const baselineFile = () => join(factoryDir(), "baseline.json");
 const baselines = (): Record<string, Baseline> => {
   try { return JSON.parse(readFileSync(baselineFile(), "utf8")); } catch { return {}; }
 };
+/** The baselines that are red now, one per repo. */
+export const redBaselines = (): Baseline[] => Object.values(baselines()).filter((b) => !b.ok);
 /** The check that failed, from the gate's reason: `tests failed` is `tests`. */
 const failedCheck = (why: string) => why.replace(/^timed out: check /, "").replace(/ failed$/, "");
 const redLine = (b: Baseline) => `main is red at ${b.commit.slice(0, 7)}: ${b.failed}`;

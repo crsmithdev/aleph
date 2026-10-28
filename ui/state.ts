@@ -5,7 +5,7 @@
  */
 import { resultLine } from "../jobs/lib/acceptance.ts";
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { DAY_CAP, LIVE_CAP, WAITING_CAP, health, hold, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
+import { DAY_CAP, LIVE_CAP, WAITING_CAP, firefighterLines, health, hold, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
 import { allRuns, loadRegistry, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { readDecision, type Decision } from "../jobs/lib/decision.ts";
@@ -55,6 +55,8 @@ export interface State {
     health: string[];
     /** The factory's own hold (a stuck or failed run), or null. */
     hold: string | null;
+    /** The firefighter's factory log lines of the last 24 hours, newest last. */
+    firefighter: { at: string; line: string }[];
   };
   needs: Job[]; stuck: Job[]; running: Job[]; delivered: Job[];
   waiting: { repo: string; id: number; title: string }[];
@@ -251,6 +253,7 @@ export function state(now = new Date()): State {
       paused: paused(), judge: judgeChoice(), dayCap: DAY_CAP(), liveCap: LIVE_CAP(), waitingCap: WAITING_CAP(), runsToday: today.length,
       costToday: today.reduce((a, e) => a + (e.run.cost ?? 0), 0),
       nextTick: nextTick(), probe, health: health(now.getTime()), hold: hold(jobs)?.line ?? null,
+      firefighter: firefighterLines(now.getTime()),
     },
     needs, stuck, running, landing, newIssues: fresh.length, openIssues, issues: fresh.slice(0, NEW_ISSUES), needsIssues: waitingOnChris,
     triage: triageRuns.sort((a, b) => b.at - a.at).slice(0, TRIAGED).map((t) => {

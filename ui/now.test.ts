@@ -568,3 +568,19 @@ test("approve and decline handlers", async () => {
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+test("the firefighter has a role row in Jobs with its log lines, newest first; none when it did nothing in 24 hours", () => {
+  const ff = [{ at: "2026-10-27T16:10:00Z", line: "firefighter: did land aleph-27" }, { at: "2026-10-27T16:20:00Z", line: "firefighter: needs-chris: aleph-30 changes hooks/x.ts, a held security path, so it needs your review before it lands." }];
+  const h = r.renderJobs({ ...state, factory: { ...state.factory, firefighter: ff } });
+  const grp = h.match(/<div class="grp" id="jobs-firefighter">[^]*?<\/ul>/)![0];
+  expect(grp).toContain("Firefighter");
+  expect(grp.indexOf("needs-chris: aleph-30")).toBeLessThan(grp.indexOf("did land aleph-27"));
+  expect(grp).not.toContain("firefighter: did");
+  expect(h.indexOf('id="jobs-firefighter"')).toBeLessThan(h.indexOf('id="jobs-queued"'));
+  expect(r.renderJobs(state)).not.toContain('id="jobs-firefighter"');
+});
+
+test("a running firefighter run shows its role as the kind", () => {
+  const s = { ...state, running: [job({ name: "firefighter", phase: "firefighter", run: { kind: "firefighter", started: "2026-10-27T16:55:00Z" } })] };
+  expect(r.renderJobs(s)).toContain('<span class="badge run">firefighter</span>');
+});

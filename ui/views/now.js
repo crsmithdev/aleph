@@ -119,10 +119,18 @@ export function renderLands(s) {
   return section("lands", "Lands", s.delivered.length, rows ? cards(rows) : empty("Nothing has landed yet."));
 }
 
-/** Jobs: the running ones (when there are any), then the Queued list, always. */
+/** The firefighter's role row: what it did in the last 24 hours, newest first, from the factory log. */
+function firefighterCard(s, lines) {
+  const items = [...lines].reverse().map((l) => `<li><span class="num">${esc(when(l.at, new Date(s.now)))}</span> ${esc(l.line.replace(/^firefighter:?\s*/, ""))}</li>`).join("");
+  return jobCard("small", "run-row firefighter", `<div class="ih"><span class="t">Firefighter</span></div><div class="run-meta"><span class="badge quiet">role</span></div><ul class="ff-lines">${items}</ul>`);
+}
+
+/** Jobs: the running ones (when there are any), the firefighter's role row (when it acted in 24 hours), then the Queued list, always. */
 export function renderJobs(s) {
   const group = (id, t, n, html) => `<div class="grp" id="jobs-${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${html}</div>`;
+  const ff = s.factory?.firefighter ?? [];
   const body = (s.running.length ? group("running", "Running", s.running.length, cards(s.running.map((j) => runningCard(s, j)).join(""))) : "") +
+    (ff.length ? group("firefighter", "Firefighter", ff.length, cards(firefighterCard(s, ff))) : "") +
     group("queued", "Queued", s.waiting.length, s.waiting.length ? cards(s.waiting.map(queuedCard).join("")) : empty("Nothing queued."));
   return section("jobs", "Jobs", s.running.length + s.waiting.length, body, 0);
 }
