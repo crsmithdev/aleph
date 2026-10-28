@@ -7,7 +7,7 @@ import { add, setStatus } from "../todo/lib/todo.ts";
 import { clearCache } from "./langfuse.ts";
 import { routes, timeline } from "./api/timeline.ts";
 // @ts-ignore plain JS, shared with the page
-import { mark, redirect, renderDay, renderEvent, renderTimeline, stripOption, view } from "./views/timeline.js";
+import { duration, mark, redirect, renderEvent, renderStream, renderTimeline, stripOption, view } from "./views/timeline.js";
 
 let base: string, jobsDir: string, fake: ReturnType<typeof Bun.serve>;
 const saved: Record<string, string | undefined> = {};
@@ -162,26 +162,48 @@ describe("timeline api", () => {
 });
 
 describe("timeline view", () => {
-  test("renders day sections, rows and the sentinel", async () => {
+  test("renders the stream table with one row per job, a running one included", async () => {
     const t = await timeline({ now });
     const html = renderTimeline(t);
-    expect(html).toContain('id="tl-sentinel"');
-    expect(html).toContain(`id="tl-${dayKey(0)}"`);
+    expect(html).toContain('id="tl-stream"');
     expect(html).toContain('href="#/jobs/fac-2"');
-    expect(renderDay({ day: "2026-01-02", events: [] })).toContain("<section");
+    expect(html).toContain('<span class="chip run">running</span>');
+    expect(t.rows!.filter((r) => r.kind === "job" && r.title === "fac-1")).toHaveLength(1);
+    expect(t.rows!.find((r) => r.title === "fac-1")).toMatchObject({ state: "needs-you", end: at(0, 10) });
     expect(view.path).toBe("/timeline");
     expect(typeof view.mount).toBe("function");
   });
 
-  test("a job ended row has its state, project, cost and Details in their cells", () => {
-    const h = renderEvent({ at: "2026-10-27T10:25:00Z", kind: "job", what: "ended", state: "landed", title: "aleph-9", href: "#/jobs/aleph-9", project: "aleph", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] });
-    for (const t of ['<span class="badge">landed</span>', "<td>aleph</td>", '<td class="num">$1.50</td>', '<td class="det"><span class="k">took 25m</span><span class="k">model opus</span></td>', 'href="#/jobs/aleph-9"']) expect(h).toContain(t);
+  test("a job row has its chip, id link, plain title, cost and Details in their cells", () => {
+    const h = renderEvent({ at: "2026-10-27T10:00:00", end: "2026-10-27T10:25:00", kind: "job", what: "started", state: "landed", id: "aleph-9", title: "Do it", href: "#/jobs/aleph-9", project: "aleph", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] });
+    for (const t of ['>job</span>', '<td class="num">25m</td>', '<td><a href="#/jobs/aleph-9">aleph-9</a></td>', '<td class="ttl">Do it</td>', '<td class="num">$1.50</td>', '<td class="det"><span class="k">took 25m</span><span class="k">model opus</span></td>']) expect(h).toContain(t);
+    expect(h).not.toMatch(/[▷■⬆○✓✕◆✎]/);
+    expect(h.match(/<a /g)).toHaveLength(1);
+    expect(h).not.toContain("running");
+  });
+
+  test("a running job counts its duration to now", () => {
+    const e = { at: "2026-10-27T10:00:00", kind: "job", what: "started", state: "running", title: "j", id: "j", href: "#/jobs/j" };
+    expect(duration(e, Date.parse("2026-10-27T10:40:00"))).toBe("40m");
+    expect(renderEvent(e, Date.parse("2026-10-27T11:05:00"))).toContain("1h05m");
+    expect(renderEvent(e)).toContain("running");
+  });
+
+  test("the stream pages at 100 rows with Older and Newer", () => {
+    const rows = Array.from({ length: 250 }, (_, i) => ({ at: new Date(2026, 9, 27, 0, 0, 250 - i).toISOString(), kind: "note", what: "written", title: `n${i}`, href: "#/memory" }));
+    const rowsIn = (h: string) => h.match(/class="evr"/g)?.length ?? 0;
+    const p0 = renderStream(rows, 0), p1 = renderStream(rows, 1), p2 = renderStream(rows, 2);
+    expect([rowsIn(p0), rowsIn(p1), rowsIn(p2)]).toEqual([100, 100, 50]);
+    expect(p0).toContain(">Older</button>");
+    expect(p0).toMatch(/data-page="-1" disabled/);
+    expect(p2).toMatch(/data-page="3" disabled/);
+    expect(p2).toContain("Page 3 of 3");
   });
 
   test("an issue row shows its labels; a row without cost has an empty cost cell", () => {
     const h = renderEvent({ at: "2026-10-26T00:00:00", kind: "issue", what: "opened", state: "open", title: "aleph-3 x", href: "#/issues/aleph/3", dateOnly: true, details: [["labels", "goal,ui"]] });
     expect(h).toContain("labels goal,ui");
-    expect(h).toContain('<td class="num"></td>');
+    expect(h).toContain('<td class="num"></td><td class="det">');
   });
 
   test("the title is HTML-escaped", () => {
@@ -196,8 +218,8 @@ describe("timeline view", () => {
     const html = renderTimeline(t);
     expect(html.match(/<input type="checkbox" data-kind="\w+" checked>/g)).toHaveLength(5);
     expect(html).toContain('id="tl-strip"');
-    for (const c of ["<th>Time</th>", "<th>Kind</th>", "<th>Project</th>", "<th>Title</th>", "<th>State</th>", "<th>Cost</th>", "<th>Details</th>"]) expect(html).toContain(c);
-    const all = (await Promise.all([0, 1, 2, 3].map(async (n) => renderDay((await timeline({ now, before: at(n, 23, 30) })).days[0] ?? { day: "x", events: [] })))).join("");
+    expect(html.match(/<th>(\w+)<\/th>/g)!.join("")).toBe("<th>Time</th><th>Duration</th><th>Kind</th><th>Id</th><th>Title</th><th>Cost</th><th>Details</th>");
+    const all = renderStream(t.rows!);
     expect(new Set(all.match(/data-kind="\w+"/g)).size).toBeGreaterThan(1);
   });
 
