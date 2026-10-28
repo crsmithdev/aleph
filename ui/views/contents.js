@@ -1,7 +1,7 @@
 // The Contents view: the state to browse, not the process: every project and every issue of every repo, in rows styled like Activity's (its CSS, header and X are imported from timeline.js),
 // three tables and a form that files an issue. `data` is /api/contents: { issues, projects, specs }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { empty, esc, labelName, md } from "../lib.js";
+import { empty, esc, labelName, md, tone } from "../lib.js";
 import { STYLE, X_ICON, confirmCancel, head as header } from "./timeline.js";
 
 export const view = {
@@ -53,7 +53,7 @@ export const ref = (r) => `${r.repo}-${r.id}`;
 export const href = (r) => `#/issues/${encodeURIComponent(r.repo)}/${r.id}`;
 const projectHref = (p) => `#/projects/${encodeURIComponent(p.key)}`;
 const badge = (text, cls = "") => `<span class="badge ${cls}">${esc(text)}</span>`;
-const stateBadge = (s) => badge(s, s === "done" ? "done" : s === "stuck" || s === "needs-you" ? "stuck" : s === "running" ? "run" : "");
+const stateBadge = (s) => badge(s, tone(s));
 
 const STATUS_TONE = { open: "run", done: "done", dropped: "quiet" };
 const when = (s) => Date.parse(s) || 0;

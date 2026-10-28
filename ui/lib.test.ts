@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { chart, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span } from "./lib.js";
+import { STATES, chart, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone } from "./lib.js";
 
 test("esc escapes markup", () => {
   expect(esc("<script>alert('x')</script>")).toBe("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;");
@@ -179,4 +179,9 @@ test("restoreState ignores state for elements the new HTML no longer has", () =>
   const after = fakeRoot("<p>nothing</p>");
   expect(() => restoreState(after, state)).not.toThrow();
   expect(() => restoreState(after, null)).not.toThrow();
+});
+
+test("tone maps every job state to one badge tone", () => {
+  expect(STATES.map(tone)).toEqual(["run", "done", "need", "stuck", "stuck", "done", "done", "quiet"]);
+  expect(tone("held")).toBe("quiet");
 });

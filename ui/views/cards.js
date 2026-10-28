@@ -2,7 +2,7 @@
 // land card: id, title, state badge, key facts. "compact" keeps the look in at most 2 lines
 // (two block children: id, badge and title; then one line of facts) for a table or a list.
 // Pure string functions, no DOM.
-import { actMessages, clock, esc, labelName, money } from "../lib.js";
+import { actMessages, clock, esc, labelName, money, tone } from "../lib.js";
 
 export const itemId = (j) => `<span class="id">${esc(j.name)}</span>`;
 export const title = (j) => `<h3>${esc(j.item?.title || j.name)}</h3>`;
@@ -38,7 +38,6 @@ export const landedAt = (iso, now) =>
     : `${new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} ${clock(iso)}`;
 
 const label = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
-const TONE = { running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", "needs-you": "need", failed: "stuck", stuck: "stuck" };
 const badge = (text, tone) => `<span class="badge ${tone}">${esc(text)}</span>`;
 const idLink = (id, href) => (href ? `<a class="id" href="${esc(href)}">${esc(id)}</a>` : `<span class="id">${esc(id)}</span>`);
 
@@ -103,7 +102,7 @@ export function triageCard(j, size = "full", now = new Date().toISOString()) {
 /** A job: { name, item, state, phase, model, started, ended, cost, trailers, href? }. */
 export function jobCard(j, size = "full", now = new Date().toISOString()) {
   const state = j.state || "running";
-  const b = { text: label(state === "needs-you" ? "needs you" : state), tone: TONE[state] ?? "quiet" };
+  const b = { text: label(state === "needs-you" ? "needs you" : state), tone: tone(state) };
   const took = dur(j.started, j.ended || (state === "running" ? now : ""));
   if (size === "compact") {
     return compactCard({
@@ -118,7 +117,7 @@ export function jobCard(j, size = "full", now = new Date().toISOString()) {
 /** An issue: { id, title, status, href, labels: string[], notes, created, updated }. */
 export function issueCard(i, size = "full") {
   const status = i.status || "open";
-  const b = { text: label(status), tone: TONE[status] ?? "quiet" };
+  const b = { text: label(status), tone: tone(status) };
   const labels = (i.labels ?? []).map(labelName).join(", ");
   if (size === "compact") {
     return compactCard({

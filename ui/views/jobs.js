@@ -1,10 +1,8 @@
 // The Jobs view (the list) and the Job view (one job's runs, result, checks,
 // logs, and a diff loaded on demand). Render functions take the /api/jobs
 // objects and return HTML strings, with no DOM, so tests can call them.
-import { clock, cmd, empty, esc, md, money, span } from "../lib.js";
+import { STATES, clock, cmd, empty, esc, md, money, span, tone } from "../lib.js";
 
-const STATES = ["running", "passed", "needs-you", "failed", "stuck", "done", "landed", "dropped"];
-const BADGE = { landed: "done", done: "done", running: "run", passed: "run", failed: "stuck", stuck: "stuck", "needs-you": "stuck" };
 
 /** The list's data URL: the filters in the hash go to the API. */
 const listUrl = (_params, q = new URLSearchParams()) => {
@@ -34,7 +32,7 @@ export const detail = {
   render: (job) => renderJob(job),
 };
 
-const badge = (state) => `<span class="badge ${BADGE[state] ?? ""}">${esc(state)}</span>`;
+const badge = (state) => `<span class="badge ${tone(state)}">${esc(state)}</span>`;
 const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
 const href = (path, params = {}) => {
   const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v));

@@ -3,7 +3,7 @@
 // sortable table (Time, Status, Type, Project, Id, Title, Contents, X): one row per event (a job started,
 // passed or failed; an issue opened, triaged, decided or closed; a land), 100 to a page with Older and
 // Newer controls. `data` is /api/timeline: { rows, now, strip }.
-import { chart, empty, esc, labelName, money, readTokens } from "../lib.js";
+import { chart, empty, esc, labelName, money, readTokens, tone } from "../lib.js";
 
 export const view = {
   path: "/timeline",
@@ -76,14 +76,13 @@ export const STYLE = `<style>
 }
 </style>`;
 
-const TONE = { running: "run", landed: "done", passed: "done", done: "done", "needs-you": "need", failed: "stuck", stuck: "stuck", dropped: "quiet" };
 const GLYPH = {
   job: { started: "▷", passed: "■", held: "■", landed: "■", dropped: "■", failed: "■", stuck: "■" },
   land: { landed: "⬆" }, issue: { opened: "○", triaged: "◇", decided: "◆", closed: "✓", dropped: "✕" },
 };
 
 /** The tone of an event: a job's or land's follows its state, an issue's its verb. */
-const toneOf = (e) => e.kind === "job" || e.kind === "land" ? (TONE[e.state] ?? "quiet")
+const toneOf = (e) => e.kind === "job" || e.kind === "land" ? (tone(e.state))
   : e.kind === "issue" ? (e.what === "closed" ? "done" : e.what === "dropped" ? "quiet" : "run") : "quiet";
 
 /** The kind mark of an event: its glyph and colour class. */
