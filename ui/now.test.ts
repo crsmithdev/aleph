@@ -452,3 +452,13 @@ test("the status line is not 'All is well.' when the Issues section has an item"
     expect(h).toContain("One thing needs your attention.");
   }
 });
+
+test("Status times use the state's own now for the year check", () => {
+  const run = (started: string) => withAttn({ ...state, now: "2027-01-05T12:00:00Z", running: [job({ name: "a", started, run: { kind: "land", started } })] });
+  expect(run("2026-10-27T16:50:00Z")).toContain("Started 2026-10-27 \u00b7");
+  expect(run("2027-01-05T11:00:00Z")).toMatch(/Started [A-Z][a-z]{2} \d\d \d\d:\d\d \u00b7/);
+  const held = withAttn({ ...state, now: "2027-01-05T12:00:00Z", needs: [job({ name: "aleph-27", state: "needs-you", started: "2026-10-27T16:50:00Z", trailers: [{ key: "Job", value: "20261028-042822-aleph-aleph-240-agent" }] })] });
+  expect(held).toContain("Started</dt><dd>2026-10-27");
+  expect(held).toContain("agent run, 2026-10-28");
+  expect(held).not.toMatch(/\d\d? ?[AP]M/i);
+});
