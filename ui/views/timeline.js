@@ -26,7 +26,7 @@ export function redirect(hash) {
 
 export const KINDS = [["job", "Jobs"], ["land", "Lands"], ["issue", "Issues"], ["note", "Notes"]];
 
-const STYLE = `<style>
+export const STYLE = `<style>
 .tl .kinds { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 8px; font: 13px var(--sans); }
 .tl .kinds label { cursor: pointer; }
 .tl .strip { width: 100%; height: 230px; margin-bottom: 12px; }
@@ -151,7 +151,7 @@ function contents(e, now) {
   return contentsText(e, now).split(" · ").filter(Boolean).map((f) => { const i = f.indexOf(" "); return `<span class="k">${esc(f.slice(0, i))}</span> ${esc(f.slice(i + 1))}`; }).join('<span class="sep">·</span>');
 }
 
-const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 
 /** One stream row, aligned in the columns: Time, Status, Type, Subtype, Id, Title, Contents and an X where one applies. */
 export function renderEvent(e, now = Date.now(), closed = new Set()) {
@@ -170,9 +170,10 @@ export const PAGE = 100;
 /** The issues that have a closed or dropped row. */
 const closedIssues = (rows) => new Set(rows.filter((e) => e.kind === "issue" && (e.what === "closed" || e.what === "dropped")).map((e) => e.href));
 
-function head(sort) {
-  return `<thead><tr>${COLUMNS.map(([k, label]) => {
-    if (!SORT[k]) return `<th class="c-${k}">${label}</th>`;
+/** A sortable header row: `columns` are [key, label], only keys in `sortable` get a button. */
+export function head(sort, columns = COLUMNS, sortable = SORT) {
+  return `<thead><tr>${columns.map(([k, label]) => {
+    if (!sortable[k]) return `<th class="c-${k}">${label}</th>`;
     const on = sort.key === k;
     return `<th class="c-${k}"${on ? ` aria-sort="${sort.dir > 0 ? "ascending" : "descending"}"` : ""}><button type="button" data-sort="${k}">${label}${on ? (sort.dir > 0 ? " ▲" : " ▼") : ""}</button></th>`;
   }).join("")}</tr></thead>`;
@@ -265,7 +266,6 @@ export function mountTimeline(root, d) {
     page = 0; show(); c?.setOption(stripOption(d?.strip ?? [], [...on], now), true);
   });
   // Rows by position on the page, so a click finds its event again after a redraw.
-  const CONFIRM_MS = 5000;
   stream.addEventListener("click", async (ev) => {
     const cb = ev.target.closest?.("button[data-cancel]");
     if (cb) return cancelClick(cb);
@@ -283,27 +283,38 @@ export function mountTimeline(root, d) {
     const closed = closedIssues(d?.rows ?? []);
     const target = e && cancelTarget(e, closed);
     if (!target) return;
-    if (!btn.dataset.armed) {
-      btn.dataset.armed = "1"; btn.title = "Click again to confirm"; btn.classList.add("arm"); msg.textContent = "";
-      setTimeout(() => { if (!btn.isConnected || btn.dataset.sent) return; delete btn.dataset.armed; btn.title = "Stop or drop"; btn.classList.remove("arm"); }, CONFIRM_MS);
-      return;
-    }
-    if (btn.dataset.sent) return;
-    btn.dataset.sent = "1"; btn.disabled = true; msg.className = "cmsg"; msg.textContent = "Cancelling…";
-    try {
-      const res = await fetch(target.url, { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify(target.body) });
-      const j = await res.json().catch(() => ({}));
-      const err = !res.ok ? (j.error ?? `HTTP ${res.status}`) : j.code ? (j.stderr || j.stdout || `aleph exited ${j.code}`).trim() : "";
-      if (err) throw new Error(err);
+    await confirmCancel(btn, msg, target, (j) => {
       // The row shows its new state, and keeps it when the page redraws.
       if (e.kind === "issue") { e.state = j.status ?? "dropped"; e.what = e.state === "done" ? "closed" : "dropped"; }
       else { e.state = "dropped"; e.what = "dropped"; e.end = new Date().toISOString(); }
       tr.outerHTML = renderEvent(e, now, closed);
       const done = [...stream.querySelectorAll("tbody tr")][rows.indexOf(e)]?.querySelector(".cmsg");
       if (done) done.textContent = e.kind === "issue" ? `Now ${e.state}` : "Dropped";
-    } catch (x) {
-      delete btn.dataset.sent; delete btn.dataset.armed; btn.disabled = false; btn.title = "Stop or drop"; btn.classList.remove("arm");
-      msg.className = "cmsg err"; msg.textContent = x?.message ?? String(x);
-    }
+    });
+  }
+}
+
+const CONFIRM_MS = 5000;
+/**
+ * The X's two clicks: the first arms the button, the second within 5 s sends `target`
+ * ({ url, body }); `done(json)` runs on success, the error shows in the row's `msg` cell.
+ */
+export async function confirmCancel(btn, msg, target, done) {
+  if (!btn.dataset.armed) {
+    btn.dataset.armed = "1"; btn.title = "Click again to confirm"; btn.classList.add("arm"); msg.textContent = "";
+    setTimeout(() => { if (!btn.isConnected || btn.dataset.sent) return; delete btn.dataset.armed; btn.title = "Stop or drop"; btn.classList.remove("arm"); }, CONFIRM_MS);
+    return;
+  }
+  if (btn.dataset.sent) return;
+  btn.dataset.sent = "1"; btn.disabled = true; msg.className = "cmsg"; msg.textContent = "Cancelling…";
+  try {
+    const res = await fetch(target.url, { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify(target.body) });
+    const j = await res.json().catch(() => ({}));
+    const err = !res.ok ? (j.error ?? `HTTP ${res.status}`) : j.code ? (j.stderr || j.stdout || `aleph exited ${j.code}`).trim() : "";
+    if (err) throw new Error(err);
+    done(j);
+  } catch (x) {
+    delete btn.dataset.sent; delete btn.dataset.armed; btn.disabled = false; btn.title = "Stop or drop"; btn.classList.remove("arm");
+    msg.className = "cmsg err"; msg.textContent = x?.message ?? String(x);
   }
 }

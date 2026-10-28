@@ -1,18 +1,6 @@
-// The Projects view: a card per registry repo, recent activity first. Each
-// render function takes the /api/projects array and returns an HTML string.
-// views/project.js shows one project with renderDetail from here.
+// The project card and detail renderers, shared by views/project.js. The list of
+// projects is part of views/contents.js.
 import { empty, esc } from "../lib.js";
-
-export const view = {
-  path: "/projects",
-  title: "Projects",
-  nav: false,
-  group: "work",
-  order: 1,
-  api: "/api/projects",
-  refresh: 30,
-  render: (projects) => renderProjects(projects),
-};
 
 const day = (iso) => (Number.isNaN(Date.parse(iso)) ? "" : new Date(iso).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }));
 const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
@@ -40,12 +28,6 @@ export function renderCard(p) {
     `<p class="quiet q"><code>${esc(p.path)}</code></p>${renderFacts(p)}</article>`;
 }
 
-export function renderProjects(projects) {
-  const cards = projects.map(renderCard).join("");
-  return `<div class="page"><div class="sh"><h2>Projects</h2><span class="count">${projects.length}</span><span class="aside">numbers as of the last fetch</span></div>` +
-    (cards || empty("No project in the registry.", "Add a repo to <code>~/.aleph/repos.json</code>.")) + `</div>`;
-}
-
 export function renderDetail(p) {
   const sec = (title, n, body) => `<div class="sh"><h2>${esc(title)}</h2><span class="count">${n}</span></div>${body}`;
   const commits = p.commits.map((c) => {
@@ -55,7 +37,7 @@ export function renderDetail(p) {
   const items = p.items.map((i) => `<li><span class="id">${esc(p.key)}-${i.id}</span> ${esc(i.title)}${i.labels.map((l) => ` <span class="badge run">${esc(l)}</span>`).join("")}</li>`).join("");
   const jobs = p.jobs.map((j) => `<li><span class="id">${esc(j.name)}</span> <span class="badge ${j.state === "landed" ? "done" : "run"}">${esc(j.state)}</span> <span class="tm">${esc(day(j.started))}</span></li>`).join("");
   const notes = p.vault.map((n) => `<li>${esc(n.title)} <span class="badge run">${esc(n.kind)}</span> <span class="tm">${esc(n.updated)}</span></li>`).join("");
-  return `<div class="page"><p><a href="#/projects">All projects</a></p>${renderCard(p)}` +
+  return `<div class="page"><p><a href="#/contents?type=project">All projects</a></p>${renderCard(p)}` +
     sec("Recent commits", p.commits.length, commits ? `<ul class="ticks">${commits}</ul>` : empty("No commits on origin.", "The checkout has not fetched origin yet.")) +
     sec("Open issues", p.items.length, items ? `<ul class="ticks">${items}</ul>` : empty("No open issue.")) +
     sec("Jobs", p.jobs.length, jobs ? `<ul class="ticks">${jobs}</ul>` : empty("No job has run here.")) +

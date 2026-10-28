@@ -6,7 +6,7 @@ import { writeList } from "../todo/lib/store.ts";
 import { add } from "../todo/lib/todo.ts";
 import { serve } from "./server.ts";
 // @ts-ignore plain JS, shared with the page
-import { view as listView, renderProjects } from "./views/projects.js";
+import { renderCard } from "./views/projects.js";
 // @ts-ignore plain JS, shared with the page
 import { view as oneView } from "./views/project.js";
 
@@ -98,12 +98,10 @@ test("?project= narrows every route", async () => {
 });
 
 test("the views render cards and the detail", async () => {
-  expect(listView.path).toBe("/projects");
   expect(oneView.path).toBe("/projects/:key");
   const all: any[] = await (await at("/api/projects")).json();
-  const h = listView.render(all);
+  const h = all.map(renderCard).join("");
   for (const t of ['href="#/projects/fac"', "Factory", "Red", "1 commit"]) expect(h).toContain(t);
-  expect(renderProjects([])).toContain("No project in the registry.");
   const d = oneView.render(await (await at("/api/projects/fac")).json());
   for (const t of ["second", "fac-2", "a goal", "B fact"]) expect(d).toContain(t);
 });

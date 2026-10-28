@@ -8,7 +8,7 @@ import * as todos from "../todo/lib/todo.ts";
 import { writeDecision } from "../jobs/lib/decision.ts";
 import { serve } from "./server.ts";
 // @ts-ignore plain JS, shared with the page
-import * as v from "./views/issues.js";
+import * as v from "./views/contents.js";
 // @ts-ignore
 import { view as issueView } from "./views/issue.js";
 
@@ -50,6 +50,7 @@ beforeAll(async () => {
   sh(base, "git", "clone", "-q", itemsRemote, items);
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
+  mkdirSync(join(base, "none"));
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo }, oth: { path: join(base, "none") } }));
   argvFile = join(base, "argv"); stdinFile = join(base, "stdin");
   const fake = join(base, "fake-aleph");
@@ -158,32 +159,78 @@ describe("views", () => {
     expect(h).toContain('href="#/jobs/fac-1"');
   });
 
-  test("the factory lens lists only goals in chain order", async () => {
-    const rows = await getJson("/api/issues?repo=fac");
-    const h = v.renderIssues(rows, { lens: true });
-    expect(h).not.toContain("plain task");
-    // second goal (fac-3) waits on fac-4, so fac-4 comes first
-    const ids = [...h.matchAll(/<li><a class="id"[^>]*>([^<]+)<\/a>/g)].map((m) => m[1]);
-    expect(ids).toEqual(["fac-1", "fac-4", "fac-3"]);
-    expect(h).toContain("waits on fac-4");
+  test("/api/contents gives the issues and the projects", async () => {
+    const d = await getJson("/api/contents");
+    expect(d.issues.length).toBeGreaterThan(3);
+    expect(d.projects.map((p: any) => p.key).sort()).toEqual(["fac", "oth"]);
+    expect((await getJson("/api/contents?project=fac")).projects.map((p: any) => p.key)).toEqual(["fac"]);
   });
 
-  test("the view renders with the route query it is given", async () => {
-    const rows = await getJson("/api/issues?repo=fac");
-    const h = v.view.render(rows, {}, new URLSearchParams("status=done"));
-    expect(h).not.toContain("first goal</span>");
-    expect(h).toContain("fac-2");
+  test("the view is Contents at #/contents; #/issues and #/projects redirect, the detail routes do not", () => {
+    expect(v.view.path).toBe("/contents");
+    expect(v.view.title).toBe("Contents");
+    expect(v.view.group).toBe("factory");
+    expect(v.redirect("#/issues")).toBe("#/contents");
+    expect(v.redirect("#/issues?status=open")).toBe("#/contents");
+    expect(v.redirect("#/projects")).toBe("#/contents?type=project");
+    expect(v.redirect("#/issues/fac/1")).toBeNull();
+    expect(v.redirect("#/projects/fac")).toBeNull();
+    expect(v.redirect("#/contents")).toBeNull();
   });
 
-  test("the list groups by repo and filters by title", async () => {
-    const rows = await getJson("/api/issues");
-    const h = v.renderIssues(rows, {});
-    expect(h).toContain("<h2>fac</h2>");
-    expect(h).toContain("<h2>oth</h2>");
-    expect(h).toContain("## Goal");
-    const f = v.renderIssues(rows, { q: "plain" });
-    expect(f).toContain("plain task");
-    expect(f).not.toContain("first goal</span>");
+  test("issue rows: Type, Status, Id, Title, Labels, Updated and an X on an open issue only", async () => {
+    const d = await getJson("/api/contents");
+    const h = v.view.render(d, {}, new URLSearchParams("type=issue"));
+    const th = [...h.matchAll(/<th class="c-(\w+)"/g)].map((m) => m[1]);
+    expect(th).toEqual(["type", "status", "id", "title", "labels", "open", "updated", "act"]);
+    expect(h).toContain('class="tbl"');
+    expect(h).toContain('<td class="c-type">issue</td>');
+    expect(h).toContain('href="#/issues/fac/1"');
+    expect(h).not.toContain('<td class="c-type">project</td>');
+    const rows = h.split("<tr class=\"evr\"").slice(1);
+    for (const r of rows) expect(r.includes("data-cancel")).toBe(r.includes(">open</span>"));
+    expect(rows.some((r: string) => r.includes(">done</span>"))).toBe(true);
+    expect(h).toContain("File an issue");
+  });
+
+  test("project rows: Type, Name, open issues, last activity", async () => {
+    const d = await getJson("/api/contents");
+    const h = v.view.render(d, {}, new URLSearchParams("type=project"));
+    expect(h).toContain('<td class="c-type">project</td>');
+    expect(h).toContain('<a href="#/projects/fac">fac</a>');
+    expect(h).not.toContain('<td class="c-type">issue</td>');
+    expect(h).not.toContain("data-cancel");
+    const fac = d.projects.find((p: any) => p.key === "fac");
+    expect(h).toContain(`<td class="c-open">${fac.openItems}</td>`);
+  });
+
+  test("the Type filter: All shows both, and an unknown type is All", async () => {
+    const d = await getJson("/api/contents");
+    const all = v.view.render(d, {}, new URLSearchParams());
+    expect(all).toContain('<td class="c-type">issue</td>');
+    expect(all).toContain('<td class="c-type">project</td>');
+    for (const t of ["All", "Issues", "Projects"]) expect(all).toContain(`>${t}</option>`);
+    expect(v.view.render(d, {}, new URLSearchParams("type=junk"))).toContain('<td class="c-type">project</td>');
+    const rows = v.contentRows(d);
+    expect(v.filterRows(rows, { type: "project" }).every((r: any) => r.type === "project")).toBe(true);
+    expect(v.filterRows(rows, { status: "done" }).every((r: any) => r.type === "issue" && r.status === "done")).toBe(true);
+    expect(v.filterRows(rows, { q: "plain" }).map((r: any) => r.title)).toEqual(["plain task"]);
+  });
+
+  test("the header sorts: a query key and direction order the rows", async () => {
+    const d = await getJson("/api/contents");
+    const ids = (q: string) => [...v.view.render(d, {}, new URLSearchParams(q + "&type=issue")).matchAll(/class="id" href="[^"]*">([^<]+)</g)].map((m) => m[1]);
+    expect(ids("sort=id&dir=asc")).toEqual([...ids("sort=id&dir=asc")].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
+    expect(ids("sort=id&dir=desc")).toEqual(ids("sort=id&dir=asc").reverse());
+    expect(v.view.render(d, {}, new URLSearchParams("sort=title&dir=asc"))).toContain('aria-sort="ascending"');
+  });
+
+  test("the X drops through the issue's drop route", async () => {
+    const d = await getJson("/api/contents");
+    const open = v.contentRows(d).find((r: any) => r.type === "issue" && r.status === "open");
+    expect(v.dropTarget(open)).toMatchObject({ url: `/api/issues/${open.repo}/${open.n}/drop` });
+    expect(v.dropTarget(v.contentRows(d).find((r: any) => r.type === "project"))).toBeNull();
+    expect(v.dropTarget({ ...open, status: "done" })).toBeNull();
   });
 });
 
