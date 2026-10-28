@@ -2,7 +2,8 @@
  * `GET /api/timeline?before=<iso>&days=1&project=<key>`: the factory's events as one stream,
  * newest first. A page is the latest `days` local days, each with events, that end before
  * `before` (default now); `next` is the `before` for the page after it, null at the end.
- * The first page (no `before`) also carries `strip`: the count per day per kind for 30 days.
+ * The first page (no `before`) also carries `strip`: the items of the last 30 days for the swimlanes,
+ * each with kind, start, end (null for a point, or a job still running) and name.
  * Sources: the ledger (job runs), the work store (issues), Langfuse sessions (the sessions
  * route), `git log` of the registry repos (lands) and the vault's daily note lines (notes).
  */
@@ -33,14 +34,27 @@ export interface TimelineEvent {
   dateOnly?: boolean;
   cost?: number;
   commit?: string;
+  /** A bar's end: a job's ended, a session's last turn. */
+  end?: string;
   /** The item's own fields as key/value pairs: the Details column. */
   details?: [string, string][];
+}
+export interface StripItem {
+  kind: Kind;
+  start: string;
+  /** Jobs and sessions are bars; a job with no end runs to now. Others are points (null). */
+  end: string | null;
+  name: string;
+  state?: string;
+  href: string;
+  /** The local day the item starts on: where a click scrolls the stream. */
+  day: string;
 }
 export interface Timeline {
   days: { day: string; events: TimelineEvent[] }[];
   next: string | null;
   langfuse: "ok" | "off" | "error";
-  strip?: { day: string; counts: Record<Kind, number> }[];
+  strip?: StripItem[];
 }
 
 const dayOf = (iso: string): string | null => {
@@ -70,7 +84,7 @@ function jobEvents(project: string | null, since: number, inGit: (sha: string) =
       if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", title: run.name, commit: run.commit, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model], ["commit", run.commit?.slice(0, 7)]) });
       continue;
     }
-    out.push({ ...base, at: run.started, kind: "job", what: "started", state: "running", title: run.name, details: pairs(["model", run.model]) });
+    out.push({ ...base, at: run.started, kind: "job", what: "started", state: "running", title: run.name, end: run.ended || undefined, details: pairs(["model", run.model]) });
     if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: "ended", state: run.state, title: run.name, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model]) });
   }
   return out.filter((e) => Date.parse(e.at) >= since);
@@ -127,7 +141,7 @@ async function sessionEvents(project: string | null, days: number): Promise<{ ev
   return {
     langfuse: "ok",
     events: (body.sessions ?? []).map((s: any): TimelineEvent => ({
-      at: s.start, kind: "session", what: "started", title: s.firstPrompt || s.id, href: `#/sessions/${enc(s.id)}`, project: s.project, cost: s.cost,
+      at: s.start, end: s.last, kind: "session", what: "started", title: s.firstPrompt || s.id, href: `#/sessions/${enc(s.id)}`, project: s.project, cost: s.cost,
       details: pairs(["turns", s.turns], ["kinds", (s.taskTypes ?? []).join(",")]),
     })),
   };
@@ -191,10 +205,11 @@ export async function timeline(opts: { before?: string | null; days?: number; pr
   const rest = last ? older.some((e) => dayOf(e.at)! < last.day) : false;
   const out: Timeline = { days, next: last && rest ? startOf(last.day).toISOString() : null, langfuse };
   if (!opts.before) {
-    const keys = Array.from({ length: STRIP_DAYS }, (_, i) => today(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (STRIP_DAYS - 1 - i), 12)));
-    const rows = new Map(keys.map((day) => [day, { day, counts: Object.fromEntries(KINDS.map((k) => [k, 0])) as Record<Kind, number> }]));
-    for (const e of all) { const row = rows.get(dayOf(e.at)!); if (row) row.counts[e.kind]++; }
-    out.strip = [...rows.values()];
+    const from = startOf(today(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (STRIP_DAYS - 1), 12))).getTime();
+    const bar = (e: TimelineEvent) => e.kind === "job" || e.kind === "session";
+    out.strip = all.filter((e) => Date.parse(e.at) >= from && !(e.kind === "job" && e.what === "ended")).reverse().map((e) => ({
+      kind: e.kind, start: e.at, end: bar(e) ? e.end ?? null : null, name: e.title, state: e.state, href: e.href, day: dayOf(e.at)!,
+    }));
   }
   return out;
 }

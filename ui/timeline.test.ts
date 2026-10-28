@@ -93,7 +93,7 @@ describe("timeline api", () => {
     expect(times).toEqual([...times].sort().reverse());
     expect(t.days[0].events.map((e) => [e.kind, e.what, e.title])).toContainEqual(["job", "started", "fac-2"]);
     expect(t.langfuse).toBe("ok");
-    expect(t.strip).toHaveLength(30);
+    expect(t.strip!.length).toBeGreaterThan(0);
     expect(t.next).not.toBeNull();
   });
 
@@ -131,23 +131,28 @@ describe("timeline api", () => {
     const t = await timeline({ now, project: "other", before: at(0, 23) });
     expect(t.days[0].events.map((e) => e.title)).toEqual(["oth-1", "oth-1"]);
     const s = await timeline({ now, project: "other" });
-    expect(s.strip!.reduce((n, d) => n + d.counts.job, 0)).toBe(2);
-    expect(s.strip!.reduce((n, d) => n + d.counts.session, 0)).toBe(1);
+    expect(s.strip!.filter((i) => i.kind === "job")).toHaveLength(1);
+    expect(s.strip!.filter((i) => i.kind === "session")).toHaveLength(1);
   });
 
-  test("the strip has one entry per day with a count for every kind", async () => {
+  test("the strip lists items: jobs as bars, a running job with no end, the rest as points", async () => {
     const t = await timeline({ now });
-    expect(new Set(t.strip!.map((d) => d.day)).size).toBe(30);
-    expect(t.strip!.at(-1)!.day).toBe(dayKey(0));
-    for (const d of t.strip!) expect(Object.keys(d.counts).sort()).toEqual(["issue", "job", "land", "note", "session"]);
-    const sum = (k: string) => t.strip!.reduce((n, d) => n + (d.counts as any)[k], 0);
-    expect(sum("job")).toBe(5);
-    expect(sum("session")).toBe(2);
-    expect(sum("note")).toBe(1);
-    const opt = stripOption(t.strip!);
-    expect(opt.series.map((s: any) => s.name)).toEqual(["Jobs", "Lands", "Issues", "Sessions", "Notes"]);
-    expect(opt.series[0].data).toHaveLength(30);
-    expect(stripOption(t.strip!, ["job"]).series).toHaveLength(1);
+    const n = (k: string) => t.strip!.filter((i) => i.kind === k).length;
+    expect(n("job")).toBe(3);
+    expect(n("session")).toBe(2);
+    expect(n("note")).toBe(1);
+    expect(t.strip!.some((i) => i.kind === "job" && i.name === "fac-1" && i.start === at(0, 9) && i.end === at(0, 10))).toBe(true);
+    expect(t.strip!.find((i) => i.name === "fac-2")).toMatchObject({ kind: "job", end: null, day: dayKey(0) });
+    expect(t.strip!.find((i) => i.kind === "note")!.end).toBeNull();
+    const opt = stripOption(t.strip!, undefined, now.getTime());
+    expect(opt.yAxis.data).toEqual(["Jobs", "Lands", "Issues", "Sessions", "Notes"]);
+    const jobs = opt.series[0].data.filter((d: any) => d.value[6] === "job");
+    const f1 = jobs.find((d: any) => d.name === "fac-1").value, f2 = jobs.find((d: any) => d.name === "fac-2").value;
+    expect(f1[2] - f1[1]).toBe(3600_000);
+    expect(f2[2]).toBe(now.getTime());
+    const some = stripOption(t.strip!, ["job"], now.getTime());
+    expect(some.yAxis.data).toEqual(["Jobs"]);
+    expect(some.series[0].data.every((d: any) => d.value[6] === "job")).toBe(true);
   });
 
   test("the route validates before", async () => {
