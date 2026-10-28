@@ -160,6 +160,34 @@ test("Langfuse down gives a 502", async () => {
   expect((await get("/api/skills/aleph:pickup")).status).toBe(502);
 });
 
+test("a 502 goes out only after every request of the failed fetch has ended", async () => {
+  let inflight = 0, requests = 0;
+  const slow = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      requests++;
+      if (new URL(req.url).searchParams.get("type") === "AGENT") return new Response("down", { status: 503 });
+      inflight++;
+      await Bun.sleep(100);
+      inflight--;
+      return new Response("down", { status: 503 });
+    },
+  });
+  const before = process.env.LANGFUSE_BASE_URL;
+  process.env.LANGFUSE_BASE_URL = `http://127.0.0.1:${slow.port}`;
+  try {
+    expect((await get("/api/skills")).status).toBe(502);
+    expect(inflight).toBe(0);
+    const seen = requests;
+    await Bun.sleep(300);
+    expect(inflight).toBe(0);
+    expect(requests).toBe(seen);
+  } finally {
+    slow.stop(true);
+    process.env.LANGFUSE_BASE_URL = before;
+  }
+});
+
 test("only turns and tool calls are fetched, and traces without their input and output", async () => {
   await get("/api/skills");
   const obs = asked.filter((u) => u.pathname === "/api/public/observations").map((u) => u.searchParams.get("type")).sort();

@@ -61,6 +61,14 @@ async function getJson(cfg: LangfuseConfig, path: string, q: Record<string, stri
   return res.json();
 }
 
+/** Like Promise.all, but a failure waits for the other promises to end first, then throws the first error: no request outlives its caller. */
+async function settled<T extends readonly unknown[]>(ps: { [K in keyof T]: Promise<T[K]> }): Promise<T> {
+  const rs = await Promise.allSettled(ps);
+  const bad = rs.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (bad) throw bad.reason;
+  return rs.map((r) => (r as PromiseFulfilledResult<unknown>).value) as unknown as T;
+}
+
 /**
  * Every row of a paged Langfuse list: page 1 says how many pages there are, the rest are fetched
  * POOL at a time, each tried twice. All pages at once overloaded Langfuse and every page timed out.
@@ -73,8 +81,12 @@ async function allPages<T>(cfg: LangfuseConfig, path: string, q: Record<string, 
   const pages = first.meta ? Math.min(Number(first.meta.totalPages) || 1, MAX_PAGES) : 1;
   const out: any[][] = [first.data ?? []];
   let next = 2;
-  const worker = async () => { for (let n = next++; n <= pages; n = next++) out[n - 1] = (await page(n)).data ?? []; };
-  await Promise.all(Array.from({ length: Math.min(POOL, pages - 1) }, worker));
+  let failed = false;
+  const worker = async () => {
+    try { for (let n = next++; n <= pages && !failed; n = next++) out[n - 1] = (await page(n)).data ?? []; }
+    catch (e) { failed = true; throw e; }
+  };
+  await settled(Array.from({ length: Math.min(POOL, pages - 1) }, worker));
   const rows = out.flat();
   const ms = Date.now() - t0;
   console.log(`skills: ${label}: ${rows.length} rows, ${pages} pages in ${(ms / 1000).toFixed(1)} s (${Math.round(ms / pages)} ms per page, ${POOL} at a time)`);
@@ -104,7 +116,7 @@ const compactTrace = (t: any): TraceInfo => ({ id: t.id, sessionId: t.sessionId,
  */
 async function fetchRows(cfg: LangfuseConfig, from: Date, to: Date): Promise<{ obs: Observation[]; traces: TraceInfo[] }> {
   const span = { fromStartTime: from.toISOString(), toStartTime: to.toISOString() };
-  const [agents, tools, traces] = await Promise.all([
+  const [agents, tools, traces] = await settled([
     allPages<any>(cfg, "/api/public/observations", { ...span, type: "AGENT" }, "turns"),
     allPages<any>(cfg, "/api/public/observations", { ...span, type: "TOOL" }, "tool calls"),
     allPages<any>(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString(), fields: "core" }, "traces"),
