@@ -101,3 +101,19 @@ test("load records the open state of details[data-keep] before the render and re
   expect(restore).toBeGreaterThan(render);
   expect(body.slice(0, rec)).toContain("first");
 });
+
+test("the sidebar lists Status, Activity (/timeline), then the rest, with Other for /activity and no Jobs or Projects", async () => {
+  const dir = new URL("./views/", import.meta.url);
+  const names = (await import("node:fs")).readdirSync(dir).filter((n) => n.endsWith(".js"));
+  const all: any[] = [];
+  for (const n of names) for (const m of Object.values(await import(new URL(n, dir).href))) if (m && typeof (m as any).path === "string") all.push(m);
+  const shown = all.filter((v) => !v.path.includes(":") && v.nav !== false);
+  const factory = shown.filter((v) => v.group === "factory").sort((a, b) => a.order - b.order);
+  expect(factory.slice(0, 2).map((v) => [v.title, v.path])).toEqual([["Status", "/"], ["Activity", "/timeline"]]);
+  expect(shown.find((v) => v.path === "/activity")?.title).toBe("Other");
+  expect(shown.some((v) => v.path === "/jobs" || v.path === "/projects")).toBe(false);
+  expect(all.some((v) => v.path === "/jobs")).toBe(true);
+  expect(all.some((v) => v.path === "/jobs/:name" || v.path === "/projects/:key")).toBe(true);
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  expect(html).toContain("v.nav !== false");
+});

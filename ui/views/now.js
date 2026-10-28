@@ -5,7 +5,7 @@ import { actMessages, clock, cmd, diffHtml, esc, money, openDiffs, span } from "
 
 export const view = {
   path: "/",
-  title: "Now",
+  title: "Status",
   group: "factory",
   order: 0,
   api: "/api/state",

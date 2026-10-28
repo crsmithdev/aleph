@@ -5,7 +5,7 @@ import { chart, empty, error, esc, money } from "../lib.js";
 
 export const view = {
   path: "/activity",
-  title: "Activity",
+  title: "Other",
   group: "activity",
   order: 2,
   api: "/api/activity/view?days=7",

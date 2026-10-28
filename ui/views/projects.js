@@ -6,6 +6,7 @@ import { empty, esc } from "../lib.js";
 export const view = {
   path: "/projects",
   title: "Projects",
+  nav: false,
   group: "work",
   order: 1,
   api: "/api/projects",

@@ -215,7 +215,7 @@ describe("the List address", () => {
     expect(redirect("#/listing")).toBeNull();
   });
   test("the view is Timeline at /timeline in the factory group, and no List view is left", () => {
-    expect(view).toMatchObject({ path: "/timeline", title: "Timeline", group: "factory" });
+    expect(view).toMatchObject({ path: "/timeline", title: "Activity", group: "factory", order: 1 });
     expect(existsSync(new URL("./views/list.js", import.meta.url).pathname)).toBe(false);
     expect(readFileSync(new URL("./index.html", import.meta.url), "utf8")).toContain("redirect");
   });

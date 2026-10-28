@@ -20,6 +20,7 @@ const listUrl = () => {
 export const view = {
   path: "/jobs",
   title: "Jobs",
+  nav: false,
   group: "factory",
   order: 1,
   api: listUrl,

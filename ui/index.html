@@ -458,7 +458,7 @@ pre.trailers b { color: var(--need); }
       if (hit && (!active || v.path.length > active.path.length)) active = v;
     }
     $("nav").innerHTML = GROUPS.map(([key, label]) => {
-      const items = views.filter((v) => v.group === key && !v.path.includes(":")).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
+      const items = views.filter((v) => v.group === key && !v.path.includes(":") && v.nav !== false).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
       if (!items.length) return "";
       return `<div class="nav-group"><h2>${esc(label)}</h2><ul>${items.map((v) =>
         `<li><a href="#${esc(withProject(v.path))}"${v === active ? ' aria-current="page"' : ""}>${esc(v.title)}</a></li>`).join("")}</ul></div>`;

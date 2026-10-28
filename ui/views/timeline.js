@@ -6,9 +6,9 @@ import { chart, clock, empty, esc, money } from "../lib.js";
 
 export const view = {
   path: "/timeline",
-  title: "Timeline",
+  title: "Activity",
   group: "factory",
-  order: 4,
+  order: 1,
   api: "/api/timeline?days=1",
   render: (d) => renderTimeline(d),
   mount: (root, d) => mountTimeline(root, d),
