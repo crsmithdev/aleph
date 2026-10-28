@@ -67,6 +67,10 @@ export function renderLede(s) {
   const problems = []; // [tone, html]
   if (s.needs.length) problems.push(["warning", `<a href="#issues">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you</a>`]);
   if (s.stuck.length) problems.push(["error", `<a href="#issues">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`]);
+  const needing = s.needsIssues ?? [];
+  if (needing.length) problems.push(["warning", `<a href="#issues">${needing.length} ${needing.length === 1 ? "issue needs" : "issues need"} a decision</a>`]);
+  const fresh = s.issues ?? [];
+  if (fresh.length) problems.push(["warning", `<a href="#issues">${fresh.length} new ${fresh.length === 1 ? "issue waits" : "issues wait"} for triage</a>`]);
   const health = [...(f.health || [])];
   if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   for (const l of health) {
@@ -174,7 +178,8 @@ const fold = (j, held) => details(j, held ? `<div class="actions">${act("diff", 
 const heldRow = (j) => row("held", `Review, then land or drop: ${heldWhy(j)}`, j.name, j.item?.title || "", `${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}${actMsg(j.name)}`, fold(j, true));
 const stuckRow = (j) => row("stuck", `Clear: ${j.state === "failed" ? "failed" : "stuck"}${j.reason ? ` with ${j.reason}` : ""}`, j.name, j.item?.title || "", `${act("recheck", j.name, "Re-check")}${act("drop", j.name, "Drop")}${actMsg(j.name)}`, fold(j, false));
 const open = (i) => `<a class="act" href="${esc(i.href)}">Open</a>`;
-const decideRow = (i) => row("decide", `Decide: ${i.question || "the question in the issue"}`, i.id, i.title, open(i));
+const decideNote = (i) => i.question ? `<details class="more" data-keep="more:${esc(i.id)}"><summary>Details</summary><div class="body"><p class="quiet q">${esc(i.question)}</p></div></details>` : "";
+const decideRow = (i) => row("decide", "Decide", i.id, i.title, open(i), decideNote(i));
 const newRow = (i) => row("new", "Wait for triage", i.id, i.title, open(i));
 const errorRow = (l) => row("error", `${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`, "", "", "");
 

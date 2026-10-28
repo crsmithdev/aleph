@@ -123,7 +123,8 @@ test("a held run, a stuck run, a needs-chris issue and a red main are one Issues
   expect(verb(rs[0])).toStartWith("Review, then land or drop: ");
   expect(verb(rs[0])).toContain("the reviewer left it to you: touches hooks");
   expect(verb(rs[1])).toBe("Clear: stuck with no commit");
-  expect(verb(rs[2])).toBe("Decide: Haiku or Sonnet for the digest?");
+  expect(verb(rs[2])).toBe("Decide");
+  expect(rs[2]).toContain("Haiku or Sonnet for the digest?");
   expect(verb(rs[3])).toBe("Fix: aleph main is red at abc1234: tests");
   // The verb phrase comes first, then the id and title, then the buttons.
   for (const [row, id, title, btns] of [[rs[0], "aleph-27", "Digest head and tail", ["land", "drop"]], [rs[1], "aleph-30", "Fix it", ["recheck", "drop"]], [rs[2], "aleph-7", "Which tier?", []]] as const) {
@@ -395,4 +396,27 @@ test("a held row shows the review2 verdict and its reason in its verb phrase", (
   expect(h.indexOf("sent it back")).toBeLessThan(h.indexOf('data-act="land"'));
   expect(withAttn(withReview({ verdict: "land" }))).toContain("the reviewer says land");
   expect(withAttn(state)).toContain("the reviewer gave no verdict");
+});
+
+test("a needs-chris issue with a long note is a one-line row with the note in a collapsed detail", () => {
+  const note = "Long triage note. ".repeat(40).trim();
+  const s = { ...state, needs: [], stuck: [], issues: [], factory: { ...state.factory, health: [] }, needsIssues: [{ ...issue(152), labels: ["needs-chris"], title: "Which tier?", question: note }] };
+  const [row] = rows(r.renderIssues(s));
+  const main = row.match(/<div class="row-main">[^]*?<\/div>/)![0];
+  expect(main).toContain("Decide");
+  expect(main).toContain("aleph-152");
+  expect(main).toContain("Which tier?");
+  expect(main).not.toContain("Long triage note");
+  const det = row.match(/<details class="more"[^>]*>[^]*?<\/details>/)![0];
+  expect(det).not.toContain(" open");
+  expect(det).toContain(note);
+});
+
+test("the status line is not 'All is well.' when the Issues section has an item", () => {
+  const calm = { ...state, needs: [], stuck: [], issues: [], needsIssues: [], factory: { ...state.factory, health: [], hold: undefined, paused: false } };
+  for (const o of [{ needsIssues: [{ ...issue(7), labels: ["needs-chris"], question: "q" }] }, { issues: [issue(8)] }]) {
+    const h = r.renderLede({ ...calm, ...o });
+    for (const v of r.FINE) expect(h).not.toContain(v);
+    expect(h).toContain("One thing needs your attention.");
+  }
 });
