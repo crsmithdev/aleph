@@ -54,6 +54,9 @@ export function validDate(s: string): boolean {
 }
 
 const REF = /^(.+)-(\d+)$/;
+/** The refs a `waiting_on` names: its comma-separated parts, trimmed, empty parts dropped. */
+export const waitParts = (waits: string): string[] => waits.split(",").map((s) => s.trim()).filter(Boolean);
+
 /** `<repo>-<n>` split into its parts, or null. */
 export function parseRef(s: string): { repo: string; id: number } | null {
   const m = REF.exec(s);
@@ -265,9 +268,10 @@ export function lint(doc: Doc, exists?: (repo: string, id: number) => boolean): 
     if (due !== undefined && !(typeof due === "string" && validDate(due))) findings.push({ id: item.id, problem: `due: ${due} is not a date written YYYY-MM-DD`, fixable: false });
     const waits = item.fm.waiting_on;
     if (waits !== undefined) {
-      const ref = typeof waits === "string" ? parseRef(waits) : null;
-      if (!ref) findings.push({ id: item.id, problem: `waiting_on: ${waits} is not <repo>-<n>`, fixable: false });
-      else if (exists && !exists(ref.repo, ref.id)) findings.push({ id: item.id, problem: `waiting_on: ${waits} names no issue`, fixable: false });
+      const parts = typeof waits === "string" ? waitParts(waits) : [];
+      const refs = parts.map(parseRef);
+      if (!parts.length || refs.some((r) => !r)) findings.push({ id: item.id, problem: `waiting_on: ${waits} is not <repo>-<n>[,<repo>-<n>...]`, fixable: false });
+      else if (exists && refs.some((r) => !exists(r!.repo, r!.id))) findings.push({ id: item.id, problem: `waiting_on: ${waits} names no issue`, fixable: false });
     }
     if (item.fm.labels !== undefined && !Array.isArray(item.fm.labels)) findings.push({ id: item.id, problem: "labels must be a list", fixable: true });
     if (item.fm.id !== undefined && Number(item.fm.id) !== item.id) findings.push({ id: item.id, problem: `id says ${item.fm.id} but the heading says ${item.id}`, fixable: true });

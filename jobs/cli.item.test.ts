@@ -153,4 +153,14 @@ describe("prospective memory", () => {
     expect(readFileSync(join(base, "factory", "seen"), "utf8")).toContain(`fac-${ids[0]}`);
     for (const id of [...ids, future]) await aleph(["todo", "drop", "fac", String(id), "test over"]);
   }, 60_000);
+
+  test("a goal waiting on several items comes due once every one is done", async () => {
+    const a = await add("wait a"), b = await add("wait b");
+    const w = await add("waits on two", "--waiting-on", `fac-${a},fac-${b}`);
+    await aleph(["todo", "done", "fac", String(a)]);
+    expect((await aleph(["report"])).stdout).not.toContain(`fac-${w} waits on two`);
+    await aleph(["todo", "done", "fac", String(b)]);
+    expect((await aleph(["report"])).stdout).toContain(`fac-${w} waits on two`);
+    await aleph(["todo", "drop", "fac", String(w), "test over"]);
+  }, 60_000);
 });

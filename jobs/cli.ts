@@ -181,7 +181,7 @@ async function todoCmd(): Promise<void> {
   const status = flag("status");
   if (status !== undefined && !(todos.STATUSES as readonly string[]).includes(status)) refuse(`--status takes ${todos.STATUSES.join(", ")}`);
   const waitingOn = flag("waiting-on");
-  if (waitingOn !== undefined && waitingOn !== "none" && !todos.parseRef(waitingOn)) refuse("--waiting-on takes <repo>-<n> or none");
+  if (waitingOn !== undefined && waitingOn !== "none" && !(todos.waitParts(waitingOn).length && todos.waitParts(waitingOn).every((p) => todos.parseRef(p)))) refuse("--waiting-on takes <repo>-<n>[,<repo>-<n>...] or none");
 
   switch (sub) {
     case "add": {

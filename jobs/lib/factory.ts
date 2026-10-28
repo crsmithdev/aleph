@@ -139,8 +139,14 @@ export function notReady(item: todos.Item, done: (ref: string) => boolean, now =
   const due = item.fm.due;
   if (typeof due === "string" && todos.validDate(due) && due > todos.today(now)) return `due ${due}`;
   const waits = item.fm.waiting_on;
-  if (typeof waits === "string" && !done(waits)) return `waiting on ${waits}`;
+  const open = pendingWaits(waits, done);
+  if (open.length) return `waiting on ${open.join(",")}`;
   return null;
+}
+
+/** The parts of a `waiting_on` (a ref or a comma list of refs) that are not done; none for an absent one. */
+export function pendingWaits(waits: unknown, done: (ref: string) => boolean): string[] {
+  return typeof waits === "string" ? todos.waitParts(waits).filter((w) => !done(w)) : [];
 }
 
 /** The job name for a goal item: its store id, as `aleph-28`. */
@@ -639,7 +645,7 @@ function cameDue(): string[] {
       if (todos.status(item) !== "open" || seen.has(id)) continue;
       const due = item.fm.due;
       const waits = item.fm.waiting_on;
-      if ((typeof due === "string" && todos.validDate(due) && due <= day) || (typeof waits === "string" && done(waits))) {
+      if ((typeof due === "string" && todos.validDate(due) && due <= day) || (typeof waits === "string" && todos.waitParts(waits).length > 0 && !pendingWaits(waits, done).length)) {
         ids.push(id);
         lines.push(`${id} ${item.title}`);
       }

@@ -11,7 +11,7 @@ import { decisionNote, normalizeDecision, writeDecision, type Decision } from ".
 import { allRuns, jobsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
-import { gates } from "./factory.ts";
+import { gates, pendingWaits } from "./factory.ts";
 /** Triage runs that end with no verdict, for one item, before it is labelled `needs-chris`; `ALEPH_TRIAGE_TRIES` changes it. */
 export const TRIAGE_TRIES = () => Number(process.env.ALEPH_TRIAGE_TRIES ?? 2);
 const TIME_BOX_MS = () => Number(process.env.ALEPH_TRIAGE_TIMEOUT ?? 600) * 1000;
@@ -179,7 +179,7 @@ export async function triageIssue(repo: Repo, id: number, done: (ref: string) =>
   const item = reader().item(repo.key, id);
   if (!item || todos.status(item) !== "open" || isSorted(item)) return { triaged, skipped };
   const waits = item.fm.waiting_on;
-  if (typeof waits === "string" && !done(waits)) return { triaged, skipped };
+  if (pendingWaits(waits, done).length) return { triaged, skipped };
   const blocked = gates({ only: ["live", "day"] });
   if (blocked) { skipped.push(`triage: ${blocked.why}`); return { triaged, skipped }; }
   await triageItem(repo, item, triaged, skipped);
@@ -199,7 +199,7 @@ export async function triageOpen(repos: Repo[], done: (ref: string) => boolean):
     for (const item of lists.list(repo.key)?.items ?? []) {
       if (todos.status(item) !== "open" || isSorted(item)) continue;
       const waits = item.fm.waiting_on;
-      if (typeof waits === "string" && !done(waits)) continue;
+      if (pendingWaits(waits, done).length) continue;
       queue.push({ repo, item });
     }
   }

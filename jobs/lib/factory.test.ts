@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { labels as itemLabels, readList, writeList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
-import { dispatchGoals, gates, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
+import { dispatchGoals, gates, notReady, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
 import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -595,4 +595,10 @@ test("a rescue whose lock wait runs out skips the job and does not throw", async
     await dispatch(f);
     expect(f.calls).toEqual([]);
   } finally { delete process.env.ALEPH_RESCUE_WAIT_MS; release(); }
+});
+
+test("notReady: a waiting_on list is ready when every part is done, and names only the parts not done", () => {
+  const item = { fm: { waiting_on: "fac-1, fac-2" } } as unknown as todos.Item;
+  expect(notReady(item, () => true)).toBeNull();
+  expect(notReady(item, (r) => r === "fac-1")).toBe("waiting on fac-2");
 });
