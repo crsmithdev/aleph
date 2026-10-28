@@ -267,7 +267,14 @@ async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
   }).slice(0, room);
   const cli = join(import.meta.dir, "..", "cli.ts");
   const jobsOf = names.map((n) => jobs.find((j) => j.at(-1)!.run.name === n && isOpen(j))![0].run.job);
-  for (const n of names) Bun.spawn([process.execPath, cli, "land", n], { env: process.env, stdin: "ignore", stdout: "ignore", stderr: "ignore", detached: true }).unref();
+  // Their own units: a child of this land's unit would die with its cgroup when the leader exits.
+  for (const n of names) {
+    const unit = `aleph-pull-${repo.key}-${n}-${Date.now()}`.replace(/[^A-Za-z0-9:_.-]/g, "-");
+    const pass = Object.entries(process.env).filter(([k]) => k.startsWith("ALEPH_") || k.startsWith("SIDETONE_")).map(([k, v]) => `--setenv=${k}=${v}`);
+    const argv = process.env.ALEPH_JOB_FOREGROUND === "1" ? [process.execPath, cli, "land", n]
+      : ["systemd-run", "--user", "--collect", "--quiet", `--unit=${unit}`, `--working-directory=${repo.path}`, `--setenv=PATH=${runPath()}`, ...pass, process.execPath, cli, "land", n];
+    Bun.spawn(argv, { env: process.env, stdin: "ignore", stdout: "ignore", stderr: "ignore", detached: true }).unref();
+  }
   const deadline = Date.now() + 10_000;
   const queued = (job: string) => allRuns().some((e) => e.run.kind === "land" && e.run.job === job && e.run.state === "running");
   while (Date.now() < deadline && !jobsOf.every(queued)) await Bun.sleep(100);
@@ -314,10 +321,12 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
     for (const m of members.slice(1)) m.log(`taken into the batch of ${run.name}'s land ${id}`);
     if (members.length > 1) log(`batch of ${members.length}`, members.map((m) => m.run.name).join("\n"));
 
+    // Members that failed in an earlier attempt keep their verdict and are not tried again.
+    const failedBefore = new Map<Member, Outcome & { after?: () => void }>();
     for (let attempt = 0; ; attempt++) {
       if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
       const base0 = git(repo.path, "rev-parse", `origin/${main}`).out;
-      const done = new Map<Member, Outcome & { after?: () => void }>();
+      const done = new Map<Member, Outcome & { after?: () => void }>(failedBefore);
       const finish = (m: Member, o: Outcome & { after?: () => void }) => { done.set(m, o); if (o.verdict.state === "failed") m.log(`failed: ${o.verdict.reason}`); };
       const tips = new Map<Member, string>();
 
@@ -380,7 +389,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
       // The checks on the chain's last commit, or none when the run's own checks passed on this very origin/<main>.
       const check = async (items: Item[], base: string): Promise<string | null> => {
         const first = items[0].m.run;
-        if (items.length === 1 && base === base0 && first.checkedBase === base0) {
+        if (items.length === 1 && base === base0 && first.checkedBase === base0 && first.checkedTip === tips.get(items[0].m)) {
           log(`checks skipped: main unchanged since ${base0}`);
           return null;
         }
@@ -443,6 +452,11 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
           return conclude(leader, done);
         }
         log("main moved; merging again");
+        for (const [m, o] of done) {
+          if (o.verdict.state !== "failed" || ok.some((i) => i.m === m)) continue;
+          failedBefore.set(m, o);
+          members.splice(members.indexOf(m), 1);
+        }
         continue;
       }
       return conclude(leader, done);
@@ -647,7 +661,7 @@ export function removeBranch(repo: Repo, run: Run): void {
   if (run.branch) git(repo.path, "branch", "-D", run.branch);
 }
 
-type Verdict = Pick<Run, "state" | "needs" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat" | "checkedBase">;
+type Verdict = Pick<Run, "state" | "needs" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat" | "checkedBase" | "checkedTip">;
 
 export async function unit(folder: string): Promise<void> {
   // drop sends SIGTERM when no systemd unit is there to stop the cgroup.
@@ -860,7 +874,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
   // A manual check does not hold the run: it lands with the check open (see land).
   const manual = repo.manual.find((m) => matches(m.when));
-  return { verdict: { state: "passed", checkedBase: base, ...(manual ? { say: manual.say } : {}) }, code: 0 };
+  return { verdict: { state: "passed", checkedBase: base, checkedTip: git(wt, "rev-parse", "HEAD").out, ...(manual ? { say: manual.say } : {}) }, code: 0 };
 }
 
 /**
@@ -941,6 +955,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       return stuck(rounds > 0 ? `${failed} after ${done} fix rounds` : failed, facts);
     }
     facts.checkedBase = base;
+    facts.checkedTip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
     return await heldAndReview(id, folder, run, repo, dir, base, branch, facts);
   } finally {
     removeRunFolder(dir);
@@ -996,7 +1011,7 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
     const changed = git(repo.path, "diff", "--name-only", base, ref).out.split("\n").filter(Boolean);
     const failed = await checksInSandbox(folder, dir, "out/out.bundle", ref, repo, changed, phase, recorder(folder), hiddenOf(repo, run));
     if (failed) return stuck(failed);
-    return await heldAndReview(id, folder, run, repo, dir, base, branch, { checkedBase: base });
+    return await heldAndReview(id, folder, run, repo, dir, base, branch, { checkedBase: base, checkedTip: git(repo.path, "rev-parse", ref).out });
   } finally {
     removeRunFolder(dir);
   }

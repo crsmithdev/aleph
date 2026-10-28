@@ -41,6 +41,8 @@ export interface Run {
   checks?: CheckResult[];
   /** An agent run whose checks passed: origin/<main> as the checks saw it. A land with main still there skips the checks. */
   checkedBase?: string;
+  /** The branch tip those checks saw. The skip needs both. */
+  checkedTip?: string;
   /** A run that needs Chris for a held path or a test edit: the diff stat. */
   stat?: string;
   /** A land of a held run, by Chris: the commit gets `Held-by: Chris`. */

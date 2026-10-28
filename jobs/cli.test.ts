@@ -182,6 +182,7 @@ beforeAll(() => {
     { name: "item race", run: `if [ -f ${join(base, "item-once")} ]; then m=$(cat ${join(base, "item-once")}); rm ${join(base, "item-once")}; cd ${join(base, "other")} && git fetch -q origin && git reset -q --hard origin/main && echo $RANDOM > item-hand && git add item-hand && git -c user.name=t -c user.email=t@t commit -qm hand -m "$m" && git push -q origin main; fi`, when: ["item-race/**"] },
     // The batch tests: one line per call; the second fails once the first run's file is there with it.
     { name: "count", run: `echo x >> ${join(base, "batch-count")}`, when: ["batch/**"] },
+    { name: "retrybad", run: "! { [ -f retry/a.txt ] && [ -f retry/bad.txt ]; }", when: ["retry/**"] },
     { name: "batchbad", run: "! { [ -f batch/a.txt ] && [ -f batch/bad.txt ]; }", when: ["batch/**"] },
     { name: "race", run: `if [ -f ${join(base, "race-once")} ]; then rm ${join(base, "race-once")}; cd ${join(base, "other")} && git pull -q --rebase origin main && echo $RANDOM > raced && git add raced && git commit -qm race && git push -q origin main; fi`, when: ["race/**"] },
   ];
@@ -627,9 +628,10 @@ describe("a batch of lands", () => {
   afterAll(() => rmSync(join(remote, "hooks", "pre-receive"), { force: true }));
 
   /** Passed jobs, then their lands started one by one while another process holds the repo's land lock; returns the lands' results once the lock is let go. */
-  async function landTogether(jobs: [string, string][]): Promise<{ job: string; run: string }[]> {
+  async function landTogether(jobs: [string, string][], beforeLand?: () => void): Promise<{ job: string; run: string }[]> {
     const ids: Record<string, string> = {};
     for (const [name, action] of jobs) ids[name] = (await job(name, action)).json.job;
+    beforeLand?.();
     mkdirSync(join(base, "run", "aleph"), { recursive: true });
     mkdirSync(lockDir());
     writeFileSync(join(lockDir(), "owner"), String(process.pid));
@@ -678,6 +680,18 @@ describe("a batch of lands", () => {
     expect(readFileSync(join(jobsDir, landRuns("t1")[0].id, "land.log"), "utf8")).toContain("batch of 3");
   }, 120_000);
 
+  test("a member that failed its checks in attempt 1 is not in the retry after main moved", async () => {
+    const lands = await landTogether([["ra", "commit retry/a.txt"], ["rbad", "commit retry/bad.txt"], ["rr", "commit race/r.txt"]], () => writeFileSync(join(base, "race-once"), ""));
+    const s = lands.map((l) => state(l.run));
+    expect(s.map((x) => x.state)).toEqual(["landed", "failed", "landed"]);
+    const log = file(lands[0].run, "land.log");
+    const retry = log.slice(log.indexOf("main moved; merging again"));
+    expect(retry).toContain("checks on");
+    expect(retry).not.toContain("retrybad failed");
+    expect(remoteGit("ls-tree", "--name-only", "main:retry").split("\n")).not.toContain("bad.txt");
+    await aleph(["drop", "rbad"]);
+  }, 120_000);
+
   test("a run that breaks the check fails with the check's name; the others land; at most 1 + 2 + 2 checks", async () => {
     const lands = await landTogether([["a", "commit batch/a.txt"], ["bad", "commit batch/bad.txt"], ["c", "commit batch/c.txt"]]);
     const s = lands.map((l) => state(l.run));
@@ -717,6 +731,25 @@ describe("a batch of lands", () => {
     expect(calls() - base2).toBe(1);
     expect(file(r2.json.run, "land.log")).not.toContain("checks skipped");
   }, 60_000);
+  test("a commit added to the branch after its checks gets the checks on land", async () => {
+    await job("tipped", "commit batch/tipped.txt");
+    writeFileSync(join(worktree("tipped"), "batch", "late.txt"), "late\n");
+    sh(worktree("tipped"), "git", "add", ".");
+    sh(worktree("tipped"), "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "late file");
+    const before = calls();
+    const r = await aleph(["land", "tipped"]);
+    expect(state(r.json.run).state).toBe("landed");
+    expect(calls() - before).toBe(1);
+    expect(file(r.json.run, "land.log")).not.toContain("checks skipped");
+  }, 60_000);
+
+  test("two lands of one job at once start one land run", async () => {
+    await job("twice", "commit batch/twice.txt");
+    const rs = await Promise.all([aleph(["land", "twice"]), aleph(["land", "twice"])]);
+    expect(rs.filter((r) => r.code === 0).length).toBe(1);
+    expect(landRuns("twice").length).toBe(1);
+  }, 60_000);
+
 });
 
 describe("a job tied to a to-do item", () => {

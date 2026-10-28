@@ -190,6 +190,19 @@ async function plain(): Promise<void> {
  */
 async function landJob(): Promise<void> {
   const name = checkName(positional[0]);
+  // Two lands of one job at once (the dispatch's batch pull and the leader's) each pass the live check below: it and the start share a lock.
+  const release = await lock(`land-start-${name}`, 30_000);
+  if (!release) refuse(`${name}: another land is starting`);
+  let child: ReturnType<typeof Bun.spawn> | undefined;
+  try {
+    child = await landStart(name);
+  } finally {
+    release!();
+  }
+  await child?.exited;
+}
+
+async function landStart(name: string): Promise<ReturnType<typeof Bun.spawn> | undefined> {
   const runs = allJobs().find((j) => isOpen(j) && j.at(-1)!.run.name === name) ?? refuse(`no open job named ${name}`);
   const live = runs.find((e) => isLive(e.folder));
   if (live) refuse(`${name} is running as ${live.id}`);
@@ -208,9 +221,10 @@ async function landJob(): Promise<void> {
     ...(unchecked ? { check: "open" as const, say: agent.say } : {}),
     ...(held ? { held: true } : {}),
     ...(agent.checkedBase ? { checkedBase: agent.checkedBase } : {}),
+    ...(agent.checkedTip ? { checkedTip: agent.checkedTip } : {}),
     ...(agent.todo !== undefined ? { todo: agent.todo } : {}),
   }, `${repo.key}-${name}`, repo.path, () => {});
-  await child?.exited;
+  return child;
 }
 
 /** Close the manual check of a job that landed with it open, and its issue. */
