@@ -117,7 +117,7 @@ export function subtypeOf(e) {
   if (e.sub) return e.sub;
   if (e.kind === "job") return "agent";
   if (e.kind === "land") return e.commit && !e.id?.includes("-") ? "commit" : "job";
-  if (e.kind === "issue") return e.what ?? "";
+  if (e.kind === "issue") return "issue";
   return "daily";
 }
 

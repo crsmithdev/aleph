@@ -55,7 +55,7 @@ beforeAll(() => {
 
   process.env.GIT_COMMITTER_DATE = at(4);
   writeList({ key: "fac" }, "seed", (doc) => {
-    add(doc, "an issue", { now: new Date(at(1)) });
+    add(doc, "an issue", { now: new Date(at(1)), labels: ["goal"] });
     add(doc, "closed issue", { now: new Date(at(4)) });
     setStatus(doc.items[1], "done", new Date(at(1)));
     note(doc.items[0], "triage: for Chris: which way?", new Date(at(1, 11)));
@@ -68,6 +68,7 @@ beforeAll(() => {
   run("20261027-000001-a", { job: "fac-1", name: "fac-1", repo: "fac", state: "needs-you", started: at(0, 9), ended: at(0, 10) });
   run("20261027-000002-a", { job: "fac-2", name: "fac-2", repo: "fac", state: "running", started: at(0, 11) });
   run("20261027-000003-a", { job: "oth-1", name: "oth-1", repo: "other", state: "failed", started: at(1, 9), ended: at(1, 10) });
+  run("20261027-000004-a", { job: "fac-3", name: "fac-3", repo: "fac", todo: 1, state: "done", started: at(1, 15), ended: at(1, 16) });
 });
 afterAll(() => {
   for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
@@ -116,6 +117,15 @@ describe("timeline api", () => {
     expect(mark(find("job", "started")).tone).toBe("run");
   });
 
+  test("job rows show the goal's title, issue rows their kind, land rows what landed", async () => {
+    const rows = (await timeline({ now, days: 30 })).rows!;
+    expect(rows.filter((e) => e.kind === "job" && e.id === "fac-3").map((e) => [e.title, e.sub])).toEqual([["an issue", "agent"], ["an issue", "agent"]]);
+    expect(rows.find((e) => e.id === "fac-1")!.title).toBe("fac-1");
+    expect(rows.filter((e) => e.kind === "issue" && e.title === "an issue").map((e) => e.sub)).toContain("goal");
+    expect(rows.find((e) => e.kind === "issue" && e.title === "closed issue")!.sub).toBe("issue");
+    expect(subtypeOf(rows.find((e) => e.kind === "issue" && e.title === "an issue")!)).toBe("goal");
+  });
+
   test("the project filter keeps one project", async () => {
     const t = await timeline({ now, project: "other", before: at(0, 23) });
     expect(t.days[0].events.map((e) => e.title)).toEqual(["oth-1", "oth-1"]);
@@ -126,7 +136,7 @@ describe("timeline api", () => {
   test("the strip lists items: jobs as bars, a running job with no end, the rest as points", async () => {
     const t = await timeline({ now });
     const n = (k: string) => t.strip!.filter((i) => i.kind === k).length;
-    expect(n("job")).toBe(3);
+    expect(n("job")).toBe(4);
     expect(n("session")).toBe(0);
     expect(n("note")).toBe(1);
     expect(t.strip!.some((i) => i.kind === "job" && i.name === "fac-1" && i.start === at(0, 9) && i.end === at(0, 10))).toBe(true);
@@ -138,7 +148,7 @@ describe("timeline api", () => {
     expect(opt.xAxis.data).toHaveLength(30);
     expect(opt.xAxis.data.at(-1)).toBe(dayKey(0));
     const series = (n: string) => opt.series.find((x: any) => x.name === n).data;
-    expect(series("Jobs").reduce((a: number, b: number) => a + b, 0)).toBe(3);
+    expect(series("Jobs").reduce((a: number, b: number) => a + b, 0)).toBe(4);
     expect(series("Jobs").at(-1)).toBe(2);
   });
 
@@ -236,7 +246,9 @@ describe("timeline view", () => {
 
   test("subtypes", () => {
     expect(subtypeOf({ kind: "job", sub: "land" })).toBe("land");
-    expect(subtypeOf({ kind: "issue", what: "closed" })).toBe("closed");
+    expect(subtypeOf({ kind: "issue", what: "closed" })).toBe("issue");
+    expect(subtypeOf({ kind: "issue", what: "closed", sub: "followup" })).toBe("followup");
+    expect(subtypeOf({ kind: "land", sub: "by hand" })).toBe("by hand");
     expect(subtypeOf({ kind: "note" })).toBe("daily");
   });
 

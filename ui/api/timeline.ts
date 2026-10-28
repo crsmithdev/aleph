@@ -82,8 +82,23 @@ const took = (a?: string, b?: string) => {
 /** The verb of a job's end row, by its state. */
 const OUTCOME: Record<string, string> = { done: "passed", "needs-you": "held" };
 
+/** The title of a repo's issue, or undefined. */
+function issueTitle(repo: string | undefined, id: number | undefined, docs: Map<string, Map<number, string>>): string | undefined {
+  if (!repo || !id) return undefined;
+  if (!docs.has(repo)) {
+    const m = new Map<number, string>();
+    try { for (const i of readList({ key: repo })?.items ?? []) m.set(i.id, i.title); } catch {}
+    docs.set(repo, m);
+  }
+  return docs.get(repo)!.get(id);
+}
+
+/** What a land landed: a factory run, or a held run Chris landed by hand. */
+const landSub = (held?: boolean) => (held ? "by hand" : "agent run");
+
 function jobEvents(project: string | null, since: number, inGit: (sha: string) => boolean): TimelineEvent[] {
   const out: TimelineEvent[] = [];
+  const docs = new Map<string, Map<number, string>>();
   for (const { run } of allRuns()) {
     if (project && run.repo !== project) continue;
     const href = `#/jobs/${enc(run.name)}`;
@@ -91,11 +106,12 @@ function jobEvents(project: string | null, since: number, inGit: (sha: string) =
     const isLand = run.kind === "land" && !!run.commit && run.state === "landed";
     if (isLand) {
       // A land that git log already shows is that commit's event.
-      if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", title: run.name, id: run.name, commit: run.commit, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model], ["commit", run.commit?.slice(0, 7)]) });
+      if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", sub: landSub(run.held), title: run.name, id: run.name, commit: run.commit, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model], ["commit", run.commit?.slice(0, 7)]) });
       continue;
     }
-    out.push({ ...base, at: run.started, kind: "job", what: "started", state: run.ended ? run.state : "running", sub: run.kind, title: run.name, id: run.name, end: run.ended || undefined, details: pairs(["model", run.model]) });
-    if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: OUTCOME[run.state] ?? run.state, state: run.state, sub: run.kind, title: run.name, id: run.name, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model]) });
+    const title = issueTitle(run.repo, run.todo, docs) ?? run.name;
+    out.push({ ...base, at: run.started, kind: "job", what: "started", state: run.ended ? run.state : "running", sub: run.kind, title, id: run.name, end: run.ended || undefined, details: pairs(["model", run.model]) });
+    if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: OUTCOME[run.state] ?? run.state, state: run.state, sub: run.kind, title, id: run.name, cost: run.cost, details: pairs(["took", took(run.started, run.ended)], ["model", run.model]) });
   }
   return out.filter((e) => Date.parse(e.at) >= since);
 }
@@ -124,7 +140,9 @@ function issueEvents(project: string | null, since: number): TimelineEvent[] {
     const times = itemTimes(repo.key);
     for (const item of doc?.items ?? []) {
       const git = times.get(itemPath(repo.key, item.id));
-      const base = { href: `#/issues/${enc(repo.key)}/${item.id}`, project: repo.key, title: item.title, id: `${repo.key}-${item.id}`, ...(git ? {} : { dateOnly: true }), kind: "issue" as const,
+      const labels = Array.isArray(item.fm.labels) ? item.fm.labels.map(String) : [];
+      const sub = ["goal", "followup", "needs-chris"].find((l) => labels.includes(l)) ?? "issue";
+      const base = { href: `#/issues/${enc(repo.key)}/${item.id}`, project: repo.key, title: item.title, sub, id: `${repo.key}-${item.id}`, ...(git ? {} : { dateOnly: true }), kind: "issue" as const,
         details: pairs(["labels", (Array.isArray(item.fm.labels) ? item.fm.labels : []).join(",")], ["notes", item.notes.length || ""]) };
       const created = String(item.fm.created ?? ""), updated = String(item.fm.updated ?? "");
       const st = status(item);
@@ -145,7 +163,7 @@ function issueEvents(project: string | null, since: number): TimelineEvent[] {
   return out.filter((e) => !Number.isNaN(Date.parse(e.at)) && new Date(e.at).getTime() >= since);
 }
 
-function commitEvents(project: string | null, since: number, landed: Map<string, string>, shas: Set<string>): TimelineEvent[] {
+function commitEvents(project: string | null, since: number, landed: Map<string, string>, held: Set<string>, shas: Set<string>): TimelineEvent[] {
   const out: TimelineEvent[] = [];
   for (const repo of Object.values(loadRegistry())) {
     if ((project && repo.key !== project) || !existsSync(repo.path)) continue;
@@ -157,7 +175,7 @@ function commitEvents(project: string | null, since: number, landed: Map<string,
       const job = landed.get(full);
       shas.add(full);
       out.push({
-        at: new Date(Number(ct) * 1000).toISOString(), kind: "land", what: "landed", state: "landed", title: subject.join("\t"), id: job ?? short,
+        at: new Date(Number(ct) * 1000).toISOString(), kind: "land", what: "landed", state: "landed", sub: job ? landSub(held.has(full)) : undefined, title: subject.join("\t"), id: job ?? short,
         href: job ? `#/jobs/${enc(job)}` : `#/projects/${enc(repo.key)}`, project: repo.key, commit: short, details: pairs(["commit", short]),
       });
     }
@@ -192,9 +210,10 @@ function noteEvents(project: string | null, since: number): TimelineEvent[] {
 export async function events(project: string | null, now = new Date()): Promise<TimelineEvent[]> {
   const since = startOf(today(new Date(now.getFullYear(), now.getMonth(), now.getDate() - HORIZON_DAYS + 1, 12))).getTime();
   const landed = new Map<string, string>();
-  for (const { run } of allRuns()) if (run.kind === "land" && run.commit) landed.set(run.commit, run.name);
+  const held = new Set<string>();
+  for (const { run } of allRuns()) if (run.kind === "land" && run.commit) { landed.set(run.commit, run.name); if (run.held) held.add(run.commit); }
   const shas = new Set<string>();
-  const commits = commitEvents(project, since, landed, shas);
+  const commits = commitEvents(project, since, landed, held, shas);
   const inGit = (sha: string) => [...shas].some((f) => f.startsWith(sha) || sha.startsWith(f));
   const all = [
     ...jobEvents(project, since, inGit), ...issueEvents(project, since), ...commits,
