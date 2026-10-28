@@ -21,8 +21,7 @@ globalThis.memorySearch = async (form) => {
   const out = document.getElementById("memory-results");
   const q = form.q.value.trim();
   if (!q) { out.innerHTML = ""; return false; }
-  const project = new URLSearchParams((location.hash.split("?")[1] ?? "")).get("project");
-  const url = `/api/memory/search?q=${encodeURIComponent(q)}${project ? `&project=${encodeURIComponent(project)}` : ""}`;
+  const url = `/api/memory/search?q=${encodeURIComponent(q)}`;
   try {
     const res = await fetch(url, { cache: "no-store" });
     out.innerHTML = renderResults(await res.json());

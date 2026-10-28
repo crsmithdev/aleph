@@ -14,15 +14,13 @@ export const view = {
 };
 
 /**
- * The old List address: `#/list?set=jobs` becomes `#/timeline`. The List query is dropped;
- * only the project filter carries over. Any other hash gives null. The shell asks every view.
+ * The old List address: `#/list?set=jobs` becomes `#/timeline`. The whole query is dropped,
+ * a project filter too. Any other hash gives null. The shell asks every view.
  */
 export function redirect(hash) {
   const h = String(hash ?? "").replace(/^#/, "");
-  const [path, query = ""] = h.split("?");
-  if (path.replace(/\/$/, "") !== "/list") return null;
-  const project = new URLSearchParams(query).get("project");
-  return `#/timeline${project ? `?project=${encodeURIComponent(project)}` : ""}`;
+  const path = h.split("?")[0];
+  return path.replace(/\/$/, "") === "/list" ? "#/timeline" : null;
 }
 
 export const KINDS = [["job", "Jobs"], ["land", "Lands"], ["issue", "Issues"], ["session", "Sessions"], ["note", "Notes"]];

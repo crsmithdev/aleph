@@ -10,12 +10,12 @@ export const view = {
   order: 2,
   api: "/api/issues",
   render: (rows, _params, query) => renderIssues(rows, hashOptions(query)),
-  mount: (root, _data, query) => mount(root, query),
+  mount: (root) => mount(root),
 };
 
 /** The filters, from the route's query: ?status=open&label=x&q=text&lens=factory. */
 export function hashOptions(q = new URLSearchParams()) {
-  return { status: q.get("status") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", lens: q.get("lens") === "factory", project: q.get("project") ?? "" };
+  return { status: q.get("status") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", lens: q.get("lens") === "factory" };
 }
 
 export const ref = (r) => `${r.repo}-${r.id}`;
@@ -89,7 +89,7 @@ export function projectOptions(keys, project) {
 }
 
 /** Fills the form's Project select from the registry's keys. */
-export async function mount(root, query) {
+export async function mount(root) {
   const select = root.querySelector?.('select[name="repo"]');
   if (!select) return;
   try {
@@ -97,7 +97,7 @@ export async function mount(root, query) {
     if (!res.ok) return;
     const keys = await res.json();
     const cur = select.value;
-    select.innerHTML = projectOptions(keys, keys.includes(cur) ? cur : hashOptions(query).project);
+    select.innerHTML = projectOptions(keys, cur);
   } catch {}
 }
 
@@ -163,15 +163,14 @@ if (typeof document !== "undefined") {
     const labels = v("labels").split(",").map((s) => s.trim()).filter(Boolean);
     if (form.elements.goal.checked && !labels.includes("goal")) labels.push("goal");
     const msg = form.querySelector(".form-msg");
-    const project = new URLSearchParams(location.hash.split("?")[1] ?? "").get("project");
     try {
-      const res = await fetch("/api/issues" + (project ? `?project=${encodeURIComponent(project)}` : ""), {
+      const res = await fetch("/api/issues", {
         method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" },
         body: JSON.stringify({ repo: v("repo"), title: v("title"), body: form.elements.body.value, labels, waitingOn: v("waitingOn"), due: v("due") }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `answered ${res.status}`);
-      location.hash = `/issues/${encodeURIComponent(v("repo"))}/${data.added}` + (project ? `?project=${encodeURIComponent(project)}` : "");
+      location.hash = `/issues/${encodeURIComponent(v("repo"))}/${data.added}`;
     } catch (err) { msg.textContent = `Could not file it: ${err.message}`; }
   });
 }

@@ -323,10 +323,10 @@ describe("issue events from the work store's git log", () => {
 });
 
 describe("the List address", () => {
-  test("#/list opens the Timeline and drops the List query", () => {
+  test("#/list opens the Timeline and drops the whole query, project too", () => {
     expect(redirect("#/list")).toBe("#/timeline");
     expect(redirect("#/list?set=issues")).toBe("#/timeline");
-    expect(redirect("#/list?set=jobs&project=aleph")).toBe("#/timeline?project=aleph");
+    expect(redirect("#/list?set=jobs&project=aleph")).toBe("#/timeline");
     expect(redirect("#/timeline?set=x")).toBeNull();
     expect(redirect("#/listing")).toBeNull();
   });

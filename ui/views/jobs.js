@@ -129,10 +129,9 @@ if (typeof document !== "undefined") {
     const b = e.target.closest?.("[data-diff]");
     if (!b) return;
     const out = document.getElementById("diff");
-    const project = new URLSearchParams(location.hash.split("?")[1] ?? "").get("project");
     b.disabled = true;
     try {
-      const res = await fetch(`/api/jobs/${encodeURIComponent(b.dataset.diff)}/diff${project ? `?project=${encodeURIComponent(project)}` : ""}`);
+      const res = await fetch(`/api/jobs/${encodeURIComponent(b.dataset.diff)}/diff`);
       out.innerHTML = res.ok ? renderDiff(await res.text()) : esc(res.status === 404 ? "The branch is gone, so there is no diff to show." : `The diff failed to load (${res.status}).`);
       out.hidden = false;
       b.remove();
