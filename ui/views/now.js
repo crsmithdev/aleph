@@ -91,7 +91,7 @@ export function renderNeeds(s) {
     const why = j.reason || j.needs || "needs you";
     const head = `<div class="ih">${itemId(j)}${title(j)}</div>`;
     const card = (inner) => fold
-      ? `<details class="need-card need-fold"${i === 0 ? " open" : ""}><summary><span class="why">${esc(why)}</span>${itemId(j)}<span class="t">${esc(j.item?.title || j.name)}</span></summary>${inner}</details>`
+      ? `<details class="need-card need-fold" data-keep="need:${esc(j.name)}"${i === 0 ? " open" : ""}><summary><span class="why">${esc(why)}</span>${itemId(j)}<span class="t">${esc(j.item?.title || j.name)}</span></summary>${inner}</details>`
       : `<article class="need-card"><span class="why">${esc(why)}</span>${inner}</article>`;
     return card((fold ? "" : head) +
       `<dl class="facts">${fact("Started", esc(clock(j.started)))}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(j.model)) : ""}${checkFacts(j)}</dl>` +

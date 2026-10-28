@@ -85,8 +85,10 @@ test("a stuck job shows its reason, the failed check and its seconds, and aleph 
 test("four needs-you jobs render one expanded and three collapsed", () => {
   const needs = [1, 2, 3, 4].map((i) => job({ name: `aleph-${i}`, state: "needs-you", reason: "Held path", item: { id: i, title: `t${i}` } }));
   const h = r.renderNeeds({ ...state, needs });
-  expect(h.match(/<details class="need-card need-fold" open>/g)?.length).toBe(1);
-  expect(h.match(/<details class="need-card need-fold">/g)?.length).toBe(3);
+  expect(h.match(/<details class="need-card need-fold" data-keep="need:[^"]*" open>/g)?.length).toBe(1);
+  expect(h.match(/<details class="need-card need-fold" data-keep="need:[^"]*">/g)?.length).toBe(3);
+  expect(h.match(/data-keep="need:/g)?.length).toBe(4);
+  for (const i of [1, 2, 3, 4]) expect(h).toContain(`data-keep="need:aleph-${i}"`);
   expect(r.renderNeeds({ ...state, needs: needs.slice(0, 2) })).not.toContain("need-fold");
 });
 

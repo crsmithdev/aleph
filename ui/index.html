@@ -483,8 +483,12 @@ pre.trailers b { color: var(--need); }
       }
     }
     if (route !== shown) return;  // the reader moved on while this loaded
+    // A refresh of the same route keeps the open state of keyed <details>; a first load takes the render's own.
+    const kept = new Map();
+    if (!first) $("view").querySelectorAll("details[data-keep]").forEach((d) => kept.set(d.dataset.keep, d.open));
     try { $("view").innerHTML = view.render(data, params); }
     catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} failed to render: ${e.message}`, "This is a bug in the view.")}</div>`; return; }
+    $("view").querySelectorAll("details[data-keep]").forEach((d) => { if (kept.has(d.dataset.keep)) d.open = kept.get(d.dataset.keep); });
     // `mount` runs after render, for what needs a DOM (the charts); a view without one is left alone.
     try { mountView(view, $("view"), data); }
     catch (e) { console.error(view.title, "mount failed", e); }
