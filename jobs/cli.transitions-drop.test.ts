@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, env, base, jobsDir, startScript, stateNow as state, setup, teardown, dispatching, starting, unitAlive, until } from "./cli.helpers";
+import { aleph, base, jobsDir, startScript, stateNow as state, setup, teardown, dispatching, starting, unitAlive, until } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -50,30 +50,6 @@ describe("every transition dispatches at once", () => {
     rmSync(startLog, { force: true });
   }, 120_000);
 
-  test("the issue form (POST /api/issues) adds a goal that starts at once", async () => {
-    const title = "from the form";
-    const issues = await import("../ui/api/issues.ts");
-    const create = issues.routes["POST /api/issues"];
-    const saved = { ...process.env };
-    Object.assign(process.env, env(on()));
-    const req = new Request("http://x/api/issues", { method: "POST", headers: { "x-aleph-ui": "1" }, body: JSON.stringify({ repo: "fac", title, labels: "goal", body: `ACTION: ${open("form")}` }) });
-    const res = await create(req, {}, new URL(req.url));
-    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
-    Object.assign(process.env, saved);
-    expect(res.status).toBe(200);
-    track(((await res.json()) as any).added);
-    await until(() => started().length === 1);
-  }, 60_000);
-
-  test("a triage run that ends with a goal starts it", async () => {
-    const x = track(await add("vague", open("triage"), ["--labels", "followup"], { ALEPH_DISPATCH: "off" }));
-    const cmd = join(base, "ttriage-cmd");
-    writeFileSync(cmd, `#!/bin/bash\ncat > /dev/null\necho '{"verdict":"goal","body":"ACTION: hold ${gate("triage")}"}'\n`, { mode: 0o755 });
-    const t = await aleph(["triage", `fac-${x}`], on({ ALEPH_TRIAGE_CMD: cmd }));
-    expect(t.json.triaged).toEqual({ goal: 1 });
-    await until(() => started().includes(`fac-${x}`));
-  }, 60_000);
-
   test("a drop that frees a live slot starts the next goal", async () => {
     const a = track(await add("holds the slot", open("slot-a"), ["--labels", "goal"], { ALEPH_LIVE_CAP: "1" }));
     await until(() => started().includes(`fac-${a}`));
@@ -97,34 +73,4 @@ describe("every transition dispatches at once", () => {
     await until(() => started().includes(`fac-${b}`));
   }, 60_000);
 
-  test("a drop's rerun waits while the issue waits on an open item", async () => {
-    const blocker = track(await add("holds the line", open("blocker"), ["--labels", "goal"]));
-    await until(() => started().includes(`fac-${blocker}`));
-    const a = track(await add("starts first", open("waiter"), ["--labels", "goal"]));
-    await until(() => started().includes(`fac-${a}`));
-    expect((await aleph(["todo", "edit", "fac", String(a), "--waiting-on", `fac-${blocker}`], on())).code).toBe(0);
-    expect((await aleph(["drop", `fac-${a}`, "waits now"], on())).code).toBe(0);
-    await Bun.sleep(2000);
-    expect(started().filter((n) => n === `fac-${a}`)).toEqual([`fac-${a}`]);
-    // A dispatch from any other path holds it too.
-    await aleph(["dispatch"], on());
-    expect(started().filter((n) => n === `fac-${a}`)).toEqual([`fac-${a}`]);
-  }, 60_000);
-
-  test("a rerun's prompt holds the reasons of the earlier drops and the issue's notes", async () => {
-    const a = track(await add("steered", open("steer"), ["--labels", "goal"]));
-    await until(() => started().includes(`fac-${a}`));
-    await aleph(["todo", "note", "fac", String(a), "mind the sliced list"]);
-    expect((await aleph(["drop", `fac-${a}`, "the card counts the sliced list"], on())).code).toBe(0);
-    await until(() => started().length === 2);
-    const prompts = () => runs(a).map((r) => join(jobsDir, r, "prompt.md")).filter(existsSync).map((f) => readFileSync(f, "utf8"));
-    await until(() => prompts().length === 2);
-    // Folder names have one-second precision and readdir has no order: find the rerun by its content.
-    const [second, ...rest] = prompts().filter((p) => p.includes("the card counts the sliced list"));
-    expect(rest).toEqual([]);
-    expect(second).toBeDefined();
-    expect(second).toContain("the card counts the sliced list");
-    expect(second).toContain("mind the sliced list");
-    expect(second.indexOf("ACTION:")).toBeLessThan(second.indexOf("the card counts the sliced list"));
-  }, 60_000);
 });

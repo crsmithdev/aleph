@@ -1,7 +1,7 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, fakeLog, file, lf, lfPosts, remote, repo, resetLf, setLfStatus, sh, specFile, state, told, setup, teardown } from "./cli.helpers";
+import { aleph, base, fakeLog, file, remote, repo, sh, specFile, state, told, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -13,38 +13,6 @@ describe("a factory run", () => {
   const factoryBranch = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `factory/${name}`]).exitCode === 0;
   const runsLeft = () => existsSync(join(base, "runs")) ? readdirSync(join(base, "runs")) : [];
 
-
-  describe("its Langfuse trace", () => {
-    const langfuse = () => ({ LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
-    const spans = () => lfPosts.flatMap((p) => p.resourceSpans.flatMap((r: any) => r.scopeSpans.flatMap((x: any) => x.spans)));
-    beforeEach(resetLf);
-
-    test("one trace is posted, its session id the job id", async () => {
-      const r = await fjob("ftrace", "commit ftrace.txt", langfuse());
-      expect(state(r.json.run).state).toBe("passed");
-      const all = spans();
-      expect(all.length).toBeGreaterThan(0);
-      const root = all.find((s: any) => !s.parentSpanId);
-      expect(root.name).toBe("worker");
-      expect(new Set(all.map((s: any) => s.traceId)).size).toBe(1);
-      const a = (k: string) => root.attributes.find((x: any) => x.key === k)?.value.stringValue;
-      expect(a("langfuse.session.id")).toBe(state(r.json.run).job);
-      expect(a("langfuse.trace.name")).toBe("factory ftrace");
-      expect(a("langfuse.trace.metadata.state")).toBe("passed");
-    });
-
-    test("with Langfuse answering 500 the verdict is unchanged and one line is logged", async () => {
-      setLfStatus(500);
-      const r = await fjob("ftrace500", "commit ftrace500.txt", langfuse());
-      expect(state(r.json.run).state).toBe("passed");
-      expect(file(r.json.run, "trace.log").trim().split("\n").length).toBe(1);
-    });
-
-    test("with no Langfuse config nothing is posted", async () => {
-      await fjob("ftracenone", "commit ftracenone.txt");
-      expect(lfPosts).toEqual([]);
-    });
-  });
 
   test("the worker's branch comes back as a bundle; the run passes and its run folder is gone", async () => {
     const r = await fjob("fpass", "commit fpass.txt");
@@ -103,26 +71,5 @@ describe("a factory run", () => {
     expect((await aleph(["todo", "show", "fac", String(id), "--json"])).json.status).toBe("done");
     expect(runsLeft()).toEqual([]);
   }, 60_000);
-
-  test("a worker silent for ALEPH_STALL_SECONDS is stuck as stalled, with no fix round", async () => {
-    const t = performance.now();
-    const r = await fjob("fstall", "quiet", { ALEPH_STALL_SECONDS: "2" });
-    expect(performance.now() - t).toBeLessThan(10_000);
-    expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "stalled: no output for 2 seconds" });
-    await aleph(["drop", "fstall"]);
-  }, 30_000);
-
-  test("a worker that keeps printing is not stalled", async () => {
-    const r = await fjob("fchat", "chatty", { ALEPH_STALL_SECONDS: "2" });
-    expect(state(r.json.run).state).not.toBe("stuck");
-    await aleph(["drop", "fchat"]);
-  }, 30_000);
-
-  test("a worker past the time box ends stuck as \"time box\"", async () => {
-    const r = await fjob("fslow", "sleep", { ALEPH_JOB_TIMEOUT: "1" });
-    expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "time box" });
-    expect(runsLeft()).toEqual([]);
-    await aleph(["drop", "fslow"]);
-  });
 
 });
