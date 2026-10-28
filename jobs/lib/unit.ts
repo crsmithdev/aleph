@@ -84,7 +84,9 @@ and never push. If the previous run's land conflicted, merge \`origin/${main}\`
 into the branch and resolve the conflicts so that both changes survive. Nobody
 answers questions during the run: when you must choose, take the answer you
 would recommend and print a line \`DEFAULT: <question> -> <answer>\`. For work
-you find but do not do, print a line \`FOLLOWUP: <title>\`. If the goal already
+you find but do not do, print a line \`FOLLOWUP: <title>\`. End the result with zero or more lines
+\`FACT: <one sentence> [source: <file:line | commit sha | https URL>]\`, for durable
+facts about the repo or its tools that you learned and checked. If the goal already
 holds on your branch and no edit is needed, make no commit, run the repo's tests,
 and print exactly one line \`${ALREADY_MET}: <evidence>\`, the evidence being the
 files, the lines and the commit on \`${main}\` that show it. Run the repo's
