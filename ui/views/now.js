@@ -123,9 +123,14 @@ export function renderStuck(s) {
 }
 
 export function renderRunning(s) {
-  const rows = s.running.map((j) =>
-    jobCard("small", "run-row", `<div class="ih">${itemId(j)}<span class="t">${esc(j.item?.title || j.name)}</span></div>` +
-      `<div class="run-meta"><span class="badge run">${esc(j.phase || j.state)}</span> <span class="num">Started ${esc(clock(j.started))}, ${Date.parse(s.now) - Date.parse(j.started) > BOX_MIN * 60_000 ? `<span class="over">${esc(span(j.started, s.now))} ago, past the time box</span>` : `${esc(span(j.started, s.now) || "0 min")} ago`}</span></div>`, "div")).join("");
+  const rows = s.running.map((j) => {
+    const run = j.run ?? { kind: "agent", started: j.started };
+    const kind = run.kind === "agent" ? "worker" : run.kind;
+    const over = run.kind === "agent" && Date.parse(s.now) - Date.parse(run.started) > BOX_MIN * 60_000;
+    const ago = over ? `<span class="over">${esc(span(run.started, s.now))} ago, past the time box</span>` : `${esc(span(run.started, s.now) || "0 min")} ago`;
+    return jobCard("small", "run-row", `<div class="ih">${itemId(j)}<span class="t">${esc(j.item?.title || j.name)}</span></div>` +
+      `<div class="run-meta"><span class="badge run">${esc(kind)}${j.phase && j.phase !== kind ? ` · ${esc(j.phase)}` : ""}</span> <span class="num">Started ${esc(clock(run.started))}, ${ago}</span></div>`, "div");
+  }).join("");
   return section("run", "Running", s.running.length, rows || empty("Nothing is running."), s.factory.liveCap);
 }
 

@@ -48,7 +48,7 @@ function toJob(runs: Entry[]): Job {
   const checks = (runs.findLast((e) => (e.run as any).checks) as any)?.run.checks;
   const job: Job = {
     name: last.name, repo: last.repo ?? "", item: todo !== undefined && last.repo ? itemOf(last.repo, todo) : null,
-    state: last.state, started: runs[0].run.started,
+    state: last.state, started: runs[0].run.started, run: { kind: last.kind, started: last.started },
     defaults: runs.findLast((e) => e.run.defaults !== undefined)?.run.defaults ?? [],
     followups: withResult ? tagged(text(withResult.folder, "result.md") ?? "", "FOLLOWUP") : [],
   };

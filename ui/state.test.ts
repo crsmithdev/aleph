@@ -96,6 +96,15 @@ describe("state", () => {
     expect(s.newIssues).toBe(6);
   });
 
+  test("a running job's run is its last run; started stays the first run's", () => {
+    run("20261027-000010-a", { job: "fac-9", name: "fac-9", state: "done", started: ago(2) });
+    run("20261027-000011-a", { kind: "land", job: "fac-9", name: "fac-9", state: "running", started: ago(1) });
+    const j = state(now).running.find((x) => x.name === "fac-9")!;
+    expect(j.run).toEqual({ kind: "land", started: ago(1) });
+    expect(j.started).toBe(ago(2));
+    for (const id of ["20261027-000010-a", "20261027-000011-a"]) rmSync(join(jobsDir, id), { recursive: true });
+  });
+
   test("caps.json gives the caps when the environment does not, and a bad file gives the defaults", () => {
     const keep = { d: process.env.ALEPH_DAY_CAP, l: process.env.ALEPH_LIVE_CAP, w: process.env.ALEPH_WAITING_CAP };
     delete process.env.ALEPH_DAY_CAP; delete process.env.ALEPH_LIVE_CAP; delete process.env.ALEPH_WAITING_CAP;

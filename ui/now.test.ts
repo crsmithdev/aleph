@@ -127,9 +127,22 @@ test("the as-of line says Updated … ago", () => {
 });
 
 test("a running job past 40 minutes says so", () => {
-  const late = r.renderRunning({ ...state, running: [job({ name: "a", started: "2026-10-27T16:19:00Z" })] });
+  const late = r.renderRunning({ ...state, running: [job({ name: "a", started: "2026-10-27T16:19:00Z", run: { kind: "agent", started: "2026-10-27T16:19:00Z" } })] });
   expect(late).toContain("past the time box");
-  expect(r.renderRunning({ ...state, running: [job({ name: "a", started: "2026-10-27T16:30:00Z" })] })).not.toContain("past the time box");
+  expect(r.renderRunning({ ...state, running: [job({ name: "a", started: "2026-10-27T16:30:00Z", run: { kind: "agent", started: "2026-10-27T16:30:00Z" } })] })).not.toContain("past the time box");
+});
+
+test("a land run is measured from its own start and never past the time box", () => {
+  const h = r.renderRunning({ ...state, now: "2026-10-27T16:55:00Z", running: [job({ name: "a", started: "2026-10-27T16:00:00Z", run: { kind: "land", started: "2026-10-27T16:50:00Z" } })] });
+  expect(h).toContain("land");
+  expect(h).toContain("5 min ago");
+  expect(h).not.toContain("past the time box");
+});
+
+test("a worker run older than 40 minutes is past the time box", () => {
+  const h = r.renderRunning({ ...state, running: [job({ name: "a", started: "2026-10-27T15:00:00Z", run: { kind: "agent", started: "2026-10-27T16:00:00Z" } })] });
+  expect(h).toContain("past the time box");
+  expect(h).toContain("worker");
 });
 
 test("a 30-file stat shows 12 lines and +18 more files", () => {

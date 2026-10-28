@@ -14,7 +14,10 @@ import { status, type Doc } from "../todo/lib/todo.ts";
 export interface Job {
   name: string; repo: string; item: { id: number; title: string } | null;
   state: string; needs?: string; phase?: string; reason?: string; question?: string;
-  started: string; ended?: string; cost?: number; model?: string;
+  started: string;
+  /** The current (last) run: its kind and start. `started` is the job's first. */
+  run: { kind: string; started: string };
+  ended?: string; cost?: number; model?: string;
   commit?: string; commitUrl?: string;
   defaults: string[]; followups: string[];
   stat?: string;
@@ -125,7 +128,7 @@ export function state(now = new Date()): State {
     const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
     const job: Job = {
       name: r.name, repo: r.repo ?? "", item: found ? { id: found.id, title: found.title } : todo !== undefined ? { id: todo, title: "" } : null,
-      state: r.state, started: runs[0].run.started,
+      state: r.state, started: runs[0].run.started, run: { kind: r.kind, started: r.started },
       defaults: withDefaults?.run.defaults ?? [],
       followups: withResult ? tagged(read(withResult.folder, "result.md") ?? "", "FOLLOWUP") : [],
     };
