@@ -9,7 +9,7 @@ import { join } from "node:path";
 export type State = "running" | "passed" | "needs-you" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
 /** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. The hidden check adds its test counts. */
-export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number }
+export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number; rerun?: boolean }
 
 export interface Run {
   kind: "agent" | "plain" | "land" | "triage";

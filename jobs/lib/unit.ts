@@ -12,7 +12,7 @@ import { git } from "./git.ts";
 import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
-import { paused } from "./factory.ts";
+import { paused, recordFlake } from "./factory.ts";
 import { postTrace } from "./trace.ts";
 import { FACTS_REF, writeFacts } from "./status.ts";
 
@@ -121,9 +121,18 @@ async function runChecks(folder: string, wt: string, repo: Repo, env: Record<str
     const out = join(folder, "check.out");
     writeFileSync(out, "");
     const t0 = Date.now();
-    const r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
-    record({ name: check.name, ok: r.code === 0 && !r.timedOut, seconds: Math.round((Date.now() - t0) / 1000) });
-    appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : ""}\n${tail(out, 100)}\n\n`);
+    let r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
+    let again = false;
+    if (r.code !== 0 && !r.timedOut) {
+      // One more run on the same tree: a pass the second time is a flake, recorded and counted as passed.
+      appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${r.code}, run again\n${tail(out, 100)}\n\n`);
+      again = true;
+      r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
+      if (r.code === 0 && !r.timedOut) recordFlake(repo.key, check.name, basename(folder));
+    }
+    const rerun = again && r.code === 0 && !r.timedOut;
+    record({ name: check.name, ok: r.code === 0 && !r.timedOut, seconds: Math.round((Date.now() - t0) / 1000), ...(rerun ? { rerun: true } : {}) });
+    appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : ""}${again ? " (second run)" : ""}\n${tail(out, 100)}\n\n`);
     if (r.timedOut) return `timed out: check ${check.name}`;
     if (r.code !== 0) return `${check.name} failed`;
   }
@@ -325,7 +334,14 @@ async function checksInSandbox(folder: string, dir: string, bundle: string, ref:
     `git fetch -q ../${bundle} ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
     `{ ${repo.setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1; echo $? > ../checklog/setup.code`,
     `[ "$(cat ../checklog/setup.code)" = 0 ] || exit 0`,
-    ...checks.map((c, i) => `${c.name === "hidden" && hasHidden && i === checks.length - 1 ? "cp -r ../hidden .hidden; " : ""}t=$(date +%s%N); timeout -k 30 ${lim} bash -c ${q(c.run)} > ../checklog/${i}.log 2>&1; echo $? > ../checklog/${i}.code; echo $(( ($(date +%s%N) - t) / 1000000 )) > ../checklog/${i}.ms; [ "$(cat ../checklog/${i}.code)" = 0 ] || exit 0`),
+    ...checks.map((c, i) => {
+      const hid = c.name === "hidden" && hasHidden && i === checks.length - 1;
+      const L = `../checklog/${i}`;
+      const once = `timeout -k 30 ${lim} bash -c ${q(c.run)} > ${L}.log 2>&1; echo $? > ${L}.code`;
+      // A failed check, not the hidden one and not a timeout, runs once more on the same tree; the first run's exit and log are kept.
+      const again = hid ? "" : `c=$(cat ${L}.code); if [ "$c" != 0 ] && [ "$c" != 124 ]; then echo $c > ${L}.first; cp ${L}.log ${L}.first.log; ${once}; fi; `;
+      return `${hid ? "cp -r ../hidden .hidden; " : ""}t=$(date +%s%N); ${once}; ${again}echo $(( ($(date +%s%N) - t) / 1000000 )) > ${L}.ms; [ "$(cat ${L}.code)" = 0 ] || exit 0`;
+    }),
   ].join("\n");
   phase(checks.length ? `check ${checks.map((c) => c.name).join(", ")}` : "check");
   const r = await sandboxed(dir, script, { read: [bundle, ...(hasHidden ? ["hidden"] : [])], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: join(folder, "check.out"), stderr: join(folder, "check.out") });
@@ -353,8 +369,12 @@ async function checksInSandbox(folder: string, dir: string, bundle: string, ref:
       if (code !== "0") return fail ? `hidden check failed: ${fail} of ${pass + fail} tests` : "hidden check failed";
       continue;
     }
-    if (code !== undefined) record?.({ name: check.name, ok: code === "0", seconds });
-    appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${code ?? "none"}${timedOut ? " (timed out)" : ""}\n${tail(join(dir, "checklog", `${i}.log`), 100)}\n\n`);
+    const first = read(`${i}.first`);
+    if (first !== undefined) appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${first}, run again\n${tail(join(dir, "checklog", `${i}.first.log`), 100)}\n\n`);
+    const rerun = first !== undefined && code === "0";
+    if (rerun) recordFlake(repo.key, check.name, basename(folder));
+    if (code !== undefined) record?.({ name: check.name, ok: code === "0", seconds, ...(rerun ? { rerun: true } : {}) });
+    appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${code ?? "none"}${timedOut ? " (timed out)" : ""}${first !== undefined ? " (second run)" : ""}\n${tail(join(dir, "checklog", `${i}.log`), 100)}\n\n`);
     if (timedOut) return `timed out: check ${check.name}`;
     if (code !== "0") return `${check.name} failed`;
   }

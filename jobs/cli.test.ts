@@ -105,6 +105,7 @@ case $action in
   hidden-fix) echo "$RANDOM" > f.txt; git add f.txt
     if printf '%s' "$prompt" | grep -q 'hidden check failed'; then echo ok > hid.txt; git add hid.txt; fi
     git commit -qm "work" ;;
+  flaky) mkdir -p flaky; echo "$RANDOM" > "flaky/$RANDOM"; git add flaky; git commit -qm "add flaky" ;;
   fail-always) echo "$RANDOM" > f.txt; echo x > FAIL; git add f.txt FAIL; git commit -qm "work" ;;
   branchlog) git log --format=%s > "$FAKE_LOG/branchlog"; git rm -q FAIL; git commit -qm "remove FAIL" ;;
   status\\ *) set -- \${action#status }; cli=$1; shift
@@ -173,7 +174,7 @@ beforeAll(() => {
     // The factory: the same clone, its runs under the stand-in sandbox.
     fac: {
       path: repo, sandbox: true, held: ["held/**"], autoland: false,
-      checks: [{ name: "tests", run: 'if [ -f FAIL ]; then for i in 1 2 3; do echo "FAIL is present $i"; done; exit 1; fi' }, { name: "tree", run: `git rev-parse 'HEAD^{tree}' >> ${join(base, "trees")}` }],
+      checks: [{ name: "tests", run: 'if [ -f FAIL ]; then for i in 1 2 3; do echo "FAIL is present $i"; done; exit 1; fi' }, { name: "flaky", run: `for f in flaky/*; do m=${join(base, "flakym-")}$(basename $f); if [ ! -f $m ]; then touch $m; exit 1; fi; done`, when: ["flaky/**"] }, { name: "tree", run: `git rev-parse 'HEAD^{tree}' >> ${join(base, "trees")}` }],
     },
   }));
 
@@ -823,6 +824,35 @@ describe("a factory run", () => {
       expect(state(r.json.run).checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
       expect(existsSync(join(jobsDir, r.json.run, "hidden.log"))).toBe(false);
       await aleph(["drop", "hidnone"]);
+    }, 30_000);
+  });
+
+  describe("flaky checks", () => {
+    const flaky = () => JSON.parse(readFileSync(join(base, "factory", "flaky.json"), "utf8"));
+
+    test("a check that fails then passes on the same tree passes the run, is recorded and reported; two make a health line", async () => {
+      const r = await fjob("flk1", "flaky");
+      expect(state(r.json.run).state).toBe("passed");
+      expect(state(r.json.run).checks.find((c: any) => c.name === "flaky")).toMatchObject({ ok: true, rerun: true });
+      expect(file(r.json.run, "checks.log")).toContain("## flaky: exit 1, run again");
+      expect(flaky()).toHaveLength(1);
+      expect(flaky()[0]).toMatchObject({ repo: "fac", check: "flaky", run: r.json.run });
+      const out = (await aleph(["report"])).stdout;
+      expect(out).toContain("flaky passed on rerun");
+      expect(out).not.toContain("on rerun 2 times");
+      await fjob("flk2", "flaky");
+      expect(flaky()).toHaveLength(2);
+      expect((await aleph(["report"])).stdout).toContain("health: fac check flaky passed on rerun 2 times in 7 days");
+      rmSync(join(base, "factory", "flaky.json"));
+    }, 60_000);
+
+    test("a check that always fails is still stuck, with one rerun in its log", async () => {
+      const r = await fjob("flk3", "fail-always", { ALEPH_FIX_ROUNDS: "0" });
+      expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "tests failed" });
+      const log = file(r.json.run, "checks.log");
+      expect(log.match(/## tests: exit 1/g)).toHaveLength(2);
+      expect(log).toContain("run again");
+      await aleph(["drop", "flk3"]);
     }, 30_000);
   });
 

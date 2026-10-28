@@ -143,6 +143,17 @@ export async function tick(
   return { started, skipped, triaged: t.triaged };
 }
 
+export interface Flake { repo: string; check: string; run: string; at: string }
+const flakyFile = () => join(factoryDir(), "flaky.json");
+export const flakes = (): Flake[] => {
+  try { return JSON.parse(readFileSync(flakyFile(), "utf8")); } catch { return []; }
+};
+/** A check that failed, then passed on a rerun of the same tree. */
+export function recordFlake(repo: string, check: string, run: string, now = Date.now()): void {
+  mkdirSync(factoryDir(), { recursive: true });
+  writeFileSync(flakyFile(), JSON.stringify([...flakes(), { repo, check, run, at: new Date(now).toISOString() }], null, 2) + "\n");
+}
+
 export interface Baseline { repo: string; commit: string; ok: boolean; failed?: string }
 const baselineFile = () => join(factoryDir(), "baseline.json");
 const baselines = (): Record<string, Baseline> => {
@@ -191,6 +202,9 @@ export function health(now = Date.now()): string[] {
   const p = lastProbe();
   if (p && !p.ok) lines.push(`health: the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`);
   for (const b of Object.values(baselines())) if (!b.ok) lines.push(`health: ${b.repo} ${redLine(b)}`);
+  const counts = new Map<string, number>();
+  for (const f of flakes()) if (now - Date.parse(f.at) < 7 * DAY) counts.set(`${f.repo} check ${f.check}`, (counts.get(`${f.repo} check ${f.check}`) ?? 0) + 1);
+  for (const [k, n] of counts) if (n >= 2) lines.push(`health: ${k} passed on rerun ${n} times in 7 days`);
   return lines;
 }
 
@@ -216,6 +230,7 @@ function entry(e: Entry): string {
   for (const d of r.defaults ?? []) lines.push(`  DEFAULT: ${d}`);
   const hidden = r.checks?.find((c) => c.name === "hidden" && c.total);
   if (hidden) lines.push(`  hidden ${hidden.passed}/${hidden.total}`);
+  for (const c of r.checks ?? []) if (c.rerun) lines.push(`  ${c.name} passed on rerun`);
   if (r.cost !== undefined) lines.push(`  cost ${money(r.cost)} at the API price`);
   return lines.join("\n");
 }
