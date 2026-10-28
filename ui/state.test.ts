@@ -83,6 +83,19 @@ describe("state", () => {
     expect(JSON.parse(before).shown).toBe(false);
   });
 
+  test("landing counts land runs in progress; New counts open unlabelled issues, not goals or labelled ones", () => {
+    writeList({ key: "fac" }, "more", (doc) => {
+      add(doc, "labelled", { labels: ["triaged"] });
+      add(doc, "bare");
+      return true;
+    }, true);
+    run("20261027-000009-a", { kind: "land", job: "fac-8", name: "fac-8", state: "running" });
+    const s = state(now);
+    expect(s.landing).toBe(1);
+    // The seeded items and "bare" have no label; the goal and the triaged one do.
+    expect(s.newIssues).toBe(6);
+  });
+
   test("caps.json gives the caps when the environment does not, and a bad file gives the defaults", () => {
     const keep = { d: process.env.ALEPH_DAY_CAP, l: process.env.ALEPH_LIVE_CAP, w: process.env.ALEPH_WAITING_CAP };
     delete process.env.ALEPH_DAY_CAP; delete process.env.ALEPH_LIVE_CAP; delete process.env.ALEPH_WAITING_CAP;

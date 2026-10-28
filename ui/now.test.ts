@@ -44,9 +44,10 @@ test("an empty section shows its empty state", () => {
   expect(r.renderNeeds({ ...state, needs: [] }).match(/<p/g)?.length).toBe(1);
 });
 
-test("the metric cards count running, waiting, stuck and needs", () => {
-  const h = r.renderMetrics(state);
-  for (const [k, n] of [["Running", 1], ["Waiting", 0], ["Stuck", 1], ["Need attention", 1]]) expect(h).toContain(`<span class="k">${k}</span><span class="v">${n}</span>`);
+test("the metric cards count running, waiting, stuck, needs, landing and new", () => {
+  const h = r.renderMetrics({ ...state, landing: 2, newIssues: 3 });
+  expect(h.match(/class="metric[ "]/g)?.length).toBe(6);
+  for (const [k, n] of [["Running", 1], ["Waiting", 0], ["Stuck", 1], ["Need attention", 1], ["Landing", 2], ["New", 3]]) expect(h).toContain(`<span class="k">${k}</span><span class="v">${n}</span>`);
   expect(h).toContain('class="metric need" href="#needs"');
   expect(r.renderMetrics({ ...state, needs: [] })).toContain('class="metric" href="#needs"');
   const page = r.view.render(state);
@@ -95,23 +96,34 @@ test("four needs-you jobs render one expanded and three collapsed", () => {
   expect(r.renderNeeds({ ...state, needs: needs.slice(0, 2) })).not.toContain("need-fold");
 });
 
-test("each factory condition renders the banner with its text", () => {
-  expect(r.renderBanner(state)).toContain("judge is down");
+test("the lede names what is wrong first, with counts, and the page has no banner", () => {
+  const h = r.renderLede(withFactory({}));
+  expect(h).toContain("1 job needs you");
+  expect(h).toContain("1 job is stuck or failed");
+  expect(h.indexOf("needs you")).toBeLessThan(h.indexOf("stuck"));
   const cases: [object, string][] = [
     [{ runsToday: 12 }, "day cap is reached"],
     [{ paused: true }, "paused"],
-    [{ hold: "Held: aleph-116 is stuck (merge conflict). No run starts or lands until it is cleared." }, "Held: aleph-116 is stuck (merge conflict). No run starts or lands until it is cleared."],
-    [{ health: ["health: 3 runs wait for Chris; no new run starts"] }, "3 runs wait for Chris"],
+    [{ hold: "Held: aleph-116 is stuck (merge conflict). No run starts or lands until it is cleared." }, "Held: aleph-116 is stuck (merge conflict)."],
     [{ health: ["health: aleph main is red"] }, "main is red"],
     [{ probe: { at: "2026-10-27T14:35:00Z", ok: false, failed: ["no network"] } }, "sandbox probe"],
   ];
-  for (const [o, text] of cases) {
-    const h = r.renderBanner(withFactory(o));
-    expect(h).toContain('class="banner"');
-    expect(h).toContain(text);
-  }
-  expect(r.renderBanner(withFactory({}))).toBe("");
-  expect(r.view.render(withFactory({ paused: true }))).toContain('class="banner"');
+  for (const [o, text] of cases) expect(r.renderLede(withFactory(o))).toContain(text);
+  const page = r.view.render(withFactory({ health: ["health: aleph main is red"] }));
+  expect(page).not.toContain('class="banner"');
+  expect(page).toMatch(/<p class="lede">[^]*main is red/);
+});
+
+test("with nothing wrong the lede is one plain phrase with no digit; paused says paused", () => {
+  const calm = { ...withFactory({}), needs: [], stuck: [] };
+  const h = r.renderLede(calm);
+  expect(h).not.toMatch(/\d/);
+  expect(h).toContain("The factory is running.");
+  expect(r.renderLede({ ...calm, factory: { ...calm.factory, paused: true } })).toContain("paused");
+});
+
+test("the as-of line says Updated … ago", () => {
+  expect(r.renderAsOf(state)).toMatch(/^Updated .+ ago$/);
 });
 
 test("a running job past 40 minutes says so", () => {
@@ -136,16 +148,17 @@ test("a job with checks shows them as facts; one without shows none", () => {
   expect(r.renderDelivered(state)).not.toContain("checks");
 });
 
-test("the Controls panel shows Resume when paused and Pause when not, and nothing else", () => {
-  const f = { ...state.factory, judge: "jev", liveCap: 10, waitingCap: 5 };
-  const on = r.renderControls({ ...state, factory: f });
+test("the Pause or Resume button sits in the page head before the updated line; no Controls panel", () => {
+  const on = r.renderControls(state);
   expect(on).toContain('data-act="pause"');
   expect(on).not.toContain('data-act="resume"');
-  const off = r.renderControls({ ...state, factory: { ...f, paused: true, judge: "haiku" } });
+  const off = r.renderControls({ ...state, factory: { ...state.factory, paused: true } });
   expect(off).toContain('data-act="resume"');
   expect(off).not.toContain('data-act="pause"');
-  for (const h of [on, off]) for (const t of ["judge", "Judge", "cap", "<dl"]) expect(h).not.toContain(t);
-  expect(r.view.render(state)).toContain('id="controls"');
+  const page = r.view.render(state);
+  expect(page).not.toContain('id="controls"');
+  expect(page.indexOf('data-act="pause"')).toBeGreaterThan(page.indexOf('class="lede"'));
+  expect(page.indexOf('data-act="pause"')).toBeLessThan(page.indexOf('class="asof"'));
 });
 
 test("trailers show in a pre.trailers block with each key in <b>, escaped, and only when there are some", () => {

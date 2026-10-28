@@ -11,14 +11,12 @@ export const view = {
   api: "/api/state",
   refresh: 15,
   render: (s) =>
-    renderBanner(s) +
-    `<div class="page">${renderMetrics(s)}<p class="lede">${renderLede(s)}</p><p class="asof">${renderAsOf(s)}</p>` +
+    `<div class="page">${renderMetrics(s)}<p class="lede">${renderLede(s)}</p><div class="head">${renderControls(s)}<span class="sep" aria-hidden="true">|</span><p class="asof">${renderAsOf(s)}</p></div>` +
     `<div class="grid"><div>` +
     `<section id="needs" aria-labelledby="h-needs">${renderNeeds(s)}</section>` +
     `<section id="stuck" aria-labelledby="h-stuck">${renderStuck(s)}</section>` +
     `<section id="delivered" aria-labelledby="h-del">${renderDelivered(s)}</section>` +
     `</div><aside class="rail">` +
-    `<section id="controls" aria-labelledby="h-ctl">${renderControls(s)}</section>` +
     `<section id="running" aria-labelledby="h-run">${renderRunning(s)}</section>` +
     `<section id="waiting" aria-labelledby="h-wait">${renderWaiting(s)}</section>` +
     `</aside></div></div>`,
@@ -49,18 +47,6 @@ const empty = (line) => `<div class="empty"><p class="hint">${esc(line)}</p></di
 const BOX_MIN = 40;
 const STAT_FILES = 12;
 
-/** One banner naming what stops or endangers the factory: the health lines first, then the cap and the pause. */
-export function renderBanner(s) {
-  const f = s.factory;
-  const lines = [...f.health];
-  if (f.probe && !f.probe.ok && !lines.some((l) => /probe/.test(l))) lines.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
-  if (f.hold) lines.push(f.hold);
-  if (f.paused) lines.push("The factory is paused; no new run starts. Start it with aleph resume.");
-  if (f.dayCap > 0 && f.runsToday >= f.dayCap) lines.push(`The day cap is reached: ${f.runsToday} of ${f.dayCap} runs today; no new run starts.`);
-  if (!lines.length) return "";
-  return `<div class="banner" role="alert">${lines.map((l, i) => `<p${i ? "" : ' class="first"'}>${esc(l)}</p>`).join("")}</div>`;
-}
-
 /** The first STAT_FILES file lines of a diff stat, then "+N more files" and the summary line. */
 function statLines(stat) {
   const all = stat.replace(/\n+$/, "").split("\n");
@@ -79,13 +65,25 @@ export function renderMetrics(s) {
     card("running", "Running", s.running.length) +
     card("waiting", "Waiting", s.waiting.length) +
     card("stuck", "Stuck", s.stuck.length, "stuck") +
-    card("needs", "Need attention", s.needs.length, "need") + `</div>`;
+    card("needs", "Need attention", s.needs.length, "need") +
+    card("running", "Landing", s.landing ?? 0) +
+    card("waiting", "New", s.newIssues ?? 0) + `</div>`;
 }
 
+/** What is wrong, first; with nothing wrong, one plain phrase and no numbers. */
 export function renderLede(s) {
-  const n = (a) => (a.length ? String(a.length) : "none");
-  if (s.needs.length) return `<a href="#needs" class="need">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you.</a> ${s.running.length} running, ${n(s.stuck)} stuck.`;
-  return `Nothing needs you. <a href="#running">${s.running.length} running</a>, ${n(s.stuck)} stuck, ${s.waiting.length ? `${s.waiting.length} waiting` : "no goal waiting"}.`;
+  const f = s.factory;
+  const parts = [];
+  if (s.needs.length) parts.push(`<a href="#needs" class="need">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you</a>`);
+  if (s.stuck.length) parts.push(`<a href="#stuck" class="need">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`);
+  const health = [...(f.health || [])];
+  if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
+  for (const l of health) parts.push(esc(l.replace(/^health:\s*/, "")));
+  if (f.hold) parts.push(esc(f.hold));
+  if (f.paused) parts.push("The factory is paused");
+  if (f.dayCap > 0 && f.runsToday >= f.dayCap) parts.push("The day cap is reached");
+  if (parts.length) return parts.join(". ") + ".";
+  return "All clear. The factory is running.";
 }
 
 export function renderNeeds(s) {
@@ -151,14 +149,14 @@ export function renderWaiting(s) {
   return section("wait", "Waiting", s.waiting.length, rows || empty("No goal waits to start."));
 }
 
+/** "Updated 2 min ago": the age of the state at the time of the render. */
 export function renderAsOf(s) {
-  return `As of ${esc(new Date(s.now).toLocaleString([], { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }))}.`;
+  return `Updated ${esc(span(s.now, new Date().toISOString()) || "0 min")} ago`;
 }
 
-/** The Controls panel: pause or resume. */
+/** The Pause or Resume button of the page head. */
 export function renderControls(s) {
-  return `<div class="sh"><h2 id="h-ctl">Controls</h2></div>` +
-    `<div class="actions">${s.factory.paused ? ctl("resume", "Resume", true) : ctl("pause", "Pause")}</div>`;
+  return s.factory.paused ? ctl("resume", "Resume", true) : ctl("pause", "Pause");
 }
 const ctl = (verb, label, primary = false) =>
   `<button class="act${primary ? " primary" : ""}" type="button" data-act="${verb}" data-label="${esc(label)}">${esc(label)}</button>`;

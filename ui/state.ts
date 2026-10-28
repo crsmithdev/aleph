@@ -9,7 +9,7 @@ import { judgeChoice } from "../hooks/lib/jev.ts";
 import { DAY_CAP, LIVE_CAP, WAITING_CAP, health, hold, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
 import { allJobs, isOpen, loadRegistry, type Entry, type Repo } from "../jobs/lib/ledger.ts";
 import { readList } from "../todo/lib/store.ts";
-import type { Doc } from "../todo/lib/todo.ts";
+import { status, type Doc } from "../todo/lib/todo.ts";
 
 export interface Job {
   name: string; repo: string; item: { id: number; title: string } | null;
@@ -39,7 +39,14 @@ export interface State {
   };
   needs: Job[]; stuck: Job[]; running: Job[]; delivered: Job[];
   waiting: { repo: string; id: number; title: string }[];
+  /** Land runs in progress. */
+  landing: number;
+  /** Open issues in factory repos that are not goals and not yet triaged. */
+  newIssues: number;
 }
+
+/** Labels that mark an issue as already sorted. */
+const SORTED = ["goal", "needs-chris", "triaged", "live-check", "proposal"];
 
 /** The Now page shows this many of the latest lands. */
 const DELIVERED = 10;
@@ -154,6 +161,7 @@ export function state(now = new Date()): State {
     return job;
   };
 
+  let landing = 0;
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
   const delivered: { at: number; job: Job }[] = [];
   const openNames = new Set<string>();
@@ -163,10 +171,22 @@ export function state(now = new Date()): State {
       openNames.add(`${last.repo}/${last.name}`);
       if (last.state === "needs-you") needs.push(toJob(runs));
       else if (last.state === "stuck" || last.state === "failed") stuck.push(toJob(runs));
-      else running.push(toJob(runs));
+      else {
+        running.push(toJob(runs));
+        if (last.kind === "land") landing++;
+      }
     } else if (last.state === "landed" && last.ended) {
       const at = Date.parse(last.ended);
       delivered.push({ at, job: toJob(runs) });
+    }
+  }
+
+  let newIssues = 0;
+  for (const repo of Object.values(registry)) {
+    if (!repo.sandbox) continue;
+    for (const item of list(repo.key)?.items ?? []) {
+      const labels = (item.fm.labels as string[]) ?? [];
+      if (status(item) === "open" && !labels.some((l) => SORTED.includes(l))) newIssues++;
     }
   }
 
@@ -179,7 +199,7 @@ export function state(now = new Date()): State {
       costToday: today.reduce((a, e) => a + (e.run.cost ?? 0), 0),
       nextTick: nextTick(), probe, health: health(now.getTime()), hold: hold(jobs)?.line ?? null,
     },
-    needs, stuck, running,
+    needs, stuck, running, landing, newIssues,
     delivered: delivered.sort((a, b) => b.at - a.at).slice(0, DELIVERED).map((d) => d.job),
     waiting: openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`))
       .map(({ repo, item }) => ({ repo: repo.key, id: item.id, title: item.title })),

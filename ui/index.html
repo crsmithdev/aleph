@@ -129,7 +129,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .mark { text-decoration: none; font: 700 17px/1 var(--display); letter-spacing: -0.01em; margin-right: 4px; }
 
 /* ---------- Now: metric cards ---------- */
-.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 24px; }
+.metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin: 0 0 24px; }
 .metric { display: grid; gap: 2px; padding: 12px 16px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); color: var(--ink); text-decoration: none; }
 .metric:hover { border-color: var(--muted); }
 .metric .k { color: var(--muted); font-size: 12.5px; }
@@ -147,7 +147,9 @@ main { min-width: 0; }
 .lede a { text-decoration: none; border-bottom: 1px solid var(--rule); }
 .lede a:hover { border-bottom-color: currentColor; }
 .lede .need { color: var(--need); }
-.asof { color: var(--muted); font-size: 12.5px; margin: 0 0 28px; }
+.head { display: flex; align-items: center; gap: 10px; margin: 0 0 28px; }
+.head .sep { color: var(--rule); }
+.asof { color: var(--muted); font-size: 12.5px; margin: 0; }
 
 .grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
 .rail { position: sticky; top: 16px; }
@@ -328,9 +330,6 @@ ul.issues li .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow:
   .del, .need-card { padding: 14px; }
   .files li { grid-template-columns: minmax(0, 1fr) auto 40px; }
 }
-.banner { background: var(--need-bg); color: var(--need); border-bottom: 1px solid var(--need); padding: 8px 24px; font-size: 13.5px; }
-.banner p { margin: 0; max-width: 1280px; margin-inline: auto; }
-.banner p.first { font-weight: 600; }
 .run-meta .over { color: var(--need); font-weight: 600; }
 .need-fold { margin-bottom: 10px; }
 .need-fold > summary { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; color: inherit; font-size: 14px; }
@@ -340,7 +339,6 @@ ul.issues li .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow:
 .need-fold:not([open]) { padding-top: 10px; padding-bottom: 10px; }
 .need-fold + .need-fold { margin-top: 0; }
 pre.trailers b { color: var(--need); }
-@media (max-width: 720px) { .banner { padding: 8px 16px; } }
 .ev.one { grid-template-columns: minmax(0, 1fr); }
 .q { margin: 10px 0 0; font-size: 13px; max-width: 76ch; }
 #offline { margin: 0; padding: 6px 24px; background: var(--stuck-bg); color: var(--stuck); font-size: 13px; text-align: center; }
