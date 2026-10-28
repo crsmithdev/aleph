@@ -95,6 +95,16 @@ describe("a batch of lands", () => {
     await aleph(["drop", "tlbad"]);
   }, 120_000);
 
+  test("a two-member batch [L, B]: B fails in attempt 1, main moves twice, and the leader still lands", async () => {
+    const lands = await landTogether([["tl2a", "commit race/l2.txt"], ["tl2bad", "commit race/bad.txt"]], () => writeFileSync(join(base, "race-once"), "2\n"));
+    const s = lands.map((l) => state(l.run));
+    expect(s.map((x) => x.state)).toEqual(["landed", "failed"]);
+    expect(file(lands[0].run, "land.log").split("main moved; merging again").length - 1).toBe(2);
+    expect(remoteGit("ls-tree", "--name-only", "main:race").split("\n")).toContain("l2.txt");
+    expect(remoteGit("ls-tree", "--name-only", "main:race").split("\n")).not.toContain("bad.txt");
+    await aleph(["drop", "tl2bad"]);
+  }, 120_000);
+
   test("a run that breaks the check fails with the check's name; the others land; at most 1 + 2 + 2 checks", async () => {
     const lands = await landTogether([["a", "commit batch/a.txt"], ["bad", "commit batch/bad.txt"], ["c", "commit batch/c.txt"]]);
     const s = lands.map((l) => state(l.run));

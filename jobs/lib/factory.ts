@@ -67,6 +67,9 @@ export function waiting(jobs = allJobs()): number {
   return jobs.filter((j) => isOpen(j) && j.at(-1)!.run.repo && keys.has(j.at(-1)!.run.repo!) && j.at(-1)!.run.state === "needs-you").length;
 }
 
+/** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts. */
+const lastReal = (j: Entry[]): Entry => j.findLast((e) => !(e.run.kind === "land" && e.run.state === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
+
 export interface Hold { name: string; state: string; reason?: string; line: string }
 
 /**
@@ -79,8 +82,7 @@ export interface Hold { name: string; state: string; reason?: string; line: stri
 export function hold(jobs = allJobs(), except?: string): Hold | null {
   const keys = new Set(sandboxRepos().map((r) => r.key));
   const bad = jobs.filter((j) => {
-    // A land that found the job lock busy did nothing to the job: the run before it counts.
-    const last = j.findLast((e) => !(e.run.kind === "land" && e.run.state === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
+    const last = lastReal(j);
     const r = last.run;
     return isOpen(j) && r.repo && keys.has(r.repo) && (r.state === "stuck" || r.state === "failed") && r.job !== except
       && !r.next && !isLive(last.folder);
@@ -95,7 +97,7 @@ export function hold(jobs = allJobs(), except?: string): Hold | null {
 export function waitingToLand(jobs = allJobs()): string[] {
   const repos = loadRegistry();
   return jobs.filter((j) => {
-    const last = j.at(-1)!;
+    const last = lastReal(j);
     const r = last.run;
     return isOpen(j) && (r.kind === "agent" || r.kind === "recheck") && r.state === "passed" && !isLive(last.folder) && (r.land || (r.repo && repos[r.repo]?.autoland));
   }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started)).map((j) => j.at(-1)!.run.name);

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
-import { dispatchGoals, hold } from "./factory.ts";
+import { dispatchGoals, hold, waitingToLand } from "./factory.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): void {
@@ -96,4 +96,11 @@ test("a land that failed 'job lock busy' does not hold the factory", () => {
 
 test("a land that failed for another reason holds the factory", () => {
   expect(hold([[entry("agent", "passed"), entry("land", "failed", "not landed")]])?.name).toBe("n1");
+});
+
+test("after a land that failed 'job lock busy' the passed agent run is waiting to land again", () => {
+  const agent = entry("agent", "passed");
+  agent.run.land = true;
+  expect(waitingToLand([[agent, entry("land", "failed", "job lock busy")]])).toEqual(["n1"]);
+  expect(waitingToLand([[agent, entry("land", "failed", "not landed")]])).toEqual([]);
 });

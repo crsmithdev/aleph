@@ -186,6 +186,7 @@ export function setup(): void {
     { name: "twicebad", run: "! { [ -f twice/a.txt ] && [ -f twice/bad.txt ]; }", when: ["twice/**"] },
     // race-once holds the number of races still to run; empty means one.
     { name: "race", run: `if [ -f ${join(base, "race-once")} ]; then n=$(cat ${join(base, "race-once")}); rm ${join(base, "race-once")}; [ "$n" = 2 ] && echo 1 > ${join(base, "race-once")}; cd ${join(base, "other")} && git pull -q --rebase origin main && echo $RANDOM > raced && git add raced && git commit -qm race && git push -q origin main; fi`, when: ["race/**"] },
+    { name: "racebad", run: "! { [ -f race/l2.txt ] && [ -f race/bad.txt ]; }", when: ["race/**"] },
   ];
   writeFileSync(join(base, "repos.json"), JSON.stringify({
     // The tests land by hand; "auto" is the same clone with the default, landing by itself.
