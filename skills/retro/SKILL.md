@@ -10,7 +10,14 @@ The user has asked for a **retrospective**. You are suggesting improvements to t
 
 1. Call the Skill tool with `aleph:writing-for-agents` for the writing style guide.
 
-2. Read the primary sources for the session the user specifies; default to the current one. The Langfuse session at `http://127.0.0.1:3010/project/aleph-local/sessions/<session_id>` (one trace per turn, id `sha256("turn:" + prompt_id)[:32]`) has every tool call, generation, verify-gate verdict and price; the transcript is `~/.claude/projects/<cwd-slug>/<session_id>.jsonl`. Read the trace first.
+2. Read the primary sources for the session the user specifies; default to the current one. The Langfuse session (one trace per turn, id `sha256("turn:" + prompt_id)[:32]`) has every tool call, generation, verify-gate verdict and price; the transcript is `~/.claude/projects/<cwd-slug>/<session_id>.jsonl`. Read the trace first. Fetch the session and its traces from the Langfuse public API:
+
+```sh
+curl -s -u "$LANGFUSE_PUBLIC_KEY:$LANGFUSE_SECRET_KEY" \
+  "${LANGFUSE_BASE_URL:-http://127.0.0.1:3010}/api/public/sessions/<session_id>"
+```
+
+For the observations of one trace, call `/api/public/observations?traceId=<trace_id>` the same way.
 
 3. Look for candidates for improvement in these categories.
 
@@ -24,6 +31,8 @@ The user has asked for a **retrospective**. You are suggesting improvements to t
 - **Information access**: look for opportunities to increase the agent's access to information. Teeing dev server logs, readonly access to third-party services. _Use when_ a crucial piece of information was not available to the agent.
 
 4. Present these candidates to the user, in order of severity, each with the evidence from the trace and the proposed change. Don't apply anything until asked.
+
+Done when **every category in step 3 has a verdict** (a candidate with trace evidence, or "none found"), the candidates are in order of severity, and each cites a span or a transcript line.
 
 ## Where a fix lives
 

@@ -87,7 +87,7 @@ Sort every finding into **remove**, **relocate**, or **defer to pass 2**, and sa
 
 Then run the baseline commands and commit. A relocation that breaks a path shows up here, and it is the only category in this pass that can.
 
-**On `/aleph:tidy sweep`, stop here and report.**
+**On `/aleph:tidy sweep`, stop here and report.** The sweep is done when **every category in the table has a result** (findings, or "none"), every finding is sorted to remove, relocate or defer, the baseline commands are green, and the changes are committed.
 
 # Pass 2 — Prove
 

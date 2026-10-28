@@ -11,13 +11,13 @@ Take the current conversation context and codebase understanding and produce a s
 
 ## Process
 
-1. Explore the repo to understand the current state of the codebase, if you haven't already. Use the project's own vocabulary throughout the spec, and respect any ADRs or design docs in the area you're touching.
+1. Explore the repo to understand the current state of the codebase, if you haven't already. Use the project's own vocabulary throughout the spec, and respect any ADRs or design docs in the area you're touching. Done when you have read every ADR and design doc in the area, and you can name the module that holds each part of the feature.
 
 2. Sketch the seams at which the feature will be tested. Prefer existing seams to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. The fewer seams across the codebase, the better; the ideal number is one.
 
    Check with the user that these seams match their expectations. This is the one question this skill asks.
 
-3. Write the spec using the template below to `docs/specs/<YYYY-MM-DD>-<slug>.md` in the target repo, or wherever the user named. Print the path.
+3. Write the spec using the template below to `docs/specs/<YYYY-MM-DD>-<slug>.md` in the target repo, or wherever the user named. Print the path. Done when the file exists at that path, every template section is present, and the path is printed.
 
 4. Self-review before handing over: no placeholders ("TBD", "handle edge cases", "add validation"), no contradictions between decisions, every acceptance criterion checkable by a command or an observation rather than by the implementer's say-so.
 

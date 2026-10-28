@@ -104,6 +104,8 @@ Every subagent prompt carries: the anchor's name and one-paragraph
 architecture, the axis list, its finalists' URLs, and the evidence rules
 below. Use `subagent_type: "general-purpose"`. Wait for every subagent before step 5.
 
+Step 4 is done when **every finalist has a return** with all four items, every claim in it cites `file:line` or is marked unverified, and the commit it was read at is recorded.
+
 Each subagent returns, per finalist:
 
 1. The value on every axis, or "none".

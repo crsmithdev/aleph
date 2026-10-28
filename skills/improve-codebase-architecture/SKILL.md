@@ -34,6 +34,8 @@ Then spawn a sub-agent to walk the codebase. Don't follow rigid heuristics; expl
 
 Apply the **deletion test** from `aleph:codebase-design` to anything you suspect is shallow. A module whose complexity vanishes when you delete it is a pass-through, and a candidate.
 
+The brief is done when **the sub-agent has answered every friction question** above, each answer names modules with `file:line`, and each suspected shallow module has a deletion-test result.
+
 ### 2. Present candidates as an HTML report
 
 Write a self-contained HTML file to the OS temp directory so nothing lands in the repo. Resolve the temp dir from `$TMPDIR`, falling back to `/tmp` (or `%TEMP%` on Windows), and write to `<tmpdir>/architecture-review-<timestamp>.html` so each run gets a fresh file. Open it for the user (`xdg-open <path>` on Linux, `open <path>` on macOS, `start <path>` on Windows) and tell them the absolute path.

@@ -53,6 +53,14 @@ Every step ends on a **completion criterion**, the condition that tells the agen
 
 The strongest criteria are both checkable and exhaustive.
 
+This skill ends each task on one criterion. When you create, edit or audit a document, you are done when:
+
+- **Pointers**: every pointer states what the material is and lists one trigger per branch.
+- **Steps**: every step names its completion criterion, and you can check it by an observation.
+- **Duplication**: no meaning appears in more than one place.
+- **No-ops**: every sentence changes behavior against the default, or you deleted it.
+- **Report**: you list each rule above with the line you changed, or "no change".
+
 ## When to split
 
 Splitting one document into two spends one of the two loads, so split only when the cut earns it:

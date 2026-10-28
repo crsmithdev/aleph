@@ -43,6 +43,8 @@ Docs audit progress:
 - [ ] Step 6: Report per the output contract, by severity
 ```
 
+Done when **every in-scope file has a verdict**: findings with a rule, an issue and a fix, or `✓ pass`. Every category in steps 3 to 5 has run on each file, and every rule that produced a finding has run again after the fixes.
+
 Load rule files by category prefix (`rules/voice-*.md`, then `rules/structure-*.md`, ...) only for in-scope categories. After applying fixes, rerun the rules that produced findings before finalizing.
 
 ## Writing workflow

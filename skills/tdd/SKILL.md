@@ -33,5 +33,6 @@ Ask: "What's the public interface, and which seams should we test?"
 ## Rules of the loop
 
 - **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
+- **Red is a run, not a plan.** Done when you have run the new test and seen it fail for the reason you expect (show the command and the failure line). Write no implementation before that run.
 - **One slice at a time.** One seam, one test, one minimal implementation per cycle.
 - **Refactoring is not part of the loop.** It belongs to review (`/code-review`), not the red → green implementation cycle.

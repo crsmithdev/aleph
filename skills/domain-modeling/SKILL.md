@@ -75,4 +75,15 @@ Only offer to create an ADR when all three are true:
 
 If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](./ADR-FORMAT.md).
 
+## Done when
+
+Each step is done when its check passes:
+
+- **Challenge**: every term in the user's message that conflicts with `CONTEXT.md` has been named, and the user has chosen one meaning.
+- **Sharpen**: every vague term has one canonical name, and the user has agreed to it.
+- **Scenarios**: every relationship under discussion has at least one edge-case scenario, and the user has answered it.
+- **Cross-reference**: every claim about how the system works has been checked against the code, and each contradiction has been shown to the user.
+- **Update**: every resolved term is in `CONTEXT.md` before you reply to the next message.
+- **ADR**: each decision is either recorded in `docs/adr/` or fails one of the three tests, and you can name which one.
+
 Adapted from Matt Pocock's `domain-modeling` skill (github.com/mattpocock/skills).

@@ -93,6 +93,8 @@ Each hypothesis must be **falsifiable**: state the prediction it makes.
 
 If you cannot state the prediction, the hypothesis is a vibe: discard or sharpen it.
 
+Done when **every hypothesis states its prediction**, the list holds 3–5 entries in ranked order, and you have shown the list to the user.
+
 **Show the ranked list to the user before testing.** They often have domain knowledge that re-ranks instantly ("we just deployed a change to #3"), or know hypotheses they've already ruled out. Cheap checkpoint, big time saver. Don't block on it; proceed with your ranking if the user is AFK.
 
 ## Phase 4: Instrument
@@ -106,6 +108,8 @@ Tool preference:
 3. Never "log everything and grep".
 
 **Tag every debug log** with a unique prefix, e.g. `[DEBUG-a4f2]`. Cleanup at the end becomes a single grep. Untagged logs survive; tagged logs die.
+
+Done when **every hypothesis is confirmed or ruled out** by a probe that maps to its prediction, and exactly one cause remains that explains the symptom from Phase 2.
 
 **Perf branch.** For performance regressions, logs are usually wrong. Instead: establish a baseline measurement (timing harness, `performance.now()`, profiler, query plan), then bisect. Measure first, fix second.
 
