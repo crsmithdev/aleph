@@ -37,8 +37,10 @@ describe("every transition dispatches at once", () => {
     for (const g of gates) writeFileSync(gate(g), "");
     for (const id of ids.splice(0)) {
       await until(() => settled(id));
-      await aleph(["drop", `fac-${id}`]);
+      // The issue goes first: while it is open and has no live job, a detached dispatch can rerun it.
       await aleph(["todo", "drop", "fac", String(id), "test over"]);
+      await aleph(["drop", `fac-${id}`]);
+      await until(() => settled(id));
     }
     await Bun.sleep(300);
     rmSync(startLog, { force: true });
