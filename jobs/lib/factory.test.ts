@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { readList, writeList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import { dispatchGoals, hold, waitingToLand, type Rescue } from "./factory.ts";
-import { readRun, writeRun, allJobs, allRuns, type Run } from "./ledger.ts";
+import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): void {
@@ -285,4 +285,44 @@ test("without rescue actions a stuck run still holds the factory", async () => {
   mk(`fac-${id}`, "agent", "stuck", { reason: "time box" });
   const out = await dispatchGoals(async () => null, async () => null);
   expect(out.held).toContain("Held:");
+});
+
+test("a rescue that finds the lock taken waits, then acts once on the state it finds under the lock", async () => {
+  const id = goal();
+  const name = `fac-${id}`;
+  const { folder } = mk(name, "agent", "stuck", { reason: "weird" });
+  // Dispatch A holds the lock; the stuck state B must act on appears only after A is done.
+  const release = (await lock(`rescue-fac-${name}`, 0))!;
+  const f = fakes();
+  const b = dispatch(f);
+  await Bun.sleep(300);
+  expect(f.calls).toEqual([]);
+  writeRun(folder, { ...readRun(folder)!, state: "failed", reason: "time box" });
+  release();
+  await b;
+  expect(f.calls.filter((c) => c.startsWith("drop"))).toEqual([`drop ${name}`]);
+  expect(notes(id)).toContain("the time box ran out");
+});
+
+test("two dispatches at once rescue one stuck job once", async () => {
+  const id = goal();
+  const name = `fac-${id}`;
+  mk(name, "agent", "stuck", { reason: "time box" });
+  const f = fakes();
+  const slow = { ...f.rescue, drop: async (n: string, r: string) => { await Bun.sleep(300); return f.rescue.drop(n, r); } };
+  await Promise.all([dispatchGoals(f.start, async () => null, f.land, slow), dispatchGoals(f.start, async () => null, f.land, slow)]);
+  expect(f.calls.filter((c) => c.startsWith("drop"))).toEqual([`drop ${name}`]);
+});
+
+test("a rescue whose lock wait runs out skips the job and does not throw", async () => {
+  const id = goal();
+  const name = `fac-${id}`;
+  mk(name, "agent", "stuck", { reason: "time box" });
+  const release = (await lock(`rescue-fac-${name}`, 0))!;
+  process.env.ALEPH_RESCUE_WAIT_MS = "200";
+  try {
+    const f = fakes();
+    await dispatch(f);
+    expect(f.calls).toEqual([]);
+  } finally { delete process.env.ALEPH_RESCUE_WAIT_MS; release(); }
 });

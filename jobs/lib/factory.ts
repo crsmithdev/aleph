@@ -304,6 +304,9 @@ function caseOf(r: Entry["run"], onMainOrDone: () => boolean): Case | null {
   return null;
 }
 
+/** How long a dispatch waits for a run's rescue lock before it skips the run. */
+const RESCUE_WAIT_MS = () => Number(process.env.ALEPH_RESCUE_WAIT_MS ?? 60_000);
+
 /**
  * The safe default actions for stuck and failed runs, taken by the dispatch that sees them: a duplicate
  * is dropped; no commit, a time box and checks that fail after a land merge drop the run for one rerun
@@ -320,8 +323,9 @@ async function rescueStuck(act: Rescue, land?: Land): Promise<void> {
   });
   for (const first of pending(allJobs())) {
     const name = first[0].run.name;
-    const release = await lock(`rescue-${first[0].run.repo}-${name}`, 0);
-    if (!release) continue;
+    // Wait: the dispatch that holds it may have read the job before this run ended, and would not act on it.
+    const release = await lock(`rescue-${first[0].run.repo}-${name}`, RESCUE_WAIT_MS());
+    if (!release) { factoryLog(`rescue of ${name} skipped: the rescue lock stayed busy`); continue; }
     try {
       // Read again under the lock: another dispatch may have acted on it.
       const runs = pending(allJobs()).find((j) => j[0].run.job === first[0].run.job);
