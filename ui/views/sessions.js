@@ -9,17 +9,20 @@ const langfuse = (base, traceId) => (base && traceId ? `<a href="${esc(base)}/tr
 const line = (s) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
 const href = (path) => `#${path}`;
 
-// The list's filters and page size live here, so the 60 s refresh keeps them.
-const state = { project: "", q: "", shown: 50 };
+// The search text and page size live here, so the 60 s refresh keeps them; Project and Window live in the hash.
+const state = { q: "", shown: 50 };
 
 const visible = (d) => {
   const q = state.q.trim().toLowerCase();
-  return d.sessions.filter((s) => (!state.project || s.project === state.project) && (!q || (s.firstPrompt ?? "").toLowerCase().includes(q)));
+  return d.sessions.filter((s) => !q || (s.firstPrompt ?? "").toLowerCase().includes(q));
 };
 
-function sessionsBody(d) {
+const DAYS = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }];
+const windowOf = (query) => (DAYS.some((o) => o.value === query?.get("days")) ? query.get("days") : "7");
+
+function sessionsBody(d, days) {
   const all = visible(d);
-  if (!all.length) return empty(d.sessions.length ? "No session matches." : "No session in the last 7 days.", d.sessions.length ? "Clear the project or the search." : "Sessions appear when the hooks send traces to Langfuse.");
+  if (!all.length) return empty(d.sessions.length ? "No session matches." : `No session in the last ${days} days.`, d.sessions.length ? "Clear the search." : "Sessions appear when the hooks send traces to Langfuse.");
   // Columns: id, title (the first prompt), project, labels (kinds), numbers, times last.
   const rows = all.slice(0, state.shown).map((s) =>
     `<tr><td>${idLink(s.id.slice(0, 8), href(`/sessions/${encodeURIComponent(s.id)}`))}</td>` +
@@ -30,42 +33,45 @@ function sessionsBody(d) {
     pager(state.shown, all.length);
 }
 
-export function renderSessions(d) {
+export function renderSessions(d, _params, query = new URLSearchParams()) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
-  const projects = [...new Set(d.sessions.map((s) => s.project).filter(Boolean))].sort();
-  if (state.project && !projects.includes(state.project)) state.project = "";
+  const projects = [...new Set([...(d.projects ?? []), ...d.sessions.map((s) => s.project).filter(Boolean)])].sort();
+  const days = windowOf(query);
   return `<div class="page">${pageHead("Sessions", { count: visible(d).length })}` +
     filterBar([
-      { label: "Project", name: "project", options: [{ value: "", label: "All" }, ...projects], value: state.project },
+      { label: "Project", name: "project", options: [{ value: "", label: "All" }, ...projects], value: projects.includes(query?.get("project")) ? query.get("project") : "" },
+      { label: "Window", name: "days", options: DAYS, value: days },
       { label: "Search", name: "q", search: true, value: state.q, placeholder: "First prompt" },
-    ]) + `<div class="sess-body">${sessionsBody(d)}</div></div>`;
+    ]) + `<div class="sess-body">${sessionsBody(d, days)}</div></div>`;
 }
 
-// Filters and "Show more" redraw the table and count in place; the search box keeps its focus.
-export function mountSessions(root, d) {
+// Project and Window write the hash; the search and "Show more" redraw the table and count in place, so the search box keeps its focus.
+export function mountSessions(root, d, query = new URLSearchParams()) {
   if (!d || d.error) return;
   const body = root.querySelector(".sess-body");
   if (!body) return;
+  const days = windowOf(query);
   const redraw = () => {
-    body.innerHTML = sessionsBody(d);
+    body.innerHTML = sessionsBody(d, days);
     const c = root.querySelector(".ph .count");
     if (c) c.textContent = String(visible(d).length);
   };
-  const set = (name, value) => { state[name] = value; state.shown = 50; redraw(); };
-  root.querySelector('.fbar input[name="q"]')?.addEventListener("input", (e) => set("q", e.target.value));
-  root.querySelector('.fbar select[name="project"]')?.addEventListener("change", (e) => set("project", e.target.value));
-  root.querySelector('.fbar .seg[data-name="project"]')?.addEventListener("click", (e) => {
-    const b = e.target.closest?.("button[data-value]");
-    if (!b) return;
-    root.querySelectorAll('.fbar .seg[data-name="project"] button').forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-    set("project", b.dataset.value);
-  });
-  body.addEventListener("click", (e) => {
+  const go = (name, value) => {
+    const q = new URLSearchParams();
+    for (const k of ["days", "project"]) if (query.get(k)) q.set(k, query.get(k));
+    if (value) q.set(name, value); else q.delete(name);
+    location.hash = `#/sessions${q.toString() ? `?${q}` : ""}`;
+  };
+  root.querySelector('.fbar input[name="q"]')?.addEventListener("input", (e) => { state.q = e.target.value; state.shown = 50; redraw(); });
+  root.onchange = (e) => { if (e.target.matches?.(".fbar select")) go(e.target.name, e.target.value); };
+  root.onclick = (e) => {
+    const seg = e.target.closest?.(".fbar .seg button");
+    if (seg) return go(seg.parentElement.dataset.name, seg.dataset.value);
     const b = e.target.closest?.("button[data-more]");
     if (!b) return;
     state.shown += Number(b.dataset.more);
     redraw();
-  });
+  };
 }
 
 export function renderSession(d) {
@@ -106,6 +112,10 @@ export function renderTurn(d) {
     (d.observations.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Kind</th><th>Name</th><th>Detail</th><th class="num">Duration</th></tr></thead><tbody>${d.observations.map((o) => obsRows(o, 0)).join("")}</tbody></table></div>` : empty("No observation in this turn.")) + `</div>`;
 }
 
-export const view = { path: "/sessions", title: "Sessions", group: "claude", order: 0, api: "/api/sessions", refresh: 60, render: renderSessions, mount: mountSessions };
+export const view = { path: "/sessions", title: "Sessions", group: "claude", order: 0, api: (_params, q = new URLSearchParams()) => {
+    const out = new URLSearchParams();
+    for (const k of ["days", "project"]) if (q.get(k)) out.set(k, q.get(k));
+    return out.toString() ? `/api/sessions?${out}` : "/api/sessions";
+  }, refresh: 60, render: renderSessions, mount: mountSessions };
 export const sessionView = { path: "/sessions/:id", title: "Session", group: "claude", order: 0, api: "/api/sessions/:id", render: renderSession };
 export const turnView = { path: "/sessions/:id/turns/:n", title: "Turn", group: "claude", order: 0, api: "/api/sessions/:id/turns/:n", render: renderTurn };

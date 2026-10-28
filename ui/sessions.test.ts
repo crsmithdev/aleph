@@ -165,3 +165,20 @@ test("the Turn page uses pageHead, idLink and when", async () => {
   expect(h).toContain(`<dt>Started</dt><dd>${when(t.start)}</dd>`);
   expect(h.match(/<h1/g)?.length).toBe(1);
 });
+
+test("Project and Window are hash parameters that reach the API", async () => {
+  expect(v.view.api({}, new URLSearchParams("days=30&project=aleph&x=1"))).toBe("/api/sessions?days=30&project=aleph");
+  expect(v.view.api({}, new URLSearchParams())).toBe("/api/sessions");
+  const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
+  expect(Array.isArray(list.projects)).toBe(true);
+  expect(list.projects).toEqual([...list.projects].sort());
+  const h = v.renderSessions(list, {}, new URLSearchParams());
+  expect(h).toContain('data-name="project"');
+  expect(h).toContain('data-name="days"');
+  expect(h).toContain('data-value="7" aria-pressed="true"');
+  expect(h).toContain('name="q"');
+  expect(h).not.toContain("<style");
+  const heads = [...h.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
+  expect(heads).toEqual(["Session", "First prompt", "Project", "Kinds", "Turns", "Cost", "Started", "Last"]);
+  expect(v.renderSessions({ ...list, sessions: [] }, {}, new URLSearchParams("days=30"))).toContain("No session in the last 30 days.");
+});

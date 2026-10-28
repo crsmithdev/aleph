@@ -1,6 +1,7 @@
 /** `/api/sessions`, `/api/sessions/:id`, `/api/sessions/:id/turns/:n`: the Sessions views' data, from Langfuse. */
 import { basename } from "node:path";
 import { LangfuseError, config, observations, traces } from "../langfuse.ts";
+import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
 
 const line = (s: unknown, max: number) => {
@@ -77,7 +78,7 @@ export const routes: Routes = {
           taskTypes: taskTypes(ts),
         };
       }).sort((a, b) => ms(b.last) - ms(a.last));
-      return Response.json({ base: cfg.baseUrl, sessions });
+      return Response.json({ base: cfg.baseUrl, projects: Object.keys(loadRegistry()).sort(), sessions });
     } catch (e) { return fail(e); }
   },
 
