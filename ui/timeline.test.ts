@@ -7,7 +7,7 @@ import { add, setStatus } from "../todo/lib/todo.ts";
 import { clearCache } from "./langfuse.ts";
 import { routes, timeline } from "./api/timeline.ts";
 // @ts-ignore plain JS, shared with the page
-import { duration, mark, redirect, renderEvent, renderStream, renderTimeline, stripOption, view } from "./views/timeline.js";
+import { duration, mark, redirect, renderEvent, renderStream, renderTimeline, stripOption, view, mountTimeline } from "./views/timeline.js";
 
 let base: string, jobsDir: string, fake: ReturnType<typeof Bun.serve>;
 const saved: Record<string, string | undefined> = {};
@@ -223,6 +223,38 @@ describe("timeline view", () => {
     expect(html.match(/<th>(\w+)<\/th>/g)!.join("")).toBe("<th>Time</th><th>Duration</th><th>Kind</th><th>Id</th><th>Title</th><th>Cost</th><th>Details</th>");
     const all = renderStream(t.rows!);
     expect(new Set(all.match(/data-kind="\w+"/g)).size).toBeGreaterThan(1);
+  });
+
+  test("the h1 is Activity", () => {
+    expect(renderTimeline({ rows: [] })).toContain("<h1>Activity</h1>");
+  });
+
+  test("shift-click on a kind shows only that kind; again shows all; a plain click toggles", () => {
+    const kinds = ["job", "land", "issue", "session", "note"];
+    const rows = kinds.map((kind, i) => ({ at: new Date(2026, 9, 27, 10, i).toISOString(), kind, what: "x", title: kind, href: "#/x" }));
+    const stream = { innerHTML: "", addEventListener() {}, querySelector() { return null; } };
+    const boxes = kinds.map((kind) => ({ dataset: { kind }, checked: true }));
+    let click: (ev: unknown) => void = () => {};
+    const root = {
+      querySelector: (q: string) => q === "#tl-stream" ? stream : q === ".kinds" ? { addEventListener: (_: string, f: typeof click) => { click = f; } } : null,
+      querySelectorAll: () => boxes,
+    };
+    mountTimeline(root, { rows });
+    const checked = () => boxes.filter((b) => b.checked).map((b) => b.dataset.kind);
+    const shown = () => [...stream.innerHTML.matchAll(/<tr class="evr" data-kind="(\w+)"/g)].map((m) => m[1]);
+    // The browser toggles the box before the click handlers run.
+    const press = (kind: string, shiftKey: boolean) => { const b = boxes.find((x) => x.dataset.kind === kind)!; b.checked = !b.checked; click({ target: b, shiftKey }); };
+    press("job", true);
+    expect(checked()).toEqual(["job"]);
+    expect(shown()).toEqual(["job"]);
+    press("job", true);
+    expect(checked()).toEqual(kinds);
+    expect(shown().sort()).toEqual([...kinds].sort());
+    press("land", false);
+    expect(checked()).toEqual(kinds.filter((k) => k !== "land"));
+    expect(shown()).not.toContain("land");
+    press("land", false);
+    expect(checked()).toEqual(kinds);
   });
 
   test("api events carry details, cost and state", async () => {

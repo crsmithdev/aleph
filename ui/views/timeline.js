@@ -1,4 +1,4 @@
-// The Timeline view: an ECharts swimlane chart (30 days, one lane per
+// The Activity view: an ECharts swimlane chart (30 days, one lane per
 // kind), then a reverse-time table, one row per job, session, land, issue and note, 100 to a
 // page with Older and Newer controls. `data` is /api/timeline: { rows, now, strip, langfuse }.
 import { chart, clock, empty, esc, money, readTokens } from "../lib.js";
@@ -113,7 +113,7 @@ export function renderTimeline(d) {
   if (!d) return `<div class="page">${empty("No data.")}</div>`;
   const note = d.langfuse === "off" ? `<p class="hint">Langfuse is not configured: sessions are left out.</p>` : d.langfuse === "error" ? `<p class="hint">Langfuse failed: sessions are left out.</p>` : "";
   const rows = d.rows ?? [];
-  return `${STYLE}<div class="page tl"><h1>Timeline</h1>${note}` +
+  return `${STYLE}<div class="page tl"><h1>Activity</h1>${note}` +
     `<div class="kinds" role="group" aria-label="Kinds">${KINDS.map(([k, label]) => `<label><input type="checkbox" data-kind="${k}" checked> ${esc(label)}</label>`).join("")}</div>` +
     `<div class="strip" id="tl-strip" role="img" aria-label="Swimlanes: jobs, lands, issues, sessions and notes, last 30 days"></div>` +
     `<div id="tl-stream">${renderStream(rows, 0, d.now ? Date.parse(d.now) : Date.now())}</div>` +
@@ -187,6 +187,13 @@ function echartsClip(params, r) {
   return x2 > x1 || x2 === x1 && r.width === 0 ? { x: x1, y: r.y, width: Math.max(x2 - x1, 0), height: r.height } : null;
 }
 
+/** Shift-click on a kind: show only that kind; on the only kind shown, show all kinds again. */
+export function soloKind(on, kind) {
+  if (on.size === 1 && on.has(kind)) for (const [k] of KINDS) on.add(k);
+  else { on.clear(); on.add(kind); }
+  return on;
+}
+
 export function mountTimeline(root, d) {
   const stream = root.querySelector("#tl-stream");
   if (!stream) return;
@@ -204,8 +211,16 @@ export function mountTimeline(root, d) {
       c.on("click", (p) => { const it = p.value && (d.strip ?? []).find((i) => i.name === p.value[3] && Date.parse(i.start) === p.value[1]); if (it?.href) location.hash = it.href; });
     } catch (e) { console.error("timeline strip failed", e); }
   }
-  for (const box of root.querySelectorAll(".kinds input")) box.addEventListener("change", () => {
-    box.checked ? on.add(box.dataset.kind) : on.delete(box.dataset.kind);
+  const boxes = [...root.querySelectorAll(".kinds input")];
+  // A click on a label text reaches the box as a second, synthetic click that may lose the shift key.
+  let labelShift = false;
+  root.querySelector(".kinds")?.addEventListener("click", (ev) => {
+    const box = ev.target;
+    if (!boxes.includes(box)) { labelShift = !!ev.shiftKey; return; }
+    const shift = ev.shiftKey || labelShift;
+    labelShift = false;
+    if (shift) soloKind(on, box.dataset.kind); else box.checked ? on.add(box.dataset.kind) : on.delete(box.dataset.kind);
+    for (const b of boxes) b.checked = on.has(b.dataset.kind);
     page = 0; show(); c?.setOption(stripOption(d?.strip ?? [], [...on]), true);
   });
   stream.addEventListener("click", (ev) => {
