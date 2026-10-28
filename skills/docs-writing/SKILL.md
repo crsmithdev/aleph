@@ -22,12 +22,7 @@ description: >
 
 Doc type gates which rules apply, so classify every file first. Use the Diataxis compass: does the page serve **action** (doing) or **cognition** (understanding), and is the reader **acquiring** a skill or **applying** one?
 
-| | Acquisition (learning) | Application (working) |
-|---|---|---|
-| **Action** | Tutorial | How-to guide |
-| **Cognition** | Explanation | Reference |
-
-A page that answers differently for different sections is mixed; `structure-diataxis` handles the split. Classify by the reader's task, not the filename. A README can orient or reference; a getting-started page can be a tutorial or a goal-directed how-to.
+`structure-diataxis` holds the compass table and the split for a mixed page. Classify by the reader's task, not the filename. A README can orient or reference; a getting-started page can be a tutorial or a goal-directed how-to.
 
 ## Audit workflow
 
@@ -57,12 +52,10 @@ Docs writing progress:
 - [ ] Step 2: Read the defaults bundles (voice-defaults, clarity-defaults, scan-defaults) plus the structure- and code- rules the type-gating table keeps
 - [ ] Step 3: Draft: bottom line up front, quick start for getting-started docs, runnable example per concept, next steps for tutorials and how-tos
 - [ ] Step 4: Apply the type-relevant rules to concrete weaknesses in the draft
-- [ ] Step 5: Verify: run every example, resolve every link, confirm parameter names and defaults against the implementation; quote the command output
+- [ ] Step 5: Verify with `review-defaults` and `review-verify-links`; quote the command output
 ```
 
 For a README, start from `readme-template.md`.
-
-Length follows what the reader has to do, not the template: drop a section the page does not need rather than filling it.
 
 ## Type-gating table
 
@@ -93,7 +86,7 @@ Everything else applies to every type. Tutorials additionally get the `we` allow
 | 8 | Content Hygiene | MEDIUM | `hygiene-` | 6 |
 | 9 | Review & Testing | LOW-MEDIUM | `review-` | 3 |
 
-For the full rule list per category, read `rules/_sections.md`. The `*-defaults.md` files (voice, clarity, scan, review) are multi-check bundles, 2-5 baseline checks each.
+For the full rule list per category, read `rules/_sections.md`. The `*-defaults.md` files (voice, clarity, scan, review) are multi-check bundles.
 
 ## Output contract (audit mode)
 

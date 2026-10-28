@@ -7,7 +7,7 @@ All 9 categories with ordering, impact, and rules. The ID in parentheses is the 
 ## 1. Voice & Tone (voice)
 
 **Impact:** CRITICAL
-**Rules:** voice defaults (5 checks), no jargon, no anthropomorphism, requirements language.
+**Rules:** voice defaults, no jargon, no anthropomorphism, requirements language.
 
 ## 2. Structure & Organization (structure)
 
@@ -17,7 +17,7 @@ All 9 categories with ordering, impact, and rules. The ID in parentheses is the 
 ## 3. Clarity & Language (clarity)
 
 **Impact:** HIGH
-**Rules:** clarity defaults (5 checks; the source of truth for paragraph length), serial comma, no Latin abbreviations, no nominalizations, one idea per sentence.
+**Rules:** clarity defaults (the source of truth for paragraph length), serial comma, no Latin abbreviations, no nominalizations, one idea per sentence.
 
 ## 4. Code Examples (code)
 
@@ -37,7 +37,7 @@ All 9 categories with ordering, impact, and rules. The ID in parentheses is the 
 ## 7. Scanability & Readability (scan)
 
 **Impact:** MEDIUM
-**Rules:** scan defaults (2 checks), request and response examples beside each API reference entry.
+**Rules:** scan defaults, request and response examples beside each API reference entry.
 
 ## 8. Content Hygiene (hygiene)
 
@@ -47,4 +47,4 @@ All 9 categories with ordering, impact, and rules. The ID in parentheses is the 
 ## 9. Review & Testing (review)
 
 **Impact:** LOW-MEDIUM
-**Rules:** review defaults (3 checks), verify links, docs change with the code.
+**Rules:** review defaults, verify links, docs change with the code.

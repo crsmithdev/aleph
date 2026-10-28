@@ -1,6 +1,6 @@
 # README template
 
-Put the most important information first. A visitor reads the top screen. A user reads to the end of Usage. A contributor reads everything. Cut a section the project does not need; do not fill it.
+Put the most important information first. A visitor reads the top screen. A user reads to the end of Usage. A contributor reads everything. `structure-no-filler-sections` applies: cut a section the project does not need.
 
 Sources: ripgrep (why and why not), uv (claim, proof, then docs link), bat (one example per feature), httpie and size-limit (demo first), choo (FAQ).
 
