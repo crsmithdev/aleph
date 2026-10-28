@@ -9,8 +9,8 @@
  */
 import { readList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
-import { git, gitWith } from "./git.ts";
-import { allJobs, isOpen, lastReal, type Repo, type State } from "./ledger.ts";
+import { fetchOrigin, git, gitWith } from "./git.ts";
+import { allJobs, allRuns, isOpen, lastReal, type Repo, type State } from "./ledger.ts";
 
 export const FACTS_REF = "refs/aleph/facts";
 
@@ -106,4 +106,34 @@ export function derive(cwd: string, main: string, f: Facts, n: number, landed?: 
   if (run === "stuck" || run === "failed") return { item, state: "stuck", why: `its job is ${run}` };
   if (run === "running" || run === "passed") return { item, state: "running", why: `its job is ${run}` };
   return { item, state: "open", why: "no commit on main names it" };
+}
+
+/**
+ * The states of `items` (all the repo's items when omitted), from the repo's
+ * origin/<main>. `fetch` says whether to fetch origin first; `doc` is the
+ * list when the caller has read it already. Items the store lacks are left
+ * out. It throws when the store cannot be read.
+ */
+export function itemStates(repo: Repo, opts: { fetch: boolean; doc?: todos.Doc | null; items?: number[] }): ItemState[] {
+  if (opts.fetch) fetchOrigin(repo.path);
+  const f = facts(repo, opts.doc);
+  const main = `refs/remotes/origin/${f.main}`;
+  const ids = opts.items ?? Object.keys(f.store).map(Number);
+  const landed = ids.length > 1 ? landedIndex(repo.path, main, repo.key) : undefined;
+  const states: ItemState[] = [];
+  for (const n of ids) { const s = derive(repo.path, main, f, n, landed); if (s) states.push(s); }
+  return states;
+}
+
+const DAY_MS = 24 * 3600_000;
+const RECENT_DAYS = 7;
+
+/** The indices of the repos with a ledger run or an item update in the last week, the latest first. `docs[n]` is `repos[n]`'s list. */
+export function recentRepos(repos: Repo[], docs: (todos.Doc | null)[]): number[] {
+  const since = Date.now() - RECENT_DAYS * DAY_MS;
+  const last = new Map<string, number>();
+  const seen = (k: string, t: number) => { if (t >= since && t > (last.get(k) ?? 0)) last.set(k, t); };
+  for (const e of allRuns()) if (e.run.repo) seen(e.run.repo, Date.parse(e.run.started));
+  repos.forEach((r, n) => { for (const i of docs[n]?.items ?? []) if (i.fm.updated) seen(r.key, Date.parse(String(i.fm.updated))); });
+  return repos.map((_, n) => n).filter((n) => last.has(repos[n].key)).sort((a, b) => last.get(repos[b].key)! - last.get(repos[a].key)!);
 }

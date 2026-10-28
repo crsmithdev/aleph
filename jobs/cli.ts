@@ -22,7 +22,7 @@ import { runPath } from "./lib/sandbox.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
 import { runReview2 } from "./lib/review2.ts";
-import { derive, facts, FACTS_REF, itemOnMain, landedIndex, readFacts, type Facts } from "./lib/status.ts";
+import { derive, FACTS_REF, itemOnMain, itemStates, readFacts, recentRepos, type ItemState } from "./lib/status.ts";
 
 const CLI = import.meta.path;
 /** The most agent runs live at once; `ALEPH_LIVE_CAP` or `caps.json` changes it. */
@@ -30,7 +30,6 @@ const CAP = LIVE_CAP;
 /** How long `dispatch` waits for the unit to write `pid`; `ALEPH_PID_WAIT_MS` changes it. */
 const PID_WAIT_MS = Number(process.env.ALEPH_PID_WAIT_MS) || 10_000;
 const DAY_MS = 24 * 3600_000;
-const RECENT_DAYS = 7;
 
 class Refusal extends Error {}
 const refuse = (msg: string): never => { throw new Refusal(msg); };
@@ -612,24 +611,16 @@ function printRows(rows: todos.Item[], indent = ""): void {
  * The registry's repos with a ledger run or an item update in the last 7
  * days, the latest first, each with its list (null when the store has none).
  */
-function recentRepos(): { repo: Repo; doc: todos.Doc | null }[] {
-  const since = Date.now() - RECENT_DAYS * DAY_MS;
-  const last = new Map<string, number>();
-  const seen = (key: string, t: number) => { if (t >= since && t > (last.get(key) ?? 0)) last.set(key, t); };
-  for (const e of allRuns()) if (e.run.repo) seen(e.run.repo, Date.parse(e.run.started));
+function listRecent(): { repo: Repo; doc: todos.Doc | null }[] {
   const repos = Object.values(loadRegistry());
-  let docs: (todos.Doc | null)[];
+  let docs: (todos.Doc | null)[] = [];
   try { docs = store.readLists(repos); } catch (e: any) { refuse(e?.message ?? String(e)); }
-  const all = repos.map((repo, n) => {
-    for (const i of docs[n]?.items ?? []) if (i.fm.updated) seen(repo.key, Date.parse(String(i.fm.updated)));
-    return { repo, doc: docs[n] };
-  });
-  return all.filter((r) => last.has(r.repo.key)).sort((a, b) => last.get(b.repo.key)! - last.get(a.repo.key)!);
+  return recentRepos(repos, docs).map((n) => ({ repo: repos[n], doc: docs[n] }));
 }
 
 /** `aleph issue list` and `aleph issue lint` with no repo: each recent repo. */
 function todoRecent(sub: "list" | "lint"): void {
-  const lists = recentRepos().filter((r) => r.doc);
+  const lists = listRecent().filter((r) => r.doc);
   if (sub === "lint") {
     const results = lists.map(({ repo, doc }) => ({ repo: repo.key, items: doc!.items.length, findings: todos.lint(doc!, itemExists(repo.key, doc!)) }));
     for (const r of results) for (const f of r.findings) console.error(`${r.repo} item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
@@ -752,34 +743,28 @@ function statusCmd(): void {
   const m = (positional[0] ?? "").match(/^(.+)-(\d+)$/) ?? refuse("usage: aleph status [<repo>-<n>] [--json]");
   const [, key, n] = m!;
   const repo = loadRegistry()[key];
-  let cwd = process.cwd();
-  let f: Facts;
+  let s: ItemState | undefined;
   if (repo) {
-    cwd = repo.path;
-    fetchOrigin(cwd);
-    try { f = facts(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
+    try { s = itemStates(repo, { fetch: true, items: [Number(n)] })[0]; } catch (e: any) { refuse(e?.message ?? String(e)); }
   } else {
+    const cwd = process.cwd();
     const snap = readFacts(cwd);
     if (!snap || snap.repo !== key) refuse(`no repo named ${key} in the registry, and no ${FACTS_REF} for it here`);
-    f = snap!;
+    s = derive(cwd, `refs/remotes/origin/${snap!.main}`, snap!, Number(n)) ?? undefined;
   }
-  const s = derive(cwd, `refs/remotes/origin/${f!.main}`, f!, Number(n)) ?? refuse(`${key} has no issue ${n}`);
+  if (!s) refuse(`${key} has no issue ${n}`);
   if (rest.includes("--json")) return out(s);
   console.log(`${s!.item} ${s!.state}: ${s!.why}`);
 }
 
 /** `aleph status` with no issue: the derived state of each open issue in each recent repo. */
 function statusRecent(): void {
-  const states = [];
-  for (const { repo, doc } of recentRepos()) {
+  const states: ItemState[] = [];
+  for (const { repo, doc } of listRecent()) {
     const open = (doc?.items ?? []).filter((i) => todos.status(i) === "open");
     if (!open.length) continue;
-    fetchOrigin(repo.path);
-    let f: Facts;
-    try { f = facts(repo, doc); } catch (e: any) { console.error(`warn: ${repo.key}: ${e?.message ?? e}`); continue; }
-    const main = `refs/remotes/origin/${f.main}`;
-    const landed = landedIndex(repo.path, main, repo.key);
-    for (const i of open) { const s = derive(repo.path, main, f, i.id, landed); if (s) states.push(s); }
+    try { states.push(...itemStates(repo, { fetch: true, doc, items: open.map((i) => i.id) })); }
+    catch (e: any) { console.error(`warn: ${repo.key}: ${e?.message ?? e}`); }
   }
   if (rest.includes("--json")) return out(states);
   if (!states.length) { console.log("no open items"); return; }

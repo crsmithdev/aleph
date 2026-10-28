@@ -10,7 +10,7 @@ import { readList, readLists, writeList } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
 import { normalizeDecision, writeDecision, type Decision } from "./decision.ts";
-import { derive, facts, itemOnMain, type Facts } from "./status.ts";
+import { itemOnMain, itemStates, type ItemState } from "./status.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allJobs, allRuns, expand, isLive, isOpen, lastReal, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 
@@ -146,17 +146,15 @@ function stillGoal(repo: Repo, id: number): todos.Item | null {
  */
 export function doneChecker(): (ref: string) => boolean {
   const reg = loadRegistry();
-  const known = new Map<string, Facts | null>();
+  const known = new Map<string, ItemState[]>();
   return (ref) => {
     const r = todos.parseRef(ref);
     const repo = r && reg[r.repo];
     if (!r || !repo) return false;
     if (!known.has(r.repo)) {
-      fetchOrigin(repo.path);
-      try { known.set(r.repo, facts(repo)); } catch { known.set(r.repo, null); }
+      try { known.set(r.repo, itemStates(repo, { fetch: true })); } catch { known.set(r.repo, []); }
     }
-    const f = known.get(r.repo);
-    return !!f && derive(repo.path, `refs/remotes/origin/${repo.main}`, f, r.id)?.state === "done";
+    return known.get(r.repo)!.find((s) => s.item === `${r.repo}-${r.id}`)?.state === "done";
   };
 }
 

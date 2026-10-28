@@ -5,9 +5,9 @@
  * `aleph todo add`, so the CLI stays the one writer.
  */
 import { join } from "node:path";
-import { allJobs, loadRegistry, allRuns, type Repo } from "../../jobs/lib/ledger.ts";
+import { allJobs, loadRegistry, type Repo } from "../../jobs/lib/ledger.ts";
 import { git } from "../../jobs/lib/git.ts";
-import { derive, facts, landedCommits, landedIndex } from "../../jobs/lib/status.ts";
+import { itemStates, landedCommits, recentRepos } from "../../jobs/lib/status.ts";
 import { readDecision } from "../../jobs/lib/decision.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
@@ -16,8 +16,6 @@ import * as todos from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { githubBase } from "../state.ts";
 
-const DAY = 24 * 3600_000;
-const RECENT_DAYS = 7;
 
 const labelsOf = (i: todos.Item): string[] => (Array.isArray(i.fm.labels) ? (i.fm.labels as string[]) : []);
 const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : String(v));
@@ -40,23 +38,12 @@ function row(repo: string, i: todos.Item): Row {
 function derived(repo: Repo, doc: todos.Doc, rows: Row[]): void {
   const goals = rows.filter((r) => r.labels.includes("goal"));
   if (!goals.length) return;
-  const main = `refs/remotes/origin/${repo.main}`;
-  let f, landed;
-  try { f = facts(repo, doc); landed = landedIndex(repo.path, main, repo.key); } catch { return; }
+  let states;
+  try { states = itemStates(repo, { fetch: false, doc, items: goals.map((r) => r.id) }); } catch { return; }
   for (const r of goals) {
-    const s = derive(repo.path, main, f, r.id, landed);
+    const s = states.find((x) => x.item === `${repo.key}-${r.id}`);
     if (s) { r.state = s.state; r.why = s.why; }
   }
-}
-
-/** The repos with a ledger run or an item update in the last week, latest first, as `aleph todo list` with no repo. */
-function recentRepos(repos: Repo[], docs: (todos.Doc | null)[]): number[] {
-  const since = Date.now() - RECENT_DAYS * DAY;
-  const last = new Map<string, number>();
-  const seen = (k: string, t: number) => { if (t >= since && t > (last.get(k) ?? 0)) last.set(k, t); };
-  for (const e of allRuns()) if (e.run.repo) seen(e.run.repo, Date.parse(e.run.started));
-  repos.forEach((r, n) => { for (const i of docs[n]?.items ?? []) if (i.fm.updated) seen(r.key, Date.parse(String(i.fm.updated))); });
-  return repos.map((_, n) => n).filter((n) => last.has(repos[n].key)).sort((a, b) => last.get(repos[b].key)! - last.get(repos[a].key)!);
 }
 
 function list(url: URL): Response {
@@ -96,7 +83,7 @@ function detail(params: Record<string, string>, url: URL): Response {
 
   const main = `refs/remotes/origin/${repo.main}`;
   let state = null;
-  try { state = derive(repo.path, main, facts(repo), n); } catch {}
+  try { state = itemStates(repo, { fetch: false, items: [n] })[0] ?? null; } catch {}
 
   const jobs = allJobs()
     .filter((runs) => runs[0].run.repo === repo.key && runs.some((e) => e.run.todo === n))
