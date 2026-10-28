@@ -52,6 +52,7 @@ beforeAll(() => {
 afterAll(() => lf.stop(true));
 beforeEach(() => { clearCache(); hits = []; status = 200; });
 
+const TABLE = new URLSearchParams("view=table");
 const call = (key: string, path: string, params: Record<string, string> = {}) => {
   const url = new URL("http://x" + path);
   return routes[key](new Request(url), params, url) as Promise<Response>;
@@ -132,7 +133,7 @@ test("the sessions tables scroll inside their own wrapper", async () => {
   const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
   expect(v.renderSessions(list)).toContain('<div class="tscroll"><table class="tbl">');
   const s: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
-  expect(v.renderSession(s)).toContain('<div class="tscroll"><table class="tbl">');
+  expect(v.renderSession(s, {}, TABLE)).toContain('<div class="tscroll"><table class="tbl">');
 });
 
 test("the list has a filter bar, 50 rows and a pager; the turn is a table", async () => {
@@ -148,9 +149,9 @@ test("the list has a filter bar, 50 rows and a pager; the turn is a table", asyn
   expect(v.renderTurn(t)).toContain('<table class="tbl">');
 });
 
-test("the Session page uses pageHead, idLink and when, in the shared column order", async () => {
+test("the Session page's table uses pageHead, idLink and when, in the shared column order", async () => {
   const s: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
-  const h = v.renderSession(s);
+  const h = v.renderSession(s, {}, TABLE);
   expect(h).toContain('<header class="ph"><h1>aleph</h1><span class="count">2</span>');
   expect(h).toContain(idLink("s1", "#/sessions/s1").replace('class="idl"', 'class="idl" title="s1"'));
   const heads = [...h.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
@@ -211,8 +212,96 @@ test("a factory session shows the job name and takes its cost from the ledger", 
     const d: any = await (await call("GET /api/sessions/:id", `/api/sessions/${JOB}`, { id: JOB })).json();
     expect(d.label).toBe("aleph-361");
     expect(v.renderSession(d)).toContain(">aleph-361</a>");
+    const c: any = await (await call("GET /api/sessions/:id/chat", `/api/sessions/${JOB}/chat`, { id: JOB })).json();
+    expect(c.label).toBe("aleph-361");
+    expect(c.turns[0].cost).toBe(1.25);
   } finally {
     TRACES.pop();
     if (saved === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = saved;
   }
+});
+
+const chat = async (id: string, q = "") => (await call("GET /api/sessions/:id/chat", `/api/sessions/${id}/chat${q}`, { id })).json() as Promise<any>;
+
+test("the chat route gives whole prompts and replies and each turn's tool calls in order", async () => {
+  const d = await chat("s1");
+  expect(d).toMatchObject({ id: "s1", project: "aleph", total: 2, from: 1 });
+  expect(d.turns[0]).toMatchObject({ n: 1, prompt: "prompt t1\nsecond line", model: "claude-opus", cost: 0.5, durationMs: 12000 });
+  expect(d.turns[0].output).toBe("x".repeat(600));
+  expect(d.turns[0].tools.map((c: any) => [c.name, c.args, c.error])).toEqual([["Bash", "ls", null], ["Read", "", "nope"]]);
+  expect(d.turns[0].tools[0].output).toBe("y".repeat(900));
+  expect((await call("GET /api/sessions/:id/chat", "/api/sessions/nope/chat", { id: "nope" })).status).toBe(404);
+});
+
+test("the chat route pages by from and limit", async () => {
+  const d = await chat("s1", "?from=2&limit=20");
+  expect(d.turns.map((t: any) => t.n)).toEqual([2]);
+  expect(d.from).toBe(2);
+  expect((await chat("s1", "?limit=1")).turns.map((t: any) => t.n)).toEqual([1]);
+});
+
+test("argSummary picks the key argument, also out of cut JSON", async () => {
+  const { argSummary } = await import("./api/sessions.ts");
+  expect(argSummary({ command: "bun test ui", description: "Run" })).toBe("bun test ui");
+  expect(argSummary('{"file_path":"/w/ui/lib.js","limit":3}')).toBe("/w/ui/lib.js");
+  expect(argSummary('{"description":"x","command":"echo \\"hi\\"\\nls", "more": "cut off her')).toBe('echo "hi" ls');
+  expect(argSummary({ pattern: "nextTick", path: "jobs" })).toBe("nextTick");
+  expect(argSummary({ todos: [] })).toBe('{"todos":[]}');
+});
+
+test("systemParts splits tags the user did not type from the text they did", async () => {
+  // @ts-ignore plain JS
+  const { systemParts } = await import("./lib.js");
+  expect(systemParts("<task-notification><summary>done</summary></task-notification>\n\nfix it")).toEqual({ system: [{ tag: "task-notification", body: "<summary>done</summary>" }], text: "fix it" });
+  expect(systemParts("hi\n<system-reminder>cut at 4 K")).toEqual({ system: [{ tag: "system-reminder", body: "cut at 4 K" }], text: "hi" });
+  expect(systemParts("a <b>bold</b> claim").system).toEqual([]);
+  const quoted = "System text (`<task-notification>`, `<system-reminder>`) folds.\nMore spec.";
+  expect(systemParts(quoted)).toEqual({ system: [], text: quoted });
+  expect(systemParts("ask\n  <system-reminder>\nnote\n</system-reminder>\nmore").system).toEqual([{ tag: "system-reminder", body: "note" }]);
+});
+
+test("the chat is the default: messages in Markdown, folded tool calls, one turn line, a toggle", async () => {
+  const d = await chat("s1");
+  d.turns[0].prompt = "<task-notification><summary>Agent done</summary></task-notification>";
+  d.turns[0].output = "line\n\n".repeat(30);
+  d.turns[1].output = "**bold** and `code`";
+  const h = v.renderSession(d, { id: "s1" }, new URLSearchParams());
+  expect(h).toContain('<button type="button" data-value="chat" aria-pressed="true">Chat</button>');
+  expect(h).toContain('<header class="ph"><h1>aleph</h1><span class="count">2</span>');
+  expect(h).toContain('<details class="sysc"><summary><span class="chip">task-notification</span><span class="peek">Agent done</span>');
+  expect(h).not.toContain('<div class="msg user md"><p>&lt;task');
+  expect(h).toContain('<div class="msg user md"><p>prompt t2 second line</p></div>');
+  expect(h).toContain("<strong>bold</strong> and <code>code</code>");
+  expect(h).toContain('<details class="tool"><summary><span class="tn">Bash</span><code class="ta">ls</code>');
+  expect(h).toContain('<details class="tool err"><summary><span class="tn">Read</span><span class="terr">Error</span>');
+  expect(h).toContain('<p class="tline"><a href="#/sessions/s1/turns/1">Turn 1</a><span class="dot">·</span>opus<span class="dot">·</span>12.0 s<span class="dot">·</span>$0.50');
+  expect(h).toContain(`<span class="time">${when(d.turns[0].start)}</span>`);
+  expect(h).toContain('<div class="clip cut">');
+  expect(h).toContain('<span class="of">2 of 2</span>');
+  expect(h).not.toContain("data-chat-from");
+  expect(v.renderSession({ ...d, turns: [{ ...d.turns[0], prompt: "<script>x</script>" }] }, {}, new URLSearchParams())).not.toContain("<script>");
+  expect(v.sessionView.api({ id: "a b" }, new URLSearchParams())).toBe("/api/sessions/a%20b/chat?limit=20");
+  expect(v.sessionView.api({ id: "a b" }, TABLE)).toBe("/api/sessions/a%20b");
+  expect(v.renderSession(await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json(), {}, TABLE)).toContain('data-value="table" aria-pressed="true"');
+});
+
+test("a long session shows 20 turns and a pager; a long turn folds its earlier tool calls", async () => {
+  const d = await chat("s1");
+  const tools = Array.from({ length: 30 }, (_, i) => ({ name: "Bash", args: `cmd ${i}`, input: "", output: "", error: i === 2 ? "x" : null, durationMs: 5 }));
+  const turns = Array.from({ length: 20 }, (_, i) => ({ ...d.turns[0], n: i + 1, tools }));
+  const h = v.renderSession({ ...d, total: 73, turns }, {}, new URLSearchParams());
+  expect(h.match(/<section class="turn"/g)?.length).toBe(20);
+  expect(h).toContain('<button type="button" data-chat-from="21">Show 20 more</button><span class="of">20 of 73</span>');
+  expect(h).toContain('<details class="tools-early"><summary>25 earlier tool calls <span class="terr">1 failed</span></summary>');
+  const one = v.chatTurn("s1", { ...d.turns[0], tools });
+  const shown = one.slice(one.indexOf("</details>", one.indexOf('class="ta">cmd 24<')) + "</details>".length);
+  expect([...shown.matchAll(/class="ta">(cmd \d+)</g)].map((m) => m[1])).toEqual(["cmd 25", "cmd 26", "cmd 27", "cmd 28", "cmd 29"]);
+});
+
+test("the sessions list's first prompt skips system text", async () => {
+  TRACES.push(trace("t8", "s3", "aleph", iso(2), { input: "<task-notification>agent finished</task-notification>" }), trace("t7", "s3", "aleph", iso(1), { input: "the real ask" }));
+  try {
+    const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
+    expect(list.sessions.find((s: any) => s.id === "s3").firstPrompt).toBe("the real ask");
+  } finally { TRACES.splice(-2); }
 });

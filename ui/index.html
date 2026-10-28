@@ -509,6 +509,52 @@ pre.stat b { color: var(--need); }
 .results, .writes { list-style: none; margin: 0; padding: 0; }
 .results li, .writes li { padding: 8px 0; border-bottom: 1px solid var(--rule-2); }
 .writes .tm { color: var(--muted); font-family: var(--mono); font-size: var(--fs-xs); }
+/* ---------- session chat (sessions.js renderSession): one reading column, the user in a bubble, the reply bare ---------- */
+.chat { max-width: 76ch; }
+.chat .turn { padding: 14px 0 18px; border-top: 1px solid var(--rule-2); }
+.chat .turn:first-child { border-top: 0; padding-top: 4px; }
+.chat .tline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; margin: 0 0 10px; font: 500 var(--fs-xs)/1.4 var(--num); font-variant-numeric: tabular-nums; color: var(--muted); }
+.chat .tline a { color: var(--ink-2); text-decoration: none; font-weight: 600; }
+.chat .tline a:hover, .chat .tline a:focus-visible { color: var(--ink); text-decoration: underline; }
+.chat .tline .dot { color: var(--rule); }
+.chat .msg { font-size: var(--fs-md); line-height: 1.6; overflow-wrap: anywhere; }
+.chat .msg > :first-child, .chat .msg .clip > :first-child { margin-top: 0; }
+.chat .msg p { margin: 0 0 8px; }
+.chat .msg ul, .chat .msg ol { margin: 0 0 8px; padding-left: 22px; }
+.chat .msg :last-child { margin-bottom: 0; }
+.chat .msg code { font-size: 0.86em; background: var(--sunk); padding: 0 3px; border-radius: 3px; }
+.chat .msg pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat .msg pre code { background: none; padding: 0; font-size: inherit; }
+.chat .msg.user { width: fit-content; max-width: min(88%, 64ch); margin: 0 0 12px auto; padding: 10px 14px; background: var(--sunk); border-radius: 12px; color: var(--ink); }
+.chat .msg.user .md pre, .chat .msg.user pre { background: var(--surface); }
+.chat .msg.reply { margin-top: 10px; color: var(--ink); }
+.chat .msg.reply.quiet { color: var(--muted); font-size: var(--fs-sm); }
+.chat .clip.cut { max-height: 24em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.chat button.unclip { all: unset; cursor: pointer; margin-top: 4px; font: 500 var(--fs-xs) var(--sans); color: var(--run); }
+.chat button.unclip:hover { text-decoration: underline; }
+.chat button.unclip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+.chat .sys { display: grid; gap: 2px; margin: 0 0 10px; }
+.chat details { margin: 0; padding: 0; border: 0; min-width: 0; }
+.chat details.sysc > summary { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: var(--fs-xs); color: var(--muted); }
+.chat details.sysc > summary .chip { flex: none; margin: 0; font-family: var(--mono); }
+.chat details.sysc > summary .peek { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat details pre { margin: 4px 0 8px 14px; padding: 8px 10px; max-height: 360px; overflow: auto; background: var(--sunk); border-radius: 4px; font: var(--fs-xs)/1.55 var(--mono); color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat .tools { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; margin: 0 0 4px; padding-left: 10px; border-left: 2px solid var(--rule-2); }
+.chat details.tool > summary, .chat details.tools-early > summary { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: var(--fs-sm); color: var(--ink-2); }
+.chat details.tools-early > summary { color: var(--muted); }
+.chat details > summary::before { flex: none; }
+.chat details.tool .tn { flex: none; font-weight: 600; color: var(--ink); }
+.chat details.tool .ta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.chat details.tool .td { flex: none; margin-left: auto; padding-left: 8px; font: 500 var(--fs-xs) var(--num); font-variant-numeric: tabular-nums; color: var(--muted); }
+.chat .terr { flex: none; font-size: var(--fs-xs); font-weight: 600; color: var(--stuck); background: var(--stuck-bg); padding: 0 6px; border-radius: 3px; }
+.chat details.tool.err .tn { color: var(--stuck); }
+.chat details.tool .tio h4 { margin: 6px 0 0 14px; font: 600 var(--fs-xs) var(--sans); color: var(--muted); }
+.chat details.tools-early[open] { padding-bottom: 4px; border-bottom: 1px dashed var(--rule-2); margin-bottom: 2px; }
+.chat details.tools-early > details.tool { padding-left: 14px; }
+@media (max-width: 720px) {
+  .chat .msg.user { max-width: 92%; }
+  .chat details.tool .td { display: none; }
+}
 </style>
 </head>
 <body>

@@ -3,6 +3,8 @@ import { basename } from "node:path";
 import { LangfuseError, config, observations, traces } from "../langfuse.ts";
 import { allRuns, loadRegistry } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
+// @ts-ignore plain JS, shared with the page
+import { systemParts } from "../lib.js";
 
 const line = (s: unknown, max: number) => {
   const t = typeof s === "string" ? s : s == null ? "" : JSON.stringify(s);
@@ -13,6 +15,7 @@ const cut = (s: unknown, max: number) => {
   const t = typeof s === "string" ? s : s == null ? "" : JSON.stringify(s);
   return t.length > max ? t.slice(0, max) + "…" : t;
 };
+const text = (s: unknown) => (typeof s === "string" ? s : s == null ? "" : JSON.stringify(s));
 const ms = (iso?: string) => Date.parse(iso ?? "") || 0;
 
 /** A trace's project: its name, else the cwd's basename. */
@@ -68,6 +71,44 @@ const durationMs = (o: any): number | null => {
   return typeof o.latency === "number" ? Math.round(o.latency * 1000) : null; // Langfuse reports latency in seconds
 };
 
+/** The first prompt the user typed: system text (a `<task-notification>`, a `<system-reminder>`) skipped. */
+const firstTyped = (ts: any[]) => ts.map((t) => systemParts(text(t.input)).text).find(Boolean) ?? text(ts[0]?.input);
+
+/** A tool input as an object, when it is one or is JSON for one. */
+function inputObject(input: unknown): Record<string, unknown> | null {
+  if (input && typeof input === "object" && !Array.isArray(input)) return input as Record<string, unknown>;
+  if (typeof input !== "string") return null;
+  try { const o = JSON.parse(input); return o && typeof o === "object" && !Array.isArray(o) ? o : null; } catch { return null; }
+}
+
+const ARG_KEYS = ["command", "pattern", "file_path", "notebook_path", "url", "query", "skill", "description", "prompt", "path"];
+/** A tool call's key argument on one line: `bun test ui` for Bash, the path for Read. A cut JSON input still yields its first key's string. */
+export function argSummary(input: unknown, max = 100): string {
+  const o = inputObject(input);
+  if (o) {
+    const key = ARG_KEYS.find((k) => typeof o[k] === "string" && o[k]) ?? Object.keys(o).find((k) => typeof o[k] === "string" && o[k]);
+    return key ? line(o[key], max) : line(o, max);
+  }
+  const s = text(input);
+  for (const k of ARG_KEYS) {
+    const m = s.match(new RegExp(`"${k}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`));
+    if (m) { try { return line(JSON.parse(`"${m[1]}"`), max); } catch { return line(m[1], max); } }
+  }
+  return line(s, max);
+}
+const pretty = (input: unknown) => { const o = inputObject(input); return o ? JSON.stringify(o, null, 2) : text(input); };
+
+/** A turn's tool calls in start order, without those a subagent made (the turn page has those). */
+function toolCalls(obs: any[]) {
+  const agents = new Set(obs.filter((o) => isType(o, "agent") && o.name !== "turn").map((o) => o.id));
+  return obs.filter((o) => isType(o, "tool") && !agents.has(o.parentObservationId))
+    .sort((a, b) => ms(a.startTime) - ms(b.startTime))
+    .map((o) => ({
+      name: o.name, args: argSummary(o.input), input: pretty(o.input), output: text(o.output),
+      error: o.level === "ERROR" ? o.statusMessage || "error" : null, durationMs: durationMs(o),
+    }));
+}
+
 export const routes: Routes = {
   "GET /api/sessions": async (_req, _p, url) => {
     const days = Number(url.searchParams.get("days") ?? 7);
@@ -88,7 +129,7 @@ export const routes: Routes = {
           id,
           ...(job ? { label: job.name } : {}),
           project: projectOf(ts[0]),
-          firstPrompt: line(ts[0].input, 160),
+          firstPrompt: line(firstTyped(ts), 160),
           turns: ts.length,
           start: ts[0].timestamp,
           last: ts[ts.length - 1].timestamp,
@@ -117,6 +158,32 @@ export const routes: Routes = {
         model: modelOf(all[i]),
       }));
       return Response.json({ base: cfg.baseUrl, id: params.id, ...labelOf(params.id), project: projectOf(ts[0]), taskTypes: taskTypes(ts), turns });
+    } catch (e) { return fail(e); }
+  },
+
+  "GET /api/sessions/:id/chat": async (_req, params, url) => {
+    try {
+      const { cfg, ts } = await sessionTraces(params.id, url.searchParams.get("project") || null);
+      if (!ts.length) return Response.json({ error: `No session ${params.id}` }, { status: 404 });
+      const from = Math.max(1, Math.floor(Number(url.searchParams.get("from")) || 1));
+      const limit = Math.min(50, Math.max(1, Math.floor(Number(url.searchParams.get("limit")) || 20)));
+      const page = ts.slice(from - 1, from - 1 + limit);
+      const all = await Promise.all(page.map((t) => observations(cfg, t.id)));
+      const turns = page.map((t, i) => ({
+        n: from + i,
+        traceId: t.id,
+        start: t.timestamp,
+        prompt: text(t.input),
+        output: text(t.output),
+        model: modelOf(all[i]),
+        durationMs: durationMs(t),
+        cost: t.totalCost ?? 0,
+        tools: toolCalls(all[i]),
+      }));
+      // A factory worker's session is one turn Langfuse prices at 0; the ledger has its cost, as on the list.
+      const job = jobs().get(params.id);
+      if (ts.length === 1 && turns.length === 1 && !turns[0].cost && job?.cost) turns[0].cost = job.cost;
+      return Response.json({ base: cfg.baseUrl, id: params.id, ...labelOf(params.id), project: projectOf(ts[0]), taskTypes: taskTypes(ts), total: ts.length, from, turns });
     } catch (e) { return fail(e); }
   },
 
