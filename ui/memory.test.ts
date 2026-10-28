@@ -112,11 +112,20 @@ test("vault misses runs once within ALEPH_UI_CACHE_TTL, and the answer says when
     expect(a.misses).toEqual({ days: 7, recalls: 1 });
     expect(b.cachedAt).toBe(a.cachedAt);
     await Bun.sleep(1600);
-    await at("/api/memory");
-    // The stale answer comes back at once; the reload runs in the background.
+    // The stale answer comes back at once, with the old cachedAt; the reload runs in the background.
+    const c: any = await (await at("/api/memory")).json();
+    expect(c.cachedAt).toBe(a.cachedAt);
     const lines = () => readFileSync(log, "utf8").trim().split("\n").length;
-    for (let i = 0; i < 100 && lines() < 2; i++) await Bun.sleep(20);
+    const deadline = Date.now() + 5000;
+    while (lines() < 2 && Date.now() < deadline) await Bun.sleep(20);
     expect(lines()).toBe(2);
+    // The stub has run, but the cache stores its answer a moment later.
+    let d: any = c;
+    while (d.cachedAt === a.cachedAt && Date.now() < deadline) {
+      await Bun.sleep(20);
+      d = await (await at("/api/memory")).json();
+    }
+    expect(d.cachedAt).not.toBe(a.cachedAt);
   } finally {
     process.env.PATH = saveEnv.PATH;
     if (saveEnv.TTL === undefined) delete process.env.ALEPH_UI_CACHE_TTL; else process.env.ALEPH_UI_CACHE_TTL = saveEnv.TTL;
