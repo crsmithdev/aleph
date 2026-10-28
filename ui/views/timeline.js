@@ -1,7 +1,8 @@
-// The Activity view: an ECharts swimlane chart (30 days, one lane per
-// kind), then a reverse-time table, one row per job, session, land, issue and note, 100 to a
+// The Activity view: an ECharts stacked area chart (events per day, 30 days, one series per
+// kind), then a reverse-time table, one compact card per job, session, land, issue and note, 100 to a
 // page with Older and Newer controls. `data` is /api/timeline: { rows, now, strip, langfuse }.
-import { chart, clock, empty, esc, money, readTokens } from "../lib.js";
+import { chart, empty, esc, money, readTokens } from "../lib.js";
+import { compactCard, issueCard, jobCard, landCard } from "./cards.js";
 
 export const view = {
   path: "/timeline",
@@ -33,23 +34,25 @@ const STYLE = `<style>
 .tl .strip { width: 100%; height: 230px; margin-bottom: 12px; }
 .tl .tscroll { overflow-x: auto; max-width: 100%; }
 .tl .tbl { border-collapse: collapse; width: 100%; font-size: 13px; }
-.tl .tbl td { padding: 3px 10px 3px 0; line-height: 1.45; border-bottom: 1px solid var(--rule-2); text-align: left; vertical-align: baseline; white-space: nowrap; max-width: 28em; overflow: hidden; text-overflow: ellipsis; }
+.tl .tbl td { padding: 4px 10px 4px 0; border-bottom: 1px solid var(--rule-2); text-align: left; vertical-align: middle; white-space: nowrap; }
 .tl .tbl th { padding: 3px 10px 3px 0; font: 600 12px var(--sans); color: var(--muted); text-align: left; white-space: nowrap; }
-.tl .tbl .t { color: var(--muted); }
-.tl .tbl .chip { display: inline-block; font: 600 12px var(--sans); padding: 1px 8px; border-radius: 3px; background: var(--sunk); color: var(--muted); }
-.tl .tbl .chip.run { background: var(--run-bg); color: var(--run); } .tl .tbl .chip.done { background: var(--done-bg); color: var(--done); }
-.tl .tbl .chip.need { color: var(--need); } .tl .tbl .chip.stuck { background: var(--stuck-bg); color: var(--stuck); }
-.tl .tbl td.ttl { width: 99%; min-width: 16em; max-width: none; white-space: normal; overflow-wrap: anywhere; }
+.tl .tbl .t { color: var(--muted); width: 1%; }
+.tl .tbl td.cardc { width: 100%; max-width: 0; overflow: hidden; }
+.tl .tbl td.act { width: 1%; white-space: normal; }
 .tl .pager { display: flex; align-items: center; gap: 12px; padding: 10px 0; font: 13px var(--sans); color: var(--muted); }
 .tl .tbl .num { font-variant-numeric: tabular-nums; }
-.tl .tbl td.det { color: var(--muted); font-size: 12.5px; }
-.tl .tbl td.det .k { margin-left: 8px; }
-.tl .tbl td.act { white-space: normal; }
 .tl .tbl .cancel { font: 12px var(--sans); cursor: pointer; }
 .tl .tbl .cancel.arm { color: var(--stuck); }
 .tl .tbl .cmsg { margin-left: 8px; font: 12px var(--sans); color: var(--muted); }
 .tl .tbl .cmsg.err { color: var(--stuck); }
-.tl .tbl td.det .k:first-child { margin-left: 0; }
+.card.compact { display: block; max-width: 100%; min-width: 0; font-size: 13px; line-height: 1.45; }
+.card.compact > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; }
+.card.compact .id { flex: none; font: 500 12.5px var(--mono); color: var(--muted); }
+.card.compact .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.card.compact .badge { flex: none; }
+.card.compact .c2 { color: var(--muted); font-size: 12.5px; gap: 14px; }
+.card.compact .c2 .k { flex: none; }
+.card.compact .c2 .fk { color: var(--muted); }
 </style>`;
 
 const TONE = { running: "run", landed: "done", passed: "done", done: "done", "needs-you": "need", failed: "stuck", stuck: "stuck", dropped: "quiet" };
@@ -96,22 +99,38 @@ export function cancelTarget(e, closed = new Set()) {
 }
 const CANCEL_REASON = "cancelled from the Activity page";
 
-/** One stream row: Time, Duration, Kind chip, Id link, Title, Cost, Details, and a Cancel control where one applies. */
-export function renderEvent(e, now = Date.now(), closed = new Set()) {
-  const det = (e.details ?? []).map(([k, v]) => `<span class="k">${esc(k)} ${esc(v)}</span>`).join("");
-  const m = mark(e);
-  const chip = `<span class="chip ${m.tone}" title="${esc(`${e.kind} ${e.what}${e.state ? `: ${e.state}` : ""}`)}">${esc(e.kind)}</span>` +
-    (running(e) ? ` <span class="chip run">running</span>` : "");
+const detail = (e, k) => e.details?.find(([key]) => key === k)?.[1];
+
+/** The compact card of an event, by its kind: the job, land or issue card, or a plain one for a session or note. */
+export function eventCard(e, now = Date.now()) {
   const id = e.id ?? (e.kind === "job" || e.kind === "land" ? e.title : "");
-  return `<tr class="evr" data-kind="${esc(e.kind)}"><td class="t num">${esc(when(e))}</td><td class="num">${esc(duration(e, now))}</td>` +
-    `<td>${chip}</td><td>${id ? `<a href="${esc(e.href)}">${esc(id)}</a>` : ""}</td>` +
-    `<td class="ttl">${esc(e.title)}</td><td class="num">${e.cost == null ? "" : esc(money(e.cost))}</td>` +
-    `<td class="det">${det}</td>` +
+  const iso = new Date(now).toISOString();
+  if (e.kind === "job") {
+    return jobCard({ name: id, item: { title: e.title }, state: e.state, started: e.at, ended: e.end, cost: e.cost, model: detail(e, "model"), href: e.href }, "compact", iso);
+  }
+  if (e.kind === "land") {
+    return landCard({ name: id, item: { title: e.title }, state: "landed", started: e.at, ended: e.at, commit: e.commit ?? detail(e, "commit"), cost: e.cost, href: e.href }, "compact", iso);
+  }
+  if (e.kind === "issue") {
+    const day = String(e.at).slice(0, 10), opened = e.what === "opened";
+    const notes = detail(e, "notes");
+    return issueCard({ id, title: e.title, status: e.state, href: e.href, labels: (detail(e, "labels") ?? "").split(",").filter(Boolean), notes: notes ? Number(notes) : 0, created: opened ? day : "", updated: opened ? "" : day }, "compact");
+  }
+  const fmt = (k, v) => [k, esc(v)];
+  return compactCard({
+    kind: e.kind, id, href: e.href, title: e.title, badge: { text: e.kind === "note" ? "Note" : "Session", tone: e.kind === "session" ? "need" : "quiet" },
+    facts: [fmt("Took", duration(e, now)), ["Cost", e.cost == null ? "" : esc(money(e.cost))], ...(e.details ?? []).map(([k, v]) => fmt(k, v))],
+  });
+}
+
+/** One stream row: Time, the compact card of its kind, and a Cancel control where one applies. */
+export function renderEvent(e, now = Date.now(), closed = new Set()) {
+  return `<tr class="evr" data-kind="${esc(e.kind)}"><td class="t num">${esc(when(e))}</td><td class="cardc">${eventCard(e, now)}</td>` +
     `<td class="act">${cancelTarget(e, closed) ? `<button type="button" class="cancel" data-cancel>Cancel</button>` : ""}<span class="cmsg" role="status"></span></td></tr>`;
 }
 
 export const PAGE = 100;
-const HEAD = "<thead><tr><th>Time</th><th>Duration</th><th>Kind</th><th>Id</th><th>Title</th><th>Cost</th><th>Details</th><th></th></tr></thead>";
+const HEAD = "<thead><tr><th>Time</th><th>Event</th><th></th></tr></thead>";
 
 /** Page `page` (0 = newest) of the rows, 100 to a page, with Older and Newer controls. */
 export function renderStream(rows, page = 0, now = Date.now(), size = PAGE) {
@@ -131,76 +150,38 @@ export function renderTimeline(d) {
   const rows = d.rows ?? [];
   return `${STYLE}<div class="page tl"><h1>Activity</h1>${note}` +
     `<div class="kinds" role="group" aria-label="Kinds">${KINDS.map(([k, label]) => `<label><input type="checkbox" data-kind="${k}" checked> ${esc(label)}</label>`).join("")}</div>` +
-    `<div class="strip" id="tl-strip" role="img" aria-label="Swimlanes: jobs, lands, issues, sessions and notes, last 30 days"></div>` +
+    `<div class="strip" id="tl-strip" role="img" aria-label="Events per day by kind, stacked, last 30 days"></div>` +
     `<div id="tl-stream">${renderStream(rows, 0, d.now ? Date.parse(d.now) : Date.now())}</div>` +
     (rows.length ? "" : empty("Nothing happened yet.", "Jobs, issues, sessions, lands and notes show up here.")) + `</div>`;
 }
 
-const DAY = 86400_000;
-const LANE_TONE = { land: "done", issue: "run", session: "need", note: "ink" };
-const toneOf = (it) => it.kind === "job" ? (TONE[it.state] ?? "run") : LANE_TONE[it.kind];
+const DAYS = 30;
+const SERIES_TONE = { job: "run", land: "done", issue: "need", session: "focus", note: "ink" };
 
 /**
- * The strip's ECharts option: a swimlane chart, one lane per enabled kind on the y axis and the
- * last 30 days on the x axis. Jobs and sessions are bars (a job with no end runs to `now`);
- * lands, issues and notes are points. A datum is [lane, start, end, name, tone, day, kind].
+ * The strip's ECharts option: a stacked area chart of events per day, one line series per shown
+ * kind, over the last 30 days ending at `now`. Series are stacked and have an area fill.
  */
 export function stripOption(strip, kinds = KINDS.map(([k]) => k), now = Date.now()) {
-  const lanes = KINDS.filter(([k]) => kinds.includes(k));
-  const data = [];
-  for (const it of strip) {
-    const lane = lanes.findIndex(([k]) => k === it.kind);
-    if (lane < 0) continue;
-    const start = Date.parse(it.start);
-    const bar = it.kind === "job" || it.kind === "session";
-    const end = bar ? Math.max(start, it.end ? Date.parse(it.end) : now) : start;
-    data.push({ name: it.name, value: [lane, start, end, it.name, toneOf(it), it.day, it.kind] });
-  }
-  const color = (tone) => {
-    const t = typeof document === "undefined" ? {} : readTokens();
-    return t[tone] || t.ink || "#888";
-  };
+  const days = Array.from({ length: DAYS }, (_, i) => {
+    const d = new Date(now), x = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (DAYS - 1 - i), 12);
+    return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
+  });
+  const shown = KINDS.filter(([k]) => kinds.includes(k));
+  const t = typeof document === "undefined" ? {} : readTokens();
   return {
     animation: false,
-    grid: { left: 64, right: 12, top: 8, bottom: 56 },
+    grid: { left: 36, right: 12, top: 28, bottom: 28 },
     legend: { show: false },
-    tooltip: {
-      trigger: "item",
-      formatter: (p) => {
-        const [, s, e, name, , , kind] = p.value;
-        const range = e > s ? `${clock(new Date(s).toISOString())} – ${clock(new Date(e).toISOString())}` : clock(new Date(s).toISOString());
-        return `${esc(kind)}: ${esc(name)}<br>${esc(range)}`;
-      },
-    },
-    xAxis: { type: "time", min: now - 30 * DAY, max: now, axisLabel: { hideOverlap: true } },
-    yAxis: { type: "category", inverse: true, data: lanes.map(([, label]) => label), axisTick: { show: false }, splitLine: { show: true } },
-    dataZoom: [
-      { type: "inside", xAxisIndex: 0, filterMode: "none" },
-      { type: "slider", xAxisIndex: 0, height: 18, bottom: 6, filterMode: "none" },
-    ],
-    series: [{
-      name: "Timeline", type: "custom", clip: true, data,
-      encode: { x: [1, 2], y: 0 },
-      renderItem: (params, api) => {
-        const lane = api.value(0);
-        const a = api.coord([api.value(1), lane]), b = api.coord([api.value(2), lane]);
-        const band = api.size([0, 1])[1];
-        const fill = color(api.value(4));
-        if (api.value(2) > api.value(1)) {
-          const h = Math.min(band * 0.5, 16), w = Math.max(b[0] - a[0], 3);
-          const rect = echartsClip(params, { x: a[0], y: a[1] - h / 2, width: w, height: h });
-          return rect && { type: "rect", shape: rect, style: { fill } };
-        }
-        return { type: "circle", shape: { cx: a[0], cy: a[1], r: 4 }, style: { fill } };
-      },
-    }],
+    tooltip: { trigger: "axis" },
+    xAxis: { type: "category", boundaryGap: false, data: days, axisLabel: { hideOverlap: true, formatter: (v) => v.slice(5) } },
+    yAxis: { type: "value", minInterval: 1 },
+    series: shown.map(([k, name]) => {
+      const color = t[SERIES_TONE[k]] || t.ink;
+      const counts = days.map((day) => strip.filter((it) => it.kind === k && it.day === day).length);
+      return { name, type: "line", stack: "events", areaStyle: { opacity: 0.7 }, symbol: "none", lineStyle: { width: 1 }, ...(color ? { color } : {}), data: counts };
+    }),
   };
-}
-
-// Clip a rect to the grid so a zoomed bar does not spill over the axis.
-function echartsClip(params, r) {
-  const cs = params.coordSys, x1 = Math.max(r.x, cs.x), x2 = Math.min(r.x + r.width, cs.x + cs.width);
-  return x2 > x1 || x2 === x1 && r.width === 0 ? { x: x1, y: r.y, width: Math.max(x2 - x1, 0), height: r.height } : null;
 }
 
 /** Shift-click on a kind: show only that kind; on the only kind shown, show all kinds again. */
@@ -223,8 +204,7 @@ export function mountTimeline(root, d) {
   };
   if (d?.strip && globalThis.echarts) {
     try {
-      c = chart(root.querySelector("#tl-strip"), stripOption(d.strip));
-      c.on("click", (p) => { const it = p.value && (d.strip ?? []).find((i) => i.name === p.value[3] && Date.parse(i.start) === p.value[1]); if (it?.href) location.hash = it.href; });
+      c = chart(root.querySelector("#tl-strip"), stripOption(d.strip, undefined, now));
     } catch (e) { console.error("timeline strip failed", e); }
   }
   const boxes = [...root.querySelectorAll(".kinds input")];
@@ -237,7 +217,7 @@ export function mountTimeline(root, d) {
     labelShift = false;
     if (shift) soloKind(on, box.dataset.kind); else box.checked ? on.add(box.dataset.kind) : on.delete(box.dataset.kind);
     for (const b of boxes) b.checked = on.has(b.dataset.kind);
-    page = 0; show(); c?.setOption(stripOption(d?.strip ?? [], [...on]), true);
+    page = 0; show(); c?.setOption(stripOption(d?.strip ?? [], [...on], now), true);
   });
   // Rows by position on the page, so a click finds its event again after a redraw.
   const CONFIRM_MS = 5000;

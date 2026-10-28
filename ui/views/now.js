@@ -2,6 +2,7 @@
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
 import { actMessages, clock, cmd, diffHtml, esc, money, openDiffs, span } from "../lib.js";
+import { act, actMsg, checkFacts, fact, itemId, landCard, shell as jobCard, title, trailerLine } from "./cards.js";
 
 export const view = {
   path: "/",
@@ -24,25 +25,6 @@ export const view = {
 /** The count of a section: `N / cap` where a cap applies. */
 const section = (id, title, n, body, cap) =>
   `<div class="sh"><h2 id="h-${id}">${esc(title)}</h2><span class="count">${n}${cap > 0 ? ` / ${cap}` : ""}</span></div>${body}`;
-
-const itemId = (j) => `<span class="id">${esc(j.name)}</span>`;
-const title = (j) => `<h3>${esc(j.item?.title || j.name)}</h3>`;
-/** A button the page wires to /api/<verb>/<name>; Land and Drop ask for a second click. */
-const actMsg = (name) => (actMessages.has(name) ? `<span class="act-msg" role="alert">${esc(actMessages.get(name))}</span>` : "");
-
-const act = (verb, name, label, primary = false) =>
-  `<button class="act${primary ? " primary" : ""}" type="button" data-act="${verb}" data-name="${esc(name)}" data-label="${esc(label)}">${esc(label)}</button>`;
-const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
-/** The checks of a run as facts: `Tests 71 s ✓`. */
-const checkFacts = (j) =>
-  (j.checks || []).map((c) => fact(c.name.charAt(0).toUpperCase() + c.name.slice(1), `${esc(String(c.seconds))} s ${c.ok ? "✓" : "✗"}`)).join("");
-
-/** The trailers of a job as one small line: `Item aleph-114 · Job 20261027-… · Held-by Chris`; empty when it has none. */
-const trailerLine = (j) =>
-  j.trailers?.length ? `<p class="trailers-line">${j.trailers.map((t) => `${esc(t.key)} ${esc(t.value)}`).join(" · ")}</p>` : "";
-
-/** One job card, large (id and title, facts, a trailers line) or small (two lines). */
-const jobCard = (size, cls, inner, tag = "article") => `<${tag} class="job-card ${size} ${cls}">${inner}</${tag}>`;
 
 /** An empty section on this page: one quiet line. */
 const empty = (line) => `<div class="empty"><p class="hint">${esc(line)}</p></div>`;
@@ -171,22 +153,9 @@ export function renderRunning(s) {
   return section("run", "Running", s.running.length, rows || empty("Nothing is running."), s.factory.liveCap);
 }
 
-/** "14:05" for a land today, "26 Oct 14:05" for an older one. */
-const landedAt = (iso, now) =>
-  new Date(iso).toDateString() === new Date(now).toDateString() ? clock(iso)
-    : `${new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} ${clock(iso)}`;
-
 /** Lands: land runs in progress first, then the latest landed. */
 export function renderLands(s) {
-  const rows = s.delivered.map((j) => {
-    const landed = j.state === "landed";
-    const sha = j.commit ? esc(j.commit.slice(0, 7)) : "";
-    const commit = j.commit ? (j.commitUrl ? `<a href="${esc(j.commitUrl)}"><code>${sha}</code></a>` : `<code>${sha}</code>`) : "";
-    return jobCard("big", "del", `<div class="ih">${itemId(j)}${title(j)}<span class="badge ${landed ? "done" : "run"}">${landed ? "Landed" : "Landing"}</span></div>` +
-      `<dl class="facts">${commit ? fact("Commit", commit) : ""}${landed && j.ended ? fact("Landed", esc(landedAt(j.ended, s.now))) : ""}${!landed ? fact("Started", esc(clock(j.started))) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${checkFacts(j)}</dl>` +
-      trailerLine(j) +
-      (j.check === "open" || actMessages.has(j.name) ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${actMsg(j.name)}</div>` : ""));
-  }).join("");
+  const rows = s.delivered.map((j) => landCard(j, "full", s.now)).join("");
   return section("del", "Lands", s.delivered.length, rows || empty("Nothing has landed yet."));
 }
 export const renderDelivered = renderLands;

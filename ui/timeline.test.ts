@@ -147,14 +147,21 @@ describe("timeline api", () => {
     expect(t.strip!.find((i) => i.name === "fac-2")).toMatchObject({ kind: "job", end: null, day: dayKey(0) });
     expect(t.strip!.find((i) => i.kind === "note")!.end).toBeNull();
     const opt = stripOption(t.strip!, undefined, now.getTime());
-    expect(opt.yAxis.data).toEqual(["Jobs", "Lands", "Issues", "Sessions", "Notes"]);
-    const jobs = opt.series[0].data.filter((d: any) => d.value[6] === "job");
-    const f1 = jobs.find((d: any) => d.name === "fac-1").value, f2 = jobs.find((d: any) => d.name === "fac-2").value;
-    expect(f1[2] - f1[1]).toBe(3600_000);
-    expect(f2[2]).toBe(now.getTime());
-    const some = stripOption(t.strip!, ["job"], now.getTime());
-    expect(some.yAxis.data).toEqual(["Jobs"]);
-    expect(some.series[0].data.every((d: any) => d.value[6] === "job")).toBe(true);
+    expect(opt.series.map((x: any) => x.name)).toEqual(["Jobs", "Lands", "Issues", "Sessions", "Notes"]);
+    for (const x of opt.series) expect(x).toMatchObject({ type: "line", stack: "events" }), expect(x.areaStyle).toBeDefined();
+    expect(opt.xAxis.data).toHaveLength(30);
+    expect(opt.xAxis.data.at(-1)).toBe(dayKey(0));
+    const series = (n: string) => opt.series.find((x: any) => x.name === n).data;
+    expect(series("Jobs").reduce((a: number, b: number) => a + b, 0)).toBe(3);
+    expect(series("Jobs").at(-1)).toBe(2);
+    expect(series("Sessions").reduce((a: number, b: number) => a + b, 0)).toBe(2);
+  });
+
+  test("hiding a kind removes its series", async () => {
+    const t = await timeline({ now });
+    const some = stripOption(t.strip!, ["job", "note"], now.getTime());
+    expect(some.series.map((x: any) => x.name)).toEqual(["Jobs", "Notes"]);
+    expect(stripOption(t.strip!, [], now.getTime()).series).toEqual([]);
   });
 
   test("the route validates before", async () => {
@@ -169,26 +176,34 @@ describe("timeline view", () => {
     const html = renderTimeline(t);
     expect(html).toContain('id="tl-stream"');
     expect(html).toContain('href="#/jobs/fac-2"');
-    expect(html).toContain('<span class="chip run">running</span>');
+    expect(html).toContain('<span class="badge run">Running</span>');
     expect(t.rows!.filter((r) => r.kind === "job" && r.title === "fac-1")).toHaveLength(1);
     expect(t.rows!.find((r) => r.title === "fac-1")).toMatchObject({ state: "needs-you", end: at(0, 10) });
     expect(view.path).toBe("/timeline");
     expect(typeof view.mount).toBe("function");
   });
 
-  test("a job row has its chip, id link, plain title, cost and Details in their cells", () => {
+  test("each table row holds the compact card of its kind", async () => {
+    const t = await timeline({ now });
+    const html = renderStream(t.rows!);
+    for (const kind of ["job", "land", "issue", "session", "note"]) {
+      expect(html).toMatch(new RegExp(`<tr class="evr" data-kind="${kind}"><td[^>]*>[^<]*</td><td class="cardc"><div class="card compact ${kind}">`));
+    }
+    expect(html.match(/<tr class="evr"/g)!.length).toBe(html.match(/class="card compact /g)!.length);
+  });
+
+  test("a job row has its badge, id link, title, duration, cost and model in the compact card", () => {
     const h = renderEvent({ at: "2026-10-27T10:00:00", end: "2026-10-27T10:25:00", kind: "job", what: "started", state: "landed", id: "aleph-9", title: "Do it", href: "#/jobs/aleph-9", project: "aleph", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] });
-    for (const t of ['>job</span>', '<td class="num">25m</td>', '<td><a href="#/jobs/aleph-9">aleph-9</a></td>', '<td class="ttl">Do it</td>', '<td class="num">$1.50</td>', '<td class="det"><span class="k">took 25m</span><span class="k">model opus</span></td>']) expect(h).toContain(t);
-    expect(h).not.toMatch(/[▷■⬆○✓✕◆✎]/);
+    for (const t of ['<span class="badge done">Landed</span>', '<a class="id" href="#/jobs/aleph-9">aleph-9</a>', 'title="Do it">Do it</span>', "Took</span> 25m", "Cost</span> $1.50", "Model</span> opus"]) expect(h).toContain(t);
     expect(h.match(/<a /g)).toHaveLength(1);
-    expect(h).not.toContain("running");
+    expect(h).not.toContain("Running");
   });
 
   test("a running job counts its duration to now", () => {
     const e = { at: "2026-10-27T10:00:00", kind: "job", what: "started", state: "running", title: "j", id: "j", href: "#/jobs/j" };
     expect(duration(e, Date.parse("2026-10-27T10:40:00"))).toBe("40m");
     expect(renderEvent(e, Date.parse("2026-10-27T11:05:00"))).toContain("1h05m");
-    expect(renderEvent(e)).toContain("running");
+    expect(renderEvent(e)).toContain("Running");
   });
 
   test("the stream pages at 100 rows with Older and Newer", () => {
@@ -204,15 +219,15 @@ describe("timeline view", () => {
 
   test("an issue row shows its labels; a row without cost has an empty cost cell", () => {
     const h = renderEvent({ at: "2026-10-26T00:00:00", kind: "issue", what: "opened", state: "open", title: "aleph-3 x", href: "#/issues/aleph/3", dateOnly: true, details: [["labels", "goal,ui"]] });
-    expect(h).toContain("labels goal,ui");
-    expect(h).toContain('<td class="num"></td><td class="det">');
+    expect(h).toContain("Labels</span> goal, ui");
+    expect(h).not.toContain("Cost");
   });
 
   test("the title is HTML-escaped", () => {
     const h = renderEvent({ at: "2026-10-27T10:00:00Z", kind: "job", what: "started", title: "Fix <it>", href: "#/jobs/x", details: [["model", "<b>"]] });
     expect(h).toContain("Fix &lt;it&gt;");
     expect(h).not.toContain("<it>");
-    expect(h).toContain("model &lt;b&gt;");
+    expect(h).toContain("Model</span> &lt;b&gt;");
   });
 
   test("the page has all five kinds checked, the strip, a header row and rows of several kinds", async () => {
@@ -220,7 +235,7 @@ describe("timeline view", () => {
     const html = renderTimeline(t);
     expect(html.match(/<input type="checkbox" data-kind="\w+" checked>/g)).toHaveLength(5);
     expect(html).toContain('id="tl-strip"');
-    expect(html.match(/<th>(\w+)<\/th>/g)!.join("")).toBe("<th>Time</th><th>Duration</th><th>Kind</th><th>Id</th><th>Title</th><th>Cost</th><th>Details</th>");
+    expect(html.match(/<th>(\w+)<\/th>/g)!.join("")).toBe("<th>Time</th><th>Event</th>");
     const all = renderStream(t.rows!);
     expect(new Set(all.match(/data-kind="\w+"/g)).size).toBeGreaterThan(1);
   });
@@ -358,7 +373,7 @@ describe("Cancel controls", () => {
       expect(c.sent[0].url).toBe("/api/drop/fac-9");
       expect(JSON.parse(c.sent[0].init.body).reason).toBe("cancelled from the Activity page");
       expect(c.tr.html).not.toContain("data-cancel");
-      expect(c.tr.html).toContain("dropped");
+      expect(c.tr.html).toContain("Dropped");
       expect(c.calls).toEqual([]);
     } finally { c.restore(); }
   });
