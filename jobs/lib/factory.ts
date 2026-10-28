@@ -4,7 +4,7 @@
  * which no sandbox can see. See docs/specs/2026-10-26-seed-factory.md.
  */
 import { appendFileSync, closeSync, openSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { goal, goals, hasLabel, note, readLists, reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
@@ -263,8 +263,10 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       if (waitNow) { skipped.push(`${name}: ${waitNow}`); continue; }
       const gated = gates({ only: ["live", "day", "waiting"], jobs });
       if (gated) { skipped.push(`${name}: ${gated.why}`); continue; }
-      if (noCommitStreak(repo.key, name) >= NO_COMMIT_LIMIT) {
+      const marked = streakMark(name) !== null;
+      if ((marked && hasLabel(item, "needs-chris")) || noCommitStreak(repo.key, name) >= NO_COMMIT_LIMIT) {
         if (!hasLabel(item, "needs-chris")) {
+          writeStreakMark(name);
           const text = `needs-chris: the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
           const bad = note(repo, item.id, text, { label: "needs-chris" });
           if (bad) factoryLog(`${name}: no issue note: ${bad}`);
@@ -289,9 +291,22 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
 /** Runs of one goal in a row, newest last, that may end with no commit before dispatch stops starting it. */
 const NO_COMMIT_LIMIT = 3;
 
-/** How many of the goal's newest agent runs, in a row, ended with no commit. */
+const streakFile = (name: string) => join(factoryDir(), "streak", `${name}.txt`);
+/** When the streak last labelled the goal's item `needs-chris` (ms), or null. Runs before it no longer count. */
+const streakMark = (name: string): number | null => {
+  if (!existsSync(streakFile(name))) return null;
+  const t = Date.parse(readFileSync(streakFile(name), "utf8").trim());
+  return Number.isNaN(t) ? null : t;
+};
+const writeStreakMark = (name: string) => {
+  mkdirSync(dirname(streakFile(name)), { recursive: true });
+  writeFileSync(streakFile(name), new Date().toISOString() + "\n");
+};
+
+/** How many of the goal's newest agent runs since the streak's last needs-chris mark, in a row, ended with no commit. */
 function noCommitStreak(repoKey: string, name: string): number {
-  const runs = allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && e.run.kind === "agent" && e.run.state !== "running")
+  const mark = streakMark(name) ?? -Infinity;
+  const runs = allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && e.run.kind === "agent" && e.run.state !== "running" && Date.parse(e.run.started) > mark)
     .sort((a, b) => Date.parse(a.run.started) - Date.parse(b.run.started));
   let n = 0;
   for (const e of runs.reverse()) { if (e.run.reason !== "no commit" && !e.run.noCommit) break; n++; }

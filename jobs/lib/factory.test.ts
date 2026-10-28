@@ -297,6 +297,42 @@ test("a fourth no-commit run in a row is not dispatched; the item is labelled ne
   expect(f.specs).toEqual([]);
 });
 
+const noCommitRuns = (id: number, n: number, ago: number) => {
+  for (let i = 0; i < n; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: new Date(Date.now() - (ago - i) * 1000).toISOString() });
+};
+const unlabel = (id: number) => change(id, (item) => todos.edit(item, { labels: itemLabels(item).filter((l) => l !== "needs-chris") }));
+const chrisNotes = (id: number) => notes(id).split("needs-chris:").length - 1;
+
+test("removing needs-chris restarts the no-commit streak; three more no-commit runs label it again", async () => {
+  const id = goal();
+  noCommitRuns(id, 3, 600);
+  const f = fakes();
+  expect((await dispatch(f)).started).toEqual([]);
+  expect(labels(id)).toContain("needs-chris");
+  await new Promise((r) => setTimeout(r, 20));
+  await unlabel(id);
+  expect((await dispatch(f)).started).toEqual([`fac-${id}`]);
+  // the started run is not a no-commit run; three more finish after the mark
+  await new Promise((r) => setTimeout(r, 20));
+  noCommitRuns(id, 3, 0);
+  const g = fakes();
+  expect((await dispatch(g)).started).toEqual([]);
+  expect(g.specs).toEqual([]);
+  expect(labels(id)).toContain("needs-chris");
+  expect(chrisNotes(id)).toBe(2);
+});
+
+test("while needs-chris stays on the item, dispatches start nothing and write one note", async () => {
+  const id = goal();
+  noCommitRuns(id, 3, 600);
+  const f = fakes();
+  await dispatch(f);
+  await dispatch(f);
+  expect(f.specs).toEqual([]);
+  expect(labels(id)).toContain("needs-chris");
+  expect(chrisNotes(id)).toBe(1);
+});
+
 test("two no-commit runs in a row are still dispatched", async () => {
   const id = goal();
   for (let i = 0; i < 2; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: new Date(Date.now() - (3 - i) * 60_000).toISOString() });
