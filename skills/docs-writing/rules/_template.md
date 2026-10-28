@@ -32,5 +32,5 @@ Conventions:
 - H2 title matches the frontmatter title
 - The Incorrect/Correct parentheticals name the specific failure/fix, not just "bad"/"good"
 - Use ````markdown fences (four backticks) when the example itself contains code fences
-- Adding or removing a rule: update the count in _sections.md, the SKILL.md priority table, and the SKILL.md description
+- Adding or removing a rule: update the category list in _sections.md and the Rules count in the SKILL.md priority table
 -->
