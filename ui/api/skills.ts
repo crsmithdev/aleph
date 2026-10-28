@@ -49,7 +49,9 @@ function projectOf(cwd: string | undefined, tags: string[] | undefined): string 
     for (const r of Object.values(loadRegistry())) if (cwd === r.path || cwd.startsWith(r.path.replace(/\/+$/, "") + "/")) return r.key;
     return ""; // sandbox and test directories are not projects
   }
-  return tags?.find((t) => t.startsWith("project:"))?.slice(8) ?? "";
+  // The stored traces carry only a project tag, which is a name too: a tag that is no registry key is not a project either.
+  const tag = tags?.find((t) => t.startsWith("project:"))?.slice(8) ?? "";
+  return Object.keys(loadRegistry()).includes(tag) ? tag : "";
 }
 
 async function getJson(cfg: LangfuseConfig, path: string, q: Record<string, string>): Promise<any> {

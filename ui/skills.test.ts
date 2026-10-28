@@ -34,6 +34,9 @@ const observations = [
   ob({ id: "11", traceId: "t5", name: "turn", input: "/aleph:retro", startTime: daysAgo(40) }),
   // t6: a sandbox directory that is no registry project
   ob({ id: "12", traceId: "t6", name: "turn", input: "/aleph:sandbox", startTime: daysAgo(1) }),
+  // t7 and t8: traces the way the real store has them, a project tag and no cwd; one tag is a registry key, one is not
+  ob({ id: "13", traceId: "t7", name: "turn", input: "/aleph:tagged", startTime: daysAgo(1) }),
+  ob({ id: "14", traceId: "t8", name: "turn", input: "/aleph:untagged", startTime: daysAgo(1) }),
 ];
 const traces = [
   { id: "t1", sessionId: "s1", metadata: { cwd: "/work/aleph" } },
@@ -42,6 +45,8 @@ const traces = [
   { id: "t4", sessionId: "s1", metadata: { cwd: "/work/aleph" } },
   { id: "t5", sessionId: "s3", metadata: { cwd: "/work/aleph" } },
   { id: "t6", sessionId: "s4", metadata: { cwd: "/tmp/agent-ae1db4a1e2c301339" } },
+  { id: "t7", sessionId: "s5", metadata: {}, tags: ["project:aleph"] },
+  { id: "t8", sessionId: "s6", metadata: {}, tags: ["project:agent-ae1db4a1e2c301339"] },
 ];
 
 beforeAll(async () => {
@@ -312,6 +317,14 @@ test("a cwd that is no registry project is not listed as a project", async () =>
   expect(body.skills.find((s: any) => s.name === "aleph:sandbox")).toMatchObject({ uses: 1, projects: [] });
   expect(body.skills.flatMap((s: any) => s.projects)).not.toContain("agent-ae1db4a1e2c301339");
   expect(body.projects).toEqual(["aleph", "other"]);
+});
+
+test("a project tag with no cwd counts only when it is a registry key", async () => {
+  const { body } = await get("/api/skills");
+  expect(body.skills.find((s: any) => s.name === "aleph:tagged")).toMatchObject({ uses: 1, projects: ["aleph"] });
+  expect(body.skills.find((s: any) => s.name === "aleph:untagged")).toMatchObject({ uses: 1, projects: [] });
+  expect(body.skills.flatMap((s: any) => s.projects)).not.toContain("agent-ae1db4a1e2c301339");
+  expect((await get("/api/skills?project=aleph")).body.skills.map((s: any) => s.name)).toContain("aleph:tagged");
 });
 
 test("the page has a Project and a Window filter, and the columns run text first, then counts", () => {
