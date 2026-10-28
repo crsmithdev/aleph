@@ -1123,7 +1123,9 @@ describe("a factory run", () => {
   }, 120_000);
 
   test("a tick starts one run per open goal, lands it, and then has nothing to start", async () => {
-    const id = (await aleph(["todo", "add", "fac", "ship the goal", "--labels", "goal", "--body", "-"], {}, "ACTION: commit goal.txt\n")).json.added;
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
+    const id =(await aleph(["todo", "add", "fac", "ship the goal", "--labels", "goal", "--body", "-"], {}, "ACTION: commit goal.txt\n")).json.added;
     const t = await aleph(["tick"]);
     expect(t.json.skipped).toEqual([]);
     expect(t.json.started).toEqual([`fac-${id}`]);
@@ -1135,7 +1137,9 @@ describe("a factory run", () => {
   }, 30_000);
 
   test("a tick skips a goal whose job is stuck, and the cap stops it", async () => {
-    const id = (await aleph(["todo", "add", "fac", "a stuck goal", "--labels", "goal", "--body", "-"], {}, "ACTION: error\n")).json.added;
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
+    const id =(await aleph(["todo", "add", "fac", "a stuck goal", "--labels", "goal", "--body", "-"], {}, "ACTION: error\n")).json.added;
     expect((await aleph(["tick"])).json.started).toEqual([`fac-${id}`]);
     const again = await aleph(["tick"]);
     expect(again.json.started).toEqual([]);
@@ -1170,6 +1174,9 @@ describe("a factory run", () => {
   }, 60_000);
 
   test("a stuck job holds the factory: no start, no land by itself; Chris's land works; pause is separate; a drop clears it", async () => {
+    // Its ticks run the nightly probe unless a fresh passing one is on file; alone, none is.
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     const stuckId = (await aleph(["todo", "add", "fac", "the stuck one", "--labels", "goal", "--body", "-"], {}, "ACTION: error\n")).json.added;
     expect((await aleph(["tick"])).json.started).toEqual([`fac-${stuckId}`]);
     const id = (await aleph(["todo", "add", "fac", "behind the hold", "--labels", "goal", "--body", "-"], {}, "ACTION: commit behind.txt\n")).json.added;
@@ -1310,6 +1317,8 @@ describe("a factory run", () => {
   test("a tick triages an open issue that is not a goal, and its line counts the verdicts", async () => {
     const cmd = join(base, "triage-fake");
     writeFileSync(cmd, `#!/bin/bash\ncat > /dev/null\necho '{"verdict":"live","note":"check the live site"}'\n`, { mode: 0o755 });
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     const id = (await aleph(["todo", "add", "fac", "needs a live look"])).json.added;
     const first = (await aleph(["todo", "list", "fac", "--json"])).json.filter((i: any) => i.status === "open" && !i.labels.some((l: string) => ["goal", "needs-chris", "triaged", "proposal"].includes(l)))[0];
     const t = await aleph(["tick"], { ALEPH_TRIAGE_CAP: "1", ALEPH_TRIAGE_CMD: cmd });
@@ -1321,6 +1330,8 @@ describe("a factory run", () => {
   }, 30_000);
 
   test("a tick starts no run while the waiting cap binds, and a drop frees a place", async () => {
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     const env = { ALEPH_WAITING_CAP: "2" };
     await fjob("fwait1", "commit held/w1.txt");
     await fjob("fwait2", "commit held/w2.txt");
@@ -1335,6 +1346,8 @@ describe("a factory run", () => {
   }, 30_000);
 
   test("pause stops the tick and the unit's follow-up land, but not Chris's land", async () => {
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     expect((await aleph(["pause"])).json).toEqual({ paused: true });
     const id = (await aleph(["todo", "add", "fac", "while paused", "--labels", "goal", "--body", "-"], {}, "ACTION: commit paused.txt\n")).json.added;
     expect((await aleph(["tick"])).json).toMatchObject({ started: [], paused: true });
@@ -1350,6 +1363,8 @@ describe("a factory run", () => {
   }, 30_000);
 
   test("a red main starts no run, is checked once per commit, and clears with a passing commit", async () => {
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     const trees = () => existsSync(join(base, "trees")) ? readFileSync(join(base, "trees"), "utf8").trim().split("\n").length : 0;
     sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
     writeFileSync(join(other, "FAIL"), "red\n");
@@ -1371,6 +1386,8 @@ describe("a factory run", () => {
   }, 60_000);
 
   test("two dispatches at once run the baseline once; the second reports it running", async () => {
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     const trees = () => existsSync(join(base, "trees")) ? readFileSync(join(base, "trees"), "utf8").trim().split("\n").length : 0;
     sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
     writeFileSync(join(other, "new.txt"), `${Math.random()}\n`);
@@ -1389,6 +1406,8 @@ describe("a factory run", () => {
   }, 60_000);
 
   test("a baseline whose checks cannot start records no red, and the next dispatch runs it again", async () => {
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
     writeFileSync(join(other, "new.txt"), `${Math.random()}\n`);
     sh(other, "git", "add", "new.txt"); sh(other, "git", "commit", "-qm", "another commit"); sh(other, "git", "push", "-q", "origin", "main");
