@@ -33,7 +33,7 @@ describe("the UI never says goal", () => {
     ["triageCard compact", triageCard({ name: "triage-aleph-3", state: "done", outcome: "goal", item: { title: "x" } }, "compact")],
     ["project card", renderCard(project)],
     ["project detail", renderDetail(project)],
-    ["contents", renderContents({ projects: [project], issues: [{ repo: "aleph", id: 3, title: "An issue", status: "open", labels: ["goal"], updated: "2026-10-25" }] }, { status: "" })],
+    ["inventory", renderContents({ projects: [project], issues: [{ repo: "aleph", id: 3, title: "An issue", status: "open", labels: ["goal"], updated: "2026-10-25" }] }, { status: "" })],
     ["issue detail", renderIssue({ repo: "aleph", id: 3, title: "t", status: "open", frontmatter: { labels: ["goal"] }, body: BODY_TEMPLATE, notes: [], jobs: [], commits: [] })],
     ["activity row", renderEvent(event)],
     ["activity stream", renderStream([event])],

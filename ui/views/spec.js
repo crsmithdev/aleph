@@ -12,7 +12,7 @@ export const view = {
 };
 
 export function renderSpec(s) {
-  return `<div class="page"><p class="quiet"><a href="#/contents">← Contents</a></p>${pageHead(s.title, { count: s.file })}` +
+  return `<div class="page"><p class="quiet"><a href="#/inventory">← Inventory</a></p>${pageHead(s.title, { count: s.file })}` +
     `<p class="hint"><code>${esc(s.project)}/docs/specs/${esc(s.file)}</code></p>` +
     `<article class="note">${md(s.body)}</article></div>`;
 }

@@ -1,12 +1,12 @@
-// The Contents view: the state to browse, not the process: every project and every issue of every repo, in rows styled like Activity's (its CSS and header are its own, and only the X icon and the cancel confirm come from timeline.js),
+// The Inventory view: the state to browse, not the process: every project and every issue of every repo, in rows styled like Activity's (its CSS and header are its own, and only the X icon and the cancel confirm come from timeline.js),
 // three tables and a form that files an issue. `data` is /api/contents: { issues, projects, specs }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { badge, chips, empty, esc, filterBar, idLink, labelName, md, pageHead, pager, sortHead, when } from "../lib.js";
 import { X_ICON, confirmCancel } from "./timeline.js";
 
 export const view = {
-  path: "/contents",
-  title: "Contents",
+  path: "/inventory",
+  title: "Inventory",
   group: "factory",
   order: 2,
   api: "/api/contents",
@@ -14,14 +14,21 @@ export const view = {
   mount: (root, d) => mount(root, d),
 };
 
-/** The old Issues address: `#/issues` and `#/projects` become `#/contents` . The detail routes are left alone. */
+/** The old Issues address: `#/issues`, `#/projects` and `#/contents` become `#/inventory` . The detail routes are left alone. */
 export function redirect(hash) {
   const path = String(hash ?? "").replace(/^#/, "").split("?")[0].replace(/\/$/, "");
-  return path === "/issues" ? "#/contents" : path === "/projects" ? "#/contents" : null;
+  return path === "/issues" || path === "/projects" || path === "/contents" ? "#/inventory" : null;
 }
 
 // Only what nothing shared covers: the whole-row link and the X button.
 const STYLE_CONTENTS = `<style>
+.contents .cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 32px; align-items: start; }
+.contents .cols > * { min-width: 0; }
+.contents .side-col .tbl td, .contents .side-col .tbl th { padding-left: 8px; padding-right: 8px; }
+.contents .sub { display: block; font: var(--fs-xs) var(--sans); color: var(--muted); }
+@media (min-width: 1200px) {
+  .contents .cols { grid-template-columns: minmax(0, 1fr) 360px; }
+}
 .contents tr.crow { position: relative; }
 .contents td.wide a { color: inherit; text-decoration: none; }
 .contents td.wide a::after { content: ""; position: absolute; inset: 0; }
@@ -93,7 +100,7 @@ export function filterRows(rows, o = {}) {
 export const filterProjects = (rows, o = {}) => rows.filter((r) => !o.project || r.project === o.project);
 
 // Column order: id or name, title, state badge, project, labels, numbers, time last. [key, label, { num }]
-export const SPEC_COLUMNS = [["title", "Title"], ["project", "Project"], ["date", "Date"]];
+export const SPEC_COLUMNS = [["title", "Title"], ["date", "Date"]];
 const SPEC_SORT = { date: (r) => r.date, title: (r) => r.title, project: (r) => r.project };
 export const COLUMNS = [["id", "Id"], ["title", "Title"], ["status", "Status"], ["project", "Project"], ["labels", "Labels"], ["updated", "Updated"], ["act", ""]];
 export const PROJECT_COLUMNS = [["title", "Name"], ["open", "Open issues", { num: true }], ["updated", "Last activity"]];
@@ -121,7 +128,7 @@ const header = (sort, columns, by) =>
 
 /** The request an issue row's X sends, or null for a row that is not an open issue. */
 export function dropTarget(r) {
-  return r.status === "open" ? { url: `/api/issues/${encodeURIComponent(r.repo)}/${r.n}/drop`, body: { reason: "dropped from the Contents page" } } : null;
+  return r.status === "open" ? { url: `/api/issues/${encodeURIComponent(r.repo)}/${r.n}/drop`, body: { reason: "dropped from the Inventory page" } } : null;
 }
 
 /** One issue row: id, title, state, project, labels, time, and the X. */
@@ -136,14 +143,14 @@ export function renderRow(r) {
 
 /** One project row; the whole row is the link. */
 export function renderProjectRow(r) {
-  return `<tr class="crow" data-kind="project"><td class="wide"><a href="${esc(r.href)}">${esc(r.project)}</a></td>` +
+  return `<tr class="crow" data-kind="project"><td class="wide"><a href="#/inventory?project=${encodeURIComponent(r.project)}" data-project="${esc(r.project)}">${esc(r.project)}</a></td>` +
     `<td class="num">${r.open}</td><td class="time">${esc(when(r.at))}</td></tr>`;
 }
 
 /** One spec row; the whole row is the link. */
 export function renderSpecRow(r) {
-  return `<tr class="crow" data-kind="spec"><td class="wide"><a href="${esc(r.href)}">${esc(r.title)}</a></td>` +
-    `<td>${esc(r.project)}</td><td class="time">${esc(day(r.date))}</td></tr>`;
+  return `<tr class="crow" data-kind="spec"><td class="wide"><a href="${esc(r.href)}">${esc(r.title)}</a><span class="sub">${esc(r.project)}</span></td>` +
+    `<td class="time">${esc(day(r.date))}</td></tr>`;
 }
 
 export function renderSpecsTable(rows, o = {}) {
@@ -227,10 +234,10 @@ export function renderContents(d, o = {}) {
   const issues = issueRows(d), projects = projectRows(d), specs = specRows(d);
   const shownSpecs = filterProjects(specs, o).length;
   const shownProjects = filterProjects(projects, o).length, shownIssues = filterRows(issues, o).length;
-  return `${STYLE_CONTENTS}<div class="page contents">${pageHead("Contents")}${renderFilters(d, o)}` +
-    `${section("Projects", shownProjects)}<div id="projects-table">${renderProjectsTable(projects, o)}</div>` +
-    `${section("Issues", shownIssues)}<div id="issues-table">${renderTable(issues, o)}</div>` +
-    `${section("Specs", shownSpecs)}<div id="specs-table">${renderSpecsTable(specs, o)}</div>` +
+  return `${STYLE_CONTENTS}<div class="page contents">${pageHead("Inventory")}${renderFilters(d, o)}` +
+    `<div class="cols"><div class="main-col">${section("Issues", shownIssues)}<div id="issues-table">${renderTable(issues, o)}</div></div>` +
+    `<div class="side-col">${section("Projects", shownProjects)}<div id="projects-table">${renderProjectsTable(projects, o)}</div>` +
+    `${section("Specs", shownSpecs)}<div id="specs-table">${renderSpecsTable(specs, o)}</div></div></div>` +
     renderForm(d?.issues ?? [], o) + `</div>`;
 }
 
@@ -248,7 +255,7 @@ export function renderIssue(d) {
       return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td><td class="time">${esc(when(c.date))}</td></tr>`;
     }).join("")}</tbody></table></div>`
     : empty("No commit on main names this issue in its trailers.");
-  return `<div class="page"><p class="quiet"><a href="#/contents">← Contents</a></p>` +
+  return `<div class="page"><p class="quiet"><a href="#/inventory">← Inventory</a></p>` +
     pageHead(d.title, { count: ref(d), aside: d.derived ? stateBadge(d.derived.state) : badge(d.status) }) +
     (d.derived ? `<p class="quiet">${esc(d.derived.why)}</p>` : "") + (fm.labels?.length ? `<p>${chips(fm.labels)}</p>` : "") +
     (facts ? `<dl class="facts">${facts}</dl>` : "") + `<div class="md">${md(d.body)}</div>` +
@@ -279,6 +286,8 @@ if (typeof document !== "undefined") {
     if (f) setQuery(f.name, f.value);
   });
   document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest("#projects-table a[data-project]");
+    if (a) { e.preventDefault(); return setQuery("project", a.dataset.project); }
     const b = e.target.closest && e.target.closest(`${FILTERS} .seg button`);
     if (b) return setQuery(b.closest(".seg").dataset.name, b.dataset.value);
     const more = e.target.closest && e.target.closest("#issues-table button[data-more]");

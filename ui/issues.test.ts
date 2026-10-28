@@ -167,25 +167,26 @@ describe("views", () => {
     expect((await getJson("/api/contents?project=fac")).projects.map((p: any) => p.key)).toEqual(["fac"]);
   });
 
-  test("the view is Contents at #/contents; #/issues and #/projects redirect, the detail routes do not", () => {
-    expect(v.view.path).toBe("/contents");
-    expect(v.view.title).toBe("Contents");
+  test("the view is Inventory at #/inventory; #/issues and #/projects redirect, the detail routes do not", () => {
+    expect(v.view.path).toBe("/inventory");
+    expect(v.view.title).toBe("Inventory");
     expect(v.view.group).toBe("factory");
-    expect(v.redirect("#/issues")).toBe("#/contents");
-    expect(v.redirect("#/issues?status=open")).toBe("#/contents");
-    expect(v.redirect("#/projects")).toBe("#/contents");
+    expect(v.redirect("#/issues")).toBe("#/inventory");
+    expect(v.redirect("#/issues?status=open")).toBe("#/inventory");
+    expect(v.redirect("#/projects")).toBe("#/inventory");
+    expect(v.redirect("#/contents")).toBe("#/inventory");
     expect(v.redirect("#/issues/fac/1")).toBeNull();
     expect(v.redirect("#/projects/fac")).toBeNull();
-    expect(v.redirect("#/contents")).toBeNull();
+    expect(v.redirect("#/inventory")).toBeNull();
   });
 
   const section = (h: string, id: string) => h.split(`<div id="${id}">`)[1]?.split("</table>")[0] ?? "";
 
-  test("two tables: Projects first with Name, Open issues, Last activity; Issues after", async () => {
+  test("two columns: Issues first, then Projects with Name, Open issues, Last activity", async () => {
     const d = await getJson("/api/contents");
     const h = v.view.render(d, {}, new URLSearchParams("status=any"));
     expect(h.indexOf("<h2>Projects")).toBeGreaterThan(-1);
-    expect(h.indexOf("<h2>Projects")).toBeLessThan(h.indexOf("<h2>Issues"));
+    expect(h.indexOf("<h2>Projects")).toBeGreaterThan(h.indexOf("<h2>Issues"));
     const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
     expect(ths(section(h, "projects-table"))).toEqual(["title", "open", "updated"]);
     expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "status", "project", "labels", "updated", ""]);
@@ -208,8 +209,8 @@ describe("views", () => {
   test("project rows: every registered project, open issues, last activity; no X", async () => {
     const d = await getJson("/api/contents");
     const h = section(v.view.render(d, {}, new URLSearchParams()), "projects-table");
-    expect(h).toContain('<a href="#/projects/fac">fac</a>');
-    expect(h).toContain('<a href="#/projects/oth">oth</a>');
+    expect(h).toContain('<a href="#/inventory?project=fac" data-project="fac">fac</a>');
+    expect(h).toContain('<a href="#/inventory?project=oth" data-project="oth">oth</a>');
     expect(h).not.toContain("data-cancel");
     const fac = d.projects.find((p: any) => p.key === "fac");
     expect(h).toContain(`<td class="num">${fac.openItems}</td>`);
@@ -223,8 +224,8 @@ describe("views", () => {
     const d = await getJson("/api/contents");
     expect(v.hashOptions(new URLSearchParams("type=project"))).not.toHaveProperty("type");
     const h = v.view.render(d, {}, new URLSearchParams("project=oth&status=any"));
-    expect(section(h, "projects-table")).toContain("#/projects/oth");
-    expect(section(h, "projects-table")).not.toContain("#/projects/fac");
+    expect(section(h, "projects-table")).toContain("project=oth");
+    expect(section(h, "projects-table")).not.toContain("project=fac");
     const rows = v.issueRows(d);
     expect(v.filterRows(rows, { status: "done" }).every((r: any) => r.status === "done")).toBe(true);
     expect(v.filterRows(rows, { project: "oth" }).every((r: any) => r.project === "oth")).toBe(true);
@@ -232,7 +233,7 @@ describe("views", () => {
     expect(v.filterRows(rows, { q: "plain" }).map((r: any) => r.title)).toEqual(["plain task"]);
     // the Projects table is not narrowed by Status, Label or Title
     const s = v.view.render(d, {}, new URLSearchParams("status=done&q=zzzz"));
-    expect(section(s, "projects-table")).toContain("#/projects/fac");
+    expect(section(s, "projects-table")).toContain("project=fac");
   });
 
   test("the Status filter defaults to Open, newest first; Any shows every status", async () => {

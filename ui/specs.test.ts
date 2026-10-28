@@ -71,13 +71,13 @@ describe("specs", () => {
     }
   });
 
-  test("Contents shows a Specs table after Issues: Title, Project, Date, rows link to the spec page", async () => {
+  test("Inventory shows a Specs table after Issues: Title, Date, the project as a second line, rows link to the spec page", async () => {
     const d = await getJson("/api/contents");
     const h = v.view.render(d, {}, new URLSearchParams());
     expect(h.indexOf("<h2>Issues")).toBeLessThan(h.indexOf("<h2>Specs"));
     expect(h).toContain('<div class="sh"><h2>Specs</h2><span class="count">3</span></div>');
     const t = h.split('<div id="specs-table">')[1].split("</table>")[0];
-    expect([...t.matchAll(/data-sort="(\w+)"/g)].map((m) => m[1])).toEqual(["title", "project", "date"]);
+    expect([...t.matchAll(/data-sort="(\w+)"/g)].map((m) => m[1])).toEqual(["title", "date"]);
     expect(t).toContain('data-sort="date"');
     expect(t).toContain('<a href="#/specs/a/2026-10-01-alpha.md">Alpha spec</a>');
     expect(t.indexOf("2026-10-05")).toBeLessThan(t.indexOf("2026-09-01"));
