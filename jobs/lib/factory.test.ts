@@ -68,6 +68,21 @@ test("a goal whose label is removed during the baseline is not started", async (
   expect(out.skipped).toEqual([]);
 });
 
+test("a goal that gains a waiting_on while an earlier goal starts is not started", async () => {
+  const a = goal();
+  const b = goal();
+  const c = goal([]);
+  const calls: string[] = [];
+  const out = await dispatchGoals(async (_repo, name) => {
+    calls.push(name);
+    if (name === `fac-${a}`) await change(b, (item) => { item.fm.waiting_on = `fac-${c}`; });
+    return null;
+  }, async () => null);
+  expect(calls).toEqual([`fac-${a}`]);
+  expect(out.started).toEqual([`fac-${a}`]);
+  expect(out.skipped).toEqual([`fac-${b}: waiting on fac-${c}`]);
+});
+
 test("a goal closed during the baseline is not started", async () => {
   const id = goal();
   const calls: string[] = [];
