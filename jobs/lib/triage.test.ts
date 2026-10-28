@@ -25,6 +25,7 @@ case $prompt in
   *VERDICT:close*) echo 'Looked at it. {"verdict":"close","reason":"duplicate of tri-1"}' ;;
   *VERDICT:chris*) echo '{"verdict":"chris","question":"Which plan, A or B?"}' ;;
   *VERDICT:live*) echo '{"verdict":"live","note":"check the prod dashboard"}' ;;
+  *VERDICT:fail*) exit 3 ;;
   *VERDICT:bad*) echo '{"verdict":"maybe"}' ;;
   *) echo 'no json here' ;;
 esac
@@ -58,7 +59,7 @@ beforeAll(() => {
   });
 });
 afterAll(() => rmSync(base, { recursive: true, force: true }));
-beforeEach(() => { delete process.env.ALEPH_TRIAGE_CAP; writeFileSync(join(base, "calls"), ""); });
+beforeEach(() => { delete process.env.ALEPH_TRIAGE_CAP; delete process.env.ALEPH_TRIAGE_TRIES; writeFileSync(join(base, "calls"), ""); });
 const calls = () => readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean).length;
 
 test("each of the four verdicts leaves the item in its state", async () => {
@@ -130,6 +131,37 @@ test("a malformed verdict leaves the item unchanged and is skipped", async () =>
   expect(t.triaged).toEqual({});
   expect(t.skipped).toEqual([expect.stringContaining(`${repo.key}-1: triage gave a malformed verdict`), expect.stringContaining(`${repo.key}-2: triage gave a malformed verdict: no JSON`)]);
   expect([item(1), item(2)].map((i) => todos.renderItem(repo.key, i))).toEqual(before);
+});
+
+test("an item with no verdict twice is labelled needs-chris and not triaged again", async () => {
+  reset([{ title: "a", body: "nothing" }]);
+  const before = todos.renderItem(repo.key, item(1));
+  await run();
+  expect(todos.renderItem(repo.key, item(1))).toBe(before);
+  const t = await run();
+  expect(labels(1)).toContain("needs-chris");
+  expect(item(1).notes.at(-1)).toContain("no verdict in 2 runs");
+  expect(t.skipped).toEqual([`${repo.key}-1: no verdict in 2 triages; labelled needs-chris`]);
+  const n = calls();
+  await run();
+  expect(calls()).toBe(n);
+});
+
+test("a triage that exits non-zero counts toward the limit", async () => {
+  reset([{ title: "a", body: "VERDICT:fail" }]);
+  await run();
+  expect(labels(1) ?? []).not.toContain("needs-chris");
+  await run();
+  expect(labels(1)).toContain("needs-chris");
+  expect(item(1).notes.at(-1)).toContain("no verdict in 2 runs: failed: triage exited 3");
+});
+
+test("ALEPH_TRIAGE_TRIES=1 labels the item after the first malformed run", async () => {
+  process.env.ALEPH_TRIAGE_TRIES = "1";
+  reset([{ title: "a", body: "nothing" }]);
+  await run();
+  expect(labels(1)).toContain("needs-chris");
+  expect(item(1).notes.at(-1)).toContain("no verdict in 1 runs");
 });
 
 test("a blocked day cap or live cap starts no triage", async () => {
