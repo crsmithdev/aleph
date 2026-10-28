@@ -7,7 +7,7 @@
  * tree, and the store's checkout follows. No product repo's main moves when
  * an item changes, and no branch of a product repo can edit its own item.
  */
-import { followMain, git, treeWithFiles } from "../../jobs/lib/git.ts";
+import { fetchOrigin, followMain, git, treeWithFiles } from "../../jobs/lib/git.ts";
 import { expand } from "../../jobs/lib/ledger.ts";
 import { parseItem, renderItem, type Doc } from "./todo.ts";
 
@@ -49,7 +49,8 @@ export function cacheFetches(seconds: number): void { reuse = seconds; }
 function fetch(dir: string): void {
   const last = fetchedAt.get(dir);
   if (reuse > 0 && last !== undefined && Date.now() - last < reuse * 1000) return;
-  const r = git(dir, "fetch", "-q", "origin", MAIN);
+  // Every aleph process reads the store, so two fetches at once race on the ref's lock: fetchOrigin retries that.
+  const r = fetchOrigin(dir, MAIN);
   if (!r.ok) throw new Error(`work store fetch failed: ${r.out}`);
   fetchedAt.set(dir, Date.now());
 }
