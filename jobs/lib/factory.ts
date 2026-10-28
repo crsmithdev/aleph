@@ -284,7 +284,7 @@ const RERUN_OPTIONS = [
   { label: "Another way", line: "Start the goal again, taking a different route than the run that failed" },
 ];
 
-type Case = "duplicate" | "no-commit" | "claimed" | "time-box" | "infra" | "land-checks";
+type Case = "duplicate" | "no-commit" | "claimed" | "time-box" | "infra" | "land-checks" | "land-conflict";
 const INFRA = /^(job lock busy|fetch failed|systemd-run failed|worktree gone|bundle failed)/;
 /** A baseline that has not answered yet (see `baseline`): the claim is waited on, not decided. */
 const UNCHECKED = /^main (is unchecked|baseline running)/;
@@ -295,6 +295,7 @@ function caseOf(r: Entry["run"], onMainOrDone: () => boolean, claim: string | nu
   if (why === "no commit") return onMainOrDone() ? "duplicate" : claim !== null ? "claimed" : "no-commit";
   if (why === "time box" && r.kind !== "land") return "time-box";
   if (INFRA.test(why)) return "infra";
+  if (r.kind === "land" && /^merge conflict/.test(why)) return "land-conflict";
   if (r.kind === "land" && !r.conflicts?.length && /^timed out: check |^[\w-]+ failed$/.test(why)) return "land-checks";
   return null;
 }
@@ -305,7 +306,7 @@ const RESCUE_WAIT_MS = () => Number(process.env.ALEPH_RESCUE_WAIT_MS ?? 60_000);
 /**
  * The safe default actions for stuck and failed runs, taken by the dispatch that sees them: a duplicate
  * is dropped; a no-commit run whose worker says the goal is already met is checked on main, and closed when
- * the checks pass there; no commit, a time box and checks that fail after a land merge drop the run for one rerun
+ * the checks pass there; no commit, a time box and checks that fail after a land merge and a land that hits a merge conflict drop the run for one rerun
  * of the goal, with a note; an infrastructure failure is rechecked or landed again, once. Each action
  * writes its reason to the run, the issue note and the news. Anything else, or the second time one
  * case hits one goal, labels the issue `needs-chris` with a one-line question; such a run holds nothing.
@@ -422,6 +423,16 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
       record(`${text}dropped; the goal reruns once`);
       await say(`${text}the goal reruns`);
     }
+  } else if (key === "land-conflict") {
+    const files = r.conflicts?.length ? r.conflicts : (reason.split(": ")[1] ?? "").split(", ").filter(Boolean);
+    fetchOrigin(repo.path);
+    const touched = files.length ? git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%h %s", "--", ...files).out : "";
+    const what = `${files.join(", ") || "unknown files"}${touched ? `, last changed on ${repo.main} by ${touched}` : ""}`;
+    rerun(`The last land failed with a merge conflict in ${what}. Another goal landed on the same lines first; this run starts from the current ${repo.main}.`);
+    const text = `${r.kind} run ${last.id}: merge conflict in ${what}; dropped, and the goal reruns once from current ${repo.main}`;
+    if (!await tryDo(await act.drop(name, text), "drop")) return;
+    record(text);
+    await say(text);
   } else {
     const why = key === "no-commit" ? "the last run made no commit" : key === "time-box" ? "the time box ran out" : `the checks failed after the land merged main (${reason})`;
     rerun(`${why[0].toUpperCase()}${why.slice(1)}. The last 20 lines of its ${key === "land-checks" ? "checks.log" : "result.md"}:\n\n${quoted(key === "land-checks" ? "checks.log" : "result.md")}`);

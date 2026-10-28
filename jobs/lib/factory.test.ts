@@ -436,6 +436,25 @@ test("failed checks after a land merge, first time: dropped and the goal reruns 
   expect(notes(id)).toContain("checks failed after the land merged main");
 });
 
+test("a land that failed with a merge conflict is dropped and the goal reruns; the second one gets needs-chris", async () => {
+  const id = goal();
+  const a = mk(`fac-${id}`, "agent", "passed", { land: true });
+  mk(`fac-${id}`, "land", "failed", { reason: "merge conflict", conflicts: ["a.ts", "b.ts"], job: a.job });
+  const f = fakes();
+  const out = await dispatch(f);
+  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
+  expect(out.held).toBeUndefined();
+  expect(f.specs[0]).toContain("merge conflict in a.ts, b.ts");
+  expect(notes(id)).toContain("merge conflict in a.ts, b.ts");
+  expect(labels(id)).not.toContain("needs-chris");
+
+  const b = mk(`fac-${id}`, "agent", "passed", { land: true });
+  mk(`fac-${id}`, "land", "failed", { reason: "merge conflict", conflicts: ["a.ts"], job: b.job });
+  await dispatch(f);
+  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
+  expect(labels(id)).toContain("needs-chris");
+});
+
 test("a run that is not safe is labelled needs-chris with a question and does not hold the factory; another goal starts", async () => {
   const id = goal();
   const other = goal();
