@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { chart, chartTheme, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, span } from "./lib.js";
+import { chart, chartTheme, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span } from "./lib.js";
 
 test("esc escapes markup", () => {
   expect(esc("<script>alert('x')</script>")).toBe("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;");
@@ -110,4 +110,56 @@ test("loading shows a status line with the title escaped", () => {
   expect(h).toContain('role="status"');
   expect(loading("<b>")).toContain("Loading &lt;b&gt;…");
   expect(loading("<b>")).not.toContain("<b>");
+});
+
+// A small fake document: just enough of querySelector(All), open, hidden, value and innerHTML for record/restore.
+function fakeRoot(html: string) {
+  const mk = (tag: string, attrs: Record<string, string>, inner = "", extra: any = {}) => ({
+    tag, attrs, innerHTML: inner, textContent: inner, hidden: "hidden" in attrs, open: "open" in attrs, value: attrs.value ?? "", name: attrs.name ?? "", type: attrs.type ?? "",
+    getAttribute(n: string) { return n in attrs ? attrs[n] : null; }, remove() { this.removed = true; }, removed: false, ...extra,
+  });
+  const details: any[] = [];
+  const panels: any[] = [];
+  for (const m of html.matchAll(/<details([^>]*)><summary>(.*?)<\/summary>(.*?)<\/details>/g)) {
+    const fields = [...m[3].matchAll(/<input name="(\w+)"/g)].map((f) => mk("input", { name: f[1] }));
+    const d: any = mk("details", /open/.test(m[1]) ? { open: "" } : {}, m[3]);
+    d.summary = { textContent: m[2] };
+    d.querySelector = () => d.summary;
+    d.querySelectorAll = () => fields;
+    details.push(d);
+  }
+  for (const m of html.matchAll(/<div class="diff-panel" data-diff-for="(\w+)" hidden><\/div>/g)) panels.push(mk("div", { "data-diff-for": m[1], hidden: "" }));
+  return {
+    details, panels,
+    querySelectorAll: (sel: string) => (sel === "details" ? details : sel.includes("diff-for") ? panels : []),
+  };
+}
+
+const HTML = '<details><summary>Input</summary><input name="a"></details><details><summary>Input</summary><input name="b"></details><div class="diff-panel" data-diff-for="j1" hidden></div>';
+
+test("recordState and restoreState bring back open details, a shown diff and typed text", () => {
+  const before = fakeRoot(HTML);
+  before.details[1].open = true;
+  before.details[1].querySelectorAll()[0].value = "typed";
+  before.panels[0].hidden = false;
+  before.panels[0].innerHTML = "<pre>+x</pre>";
+  const state = recordState(before);
+  const after = fakeRoot(HTML);
+  restoreState(after, state);
+  expect(after.details[0].open).toBe(false);
+  expect(after.details[1].open).toBe(true);
+  expect(after.details[1].querySelectorAll()[0].value).toBe("typed");
+  expect(after.panels[0].hidden).toBe(false);
+  expect(after.panels[0].innerHTML).toBe("<pre>+x</pre>");
+});
+
+test("restoreState ignores state for elements the new HTML no longer has", () => {
+  const before = fakeRoot(HTML);
+  before.details[0].open = true;
+  before.panels[0].hidden = false;
+  before.panels[0].innerHTML = "x";
+  const state = recordState(before);
+  const after = fakeRoot("<p>nothing</p>");
+  expect(() => restoreState(after, state)).not.toThrow();
+  expect(() => restoreState(after, null)).not.toThrow();
 });

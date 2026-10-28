@@ -416,7 +416,7 @@ pre.trailers b { color: var(--need); }
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { actMessages, diffHtml, empty, error, esc, failMessage, loading, mountView, openDiffs } from "/lib.js";
+  import { actMessages, diffHtml, empty, error, esc, failMessage, loading, mountView, openDiffs, recordState, restoreState } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, render(data, params), mount?(root, data), api?, refresh? }, and
@@ -483,11 +483,14 @@ pre.trailers b { color: var(--need); }
       }
     }
     if (route !== shown) return;  // the reader moved on while this loaded
-    // A refresh of the same route keeps the open state of keyed <details>; a first load takes the render's own.
+    // A refresh render throws away what the reader set (open folds, shown diffs, typed text); put it back.
+    const saved = first ? null : recordState($("view"));
+    // Keyed <details> also keep their open state by data-keep.
     const kept = new Map();
     if (!first) $("view").querySelectorAll("details[data-keep]").forEach((d) => kept.set(d.dataset.keep, d.open));
     try { $("view").innerHTML = view.render(data, params); }
     catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} failed to render: ${e.message}`, "This is a bug in the view.")}</div>`; return; }
+    if (saved) restoreState($("view"), saved);
     $("view").querySelectorAll("details[data-keep]").forEach((d) => { if (kept.has(d.dataset.keep)) d.open = kept.get(d.dataset.keep); });
     // `mount` runs after render, for what needs a DOM (the charts); a view without one is left alone.
     try { mountView(view, $("view"), data); }

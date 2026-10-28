@@ -78,6 +78,18 @@ test("route writes the loading line to the view before the first load", () => {
   expect(b).toBeGreaterThan(a);
 });
 
+test("load records state before render and restores it after, only on a refresh", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const body = html.slice(html.indexOf("async function load("));
+  const rec = body.indexOf("recordState(");
+  const render = body.indexOf("view.render(");
+  const rest = body.indexOf("restoreState(");
+  expect(rec).toBeGreaterThan(-1);
+  expect(render).toBeGreaterThan(rec);
+  expect(rest).toBeGreaterThan(render);
+  expect(body.slice(rec - 40, rec)).toContain("first ? null");
+});
+
 test("load records the open state of details[data-keep] before the render and restores it after", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   const body = html.slice(html.indexOf("async function load("));

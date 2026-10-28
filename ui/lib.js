@@ -175,6 +175,58 @@ export function chart(el, option) {
   };
 }
 
+// Now fills `.diff-panel[data-diff-for]`; Jobs fills `pre#diff` and removes its `[data-diff]` button once the diff is in.
+const PANELS = "[data-diff-for], pre.diff";
+const panelKey = (p) => p.getAttribute?.("data-diff-for") ?? "diff";
+const FIELDS = "input, textarea, select";
+
+/** `summary text` plus its position among the details with the same summary text. */
+function detailsKeys(root) {
+  const seen = new Map();
+  return [...root.querySelectorAll("details")].map((el) => {
+    const text = (el.querySelector("summary")?.textContent ?? "").trim();
+    const n = seen.get(text) ?? 0;
+    seen.set(text, n + 1);
+    return [`${text}#${n}`, el];
+  });
+}
+
+/** Capture what the reader set in `root` (open details, shown diff panels, typed fields) before a refresh re-renders it. */
+export function recordState(root) {
+  const details = {};
+  for (const [key, el] of detailsKeys(root)) {
+    const fields = {};
+    if (el.open) [...el.querySelectorAll(FIELDS)].forEach((f, i) => { fields[f.name || i] = f.type === "checkbox" || f.type === "radio" ? f.checked : f.value; });
+    details[key] = { open: !!el.open, fields };
+  }
+  const panels = {};
+  for (const p of root.querySelectorAll(PANELS)) if (!p.hidden) panels[panelKey(p)] = p.innerHTML;
+  return { details, panels };
+}
+
+/** Apply a `recordState` record to the freshly rendered `root`. What the new markup no longer has is ignored. */
+export function restoreState(root, state) {
+  if (!state) return;
+  for (const [key, el] of detailsKeys(root)) {
+    const s = state.details?.[key];
+    if (!s) continue;
+    el.open = s.open;
+    [...el.querySelectorAll(FIELDS)].forEach((f, i) => {
+      const k = f.name || i;
+      if (!(k in s.fields)) return;
+      if (f.type === "checkbox" || f.type === "radio") f.checked = s.fields[k];
+      else f.value = s.fields[k];
+    });
+  }
+  for (const p of root.querySelectorAll(PANELS)) {
+    const html = state.panels?.[panelKey(p)];
+    if (html === undefined) continue;
+    p.innerHTML = html;
+    p.hidden = false;
+    if (!p.getAttribute?.("data-diff-for")) for (const b of root.querySelectorAll("button[data-diff]")) b.remove();
+  }
+}
+
 /** UI state that survives the Now view's refresh: job name to its open diff text, and to its last action message. */
 export const openDiffs = new Map();
 export const actMessages = new Map();
