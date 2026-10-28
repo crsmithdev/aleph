@@ -12,7 +12,8 @@ export const view = {
   api: "/api/state",
   refresh: 15,
   render: (s) =>
-    `<div class="page">${renderMetrics(s)}<p class="lede">${renderLede(s)}</p><div class="head">${renderControls(s)}<span class="sep" aria-hidden="true">|</span><p class="asof">${renderAsOf(s)}</p></div>` +
+    `<div class="page"><p class="lede">${renderLede(s)}</p><div class="head">${renderControls(s)}<span class="sep" aria-hidden="true">|</span><p class="asof">${renderAsOf(s)}</p></div>` +
+    renderAttention(s) + renderMetrics(s) +
     `<div class="pipeline">` +
     [["issues", renderIssues], ["triage", renderTriage], ["lands", renderLands], ["jobs", renderJobs]]
       .map(([id, f]) => `<section id="${id}" aria-labelledby="h-${id}">${f(s)}</section>`).join("") +
@@ -53,8 +54,8 @@ export function renderMetrics(s) {
     card("issues", "Issues", (s.issues ?? []).length) +
     card("triage", "Triage", (s.triage ?? []).length) +
     card("lands", "Lands", s.delivered.length) +
-    card("jobs", "Needs you", s.needs.length, "need") +
-    card("jobs", "Stuck or failed", s.stuck.length, "stuck") +
+    card("attention", "Needs you", s.needs.length, "need") +
+    card("attention", "Stuck or failed", s.stuck.length, "stuck") +
     card("jobs", "Running", s.running.length) +
     card("jobs", "Waiting", s.waiting.length) +
     vcard("lands", "Landed", s.velocity?.landed) +
@@ -69,16 +70,16 @@ export function renderLede(s) {
   const f = s.factory;
   const problems = []; // [tone, html]
   const notices = [];
-  if (s.needs.length) problems.push(["warning", `<a href="#jobs">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you</a>`]);
-  if (s.stuck.length) problems.push(["error", `<a href="#jobs">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`]);
+  if (s.needs.length) problems.push(["warning", `<a href="#attention">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you</a>`]);
+  if (s.stuck.length) problems.push(["error", `<a href="#attention">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`]);
   const health = [...(f.health || [])];
   if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   for (const l of health) {
     const text = l.replace(/^health:\s*/, "");
     if (/passed on rerun/.test(text)) notices.push(text);
-    else problems.push(["error", `<a href="#jobs">${esc(text)}</a>`]);
+    else problems.push(["error", `<a href="#attention">${esc(text)}</a>`]);
   }
-  if (f.hold) problems.push(["error", `<a href="#jobs">${esc(f.hold)}</a>`]);
+  if (f.hold) problems.push(["error", `<a href="#attention">${esc(f.hold)}</a>`]);
   if (f.paused) problems.push(["warning", "The factory is paused"]);
   if (f.dayCap > 0 && f.runsToday >= f.dayCap) problems.push(["warning", "The day cap is reached"]);
   const n = problems.length;
@@ -160,22 +161,39 @@ export function renderLands(s) {
   return section("lands", "Lands", s.delivered.length, rows ? cards(rows) : empty("Nothing has landed yet."));
 }
 
-/** The job groups, the ones that need attention first: [id, title, count, cards html]. */
+/** The job groups that need nothing from Chris (those that do are in the Needs you section): [id, title, count, cards html]. */
 function jobGroups(s) {
   return [
-    ["needs", "Needs you", s.needs.length, s.needs.map((j) => attentionCard(j, true)).join("")],
-    ["stuck", "Stuck or failed", s.stuck.length, s.stuck.map((j) => attentionCard(j, false)).join("")],
     ["running", "Running", s.running.length, s.running.map((j) => runningCard(s, j)).join("")],
     ["waiting", "Waiting", s.waiting.length, s.waiting.map(waitingCard).join("")],
   ];
 }
 
-/** Jobs by state: needs you, stuck or failed, running, waiting; a group with no job is left out. */
+/** Jobs by state: running, waiting; a group with no job is left out. */
 export function renderJobs(s) {
   const groups = jobGroups(s).filter(([, , n]) => n);
   const total = groups.reduce((a, [, , n]) => a + n, 0);
   const body = groups.map(([id, t, n, html]) => `<div class="grp" id="jobs-${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${cards(html)}</div>`).join("");
   return section("jobs", "Jobs", total, body || empty("No job is open and no goal waits."), 0);
+}
+
+/** Lines of the factory's own trouble that are errors: health (a red main among them), the hold, a failed probe. */
+function errorLines(s) {
+  const f = s.factory;
+  const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter((l) => !/passed on rerun/.test(l));
+  if (f.probe && !f.probe.ok && !(f.health || []).some((l) => /probe/.test(l))) out.push(`the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
+  if (f.hold) out.push(f.hold);
+  return out;
+}
+
+/** The Needs you section: everything that needs Chris or is wrong, with its actions, right under the status sentence. Left out when there is none. */
+export function renderAttention(s) {
+  const errors = errorLines(s).map((l) => `<div class="card error-row"><span class="badge stuck">Error</span> <span class="why">${esc(l)}</span></div>`).join("");
+  const issues = (s.needsIssues ?? []).map((i) => issueCard(i, "compact")).join("");
+  const html = s.needs.map((j) => attentionCard(j, true)).join("") + s.stuck.map((j) => attentionCard(j, false)).join("") + issues + errors;
+  const n = s.needs.length + s.stuck.length + (s.needsIssues ?? []).length + errorLines(s).length;
+  if (!n) return "";
+  return `<section id="attention" class="attention" aria-labelledby="h-attention">${section("attention", "Needs you", n, cards(html), 0)}</section>`;
 }
 
 /** "09:05": the time of the state, 24-hour, no date. */
