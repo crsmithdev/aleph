@@ -23,7 +23,7 @@ For the observations of one trace, call `/api/public/observations?traceId=<trace
 
 - **Navigation**: how easy was it for the agent to find the right files? Are there hidden dependencies between files? Would a **navigation pointer** make it easier? _Use when_ the session took a long time to find a piece of information.
 - **Automated checks**: are there automated checks that could catch errors the agent made? Linting, typing, tests, filesystem linters? _Use when_ the agent made a mistake that could have been caught by an automated check.
-- **Identity**: is there a steering instruction in `identity/CLAUDE.md` or `~/.claude/CLAUDE.md` that belongs in a skill, a hook, or the vault instead? _Use when_ the always-loaded files are growing, or an instruction fired where it wasn't wanted.
+- **Identity**: is there a steering instruction in `identity/CLAUDE.md` or `~/.claude/CLAUDE.md` that belongs elsewhere (see "Where a fix lives")? _Use when_ the always-loaded files are growing, or an instruction fired where it wasn't wanted.
 - **Verify gate**: did the gate deny a turn that was fine, or pass one that wasn't? _Use when_ a `guardrail` span in the trace has a surprising verdict.
 - **Memory**: did the agent re-derive something the vault already held, or learn something it never wrote down? _Use when_ a fact was looked up twice or lost between sessions.
 - **Tool economy**: did the agent make expensive tool calls that could be streamlined? Is there any custom tooling (CLI's, MCP's) that is particularly token-inefficient? _Use when_ the agent made an expensive tool call.

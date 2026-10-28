@@ -11,10 +11,7 @@ description: >
 # Red Team
 
 Spawn a panel of adversarial reviewers in parallel to interrogate a plan or
-proposal from independent angles. Each reviewer reads the artifact, verifies
-its claims against actual source, walks every branch of its decisions, and
-returns a numbered list of sharp questions and identified gaps with file
-citations.
+proposal from independent angles.
 
 This is the parallel companion to `/aleph:grill-me`. Where the interview
 walks one question at a time with the user, red-team interrogates the
@@ -23,19 +20,10 @@ synthesis.
 
 ## When to Use
 
-- The user has a plan, proposal, design doc, RFC, or PR description and
-  wants it stress-tested before committing
 - The user says "red team this", "tear this apart", "stress-test this with
   subagents", "have agents grill the plan", "grill yourself on this"
-- You just produced a plan in this session and want to pressure-test it
-  before recommending it
 
-## Do NOT Use For
-
-- Interactive grilling where the user is the subject: `/aleph:grill-me`
-- Reviewing already-implemented code: `/code-review`
-- Investigating a bug or failure: `/aleph:diagnosing-bugs`
-- Brainstorming when no plan exists yet. There must be an artifact to grill.
+Do not use this skill before a plan exists. There must be an artifact to grill.
 
 ## Procedure
 
@@ -48,7 +36,7 @@ it in full. If you cannot find it, ask for the path or URL. Do not invent.
 
 Default to **five parallel lenses**, one subagent each. Adapt the set to the
 artifact: drop a lens that doesn't apply, add one the artifact demands
-(security for an auth proposal, migration for a schema change).
+(see the table below).
 
 Default lenses:
 
@@ -82,7 +70,7 @@ Each prompt must include:
 - A length cap (under 800 words is a good default)
 
 Use `subagent_type: "general-purpose"` unless a specialist agent exists for
-the artifact's domain. Wait for every reviewer before you synthesize.
+the artifact's domain.
 
 ### 4. Synthesize the findings
 
@@ -115,7 +103,7 @@ The synthesis is direct and unhedged. If the verdict is "don't land this",
 say so. If several reviewers independently reached the same fatal finding,
 name that convergence.
 
-Do **not** soften findings to spare the author. If a finding is wrong, the
+If a finding is wrong, the
 author pushes back via SendMessage and the reviewer updates.
 
 ## Adapting the lens set
@@ -128,5 +116,3 @@ author pushes back via SendMessage and the reviewer updates.
 | UI/UX proposal | Add a design reviewer |
 | One-page tactical fix | Drop to 2 lenses (correctness + YAGNI) |
 | Cross-cutting platform change | Add a blast-radius reviewer |
-
-Match the panel to the artifact.

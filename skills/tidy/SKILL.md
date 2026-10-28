@@ -37,7 +37,7 @@ Use the `aleph:codebase-design` vocabulary for what you find, and the **deletion
 
 ## The line between the passes
 
-**Pass 1 acts only where a check answers yes or no.** The path does not resolve. The ignore rule matches. The command exits non-zero. Nothing in pass 1 turns on whether a thing is worth keeping; the moment it does, the finding moves to pass 2.
+**Pass 1 acts only where a check answers yes or no.** Nothing in pass 1 turns on whether a thing is worth keeping; the moment it does, the finding moves to pass 2.
 
 That line runs straight through tests and docs, so place each one by where its check falls:
 
@@ -57,7 +57,7 @@ Settle this before deleting anything, in either pass. A tracked file is recovera
 Both passes measure against this, so take it once.
 
 - The repo's own build, test and lint commands, run and green. Read them from the manifest; never hardcode a command the repo does not define.
-- The starting commit, and `git status --porcelain`. A dirty tree is fine, and it is also why the untracked rule exists: today's edits look like scratch.
+- The starting commit, and `git status --porcelain`. A dirty tree is fine.
 - Size: file count and total lines in scope. The report quotes the delta.
 
 A red baseline ends the run. Say so and stop: you cannot prove a deletion safe against a suite that was already failing.
@@ -103,8 +103,8 @@ Each row passes or fails. Nothing here is scored: a number averages a leaked cre
 
 | Gate | How it passes |
 |---|---|
-| **Cold clone** | Clone to a temp dir, follow the README's quickstart verbatim, and reach the result it promises. Do not use the working tree; it holds state a stranger will not have |
-| **Secrets in history** | No credential in `git log -p`, not merely none in `HEAD`. Deleting a key from the working tree leaves it in every clone |
+| **Cold clone** | Clone to a temp dir, follow the README's quickstart verbatim, and reach the result it promises. POLISH.md has the procedure |
+| **Secrets in history** | No credential in `git log -p`, not merely none in `HEAD` |
 | **Personal artifacts** | No absolute path carrying a username, no machine-local config, no `.env`, no editor or agent directory the repo does not mean to ship |
 | **License** | A `LICENSE` file exists, the manifest's license field agrees with it, and no vendored file carries an incompatible one |
 | **Required files** | The ones this repo's kind implies are present and say something. POLISH.md has the matrix |
@@ -136,6 +136,5 @@ Then write the vault page (`/aleph:vault`) for what the run taught you about how
 ## Red flags
 
 - **You are writing more lines than you delete.** Stop. The work turned into `/aleph:improve-codebase-architecture`.
-- **You reached for a new abstraction.** Same stop. This skill never adds a layer.
 - **You loosened the proof table to keep a finding.** The finding goes; the table stays.
 - **A deletion "should be safe".** It is proven or it is not a finding.

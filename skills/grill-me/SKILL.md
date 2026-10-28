@@ -20,9 +20,7 @@ For each question:
 2. Put the decision to the user with AskUserQuestion: short option labels, a one-line description each, your recommended option first. The explanation stays in step 1, because the question body is too small for it.
 3. Wait for the answer. Say what it settles, recompute the frontier, and go to the next question.
 
-Each answer reshapes the tree: settled decisions push the frontier outward and unblock the questions that depended on them.
-
-Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (filesystem, tools, etc.), dispatch a sub-agent to find it; don't ask the user for anything you could look up yourself. Don't block on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it wait for the sub-agent to report; ask another frontier question now. The _decisions_ are the user's: put each to them and wait.
+Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (filesystem, tools, etc.), dispatch a sub-agent to find it; don't ask the user for anything you could look up yourself. Don't block on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it wait for the sub-agent to report; ask another frontier question now.
 
 The session is done when the frontier is empty: every branch of the design tree visited, nothing left silently assumed. Do not act on it until the user confirms you have reached a shared understanding. When they do, offer `/aleph:to-spec` to write the decisions down.
 

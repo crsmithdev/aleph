@@ -7,7 +7,7 @@ description: >
 
 Read `~/.aleph/handoffs/<name>.md` in full. `<name>` is the argument, if one is given, and `current` if not. If the file does not exist, say so and stop. Do not guess.
 
-Treat the contents as authoritative session context: the **Intent** is the user's goal, the **State** is ground truth (verify it before acting), the **Active plan** is your plan unless you have a strong reason to revise it, and the **Resume instructions** are your directive.
+Treat the contents as authoritative session context: the **Intent** is the user's goal, the **State** is ground truth, the **Active plan** is your plan unless you have a strong reason to revise it, and the **Resume instructions** are your directive.
 
 Before taking any action the handoff tells you to take:
 

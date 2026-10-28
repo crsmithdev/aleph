@@ -1,8 +1,6 @@
 # ADR Format
 
-An ADR lives in the `docs/adr/` of the context it concerns: the root `docs/adr/` for a system-wide decision, the context's own `docs/adr/` otherwise (see the file structure in SKILL.md). Each folder numbers its ADRs in sequence: `0001-slug.md`, `0002-slug.md`, etc.
-
-Create the `docs/adr/` directory lazily: only when the first ADR is needed.
+An ADR lives in the `docs/adr/` of the context it concerns: see the file structure in SKILL.md. Each folder numbers its ADRs in sequence: `0001-slug.md`, `0002-slug.md`, etc.
 
 ## Template
 
@@ -28,13 +26,7 @@ Scan the target `docs/adr/` folder for the highest existing number and increment
 
 ## When to offer an ADR
 
-All three of these must be true:
-
-1. **Hard to reverse**: the cost of changing your mind later is meaningful
-2. **Surprising without context**: a future reader will look at the code and wonder "why on earth did they do it this way?"
-3. **The result of a real trade-off**: there were genuine alternatives and you picked one for specific reasons
-
-If a decision is easy to reverse, skip it: you'll just reverse it. If it's not surprising, nobody will wonder why. If there was no real alternative, there's nothing to record beyond "we did the obvious thing."
+Offer one only when all three tests in SKILL.md ("Offer ADRs sparingly") pass.
 
 ### What qualifies
 

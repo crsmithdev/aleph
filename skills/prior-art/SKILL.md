@@ -14,8 +14,7 @@ Read the field against a repo you own, and come back with a ranked list of
 what to take.
 
 The output is not a landscape. A landscape names who exists; this names what
-changes in the **anchor**. Every finding is relative to one repo, and every
-recommendation is costed.
+changes in the **anchor**.
 
 ## Vocabulary
 
@@ -44,8 +43,7 @@ Two sources earn a specific look, because they are where the sharpest
 recommendations come from:
 
 - **The problem statement** of any spec. It names failures that already
-  happened. A take that answers one of those outranks every take that
-  answers a hypothetical.
+  happened.
 - **`git log` for reverts and reversals.** `git log --oneline --grep=revert
   -i` and the commits around them. A revert is a failure the anchor paid
   for. Find what the field does about that class of failure.
@@ -162,15 +160,10 @@ Give the artifact a title naming the comparison, not the topic.
 
 ## Calibration
 
-- **The axes are the deliverable's spine.** A survey that compares on the
-  field's terms instead of the anchor's produces a feature checklist, which
-  is the failure mode of every competitor analysis.
-- **Cost every take**, in agent time. An uncosted recommendation cannot be
-  ranked, and a ranked list is the whole point.
 - **Prefer the mechanism to the feature.** "Runs the evidence test against
   the old commit and requires it to fail" is portable. "Has good verification"
   is not.
 - **A project's own numbers are evidence about the mechanism**, not about the
-  anchor. Quote them, attribute them, and never restate them as a prediction.
+  anchor. Never restate them as a prediction.
 - Do not soften a take because it implies rework, and do not inflate one
   because the project is popular. Stars measure attention.

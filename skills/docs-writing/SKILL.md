@@ -45,7 +45,7 @@ Docs audit progress:
 
 Done when **every in-scope file has a verdict**: findings with a rule, an issue and a fix, or `✓ pass`. Every category in steps 3 to 5 has run on each file, and every rule that produced a finding has run again after the fixes.
 
-Load rule files by category prefix (`rules/voice-*.md`, then `rules/structure-*.md`, ...) only for in-scope categories. After applying fixes, rerun the rules that produced findings before finalizing.
+Load rule files by category prefix (`rules/voice-*.md`, then `rules/structure-*.md`, ...) only for in-scope categories.
 
 ## Writing workflow
 
@@ -66,7 +66,7 @@ Step 5 is the exit criterion: a doc ships when its examples ran and its links re
 
 ## Type-gating table
 
-These rules apply only to the listed types. Flagging them elsewhere tells the author to break Diataxis.
+These rules apply only to the listed types.
 
 | Rule | Applies to |
 |------|-----------|
@@ -117,16 +117,6 @@ For the full rule list per category, read `rules/_sections.md`. The `*-defaults.
 
 - Doc-type misclassification is the top false-positive source. A missing quick start on an explanation page, or a "Next steps" section demanded of a reference page, is a finding against Diataxis, not for it. Check the type-gating table before reporting.
 - Cite the specific failing check in a `*-defaults.md` bundle ("`voice-defaults`: passive voice"), not just the filename, or the author can't locate the issue.
-- Load rule files by prefix for in-scope categories only. Loading the whole folder before scope is known floods context and buries the CRITICAL findings under MEDIUM ones.
-- "Should" is not a bug. Google's current word list uses "should" for a recommendation and "must" for a requirement; flag "should" only where the sentence states a requirement. Flagging every "should" produces a wall of false positives.
-- An example key that looks live (`sk_live_...`) gets pasted into real code and tripped by secret scanners. Sample credentials use the provider's test prefix (`sk_test_...`) or an explained placeholder (`YOUR_API_KEY`); see `code-placeholders`.
-- A hand-typed "Last updated: 2024-03-01" that nobody maintains reads as "abandoned" and is worse than no date. Only recommend `hygiene-update-metadata` when the date can come from the build or VCS.
-- A "This guide is part of the X series" opener on every page of a docs site duplicates the sidebar and breadcrumb the site already renders. `nav-breadcrumb-context` is for plain Markdown in a repo and for pages with a prerequisite the reader must have met.
-- Don't rewrite content you were asked to review; report and propose fixes unless the user said "improve" or "fix".
-- Don't audit unchanged files unless a full sweep was explicitly requested; unscoped findings drown the real ones.
-
-## Related skills
-
-- `aleph:writing-for-agents`: AGENTS.md, CLAUDE.md and skill files (execution-first, not reader-facing docs).
+- Rule files carry their own false-positive guidance (the "should" check, sample credentials, hand-typed dates, series openers). Read the rule before you flag a finding against it.
 
 Adapted from Matthew Blode's `docs-writing` skill (github.com/mblode/agent-skills, MIT, `skills/LICENSE-mblode`), with its references to sibling skills and its eval suite removed.

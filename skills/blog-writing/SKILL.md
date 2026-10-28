@@ -85,7 +85,6 @@ Flag and rewrite each of these.
 - "Seamless", "robust", "empower", "leverage", "unlock", "streamline": say what it actually does.
 - "At [X], we believe...": state the belief.
 - Filler transitions: "That being said", "It's worth noting that", "At the end of the day", "Without further ado", "As you might know".
-- "In this post, we will explore...": just start.
 
 **Stock AI words and moves:**
 - Puffery: pivotal, crucial, vital, testament, enduring legacy.
@@ -105,14 +104,14 @@ When a draft still reads as machine-written and you can't say why, search [`sign
 
 ## 4. Voice pass
 
-Invoke `aleph:humanizer` on the draft. It finds a voice sample and rewrites the post in the writer's voice. Where humanizer's voice sample and a rule above disagree, the sample wins: if the writer uses dashes or fragments, keep them at the writer's rate.
+Invoke `aleph:humanizer` on the draft. It finds a voice sample and rewrites the post in the writer's voice. Where humanizer's voice sample and a rule above disagree, the sample wins.
 
 ## Reviewing a draft
 
 Run the four passes as checks, and also:
 
-**Technical:** claims are accurate; code runs; descriptions of systems match the systems; numbers are correct; no simplification would make an expert cringe.
+**Technical:** claims are accurate; descriptions of systems match the systems; numbers are correct.
 
-**Editorial:** the opening holds the reader within two sentences; headings convey information; length fits the material, neither padded nor thin; the title is specific.
+**Editorial:** the opening holds the reader within two sentences; length fits the material, neither padded nor thin.
 
 For each problem, quote the weak passage, say why it is weak, and rewrite it.

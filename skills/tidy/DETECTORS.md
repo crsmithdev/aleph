@@ -13,7 +13,7 @@ Per-stack tools for step 4 of [tidy](SKILL.md). Detect the stack from the manife
 | Rust | `Cargo.toml` | `cargo machete`, `cargo udeps`, `cargo clippy` | Unused dependencies (fast, then thorough); dead code warnings |
 | Go | `go.mod` | `staticcheck`, `go mod tidy -diff` | Unused unexported symbols; dependencies the module no longer needs |
 
-`knip` is the strongest of these: it reports unused files, exports and dependencies in one pass, and it understands entry points. Give it the repo's real entry points (bins, hooks, test globs) or it reports every one of them as unused. Prefer configuring it in the run over committing a `knip.json`, unless the user wants the config kept.
+`knip` is the strongest of these: it reports unused files, exports and dependencies in one pass, and it understands entry points, so point it at the repo's real ones (see "Entry-point blindness"). Prefer configuring it in the run over committing a `knip.json`, unless the user wants the config kept.
 
 ## Reading the output
 

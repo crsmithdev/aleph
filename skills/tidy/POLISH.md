@@ -33,7 +33,7 @@ git log --all --diff-filter=A --name-only --format='%h' | grep -E '\.(env|pem|ke
 
 Two false-positive classes cover most hits. A test for a secret scanner plants secrets on purpose, so a repo that scans for credentials will match its own fixtures. And a docs example shows the shape of a key without being one. Read the surrounding line before reporting; a fixture reported as a leak spends the user's attention and teaches them to skip the gate.
 
-Name the commit for anything real. Do not rewrite history, and do not stop at the history question: a committed credential is compromised the moment it is pushed, so it needs rotating whether or not the history changes. Say that in the report.
+Name the commit for anything real, then follow the stop rule in step 10 of SKILL.md.
 
 ## Required files, by kind
 
@@ -47,7 +47,3 @@ Presence is the check; content is a judgment. A `CONTRIBUTING.md` that says "con
 | CLI | `--help` that matches the README | Install per platform |
 
 A repo that stays private needs the first column and nothing else. Do not add a code of conduct to a one-person private repo; that is checklist theatre, and it is the failure mode of every open-source-readiness tool.
-
-## What this pass deliberately omits
-
-A readiness score. Scoring averages a leaked credential against a thin README and reports a number that is neither. Every gate is pass or fail, and a failed gate is named.
