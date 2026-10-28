@@ -283,7 +283,8 @@ export async function warm(): Promise<void> {
 async function cached(url: URL, make: (a: Analysis) => unknown | null): Promise<Response> {
   const d = Number(url.searchParams.get("days"));
   const days = d > 0 ? Math.min(Math.floor(d), 365) : 30;
-  const project = url.searchParams.get("project") || null;
+  const asked = url.searchParams.get("project");
+  const project = asked && Object.hasOwn(loadRegistry(), asked) ? asked : null; // an unknown project is no filter
   const key = `${process.env.LANGFUSE_BASE_URL}\0${days}\0${project}`;
   let a: Analysis;
   try { a = await cache.get(key, TTL, () => analyse(days, project)); }

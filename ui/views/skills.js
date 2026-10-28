@@ -113,9 +113,9 @@ export const staleNote = (d, now = new Date()) => d.failed
   : "";
 
 export function renderFilters(d, f = {}) {
-  const projects = [...new Set([...(d.projects || []), f.project].filter(Boolean))].sort();
+  const projects = [...new Set(d.projects || [])].sort();
   return filterBar([
-    { label: "Project", name: "project", value: f.project || "", options: [{ value: "", label: "All" }, ...projects] },
+    { label: "Project", name: "project", value: projects.includes(f.project) ? f.project : "", options: [{ value: "", label: "All" }, ...projects] },
     { label: "Window", name: "days", value: f.days || "30", options: [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }] },
   ]);
 }

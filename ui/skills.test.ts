@@ -126,6 +126,17 @@ test("?project= keeps only that project's data", async () => {
   expect(one.tools.map((t: any) => t.tool)).not.toContain("Grep");
 });
 
+test("?project= that is no registry key is no filter", async () => {
+  expect((await get("/api/skills?project=junk")).body.skills).toEqual((await get("/api/skills")).body.skills);
+});
+
+test("renderFilters lists only registry projects and selects All for an unknown one", () => {
+  const junk = v.renderFilters({ projects: ["a", "b"] }, { project: "junk" });
+  expect(junk).not.toContain("junk");
+  expect(junk).toContain('data-value="" aria-pressed="true"');
+  expect(v.renderFilters({ projects: ["a", "b"] }, { project: "b" })).toContain('data-value="b" aria-pressed="true"');
+});
+
 test("a skill from the skills folder with no use is listed as unused", async () => {
   const { body } = await get("/api/skills");
   expect(body.unused).toEqual(["dormant"]);
