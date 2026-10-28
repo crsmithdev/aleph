@@ -79,6 +79,23 @@ test("a goal closed during the baseline is not started", async () => {
   expect(out.skipped).toEqual([]);
 });
 
+// The baselines all run before the goals are read again, so the gap that matters is between that read and a goal's lock:
+// an earlier goal's start is where it opens.
+test("a goal given a waiting_on while an earlier goal starts is not started", async () => {
+  const first = goal();
+  const second = goal();
+  const other = writeList({ key: "fac" }, "add an open item", (doc) => todos.add(doc, "not a goal", { labels: [] }).id, true)!.value;
+  const calls: string[] = [];
+  const out = await dispatchGoals(async (_repo, name) => {
+    calls.push(name);
+    if (name === `fac-${first}`) await change(second, (item) => todos.edit(item, { waitingOn: `fac-${other}` }));
+    return null;
+  }, async () => null);
+  expect(calls).toEqual([`fac-${first}`]);
+  expect(out.started).toEqual([`fac-${first}`]);
+  expect(out.skipped).toEqual([`fac-${second}: waiting on fac-${other}`]);
+});
+
 test("a goal that stays open and labelled is started exactly once", async () => {
   const id = goal();
   const calls: string[] = [];
