@@ -5,7 +5,8 @@
  * See "Sandbox" in docs/specs/2026-10-26-seed-factory.md.
  */
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { expand } from "./ledger.ts";
 
 export const runsDir = () => expand(process.env.ALEPH_RUNS_DIR ?? "~/.aleph/runs");
@@ -15,9 +16,16 @@ const TOKEN = () => expand(process.env.ALEPH_WORKER_TOKEN ?? "~/.aleph/secrets/w
 /** The worker's token, or empty when the file is missing. Never printed. */
 export const workerToken = (): string => existsSync(TOKEN()) ? readFileSync(TOKEN(), "utf8").trim() : "";
 
-/** Resolve a command on the dispatcher's PATH to its real file, or null. */
+/** The caller's PATH with ~/.local/bin and the directory of this bun added at the end when missing. */
+export function runPath(env: Record<string, string | undefined> = process.env): string {
+  const parts = (env.PATH ?? "").split(":").filter(Boolean);
+  for (const d of [join(process.env.HOME || homedir(), ".local", "bin"), dirname(process.execPath)]) if (!parts.includes(d)) parts.push(d);
+  return parts.join(":");
+}
+
+/** Resolve a command on the run PATH to its real file, or null. */
 function resolveBin(name: string): string | null {
-  const p = Bun.which(name);
+  const p = Bun.which(name, { PATH: runPath() });
   return p ? realpathSync(p) : null;
 }
 

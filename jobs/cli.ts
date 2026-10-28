@@ -16,6 +16,7 @@ import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import { triage } from "../todo/lib/triage.ts";
 import { behind, dispatchGoals, dispatchOn, factoryDir, factoryLog, LIVE_CAP, health, hold, lastProbe, paused, probeDue, report, setPaused, triageDetached, triageNow, triageStep } from "./lib/factory.ts";
+import { runPath } from "./lib/sandbox.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
 import { derive, facts, FACTS_REF, itemOnMain, readFacts, type Facts } from "./lib/status.ts";
@@ -88,7 +89,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
       const factory = run.kind === "agent" && run.repo && loadRegistry()[run.repo]?.sandbox;
       const max = factory ? [`--property=RuntimeMaxSec=${Number(process.env.ALEPH_JOB_TIMEOUT ?? 2400) + 3600}`] : [];
       const p = Bun.spawnSync(["systemd-run", "--user", "--collect", "--quiet", `--unit=aleph-${id}`, `--working-directory=${cwd}`, ...max,
-        `--setenv=PATH=${process.env.PATH}`, ...pass, process.execPath, CLI, "unit", folder], { stdout: "pipe", stderr: "pipe" });
+        `--setenv=PATH=${runPath()}`, ...pass, process.execPath, CLI, "unit", folder], { stdout: "pipe", stderr: "pipe" });
       if (p.exitCode !== 0) {
         updateRun(folder, { state: "failed", reason: `systemd-run failed: ${p.stderr.toString().trim()}`, ended: new Date().toISOString() });
         refuse(`systemd-run failed: ${p.stderr.toString().trim()}`);

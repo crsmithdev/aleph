@@ -11,7 +11,7 @@ import { readHidden, writeList } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
-import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
+import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
 import { dispatchOn, hold, triageDetached, paused, recordFlake } from "./factory.ts";
 import { postTrace } from "./trace.ts";
 import { FACTS_REF, itemOnMain, writeFacts } from "./status.ts";
@@ -485,7 +485,7 @@ export async function unit(folder: string): Promise<void> {
   const id = basename(folder);
   const run = readRun(folder)!;
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
-  const dispatcherPath = process.env.PATH;
+  const dispatcherPath = runPath();
   const env: Record<string, string | undefined> = {
     ...process.env, ...readEnvFile(repo?.env ?? process.env.ALEPH_RUN_ENV),
     PATH: dispatcherPath, HOME: homedir(), ALEPH_JOB_ID: run.job, ALEPH_JOB_RUN: id,
@@ -610,7 +610,7 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
     ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph issue writes the list. The lists live in the work store now. Remove ${TODO_PATH} from the branch, commit, and make each change to the list with aleph issue.`
     : `The land conflicted with origin/main in: ${(run.conflicts ?? []).join(", ")}. Merge origin/main into this branch, resolve each conflict so that the change on main and this job's change both survive, run the tests, and commit.`;
   const log = openSync(join(folder, "next.log"), "a");
-  const p = Bun.spawn([process.execPath, cli, ...argv], { env: process.env, stdin: next === "worker" ? new Blob([note]) : "ignore", stdout: log, stderr: log });
+  const p = Bun.spawn([process.execPath, cli, ...argv], { env: { ...process.env, PATH: runPath() }, stdin: next === "worker" ? new Blob([note]) : "ignore", stdout: log, stderr: log });
   const code = await p.exited;
   closeSync(log);
   if (code !== 0) updateRun(folder, { next: undefined });
