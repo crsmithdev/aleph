@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { labels as storeLabels, readList, writeList } from "../../todo/lib/store.ts";
 import { readDecision } from "./decision.ts";
 import { parseVerdict, prompt, triageOpen } from "./triage.ts";
-import { readRun, type Repo } from "./ledger.ts";
+import { lock, readRun, stamp, writeRun, type Repo } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
@@ -201,6 +201,35 @@ test("parseVerdict wants the field its verdict needs", () => {
   expect(parseVerdict('{"verdict":"goal","body":"b","waiting_on":"aleph-265"}')).toEqual({ verdict: "goal", body: "b", waitingOn: "aleph-265" });
   expect(parseVerdict('{"verdict":"goal","body":"b","waiting_on":"soon"}')).toEqual({ verdict: "goal", body: "b" });
   expect(parseVerdict("[]")).toBe("no JSON");
+});
+
+// A triage run whose process died before its `end()`: `running`, with no pid or exit file.
+function lostRun(name: string): string {
+  const folder = join(base, "jobs", `${stamp()}-${name}-triage`);
+  mkdirSync(folder, { recursive: true });
+  writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name, repo: repo.key, todo: 1, state: "running", phase: "triage", told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
+  return folder;
+}
+
+test("a triage run whose process ended before a verdict is ended as failed by the next triage", async () => {
+  reset([]);
+  const folder = lostRun(`triage-${repo.key}-1`);
+  await run();
+  const r = readRun(folder)!;
+  expect(r).toMatchObject({ state: "done", reason: "failed: its process ended before a verdict" });
+  expect(typeof r.ended).toBe("string");
+});
+
+test("a lost triage run whose item's lock is held is left running", async () => {
+  reset([]);
+  const folder = lostRun(`triage-${repo.key}-1`);
+  const release = (await lock(`triage-${repo.key}-1`, 0))!;
+  try {
+    await run();
+    expect(readRun(folder)?.state).toBe("running");
+  } finally {
+    release();
+  }
 });
 
 // Triage at once: `triageNow` is what `aleph triage <repo>-<n>` runs, after an add, an answer or a follow-up.

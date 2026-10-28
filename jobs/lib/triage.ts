@@ -8,7 +8,7 @@ import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { GOAL, NEEDS_CHRIS, isSorted, label, reader, sort } from "../../todo/lib/store.ts";
 import { decisionNote, normalizeDecision, writeDecision, type Decision } from "./decision.ts";
-import { allRuns, jobsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
+import { allRuns, jobsDir, lock, readRun, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
 import { gates, pendingWaits } from "./factory.ts";
@@ -172,10 +172,31 @@ async function triageItem(repo: Repo, item: todos.Item, triaged: Counts, skipped
   }
 }
 
+/**
+ * End the triage runs left `running` by a process that died before its `end()`.
+ * A triage holds its item's lock for the whole run, so a lock taken with no wait
+ * means no process is running that triage. A run whose lock is held is left alone.
+ */
+async function endLost(): Promise<void> {
+  for (const { folder, run } of allRuns()) {
+    if (run.kind !== "triage" || run.state !== "running" || !run.repo || run.todo === undefined) continue;
+    const release = await lock(`triage-${run.repo}-${run.todo}`, 0);
+    if (!release) continue;
+    try {
+      // Read again under the lock: the run may have ended since the list was read.
+      if (readRun(folder)?.state !== "running") continue;
+      updateRun(folder, { state: "done", phase: undefined, reason: "failed: its process ended before a verdict", ended: new Date().toISOString() });
+    } finally {
+      release();
+    }
+  }
+}
+
 /** Triage one open issue now, if it is one the tick would triage. */
 export async function triageIssue(repo: Repo, id: number, done: (ref: string) => boolean): Promise<{ triaged: Counts; skipped: string[] }> {
   const triaged: Counts = {};
   const skipped: string[] = [];
+  await endLost();
   const item = reader().item(repo.key, id);
   if (!item || todos.status(item) !== "open" || isSorted(item)) return { triaged, skipped };
   const waits = item.fm.waiting_on;
@@ -193,6 +214,7 @@ export async function triageIssue(repo: Repo, id: number, done: (ref: string) =>
 export async function triageOpen(repos: Repo[], done: (ref: string) => boolean): Promise<{ triaged: Counts; skipped: string[] }> {
   const triaged: Counts = {};
   const skipped: string[] = [];
+  await endLost();
   const queue: { repo: Repo; item: todos.Item }[] = [];
   const lists = reader();
   for (const repo of repos) {
