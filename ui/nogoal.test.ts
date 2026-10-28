@@ -43,7 +43,7 @@ describe("the UI never says goal", () => {
 
   test("the goal label shows as factory, and the form still adds it", () => {
     expect(issueCard(issue, "full")).toContain("factory, ui");
-    expect(renderEvent(event)).toContain('<span class="badge">factory</span>');
+    expect(renderEvent(event)).toContain('<span class="chip">factory</span>');
     expect(triageCard({ name: "t", state: "done", outcome: "goal" }, "full")).toContain("To factory");
     const form = renderContents({ projects: [], issues: [] });
     expect(form).toContain("Build in the factory");

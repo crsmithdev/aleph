@@ -130,3 +130,18 @@ describe("routes and view", () => {
     expect(renderActivity(b)).toContain("&lt;b&gt;");
   });
 });
+
+describe("Tools page parts", () => {
+  test("uses the shared header and table, orders name, numbers; 50 rows and a pager", () => {
+    const tools = Array.from({ length: 70 }, (_, i) => ({ name: `T${i}`, calls: i, errors: i % 2 }));
+    const html = renderActivity({ langfuse: "ok", tools, hooks: [], denials: { total: 1, recent: [{ at: "2026-10-27T10:25:00", reason: "nothing ran" }] } });
+    expect(html).toContain('<header class="ph"><h1>Tools</h1>');
+    expect(html).toContain('<table class="tbl"');
+    expect(html.match(/<td class="wide">T/g)).toHaveLength(50);
+    expect(html).toContain('data-more="20">Show 20 more');
+    expect(html).toContain("50 of 70");
+    expect(html).toMatch(/<th>Reason<\/th><th>When<\/th>/);
+    expect(html).toContain('<td class="time">Oct 27 10:25</td>');
+    expect(html).not.toContain(".act table");
+  });
+});

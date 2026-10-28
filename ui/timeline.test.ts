@@ -185,22 +185,23 @@ describe("timeline view", () => {
 
   test("each row has the eight columns, in order, with a Project and no Subtype", async () => {
     const t = await timeline({ now });
-    const html = renderStream(t.rows!, 0, now.getTime());
+    const html = renderStream(t.rows!, 1000, now.getTime());
     for (const kind of ["job", "land", "issue"]) {
-      expect(html).toMatch(new RegExp(`<tr class="evr" data-kind="${kind}"[^>]*>(<td class="c-[a-z]+"[^>]*>.*?</td>){8}</tr>`));
+      expect(html).toMatch(new RegExp(`<tr class="evr" data-kind="${kind}"[^>]*>(<td class="c-[a-z]+[^"]*"[^>]*>.*?</td>){8}</tr>`));
     }
     const row = renderEvent(t.rows!.find((r: any) => r.kind === "job")!);
-    expect([...row.matchAll(/<td class="(c-\w+)"/g)].map((m) => m[1])).toEqual(["c-time", "c-status", "c-type", "c-project", "c-id", "c-title", "c-con", "c-act"]);
+    expect([...row.matchAll(/<td class="(c-\w+)/g)].map((m) => m[1])).toEqual(["c-id", "c-title", "c-status", "c-type", "c-project", "c-con", "c-time", "c-act"]);
   });
 
-  test("time is MM/DD HH:MM, or the day alone", () => {
-    expect(stamp({ at: new Date(2026, 9, 7, 9, 5).toISOString() })).toBe("10/07 09:05");
-    expect(stamp({ at: new Date(2026, 9, 7, 9, 5).toISOString(), dateOnly: true })).toBe("10/07");
+  test("time is the shared when (Oct 07 09:05), or the day alone", () => {
+    const y = new Date().getFullYear();
+    expect(stamp({ at: new Date(y, 9, 7, 9, 5).toISOString() })).toBe("Oct 07 09:05");
+    expect(stamp({ at: new Date(y, 9, 7, 9, 5).toISOString(), dateOnly: true })).toBe("Oct 07");
   });
 
   test("a job's end row has the verb as its badge, type, project, #id link, title and contents of run kind, model, cost, took", () => {
     const h = renderEvent({ at: "2026-10-27T10:25:00", kind: "job", what: "landed", state: "landed", sub: "agent", id: "aleph-9", title: "Do it", href: "#/jobs/aleph-9", project: "aleph", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] });
-    for (const t of ['<span class="badge done">landed</span>', '<td class="c-type">job</td>', '<td class="c-project">aleph</td>', '<a class="id" href="#/jobs/aleph-9">#9</a>', '<td class="c-title">Do it</td>']) expect(h).toContain(t);
+    for (const t of ['<span class="badge done">landed</span>', '<td class="c-type">job</td>', '<td class="c-project">aleph</td>', '<a class="idl" href="#/jobs/aleph-9">#9</a>', '<td class="c-title wide" title="Do it">Do it</td>']) expect(h).toContain(t);
     expect(contentsText({ kind: "job", sub: "agent", cost: 1.5, details: [["took", "25m"], ["model", "opus"]] })).toBe("run: agent  model: opus  cost: $1.50  took: 25m");
     expect(h).not.toContain("Project");
     expect(h).not.toContain("Cost");
@@ -219,10 +220,9 @@ describe("timeline view", () => {
     expect(contentsText({ kind: "land", sub: "direct", details: [["commit", "abc1234"]] })).toBe("commit: abc1234  landed: direct");
     expect(contentsText({ kind: "land", details: [["commit", "abc1234"]] })).toBe("commit: abc1234");
     const h = renderEvent({ at: "2026-10-26T00:00:00", kind: "issue", what: "opened", state: "open", title: "t", id: "aleph-3", href: "#/issues/aleph/3", project: "aleph", details: [["labels", "followup,goal"], ["notes", "2"]] });
-    expect(h).toContain('<span class="badge">followup</span>');
-    expect(h).toContain('<span class="badge">factory</span>');
+    expect(h).toContain('<span class="chips"><span class="chip">followup</span><span class="chip">factory</span></span>');
     expect(h).toContain('<span><b class="k">notes:</b> 2</span>');
-    expect(h).toContain('<b class="k">labels:</b> <span class="badge">followup</span>');
+    expect(h).toContain('<b class="k">labels:</b> <span class="chips"><span class="chip">followup</span>');
     expect(h).not.toContain("Labels");
   });
 
@@ -249,7 +249,7 @@ describe("timeline view", () => {
 
     test("only rows in the open set get an extra row", () => {
       expect(renderStream([job, issue])).not.toContain('class="more"');
-      const h = renderStream([job, issue], 0, Date.now(), 100, undefined, new Set([rowKey(job)]));
+      const h = renderStream([job, issue], 50, Date.now(), undefined, new Set([rowKey(job)]));
       expect(h.match(/<tr class="more"/g)).toHaveLength(1);
       expect(h).toContain('aria-expanded="true"');
       expect(h).toContain('aria-expanded="false"');
@@ -316,9 +316,10 @@ describe("timeline view", () => {
     expect(renderTimeline({ rows: [] })).toContain("text-overflow: ellipsis");
   });
 
-  test("the title takes the width left, and the X is an icon button in the last cell", () => {
+  test("the title is the shared wide cell, and the X is an icon button in the last cell", () => {
     const css = renderTimeline({ rows: [] });
-    expect(css).toMatch(/\.c-title \{ width: 100%/);
+    expect(css).not.toMatch(/\.c-title \{ width: 100%/);
+    expect(renderEvent({ at: at(0), kind: "job", what: "x", title: "j" })).toContain('class="c-title wide"');
     expect(css).not.toContain("table-layout: fixed");
     expect(css).toContain(".cancel:hover");
     expect(css).toContain(".cancel:focus-visible");
@@ -335,9 +336,9 @@ describe("timeline view", () => {
     expect(mine.find((e) => e.what === "triaged")!.at).toBe(new Date(at(1, 11)).toISOString());
     expect(mine.filter((e) => e.what === "decided").map((e) => e.at).sort()).toEqual([new Date(at(1, 12)).toISOString(), new Date(at(1, 13)).toISOString()]);
     // a decided row has no X; the issue is still open, so its opened row has
-    expect(renderStream(t.rows!, 0, now.getTime(), 1000)).toMatch(/data-cancel/);
+    expect(renderStream(t.rows!, 1000, now.getTime())).toMatch(/data-cancel/);
     expect(renderEvent(mine.find((e) => e.what === "triaged")!)).not.toContain("data-cancel");
-    expect(renderStream(mine.filter((e) => e.what !== "opened"), 0, now.getTime())).not.toContain("data-cancel");
+    expect(renderStream(mine.filter((e) => e.what !== "opened"), 1000, now.getTime())).not.toContain("data-cancel");
   });
 
   test("a running job counts its duration to now", () => {
@@ -347,20 +348,21 @@ describe("timeline view", () => {
     expect(renderEvent(e)).toContain(">started<");
   });
 
-  test("the stream pages at 100 rows with Older and Newer", () => {
-    const rows = Array.from({ length: 250 }, (_, i) => ({ at: new Date(2026, 9, 27, 0, 0, 250 - i).toISOString(), kind: "issue", what: "opened", title: `n${i}`, href: "#/issues/a/1" }));
+  test("the stream shows 50 rows and the shared pager, Show 50 more", () => {
+    const rows = Array.from({ length: 120 }, (_, i) => ({ at: new Date(2026, 9, 27, 0, 0, 250 - i).toISOString(), kind: "issue", what: "opened", title: `n${i}`, href: "#/issues/a/1" }));
     const rowsIn = (h: string) => h.match(/class="evr"/g)?.length ?? 0;
-    const p0 = renderStream(rows, 0), p1 = renderStream(rows, 1), p2 = renderStream(rows, 2);
-    expect([rowsIn(p0), rowsIn(p1), rowsIn(p2)]).toEqual([100, 100, 50]);
-    expect(p0).toContain(">Older</button>");
-    expect(p0).toMatch(/data-page="-1" disabled/);
-    expect(p2).toMatch(/data-page="3" disabled/);
-    expect(p2).toContain("Page 3 of 3");
+    const p0 = renderStream(rows), p1 = renderStream(rows, 100), p2 = renderStream(rows, 150);
+    expect([rowsIn(p0), rowsIn(p1), rowsIn(p2)]).toEqual([50, 100, 120]);
+    expect(p0).toContain('data-more="50">Show 50 more</button>');
+    expect(p0).toContain("50 of 120");
+    expect(p1).toContain('data-more="20"');
+    expect(p2).not.toContain("data-more");
+    expect(p2).toContain("120 of 120");
   });
 
   test("an issue row without cost has an empty cost cell and a day-only time", () => {
     const h = renderEvent({ at: "2026-10-26T00:00:00", kind: "issue", what: "opened", state: "open", title: "aleph-3 x", href: "#/issues/aleph/3", dateOnly: true, details: [["labels", "goal,ui"]] });
-    expect(h).toContain('<td class="c-time">10/26</td>');
+    expect(h).toContain('<td class="c-time time">Oct 26</td>');
     expect(h).not.toContain("$");
   });
 
@@ -375,13 +377,14 @@ describe("timeline view", () => {
     const t = await timeline({ now });
     const html = renderTimeline(t);
     expect(html).not.toContain('type="checkbox"');
-    expect([...html.matchAll(/<button type="button" data-kind="(\w+)" aria-pressed="(\w+)">(\w+)</g)].map((m) => m.slice(1).join(":"))).toEqual(["all:true:All", "job:false:Jobs", "land:false:Lands", "issue:false:Issues"]);
-    expect(html).toContain(".kinds button:focus-visible");
+    expect([...html.matchAll(/<button type="button" data-value="(\w+)" aria-pressed="(\w+)">(\w+)</g)].map((m) => m.slice(1).join(":"))).toEqual(["all:true:All", "job:false:Jobs", "land:false:Lands", "issue:false:Issues"]);
+    expect(html).toContain('<div class="seg"');
+    expect(html).toContain('<header class="ph"><h1>Activity</h1>');
     expect(html).not.toContain("Sessions");
     expect(html).not.toContain("Notes</button>");
     expect(html).toContain('id="tl-strip"');
-    expect([...html.matchAll(/<th class="c-\w+"[^>]*>(?:<button[^>]*>)?(\w*)/g)].map((m) => m[1])).toEqual(["Time", "Status", "Type", "Project", "Id", "Title", "Contents", ""]);
-    const all = renderStream(t.rows!, 0, now.getTime(), 1000);
+    expect([...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*>)?(\w*)/g)].map((m) => m[1])).toEqual(["Id", "Title", "Status", "Type", "Project", "Contents", "Time", ""]);
+    const all = renderStream(t.rows!, 1000, now.getTime());
     expect(new Set(all.match(/data-kind="\w+"/g)).size).toBeGreaterThan(1);
   });
 
@@ -393,8 +396,8 @@ describe("timeline view", () => {
     expect(kindsHash(new Set(["land", "job"]))).toBe("#/timeline?kinds=job,land");
     expect(kindsHash(new Set(["job", "land", "issue"]))).toBe("#/timeline");
     const html = renderTimeline({ rows }, new URLSearchParams("kinds=land"));
-    expect(html).toContain('data-kind="land" aria-pressed="true"');
-    expect(html).toContain('data-kind="all" aria-pressed="false"');
+    expect(html).toContain('data-value="land" aria-pressed="true"');
+    expect(html).toContain('data-value="all" aria-pressed="false"');
     expect(html.match(/<tr class="evr"/g)).toHaveLength(1);
   });
 
@@ -417,16 +420,16 @@ describe("timeline view", () => {
     const kinds = ["job", "land", "issue"];
     const rows = kinds.map((kind, i) => ({ at: new Date(2026, 9, 27, 10, i).toISOString(), kind, what: "x", title: kind, href: "#/x" }));
     const stream = { innerHTML: "", addEventListener() {}, querySelector() { return null; } };
-    const buttons = ["all", ...kinds].map((kind) => ({ dataset: { kind }, pressed: "", setAttribute(_: string, v: string) { this.pressed = v; }, closest() { return this; } }));
+    const buttons = ["all", ...kinds].map((kind) => ({ dataset: { value: kind }, pressed: "", setAttribute(_: string, v: string) { this.pressed = v; }, closest() { return this; } }));
     let click: (ev: unknown) => void = () => {};
     const root = {
-      querySelector: (q: string) => q === "#tl-stream" ? stream : q === ".kinds" ? { addEventListener: (_: string, f: typeof click) => { click = f; } } : null,
+      querySelector: (q: string) => q === "#tl-stream" ? stream : q === ".fbar .seg" ? { addEventListener: (_: string, f: typeof click) => { click = f; } } : null,
       querySelectorAll: () => buttons,
     };
     mountTimeline(root, { rows }, new URLSearchParams());
-    const pressed = () => buttons.filter((b) => b.pressed === "true").map((b) => b.dataset.kind);
+    const pressed = () => buttons.filter((b) => b.pressed === "true").map((b) => b.dataset.value);
     const shown = () => [...stream.innerHTML.matchAll(/<tr class="evr" data-kind="(\w+)"/g)].map((m) => m[1]);
-    const press = (kind: string, mods: object = {}) => click({ target: buttons.find((x) => x.dataset.kind === kind), ...mods });
+    const press = (kind: string, mods: object = {}) => click({ target: buttons.find((x) => x.dataset.value === kind), ...mods });
     press("job");
     expect(shown()).toEqual(["job"]);
     expect(pressed()).toEqual(["job"]);
@@ -528,8 +531,8 @@ describe("sorting", () => {
     expect(titles(sortRows(rows, { key: "time", dir: 1 }))).toBe("bca");
     expect(nextSort({ key: "time", dir: -1 }, "time")).toEqual({ key: "time", dir: 1 });
     expect(nextSort({ key: "time", dir: -1 }, "title")).toEqual({ key: "title", dir: 1 });
-    expect(renderStream(rows)).toContain('aria-sort="descending"><button type="button" data-sort="time">Time ▼');
-    expect(renderStream(rows, 0, Date.now(), 100, { key: "title", dir: 1 })).toContain('aria-sort="ascending"><button type="button" data-sort="title">Title ▲');
+    expect(renderStream(rows)).toContain('aria-sort="descending"><button type="button" data-sort="time">Time<span class="arr" aria-hidden="true">▼');
+    expect(renderStream(rows, 50, Date.now(), { key: "title", dir: 1 })).toContain('aria-sort="ascending"><button type="button" data-sort="title">Title<span class="arr" aria-hidden="true">▲');
     expect(renderStream(rows)).not.toContain('data-sort="con"');
   });
   test("each sortable key orders the rows", () => {
@@ -540,7 +543,7 @@ describe("sorting", () => {
   test("clicking a header redraws sorted; a second click reverses", () => {
     const stream: any = { innerHTML: "", addEventListener(_: string, f: any) { this.h = f; } };
     mountTimeline({ querySelector: (q: string) => (q === "#tl-stream" ? stream : null), querySelectorAll: () => [] } as any, { rows });
-    const order = () => [...stream.innerHTML.matchAll(/class="c-title">(\w)</g)].map((m) => m[1]).join("");
+    const order = () => [...stream.innerHTML.matchAll(/class="c-title wide" title="\w">(\w)</g)].map((m) => m[1]).join("");
     const click = (key: string) => stream.h({ target: { closest: (s: string) => (s.includes("data-sort") ? { dataset: { sort: key } } : null) } });
     click("title"); expect(order()).toBe("abc");
     click("title"); expect(order()).toBe("cba");
