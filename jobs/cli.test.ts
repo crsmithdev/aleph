@@ -55,6 +55,14 @@ function specFile(text: string): string {
 }
 const job = (name: string, action: string, extra: Record<string, string> = {}, repoKey = "demo") =>
   aleph(["job", repoKey, name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`)], extra);
+/** A commit on origin/main from the other clone, so a land's checks see a main the run's own checks did not. */
+function moveMain(): void {
+  sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
+  writeFileSync(join(other, `moved-${Math.random()}`), "x\n");
+  sh(other, "git", "add", ".");
+  sh(other, "git", "commit", "-qm", "moved");
+  sh(other, "git", "push", "-q", "origin", "main");
+}
 const state = (run: string) => JSON.parse(readFileSync(join(jobsDir, run, "state.json"), "utf8"));
 const file = (run: string, f: string) => readFileSync(join(jobsDir, run, f), "utf8");
 const worktree = (name: string) => join(repo, ".worktrees", `job-${name}`);
@@ -172,6 +180,9 @@ beforeAll(() => {
     { name: "todo race", run: `if [ -f ${join(base, "todo-once")} ]; then rm ${join(base, "todo-once")}; bun ${CLI} todo note demo 1 "during the land"; fi`, when: ["todo-race/**"] },
     // Pushes a commit that names an item (its trailer is in item-once) from another clone once, during the land's checks.
     { name: "item race", run: `if [ -f ${join(base, "item-once")} ]; then m=$(cat ${join(base, "item-once")}); rm ${join(base, "item-once")}; cd ${join(base, "other")} && git fetch -q origin && git reset -q --hard origin/main && echo $RANDOM > item-hand && git add item-hand && git -c user.name=t -c user.email=t@t commit -qm hand -m "$m" && git push -q origin main; fi`, when: ["item-race/**"] },
+    // The batch tests: one line per call; the second fails once the first run's file is there with it.
+    { name: "count", run: `echo x >> ${join(base, "batch-count")}`, when: ["batch/**"] },
+    { name: "batchbad", run: "! { [ -f batch/a.txt ] && [ -f batch/bad.txt ]; }", when: ["batch/**"] },
     { name: "race", run: `if [ -f ${join(base, "race-once")} ]; then rm ${join(base, "race-once")}; cd ${join(base, "other")} && git pull -q --rebase origin main && echo $RANDOM > raced && git add raced && git commit -qm race && git push -q origin main; fi`, when: ["race/**"] },
   ];
   writeFileSync(join(base, "repos.json"), JSON.stringify({
@@ -557,6 +568,7 @@ describe("land", () => {
 
   test("a push that loses a race merges again in the same land, and lands", async () => {
     await job("racer", "commit race/x.txt");
+    moveMain();
     writeFileSync(join(base, "race-once"), "");
     const r = await aleph(["land", "racer"]);
     expect(state(r.json.run)).toMatchObject({ state: "landed" });
@@ -568,6 +580,7 @@ describe("land", () => {
 
   test("a to-do write during the checks goes to the work store and leaves the land's main alone", async () => {
     await job("patient", "commit todo-race/patient.txt");
+    moveMain();
     const before = remoteHead();
     writeFileSync(join(base, "todo-once"), "");
     const l = await aleph(["land", "patient"]);
@@ -596,6 +609,114 @@ describe("land", () => {
     expect([sh(repo, "git", "rev-parse", "HEAD"), sh(repo, "git", "status", "--porcelain"), sh(repo, "git", "diff")]).toEqual(before);
     sh(repo, "git", "checkout", "README");
   });
+});
+
+describe("a batch of lands", () => {
+  const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
+  const calls = () => existsSync(join(base, "batch-count")) ? readFileSync(join(base, "batch-count"), "utf8").trim().split("\n").filter(Boolean).length : 0;
+  const pushes = () => existsSync(join(base, "pushes")) ? readFileSync(join(base, "pushes"), "utf8").trim().split("\n").filter(Boolean).length : 0;
+  const landRuns = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-demo-${name}-`) && d.endsWith("-land")).sort().map((d) => ({ id: d, ...state(d) }));
+  const lockDir = () => join(base, "run", "aleph", "land-demo");
+  let landCalls = 0;
+
+  beforeEach(() => {
+    rmSync(join(base, "batch-count"), { force: true });
+    rmSync(join(base, "pushes"), { force: true });
+    writeFileSync(join(remote, "hooks", "pre-receive"), `#!/bin/sh\necho x >> ${join(base, "pushes")}\ncat > /dev/null\n`, { mode: 0o755 });
+  });
+  afterAll(() => rmSync(join(remote, "hooks", "pre-receive"), { force: true }));
+
+  /** Passed jobs, then their lands started one by one while another process holds the repo's land lock; returns the lands' results once the lock is let go. */
+  async function landTogether(jobs: [string, string][]): Promise<{ job: string; run: string }[]> {
+    const ids: Record<string, string> = {};
+    for (const [name, action] of jobs) ids[name] = (await job(name, action)).json.job;
+    mkdirSync(join(base, "run", "aleph"), { recursive: true });
+    mkdirSync(lockDir());
+    writeFileSync(join(lockDir(), "owner"), String(process.pid));
+    const callsBefore = calls();
+    const started: Promise<unknown>[] = [];
+    for (const [name] of jobs) {
+      started.push(aleph(["land", name]));
+      const deadline = Date.now() + 30_000;
+      while (!landRuns(name).length && Date.now() < deadline) await Bun.sleep(50);
+      await Bun.sleep(300);
+    }
+    rmSync(lockDir(), { recursive: true, force: true });
+    await Promise.all(started);
+    landCalls = calls() - callsBefore;
+    return jobs.map(([name]) => ({ job: ids[name], run: landRuns(name)[0].id }));
+  }
+
+  test("a batch of three: one check call, one push, three commits, each run landed with its own Item and Job trailers", async () => {
+    const items = [] as number[];
+    for (const t of ["x1", "x2", "x3"]) items.push((await aleph(["todo", "add", "demo", t])).json.added);
+    const ids: string[] = [];
+    for (const [i, n] of ["t1", "t2", "t3"].entries()) ids.push((await aleph(["job", "demo", n, "--spec", specFile(`Goal: ${n}\nACTION: commit batch/t${i}.txt\n`), "--todo", String(items[i])])).json.job);
+    const before = calls();
+    mkdirSync(join(base, "run", "aleph"), { recursive: true });
+    mkdirSync(lockDir());
+    writeFileSync(join(lockDir(), "owner"), String(process.pid));
+    const started: Promise<unknown>[] = [];
+    for (const n of ["t1", "t2", "t3"]) {
+      started.push(aleph(["land", n]));
+      while (!landRuns(n).length) await Bun.sleep(50);
+      await Bun.sleep(300);
+    }
+    rmSync(lockDir(), { recursive: true, force: true });
+    await Promise.all(started);
+    expect(calls() - before).toBe(1);
+    expect(pushes()).toBe(1);
+    const log = remoteGit("log", "-3", "--format=%B%x00", "main").split("\0").map((m) => m.trim()).filter(Boolean).reverse();
+    expect(log.length).toBe(3);
+    for (const [i, n] of ["t1", "t2", "t3"].entries()) {
+      expect(log[i]).toContain(`Item: demo-${items[i]}`);
+      expect(log[i]).toContain(`Job: ${ids[i]}`);
+      const s = state(landRuns(n)[0].id);
+      expect(s).toMatchObject({ state: "landed" });
+      expect(remoteGit("log", "-1", "--format=%H", `--grep=^Job: ${ids[i]}$`, "main")).toBe(s.commit);
+    }
+    expect(readFileSync(join(jobsDir, landRuns("t1")[0].id, "land.log"), "utf8")).toContain("batch of 3");
+  }, 120_000);
+
+  test("a run that breaks the check fails with the check's name; the others land; at most 1 + 2 + 2 checks", async () => {
+    const lands = await landTogether([["a", "commit batch/a.txt"], ["bad", "commit batch/bad.txt"], ["c", "commit batch/c.txt"]]);
+    const s = lands.map((l) => state(l.run));
+    expect(s.map((x) => x.state)).toEqual(["landed", "failed", "landed"]);
+    expect(s[1].reason).toBe("batchbad failed");
+    expect(landCalls).toBeLessThanOrEqual(1 + 2 + 2);
+    expect(remoteGit("ls-tree", "--name-only", "main:batch").split("\n")).toEqual(expect.arrayContaining(["a.txt", "c.txt"]));
+    expect(remoteGit("ls-tree", "--name-only", "main:batch").split("\n")).not.toContain("bad.txt");
+    expect(pushes()).toBe(1);
+    await aleph(["drop", "bad"]);
+  }, 120_000);
+
+  test("a conflict in one run takes only that run out", async () => {
+    const lands = await landTogether([["k1", "commit-fixed batch/k.txt"], ["k2", "commit batch/k.txt"], ["k3", "commit batch/k3.txt"]]);
+    const s = lands.map((l) => state(l.run));
+    expect(s.map((x) => x.state)).toEqual(["landed", "failed", "landed"]);
+    expect(s[1]).toMatchObject({ reason: "merge conflict", conflicts: ["batch/k.txt"] });
+    expect(readFileSync(join(jobsDir, lands[1].run, "land.log"), "utf8")).toContain("batch/k.txt");
+    expect(remoteGit("ls-tree", "--name-only", "main:batch").split("\n")).toEqual(expect.arrayContaining(["k.txt", "k3.txt"]));
+    await aleph(["drop", "k2"]);
+  }, 120_000);
+
+  test("a run whose checked base is origin/main lands with no check call; one behind main runs the checks", async () => {
+    await job("fresh", "commit batch/fresh.txt");
+    const base1 = calls();
+    const r = await aleph(["land", "fresh"]);
+    expect(state(r.json.run).state).toBe("landed");
+    expect(calls()).toBe(base1);
+    expect(file(r.json.run, "land.log")).toContain("checks skipped: main unchanged since");
+    expect(state(r.json.run).checks ?? []).toEqual([]);
+
+    await job("stale", "commit batch/stale.txt");
+    moveMain();
+    const base2 = calls();
+    const r2 = await aleph(["land", "stale"]);
+    expect(state(r2.json.run).state).toBe("landed");
+    expect(calls() - base2).toBe(1);
+    expect(file(r2.json.run, "land.log")).not.toContain("checks skipped");
+  }, 60_000);
 });
 
 describe("a job tied to a to-do item", () => {
@@ -822,10 +943,10 @@ describe("a factory run", () => {
       expect(p).toContain("hid file exists");
       expect(p).not.toContain("SECRET-HIDDEN-LINE");
       expect(p).not.toContain("expect(existsSync");
-      // The land's checks ran the hidden check; its log is in the land run's folder.
-      expect(rs[2].checks.map((c: any) => c.name)).toEqual(["tests", "tree", "hidden"]);
-      expect(rs[2].checks.at(-1)).toMatchObject({ ok: true, passed: 1, total: 1 });
-      expect(readFileSync(join(jobsDir, rs[2].id, "hidden.log"), "utf8")).toContain("1 pass");
+      // The run's own checks ran the hidden check; main had not moved, so the land skipped them.
+      expect(rs[1].checks.map((c: any) => c.name)).toEqual(["tests", "tree", "hidden"]);
+      expect(rs[1].checks.at(-1)).toMatchObject({ ok: true, passed: 1, total: 1 });
+      expect(readFileSync(join(jobsDir, rs[2].id, "land.log"), "utf8")).toContain("checks skipped");
       expect(runsLeft()).toEqual([]);
     }, 60_000);
 
@@ -1648,6 +1769,7 @@ describe("an item that is already on main", () => {
   test("a land whose item another commit landed meanwhile ends done and does not push", async () => {
     const id = await add("landed by hand mid-land");
     await withItem("handmid", "commit item-race/x.txt", id);
+    moveMain();
     writeFileSync(join(base, "item-once"), `Item: demo-${id}`);
     const r = await aleph(["land", "handmid"]);
     const hand = remoteGit("rev-parse", "main");

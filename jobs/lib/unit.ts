@@ -10,9 +10,9 @@ import * as todos from "../../todo/lib/todo.ts";
 import { readHidden, writeList } from "../../todo/lib/store.ts";
 import { followMain, git } from "./git.ts";
 import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
-import { allJobs, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { allJobs, allRuns, isLive, isOpen, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
-import { dispatchOn, hold, triageDetached, paused, recordFlake } from "./factory.ts";
+import { dispatchOn, hold, triageDetached, paused, recordFlake, waitingToLand } from "./factory.ts";
 import { startReview2 } from "./review2.ts";
 import { postTrace } from "./trace.ts";
 import { FACTS_REF, itemOnMain, writeFacts } from "./status.ts";
@@ -224,12 +224,65 @@ function landMessage(subjects: string[], run: Run, repo: Repo): string {
   return [subjects[0] ?? run.name, ...body, "", ...trailers].join("\n");
 }
 
+/** One run in a land: the leader's own, or a land run queued behind it. */
+interface Member { id: string; folder: string; run: Run; log: (step: string, out?: string) => void }
+/** A member's squash commit, on top of the commit before it in the chain. */
+interface Item { m: Member; commit: string }
+type Outcome = { verdict: Verdict; code: number };
+
+const landBatch = () => Math.max(1, Math.floor(Number(process.env.ALEPH_LAND_BATCH ?? 8)) || 1);
+
+/** A run `aleph land` accepts: passed, or needing Chris only for a manual check, a held path or the reviewer. */
+function landable(agent: Run | undefined): boolean {
+  return !!agent && (agent.state === "passed" || (agent.state === "needs-you" && (agent.needs === "manual" || agent.needs === "held" || agent.needs === "review")));
+}
+
+/** The land runs queued behind this one in the repo, oldest first, that `aleph land` would still accept. */
+function queuedLands(repo: Repo, id: string, run: Run, cap: number): Member[] {
+  const seen = new Set([run.job]);
+  const out: Member[] = [];
+  const queued = allRuns().filter((e) => e.run.kind === "land" && e.run.repo === repo.key && e.id !== id && e.run.state === "running" && isLive(e.folder) && !existsSync(join(e.folder, "batch.json")))
+    .sort((a, b) => (a.run.made ?? 0) - (b.run.made ?? 0) || (a.id < b.id ? -1 : 1));
+  for (const e of queued) {
+    if (out.length >= cap || seen.has(e.run.job)) continue;
+    const runs = allJobs().find((j) => j[0].id === e.run.job);
+    if (!runs || !isOpen(runs) || !landable(runs.filter((x) => x.run.kind === "agent" || x.run.kind === "recheck").at(-1)?.run)) continue;
+    seen.add(e.run.job);
+    out.push({ id: e.id, folder: e.folder, run: e.run, log: (step, o = "") => appendFileSync(join(e.folder, "land.log"), `## ${step}\n${o ? o + "\n" : ""}\n`) });
+  }
+  return out;
+}
+
 /**
- * Land a job: merge its branch onto origin/<main> in memory, run the checks on
- * that tree, and push one squash commit of exactly that tree with a plain
- * push. A refused push merges again, at most RELANDS times. The job's issue
- * closes in the work store after the push, and the main checkout follows
- * origin/<main> if it is clean. Every failure leaves the remote as it was.
+ * Passed runs of the repo waiting to land that have no land run yet: start
+ * `aleph land` for them, so they queue on the lock and join this batch. Not
+ * while the factory is paused or held, as the dispatch would not land them.
+ */
+async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
+  if (room <= 0 || paused() || hold(undefined, run.job)) return;
+  const jobs = allJobs();
+  const names = waitingToLand(jobs).filter((n) => {
+    const last = jobs.find((j) => j.at(-1)!.run.name === n && isOpen(j))?.at(-1)!.run;
+    return last && last.repo === repo.key && !last.next && last.job !== run.job;
+  }).slice(0, room);
+  const cli = join(import.meta.dir, "..", "cli.ts");
+  const jobsOf = names.map((n) => jobs.find((j) => j.at(-1)!.run.name === n && isOpen(j))![0].run.job);
+  for (const n of names) Bun.spawn([process.execPath, cli, "land", n], { env: process.env, stdin: "ignore", stdout: "ignore", stderr: "ignore", detached: true }).unref();
+  const deadline = Date.now() + 10_000;
+  const queued = (job: string) => allRuns().some((e) => e.run.kind === "land" && e.run.job === job && e.run.state === "running");
+  while (Date.now() < deadline && !jobsOf.every(queued)) await Bun.sleep(100);
+}
+
+/**
+ * Land a job, and the land runs queued behind it. Each run's branch merges onto
+ * origin/<main> in memory, in order, as one squash commit with its own trailers.
+ * The checks run once on the last commit; when they fail the batch splits in
+ * half, until the run that fails is found. That run fails, the others land, and
+ * one plain push takes all their commits. A conflict takes only its run out. A
+ * run whose own checks passed on the current origin/<main> pushes with no check.
+ * A refused push merges again, at most RELANDS times. Each run's issue closes
+ * in the work store after the push, and the main checkout follows origin/<main>
+ * if it is clean. Every failure leaves the remote as it was.
  */
 async function land(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ verdict: Verdict; code: number }> {
   const main = repo.main;
@@ -237,7 +290,8 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
   const log = (step: string, out = "") => appendFileSync(logFile, `## ${step}\n${out ? out + "\n" : ""}\n`);
   const step = (name: string, ...args: string[]) => { const r = git(repo.path, ...args); log(`${name}: ${r.ok ? "ok" : "failed"}`, r.out); return r; };
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const fail = (reason: string, extra: Partial<Verdict> = {}) => { log(`failed: ${reason}`); return { verdict: { state: "failed" as const, reason, ...extra }, code: 1 }; };
+  const failed = (reason: string, extra: Partial<Verdict> = {}): Outcome => ({ verdict: { state: "failed", reason, ...extra }, code: 1 });
+  const fail = (reason: string, extra: Partial<Verdict> = {}) => { log(`failed: ${reason}`); return failed(reason, extra); };
 
   const release = await lock(`job-${repo.key}-${run.name}`, 60_000);
   if (!release) return fail("job lock busy");
@@ -245,70 +299,169 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
   try {
     phase("queued");
     releaseRepo = await landTurn(repo, id, run.made ?? 0);
+    // A land run an earlier land took into its batch has its verdict in its folder.
+    const given = join(folder, "batch.json");
+    if (existsSync(given)) {
+      const b = JSON.parse(readFileSync(given, "utf8"));
+      if (b.checks) updateRun(folder, { checks: b.checks });
+      return { verdict: b.verdict, code: b.code };
+    }
     phase("land");
+    const cap = landBatch();
+    await pullWaiting(repo, run, cap - 1 - queuedLands(repo, id, run, cap).length);
+    const leader: Member = { id, folder, run, log };
+    const members = [leader, ...queuedLands(repo, id, run, cap - 1)];
+    for (const m of members.slice(1)) m.log(`taken into the batch of ${run.name}'s land ${id}`);
+    if (members.length > 1) log(`batch of ${members.length}`, members.map((m) => m.run.name).join("\n"));
+
     for (let attempt = 0; ; attempt++) {
       if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
-      // A land that pushed and then died finds its own commit here and does not merge again.
-      const pushed = git(repo.path, "log", `origin/${main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${run.job}$`).out;
-      if (pushed) {
-        log(`already on main as ${pushed}`);
-        removeBranch(repo, run);
-        followCheckout(repo, changedBy(repo, pushed), log);
-        return { verdict: { state: "landed", commit: pushed }, code: 0 };
+      const base0 = git(repo.path, "rev-parse", `origin/${main}`).out;
+      const done = new Map<Member, Outcome & { after?: () => void }>();
+      const finish = (m: Member, o: Outcome & { after?: () => void }) => { done.set(m, o); if (o.verdict.state === "failed") m.log(`failed: ${o.verdict.reason}`); };
+      const tips = new Map<Member, string>();
+
+      // Runs that need no merge: already on main, their item on main, or no branch.
+      const open: Member[] = [];
+      for (const m of members) {
+        // A land that pushed and then died finds its own commit here and does not merge again.
+        const pushed = git(repo.path, "log", `origin/${main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${m.run.job}$`).out;
+        if (pushed) {
+          m.log(`already on main as ${pushed}`);
+          finish(m, { verdict: { state: "landed", commit: pushed }, code: 0, after: () => { removeBranch(repo, m.run); followCheckout(repo, changedBy(repo, pushed), log); } });
+          continue;
+        }
+        // A commit by hand, or by another job, that names the item: this land must not add a second one.
+        const there = itemOnMain(repo, m.run.todo);
+        if (there) {
+          m.log(`item landed as ${there}`);
+          finish(m, { verdict: { state: "done", reason: `item landed as ${there}` }, code: 0, after: () => removeBranch(repo, m.run) });
+          continue;
+        }
+        const tip = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${m.run.branch}`);
+        if (!tip.ok) { finish(m, failed(`branch gone: ${m.run.branch}`)); continue; }
+        tips.set(m, tip.out);
+        open.push(m);
       }
-      // A commit by hand, or by another job, that names the item: this land must not add a second one.
-      const there = itemOnMain(repo, run.todo);
-      if (there) {
-        log(`item landed as ${there}`);
-        removeBranch(repo, run);
-        return { verdict: { state: "done", reason: `item landed as ${there}` }, code: 0 };
+
+      // Merge each run onto the one before it. A conflict, a run with no net change and a run that edits the list leave the chain.
+      const build = (list: Member[], from: string): Item[] => {
+        const items: Item[] = [];
+        let cur = from;
+        for (const m of list) {
+          const tip = tips.get(m)!;
+          const merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", cur, tip);
+          if (!merged.ok) {
+            const lines = merged.out.split("\n");
+            const conflicts = lines.slice(1, lines.indexOf("") < 0 ? undefined : lines.indexOf("")).filter(Boolean);
+            m.log("conflicts", conflicts.join("\n"));
+            finish(m, failed("merge conflict", { conflicts }));
+            continue;
+          }
+          const tree = merged.out.split("\n")[0];
+          if (tree === git(repo.path, "rev-parse", `${cur}^{tree}`).out) {
+            m.log("no net change");
+            finish(m, { verdict: { state: "done", reason: "no net change" }, code: 0, after: () => removeBranch(repo, m.run) });
+            continue;
+          }
+          // Only aleph issue writes the list. A worker can go past git-guard with a script, so the land refuses it.
+          if (git(repo.path, "diff", "--name-only", cur, tree).out.split("\n").includes(TODO_PATH)) { finish(m, failed(OWN_LIST, { conflicts: [TODO_PATH] })); continue; }
+          const fork = git(repo.path, "merge-base", cur, tip).out;
+          const subjects = git(repo.path, "log", "--reverse", "--no-merges", "--format=%s", `${fork}..${tip}`).out.split("\n").filter(Boolean);
+          const c = git(repo.path, "commit-tree", tree, "-p", cur, "-m", landMessage(subjects, m.run, repo));
+          m.log(`commit-tree: ${c.ok ? "ok" : "failed"}`, c.out);
+          if (!c.ok) { finish(m, failed("commit-tree failed")); continue; }
+          items.push({ m, commit: c.out });
+          cur = c.out;
+        }
+        return items;
+      };
+
+      // The checks on the chain's last commit, or none when the run's own checks passed on this very origin/<main>.
+      const check = async (items: Item[], base: string): Promise<string | null> => {
+        const first = items[0].m.run;
+        if (items.length === 1 && base === base0 && first.checkedBase === base0) {
+          log(`checks skipped: main unchanged since ${base0}`);
+          return null;
+        }
+        const tip = items.at(-1)!.commit;
+        const changed = git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean);
+        const before = existsSync(join(folder, "checks.log")) ? readFileSync(join(folder, "checks.log"), "utf8").length : 0;
+        log(`checks on ${items.length} run${items.length > 1 ? "s" : ""}`, items.map((i) => i.m.run.name).join("\n"));
+        let why: string | null;
+        if (repo.sandbox) {
+          const hidden: Record<string, string> = {};
+          for (const i of items) for (const [name, text] of Object.entries(hiddenOf(repo, i.m.run))) hidden[name in hidden ? `${i.m.run.todo}-${name}` : name] = text;
+          why = await sandboxChecks(id, folder, repo, tip, changed, phase, hidden);
+        } else {
+          const owner = items.map((i) => i.m.run).find((r) => r.worktree && existsSync(r.worktree)) ?? first;
+          why = await worktreeChecks(folder, owner, repo, env, tip, changed, phase);
+        }
+        if (why && items.length === 1 && items[0].m !== leader && existsSync(join(folder, "checks.log"))) items[0].m.log("checks.log", readFileSync(join(folder, "checks.log"), "utf8").slice(before));
+        return why;
+      };
+
+      // The commits of `items` that pass, in order, and the commit they end on. `known` is why the whole chain is already known to fail.
+      const settle = async (items: Item[], base: string, known: string | null): Promise<{ ok: Item[]; tip: string }> => {
+        if (!items.length) return { ok: [], tip: base };
+        const why = known ?? await check(items, base);
+        if (!why) return { ok: items, tip: items.at(-1)!.commit };
+        if (items.length === 1) { finish(items[0].m, failed(why)); return { ok: [], tip: base }; }
+        log(`split ${items.length} runs: ${why}`);
+        const h = Math.floor(items.length / 2);
+        const a = await settle(items.slice(0, h), base, null);
+        const rest = items.slice(h);
+        // The first half passed whole, so the second half on top of it is the tree that just failed.
+        const intact = a.ok.length === h;
+        const b = await settle(intact ? rest : build(rest.map((i) => i.m), a.tip), a.tip, intact ? why : null);
+        return { ok: [...a.ok, ...b.ok], tip: b.ok.length ? b.tip : a.tip };
+      };
+
+      const chain = build(open, base0);
+      const result = await settle(chain, base0, null);
+      const ok = result.ok;
+      if (ok.length) {
+        phase("land");
+        if (step("push", "push", "-q", "origin", `${result.tip}:refs/heads/${main}`).ok) {
+          const changed = git(repo.path, "diff", "--name-only", base0, result.tip).out.split("\n").filter(Boolean);
+          const checks = readRun(folder)?.checks;
+          for (const { m, commit } of ok) {
+            const { todo, checkItem } = closeItems(repo, m.run);
+            if (todo) m.log(todo === "done" ? `todo ${m.run.todo} done` : `todo ${m.run.todo} not closed: ${todo}`);
+            if (checkItem !== undefined) m.log(`todo ${checkItem} holds the manual check`);
+            removeBranch(repo, m.run);
+            if (m !== leader) m.log(`landed as ${commit} with ${run.name}; the checks ran in ${id}`);
+            finish(m, { verdict: { state: "landed", commit, checkItem }, code: 0 });
+          }
+          followCheckout(repo, changed, log);
+          return conclude(leader, done, checks);
+        }
+        if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
+        const refused = git(repo.path, "rev-parse", `origin/${main}`).out === base0;
+        if (refused || attempt >= RELANDS) {
+          for (const { m } of ok) done.set(m, failed(refused ? "push refused" : MOVED));
+          for (const { m } of ok) m.log(`failed: ${refused ? "push refused" : MOVED}`);
+          return conclude(leader, done);
+        }
+        log("main moved; merging again");
+        continue;
       }
-      const tip = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${run.branch}`);
-      if (!tip.ok) return fail(`branch gone: ${run.branch}`);
-      // Every step after the fetch uses this commit, so a move of main makes the push non-fast-forward.
-      const base = git(repo.path, "rev-parse", `origin/${main}`).out;
-      const merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", base, tip.out);
-      if (!merged.ok) {
-        const lines = merged.out.split("\n");
-        const conflicts = lines.slice(1, lines.indexOf("") < 0 ? undefined : lines.indexOf("")).filter(Boolean);
-        log("conflicts", conflicts.join("\n"));
-        return fail("merge conflict", { conflicts });
-      }
-      const tree = merged.out.split("\n")[0];
-      if (tree === git(repo.path, "rev-parse", `${base}^{tree}`).out) {
-        log("no net change");
-        removeBranch(repo, run);
-        return { verdict: { state: "done", reason: "no net change" }, code: 0 };
-      }
-      const changed = git(repo.path, "diff", "--name-only", base, tree).out.split("\n").filter(Boolean);
-      // Only aleph issue writes the list. A worker can go past git-guard with a script, so the land refuses it.
-      if (changed.includes(TODO_PATH)) return fail(OWN_LIST, { conflicts: [TODO_PATH] });
-      const fork = git(repo.path, "merge-base", base, tip.out).out;
-      const subjects = git(repo.path, "log", "--reverse", "--no-merges", "--format=%s", `${fork}..${tip.out}`).out.split("\n").filter(Boolean);
-      const c = step("commit-tree", "commit-tree", tree, "-p", base, "-m", landMessage(subjects, run, repo));
-      if (!c.ok) return fail("commit-tree failed");
-      const failed = repo.sandbox
-        ? await sandboxChecks(id, folder, repo, c.out, changed, phase, hiddenOf(repo, run))
-        : await worktreeChecks(folder, run, repo, env, c.out, changed, phase);
-      if (failed) return fail(failed);
-      phase("land");
-      if (step("push", "push", "-q", "origin", `${c.out}:refs/heads/${main}`).ok) {
-        const { todo, checkItem } = closeItems(repo, run);
-        if (todo) log(todo === "done" ? `todo ${run.todo} done` : `todo ${run.todo} not closed: ${todo}`);
-        if (checkItem !== undefined) log(`todo ${checkItem} holds the manual check`);
-        removeBranch(repo, run);
-        followCheckout(repo, changed, log);
-        return { verdict: { state: "landed", commit: c.out, checkItem }, code: 0 };
-      }
-      if (!step("fetch", "fetch", "-q", "origin").ok) return fail("fetch failed");
-      if (git(repo.path, "rev-parse", `origin/${main}`).out === base) return fail("push refused");
-      if (attempt >= RELANDS) return fail(MOVED);
-      log("main moved; merging again");
+      return conclude(leader, done);
     }
   } finally {
     releaseRepo?.();
     release();
   }
+}
+
+/** Run the deferred steps of the runs that ended without a push, give the queued runs their verdicts, and return the leader's. */
+function conclude(leader: Member, done: Map<Member, Outcome & { after?: () => void }>, checks?: Run["checks"]): Outcome {
+  for (const [m, o] of done) {
+    o.after?.();
+    if (m === leader) continue;
+    writeFileSync(join(m.folder, "batch.json"), JSON.stringify({ verdict: o.verdict, code: o.code, ...(o.verdict.state === "landed" && checks ? { checks } : {}) }));
+  }
+  return done.get(leader) ?? { verdict: { state: "failed", reason: "not landed" }, code: 1 };
 }
 
 /** The paths a commit changed. */
@@ -492,7 +645,7 @@ export function removeBranch(repo: Repo, run: Run): void {
   if (run.branch) git(repo.path, "branch", "-D", run.branch);
 }
 
-type Verdict = Pick<Run, "state" | "needs" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat">;
+type Verdict = Pick<Run, "state" | "needs" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat" | "checkedBase">;
 
 export async function unit(folder: string): Promise<void> {
   // drop sends SIGTERM when no systemd unit is there to stop the cgroup.
@@ -705,7 +858,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
   // A manual check does not hold the run: it lands with the check open (see land).
   const manual = repo.manual.find((m) => matches(m.when));
-  return { verdict: { state: "passed", ...(manual ? { say: manual.say } : {}) }, code: 0 };
+  return { verdict: { state: "passed", checkedBase: base, ...(manual ? { say: manual.say } : {}) }, code: 0 };
 }
 
 /**
@@ -785,6 +938,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       if (done < rounds) return stuck(failed, { ...facts, failed: check, round: done });
       return stuck(rounds > 0 ? `${failed} after ${done} fix rounds` : failed, facts);
     }
+    facts.checkedBase = base;
     return await heldAndReview(id, folder, run, repo, dir, base, branch, facts);
   } finally {
     removeRunFolder(dir);
@@ -840,7 +994,7 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
     const changed = git(repo.path, "diff", "--name-only", base, ref).out.split("\n").filter(Boolean);
     const failed = await checksInSandbox(folder, dir, "out/out.bundle", ref, repo, changed, phase, recorder(folder), hiddenOf(repo, run));
     if (failed) return stuck(failed);
-    return await heldAndReview(id, folder, run, repo, dir, base, branch, {});
+    return await heldAndReview(id, folder, run, repo, dir, base, branch, { checkedBase: base });
   } finally {
     removeRunFolder(dir);
   }

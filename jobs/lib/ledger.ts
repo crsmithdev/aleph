@@ -39,6 +39,8 @@ export interface Run {
   defaults?: string[];
   /** An agent or land run: each check that ran, skipped `when` checks left out. */
   checks?: CheckResult[];
+  /** An agent run whose checks passed: origin/<main> as the checks saw it. A land with main still there skips the checks. */
+  checkedBase?: string;
   /** A run that needs Chris for a held path or a test edit: the diff stat. */
   stat?: string;
   /** A held run: the review2 verdict. "pending" while it runs, "error" when it gave none. */

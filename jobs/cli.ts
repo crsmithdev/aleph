@@ -207,6 +207,7 @@ async function landJob(): Promise<void> {
     state: "running", phase: "land", told: false, shown: false, started: new Date().toISOString(),
     ...(unchecked ? { check: "open" as const, say: agent.say } : {}),
     ...(held ? { held: true } : {}),
+    ...(agent.checkedBase ? { checkedBase: agent.checkedBase } : {}),
     ...(agent.todo !== undefined ? { todo: agent.todo } : {}),
   }, `${repo.key}-${name}`, repo.path, () => {});
   await child?.exited;

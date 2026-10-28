@@ -175,10 +175,10 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land):
   }
   const landed: string[] = [];
   if (land) {
-    for (const name of waitingToLand()) {
-      const why = await land(name);
-      if (!why) landed.push(name);
-    }
+    // All at once: the lands queue on the repo's lock, and the first takes the rest into one batch.
+    const names = waitingToLand();
+    const whys = await Promise.all(names.map((name) => land(name)));
+    names.forEach((name, i) => { if (!whys[i]) landed.push(name); });
     if (landed.length) factoryLog(`landed ${landed.join(", ")}`);
   }
   const started: string[] = [];
