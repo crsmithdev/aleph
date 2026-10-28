@@ -164,8 +164,10 @@ test("the sessions tables scroll inside their own wrapper", async () => {
   expect(html).toMatch(/^\.tscroll \{[^}]*overflow-x: auto/m);
   const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
   expect(v.renderSessions(list)).toContain('<div class="tscroll"><table class="tbl">');
+  expect(v.renderSessions(list)).not.toMatch(/<div class="tscroll" style=/);
   const s: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
   expect(v.renderSession(s, {}, TABLE)).toContain('<div class="tscroll"><table class="tbl">');
+  expect(v.renderSession(s, {}, TABLE)).not.toMatch(/<div class="tscroll" style=/);
 });
 
 test("the list has a filter bar, 50 rows and a pager; the turn is a table", async () => {
