@@ -31,7 +31,7 @@ Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 | `codebase-design` | Vocabulary and principles for deep modules: module, interface, seam, adapter, the deletion test |
 | `domain-modeling` | Builds the project glossary (`CONTEXT.md`) and records ADRs |
 | `improve-codebase-architecture` † | Scans a codebase for deepening candidates, presents them as an HTML report, grills through the one you pick |
-| `docs-writing` | Writes and audits docs with Diátaxis type gating and 51 rules |
+| `docs-writing` | Writes and audits docs with Diátaxis type gating and a rule set by category |
 | `blog-writing` | Writes and reviews blog posts and essays, technical and general: structure, sentence and AI-pattern passes, then `humanizer` |
 | `humanizer` | Rewrites prose so it does not read as AI-written: blog posts, essays, anything for people rather than agents |
 | `writing-for-agents` | How to write a skill, an `AGENTS.md` or a `CLAUDE.md` |
