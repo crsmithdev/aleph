@@ -1,0 +1,82 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { aleph, base, fakeLog, remote, sh, specFile, state, setup, teardown } from "./cli.helpers";
+
+beforeAll(setup);
+afterAll(teardown);
+
+describe("a factory run", () => {
+  const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
+  const runsLeft = () => existsSync(join(base, "runs")) ? readdirSync(join(base, "runs")) : [];
+  describe("the reviewer", () => {
+    const rjob = (name: string, mark: string, action = `commit ${name}.txt`, extra: Record<string, string> = {}) =>
+      aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name} ${mark}\nACTION: ${action}\n`)], extra);
+    const calls = () => existsSync(join(fakeLog, "review-calls")) ? readFileSync(join(fakeLog, "review-calls"), "utf8").length : 0;
+
+    test("a pass lands; the prompt holds the item and the diff; the cost adds up", async () => {
+      const r = await rjob("rpass", "REVIEW:pass");
+      expect(state(r.json.run)).toMatchObject({ state: "passed", cost: 0.03 });
+      const p = readFileSync(join(fakeLog, "review-prompt"), "utf8");
+      expect(p).toContain("Goal: rpass REVIEW:pass");
+      expect(p).toContain("+++ b/rpass.txt");
+      expect(runsLeft()).toEqual([]);
+      expect(state((await aleph(["land", "rpass"])).json.run).state).toBe("landed");
+    });
+
+    test("a diff over ALEPH_REVIEW_DIFF_MAX is cut: the stat, the head of the diff, a line that says so", async () => {
+      const r = await rjob("rbig", "REVIEW:pass", "commit-big rbig.txt", { ALEPH_REVIEW_DIFF_MAX: "200" });
+      expect(state(r.json.run)).toMatchObject({ state: "passed" });
+      const p = readFileSync(join(fakeLog, "review-prompt"), "utf8");
+      const m = p.match(/diff cut at 200 of (\d+) characters/);
+      expect(m).not.toBeNull();
+      expect(Number(m![1])).toBeGreaterThan(200);
+      expect(p).toContain("rbig.txt |");
+      const body = p.slice(p.indexOf("diff --git"), p.indexOf("(diff cut at"));
+      expect(body.trim().length).toBeLessThanOrEqual(200);
+      expect(p).not.toContain("line 60 of the big file");
+    });
+
+    test("under the default cap the whole diff goes in and no line says it was cut", async () => {
+      const r = await rjob("rwhole", "REVIEW:pass", "commit-big rwhole.txt");
+      expect(state(r.json.run)).toMatchObject({ state: "passed" });
+      const p = readFileSync(join(fakeLog, "review-prompt"), "utf8");
+      expect(p).toContain("line 60 of the big file");
+      expect(p).not.toContain("diff cut");
+    });
+
+    test("a hold needs Chris, pushes nothing, and his land adds Held-by", async () => {
+      const r = await rjob("rhold", "REVIEW:hold");
+      expect(state(r.json.run)).toMatchObject({ state: "needs-you", needs: "review", reason: "reviewer: tests do not cover the new flag" });
+      expect(state(r.json.run).stat).toContain("rhold.txt");
+      const before = remoteGit("rev-parse", "main");
+      expect(before).toBe(remoteGit("rev-parse", "main"));
+      expect(remoteGit("log", "-1", "--format=%s", "main")).not.toBe("add rhold.txt");
+      const l = await aleph(["land", "rhold"]);
+      expect(state(l.json.run)).toMatchObject({ state: "landed", held: true });
+      expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain("Held-by: Chris");
+    });
+
+    test("no verdict line, or an error result, holds the run", async () => {
+      expect(state((await rjob("rnone", "REVIEW:none")).json.run)).toMatchObject({ state: "needs-you", needs: "review", reason: expect.stringMatching(/^reviewer: no verdict/) });
+      expect(state((await rjob("rerr", "REVIEW:error")).json.run)).toMatchObject({ state: "needs-you", reason: "reviewer: no verdict (API Error: 529)" });
+      for (const n of ["rnone", "rerr"]) await aleph(["drop", n]);
+    });
+
+    test("a reviewer past the time box holds the run", async () => {
+      const slow = join(base, "slow-reviewer");
+      writeFileSync(slow, "#!/bin/bash\nsleep 60\n", { mode: 0o755 });
+      const t = await aleph(["job", "fac", "rslow2", "--spec", specFile("Goal: g\nACTION: commit rslow2.txt\n")], { ALEPH_REVIEWER_CMD: slow, ALEPH_REVIEW_TIMEOUT: "1" });
+      expect(state(t.json.run)).toMatchObject({ state: "needs-you", reason: "reviewer: no verdict (time box)" });
+      await aleph(["drop", "rslow2"]);
+    });
+
+    test("a held path holds without a review", async () => {
+      const n = calls();
+      const r = await rjob("rheld", "REVIEW:pass", "commit held/r.txt");
+      expect(state(r.json.run)).toMatchObject({ needs: "held" });
+      expect(calls()).toBe(n);
+      await aleph(["drop", "rheld"]);
+    });
+  });
+});

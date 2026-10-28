@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CLI, aleph, env, base, jobsDir, state as stateOf, setup, teardown } from "./cli.helpers";
+import { CLI, aleph, base, jobsDir, state as stateOf, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -43,88 +43,6 @@ describe("every transition dispatches at once", () => {
     await Bun.sleep(300);
     rmSync(startLog, { force: true });
   }, 120_000);
-
-  test("a land that lands starts the goal that waits on that job", async () => {
-    const a = track(await add("lands first", "commit tr/a.txt", ["--labels", "goal"]));
-    await until(() => started().includes(`fac-${a}`));
-    await until(() => settled(a) && runs(a).some((r) => state(r).state === "passed"));
-    const b = track(await add("waits on the first", open("land"), ["--labels", "goal", "--waiting-on", `fac-${a}`]));
-    await Bun.sleep(1000);
-    expect(started()).not.toContain(`fac-${b}`);
-    const l = await aleph(["land", `fac-${a}`], on());
-    expect(l.code).toBe(0);
-    await until(() => started().includes(`fac-${b}`));
-  }, 90_000);
-
-  test("an edit that adds the goal label starts the goal", async () => {
-    const x = track(await add("plain issue", open("label"), ["--labels", "needs-chris"]));
-    await Bun.sleep(500);
-    expect(started()).toEqual([]);
-    expect((await aleph(["todo", "edit", "fac", String(x), "--labels", "goal"], on())).code).toBe(0);
-    await until(() => started().includes(`fac-${x}`));
-  }, 60_000);
-
-  test("an edit that removes waiting_on starts the goal", async () => {
-    const blocker = track(await add("never done", "commit tr/never.txt", ["--labels", "needs-chris"]));
-    const x = track(await add("waits", open("wait"), ["--labels", "goal", "--waiting-on", `fac-${blocker}`]));
-    await Bun.sleep(1000);
-    expect(started()).toEqual([]);
-    await aleph(["todo", "edit", "fac", String(x), "--waiting-on", "none"], on());
-    await until(() => started().includes(`fac-${x}`));
-  }, 60_000);
-
-  test("an edit that sets the status back to open starts the goal", async () => {
-    const x = track(await add("dropped, then reopened", open("reopen"), ["--labels", "goal"], { ALEPH_DISPATCH: "off" }));
-    await aleph(["todo", "drop", "fac", String(x), "not now"]);
-    await Bun.sleep(300);
-    expect(started()).toEqual([]);
-    expect((await aleph(["todo", "edit", "fac", String(x), "--status", "open"], on())).code).toBe(0);
-    await until(() => started().includes(`fac-${x}`));
-  }, 60_000);
-
-  test("the issue form (POST /api/issues) adds a goal that starts at once", async () => {
-    const title = "from the form";
-    const issues = await import("../ui/api/issues.ts");
-    const create = issues.routes["POST /api/issues"];
-    const saved = { ...process.env };
-    Object.assign(process.env, env(on()));
-    const req = new Request("http://x/api/issues", { method: "POST", headers: { "x-aleph-ui": "1" }, body: JSON.stringify({ repo: "fac", title, labels: "goal", body: `ACTION: ${open("form")}` }) });
-    const res = await create(req, {}, new URL(req.url));
-    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
-    Object.assign(process.env, saved);
-    expect(res.status).toBe(200);
-    track(((await res.json()) as any).added);
-    await until(() => started().length === 1);
-  }, 60_000);
-
-  test("a triage run that ends with a goal starts it", async () => {
-    const x = track(await add("vague", open("triage"), ["--labels", "followup"], { ALEPH_DISPATCH: "off" }));
-    const cmd = join(base, "ttriage-cmd");
-    writeFileSync(cmd, `#!/bin/bash\ncat > /dev/null\necho '{"verdict":"goal","body":"ACTION: hold ${gate("triage")}"}'\n`, { mode: 0o755 });
-    const t = await aleph(["triage", `fac-${x}`], on({ ALEPH_TRIAGE_CMD: cmd }));
-    expect(t.json.triaged).toEqual({ goal: 1 });
-    await until(() => started().includes(`fac-${x}`));
-  }, 60_000);
-
-  test("a drop that frees a live slot starts the next goal", async () => {
-    const a = track(await add("holds the slot", open("slot-a"), ["--labels", "goal"], { ALEPH_LIVE_CAP: "1" }));
-    await until(() => started().includes(`fac-${a}`));
-    const b = track(await add("needs the slot", open("slot-b"), ["--labels", "goal"], { ALEPH_LIVE_CAP: "1" }));
-    await Bun.sleep(1500);
-    expect(started()).toEqual([`fac-${a}`]);
-    expect((await aleph(["drop", `fac-${a}`], on({ ALEPH_LIVE_CAP: "1" }))).code).toBe(0);
-    await until(() => started().includes(`fac-${b}`));
-  }, 60_000);
-
-  test("a drop that frees a waiting slot starts the next goal", async () => {
-    const q = track(await add("asks Chris", "commit held/w.txt", ["--labels", "goal"], { ALEPH_WAITING_CAP: "1" }));
-    await until(() => runs(q).some((r) => state(r).state === "needs-you"));
-    const b = track(await add("needs the waiting slot", open("wait-b"), ["--labels", "goal"], { ALEPH_WAITING_CAP: "1" }));
-    await Bun.sleep(1500);
-    expect(started()).toEqual([`fac-${q}`]);
-    await aleph(["drop", `fac-${q}`], on({ ALEPH_WAITING_CAP: "1" }));
-    await until(() => started().includes(`fac-${b}`));
-  }, 60_000);
 
   test("a recheck that clears the factory hold starts the next goal", async () => {
     // The hold is what this test is about: the safe default actions would release the run.

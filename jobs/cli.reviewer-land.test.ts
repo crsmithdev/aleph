@@ -1,0 +1,82 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { aleph, base, fakeLog, file, remote, repo, sh, specFile, state, setup, teardown } from "./cli.helpers";
+
+beforeAll(setup);
+afterAll(teardown);
+
+describe("a factory run", () => {
+  const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
+  const fjob = (name: string, action: string, extra: Record<string, string> = {}, more: string[] = []) =>
+    aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), ...more], extra);
+  const factoryBranch = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `factory/${name}`]).exitCode === 0;
+  test("a change to an existing test goes to the reviewer; its hold needs a review; drop leaves the item open", async () => {
+    const id = (await aleph(["todo", "add", "fac", "tests"])).json.added;
+    const r = await aleph(["job", "fac", "ftest", "--spec", specFile("Goal: ftest REVIEW:hold\nACTION: commit old.test.ts\n"), "--todo", String(id)]);
+    expect(state(r.json.run)).toMatchObject({ state: "needs-you", needs: "review", reason: expect.stringMatching(/^reviewer: hold|^reviewer: tests do not/) });
+    expect(readFileSync(join(fakeLog, "review-prompt"), "utf8")).toContain("The diff changes the test old.test.ts");
+    expect((await aleph(["drop", "ftest"])).code).toBe(0);
+    expect((await aleph(["todo", "show", "fac", String(id), "--json"])).json.status).toBe("open");
+    expect(factoryBranch("ftest")).toBe(false);
+  });
+
+  test("a follow-up on a stuck job starts from the job's previous branch", async () => {
+    const r = await fjob("fagain", "commit FAIL");
+    expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "tests failed" });
+    expect(state(r.json.run).checks).toEqual([{ name: "tests", ok: false, seconds: expect.any(Number) }]);
+    const f = await fjob("fagain", "branchlog");
+    expect(readFileSync(join(fakeLog, "branchlog"), "utf8")).toContain("add FAIL");
+    expect(state(f.json.run).state).toBe("passed");
+    await aleph(["drop", "fagain"]);
+  });
+
+  test("a held path needs Chris with the rule and the diff stat; his land adds Held-by", async () => {
+    const r = await fjob("fheld", "commit held/x.txt");
+    const s = state(r.json.run);
+    expect(s).toMatchObject({ state: "needs-you", needs: "held", reason: "held path held/x.txt" });
+    expect(s.stat).toContain("held/x.txt");
+    const run = r.json.run;
+    for (let i = 0; i < 100 && !file(run, "review2.md").includes("VERDICT"); i++) await Bun.sleep(100);
+    expect(file(run, "review2.md")).toContain("VERDICT: back fix the held path");
+    expect((await aleph(["jobs", "fheld"])).json.review2).toEqual({ verdict: "back", reason: "fix the held path" });
+    const before = remoteGit("rev-parse", "main");
+    expect(remoteGit("rev-parse", "main")).toBe(before);
+    const l = await aleph(["land", "fheld"]);
+    expect(state(l.json.run)).toMatchObject({ state: "landed", held: true });
+    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain("Held-by: Chris");
+  });
+
+
+  test("DEFAULT lines and the cost reach the report once; FOLLOWUP lines become items", async () => {
+    const r = await fjob("fdefault", "defaults");
+    expect(state(r.json.run)).toMatchObject({ state: "passed", cost: 0.25, defaults: ["which colour? -> blue"] });
+    const items = (await aleph(["todo", "list", "fac", "--label", "followup", "--json"])).json;
+    expect(items.map((i: any) => i.title)).toContain("paint the fence");
+    const rep = await aleph(["report"]);
+    expect(rep.stdout).toContain("fac/fdefault passed");
+    expect(rep.stdout).toContain("DEFAULT: which colour? -> blue");
+    expect(rep.stdout).toContain("cost $0.25 at the API price");
+    expect(rep.stdout).toContain("fac/fheld needs-you (held): held path held/x.txt");
+    expect(rep.stdout).toContain("aleph land fheld");
+    expect(rep.stdout).toMatch(/runs in the last 24 hours: \d+ of 100, \$\d+\.\d{2} at the API price/);
+    expect(state(r.json.run)).toMatchObject({ shown: true, told: true });
+    expect((await aleph(["report"])).stdout).not.toContain("fdefault");
+    await aleph(["drop", "fdefault"]);
+  });
+
+  test("the report hook prints JSON for SessionStart, and nothing when nothing is new", async () => {
+    // Lands move the main checkout now; put it back before the commit that added held/x.txt.
+    sh(repo, "git", "reset", "-q", "--hard", `${sh(repo, "git", "log", "-1", "--format=%H", "--diff-filter=A", "origin/main", "--", "held/x.txt")}~1`);
+    const behind = await aleph(["report", "--hook"]);
+    expect(behind.json.hookSpecificOutput.additionalContext).toMatch(/repo is \d+ commits? behind origin\/main; git pull brings:\n[\s\S]*held\/x\.txt/);
+    sh(repo, "git", "merge", "-q", "--ff-only", "origin/main");
+    const quiet = await aleph(["report", "--hook"]);
+    expect(quiet.stdout.trim()).toBe("");
+    await fjob("fhook", "error");
+    const h = await aleph(["report", "--hook"]);
+    expect(h.json.hookSpecificOutput.additionalContext).toContain("fac/fhook stuck: API Error: 500");
+    expect(h.json.systemMessage).toContain("fac/fhook stuck");
+    await aleph(["drop", "fhook"]);
+  });
+});
