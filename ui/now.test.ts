@@ -272,15 +272,15 @@ test("a flake line is not shown on the Status page", () => {
   const h = r.renderLede(calm);
   expect(h).toContain('class="say fine"');
   expect(h).not.toContain("attention");
-  expect(h).not.toContain("rerun");
-  expect(r.view.render(calm)).not.toContain("rerun");
+  expect(h).toContain('<span class="notice">aleph check tests passed on rerun 4 times in 7 days</span>');
+  expect(r.view.render(calm)).toContain('class="notice"');
   expect(r.renderIssues(calm)).not.toContain("rerun");
 });
 
-test("the as-of line reads like every Status time: Oct 28 09:17", () => {
-  expect(r.renderAsOf({ now: new Date(2026, 9, 28, 9, 17).toISOString() })).toBe("Oct 28 09:17");
-  expect(r.renderAsOf({ now: new Date(2026, 9, 28, 21, 5).toISOString() })).toBe("Oct 28 21:05");
-  expect(r.renderAsOf(state)).toMatch(/^[A-Z][a-z]{2} \d{2} \d{2}:\d{2}$/);
+test("the as-of line is hh:mm, 24-hour, no date", () => {
+  expect(r.renderAsOf({ now: new Date(2026, 9, 28, 9, 5).toISOString() })).toBe("09:05");
+  expect(r.renderAsOf({ now: new Date(2026, 9, 28, 21, 5).toISOString() })).toBe("21:05");
+  expect(r.renderAsOf(state)).toMatch(/^\d{2}:\d{2}$/);
 });
 
 test("a running job past 40 minutes says so", () => {

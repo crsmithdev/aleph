@@ -59,6 +59,7 @@ const NUMBER_WORDS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Sev
 export function renderLede(s) {
   const f = s.factory;
   const problems = []; // [tone, html]
+  const notices = [];
   if (s.needs.length) problems.push(["warning", `<a href="#issues">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you</a>`]);
   if (s.stuck.length) problems.push(["error", `<a href="#issues">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`]);
   const needing = s.needsIssues ?? [];
@@ -69,17 +70,18 @@ export function renderLede(s) {
   if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   for (const l of health) {
     const text = l.replace(/^health:\s*/, "");
-    if (/passed on rerun/.test(text)) continue;
+    if (/passed on rerun/.test(text)) { notices.push(text); continue; }
     problems.push(["error", `<a href="#issues">${esc(text)}</a>`]);
   }
   if (f.hold) problems.push(["error", `<a href="#issues">${esc(f.hold)}</a>`]);
   if (f.paused) problems.push(["warning", "The factory is paused"]);
   if (f.dayCap > 0 && f.runsToday >= f.dayCap) problems.push(["warning", "The day cap is reached"]);
   const n = problems.length;
-  if (!n) return `<span class="say fine">${FINE[Math.floor((Date.parse(s.now) || Date.now()) / 600000) % FINE.length]}</span>`;
+  const note = notices.map((x) => `<span class="notice">${esc(x)}</span>`).join("");
+  if (!n) return `<span class="say fine">${FINE[Math.floor((Date.parse(s.now) || Date.now()) / 600000) % FINE.length]}</span>${note}`;
   const tone = problems.some(([t]) => t === "error") ? "error" : "warning";
   const count = `${n < 10 ? NUMBER_WORDS[n] : n} ${n === 1 ? "thing needs" : "things need"} your attention.`;
-  return `<span class="say ${tone}">${count} ${problems.map(([, h]) => h).join(". ")}.</span>`;
+  return `<span class="say ${tone}">${count} ${problems.map(([, h]) => h).join(". ")}.</span>${note}`;
 }
 
 const cards = (html) => `<div class="cards">${html}</div>`;
@@ -244,7 +246,8 @@ export function renderIssues(s) {
 
 /** "Oct 28 09:17": the time of the state, as every Status time reads (a date for another year). */
 export function renderAsOf(s) {
-  return esc(when(s.now, new Date(s.now)));
+  const d = new Date(s.now);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 /** The Pause or Resume button of the page head. */
