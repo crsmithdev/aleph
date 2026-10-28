@@ -1,7 +1,7 @@
 // The Contents view: the state to browse, not the process: every project and every issue of every repo, in rows styled like Activity's (its CSS, header and X are imported from timeline.js),
 // two tables and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { empty, esc, md } from "../lib.js";
+import { empty, esc, labelName, md } from "../lib.js";
 import { STYLE, X_ICON, confirmCancel, head as header } from "./timeline.js";
 
 export const view = {
@@ -110,7 +110,7 @@ export function renderRow(r) {
   return `<tr class="evr crow" data-repo="${esc(r.repo)}" data-n="${r.n}"><td class="c-project">${esc(r.project)}</td>` +
     `<td class="c-status">${badge(r.status, STATUS_TONE[r.status] ?? "")}</td><td class="c-id"><a class="id" href="${esc(r.href)}">${esc(r.id)}</a></td>` +
     `<td class="c-title"><a href="${esc(r.href)}">${esc(r.title)}</a></td>` +
-    `<td class="c-labels">${r.labels.map((l) => badge(l)).join(" ")}</td>` +
+    `<td class="c-labels">${r.labels.map((l) => badge(labelName(l))).join(" ")}</td>` +
     `<td class="c-time">${esc(day(r.at))}</td><td class="c-act">${x}<span class="cmsg" role="status"></span></td></tr>`;
 }
 
@@ -128,7 +128,7 @@ export function renderFilters(d, o = {}) {
   return `<form class="filters" data-ui="contents-filter" onsubmit="return false">` +
     `<label>Project <select data-filter="project">${opt("", o.project, "All")}${projects.map((k) => opt(k, o.project)).join("")}</select></label>` +
     `<label>Status <select data-filter="status">${opt("any", o.status || "any", "Any")}${["open", "done", "dropped"].map((s) => opt(s, o.status)).join("")}</select></label>` +
-    `<label>Label <select data-filter="label">${opt("", o.label, "Any")}${labels.map((l) => opt(l, o.label)).join("")}</select></label>` +
+    `<label>Label <select data-filter="label">${opt("", o.label, "Any")}${labels.map((l) => opt(l, o.label, labelName(l))).join("")}</select></label>` +
     `<label>Title <input type="search" data-filter="q" value="${esc(o.q ?? "")}" placeholder="text in the title"></label></form>`;
 }
 
@@ -144,7 +144,7 @@ export function renderTable(rows, o = {}) {
   return `<div class="list"><table class="tbl">${header(o.sort ?? { key: "updated", dir: -1 }, COLUMNS, SORT)}<tbody>${shown.map(renderRow).join("")}</tbody></table></div>`;
 }
 
-export const BODY_TEMPLATE = "## Goal\n\n\n\n## Oracle\n\n\n\n## Time box\n\n";
+export const BODY_TEMPLATE = "## Outcome\n\n\n\n## Oracle\n\n\n\n## Time box\n\n";
 
 /** The Project select's options, one per registry key, `project` selected. */
 export function projectOptions(keys, project) {
@@ -184,7 +184,7 @@ export function renderForm(rows, o = {}) {
     `<label>Title <input name="title" required></label>` +
     `<label>Body <textarea name="body" rows="12">${esc(BODY_TEMPLATE)}</textarea></label>` +
     `<label>Labels <input name="labels" placeholder="comma separated"></label>` +
-    `<label><input type="checkbox" name="goal"> Factory goal (adds the <code>goal</code> label)</label>` +
+    `<label><input type="checkbox" name="goal"> Build in the factory (adds the <code>factory</code> label)</label>` +
     `<label>Waits on <input name="waitingOn" placeholder="repo-n"></label>` +
     `<label>Due <input name="due" type="date"></label>` +
     `<button type="submit" class="cmd primary">File issue</button> <span class="form-msg" role="status"></span></form></details>`;
@@ -201,7 +201,7 @@ export function renderContents(d, o = {}) {
 
 /** The detail view's pieces, shared with views/issue.js. */
 export function renderIssue(d) {
-  const facts = Object.entries(d.frontmatter ?? {}).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(Array.isArray(v) ? v.join(", ") : v)}</dd></div>`).join("");
+  const facts = Object.entries(d.frontmatter ?? {}).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(Array.isArray(v) ? v.map(labelName).join(", ") : v)}</dd></div>`).join("");
   const notes = d.notes.length ? `<ul class="notes">${d.notes.map((n) => `<li>${esc(n.replace(/^- /, ""))}</li>`).join("")}</ul>` : empty("No notes.");
   const jobs = d.jobs.length
     ? `<ul class="jobs">${d.jobs.map((j) => `<li><a href="#/jobs/${encodeURIComponent(j.name)}">${esc(j.name)}</a> ${badge(j.state)} <small class="quiet">${esc(j.started)}</small></li>`).join("")}</ul>`

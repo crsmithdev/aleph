@@ -216,7 +216,7 @@ describe("timeline view", () => {
     expect(contentsText({ kind: "land", details: [["commit", "abc1234"]] })).toBe("abc1234");
     const h = renderEvent({ at: "2026-10-26T00:00:00", kind: "issue", what: "opened", state: "open", title: "t", id: "aleph-3", href: "#/issues/aleph/3", project: "aleph", details: [["labels", "followup,goal"], ["notes", "2"]] });
     expect(h).toContain('<span class="badge">followup</span>');
-    expect(h).toContain('<span class="badge">goal</span>');
+    expect(h).toContain('<span class="badge">factory</span>');
     expect(h).toContain("<span>2 notes</span>");
     expect(h).not.toContain("Labels");
   });
@@ -231,9 +231,9 @@ describe("timeline view", () => {
 
   test("contents is one line, with its full text in the title", () => {
     const e = { at: "2026-10-26T00:00:00", kind: "issue", what: "opened", state: "open", title: "t", id: "aleph-3", href: "#/issues/aleph/3", project: "aleph", details: [["labels", "followup,goal"], ["notes", "2"]] };
-    expect(contentsText(e)).toBe("followup · goal · 2 notes");
+    expect(contentsText(e)).toBe("followup · factory · 2 notes");
     const h = renderEvent(e);
-    expect(h).toContain('<td class="c-con" title="followup · goal · 2 notes">');
+    expect(h).toContain('<td class="c-con" title="followup · factory · 2 notes">');
     expect(h).not.toContain("<br");
     expect(renderTimeline({ rows: [] })).toContain("text-overflow: ellipsis");
   });

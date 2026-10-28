@@ -2,7 +2,7 @@
 // land card: id, title, state badge, key facts. "compact" keeps the look in at most 2 lines
 // (two block children: id, badge and title; then one line of facts) for a table or a list.
 // Pure string functions, no DOM.
-import { actMessages, clock, esc, money } from "../lib.js";
+import { actMessages, clock, esc, labelName, money } from "../lib.js";
 
 export const itemId = (j) => `<span class="id">${esc(j.name)}</span>`;
 export const title = (j) => `<h3>${esc(j.item?.title || j.name)}</h3>`;
@@ -81,7 +81,7 @@ export function landCard(j, size = "full", now = new Date().toISOString()) {
     (j.check === "open" || actMessages.has(j.name) ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${actMsg(j.name)}</div>` : ""));
 }
 
-const TRIAGE = { goal: ["Goal", "done"], closed: ["Closed", "done"], "needs-chris": ["Needs Chris", "need"], "live-check": ["Live check", "done"] };
+const TRIAGE = { goal: ["To factory", "done"], closed: ["Closed", "done"], "needs-chris": ["Needs Chris", "need"], "live-check": ["Live check", "done"] };
 
 /**
  * A triage run: a job `j` as the state gives it, kind triage, with `outcome` (goal, closed,
@@ -119,7 +119,7 @@ export function jobCard(j, size = "full", now = new Date().toISOString()) {
 export function issueCard(i, size = "full") {
   const status = i.status || "open";
   const b = { text: label(status), tone: TONE[status] ?? "quiet" };
-  const labels = (i.labels ?? []).join(", ");
+  const labels = (i.labels ?? []).map(labelName).join(", ");
   if (size === "compact") {
     return compactCard({
       kind: "issue", id: i.id, href: i.href, title: i.title, badge: b,

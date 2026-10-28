@@ -48,7 +48,7 @@ describe("cards", () => {
     const h = triageCard(triage, "full", now);
     expect(h).toContain('<article class="job-card big del triage"><div class="ih"><span class="id">triage-aleph-3</span><h3>Sort &lt;it&gt;</h3><span class="badge need">Needs Chris</span></div>');
     expect(h).toContain("<dt>Took</dt><dd>4m</dd>");
-    expect(triageCard({ ...triage, outcome: "goal" }, "full", now)).toContain('<span class="badge done">Goal</span>');
+    expect(triageCard({ ...triage, outcome: "goal" }, "full", now)).toContain('<span class="badge done">To factory</span>');
     expect(triageCard({ ...triage, outcome: "closed" }, "full", now)).toContain(">Closed<");
     expect(triageCard({ ...triage, outcome: "live-check" }, "full", now)).toContain(">Live check<");
     expect(triageCard({ ...triage, state: "running", outcome: undefined, ended: undefined }, "full", now)).toContain('<span class="badge run">Triaging</span>');
@@ -58,6 +58,6 @@ describe("cards", () => {
   test("titles are escaped; ids link when there is an href", () => {
     expect(jobCard(job, "compact", now)).toContain("Do &lt;it&gt;");
     expect(jobCard(job, "compact", now)).toContain('<a class="id" href="#/jobs/aleph-9">');
-    expect(issueCard(issue, "full")).toContain("<dt>Labels</dt><dd>goal, ui</dd>");
+    expect(issueCard(issue, "full")).toContain("<dt>Labels</dt><dd>factory, ui</dd>");
   });
 });

@@ -1,6 +1,6 @@
 // The project card and detail renderers, shared by views/project.js. The list of
 // projects is part of views/contents.js.
-import { empty, esc } from "../lib.js";
+import { empty, esc, labelName } from "../lib.js";
 
 const day = (iso) => (Number.isNaN(Date.parse(iso)) ? "" : new Date(iso).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }));
 const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
@@ -15,7 +15,7 @@ export function renderBaseline(p) {
 
 export function renderFacts(p) {
   return `<dl class="facts">` +
-    fact("Open issues", String(p.openItems)) + fact("Open goals", String(p.openGoals)) +
+    fact("Open issues", String(p.openItems)) +
     fact("Last landed", p.lastLanded ? `<code>${esc(p.lastLanded.name)}</code> ${esc(day(p.lastLanded.at))}` : "none yet") +
     fact("Behind origin", p.behind === null ? "unknown" : p.behind === 0 ? "up to date" : plural(p.behind, "commit")) +
     renderBaseline(p) + fact("Vault notes", String(p.notes)) + `</dl>`;
@@ -34,7 +34,7 @@ export function renderDetail(p) {
     const sha = esc(c.hash.slice(0, 7));
     return `<li><span class="tm">${esc(day(c.date))}</span> ${c.commitUrl ? `<a href="${esc(c.commitUrl)}"><code>${sha}</code></a>` : `<code>${sha}</code>`} ${esc(c.subject)}${c.item ? ` <span class="id">${esc(c.item)}</span>` : ""}</li>`;
   }).join("");
-  const items = p.items.map((i) => `<li><span class="id">${esc(p.key)}-${i.id}</span> ${esc(i.title)}${i.labels.map((l) => ` <span class="badge run">${esc(l)}</span>`).join("")}</li>`).join("");
+  const items = p.items.map((i) => `<li><span class="id">${esc(p.key)}-${i.id}</span> ${esc(i.title)}${i.labels.map((l) => ` <span class="badge run">${esc(labelName(l))}</span>`).join("")}</li>`).join("");
   const jobs = p.jobs.map((j) => `<li><span class="id">${esc(j.name)}</span> <span class="badge ${j.state === "landed" ? "done" : "run"}">${esc(j.state)}</span> <span class="tm">${esc(day(j.started))}</span></li>`).join("");
   const notes = p.vault.map((n) => `<li>${esc(n.title)} <span class="badge run">${esc(n.kind)}</span> <span class="tm">${esc(n.updated)}</span></li>`).join("");
   return `<div class="page"><p><a href="#/contents?type=project">All projects</a></p>${renderCard(p)}` +

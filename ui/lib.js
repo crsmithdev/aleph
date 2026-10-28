@@ -18,6 +18,8 @@ export const clock12 = (iso) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? "" : `${d.getHours() % 12 || 12}:${pad(d.getMinutes())} ${d.getHours() < 12 ? "am" : "pm"}`;
 };
+/** A label as the page shows it: the factory's `goal` label reads "factory". */
+export const labelName = (l) => (l === "goal" ? "factory" : l);
 export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
 
 /** "4:12": minutes and seconds from `from` to `to` (ISO strings); minutes may pass 59. */

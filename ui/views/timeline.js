@@ -3,7 +3,7 @@
 // sortable table (Time, Status, Type, Project, Id, Title, Contents, X): one row per event (a job started,
 // passed or failed; an issue opened, triaged, decided or closed; a land), 100 to a page with Older and
 // Newer controls. `data` is /api/timeline: { rows, now, strip }.
-import { chart, empty, esc, money, readTokens } from "../lib.js";
+import { chart, empty, esc, labelName, money, readTokens } from "../lib.js";
 
 export const view = {
   path: "/timeline",
@@ -151,10 +151,10 @@ export function contentsParts(e, now) {
   const plain = (...texts) => texts.filter(Boolean).map((text) => ({ text }));
   if (e.kind === "job") return plain(e.sub ?? "agent", d.model, e.cost == null ? "" : money(e.cost), duration(e, now) || d.took);
   if (e.kind === "land") return plain(d.commit ?? e.commit?.slice(0, 7), e.sub);
-  const labels = (d.labels ?? "").split(",").filter(Boolean).map((text) => ({ text, chip: true }));
+  const labels = (d.labels ?? "").split(",").filter(Boolean).map((l) => ({ text: labelName(l), chip: true }));
   return [...labels, ...plain(d.notes ? `${d.notes} ${d.notes === "1" ? "note" : "notes"}` : "")];
 }
-/** The Contents cell as plain text, one line: "goal · followup · 2 notes". */
+/** The Contents cell as plain text, one line: "factory · followup · 2 notes". */
 export const contentsText = (e, now) => contentsParts(e, now).map((p) => p.text).join(" · ");
 function contents(e, now) {
   return contentsParts(e, now).map((p) => p.chip ? `<span class="badge">${esc(p.text)}</span>` : `<span>${esc(p.text)}</span>`).join('<span class="sep">·</span>');
