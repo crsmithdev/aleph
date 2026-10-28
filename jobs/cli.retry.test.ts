@@ -11,6 +11,14 @@ describe("a batch of lands", () => {
   const landRuns = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-demo-${name}-`) && d.endsWith("-land") && existsSync(join(jobsDir, d, "state.json"))).sort().map((d) => ({ id: d, ...state(d) }));
   const lockDir = () => join(base, "run", "aleph", "land-demo");
 
+  /** Until the land run of `name` is queued on the repo's land lock, where a leader's batch can take it. */
+  async function queued(name: string): Promise<void> {
+    const deadline = Date.now() + 30_000;
+    const phase = () => { try { return landRuns(name)[0]?.phase; } catch { return undefined; } };
+    // The run folder is there a moment before its state.json.
+    while (phase() !== "queued" && Date.now() < deadline) await Bun.sleep(20);
+  }
+
   beforeEach(() => {
     rmSync(join(base, "batch-count"), { force: true });
     rmSync(join(base, "pushes"), { force: true });
@@ -29,9 +37,7 @@ describe("a batch of lands", () => {
     const started: Promise<unknown>[] = [];
     for (const [name] of jobs) {
       started.push(aleph(["land", name]));
-      const deadline = Date.now() + 30_000;
-      while (!landRuns(name).length && Date.now() < deadline) await Bun.sleep(50);
-      await Bun.sleep(300);
+      await queued(name);
     }
     rmSync(lockDir(), { recursive: true, force: true });
     await Promise.all(started);

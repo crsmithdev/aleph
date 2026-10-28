@@ -175,24 +175,30 @@ describe("guards", () => {
   test("six starts at once: five run, one is refused", async () => {
     const names = ["one", "two", "three", "four", "five", "six"];
     const started = names.map((n) => job(n, `hold ${join(fakeLog, "never-created")}`));
-    const deadline = Date.now() + 90_000;
-    let refused: Awaited<ReturnType<typeof aleph>> | undefined;
-    // Five hold on a gate file nobody creates, so none ends before the drops; the sixth comes back refused.
-    refused = await Promise.race([Promise.any(started.map(async (p) => { const r = await p; if (r.code !== 1) throw 0; return r; })), Bun.sleep(90_000).then(() => undefined)]);
-    expect(Date.now()).toBeLessThan(deadline);
-    expect(refused?.stderr).toContain("5 agent runs are live");
-    // The refusal comes as soon as the fifth unit wrote `pid`; on a loaded machine some are still in phase setup.
     const mine = async () => (await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name));
-    let live = await mine();
-    for (const end = Date.now() + 90_000; Date.now() < end && !(live.length === 5 && live.every((j: any) => j.state === "running" && j.phase === "worker")); live = await mine()) await Bun.sleep(100);
-    expect(live.length).toBe(5);
-    expect(live.every((j: any) => j.state === "running" && j.phase === "worker")).toBe(true);
-    for (const j of live) expect((await aleph(["drop", j.name])).code).toBe(0);
-    const ends = await Promise.all(started);
-    expect(ends.filter((r) => r.code === 0).length).toBe(5);
-    for (const j of live) expect(state(j.run).state).toBe("dropped");
-    expect((await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name)).map((j: any) => j.state)).toEqual(live.map(() => "dropped"));
-  }, 180_000);
+    try {
+      // Five hold on a gate file nobody creates, so none ends before the drops; the sixth comes back refused.
+      // No wall-clock window: the starts queue on the dispatch lock, which bounds each wait itself.
+      // The held runs never end, so the first start to come back is the sixth, whatever it says.
+      const refused = await Promise.race(started);
+      expect(refused.code, refused.stdout + refused.stderr).toBe(1);
+      expect(refused.stderr).toContain("5 agent runs are live");
+      // The refusal comes as soon as the fifth unit wrote `pid`; on a loaded machine some are still in phase setup.
+      let live = await mine();
+      for (const end = Date.now() + 90_000; Date.now() < end && !(live.length === 5 && live.every((j: any) => j.state === "running" && j.phase === "worker")); live = await mine()) await Bun.sleep(100);
+      expect(live.length).toBe(5);
+      expect(live.every((j: any) => j.state === "running" && j.phase === "worker")).toBe(true);
+      for (const j of live) expect((await aleph(["drop", j.name])).code).toBe(0);
+      const ends = await Promise.all(started);
+      expect(ends.filter((r) => r.code === 0).length).toBe(5);
+      for (const j of live) expect(state(j.run).state).toBe("dropped");
+      expect((await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name)).map((j: any) => j.state)).toEqual(live.map(() => "dropped"));
+    } finally {
+      // Drop every run that started, so a failure here does not leave five held runs for the next test.
+      for (const j of await mine()) if (j.state === "running") await aleph(["drop", j.name]);
+      await Promise.allSettled(started);
+    }
+  }, 300_000);
 });
 
 describe("news", () => {
