@@ -2,25 +2,24 @@
  * review2: the review a held run gets before it reaches Chris. One `claude -p`
  * under srt in a scratch clone of the repo, which merges the run branch onto origin/main,
  * runs the checks, reads the test diff, lists the changes outside the goal's
- * edit surface, and for a `ui` goal has the harness load the changed views in
- * Chrome (review2-browser.ts), outside the sandbox. It writes review2.md in the run folder, and only that: state.json belongs to the
+ * edit surface, and for a `ui` goal the harness starts the ui server on the merge
+ * result and loads the changed views in Chrome (review2-browser.ts), both outside the sandbox, before the reviewer starts. It writes review2.md in the run folder, and only that: state.json belongs to the
  * run's owner. The verdict, a `PENDING` line or a last `ERROR: <reason>` line
  * are read back from review2.md (`readReview2`). Nothing lands: Land stays a click.
  */
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { BROWSER, VIEWS, watchViews } from "./review2-browser.ts";
+import { BROWSER, browserStep, changedViews, startUiServer } from "./review2-browser.ts";
 import { hasLabel, reader } from "../../todo/lib/store.ts";
-import { git } from "./git.ts";
+import { git, gitWith } from "./git.ts";
 import { outcome } from "./gate.ts";
 import { LOW, loadRegistry, parseVerdict, readEnvFile, readRun, type Repo, type Run } from "./ledger.ts";
 import { linkBins, runPath, sandboxed, workerToken, writeHome } from "./sandbox.ts";
 
 /**
  * The reviewer's profile: it reads the run folder, writes only in review2/ (its
- * clone and home) and tmp/ (where its browse request, tmp/views.txt, goes), and
- * reaches the Anthropic API and localhost, which a `ui` goal's server needs, with
- * local binding. No Unix sockets: Chrome runs in the harness (review2-browser.ts).
+ * clone and home) and tmp/, and reaches the Anthropic API and localhost, with
+ * local binding. No Unix sockets: the ui server and Chrome run in the harness (review2-browser.ts).
  */
 export const REVIEW2_SANDBOX = {
   read: ["."], write: ["review2", "tmp"], net: { domains: ["api.anthropic.com", "localhost"], localBinding: true },
@@ -38,12 +37,9 @@ ${o.checks.map((c) => `   - \`${c}\``).join("\n")}
 ${o.tsc ? `   - \`bunx tsc --noEmit\` (the clone has the repo's node_modules). Write one line \`Type check: pass\` or \`Type check: fail <n> errors\`, and name the errors the branch adds.
 ` : ""}3. Diff the tests (\`git diff origin-main...${o.branch}\` on test files) for dropped or weakened assertions: removed tests, removed expect lines, .skip/.only, loosened matchers.
 4. List the changes outside the goal's edit surface (the "Edit surface" in the spec below).
-${o.ui ? `5. The goal is labelled \`ui\`. You cannot start a browser; the harness loads the views for you. Start \`bun ui/server.ts --port <free port>\` in the background (it listens on 127.0.0.1). Its jobs, issues, projects and notes are a small made-up set (ALEPH_* in your environment); it is not Chris's data.
-   Write the URL of each changed view, one per line (\`http://127.0.0.1:<port>/...\`, at most 8), to \`${o.folder}/tmp/views.part\`, then
-   \`mv\` it to \`${o.folder}/${VIEWS}\`. The harness takes that file and loads each view at 1440 and 390 px wide, in light and dark, and writes
-   \`${o.folder}/${BROWSER}/report.md\` last: wait for it (poll up to 5 minutes), then read it and look at the screenshots it names for anything else.
-   Take page errors and horizontal scroll (the \`overflow:\` line of each width and theme) from the report, not from the screenshots; record them for each view, and write one line \`Browser: <what you saw>\`, or \`Browser: ERROR <the report's error>\` when
-   the report has an ERROR line or never came, and go on. Stop the server.
+${o.ui ? `5. The goal is labelled \`ui\`. The harness has already started the ui server on the merge result and loaded each changed view in Chrome at 1440 and 390 px wide, in light and dark.
+   Do not start a server or a browser. Read \`${o.folder}/${BROWSER}/report.md\` and look at the screenshots it names. Take page errors and horizontal scroll (the \`overflow:\` line of each width and theme) from the report, not from the screenshots; record them for each view, and
+   write one line \`Browser: <what you saw>\`, or \`Browser: ERROR <the report's error>\` when the report has an ERROR line or is missing, and go on.
 ` : ""}
 Write down what you found, then end with exactly one line:
 VERDICT: land
@@ -98,6 +94,43 @@ export async function runReview2(folder: string): Promise<void> {
   }
 }
 
+/**
+ * The browser step of a `ui` goal, before the reviewer starts: merge the branch onto origin-main in a worktree of the
+ * scratch clone, start `bun ui/server.ts` from it outside the sandbox, load each changed view in Chrome, write browser/ in
+ * the run folder, and stop the server and drop the worktree, also on an error. Never throws.
+ */
+async function uiBrowser(folder: string, work: string, branch: string): Promise<void> {
+  const out = join(folder, BROWSER);
+  const merged = join(folder, "review2", "merged");
+  const note = (msg: string) => writeFileSync(join(out, "report.md"), `# Browser\n\nERROR: ${msg.replace(/\s+/g, " ").slice(0, 400)}\n`);
+  let server: Awaited<ReturnType<typeof startUiServer>> | null = null;
+  try {
+    const id = { GIT_AUTHOR_NAME: "aleph factory", GIT_AUTHOR_EMAIL: "factory@aleph.invalid", GIT_COMMITTER_NAME: "aleph factory", GIT_COMMITTER_EMAIL: "factory@aleph.invalid" };
+    const w = git(work, "worktree", "add", "-q", "--detach", merged, "origin-main");
+    if (!w.ok) return note(`review worktree failed: ${w.out}`);
+    const m = gitWith({ env: id }, merged, "merge", "-q", "--no-edit", branch);
+    if (!m.ok) return note(`the branch does not merge onto origin-main: ${m.out}`);
+    // The merge result has no node_modules of its own: it shares the clone's.
+    if (existsSync(join(work, "node_modules"))) symlinkSync(join(work, "node_modules"), join(merged, "node_modules"));
+    const files = git(merged, "diff", "--name-only", "origin-main...HEAD").out.split("\n").filter(Boolean);
+    try {
+      // Not process.env: the real ALEPH_* stores and tokens stay out. The server runs on the made-up set of ui/fixtures/review.
+      const fx = fixtureEnv(merged, join(folder, "review2", "fixture"));
+      if (typeof fx === "string") return note(fx);
+      server = await startUiServer(merged, join(out, "server.log"), { PATH: runPath(), HOME: join(folder, "review2", "home"), ...fx });
+    } catch (e: any) {
+      return note(String(e?.message ?? e));
+    }
+    await browserStep(folder, changedViews(files, server.url));
+  } catch (e: any) {
+    try { note(`browser step: ${e?.message ?? e}`); } catch { /* the run folder is gone */ }
+  } finally {
+    await server?.stop();
+    git(work, "worktree", "remove", "--force", merged);
+    rmSync(merged, { recursive: true, force: true });
+  }
+}
+
 async function review(folder: string): Promise<void> {
   const run = readRun(folder)!;
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
@@ -138,27 +171,20 @@ async function review(folder: string): Promise<void> {
     linkBins(folder);
     // browser/ exists before the sandbox starts, so the profile's read of "." holds it: the reviewer reads the harness's report there.
     for (const d of ["sock", "tmp", BROWSER]) mkdirSync(join(folder, d), { recursive: true });
-    rmSync(join(folder, VIEWS), { force: true });
+    if (ui) await uiBrowser(folder, work, run.branch);
     const env: Record<string, string> = {
       ...readEnvFile(repo.env ?? process.env.ALEPH_RUN_ENV), CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN || workerToken(),
       HOME: home, CLAUDE_CONFIG_DIR: join(home, ".claude"),
     };
     delete env.ANTHROPIC_API_KEY;
-    if (ui) {
-      const fx = fixtureEnv(work, join(scratch, "fixture"));
-      if (typeof fx === "string") return void fail(fx);
-      Object.assign(env, fx);
-    }
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
     const argv = [process.env.ALEPH_REVIEW2_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
     const log = join(folder, "review2.log");
-    let root: number | undefined;
-    const views = ui ? watchViews(folder, () => root, { sandbox: !process.env.ALEPH_SANDBOX_CMD }) : null;
     const r = await sandboxed(folder, `exec ${argv.map(q).join(" ")}`, {
       ...REVIEW2_SANDBOX, cwd: "review2/work", env, stdin: text, stdout: log, stderr: log,
-      limit: Number(process.env.ALEPH_REVIEW2_TIMEOUT ?? 1500), onSpawn: (p) => { root = p.pid; },
-    }).finally(() => views?.stop());
+      limit: Number(process.env.ALEPH_REVIEW2_TIMEOUT ?? 1500),
+    });
     const o = outcome(existsSync(log) ? readFileSync(log, "utf8") : "");
     writeFileSync(md, o.result.trimEnd() + "\n");
     if (r.timedOut) return void fail("time box");

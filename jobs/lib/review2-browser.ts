@@ -1,79 +1,98 @@
 /**
  * review2's browser step, run by the harness outside the reviewer's sandbox: srt's
- * profile blocks the Unix sockets Chrome needs, and opening them would open every
- * host socket to worker-written code. The sandboxed reviewer starts `bun ui/server.ts`
- * on 127.0.0.1 and writes the URLs to tmp/views.txt; the harness then runs
- * /usr/bin/google-chrome --headless inside the sandbox's user and network namespaces
- * (`nsenter -U -n`), so it reaches that server and nothing else, drives it over
- * --remote-debugging-pipe (no debugging port), and writes the screenshots, console
- * errors and horizontal scroll of each view at 1440 and 390 px, light and dark, to
- * browser/ in the run folder, which the reviewer reads and cannot write.
+ * profile blocks the Unix sockets Chrome needs, and srt puts the reviewer in a network
+ * namespace of its own, so a server the reviewer binds on localhost is out of host Chrome's
+ * reach. The harness therefore starts the one-off `bun ui/server.ts` itself, from the merge
+ * result, runs /usr/bin/google-chrome --headless against it over --remote-debugging-pipe
+ * (no debugging port), and writes the screenshots, console errors and horizontal scroll of
+ * each changed view at 1440 and 390 px, light and dark, to browser/ in the run folder, which
+ * the reviewer reads and cannot write. The server is stopped when the step ends, before the
+ * reviewer starts.
  *
- * Chrome joins only the network and user namespaces, not the mount namespace, so it
- * keeps its own sandbox: there is no --no-sandbox fallback. When Chrome's sandbox
- * cannot start there, the report says so and the review goes on with no browser result.
+ * Chrome keeps its own sandbox: there is no --no-sandbox fallback. When Chrome's sandbox
+ * cannot start, the report says so and the review goes on with no browser result.
  */
 import { spawn } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, closeSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
+import { closeSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-/** The reviewer's browse request, relative to the run folder: in tmp/, which REVIEW2_SANDBOX lets it write. */
-export const VIEWS = "tmp/views.txt";
 /** The harness's output, relative to the run folder: read-only for the reviewer. */
 export const BROWSER = "browser";
-export const SANDBOX_ERROR = "ERROR: Chrome sandbox unavailable in the review namespace";
+export const SANDBOX_ERROR = "ERROR: Chrome sandbox unavailable";
 
 const SIZES: [number, number][] = [[1440, 900], [390, 844]];
 const SCHEMES = ["light", "dark"] as const;
 const MAX_VIEWS = 8;
+const FIRST_PORT = 3002;
 const chrome = () => process.env.ALEPH_REVIEW2_CHROME ?? "/usr/bin/google-chrome";
 
-/** The URLs of a views file: http on localhost, 127.0.0.1 or [::1] only, at most MAX_VIEWS. Other lines are dropped. */
-export function parseViews(text: string): { urls: string[]; dropped: number } {
-  const urls: string[] = [];
-  let dropped = 0;
-  for (const line of text.split("\n").map((l) => l.trim()).filter(Boolean)) {
-    let u: URL | null = null;
-    try { u = new URL(line); } catch { /* not a URL */ }
-    if (u && u.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname) && !u.username && !u.password && urls.length < MAX_VIEWS) urls.push(u.href);
-    else dropped++;
-  }
-  return { urls, dropped };
-}
-
-const ns = (pid: number | "self", kind: string): string | null => { try { return readlinkSync(`/proc/${pid}/ns/${kind}`); } catch { return null; } };
-
-/** The first descendant of `root`, breadth first, in another network namespace than this process: a process inside srt's sandbox. */
-export function sandboxPid(root: number): number | null {
-  const children = new Map<number, number[]>();
-  for (const e of readdirSync("/proc")) {
-    if (!/^\d+$/.test(e)) continue;
-    try {
-      // The ppid is the second field after the command, which sits in parentheses and may hold spaces.
-      const stat = readFileSync(`/proc/${e}/stat`, "utf8");
-      const ppid = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1]);
-      children.set(ppid, [...(children.get(ppid) ?? []), Number(e)]);
-    } catch { /* gone */ }
-  }
-  const self = ns("self", "net");
-  const queue = [...(children.get(root) ?? [])];
-  while (queue.length) {
-    const pid = queue.shift()!;
-    const net = ns(pid, "net");
-    if (net && net !== self) return pid;
-    queue.push(...(children.get(pid) ?? []));
-  }
-  return null;
-}
-
-/** The argv that runs Chrome in `pid`'s user and network namespaces; with `pid` null, in this process's own (the tests' stand-in for srt). */
-export function chromeArgv(pid: number | null, profileDir: string): string[] {
-  const enter = pid === null ? [] : ["nsenter", "-t", String(pid), "--preserve-credentials",
-    ...(ns(pid, "user") !== ns("self", "user") ? ["-U"] : []), "-n", "--"];
-  return [...enter, chrome(), "--headless=new", "--remote-debugging-pipe", `--user-data-dir=${profileDir}`,
+/** The argv that runs Chrome headless on a pipe, with a profile of the harness's own. */
+export function chromeArgv(profileDir: string): string[] {
+  return [chrome(), "--headless=new", "--remote-debugging-pipe", `--user-data-dir=${profileDir}`,
     "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-sync", "--disable-background-networking",
     "--disable-gpu", "--hide-scrollbars", "--mute-audio", "--no-proxy-server", "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost", "about:blank"];
+}
+
+/** The first port at or above FIRST_PORT that 127.0.0.1 can bind. */
+export async function freePort(from = FIRST_PORT): Promise<number> {
+  for (let port = from; port < from + 200; port++) {
+    const ok = await new Promise<boolean>((done) => {
+      const s = createServer();
+      s.once("error", () => done(false));
+      s.listen(port, "127.0.0.1", () => s.close(() => done(true)));
+    });
+    if (ok) return port;
+  }
+  throw new Error(`no free port from ${from}`);
+}
+
+/** The routes of the views a diff changes: `ui/views/<name>.js` is `#/<name up to its first dash>`; any other change under ui/ is the front page. At most MAX_VIEWS. */
+export function changedViews(files: string[], origin: string): string[] {
+  const routes: string[] = [];
+  for (const f of files) {
+    const m = f.match(/^ui\/views\/([\w]+)[\w-]*\.js$/);
+    const r = m ? `#/${m[1]}` : f.startsWith("ui/") ? "" : null;
+    if (r !== null && !routes.includes(r)) routes.push(r);
+  }
+  return routes.slice(0, MAX_VIEWS).map((r) => `${origin}/${r}`);
+}
+
+/** A running `bun ui/server.ts`: `stop` ends it, and waits for it to be gone. */
+export interface UiServer { url: string; stop: () => Promise<void> }
+
+/**
+ * Start `bun ui/server.ts` in `dir` on a free port, outside the sandbox, with git on its PATH, and wait until
+ * the port answers. Throws, with the server gone, when it exits or does not answer within `waitMs`.
+ */
+export async function startUiServer(dir: string, log: string, env: Record<string, string | undefined>, waitMs = 30_000): Promise<UiServer> {
+  const port = await freePort();
+  const fd = openSync(log, "a");
+  let child: ReturnType<typeof spawn>;
+  try {
+    child = spawn(process.execPath, ["ui/server.ts", "--port", String(port)], { cwd: dir, env, stdio: ["ignore", fd, fd] });
+  } finally { closeSync(fd); }
+  const gone = new Promise<void>((ok) => { child.once("exit", () => ok()); child.once("error", () => ok()); });
+  const stop = async () => {
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    child.kill("SIGTERM");
+    await Promise.race([gone, Bun.sleep(5000)]);
+    if (child.exitCode === null && child.signalCode === null) { child.kill("SIGKILL"); await gone; }
+  };
+  const url = `http://127.0.0.1:${port}`;
+  try {
+    const end = Date.now() + waitMs;
+    for (;;) {
+      if (child.exitCode !== null || child.signalCode !== null) throw new Error(`ui server exited: ${tail(log, 5)}`);
+      if (await fetch(`${url}/`, { signal: AbortSignal.timeout(2000) }).then((r) => r.ok, () => false)) return { url, stop };
+      if (Date.now() > end) throw new Error(`ui server did not answer on port ${port}`);
+      await Bun.sleep(100);
+    }
+  } catch (e) {
+    await stop();
+    throw e;
+  }
 }
 
 /** A CDP connection over Chrome's pipe: commands on fd 3, answers and events on fd 4, each message ended by a NUL. */
@@ -185,10 +204,10 @@ async function shoot(cdp: Pipe, url: string, width: number, height: number, sche
 const tail = (file: string, n = 20) => { try { return readFileSync(file, "utf8").trimEnd().split("\n").slice(-n).join("\n"); } catch { return ""; } };
 
 /**
- * Load each view in `urls` at 1440 and 390 px, light and dark, in Chrome inside `pid`'s namespaces,
+ * Load each view in `urls` at 1440 and 390 px, light and dark, in Chrome,
  * and write `<folder>/browser/report.md` (atomically, last), the screenshots and chrome.log. Never throws.
  */
-export async function browserStep(folder: string, urls: string[], pid: number | null, dropped = 0): Promise<void> {
+export async function browserStep(folder: string, urls: string[], ): Promise<void> {
   const out = join(folder, BROWSER);
   const log = join(out, "chrome.log");
   const lines: string[] = ["# Browser", ""];
@@ -197,10 +216,9 @@ export async function browserStep(folder: string, urls: string[], pid: number | 
   const profileDir = mkdtempSync(join(tmpdir(), "aleph-review2-chrome-"));
   let child: ReturnType<typeof spawn> | null = null;
   try {
-    if (dropped) lines.push(`${dropped} line(s) of ${VIEWS} dropped: only http URLs on localhost, 127.0.0.1 or [::1], at most ${MAX_VIEWS}.`, "");
     if (!urls.length) { lines.push("ERROR: no view to load"); return report(); }
     const fd = openSync(log, "a");
-    const argv = chromeArgv(pid, profileDir);
+    const argv = chromeArgv(profileDir);
     try {
       child = spawn(argv[0], argv.slice(1), {
         stdio: ["ignore", fd, fd, "pipe", "pipe"],
@@ -215,10 +233,10 @@ export async function browserStep(folder: string, urls: string[], pid: number | 
       version = (await cdp.send("Browser.getVersion", {}, undefined, 30_000)).product ?? "Chrome";
     } catch {
       const t = tail(log);
-      lines.push(/sandbox/i.test(t) ? SANDBOX_ERROR : "ERROR: Chrome did not start in the review namespace", "", "```", t, "```");
+      lines.push(/sandbox/i.test(t) ? SANDBOX_ERROR : "ERROR: Chrome did not start", "", "```", t, "```");
       return report();
     }
-    lines.push(`${version}, run by the harness in the reviewer's network namespace. Screenshots are full page, up to 4000 px tall.`, "");
+    lines.push(`${version}, run by the harness. Screenshots are full page, up to 4000 px tall.`, "");
     let n = 0;
     for (const url of urls) {
       n++;
@@ -247,36 +265,4 @@ export async function browserStep(folder: string, urls: string[], pid: number | 
     }
     rmSync(profileDir, { recursive: true, force: true });
   }
-}
-
-/**
- * Watch `<folder>/tmp/views.txt` while the reviewer runs (`root` is the sandbox's outer process), and
- * run the browser step on each request. The request is taken (read, then removed) before Chrome starts,
- * so the reviewer may write a new one for a second round. `stop` waits for a step under way.
- */
-export function watchViews(folder: string, root: () => number | undefined, o: { sandbox: boolean; every?: number }): { stop: () => Promise<void> } {
-  const file = join(folder, VIEWS);
-  let busy: Promise<void> | null = null;
-  const tick = () => {
-    if (busy || !existsSync(file)) return;
-    busy = (async () => {
-      let text = "";
-      // Only a regular file: a link the reviewer planted is not followed out of the sandbox.
-      try { if (lstatSync(file).isFile()) text = readFileSync(file, "utf8"); } catch { /* taken */ }
-      rmSync(file, { force: true });
-      const out = join(folder, BROWSER);
-      for (const e of existsSync(out) ? readdirSync(out) : []) rmSync(join(out, e), { recursive: true, force: true });
-      mkdirSync(out, { recursive: true });
-      const { urls, dropped } = parseViews(text);
-      const r = root();
-      const pid = o.sandbox ? (r === undefined ? null : sandboxPid(r)) : null;
-      if (o.sandbox && pid === null) {
-        writeFileSync(join(out, "report.md"), "# Browser\n\nERROR: the reviewer's sandbox has no network namespace of its own to load the views in\n");
-        return;
-      }
-      await browserStep(folder, urls, pid, dropped);
-    })().catch(() => {}).finally(() => { busy = null; });
-  };
-  const t = setInterval(tick, o.every ?? 1000);
-  return { stop: async () => { clearInterval(t); await busy; } };
 }
