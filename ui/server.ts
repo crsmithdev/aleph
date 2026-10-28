@@ -14,6 +14,8 @@ interface Route { method: string; pattern: RegExp; names: string[]; handler: Han
 
 const JS = { "content-type": "text/javascript; charset=utf-8" };
 const VIEW_FILE = /^[\w-]+\.js$/;
+/** The modules in ui/ that views import (`from "../lib.js"`), served at the root. */
+const SHARED = new Set(["/lib.js", "/decision.js"]);
 
 /** `/api/jobs/:name` as a regex and its parameter names. */
 export function compile(path: string): { pattern: RegExp; names: string[] } {
@@ -79,7 +81,7 @@ export async function serve(port: number, { warm = true }: { warm?: boolean } = 
         const page = join(dir, "index.html");
         return new Response(Bun.file(page), { headers: { "content-type": "text/html; charset=utf-8" } });
       }
-      if (path === "/lib.js") return new Response(Bun.file(join(dir, "lib.js")), { headers: JS });
+      if (SHARED.has(path)) return new Response(Bun.file(join(dir, path.slice(1))), { headers: JS });
       const v = path.match(/^\/views\/([^/]+)$/);
       if (v && VIEW_FILE.test(v[1]) && existsSync(join(dir, "views", v[1]))) return new Response(Bun.file(join(dir, "views", v[1])), { headers: JS });
       return new Response("not found", { status: 404 });

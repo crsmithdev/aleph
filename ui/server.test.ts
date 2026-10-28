@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serve } from "./server.ts";
@@ -80,6 +80,13 @@ test("/ is the page, /lib.js and /views/now.js its modules", async () => {
   expect(lib.headers.get("content-type")).toContain("javascript");
   expect(await lib.text()).toContain("export function esc");
   expect(await (await at("/views/now.js")).text()).toContain("export function renderJobs");
+});
+
+test("every module a view imports from ui/ is served", async () => {
+  const dir = join(import.meta.dir, "views");
+  const shared = new Set(readdirSync(dir).flatMap((f) => [...readFileSync(join(dir, f), "utf8").matchAll(/from "\.\.\/([^"/]+\.js)"/g)].map((m) => m[1])));
+  expect([...shared].sort()).toContain("lib.js");
+  for (const f of shared) expect(`${f}: ${(await at(`/${f}`)).status}`).toBe(`${f}: 200`);
 });
 
 test("other paths are 404 and writes are refused", async () => {
