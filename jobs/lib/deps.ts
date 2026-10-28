@@ -105,14 +105,19 @@ export function propose(repo: Repo, found: Proposal[]): string[] {
   return titles;
 }
 
-/** The sweep over `repos`: what is new, filed. A repo whose `bun outdated` did not run is left for the next night. */
-export async function sweep(repos: Repo[]): Promise<string[]> {
+/**
+ * The sweep over `repos`: what is new, filed. A repo whose `bun outdated` did not run is left for the next night.
+ * A repo that throws is reported to `onError` as `deps <key>: <message>`, and the sweep goes on.
+ */
+export async function sweep(repos: Repo[], onError: (line: string) => void = () => {}): Promise<string[]> {
   const all: string[] = [];
   for (const repo of repos) {
     try {
       const text = await outdated(repo);
       if (text !== null) all.push(...propose(repo, parseOutdated(text)));
-    } catch {}
+    } catch (e) {
+      onError(`deps ${repo.key}: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
   return all;
 }

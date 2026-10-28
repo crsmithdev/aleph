@@ -651,7 +651,7 @@ async function tickCmd(): Promise<void> {
       const p = await probe(repo, join(factoryDir(), "probe.log"));
       factoryLog(`probe ${p.ok ? "passed" : `failed: ${p.failed.join("; ")}`}`);
       if (p.ok) {
-        const proposed = await sweep(Object.values(loadRegistry()).filter((r) => r.sandbox));
+        const proposed = await sweep(Object.values(loadRegistry()).filter((r) => r.sandbox), factoryLog);
         if (proposed.length) factoryLog(`proposed ${proposed.join("; ")}`);
       }
     }

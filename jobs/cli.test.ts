@@ -1126,6 +1126,25 @@ describe("a factory run", () => {
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
   }, 120_000);
 
+  test("the nightly sweep logs a repo with no list and still files the next repo's proposals", async () => {
+    const cmd = join(base, "outdated-nolist.sh");
+    writeFileSync(cmd, `#!/bin/bash\ncat <<'EOF'\n| Package | Current | Update | Latest |\n|---------|---------|--------|--------|\n| left-pad | 1.0.0 | 1.0.0 | 1.2.0 |\nEOF\n`, { mode: 0o755 });
+    const reg = readFileSync(join(base, "repos.json"), "utf8");
+    // "nolist" comes first, so the sweep must go on past it to "fac".
+    writeFileSync(join(base, "repos.json"), JSON.stringify({ nolist: { path: repo, sandbox: true, checks: [], autoland: false }, ...JSON.parse(reg) }));
+    try {
+      rmSync(join(base, "factory", "probe.json"), { force: true });
+      await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "pass" });
+      expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toMatch(/deps nolist: .*no list/);
+      const rows = ((await aleph(["todo", "list", "fac", "--json"])).json as any[]).filter((r) => r.title.startsWith("Update "));
+      expect(rows.map((r) => r.title)).toContain("Update left-pad 1.0.0 to 1.2.0");
+      for (const r of rows) await aleph(["todo", "drop", "fac", String(r.id), "test over"]);
+    } finally {
+      writeFileSync(join(base, "repos.json"), reg);
+      writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
+    }
+  }, 120_000);
+
   test("a tick starts one run per open goal, lands it, and then has nothing to start", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
