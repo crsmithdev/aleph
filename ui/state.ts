@@ -75,7 +75,7 @@ export interface State {
 const DELIVERED = 10;
 /** So do the Issues and Triage sections. */
 const NEW_ISSUES = 10, TRIAGED = 10;
-const OUTCOME: Record<string, string> = { goal: "goal", close: "closed", chris: "needs-chris", live: "live-check" };
+const OUTCOME: Record<string, string> = { goal: "goal", close: "closed", chris: "needs-chris", live: "live-check", planned: "planned" };
 
 /** The next firing of aleph-tick.timer, or null when systemctl fails or lists no such timer. */
 export function nextTick(): string | null {
@@ -180,7 +180,8 @@ export function state(now = new Date()): State {
   const triageRuns: { at: number; runs: Runs; reason?: string }[] = [];
   for (const runs of jobs) {
     const last = runs.at(-1)!.run;
-    if (last.kind === "triage") {
+    // A planner run is shown like a triage: it sorts a goal and never lands.
+    if (last.kind === "triage" || last.kind === "plan") {
       triageRuns.push({ at: Date.parse(last.state === "running" ? "9999-01-01" : last.ended ?? last.started), runs, reason: last.reason });
       continue;
     }
@@ -255,7 +256,7 @@ export function state(now = new Date()): State {
     velocity: { landed: rate(landedAt), triaged: rate(triagedAt) },
     // Lands: land runs in progress first, then the latest landed, DELIVERED in all.
     delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).slice(0, Math.max(0, DELIVERED - landRuns.length)).map((d) => toJob(d.runs))].slice(0, DELIVERED),
-    waiting: openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`))
+    waiting: openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`) && !labels(item).includes("planned"))
       .map(({ repo, item }) => ({ repo: repo.key, id: item.id, title: item.title })),
   };
 }

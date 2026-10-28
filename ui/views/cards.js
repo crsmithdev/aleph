@@ -16,7 +16,7 @@ export const checkFacts = (j) =>
   (j.checks || []).map((c) => fact(c.name.charAt(0).toUpperCase() + c.name.slice(1), `${esc(String(c.seconds))} s ${c.ok ? "✓" : "✗"}`)).join("");
 /** "Oct 28 04:28" from a job folder id like 20261028-042822-aleph-aleph-240-agent: the id's own local time, as `when` shows it. */
 const idStart = (m, now) => when(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])), new Date(now));
-const KINDS = { agent: "agent run", land: "land", triage: "triage" };
+const KINDS = { agent: "agent run", land: "land", triage: "triage", plan: "planner" };
 /** One trailer as text: Item shows its value alone; a Job folder id is parsed into its run kind and start and links to the job page (raw id in the title). */
 const trailer = (t, j, now) => {
   if (t.key === "Item") return esc(t.value);
@@ -74,15 +74,18 @@ export function landCard(j, size = "full", now = new Date().toISOString()) {
     (j.check === "open" || actMessages.has(j.name) ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${actMsg(j.name)}</div>` : ""));
 }
 
-const TRIAGE = { goal: ["To factory", "done"], closed: ["Closed", "done"], "needs-chris": ["Needs Chris", "need"], "live-check": ["Live check", "done"] };
+const TRIAGE = { goal: ["To factory", "done"], closed: ["Closed", "done"], "needs-chris": ["Needs Chris", "need"], "live-check": ["Live check", "done"], planned: ["Split", "done"] };
+/** A planner run's job name, `plan-<repo>-<n>`, or its kind when the state gives it. */
+const isPlan = (j) => j.run?.kind === "plan" || /^plan-/.test(j.name ?? "");
 
 /**
- * A triage run: a job `j` as the state gives it, kind triage, with `outcome` (goal, closed,
- * needs-chris, live-check) once it has a verdict. Same style as the land card.
+ * A triage or planner run: a job `j` as the state gives it, kind triage or plan, with `outcome`
+ * (goal, closed, needs-chris, live-check; planned) once it has a verdict. Same style as the land card.
  */
 export function triageCard(j, size = "full", now = new Date().toISOString()) {
   const running = j.state === "running";
-  const b = running ? { text: "Triaging", tone: "run" } : TRIAGE[j.outcome] ? { text: TRIAGE[j.outcome][0], tone: TRIAGE[j.outcome][1] } : { text: "No verdict", tone: "quiet" };
+  const plan = isPlan(j);
+  const b = running ? { text: plan ? "Planning" : "Triaging", tone: "run" } : TRIAGE[j.outcome] ? { text: TRIAGE[j.outcome][0], tone: TRIAGE[j.outcome][1] } : { text: plan ? "No plan" : "No verdict", tone: "quiet" };
   const took = dur(j.started, j.ended || (running ? now : ""));
   const ttl = j.item?.title || j.name;
   if (size === "compact") {

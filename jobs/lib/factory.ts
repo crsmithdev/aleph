@@ -16,6 +16,8 @@ import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entr
 import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { alreadyMet } from "./gate.ts";
 import { detached } from "./launch.ts";
+import { PLANNED, planGoal, type Rate } from "./plan.ts";
+import type { Tier } from "./route.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
 const pauseFile = () => join(factoryDir(), "paused");
@@ -62,7 +64,7 @@ const sandboxRepos = () => Object.values(loadRegistry()).filter((r) => r.sandbox
 /** Factory agent and triage runs started in the last 24 hours. */
 export function runsToday(now = Date.now()): Entry[] {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  return allRuns().filter((e) => (e.run.kind === "agent" || e.run.kind === "triage") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
+  return allRuns().filter((e) => (e.run.kind === "agent" || e.run.kind === "triage" || e.run.kind === "plan") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
 }
 
 /** Open jobs in factory repos waiting for Chris (`needs-you`; a stuck run needs no answer). */
@@ -193,7 +195,8 @@ export function gates(opts: { only?: readonly Gate[]; jobs?: Job[]; except?: str
 /** Dispatch is off when `ALEPH_DISPATCH=off`: a run's end and `aleph issue` then start nothing; the tick still does. */
 export const dispatchOn = () => process.env.ALEPH_DISPATCH !== "off";
 
-type Start = (repo: Repo, name: string, id: number, spec: string) => Promise<string | null>;
+/** `tier` is the router's rating when the dispatch has it already; undefined lets the start rate the spec itself. */
+type Start = (repo: Repo, name: string, id: number, spec: string, tier?: Tier | null) => Promise<string | null>;
 type Checks = (repo: Repo, commit: string, logs: string) => Promise<string | null>;
 type Land = (name: string) => Promise<string | null>;
 /** What a safe default action does to a run: both return the refusal, or null. */
@@ -210,9 +213,11 @@ export interface Rescue {
  * runs when a run ends, when a goal is added or edited, and from the tick as a
  * fallback. Each start holds a lock on its goal and re-reads the jobs under it,
  * so two dispatches at once start a goal once. `start` dispatches the run; it
- * is `aleph job`, in-process (transitions.ts).
+ * is `aleph job`, in-process (transitions.ts). With `rate`, a large goal's
+ * first run is a planner run instead (plan.ts), and a goal labelled `planned`
+ * is never started: it is closed once its children are all done.
  */
-export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, rescue?: Rescue): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[] }> {
+export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[]; planned?: string[] }> {
   if (gates({ only: ["pause"] })) {
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
@@ -233,6 +238,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
   }
   const started: string[] = [];
   const skipped: string[] = [];
+  const planned: string[] = [];
   const reds = new Map<string, string | null>();
   const done = doneChecker();
   // Baselines run for the repos in the list, then the list is read again, until every repo in it has one. The start loop
@@ -251,6 +257,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
     const name = goalJob(repo, listed.id);
     const red = reds.get(repo.key);
     if (red) { skipped.push(`${name}: ${red}`); continue; }
+    if (hasLabel(listed, PLANNED)) { skipped.push(`${name}: ${await closePlanned(repo, listed.id, done)}`); continue; }
     if (done(`${repo.key}-${listed.id}`)) { skipped.push(`${name}: the item is already done`); continue; }
     const wait = notReady(listed, done);
     if (wait) { skipped.push(`${name}: ${wait}`); continue; }
@@ -284,15 +291,51 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       const again = rerunNote(name);
       const drops = jobsNamed(name, null, jobs).filter((j) => j.at(-1)!.run.state === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
       const spec = `# ${item.title}\n\n${item.body.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
-      const why = await start(repo, name, item.id, spec);
+      let tier: Tier | null | undefined;
+      if (rate) {
+        const p = await planGoal(repo, item, spec, rate);
+        if ("planned" in p) { planned.push(`${name} into ${p.planned.join(",")}`); continue; }
+        tier = p.tier;
+        if (p.why) factoryLog(`${name}: ${p.why}`);
+      }
+      const why = await start(repo, name, item.id, spec, tier);
       if (why) skipped.push(`${name}: ${why}`);
       else { started.push(name); if (again) rmSync(rerunFile(name), { force: true }); }
     } finally {
       release();
     }
   }
-  factoryLog(`started ${started.join(", ") || "none"}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
-  return { started, skipped, ...(landed.length ? { landed } : {}) };
+  factoryLog(`started ${started.join(", ") || "none"}${planned.length ? `; planned ${planned.join("; ")}` : ""}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
+  // The children a planner filed start at once, as a triage's goal does, from a dispatch of their own.
+  if (planned.length) dispatchDetached();
+  return { started, skipped, ...(landed.length ? { landed } : {}), ...(planned.length ? { planned } : {}) };
+}
+
+/**
+ * A goal labelled `planned` is never started. Once every child it waits on is
+ * done, it is closed as done with a note naming the children's commits.
+ * Returns the line for the dispatch's skipped list.
+ */
+async function closePlanned(repo: Repo, id: number, done: (ref: string) => boolean): Promise<string> {
+  const release = await lock(`goal-${goalJob(repo, id)}`, 0);
+  if (!release) return "planned; another dispatch holds it";
+  try {
+    const item = goal(repo, id);
+    if (!item || !hasLabel(item, PLANNED)) return "planned; no longer an open goal";
+    const waits = typeof item.fm.waiting_on === "string" ? todos.waitParts(item.fm.waiting_on) : [];
+    const open = waits.filter((w) => !done(w));
+    if (open.length) return `planned; waiting on ${open.join(",")}`;
+    const reg = loadRegistry();
+    const commits = waits.map((w) => {
+      const r = todos.parseRef(w);
+      const sha = r ? itemOnMain(reg[r.repo] ?? (r.repo === repo.key ? repo : undefined), r.id) : null;
+      return `${w} (${sha ?? "no commit"})`;
+    });
+    const bad = note(repo, id, `planned: its children are all done: ${commits.join(", ") || "none"}`, { done: true });
+    return bad ? `planned; not closed: ${bad}` : "planned; closed as done";
+  } finally {
+    release();
+  }
 }
 
 /** Runs of one goal in a row, newest last, that may end with no commit before dispatch stops starting it. */

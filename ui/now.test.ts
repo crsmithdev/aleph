@@ -464,3 +464,13 @@ test("Status times use the state's own now for the year check", () => {
   expect(held).toContain("agent run, 2026-10-28");
   expect(held).not.toMatch(/\d\d? ?[AP]M/i);
 });
+
+test("a planner run is shown like a triage: Planning while it runs, Split once it filed children, planner as a running kind", async () => {
+  // @ts-ignore plain JS, shared with the page
+  const { triageCard } = await import("./views/cards.js");
+  const plan = { name: "plan-aleph-5", item: { title: "Big" }, state: "running", run: { kind: "plan", started: "2026-10-27T16:50:00Z" }, started: "2026-10-27T16:50:00Z" };
+  expect(triageCard(plan, "full", state.now)).toContain('<span class="badge run">Planning</span>');
+  expect(triageCard({ ...plan, state: "done", outcome: "planned" }, "full", state.now)).toContain('<span class="badge done">Split</span>');
+  expect(triageCard({ ...plan, state: "done", reason: "malformed plan: x" }, "compact", state.now)).toContain(">No plan<");
+  expect(r.renderJobs({ ...state, running: [job({ name: "plan-aleph-5", run: plan.run })] })).toContain('<span class="badge run">planner');
+});

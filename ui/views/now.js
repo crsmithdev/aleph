@@ -101,7 +101,7 @@ const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 
 function runningCard(s, j) {
   const run = j.run ?? { kind: "agent", started: j.started };
-  const kind = run.kind === "agent" ? "worker" : run.kind;
+  const kind = run.kind === "agent" ? "worker" : run.kind === "plan" ? "planner" : run.kind;
   const over = run.kind === "agent" && Date.parse(s.now) - Date.parse(run.started) > BOX_MIN * 60_000;
   return jobCard("small", "run-row", `<div class="ih">${itemId(j)}<span class="t">${esc(j.item?.title || j.name)}</span></div>` +
     `<div class="run-meta"><span class="badge run">${esc(kind)}${j.phase && j.phase !== kind ? ` \u00b7 ${esc(j.phase)}` : ""}</span> <span class="num">Started ${esc(when(run.started, new Date(s.now)))} \u00b7 ` +

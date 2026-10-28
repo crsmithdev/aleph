@@ -13,7 +13,7 @@ import { baselineChecks, git, removeBranch } from "./unit.ts";
 import { fetchOrigin } from "./git.ts";
 import { itemOnMain } from "./status.ts";
 import { dispatchDetached, dispatchGoals, factoryLog, gates, liveEntries } from "./factory.ts";
-import { route } from "./route.ts";
+import { route, type Tier } from "./route.ts";
 import { startUnit, type Output } from "./launch.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
@@ -324,8 +324,8 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean }
  * Start the run for a goal: `aleph job` in-process, or `ALEPH_START_CMD` (tests) as a process.
  * A foreground unit is waited for, its output dropped. Returns the refusal, or null.
  */
-export async function startGoal(repo: Repo, name: string, id: number, spec: string): Promise<string | null> {
-  const model = await route(spec);
+export async function startGoal(repo: Repo, name: string, id: number, spec: string, tier?: Tier | null): Promise<string | null> {
+  const model = tier !== undefined ? tier : await route(spec);
   factoryLog(`starting ${name} with model ${model ?? "default"}`);
   if (process.env.ALEPH_START_CMD) {
     const p = Bun.spawn([process.env.ALEPH_START_CMD, repo.key, name, String(id)], { env: process.env, stdin: new Blob([spec]), stdout: "ignore", stderr: "pipe" });
@@ -349,5 +349,5 @@ export async function runDispatch() {
     return { started: [], skipped: [g.why] };
   }
   // `ALEPH_RESCUE=off` leaves a stuck or failed run to hold the factory, as before the safe default actions; for tests of the hold.
-  return dispatchGoals(startGoal, baselineChecks, landGoal, process.env.ALEPH_RESCUE === "off" ? undefined : { drop: dropGoal, recheck: recheckGoal });
+  return dispatchGoals(startGoal, baselineChecks, landGoal, process.env.ALEPH_RESCUE === "off" ? undefined : { drop: dropGoal, recheck: recheckGoal }, route);
 }

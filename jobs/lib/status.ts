@@ -35,7 +35,8 @@ export function facts(repo: Repo, doc: todos.Doc | null = readList(repo)): Facts
   for (const runs of allJobs()) {
     const item = issue(runs);
     if (item === undefined || runs[0].run.repo !== repo.key) continue;
-    if (repo.sandbox) touched.add(item);
+    // A planner run files children and does not land: a planned goal closed in the store is done.
+    if (repo.sandbox && runs.some((e) => e.run.kind !== "plan")) touched.add(item);
     if (isOpen(runs)) open[item] = stateOf(runs);
   }
   return { repo: repo.key, main: repo.main, store, open, touched: [...touched].sort((a, b) => a - b) };

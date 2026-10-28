@@ -283,6 +283,16 @@ Only the tick starts:
 - The tick's triage of open issues that nothing triaged at once (a gated or failed triage), and a `waiting_on` whose target became done by a push by hand.
 - The fallback dispatch for anything the above missed.
 
+### Planner (28 Oct)
+
+A planner sits before dispatch (`jobs/lib/plan.ts`, called from `dispatchGoals` under the goal's lock). Before a goal's first worker run (no job of its name in the ledger), the dispatch rates its spec with the router (`jobs/lib/route.ts`) and asks whether it is large: rated `opus`, or an Edit surface whose paths name more than one top-level folder (a file at the repo's root names none). A small goal starts its worker as before, with the tier already rated. A goal a planner filed (its body starts with "Part of <repo>-<n>.") is never planned again.
+
+A large goal gets a planner run: a job of kind `plan` in the ledger (`plan-<repo>-<n>`, like a triage), `claude -p --model claude-fable-5-1` with the tools Read, Grep and Glob, in the repo, with the goal's issue body and notes. `ALEPH_PLAN_CMD` replaces the command (tests); `ALEPH_PLAN_TIMEOUT` is its time box in seconds (900). It replies with one JSON object, `{"children": [{"title", "body", "waits_on": [<earlier child numbers, from 1>]}]}`. The code checks it: 2 to 6 children, each with a title and a body whose Goal, Edit surface, Oracle and Time box are non-empty, an Oracle that names a command a shell runs (and not `aleph check`) or a test file, and waits that point only at earlier children. Then, as one commit of the work store, each child is filed with the label `goal` plus the parent's other labels, the parent's priority, a first line "Part of <repo>-<n>." and `waiting_on` the children it waits on; the parent gets `waiting_on` all its children (a comma list), the label `planned`, and a note listing them. The dispatch then dispatches again, detached, so the children start at once.
+
+A goal labelled `planned` is never started. Each dispatch looks at it: while a child is open it is skipped (`planned; waiting on ...`); once all are done it is closed as done with a note naming each child's commit on main (`no commit` for one closed by hand). A planner run does not count as the factory touching the item (`jobs/lib/status.ts`), so the store's done stands for the parent.
+
+A reply that fails the check, or a planner that exits non-zero, is retried once at once. After a second failure the goal starts as one worker run, as before, with a note on the issue that says why; the ledger's two failed plan runs keep it from being planned again. Plan runs count toward the day cap, and the UI shows them like triage runs ("Planning", "Split", "No plan"); a `planned` parent is not in the Queued list.
+
 ### As built (27 Oct)
 
 Where the code departs from the sections above:
