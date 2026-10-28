@@ -514,6 +514,7 @@ describe("land", () => {
     const runs = runsOf("mend");
     expect(runs.map((x) => [x.kind, x.state])).toEqual([["agent", "passed"], ["land", "failed"], ["agent", "passed"], ["land", "landed"]]);
     expect(runs[2].land).toBe(true);
+    expect(file(runs[1].id, "next.log")).not.toContain("held:");
     expect(sh(base, "git", "--git-dir", remote, "show", "main:mend.txt")).toBe("mine");
     expect(remoteHead()).toBe(runs[3].commit);
   }, 30_000);
@@ -1175,6 +1176,33 @@ describe("a factory run", () => {
     expect(free.json.started).toEqual([`fac-${id}`]);
     await aleph(["drop", `fac-${id}`]);
     await aleph(["todo", "drop", "fac", String(id), "test over"]);
+  }, 60_000);
+
+  test("a stuck or failed run holds the factory only once no next run is pending for it", async () => {
+    // Runs written as the ledger holds them: a conflicted land that goes back to its worker, and a stuck run.
+    const made: string[] = [];
+    const run = (name: string, extra: Record<string, unknown>) => {
+      const folder = join(jobsDir, `${new Date().toISOString().slice(0, 19).replace(/:/g, "").replace("T", "-")}-fac-${name}-${extra.kind ?? "agent"}`);
+      mkdirSync(folder);
+      writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "agent", job: name, name, repo: "fac", told: true, started: new Date().toISOString(), ...extra }));
+      made.push(folder);
+      return folder;
+    };
+    const land = { kind: "land", state: "failed", reason: "merge conflict", conflicts: ["x.txt"] };
+    const pending = run("fheldland", { ...land, next: "worker", ended: new Date().toISOString() });
+    expect((await aleph(["dispatch"])).json.held).toBeUndefined();
+    writeFileSync(join(pending, "state.json"), JSON.stringify({ ...state(pending.split("/").pop()!), next: undefined }));
+    expect((await aleph(["dispatch"])).json.held).toContain("Held: fheldland is failed");
+    // a stuck run whose unit is still live does not hold; once the unit ends, it does
+    const live = run("fstuck", { state: "stuck", reason: "tests" });
+    const unit = Bun.spawn(["sh", "-c", "sleep 60", live], { stdout: "ignore", stderr: "ignore" });
+    writeFileSync(join(live, "pid"), String(unit.pid));
+    expect((await aleph(["dispatch"])).json.held).not.toContain("fstuck");
+    unit.kill();
+    await unit.exited;
+    writeFileSync(join(live, "exit"), "0\n");
+    expect((await aleph(["dispatch"])).json.held).toContain("Held: fheldland and 1 more are");
+    for (const f of made) rmSync(f, { recursive: true, force: true });
   }, 60_000);
 
   describe("recheck", () => {

@@ -73,12 +73,16 @@ export interface Hold { name: string; state: string; reason?: string; line: stri
  * The factory's own hold: on while any open job in a factory repo is `stuck` or
  * `failed`. No run starts or lands by itself until it clears. `except` is a job
  * that does not count (the run asking is that job's own). Separate from the pause.
+ * A run with a next run pending (`next` set, or its unit still live) does not count:
+ * a conflicted land goes back to its worker by itself, and the hold waits for that.
  */
 export function hold(jobs = allJobs(), except?: string): Hold | null {
   const keys = new Set(sandboxRepos().map((r) => r.key));
   const bad = jobs.filter((j) => {
-    const r = j.at(-1)!.run;
-    return isOpen(j) && r.repo && keys.has(r.repo) && (r.state === "stuck" || r.state === "failed") && r.job !== except;
+    const last = j.at(-1)!;
+    const r = last.run;
+    return isOpen(j) && r.repo && keys.has(r.repo) && (r.state === "stuck" || r.state === "failed") && r.job !== except
+      && !r.next && !isLive(last.folder);
   }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started));
   if (!bad.length) return null;
   const r = bad[0].at(-1)!.run;
