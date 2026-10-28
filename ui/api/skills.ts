@@ -7,7 +7,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
 import type { Observation } from "../../hooks/lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
@@ -47,7 +47,7 @@ export function slashCommand(prompt: string): string | null {
 function projectOf(cwd: string | undefined, tags: string[] | undefined): string {
   if (cwd) {
     for (const r of Object.values(loadRegistry())) if (cwd === r.path || cwd.startsWith(r.path.replace(/\/+$/, "") + "/")) return r.key;
-    return basename(cwd);
+    return ""; // sandbox and test directories are not projects
   }
   return tags?.find((t) => t.startsWith("project:"))?.slice(8) ?? "";
 }
@@ -253,7 +253,7 @@ function summary(a: Analysis) {
     };
   }).sort((x, y) => y.uses - x.uses || x.name.localeCompare(y.name));
   const unused = folders().filter((f) => !names.some((n) => short(n) === f));
-  return { days: a.days, since: day(a.since.toISOString()), asOf: a.asOf, ...(a.failed ? { failed: a.failed } : {}), skills, unused };
+  return { days: a.days, since: day(a.since.toISOString()), asOf: a.asOf, ...(a.failed ? { failed: a.failed } : {}), projects: Object.keys(loadRegistry()).sort(), skills, unused };
 }
 
 function detail(a: Analysis, name: string) {

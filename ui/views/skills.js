@@ -1,16 +1,20 @@
 // The Skills view: how often each skill ran, from Langfuse. `renderSkills` takes
 // /api/skills, `renderSkill` takes /api/skills/:name; neither touches the DOM.
 // The shell takes one view per module, so the detail route is declared in skill.js.
-import { badge, chart, empty, esc, idLink, pageHead, sortHead, span, when } from "../lib.js";
+import { badge, chart, empty, esc, filterBar, idLink, pageHead, sortHead, span, when } from "../lib.js";
 
 export const view = {
   path: "/skills",
   title: "Skills",
   group: "claude",
   order: 20,
-  api: "/api/skills",
-  render: (d) => renderSkills(d),
-  mount: (root, d) => { mountPerDay(root, d); mountSort(root, d); },
+  api: (_params, q = new URLSearchParams()) => {
+    const out = new URLSearchParams();
+    for (const k of ["days", "project"]) if (q.get(k)) out.set(k, q.get(k));
+    return out.toString() ? `/api/skills?${out}` : "/api/skills";
+  },
+  render: (d, _params, query) => renderSkills(d, Object.fromEntries(query ?? [])),
+  mount: (root, d, query) => { mountPerDay(root, d); mountSort(root, d, Object.fromEntries(query ?? [])); },
 };
 
 const href = (name) => `#/skills/${encodeURIComponent(name)}`;
@@ -56,11 +60,11 @@ const SCROLL = `class="tscroll" style="overflow-x:auto;max-width:100%"`;
 /** The Projects cell: at most three names and "+N", the full list in the title. */
 const projectsCell = (ps) => `<td title="${esc(ps.join(", "))}">${esc(ps.slice(0, 3).join(", "))}${ps.length > 3 ? ` +${ps.length - 3}` : ""}</td>`;
 
-// Columns: name, errors (badge), projects, numbers, per-day chart, time last.
+// Columns: name, projects, numbers (uses, sessions, errors as a badge), per-day chart, time last.
 const row = (s) =>
-  `<tr data-name="${esc(s.name)}"><td>${idLink(s.name, href(s.name))}</td>` +
-  `<td>${s.errors ? badge(`${s.errors} ${s.errors === 1 ? "error" : "errors"}`) : ""}</td>${projectsCell(s.projects)}` +
+  `<tr data-name="${esc(s.name)}"><td>${idLink(s.name, href(s.name))}</td>${projectsCell(s.projects)}` +
   `<td class="num" title="${s.bySlash} slash, ${s.byTool} tool">${s.uses}</td><td class="num">${s.sessions}</td>` +
+  `<td class="num">${s.errors ? badge(`${s.errors} ${s.errors === 1 ? "error" : "errors"}`) : ""}</td>` +
   `<td>${bars(s.name)}</td><td class="time">${esc(when(s.lastUsed))}</td></tr>`;
 
 /** The used skills in the order of `sort` ({key, dir}; dir 1 up, -1 down): key is "name", "uses", "sessions" or "last". Ties by name. */
@@ -74,13 +78,22 @@ export function sortSkills(skills, sort = { key: "uses", dir: -1 }) {
 const COLS = [["Skill", "name", false], ["Uses", "uses", true], ["Sessions", "sessions", true], ["Last used", "last", false]];
 const heads = (sort) => Object.fromEntries(COLS.map(([label, key, num]) => [key, sortHead(label, key, sort, { num })]));
 
-/** Wire the sortable headers: moving the rows of the used tbody, so the charts in them are not redrawn. */
-export function mountSort(root, d) {
+const hashFor = (params) => {
+  const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v));
+  return `#/skills${q.toString() ? `?${q}` : ""}`;
+};
+
+/** Wire the filter bar (a change goes to the hash) and the sortable headers: moving the rows of the used tbody, so the charts in them are not redrawn. */
+export function mountSort(root, d, f = {}) {
+  const go = (name, value) => { location.hash = hashFor({ days: f.days, project: f.project, [name]: value }); };
+  root.onchange = (e) => { if (e.target.matches?.(".fbar select")) go(e.target.name, e.target.value); };
   const body = root.querySelector("tbody.used");
-  if (!body || !d) return;
-  const rows = new Map([...body.querySelectorAll("tr[data-name]")].map((r) => [r.dataset.name, r]));
+  if (!d) return;
+  const rows = new Map([...(body?.querySelectorAll("tr[data-name]") ?? [])].map((r) => [r.dataset.name, r]));
   let sort = { key: "uses", dir: -1 };
   root.onclick = (e) => {
+    const seg = e.target.closest?.(".seg button");
+    if (seg) return go(seg.parentElement.dataset.name, seg.dataset.value);
     const b = e.target.closest?.("button[data-sort]");
     if (!b || !root.contains(b) || !b.closest("table.skills-tbl")) return;
     const key = b.dataset.sort;
@@ -99,15 +112,23 @@ export const staleNote = (d, now = new Date()) => d.failed
   ? `<p class="quiet stale" role="status">Langfuse failed: ${esc(d.failed)}. Showing the data from ${esc(when(d.asOf, now))} (${esc(span(d.asOf, now.toISOString()) || "0 min")} ago).</p>`
   : "";
 
-export function renderSkills(d) {
+export function renderFilters(d, f = {}) {
+  const projects = [...new Set([...(d.projects || []), f.project].filter(Boolean))].sort();
+  return filterBar([
+    { label: "Project", name: "project", value: f.project || "", options: [{ value: "", label: "All" }, ...projects] },
+    { label: "Window", name: "days", value: f.days || "30", options: [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }] },
+  ]);
+}
+
+export function renderSkills(d, f = {}) {
   const used = sortSkills(d.skills);
   const unused = (d.unused || []).map((n) => `<tr class="unused"><td>${esc(n)}</td><td colspan="6">Unused in the last ${d.days} days</td></tr>`).join("");
   const sort = { key: "uses", dir: -1 }, h = heads(sort);
-  const head = `<thead><tr>${h.name}<th>Errors</th><th>Projects</th>${h.uses}${h.sessions}<th>Per day</th>${h.last}</tr></thead>`;
+  const head = `<thead><tr>${h.name}<th>Projects</th>${h.uses}${h.sessions}<th class="num">Errors</th><th>Per day</th>${h.last}</tr></thead>`;
   const body = used.length || unused
     ? `<div ${SCROLL}><table class="tbl skills-tbl">${head}<tbody class="used">${used.map(row).join("")}</tbody><tbody>${unused}</tbody></table></div>`
     : empty("No skill is installed or used.", "Skills come from the plugin's <code>skills/</code> folder.");
-  return `${STYLE}<div class="page skills">${pageHead("Skills", { count: used.length, aside: `last ${d.days} days` })}${staleNote(d)}` +
+  return `${STYLE}<div class="page skills">${pageHead("Skills", { count: used.length })}${renderFilters(d, f)}${staleNote(d)}` +
     (used.length ? "" : empty(`No skill was used in the last ${d.days} days.`, "A use is a Skill tool call or a slash command.")) + body + `</div>`;
 }
 

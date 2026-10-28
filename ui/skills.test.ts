@@ -32,6 +32,8 @@ const observations = [
   ob({ id: "10", traceId: "t4", name: "turn", input: "/clear", startTime: daysAgo(1) }),
   // t5: too old for the default window
   ob({ id: "11", traceId: "t5", name: "turn", input: "/aleph:retro", startTime: daysAgo(40) }),
+  // t6: a sandbox directory that is no registry project
+  ob({ id: "12", traceId: "t6", name: "turn", input: "/aleph:sandbox", startTime: daysAgo(1) }),
 ];
 const traces = [
   { id: "t1", sessionId: "s1", metadata: { cwd: "/work/aleph" } },
@@ -39,6 +41,7 @@ const traces = [
   { id: "t3", sessionId: "s1", metadata: { cwd: "/work/aleph" } },
   { id: "t4", sessionId: "s1", metadata: { cwd: "/work/aleph" } },
   { id: "t5", sessionId: "s3", metadata: { cwd: "/work/aleph" } },
+  { id: "t6", sessionId: "s4", metadata: { cwd: "/tmp/agent-ae1db4a1e2c301339" } },
 ];
 
 beforeAll(async () => {
@@ -210,7 +213,9 @@ test("the view lists skills with bars and links, and the detail links sessions",
   const detail = v.renderSkill((await get("/api/skills/aleph:pickup")).body);
   expect(detail).toContain('href="#/sessions/s1"');
   expect(detail).toContain("Bash");
-  expect(v.view).toMatchObject({ path: "/skills", group: "claude", api: "/api/skills" });
+  expect(v.view).toMatchObject({ path: "/skills", group: "claude" });
+  expect((v.view as any).api({}, new URLSearchParams("days=7&project=aleph&x=1"))).toBe("/api/skills?days=7&project=aleph");
+  expect((v.view as any).api({}, new URLSearchParams())).toBe("/api/skills");
   expect(skillView).toMatchObject({ path: "/skills/:name", api: "/api/skills/:name" });
 });
 
@@ -300,4 +305,21 @@ test("unused skills are listed once, after the used ones", () => {
   const html = v.renderSkills(three);
   expect(html.match(/class="unused"/g)?.length).toBe(1);
   expect(html.indexOf('class="unused"')).toBeGreaterThan(html.lastIndexOf('data-name="b"'));
+});
+
+test("a cwd that is no registry project is not listed as a project", async () => {
+  const { body } = await get("/api/skills");
+  expect(body.skills.find((s: any) => s.name === "aleph:sandbox")).toMatchObject({ uses: 1, projects: [] });
+  expect(body.skills.flatMap((s: any) => s.projects)).not.toContain("agent-ae1db4a1e2c301339");
+  expect(body.projects).toEqual(["aleph", "other"]);
+});
+
+test("the page has a Project and a Window filter, and the columns run text first, then counts", () => {
+  const html = v.renderSkills({ ...three, projects: ["a", "b"] }, { days: "7", project: "b" });
+  expect(html).toContain('class="fbar"');
+  expect(html).toContain('data-value="b" aria-pressed="true"');
+  expect(html).toContain('data-name="days"');
+  expect(html).toMatch(/data-value="7" aria-pressed="true"/);
+  const heads = [...html.match(/<thead>[\s\S]*?<\/thead>/)![0].matchAll(/<th[^>]*>(?:<button[^>]*>)?([A-Za-z ]+)/g)].map((m) => m[1]);
+  expect(heads).toEqual(["Skill", "Projects", "Uses", "Sessions", "Errors", "Per day", "Last used"]);
 });
