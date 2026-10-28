@@ -9,7 +9,7 @@ import { factoryDir } from "../../jobs/lib/factory.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { loadRegistry, type Entry, type Repo } from "../../jobs/lib/ledger.ts";
 import { allJobs, lastReal } from "../../jobs/lib/job.ts";
-import { readFetched } from "../../todo/lib/store.ts";
+import { isGoal, labels, readFetched } from "../../todo/lib/store.ts";
 import { status, type Item } from "../../todo/lib/todo.ts";
 import { vaultDir, type Note } from "../../vault/lib/vault.ts";
 import { vaultNotes } from "./memory.ts";
@@ -33,8 +33,6 @@ export interface Detail extends Card {
   jobs: { name: string; state: string; started: string; ended?: string; item: number | null }[];
   vault: { title: string; kind: string; updated: string }[];
 }
-
-const labels = (i: Item): string[] => (Array.isArray(i.fm.labels) ? (i.fm.labels as string[]) : []);
 
 /** The repo's open issues on the work store's last-fetched origin/main; no fetch. */
 function openIssues(key: string): Item[] {
@@ -64,7 +62,7 @@ function card(repo: Repo, issues: Item[], jobs: Entry[][], notes: number): Card 
   const activity = [landed?.ended, started].filter((x): x is string => !!x).sort().at(-1) ?? null;
   return {
     key: repo.key, path: repo.path, factory: repo.sandbox,
-    openItems: issues.length, openGoals: issues.filter((i) => labels(i).includes("goal")).length,
+    openItems: issues.length, openGoals: issues.filter(isGoal).length,
     lastLanded: landed ? { name: landed.name, at: landed.ended! } : null,
     behind: n.ok ? Number(n.out) : null,
     baseline: baselineOf(repo), notes, activity,

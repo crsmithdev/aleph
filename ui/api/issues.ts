@@ -12,13 +12,12 @@ import { itemStates, landedCommits, recentRepos } from "../../jobs/lib/status.ts
 import { readDecision } from "../../jobs/lib/decision.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { readList, readLists } from "../../todo/lib/store.ts";
+import { labels, needsChris, readList, readLists } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { githubBase } from "../state.ts";
 
 
-const labelsOf = (i: todos.Item): string[] => (Array.isArray(i.fm.labels) ? (i.fm.labels as string[]) : []);
 const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : String(v));
 
 export interface Row {
@@ -30,7 +29,7 @@ export interface Row {
 
 function row(repo: string, i: todos.Item): Row {
   return {
-    id: i.id, repo, title: i.title, status: todos.status(i), priority: str(i.fm.priority), labels: labelsOf(i),
+    id: i.id, repo, title: i.title, status: todos.status(i), priority: str(i.fm.priority), labels: labels(i),
     due: str(i.fm.due), waiting_on: str(i.fm.waiting_on), updated: str(i.fm.updated), notes: i.notes.length,
   };
 }
@@ -167,7 +166,7 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
   try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
   const item = doc && todos.find(doc, n);
   if (!item) return Response.json({ error: "no such issue" }, { status: 404 });
-  if (todos.status(item) !== "open" || !labelsOf(item).includes("needs-chris")) return Response.json({ error: "this issue is not waiting for a decision" }, { status: 409 });
+  if (todos.status(item) !== "open" || !needsChris(item)) return Response.json({ error: "this issue is not waiting for a decision" }, { status: 409 });
   const body: any = await req.json().catch(() => ({}));
   const d = readDecision(item);
   let note: string;

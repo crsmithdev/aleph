@@ -9,7 +9,7 @@
  */
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { readList } from "../../todo/lib/store.ts";
+import { hasLabel, reader } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { outcome } from "./gate.ts";
 import { LOW, loadRegistry, parseVerdict, readEnvFile, readRun, type Repo, type Run } from "./ledger.ts";
@@ -50,10 +50,8 @@ ${o.spec}
 /** Whether the run's goal carries the `ui` label. */
 function isUi(repo: Repo, run: Run): boolean {
   if (run.todo === undefined) return false;
-  try {
-    const item = readList({ key: repo.key })?.items.find((i) => i.id === run.todo);
-    return ((item?.fm.labels as string[]) ?? []).includes("ui");
-  } catch { return false; }
+  const item = reader().item(repo.key, run.todo);
+  return !!item && hasLabel(item, "ui");
 }
 
 /** Whether a review2 process is alive for `folder`: its review2.pid names a process whose command line holds the folder. */

@@ -6,7 +6,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { readList, writeList } from "../../todo/lib/store.ts";
+import { GOAL, NEEDS_CHRIS, isSorted, label, reader, sort } from "../../todo/lib/store.ts";
 import { decisionNote, normalizeDecision, writeDecision, type Decision } from "./decision.ts";
 import { allRuns, jobsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 
@@ -15,9 +15,6 @@ import { gates } from "./factory.ts";
 /** Triage runs that end with no verdict, for one item, before it is labelled `needs-chris`; `ALEPH_TRIAGE_TRIES` changes it. */
 export const TRIAGE_TRIES = () => Number(process.env.ALEPH_TRIAGE_TRIES ?? 2);
 const TIME_BOX_MS = () => Number(process.env.ALEPH_TRIAGE_TIMEOUT ?? 600) * 1000;
-
-/** An item with any of these labels is not triaged. */
-export const SKIP_LABELS = ["goal", "needs-chris", "triaged", "proposal"];
 
 export type Verdict =
   | { verdict: "goal"; body: string; waitingOn?: string }
@@ -106,28 +103,23 @@ async function ask(repo: Repo, item: todos.Item, folder: string): Promise<string
 
 /** Apply a verdict to the item through the work store; false when the item changed under the run. */
 function apply(repo: Repo, id: number, v: Verdict): boolean {
-  const written = writeList(repo, `triage ${repo.key}-${id}: ${v.verdict}`, (doc) => {
-    const item = todos.find(doc, id);
-    if (!item || todos.status(item) !== "open") return null;
-    const labels = (item.fm.labels as string[]) ?? [];
-    if (labels.some((l) => SKIP_LABELS.includes(l))) return null;
+  return sort(repo, id, `triage ${repo.key}-${id}: ${v.verdict}`, (item) => {
     if (v.verdict === "goal") {
-      todos.edit(item, { body: v.body, labels: [...labels, "goal"], ...(v.waitingOn ? { waitingOn: v.waitingOn } : {}) });
+      todos.edit(item, { body: v.body, ...(v.waitingOn ? { waitingOn: v.waitingOn } : {}) });
+      label(item, [GOAL]);
       todos.note(item, v.waitingOn ? `triage: rewritten as a goal; waits on ${v.waitingOn}` : "triage: rewritten as a goal");
     } else if (v.verdict === "close") {
       todos.setStatus(item, "done");
       todos.note(item, `triage: closed: ${v.reason}`);
     } else if (v.verdict === "chris") {
-      todos.edit(item, { labels: [...labels, "needs-chris"] });
+      label(item, [NEEDS_CHRIS]);
       if (v.decision) writeDecision(item, v.decision);
       todos.note(item, `triage: for Chris: ${v.decision ? decisionNote(v.decision) : v.question}`);
     } else {
-      todos.edit(item, { labels: [...labels, "live-check", "triaged"] });
+      label(item, ["live-check", "triaged"]);
       todos.note(item, `triage: a live check: ${v.note}`);
     }
-    return true;
   });
-  return written?.value === true;
 }
 
 /**
@@ -138,16 +130,11 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   const n = allRuns().filter((e) => e.run.kind === "triage" && e.run.repo === repo.key && e.run.todo === id
     && /^(malformed verdict|failed):/.test(e.run.reason ?? "")).length;
   if (n < TRIAGE_TRIES()) return null;
-  const written = writeList(repo, `triage ${repo.key}-${id}: no verdict`, (doc) => {
-    const item = todos.find(doc, id);
-    if (!item || todos.status(item) !== "open") return null;
-    const labels = (item.fm.labels as string[]) ?? [];
-    if (labels.some((l) => SKIP_LABELS.includes(l))) return null;
-    todos.edit(item, { labels: [...labels, "needs-chris"] });
+  const written = sort(repo, id, `triage ${repo.key}-${id}: no verdict`, (item) => {
+    label(item, [NEEDS_CHRIS]);
     todos.note(item, `triage: no verdict in ${n} runs: ${reason}`);
-    return true;
   });
-  return written?.value === true ? `${repo.key}-${id}: no verdict in ${n} triages; labelled needs-chris` : null;
+  return written ? `${repo.key}-${id}: no verdict in ${n} triages; labelled needs-chris` : null;
 }
 
 /** One triage run of one item and its verdict applied; counts and skipped lines are added to. */
@@ -189,10 +176,8 @@ async function triageItem(repo: Repo, item: todos.Item, triaged: Counts, skipped
 export async function triageIssue(repo: Repo, id: number, done: (ref: string) => boolean): Promise<{ triaged: Counts; skipped: string[] }> {
   const triaged: Counts = {};
   const skipped: string[] = [];
-  let item: todos.Item | undefined;
-  try { item = todos.find(readList(repo)!, id); } catch {}
-  if (!item || todos.status(item) !== "open") return { triaged, skipped };
-  if (((item.fm.labels as string[]) ?? []).some((l) => SKIP_LABELS.includes(l))) return { triaged, skipped };
+  const item = reader().item(repo.key, id);
+  if (!item || todos.status(item) !== "open" || isSorted(item)) return { triaged, skipped };
   const waits = item.fm.waiting_on;
   if (typeof waits === "string" && !done(waits)) return { triaged, skipped };
   const blocked = gates({ only: ["live", "day"] });
@@ -209,12 +194,10 @@ export async function triageOpen(repos: Repo[], done: (ref: string) => boolean):
   const triaged: Counts = {};
   const skipped: string[] = [];
   const queue: { repo: Repo; item: todos.Item }[] = [];
+  const lists = reader();
   for (const repo of repos) {
-    let doc: todos.Doc | null = null;
-    try { doc = readList(repo); } catch { continue; }
-    for (const item of doc?.items ?? []) {
-      if (todos.status(item) !== "open") continue;
-      if (((item.fm.labels as string[]) ?? []).some((l) => SKIP_LABELS.includes(l))) continue;
+    for (const item of lists.list(repo.key)?.items ?? []) {
+      if (todos.status(item) !== "open" || isSorted(item)) continue;
       const waits = item.fm.waiting_on;
       if (typeof waits === "string" && !done(waits)) continue;
       queue.push({ repo, item });

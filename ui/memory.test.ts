@@ -103,7 +103,7 @@ test("vault misses runs once within ALEPH_UI_CACHE_TTL, and the answer says when
   chmodSync(join(bin, "bun"), 0o755);
   const saveEnv = { PATH: process.env.PATH, TTL: process.env.ALEPH_UI_CACHE_TTL };
   process.env.PATH = `${bin}:${process.env.PATH}`;
-  process.env.ALEPH_UI_CACHE_TTL = "0.3";
+  process.env.ALEPH_UI_CACHE_TTL = "1.5";
   clearCache();
   try {
     const a: any = await (await at("/api/memory")).json();
@@ -111,7 +111,7 @@ test("vault misses runs once within ALEPH_UI_CACHE_TTL, and the answer says when
     expect(readFileSync(log, "utf8").trim().split("\n")).toHaveLength(1);
     expect(a.misses).toEqual({ days: 7, recalls: 1 });
     expect(b.cachedAt).toBe(a.cachedAt);
-    await Bun.sleep(400);
+    await Bun.sleep(1600);
     await at("/api/memory");
     // The stale answer comes back at once; the reload runs in the background.
     const lines = () => readFileSync(log, "utf8").trim().split("\n").length;

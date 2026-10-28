@@ -6,8 +6,7 @@
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import * as todos from "../../todo/lib/todo.ts";
-import { readHidden, writeList } from "../../todo/lib/store.ts";
+import { closeAndFile, file, readHidden } from "../../todo/lib/store.ts";
 import { fetchOrigin, followMain, git } from "./git.ts";
 import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { LOW, checkSlot, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
@@ -180,25 +179,8 @@ export function onMain(repo: Repo, run: Run): { commit: string; how: string } | 
 function closeItems(repo: Repo, run: Run): { todo?: string; checkItem?: number } {
   const open = run.check === "open";
   if (run.todo === undefined && !open) return {};
-  let todo: string | undefined;
-  let checkItem: number | undefined;
-  try {
-    writeList(repo, `todo: job ${run.name} landed`, (doc) => {
-      if (run.todo !== undefined) {
-        const item = todos.find(doc, run.todo);
-        if (item) {
-          todos.setStatus(item, "done");
-          todos.note(item, `job ${run.name} landed`);
-        }
-        todo = item ? "done" : `no issue ${run.todo}`;
-      }
-      if (open) checkItem = todos.add(doc, `Check ${run.name}: ${run.say}`, { labels: ["check"] }).id;
-      return true;
-    }, true);
-  } catch (e: any) {
-    todo = e?.message ?? String(e);
-  }
-  return { todo, checkItem };
+  const w = closeAndFile(repo, `todo: job ${run.name} landed`, run.todo, `job ${run.name} landed`, open ? [{ title: `Check ${run.name}: ${run.say}`, labels: ["check"] }] : []);
+  return { todo: w.todo, checkItem: w.ids[0] };
 }
 
 // The lists left product repos for the work store. A branch made before that
@@ -639,26 +621,6 @@ export async function baselineChecks(repo: Repo, commit: string, logs: string): 
   } finally {
     git(repo.path, "update-ref", "-d", ref);
     removeRunFolder(dir);
-  }
-}
-
-/**
- * `aleph issue done` (with `done`) or `aleph issue note` for a job's issue, as a
- * commit on origin/<main>. Returns why it could not, for the caller to report.
- */
-export function updateTodo(repo: Repo, id: number, text: string, done: boolean): string | null {
-  try {
-    let found = false;
-    writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
-      const item = todos.find(doc, id);
-      if (!item) return null;
-      found = true;
-      if (done) todos.setStatus(item, "done");
-      return todos.note(item, text);
-    });
-    return found ? null : `no issue ${id}`;
-  } catch (e: any) {
-    return e?.message ?? String(e);
   }
 }
 
@@ -1104,9 +1066,6 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
 /** A worker's `FOLLOWUP:` lines become issues in the repo's list, filed by aleph. */
 function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
   if (!titles.length) return;
-  try {
-    const w = writeList(repo, `todo: follow-ups from job ${run.name}`, (doc) =>
-      titles.map((t) => todos.add(doc, t, { labels: ["followup"], body: `From job ${run.name}${run.todo !== undefined ? ` on issue ${run.todo}` : ""}.` }).id), true);
-    for (const id of w?.value ?? []) triageDetached(repo, id);
-  } catch {}
+  const body = `From job ${run.name}${run.todo !== undefined ? ` on issue ${run.todo}` : ""}.`;
+  for (const id of file(repo, `todo: follow-ups from job ${run.name}`, titles.map((title) => ({ title, labels: ["followup"], body })))) triageDetached(repo, id);
 }

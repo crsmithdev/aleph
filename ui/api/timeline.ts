@@ -10,7 +10,7 @@
  */
 import { existsSync } from "node:fs";
 import { allRuns, loadRegistry } from "../../jobs/lib/ledger.ts";
-import { itemPath, readList, storeDir } from "../../todo/lib/store.ts";
+import { itemTimes, labels, reader } from "../../todo/lib/store.ts";
 import { status, today } from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
 
@@ -75,23 +75,12 @@ const took = (a?: string, b?: string) => {
 /** The verb of a job's end row, by its state. */
 const OUTCOME: Record<string, string> = { done: "passed", "needs-you": "held" };
 
-/** The title of a repo's issue, or undefined. */
-function issueTitle(repo: string | undefined, id: number | undefined, docs: Map<string, Map<number, string>>): string | undefined {
-  if (!repo || !id) return undefined;
-  if (!docs.has(repo)) {
-    const m = new Map<number, string>();
-    try { for (const i of readList({ key: repo })?.items ?? []) m.set(i.id, i.title); } catch {}
-    docs.set(repo, m);
-  }
-  return docs.get(repo)!.get(id);
-}
-
 /** How a land came about: a held run Chris landed by hand, a commit no job made, or a plain factory run (none). */
 const landSub = (job: boolean, held?: boolean) => (!job ? "direct" : held ? "by hand" : undefined);
 
 function jobEvents(project: string | null, since: number, inGit: (sha: string) => boolean): TimelineEvent[] {
   const out: TimelineEvent[] = [];
-  const docs = new Map<string, Map<number, string>>();
+  const lists = reader();
   for (const { run } of allRuns()) {
     if (project && run.repo !== project) continue;
     const href = `#/jobs/${enc(run.name)}`;
@@ -103,34 +92,12 @@ function jobEvents(project: string | null, since: number, inGit: (sha: string) =
       if (run.ended && !inGit(run.commit!)) out.push({ ...base, at: run.ended, kind: "land", what: "landed", state: "landed", sub: landSub(true, run.held), title: run.name, id: run.name, commit: run.commit, cost: run.cost, details: pairs(["model", run.model], ["took", took(run.started, run.ended)], ["branch", run.branch], ["folder", run.job]) });
       continue;
     }
-    const title = issueTitle(run.repo, run.todo, docs) ?? run.name;
+    const title = (run.repo && run.todo ? lists.item(run.repo, run.todo)?.title : undefined) ?? run.name;
     const state = run.ended ? run.state : "running";
     out.push({ ...base, at: run.started, kind: "job", what: "started", state, sub: run.kind, title, id: run.name, end: run.ended || undefined, details: pairs(["reason", run.reason], ["model", run.model], ["branch", run.branch], ["folder", run.job]) });
     if (run.ended) out.push({ ...base, at: run.ended, kind: "job", what: OUTCOME[run.state] ?? run.state, state: run.state, sub: run.kind, title, id: run.name, cost: run.cost, details: pairs(["reason", run.reason], ["model", run.model], ["took", took(run.started, run.ended)], ["branch", run.branch], ["folder", run.job]) });
   }
   return out.filter((e) => Date.parse(e.at) >= since);
-}
-
-/** Item times for the store's origin/main, kept by its commit: the history below a commit never changes. */
-let timesAt: { rev: string; times: Map<string, { added: number; changed: number }> } | null = null;
-
-/** Per item file in the work store: the time of the commit that added it and of the last that changed it, from one `git log` per new origin/main. */
-function itemTimes(): Map<string, { added: number; changed: number }> {
-  const rev = Bun.spawnSync(["git", "-C", storeDir(), "rev-parse", "origin/main"], { stdout: "pipe", stderr: "ignore" });
-  const head = rev.exitCode === 0 ? rev.stdout.toString().trim() : "";
-  if (head && timesAt?.rev === head) return timesAt.times;
-  const out = new Map<string, { added: number; changed: number }>();
-  const p = Bun.spawnSync(["git", "-C", storeDir(), "log", head || "origin/main", "--format=%ct", "--name-only"], { stdout: "pipe", stderr: "ignore" });
-  if (p.exitCode !== 0) return out;
-  let ct = 0;
-  for (const line of p.stdout.toString().split("\n")) {
-    if (!line) continue;
-    if (/^\d+$/.test(line)) { ct = Number(line) * 1000; continue; }
-    const t = out.get(line);
-    if (t) t.added = ct; else out.set(line, { added: ct, changed: ct });
-  }
-  if (head) timesAt = { rev: head, times: out };
-  return out;
 }
 
 /** The first line of an issue's last note, without its leading "- ". */
@@ -139,15 +106,13 @@ const lastNote = (notes: string[]): string => (notes.at(-1) ?? "").split("\n")[0
 function issueEvents(project: string | null, since: number): TimelineEvent[] {
   const out: TimelineEvent[] = [];
   const times = itemTimes();
+  const lists = reader();
   for (const repo of Object.values(loadRegistry())) {
     if (project && repo.key !== project) continue;
-    let doc = null;
-    try { doc = readList({ key: repo.key }); } catch {}
-    for (const item of doc?.items ?? []) {
-      const git = times.get(itemPath(repo.key, item.id));
-      const labels = Array.isArray(item.fm.labels) ? item.fm.labels.map(String) : [];
+    for (const item of lists.list(repo.key)?.items ?? []) {
+      const git = times.get(`${repo.key}-${item.id}`);
       const base = { href: `#/issues/${enc(repo.key)}/${item.id}`, project: repo.key, title: item.title, id: `${repo.key}-${item.id}`, ...(git ? {} : { dateOnly: true }), kind: "issue" as const,
-        details: pairs(["status", status(item)], ["labels", labels.join(",")], ["waiting on", item.fm.waiting_on], ["notes", item.notes.length || ""], ["last note", lastNote(item.notes)]) };
+        details: pairs(["status", status(item)], ["labels", labels(item).join(",")], ["waiting on", item.fm.waiting_on], ["notes", item.notes.length || ""], ["last note", lastNote(item.notes)]) };
       const created = String(item.fm.created ?? ""), updated = String(item.fm.updated ?? "");
       const st = status(item);
       // A 'triage: …' note is a triage, a 'Chris decided: …' or 'Claude decided: …' note a decision, at the note's time.

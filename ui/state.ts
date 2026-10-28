@@ -8,8 +8,8 @@ import { DAY_CAP, LIVE_CAP, WAITING_CAP, health, hold, lastProbe, openGoals, pau
 import { allRuns, loadRegistry, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { readDecision, type Decision } from "../jobs/lib/decision.ts";
-import { readList } from "../todo/lib/store.ts";
-import { status, type Doc } from "../todo/lib/todo.ts";
+import { isSorted, labels, needsChris, reader } from "../todo/lib/store.ts";
+import { status } from "../todo/lib/todo.ts";
 
 export interface Job {
   name: string; repo: string; item: { id: number; title: string } | null;
@@ -71,9 +71,6 @@ export interface State {
   velocity: { landed: { day: number; avg: number }; triaged: { day: number; avg: number } };
 }
 
-/** Labels that mark an issue as already sorted. */
-const SORTED = ["goal", "needs-chris", "triaged", "live-check", "proposal"];
-
 /** The Now page shows this many of the latest lands. */
 const DELIVERED = 10;
 /** So do the Issues and Triage sections. */
@@ -134,21 +131,13 @@ function landedTrailers(repo: Repo | undefined, commit: string | undefined): { k
  * and each origin URL once.
  */
 export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
-  const lists = new Map<string, Doc | null>();
-  const list = (key: string): Doc | null => {
-    if (!lists.has(key)) {
-      let doc: Doc | null = null;
-      try { doc = readList({ key }); } catch {}
-      lists.set(key, doc);
-    }
-    return lists.get(key)!;
-  };
+  const lists = reader();
   const bases = new Map<string, string | null>();
 
   const toJob = (runs: Runs, v: JobView = view(runs)): Job => {
     const repo = v.repo ? registry[v.repo] : undefined;
     const todo = v.item;
-    const found = todo !== undefined && v.repo ? list(v.repo)?.items.find((i) => i.id === todo) : undefined;
+    const found = todo !== undefined && v.repo ? lists.item(v.repo, todo) : undefined;
     const job: Job = {
       name: v.name, repo: v.repo ?? "", item: found ? { id: found.id, title: found.title } : todo !== undefined ? { id: todo, title: "" } : null,
       state: v.state, started: v.started, run: { kind: v.run.kind, started: v.run.started },
@@ -174,13 +163,13 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
     if (trailers.length) job.trailers = trailers;
     return job;
   };
-  return { list, toJob };
+  return { lists, toJob };
 }
 
 export function state(now = new Date()): State {
   const registry = loadRegistry();
   const jobs = allJobs();
-  const { list, toJob } = jobProjector(registry);
+  const { lists, toJob } = jobProjector(registry);
 
   let landing = 0;
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
@@ -231,12 +220,11 @@ export function state(now = new Date()): State {
   let openIssues = 0;
   for (const repo of Object.values(registry)) {
     if (!repo.sandbox) continue;
-    for (const item of list(repo.key)?.items ?? []) {
-      const labels = (item.fm.labels as string[]) ?? [];
-      const card = (): NewIssue => ({ id: `${repo.key}-${item.id}`, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}`, labels, notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? "") });
+    for (const item of lists.list(repo.key)?.items ?? []) {
+      const card = (): NewIssue => ({ id: `${repo.key}-${item.id}`, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}`, labels: labels(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? "") });
       if (status(item) !== "open") continue;
       openIssues++;
-      if (labels.includes("needs-chris")) {
+      if (needsChris(item)) {
         const c = card();
         const q = item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
         if (q) c.question = q;
@@ -244,7 +232,7 @@ export function state(now = new Date()): State {
         if (d) c.decision = d;
         waitingOnChris.push(c);
       }
-      else if (!labels.some((l) => SORTED.includes(l))) fresh.push(card());
+      else if (!isSorted(item)) fresh.push(card());
     }
   }
 

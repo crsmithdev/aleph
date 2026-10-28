@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { readList, writeList } from "../../todo/lib/store.ts";
+import { labels as storeLabels, readList, writeList } from "../../todo/lib/store.ts";
 import { readDecision } from "./decision.ts";
 import { parseVerdict, prompt, triageOpen } from "./triage.ts";
 import { readRun, type Repo } from "./ledger.ts";
@@ -43,7 +43,7 @@ function reset(items: { title: string; body?: string; labels?: string[]; waiting
   }, true);
 }
 const item = (id: number) => todos.find(readList(repo)!, id)!;
-const labels = (id: number) => item(id).fm.labels as string[];
+const labels = (id: number) => storeLabels(item(id));
 const run = (done: (r: string) => boolean = () => false) => triageOpen([repo], done);
 
 beforeAll(() => {

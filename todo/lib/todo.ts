@@ -69,6 +69,13 @@ export function status(item: Item): string {
   return (item.fm.status as string) ?? "open";
 }
 
+/** An item's labels. A lone label not in a list, which lint flags and fix wraps, counts as a list of one. */
+export function labels(item: Item): string[] {
+  const l = item.fm.labels;
+  if (Array.isArray(l)) return l.map(String);
+  return l === undefined || l === null || l === "" ? [] : [String(l)];
+}
+
 const HEADING = /^##\s+(\d+)\.\s*(.*)$/;
 const NOTES = /^###\s+Notes\s*$/;
 
@@ -223,7 +230,7 @@ export function adopt(item: Item, now = new Date(), created?: string): void {
     created: created ?? day,
     updated: day,
     priority: (item.fm.priority as string) ?? "medium",
-    labels: (item.fm.labels as string[]) ?? [],
+    labels: labels(item),
     ...item.fm,
   };
   item.fm.id = String(item.id);

@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { basename, join, resolve } from "node:path";
 import { LOW, allRuns, isLive, jobsDir, loadRegistry, lock, newsLine, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
 import { addNote, allJobs, findJob, goal, isOpen, issue as issueOf, latestJob, openJob, readFile, view, type Job } from "./lib/job.ts";
-import { baselineChecks, git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
+import { baselineChecks, git, onMain, removeBranch, unit } from "./lib/unit.ts";
 import { clearDecision } from "./lib/decision.ts";
 import { fetchOrigin } from "./lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
@@ -239,7 +239,7 @@ function checked(): void {
   updateRun(last!.folder, { check: "done" });
   const repo = last!.run.repo ? loadRegistry()[last!.run.repo] : undefined;
   const item = last!.run.checkItem;
-  const why = repo && item !== undefined ? updateTodo(repo, item, "checked by Chris", true) : null;
+  const why = repo && item !== undefined ? store.close(repo, item, "checked by Chris") : null;
   if (why) console.error(`warn: issue ${item} not closed: ${why}`);
   out({ job: last!.run.job, name, state: "landed", check: "done" });
   dispatchDetached();
@@ -269,7 +269,7 @@ function reconcile(all: Entry[][]): Map<string, string> {
       updateRun(last.folder, { state: "landed", commit: found.commit, reason: `found on main (${found.how})`, needs: undefined, told: true });
       removeBranch(repo, last.run);
       const todo = issueOf(runs);
-      const why = todo === undefined ? null : updateTodo(repo, todo, `job ${last.run.name} found on main as ${found.commit.slice(0, 7)}`, true);
+      const why = todo === undefined ? null : store.close(repo, todo, `job ${last.run.name} found on main as ${found.commit.slice(0, 7)}`);
       if (why) console.error(`warn: issue ${todo} not closed: ${why}`);
       continue;
     }
@@ -384,7 +384,7 @@ async function drop(): Promise<void> {
     const todo = issueOf(runs);
     // --quiet: the factory's own drop writes the note and the news itself, and its dispatch goes on.
     const quiet = rest.includes("--quiet");
-    const why = repo && todo !== undefined && !quiet ? updateTodo(repo, todo, `job ${name} dropped: ${reason}`, false) : null;
+    const why = repo && todo !== undefined && !quiet ? store.note(repo, todo, `job ${name} dropped: ${reason}`) : null;
     if (why) console.error(`warn: issue ${todo} has no note: ${why}`);
     out({ job: last.run.job, name, state: "dropped", reason });
     if (!quiet) dispatchDetached();
@@ -395,7 +395,7 @@ async function drop(): Promise<void> {
 
 /** After `aleph issue add` or `edit` of an open goal in a factory repo: a dispatch, so the goal starts at once. It never fails the write. */
 function dispatchAfterGoal(repo: Repo, item: todos.Item): void {
-  if (!repo.sandbox || todos.status(item) !== "open" || !((item.fm.labels as string[]) ?? []).includes("goal")) return;
+  if (!repo.sandbox || !store.isGoal(item)) return;
   dispatchDetached();
 }
 
@@ -443,14 +443,12 @@ async function todoCmd(): Promise<void> {
   switch (sub) {
     case "add": {
       const title = args.join(" ").trim() || refuse("give the item a title");
-      let existing: todos.Doc | null = null;
-      try { existing = store.readList(repo); } catch {}
-      const t = await triage(existing, title, body ?? "");
+      const t = await triage(store.reader().list(repo.key), title, body ?? "");
       const w = write("todo: add an item", (doc) => todos.add(doc, title, { priority: flag("priority"), labels: labels ?? t.labels, body, due, waitingOn }), true)!;
       for (const m of t.maybeSame) console.error(`aleph-${m.id} may be the same task: ${m.title}`);
       out({ repo: repo.key, added: w.value.id, title: w.value.title, commit: w.commit, ...(t.maybeSame.length ? { maybeSame: t.maybeSame } : {}) });
       dispatchAfterGoal(repo, w.value);
-      if (!((w.value.fm.labels as string[]) ?? []).includes("goal")) triageDetached(repo, w.value.id);
+      if (!store.hasLabel(w.value, store.GOAL)) triageDetached(repo, w.value.id);
       return;
     }
     case "list": {
@@ -464,7 +462,7 @@ async function todoCmd(): Promise<void> {
       const i = pick(readTodo(repo));
       if (rest.includes("--json")) { out({ ...brief(i), body: i.body, notes: i.notes, hidden: hiddenCount(repo, i.id) }); return; }
       console.log(`## ${i.id}. ${i.title}`);
-      console.log(`status ${todos.status(i)}   priority ${i.fm.priority ?? "-"}   labels ${(((i.fm.labels as string[]) ?? []).join(", ")) || "-"}   updated ${i.fm.updated ?? "-"}`);
+      console.log(`status ${todos.status(i)}   priority ${i.fm.priority ?? "-"}   labels ${store.labels(i).join(", ") || "-"}   updated ${i.fm.updated ?? "-"}`);
       console.log(`due ${i.fm.due ?? "-"}   waiting_on ${i.fm.waiting_on ?? "-"}`);
       console.log(`hidden checks: ${hiddenCount(repo, i.id)}`);
       if (i.body.trim()) console.log(`\n${i.body}`);
@@ -504,9 +502,8 @@ async function todoCmd(): Promise<void> {
       const w = write(`todo: a note on item ${args[0]}`, (doc) => {
         const i = pick(doc);
         const line = todos.note(i, text);
-        const ls = (i.fm.labels as string[]) ?? [];
-        const answered = answer && ls.includes("needs-chris");
-        if (answered) todos.edit(i, { labels: ls.filter((l) => l !== "needs-chris") });
+        const answered = answer && store.needsChris(i);
+        if (answered) store.label(i, [], [store.NEEDS_CHRIS]);
         return { id: i.id, line, answered };
       })!;
       out({ repo: repo.key, id: w.value.id, note: w.value.line, commit: w.commit });
@@ -518,11 +515,11 @@ async function todoCmd(): Promise<void> {
       const text = args.slice(1).join(" ").trim() || refuse("give the decision");
       const w = write(`todo: item ${args[0]}: decided`, (doc) => {
         const i = pick(doc);
-        const ls = (i.fm.labels as string[]) ?? [];
-        if (todos.status(i) !== "open" || !ls.includes("needs-chris")) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
+        if (todos.status(i) !== "open" || !store.needsChris(i)) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
         todos.note(i, text);
         clearDecision(i);
-        todos.edit(i, { labels: [...ls.filter((l) => l !== "needs-chris"), ...(ls.includes("goal") ? [] : ["goal"])], waitingOn });
+        store.label(i, [store.GOAL], [store.NEEDS_CHRIS]);
+        todos.edit(i, { waitingOn });
         return i;
       })!;
       out({ repo: repo.key, ...brief(w.value), commit: w.commit });
@@ -578,7 +575,7 @@ async function todoCmd(): Promise<void> {
 /** How many hidden check files an item has in the store. */
 const hiddenCount = (repo: Repo, id: number): number => Object.keys(store.readHidden(repo, id)).length;
 
-const brief = (i: todos.Item) => ({ id: i.id, title: i.title, status: todos.status(i), priority: i.fm.priority ?? null, labels: i.fm.labels ?? [], updated: i.fm.updated ?? null, due: i.fm.due ?? null, waiting_on: i.fm.waiting_on ?? null, notes: i.notes.length, legacy: i.legacy || undefined });
+const brief = (i: todos.Item) => ({ id: i.id, title: i.title, status: todos.status(i), priority: i.fm.priority ?? null, labels: store.labels(i), updated: i.fm.updated ?? null, due: i.fm.due ?? null, waiting_on: i.fm.waiting_on ?? null, notes: i.notes.length, legacy: i.legacy || undefined });
 const ready = (i: todos.Item) => [i.fm.due ? `due ${i.fm.due}` : "", i.fm.waiting_on ? `waits ${i.fm.waiting_on}` : ""].filter(Boolean).join("  ");
 
 /** The items of a list that pass `--status` and `--label`. */
@@ -588,7 +585,7 @@ function listRows(doc: todos.Doc): todos.Item[] {
   const label = flag("label");
   return doc.items
     .filter((i) => (want ? todos.status(i) === want : true))
-    .filter((i) => (label ? ((i.fm.labels as string[]) ?? []).includes(label) : true));
+    .filter((i) => (label ? store.hasLabel(i, label) : true));
 }
 
 function printRows(rows: todos.Item[], indent = ""): void {
@@ -761,15 +758,9 @@ function statusRecent(): void {
 
 /** Whether `<repo>-<n>` names an item in the work store; `own` is the list already read for `key`. */
 function itemExists(key: string, own?: todos.Doc): (repo: string, id: number) => boolean {
-  const lists = new Map<string, todos.Doc | null>(own ? [[key, own]] : []);
-  return (r, id) => {
-    if (!lists.has(r)) {
-      let doc: todos.Doc | null = null;
-      try { doc = loadRegistry()[r] ? store.readList({ key: r }) : null; } catch {}
-      lists.set(r, doc);
-    }
-    return !!lists.get(r) && todos.find(lists.get(r)!, id) !== undefined;
-  };
+  const lists = store.reader();
+  const registry = loadRegistry();
+  return (r, id) => (own && r === key ? todos.find(own, id) : registry[r] ? lists.item(r, id) : undefined) !== undefined;
 }
 
 /** The repo's list in the work store; a refusal when the store has none or the fetch fails. */

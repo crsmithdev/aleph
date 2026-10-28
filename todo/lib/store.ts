@@ -6,10 +6,19 @@
  * origin/main; a write is one commit on origin/main, made without a working
  * tree, and the store's checkout follows. No product repo's main moves when
  * an item changes, and no branch of a product repo can edit its own item.
+ *
+ * It is the Issues module: the label predicates (`isGoal`, `isSorted`,
+ * `needsChris`), one read of a repo's list (`reader`), and the named writes
+ * (`note`, `close`, `label`, `closeAndFile`, `file`). Callers do not read
+ * `fm.labels` or name a task's path.
  */
 import { fetchOrigin, followMain, git, treeWithFiles } from "../../jobs/lib/git.ts";
 import { expand } from "../../jobs/lib/ledger.ts";
-import { parseItem, renderItem, type Doc } from "./todo.ts";
+import { writeDecision, type Decision } from "../../jobs/lib/decision.ts";
+import * as todos from "./todo.ts";
+import { labels, parseItem, renderItem, status, type Doc, type Item } from "./todo.ts";
+
+export { labels };
 
 export interface Place { key: string }
 
@@ -18,8 +27,8 @@ const ATTEMPTS = 5;
 
 export const storeDir = (): string => expand(process.env.ALEPH_ITEMS ?? "~/.aleph/items");
 const tasksDir = (key: string): string => `${key}/backlog/tasks`;
-export const configPath = (key: string): string => `${key}/backlog/config.yml`;
-export const itemPath = (key: string, id: number): string => `${tasksDir(key)}/${key}-${id}.md`;
+const configPath = (key: string): string => `${key}/backlog/config.yml`;
+const itemPath = (key: string, id: number): string => `${tasksDir(key)}/${key}-${id}.md`;
 
 /**
  * The Backlog.md project file for a repo: its statuses are aleph's, and
@@ -168,3 +177,175 @@ export function writeHidden(repo: Place, id: number, files: Record<string, strin
     if (attempt === ATTEMPTS) throw new Error(`push refused ${ATTEMPTS} times: ${push.out}`);
   }
 }
+
+let timesAt: { rev: string; times: Map<string, { added: number; changed: number }> } | null = null;
+
+/**
+ * When each item was first and last committed on the store's origin/main as
+ * last fetched, by `<repo>-<n>`, in ms. One `git log`, reused while origin/main stays put.
+ */
+export function itemTimes(): Map<string, { added: number; changed: number }> {
+  const dir = storeDir();
+  const head = git(dir, "rev-parse", `origin/${MAIN}`);
+  if (head.ok && timesAt?.rev === head.out) return timesAt.times;
+  const out = new Map<string, { added: number; changed: number }>();
+  const p = Bun.spawnSync(["git", "-C", dir, "log", head.ok ? head.out : `origin/${MAIN}`, "--format=%ct", "--name-only"], { stdout: "pipe", stderr: "ignore" });
+  if (p.exitCode !== 0) return out;
+  let ct = 0;
+  for (const line of p.stdout.toString().split("\n")) {
+    if (!line) continue;
+    if (/^\d+$/.test(line)) { ct = Number(line) * 1000; continue; }
+    const m = /^([^/]+)\/backlog\/tasks\/\1-(\d+)\.md$/.exec(line);
+    if (!m) continue;
+    const ref = `${m[1]}-${m[2]}`;
+    const t = out.get(ref);
+    if (t) t.added = ct; else out.set(ref, { added: ct, changed: ct });
+  }
+  if (head.ok) timesAt = { rev: head.out, times: out };
+  return out;
+}
+
+// The labels.
+
+export const GOAL = "goal";
+export const NEEDS_CHRIS = "needs-chris";
+/**
+ * Labels that mark an issue as sorted: triage skips it, and the UI does not
+ * count it as new. One set for both. `live-check` is in it: triage labels a
+ * live check `live-check` and `triaged` together, and an issue labelled
+ * `live-check` by hand is a check the sandbox cannot reach either.
+ */
+export const SORTED: readonly string[] = [GOAL, NEEDS_CHRIS, "triaged", "live-check", "proposal"];
+
+export const hasLabel = (item: Item, label: string): boolean => labels(item).includes(label);
+/** An open item labelled `goal`: a factory run's work. */
+export const isGoal = (item: Item): boolean => status(item) === "open" && hasLabel(item, GOAL);
+/** An item with a label of SORTED: triage leaves it alone. */
+export const isSorted = (item: Item): boolean => labels(item).some((l) => SORTED.includes(l));
+/** An item labelled `needs-chris`: it waits for Chris's answer. */
+export const needsChris = (item: Item): boolean => hasLabel(item, NEEDS_CHRIS);
+
+/** Add the labels `add` the item lacks and take out `remove`, as one edit; no edit when nothing changes. */
+export function label(item: Item, add: string[], remove: string[] = []): void {
+  const had = labels(item);
+  const next = [...new Set([...had, ...add])].filter((l) => !remove.includes(l));
+  if (next.join("\0") !== had.join("\0")) todos.edit(item, { labels: next });
+}
+
+// The read.
+
+/** Lists by repo key, each read from the store once for the reader's life. */
+export interface Reader {
+  /** The repo's list, or null when the store has none or cannot be read. */
+  list(key: string): Doc | null;
+  /** Item `id` of the repo's list, or undefined. */
+  item(key: string, id: number): Item | undefined;
+}
+
+/** A reader of the store's lists; `fetch: false` reads origin/main as last fetched. */
+export function reader(o: { fetch?: boolean } = {}): Reader {
+  const lists = new Map<string, Doc | null>();
+  const list = (key: string): Doc | null => {
+    if (!lists.has(key)) {
+      let doc: Doc | null = null;
+      try { doc = o.fetch === false ? readFetched({ key }) : readList({ key }); } catch {}
+      lists.set(key, doc);
+    }
+    return lists.get(key)!;
+  };
+  return { list, item: (key, id) => list(key)?.items.find((i) => i.id === id) };
+}
+
+/** The open goals of each repo, in repo then number order. A repo whose list cannot be read has none. */
+export function goals<R extends Place>(repos: R[]): { repo: R; item: Item }[] {
+  const lists = reader();
+  return repos.flatMap((repo) => (lists.list(repo.key)?.items ?? []).filter(isGoal).map((item) => ({ repo, item })));
+}
+
+/**
+ * Item `id` as the store has it now, or null when it is not an open goal: it
+ * may have been closed, had its `goal` label removed, or had a note added
+ * since the list was read. A store that cannot be read counts as not a goal.
+ */
+export function goal(repo: Place, id: number): Item | null {
+  const item = reader().item(repo.key, id);
+  return item && isGoal(item) ? item : null;
+}
+
+// The writes.
+
+/** Why a write did not happen, from what it threw. */
+const why = (e: any): string => e?.message ?? String(e);
+
+/**
+ * A note on item `id`, as one commit; with `done` the item is done too, with
+ * `label` it gains that label, with `decision` it carries that decision.
+ * Returns why it could not, or null.
+ */
+export function note(repo: Place, id: number, text: string, opts: { done?: boolean; label?: string; decision?: Decision } = {}): string | null {
+  try {
+    const w = writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
+      const item = todos.find(doc, id);
+      if (!item) return null;
+      if (opts.done) todos.setStatus(item, "done");
+      if (opts.label) label(item, [opts.label]);
+      if (opts.decision) writeDecision(item, opts.decision);
+      return todos.note(item, text);
+    });
+    return w ? null : `no issue ${id}`;
+  } catch (e) {
+    return why(e);
+  }
+}
+
+/** Item `id` done, with the note `text`. Returns why it could not, or null. */
+export const close = (repo: Place, id: number, text: string): string | null => note(repo, id, text, { done: true });
+
+/**
+ * Change item `id` with `change` as one commit, while it is still open and not
+ * sorted: triage's write. False when the item is gone, closed or sorted.
+ */
+export function sort(repo: Place, id: number, message: string, change: (item: Item) => void): boolean {
+  const w = writeList(repo, message, (doc) => {
+    const item = todos.find(doc, id);
+    if (!item || status(item) !== "open" || isSorted(item)) return null;
+    change(item);
+    return true;
+  });
+  return w?.value === true;
+}
+
+/** A new issue for `file` and `closeAndFile`. */
+export interface Filing { title: string; labels: string[]; body?: string; priority?: string }
+
+/**
+ * Item `id` done with the note `text` (when `id` is given), and `filed` added,
+ * as one commit; a repo the store has no list for gets one. Returns what became
+ * of the item (`done`, `no issue <id>`, or the write's error) and the new numbers.
+ */
+export function closeAndFile(repo: Place, message: string, id: number | undefined, text: string, filed: Filing[]): { todo?: string; ids: number[] } {
+  let todo: string | undefined;
+  let ids: number[] = [];
+  try {
+    writeList(repo, message, (doc) => {
+      if (id !== undefined) {
+        const item = todos.find(doc, id);
+        if (item) {
+          todos.setStatus(item, "done");
+          todos.note(item, text);
+        }
+        todo = item ? "done" : `no issue ${id}`;
+      }
+      ids = filed.map((f) => todos.add(doc, f.title, { labels: f.labels, body: f.body, priority: f.priority }).id);
+      return true;
+    }, true);
+  } catch (e) {
+    todo = why(e);
+    ids = [];
+  }
+  return { todo, ids };
+}
+
+/** File new issues as one commit, starting the list when the store has none; their numbers. A write that fails files none. */
+export const file = (repo: Place, message: string, filed: Filing[]): number[] =>
+  filed.length ? closeAndFile(repo, message, undefined, "", filed).ids : [];

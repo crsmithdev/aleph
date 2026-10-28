@@ -6,10 +6,10 @@
 import { appendFileSync, closeSync, openSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { readList, readLists, writeList } from "../../todo/lib/store.ts";
+import { goal, goals, note, readLists, reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
-import { normalizeDecision, writeDecision, type Decision } from "./decision.ts";
+import { normalizeDecision, type Decision } from "./decision.ts";
 import { itemOnMain, itemStates, type ItemState } from "./status.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
@@ -111,35 +111,8 @@ export function waitingToLand(jobs = allJobs()): string[] {
   }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started)).map((j) => j.at(-1)!.run.name);
 }
 
-/** An open item labelled `goal`. */
-const isGoal = (item: todos.Item) => todos.status(item) === "open" && ((item.fm.labels as string[]) ?? []).includes("goal");
-
 /** The open items labelled `goal` in each factory repo. */
-export function openGoals(): { repo: Repo; item: todos.Item }[] {
-  const out: { repo: Repo; item: todos.Item }[] = [];
-  for (const repo of sandboxRepos()) {
-    let doc: todos.Doc | null = null;
-    try { doc = readList(repo); } catch { continue; }
-    for (const item of doc?.items ?? []) {
-      if (isGoal(item)) out.push({ repo, item });
-    }
-  }
-  return out;
-}
-
-/**
- * Item `id` as the store has it now, or null when it is no longer an open
- * goal. Dispatch calls it under the goal lock: `baseline` can take minutes,
- * and since `openGoals` read it the item may have been closed, had its `goal`
- * label removed, or had a note added that the run's spec must hold. A store
- * that cannot be read counts as not a goal.
- */
-function stillGoal(repo: Repo, id: number): todos.Item | null {
-  let doc: todos.Doc | null = null;
-  try { doc = readList(repo); } catch { return null; }
-  const item = doc?.items.find((i) => i.id === id);
-  return item && isGoal(item) ? item : null;
-}
+export const openGoals = (): { repo: Repo; item: todos.Item }[] => goals(sandboxRepos());
 
 /**
  * Whether `<repo>-<n>` is done, by the derived state `aleph status` gives. A
@@ -281,7 +254,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       const open = openJob(name, null, jobs);
       if (open) { skipped.push(`${name}: ${open.at(-1)!.run.state}`); continue; }
       // Read after the jobs: a note added before the last run's drop is in the rerun's spec.
-      const item = stillGoal(repo, listed.id);
+      const item = goal(repo, listed.id);
       if (!item) { skipped.push(`${name}: not a goal`); continue; }
       // The item may have gained a waiting_on or a due date since it was read, while the baseline ran or an earlier goal started.
       const waitNow = notReady(item, done);
@@ -304,27 +277,6 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
 
 const rerunFile = (name: string) => join(factoryDir(), "rerun", `${name}.md`);
 const rerunNote = (name: string): string => (existsSync(rerunFile(name)) ? readFileSync(rerunFile(name), "utf8").trim() : "");
-
-/** The last `n` lines of a run's file, or "" when it has none. */
-/** A note on the item, with the label and the done status when asked. Returns why it could not, or null. */
-function writeIssue(repo: Repo, id: number, text: string, opts: { done?: boolean; label?: string; decision?: Decision } = {}): string | null {
-  try {
-    let found = false;
-    writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
-      const item = todos.find(doc, id);
-      if (!item) return null;
-      found = true;
-      if (opts.done) todos.setStatus(item, "done");
-      const labels = (item.fm.labels as string[]) ?? [];
-      if (opts.label && !labels.includes(opts.label)) todos.edit(item, { labels: [...labels, opts.label] });
-      if (opts.decision) writeDecision(item, opts.decision);
-      return todos.note(item, text);
-    });
-    return found ? null : `no issue ${id}`;
-  } catch (e: any) {
-    return e?.message ?? String(e);
-  }
-}
 
 const RERUN_OPTIONS = [
   { label: "Rerun", line: "Drop the stuck run and start the goal again as it is" },
@@ -382,7 +334,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land): Promise<void> {
   const issue = Number.isInteger(todo) ? todo : undefined;
   const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${repo.key}/${name}: ${line}`); };
   const record = (text: string, opts: { done?: boolean; label?: string; decision?: Decision } = {}) => {
-    const why = issue === undefined ? "no issue" : writeIssue(repo, issue, text, opts);
+    const why = issue === undefined ? "no issue" : note(repo, issue, text, opts);
     if (why) factoryLog(`${name}: no issue note: ${why}`);
   };
   const chris = async (question: string, decision?: Decision) => {
@@ -396,10 +348,8 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land): Promise<void> {
     fetchOrigin(repo.path);
     if (git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${r.job}$`).out) { onMain = true; return true; }
     if (itemOnMain(repo, issue)) return true;
-    try {
-      const item = issue === undefined ? undefined : readList(repo)?.items.find((i) => i.id === issue);
-      return !!item && todos.status(item) !== "open";
-    } catch { return false; }
+    const item = issue === undefined ? undefined : reader().item(repo.key, issue);
+    return !!item && todos.status(item) !== "open";
   };
   const key = caseOf(r, onMainOrDone);
   const reason = r.reason ?? r.state;

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readList, writeList } from "../../todo/lib/store.ts";
+import { labels as itemLabels, readList, writeList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import { dispatchGoals, gates, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
 import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
@@ -206,7 +206,7 @@ function mk(name: string, kind: Run["kind"], state: Run["state"], extra: Partial
 }
 const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join("\n") + "\n";
 const notes = (id: number) => readList({ key: "fac" })!.items.find((i) => i.id === id)!.notes.join("\n");
-const labels = (id: number) => (readList({ key: "fac" })!.items.find((i) => i.id === id)!.fm.labels as string[]) ?? [];
+const labels = (id: number) => itemLabels(readList({ key: "fac" })!.items.find((i) => i.id === id)!);
 
 /** Fake actions that log their calls: a drop marks the run dropped, a recheck starts a passed recheck run. */
 function fakes() {

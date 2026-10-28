@@ -13,7 +13,8 @@ export function staleAsync<T>() {
   const start = (key: string, e: Entry<T>, load: () => Promise<T>): Promise<T> => {
     const p = load().then((v) => { e.value = { v }; e.at = Date.now(); return v; });
     e.loading = p;
-    p.catch(() => { if (!e.value) map.delete(key); }).finally(() => { if (e.loading === p) e.loading = undefined; });
+    // A failed first load drops its own entry only: after a clear, the key may hold a newer one.
+    p.catch(() => { if (!e.value && map.get(key) === e) map.delete(key); }).finally(() => { if (e.loading === p) e.loading = undefined; });
     return p;
   };
   return {
