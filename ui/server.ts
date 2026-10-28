@@ -6,6 +6,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { cacheFetches, uiFetchTtl } from "../todo/lib/store.ts";
+import { startPoller } from "./usage.ts";
 
 export type Handler = (req: Request, params: Record<string, string>, url: URL) => Response | Promise<Response>;
 export type Routes = Record<string, Handler>;
@@ -93,6 +94,8 @@ export async function serve(port: number, { warm = true }: { warm?: boolean } = 
     },
   });
   // One background call per slow route, so the first visit finds its cache filled.
+  // The weekly plan usage is polled every 10 minutes while the server runs.
+  if (warm) startPoller();
   if (warm) for (const w of warmers) w.warm().catch((e) => console.error(`ui/api/${w.file}: warm-up failed: ${e instanceof Error ? e.message : e}`));
   return server;
 }

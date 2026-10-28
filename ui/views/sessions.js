@@ -1,7 +1,7 @@
 // Sessions, Session and Turn: the conversations Langfuse recorded. One module
 // holds the three views; sessions-session.js and sessions-turn.js re-export
 // the last two, because the page reads one `view` per file.
-import { chips, empty, error, esc, filterBar, idLink, md, money, pageHead, pager, shortModel, systemParts, when } from "../lib.js";
+import { costHtml, chips, empty, error, esc, filterBar, idLink, md, pageHead, pager, shortModel, systemParts, when } from "../lib.js";
 
 const dur = (ms) => (ms == null ? "" : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`);
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
@@ -31,7 +31,7 @@ function sessionsBody(d, days) {
   const rows = all.slice(0, state.shown).map((s) =>
     `<tr><td>${sessionLink(s)}</td>` +
     `<td class="wide" title="${esc(s.firstPrompt)}">${esc(s.firstPrompt)}</td><td>${esc(s.project)}</td>` +
-    `<td>${chips(s.taskTypes)}</td><td class="num">${s.turns}</td><td class="num">${esc(money(s.cost))}</td>` +
+    `<td>${chips(s.taskTypes)}</td><td class="num">${s.turns}</td><td class="num">${costHtml(s.cost, s.wk)}</td>` +
     `<td class="time">${esc(when(s.start))}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
   return `<div class="tscroll"><table class="tbl"><thead><tr><th>Session</th><th>First prompt</th><th>Project</th><th>Kinds</th><th class="num">Turns</th><th class="num">Cost</th><th>Started</th><th>Last</th></tr></thead><tbody>${rows}</tbody></table></div>` +
     pager(state.shown, all.length);
@@ -84,7 +84,7 @@ function turnTable(d) {
   const rows = d.turns.map((t) =>
     `<tr><td class="num"><a href="${esc(href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}">${t.n}</a></td>` +
     `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td>${esc(line(t.output))}</td><td>${esc(shortModel(t.model))}</td><td class="num">${t.tools}</td>` +
-    `<td class="num">${esc(dur(t.durationMs))}</td><td class="num">${esc(money(t.cost))}</td><td class="time">${esc(when(t.start))}</td></tr>`).join("");
+    `<td class="num">${esc(dur(t.durationMs))}</td><td class="num">${costHtml(t.cost, t.wk)}</td><td class="time">${esc(when(t.start))}</td></tr>`).join("");
   return `<div class="tscroll"><table class="tbl"><thead><tr><th class="num">Turn</th><th>Prompt</th><th>Output</th><th>Model</th><th class="num">Tools</th><th class="num">Duration</th><th class="num">Cost</th><th>Started</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
@@ -128,7 +128,7 @@ function toolList(tools) {
 export function chatTurn(id, t) {
   const { system, text } = systemParts(t.prompt);
   const meta = [`<a href="${esc(href(`/sessions/${encodeURIComponent(id)}/turns/${t.n}`))}">Turn ${t.n}</a>`,
-    esc(shortModel(t.model)), esc(dur(t.durationMs)), esc(money(t.cost)), `<span class="time">${esc(when(t.start))}</span>`].filter(Boolean).join('<span class="dot">·</span>');
+    esc(shortModel(t.model)), esc(dur(t.durationMs)), costHtml(t.cost, t.wk), `<span class="time">${esc(when(t.start))}</span>`].filter(Boolean).join('<span class="dot">·</span>');
   const out = String(t.output ?? "").trim();
   return `<section class="turn" id="turn-${t.n}"><p class="tline">${meta}</p>` +
     (system.length ? `<div class="sys">${system.map(sysChip).join("")}</div>` : "") +
@@ -209,7 +209,7 @@ export function renderTurn(d) {
   const nav = (n, label) => (n >= 1 && n <= d.total ? `<a href="${esc(href(`/sessions/${sid}/turns/${n}`))}">${label}</a>` : "");
   return `<div class="page"><p class="quiet"><a href="#/sessions">← Sessions</a> / ${sessionLink(d)}</p>` +
     pageHead(`Turn ${d.n} of ${d.total}`, { aside: [nav(d.n - 1, "Previous"), nav(d.n + 1, "Next"), langfuse(d.base, d.traceId)].filter(Boolean).join(" ") }) +
-    `<dl class="facts"><div><dt>Started</dt><dd>${esc(when(d.start))}</dd></div><div><dt>Cost</dt><dd>${esc(money(d.cost))}</dd></div><div><dt>Duration</dt><dd>${esc(dur(d.durationMs))}</dd></div></dl>` +
+    `<dl class="facts"><div><dt>Started</dt><dd>${esc(when(d.start))}</dd></div><div><dt>Cost</dt><dd>${costHtml(d.cost, d.wk)}</dd></div><div><dt>Duration</dt><dd>${esc(dur(d.durationMs))}</dd></div></dl>` +
     `<h2>Prompt</h2><pre>${esc(d.prompt)}</pre><h2>Output</h2><pre>${esc(d.output)}</pre><h2>Observations</h2>` +
     (d.observations.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Kind</th><th>Name</th><th>Detail</th><th class="num">Duration</th></tr></thead><tbody>${d.observations.map((o) => obsRows(o, 0)).join("")}</tbody></table></div>` : empty("No observation in this turn.")) + `</div>`;
 }

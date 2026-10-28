@@ -4,8 +4,9 @@ import { loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
 import { allJobs, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
 import { jobProjector, type Job } from "../state.ts";
 import type { Routes } from "../server.ts";
+import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
 
-export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan" | "facts" | "firefighter"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string }
+export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan" | "facts" | "firefighter"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk }
 export interface JobDetail extends Job {
   runs: RunInfo[]; result?: string; review?: string; stat?: string;
   checksLog?: string; stderr?: string; trace?: string;
@@ -19,7 +20,7 @@ export const lastLines = (s: string | undefined, n = 80): string | undefined => 
   return lines.slice(-n).join("\n");
 };
 const KIND = { agent: "worker", recheck: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter" } as const;
-function runInfos(runs: Entry[]): RunInfo[] {
+function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
   const out: RunInfo[] = [];
   for (const e of runs) {
     const r = e.run;
@@ -27,6 +28,8 @@ function runInfos(runs: Entry[]): RunInfo[] {
     if (r.ended) info.ended = r.ended;
     if (r.cost !== undefined) info.cost = r.cost;
     if (r.model) info.model = r.model;
+    const wk = share(fit, r.cost, r.model);
+    if (wk) info.wk = wk;
     if (r.reason) info.reason = r.reason;
     out.push(info);
     // The reviewer runs inside the worker's run folder and leaves review.md there.
@@ -66,7 +69,7 @@ function branchRange(runs: Entry[]): { path: string; base: string; ref: string }
 }
 
 export const routes: Routes = {
-  "GET /api/jobs": (_req, _p, url) => {
+  "GET /api/jobs": async (_req, _p, url) => {
     const q = url.searchParams;
     const project = q.get("project"), repo = q.get("repo"), state = q.get("state");
     const dq = q.get("days");
@@ -83,14 +86,18 @@ export const routes: Routes = {
       if (!(at >= since)) continue;
       hit.push({ at, job: toJob(runs) });
     }
-    return Response.json(hit.sort((a, b) => b.at - a.at).map((h) => h.job));
+    const jobs = hit.sort((a, b) => b.at - a.at).map((h) => h.job);
+    annotate(jobs, await currentFit().catch(() => null));
+    return Response.json(jobs);
   },
 
   "GET /api/jobs/:name": async (_req, params, url) => {
     const runs = find(params.name, url.searchParams.get("project"));
     if (!runs) return Response.json({ error: "no such job" }, { status: 404 });
     const v = view(runs);
-    const detail: JobDetail = { ...jobProjector().toJob(runs, v), runs: runInfos(runs) };
+    const fit = await currentFit().catch(() => null);
+    const detail: JobDetail = { ...jobProjector().toJob(runs, v), runs: runInfos(runs, fit) };
+    annotate([detail], fit);
     const result = latestFile(runs, "result.md", (e) => e.run.kind === "agent")?.text;
     const review = latestFile(runs, "review.md")?.text;
     const checksLog = latestFile(runs, "checks.log")?.text;

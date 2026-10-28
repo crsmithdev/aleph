@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { denyReasons, diffHtml, elapsed, esc, idLink, money, openDiffs, shortModel, when } from "../lib.js";
+import { denyReasons, diffHtml, elapsed, costHtml, esc, idLink, openDiffs, shortModel, when } from "../lib.js";
 import { proseDecision } from "../decision.js";
 import { act, actMsg, checkFacts, fact, issueCard, itemId, landCard, shell as jobCard, triageCard, trailerLine } from "./cards.js";
 
@@ -13,7 +13,7 @@ export const view = {
   api: "/api/state",
   refresh: 15,
   render: (s) =>
-    `<div class="page">${renderMetrics(s)}<p class="lede">${renderLede(s)}</p><div class="head"><p class="asof">${renderAsOf(s)}</p>${renderControls(s)}</div>` +
+    `<div class="page">${renderMetrics(s)}${renderUsage(s)}<p class="lede">${renderLede(s)}</p><div class="head"><p class="asof">${renderAsOf(s)}</p>${renderControls(s)}</div>` +
     `<section id="issues" aria-labelledby="h-issues">${renderIssues(s)}</section>` +
     `<section id="triage" aria-labelledby="h-triage">${renderTriage(s)}</section>` +
     `<section id="lands" aria-labelledby="h-lands">${renderLands(s)}</section>` +
@@ -58,6 +58,24 @@ export function renderMetrics(s) {
     card("jobs-waiting", "Waiting", s.waiting.length) + `</div>`;
 }
 
+/** Weekly plan usage: the % now, the reset time and the 5-hour %, with the 7-day % since the last reset as a line; "usage unknown" when the endpoint gave nothing. */
+export function renderUsage(s) {
+  const u = s.usage;
+  const cur = u?.now;
+  if (!cur) return `<div class="usage"><span class="k">Weekly usage</span> <span class="quiet">usage unknown</span></div>`;
+  const reset = cur.seven_day_resets_at ? ` \u00b7 resets ${esc(when(cur.seven_day_resets_at, new Date(s.now)))}` : "";
+  return `<div class="usage"><a class="metric" href="#/"><span class="k">Weekly usage</span><span class="v">${esc(Math.round(cur.seven_day))}%</span>` +
+    `<span class="quiet">5-hour ${esc(Math.round(cur.five_hour))}%${reset}</span></a>${usageLine(u.series)}</div>`;
+}
+
+/** The 7-day % since the last reset as an SVG polyline over the 0-100 % scale. */
+export function usageLine(series) {
+  if (!series || series.length < 2) return "";
+  const t0 = Date.parse(series[0].at), span = Math.max(1, Date.parse(series.at(-1).at) - t0);
+  const pts = series.map((p) => `${(((Date.parse(p.at) - t0) / span) * 300).toFixed(1)},${(40 - (Math.min(100, p.seven_day) / 100) * 40).toFixed(1)}`).join(" ");
+  return `<svg class="usage-line" viewBox="0 0 300 40" preserveAspectRatio="none" role="img" aria-label="7-day usage since the last reset"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
 export const FINE = ["Everything is fine.", "All is well.", "Everything is running smoothly.", "The factory is humming along."];
 const NUMBER_WORDS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
 
@@ -98,7 +116,7 @@ const more = (key, body) => `<details class="more" data-keep="more:${esc(key)}">
 /** The details of a held or stuck job: everything the row's one sentence leaves out. */
 function details(s, j, extra = "") {
   const parts = extra + (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
-    `<dl class="facts">${fact("Started", esc(when(j.started, new Date(s.now))))}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}${j.model ? fact("Model", esc(shortModel(j.model))) : ""}${checkFacts(j)}</dl>` +
+    `<dl class="facts">${fact("Started", esc(when(j.started, new Date(s.now))))}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.cost !== undefined ? fact("Cost", costHtml(j.cost, j.wk)) : ""}${j.model ? fact("Model", esc(shortModel(j.model))) : ""}${checkFacts(j)}</dl>` +
     (failed(j) ? `<p class="quiet q">Last check that failed: <b>${esc(failed(j).name)}</b>, ${esc(failed(j).seconds)} s</p>` : "") +
     (j.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(j.stat)}</pre></div></div>` : "") +
     trailerLine(j, s.now) +

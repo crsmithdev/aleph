@@ -22,6 +22,17 @@ export const clock12 = (iso) => {
 export const labelName = (l) => (l === "goal" ? "factory" : l);
 export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
 
+/** `≈1.4% wk` for a job's or session's estimated share of the weekly plan limit; "" without one. */
+export const wkText = (wk) => (wk ? `\u2248${wk.pct < 0.05 ? "<0.1" : wk.pct.toFixed(1)}% wk` : "");
+const WK_TIP = "An estimate of the share of the weekly plan limit: the cost times the rise in weekly % per dollar aleph saw spent since the last reset. Spend outside aleph (claude.ai chat) is not in the dollars, so it reads high.";
+/** The cost cell content (HTML): the weekly share first, with its tooltip, then the dollars. */
+export const costHtml = (cost, wk) => {
+  const dollars = cost === undefined || cost === null ? "" : esc(money(cost));
+  if (!wk) return dollars;
+  const tip = WK_TIP + (wk.pooled ? " The rate is the pooled one: this model has under $5 in the window." : "");
+  return `<span class="wk" title="${esc(tip)}">${esc(wkText(wk))}</span>${dollars ? ` <span class="quiet">${dollars}</span>` : ""}`;
+};
+
 /** "4:12": minutes and seconds from `from` to `to` (ISO strings); minutes may pass 59. */
 export function elapsed(from, to) {
   const ms = Date.parse(to) - Date.parse(from);

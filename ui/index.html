@@ -145,6 +145,10 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .metric:hover { border-color: var(--muted); }
 .metric .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
 .metric .v { font: 700 var(--fs-metric)/1 var(--metric); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); white-space: nowrap; }
+.usage { display: flex; align-items: center; gap: 16px; margin: 0 0 24px; flex-wrap: wrap; }
+.usage .metric { min-width: 200px; }
+.usage-line { width: 300px; height: 40px; color: var(--muted); }
+.wk { cursor: help; font-weight: 600; }
 .metric.done .v { color: var(--done); }
 .metric.run .v { color: var(--run); }
 .metric .v .of { font: 400 22px/1 var(--metric); color: var(--muted); }

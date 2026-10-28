@@ -2,6 +2,7 @@
 import type { Routes } from "../server.ts";
 import { proposals } from "../../jobs/lib/corrections.ts";
 import { state, type State } from "../state.ts";
+import { annotate, currentFit, summary } from "../usage.ts";
 
 /** The state with only `project`'s jobs and waiting goals; the factory and ticks stay whole. */
 export function forProject(s: State, project: string | null): State {
@@ -11,5 +12,9 @@ export function forProject(s: State, project: string | null): State {
 }
 
 export const routes: Routes = {
-  "GET /api/state": (_req, _params, url) => Response.json({ ...forProject(state(), url.searchParams.get("project")), proposals: proposals().map(({ id, kind, sentence, count, signals }) => ({ id, kind, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) }),
+  "GET /api/state": async (_req, _params, url) => {
+    const s = forProject(state(), url.searchParams.get("project"));
+    annotate([...s.needs, ...s.stuck, ...s.running, ...s.delivered, ...s.triage], await currentFit().catch(() => null));
+    return Response.json({ ...s, usage: summary(), proposals: proposals().map(({ id, kind, sentence, count, signals }) => ({ id, kind, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) });
+  },
 };

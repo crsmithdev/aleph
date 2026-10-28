@@ -3,6 +3,7 @@ import { basename } from "node:path";
 import { LangfuseError, config, observations, traces } from "../langfuse.ts";
 import { allRuns, loadRegistry } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
+import { currentFit, share } from "../usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { systemParts } from "../lib.js";
 
@@ -36,16 +37,23 @@ const byTime = (a: any, b: any) => ms(a.timestamp) - ms(b.timestamp);
 const isType = (o: any, type: string) => String(o.type ?? "").toLowerCase() === type;
 
 /** Job id → name and ledger cost (the sum over the job's runs), read once per request. */
-function jobs(): Map<string, { name: string; cost: number }> {
-  const out = new Map<string, { name: string; cost: number }>();
+function jobs(): Map<string, { name: string; cost: number; model?: string }> {
+  const out = new Map<string, { name: string; cost: number; model?: string }>();
   for (const { run } of allRuns()) {
     if (!run.job) continue;
     const j = out.get(run.job) ?? { name: run.name, cost: 0 };
     j.cost += run.cost ?? 0;
+    if (run.model) j.model = run.model;
     out.set(run.job, j);
   }
   return out;
 }
+
+/** `{ wk }` for a cost on a model, or nothing. */
+const wkOf = (fit: Parameters<typeof share>[0], cost: number | undefined, model?: string | null) => {
+  const wk = share(fit, cost, model ?? undefined);
+  return wk ? { wk } : {};
+};
 
 const labelOf = (id: string) => { const j = jobs().get(id); return j ? { label: j.name } : {}; };
 
@@ -146,11 +154,14 @@ export const routes: Routes = {
       const groups = new Map<string, any[]>();
       for (const t of all) groups.set(t.sessionId, [...(groups.get(t.sessionId) ?? []), t]);
       const ledger = jobs();
+      const fit = await currentFit().catch(() => null);
       const sessions = [...groups].map(([id, ts]) => {
         ts.sort(byTime);
         const job = ledger.get(id);
         const langfuse = ts.reduce((n, t) => n + (t.totalCost ?? 0), 0);
+        const wk = share(fit, langfuse || job?.cost || 0, job?.model);
         return {
+          ...(wk ? { wk } : {}),
           id,
           ...(job ? { label: job.name } : {}),
           project: projectOf(ts[0]),
@@ -171,8 +182,10 @@ export const routes: Routes = {
       const { cfg, ts } = await sessionTraces(params.id, url.searchParams.get("project") || null);
       if (!ts.length) return Response.json({ error: `No session ${params.id}` }, { status: 404 });
       const all = await Promise.all(ts.map((t) => observations(cfg, t.id)));
+      const fit = await currentFit().catch(() => null);
       const turns = ts.map((t, i) => ({
         n: i + 1,
+        ...wkOf(fit, t.totalCost, modelOf(all[i])),
         traceId: t.id,
         start: t.timestamp,
         prompt: line(t.input, 300),
@@ -194,8 +207,10 @@ export const routes: Routes = {
       const limit = Math.min(50, Math.max(1, Math.floor(Number(url.searchParams.get("limit")) || 20)));
       const page = ts.slice(from - 1, from - 1 + limit);
       const all = await Promise.all(page.map((t) => observations(cfg, t.id)));
+      const fit = await currentFit().catch(() => null);
       const turns = page.map((t, i) => ({
         n: from + i,
+        ...wkOf(fit, t.totalCost, modelOf(all[i])),
         traceId: t.id,
         start: t.timestamp,
         prompt: text(t.input),
@@ -207,7 +222,7 @@ export const routes: Routes = {
       }));
       // A factory worker's session is one turn Langfuse prices at 0; the ledger has its cost, as on the list.
       const job = jobs().get(params.id);
-      if (ts.length === 1 && turns.length === 1 && !turns[0].cost && job?.cost) turns[0].cost = job.cost;
+      if (ts.length === 1 && turns.length === 1 && !turns[0].cost && job?.cost) Object.assign(turns[0], { cost: job.cost }, wkOf(fit, job.cost, job.model));
       return Response.json({ base: cfg.baseUrl, id: params.id, ...labelOf(params.id), project: projectOf(ts[0]), taskTypes: taskTypes(ts), total: ts.length, from, turns });
     } catch (e) { return fail(e); }
   },
@@ -242,6 +257,7 @@ export const routes: Routes = {
       // The turn span is the tree's root; show its children as the top level.
       const top = roots.length === 1 && roots[0].name === "turn" ? roots[0].children : roots;
       return Response.json({
+        ...wkOf(await currentFit().catch(() => null), t.totalCost, modelOf(obs)),
         base: cfg.baseUrl, id: params.id, ...labelOf(params.id), n, total: ts.length, traceId: t.id, project: projectOf(t), start: t.timestamp,
         prompt: cut(t.input, 400), output: cut(t.output, 400), cost: t.totalCost ?? 0, durationMs: durationMs(t), observations: top,
       });

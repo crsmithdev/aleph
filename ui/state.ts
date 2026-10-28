@@ -11,6 +11,7 @@ import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from 
 import { readDecision, type Decision } from "../jobs/lib/decision.ts";
 import { isSorted, labels, needsChris, reader } from "../todo/lib/store.ts";
 import { status } from "../todo/lib/todo.ts";
+import type { Wk } from "./usage.ts";
 
 export interface Job {
   name: string; repo: string; item: { id: number; title: string } | null;
@@ -19,6 +20,8 @@ export interface Job {
   /** The current (last) run: its kind and start. `started` is the job's first. */
   run: { kind: string; started: string };
   ended?: string; cost?: number; model?: string;
+  /** The cost as an estimated share of the weekly plan limit; set by the routes, none under 6 hours of usage snapshots. */
+  wk?: Wk;
   commit?: string; commitUrl?: string;
   defaults: string[]; followups: string[];
   stat?: string;
