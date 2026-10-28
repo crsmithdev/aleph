@@ -261,3 +261,61 @@ export const STATES = ["running", "passed", "needs-you", "failed", "stuck", "don
 const TONES = { running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", "needs-you": "need", failed: "stuck", stuck: "stuck", dropped: "quiet" };
 /** The badge tone of a state (a job's, land's or issue's): run, done, need, stuck, or quiet for any other. */
 export const tone = (state) => TONES[state] ?? "quiet";
+
+// ---------- shared page parts: header, table cells, filter bar, pager ----------
+// The CSS for these is in index.html (.ph, table.tbl, .idl, .chips, .fbar, .seg, .pager).
+// Column order for every table: id or name, title, state badge, project, labels, numbers, time last.
+
+/** The page header: the serif title, a muted count, and an optional right-hand aside (`aside` is HTML). */
+export const pageHead = (title, { count, aside = "" } = {}) =>
+  `<header class="ph"><h1>${esc(title)}</h1>${count != null && count !== "" ? `<span class="count">${esc(count)}</span>` : ""}${aside ? `<div class="aside">${aside}</div>` : ""}</header>`;
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** A table's time, on one line: "Oct 28 08:45" for this year, "2025-12-03" for another; "" for a bad date. */
+export function when(ts, now = new Date()) {
+  const d = new Date(ts);
+  if (ts == null || ts === "" || Number.isNaN(d.getTime())) return "";
+  return d.getFullYear() === now.getFullYear()
+    ? `${MONTHS[d.getMonth()]} ${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+    : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** An id as a link: mono, small, muted, underlined on hover. */
+export const idLink = (id, href) => `<a class="idl" href="${esc(safeHref(href))}">${esc(id)}</a>`;
+
+/** A state as a badge, toned by `tone`. */
+export const badge = (state) => `<span class="badge ${tone(state)}">${esc(state)}</span>`;
+
+/** Labels as small rounded chips; "" for none. */
+export const chips = (labels) => (labels?.length ? `<span class="chips">${labels.map((l) => `<span class="chip">${esc(labelName(l))}</span>`).join("")}</span>` : "");
+
+const opt = (o) => (typeof o === "object" && o ? { value: String(o.value), label: String(o.label ?? o.value) } : { value: String(o), label: String(o) });
+/**
+ * One row of filter controls, all 28px high. Each group is `{label, name, options, value}` (a choice: a
+ * segmented control for six options or fewer, a `<select>` for more) or `{label, name, search: true,
+ * value, placeholder}` (a search input). Options are strings or `{value, label}`. The view wires the events:
+ * a segmented button carries `data-name` on its group and `data-value`, pressed is `aria-pressed="true"`.
+ */
+export function filterBar(groups) {
+  const control = (g) => {
+    const name = esc(g.name ?? "");
+    if (g.search) return `<input type="search" name="${name}" value="${esc(g.value ?? "")}" placeholder="${esc(g.placeholder ?? "Search")}" aria-label="${esc(g.label ?? "Search")}">`;
+    const opts = (g.options ?? []).map(opt);
+    const cur = String(g.value ?? opts[0]?.value ?? "");
+    if (opts.length <= 6) return `<div class="seg" role="group" aria-label="${esc(g.label ?? "")}" data-name="${name}">${opts.map((o) => `<button type="button" data-value="${esc(o.value)}" aria-pressed="${o.value === cur}">${esc(o.label)}</button>`).join("")}</div>`;
+    return `<select name="${name}" aria-label="${esc(g.label ?? "")}">${opts.map((o) => `<option value="${esc(o.value)}"${o.value === cur ? " selected" : ""}>${esc(o.label)}</option>`).join("")}</select>`;
+  };
+  return `<div class="fbar">${groups.map((g) => `<div class="fg">${g.label ? `<span class="k">${esc(g.label)}</span>` : ""}${control(g)}</div>`).join("")}</div>`;
+}
+
+/** Under a long table: "50 of 345" and a "Show 50 more" button (`data-more` holds the step) while rows are left. */
+export function pager(shown, total, step = 50) {
+  const n = Math.min(shown, total), more = Math.min(step, total - n);
+  return `<div class="pager">${more > 0 ? `<button type="button" data-more="${more}">Show ${more} more</button>` : ""}<span class="of">${n} of ${total}</span></div>`;
+}
+
+/** A sortable header cell; `sort` is `{key, dir}` (dir 1 up, -1 down). Every table shows the same arrow. */
+export function sortHead(label, key, sort, { num = false } = {}) {
+  const on = sort?.key === key;
+  return `<th${num ? ' class="num"' : ""}${on ? ` aria-sort="${sort.dir > 0 ? "ascending" : "descending"}"` : ""}><button type="button" data-sort="${esc(key)}">${esc(label)}<span class="arr" aria-hidden="true">${on ? (sort.dir > 0 ? "▲" : "▼") : ""}</span></button></th>`;
+}

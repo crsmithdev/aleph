@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { STATES, chart, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone } from "./lib.js";
+import { STATES, badge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, when, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone } from "./lib.js";
 
 test("esc escapes markup", () => {
   expect(esc("<script>alert('x')</script>")).toBe("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;");
@@ -184,4 +184,72 @@ test("restoreState ignores state for elements the new HTML no longer has", () =>
 test("tone maps every job state to one badge tone", () => {
   expect(STATES.map(tone)).toEqual(["run", "done", "need", "stuck", "stuck", "done", "done", "quiet"]);
   expect(tone("held")).toBe("quiet");
+});
+
+test("when gives month, day and time this year, the date for another year, on one line", () => {
+  const now = new Date(2026, 9, 28, 12, 0);
+  expect(when(new Date(2026, 9, 28, 8, 45).toISOString(), now)).toBe("Oct 28 08:45");
+  expect(when(new Date(2026, 0, 3, 23, 5).toISOString(), now)).toBe("Jan 03 23:05");
+  expect(when(new Date(2025, 11, 3, 9, 0).toISOString(), now)).toBe("2025-12-03");
+  expect(when("nope", now)).toBe("");
+  expect(when(null, now)).toBe("");
+  expect(when(new Date().toISOString())).not.toContain("\n");
+});
+
+test("badge tones a state with the state-tone map", () => {
+  expect(badge("running")).toBe('<span class="badge run">running</span>');
+  expect(badge("needs-you")).toBe('<span class="badge need">needs-you</span>');
+  expect(badge("failed")).toBe('<span class="badge stuck">failed</span>');
+  expect(badge("landed")).toBe('<span class="badge done">landed</span>');
+  expect(badge("<odd>")).toBe('<span class="badge quiet">&lt;odd&gt;</span>');
+});
+
+test("chips gives labels as chips, the goal label as factory, nothing for none", () => {
+  expect(chips(["ui", "goal"])).toBe('<span class="chips"><span class="chip">ui</span><span class="chip">factory</span></span>');
+  expect(chips([])).toBe("");
+  expect(chips(undefined)).toBe("");
+  expect(chips(["<b>"])).toContain("&lt;b&gt;");
+});
+
+test("idLink and pageHead", () => {
+  expect(idLink("aleph-1", "#/jobs/aleph-1")).toBe('<a class="idl" href="#/jobs/aleph-1">aleph-1</a>');
+  expect(idLink("x", "javascript:alert(1)")).toContain('href="#"');
+  expect(pageHead("Jobs", { count: 12, aside: "<b>x</b>" })).toBe('<header class="ph"><h1>Jobs</h1><span class="count">12</span><div class="aside"><b>x</b></div></header>');
+  expect(pageHead("Jobs")).toBe('<header class="ph"><h1>Jobs</h1></header>');
+  expect(pageHead("Jobs", { count: 0 })).toContain('<span class="count">0</span>');
+});
+
+test("filterBar gives a segmented control for six options or fewer, a select for more, and a search input", () => {
+  const h = filterBar([
+    { label: "State", name: "state", options: ["all", "running", { value: "done", label: "Done" }], value: "running" },
+    { label: "Project", name: "project", options: ["a", "b", "c", "d", "e", "f", "g"], value: "c" },
+    { label: "Search", name: "q", search: true, value: "x<" },
+  ]);
+  expect(h.startsWith('<div class="fbar">')).toBe(true);
+  expect(h).toContain('<div class="fg"><span class="k">State</span><div class="seg" role="group" aria-label="State" data-name="state">');
+  expect(h).toContain('<button type="button" data-value="all" aria-pressed="false">all</button>');
+  expect(h).toContain('<button type="button" data-value="running" aria-pressed="true">running</button>');
+  expect(h).toContain('<button type="button" data-value="done" aria-pressed="false">Done</button>');
+  expect(h).toContain('<span class="k">Project</span><select name="project" aria-label="Project">');
+  expect(h).toContain('<option value="c" selected>c</option>');
+  expect(h.match(/<option/g)!.length).toBe(7);
+  expect(h).toContain('<input type="search" name="q" value="x&lt;" placeholder="Search" aria-label="Search">');
+  // Six options stay segmented; the first is pressed when no value is given.
+  const six = filterBar([{ name: "k", options: ["1", "2", "3", "4", "5", "6"] }]);
+  expect(six).toContain('class="seg"');
+  expect(six).not.toContain("<select");
+  expect(six).toContain('data-value="1" aria-pressed="true"');
+  expect(six).not.toContain('class="k"');
+});
+
+test("pager shows how many of the total, and the next step while rows are left", () => {
+  expect(pager(50, 345)).toBe('<div class="pager"><button type="button" data-more="50">Show 50 more</button><span class="of">50 of 345</span></div>');
+  expect(pager(300, 345)).toContain("Show 45 more");
+  expect(pager(345, 345)).toBe('<div class="pager"><span class="of">345 of 345</span></div>');
+  expect(pager(50, 20)).toContain("20 of 20");
+});
+
+test("sortHead marks the sorted column with the arrow", () => {
+  expect(sortHead("Cost", "cost", { key: "cost", dir: -1 }, { num: true })).toBe('<th class="num" aria-sort="descending"><button type="button" data-sort="cost">Cost<span class="arr" aria-hidden="true">▼</span></button></th>');
+  expect(sortHead("Name", "name", { key: "cost", dir: 1 })).toBe('<th><button type="button" data-sort="name">Name<span class="arr" aria-hidden="true"></span></button></th>');
 });

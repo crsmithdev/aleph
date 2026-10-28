@@ -108,7 +108,8 @@ test("the second request is served from the cache", async () => {
 
 test("views render, link to Langfuse, and escape", async () => {
   const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
-  expect(v.renderSessions(list)).toContain('href="#/sessions/s1"');
+  expect(v.renderSessions(list)).toContain('<a class="idl" href="#/sessions/s1">s1</a>');
+  expect(v.renderSessions(list)).toContain('<header class="ph"><h1>Sessions</h1><span class="count">2</span></header>');
   const s: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
   expect(v.renderSession(s)).toContain(`${s.base}/trace/t1`);
   const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/1", { id: "s1", n: "1" })).json();

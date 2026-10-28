@@ -1,12 +1,8 @@
 // Sessions, Session and Turn: the conversations Langfuse recorded. One module
 // holds the three views; sessions-session.js and sessions-turn.js re-export
 // the last two, because the page reads one `view` per file.
-import { clock, empty, error, esc, money } from "../lib.js";
+import { chips, empty, error, esc, idLink, money, pageHead, when } from "../lib.js";
 
-const day = (iso) => {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : `${d.toLocaleDateString([], { day: "numeric", month: "short" })} ${clock(iso)}`;
-};
 const dur = (ms) => (ms == null ? "" : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`);
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
 const langfuse = (base, traceId) => (base && traceId ? `<a href="${esc(base)}/trace/${esc(traceId)}">Open in Langfuse</a>` : "");
@@ -14,13 +10,14 @@ const href = (path) => `#${path}`;
 
 export function renderSessions(d) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
+  // Columns: id, title (the first prompt), project, labels (kinds), numbers, times last.
   const rows = d.sessions.map((s) =>
-    `<tr><td><a href="${esc(href(`/sessions/${encodeURIComponent(s.id)}`))}"><code>${esc(s.id.slice(0, 8))}</code></a></td>` +
-    `<td>${esc(s.project)}</td><td>${esc(s.firstPrompt)}</td><td class="num">${s.turns}</td>` +
-    `<td class="num">${esc(day(s.start))}</td><td class="num">${esc(day(s.last))}</td><td class="num">${esc(money(s.cost))}</td>` +
-    `<td>${s.taskTypes.map((t) => `<span class="badge">${esc(t)}</span>`).join(" ")}</td></tr>`).join("");
-  return `<div class="page"><h1>Sessions</h1>` + (rows
-    ? `<div class="list"><div class="tscroll" style="overflow-x:auto;max-width:100%"><table class="tbl"><thead><tr><th>Session</th><th>Project</th><th>First prompt</th><th>Turns</th><th>Started</th><th>Last</th><th>Cost</th><th>Kinds</th></tr></thead><tbody>${rows}</tbody></table></div></div>`
+    `<tr><td>${idLink(s.id.slice(0, 8), href(`/sessions/${encodeURIComponent(s.id)}`))}</td>` +
+    `<td class="wide" title="${esc(s.firstPrompt)}">${esc(s.firstPrompt)}</td><td>${esc(s.project)}</td>` +
+    `<td>${chips(s.taskTypes)}</td><td class="num">${s.turns}</td><td class="num">${esc(money(s.cost))}</td>` +
+    `<td class="time">${esc(when(s.start))}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
+  return `<div class="page">${pageHead("Sessions", { count: d.sessions.length })}` + (rows
+    ? `<div class="tscroll" style="overflow-x:auto;max-width:100%"><table class="tbl"><thead><tr><th>Session</th><th>First prompt</th><th>Project</th><th>Kinds</th><th class="num">Turns</th><th class="num">Cost</th><th>Started</th><th>Last</th></tr></thead><tbody>${rows}</tbody></table></div>`
     : empty("No session in the last 7 days.", "Sessions appear when the hooks send traces to Langfuse.")) + `</div>`;
 }
 
