@@ -3,7 +3,7 @@
  * liveness and locks. See docs/specs/2026-09-24-agent-jobs.md.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { availableParallelism, homedir } from "node:os";
 import { join } from "node:path";
 
 export type State = "running" | "passed" | "needs-you" | "failed" | "stuck" | "done" | "landed" | "dropped";
@@ -271,3 +271,26 @@ export function readReview2(folder: string): Review2 | undefined {
 
 /** The reason of a land that found the job lock taken: it did nothing to the job. */
 export const LOCK_BUSY = "job lock busy";
+
+/** How many check runs of the test suite may run at once across the factory: ALEPH_CHECK_SLOTS, default 2. */
+export const checkSlots = () => Math.max(1, Math.floor(Number(process.env.ALEPH_CHECK_SLOTS)) || 2);
+
+/** Each suite run's share of the cores: cores / slots, at least 1. */
+export const testParallel = () => Math.max(1, Math.floor(availableParallelism() / checkSlots()));
+
+/**
+ * Wait for a free check slot (a lock `check-slot-<n>`) and take it. The wait
+ * has no end: the caller starts its time limit after this returns.
+ */
+export async function checkSlot(): Promise<() => void> {
+  for (;;) {
+    for (let n = 0; n < checkSlots(); n++) {
+      const release = await lock(`check-slot-${n}`, 0);
+      if (release) return release;
+    }
+    await Bun.sleep(100);
+  }
+}
+
+/** The systemd-run properties of every factory run unit: the shell, the UI and Claude Code sessions win when the cores are busy. */
+export const LOW = ["--property=CPUWeight=20", "--nice=10"];

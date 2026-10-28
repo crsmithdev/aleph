@@ -10,7 +10,7 @@ import * as todos from "../../todo/lib/todo.ts";
 import { readHidden, writeList } from "../../todo/lib/store.ts";
 import { followMain, git } from "./git.ts";
 import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
-import { allJobs, allRuns, isLive, isOpen, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { LOW, allJobs, checkSlot, testParallel, allRuns, isLive, isOpen, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
 import { dispatchOn, hold, triageDetached, paused, recordFlake, waitingToLand } from "./factory.ts";
 import { startReview2 } from "./review2.ts";
@@ -121,6 +121,8 @@ async function runChecks(folder: string, wt: string, repo: Repo, env: Record<str
     phase(`check ${check.name}`);
     const out = join(folder, "check.out");
     writeFileSync(out, "");
+    // The wait for a slot is outside the time limit and outside the check's seconds.
+    const free = await checkSlot();
     const t0 = Date.now();
     let r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
     let again = false;
@@ -131,6 +133,7 @@ async function runChecks(folder: string, wt: string, repo: Repo, env: Record<str
       r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
       if (r.code === 0 && !r.timedOut) recordFlake(repo.key, check.name, basename(folder));
     }
+    free();
     const rerun = again && r.code === 0 && !r.timedOut;
     record({ name: check.name, ok: r.code === 0 && !r.timedOut, seconds: Math.round((Date.now() - t0) / 1000), ...(rerun ? { rerun: true } : {}) });
     appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : ""}${again ? " (second run)" : ""}\n${tail(out, 100)}\n\n`);
@@ -272,7 +275,7 @@ async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
     const unit = `aleph-pull-${repo.key}-${n}-${Date.now()}`.replace(/[^A-Za-z0-9:_.-]/g, "-");
     const pass = Object.entries(process.env).filter(([k]) => k.startsWith("ALEPH_") || k.startsWith("SIDETONE_")).map(([k, v]) => `--setenv=${k}=${v}`);
     const argv = process.env.ALEPH_JOB_FOREGROUND === "1" ? [process.execPath, cli, "land", n]
-      : ["systemd-run", "--user", "--collect", "--quiet", `--unit=${unit}`, `--working-directory=${repo.path}`, `--setenv=PATH=${runPath()}`, ...pass, process.execPath, cli, "land", n];
+      : ["systemd-run", "--user", "--collect", "--quiet", ...LOW, `--unit=${unit}`, `--working-directory=${repo.path}`, `--setenv=PATH=${runPath()}`, ...pass, process.execPath, cli, "land", n];
     Bun.spawn(argv, { env: process.env, stdin: "ignore", stdout: "ignore", stderr: "ignore", detached: true }).unref();
   }
   const deadline = Date.now() + 10_000;
@@ -551,7 +554,8 @@ async function checksInSandbox(folder: string, dir: string, bundle: string, ref:
     }),
   ].join("\n");
   phase(checks.length ? `check ${checks.map((c) => c.name).join(", ")}` : "check");
-  const r = await sandboxed(dir, script, { read: [bundle, ...(hasHidden ? ["hidden"] : [])], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: join(folder, "check.out"), stderr: join(folder, "check.out") });
+  const free = await checkSlot();
+  const r = await sandboxed(dir, script, { read: [bundle, ...(hasHidden ? ["hidden"] : [])], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: join(folder, "check.out"), stderr: join(folder, "check.out") }).finally(free);
   const read = (f: string) => existsSync(join(dir, "checklog", f)) ? readFileSync(join(dir, "checklog", f), "utf8").trim() : undefined;
   const setup = read("setup.code");
   if (setup === undefined) return `checks did not start (exit ${r.code})`;
@@ -688,7 +692,7 @@ export async function unit(folder: string): Promise<void> {
   const dispatcherPath = runPath();
   const env: Record<string, string | undefined> = {
     ...process.env, ...readEnvFile(repo?.env ?? process.env.ALEPH_RUN_ENV),
-    PATH: dispatcherPath, HOME: homedir(), ALEPH_JOB_ID: run.job, ALEPH_JOB_RUN: id,
+    PATH: dispatcherPath, HOME: homedir(), ALEPH_JOB_ID: run.job, ALEPH_JOB_RUN: id, ALEPH_TEST_PARALLEL: String(testParallel()),
   };
   delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDECODE;

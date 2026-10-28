@@ -87,7 +87,7 @@ describe("review2", () => {
     const { startReview2 } = await import("./review2.ts");
     process.env.ALEPH_REVIEW2_CMD = fakeClaude("VERDICT: land");
     const folder = held("once");
-    expect(startReview2(folder)).toBe(true);
+    expect([startReview2(folder), existsSync(join(folder, "review2.md")) ? readFileSync(join(folder, "review2.md"), "utf8") : ""]).toEqual([true, "PENDING\n"]);
     expect(startReview2(folder)).toBe(false);
     for (let i = 0; i < 100 && (await review2(folder))?.verdict === "pending"; i++) await Bun.sleep(100);
     expect(await review2(folder)).toEqual({ verdict: "land" });
@@ -175,5 +175,21 @@ describe("parseVerdict", () => {
     expect(parseVerdict("VERDICT: back x\nVERDICT: land")).toEqual({ verdict: "land" });
     expect(parseVerdict("VERDICT: back")).toBeNull();
     expect(parseVerdict("nothing")).toBeNull();
+  });
+});
+
+describe("review2 unit", () => {
+  test("the systemd-run argv of review2 has CPUWeight=20 and --nice=10", () => {
+    const folder = held("unit-argv");
+    const log = join(base, "review2-argv");
+    mkdirSync(join(base, "bin"), { recursive: true });
+    writeFileSync(join(base, "bin", "systemd-run"), `#!/bin/bash\necho "$@" > ${log}\n`, { mode: 0o755 });
+    // A child process: Bun looks a command up in the PATH it started with.
+    const env = { ...process.env, PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_JOB_FOREGROUND: "" };
+    const p = Bun.spawnSync(["bun", "-e", `import { startReview2 } from "${join(import.meta.dir, "review2.ts")}"; process.exit(startReview2(${JSON.stringify(folder)}) ? 0 : 1);`], { env, stdout: "pipe", stderr: "pipe" });
+    expect(p.exitCode).toBe(0);
+    const argv = readFileSync(log, "utf8");
+    expect(argv).toContain("--property=CPUWeight=20");
+    expect(argv).toContain("--nice=10");
   });
 });

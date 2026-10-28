@@ -12,7 +12,7 @@ import { basename, join } from "node:path";
 import { readList } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { outcome } from "./gate.ts";
-import { loadRegistry, parseVerdict, readEnvFile, readRun, type Repo, type Run } from "./ledger.ts";
+import { LOW, loadRegistry, parseVerdict, readEnvFile, readRun, type Repo, type Run } from "./ledger.ts";
 import { linkBins, runPath, sandboxed, workerToken, writeHome } from "./sandbox.ts";
 
 /**
@@ -152,7 +152,7 @@ export function startReview2(folder: string): boolean {
     } else {
       // Its own transient unit: the run's unit stops its whole cgroup when the run ends.
       const pass = Object.entries(process.env).filter(([k]) => k.startsWith("ALEPH_") || k.startsWith("SIDETONE_")).map(([k, v]) => `--setenv=${k}=${v}`);
-      const p = Bun.spawnSync(["systemd-run", "--user", "--collect", "--quiet", `--unit=aleph-${basename(folder)}-review2`, `--working-directory=${folder}`,
+      const p = Bun.spawnSync(["systemd-run", "--user", "--collect", "--quiet", ...LOW, `--unit=aleph-${basename(folder)}-review2`, `--working-directory=${folder}`,
         `--property=StandardOutput=append:${join(folder, "review2.err")}`, `--property=StandardError=append:${join(folder, "review2.err")}`,
         `--setenv=PATH=${runPath()}`, ...pass, process.execPath, cli, "review2", folder], { stdout: "pipe", stderr: "pipe" });
       if (p.exitCode !== 0) throw new Error(`systemd-run failed: ${p.stderr.toString().trim()}`);

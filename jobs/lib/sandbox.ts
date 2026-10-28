@@ -7,7 +7,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { expand } from "./ledger.ts";
+import { expand, testParallel } from "./ledger.ts";
 
 export const runsDir = () => expand(process.env.ALEPH_RUNS_DIR ?? "~/.aleph/runs");
 const SRT = () => expand(process.env.ALEPH_SRT ?? "~/.aleph/tools/bin/srt");
@@ -112,7 +112,7 @@ export async function sandboxed(dir: string, script: string, o: {
   const inner: Record<string, string> = {
     HOME: join(dir, "home"), CLAUDE_CONFIG_DIR: join(dir, "home/.claude"), TMPDIR: join(dir, "tmp"),
     PATH: `${join(dir, "bin")}:/usr/local/bin:/usr/bin:/bin`, LANG: "C.UTF-8",
-    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1", DISABLE_AUTOUPDATER: "1", ...o.env,
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1", DISABLE_AUTOUPDATER: "1", ALEPH_TEST_PARALLEL: String(testParallel()), ...o.env,
   };
   const pass = process.env.ALEPH_SANDBOX_CMD;
   // srt adds the proxy variables the sandbox needs to the environment it gets, so the

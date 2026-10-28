@@ -63,7 +63,7 @@ describe("a factory run", () => {
     const env = readFileSync(join(fakeLog, "env"), "utf8");
     expect(env).toContain("CLAUDE_CODE_OAUTH_TOKEN=tok-123");
     expect(env).toMatch(/^HOME=.*\/runs\/.*\/home$/m);
-    expect(env).not.toMatch(/^(ALEPH_[A-Z_]+|SIDETONE_[A-Z_]+|GIT_AUTHOR_NAME|XDG_RUNTIME_DIR)=/m);
+    expect(env).not.toMatch(/^(ALEPH_(?!TEST_PARALLEL=)[A-Z_]+|SIDETONE_[A-Z_]+|GIT_AUTHOR_NAME|XDG_RUNTIME_DIR)=/m);
   });
 
   test("the land pushes the tested tree with Item and Job trailers, and the clean main checkout follows", async () => {

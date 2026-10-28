@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "bun test --parallel",
+    "test": "bun test --parallel=${ALEPH_TEST_PARALLEL:-$(nproc)}",
     "typecheck": "tsc"
   },
   "devDependencies": {

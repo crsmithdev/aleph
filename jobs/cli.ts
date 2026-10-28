@@ -9,7 +9,7 @@
 import { jobArgv, route } from "./lib/route.ts";
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, readReview2, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
+import { LOW, allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, readReview2, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
 import { baselineChecks, git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
@@ -89,7 +89,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
       // A factory run's unit is the backstop for its time box: systemd stops the whole cgroup.
       const factory = run.kind === "agent" && run.repo && loadRegistry()[run.repo]?.sandbox;
       const max = factory ? [`--property=RuntimeMaxSec=${Number(process.env.ALEPH_JOB_TIMEOUT ?? 2400) + 3600}`] : [];
-      const p = Bun.spawnSync(["systemd-run", "--user", "--collect", "--quiet", `--unit=aleph-${id}`, `--working-directory=${cwd}`, ...max,
+      const p = Bun.spawnSync(["systemd-run", "--user", "--collect", "--quiet", ...LOW, `--unit=aleph-${id}`, `--working-directory=${cwd}`, ...max,
         `--setenv=PATH=${runPath()}`, ...pass, process.execPath, CLI, "unit", folder], { stdout: "pipe", stderr: "pipe" });
       if (p.exitCode !== 0) {
         updateRun(folder, { state: "failed", reason: `systemd-run failed: ${p.stderr.toString().trim()}`, ended: new Date().toISOString() });
