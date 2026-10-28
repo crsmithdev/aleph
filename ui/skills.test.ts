@@ -251,7 +251,8 @@ test("the view lists skills with bars and links, and the detail links sessions",
   const { body } = await get("/api/skills");
   const html = v.renderSkills(body);
   expect(html).toContain('href="#/skills/aleph%3Apickup"');
-  expect(html).toContain('class="perday"');
+  expect(html).toContain('class="perday spark"');
+  expect(html).toContain('<a class="nml" href="#/skills/aleph%3Apickup">');
   expect(html).not.toContain("<svg");
   expect(html).toContain('data-sort="last"');
   const detail = v.renderSkill((await get("/api/skills/aleph:pickup")).body);
@@ -271,7 +272,8 @@ test("text is escaped and an empty window shows the empty state", () => {
 
 test("the skills table scrolls inside its own wrapper", async () => {
   const html = v.renderSkills((await get("/api/skills")).body);
-  expect(html).toContain('class="tscroll" style="overflow-x:auto;max-width:100%"><table class="tbl');
+  expect(html).toContain('<div class="tscroll"><table class="tbl');
+  expect(html).not.toContain('style="overflow-x');
 });
 
 test("perDayOption has one bar per day with its count, dated from since", () => {
@@ -326,7 +328,7 @@ const three = { days: 30, since: "2026-01-01", skills: [mk("b", 2, "2026-01-02T0
 
 test("renderSkills draws one chart mount per used skill", () => {
   const html = v.renderSkills(three);
-  expect(html.match(/class="perday" role="img"[^>]*data-skill/g)?.length).toBe(3);
+  expect(html.match(/class="perday spark" role="img"[^>]*data-skill/g)?.length).toBe(3);
 });
 
 test("sortSkills orders by uses or by last used, ties by name", () => {
@@ -340,15 +342,24 @@ test("a skills row has one number for uses, three projects at most, and a when t
   const html = v.renderSkills({ ...three, skills: [{ ...mk("a", 4, "2026-01-05T00:00:00Z"), bySlash: 3, byTool: 1, projects: ["p1", "p2", "p3", "p4", "p5"], errors: 2 }] });
   expect(html).toContain('title="3 slash, 1 tool">4</td>');
   expect(html).toContain('title="p1, p2, p3, p4, p5">p1, p2, p3 +2</td>');
-  expect(html).toContain('class="badge');
+  expect(html).toContain('<td class="num bad">2</td>');
+  expect(html).not.toContain('class="badge');
+  expect(v.renderSkills({ ...three, skills: [mk("z", 1, "2026-01-05T00:00:00Z")] })).toContain('<td class="num">0</td>');
   expect(html).toContain("Jan 05");
   expect(html).not.toContain("Sort by");
 });
 
 test("unused skills are listed once, after the used ones", () => {
   const html = v.renderSkills(three);
-  expect(html.match(/class="unused"/g)?.length).toBe(1);
-  expect(html.indexOf('class="unused"')).toBeGreaterThan(html.lastIndexOf('data-name="b"'));
+  expect(html.match(/class="muted"/g)?.length).toBe(1);
+  expect(html).toContain('<div class="sh"><h2>Unused</h2>');
+  expect(html).toMatch(/<h2>Unused<\/h2>[\s\S]*?<\/div><div class="tscroll"><table class="tbl fit">[\s\S]*class="muted"/);
+  expect(html.indexOf('<h2>Unused')).toBeGreaterThan(html.lastIndexOf('data-name="b"'));
+  expect(html.match(/<tbody/g)?.length).toBe(2);
+  expect(html).toContain('name="q"');
+  expect(html).toContain('placeholder="Skill"');
+  for (const bad of ["<style", "colspan", 'style="overflow-x']) expect(html).not.toContain(bad);
+  expect(v.renderFilters({ projects: [] }, { q: "pick" })).toContain('value="pick"');
 });
 
 test("a cwd that is no registry project is not listed as a project", async () => {
@@ -374,4 +385,11 @@ test("the page has a Project and a Window filter, and the columns run text first
   expect(html).toMatch(/data-value="7" aria-pressed="true"/);
   const heads = [...html.match(/<thead>[\s\S]*?<\/thead>/)![0].matchAll(/<th[^>]*>(?:<button[^>]*>)?([A-Za-z ]+)/g)].map((m) => m[1]);
   expect(heads).toEqual(["Skill", "Projects", "Uses", "Sessions", "Errors", "Per day", "Last used"]);
+});
+
+test("the skill detail uses section heads and fit tables", async () => {
+  const detail = v.renderSkill((await get("/api/skills/aleph:pickup")).body);
+  expect(detail).toContain('<div class="sh"><h2>Projects</h2>');
+  expect(detail).not.toContain("<h3>");
+  expect(detail).not.toContain("<style");
 });

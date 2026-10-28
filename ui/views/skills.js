@@ -1,7 +1,7 @@
 // The Skills view: how often each skill ran, from Langfuse. `renderSkills` takes
 // /api/skills, `renderSkill` takes /api/skills/:name; neither touches the DOM.
 // The shell takes one view per module, so the detail route is declared in skill.js.
-import { badge, chart, empty, esc, filterBar, idLink, pageHead, sortHead, span, when } from "../lib.js";
+import { chart, empty, esc, filterBar, idLink, nameLink, numCell, pageHead, sectionHead, sortHead, span, when } from "../lib.js";
 
 export const view = {
   path: "/skills",
@@ -21,7 +21,7 @@ const href = (name) => `#/skills/${encodeURIComponent(name)}`;
 const sessionHref = (id) => `#/sessions/${encodeURIComponent(id)}`;
 
 /** The mount point of a per-day chart; `mountPerDay` draws into it. `key` finds its data again. */
-export const bars = (key, label = "Uses per day") => `<div class="perday" role="img" aria-label="${esc(label)}" data-skill="${esc(key)}"></div>`;
+export const bars = (key, label = "Uses per day") => `<div class="perday spark" role="img" aria-label="${esc(label)}" data-skill="${esc(key)}"></div>`;
 
 /** The ECharts option for per-day counts: one bar per day, the days counted on from `since` (YYYY-MM-DD). */
 export function perDayOption(counts, since) {
@@ -50,21 +50,16 @@ export function mountPerDay(root, d) {
   }
 }
 
-const STYLE = `<style>
-.skills .perday { width: 150px; height: 28px; }
-.skills p > .perday { width: 100%; max-width: 720px; height: 120px; }
-.skills .unused td { color: var(--muted); }
-</style>`;
-const SCROLL = `class="tscroll" style="overflow-x:auto;max-width:100%"`;
+const SCROLL = `class="tscroll"`;
 
 /** The Projects cell: at most three names and "+N", the full list in the title. */
 const projectsCell = (ps) => `<td title="${esc(ps.join(", "))}">${esc(ps.slice(0, 3).join(", "))}${ps.length > 3 ? ` +${ps.length - 3}` : ""}</td>`;
 
-// Columns: name, projects, numbers (uses, sessions, errors as a badge), per-day chart, time last.
+// Columns: name, projects, numbers (uses, sessions, errors in red), per-day chart, time last.
 const row = (s) =>
-  `<tr data-name="${esc(s.name)}"><td>${idLink(s.name, href(s.name))}</td>${projectsCell(s.projects)}` +
+  `<tr data-name="${esc(s.name)}"><td>${nameLink(s.name, href(s.name))}</td>${projectsCell(s.projects)}` +
   `<td class="num" title="${s.bySlash} slash, ${s.byTool} tool">${s.uses}</td><td class="num">${s.sessions}</td>` +
-  `<td class="num">${s.errors ? badge(`${s.errors} ${s.errors === 1 ? "error" : "errors"}`) : ""}</td>` +
+  numCell(s.errors) +
   `<td>${bars(s.name)}</td><td class="time">${esc(when(s.lastUsed))}</td></tr>`;
 
 /** The used skills in the order of `sort` ({key, dir}; dir 1 up, -1 down): key is "name", "uses", "sessions" or "last". Ties by name. */
@@ -85,9 +80,21 @@ const hashFor = (params) => {
 
 /** Wire the filter bar (a change goes to the hash) and the sortable headers: moving the rows of the used tbody, so the charts in them are not redrawn. */
 export function mountSort(root, d, f = {}) {
-  const go = (name, value) => { location.hash = hashFor({ days: f.days, project: f.project, [name]: value }); };
+  const go = (name, value) => { location.hash = hashFor({ days: f.days, project: f.project, q: root.querySelector(".fbar input[name=q]")?.value, [name]: value }); };
   root.onchange = (e) => { if (e.target.matches?.(".fbar select")) go(e.target.name, e.target.value); };
   const body = root.querySelector("tbody.used");
+  const q = root.querySelector('.fbar input[name="q"]');
+  q?.addEventListener("input", () => {
+    const needle = q.value.trim().toLowerCase();
+    let n = 0;
+    for (const r of body?.querySelectorAll("tr[data-name]") ?? []) {
+      const hide = !r.dataset.name.toLowerCase().includes(needle);
+      r.hidden = hide;
+      if (!hide) n++;
+    }
+    const c = root.querySelector(".ph .count");
+    if (c) c.textContent = String(n);
+  });
   if (!d) return;
   const rows = new Map([...(body?.querySelectorAll("tr[data-name]") ?? [])].map((r) => [r.dataset.name, r]));
   let sort = { key: "uses", dir: -1 };
@@ -117,23 +124,27 @@ export function renderFilters(d, f = {}) {
   return filterBar([
     { label: "Project", name: "project", value: projects.includes(f.project) ? f.project : "", options: [{ value: "", label: "All" }, ...projects] },
     { label: "Window", name: "days", value: f.days || "30", options: [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }] },
+    { label: "Search", name: "q", search: true, value: f.q ?? "", placeholder: "Skill" },
   ]);
 }
 
 export function renderSkills(d, f = {}) {
   const used = sortSkills(d.skills);
-  const unused = (d.unused || []).map((n) => `<tr class="unused"><td>${esc(n)}</td><td colspan="6">Unused in the last ${d.days} days</td></tr>`).join("");
   const sort = { key: "uses", dir: -1 }, h = heads(sort);
   const head = `<thead><tr>${h.name}<th>Projects</th>${h.uses}${h.sessions}<th class="num">Errors</th><th>Per day</th>${h.last}</tr></thead>`;
-  const body = used.length || unused
-    ? `<div ${SCROLL}><table class="tbl skills-tbl">${head}<tbody class="used">${used.map(row).join("")}</tbody><tbody>${unused}</tbody></table></div>`
-    : empty("No skill is installed or used.", "Skills come from the plugin's <code>skills/</code> folder.");
-  return `${STYLE}<div class="page skills">${pageHead("Skills", { count: used.length })}${renderFilters(d, f)}${staleNote(d)}` +
-    (used.length ? "" : empty(`No skill was used in the last ${d.days} days.`, "A use is a Skill tool call or a slash command.")) + body + `</div>`;
+  const unused = d.unused || [];
+  const main = used.length ? `<div ${SCROLL}><table class="tbl skills-tbl">${head}<tbody class="used">${used.map(row).join("")}</tbody></table></div>` : "";
+  const rest = unused.length
+    ? sectionHead("Unused", { count: unused.length, aside: `in the last ${d.days} days` }) +
+      `<div ${SCROLL}><table class="tbl fit"><thead><tr><th>Skill</th></tr></thead><tbody>${unused.map((n) => `<tr class="muted"><td>${nameLink(n, href(n))}</td></tr>`).join("")}</tbody></table></div>`
+    : "";
+  const none = used.length || unused.length ? "" : empty("No skill is installed or used.", "Skills come from the plugin's <code>skills/</code> folder.");
+  return `<div class="page skills">${pageHead("Skills", { count: used.length })}${renderFilters(d, f)}${staleNote(d)}` +
+    (used.length || !unused.length ? "" : empty(`No skill was used in the last ${d.days} days.`, "A use is a Skill tool call or a slash command.")) + none + main + rest + `</div>`;
 }
 
 const sessionCell = (id) => (id ? idLink(id.slice(0, 8), sessionHref(id)) : "");
-const table = (head, rows) => `<div ${SCROLL}><table class="tbl"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+const table = (head, rows) => `<div ${SCROLL}><table class="tbl fit"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 
 export function renderSkill(d) {
   // Columns: session, title (prompt or message), project, numbers, time last.
@@ -144,12 +155,12 @@ export function renderSkill(d) {
     `<tr><td>${sessionCell(e.session)}</td><td class="wide" title="${esc(e.message)}">${esc(e.message)}</td><td>${esc(e.project)}</td><td class="time">${esc(when(e.time))}</td></tr>`).join("");
   const tools = d.tools.map((t) => `<tr><td><code>${esc(t.tool)}</code></td><td class="num">${t.count}</td></tr>`).join("");
   const projects = d.projects.map((p) => `<tr><td>${esc(p.project)}</td><td class="num">${p.uses}</td></tr>`).join("");
-  return `${STYLE}<div class="page skills"><p><a href="#/skills">Skills</a></p>` +
+  return `<div class="page skills"><p><a href="#/skills">Skills</a></p>` +
     pageHead(d.name, { count: d.uses, aside: `uses in the last ${d.days} days` }) + staleNote(d) +
-    (d.uses ? `<p>${bars(d.name)}</p>` : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
-    (projects ? `<div class="sh"><h3>Projects</h3></div>${table("<th>Project</th><th class=\"num\">Uses</th>", projects)}` : "") +
-    (sessions ? `<div class="sh"><h3>Sessions</h3></div>${table("<th>Session</th><th>First prompt line</th><th>Project</th><th>Started by</th><th>Time</th>", sessions)}` : "") +
-    (tools ? `<div class="sh"><h3>Tools called after it, in the same turn</h3></div>${table("<th>Tool</th><th class=\"num\">Calls</th>", tools)}` : "") +
-    (errors ? `<div class="sh"><h3>Turns with errors</h3><span class="count">${d.errors.length}</span></div>${table("<th>Session</th><th>Error</th><th>Project</th><th>Time</th>", errors)}` : "") +
+    (d.uses ? `<p style="max-width:720px;height:120px">${bars(d.name).replace('class="perday spark"', 'class="perday" style="width:100%;height:120px"')}</p>` : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
+    (projects ? `${sectionHead("Projects")}${table("<th>Project</th><th class=\"num\">Uses</th>", projects)}` : "") +
+    (sessions ? `${sectionHead("Sessions")}${table("<th>Session</th><th>First prompt line</th><th>Project</th><th>Started by</th><th>Time</th>", sessions)}` : "") +
+    (tools ? `${sectionHead("Tools called after it, in the same turn")}${table("<th>Tool</th><th class=\"num\">Calls</th>", tools)}` : "") +
+    (errors ? `${sectionHead("Turns with errors", { count: d.errors.length })}${table("<th>Session</th><th>Error</th><th>Project</th><th>Time</th>", errors)}` : "") +
     `</div>`;
 }
