@@ -252,6 +252,24 @@ Check runs and probe runs do not count against the 12. They start no `claude`.
 - **Land queue.** One drainer per repo. It is started by each run that becomes ready and by each timer tick, and held by a lock. It takes ready branches in order and merges each with `git merge-tree --write-tree` onto `origin/main`. It checks the merged tree in a sandbox, then commits and pushes it with a plain push. A refused push merges again. The queue keeps `BOUNCES` and `RELANDS` and records each entry's state, so a crash after the push does not re-merge.
 - **Item state.** Derived from the store, the `origin/main` trailers, the ledger and the queue. The precedence is dropped, done, needs-you, stuck, running, open. Only lines in the trailer block count, and a revert of the commit undoes done. Items done before milestone 2, which have no trailer, keep the store's done. Nothing writes the derived state back to the store.
 
+### What dispatches at once, and what only the tick starts (28 Oct)
+
+The tick (`aleph-tick.timer`, every 5 minutes) only starts periodic or scheduled work. Every other transition starts the next step at once, with no wait for the tick: `aleph dispatch` runs in the same process call (a run's end) or detached (`dispatchDetached` in `jobs/lib/factory.ts`, which never fails or holds the caller). `ALEPH_DISPATCH=off` turns the at-once dispatches off, for tests; the tick still dispatches.
+
+Dispatch at once:
+- A run's end, of any kind but `plain`: the unit runs `aleph dispatch`. This covers a land that lands (the goals with `waiting_on: <repo>-<n>` on that job start), a baseline that turns green after a red main whose fix landed, and a cap that frees (live cap, waiting cap) when a run ends or leaves `needs-you`.
+- `aleph issue add`, and `aleph issue edit` of an open goal: adding the `goal` label, removing `waiting_on` (`--waiting-on none`), or setting the status back to open (`--status open`). The UI's `POST /api/issues` runs `aleph issue add`, so the issue form dispatches the same way.
+- A new issue that is not a goal, and a note that answers `needs-chris`: triage (`triageDetached`). A triage run that ends with a `goal` verdict dispatches, from `aleph triage` and from the tick's triage step.
+- `aleph drop` of a job (frees a live slot, a waiting slot, or the hold), `aleph recheck` (the recheck is live, so the hold no longer counts), and `aleph checked`.
+- `aleph resume`.
+
+Only the tick starts:
+- A due date that arrives: an item with `due` after today starts nothing until a tick on or after that date.
+- The nightly sandbox probe, and the dependency sweep that follows a passing probe.
+- The baseline of a main that moved without a land (a push by hand): nothing in the factory sees it until the tick's dispatch checks the new commit.
+- The tick's triage of open issues that nothing triaged at once (a gated or failed triage), and a `waiting_on` whose target became done by a push by hand.
+- The fallback dispatch for anything the above missed.
+
 ### As built (27 Oct)
 
 Where the code departs from the sections above:

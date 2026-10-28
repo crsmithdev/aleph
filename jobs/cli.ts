@@ -7,7 +7,7 @@
  * See docs/specs/2026-09-24-agent-jobs.md.
  */
 import { jobArgv, route } from "./lib/route.ts";
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { LOW, allJobs, allRuns, isLive, isLost, isOpen, jobsDir, loadRegistry, lock, newsLine, readReview2, stamp, updateRun, writeRun, type Entry, type Repo, type Run } from "./lib/ledger.ts";
 import { baselineChecks, git, onMain, removeBranch, unit, updateTodo } from "./lib/unit.ts";
@@ -15,7 +15,7 @@ import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import { triage } from "../todo/lib/triage.ts";
-import { behind, dispatchGoals, dispatchOn, factoryDir, factoryLog, LIVE_CAP, health, hold, lastProbe, paused, probeDue, report, setPaused, triageDetached, triageNow, triageStep } from "./lib/factory.ts";
+import { behind, dispatchDetached, dispatchGoals, factoryDir, factoryLog, LIVE_CAP, health, hold, lastProbe, paused, probeDue, report, setPaused, triageDetached, triageNow, triageStep } from "./lib/factory.ts";
 import { runPath } from "./lib/sandbox.ts";
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
@@ -239,6 +239,7 @@ function checked(): void {
   const why = repo && item !== undefined ? updateTodo(repo, item, "checked by Chris", true) : null;
   if (why) console.error(`warn: issue ${item} not closed: ${why}`);
   out({ job: last!.run.job, name, state: "landed", check: "done" });
+  dispatchDetached();
 }
 
 function read(folder: string, file: string): string | undefined {
@@ -352,6 +353,8 @@ async function recheck(): Promise<void> {
   } finally {
     release!();
   }
+  // The recheck is live now, so the hold it was under no longer counts.
+  dispatchDetached();
   await child?.exited;
 }
 
@@ -387,24 +390,16 @@ async function drop(): Promise<void> {
     const why = repo && todo !== undefined ? updateTodo(repo, todo, `job ${name} dropped: ${reason}`, false) : null;
     if (why) console.error(`warn: issue ${todo} has no note: ${why}`);
     out({ job: last.run.job, name, state: "dropped", reason });
+    dispatchDetached();
   } finally {
     release!();
   }
 }
 
 /** After `aleph issue add` or `edit` of an open goal in a factory repo: a dispatch, so the goal starts at once. It never fails the write. */
-async function dispatchAfterGoal(repo: Repo, item: todos.Item): Promise<void> {
-  if (!dispatchOn() || !repo.sandbox || todos.status(item) !== "open" || !((item.fm.labels as string[]) ?? []).includes("goal")) return;
-  try {
-    // Detached: the dispatch may run the baseline checks for minutes, and the write must not wait for them.
-    mkdirSync(factoryDir(), { recursive: true });
-    const log = openSync(join(factoryDir(), "dispatch.log"), "a");
-    try {
-      Bun.spawn([process.execPath, CLI, "dispatch"], { env: process.env, stdin: "ignore", stdout: log, stderr: log, detached: true }).unref();
-    } finally {
-      closeSync(log);
-    }
-  } catch (e: any) { console.error(`warn: dispatch failed: ${e?.message ?? e}`); }
+function dispatchAfterGoal(repo: Repo, item: todos.Item): void {
+  if (!repo.sandbox || todos.status(item) !== "open" || !((item.fm.labels as string[]) ?? []).includes("goal")) return;
+  dispatchDetached();
 }
 
 /**
@@ -443,6 +438,8 @@ async function todoCmd(): Promise<void> {
   // `none` removes the field; a bad value is refused before anything is written.
   const due = flag("due");
   if (due !== undefined && due !== "none" && !todos.validDate(due)) refuse("--due takes YYYY-MM-DD or none");
+  const status = flag("status");
+  if (status !== undefined && !(todos.STATUSES as readonly string[]).includes(status)) refuse(`--status takes ${todos.STATUSES.join(", ")}`);
   const waitingOn = flag("waiting-on");
   if (waitingOn !== undefined && waitingOn !== "none" && !todos.parseRef(waitingOn)) refuse("--waiting-on takes <repo>-<n> or none");
 
@@ -455,7 +452,7 @@ async function todoCmd(): Promise<void> {
       const w = write("todo: add an item", (doc) => todos.add(doc, title, { priority: flag("priority"), labels: labels ?? t.labels, body, due, waitingOn }), true)!;
       for (const m of t.maybeSame) console.error(`aleph-${m.id} may be the same task: ${m.title}`);
       out({ repo: repo.key, added: w.value.id, title: w.value.title, commit: w.commit, ...(t.maybeSame.length ? { maybeSame: t.maybeSame } : {}) });
-      await dispatchAfterGoal(repo, w.value);
+      dispatchAfterGoal(repo, w.value);
       if (!((w.value.fm.labels as string[]) ?? []).includes("goal")) triageDetached(repo, w.value.id);
       return;
     }
@@ -522,15 +519,16 @@ async function todoCmd(): Promise<void> {
     case "edit": {
       const title = flag("title")?.trim();
       const priority = flag("priority");
-      if (title === undefined && body === undefined && priority === undefined && labels === undefined && due === undefined && waitingOn === undefined) refuse("give --title, --body, --priority, --labels, --due or --waiting-on");
+      if (title === undefined && body === undefined && priority === undefined && labels === undefined && due === undefined && waitingOn === undefined && status === undefined) refuse("give --title, --body, --priority, --labels, --due or --waiting-on (or --status)");
       if (title === "") refuse("the title cannot be empty");
       const w = write(`todo: edit item ${args[0]}`, (doc) => {
         const i = pick(doc);
         todos.edit(i, { title, body, priority, labels, due, waitingOn });
+        if (status !== undefined) todos.setStatus(i, status as todos.Status);
         return i;
       })!;
       out({ repo: repo.key, ...brief(w.value), commit: w.commit });
-      await dispatchAfterGoal(repo, w.value);
+      dispatchAfterGoal(repo, w.value);
       return;
     }
     case "done":
@@ -790,7 +788,7 @@ try {
     case "status": statusCmd(); break;
     case "report": reportCmd(); break;
     case "pause": setPaused(true); out({ paused: true }); break;
-    case "resume": setPaused(false); out({ paused: false }); break;
+    case "resume": setPaused(false); out({ paused: false }); dispatchDetached(); break;
     case "judge": {
       const v = positional[0];
       if (v === "jev" || v === "haiku") setJudgeChoice(v);

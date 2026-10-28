@@ -246,6 +246,7 @@ export async function triageStep(): Promise<{ triaged: Counts; skipped: string[]
   if (paused() || hold()) return { triaged: {}, skipped: [] };
   const t = await triageOpen(sandboxRepos(), doneChecker(), dayCapped);
   factoryLog(`triaged ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
+  if (t.triaged.goal) dispatchDetached();
   return t;
 }
 
@@ -433,7 +434,26 @@ export async function triageNow(repo: Repo, id: number): Promise<{ triaged: Coun
   if (paused() || hold() || (p && !p.ok)) return { triaged: {}, skipped: [] };
   const t = await triageIssue(repo, id, doneChecker(), dayCapped);
   factoryLog(`triaged ${repo.key}-${id}: ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
+  if (t.triaged.goal) dispatchDetached();
   return t;
+}
+
+/**
+ * Start `aleph dispatch` detached, for a transition that may free a slot, clear a hold or ready a
+ * goal: the caller never waits for the baseline checks, and a failure never reaches it. Off when
+ * `ALEPH_DISPATCH=off`; the tick still dispatches.
+ */
+export function dispatchDetached(): void {
+  if (!dispatchOn()) return;
+  try {
+    mkdirSync(factoryDir(), { recursive: true });
+    const log = openSync(join(factoryDir(), "dispatch.log"), "a");
+    try {
+      Bun.spawn([process.execPath, join(import.meta.dir, "..", "cli.ts"), "dispatch"], { env: process.env, stdin: "ignore", stdout: log, stderr: log, detached: true }).unref();
+    } finally {
+      closeSync(log);
+    }
+  } catch {}
 }
 
 /** Start `aleph triage <repo>-<id>` detached, for a factory repo's issue; it never fails the caller. */
