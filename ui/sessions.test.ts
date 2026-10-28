@@ -124,10 +124,12 @@ test("views render, link to Langfuse, and escape", async () => {
 });
 
 test("the sessions tables scroll inside their own wrapper", async () => {
+  const html = await Bun.file(new URL("./index.html", import.meta.url)).text();
+  expect(html).toMatch(/^\.tscroll \{[^}]*overflow-x: auto/m);
   const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
-  expect(v.renderSessions(list)).toMatch(/<div class="tscroll"><table class="tbl">/);
+  expect(v.renderSessions(list)).toContain('<div class="tscroll"><table class="tbl">');
   const s: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
-  expect(v.renderSession(s)).toMatch(/<div class="tscroll"><table class="tbl">/);
+  expect(v.renderSession(s)).toContain('<div class="tscroll"><table class="tbl">');
 });
 
 test("the list has a filter bar, 50 rows and a pager; the turn is a table", async () => {
