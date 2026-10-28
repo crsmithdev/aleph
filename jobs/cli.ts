@@ -191,7 +191,8 @@ async function plain(): Promise<void> {
 async function landJob(): Promise<void> {
   const name = checkName(positional[0]);
   // Two lands of one job at once (the dispatch's batch pull and the leader's) each pass the live check below: it and the start share a lock.
-  const release = await lock(`land-start-${name}`, 30_000);
+  const repoKey = allJobs().find((j) => isOpen(j) && j.at(-1)!.run.name === name)?.at(-1)!.run.repo;
+  const release = await lock(`land-start-${repoKey}-${name}`, 30_000);
   if (!release) refuse(`${name}: another land is starting`);
   let child: ReturnType<typeof Bun.spawn> | undefined;
   try {

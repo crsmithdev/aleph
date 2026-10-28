@@ -11,7 +11,7 @@ import { git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
 import { derive, facts, type Facts } from "./status.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
-import { allJobs, allRuns, expand, isLive, isOpen, loadRegistry, lock, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allJobs, allRuns, expand, isLive, isOpen, LOCK_BUSY, loadRegistry, lock, updateRun, type Entry, type Repo } from "./ledger.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
 const pauseFile = () => join(factoryDir(), "paused");
@@ -79,7 +79,8 @@ export interface Hold { name: string; state: string; reason?: string; line: stri
 export function hold(jobs = allJobs(), except?: string): Hold | null {
   const keys = new Set(sandboxRepos().map((r) => r.key));
   const bad = jobs.filter((j) => {
-    const last = j.at(-1)!;
+    // A land that found the job lock busy did nothing to the job: the run before it counts.
+    const last = j.findLast((e) => !(e.run.kind === "land" && e.run.state === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
     const r = last.run;
     return isOpen(j) && r.repo && keys.has(r.repo) && (r.state === "stuck" || r.state === "failed") && r.job !== except
       && !r.next && !isLive(last.folder);

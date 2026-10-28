@@ -268,3 +268,6 @@ export function readReview2(folder: string): Review2 | undefined {
   if (last.startsWith("ERROR:")) return { verdict: "error", reason: last.slice(6).trim() };
   return parseVerdict(text) ?? { verdict: "error", reason: "no VERDICT line" };
 }
+
+/** The reason of a land that found the job lock taken: it did nothing to the job. */
+export const LOCK_BUSY = "job lock busy";

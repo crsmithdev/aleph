@@ -10,7 +10,7 @@ import * as todos from "../../todo/lib/todo.ts";
 import { readHidden, writeList } from "../../todo/lib/store.ts";
 import { followMain, git } from "./git.ts";
 import { heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
-import { allJobs, allRuns, isLive, isOpen, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { allJobs, allRuns, isLive, isOpen, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
 import { dispatchOn, hold, triageDetached, paused, recordFlake, waitingToLand } from "./factory.ts";
 import { startReview2 } from "./review2.ts";
@@ -301,7 +301,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
   const fail = (reason: string, extra: Partial<Verdict> = {}) => { log(`failed: ${reason}`); return failed(reason, extra); };
 
   const release = await lock(`job-${repo.key}-${run.name}`, 60_000);
-  if (!release) return fail("job lock busy");
+  if (!release) return fail(LOCK_BUSY);
   let releaseRepo: (() => void) | null = null;
   try {
     phase("queued");
@@ -459,6 +459,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         log("main moved; merging again");
         for (const [m, o] of done) {
           if (o.verdict.state !== "failed" || ok.some((i) => i.m === m)) continue;
+          if (failedBefore.has(m)) continue;
           failedBefore.set(m, o);
           members.splice(members.indexOf(m), 1);
         }

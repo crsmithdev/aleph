@@ -184,7 +184,9 @@ beforeAll(() => {
     { name: "count", run: `echo x >> ${join(base, "batch-count")}`, when: ["batch/**"] },
     { name: "retrybad", run: "! { [ -f retry/a.txt ] && [ -f retry/bad.txt ]; }", when: ["retry/**"] },
     { name: "batchbad", run: "! { [ -f batch/a.txt ] && [ -f batch/bad.txt ]; }", when: ["batch/**"] },
-    { name: "race", run: `if [ -f ${join(base, "race-once")} ]; then rm ${join(base, "race-once")}; cd ${join(base, "other")} && git pull -q --rebase origin main && echo $RANDOM > raced && git add raced && git commit -qm race && git push -q origin main; fi`, when: ["race/**"] },
+    { name: "twicebad", run: "! { [ -f twice/a.txt ] && [ -f twice/bad.txt ]; }", when: ["twice/**"] },
+    // race-once holds the number of races still to run; empty means one.
+    { name: "race", run: `if [ -f ${join(base, "race-once")} ]; then n=$(cat ${join(base, "race-once")}); rm ${join(base, "race-once")}; [ "$n" = 2 ] && echo 1 > ${join(base, "race-once")}; cd ${join(base, "other")} && git pull -q --rebase origin main && echo $RANDOM > raced && git add raced && git commit -qm race && git push -q origin main; fi`, when: ["race/**"] },
   ];
   writeFileSync(join(base, "repos.json"), JSON.stringify({
     // The tests land by hand; "auto" is the same clone with the default, landing by itself.
@@ -690,6 +692,15 @@ describe("a batch of lands", () => {
     expect(retry).not.toContain("retrybad failed");
     expect(remoteGit("ls-tree", "--name-only", "main:retry").split("\n")).not.toContain("bad.txt");
     await aleph(["drop", "rbad"]);
+  }, 120_000);
+
+  test("a member that failed in attempt 1 does not take the leader out when main moves twice", async () => {
+    const lands = await landTogether([["tla", "commit twice/a.txt"], ["tlbad", "commit twice/bad.txt"], ["tlr", "commit race/tl.txt"]], () => writeFileSync(join(base, "race-once"), "2\n"));
+    const s = lands.map((l) => state(l.run));
+    expect(s.map((x) => x.state)).toEqual(["landed", "failed", "landed"]);
+    expect(file(lands[0].run, "land.log").split("main moved; merging again").length - 1).toBe(2);
+    expect(remoteGit("ls-tree", "--name-only", "main:twice").split("\n")).toEqual(["a.txt"]);
+    await aleph(["drop", "tlbad"]);
   }, 120_000);
 
   test("a run that breaks the check fails with the check's name; the others land; at most 1 + 2 + 2 checks", async () => {

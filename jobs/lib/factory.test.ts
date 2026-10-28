@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
-import { dispatchGoals } from "./factory.ts";
+import { dispatchGoals, hold } from "./factory.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): void {
@@ -85,4 +85,15 @@ test("a goal that stays open and labelled is started exactly once", async () => 
   expect(calls).toEqual([`fac-${id}`]);
   expect(out.started).toEqual([`fac-${id}`]);
   expect(out.skipped).toEqual([]);
+});
+
+const entry = (kind: string, state: string, reason?: string): any =>
+  ({ id: `x-${kind}-${state}`, folder: join(base, "none", `${kind}-${state}`), run: { kind, job: "j1", name: "n1", repo: "fac", state, started: "2026-10-28T00:00:00Z", ...(reason ? { reason } : {}) } });
+
+test("a land that failed 'job lock busy' does not hold the factory", () => {
+  expect(hold([[entry("agent", "passed"), entry("land", "failed", "job lock busy")]])).toBeNull();
+});
+
+test("a land that failed for another reason holds the factory", () => {
+  expect(hold([[entry("agent", "passed"), entry("land", "failed", "not landed")]])?.name).toBe("n1");
 });
