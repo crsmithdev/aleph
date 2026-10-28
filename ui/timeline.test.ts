@@ -352,6 +352,26 @@ describe("issue events from the work store's git log", () => {
     expect(Date.parse(closed.at)).toBeGreaterThanOrEqual(Date.parse(opened.at));
     expect(Date.parse(closed.at) - Date.now()).toBeLessThan(2000);
   });
+  test("a Chris decided note gives a decided row at its minute; no note, no row; an old note is outside the window", async () => {
+    const stamp = (d: Date) => `${d.toLocaleDateString("sv")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const recent = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 9, 5);
+    const old = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 200, 9, 5);
+    writeList({ key: "fac" }, "decide", (doc) => {
+      const a = add(doc, "decided issue", { now: new Date() }), b = add(doc, "undecided issue", { now: new Date() }), c = add(doc, "old decision", { now: new Date() });
+      a.notes.push(`- ${stamp(recent)}: Chris decided: A: do a`);
+      b.notes.push(`- ${stamp(recent)}: triage: something else`);
+      c.notes.push(`- ${stamp(old)}: Chris decided: A: do a`);
+      return true;
+    });
+    const evs = (await issueEvents()).filter((e) => e.what === "decided");
+    const hit = evs.filter((e) => e.title === "decided issue");
+    expect(hit.length).toBe(1);
+    expect(hit[0].kind).toBe("issue");
+    expect(hit[0].state).toBe("open");
+    expect(hit[0].at).toBe(recent.toISOString());
+    expect(evs.some((e) => e.title === "undecided issue")).toBe(false);
+    expect(evs.some((e) => e.title === "old decision")).toBe(false);
+  });
   test("git log runs once per repo, not once per item", async () => {
     writeList({ key: "fac" }, "many", (doc) => { for (let i = 0; i < 200; i++) add(doc, `bulk ${i}`, { now: new Date() }); return true; });
     const t = performance.now();
