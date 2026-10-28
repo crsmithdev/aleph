@@ -89,7 +89,7 @@ export function propose(repo: Repo, found: Proposal[]): string[] {
     title: titleOf(p), priority: "low", labels: ["proposal", "deps"],
     body: `Proposed by the nightly dependency sweep: \`bun outdated\` shows ${p.name} at ${p.current} in the lockfile and ${p.latest} as the latest.\nRelabel it \`goal\` to have the factory update it.\n`,
   })));
-  if (made.length !== missing.length) return [];
+  if (made.length !== missing.length || made.some((id) => !id)) return [];
   missing.forEach((p, i) => had.set(titleOf(p), made[i]));
   const titles: string[] = [];
   for (const p of fresh) {

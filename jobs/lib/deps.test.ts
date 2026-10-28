@@ -37,6 +37,11 @@ describe("propose", () => {
     if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
   };
 
+  const commits = () => {
+    const p = Bun.spawnSync(["git", "--git-dir", join(base, "items.git"), "rev-list", "--count", "main"], { stdout: "pipe" });
+    return Number(p.stdout.toString().trim());
+  };
+
   beforeAll(() => {
     for (const k of keys) saved[k] = process.env[k];
     base = mkdtempSync(join(tmpdir(), "aleph-deps-"));
@@ -57,7 +62,9 @@ describe("propose", () => {
     const found = [{ name: "left-pad", current: "1.0.0", latest: "1.2.0" }, { name: "a", current: "1.9.0", latest: "1.10.0" }];
     expect(propose(repo, found)).toEqual(["dp1-1 Update left-pad 1.0.0 to 1.2.0", "dp1-2 Update a 1.9.0 to 1.10.0"]);
     expect(readList(repo)!.items.map((i) => i.title)).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update a 1.9.0 to 1.10.0"]);
+    const before = commits();
     expect(propose(repo, found)).toEqual([]);
     expect(readList(repo)!.items).toHaveLength(2);
+    expect(commits()).toBe(before);
   });
 });
