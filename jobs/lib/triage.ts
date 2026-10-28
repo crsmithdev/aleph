@@ -64,7 +64,7 @@ Reply with one JSON object and nothing else, with one of these verdicts:
 
   The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun test\`), or a new test that asserts the end state. There is no \`aleph check\` command: never name one.
 - {"verdict": "close", "reason": "<why>"}: it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
-- {"verdict": "chris", "question": "<one sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a plan or a choice only Chris can make. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
+- {"verdict": "chris", "question": "<one sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>", "waiting_on": "<optional <repo>-<n>: set only when choosing this option means waiting for that issue first>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a plan or a choice only Chris can make. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
 - {"verdict": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.
 `;
 }

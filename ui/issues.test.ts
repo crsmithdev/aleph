@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { readList, writeList } from "../todo/lib/store.ts";
 import { add } from "../todo/lib/todo.ts";
 import * as todos from "../todo/lib/todo.ts";
-import { writeDecision } from "../jobs/lib/decision.ts";
+import { readDecision, writeDecision } from "../jobs/lib/decision.ts";
 import { serve } from "./server.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/contents.js";
@@ -341,9 +341,9 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
     process.env.ALEPH_CLI = wrap;
     try { await fn(); } finally { if (real === undefined) delete process.env.ALEPH_CLI; else process.env.ALEPH_CLI = real; }
   }
-  const ask = (decision: boolean) => writeList({ key: "fac" }, "seed", (doc) => {
+  const ask = (decision: boolean, wait?: string) => writeList({ key: "fac" }, "seed", (doc) => {
     const i = add(doc, "which way", { labels: ["needs-chris"], body: "x" });
-    if (decision) writeDecision(i, { question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] });
+    if (decision) writeDecision(i, { question: "A or B?", options: [{ label: "A", line: "do a", ...(wait ? { waiting_on: wait } : {}) }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] });
     else todos.note(i, "triage: for Chris: Should it be A or B? My recommendation is B, it is smaller.");
     return i.id;
   })!.value;
@@ -360,6 +360,17 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
       expect(i.fm.labels).toEqual(["goal"]);
       expect(i.fm.question).toBeUndefined();
       expect((await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) })).status).toBe(409);
+    });
+  });
+
+  test("an option that waits sets waiting_on in the same write as the goal label", async () => {
+    const n = ask(true, "fac-1");
+    expect(readDecision(item(n))!.options[0].waiting_on).toBe("fac-1");
+    await withRealCli(async () => {
+      const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) });
+      expect(r.status).toBe(200);
+      expect(item(n).fm.labels).toEqual(["goal"]);
+      expect(item(n).fm.waiting_on).toBe("fac-1");
     });
   });
 

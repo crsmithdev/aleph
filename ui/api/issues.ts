@@ -170,16 +170,18 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
   const body: any = await req.json().catch(() => ({}));
   const d = readDecision(item);
   let note: string;
+  let waitingOn: string | undefined;
   if (d) {
     const o = d.options.find((x) => x.label === body?.label);
     if (!o) return Response.json({ error: `no option named ${JSON.stringify(body?.label ?? null)}` }, { status: 400 });
     note = `Chris decided: ${o.label}: ${o.line}`;
+    waitingOn = o.waiting_on;
   } else {
     const rec = body?.recommendation === true ? proseDecision(item.notes.at(-1)).recommendation : null;
     if (!rec) return Response.json({ error: "this issue has no recommendation to approve" }, { status: 400 });
     note = `Chris decided: ${rec}`;
   }
-  const p = Bun.spawn([...cliArgv(), "issue", "decide", repo.key, String(n), note], { stdin: "ignore", stdout: "pipe", stderr: "pipe", env: process.env });
+  const p = Bun.spawn([...cliArgv(), "issue", "decide", repo.key, String(n), ...(waitingOn ? ["--waiting-on", waitingOn] : []), note], { stdin: "ignore", stdout: "pipe", stderr: "pipe", env: process.env });
   const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
   if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
   try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }

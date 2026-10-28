@@ -533,7 +533,7 @@ async function todoCmd(): Promise<void> {
         if (todos.status(i) !== "open" || !ls.includes("needs-chris")) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
         todos.note(i, text);
         clearDecision(i);
-        todos.edit(i, { labels: [...ls.filter((l) => l !== "needs-chris"), ...(ls.includes("goal") ? [] : ["goal"])] });
+        todos.edit(i, { labels: [...ls.filter((l) => l !== "needs-chris"), ...(ls.includes("goal") ? [] : ["goal"])], waitingOn });
         return i;
       })!;
       out({ repo: repo.key, ...brief(w.value), commit: w.commit });
