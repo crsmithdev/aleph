@@ -45,7 +45,7 @@ test("/api/state is JSON with the spec's keys", async () => {
   const res = await at("/api/state");
   expect(res.headers.get("content-type")).toContain("application/json");
   const body: any = await res.json();
-  expect(Object.keys(body).sort()).toEqual(["delivered", "factory", "landing", "needs", "newIssues", "now", "running", "stuck", "velocity", "waiting"]);
+  expect(Object.keys(body).sort()).toEqual(["delivered", "factory", "issues", "landing", "needs", "newIssues", "now", "running", "stuck", "triage", "velocity", "waiting"]);
 });
 
 test("/api/state?project= keeps only that project's jobs", async () => {
@@ -80,7 +80,7 @@ test("/ is the page, /lib.js and /views/now.js its modules", async () => {
   const lib = await at("/lib.js");
   expect(lib.headers.get("content-type")).toContain("javascript");
   expect(await lib.text()).toContain("export function esc");
-  expect(await (await at("/views/now.js")).text()).toContain("export function renderNeeds");
+  expect(await (await at("/views/now.js")).text()).toContain("export function renderJobs");
 });
 
 test("other paths are 404 and writes are refused", async () => {

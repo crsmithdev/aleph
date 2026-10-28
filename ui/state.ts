@@ -32,7 +32,12 @@ export interface Job {
   hidden?: { passed: number; total: number };
   /** Lands: the trailers of the land commit. Needs-you: the trailers the land will write. */
   trailers?: { key: string; value: string }[];
+  /** A triage run: its verdict as `goal`, `closed`, `needs-chris` or `live-check`; none while it runs or when it gave no verdict. */
+  outcome?: string;
 }
+
+/** A new issue of a factory repo, in the shape of the Issue card. */
+export interface NewIssue { id: string; title: string; status: string; href: string; labels: string[]; notes: number; created: string; updated: string }
 
 export interface State {
   now: string;
@@ -48,8 +53,12 @@ export interface State {
   waiting: { repo: string; id: number; title: string }[];
   /** Land runs in progress. */
   landing: number;
-  /** Open issues in factory repos that are not goals and not yet triaged. */
+  /** Open issues in factory repos that are not goals and not yet triaged: the newest NEW_ISSUES. */
+  issues: NewIssue[];
+  /** How many such issues there are in all. */
   newIssues: number;
+  /** Triage runs: those running, then the latest finished. */
+  triage: Job[];
   /** Jobs landed and issues triaged in the last 24 hours, with the 7-day daily average. */
   velocity: { landed: { day: number; avg: number }; triaged: { day: number; avg: number } };
 }
@@ -59,6 +68,9 @@ const SORTED = ["goal", "needs-chris", "triaged", "live-check", "proposal"];
 
 /** The Now page shows this many of the latest lands. */
 const DELIVERED = 10;
+/** So do the Issues and Triage sections. */
+const NEW_ISSUES = 10, TRIAGED = 10;
+const OUTCOME: Record<string, string> = { goal: "goal", close: "closed", chris: "needs-chris", live: "live-check" };
 
 /** The next firing of aleph-tick.timer, or null when systemctl fails or lists no such timer. */
 export function nextTick(): string | null {
@@ -178,8 +190,15 @@ export function state(now = new Date()): State {
   const liveJobs = new Set<string>(), liveItems = new Set<string>();
   const landRuns: Job[] = [];
   const openNames = new Set<string>();
+  const triageRuns: { at: number; job: Job }[] = [];
   for (const runs of jobs) {
     const last = runs.at(-1)!.run;
+    if (last.kind === "triage") {
+      const job = toJob(runs);
+      if (OUTCOME[last.reason ?? ""]) job.outcome = OUTCOME[last.reason!];
+      triageRuns.push({ at: Date.parse(last.state === "running" ? "9999-01-01" : last.ended ?? last.started), job });
+      continue;
+    }
     if (isOpen(runs)) {
       openNames.add(`${last.repo}/${last.name}`);
       if (last.state === "needs-you") needs.push(toJob(runs));
@@ -210,15 +229,18 @@ export function state(now = new Date()): State {
   const landedAt = delivered.map((d) => d.at).filter((t) => t <= t0);
   const triagedAt = allRuns().filter((e) => e.run.kind === "triage" && e.run.state === "done").map((e) => Date.parse(e.run.ended ?? e.run.started)).filter((t) => t <= t0);
 
-  let newIssues = 0;
+  const fresh: NewIssue[] = [];
   for (const repo of Object.values(registry)) {
     if (!repo.sandbox) continue;
     for (const item of list(repo.key)?.items ?? []) {
       const labels = (item.fm.labels as string[]) ?? [];
-      if (status(item) === "open" && !labels.some((l) => SORTED.includes(l))) newIssues++;
+      if (status(item) === "open" && !labels.some((l) => SORTED.includes(l))) {
+        fresh.push({ id: `${repo.key}-${item.id}`, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}`, labels, notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? "") });
+      }
     }
   }
 
+  fresh.sort((a, b) => b.created.localeCompare(a.created));
   const today = runsToday(now.getTime());
   const probe = lastProbe();
   return {
@@ -228,7 +250,8 @@ export function state(now = new Date()): State {
       costToday: today.reduce((a, e) => a + (e.run.cost ?? 0), 0),
       nextTick: nextTick(), probe, health: health(now.getTime()), hold: hold(jobs)?.line ?? null,
     },
-    needs, stuck, running, landing, newIssues,
+    needs, stuck, running, landing, newIssues: fresh.length, issues: fresh.slice(0, NEW_ISSUES),
+    triage: triageRuns.sort((a, b) => b.at - a.at).slice(0, TRIAGED).map((t) => t.job),
     velocity: { landed: rate(landedAt), triaged: rate(triagedAt) },
     // Lands: land runs in progress first, then the latest landed, DELIVERED in all.
     delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).map((d) => d.job)].slice(0, DELIVERED),

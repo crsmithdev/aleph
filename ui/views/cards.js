@@ -68,6 +68,25 @@ export function landCard(j, size = "full", now = new Date().toISOString()) {
     (j.check === "open" || actMessages.has(j.name) ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${actMsg(j.name)}</div>` : ""));
 }
 
+const TRIAGE = { goal: ["Goal", "done"], closed: ["Closed", "done"], "needs-chris": ["Needs Chris", "need"], "live-check": ["Live check", "done"] };
+
+/**
+ * A triage run: a job `j` as the state gives it, kind triage, with `outcome` (goal, closed,
+ * needs-chris, live-check) once it has a verdict. Same style as the land card.
+ */
+export function triageCard(j, size = "full", now = new Date().toISOString()) {
+  const running = j.state === "running";
+  const b = running ? { text: "Triaging", tone: "run" } : TRIAGE[j.outcome] ? { text: TRIAGE[j.outcome][0], tone: TRIAGE[j.outcome][1] } : { text: "No verdict", tone: "quiet" };
+  const took = dur(j.started, j.ended || (running ? now : ""));
+  const ttl = j.item?.title || j.name;
+  if (size === "compact") {
+    return compactCard({ kind: "triage", id: j.name, href: j.href, title: ttl, badge: b, facts: [["Started", j.started ? esc(clock(j.started)) : ""], ["Took", esc(took)], ["Cost", j.cost !== undefined ? esc(money(j.cost)) : ""]] });
+  }
+  return shell("big", "del triage", `<div class="ih">${itemId(j)}${title(j)}${badge(b.text, b.tone)}</div>` +
+    `<dl class="facts">${j.started ? fact("Started", esc(clock(j.started))) : ""}${took ? fact("Took", esc(took)) : ""}${j.cost !== undefined ? fact("Cost", esc(money(j.cost))) : ""}</dl>` +
+    (!running && !j.outcome && j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : ""));
+}
+
 /** A job: { name, item, state, phase, model, started, ended, cost, trailers, href? }. */
 export function jobCard(j, size = "full", now = new Date().toISOString()) {
   const state = j.state || "running";

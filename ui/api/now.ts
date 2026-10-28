@@ -6,7 +6,7 @@ import { state, type State } from "../state.ts";
 export function forProject(s: State, project: string | null): State {
   if (!project) return s;
   const mine = <T extends { repo: string }>(a: T[]) => a.filter((x) => x.repo === project);
-  return { ...s, needs: mine(s.needs), stuck: mine(s.stuck), running: mine(s.running), delivered: mine(s.delivered), waiting: mine(s.waiting) };
+  return { ...s, needs: mine(s.needs), stuck: mine(s.stuck), running: mine(s.running), delivered: mine(s.delivered), triage: mine(s.triage), issues: s.issues.filter((i) => i.id.startsWith(`${project}-`)), waiting: mine(s.waiting) };
 }
 
 export const routes: Routes = {

@@ -99,6 +99,18 @@ describe("state", () => {
     for (const id of ["20261027-000020-a", "20261027-000021-a", "20261027-000022-a", "20261027-000023-a"]) rmSync(join(jobsDir, id), { recursive: true });
   });
 
+  test("triage lists running runs first, then finished ones with their outcome, and keeps them out of the jobs lists; issues lists the new ones", () => {
+    run("20261027-000030-a", { kind: "triage", job: "fac-t1", name: "triage-fac-1", state: "done", reason: "close", todo: 1, started: ago(5), ended: ago(4) });
+    run("20261027-000031-a", { kind: "triage", job: "fac-t2", name: "triage-fac-2", state: "running", todo: 2, started: ago(0.1) });
+    run("20261027-000032-a", { kind: "triage", job: "fac-t3", name: "triage-fac-3", state: "done", reason: "malformed verdict: x", todo: 3, started: ago(7), ended: ago(6) });
+    const s = state(now);
+    expect(s.triage.map((j) => [j.name, j.outcome])).toEqual([["triage-fac-2", undefined], ["triage-fac-1", "closed"], ["triage-fac-3", undefined]]);
+    expect(s.running.map((j) => j.name)).toEqual(["fac-4"]);
+    expect(s.issues.length).toBe(s.newIssues);
+    expect(s.issues.every((i) => i.id.startsWith("fac-") && i.href.startsWith("#/issues/fac/") && i.status === "open")).toBe(true);
+    for (const id of ["20261027-000030-a", "20261027-000031-a", "20261027-000032-a"]) rmSync(join(jobsDir, id), { recursive: true });
+  });
+
   test("landing counts land runs in progress; New counts open unlabelled issues, not goals or labelled ones", () => {
     writeList({ key: "fac" }, "more", (doc) => {
       add(doc, "labelled", { labels: ["triaged"] });
