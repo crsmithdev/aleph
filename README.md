@@ -168,7 +168,7 @@ aleph pause | aleph resume
 
 ## UI
 
-`aleph-ui [--port <n>]` serves the factory UI on `127.0.0.1` only (default `ALEPH_UI_PORT` or 3020) and prints the URL. `GET /` is `ui/index.html`, else `ui/prototype.html`: a sidebar in four groups (Factory, Work, Activity, Memory), hash routes (`#/jobs/aleph-52`), and a project picker whose choice rides along as `?project=<key>` on every route and every `/api` fetch. `GET /api/state` is the JSON of `docs/specs/2026-10-27-ui.md`, read from the ledger, the factory directory and the work store, narrowed by `?project=`; it writes nothing. `GET /api/projects/keys` lists the registry's repos, `GET /api/views` the files under `ui/views/`.
+`aleph-ui [--port <n>]` serves the factory UI on `127.0.0.1` only (default `ALEPH_UI_PORT` or 3020) and prints the URL. `GET /` is `ui/index.html`: a sidebar in four groups (Factory, Work, Activity, Memory), hash routes (`#/jobs/aleph-52`), and a project picker whose choice rides along as `?project=<key>` on every route and every `/api` fetch. `GET /api/state` is the JSON of `docs/specs/2026-10-27-ui.md`, read from the ledger, the factory directory and the work store, narrowed by `?project=`; it writes nothing. `GET /api/projects/keys` lists the registry's repos, `GET /api/views` the files under `ui/views/`.
 
 To add a view, add two files and touch no shared one:
 

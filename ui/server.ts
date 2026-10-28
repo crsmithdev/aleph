@@ -75,7 +75,7 @@ export async function serve(port: number) {
       if (req.method !== "GET") return new Response("method not allowed", { status: 405 });
       if (path === "/api/views") return Response.json(views(join(dir, "views")));
       if (path === "/") {
-        const page = [join(dir, "index.html"), join(dir, "prototype.html")].find(existsSync)!;
+        const page = join(dir, "index.html");
         return new Response(Bun.file(page), { headers: { "content-type": "text/html; charset=utf-8" } });
       }
       if (path === "/lib.js") return new Response(Bun.file(join(dir, "lib.js")), { headers: JS });
