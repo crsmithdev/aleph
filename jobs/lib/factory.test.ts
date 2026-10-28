@@ -1,77 +1,88 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as todos from "../../todo/lib/todo.ts";
 import { writeList } from "../../todo/lib/store.ts";
+import * as todos from "../../todo/lib/todo.ts";
 import { dispatchGoals } from "./factory.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
-const repo = { key: "fac", path: "" };
-let base: string;
-let saved: Record<string, string | undefined>;
-
 function sh(cwd: string, ...args: string[]): void {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
   if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
 }
 
-// Each test gets its own repo, goal list, and factory dir, so no baseline, lock, or item carries over.
-let runs = 0;
-function reset(): void {
-  const n = ++runs;
-  repo.key = `fac${n}`;
-  process.env.ALEPH_FACTORY_DIR = join(base, `factory-${n}`);
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ [repo.key]: { path: join(base, "code"), sandbox: true, autoland: false } }));
-  writeList(repo, "reset", (doc) => {
-    todos.add(doc, "goal", { labels: ["goal"] });
-    return true;
-  }, true);
-}
-const setStatus = (status: "done" | "open") => writeList(repo, "status", (doc) => {
-  todos.setStatus(todos.find(doc, 1)!, status);
-  return true;
-});
+const KEYS = ["ALEPH_ITEMS", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP"];
+let base: string;
+let saved: Record<string, string | undefined>;
 
-beforeAll(() => {
+// Each test gets its own factory repo, work store and registry, so the baseline and the goal list start empty.
+beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-factory-"));
-  saved = Object.fromEntries(["ALEPH_ITEMS", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "XDG_RUNTIME_DIR", "ALEPH_FACTORY_DIR"].map((k) => [k, process.env[k]]));
-  // The items store, with the repo's list in it.
+  saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
+  Object.assign(process.env, {
+    ALEPH_ITEMS: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"),
+    ALEPH_FACTORY_DIR: join(base, "factory"), XDG_RUNTIME_DIR: join(base, "run"), ALEPH_DAY_CAP: "100", ALEPH_LIVE_CAP: "5",
+  });
+  // The factory repo, with an origin the baseline can fetch.
+  sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "repo.git"));
+  sh(base, "git", "clone", "-q", join(base, "repo.git"), join(base, "repo"));
+  sh(join(base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", "init");
+  sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
+  // The work store, empty: a list starts with its first item.
   sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
   sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
   sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(join(base, "items"), "git", "push", "-q", "origin", "main");
-  // The code checkout the baseline checks, with a green main.
-  sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "code.git"));
-  sh(base, "git", "clone", "-q", join(base, "code.git"), join(base, "code"));
-  sh(join(base, "code"), "git", "commit", "-q", "--allow-empty", "-m", "start");
-  sh(join(base, "code"), "git", "push", "-q", "origin", "main");
-  repo.path = join(base, "code");
-  Object.assign(process.env, gitEnv, {
-    ALEPH_ITEMS: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"),
-    XDG_RUNTIME_DIR: join(base, "run"),
-  });
+  writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: join(base, "repo"), sandbox: true, autoland: false } }));
 });
-afterAll(() => {
-  for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+
+afterEach(() => {
+  for (const k of KEYS) {
+    if (saved[k] === undefined) delete process.env[k];
+    else process.env[k] = saved[k];
+  }
   rmSync(base, { recursive: true, force: true });
 });
 
-test("a goal that closes while the baseline runs starts nothing", async () => {
-  reset();
-  const started: string[] = [];
-  // The baseline takes minutes; the goal closes during it, after openGoals() has read it.
-  const checks = async () => { setStatus("done"); return null; };
-  const r = await dispatchGoals(async (_repo, name) => { started.push(name); return null; }, checks);
-  expect(started).toEqual([]);
-  expect(r.started).toEqual([]);
-  expect(r.skipped).toEqual([`${repo.key}-1: closed`]);
+/** A new open item in the store's factory list `fac`, with the given labels; returns its id. */
+const goal = (labels = ["goal"]): number =>
+  writeList({ key: "fac" }, "add a goal", (doc) => todos.add(doc, "ship it", { labels, body: "Do the thing." }).id, true)!.value;
+
+/** Change item `id` in the store, as Chris would while the baseline runs. */
+const change = (id: number, f: (item: todos.Item) => void) =>
+  writeList({ key: "fac" }, "edit", (doc) => { f(todos.find(doc, id)!); return true; });
+
+test("a goal whose label is removed during the baseline is not started", async () => {
+  const id = goal();
+  const calls: string[] = [];
+  let baselined = false;
+  const out = await dispatchGoals(async (_repo, name) => { calls.push(name); return null; }, async () => {
+    baselined = true;
+    await change(id, (item) => todos.edit(item, { labels: [] }));
+    return null;
+  });
+  expect(baselined).toBe(true);
+  expect(calls).toEqual([]);
+  expect(out.skipped).toEqual([`fac-${id}: not a goal`]);
 });
 
-test("a goal still open after the baseline starts once", async () => {
-  reset();
-  const started: string[] = [];
-  const r = await dispatchGoals(async (_repo, name) => { started.push(name); return null; }, async () => null);
-  expect(started).toEqual([`${repo.key}-1`]);
-  expect(r.started).toEqual([`${repo.key}-1`]);
+test("a goal closed during the baseline is not started", async () => {
+  const id = goal();
+  const calls: string[] = [];
+  const out = await dispatchGoals(async (_repo, name) => { calls.push(name); return null; }, async () => {
+    await change(id, (item) => todos.setStatus(item, "done"));
+    return null;
+  });
+  expect(calls).toEqual([]);
+  expect(out.skipped).toEqual([`fac-${id}: not a goal`]);
+});
+
+test("a goal that stays open and labelled is started exactly once", async () => {
+  const id = goal();
+  const calls: string[] = [];
+  const out = await dispatchGoals(async (_repo, name) => { calls.push(name); return null; }, async () => null);
+  expect(calls).toEqual([`fac-${id}`]);
+  expect(out.started).toEqual([`fac-${id}`]);
+  expect(out.skipped).toEqual([]);
 });

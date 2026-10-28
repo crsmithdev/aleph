@@ -100,6 +100,9 @@ export function waitingToLand(jobs = allJobs()): string[] {
   }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started)).map((j) => j.at(-1)!.run.name);
 }
 
+/** An open item labelled `goal`. */
+const isGoal = (item: todos.Item) => todos.status(item) === "open" && ((item.fm.labels as string[]) ?? []).includes("goal");
+
 /** The open items labelled `goal` in each factory repo. */
 export function openGoals(): { repo: Repo; item: todos.Item }[] {
   const out: { repo: Repo; item: todos.Item }[] = [];
@@ -107,19 +110,23 @@ export function openGoals(): { repo: Repo; item: todos.Item }[] {
     let doc: todos.Doc | null = null;
     try { doc = readList(repo); } catch { continue; }
     for (const item of doc?.items ?? []) {
-      if (todos.status(item) === "open" && ((item.fm.labels as string[]) ?? []).includes("goal")) out.push({ repo, item });
+      if (isGoal(item)) out.push({ repo, item });
     }
   }
   return out;
 }
 
-/** Whether the item is still open in the store now: a fresh read, not the one openGoals() made. A store that cannot be read is not open. */
-function stillOpen(repo: Repo, id: number): boolean {
-  try {
-    const doc = readList(repo);
-    const item = doc && todos.find(doc, id);
-    return !!item && todos.status(item) === "open";
-  } catch { return false; }
+/**
+ * Whether item `id` is still an open goal in the store, read now. Dispatch
+ * calls it under the goal lock: `baseline` can take minutes, and the item may
+ * have been closed or had its `goal` label removed since `openGoals` read it.
+ * A store that cannot be read counts as not a goal.
+ */
+function stillGoal(repo: Repo, id: number): boolean {
+  let doc: todos.Doc | null = null;
+  try { doc = readList(repo); } catch { return false; }
+  const item = doc?.items.find((i) => i.id === id);
+  return !!item && isGoal(item);
 }
 
 /**
@@ -204,8 +211,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land):
     const release = await lock(`goal-${name}`, 0);
     if (!release) { skipped.push(`${name}: another dispatch is starting it`); continue; }
     try {
-      // The baseline can take minutes, so the goal may have closed since openGoals(): re-read it under the lock.
-      if (!stillOpen(repo, item.id)) { skipped.push(`${name}: closed`); continue; }
+      if (!stillGoal(repo, item.id)) { skipped.push(`${name}: not a goal`); continue; }
       const jobs = allJobs();
       const open = jobs.find((j) => isOpen(j) && j.at(-1)!.run.name === name);
       if (open) { skipped.push(`${name}: ${open.at(-1)!.run.state}`); continue; }
