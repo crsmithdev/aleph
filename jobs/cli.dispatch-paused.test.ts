@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, jobsDir, other, sh, startScript, stateNow, setup, teardown } from "./cli.helpers";
+import { aleph, base, jobsDir, other, sh, startScript, stateNow, setup, teardown, until } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -13,7 +13,6 @@ describe("a factory run", () => {
     const on = (extra: Record<string, string> = {}) => ({ ALEPH_DISPATCH: "on", ALEPH_START_CMD: startCmd, START_LOG: startLog, ...extra });
     const started = () => (existsSync(startLog) ? readFileSync(startLog, "utf8").trim().split("\n").filter(Boolean) : []);
     const gate = (n: string) => join(base, `gate-${n}`);
-    const until = async (f: () => boolean) => { for (let i = 0; i < 300 && !f(); i++) await Bun.sleep(100); expect(f()).toBe(true); };
     const settled = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`)).every((r) => stateNow(r).state === "passed");
     const ids: number[] = [];
     beforeAll(() => {
@@ -54,12 +53,12 @@ describe("a factory run", () => {
       expect(started()).toEqual([`fac-${add.json.added}`]);
       writeFileSync(gate("f"), "");
       await until(() => settled(add.json.added));
-      // A slow dispatch does not hold the add.
+      // A slow dispatch does not hold the add: the start sleeps well past the bound, which leaves room for a loaded `todo add`.
       const slowCmd = join(base, "slow-cmd");
-      writeFileSync(slowCmd, `#!/bin/bash\nsleep 4\nexec ${startCmd} "$@"\n`, { mode: 0o755 });
+      writeFileSync(slowCmd, `#!/bin/bash\nsleep 20\nexec ${startCmd} "$@"\n`, { mode: 0o755 });
       const t0 = Date.now();
       const slow = await aleph(["todo", "add", "fac", "slow dispatch", "--labels", "goal", "--body", "-"], on({ ALEPH_START_CMD: slowCmd }), `ACTION: hold ${gate("f")}\n`);
-      expect(Date.now() - t0).toBeLessThan(3000);
+      expect(Date.now() - t0).toBeLessThan(10_000);
       expect(slow.code).toBe(0);
       ids.push(slow.json.added);
       await until(() => started().length === 2);
