@@ -28,7 +28,7 @@ beforeAll(async () => {
   writeFileSync(join(repo, "b.txt"), "main moved\n");
   sh(repo, "add", "."); sh(repo, "commit", "-qm", "main moves on");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ r: { path: repo } }));
-  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { needs: "question" }]] as const) {
+  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { needs: "question", question: "which colour?" }], ["stuckjob", { state: "stuck" }]] as const) {
     const folder = join(base, "jobs", `20261027-100000-r-${name}-agent`);
     mkdirSync(folder, { recursive: true });
     writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "agent", state: "needs-you", started: new Date().toISOString(), name, job: name, repo: "r", ...extra }));
@@ -141,4 +141,22 @@ test("POST /api/jobs/:name/answer follows up a question, and refuses anything el
   expect(res.status).toBe(200);
   expect(recorded().at(-1)).toBe("job r asks --spec -");
   expect(readFileSync(`${calls}.stdin`, "utf8")).toBe("Chris: blue");
+});
+
+test("POST /api/answer/:name drops the question run with the answer as its reason, and refuses anything else without running the CLI", async () => {
+  const before = recorded().length;
+  const hdr = { "X-Aleph-UI": "1" };
+  expect((await post("/api/answer/asks", {}, { answer: "blue" })).status).toBe(403);
+  expect((await post("/api/answer/nope", hdr, { answer: "blue" })).status).toBe(404);
+  expect((await post("/api/answer/asks", hdr, { answer: "  " })).status).toBe(400);
+  expect((await post("/api/answer/asks", hdr, {})).status).toBe(400);
+  expect((await post("/api/answer/stuckjob", hdr, { answer: "blue" })).status).toBe(409);
+  expect(recorded().length).toBe(before);
+  const res = await post("/api/answer/asks", hdr, { answer: "blue" });
+  expect(res.status).toBe(200);
+  expect((await res.json()).code).toBe(0);
+  const last = recorded().at(-1)!;
+  expect(last.startsWith("drop asks ")).toBe(true);
+  expect(last).toContain("which colour?");
+  expect(last).toContain("blue");
 });

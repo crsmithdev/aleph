@@ -282,6 +282,8 @@ function attentionRow(i) {
     const [repo, n] = i.id.split(/-(?=\d+$)/);
     buttons.splice(deny, 0, `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason to deny (optional)" aria-label="Reason to deny ${esc(i.id)}" data-repo="${esc(repo)}" data-id="${esc(n)}" value="${esc(denyReasons.get(i.id) ?? "")}">`);
   }
+  const ans = acts.findIndex((a) => a.act === "answer");
+  if (ans >= 0) buttons.splice(ans, 0, `<input class="reason" type="text" name="answer" maxlength="500" placeholder="Your answer" aria-label="Answer for ${esc(i.id)}">`);
   const always = i.always ? `<button class="act always" type="button" data-act="always" data-reason="${esc(i.reason)}" data-action="${esc(i.always.action)}" data-first="${esc(acts[0]?.act ?? "")}" data-label="${esc(i.always.label)}">${esc(i.always.label)}</button>` : "";
   return `<article class="job-card small issue-row ${esc(i.reason)}" data-reason="${esc(i.reason)}"><div class="row-main">` +
     `${i.href ? idLink(i.id, i.href) : `<span class="id">${esc(i.id)}</span>`} ${i.title ? `<span class="t">${esc(i.title)}</span>` : ""}</div>` +

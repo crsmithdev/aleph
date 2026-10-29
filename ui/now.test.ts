@@ -648,3 +648,12 @@ test("Standing permissions is a folded section after Jobs with a Revoke per entr
   expect(h.match(/data-act="revoke"/g)?.length).toBe(2);
   expect(h).not.toContain("None.</p></div></details>");
 });
+
+test("a question attention item renders the Answer button with a text input in the same row", () => {
+  const sm = sample("question");
+  const items = attend({ needs: sm.needs as any, needsIssues: sm.needsIssues }, {}, sm.lessons).items;
+  const h = r.renderJobs({ ...state, needs: [], stuck: [], factory: { ...state.factory, health: [] }, attention: items });
+  const row = h.match(/<article class="job-card small issue-row question"[^]*?<\/article>/)![0];
+  expect(row).toMatch(/data-act="answer"[^>]*data-name="aleph-27"|data-name="aleph-27"[^>]*data-act="answer"/);
+  expect(row).toMatch(/<input [^>]*type="text"[^>]*name="answer"/);
+});

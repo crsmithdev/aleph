@@ -765,7 +765,9 @@ pre.stat b { color: var(--need); }
       } catch (err) { openDiffs.delete(name); panel.innerHTML = `<p class="msg">${esc(err.message)}</p>`; }
       return;
     }
-    if ((act === "land" || act === "drop" || act === "pause" || act === "deny") && !b.classList.contains("ask")) {
+    const answerText = act === "answer" ? b.closest(".actions").querySelector("input[name=answer]")?.value.trim() ?? "" : "";
+    if (act === "answer" && !answerText) { note("Type an answer first"); return; }
+    if ((act === "land" || act === "drop" || act === "pause" || act === "deny" || act === "answer") && !b.classList.contains("ask")) {
       b.classList.add("ask");
       b.textContent = name ? `${label} ${name}? Click again` : `${label}? Click again`;
       clearTimeout(b._t);
@@ -821,7 +823,7 @@ pre.stat b { color: var(--need); }
     b.disabled = true;
     if (name) actMessages.delete(name);
     try {
-      const res = await fetch(name ? `/api/${act}/${encodeURIComponent(name)}` : `/api/${act}`, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(act === "judge" ? { judge: b.dataset.value } : {}) });
+      const res = await fetch(name ? `/api/${act}/${encodeURIComponent(name)}` : `/api/${act}`, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(act === "judge" ? { judge: b.dataset.value } : act === "answer" ? { answer: answerText } : {}) });
       const r = await res.json().catch(() => ({ code: res.status, stderr: res.statusText }));
       if (r.code !== 0) { b.disabled = false; b.classList.remove("ask"); b.textContent = label; note(`${act} failed: ${(r.stderr || r.stdout || `code ${r.code}`).trim().split("\n").pop()}`); return; }
     } catch (err) { b.disabled = false; note(err.message); return; }
