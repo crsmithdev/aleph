@@ -55,7 +55,7 @@ function save(r: Record_): void {
 /** `bun outdated` for `repo`'s origin/main, in a fresh clone in the sandbox. Null when it did not run. */
 async function outdated(repo: Repo): Promise<string | null> {
   const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
-  const dir = makeRunFolder(`deps-${repo.key}`);
+  const dir = makeRunFolder(`deps-${repo.key}-${crypto.randomUUID().slice(0, 8)}`); // its own folder: overlapping ticks must not wipe each other's
   const log = join(dir, "out", "outdated.log");
   try {
     const main = `refs/remotes/origin/${repo.main}`;

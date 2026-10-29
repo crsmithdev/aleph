@@ -616,6 +616,7 @@ async function sandboxChecks(id: string, folder: string, repo: Repo, commit: str
 
 /** The repo's checks, all of them, on `commit` of origin/<main>: null when they pass, else why not. For the factory's baseline. */
 export async function baselineChecks(repo: Repo, commit: string, logs: string): Promise<string | null> {
+  // The fixed name is safe: baseline() in factory.ts holds lock(`baseline-${repo.key}`) around this.
   const dir = makeRunFolder(`baseline-${repo.key}`);
   const ref = `refs/aleph/baseline/${repo.key}`;
   try {
