@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, diagnose, jobsDir, startScript, stateNow, setup, teardown } from "./cli.helpers";
+import { aleph, base, diagnose, dispatching, jobsDir, startScript, starting, stateNow, setup, teardown, unitAlive, until as untilQuiet } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -23,7 +23,9 @@ describe("a factory run", () => {
       startCmd = join(base, "start-cmd");
       startScript(startCmd, jobsDir);
     });
-    beforeEach(() => { rmSync(startLog, { force: true }); });
+    // A run writes its passed state before its run-end dispatch: that dispatch may still start the next goal. Wait it out.
+    const quiet = () => !starting(startLog) && !dispatching() && readdirSync(jobsDir).every((r) => !unitAlive(join(jobsDir, r)));
+    beforeEach(async () => { await untilQuiet(quiet); rmSync(startLog, { force: true }); });
     afterAll(async () => {
       for (const n of ["d", "e", "f"]) writeFileSync(gate(n), "");
       // The released holds finish their runs; wait for that, at most as long as the fixed wait it replaces.
