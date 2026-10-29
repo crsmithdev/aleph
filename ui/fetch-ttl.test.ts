@@ -2,7 +2,8 @@ import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cacheFetches, readList, readLists, uiFetchTtl } from "../todo/lib/store.ts";
+import { add } from "../todo/lib/todo.ts";
+import { cacheFetches, readList, readLists, uiFetchTtl, writeList } from "../todo/lib/store.ts";
 import { routes } from "./api/issues.ts";
 import { state } from "./state.ts";
 
@@ -70,4 +71,32 @@ test("with the cache off, as in the CLI, every read fetches", () => {
   readLists([{ key: "a" }, { key: "b" }]);
   expect(fetches()).toBe(before + 2);
   cacheFetches(uiFetchTtl());
+});
+
+test("a write fetches in the foreground even with the cache on, and builds on the fresh origin/main", () => {
+  cacheFetches(uiFetchTtl());
+  const other = join(base, "other");
+  sh(base, "git", "clone", "-q", join(base, "items.git"), other);
+  writeList({ key: "a" }, "give a a list", (doc) => { add(doc, "one"); return true; }, true);
+  const t0 = Date.now() + 2_000_000;
+  const now = spyOn(Date, "now");
+  now.mockReturnValue(t0);
+  try {
+    const before = fetches();
+    readList({ key: "a" });
+    expect(fetches()).toBe(before + 1);
+    readList({ key: "a" });
+    expect(fetches()).toBe(before + 1);
+    sh(other, "git", "pull", "-q", "origin", "main");
+    sh(other, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "elsewhere");
+    sh(other, "git", "push", "-q", "origin", "main");
+    const head = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: other }).stdout.toString().trim();
+    const w = writeList({ key: "a" }, "write", () => true);
+    expect(w).not.toBeNull();
+    expect(fetches()).toBe(before + 2);
+    const parent = Bun.spawnSync(["git", "rev-parse", `${w!.commit}^`], { cwd: join(base, "items") }).stdout.toString().trim();
+    expect(parent).toBe(head);
+    readList({ key: "a" });
+    expect(fetches()).toBe(before + 2);
+  } finally { now.mockRestore(); }
 });

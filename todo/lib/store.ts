@@ -67,7 +67,14 @@ function fetch(dir: string): void {
     Bun.spawn(["git", "fetch", "-q", "origin", MAIN], { cwd: dir, env: process.env, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
     return;
   }
-  // Every aleph process reads the store, so two fetches at once race on the ref's lock: fetchOrigin retries that.
+  fetchNow(dir);
+}
+
+/**
+ * Fetch origin/main and wait for it, whatever the cache setting. Every aleph process
+ * reads the store, so two fetches at once race on the ref's lock: fetchOrigin retries that.
+ */
+function fetchNow(dir: string): void {
   const r = fetchOrigin(dir, MAIN);
   if (!r.ok) throw new Error(`work store fetch failed: ${r.out}`);
   fetchedAt.set(dir, Date.now());
@@ -128,7 +135,7 @@ export function readLists(repos: Place[]): (Doc | null)[] {
 export function writeList<T>(repo: Place, message: string, change: (doc: Doc) => T | null, create = false): { value: T; commit: string; follow: string | null } | null {
   const dir = storeDir();
   for (let attempt = 1; ; attempt++) {
-    fetch(dir);
+    fetchNow(dir);
     const base = git(dir, "rev-parse", `origin/${MAIN}`).out;
     const found = load(dir, base, repo.key);
     if (found === null && !create) throw new Error(`the work store has no list for ${repo.key}`);
@@ -166,7 +173,7 @@ export function readHidden(repo: Place, id: number): Record<string, string> {
 export function writeHidden(repo: Place, id: number, files: Record<string, string>): { commit: string; follow: string | null } {
   const dir = storeDir();
   for (let attempt = 1; ; attempt++) {
-    fetch(dir);
+    fetchNow(dir);
     const base = git(dir, "rev-parse", `origin/${MAIN}`).out;
     const put = Object.fromEntries(Object.entries(files).map(([n, text]) => [`${hiddenDir(repo.key, id)}/${n}`, text]));
     const tree = treeWithFiles(dir, `${base}^{tree}`, put);
