@@ -124,6 +124,23 @@ function toolList(tools) {
   return `<div class="tools">${fold}${late.map(toolLine).join("")}</div>`;
 }
 
+/** The tool calls with the assistant's text blocks between them: each text follows the calls that started before it. */
+function work(t) {
+  const texts = t.texts ?? [];
+  if (!texts.length) return toolList(t.tools);
+  const tools = t.tools ?? [];
+  const at = (x) => Date.parse(x) || 0;
+  let i = 0, out = "";
+  for (const x of texts) {
+    const j = tools.findIndex((c, k) => k >= i && at(c.start) > at(x.at));
+    const upto = j < 0 ? tools.length : j;
+    out += toolList(tools.slice(i, upto));
+    i = upto;
+    out += `<div class="msg say md">${clip(x.text, md(x.text))}</div>`;
+  }
+  return out + toolList(tools.slice(i));
+}
+
 /** One turn: its muted line (linked to the turn page), the system chips, the prompt, the tool calls, the reply. */
 export function chatTurn(id, t) {
   const { system, text } = systemParts(t.prompt);
@@ -133,7 +150,7 @@ export function chatTurn(id, t) {
   return `<section class="turn" id="turn-${t.n}"><p class="tline">${meta}</p>` +
     (system.length ? `<div class="sys">${system.map(sysChip).join("")}</div>` : "") +
     (text ? `<div class="msg user md">${clip(text, md(text))}</div>` : "") +
-    toolList(t.tools) +
+    work(t) +
     (out ? `<div class="msg reply md">${clip(out, md(out))}</div>` : `<p class="msg reply quiet">No reply recorded.</p>`) + `</section>`;
 }
 

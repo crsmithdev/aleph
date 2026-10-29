@@ -559,3 +559,43 @@ describe("fetchObservations", () => {
     } finally { server.stop(true); }
   });
 });
+
+describe("obs hook text blocks", () => {
+  test("Stop sends one text event per assistant text block, in order, and skips thinking", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "aleph-txt-"));
+    const transcript = join(dir, "t.jsonl");
+    const a = (id: string, sec: number, block: any) => ({ type: "assistant", isSidechain: false, requestId: id, timestamp: `2026-09-03T10:00:0${sec}.000Z`, message: { role: "assistant", model: "claude-fable-5-1", usage: { input_tokens: 1, output_tokens: 1 }, content: [block] } });
+    const result = (sec: number) => ({ type: "user", isSidechain: false, timestamp: `2026-09-03T10:00:0${sec}.000Z`, message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t", content: "ok" }] } });
+    const lines = [
+      { type: "user", promptId: "pt", isSidechain: false, timestamp: "2026-09-03T10:00:00.000Z", message: { role: "user", content: "hi" } },
+      a("r1", 1, { type: "thinking", thinking: "" }),
+      a("r1", 1, { type: "text", text: "first" }),
+      a("r1", 2, { type: "tool_use", id: "t", name: "Bash", input: {} }),
+      result(3),
+      a("r2", 4, { type: "text", text: "second" }),
+      a("r2", 5, { type: "tool_use", id: "t", name: "Bash", input: {} }),
+      result(6),
+      a("r3", 7, { type: "text", text: "third" }),
+    ];
+    writeFileSync(transcript, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+    const posted: any[] = [];
+    const server = Bun.serve({ port: 0, fetch: async (req) => { posted.push(await req.json()); return new Response("{}"); } });
+    const spool = mkdtempSync(join(tmpdir(), "aleph-txt-spool-"));
+    const proc = Bun.spawn(["bun", join(HOOKS, "obs.ts")], {
+      stdin: new TextEncoder().encode(JSON.stringify({ session_id: "s-txt", cwd: "/tmp/proj", hook_event_name: "Stop", prompt_id: "pt", transcript_path: transcript, last_assistant_message: "third" })),
+      env: { ...process.env, LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SPOOL: spool },
+      stdout: "pipe", stderr: "pipe",
+    });
+    expect(await proc.exited).toBe(0);
+    server.stop();
+    const spans = posted[0].resourceSpans[0].scopeSpans[0].spans;
+    const attr = (span: any, key: string) => span.attributes.find((x: any) => x.key === key)?.value?.stringValue;
+    const turn = spans.find((s: any) => s.name === "turn");
+    const texts = spans.filter((s: any) => s.name === "text");
+    expect(texts.map((s: any) => attr(s, "langfuse.observation.output"))).toEqual(["first", "second", "third"]);
+    expect(texts.map((s: any) => s.startTimeUnixNano)).toEqual([...texts.map((s: any) => s.startTimeUnixNano)].sort());
+    for (const t of texts) expect(t.parentSpanId).toBe(turn.spanId);
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(spool, { recursive: true, force: true });
+  });
+});

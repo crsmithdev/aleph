@@ -196,6 +196,29 @@ function generations(transcriptPath: string, promptId: string, finalMessage: str
   return out;
 }
 
+/**
+ * One event per assistant text block in this turn, in transcript order, at the
+ * block's timestamp, so the chat view can show what Claude said between tool
+ * calls. Thinking blocks are stored empty and are skipped.
+ */
+function textBlocks(transcriptPath: string, promptId: string, finalMessage: string): Span[] {
+  const out: Span[] = [];
+  let previous = 0;
+  for (const entry of settledEntries(transcriptPath, promptId, finalMessage)) {
+    const at = Date.parse(entry.timestamp ?? "") || previous || now;
+    previous = at;
+    if (entry.type !== "assistant" || !Array.isArray(entry.message?.content)) continue;
+    for (const block of entry.message.content) {
+      if (block.type !== "text" || typeof block.text !== "string" || !block.text.trim()) continue;
+      out.push(span("text", "event", at, {
+        "langfuse.observation.output": truncate(block.text),
+        "langfuse.observation.metadata.seq": out.length,
+      }, { parent: turnSpanId, end: at }));
+    }
+  }
+  return out;
+}
+
 const spans: Span[] = [];
 const scores: Score[] = [];
 
@@ -257,6 +280,7 @@ switch (event) {
     spans.push(turnSpan(start, message, failed ? (input.error ? `${input.error}: ${message}` : message || "StopFailure") : undefined, tag));
     // a failed turn's message is the API error, which never reaches the transcript, so do not wait for it
     if (input.transcript_path) spans.push(...generations(input.transcript_path, input.prompt_id, failed ? "" : message));
+    if (input.transcript_path && !failed) spans.push(...textBlocks(input.transcript_path, input.prompt_id, message));
     break;
   }
 

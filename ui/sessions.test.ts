@@ -25,7 +25,14 @@ const OBS: Record<string, any[]> = {
     { id: "o3", parentObservationId: "o0", type: "SPAN", name: "vault-recall", metadata: { candidates: 5, asked: 3, kept: 1 }, startTime: iso(30) },
     { id: "o4", parentObservationId: "o0", type: "GENERATION", name: "m", model: "claude-opus", startTime: iso(27) },
   ],
-  t2: [], t3: [],
+  t2: [
+    { id: "p0", type: "AGENT", name: "turn", startTime: iso(20) },
+    { id: "p1", parentObservationId: "p0", type: "EVENT", name: "text", output: "first words", startTime: iso(19.9) },
+    { id: "p2", parentObservationId: "p0", type: "TOOL", name: "Grep", input: "x", startTime: iso(19.8) },
+    { id: "p3", parentObservationId: "p0", type: "EVENT", name: "text", output: "second words", startTime: iso(19.7) },
+    { id: "p4", parentObservationId: "p0", type: "TOOL", name: "Glob", input: "y", startTime: iso(19.6) },
+    { id: "p5", parentObservationId: "p0", type: "EVENT", name: "text", output: "x".repeat(600), startTime: iso(19.5) },
+  ], t3: [],
 };
 let lf: ReturnType<typeof Bun.serve>;
 let hits: string[] = [];
@@ -354,4 +361,16 @@ test("the sessions list's first prompt skips system text", async () => {
     const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
     expect(list.sessions.find((s: any) => s.id === "s3").firstPrompt).toBe("the real ask");
   } finally { TRACES.splice(-2); }
+});
+
+test("the chat shows the assistant's text blocks between the tool rows, not the final reply twice", async () => {
+  const d = await chat("s1");
+  expect(d.turns[1].texts.map((t: any) => t.text)).toEqual(["first words", "second words"]);
+  const h = v.chatTurn("s1", d.turns[1]);
+  const at = (s: string) => h.indexOf(s);
+  expect(at("first words")).toBeGreaterThan(-1);
+  expect(at("first words")).toBeLessThan(at('<span class="tn">Grep</span>'));
+  expect(at('<span class="tn">Grep</span>')).toBeLessThan(at("second words"));
+  expect(at("second words")).toBeLessThan(at('<span class="tn">Glob</span>'));
+  expect(at('<span class="tn">Glob</span>')).toBeLessThan(at('<div class="msg reply md">'));
 });

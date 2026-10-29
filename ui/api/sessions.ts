@@ -133,13 +133,21 @@ function toolCalls(obs: any[]) {
   const agents = new Set(obs.filter((o) => isType(o, "agent") && o.name !== "turn").map((o) => o.id));
   const spanOf = new Map([...pairAgents(obs)].map(([a, t]) => [t, a]));
   const call = (o: any): any => ({
-    name: o.name, args: argSummary(o.input), input: pretty(o.input), output: text(o.output),
+    name: o.name, start: o.startTime, args: argSummary(o.input), input: pretty(o.input), output: text(o.output),
     error: o.level === "ERROR" ? o.statusMessage || "error" : null, durationMs: durationMs(o),
     children: spanOf.has(o.id) ? list((p) => p === spanOf.get(o.id)) : [],
   });
   const list = (under: (parent: string | undefined) => boolean) =>
     obs.filter((o) => isType(o, "tool") && under(o.parentObservationId)).sort((a, b) => ms(a.startTime) - ms(b.startTime)).map(call);
   return list((p) => !agents.has(p as string));
+}
+
+/** A turn's assistant text blocks (hooks/obs.ts writes each as an event named `text`) in time order; the final reply, which the turn's output already holds, is left out. */
+function textBlocks(obs: any[], output: string) {
+  return obs.filter((o) => isType(o, "event") && o.name === "text" && text(o.output).trim())
+    .sort((a, b) => ms(a.startTime) - ms(b.startTime) || (a.metadata?.seq ?? 0) - (b.metadata?.seq ?? 0))
+    .map((o) => ({ at: o.startTime, text: text(o.output) }))
+    .filter((t) => t.text.trim() !== output.trim());
 }
 
 export const routes: Routes = {
@@ -219,6 +227,7 @@ export const routes: Routes = {
         durationMs: durationMs(t),
         cost: t.totalCost ?? 0,
         tools: toolCalls(all[i]),
+        texts: textBlocks(all[i], text(t.output)),
       }));
       // A factory worker's session is one turn Langfuse prices at 0; the ledger has its cost, as on the list.
       const job = jobs().get(params.id);
