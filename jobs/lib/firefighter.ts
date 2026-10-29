@@ -17,6 +17,7 @@ import { verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
 import { factoryDir, factoryLog, factoryRepos, redBaselines, writeRerun } from "./factory.ts";
 import { drop as dropJob, land as landJob, refusal } from "./transitions.ts";
+import { handed, logStanding, readStanding, standing } from "./standing.ts";
 
 export const FIREFIGHTER_MODEL = "claude-opus-5-5";
 /** The most actions one run may take; the rest are refused. */
@@ -31,8 +32,14 @@ const stateFile = () => join(factoryDir(), "firefighter.json");
 export const SECURITY_PATHS = ["hooks/", "jobs/lib/sandbox.ts", "jobs/lib/gate.ts", "jobs/lib/review2-browser.ts"];
 
 export type EventKind = "needs-you" | "stuck" | "failed" | "loop" | "red" | "needs-chris" | "lost";
-/** One thing the snapshot found. `key` is what makes it new: it changes when the thing does. */
-export interface Event { key: string; kind: EventKind; repo: string; job?: string; item?: number; line: string }
+/**
+ * One thing the snapshot found. `key` is what makes it new: it changes when the thing does.
+ * `reason` is the reason code it waits for; `handed` marks one whose reason Chris handed to the firefighter (standing.json).
+ */
+export interface Event { key: string; kind: EventKind; repo: string; job?: string; item?: number; line: string; reason?: string; handed?: boolean }
+
+/** Marks an event whose reason Chris handed to the firefighter, and says so on its line. */
+const hand = (e: Event): Event => (e.reason && handed(e.reason) ? { ...e, handed: true, line: `${e.line} (handed to you by Chris)` } : e);
 
 /** What the snapshot sees now, in factory repos. */
 export function snapshot(now = Date.now()): Event[] {
@@ -46,7 +53,8 @@ export function snapshot(now = Date.now()): Event[] {
     const item = issueOf(j);
     const at = { repo: r.repo, job: r.name, ...(item !== undefined ? { item } : {}) };
     if (r.state === "needs-you" || r.state === "stuck" || r.state === "failed") {
-      events.push({ key: `${r.state}:${r.repo}/${last.id}`, kind: r.state, ...at, line: `${r.name} is ${r.state}${r.needs ? ` (${r.needs})` : ""}${r.reason ? `: ${r.reason}` : ""}` });
+      const reason = r.state === "needs-you" ? r.needs : undefined;
+      events.push(hand({ key: `${r.state}:${r.repo}/${last.id}`, kind: r.state, ...at, ...(reason ? { reason } : {}), line: `${r.name} is ${r.state}${r.needs ? ` (${r.needs})` : ""}${r.reason ? `: ${r.reason}` : ""}` }));
     } else if (r.state === "running" && isLost(last.folder)) {
       events.push({ key: `lost:${r.repo}/${last.id}`, kind: "lost", ...at, line: `${r.name}: its ${r.kind} run ${last.id} is running, but its process is gone` });
     }
@@ -68,7 +76,8 @@ export function snapshot(now = Date.now()): Event[] {
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
       if (todos.status(item) !== "open" || !store.needsChris(item)) continue;
-      events.push({ key: `needs-chris:${repo.key}-${item.id}:${item.notes.length}`, kind: "needs-chris", repo: repo.key, item: item.id, line: `${repo.key}-${item.id} ${item.title} waits for Chris: ${item.notes.at(-1) ?? ""}` });
+      const reason = reasonOf(item);
+      events.push(hand({ key: `needs-chris:${repo.key}-${item.id}:${item.notes.length}`, kind: "needs-chris", repo: repo.key, item: item.id, ...(reason ? { reason } : {}), line: `${repo.key}-${item.id} ${item.title} waits for Chris: ${item.notes.at(-1) ?? ""}` }));
     }
   }
   return events;
@@ -153,16 +162,20 @@ function context(e: Event, jobs: Job[]): string {
 }
 
 export function prompt(events: Event[], jobs = allJobs()): string {
+  const handedReasons = Object.keys(readStanding()).filter((r) => handed(r));
+  const handedRule = handedReasons.length
+    ? `\n- Chris has handed these reasons to you: ${handedReasons.join(", ")}. Decide every event marked handed yourself: land, drop, clear-needs-chris, edit-goal or close, by the rules above; do not send it back to Chris.`
+    : "";
   return `You are the factory's firefighter. You read what went wrong and say what to do; the code does it. You have read-only tools (Read, Grep, Glob, and Bash for \`aleph jobs\`, \`aleph issue show|list\`, \`aleph report\`, \`git log|show|diff\`). Change nothing yourself.
 
 # The rules
 
-- Land a held run once both reviews have a verdict and say land, unless its diff changes a held security path (${SECURITY_PATHS.join(", ")}, or REVIEW2_SANDBOX in jobs/lib/review2.ts). The code refuses those and sends them to Chris.
+- Land a held run once both reviews have a verdict and say land, unless its diff changes a held security path (${SECURITY_PATHS.join(", ")}, or REVIEW2_SANDBOX in jobs/lib/review2.ts). The code refuses those and sends them to Chris${standing("firefighter")?.action === "land" ? ", except that Chris has let you land them" : ""}.
 - Drop a run a reviewer sent back, with the reviewer's reason as the drop's reason: it becomes the next run's note.
 - A land with a merge conflict, a run that loops with no commit, or a goal that is already met on main is fixed without Chris: drop the first two; for a goal already met on main use close (it drops the open job and marks the issue done), never sent to Chris.
-- A how-to-build question (code structure, which module, naming, test shape, whether to wait for an issue) is yours to decide: clear-needs-chris with the decision. A product choice (what the product does for Chris, what he sees, what it costs, what comes first) stays with Chris.
+- A how-to-build question (code structure, which module, naming, test shape, whether to wait for an issue) is yours to decide: clear-needs-chris with the decision. A product choice (what the product does for Chris, what he sees, what it costs, what comes first) stays with Chris, unless Chris has handed its reason to you.
 - File every follow-up you find as an issue with add.
-- At most ${MAX_ACTIONS} actions. No action is a fine answer when nothing needs doing.
+- At most ${MAX_ACTIONS} actions. No action is a fine answer when nothing needs doing.${handedRule}
 
 # What is new since the last look
 
@@ -200,6 +213,9 @@ export function securityPath(repo: Repo, branch: string | undefined): string | n
 
 /** Whether a `needs-chris` item's question is a product choice: triage asked it (its `chris` verdict is the product kind). */
 export const isProductChoice = (item: todos.Item): boolean => item.notes.some((n) => /\btriage: for Chris:/.test(n));
+
+/** The reason code a `needs-chris` item waits for: its `fm.reason`, or `decision` for a triage question with none. */
+export const reasonOf = (item: todos.Item): string | null => (typeof item.fm.reason === "string" ? item.fm.reason : isProductChoice(item) ? "decision" : null);
 
 /** How actions reach the factory; each returns the refusal, or null. Tests replace land and drop. */
 export interface Ports {
@@ -241,7 +257,10 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     if (!r2 || r2.verdict === "pending" || r2.verdict === "error") return { refused: `${describe(a)}: review2 has no verdict yet` };
     if (r2.verdict !== "land") return { refused: `${describe(a)}: review2 says ${r2.verdict}${r2.reason ? ` (${r2.reason})` : ""}` };
     const held = securityPath(repo, agent.run.branch);
-    if (held) {
+    // Chris let the firefighter land held security paths: the check is skipped, and the land is logged. An unknown branch still goes to Chris.
+    const granted = held !== null && held !== "unknown" && standing("firefighter")?.action === "land";
+    if (held && granted) logStanding("firefighter", "land", a.job);
+    if (held && !granted) {
       const sentence = held === "unknown"
         ? `${a.job} cannot be checked for held security paths, as its branch is gone, so it needs you to land or drop it.`
         : `${a.job} changes ${held}, a held security path, so it needs your review before it lands.`;
@@ -277,7 +296,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   }
   if (a.do === "clear-needs-chris") {
     if (!store.needsChris(item)) return { refused: `${describe(a)}: it is not labelled needs-chris` };
-    if (isProductChoice(item)) return { refused: `${describe(a)}: its question is a product choice, which is Chris's` };
+    if (isProductChoice(item) && !handed("decision")) return { refused: `${describe(a)}: its question is a product choice, which is Chris's` };
     const why = await refusal(async () => issues.decide(repo, a.n, `firefighter decided: ${a.note}`));
     return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
   }

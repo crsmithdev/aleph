@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { labels as storeLabels, readList, writeList } from "../../todo/lib/store.ts";
 import { firefighterStep } from "./factory.ts";
-import { parseReply, snapshot, type Ports } from "./firefighter.ts";
+import { parseReply, prompt, snapshot, type Ports } from "./firefighter.ts";
 import { readRun, stamp, writeRun, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -241,6 +241,63 @@ test("a paused factory takes no snapshot and starts no run", async () => {
   writeFileSync(join(process.env.ALEPH_FACTORY_DIR!, "paused"), "x\n");
   expect(await firefighterStep(ports())).toBeNull();
   expect(calls()).toBe(0);
+});
+
+/** Chris's standing permissions for this test's factory directory. */
+const standingFile = (s: object) => {
+  mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
+  writeFileSync(join(process.env.ALEPH_FACTORY_DIR!, "standing.json"), JSON.stringify(s));
+};
+const FIREFIGHTER = { action: "firefighter", at: "2026-10-28T00:00:00.000Z" };
+
+test("a decision handed to the firefighter: its product choice is cleared, its event is marked handed and named in the prompt", async () => {
+  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"] }]);
+  standingFile({ decision: FIREFIGHTER });
+  const e = snapshot().find((x) => x.kind === "needs-chris");
+  expect(e).toMatchObject({ handed: true, reason: "decision" });
+  expect(e?.line.endsWith("(handed to you by Chris)")).toBe(true);
+  expect(prompt([e!])).toContain("Chris has handed these reasons to you: decision.");
+  expect(prompt([e!])).toContain("Decide every event marked handed yourself");
+  reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }]);
+  const f = await firefighterStep(ports());
+  expect(f?.refused).toEqual([]);
+  expect(f?.applied).toEqual([`clear-needs-chris ${key}-1: page A`]);
+  expect(storeLabels(item(1))).toContain("goal");
+  expect(storeLabels(item(1))).not.toContain("needs-chris");
+});
+
+test("without a handed reason a product choice is still refused, and the prompt has no handed rule", () => {
+  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"] }]);
+  const e = snapshot().find((x) => x.kind === "needs-chris");
+  expect(e?.handed).toBeUndefined();
+  expect(e?.line.endsWith("(handed to you by Chris)")).toBe(false);
+  expect(prompt([e!])).not.toContain("Chris has handed these reasons");
+});
+
+test("a firefighter land standing lets the firefighter land a held run on a security path, and logs it", async () => {
+  fresh([{ title: "held", labels: ["goal"] }]);
+  branch(`b${n}`, "hooks/x.ts");
+  const folder = held(`b${n}`);
+  standingFile({ firefighter: { action: "land", at: "2026-10-28T00:00:00.000Z" } });
+  reply([{ do: "land", job: `${key}-1` }]);
+  const f = await firefighterStep(ports());
+  expect(landed).toEqual([`${key}-1`]);
+  expect(f?.chris).toEqual([]);
+  expect(existsSync(join(folder, "needs-chris"))).toBe(false);
+  expect(told).toEqual([]);
+  expect(log()).toContain("standing: firefighter: land");
+});
+
+test("the same held hooks/ run without a land standing goes to Chris", async () => {
+  fresh([{ title: "held", labels: ["goal"] }]);
+  branch(`b${n}`, "hooks/x.ts");
+  const folder = held(`b${n}`);
+  reply([{ do: "land", job: `${key}-1` }]);
+  const f = await firefighterStep(ports());
+  expect(landed).toEqual([]);
+  expect(f?.chris.length).toBe(1);
+  expect(existsSync(join(folder, "needs-chris"))).toBe(true);
+  expect(log()).not.toContain("standing: firefighter: land");
 });
 
 test("parseReply reads each action, and names a malformed one", () => {
