@@ -17,7 +17,10 @@ export type Job = Entry[];
 /** The files a run folder may hold that a reader of the job asks for. */
 export type RunFile = "spec.md" | "command.txt" | "result.md" | "review.md" | "review2.md" | "checks.log" | "land.log" | "stderr.log" | "needs-chris" | "rescued" | "batch.json";
 
-const nameIs = (name: string, repo?: string | null) => (j: Job) => j.at(-1)!.run.name === name && (!repo || j.at(-1)!.run.repo === repo);
+/** A facts run belongs to the landed job but is not its state: names and states look past it. */
+const notFacts = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts") ?? j.at(-1)!;
+
+const nameIs = (name: string, repo?: string | null) => (j: Job) => notFacts(j).run.name === name && (!repo || notFacts(j).run.repo === repo);
 
 /** The open job called `name` (in `repo`, when given). A name has one open job at most. */
 export const openJob = (name: string, repo?: string | null, jobs = allJobs()): Job | undefined => jobs.findLast((j) => isOpen(j) && nameIs(name, repo)(j));
@@ -37,8 +40,8 @@ export const jobById = (id: string, jobs = allJobs()): Job | undefined => jobs.f
 /** The repo issue the job works on: the latest run that names one. */
 export const issue = (j: Job): number | undefined => j.findLast((e) => e.run.todo !== undefined)?.run.todo;
 
-/** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts. */
-export const lastReal = (j: Job): Entry => j.findLast((e) => !(e.run.kind === "land" && e.run.state === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
+/** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts; a facts run is not the job's state. */
+export const lastReal = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts" && !(e.run.kind === "land" && e.run.state === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
 
 /** The job's state: that of the run that counts. */
 export const stateOf = (j: Job): State => lastReal(j).run.state;

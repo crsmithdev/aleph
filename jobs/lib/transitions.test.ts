@@ -127,6 +127,13 @@ describe("checked", () => {
     expect(readRun(folder)!.check).toBe("done");
     expect(() => checked("x")).toThrow("x has no open check");
   });
+
+  test("works for a land followed by a facts run", () => {
+    const folder = run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined, state: "landed", check: "open" });
+    run("20261028-000002-x-facts", "20261028-000001-x-agent", { repo: undefined, name: "facts-x", kind: "facts", state: "done" });
+    expect(checked("x").check).toBe("done");
+    expect(readRun(folder)!.check).toBe("done");
+  });
 });
 
 test("refusal answers a port: the message of a refusal, or null", async () => {

@@ -779,3 +779,14 @@ test("episodeStep writes the page of a done goal and logs its title", async () =
     expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain(`episodes fac-${id} ship it\n`);
   } finally { v.done(); }
 });
+
+test("report prints the kept and rejected lines of a facts run, once", () => {
+  const folder = join(base, "jobs", "20261028-000001-facts-n1-facts");
+  mkdirSync(folder, { recursive: true });
+  writeRun(folder, { kind: "facts", job: "j1", name: "facts-n1", repo: "fac", state: "done", reason: "kept 1, rejected 1", told: true, shown: false, started: "2026-10-28T00:00:00Z", kept: ["Lemons Float"], rejected: ["pears sink: b.ts says otherwise"] } as Run);
+  const out = report();
+  expect(out).toContain("fac/facts-n1 done: kept 1, rejected 1\n  kept: Lemons Float");
+  expect(out).toContain("  rejected: pears sink: b.ts says otherwise");
+  expect(out.split("rejected: pears sink").length).toBe(2);
+  expect(report()).not.toContain("fac/facts-n1");
+});

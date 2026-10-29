@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { tagged } from "./gate.ts";
+import { readFile, allJobs } from "./job.ts";
 import { jobsDir, stamp, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
 
 export interface Fact { fact: string; source: string }
@@ -171,4 +172,33 @@ ${v.source}
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/**
+ * Runs the facts gate for a landed job: the sourced FACT lines of its worker's result go to
+ * one reviewer run, and each kept verdict is written to the vault. Null when there is nothing to review.
+ */
+export async function factsGate(repo: Repo, landed: Entry, commit: string, log: (line: string) => void): Promise<{ kept: string[]; rejected: string[] } | null> {
+  const name = landed.run.name;
+  const job = allJobs().find((j) => j[0].run.job === landed.run.job) ?? [landed];
+  const worker = job.findLast((e) => e.run.kind === "agent" || e.run.kind === "recheck");
+  const result = (worker && readFile(worker, "result.md")) ?? "";
+  const { facts, unsourced } = parseFacts(result);
+  for (const line of unsourced) log(`${name}: fact dropped, no source: ${line}`);
+  if (!facts.length) return null;
+  const { folder, verdicts } = await reviewFacts(repo, landed, facts, commit);
+  const kept: string[] = [];
+  const rejected: string[] = [];
+  const reject = (v: Verdict, reason: string) => {
+    rejected.push(`${v.fact}: ${reason}`);
+    log(`${name}: fact rejected (${reason}): ${v.fact}`);
+  };
+  for (const v of verdicts) {
+    if (v.verdict !== "keep") { reject(v, v.reason); continue; }
+    const w = await writeFact(v, landed.run.job, kindOf(v));
+    if (w.written) kept.push(basename(w.path, ".md"));
+    else reject(v, w.reason);
+  }
+  updateRun(folder, { kept, rejected });
+  return { kept, rejected };
 }

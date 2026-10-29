@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { isLive, jobsDir, loadRegistry, lock, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
-import { addNote, issue as issueOf, latestJob, openJob } from "./job.ts";
+import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
 import { baselineChecks, git, removeBranch } from "./unit.ts";
 import { fetchOrigin } from "./git.ts";
 import { itemOnMain } from "./status.ts";
@@ -232,7 +232,8 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
 /** `aleph checked`: close the manual check of a job that landed with it open, and its issue. */
 export function checked(name: string): { job: string; name: string; state: "landed"; check: "done" } {
   checkName(name);
-  const last = latestJob(name)?.at(-1);
+  const found = latestJob(name);
+  const last = found ? lastReal(found) : undefined;
   if (!last || last.run.state !== "landed" || last.run.check !== "open") refuse(`${name} has no open check`);
   updateRun(last!.folder, { check: "done" });
   const repo = last!.run.repo ? loadRegistry()[last!.run.repo] : undefined;

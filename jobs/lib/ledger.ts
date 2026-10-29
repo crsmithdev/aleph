@@ -37,6 +37,10 @@ export interface Run {
   next?: "worker" | "land";
   /** A factory run: the price of its worker's `result` event, at API rates. */
   cost?: number;
+  /** A facts run: the titles of the notes it wrote. */
+  kept?: string[];
+  /** A facts run: the facts it rejected, each with its reason. */
+  rejected?: string[];
   /** A factory run: the `DEFAULT: <question> -> <answer>` lines of its result. */
   defaults?: string[];
   /** An agent or land run: each check that ran, skipped `when` checks left out. */

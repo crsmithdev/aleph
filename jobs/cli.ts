@@ -9,7 +9,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { allRuns, isLive, loadRegistry, newsLine, updateRun, type Entry, type Repo } from "./lib/ledger.ts";
-import { allJobs, findJob, goal, isOpen, issue as issueOf, readFile, view, type Job } from "./lib/job.ts";
+import { allJobs, findJob, goal, isOpen, issue as issueOf, lastReal, readFile, view, type Job } from "./lib/job.ts";
 import { git, onMain, removeBranch, reviewBack, unit } from "./lib/unit.ts";
 import { fetchOrigin } from "./lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
@@ -121,14 +121,14 @@ function jobs(): void {
   // A job that landed with its check open stays in the list until `aleph checked`.
   // A job that ended in the last 24 hours follows the open ones, the latest first.
   if (!name) {
-    const listed = (j: Entry[]) => isOpen(j) || (j.at(-1)!.run.state === "landed" && j.at(-1)!.run.check === "open");
-    const ended = (j: Entry[]) => Date.parse(j.at(-1)!.run.ended ?? "");
+    const listed = (j: Entry[]) => isOpen(j) || (lastReal(j).run.state === "landed" && lastReal(j).run.check === "open");
+    const ended = (j: Entry[]) => Date.parse(lastReal(j).run.ended ?? "");
     const recent = all.filter((j) => !listed(j) && Date.now() - ended(j) < DAY_MS).sort((a, b) => ended(b) - ended(a));
     return out([...all.filter(listed), ...recent].map((j) => summary(j, fates)));
   }
   const runs = findJob(name, null, all);
   if (!runs) refuse(`no job named ${name}`);
-  const last = runs!.at(-1)!;
+  const last = lastReal(runs!);
   const checks = readFile(last, "checks.log");
   out({
     ...summary(runs!, fates), question: last.run.question, result: readFile(last, "result.md"),

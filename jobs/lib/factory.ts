@@ -17,6 +17,7 @@ import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entr
 import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { accept, final, readRecord, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
+import { factsGate } from "./facts.ts";
 import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
@@ -122,6 +123,32 @@ export function waitingToLand(jobs = allJobs()): string[] {
     const r = last.run;
     return isOpen(j) && (r.kind === "agent" || r.kind === "recheck") && r.state === "passed" && !isLive(last.folder) && (r.land || (r.repo && repos[r.repo]?.autoland));
   }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started)).map((j) => j.at(-1)!.run.name);
+}
+
+/**
+ * The facts gate for every landed job of a factory repo that has a commit and no facts run yet. A land that
+ * comes through the unit's own next step is picked up by the dispatch the unit starts when it ends.
+ */
+async function factsStep(): Promise<void> {
+  const keys = new Map(sandboxRepos().map((r) => [r.key, r]));
+  for (const j of allJobs()) {
+    const last = lastReal(j);
+    const repo = last.run.repo ? keys.get(last.run.repo) : undefined;
+    if (!repo || last.run.state !== "landed" || !last.run.commit || j.some((e) => e.run.kind === "facts")) continue;
+    const name = last.run.name;
+    const release = await lock(`facts-${name}`, 0);
+    if (!release) continue;
+    try {
+      // Read again under the lock: another dispatch may have run the gate meanwhile.
+      const now = allJobs().find((x) => x[0].run.job === j[0].run.job);
+      if (!now || now.some((e) => e.run.kind === "facts")) continue;
+      await factsGate(repo, last, last.run.commit, factoryLog);
+    } catch (e: any) {
+      factoryLog(`${name}: facts gate failed: ${e?.message ?? e}`);
+    } finally {
+      release();
+    }
+  }
 }
 
 /** The open items labelled `goal` in each factory repo. */
@@ -254,6 +281,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
     names.forEach((name, i) => { if (!whys[i]) landed.push(name); });
     if (landed.length) factoryLog(`landed ${landed.join(", ")}`);
   }
+  await factsStep();
   if (checks) await acceptanceStep();
   const started: string[] = [];
   const skipped: string[] = [];
@@ -819,6 +847,18 @@ export function behind(repo: Repo): string | null {
 
 const money = (n: number) => (n > 0 && n < 0.005 ? "<$0.01" : `$${n.toFixed(2)}`);
 
+/** The first source of the vault note titled `title`, or undefined. */
+function noteSource(title: string): string | undefined {
+  for (const d of ["gotchas", "concepts"]) {
+    try {
+      const m = /^sources:\s*\[([^\]]*)\]/m.exec(readFileSync(join(vaultDir(), "wiki", d, `${title}.md`), "utf8"));
+      const first = m?.[1].split(",")[0].trim();
+      if (first) return first;
+    } catch {}
+  }
+  return undefined;
+}
+
 /** One run as the report gives it. */
 function entry(e: Entry): string {
   const r = e.run;
@@ -833,6 +873,13 @@ function entry(e: Entry): string {
   const hidden = r.checks?.find((c) => c.name === "hidden" && c.total);
   if (hidden) lines.push(`  hidden ${hidden.passed}/${hidden.total}`);
   for (const c of r.checks ?? []) if (c.rerun) lines.push(`  ${c.name} passed on rerun`);
+  if (r.kind === "facts") {
+    for (const k of r.kept ?? []) {
+      const src = noteSource(k);
+      lines.push(`  kept: ${k}${src ? ` (${src})` : ""}`);
+    }
+    for (const x of r.rejected ?? []) lines.push(`  rejected: ${x}`);
+  }
   if (r.cost !== undefined) lines.push(`  cost ${money(r.cost)} at the API price`);
   return lines.join("\n");
 }

@@ -156,3 +156,18 @@ describe("view", () => {
     expect(allJobs().map((j) => j.map((e) => e.id.slice(-3)))).toEqual([["a01", "a03"], ["a02"]]);
   });
 });
+
+describe("facts runs", () => {
+  test("a landed job with an open check and a facts run is still landed under its name", () => {
+    run("20261028-000001-a01", "j1", { name: "n1" });
+    run("20261028-000002-a02", "j1", { name: "n1", kind: "land", state: "landed", commit: "abc1234", check: "open" });
+    run("20261028-000003-a03", "j1", { name: "facts-n1", kind: "facts", state: "done" });
+    expect(latestJob("n1")![0].run.job).toBe("j1");
+    expect(jobsNamed("n1")).toHaveLength(1);
+    expect(latestJob("facts-n1")).toBeUndefined();
+    const j = latestJob("n1")!;
+    expect(stateOf(j)).toBe("landed");
+    expect(lastReal(j).run).toMatchObject({ kind: "land", check: "open" });
+    expect(view(j).check).toBe("open");
+  });
+});

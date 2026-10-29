@@ -47,7 +47,8 @@ async function review(script: string) {
     if (old.c === undefined) delete process.env.ALEPH_FACTS_CMD;
   }
 }
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { dispatchGoals } from "./factory.ts";
 
 test("reviewFacts keeps one fact and rejects one", async () => {
   const reply = JSON.stringify({ verdicts: [{ fact: "alpha holds", verdict: "keep", reason: "a.txt says so", scope: "demo", title: "Alpha Holds" }, { fact: "beta holds", verdict: "reject", reason: "b.txt says otherwise", scope: "global", title: "Beta" }] });
@@ -139,5 +140,100 @@ describe("writeFact", () => {
     expect(kindOf(verdict("A"))).toBe("gotcha");
     const p = parseVerdicts('{"verdicts":[{"fact":"f","verdict":"keep","reason":"r","kind":"concept"}]}');
     expect((p as Verdict[])[0].kind).toBe("concept");
+  });
+});
+
+describe("factsGate through the dispatch", () => {
+  const saved: Record<string, string | undefined> = {};
+  const set = (k: string, val: string) => { saved[k] = process.env[k]; process.env[k] = val; };
+  let base: string, vault: string, jobs: string, server: ReturnType<typeof Bun.serve>, answer = 0;
+
+  beforeAll(() => {
+    base = mkdtempSync(join(tmpdir(), "facts-gate-"));
+    vault = join(base, "vault"); jobs = join(base, "jobs");
+    const repo = join(base, "repo");
+    Bun.spawnSync(["git", "init", "-q", repo]);
+    writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo, sandbox: true, autoland: false } }));
+    for (const [k, val] of Object.entries({ GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" })) set(k, val);
+    set("ALEPH_VAULT", vault); set("ALEPH_JUDGE", "jev"); set("ALEPH_JOBS_DIR", jobs); set("ALEPH_REPOS", join(base, "repos.json"));
+    set("ALEPH_FACTORY_DIR", join(base, "factory")); set("XDG_RUNTIME_DIR", join(base, "run")); set("ALEPH_ITEMS", join(base, "items"));
+    expect(Bun.spawnSync(["bun", join(import.meta.dir, "..", "..", "vault", "cli.ts"), "init"], { env: { ...process.env, ALEPH_JUDGE: "haiku" } }).exitCode).toBe(0);
+    server = Bun.serve({ port: 0, async fetch(req) {
+      const body: any = await req.json();
+      const answers = Object.fromEntries(Object.keys(body.questions).map((k) => [k, { type: "noul", noul: answer }]));
+      return Response.json({ answers, model: "m", usage: { cost: 0 } });
+    } });
+    set("ALEPH_JEV_URL", `http://127.0.0.1:${server.port}/`); set("OPENROUTER_API_KEY", "k");
+  });
+  afterAll(() => {
+    server.stop(true);
+    for (const [k, val] of Object.entries(saved)) { if (val === undefined) delete process.env[k]; else process.env[k] = val; }
+    rmSync(base, { recursive: true, force: true });
+  });
+
+  /** A landed job: a worker run with `result`, then its land. */
+  function landed(name: string, result: string): void {
+    const id = `20261028-0000${name.slice(-2)}-${name}`;
+    const w = join(jobs, id);
+    mkdirSync(w, { recursive: true });
+    const base = { job: id, name, repo: "fac", told: true, shown: true };
+    writeFileSync(join(w, "state.json"), JSON.stringify({ ...base, kind: "agent", state: "passed", started: "2026-10-28T00:00:00Z" }));
+    writeFileSync(join(w, "result.md"), result);
+    const l = join(jobs, `${id}-land`);
+    mkdirSync(l, { recursive: true });
+    writeFileSync(join(l, "state.json"), JSON.stringify({ ...base, kind: "land", state: "landed", commit: "abc1234def", started: "2026-10-28T00:01:00Z" }));
+  }
+  const factsRuns = () => (existsSync(jobs) ? readdirSync(jobs).filter((f) => f.endsWith("-facts")) : []);
+  const reviewer = (reply: object) => {
+    const bin = join(base, "fake.sh"), seen = join(base, "stdin.txt");
+    writeFileSync(bin, `#!/bin/sh\ncat > ${seen}\necho '${JSON.stringify(reply)}'\n`);
+    chmodSync(bin, 0o755);
+    process.env.ALEPH_FACTS_CMD = bin;
+    return seen;
+  };
+  const log = () => readFileSync(join(base, "factory", "tick.log"), "utf8");
+
+  test("a kept fact is written, an unsourced one dropped, a rejected one logged, a contradiction rejected; a second dispatch adds no run", async () => {
+    landed("gate-01", "done\nFACT: lemons float [source: src/a.ts:1]\nFACT: no source at all\nFACT: pears sink [source: src/b.ts]\n");
+    const seen = reviewer({ verdicts: [
+      { fact: "lemons float", verdict: "keep", reason: "a.ts shows it", scope: "fac", title: "Lemons Float" },
+      { fact: "pears sink", verdict: "reject", reason: "b.ts says otherwise", scope: "fac", title: "Pears" },
+    ] });
+    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    const note = readFileSync(join(vault, "wiki", "gotchas", "Lemons Float.md"), "utf8");
+    expect(note).toContain("written_by: factory");
+    expect(note).toMatch(/sources: \[src\/a\.ts:1, /);
+    const runs = factsRuns();
+    expect(runs).toHaveLength(1);
+    const state = JSON.parse(readFileSync(join(jobs, runs[0], "state.json"), "utf8"));
+    expect(state.kept).toEqual(["Lemons Float"]);
+    expect(state.rejected).toEqual(["pears sink: b.ts says otherwise"]);
+    expect(readFileSync(seen, "utf8")).not.toContain("no source at all");
+    expect(log()).toContain("gate-01: fact dropped, no source: no source at all");
+    expect(log()).toContain("gate-01: fact rejected (b.ts says otherwise): pears sink");
+    expect(existsSync(join(vault, "wiki", "gotchas", "Pears.md"))).toBe(false);
+    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    expect(factsRuns()).toHaveLength(1);
+  });
+
+  test("a kept fact the Jev screen marks as a contradiction is rejected", async () => {
+    // A first note the screen can compare with.
+    expect((await writeFact({ fact: "Widgets exist", source: "src/w.ts", verdict: "keep", reason: "w.ts", scope: "fac", title: "Widget Registry" }, "j", "gotcha")).written).toBe(true);
+    answer = 0.9;
+    landed("gate-02", "FACT: widgets are not registered [source: src/w.ts:2]\n");
+    reviewer({ verdicts: [{ fact: "widgets are not registered", verdict: "keep", reason: "w.ts shows it", scope: "fac", title: "Widget Registry Rules" }] });
+    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    answer = 0;
+    expect(existsSync(join(vault, "wiki", "gotchas", "Widget Registry Rules.md"))).toBe(false);
+    const run = factsRuns().map((f) => JSON.parse(readFileSync(join(jobs, f, "state.json"), "utf8"))).find((s) => s.name === "facts-gate-02");
+    expect(run.kept).toEqual([]);
+    expect(run.rejected[0]).toContain("widgets are not registered");
+  });
+
+  test("a landed job with no FACT lines makes no facts run", async () => {
+    const before = factsRuns().length;
+    landed("gate-03", "done, nothing learned\n");
+    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    expect(factsRuns()).toHaveLength(before);
   });
 });
