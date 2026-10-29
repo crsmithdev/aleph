@@ -6,11 +6,11 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { goal, goals, hasLabel, note, readLists, reader } from "../../todo/lib/store.ts";
+import { goal, goals, hasLabel, note, readList, readLists, reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
 import { normalizeDecision, type Decision } from "./decision.ts";
-import { itemOnMain, itemStates, type ItemState } from "./status.ts";
+import { itemOnMain, itemStates } from "./status.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
@@ -128,20 +128,28 @@ export function waitingToLand(jobs = allJobs()): string[] {
 export const openGoals = (): { repo: Repo; item: todos.Item }[] => goals(sandboxRepos());
 
 /**
- * Whether `<repo>-<n>` is done, by the derived state `aleph status` gives. A
- * repo outside the registry, or an item the store lacks, is not done.
+ * Whether `<repo>-<n>` is done: the store says done, or the derived state
+ * `aleph status` gives is done. The store counts on its own because a goal
+ * closed as already met has no commit that names it. A repo outside the
+ * registry, or an item the store lacks, is not done.
  */
 export function doneChecker(): (ref: string) => boolean {
   const reg = loadRegistry();
-  const known = new Map<string, ItemState[]>();
+  const known = new Map<string, Set<string>>();
   return (ref) => {
     const r = todos.parseRef(ref);
     const repo = r && reg[r.repo];
     if (!r || !repo) return false;
     if (!known.has(r.repo)) {
-      try { known.set(r.repo, itemStates(repo, { fetch: true })); } catch { known.set(r.repo, []); }
+      const done = new Set<string>();
+      try {
+        const doc = readList(repo);
+        for (const i of doc?.items ?? []) if (todos.status(i) === "done") done.add(`${r.repo}-${i.id}`);
+        for (const s of itemStates(repo, { fetch: true, doc })) if (s.state === "done") done.add(s.item);
+      } catch {}
+      known.set(r.repo, done);
     }
-    return known.get(r.repo)!.find((s) => s.item === `${r.repo}-${r.id}`)?.state === "done";
+    return known.get(r.repo)!.has(`${r.repo}-${r.id}`);
   };
 }
 

@@ -97,6 +97,19 @@ test("a goal given a waiting_on while an earlier goal starts is not started", as
   expect(out.skipped).toEqual([`fac-${second}: waiting on fac-${other}`]);
 });
 
+// An "already met" drop closes a factory item with no commit that names it; the goals that wait on it still start.
+test("a goal waiting on a factory item the store says done, with no commit naming it, starts", async () => {
+  const blocker = writeList({ key: "fac" }, "add the blocker", (doc) => todos.add(doc, "met elsewhere", { labels: [] }).id, true)!.value;
+  mk(`fac-${blocker}`, "agent", "dropped", { reason: "the goal is already met" });
+  await change(blocker, (item) => todos.setStatus(item, "done"));
+  const waiter = goal();
+  await change(waiter, (item) => todos.edit(item, { waitingOn: `fac-${blocker}` }));
+  const f = fakes();
+  const out = await dispatch(f);
+  expect(out.started).toEqual([`fac-${waiter}`]);
+  expect(out.skipped).toEqual([]);
+});
+
 // The list is read after the baselines, so the label gap is between that read and a goal's lock: an earlier goal's start removes it.
 test("a goal whose label is removed while an earlier goal starts is not started", async () => {
   const first = goal();
