@@ -54,15 +54,38 @@ function writeStore(s: Store): void {
 const text = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 const cut = (s: string) => s.slice(0, QUOTE);
 
-/** The quote up to its first sentence end, at most 160 characters. */
-function firstSentence(quote: string): string {
-  const q = quote.trim();
-  const m = q.match(/^[\s\S]*?[.!?](?=\s|$)/);
-  return (m ? m[0] : q).slice(0, SENTENCE);
+/** Text that is not Chris typing: notifications, subagent hand-backs, bridge relays, slash-command wrappers. */
+const NOT_CHRIS = /^\s*(?:<task-notification>|<agent-message|<system-reminder>|\[From the bridge|<command-)/;
+
+/**
+ * One imperative rule from a signal's quote. Jev answers typed questions and writes no text,
+ * so a nested Haiku `claude -p` writes it. "" when it fails or finds no rule.
+ */
+async function writeRule(quote: string): Promise<string> {
+  const cmd = process.env.ALEPH_RULE_CMD ?? "claude";
+  const env = { ...process.env };
+  delete env.CLAUDECODE;
+  delete env.CLAUDE_CODE_ENTRYPOINT;
+  delete env.ANTHROPIC_API_KEY;
+  env.MAX_THINKING_TOKENS = "0";
+  const system = "You turn one correction into the rule it teaches. Reply with exactly one sentence in the imperative, under 160 characters, that states how Claude should work across tasks (for example: Run the checks after the last edit before claiming they pass). No quotes, no preamble, nothing about the single task.";
+  try {
+    const proc = Bun.spawn([cmd, "-p", "--model", "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, quote], { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+    const timer = setTimeout(() => proc.kill(), 30_000);
+    const [stdout] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+    const code = await proc.exited;
+    clearTimeout(timer);
+    if (code !== 0) return "";
+    let result = stdout;
+    try { result = JSON.parse(stdout).result ?? stdout; } catch { /* plain text */ }
+    return String(result).trim().split("\n")[0].trim().slice(0, SENTENCE);
+  } catch {
+    return "";
+  }
 }
 const lessonId = (sentence: string) => "l-" + createHash("sha256").update(sentence).digest("hex").slice(0, 8);
 
-interface Trace { id: string; sessionId?: string; timestamp?: string; input?: unknown; output?: unknown }
+interface Trace { id: string; name?: string; sessionId?: string; timestamp?: string; input?: unknown; output?: unknown }
 
 async function fetchTraces(cfg: LangfuseConfig, from: Date): Promise<Trace[]> {
   const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
@@ -84,19 +107,26 @@ async function chrisSignals(cfg: LangfuseConfig, from: Date, seen: Set<string>):
     .sort((a, b) => Date.parse(a.timestamp!) - Date.parse(b.timestamp!));
   const lastBySession = new Map<string, Trace>();
   const out: Signal[] = [];
+  // A factory worker's or triage's session id is its run's job or session; its trace is named "factory ...".
+  const factory = new Set(allRuns().flatMap((e) => [e.run.job, e.run.session].filter((x): x is string => !!x)));
   for (const t of traces) {
+    if (t.name?.startsWith("factory ") || (t.sessionId && factory.has(t.sessionId))) continue;
     const prev = t.sessionId ? lastBySession.get(t.sessionId) : undefined;
     if (t.sessionId) lastBySession.set(t.sessionId, t);
     const message = text(t.input).trim();
     const before = text(prev?.output).trim();
-    if (!message || !before || seen.has(t.id)) continue;
+    if (!message || !before || seen.has(t.id) || NOT_CHRIS.test(message)) continue;
     try {
       const d = await decide(
         { message, previous_assistant_message: before },
-        { correction: { type: "noul", instructions: "Does `message` correct, reject or push back on what `previous_assistant_message` did or said?" } },
+        {
+          correction: { type: "noul", instructions: "Does `message` correct, reject or push back on what `previous_assistant_message` did or said?" },
+          general: { type: "noul", instructions: "Does `message` state a rule for how Claude works across tasks, rather than a choice about this task's output?" },
+        },
       );
       const a = d.answers.correction;
-      if (a.type !== "noul" || !(a.noul >= CORRECTION_AT)) continue;
+      const r = d.answers.general;
+      if (a.type !== "noul" || !(a.noul >= CORRECTION_AT) || r.type !== "noul" || !(r.noul >= CORRECTION_AT)) continue;
     } catch (e) {
       factoryLog(`corrections: jev failed on trace ${t.id}: ${(e as Error).message}`);
       continue;
@@ -117,12 +147,24 @@ async function gateSignals(cfg: LangfuseConfig, from: Date, now: number, seen: S
     }));
 }
 
-function dropSignals(from: Date, seen: Set<string>): Signal[] {
+/** Only a drop for a fault in the agent's work counts; already-done, duplicate, rebase and stale-base drops are dispatch races. */
+async function dropSignals(from: Date, seen: Set<string>): Promise<Signal[]> {
   const out: Signal[] = [];
   for (const e of allRuns()) {
     const { run } = e;
     const ended = Date.parse(run.ended ?? "");
     if (run.state !== "dropped" || !run.reason || !(ended >= from.getTime()) || seen.has(e.id)) continue;
+    try {
+      const d = await decide(
+        { reason: run.reason },
+        { fault: { type: "noul", instructions: "Did the reviewer drop the run for a fault in the agent's own work, rather than because the work is already done or on main, a duplicate, needs a rebase, or has a stale base?" } },
+      );
+      const a = d.answers.fault;
+      if (a.type !== "noul" || !(a.noul >= CORRECTION_AT)) continue;
+    } catch (e2) {
+      factoryLog(`corrections: jev failed on drop ${e.id}: ${(e2 as Error).message}`);
+      continue;
+    }
     out.push({ id: e.id, source: "drop", at: new Date(ended).toISOString(), quote: cut(run.reason), link: run.job });
   }
   return out;
@@ -149,7 +191,11 @@ async function group(lessons: Lesson[], s: Signal): Promise<boolean> {
   }
   let lesson = pick === "new" ? undefined : lessons.find((l) => l.id === pick);
   if (!lesson) {
-    const sentence = firstSentence(s.quote);
+    const sentence = await writeRule(s.quote);
+    if (!sentence) {
+      factoryLog(`corrections: no rule written for signal ${s.id}`);
+      return false;
+    }
     lesson = lessons.find((l) => l.id === lessonId(sentence));
     if (!lesson) {
       lesson = { id: lessonId(sentence), sentence, state: "open", signals: [], count: 0 };
@@ -173,7 +219,7 @@ export async function mine(now = Date.now()): Promise<Store> {
       try { signals.push(...(await f())); } catch (e) { factoryLog(`corrections: langfuse failed: ${(e as Error).message}`); }
     }
   }
-  signals.push(...dropSignals(from, seen));
+  signals.push(...(await dropSignals(from, seen)));
   signals.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   for (const s of signals) await group(store.lessons, s);
   const proposed = await propose(store.lessons);

@@ -25,7 +25,11 @@ let pickFirst = false;
 let checkP = 0.9;
 let ruleP = 0.1;
 let traceFrom: string | null = null;
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "ALEPH_JEV_URL", "OPENROUTER_API_KEY", "HOME", "ALEPH_ITEMS", "ALEPH_REPOS", "ALEPH_PROPOSE_AT", ...Object.keys(gitEnv)];
+let generalP = 0.9;
+let faultP = 0.9;
+/** The sentence-writing stub echoes this prefix and the quote's first word. */
+const RULE_STUB = "#!/bin/sh\nfor a; do :; done\nw=$(printf '%s' \"$a\" | tr -cd 'A-Za-z' | cut -c1-12)\nprintf '{\"result\":\"Follow rule %s.\"}' \"$w\"\n";
+const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "ALEPH_JEV_URL", "OPENROUTER_API_KEY", "HOME", "ALEPH_ITEMS", "ALEPH_REPOS", "ALEPH_PROPOSE_AT", "ALEPH_RULE_CMD", ...Object.keys(gitEnv)];
 let saved: Record<string, string | undefined>;
 
 beforeAll(() => {
@@ -44,6 +48,8 @@ beforeAll(() => {
       const { questions } = (await req.json()) as any;
       const answers: any = {};
       if (questions.correction) answers.correction = { type: "noul", noul };
+      if (questions.general) answers.general = { type: "noul", noul: generalP };
+      if (questions.fault) answers.fault = { type: "noul", noul: faultP };
       if (questions.check) answers.check = { type: "noul", noul: checkP };
       if (questions.rule) answers.rule = { type: "noul", noul: ruleP };
       if (questions.lesson) answers.lesson = { type: "choice", choice: pickFirst ? Object.keys(questions.lesson.criteria).find((k) => k !== "new") : choice };
@@ -67,6 +73,10 @@ beforeEach(() => {
   sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
   sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(join(base, "items"), "git", "push", "-q", "origin", "main");
+  const stub = join(base, "rule.sh");
+  writeFileSync(stub, RULE_STUB, { mode: 0o755 });
+  process.env.ALEPH_RULE_CMD = stub;
+  generalP = 0.9; faultP = 0.9;
   checkP = 0.9; ruleP = 0.1; delete process.env.ALEPH_PROPOSE_AT;
   noul = 0.9; choice = "new"; pickFirst = false; traceFrom = null;
   traces = [
@@ -102,7 +112,7 @@ test("signals Jev splits make lessons of count 1", async () => {
   await mine(NOW);
   const s = stored();
   expect(s.lessons.map((l: any) => l.count)).toEqual([1, 1, 1]);
-  expect(s.lessons[0].sentence).toBe("No, that is wrong.");
+  expect(s.lessons[0].sentence).toBe("Follow rule Nothatiswron.");
 });
 
 test("a message Jev answers below 0.7 is not a signal", async () => {
@@ -219,4 +229,53 @@ describe("standing proposals", () => {
 test("an unknown id is a refusal, not a throw", () => {
   expect(approve("l-nope", repo)).toContain("no lesson");
   expect(decline("l-nope")).toContain("no lesson");
+});
+
+describe("noise", () => {
+  const noise = ["<task-notification>done</task-notification>", "<agent-message from=x>hi</agent-message>", "<system-reminder>x</system-reminder>", "[From the bridge, not from Chris] hi", "<command-name>/x</command-name>"];
+
+  test("notifications, hand-backs and bridge text make no signal", async () => {
+    traces = [{ id: "t0", sessionId: "s", timestamp: ago(4), input: "start", output: "did it" }, ...noise.map((input, i) => ({ id: `n${i}`, sessionId: "s", timestamp: ago(3 - i / 10), input, output: "ok" }))];
+    await mine(NOW);
+    expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source)).sort()).toEqual(["drop", "gate"]);
+  });
+
+  test("factory worker sessions and traces make no signal", async () => {
+    traces = [
+      { id: "w1", name: "factory aleph-9", sessionId: "x", timestamp: ago(4), input: "start", output: "did it" },
+      { id: "w2", name: "factory aleph-9", sessionId: "x", timestamp: ago(3), input: "No, wrong.", output: "ok" },
+      { id: "j1", sessionId: "aleph-9", timestamp: ago(4), input: "start", output: "did it" },
+      { id: "j2", sessionId: "aleph-9", timestamp: ago(3), input: "No, wrong.", output: "ok" },
+    ];
+    await mine(NOW);
+    expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source)).sort()).toEqual(["drop", "gate"]);
+  });
+
+  test("a design request Jev finds no rule in is not a signal", async () => {
+    generalP = 0.2;
+    await mine(NOW);
+    expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source)).sort()).toEqual(["drop", "gate"]);
+  });
+
+  test("a drop that is not a fault in the work is not a signal", async () => {
+    faultP = 0.2;
+    await mine(NOW);
+    expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source)).sort()).toEqual(["chris", "gate"]);
+  });
+
+  test("three pushbacks about one rule make one proposal with the imperative sentence", async () => {
+    traces = [0, 1, 2].flatMap((i) => [
+      { id: `a${i}`, sessionId: `s${i}`, timestamp: ago(5 - i * 2), input: "start", output: "All the checks pass." },
+      { id: `b${i}`, sessionId: `s${i}`, timestamp: ago(4.9 - i * 2), input: `Run the checks again, you edited after they passed (${i}).`, output: "ok" },
+    ]);
+    observations = [];
+    rmSync(join(base, "jobs"), { recursive: true });
+    mkdirSync(join(base, "jobs"));
+    pickFirst = true;
+    await mine(NOW);
+    expect(proposals().length).toBe(1);
+    expect(proposals()[0].sentence).toBe("Follow rule Runthechecks.");
+    expect(proposals()[0].count).toBe(3);
+    expect(proposals()[0].signals[0].quote).toContain("Run the checks again");
+  });
 });
