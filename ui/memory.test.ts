@@ -39,7 +39,9 @@ beforeAll(async () => {
   writeFileSync(join(hand, "2026-10-01-120000-x.md"), "## Intent\nOld work.\n");
   saved.ALEPH_HANDOFFS_DIR = process.env.ALEPH_HANDOFFS_DIR; process.env.ALEPH_HANDOFFS_DIR = hand;
   writeFileSync(join(root, "daily", `${today}.md`), `# ${today}\n\n- 10:00 write [[Use Bun]] — why\n- 10:05 write [[Other trap]] — why\n`);
-  for (const [k, val] of Object.entries({ ALEPH_VAULT: root, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" })) { saved[k] = process.env[k]; process.env[k] = val; }
+  // A closed port makes `vault misses` fail whatever keys a dotenv file supplies; the cache is cleared so no answer from an earlier file in this worker is served.
+  for (const [k, val] of Object.entries({ ALEPH_VAULT: root, LANGFUSE_BASE_URL: "http://127.0.0.1:9", LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" })) { saved[k] = process.env[k]; process.env[k] = val; }
+  clearCache();
   server = await serve(0);
 });
 afterAll(() => {
