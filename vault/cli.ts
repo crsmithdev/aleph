@@ -14,6 +14,7 @@ import { serializeFrontmatter } from "./lib/frontmatter.ts";
 import { addedDate, commitPaths, git, pushOrigin, tracked, trackedFiles } from "./lib/git.ts";
 import { handoffsFor, traceDigest } from "./lib/compile.ts";
 import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./lib/templates.ts";
+import { recallQuery } from "./lib/recall-query.ts";
 import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, HOME_KINDS, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, renameScope, screenCandidates, screenWords, stampProvenance, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -314,7 +315,7 @@ function outText(v: unknown): string {
   if (x && typeof x === "object" && typeof (x as any).stdout === "string") return (x as any).stdout.trim();
   return x === undefined || x === null ? "" : JSON.stringify(x);
 }
-const queryWords = (cmd: string) => new Set((cmd.replace(/^\s*vault recall\b/, "").toLowerCase().match(/[^\s"']+/g) ?? []));
+const queryWords = (q: string) => new Set(q.toLowerCase().match(/[^\s"']+/g) ?? []);
 const noteName = (p: string) => basename(p).replace(/\.md$/, "");
 
 async function misses(): Promise<void> {
@@ -331,15 +332,16 @@ async function misses(): Promise<void> {
   obs = obs.filter((o) => !o.startTime || new Date(o.startTime) >= from).sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));
 
   const cmdOf = (o: Observation): string => { const i = asValue(o.input); return String(typeof i === "string" ? i : i?.command ?? "").trim(); };
-  const recalls = obs.filter((o) => o.name === "Bash" && /^vault recall\b/.test(cmdOf(o)));
+  const queryOf = (o: Observation) => recallQuery(cmdOf(o)) ?? "";
+  const recalls = obs.filter((o) => o.name === "Bash" && recallQuery(cmdOf(o)) !== null);
   const empty = recalls.filter((o) => outText(o.output) === "[]");
   const byTurn = new Map<string, Observation[]>();
   for (const o of recalls) byTurn.set(o.traceId ?? "", [...(byTurn.get(o.traceId ?? "") ?? []), o]);
   const reformulated = [...byTurn.values()].filter((calls) => {
     if (calls.length < 2) return false;
     if (outText(calls[0].output) === "[]") return true;
-    const first = queryWords(cmdOf(calls[0]));
-    return calls.slice(1).some((c) => { const w = queryWords(cmdOf(c)); return w.size !== first.size || [...w].some((x) => !first.has(x)); });
+    const first = queryWords(queryOf(calls[0]));
+    return calls.slice(1).some((c) => { const w = queryWords(queryOf(c)); return w.size !== first.size || [...w].some((x) => !first.has(x)); });
   }).length;
 
   const spans = obs.filter((o) => o.name === "vault-recall");
@@ -360,7 +362,7 @@ async function misses(): Promise<void> {
   out({
     days, recalls: recalls.length, empty: empty.length, empty_share: recalls.length ? empty.length / recalls.length : 0,
     reformulated, unoffered_reads: unoffered,
-    missed: empty.slice(-10).reverse().map((o) => ({ query: cmdOf(o).replace(/^vault recall\s*/, ""), at: o.startTime ?? "" })),
+    missed: empty.slice(-10).reverse().map((o) => ({ query: queryOf(o), at: o.startTime ?? "" })),
     hook: {
       runs: spans.length,
       zero_candidates: meta.filter((m) => num(m.candidates) === 0).length,

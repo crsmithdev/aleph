@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { recallQuery } from "./lib/recall-query.ts";
 
 const CLI = join(import.meta.dir, "cli.ts");
 let base: string;
@@ -705,6 +706,10 @@ describe("misses", () => {
     bash("c", "vault recall gamma", "[]"),
     bash("old", "vault recall ancient", "[]", 30),
     bash("d", "ls", "x"),
+    bash("g", 'bun ~/.claude/skills/aleph/vault/cli.ts recall "x"', "[]"),
+    bash("g", 'cd ~/.claude/skills/aleph/vault; bun cli.ts recall "y" --scope aleph', "[]"),
+    bash("g", 'grep -rn "cli.ts recall" ~/.claude', "x"),
+    bash("g", "cat <<'EOF' > n.md\nbun cli.ts recall \"z\"\nEOF", "x"),
     read("d", "/v/wiki/concepts/Offered By Hook.md"),
     hook("d", { candidates: 45, asked: 40, kept: 3, capped: true }, "- Offered By Hook (/v/wiki/concepts/Offered By Hook.md): c"),
     hook("e", { candidates: 0, asked: 0, kept: 0, capped: false }),
@@ -732,20 +737,28 @@ describe("misses", () => {
     const r = await runAsync(env(), "misses", "--days", "7");
     expect(r.code).toBe(0);
     const out = JSON.parse(r.stdout);
-    expect(out.missed).toHaveLength(2);  // the two empty recalls, newest first
+    expect(out.missed).toHaveLength(4);  // the empty recalls, newest first
+    expect(out.missed.map((m: any) => m.query)).toEqual(expect.arrayContaining(["x", "y"]));
     expect(out.missed[0].at >= out.missed[1].at).toBe(true);
     delete out.missed;
     expect(out).toEqual({
-      days: 7, recalls: 5, empty: 2, empty_share: 2 / 5, reformulated: 2, unoffered_reads: 1,
+      days: 7, recalls: 7, empty: 4, empty_share: 4 / 7, reformulated: 3, unoffered_reads: 1,
       hook: { runs: 3, zero_candidates: 1, capped: 1, mean_kept: 1 },
     });
     expect(snapshot()).toBe(before);
   });
   test("without --days the window is 7 days; a wide window counts older calls", async () => {
-    expect(JSON.parse((await runAsync(env(), "misses")).stdout).recalls).toBe(5);
+    expect(JSON.parse((await runAsync(env(), "misses")).stdout).recalls).toBe(7);
     const wide = JSON.parse((await runAsync(env(), "misses", "--days", "60")).stdout);
-    expect(wide.recalls).toBe(6);
+    expect(wide.recalls).toBe(8);
     expect(wide.hook.runs).toBe(4);
+  });
+  test("recallQuery takes cli.ts and vault recall as a command word only", () => {
+    expect(recallQuery('bun ~/.claude/skills/aleph/vault/cli.ts recall "x"')).toBe("x");
+    expect(recallQuery('cd v && bun cli.ts recall "y z" --scope aleph | head')).toBe("y z");
+    expect(recallQuery("vault recall --episodes a b")).toBe("a b");
+    expect(recallQuery('grep "cli.ts recall" f')).toBeNull();
+    expect(recallQuery("cat <<EOF\nvault recall q\nEOF")).toBeNull();
   });
 });
 
