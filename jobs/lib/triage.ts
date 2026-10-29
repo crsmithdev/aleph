@@ -121,7 +121,8 @@ function apply(repo: Repo, id: number, v: Verdict): boolean {
     } else if (v.verdict === "chris") {
       label(item, [NEEDS_CHRIS]);
       item.fm.reason = "decision";
-      if (v.decision) writeDecision(item, v.decision);
+      // Triage only asks Chris product questions, whatever kind the model named.
+      if (v.decision) writeDecision(item, { ...v.decision, kind: "product" });
       todos.note(item, `triage: for Chris: ${v.decision ? decisionNote(v.decision) : v.question}`);
     } else {
       label(item, ["live-check", "triaged"]);

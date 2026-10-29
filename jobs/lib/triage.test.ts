@@ -26,6 +26,7 @@ case $prompt in
   *VERDICT:close*) echo 'Looked at it. {"verdict":"close","reason":"duplicate of tri-1"}' ;;
   *VERDICT:chris*) echo '{"verdict":"chris","question":"Which plan, A or B?"}' ;;
   *VERDICT:structured*) echo '{"verdict":"chris","question":"A or B?","options":[{"label":"A","line":"do a"},{"label":"B","line":"do b"}],"recommended":"B","why":["one","two"]}' ;;
+  *VERDICT:build*) echo '{"verdict":"chris","question":"Ship it?","options":[{"label":"A","line":"ship"},{"label":"B","line":"wait"}],"recommended":"A","kind":"build"}' ;;
   *VERDICT:live*) echo '{"verdict":"live","note":"check the prod dashboard"}' ;;
   *VERDICT:fail*) exit 3 ;;
   *VERDICT:bad*) echo '{"verdict":"maybe"}' ;;
@@ -115,10 +116,18 @@ test("a chris verdict with options is stored as fields next to the prose note; a
   reset([{ title: "a", body: "VERDICT:structured" }]);
   await run();
   expect(readDecision(item(1))).toEqual({ question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", kind: "product", why: ["one", "two"] });
+  expect(item(1).fm.kind).toBe("product");
   expect(item(1).fm.reason).toBe("decision");
   expect(item(1).notes.at(-1)).toContain("A or B? Options: A: do a; B: do b. My recommendation is B.");
   const bad = parseVerdict('{"verdict":"chris","question":"Q?","options":[{"label":"A","line":"x"}],"recommended":"A"}');
   expect(bad).toEqual({ verdict: "chris", question: "Q?" });
+});
+
+test("a chris verdict that says kind build still stores kind product", async () => {
+  reset([{ title: "a", body: "VERDICT:build" }]);
+  await run();
+  expect(item(1).fm.kind).toBe("product");
+  expect(readDecision(item(1))?.kind).toBe("product");
 });
 
 test("items labelled needs-chris, triaged, proposal or goal, or waiting on an open item, are not triaged", async () => {
