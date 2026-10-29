@@ -13,11 +13,12 @@ export const view = {
   api: "/api/state",
   refresh: 15,
   render: (s) =>
-    `<div class="page">${renderMetrics(s)}<p class="lede">${renderLede(s)}</p><div class="head"><p class="asof">${renderAsOf(s)}</p>${renderControls(s)}</div>` +
+    `<div class="page">${renderMetrics(s)}<p class="lede"><span class="asof">${renderAsOf(s)}</span>${renderLede(s)}${renderControls(s)}</p>` +
     `<section id="issues" aria-labelledby="h-issues">${renderIssues(s)}</section>` +
-    `<section id="lands" aria-labelledby="h-lands">${renderLands(s)}</section>` +
-    `<section id="triage" aria-labelledby="h-triage">${renderTriage(s)}</section>` +
+    `<div class="pair"><section id="done" aria-labelledby="h-done">${renderDone(s)}</section>` +
+    `<section id="incoming" aria-labelledby="h-incoming">${renderIncoming(s)}</section></div>` +
     `<section id="jobs" aria-labelledby="h-jobs">${renderJobs(s)}</section>` +
+    `<section id="agents" aria-labelledby="h-agents">${renderAgents(s)}</section>` +
     `<section id="queued" aria-labelledby="h-queued">${renderQueued(s)}</section>` +
     `<section id="speed" aria-labelledby="h-speed">${speedSection()}</section></div>`,
   mount: (root) => mountSpeed(root),
@@ -55,7 +56,7 @@ export function renderMetrics(s) {
   const card = (href, k, n, tone = "") => `<a class="metric${tone ? " " + tone : ""}" href="#${href}"><span class="k">${k}</span><span class="v">${n}</span></a>`;
   const failed = s.stuck.filter((j) => j.state === "failed").length;
   return `<div class="metrics">` +
-    card("lands", "Lands", liveLands(s), "done") +
+    card("jobs-running", "Lands", liveLands(s), "done") +
     card("jobs-needs", "Needs you", needsCount(s)) +
     card("jobs-stuck", "Stuck", s.stuck.length - failed) +
     card("jobs-stuck", "Failed", failed) +
@@ -82,11 +83,10 @@ export function usageLine(series) {
 
 export const FINE = ["Everything is fine.", "All is well.", "Everything is running smoothly.", "The factory is humming along."];
 
-/** The status sentence: all fine, or one sentence that lists what needs attention, each part a link; notices under it, muted. */
+/** The status sentence: all fine, or one sentence that lists what needs attention, each part a link. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
 export function renderLede(s) {
   const f = s.factory;
   const problems = []; // [tone, text, href]
-  const notices = [];
   const att = s.attention ?? [];
   const isRun = (i) => ["held", "review", "question"].includes(i.reason);
   const isProposal = (i) => i.reason.startsWith("proposal-");
@@ -101,21 +101,20 @@ export function renderLede(s) {
   if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   for (const l of health) {
     const text = l.replace(/^health:\s*/, "");
-    if (/passed on rerun/.test(text)) { notices.push(text); continue; }
+    if (/passed on rerun/.test(text)) continue;
     problems.push(["error", text.replace(/\.$/, ""), "#jobs-needs"]);
   }
   if (f.hold) problems.push(["error", f.hold.replace(/\.$/, ""), "#jobs-needs"]);
   if (f.paused) problems.push(["warning", "the factory is paused", ""]);
   if (f.dayCap > 0 && f.runsToday >= f.dayCap) problems.push(["warning", "the day cap is reached", ""]);
-  const note = notices.map((x) => `<span class="notice">${esc(x)}</span>`).join("");
-  if (!problems.length) return `<span class="say fine">${FINE[Math.floor((Date.parse(s.now) || Date.now()) / 600000) % FINE.length]}</span>${note}`;
+  if (!problems.length) return `<span class="say fine">${FINE[Math.floor((Date.parse(s.now) || Date.now()) / 600000) % FINE.length]}</span>`;
   const tone = problems.some(([t]) => t === "error") ? "error" : "warning";
   const parts = problems.map(([, t, href], k) => {
     const text = k === 0 ? t[0].toUpperCase() + t.slice(1) : t;
     return href ? `<a href="${href}">${esc(text)}</a>` : esc(text);
   });
   const sentence = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
-  return `<span class="say ${tone}">${sentence}.</span>${note}`;
+  return `<span class="say ${tone}">${sentence}.</span>`;
 }
 
 const list = (html) => `<div class="list">${html}</div>`;
@@ -150,16 +149,36 @@ function runningCard(s, j) {
 
 const queuedCard = (w) => jobCard("small", "run-row", `<div class="ih"><span class="id">${esc(w.repo)}-${esc(w.id)}</span><span class="t">${esc(w.title)}</span></div><div class="run-meta">Waiting</div>`);
 
-/** Lands: land runs in progress first, then the latest landed. */
-export function renderLands(s) {
-  const rows = s.delivered.map((j) => landCard(j, "full", s.now)).join("");
-  return section("lands", "Lands", s.delivered.length, rows ? cards(rows, "one") : empty("Nothing has landed yet."));
+const STATUS_TONE = { "waiting on Chris": "need", "needs you": "need", stuck: "stuck", building: "run", landing: "run", queued: "run", landed: "done", done: "done" };
+const statusBadge = (st) => `<span class="badge ${STATUS_TONE[st] ?? "quiet"}">${esc(st)}</span>`;
+const RUN_KIND = { agent: "work", land: "land", triage: "triage", plan: "plan", facts: "facts" };
+
+/** One job of a Done package, as a link to its page; a land adds its commit. */
+function doneJob(j) {
+  const kind = j.run?.kind ?? "agent";
+  const sha = j.commit ? (j.commitUrl ? ` <a href="${esc(j.commitUrl)}"><code>${esc(j.commit.slice(0, 7))}</code></a>` : ` <code>${esc(j.commit.slice(0, 7))}</code>`) : "";
+  const out = kind === "triage" && j.outcome ? ` (${esc(j.outcome)})` : "";
+  return `<span class="dj"><a href="${jobHref(j)}">${esc(RUN_KIND[kind] ?? kind)}</a>${out}${sha}</span>`;
 }
 
-/** Triage: triage runs in progress first, then the latest finished, with their outcome. */
-export function renderTriage(s) {
-  const rows = (s.triage ?? []).map((j) => triageCard(j, "full", s.now)).join("");
-  return section("triage", "Triage", (s.triage ?? []).length, rows ? cards(rows, "one") : empty("Nothing has been triaged yet."));
+/** Done: the last 10 done issues, newest first; the issue is the head of its row, its triage and land jobs are links. */
+export function renderDone(s) {
+  const d = new Date(s.now);
+  const rows = (s.done ?? []).map((i) => {
+    const jobs = [...i.jobs].sort((a, b) => Date.parse(a.started) - Date.parse(b.started));
+    return `<article class="job-card small done-row"><div class="ih">${idLink(i.id, i.href)}<a class="t" href="${esc(i.href)}">${esc(i.title)}</a></div>` +
+      `<div class="run-meta">${i.finished ? `<span class="num">Done ${esc(when(i.finished, d))}</span>` : ""}${jobs.map(doneJob).join("")}</div></article>`;
+  }).join("");
+  return section("done", "Done", (s.done ?? []).length, rows ? cards(rows, "one") : empty("Nothing is done yet."));
+}
+
+/** Incoming: the 10 issues added last, newest first, each with its status. */
+export function renderIncoming(s) {
+  const d = new Date(s.now);
+  const rows = (s.incoming ?? []).map((i) =>
+    `<article class="job-card small incoming-row"><div class="ih">${idLink(i.id, i.href)}<a class="t" href="${esc(i.href)}">${esc(i.title)}</a></div>` +
+    `<div class="run-meta">${statusBadge(i.status)}${i.created ? ` <span class="num">Added ${esc(when(i.created, d))}</span>` : ""}</div></article>`).join("");
+  return section("incoming", "Incoming", (s.incoming ?? []).length, rows ? cards(rows, "one") : empty("No issues yet."));
 }
 
 const FF_SHOWN = 3;
@@ -179,27 +198,47 @@ function ffLine(s, l) {
     `${id ? idLink(id, `#/issues/${encodeURIComponent(repo)}/${n}`) + " " : ""}<span class="why">${esc(reason.length > 90 ? `${reason.slice(0, 89).trimEnd()}\u2026` : reason)}</span></li>`;
 }
 
-/** The firefighter as one full-width row: its state, the time of its last action, its last 3 actions, the whole log folded under Details. */
-function firefighterRow(s, lines) {
+/** An agent row: name, state, time of its last action, what it does now, its last 3 actions as `<li>`s and the whole log folded. */
+function agentRow(s, key, name, live, last, now, lines, log) {
+  return `<article class="agent-row ${key}"><div class="ih"><span class="t">${name}</span> <span class="badge ${live ? "run" : "quiet"}">${live ? "running" : "idle"}</span> ` +
+    `<span class="num">${last ? `last action ${esc(when(last, new Date(s.now)))}` : "no action yet"}</span></div>` +
+    `<p class="now">${now}</p>` +
+    `<ul class="ff-lines">${lines.slice(0, FF_SHOWN).join("")}</ul>` + more(key, `<ul class="ff-lines">${log}</ul>`) + `</article>`;
+}
+
+const firefighterRow = (s, lines) => {
   const newest = [...lines].reverse();
-  const live = s.running.some((j) => j.name === "firefighter" || j.run?.kind === "firefighter");
-  const last = newest[0];
-  return `<article class="job-card small firefighter ff-row"><div class="ih"><span class="t">Firefighter</span> <span class="badge ${live ? "run" : "quiet"}">${live ? "running" : "idle"}</span> ` +
-    `<span class="num">last action ${esc(when(last.at, new Date(s.now)))}</span></div>` +
-    `<ul class="ff-lines">${newest.slice(0, FF_SHOWN).map((l) => ffLine(s, l)).join("")}</ul>` +
-    more("firefighter", `<ul class="ff-lines">${newest.map((l) => `<li><span class="num">${esc(when(l.at, new Date(s.now)))}</span> ${esc(l.line.replace(/^firefighter:?\s*/, ""))}</li>`).join("")}</ul>`) + `</article>`;
+  const run = s.running.find((j) => j.name === "firefighter" || j.run?.kind === "firefighter");
+  return agentRow(s, "firefighter", "Firefighter", !!run, newest[0]?.at, run ? "Working now." : "Waiting for the next tick.",
+    newest.map((l) => ffLine(s, l)),
+    newest.map((l) => `<li><span class="num">${esc(when(l.at, new Date(s.now)))}</span> ${esc(l.line.replace(/^firefighter:?\s*/, ""))}</li>`).join(""));
+};
+
+const PLAN_OUT = { planned: "split", goal: "goal" };
+const plannerRow = (s) => {
+  const runs = s.planner ?? [];
+  const live = runs.find((j) => j.state === "running");
+  const at = (j) => (j.state === "running" ? j.started : j.ended ?? j.started);
+  const line = (j) => `<li><span class="num">${esc(when(at(j), new Date(s.now)))}</span> <b>${j.state === "running" ? "planning" : esc(j.outcome ? (PLAN_OUT[j.outcome] ?? j.outcome) : "no plan")}</b> ` +
+    `${j.item ? idLink(`${j.repo}-${j.item.id}`, `#/issues/${encodeURIComponent(j.repo)}/${j.item.id}`) + " " : ""}<span class="why">${esc(j.item?.title ?? "")}</span></li>`;
+  const done = runs.filter((j) => j.state !== "running");
+  return agentRow(s, "planner", "Planner", !!live, done[0] ? at(done[0]) : live?.started,
+    live ? `Planning ${esc(live.item?.title ?? live.name)}.` : "Waiting for a goal to split.", runs.map(line), runs.map(line).join(""));
+};
+
+/** Agents: the planner and the firefighter as rows of one shape. */
+export function renderAgents(s) {
+  return section("agents", "Agents", 2, `<div class="agents">${plannerRow(s)}${firefighterRow(s, s.factory?.firefighter ?? [])}</div>`, 0);
 }
 
 /** Jobs by state: needs you, stuck or failed, running; each group is there even when empty, so its metric card has a target. */
 export function renderJobs(s) {
   const group = (id, t, n, html, none, wrap = cards) => `<div class="grp" id="jobs-${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${n ? wrap(html) : empty(none)}</div>`;
-  const ff = s.factory?.firefighter ?? [];
   const needs = (s.attention ?? []).map(attentionRow).concat(errorLines(s).map(errorRow));
   const body = group("needs", "Needs you", needs.length, needs.join(""), "Nothing needs you.", list) +
     group("stuck", "Stuck or failed", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), "Nothing is stuck or failed.") +
-    group("running", "Running", runningCount(s), s.running.map((j) => runningCard(s, j)).join(""), "Nothing is running.") +
-    (ff.length ? `<div class="grp" id="jobs-firefighter">${firefighterRow(s, ff)}</div>` : "");
-  return section("jobs", "Jobs", needsCount(s) + s.stuck.length + runningCount(s), body, 0) + renderStanding(s);
+    group("running", "Running", runningCount(s), s.running.map((j) => runningCard(s, j)).join(""), "Nothing is running.");
+  return section("jobs", "Jobs", needsCount(s) + s.stuck.length + runningCount(s), body, 0);
 }
 
 /** Waiting: the goals with no job yet, as a section of its own below Jobs; one card each. */
@@ -326,16 +365,6 @@ function attentionRow(i) {
 
 /** An error line as a row: the Problem sentence, no buttons and no Always. */
 const errorRow = (l) => `<article class="job-card small issue-row error" data-kind="error"><p class="problem">${esc(`${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`)}</p></article>`;
-
-/** The folded "Standing permissions" section: what Chris has let the factory do without asking, each with Revoke. */
-export function renderStanding(s) {
-  const st = s.standing ?? [];
-  const d = new Date(s.now);
-  const rows = st.map((g) => `<li><span>${esc(g.reason)}: ${esc(g.action)}, since ${esc(when(g.at, d))}${g.handed ? `, ${g.handed} ${g.handed === 1 ? "item" : "items"} with the firefighter` : ""}</span> ` +
-    `<button class="act" type="button" data-act="revoke" data-reason="${esc(g.reason)}" data-label="Revoke">Revoke</button></li>`).join("");
-  return `<details class="standing" data-keep="standing"><summary>Standing permissions</summary><div class="body">${st.length ? `<ul class="standing-list">${rows}</ul>` : `<p class="hint">None.</p>`}</div></details>`;
-}
-
 
 /** Issues: the issues filed recently that are not yet triaged, as Issue cards. */
 export function renderIssues(s) {

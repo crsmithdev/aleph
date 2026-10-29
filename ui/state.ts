@@ -53,6 +53,11 @@ export interface NewIssue { id: string; title: string; status: string; href: str
   /** The reason code the factory wrote on the issue (`fm.reason`); none on an old item. */
   reason?: string }
 
+/** A done issue as the Done list shows it: the issue is the head, its jobs are links. */
+export interface DoneItem { id: string; title: string; href: string; finished: string; jobs: Job[] }
+/** An issue as the Incoming list shows it: `status` is untriaged, waiting on Chris, queued, building, landing, needs you, stuck, landed, sorted, done or dropped. */
+export interface IncomingItem { id: string; title: string; href: string; created: string; status: string }
+
 export interface State {
   now: string;
   factory: {
@@ -79,6 +84,12 @@ export interface State {
   openIssues: number;
   /** Triage runs: those running, then the latest finished. */
   triage: Job[];
+  /** Done: the last 10 done issues, newest first, each with the triage and land jobs that belong to it. */
+  done: DoneItem[];
+  /** Incoming: the last 10 issues added, newest first, each with its current status. */
+  incoming: IncomingItem[];
+  /** The planner's runs, the running ones first, then the latest finished. */
+  planner: Job[];
   /** What Needs you says: one item per held, review or question run, needs-chris issue and proposal. */
   attention: AttentionItem[];
   /** The standing permissions, with how many items each left out of `attention`. */
@@ -90,7 +101,7 @@ export interface State {
 /** The Now page shows this many of the latest lands. */
 const DELIVERED = 10;
 /** So do the Issues and Triage sections. */
-const NEW_ISSUES = 10, TRIAGED = 10;
+const NEW_ISSUES = 10, TRIAGED = 10, DONE = 10;
 const OUTCOME: Record<string, string> = { goal: "goal", close: "closed", chris: "needs-chris", live: "live-check", planned: "planned" };
 
 /** The next firing of aleph-tick.timer, or null when systemctl fails or lists no such timer. */
@@ -234,6 +245,32 @@ export function state(now = new Date()): State {
   const landedAt = delivered.map((d) => d.at).filter((t) => t <= t0);
   const triagedAt = allRuns().filter((e) => e.run.kind === "triage" && e.run.state === "done").map((e) => Date.parse(e.run.ended ?? e.run.started)).filter((t) => t <= t0);
 
+  // The jobs of each issue, by `repo-id`: the open ones give its status, all of them its Done package.
+  const ofItem = new Map<string, Runs[]>();
+  for (const runs of jobs) {
+    const real = lastReal(runs).run;
+    if (real.todo === undefined) continue;
+    const k = `${real.repo}-${real.todo}`;
+    ofItem.set(k, [...(ofItem.get(k) ?? []), runs]);
+  }
+  const SORTING = ["triage", "plan", "facts"];
+  const itemStatus = (repoKey: string, item: any): string => {
+    const st = status(item);
+    if (st !== "open") return st;
+    if (needsChris(item)) return "waiting on Chris";
+    const mine = ofItem.get(`${repoKey}-${item.id}`) ?? [];
+    const open = mine.find((r) => isOpen(r) && !SORTING.includes(r.at(-1)!.run.kind));
+    if (open) {
+      const real = lastReal(open).run;
+      return real.state === "needs-you" ? "needs you" : real.state === "stuck" || real.state === "failed" ? "stuck" : real.kind === "land" ? "landing" : "building";
+    }
+    if (mine.some((r) => r.at(-1)!.run.state === "landed")) return "landed";
+    if (labels(item).includes("goal")) return "queued";
+    return isSorted(item) ? "sorted" : "untriaged";
+  };
+  const everyone: { at: string; n: number; card: IncomingItem }[] = [];
+  const doneItems: { at: number; repo: Repo; item: any }[] = [];
+
   const fresh: NewIssue[] = [];
   const waitingOnChris: NewIssue[] = [];
   let openIssues = 0;
@@ -241,6 +278,12 @@ export function state(now = new Date()): State {
     if (!repo.sandbox) continue;
     for (const item of lists.list(repo.key)?.items ?? []) {
       const card = (): NewIssue => ({ id: `${repo.key}-${item.id}`, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}`, labels: labels(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? "") });
+      const created = String(item.fm.created ?? "");
+      everyone.push({ at: created, n: item.id, card: { id: `${repo.key}-${item.id}`, title: item.title, href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}`, created, status: itemStatus(repo.key, item) } });
+      if (status(item) === "done") {
+        const ends = (ofItem.get(`${repo.key}-${item.id}`) ?? []).map((r) => Date.parse(r.at(-1)!.run.ended ?? "")).filter((t) => t > 0);
+        doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(String(item.fm.updated ?? "")) || 0, repo, item });
+      }
       if (status(item) !== "open") continue;
       openIssues++;
       if (needsChris(item)) {
@@ -256,6 +299,16 @@ export function state(now = new Date()): State {
     }
   }
 
+  everyone.sort((a, b) => b.at.localeCompare(a.at) || b.n - a.n);
+  doneItems.sort((a, b) => b.at - a.at);
+  const done: DoneItem[] = doneItems.slice(0, DONE).map(({ at, repo, item }) => ({
+    id: `${repo.key}-${item.id}`, title: item.title, href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}`,
+    finished: at ? new Date(at).toISOString() : "",
+    jobs: (ofItem.get(`${repo.key}-${item.id}`) ?? []).map((r) => toJob(r)),
+  }));
+  const planAt = (r: Runs) => Date.parse(r.at(-1)!.run.state === "running" ? "9999-01-01" : r.at(-1)!.run.ended ?? r.at(-1)!.run.started);
+  const planner = jobs.filter((r) => r.at(-1)!.run.kind === "plan").sort((a, b) => planAt(b) - planAt(a)).slice(0, TRIAGED).map((r) => toJob(r));
+
   fresh.sort((a, b) => b.created.localeCompare(a.created));
   const today = runsToday(now.getTime());
   const probe = lastProbe();
@@ -269,7 +322,7 @@ export function state(now = new Date()): State {
       nextTick: nextTick(), probe, health: health(now.getTime()), hold: hold(jobs)?.line ?? null,
       firefighter: firefighterLines(now.getTime()),
     },
-    attention: att.items,
+    attention: att.items, done, incoming: everyone.slice(0, NEW_ISSUES).map((e) => e.card), planner,
     standing: Object.entries(granted).map(([reason, g]) => ({ reason, action: g.action, at: g.at, handed: att.handed[reason] ?? 0 })),
     needs, stuck, running, landing, newIssues: fresh.length, openIssues, issues: fresh.slice(0, NEW_ISSUES), needsIssues: waitingOnChris,
     triage: triageRuns.sort((a, b) => b.at - a.at).slice(0, TRIAGED).map((t) => {

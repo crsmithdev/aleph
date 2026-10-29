@@ -9,6 +9,11 @@ import { actMessages, openDiffs } from "./lib.js";
 const att = (s: any) => (s.attention ? s : { ...s, attention: attend({ needs: s.needs ?? [], needsIssues: s.needsIssues ?? [] }, {}, s.proposals ?? []).items });
 const r: any = { ...view, renderJobs: (s: any) => view.renderJobs(att(s)), renderLede: (s: any) => view.renderLede(att(s)), renderMetrics: (s: any) => view.renderMetrics(att(s)), view: { ...view.view, render: (s: any) => view.view.render(att(s)) } };
 
+// @ts-ignore
+import { landCard } from "./views/cards.js";
+// The land cards of `delivered`: the Status page no longer lists them, Done links to them, but the card still renders.
+const landList = (s: any) => `<div class="cards one">${s.delivered.map((j: any) => landCard(j, "full", s.now)).join("")}</div>`;
+
 const job = (o: object) => ({ repo: "aleph", item: null, state: "running", started: "2026-10-27T16:00:00Z", defaults: [], followups: [], ...o });
 const state: any = {
   now: "2026-10-27T17:00:00Z",
@@ -34,8 +39,8 @@ test("stuck, running and delivered show their jobs", () => {
 });
 
 test("a commitUrl becomes a link", () => {
-  expect(r.renderLands(state)).toContain('<a href="https://github.com/o/r/commit/50f301fabc"><code>50f301f</code></a>');
-  const none = r.renderLands({ ...state, delivered: [{ ...state.delivered[0], commitUrl: undefined }] });
+  expect(landList(state)).toContain('<a href="https://github.com/o/r/commit/50f301fabc"><code>50f301f</code></a>');
+  const none = landList({ ...state, delivered: [{ ...state.delivered[0], commitUrl: undefined }] });
   expect(none).not.toContain("commit/");
 });
 
@@ -43,12 +48,11 @@ test("an empty section shows its empty state", () => {
   const calm = { ...state, needs: [], stuck: [], running: [], factory: { ...state.factory, health: [] } };
   expect(r.renderQueued({ ...state, waiting: [] })).toContain("Nothing is waiting.");
   expect(r.renderIssues({ ...state, issues: [] })).toContain("No new issues.");
-  expect(r.renderTriage({ ...state, triage: [] })).toContain("Nothing has been triaged yet.");
-  expect(r.renderLands({ ...state, delivered: [] })).toContain("Nothing has landed yet.");
+  expect(r.renderIncoming({ ...state, incoming: [] })).toContain("No issues yet.");
+  expect(r.renderDone({ ...state, done: [] })).toContain("Nothing is done yet.");
   // Every state has its group, empty or not: the metric cards link to them.
   for (const g of ["needs", "stuck", "running"]) expect(r.renderJobs(calm)).toContain(`id="jobs-${g}"`);
-  expect(r.renderJobs(calm).match(/<p/g)?.length).toBe(4); // three empty groups and the standing list
-  expect(r.renderJobs(calm)).toContain("None.");
+  expect(r.renderJobs(calm).match(/<p/g)?.length).toBe(3); // three empty groups
 });
 
 const issue = (n: number) => ({ id: `aleph-${n}`, title: `Issue ${n}`, status: "open", href: `#/issues/aleph/${n}`, labels: [], notes: 0, created: "2026-10-27", updated: "2026-10-27" });
@@ -57,11 +61,11 @@ const full: any = { ...state, issues: [issue(1), issue(2)], triage: [triaged(3, 
 const withAttn = (s: any) => r.renderJobs(s);
 const section = (h: string, id: string) => h.match(new RegExp(`<section id="${id}"[^]*?</section>`))![0];
 
-test("the page order is metric cards, status line and time, then Issues, Lands, Triage, Jobs; no old section", () => {
+test("the page order is metric cards, the status line with the time, then Issues, Done beside Incoming, Jobs, Agents; no old section", () => {
   const page = r.view.render(full);
-  expect([...page.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1])).toEqual(["issues", "lands", "triage", "jobs", "queued", "speed"]);
+  expect([...page.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1])).toEqual(["issues", "done", "incoming", "jobs", "agents", "queued", "speed"]);
   const at = (t: string) => page.indexOf(t);
-  const order = ['class="metrics"', 'class="lede"', 'class="asof"', 'id="issues"', 'id="lands"', 'id="triage"', 'id="jobs"'];
+  const order = ['class="metrics"', 'class="lede"', 'class="asof"', 'class="say', 'data-act="pause"', 'id="issues"', 'id="done"', 'id="incoming"', 'id="jobs"', 'id="agents"'];
   expect(order.map(at)).toEqual([...order.map(at)].sort((a, b) => a - b));
   expect(order.every((t) => at(t) >= 0)).toBe(true);
   expect(page).not.toContain('class="cols"');
@@ -82,11 +86,9 @@ test("the metric cards are Lands (live), Needs you, Stuck, Failed, Running, Queu
 });
 
 test("every section header has a count, in one style", () => {
-  for (const h of [r.renderIssues(full), r.renderTriage(full), r.renderLands(full), r.renderJobs(full)]) expect(h).toMatch(/^<div class="sh"><h2 id="h-[a-z]+">[A-Za-z]+<\/h2><span class="count">\d+<\/span><\/div>/);
+  for (const h of [r.renderIssues(full), r.renderDone(full), r.renderIncoming(full), r.renderJobs(full), r.renderAgents(full)]) expect(h).toMatch(/^<div class="sh"><h2 id="h-[a-z]+">[A-Za-z]+<\/h2><span class="count">\d+<\/span><\/div>/);
   expect(r.renderIssues(full)).toContain('<h2 id="h-issues">Issues</h2><span class="count">2</span>');
   expect(r.renderIssues(full)).toContain("Issue 1");
-  expect(r.renderTriage(full)).toContain('<span class="badge run">Triaging</span>');
-  expect(r.renderTriage(full)).toContain('<span class="badge done">To factory</span>');
 });
 
 test("Jobs groups needs you, then stuck or failed, then running; Queued is its own section below; every job card is compact", () => {
@@ -190,15 +192,15 @@ test("a needs-you entry has Diff, Land and Drop buttons; a landed one with an op
   for (const v of ["diff", "land", "drop"]) expect(h).toContain(`data-act="${v}" data-name="aleph-27"`);
   expect(h).toContain("diff-panel");
   const open = { ...state, delivered: [{ ...state.delivered[0], check: "open" }] };
-  expect(r.renderLands(open)).toContain('data-act="checked" data-name="aleph-28"');
-  expect(r.renderLands(state)).not.toContain("data-act=");
-  expect(r.renderLands(state)).not.toContain("data-cmd=");
+  expect(landList(open)).toContain('data-act="checked" data-name="aleph-28"');
+  expect(landList(state)).not.toContain("data-act=");
+  expect(landList(state)).not.toContain("data-cmd=");
 });
 
 test("a land from another day shows its date", () => {
   const old = { ...state, delivered: [{ ...state.delivered[0], ended: "2026-10-25T16:30:00Z" }] };
-  expect(r.renderLands(old)).toMatch(/<dt>Landed<\/dt><dd>Oct 25 \d\d:\d\d<\/dd>/);
-  expect(r.renderLands(state)).toMatch(/<dt>Landed<\/dt><dd>Oct 27 \d\d:\d\d<\/dd>/);
+  expect(landList(old)).toMatch(/<dt>Landed<\/dt><dd>Oct 25 \d\d:\d\d<\/dd>/);
+  expect(landList(state)).toMatch(/<dt>Landed<\/dt><dd>Oct 27 \d\d:\d\d<\/dd>/);
 });
 
 const withFactory = (o: object) => ({ ...state, factory: { ...state.factory, health: [], ...o } });
@@ -269,8 +271,8 @@ test("a flake line is not shown on the Status page", () => {
   const h = r.renderLede(calm);
   expect(h).toContain('class="say fine"');
   expect(h).not.toContain("attention");
-  expect(h).toContain('<span class="notice">aleph check tests passed on rerun 4 times in 7 days</span>');
-  expect(r.view.render(calm)).toContain('class="notice"');
+  expect(h).not.toContain("rerun");
+  expect(r.view.render(calm)).not.toContain("rerun");
   expect(r.renderJobs(calm)).not.toContain("rerun");
 });
 
@@ -308,11 +310,11 @@ test("a 30-file stat shows 12 lines and +18 more files", () => {
 
 test("a land does not show checks as facts", () => {
   const checks = [{ name: "tests", ok: true, seconds: 71 }, { name: "types", ok: false, seconds: 9 }];
-  const land = r.renderLands({ ...state, delivered: [{ ...state.delivered[0], checks }] });
+  const land = landList({ ...state, delivered: [{ ...state.delivered[0], checks }] });
   expect(land).not.toContain("<dt>Tests</dt>");
   expect(land).not.toContain("<dt>Types</dt>");
   expect(withAttn(state)).not.toContain(" s ✓");
-  expect(r.renderLands(state)).not.toContain("checks");
+  expect(landList(state)).not.toContain("checks");
 });
 
 test("the Pause or Resume button sits in the page head beside the time; no Controls panel", () => {
@@ -332,28 +334,26 @@ test("the Pause or Resume button sits in the page head beside the time; no Contr
 test("trailers show on one line joined by ' · ', escaped, and only when there are some", () => {
   const trailers = [{ key: "Item", value: "aleph-27" }, { key: "Job", value: "<script>x</script>" }, { key: "Held-by", value: "Chris" }];
   const del = { ...state, delivered: [job({ name: "aleph-28", state: "landed", trailers })] };
-  const h = r.renderLands(del);
+  const h = landList(del);
   expect(h).toContain("aleph-27 · Job &lt;script&gt;x&lt;/script&gt; · Held-by Chris");
   expect(h).not.toContain("Item aleph-27");
   expect(h).not.toContain("<script>");
   expect(h).not.toContain('<pre class="trailers"');
-  expect(r.renderLands(state)).not.toContain("trailers");
+  expect(landList(state)).not.toContain("trailers");
 });
 
 test("the Job trailer is parsed into run kind and start, linked to the job page with the raw id in the title", () => {
   const id = "20261028-042822-aleph-aleph-240-agent";
   const del = { ...state, delivered: [job({ name: "aleph-240", state: "landed", trailers: [{ key: "Item", value: "aleph-240" }, { key: "Job", value: id }] })] };
-  const h = r.renderLands(del);
+  const h = landList(del);
   expect(h).toContain(`<p class="trailers-line">aleph-240 \u00b7 <a href="#/jobs/aleph-240" title="${id}">agent run, Oct 28 04:28</a></p>`);
   expect(h.replace(/title="[^"]*"/, "")).not.toContain(id);
-  expect(r.renderLands({ ...del, delivered: [{ ...del.delivered[0], trailers: [{ key: "Job", value: id.replace("agent", "land").replace("042822", "134500") }] }] })).toContain(">land, Oct 28 13:45<");
+  expect(landList({ ...del, delivered: [{ ...del.delivered[0], trailers: [{ key: "Job", value: id.replace("agent", "land").replace("042822", "134500") }] }] })).toContain(">land, Oct 28 13:45<");
 });
 
-test("Lands lists a running land before landed ones, has no origin/main aside, and counts its cards", () => {
+test("a land card has no origin/main aside; a running land comes before landed ones", () => {
   const lands = { ...state, delivered: [job({ name: "land-1", state: "running" }), ...state.delivered] };
-  const h = r.renderLands(lands);
-  expect(h).toContain(">Lands</h2>");
-  expect(h).toContain('<span class="count">2</span>');
+  const h = landList(lands);
   expect(h).not.toContain("origin/main");
   expect(h.indexOf("land-1")).toBeLessThan(h.indexOf("aleph-28"));
   expect(h).toMatch(/class="job-card big[ "]/);
@@ -462,11 +462,11 @@ test("a planner run is shown like a triage: Planning while it runs, Split once i
 });
 
 test("a land shows the acceptance result of its goal, escaped, and nothing without one", () => {
-  const h = r.renderLands({ ...state, delivered: [{ ...state.delivered[0], acceptance: "acceptance: pass at abc1234" }] });
+  const h = landList({ ...state, delivered: [{ ...state.delivered[0], acceptance: "acceptance: pass at abc1234" }] });
   expect(h).toContain("<dt>Acceptance</dt><dd>pass at abc1234</dd>");
-  const bad = r.renderLands({ ...state, delivered: [{ ...state.delivered[0], acceptance: "acceptance: fail, rerun: `bun test <x>`" }] });
+  const bad = landList({ ...state, delivered: [{ ...state.delivered[0], acceptance: "acceptance: fail, rerun: `bun test <x>`" }] });
   expect(bad).toContain("fail, rerun: `bun test &lt;x&gt;`");
-  expect(r.renderLands(state)).not.toContain("Acceptance");
+  expect(landList(state)).not.toContain("Acceptance");
 });
 
 // ---- proposals ----
@@ -561,8 +561,8 @@ test("the firefighter is one full-width row: state, last action time, its last 3
     { at: "2026-10-27T16:20:00Z", line: "firefighter: needs-chris: aleph-30 changes hooks/x.ts, a held security path, so it needs your review before it lands." },
     { at: "2026-10-27T16:30:00Z", line: "firefighter: tell: refused aleph-31 not ours" },
   ];
-  const h = r.renderJobs({ ...state, factory: { ...state.factory, firefighter: ff } });
-  const row = h.match(/<article class="job-card small firefighter ff-row">[^]*?<\/article>/)![0];
+  const h = r.renderAgents({ ...state, factory: { ...state.factory, firefighter: ff } });
+  const row = h.match(/<article class="agent-row firefighter">[^]*?<\/article>/)![0];
   expect(row).toContain("idle");
   expect(row).toContain("last action Oct 27 16:30");
   const shown = row.split("<details")[0];
@@ -571,7 +571,7 @@ test("the firefighter is one full-width row: state, last action time, its last 3
   expect(shown).toContain('<a class="idl" href="#/issues/aleph/30">aleph-30</a>');
   expect(shown.indexOf("aleph-31")).toBeLessThan(shown.indexOf("aleph-27"));
   expect(row.split("<details")[1]).toContain("did old aleph-1");
-  expect(r.renderJobs(state)).not.toContain("Firefighter");
+  expect(r.renderAgents(state)).toContain(">Planner<");
 });
 
 test("a running firefighter run shows its role as the kind", () => {
@@ -641,18 +641,42 @@ test("the Needs-you group is one list; its articles are the attention items plus
   expect(r.renderMetrics(s)).toContain('<span class="k">Needs you</span><span class="v">4</span>');
 });
 
-test("Standing permissions is a folded section after Jobs with a Revoke per entry", () => {
-  const none = r.renderJobs({ ...state, standing: [] });
-  expect(none).toMatch(/<details class="standing"[^>]*><summary>Standing permissions<\/summary>[^]*None\./);
-  expect(none).not.toMatch(/<details class="standing"[^>]* open/);
-  const s = { ...state, standing: [{ reason: "held", action: "firefighter", at: "2026-10-27T16:00:00Z", handed: 3 }, { reason: "triage-no-verdict", action: "retry", at: "2026-10-27T16:30:00Z", handed: 0 }] };
-  const h = r.renderJobs(s);
-  expect(h.indexOf('id="jobs-running"')).toBeLessThan(h.indexOf('<details class="standing"'));
-  expect(h).toContain("held: firefighter, since Oct 27 16:00, 3 items with the firefighter");
-  expect(h).toContain("triage-no-verdict: retry, since Oct 27 16:30");
-  expect(h).toContain('data-act="revoke" data-reason="held"');
-  expect(h.match(/data-act="revoke"/g)?.length).toBe(2);
-  expect(h).not.toContain("None.</p></div></details>");
+test("Status has no Standing permissions section", () => {
+  const s = { ...full, standing: [{ reason: "held", action: "firefighter", at: "2026-10-27T16:00:00Z", handed: 3 }] };
+  expect(r.view.render(s)).not.toContain("Standing permissions");
+  expect(r.view.render(s)).not.toContain('data-act="revoke"');
+});
+
+const done = (n: number) => ({ id: `aleph-${n}`, title: `Done ${n}`, href: `#/issues/aleph/${n}`, finished: "2026-10-27T16:30:00Z",
+  jobs: [job({ name: `triage-aleph-${n}`, state: "done", outcome: "goal", run: { kind: "triage", started: "2026-10-27T10:00:00Z" } }),
+    job({ name: `aleph-${n}`, state: "landed", commit: "50f301fabc", commitUrl: "https://github.com/o/r/commit/50f301fabc", run: { kind: "land", started: "2026-10-27T15:00:00Z" } })] });
+
+test("Done lists the issue as head with its triage and land jobs and commit as links", () => {
+  const h = r.renderDone({ ...state, done: [done(5), done(4)] });
+  expect(h).toContain('<h2 id="h-done">Done</h2><span class="count">2</span>');
+  expect(h).toContain('<a class="t" href="#/issues/aleph/5">Done 5</a>');
+  expect(h).toContain('href="#/jobs/aleph-5">land</a>');
+  expect(h).toContain('href="#/jobs/triage-aleph-5">triage</a> (goal)');
+  expect(h).toContain('<a href="https://github.com/o/r/commit/50f301fabc"><code>50f301f</code></a>');
+  expect(h.indexOf("Done 5")).toBeLessThan(h.indexOf("Done 4"));
+});
+
+test("Incoming lists each issue with its link, when it was added and its status", () => {
+  const inc = ["untriaged", "waiting on Chris", "queued", "building", "landed", "done", "dropped"].map((status, i) => ({ ...issue(i + 1), status, created: "2026-10-27" }));
+  const h = r.renderIncoming({ ...state, incoming: inc });
+  for (const st of ["untriaged", "waiting on Chris", "queued", "building", "landed", "done", "dropped"]) expect(h).toContain(`>${st}</span>`);
+  expect(h).toContain('<a class="t" href="#/issues/aleph/1">Issue 1</a>');
+  expect(h).toMatch(/Added Oct 27/);
+});
+
+test("Agents shows the planner and the firefighter as rows of one shape, with state and last action", () => {
+  const planner = [job({ name: "plan-aleph-9", state: "done", outcome: "planned", repo: "aleph", item: { id: 9, title: "Big goal" }, ended: "2026-10-27T16:40:00Z" })];
+  const h = r.renderAgents({ ...state, planner, factory: { ...state.factory, firefighter: [{ at: "2026-10-27T16:30:00Z", line: "firefighter: did land aleph-27" }] } });
+  const rows = h.match(/<article class="agent-row [a-z]+">/g);
+  expect(rows).toEqual(['<article class="agent-row planner">', '<article class="agent-row firefighter">']);
+  expect(h).toContain("last action Oct 27 16:40");
+  expect(h).toContain("Big goal");
+  expect((h.match(/class="badge quiet">idle/g) ?? []).length).toBe(2);
 });
 
 test("a question attention item renders the Answer button with a text input in the same row", () => {

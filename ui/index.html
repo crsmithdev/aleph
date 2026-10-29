@@ -159,12 +159,14 @@ main { min-width: 0; }
 .page { max-width: 1280px; margin: 0 auto; padding: 28px 24px 64px; }
 .lede {
   font: 400 var(--fs-xl)/1.35 var(--display); letter-spacing: -0.01em;
-  margin: 0 0 6px; 
+  margin: 0 0 28px; display: flex; align-items: center; gap: 12px; white-space: nowrap;
 }
+.lede .say { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lede .asof { flex: none; }
+.lede .act { flex: none; margin-left: auto; font: 500 var(--fs-sm) var(--sans, inherit); }
 .lede a { text-decoration: none; border-bottom: 1px solid var(--rule); }
 .lede a:hover { border-bottom-color: currentColor; }
 .lede .say.error, .lede .say.error a { color: var(--stuck); }
-.lede .notice { display: block; color: var(--muted); font-size: var(--fs-sm); }
 .lede .say.warning, .lede .say.warning a { color: var(--need); }
 .rows { display: grid; gap: 8px; }
 .issue-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
@@ -187,8 +189,13 @@ main { min-width: 0; }
 .issue-row input.reason { font: inherit; font-size: var(--fs-sm); padding: 3px 8px; min-width: 200px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: inherit; }
 .issue-row details.more { flex: 1 1 100%; font-size: var(--fs-sm); }
 a.act { text-decoration: none; display: inline-block; }
-.head { display: flex; align-items: center; gap: 12px; margin: 0 0 28px; }
-.asof { color: var(--muted); font-size: var(--fs-sm); margin: 0; }
+.asof { color: var(--muted); margin: 0; }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start; }
+.pair > section { margin: 0; }
+.agents { display: grid; gap: 16px; }
+.agent-row .now { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--muted); }
+.done-row .run-meta, .incoming-row .run-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--fs-sm); }
+.done-row .ih .t, .incoming-row .ih .t { font-weight: 600; text-decoration: none; }
 
 .grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
 .rail { position: sticky; top: 16px; }
@@ -198,7 +205,6 @@ section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
 .cards.one { grid-template-columns: minmax(0, 1fr); }
 .cards > * { min-width: 0; margin: 0; }
-.ff-row { margin-top: 12px; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; }
 .ff-lines { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: var(--fs-sm); }
 .ff-lines li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ff-row details .ff-lines li { white-space: normal; }
@@ -210,10 +216,6 @@ section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .issue-row input.reason { max-width: 100%; }
 .act.always { background: none; border-color: transparent; color: var(--muted); font-size: var(--fs-sm); text-decoration: underline; }
 .act.always:hover { color: var(--ink); }
-details.standing { margin-top: 18px; font-size: var(--fs-sm); }
-details.standing summary { cursor: pointer; font-weight: 600; }
-details.standing ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
-details.standing li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; overflow-wrap: anywhere; }
 .job-card .ih .id { white-space: nowrap; flex: none; }
 .grp + .grp { margin-top: 16px; }
 .grp h3 { display: flex; align-items: baseline; gap: 8px; font: 600 var(--fs-sm)/1.3 var(--sans); color: var(--muted); margin: 0 0 8px; }
@@ -483,6 +485,7 @@ details.fold { margin: 0 0 8px; }
   .rail { position: static; }
 }
 @media (max-width: 720px) {
+  .pair { grid-template-columns: minmax(0, 1fr); }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .page { padding: 20px 16px 48px; }
   .lede { font-size: var(--fs-xl); }
