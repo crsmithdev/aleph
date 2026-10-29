@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serve } from "./server.ts";
@@ -41,6 +42,15 @@ beforeAll(async () => {
   writeFileSync(join(root, "daily", `${today}.md`), `# ${today}\n\n- 10:00 write [[Use Bun]] — why\n- 10:05 write [[Other trap]] — why\n`);
   // A closed port makes `vault misses` fail whatever keys a dotenv file supplies; the cache is cleared so no answer from an earlier file in this worker is served.
   for (const [k, val] of Object.entries({ ALEPH_VAULT: root, LANGFUSE_BASE_URL: "http://127.0.0.1:9", LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" })) { saved[k] = process.env[k]; process.env[k] = val; }
+  // memoryTypes reads the repo registry, the work store and the job runs: point them at small fixtures so the first request is quick and the TTL test's clock is not spent on the network or ~/.aleph.
+  const git = (cwd: string, ...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd, stdio: "ignore" });
+  git(base, "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
+  git(base, "clone", "-q", join(base, "items.git"), join(base, "items"));
+  git(join(base, "items"), "commit", "-q", "--allow-empty", "-m", "start");
+  git(join(base, "items"), "push", "-q", "origin", "main");
+  writeFileSync(join(base, "repos.json"), "{}");
+  mkdirSync(join(base, "jobs"));
+  for (const [k, val] of Object.entries({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs") })) { saved[k] = process.env[k]; process.env[k] = val; }
   clearCache();
   server = await serve(0);
 });
