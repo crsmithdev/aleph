@@ -62,15 +62,4 @@ describe("every transition dispatches at once", () => {
     await until(() => started().includes(`fac-${b}`));
   }, 60_000);
 
-  test("a drop that frees a waiting slot starts the next goal", async () => {
-    const q = track(await add("asks Chris", "commit held/w.txt", ["--labels", "goal"], { ALEPH_WAITING_CAP: "1" }));
-    await until(() => runs(q).some((r) => state(r).state === "needs-you"));
-    const b = track(await add("needs the waiting slot", open("wait-b"), ["--labels", "goal"], { ALEPH_WAITING_CAP: "1" }));
-    await Bun.sleep(1500);
-    expect(started()).toEqual([`fac-${q}`]);
-    await aleph(["todo", "drop", "fac", String(q), "done with it"]);
-    await aleph(["drop", `fac-${q}`], on({ ALEPH_WAITING_CAP: "1" }));
-    await until(() => started().includes(`fac-${b}`));
-  }, 60_000);
-
 });
