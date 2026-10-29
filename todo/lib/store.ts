@@ -193,7 +193,7 @@ export function writeHidden(repo: Place, id: number, files: Record<string, strin
   }
 }
 
-let timesAt: { rev: string; times: Map<string, { added: number; changed: number }> } | null = null;
+let timesAt: { dir: string; rev: string; times: Map<string, { added: number; changed: number }> } | null = null;
 
 /**
  * When each item was first and last committed on the store's origin/main as
@@ -202,7 +202,7 @@ let timesAt: { rev: string; times: Map<string, { added: number; changed: number 
 export function itemTimes(): Map<string, { added: number; changed: number }> {
   const dir = storeDir();
   const head = git(dir, "rev-parse", `origin/${MAIN}`);
-  if (head.ok && timesAt?.rev === head.out) return timesAt.times;
+  if (head.ok && timesAt?.dir === dir && timesAt.rev === head.out) return timesAt.times;
   const out = new Map<string, { added: number; changed: number }>();
   const p = Bun.spawnSync(["git", "-C", dir, "log", head.ok ? head.out : `origin/${MAIN}`, "--format=%ct", "--name-only"], { stdout: "pipe", stderr: "ignore" });
   if (p.exitCode !== 0) return out;
@@ -216,7 +216,7 @@ export function itemTimes(): Map<string, { added: number; changed: number }> {
     const t = out.get(ref);
     if (t) t.added = ct; else out.set(ref, { added: ct, changed: ct });
   }
-  if (head.ok) timesAt = { rev: head.out, times: out };
+  if (head.ok) timesAt = { dir, rev: head.out, times: out };
   return out;
 }
 
