@@ -1061,7 +1061,7 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
 const REVIEW = `You are the reviewer of job \`%NAME%\`. The working directory is a clone of the
 branch the worker made for the goal issue below; read the code there as needed.
 Judge whether the diff does what the issue asks, whether the tests cover it, and
-whether it breaks anything. Do not change files. End with one line:
+whether it breaks anything. Do not change files. ${FOREGROUND} End with one line:
 \`VERDICT: pass\` or \`VERDICT: hold <one-sentence reason>\`.`;
 
 const TESTS = `The diff changes tests. Judge each finding below against the goal: hold only
@@ -1101,7 +1101,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     const log = join(folder, "review.log");
     const w = await sandboxed(rdir, script, {
       read: ["out/out.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
-      env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken() },
+      env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
       stdout: log, stderr: join(folder, "review.err"), limit: limit("ALEPH_REVIEW_TIMEOUT", 600),
       onSpawn: (p) => { child = p; },
     });
