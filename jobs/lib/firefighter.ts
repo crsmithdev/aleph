@@ -84,6 +84,7 @@ function saveSnapshot(events: Event[]): void {
 export type Action =
   | { do: "land"; job: string }
   | { do: "drop"; job: string; reason: string }
+  | { do: "close"; repo: string; n: number; note: string }
   | { do: "note"; repo: string; n: number; text: string }
   | { do: "add"; repo: string; title: string; body: string }
   | { do: "clear-needs-chris"; repo: string; n: number; note: string }
@@ -101,6 +102,7 @@ function parseAction(raw: any): Action | string {
   switch (raw.do) {
     case "land": return f("job") ? { do: "land", job: f("job")! } : "land without a job";
     case "drop": return f("job") && f("reason") ? { do: "drop", job: f("job")!, reason: f("reason")! } : "drop without a job and a reason";
+    case "close": return f("repo") && n && f("note") ? { do: "close", repo: f("repo")!, n, note: f("note")! } : "close without a repo, n and note";
     case "note": return f("repo") && n && f("text") ? { do: "note", repo: f("repo")!, n, text: f("text")! } : "note without a repo, n and text";
     case "add": return f("repo") && f("title") ? { do: "add", repo: f("repo")!, title: f("title")!, body: f("body") ?? "" } : "add without a repo and a title";
     case "clear-needs-chris": return f("repo") && n && f("note") ? { do: "clear-needs-chris", repo: f("repo")!, n, note: f("note")! } : "clear-needs-chris without a repo, n and note";
@@ -121,7 +123,7 @@ export function parseReply(output: string): (Action | string)[] | string {
 }
 
 export const describe = (a: Action): string =>
-  a.do === "land" ? `land ${a.job}` : a.do === "drop" ? `drop ${a.job}: ${a.reason}` : a.do === "note" ? `note ${a.repo}-${a.n}: ${a.text}`
+  a.do === "land" ? `land ${a.job}` : a.do === "drop" ? `drop ${a.job}: ${a.reason}` : a.do === "close" ? `close ${a.repo}-${a.n}: ${a.note}` : a.do === "note" ? `note ${a.repo}-${a.n}: ${a.text}`
   : a.do === "add" ? `add ${a.repo}: ${a.title}` : a.do === "clear-needs-chris" ? `clear-needs-chris ${a.repo}-${a.n}: ${a.note}`
   : a.do === "edit-goal" ? `edit-goal ${a.repo}-${a.n}` : `tell: ${a.text}`;
 
@@ -157,7 +159,7 @@ export function prompt(events: Event[], jobs = allJobs()): string {
 
 - Land a held run once both reviews have a verdict and say land, unless its diff changes a held security path (${SECURITY_PATHS.join(", ")}, or REVIEW2_SANDBOX in jobs/lib/review2.ts). The code refuses those and sends them to Chris.
 - Drop a run a reviewer sent back, with the reviewer's reason as the drop's reason: it becomes the next run's note.
-- A land with a merge conflict, a run that loops with no commit, or a goal that is already met on main is fixed by drop (or by closing the issue with a note), never sent to Chris.
+- A land with a merge conflict, a run that loops with no commit, or a goal that is already met on main is fixed without Chris: drop the first two; for a goal already met on main use close (it drops the open job and marks the issue done), never sent to Chris.
 - A how-to-build question (code structure, which module, naming, test shape, whether to wait for an issue) is yours to decide: clear-needs-chris with the decision. A product choice (what the product does for Chris, what he sees, what it costs, what comes first) stays with Chris.
 - File every follow-up you find as an issue with add.
 - At most ${MAX_ACTIONS} actions. No action is a fine answer when nothing needs doing.
@@ -169,6 +171,7 @@ ${events.map((e) => `## ${e.kind}: ${e.line}\n\n${context(e, jobs)}`).join("\n\n
 Reply with one JSON object and nothing else: {"actions": [ ... ]}, each action one of
 - {"do": "land", "job": "<job name>"}
 - {"do": "drop", "job": "<job name>", "reason": "<why; the next run reads it>"}
+- {"do": "close", "repo": "<repo>", "n": <issue number>, "note": "<why the goal is already met>"}
 - {"do": "note", "repo": "<repo>", "n": <issue number>, "text": "<note>"}
 - {"do": "add", "repo": "<repo>", "title": "<title>", "body": "<body>"}
 - {"do": "clear-needs-chris", "repo": "<repo>", "n": <issue number>, "note": "<the decision>"}
@@ -259,6 +262,15 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   }
   const item = store.reader().item(repo.key, a.n);
   if (!item || todos.status(item) !== "open") return { refused: `${describe(a)}: no open issue ${repo.key}-${a.n}` };
+  if (a.do === "close") {
+    const open = allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === a.n);
+    if (open) {
+      const why = await ports.drop(open[0].run.name, `closed by the firefighter: ${a.note}`);
+      if (why) return { refused: `${describe(a)}: ${why}` };
+    }
+    const why = store.note(repo, a.n, `firefighter: closed: ${a.note}`, { done: true });
+    return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
+  }
   if (a.do === "note") {
     const why = store.note(repo, a.n, `firefighter: ${a.text}`);
     return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };

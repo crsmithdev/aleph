@@ -505,7 +505,8 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
   };
   const rerun = (note: string) => writeRerun(name, note);
   const quoted = (file: "checks.log" | "result.md") => `\`\`\`\n${tailOf(last, file, 20) || "(empty)"}\n\`\`\``;
-  if (key !== "duplicate") {
+  const earlier = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key);
+  if (key !== "duplicate" && key !== "claimed") {
     const before = allRuns().filter((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key).length;
     // A no-commit run with no claim, twice: the goal is the likely fault, so the issue goes back to triage, once.
     const sentBack = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === "triaged");
@@ -519,17 +520,23 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
     }
     if (before) return chris(`${name} hit the same case again (${key}: ${reason}); a rerun did not clear it. Drop it, or change the goal?`, choice(`${name} hit the same case again (${key}): how should the factory go on?`, ["A rerun did not clear it"]));
   }
-  markRescued(last, key);
+  if (key !== "claimed") markRescued(last, key);
 
   if (key === "claimed") {
     // The worker says the goal is met: the repo's checks on origin/<main> decide. Green closes the item; red reruns
     // the goal with the claim as its note. An unchecked main is waited on: the run stays for the next dispatch.
     const red = checks ? await baseline(repo, checks) : "main is unchecked: no checks";
     if (red && UNCHECKED.test(red)) { factoryLog(`${name}: the claim waits: ${red}`); return; }
+    markRescued(last, key);
     if (!red) {
       const text = `${r.kind} run ${last.id} says the goal is already met (${claim}), and the checks pass on origin/${repo.main}: dropped, and the item is done`;
       if (!await tryDo(await act.drop(name, text), "drop")) return;
       record(text, { done: true });
+      await say(text);
+    } else if (earlier && issue !== undefined) {
+      const text = `${r.kind} run ${last.id} says the goal is already met again (${claim}), but ${red}: dropped, and the issue went back to triage`;
+      if (!await tryDo(await act.drop(name, text), "drop")) return;
+      record(text, { unlabel: "goal" });
       await say(text);
     } else {
       rerun(`The last run said the goal is already met (${claim}), but the checks do not pass on origin/${repo.main} (${red}). Make the change the goal asks for.`);

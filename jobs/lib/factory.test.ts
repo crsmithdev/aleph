@@ -421,6 +421,37 @@ test("no commit and the claim, but main cannot be checked: the run waits for the
   expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
 });
 
+test("a met goal: the claim waits on an unchecked main, then the next dispatch on green main drops it and the item is done", async () => {
+  const id = goal();
+  claimed(`fac-${id}`, "Goal: Already met — main has it\n");
+  const f = fakes();
+  await withChecks(f, async () => "checks did not start");
+  expect(f.calls).toEqual([]);
+  await withChecks(f, async () => null);
+  expect(f.calls).toEqual([`drop fac-${id}`]);
+  expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
+  expect(labels(id)).not.toContain("needs-chris");
+});
+
+for (const red of [false, true]) {
+  test(`a second claimed run after one rescued as claimed, main ${red ? "red: the goal label is off" : "green: the item is done"}, never needs-chris`, async () => {
+    const id = goal();
+    const first = mk(`fac-${id}`, "agent", "dropped", { reason: "no commit" }, { "result.md": "Goal: Already met\n" });
+    writeFileSync(join(first.folder, "rescued"), "claimed\n");
+    claimed(`fac-${id}`, "Goal: Already met\n");
+    const f = fakes();
+    await withChecks(f, async () => (red ? "tests failed" : null));
+    expect(f.calls).toEqual([`drop fac-${id}`]);
+    expect(labels(id)).not.toContain("needs-chris");
+    if (red) {
+      expect(labels(id)).not.toContain("goal");
+      expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
+    } else {
+      expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
+    }
+  });
+}
+
 test("no commit, the item open, first time: dropped and the goal reruns once, with the last 20 lines of result.md", async () => {
   const id = goal();
   mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(30) });

@@ -191,6 +191,18 @@ test("a goal with 4 runs in 30 minutes is an event, and a drop from the reply is
   expect(item(1).notes.at(-1)).toContain("firefighter: dropped");
 });
 
+test("a close reply drops the stuck job, writes no rerun file, and marks the issue done with the note", async () => {
+  fresh([{ title: "met", labels: ["goal"] }]);
+  const name = `${key}-1`;
+  run({ name, state: "stuck", reason: "no commit", todo: 1 }, {}, 2);
+  reply([{ do: "close", repo: key, n: 1, note: "the goal is already met on main" }]);
+  await firefighterStep(ports());
+  expect(dropped.map((d) => d.name)).toEqual([name]);
+  expect(existsSync(join(process.env.ALEPH_FACTORY_DIR!, "rerun", `${name}.md`))).toBe(false);
+  expect(todos.status(item(1))).toBe("done");
+  expect(item(1).notes.at(-1)).toContain("firefighter: closed: the goal is already met on main");
+});
+
 test("three runs in 30 minutes are no loop", () => {
   fresh();
   for (const m of [25, 18]) run({ name: `${key}-1`, state: "dropped", reason: "no commit" }, {}, m);
