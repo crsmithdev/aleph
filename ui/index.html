@@ -708,7 +708,7 @@ pre.stat b { color: var(--need); }
   }
 
   function route() {
-    // A view may take over an old address (#/list becomes #/timeline).
+    // A view may take over an old address (a view exports `redirect(hash)`).
     for (const r of redirects) {
       const to = r(location.hash);
       if (to) { history.replaceState(null, "", to); break; }

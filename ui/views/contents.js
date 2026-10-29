@@ -1,14 +1,40 @@
-// The Inventory view: the state to browse, not the process: every project and every issue of every repo, in rows styled like Activity's (its CSS and header are its own, and only the X icon and the cancel confirm come from timeline.js),
+// The Inventory view: the state to browse, not the process: every project and every issue of every repo,
 // three tables and a form that files an issue. `data` is /api/contents: { issues, projects, specs }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { badge, chips, empty, esc, filterBar, idLink, labelName, md, pageHead, pager, sortHead, when } from "../lib.js";
-import { X_ICON, confirmCancel } from "./timeline.js";
+
+export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+
+const CONFIRM_MS = 5000;
+/**
+ * The X's two clicks: the first arms the button, the second within 5 s sends `target`
+ * ({ url, body }); `done(json)` runs on success, the error shows in the row's `msg` cell.
+ */
+export async function confirmCancel(btn, msg, target, done) {
+  if (!btn.dataset.armed) {
+    btn.dataset.armed = "1"; btn.title = "Click again to confirm"; btn.classList.add("arm"); msg.textContent = "";
+    setTimeout(() => { if (!btn.isConnected || btn.dataset.sent) return; delete btn.dataset.armed; btn.title = "Stop or drop"; btn.classList.remove("arm"); }, CONFIRM_MS);
+    return;
+  }
+  if (btn.dataset.sent) return;
+  btn.dataset.sent = "1"; btn.disabled = true; msg.className = "cmsg"; msg.textContent = "Cancelling…";
+  try {
+    const res = await fetch(target.url, { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify(target.body) });
+    const j = await res.json().catch(() => ({}));
+    const err = !res.ok ? (j.error ?? `HTTP ${res.status}`) : j.code ? (j.stderr || j.stdout || `aleph exited ${j.code}`).trim() : "";
+    if (err) throw new Error(err);
+    done(j);
+  } catch (x) {
+    delete btn.dataset.sent; delete btn.dataset.armed; btn.disabled = false; btn.title = "Stop or drop"; btn.classList.remove("arm");
+    msg.className = "cmsg err"; msg.textContent = x?.message ?? String(x);
+  }
+}
 
 export const view = {
   path: "/inventory",
   title: "Inventory",
   group: "factory",
-  order: 2,
+  order: 1,
   api: "/api/contents",
   render: (d, _params, query) => renderContents(d, hashOptions(query)),
   mount: (root, d) => mount(root, d),

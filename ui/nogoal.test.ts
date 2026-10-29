@@ -6,8 +6,6 @@ import { BODY_TEMPLATE, renderContents, renderIssue } from "./views/contents.js"
 // @ts-ignore plain JS, shared with the page
 import { renderCard, renderDetail } from "./views/projects.js";
 // @ts-ignore plain JS, shared with the page
-import { renderEvent, renderStream } from "./views/timeline.js";
-// @ts-ignore plain JS, shared with the page
 import { renderIssues } from "./views/now.js";
 
 /** What a reader sees: no style or script blocks, no tags, no attribute values. */
@@ -23,7 +21,6 @@ const project = {
   baseline: { commit: "abcdef1234", ok: true }, lastLanded: null,
   items: [{ id: 3, title: "An issue", labels: ["goal"] }], commits: [], jobs: [], vault: [],
 };
-const event = { at: "2026-10-26T00:00:00", kind: "issue", what: "opened", state: "open", title: "t", id: "aleph-3", href: "#/issues/aleph/3", project: "aleph", details: [["labels", "followup,goal"], ["notes", "2"]] };
 
 describe("the UI never says goal", () => {
   const pages: [string, string][] = [
@@ -35,15 +32,12 @@ describe("the UI never says goal", () => {
     ["project detail", renderDetail(project)],
     ["inventory", renderContents({ projects: [project], issues: [{ repo: "aleph", id: 3, title: "An issue", status: "open", labels: ["goal"], updated: "2026-10-25" }] }, { status: "" })],
     ["issue detail", renderIssue({ repo: "aleph", id: 3, title: "t", status: "open", frontmatter: { labels: ["goal"] }, body: BODY_TEMPLATE, notes: [], jobs: [], commits: [] })],
-    ["activity row", renderEvent(event)],
-    ["activity stream", renderStream([event])],
     ["now issues", renderIssues({ needs: [], stuck: [], issues: [{ id: 3, title: "x", repo: "aleph" }], factory: { health: [] } })],
   ];
   for (const [name, html] of pages) test(name, () => { noGoal(html); noGoal(attrs(html)); });
 
   test("the goal label shows as factory, and the form still adds it", () => {
     expect(issueCard(issue, "full")).toContain("factory, ui");
-    expect(renderEvent(event)).toContain('<span class="chip">factory</span>');
     expect(triageCard({ name: "t", state: "done", outcome: "goal" }, "full")).toContain("To factory");
     const form = renderContents({ projects: [], issues: [] });
     expect(form).toContain("Build in the factory");
