@@ -24,7 +24,7 @@ export type Standing = Record<string, Granted>;
 
 const STAMP = /^\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?:\s*/;
 /** A note without its optional leading timestamp and its `needs-chris:` lead. */
-const unlead = (s: string): string => s.replace(STAMP, "").replace(/^needs-chris:\s*/, "");
+const unlead = (s: string): string => s.replace(/^\s*-\s*/, "").replace(STAMP, "").replace(/^\s*needs-chris:\s*/i, "");
 
 /** The held-reason, from the item's own field or, for an old item, the last note. */
 export function issueReason(i: Pick<NewIssue, "reason" | "question" | "decision">): string {

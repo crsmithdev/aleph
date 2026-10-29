@@ -79,6 +79,18 @@ describe("attention", () => {
     expect(r("needs-chris: what now?")).toBe("decision");
   });
 
+  test("an old note's timestamp is not part of the reason, the detail or the Problem", () => {
+    expect(clean("- 2026-10-27 12:34: needs-chris: which helper?")).toBe(clean("needs-chris: which helper?"));
+    expect(clean("- 2026-10-27 12:34: needs-chris: which helper?")).toBe("which helper?");
+    expect(clean("- 2026-10-27 12:34:56: triage: for Chris: pick one")).toBe("pick one");
+    expect(issueReason({ question: "- 2026-10-27 12:34: needs-chris: triage: no verdict in 2 runs: failed: x" })).toBe("triage-no-verdict");
+    expect(issueReason({ question: "- 2026-10-27 12:34: needs-chris: x changes hooks/a.ts, a held security path, so it needs you" })).toBe("firefighter");
+    const [f] = attention({ needs: [], needsIssues: [issue({ id: "aleph-30", reason: "firefighter", question: "- 2026-10-27 12:34: needs-chris: aleph-30 changes hooks/x.ts, a held security path, so it needs your review." })] }, {}, []);
+    expect(f.problem).toBe("The firefighter would land aleph-30, but it changes hooks/x.ts, a held security path, so it needs your review.");
+    const [t] = attention({ needs: [], needsIssues: [issue({ reason: "triage-no-verdict", question: "- 2026-10-27 12:34: needs-chris: triage: no verdict in 2 runs: failed: its process ended before a verdict" })] }, {}, []);
+    expect(t.problem).toBe("Triage of aleph-387 failed twice: its process ended before a verdict, so no one has decided what to do with this issue.");
+  });
+
   test("an old note with a leading timestamp loses it", () => {
     expect(clean("2026-10-27 14:05: needs-chris: Should it be A or B?")).toBe("Should it be A or B?");
     const q = "2026-10-27 14:05: needs-chris: aleph-30 changes hooks/x.ts, a held security path, so it needs your review before it lands.";
