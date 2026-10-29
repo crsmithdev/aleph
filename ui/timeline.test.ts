@@ -459,8 +459,7 @@ describe("timeline view", () => {
 });
 
 describe("issue events from the work store's git log", () => {
-  // The items are written at the real time, so the window must reach past it; `now` (23:00) is earlier after 23:01.
-  const issueEvents = async () => (await timeline({ now: new Date(Math.max(now.getTime(), Date.now()) + 60_000), days: 30 })).rows!.filter((e) => e.kind === "issue");
+  const issueEvents = async () => (await timeline({ now, days: 30 })).rows!.filter((e) => e.kind === "issue");
   // Each commit gets its own fixed committer date, so the times asserted do not depend on the clock or on how fast the sandbox is.
   const writeAt = (date: string, message: string, change: Parameters<typeof writeList>[2]) => {
     process.env.GIT_COMMITTER_DATE = date;
@@ -482,7 +481,7 @@ describe("issue events from the work store's git log", () => {
     const stamp = (d: Date) => `${d.toLocaleDateString("sv")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
     const recent = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 9, 5);
     const old = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 200, 9, 5);
-    writeList({ key: "fac" }, "decide", (doc) => {
+    writeAt(at(0, 13), "decide", (doc) => {
       const a = add(doc, "decided issue", { now: new Date() }), b = add(doc, "undecided issue", { now: new Date() }), c = add(doc, "old decision", { now: new Date() });
       a.notes.push(`- ${stamp(recent)}: Chris decided: A: do a`);
       b.notes.push(`- ${stamp(recent)}: triage: something else`);
@@ -499,7 +498,7 @@ describe("issue events from the work store's git log", () => {
     expect(evs.some((e) => e.title === "old decision")).toBe(false);
   });
   test("git log runs once per repo, not once per item", async () => {
-    writeList({ key: "fac" }, "many", (doc) => { for (let i = 0; i < 200; i++) add(doc, `bulk ${i}`, { now: new Date() }); return true; });
+    writeAt(at(0, 14), "many", (doc) => { for (let i = 0; i < 200; i++) add(doc, `bulk ${i}`, { now: new Date() }); return true; });
     // The store's log is the one that lists file names; the land rows run their own log on the code repo.
     const spawn = Bun.spawnSync, logs: string[][] = [];
     (Bun as any).spawnSync = (cmd: any, ...rest: any[]) => { if (Array.isArray(cmd) && cmd[0] === "git" && cmd.includes("log") && cmd.includes("--name-only")) logs.push(cmd); return (spawn as any)(cmd, ...rest); };
