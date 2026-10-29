@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, jobsDir, other, sh, startScript, stateNow, setup, teardown, until } from "./cli.helpers";
+import { aleph, base, jobsDir, other, sh, startScript, stateNow, setup, teardown, until as untilHelper } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -10,8 +10,16 @@ describe("a factory run", () => {
 
   describe("dispatch", () => {
     let startLog: string, startCmd: string;
+    let testStart = 0;
     const on = (extra: Record<string, string> = {}) => ({ ALEPH_DISPATCH: "on", ALEPH_START_CMD: startCmd, START_LOG: startLog, ...extra });
     const started = () => (existsSync(startLog) ? readFileSync(startLog, "utf8").trim().split("\n").filter(Boolean) : []);
+    const startLogText = () => (existsSync(startLog) ? readFileSync(startLog, "utf8") : "(none)");
+    // Adds the start.log contents to an error, so a flake shows what was started.
+    const withLog = (e: unknown, extra = "") => new Error([(e as Error).message, ...(extra ? [extra] : []), `--- start.log\n${startLogText()}`].join("\n"));
+    const until = async (f: () => boolean) => {
+      try { await untilHelper(f); } catch (e) { throw withLog(e, `elapsed since test start: ${Date.now() - testStart} ms`); }
+    };
+    const expectStarted = (check: () => void) => { try { check(); } catch (e) { throw withLog(e); } };
     const gate = (n: string) => join(base, `gate-${n}`);
     const settled = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`)).every((r) => stateNow(r).state === "passed");
     const ids: number[] = [];
@@ -32,11 +40,12 @@ describe("a factory run", () => {
     });
 
     test("a dispatch while paused or with main red starts nothing, and adding a goal starts its run with no tick", async () => {
+      testStart = Date.now();
       await aleph(["pause"]);
       expect((await aleph(["dispatch"], on())).json).toMatchObject({ started: [], paused: true });
       const held = await aleph(["todo", "add", "fac", "added while paused", "--labels", "goal"], on());
       await Bun.sleep(1500);
-      expect(started()).toEqual([]);
+      expectStarted(() => expect(started()).toEqual([]));
       await aleph(["resume"]);
       sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
       writeFileSync(join(other, "FAIL"), "red\n");
@@ -50,7 +59,7 @@ describe("a factory run", () => {
       ids.push(add.json.added);
       expect(add.code).toBe(0);
       await until(() => started().length === 1);
-      expect(started()).toEqual([`fac-${add.json.added}`]);
+      expectStarted(() => expect(started()).toEqual([`fac-${add.json.added}`]));
       writeFileSync(gate("f"), "");
       await until(() => settled(add.json.added));
       // A slow dispatch does not hold the add: the start sleeps well past the bound, which leaves room for a loaded `todo add`.
@@ -58,7 +67,14 @@ describe("a factory run", () => {
       writeFileSync(slowCmd, `#!/bin/bash\nsleep 20\nexec ${startCmd} "$@"\n`, { mode: 0o755 });
       const t0 = Date.now();
       const slow = await aleph(["todo", "add", "fac", "slow dispatch", "--labels", "goal", "--body", "-"], on({ ALEPH_START_CMD: slowCmd }), `ACTION: hold ${gate("f")}\n`);
-      expect(Date.now() - t0).toBeLessThan(10_000);
+      const elapsed = Date.now() - t0;
+      if (elapsed >= 10_000) throw new Error([
+        `slow todo add took ${elapsed} ms (bound 10000 ms)`,
+        `exit code: ${slow.code}`,
+        `stdout:\n${slow.stdout}`,
+        `stderr tail:\n${slow.stderr.split("\n").slice(-20).join("\n")}`,
+        `--- start.log\n${startLogText()}`,
+      ].join("\n"));
       expect(slow.code).toBe(0);
       ids.push(slow.json.added);
       await until(() => started().length === 2);
