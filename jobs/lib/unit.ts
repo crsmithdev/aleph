@@ -979,12 +979,14 @@ async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, d
   const findings = testFindings(repo.path, base, `refs/heads/${branch}`);
   let rv = await review(id, folder, run, repo, dir, base, branch, findings);
   if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
-  // A reviewer that gave no verdict runs once more; a second miss is a finding.
+  // A reviewer that gave no verdict runs once more; a second miss is the reviewer's, not the
+  // worker's: it goes to Chris whatever fix rounds are left, since a fix round cannot cure it.
   if (rv.none) {
     rv = await review(id, folder, run, repo, dir, base, branch, findings);
     if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
   }
   if (!rv.reason) return { verdict: { state: "passed", ...facts }, code: 0 };
+  if (rv.none) return { verdict: { state: "needs-you", needs: "review", reason: rv.reason, stat, ...facts }, code: 0 };
   if (earlier) {
     if (earlier.length < fixRounds()) return { verdict: { state: "stuck", reason: rv.reason, stat, ...facts, failed: "review", round: earlier.length }, code: 1 };
     const back = earlier.filter((r) => r.failed === "review").length;
@@ -1061,7 +1063,10 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
 const REVIEW = `You are the reviewer of job \`%NAME%\`. The working directory is a clone of the
 branch the worker made for the goal issue below; read the code there as needed.
 Judge whether the diff does what the issue asks, whether the tests cover it, and
-whether it breaks anything. Do not change files. ${FOREGROUND} End with one line:
+whether it breaks anything. Do not change files. The factory already ran the repo's checks on this branch and
+they passed. Do not run the full test suite or repeat-run loops: you have a time
+box, and a long command ends it with no verdict. Run only a few targeted commands
+of your own, each ending in well under a minute. ${FOREGROUND} End with one line:
 \`VERDICT: pass\` or \`VERDICT: hold <one-sentence reason>\`.`;
 
 const TESTS = `The diff changes tests. Judge each finding below against the goal: hold only

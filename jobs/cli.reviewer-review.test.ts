@@ -98,6 +98,20 @@ describe("a factory run", () => {
       await aleph(["drop", "rslow2"]);
     });
 
+    test("with the default fix rounds, a reviewer with no verdict twice needs Chris and no worker runs again", async () => {
+      const slow = join(base, "slow-reviewer");
+      writeFileSync(slow, "#!/bin/bash\nsleep 60\n", { mode: 0o755 });
+      const t = await aleph(["job", "fac", "rslow3", "--spec", specFile("Goal: g\nACTION: commit rslow3.txt\n")], { ALEPH_REVIEWER_CMD: slow, ALEPH_REVIEW_TIMEOUT: "1" });
+      expect(state(t.json.run)).toMatchObject({ state: "needs-you", needs: "review", reason: "reviewer: no verdict (time box)" });
+      expect(runsOf("rslow3").length).toBe(1);
+      await aleph(["drop", "rslow3"]);
+      await rjob("rnone2", "REVIEW:none");
+      const rs = runsOf("rnone2");
+      expect(rs.length).toBe(1);
+      expect(rs[0]).toMatchObject({ state: "needs-you", needs: "review", reason: expect.stringMatching(/^reviewer: no verdict/) });
+      await aleph(["drop", "rnone2"]);
+    }, 30_000);
+
     test("a held path holds without a review", async () => {
       const n = calls();
       const r = await rjob("rheld", "REVIEW:pass", "commit held/r.txt");
