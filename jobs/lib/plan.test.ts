@@ -39,7 +39,7 @@ J
 esac
 `;
 
-const KEYS = ["ALEPH_ITEMS", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_PLAN_CMD", "ALEPH_DISPATCH"];
+const KEYS = ["ALEPH_ITEMS", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_PLAN_CMD", "ALEPH_DISPATCH", "ALEPH_VAULT"];
 let base: string;
 let saved: Record<string, string | undefined>;
 
@@ -49,10 +49,13 @@ beforeEach(() => {
   writeFileSync(join(base, "fake"), fake(base));
   chmodSync(join(base, "fake"), 0o755);
   writeFileSync(join(base, "calls"), "");
+  // An empty vault, so the planner's recall never reads the real ~/.aleph/vault.
+  mkdirSync(join(base, "vault-empty"));
   Object.assign(process.env, {
     ALEPH_ITEMS: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"),
     ALEPH_FACTORY_DIR: join(base, "factory"), XDG_RUNTIME_DIR: join(base, "run"), ALEPH_DAY_CAP: "100", ALEPH_LIVE_CAP: "5",
     SIDETONE_TELL_URL: "http://127.0.0.1:1/tell", ALEPH_PLAN_CMD: join(base, "fake"), ALEPH_DISPATCH: "off",
+    ALEPH_VAULT: join(base, "vault-empty"),
   });
   sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "repo.git"));
   sh(base, "git", "clone", "-q", join(base, "repo.git"), join(base, "repo"));
@@ -207,7 +210,8 @@ test("a dispatch returns before a slow planner replies; the small goal starts, a
   expect(Date.now() - t0).toBeLessThan(900);
   expect(starts).toEqual([`fac-${small}`]);
   expect(out.planned).toEqual([`fac-${big}`]);
-  await Bun.sleep(300);
+  // A bounded wait, of at most about 3 seconds, for the fake planner to log its call while the plan runs.
+  for (let i = 0; planCalls().length < 1 && i < 150; i++) await Bun.sleep(20);
   expect(planRuns()).toEqual([expect.objectContaining({ kind: "plan", todo: big, state: "running" })]);
 
   // A second pass starts no second plan and no worker for the large goal.
