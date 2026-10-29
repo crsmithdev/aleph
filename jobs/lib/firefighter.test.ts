@@ -6,7 +6,7 @@ import * as todos from "../../todo/lib/todo.ts";
 import { labels as storeLabels, readList, writeList } from "../../todo/lib/store.ts";
 import { writeDecision, type Decision } from "./decision.ts";
 import { firefighterStep } from "./factory.ts";
-import { parseReply, prompt, snapshot, type Ports } from "./firefighter.ts";
+import { defaultPorts, parseReply, prompt, snapshot, type Ports } from "./firefighter.ts";
 import { readRun, stamp, writeRun, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -141,6 +141,32 @@ test("a new held run whose reviews both say land, off the security paths, is lan
   const p = readFileSync(join(base, "prompt.md"), "utf8");
   expect(p).toContain("VERDICT: land");
   expect(p).toContain(`Issue ${key}-1: held`);
+});
+
+test("a land by the firefighter writes Held-by: firefighter, not Held-by: Chris", async () => {
+  fresh([{ title: "held", labels: ["goal"] }]);
+  // A real remote for the land to push to, and a stand-in for srt; the land unit runs in the foreground.
+  writeFileSync(join(base, "repos.json"), JSON.stringify({ [key]: { path: repoPath(), sandbox: true, autoland: false, checks: [] } }));
+  writeFileSync(join(base, "pass"), "#!/bin/bash\nshift\nexec env -i \"$@\"\n", { mode: 0o755 });
+  process.env.ALEPH_SANDBOX_CMD = join(base, "pass");
+  const remote = join(base, `remote${n}.git`);
+  sh(base, "git", "init", "-q", "--bare", "-b", "main", remote);
+  sh(repoPath(), "git", "remote", "add", "origin", remote);
+  sh(repoPath(), "git", "push", "-q", "origin", "main");
+  branch(`b${n}`, "ui/views/x.js");
+  held(`b${n}`);
+  reply([{ do: "land", job: `${key}-1` }]);
+  process.env.ALEPH_JOB_FOREGROUND = "1";
+  try {
+    const f = await firefighterStep(defaultPorts);
+    expect(f?.applied).toEqual([`land ${key}-1`]);
+  } finally {
+    delete process.env.ALEPH_JOB_FOREGROUND;
+    delete process.env.ALEPH_SANDBOX_CMD;
+  }
+  const trailers = sh(base, "git", "--git-dir", remote, "log", "-1", "--format=%(trailers:only)", "main");
+  expect(trailers).toContain("Held-by: firefighter");
+  expect(trailers).not.toContain("Held-by: Chris");
 });
 
 test("the same run with a diff in jobs/lib/sandbox.ts is not landed: needs-chris and one tell", async () => {
