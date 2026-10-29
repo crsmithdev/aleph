@@ -31,7 +31,7 @@ let key = "";
 const repoPath = () => join(base, "repo");
 
 /** A new repo key, ledger and factory directory, with these items in its list. */
-function fresh(items: { title: string; labels?: string[]; notes?: string[] }[] = []): void {
+function fresh(items: { title: string; labels?: string[]; notes?: string[]; reason?: string }[] = []): void {
   key = `ff${++n}`;
   writeFileSync(join(base, "repos.json"), JSON.stringify({ [key]: { path: repoPath(), sandbox: true, autoland: false } }));
   process.env.ALEPH_JOBS_DIR = join(base, `jobs${n}`);
@@ -40,6 +40,7 @@ function fresh(items: { title: string; labels?: string[]; notes?: string[] }[] =
     for (const i of items) {
       const it = todos.add(doc, i.title, { labels: i.labels });
       for (const note of i.notes ?? []) todos.note(it, note);
+      if (i.reason) it.fm.reason = i.reason;
     }
     return true;
   }, true);
@@ -264,6 +265,33 @@ test("a decision handed to the firefighter: its product choice is cleared, its e
   expect(f?.applied).toEqual([`clear-needs-chris ${key}-1: page A`]);
   expect(storeLabels(item(1))).toContain("goal");
   expect(storeLabels(item(1))).not.toContain("needs-chris");
+});
+
+test("a triage question on a mark whose reason Chris handed is cleared; without the handed reason it is refused", async () => {
+  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], reason: "acceptance-failed" }]);
+  standingFile({ "acceptance-failed": { action: "firefighter", at: "2026-10-28T00:00:00.000Z" } });
+  reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }]);
+  const f = await firefighterStep(ports());
+  expect(f?.refused).toEqual([]);
+  expect(f?.applied).toEqual([`clear-needs-chris ${key}-1: page A`]);
+  expect(storeLabels(item(1))).not.toContain("needs-chris");
+});
+
+test("the same triage question with no standing for its reason is refused", async () => {
+  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], reason: "acceptance-failed" }]);
+  reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }]);
+  const f = await firefighterStep(ports());
+  expect(f?.refused).toEqual([expect.stringContaining("product choice")]);
+  expect(storeLabels(item(1))).toContain("needs-chris");
+});
+
+test("a decision mark is refused as a product choice without a decision standing", async () => {
+  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], reason: "decision" }]);
+  standingFile({ "acceptance-failed": { action: "firefighter", at: "2026-10-28T00:00:00.000Z" } });
+  reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }]);
+  const f = await firefighterStep(ports());
+  expect(f?.refused).toEqual([expect.stringContaining("product choice")]);
+  expect(storeLabels(item(1))).toContain("needs-chris");
 });
 
 test("without a handed reason a product choice is still refused, and the prompt has no handed rule", () => {

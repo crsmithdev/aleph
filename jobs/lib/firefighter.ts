@@ -296,7 +296,10 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   }
   if (a.do === "clear-needs-chris") {
     if (!store.needsChris(item)) return { refused: `${describe(a)}: it is not labelled needs-chris` };
-    if (isProductChoice(item) && !handed("decision")) return { refused: `${describe(a)}: its question is a product choice, which is Chris's` };
+    // The current mark's reason decides: a `decision` mark, or a triage question on a mark with another reason that Chris has not handed, is Chris's.
+    const reason = reasonOf(item);
+    const productChoice = reason === "decision" || (isProductChoice(item) && !(reason !== null && handed(reason)));
+    if (productChoice && !handed("decision")) return { refused: `${describe(a)}: its question is a product choice, which is Chris's` };
     const why = await refusal(async () => issues.decide(repo, a.n, `firefighter decided: ${a.note}`));
     return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
   }
