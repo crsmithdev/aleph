@@ -147,11 +147,13 @@ export function allJobs(): Entry[][] {
 }
 
 /**
- * A job is open while its latest run is open. A plain run is open only while
- * it is live: a failed build is news, not a job to land or drop.
+ * A job is open while its latest run is open. A facts run (the reviewer of a
+ * landed job) does not count: a landed job stays closed while it runs. A plain
+ * run is open only while it is live: a failed build is news, not a job to land or drop.
  */
 export function isOpen(runs: Entry[]): boolean {
-  const last = runs.at(-1)!;
+  const last = runs.findLast((e) => e.run.kind !== "facts");
+  if (!last) return false;
   if (last.run.kind === "plain") return isLive(last.folder);
   return OPEN.includes(last.run.state);
 }

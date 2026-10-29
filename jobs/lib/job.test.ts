@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addNote, allJobs, batch, findJob, goal, hasFile, issue, jobById, lastReal, latestFile, jobsNamed, latestJob, markNeedsChris, markRescued, needsChris, notes, openJob, readFile, rescued, stateOf, tailOf, view } from "./job.ts";
-import { writeRun, type Run } from "./ledger.ts";
+import { isOpen, writeRun, type Run } from "./ledger.ts";
 
 let base: string;
 let saved: string | undefined;
@@ -67,6 +67,22 @@ describe("the run that counts", () => {
     const k = latestJob("n")!;
     expect(stateOf(k)).toBe("failed");
     expect(issue(k)).toBe(4);
+  });
+});
+
+describe("isOpen", () => {
+  test("a facts run does not reopen a landed job", () => {
+    run("20261028-000001-a01", "j", { name: "n", kind: "land", state: "landed" });
+    run("20261028-000002-a02", "j", { name: "n", kind: "facts", state: "running" });
+    expect(isOpen(allJobs()[0])).toBe(false);
+  });
+
+  test("an open run stays open under a facts run; a job of only facts runs is not open", () => {
+    run("20261028-000001-a01", "j", { name: "n", state: "passed" });
+    run("20261028-000002-a02", "j", { name: "n", kind: "facts", state: "done" });
+    expect(isOpen(allJobs()[0])).toBe(true);
+    run("20261028-000003-a03", "k", { name: "k", kind: "facts", state: "running" });
+    expect(isOpen(allJobs()[1])).toBe(false);
   });
 });
 
