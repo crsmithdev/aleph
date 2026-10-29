@@ -42,7 +42,7 @@ export interface Run {
   /** A facts run: the titles of the notes it wrote. */
   kept?: string[];
   /** A facts run: the facts it rejected, each with its reason. */
-  rejected?: string[];
+  rejected?: { fact: string; reason: string }[];
   /** A factory run: the `DEFAULT: <question> -> <answer>` lines of its result. */
   defaults?: string[];
   /** An agent or land run: each check that ran, skipped `when` checks left out. */

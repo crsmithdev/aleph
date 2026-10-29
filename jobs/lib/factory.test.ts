@@ -783,9 +783,13 @@ test("episodeStep writes the page of a done goal and logs its title", async () =
 test("report prints the kept and rejected lines of a facts run, once", () => {
   const folder = join(base, "jobs", "20261028-000001-facts-n1-facts");
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "facts", job: "j1", name: "facts-n1", repo: "fac", state: "done", reason: "kept 1, rejected 1", told: true, shown: false, started: "2026-10-28T00:00:00Z", kept: ["Lemons Float"], rejected: ["pears sink: b.ts says otherwise"] } as Run);
+  writeRun(folder, { kind: "facts", job: "j1", name: "facts-n1", repo: "fac", state: "done", reason: "kept 1, rejected 1", told: true, shown: false, started: "2026-10-28T00:00:00Z", kept: ["Lemons Float"], rejected: [{ fact: "pears sink", reason: "b.ts says otherwise" }] } as Run);
+  const old = join(base, "jobs", "20261028-000002-facts-n2-facts");
+  mkdirSync(old, { recursive: true });
+  writeRun(old, { kind: "facts", job: "j2", name: "facts-n2", repo: "fac", state: "done", reason: "kept 0, rejected 1", told: true, shown: false, started: "2026-10-28T00:00:01Z", kept: [], rejected: ["old: string form"] } as unknown as Run);
   const out = report();
   expect(out).toContain("fac/facts-n1 done: kept 1, rejected 1\n  kept: Lemons Float");
+  expect(out).toContain("  rejected: old: string form");
   expect(out).toContain("  rejected: pears sink: b.ts says otherwise");
   expect(out.split("rejected: pears sink").length).toBe(2);
   expect(report()).not.toContain("fac/facts-n1");

@@ -178,7 +178,7 @@ ${v.source}
  * Runs the facts gate for a landed job: the sourced FACT lines of its worker's result go to
  * one reviewer run, and each kept verdict is written to the vault. Null when there is nothing to review.
  */
-export async function factsGate(repo: Repo, landed: Entry, commit: string, log: (line: string) => void): Promise<{ kept: string[]; rejected: string[] } | null> {
+export async function factsGate(repo: Repo, landed: Entry, commit: string, log: (line: string) => void): Promise<{ kept: string[]; rejected: { fact: string; reason: string }[] } | null> {
   const name = landed.run.name;
   const job = allJobs().find((j) => j[0].run.job === landed.run.job) ?? [landed];
   const worker = job.findLast((e) => e.run.kind === "agent" || e.run.kind === "recheck");
@@ -190,9 +190,9 @@ export async function factsGate(repo: Repo, landed: Entry, commit: string, log: 
   if (!facts.length) return null;
   const { folder, verdicts } = await reviewFacts(repo, landed, facts, commit);
   const kept: string[] = [];
-  const rejected: string[] = [];
+  const rejected: { fact: string; reason: string }[] = [];
   const reject = (v: Verdict, reason: string) => {
-    rejected.push(`${v.fact}: ${reason}`);
+    rejected.push({ fact: v.fact, reason });
     log(`${name}: fact rejected (${reason}): ${v.fact}`);
   };
   for (const v of verdicts) {

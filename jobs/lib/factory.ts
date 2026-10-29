@@ -878,7 +878,7 @@ function entry(e: Entry): string {
       const src = noteSource(k);
       lines.push(`  kept: ${k}${src ? ` (${src})` : ""}`);
     }
-    for (const x of r.rejected ?? []) lines.push(`  rejected: ${x}`);
+    for (const x of r.rejected ?? []) lines.push(`  rejected: ${typeof x === "string" ? x : `${x.fact}: ${x.reason}`}`);
   }
   if (r.cost !== undefined) lines.push(`  cost ${money(r.cost)} at the API price`);
   return lines.join("\n");

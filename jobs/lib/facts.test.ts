@@ -207,7 +207,7 @@ describe("factsGate through the dispatch", () => {
     expect(runs).toHaveLength(1);
     const state = JSON.parse(readFileSync(join(jobs, runs[0], "state.json"), "utf8"));
     expect(state.kept).toEqual(["Lemons Float"]);
-    expect(state.rejected).toEqual(["pears sink: b.ts says otherwise"]);
+    expect(state.rejected).toEqual([{ fact: "pears sink", reason: "b.ts says otherwise" }]);
     expect(readFileSync(seen, "utf8")).not.toContain("no source at all");
     expect(log()).toContain("gate-01: fact dropped, no source: no source at all");
     expect(log()).toContain("gate-01: fact rejected (b.ts says otherwise): pears sink");
@@ -227,7 +227,8 @@ describe("factsGate through the dispatch", () => {
     expect(existsSync(join(vault, "wiki", "gotchas", "Widget Registry Rules.md"))).toBe(false);
     const run = factsRuns().map((f) => JSON.parse(readFileSync(join(jobs, f, "state.json"), "utf8"))).find((s) => s.name === "facts-gate-02");
     expect(run.kept).toEqual([]);
-    expect(run.rejected[0]).toContain("widgets are not registered");
+    expect(run.rejected[0].fact).toContain("widgets are not registered");
+    expect(run.rejected[0].reason).toContain("may contradict");
   });
 
   test("a landed job with no FACT lines makes no facts run", async () => {

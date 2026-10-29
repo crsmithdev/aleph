@@ -86,7 +86,7 @@ async function runMisses(): Promise<unknown | null> {
 
 const WEEK = 7 * 86_400_000;
 /** A rejection is stored as `<fact>: <reason>`; the reason is what follows the last colon. */
-const splitRejection = (s: string) => { const i = s.lastIndexOf(": "); return i < 0 ? { fact: s, reason: "" } : { fact: s.slice(0, i), reason: s.slice(i + 2) }; };
+const splitRejection = (s: string | { fact: string; reason: string }) => { if (typeof s !== "string") return s; const i = s.lastIndexOf(": "); return i < 0 ? { fact: s, reason: "" } : { fact: s.slice(0, i), reason: s.slice(i + 2) }; };
 
 /** The 20 latest facts runs of the job ledger, newest first, with what each kept (the note's title and its first source) and rejected; and the facts kept and rejected in the last 7 days. */
 function factsRuns(all: Note[], project: string | null) {
