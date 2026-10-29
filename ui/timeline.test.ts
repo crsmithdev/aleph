@@ -68,6 +68,12 @@ beforeAll(() => {
   run("20261027-000003-a", { job: "oth-1", name: "oth-1", repo: "other", state: "failed", started: at(1, 9), ended: at(1, 10) });
   run("20261027-000005-a", { job: "fac-5", name: "fac-5", kind: "triage", repo: "fac", state: "done", started: at(0, 8), ended: at(0, 8, 5) });
   run("20261027-000004-a", { job: "fac-3", name: "fac-3", repo: "fac", todo: 1, state: "done", started: at(1, 15), ended: at(1, 16) });
+  // Lands whose commits are not in git: the four labels. A held run with no lander is Chris's.
+  const sha = (c: string) => c.repeat(40);
+  run("20261027-000006-l", { kind: "land", job: "land-plain", name: "land-plain", repo: "fac", state: "landed", commit: sha("1"), started: at(3, 9), ended: at(3, 10) });
+  run("20261027-000007-l", { kind: "land", job: "land-held", name: "land-held", repo: "fac", state: "landed", commit: sha("2"), held: true, started: at(3, 11), ended: at(3, 12) });
+  run("20261027-000008-l", { kind: "land", job: "land-chris", name: "land-chris", repo: "fac", state: "landed", commit: sha("3"), held: true, lander: "Chris", started: at(3, 13), ended: at(3, 14) });
+  run("20261027-000009-l", { kind: "land", job: "land-ff", name: "land-ff", repo: "fac", state: "landed", commit: sha("4"), held: true, lander: "firefighter", started: at(3, 15), ended: at(3, 16) });
 });
 afterAll(() => {
   for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
@@ -207,6 +213,11 @@ describe("timeline api", () => {
     expect(rows.some((e) => e.id === "fac-5")).toBe(false);
     expect(rows.some((e) => (e.kind as string) === "note")).toBe(false);
     expect(rows.find((e) => e.kind === "land" && e.title === "first commit")).toMatchObject({ sub: "direct", project: "fac" });
+    const label = (id: string) => rows.find((e) => e.kind === "land" && e.id === id)!.sub;
+    expect(label("land-plain")).toBeUndefined();
+    expect(label("land-held")).toBe("by hand");
+    expect(label("land-chris")).toBe("by hand");
+    expect(label("land-ff")).toBe("by firefighter");
     expect(rows.find((e) => e.kind === "issue" && e.title === "an issue")!.details).toContainEqual(["labels", "goal"]);
     expect(rows.find((e) => e.kind === "issue" && e.title === "an issue")!.details).toContainEqual(["notes", "4"]);
     expect(rows.every((e) => e.project)).toBe(true);
@@ -300,6 +311,7 @@ describe("timeline view", () => {
   test("a land's contents are its commit and by hand or direct; an issue's are label chips and the note count", () => {
     expect(contentsText({ kind: "land", sub: "by hand", commit: "abcdef0123", details: [["took", "5m"], ["model", "m"], ["commit", "abcdef0"]] })).toBe("commit: abcdef0  landed: by hand");
     expect(contentsText({ kind: "land", sub: "direct", details: [["commit", "abc1234"]] })).toBe("commit: abc1234  landed: direct");
+    expect(contentsText({ kind: "land", sub: "by firefighter", commit: "abcdef0123", details: [["commit", "abcdef0"]] })).toContain("landed: by firefighter");
     expect(contentsText({ kind: "land", details: [["commit", "abc1234"]] })).toBe("commit: abc1234");
     const h = renderEvent({ at: "2026-10-26T00:00:00", kind: "issue", what: "opened", state: "open", title: "t", id: "aleph-3", href: "#/issues/aleph/3", project: "aleph", details: [["labels", "followup,goal"], ["notes", "2"]] });
     expect(h).toContain('<span class="chips"><span class="chip">followup</span><span class="chip">factory</span></span>');
