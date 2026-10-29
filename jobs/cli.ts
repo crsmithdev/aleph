@@ -16,6 +16,7 @@ import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import * as issues from "../todo/lib/issues.ts";
+import { grant, readStanding, revoke } from "./lib/standing.ts";
 import { behind, correctionsStep, dispatchDetached, factoryDir, factoryLog, firefighterStep, health, hold, paused, planNow, probeDue, report, setPaused, triageDetached, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
 import { checkName, checked, drop, land, recheck, refuse, Refusal, repoOf, runDispatch, startJob, startPlain, type Start } from "./lib/transitions.ts";
 import { probe } from "./lib/probe.ts";
@@ -435,6 +436,14 @@ try {
     case "report": reportCmd(); break;
     case "pause": setPaused(true); out({ paused: true }); break;
     case "resume": setPaused(false); out({ paused: false }); dispatchDetached(); break;
+    case "standing": {
+      const [sub, reason, action] = positional;
+      if (sub === "list" || sub === undefined) out(readStanding());
+      else if (sub === "grant") { const bad = grant(reason ?? refuse("usage: aleph standing grant <reason> <action>"), action ?? refuse("usage: aleph standing grant <reason> <action>")); if (bad) refuse(bad); out(readStanding()); }
+      else if (sub === "revoke") { revoke(reason ?? refuse("usage: aleph standing revoke <reason>")); out(readStanding()); }
+      else refuse("usage: aleph standing <list|grant <reason> <action>|revoke <reason>>");
+      break;
+    }
     case "judge": {
       const v = positional[0];
       if (v === "jev" || v === "haiku") setJudgeChoice(v);

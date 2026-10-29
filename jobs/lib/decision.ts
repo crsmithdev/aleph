@@ -56,7 +56,7 @@ export function writeDecision(item: todos.Item, d: Decision): void {
 }
 
 export function clearDecision(item: todos.Item): void {
-  for (const k of ["question", "options", "recommended", "why"]) delete item.fm[k];
+  for (const k of ["question", "options", "recommended", "why", "reason"]) delete item.fm[k];
 }
 
 /** The prose note of a decision, for the CLI and the history. */

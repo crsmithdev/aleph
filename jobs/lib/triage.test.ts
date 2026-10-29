@@ -115,6 +115,7 @@ test("a chris verdict with options is stored as fields next to the prose note; a
   reset([{ title: "a", body: "VERDICT:structured" }]);
   await run();
   expect(readDecision(item(1))).toEqual({ question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["one", "two"] });
+  expect(item(1).fm.reason).toBe("decision");
   expect(item(1).notes.at(-1)).toContain("A or B? Options: A: do a; B: do b. My recommendation is B.");
   const bad = parseVerdict('{"verdict":"chris","question":"Q?","options":[{"label":"A","line":"x"}],"recommended":"A"}');
   expect(bad).toEqual({ verdict: "chris", question: "Q?" });
@@ -165,6 +166,7 @@ test("an item with no verdict twice is labelled needs-chris and not triaged agai
   const t = await run();
   expect(labels(1)).toContain("needs-chris");
   expect(item(1).notes.at(-1)).toContain("no verdict in 2 runs");
+  expect(item(1).fm.reason).toBe("triage-no-verdict");
   expect(t.skipped).toEqual([`${repo.key}-1: no verdict in 2 triages; labelled needs-chris`]);
   const n = calls();
   await run();

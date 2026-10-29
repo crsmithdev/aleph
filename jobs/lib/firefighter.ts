@@ -246,7 +246,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
         ? `${a.job} cannot be checked for held security paths, as its branch is gone, so it needs you to land or drop it.`
         : `${a.job} changes ${held}, a held security path, so it needs your review before it lands.`;
       markNeedsChris(last, sentence);
-      if (issue !== undefined) store.note(repo, issue, `needs-chris: ${sentence}`, { label: store.NEEDS_CHRIS });
+      if (issue !== undefined) store.note(repo, issue, `needs-chris: ${sentence}`, { label: store.NEEDS_CHRIS, reason: "firefighter" });
       await ports.tell(`${repo.key}/${a.job}: needs-chris: ${sentence}`);
       return { chris: sentence };
     }

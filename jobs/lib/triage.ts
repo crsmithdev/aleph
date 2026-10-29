@@ -113,6 +113,7 @@ function apply(repo: Repo, id: number, v: Verdict): boolean {
       todos.note(item, `triage: closed: ${v.reason}`);
     } else if (v.verdict === "chris") {
       label(item, [NEEDS_CHRIS]);
+      item.fm.reason = "decision";
       if (v.decision) writeDecision(item, v.decision);
       todos.note(item, `triage: for Chris: ${v.decision ? decisionNote(v.decision) : v.question}`);
     } else {
@@ -132,6 +133,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   if (n < TRIAGE_TRIES()) return null;
   const written = sort(repo, id, `triage ${repo.key}-${id}: no verdict`, (item) => {
     label(item, [NEEDS_CHRIS]);
+    item.fm.reason = "triage-no-verdict";
     todos.note(item, `triage: no verdict in ${n} runs: ${reason}`);
   });
   return written ? `${repo.key}-${id}: no verdict in ${n} triages; labelled needs-chris` : null;

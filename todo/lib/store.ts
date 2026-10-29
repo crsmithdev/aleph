@@ -294,10 +294,10 @@ const why = (e: any): string => e?.message ?? String(e);
 
 /**
  * A note on item `id`, as one commit; with `done` the item is done too, with
- * `label` it gains that label, with `decision` it carries that decision.
+ * `label` it gains that label, with `decision` it carries that decision, with `reason` it carries the reason code (`fm.reason`).
  * Returns why it could not, or null.
  */
-export function note(repo: Place, id: number, text: string, opts: { done?: boolean; label?: string; unlabel?: string; decision?: Decision } = {}): string | null {
+export function note(repo: Place, id: number, text: string, opts: { done?: boolean; label?: string; unlabel?: string; decision?: Decision; reason?: string } = {}): string | null {
   try {
     const w = writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
       const item = todos.find(doc, id);
@@ -305,6 +305,7 @@ export function note(repo: Place, id: number, text: string, opts: { done?: boole
       if (opts.done) todos.setStatus(item, "done");
       if (opts.label || opts.unlabel) label(item, opts.label ? [opts.label] : [], opts.unlabel ? [opts.unlabel] : []);
       if (opts.decision) writeDecision(item, opts.decision);
+      if (opts.reason) item.fm.reason = opts.reason;
       return todos.note(item, text);
     });
     return w ? null : `no issue ${id}`;

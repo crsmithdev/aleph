@@ -168,7 +168,7 @@ export async function accept(repo: Repo, item: todos.Item, run: Runner = sandbox
       writeRecord(repo.key, item.id, { result: "fail", sha, command, fails, since: full });
       return `${name}: acceptance failed at ${sha} (${command}); reopened for one more run`;
     }
-    const bad = note(repo, item.id, `acceptance: fail again at ${sha}: ${out} | needs-chris: the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, { label: "needs-chris" });
+    const bad = note(repo, item.id, `acceptance: fail again at ${sha}: ${out} | needs-chris: the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, { label: "needs-chris", reason: "acceptance-failed" });
     writeRecord(repo.key, item.id, { result: "fail", sha, command, fails, since: full });
     return `${name}: acceptance failed again at ${sha} (${command}); needs-chris${bad ? ` (no issue note: ${bad})` : ""}`;
   }

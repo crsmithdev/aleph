@@ -294,7 +294,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
         if (!hasLabel(item, "needs-chris")) {
           writeStreakMark(name);
           const text = `needs-chris: the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
-          const bad = note(repo, item.id, text, { label: "needs-chris" });
+          const bad = note(repo, item.id, text, { label: "needs-chris", reason: "no-commit" });
           if (bad) factoryLog(`${name}: no issue note: ${bad}`);
         }
         skipped.push(`${name}: ${NO_COMMIT_LIMIT} runs in a row with no commit`);
@@ -511,13 +511,13 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
   const todo = issueOf(runs) ?? Number(name.match(/-(\d+)$/)?.[1]);
   const issue = Number.isInteger(todo) ? todo : undefined;
   const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${repo.key}/${name}: ${line}`); };
-  const record = (text: string, opts: { done?: boolean; label?: string; unlabel?: string; decision?: Decision } = {}) => {
+  const record = (text: string, opts: { done?: boolean; label?: string; unlabel?: string; decision?: Decision; reason?: string } = {}) => {
     const why = issue === undefined ? "no issue" : note(repo, issue, text, opts);
     if (why) factoryLog(`${name}: no issue note: ${why}`);
   };
   const chris = async (question: string, decision?: Decision) => {
     markNeedsChris(last, question);
-    record(`needs-chris: ${question}`, { label: "needs-chris", decision });
+    record(`needs-chris: ${question}`, { label: "needs-chris", decision, reason: "rescue" });
     await say(`needs-chris: ${question}`);
   };
 

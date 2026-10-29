@@ -114,7 +114,7 @@ export function note(repo: store.Place, id: number, text: string, answer = false
     const i = pick(repo, doc, id);
     const line = todos.note(i, text);
     const answered = answer && store.needsChris(i);
-    if (answered) store.label(i, [], [store.NEEDS_CHRIS]);
+    if (answered) { store.label(i, [], [store.NEEDS_CHRIS]); delete i.fm.reason; }
     return { id: i.id, line, answered };
   })!;
   return { result: { repo: repo.key, id: w.value.id, note: w.value.line, commit: w.commit }, answered: w.value.answered, follow: w.follow };
@@ -129,6 +129,7 @@ export function decide(repo: store.Place, id: number, text: string, fields: Fiel
     if (todos.status(i) !== "open" || !store.needsChris(i)) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
     todos.note(i, text);
     clearDecision(i);
+    delete i.fm.reason;
     store.label(i, [store.GOAL], [store.NEEDS_CHRIS]);
     todos.edit(i, { waitingOn: fields.waitingOn });
     return i;

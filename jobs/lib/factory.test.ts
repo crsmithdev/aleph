@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { labels as itemLabels, readList, writeList } from "../../todo/lib/store.ts";
+import * as issues from "../../todo/lib/issues.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import { correctionsDue, dispatchGoals, episodeStep, report, gates, notReady, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
 import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
@@ -323,6 +324,7 @@ test("a fourth no-commit run in a row is not dispatched; the item is labelled ne
   expect(out.skipped.join()).toContain("3 runs in a row with no commit");
   expect(labels(id)).toContain("needs-chris");
   expect(notes(id)).toContain("ended with no commit");
+  expect(readList({ key: "fac" })!.items.find((i) => i.id === id)!.fm.reason).toBe("no-commit");
   await dispatch(f);
   expect(f.specs).toEqual([]);
 });
@@ -605,6 +607,10 @@ test("a run that is not safe is labelled needs-chris with a question and does no
   const out = await dispatch(f);
   expect(labels(id)).toContain("needs-chris");
   expect(notes(id)).toContain("needs-chris: fac-");
+  const stored = () => readList({ key: "fac" })!.items.find((i) => i.id === id)!;
+  expect(stored().fm.reason).toBe("rescue");
+  issues.decide({ key: "fac" }, id, "drop it");
+  expect("reason" in stored().fm).toBe(false);
   expect(out.held).toBeUndefined();
   expect(f.calls).toEqual([`start fac-${other}`]);
   expect(hold()).toBeNull();
