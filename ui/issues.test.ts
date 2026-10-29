@@ -407,3 +407,28 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
     });
   });
 });
+
+describe("POST /api/issues/:repo/:id/retriage and rerun", () => {
+  const h = { "x-aleph-ui": "1", "content-type": "application/json" };
+  const ask = () => writeList({ key: "fac" }, "seed", (doc) => add(doc, "stuck triage", { labels: ["needs-chris"], body: "x" }).id, true)!.value;
+
+  for (const [verb, argv] of [["retriage", ["issue", "note", "fac", "N", "Chris: run triage again"]], ["rerun", ["issue", "decide", "fac", "N", "Chris: run it again"]]] as const) {
+    test(`${verb} refuses without the header, 404s an unknown issue and runs the CLI on a needs-chris item`, async () => {
+      const n = ask();
+      rmSync(argvFile, { force: true });
+      expect((await at(`/api/issues/fac/${n}/${verb}`, { method: "POST" })).status).toBe(403);
+      expect((await at(`/api/issues/fac/${n}/${verb}`, { method: "POST", headers: { ...h, origin: "http://evil.example" } })).status).toBe(403);
+      expect((await at(`/api/issues/fac/9999/${verb}`, { method: "POST", headers: h })).status).toBe(404);
+      expect((await at(`/api/issues/nope/${n}/${verb}`, { method: "POST", headers: h })).status).toBe(404);
+      expect(await Bun.file(argvFile).exists()).toBe(false);
+      const r = await at(`/api/issues/fac/${n}/${verb}`, { method: "POST", headers: h });
+      expect(r.status).toBe(200);
+      expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(argv.map((a) => (a === "N" ? String(n) : a)));
+    });
+  }
+
+  test("an issue that is not waiting for you is a 409", async () => {
+    const n = writeList({ key: "fac" }, "seed", (doc) => add(doc, "plain", { body: "x" }).id, true)!.value;
+    expect((await at(`/api/issues/fac/${n}/retriage`, { method: "POST", headers: h })).status).toBe(409);
+  });
+});

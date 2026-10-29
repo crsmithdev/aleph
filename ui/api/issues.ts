@@ -179,7 +179,32 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
   try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }
 }
 
+/**
+ * A needs-chris issue's one-line answer, run as the CLI: `retriage` is `aleph issue note` (the label leaves; the tick triages it),
+ * `rerun` is `aleph issue decide`. `aleph issue note` takes the answer as its text, not as a flag.
+ */
+function answer(verb: "note" | "decide", text: string) {
+  return async (req: Request, params: Record<string, string>, url: URL): Promise<Response> => {
+    const origin = req.headers.get("origin");
+    if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
+    const repo = loadRegistry()[params.repo];
+    const n = Number(params.id);
+    const none = Response.json({ error: "no such issue" }, { status: 404 });
+    if (!repo || !Number.isInteger(n)) return none;
+    let doc: todos.Doc | null;
+    try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
+    const item = doc && todos.find(doc, n);
+    if (!item) return none;
+    if (todos.status(item) !== "open" || !needsChris(item)) return Response.json({ error: "this issue is not waiting for you" }, { status: 409 });
+    const { stdout: out, stderr: err, code } = await runCli(["issue", verb, repo.key, String(n), text]);
+    if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
+    try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }
+  };
+}
+
 export const routes: Routes = {
+  "POST /api/issues/:repo/:id/retriage": answer("note", "Chris: run triage again"),
+  "POST /api/issues/:repo/:id/rerun": answer("decide", "Chris: run it again"),
   "POST /api/issues/:repo/:id/drop": (req, params, url) => drop(req, params, url),
   "POST /api/issues/:repo/:id/decide": (req, params, url) => decide(req, params, url),
   "GET /api/issues": (_req, _p, url) => list(url),

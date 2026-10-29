@@ -85,6 +85,18 @@ describe("state", () => {
     expect(JSON.parse(before).shown).toBe(false);
   });
 
+  test("attention lists the held run and the standing list shows a grant with its handed count", () => {
+    let s = state(now);
+    expect(s.attention.map((a) => [a.reason, a.id])).toEqual([["held", "fac-1"]]);
+    expect(s.standing).toEqual([]);
+    writeFileSync(join(factory, "standing.json"), JSON.stringify({ held: { action: "firefighter", at: "2026-10-28T00:00:00.000Z" } }));
+    try {
+      s = state(now);
+      expect(s.standing).toEqual([{ reason: "held", action: "firefighter", at: "2026-10-28T00:00:00.000Z", handed: 1 }]);
+      expect(s.attention).toEqual([]);
+    } finally { rmSync(join(factory, "standing.json")); }
+  });
+
   test("velocity counts lands and done triage runs over 24 hours and 7 days; agent marks a job with a live run", () => {
     run("20261027-000020-a", { kind: "triage", job: "fac-t1", name: "fac-t1", state: "done", started: ago(5), ended: ago(4) });
     run("20261027-000021-a", { kind: "triage", job: "fac-t2", name: "fac-t2", state: "failed", started: ago(5), ended: ago(4) });

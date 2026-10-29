@@ -9,6 +9,8 @@ import { DAY_CAP, LIVE_CAP, WAITING_CAP, firefighterLines, health, hold, lastPro
 import { allRuns, loadRegistry, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { readDecision, type Decision } from "../jobs/lib/decision.ts";
+import { attend, type AttentionItem } from "./attention.ts";
+import { readStanding } from "../jobs/lib/standing.ts";
 import { isSorted, labels, needsChris, reader } from "../todo/lib/store.ts";
 import { status } from "../todo/lib/todo.ts";
 import type { Wk } from "./usage.ts";
@@ -47,7 +49,9 @@ export interface NewIssue { id: string; title: string; status: string; href: str
   /** A needs-chris issue: what Chris is asked, from its last note. */
   question?: string;
   /** A needs-chris issue that carries a structured decision: its fields. */
-  decision?: Decision }
+  decision?: Decision;
+  /** The reason code the factory wrote on the issue (`fm.reason`); none on an old item. */
+  reason?: string }
 
 export interface State {
   now: string;
@@ -75,6 +79,10 @@ export interface State {
   openIssues: number;
   /** Triage runs: those running, then the latest finished. */
   triage: Job[];
+  /** What Needs you says: one item per held, review or question run, needs-chris issue and proposal. */
+  attention: AttentionItem[];
+  /** The standing permissions, with how many items each left out of `attention`. */
+  standing: { reason: string; action: string; at: string; handed: number }[];
   /** Jobs landed and issues triaged in the last 24 hours, with the 7-day daily average. */
   velocity: { landed: { day: number; avg: number }; triaged: { day: number; avg: number } };
 }
@@ -241,6 +249,7 @@ export function state(now = new Date()): State {
         if (q) c.question = q;
         const d = readDecision(item);
         if (d) c.decision = d;
+        if (typeof item.fm.reason === "string" && item.fm.reason) c.reason = item.fm.reason;
         waitingOnChris.push(c);
       }
       else if (!isSorted(item)) fresh.push(card());
@@ -250,6 +259,8 @@ export function state(now = new Date()): State {
   fresh.sort((a, b) => b.created.localeCompare(a.created));
   const today = runsToday(now.getTime());
   const probe = lastProbe();
+  const granted = readStanding();
+  const att = attend({ needs, needsIssues: waitingOnChris }, granted);
   return {
     now: now.toISOString(),
     factory: {
@@ -258,6 +269,8 @@ export function state(now = new Date()): State {
       nextTick: nextTick(), probe, health: health(now.getTime()), hold: hold(jobs)?.line ?? null,
       firefighter: firefighterLines(now.getTime()),
     },
+    attention: att.items,
+    standing: Object.entries(granted).map(([reason, g]) => ({ reason, action: g.action, at: g.at, handed: att.handed[reason] ?? 0 })),
     needs, stuck, running, landing, newIssues: fresh.length, openIssues, issues: fresh.slice(0, NEW_ISSUES), needsIssues: waitingOnChris,
     triage: triageRuns.sort((a, b) => b.at - a.at).slice(0, TRIAGED).map((t) => {
       const job = toJob(t.runs);
