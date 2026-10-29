@@ -17,7 +17,8 @@ export const view = {
     `<section id="issues" aria-labelledby="h-issues">${renderIssues(s)}</section>` +
     `<section id="triage" aria-labelledby="h-triage">${renderTriage(s)}</section>` +
     `<section id="lands" aria-labelledby="h-lands">${renderLands(s)}</section>` +
-    `<section id="jobs" aria-labelledby="h-jobs">${renderJobs(s)}</section></div>`,
+    `<section id="jobs" aria-labelledby="h-jobs">${renderJobs(s)}</section>` +
+    `<section id="queued" aria-labelledby="h-queued">${renderQueued(s)}</section></div>`,
 };
 
 /** The count of a section: `N / cap` where a cap applies. */
@@ -45,7 +46,7 @@ const runningCount = (s) => s.running.length + ((s.factory?.firefighter ?? []).l
 /** The needs-you group's rows: held runs, needs-chris issues, proposals, errors. */
 const needsCount = (s) => s.needs.length + (s.needsIssues ?? []).length + (s.proposals ?? []).length + errorLines(s).length;
 
-/** The row of metric cards, one count per section, each a link to it: Issues, Triage, Lands, and Jobs by state. */
+/** The row of metric cards, one count per section, each a link to it: Issues, Triage, Lands, Jobs by state, and Waiting. */
 export function renderMetrics(s) {
   const card = (href, k, n, tone = "") => `<a class="metric${tone ? " " + tone : ""}" href="#${href}"><span class="k">${k}</span><span class="v">${n}</span></a>`;
   return `<div class="metrics">` +
@@ -55,7 +56,7 @@ export function renderMetrics(s) {
     card("jobs-needs", "Needs you", needsCount(s)) +
     card("jobs-stuck", "Stuck or failed", s.stuck.length) +
     card("jobs-running", "Running", runningCount(s), "run") +
-    card("jobs-waiting", "Waiting", s.waiting.length) + `</div>`;
+    card("queued", "Waiting", s.waiting.length) + `</div>`;
 }
 
 /** Weekly plan usage: the % now, the reset time and the 5-hour %, with the 7-day % since the last reset as a line; "usage unknown" when the endpoint gave nothing. */
@@ -157,16 +158,20 @@ function firefighterCard(s, lines) {
   return jobCard("small", "run-row firefighter", `<div class="ih"><span class="t">Firefighter</span></div><div class="run-meta"><span class="badge quiet">role</span></div><ul class="ff-lines">${items}</ul>`);
 }
 
-/** Jobs by state: needs you, stuck or failed, running, waiting; each group is there even when empty, so its metric card has a target. */
+/** Jobs by state: needs you, stuck or failed, running; each group is there even when empty, so its metric card has a target. */
 export function renderJobs(s) {
   const group = (id, t, n, html, none) => `<div class="grp" id="jobs-${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${n ? cards(html) : empty(none)}</div>`;
   const ff = s.factory?.firefighter ?? [];
   const needs = s.needs.map(heldRow(s)).concat((s.needsIssues ?? []).map(decideRow), (s.proposals ?? []).map(proposalRow), errorLines(s).map(errorRow));
   const body = group("needs", "Needs you", needs.length, needs.join(""), "Nothing needs you.") +
     group("stuck", "Stuck or failed", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), "Nothing is stuck or failed.") +
-    group("running", "Running", runningCount(s), s.running.map((j) => runningCard(s, j)).join("") + (ff.length ? firefighterCard(s, ff) : ""), "Nothing is running.") +
-    group("waiting", "Waiting", s.waiting.length, s.waiting.map(queuedCard).join(""), "Nothing is waiting.");
-  return section("jobs", "Jobs", needsCount(s) + s.stuck.length + runningCount(s) + s.waiting.length, body, 0);
+    group("running", "Running", runningCount(s), s.running.map((j) => runningCard(s, j)).join("") + (ff.length ? firefighterCard(s, ff) : ""), "Nothing is running.");
+  return section("jobs", "Jobs", needsCount(s) + s.stuck.length + runningCount(s), body, 0);
+}
+
+/** Waiting: the goals with no job yet, as a section of its own below Jobs; one card each. */
+export function renderQueued(s) {
+  return section("queued", "Waiting", s.waiting.length, s.waiting.length ? cards(s.waiting.map(queuedCard).join("")) : empty("Nothing is waiting."), 0);
 }
 
 /** Lines of the factory's own trouble that are errors: health (a red main among them), the hold, a failed probe; each once. The hold is left out when its stuck run has a row of its own. */

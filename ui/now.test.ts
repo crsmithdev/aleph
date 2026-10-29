@@ -36,13 +36,13 @@ test("a commitUrl becomes a link", () => {
 
 test("an empty section shows its empty state", () => {
   const calm = { ...state, needs: [], stuck: [], running: [], factory: { ...state.factory, health: [] } };
-  expect(r.renderJobs(calm)).toContain("Nothing is waiting.");
+  expect(r.renderQueued({ ...state, waiting: [] })).toContain("Nothing is waiting.");
   expect(r.renderIssues({ ...state, issues: [] })).toContain("No new issues.");
   expect(r.renderTriage({ ...state, triage: [] })).toContain("Nothing has been triaged yet.");
   expect(r.renderLands({ ...state, delivered: [] })).toContain("Nothing has landed yet.");
   // Every state has its group, empty or not: the metric cards link to them.
-  for (const g of ["needs", "stuck", "running", "waiting"]) expect(r.renderJobs(calm)).toContain(`id="jobs-${g}"`);
-  expect(r.renderJobs(calm).match(/<p/g)?.length).toBe(4);
+  for (const g of ["needs", "stuck", "running"]) expect(r.renderJobs(calm)).toContain(`id="jobs-${g}"`);
+  expect(r.renderJobs(calm).match(/<p/g)?.length).toBe(3);
 });
 
 const issue = (n: number) => ({ id: `aleph-${n}`, title: `Issue ${n}`, status: "open", href: `#/issues/aleph/${n}`, labels: [], notes: 0, created: "2026-10-27", updated: "2026-10-27" });
@@ -53,7 +53,7 @@ const section = (h: string, id: string) => h.match(new RegExp(`<section id="${id
 
 test("the page order is metric cards, status line and time, then Issues, Triage, Lands, Jobs; no old section", () => {
   const page = r.view.render(full);
-  expect([...page.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1])).toEqual(["issues", "triage", "lands", "jobs"]);
+  expect([...page.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1])).toEqual(["issues", "triage", "lands", "jobs", "queued"]);
   const at = (t: string) => page.indexOf(t);
   const order = ['class="metrics"', 'class="lede"', 'class="asof"', 'id="issues"', 'id="triage"', 'id="lands"', 'id="jobs"'];
   expect(order.map(at)).toEqual([...order.map(at)].sort((a, b) => a - b));
@@ -69,7 +69,7 @@ test("the metric cards are one count per section, each a link to it, and the cou
   const h = r.renderMetrics(s);
   const cards = [...h.matchAll(/<a class="metric[^"]*" href="#([^"]+)"><span class="k">([^<]+)<\/span><span class="v">(\d+)<\/span>/g)].map((m) => [m[1], m[2], Number(m[3])]);
   expect(cards.map((c) => c[1])).toEqual(["Issues", "Triage", "Lands", "Needs you", "Stuck or failed", "Running", "Waiting"]);
-  expect(cards.map((c) => c[0])).toEqual(["issues", "triage", "lands", "jobs-needs", "jobs-stuck", "jobs-running", "jobs-waiting"]);
+  expect(cards.map((c) => c[0])).toEqual(["issues", "triage", "lands", "jobs-needs", "jobs-stuck", "jobs-running", "queued"]);
   const inside = (id: string) => {
     const m = page.match(new RegExp(`<(?:section|div) (?:id="${id}"|class="grp" id="${id}")[^]*?(?=<div class="grp" id="jobs-|</section>)`));
     return m![0].match(/<article /g)?.length ?? 0;
@@ -86,18 +86,22 @@ test("every section header has a count, in one style", () => {
   expect(r.renderTriage(full)).toContain('<span class="badge done">To factory</span>');
 });
 
-test("Jobs groups needs you, then stuck or failed, then running, then waiting; every job card is compact", () => {
+test("Jobs groups needs you, then stuck or failed, then running; Waiting is its own section below; every job card is compact", () => {
   const h = r.renderJobs(full);
   const at = (id: string) => h.indexOf(`id="jobs-${id}"`);
   expect(at("needs")).toBeGreaterThan(-1);
   expect(at("needs")).toBeLessThan(at("stuck"));
   expect(at("stuck")).toBeLessThan(at("running"));
-  expect(at("running")).toBeLessThan(at("waiting"));
-  expect(h).toContain(">Waiting<");
-  expect(h).not.toContain("Queued");
+  expect(h).not.toContain("jobs-waiting");
+  expect(h).not.toContain("Waiting");
+  const q = r.renderQueued(full);
+  expect(q).toMatch(/^<div class="sh"><h2 id="h-queued">Waiting<\/h2><span class="count">1<\/span><\/div>/);
+  expect(q).toContain('<div class="cards">');
+  expect(q).not.toContain("Queued");
   expect(h).not.toContain("job-card big");
   expect(h.match(/class="job-card small[ "]/g)?.length).toBe(h.match(/<article /g)?.length);
-  expect(h.match(/class="job-card small[ "]/g)?.length).toBe(5);
+  expect(h.match(/class="job-card small[ "]/g)?.length).toBe(4);
+  expect(q.match(/class="job-card small[ "]/g)?.length).toBe(1);
 });
 
 const rows = (h: string) => h.split('<article class="job-card small issue-row ').slice(1);
