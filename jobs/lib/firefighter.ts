@@ -17,6 +17,7 @@ import { verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
 import { factoryDir, factoryLog, factoryRepos, redBaselines, writeRerun } from "./factory.ts";
 import { drop as dropJob, land as landJob, refusal } from "./transitions.ts";
+import { readDecision } from "./decision.ts";
 import { handed, logStanding, readStanding, standing } from "./standing.ts";
 
 export const FIREFIGHTER_MODEL = "claude-opus-5-5";
@@ -211,8 +212,8 @@ export function securityPath(repo: Repo, branch: string | undefined): string | n
   return hit ?? (c.review2Sandbox ? "REVIEW2_SANDBOX in jobs/lib/review2.ts" : null);
 }
 
-/** Whether a `needs-chris` item's question is a product choice: triage asked it (its `chris` verdict is the product kind). */
-export const isProductChoice = (item: todos.Item): boolean => item.notes.some((n) => /\btriage: for Chris:/.test(n));
+/** Whether a `needs-chris` item's question is a product choice: its decision's kind is `product` (triage's `chris` verdict writes that kind). An item with no decision is not one. */
+export const isProductChoice = (item: todos.Item): boolean => readDecision(item)?.kind === "product";
 
 /** The reason code a `needs-chris` item waits for: its `fm.reason`, or `decision` for a triage question with none. */
 export const reasonOf = (item: todos.Item): string | null => (typeof item.fm.reason === "string" ? item.fm.reason : isProductChoice(item) ? "decision" : null);

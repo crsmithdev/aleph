@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { labels as storeLabels, readList, writeList } from "../../todo/lib/store.ts";
+import { writeDecision, type Decision } from "./decision.ts";
 import { firefighterStep } from "./factory.ts";
 import { parseReply, prompt, snapshot, type Ports } from "./firefighter.ts";
 import { readRun, stamp, writeRun, type Run } from "./ledger.ts";
@@ -31,7 +32,7 @@ let key = "";
 const repoPath = () => join(base, "repo");
 
 /** A new repo key, ledger and factory directory, with these items in its list. */
-function fresh(items: { title: string; labels?: string[]; notes?: string[]; reason?: string }[] = []): void {
+function fresh(items: { title: string; labels?: string[]; notes?: string[]; reason?: string; decision?: Decision }[] = []): void {
   key = `ff${++n}`;
   writeFileSync(join(base, "repos.json"), JSON.stringify({ [key]: { path: repoPath(), sandbox: true, autoland: false } }));
   process.env.ALEPH_JOBS_DIR = join(base, `jobs${n}`);
@@ -41,10 +42,12 @@ function fresh(items: { title: string; labels?: string[]; notes?: string[]; reas
       const it = todos.add(doc, i.title, { labels: i.labels });
       for (const note of i.notes ?? []) todos.note(it, note);
       if (i.reason) it.fm.reason = i.reason;
+      if (i.decision) writeDecision(it, i.decision);
     }
     return true;
   }, true);
 }
+const decision = (kind: Decision["kind"]): Decision => ({ question: "Which page?", options: [{ label: "A", line: "page A" }, { label: "B", line: "page B" }], recommended: "A", why: [], kind });
 const item = (id: number) => todos.find(readList({ key })!, id)!;
 const reply = (actions: object[]) => writeFileSync(join(base, "reply.json"), JSON.stringify({ actions }));
 const calls = () => (existsSync(join(base, "calls")) ? readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean).length : 0);
@@ -224,7 +227,7 @@ test("an 11th action in one reply is not applied", async () => {
 
 test("clear-needs-chris is refused on a product choice and applied on a how-to-build one", async () => {
   fresh([
-    { title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"] },
+    { title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], decision: decision("product") },
     { title: "build", labels: ["needs-chris"], notes: ["needs-chris: which module?"] },
   ]);
   reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }, { do: "clear-needs-chris", repo: key, n: 2, note: "put it in x.ts" }]);
@@ -252,7 +255,7 @@ const standingFile = (s: object) => {
 const FIREFIGHTER = { action: "firefighter", at: "2026-10-28T00:00:00.000Z" };
 
 test("a decision handed to the firefighter: its product choice is cleared, its event is marked handed and named in the prompt", async () => {
-  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"] }]);
+  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], decision: decision("product") }]);
   standingFile({ decision: FIREFIGHTER });
   const e = snapshot().find((x) => x.kind === "needs-chris");
   expect(e).toMatchObject({ handed: true, reason: "decision" });
@@ -268,7 +271,7 @@ test("a decision handed to the firefighter: its product choice is cleared, its e
 });
 
 test("a triage question on a mark whose reason Chris handed is cleared; without the handed reason it is refused", async () => {
-  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], reason: "acceptance-failed" }]);
+  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], decision: decision("product"), reason: "acceptance-failed" }]);
   standingFile({ "acceptance-failed": { action: "firefighter", at: "2026-10-28T00:00:00.000Z" } });
   reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }]);
   const f = await firefighterStep(ports());
@@ -278,7 +281,7 @@ test("a triage question on a mark whose reason Chris handed is cleared; without 
 });
 
 test("the same triage question with no standing for its reason is refused", async () => {
-  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], reason: "acceptance-failed" }]);
+  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], decision: decision("product"), reason: "acceptance-failed" }]);
   reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }]);
   const f = await firefighterStep(ports());
   expect(f?.refused).toEqual([expect.stringContaining("product choice")]);
@@ -286,7 +289,7 @@ test("the same triage question with no standing for its reason is refused", asyn
 });
 
 test("a decision mark is refused as a product choice without a decision standing", async () => {
-  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], reason: "decision" }]);
+  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], decision: decision("product"), reason: "decision" }]);
   standingFile({ "acceptance-failed": { action: "firefighter", at: "2026-10-28T00:00:00.000Z" } });
   reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }]);
   const f = await firefighterStep(ports());
@@ -295,7 +298,7 @@ test("a decision mark is refused as a product choice without a decision standing
 });
 
 test("without a handed reason a product choice is still refused, and the prompt has no handed rule", () => {
-  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"] }]);
+  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], decision: decision("product") }]);
   const e = snapshot().find((x) => x.kind === "needs-chris");
   expect(e?.handed).toBeUndefined();
   expect(e?.line.endsWith("(handed to you by Chris)")).toBe(false);
@@ -331,4 +334,26 @@ test("the same held hooks/ run without a land standing goes to Chris", async () 
 test("parseReply reads each action, and names a malformed one", () => {
   expect(parseReply('Here: {"actions":[{"do":"tell","text":"hi"},{"do":"land"}]}')).toEqual([{ do: "tell", text: "hi" }, "land without a job"]);
   expect(parseReply("nothing")).toBe("no JSON object with an actions list");
+});
+
+test("clear-needs-chris is refused on a product decision whose notes have no triage text", async () => {
+  fresh([{ title: "product", labels: ["needs-chris"], notes: ["needs-chris: pick a page"], decision: decision("product") }]);
+  reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }]);
+  const f = await firefighterStep(ports());
+  expect(f?.refused).toEqual([expect.stringContaining("product choice")]);
+  expect(storeLabels(item(1))).toContain("needs-chris");
+});
+
+test("clear-needs-chris is applied on a build decision or no decision, even with a triage: for Chris: note", async () => {
+  fresh([
+    { title: "build", labels: ["needs-chris"], notes: ["triage: for Chris: which module?"], decision: decision("build") },
+    { title: "none", labels: ["needs-chris"], notes: ["triage: for Chris: which module?"] },
+  ]);
+  reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "x.ts" }, { do: "clear-needs-chris", repo: key, n: 2, note: "y.ts" }]);
+  const f = await firefighterStep(ports());
+  expect(f?.refused).toEqual([]);
+  for (const id of [1, 2]) {
+    expect(storeLabels(item(id))).not.toContain("needs-chris");
+    expect(storeLabels(item(id))).toContain("goal");
+  }
 });
