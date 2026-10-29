@@ -35,6 +35,18 @@ export function chromeArgv(profileDir: string): string[] {
     "--disable-gpu", "--hide-scrollbars", "--mute-audio", "--no-proxy-server", "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost", "about:blank"];
 }
 
+/** Spawn Chrome on a pipe with `profileDir` as its profile and HOME, its output appended to `log`. */
+export function startChrome(profileDir: string, log: string): ReturnType<typeof spawn> {
+  const fd = openSync(log, "a");
+  const argv = chromeArgv(profileDir);
+  try {
+    return spawn(argv[0], argv.slice(1), {
+      stdio: ["ignore", fd, fd, "pipe", "pipe"],
+      env: { HOME: profileDir, TMPDIR: profileDir, PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" },
+    });
+  } finally { closeSync(fd); }
+}
+
 /** The first port at or above FIRST_PORT that 127.0.0.1 can bind. */
 export async function freePort(from = FIRST_PORT): Promise<number> {
   for (let port = from; port < from + 200; port++) {
@@ -96,7 +108,7 @@ export async function startUiServer(dir: string, log: string, env: Record<string
 }
 
 /** A CDP connection over Chrome's pipe: commands on fd 3, answers and events on fd 4, each message ended by a NUL. */
-class Pipe {
+export class Pipe {
   private next = 1;
   private waiting = new Map<number, { ok: (v: any) => void; no: (e: Error) => void }>();
   private listeners: ((m: any) => void)[] = [];
@@ -201,7 +213,7 @@ async function shoot(cdp: Pipe, url: string, width: number, height: number, sche
   }
 }
 
-const tail = (file: string, n = 20) => { try { return readFileSync(file, "utf8").trimEnd().split("\n").slice(-n).join("\n"); } catch { return ""; } };
+export const tail = (file: string, n = 20) => { try { return readFileSync(file, "utf8").trimEnd().split("\n").slice(-n).join("\n"); } catch { return ""; } };
 
 /**
  * Load each view in `urls` at 1440 and 390 px, light and dark, in Chrome,
@@ -217,14 +229,7 @@ export async function browserStep(folder: string, urls: string[], ): Promise<voi
   let child: ReturnType<typeof spawn> | null = null;
   try {
     if (!urls.length) { lines.push("ERROR: no view to load"); return report(); }
-    const fd = openSync(log, "a");
-    const argv = chromeArgv(profileDir);
-    try {
-      child = spawn(argv[0], argv.slice(1), {
-        stdio: ["ignore", fd, fd, "pipe", "pipe"],
-        env: { HOME: profileDir, TMPDIR: profileDir, PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" },
-      });
-    } finally { closeSync(fd); }
+    child = startChrome(profileDir, log);
     const exited = new Promise<void>((ok) => { child!.on("exit", () => ok()); child!.on("error", () => ok()); });
     const cdp = new Pipe(child.stdio[3] as NodeJS.WritableStream, child.stdio[4] as NodeJS.ReadableStream);
     exited.then(() => cdp.close(new Error("Chrome exited")));
