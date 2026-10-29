@@ -35,7 +35,9 @@ issue; take the rest from the code.
   value with its source URL. The factory runs the repo's checks from
   `~/.aleph/repos.json` after every run, so an oracle names only real
   commands, for example `bun test <file>`, never a command that does not
-  exist, such as `aleph check`. "The tests pass" alone is not an oracle.
+  exist, such as `aleph check`. Acceptance does not run an Oracle command with a
+  placeholder such as `<file>`, so the Oracle names the real path. "The tests
+  pass" alone is not an oracle.
 - **Time box**: default 40 minutes and one run.
 
 If Chris answers "use your defaults", take every recommended answer. Write
