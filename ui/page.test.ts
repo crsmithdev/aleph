@@ -21,7 +21,7 @@ test("the new rules sit at the top level, outside any @media block", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   const css = html.match(/<style>([\s\S]*?)<\/style>/)![1].replace(/\/\*[\s\S]*?\*\//g, "").replace(/"[^"\n]*"|'[^'\n]*'/g, "");
   let depth = 0;
-  for (const sel of [".metric:hover", ".ev.one", "#offline", "main {"]) {
+  for (const sel of [".stage-main:hover", ".ev.one", "#offline", "main {"]) {
     const i = css.indexOf(sel === "main {" ? "\nmain {" : "\n" + sel);
     expect(i).toBeGreaterThan(-1);
     depth = 0;
@@ -127,8 +127,8 @@ test("the sidebar lists Status, Inventory (/inventory), then the rest, with Tool
 test("the Status metric numbers use --metric, which has its own picker role apart from Titles", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   expect(html).toContain("--metric: 'Merriweather', Georgia, serif;");
-  expect(html).toContain(".metric .v { font: 700 var(--fs-metric)/1 var(--metric);");
-  expect(html).toContain(".metric .v .of { font: 400 22px/1 var(--metric);");
+  expect(html).toContain(".stage-main .v { font: 700 var(--fs-metric)/1 var(--metric);");
+  expect(html).toContain(".stage-main .v .of { font: 400 22px/1 var(--metric);");
   expect(html).toContain('["metric", "Big numbers", [...SERIF, ...SANS], "Merriweather", "Georgia, serif"],');
   expect(html.indexOf('["display", "Titles"')).toBeLessThan(html.indexOf('["metric", "Big numbers"'));
 });

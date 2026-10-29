@@ -6,7 +6,7 @@ import { BODY_TEMPLATE, renderContents, renderIssue } from "./views/contents.js"
 // @ts-ignore plain JS, shared with the page
 import { renderCard, renderDetail } from "./views/projects.js";
 // @ts-ignore plain JS, shared with the page
-import { renderIssues } from "./views/now.js";
+import { renderLanes } from "./views/now.js";
 
 /** What a reader sees: no style or script blocks, no tags, no attribute values. */
 const visible = (html: string) =>
@@ -32,7 +32,7 @@ describe("the UI never says goal", () => {
     ["project detail", renderDetail(project)],
     ["inventory", renderContents({ projects: [project], issues: [{ repo: "aleph", id: 3, title: "An issue", status: "open", labels: ["goal"], updated: "2026-10-25" }] }, { status: "" })],
     ["issue detail", renderIssue({ repo: "aleph", id: 3, title: "t", status: "open", frontmatter: { labels: ["goal"] }, body: BODY_TEMPLATE, notes: [], jobs: [], commits: [] })],
-    ["now issues", renderIssues({ needs: [], stuck: [], issues: [{ id: 3, title: "x", repo: "aleph" }], factory: { health: [] } })],
+    ["now issues", renderLanes({ needs: [], stuck: [], issues: [{ id: 3, title: "x", repo: "aleph" }], factory: { health: [] } })],
   ];
   for (const [name, html] of pages) test(name, () => { noGoal(html); noGoal(attrs(html)); });
 

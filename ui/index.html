@@ -139,18 +139,32 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .mark { display: flex; align-items: center; gap: 8px; text-decoration: none; font: 700 20px/1 'Merriweather', Georgia, serif; letter-spacing: -0.01em; margin-right: 4px; }
 .mark svg { width: 22px; height: 22px; flex: none; }
 
-/* ---------- Now: metric cards ---------- */
-.metrics { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px; margin: 0 0 24px; }
-.metric { display: grid; gap: 10px; min-width: 0; padding: 20px 22px 18px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); color: var(--ink); text-decoration: none; }
-.metric:hover { border-color: var(--muted); }
-.metric .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
-.metric .v { font: 700 var(--fs-metric)/1 var(--metric); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); white-space: nowrap; }
-.metric .quiet { font-size: var(--fs-xs); color: var(--muted); min-height: 2.6em; }
+/* ---------- Now: flow strip and lanes ---------- */
+.flow { display: flex; align-items: stretch; gap: 8px; margin: 0 0 24px; padding: 16px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+.stage { flex: 1 1 0; min-width: 0; display: grid; gap: 10px; align-content: start; }
+.stage-main { display: grid; gap: 6px; color: var(--ink); text-decoration: none; }
+.stage-main:hover .v { text-decoration: underline; }
+.stage-main .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+.stage-main .v { font: 700 var(--fs-metric)/1 var(--metric); font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; }
+.stage-main .v .of { font: 400 22px/1 var(--metric); color: var(--muted); }
+.stage-main .quiet { font-size: var(--fs-xs); color: var(--muted); }
+.arrow { flex: none; align-self: center; color: var(--muted); font-size: 24px; }
+.agentline { font-size: var(--fs-sm); }
+.agentline summary { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agentline .dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--muted); }
+.agentline .dot.run { background: var(--run); }
+.agentline ul { margin: 6px 0 0; padding-left: 16px; }
+.lanes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; align-items: start; margin-top: 24px; }
+.lane { min-width: 0; }
+.lane-card .ih { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.lane-card > .t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 4px 0; font-weight: 600; text-decoration: none; color: inherit; }
+.lane-card .run-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--fs-sm); color: var(--muted); }
+.needs { margin: 0 0 24px; }
+.lede .counts { flex: none; display: flex; gap: 6px 14px; font: 500 var(--fs-sm) var(--sans); color: var(--muted); }
+.lede .counts .cnt { border-bottom: 0; color: var(--muted); }
+.lede .counts a.need { color: var(--need); } .lede .counts a.stuck { color: var(--stuck); }
 .usage-line { width: 300px; height: 40px; color: var(--muted); }
 .wk { cursor: help; font-weight: 600; }
-.metric.done .v { color: var(--done); }
-.metric.run .v { color: var(--run); }
-.metric .v .of { font: 400 22px/1 var(--metric); color: var(--muted); }
 .agent { margin: 0; font-size: var(--fs-sm); color: var(--muted); }
 .agent.on { color: var(--ink); font-weight: 600; }
 
@@ -158,8 +172,8 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 main { min-width: 0; }
 .page { max-width: 1280px; margin: 0 auto; padding: 28px 24px 64px; }
 .lede {
-  font: 400 var(--fs-xl)/1.35 var(--display); letter-spacing: -0.01em;
-  margin: 0 0 28px; display: flex; align-items: center; gap: 12px; white-space: nowrap;
+  font: 400 var(--fs-md)/1.35 var(--display); letter-spacing: -0.01em;
+  margin: 0 0 20px; display: flex; align-items: center; gap: 12px; white-space: nowrap;
 }
 .lede .say { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .lede .asof { flex: none; }
@@ -190,8 +204,6 @@ main { min-width: 0; }
 .issue-row details.more { flex: 1 1 100%; font-size: var(--fs-sm); }
 a.act { text-decoration: none; display: inline-block; }
 .asof { color: var(--muted); margin: 0; }
-.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start; }
-.pair > section { margin: 0; }
 .agents { display: grid; gap: 16px; }
 .agent-row .now { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--muted); }
 .done-row .run-meta, .incoming-row .run-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--fs-sm); }
@@ -473,22 +485,22 @@ details.fold { margin: 0 0 8px; }
 .chartbox { margin: 0; min-width: 0; }
 .chartbox figcaption { font-size: var(--fs-xs); color: var(--muted); font-weight: 600; margin-bottom: 4px; }
 .speedchart { height: 160px; width: 100%; }
-.pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
-@media (min-width: 1200px) { .pair { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
-.pair .half { min-width: 0; }
 @media (max-width: 1020px) { .meds { grid-template-columns: repeat(3, minmax(0, 1fr)); } .charts3 { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 720px) { .meds { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ---------- narrow ---------- */
 @media (max-width: 1020px) {
   .grid { grid-template-columns: minmax(0, 1fr); }
   .rail { position: static; }
 }
+@media (max-width: 1020px) { .lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) {
-  .pair { grid-template-columns: minmax(0, 1fr); }
-  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .flow { flex-direction: column; }
+  .arrow { display: none; }
+  .lanes { grid-template-columns: minmax(0, 1fr); }
+  .meds { grid-template-columns: minmax(0, 1fr); }
+  .lede { flex-wrap: wrap; white-space: normal; }
+  .lede .counts { flex-wrap: wrap; order: 3; width: 100%; }
   .page { padding: 20px 16px 48px; }
-  .lede { font-size: var(--fs-xl); }
   .ev { grid-template-columns: minmax(0, 1fr); }
   .ev > div { border-left: 0; border-top: 1px solid var(--rule-2); }
   .ev > div:first-child { border-top: 0; }

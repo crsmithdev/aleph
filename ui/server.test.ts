@@ -79,7 +79,7 @@ test("/ is the page, /lib.js and /views/now.js its modules", async () => {
   const lib = await at("/lib.js");
   expect(lib.headers.get("content-type")).toContain("javascript");
   expect(await lib.text()).toContain("export function esc");
-  expect(await (await at("/views/now.js")).text()).toContain("export function renderJobs");
+  expect(await (await at("/views/now.js")).text()).toContain("export function renderFlow");
 });
 
 test("every module a view imports from ui/ is served", async () => {

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearCache, pct, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { dur, renderMedianCard, renderSpeed, renderSpeedBody, renderSpeedTop } from "./views/speed.js";
+import { dur, renderSpeedTop } from "./views/speed.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -86,14 +86,14 @@ test("GET /api/speed validates days and answers JSON", async () => {
   expect(bad.status).toBe(400);
 });
 
-test("the view: median card, section parts and empty states", () => {
-  const d = speed(7, now);
-  const card = renderMedianCard(d);
-  expect(card).toContain("Median run");
-  expect(card).toMatch(/land 46s · tests 36s · 77% wasted/);
-  expect(renderMedianCard(null)).toContain("no runs yet");
-  const h = renderSpeedTop(speed(1, now), 1) + renderSpeed(speed(1, now));
-  for (const t of ["Speed", "Today", "7 days", "30 days", "24–27 s alone", "Where the agent hours went", "Agent runs by model", "unset", 'data-chart="lands"', "of the agent hours were wasted"]) expect(h).toContain(t);
+test("the view: range control, wasted sentence, hours bar, six medians, charts, empty states", () => {
+  const h = renderSpeedTop(speed(1, now), 1);
+  for (const t of ["Today", "7 days", "30 days", "24–27 s alone", "Where the agent hours went", 'data-chart="lands"', "of the agent hours were wasted"]) expect(h).toContain(t);
+  expect(h.indexOf("were wasted")).toBeLessThan(h.indexOf('class="hbar"'));
+  expect(h.indexOf('class="hbar"')).toBeLessThan(h.indexOf('class="meds"'));
+  expect(h.indexOf('class="meds"')).toBeLessThan(h.indexOf('class="charts3"'));
+  expect(h.match(/class="med"/g)?.length).toBe(6);
+  expect(h).not.toContain("Agent runs by model");
   expect(renderSpeedTop(null, 7)).toContain("Loading");
   expect(h).not.toContain("Slowest agent runs");
   expect(dur(43)).toBe("43s");
