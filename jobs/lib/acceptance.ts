@@ -62,12 +62,14 @@ export function afterReopen(cwd: string, key: string, id: number, hits: string[]
 const CHECK = "(?:bun test|bun run|bunx tsc)";
 /** A plain check command, or a shell `for` loop whose body runs one. */
 const RUNNABLE = new RegExp(`^${CHECK}(\\s|$)|^for\\s.*;\\s*do\\b.*[\\s;&|(]${CHECK}(?=[\\s;&|)]|$)`);
+/** A placeholder such as `<file>` or `<repo>-<n>` that the Oracle leaves for the reader to fill in. Not a redirection. */
+const PLACEHOLDER = /<[A-Za-z][A-Za-z0-9_-]*>/;
 /** A `bun test` summary line that counts failures, such as ` 2 fail`. */
 const FAIL_SUMMARY = /^\s*[1-9]\d* fail\s*$/m;
 
 /** The commands in backticks in the issue's `## Oracle` section that start with a command the repo's checks use. */
 export function oracleCommands(body: string): string[] {
-  return [...section(body, "Oracle").matchAll(/`([^`\n]+)`/g)].map((m) => m[1].trim()).filter((c) => RUNNABLE.test(c));
+  return [...section(body, "Oracle").matchAll(/`([^`\n]+)`/g)].map((m) => m[1].trim()).filter((c) => RUNNABLE.test(c) && !PLACEHOLDER.test(c));
 }
 
 export interface Ran { code: number; output: string }

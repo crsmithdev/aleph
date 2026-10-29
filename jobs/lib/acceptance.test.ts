@@ -82,6 +82,17 @@ test("shell loops that run a check are runnable; loops that run no check are not
   expect(oracleCommands(body)).toEqual([a, b, c, "bun test y"]);
 });
 
+test("a command with an angle-bracket placeholder is not runnable; a redirection is", async () => {
+  const body = "## Oracle\n`bun test <file>`\n`bun test jobs/<name>.test.ts`\n`bun test jobs/lib/a.test.ts 2>&1`";
+  expect(oracleCommands(body)).toEqual(["bun test jobs/lib/a.test.ts 2>&1"]);
+  const id = doneGoal("`bun test <file>`");
+  const lines = await acceptanceStep(runner(2, "bash: syntax error near unexpected token `<'"));
+  expect(ran).toEqual([]);
+  expect(readRecord("fac", id)?.result).toBe("skipped");
+  expect(lines[0]).toContain("acceptance skipped");
+  expect(todos.status(item(id))).toBe("done");
+});
+
 test("a run with exit 0 whose bun test summary reports failures fails; with 0 fail it passes", async () => {
   const id = doneGoal("`for i in 1 2; do bun test x & done; wait`");
   await acceptanceStep(runner(0, "bun test\n 3 pass\n 1 fail\nRan 4 tests"));
