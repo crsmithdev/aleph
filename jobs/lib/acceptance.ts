@@ -84,7 +84,8 @@ export function oracleCommands(body: string): string[] {
   return [...section(body, "Oracle").matchAll(/`([^`\n]+)`/g)].map((m) => m[1].trim()).filter((c) => RUNNABLE.test(c) && !PLACEHOLDER.test(c));
 }
 
-export interface Ran { code: number; output: string }
+/** `infra` marks a fault of the sandbox, not a result of the command: the acceptance is not run. */
+export interface Ran { code: number; output: string; infra?: boolean }
 /** Run one command on the commit `sha` of the repo's main. */
 export type Runner = (repo: Repo, sha: string, command: string) => Promise<Ran>;
 
@@ -100,7 +101,7 @@ export const sandboxRunner: Runner = async (repo, sha, command) => {
   try {
     git(repo.path, "update-ref", ref, sha);
     const b = git(repo.path, "bundle", "create", join(run, "out", "accept.bundle"), ref);
-    if (!b.ok) return { code: 1, output: `bundle failed: ${b.out}` };
+    if (!b.ok) return { code: 1, output: `bundle failed: ${b.out}`, infra: true };
     const script = [
       "set -e", "git init -q .", `git fetch -q ../out/accept.bundle ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
       `{ ${repo.setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1 || { echo setup failed >> ../checklog/out.log; cat ../checklog/setup.log >> ../checklog/out.log; echo 1 > ../checklog/code; exit 0; }`,
@@ -109,7 +110,10 @@ export const sandboxRunner: Runner = async (repo, sha, command) => {
     const logs = join(run, "stdout.log");
     const r = await sandboxed(run, script, { read: ["out"], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: logs, stderr: logs });
     const at = (f: string) => join(run, "checklog", f);
-    if (!existsSync(at("code"))) return { code: r.code || 1, output: `the command did not start (exit ${r.code})` };
+    if (!existsSync(at("code"))) {
+      const tail = existsSync(logs) ? lastLines(readFileSync(logs, "utf8")) : "";
+      return { code: r.code || 1, output: `the command did not start (exit ${r.code})${tail ? `: ${tail}` : ""}`, infra: true };
+    }
     return { code: Number(readFileSync(at("code"), "utf8").trim()), output: existsSync(at("out.log")) ? readFileSync(at("out.log"), "utf8") : "" };
   } finally {
     git(repo.path, "update-ref", "-d", ref);
@@ -153,6 +157,7 @@ export async function accept(repo: Repo, item: todos.Item, run: Runner = sandbox
   }
   for (const command of commands) {
     const r = await run(repo, full, command);
+    if (r.infra) return `${name}: acceptance not run: ${lastLines(r.output)}`;
     const failedTests = r.code === 0 && FAIL_SUMMARY.test(r.output);
     if (r.code === 0 && !failedTests) continue;
     const fails = (prev?.fails ?? 0) + 1;

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hasLabel, readList, writeList } from "../../todo/lib/store.ts";
@@ -231,4 +231,43 @@ test("sandboxRunner: two runs for one repo at the same time do not remove each o
   expect(b.output).not.toContain("bundle failed");
   expect(a.code).toBe(0);
   expect(b.code).toBe(3);
+});
+
+const infra = (output: string): Runner => async () => ({ code: 1, output, infra: true });
+
+test("an infra result leaves the issue done, writes no record and says acceptance not run", async () => {
+  const id = doneGoal("`bun run ok`");
+  const lines = await acceptanceStep(infra("the command did not start (exit 1): sandbox said hi"));
+  expect(lines[0]).toContain("acceptance not run");
+  expect(lines[0]).toContain("sandbox said hi");
+  expect(todos.status(item(id))).toBe("done");
+  expect(readRecord("fac", id)).toBeNull();
+});
+
+test("an infra result after one real failure does not label needs-chris or change the record", async () => {
+  const id = doneGoal("`bun run ok`");
+  await acceptanceStep(runner(1, "boom"));
+  const before = readRecord("fac", id);
+  expect(before?.fails).toBe(1);
+  land(id);
+  closeAgain(id);
+  const lines = await acceptanceStep(infra("bundle failed: x"));
+  expect(lines[0]).toContain("acceptance not run");
+  expect(hasLabel(item(id), "needs-chris")).toBe(false);
+  expect(todos.status(item(id))).toBe("done");
+  expect(readRecord("fac", id)).toEqual(before);
+});
+
+test("sandboxRunner: a sandbox that ends before writing code returns its stdout.log tail", async () => {
+  const fake = join(base, "fake-sandbox.sh");
+  writeFileSync(fake, "#!/bin/sh\necho sandbox-said-this\nexit 7\n");
+  chmodSync(fake, 0o755);
+  process.env.ALEPH_SANDBOX_CMD = fake;
+  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
+  const repo = { key: "fac", path: repoDir(), main: "main", setup: [] } as any;
+  const r = await sandboxRunner(repo, sha, "bun run ok");
+  expect(r.infra).toBe(true);
+  expect(r.code).toBe(7);
+  expect(r.output).toContain("the command did not start");
+  expect(r.output).toContain("sandbox-said-this");
 });
