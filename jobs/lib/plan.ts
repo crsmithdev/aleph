@@ -134,7 +134,7 @@ Each body is in the goal format, with all four sections non-empty:
   ## Oracle (the checks that tell it is done)
   ## Time box (default: 45 minutes, one run)
 
-The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun test\`), or a test file that asserts the end state. There is no \`aleph check\` command: never name one.
+The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`), or a test file that asserts the end state. There is no \`aleph check\` command: never name one. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`.
 
 "waits_on" lists the earlier children (by their place in the list, the first is 1) that must land first, because they change the same files or this child builds on them. Children that wait on nothing run at once, side by side, so give a wait whenever two children share a file.
 `;
