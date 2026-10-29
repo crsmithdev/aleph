@@ -190,3 +190,55 @@ export function unshown(): string[] {
   }
   return lines;
 }
+
+/** The minute a note line was written (`- YYYY-MM-DD HH:MM: text`, local time), in ms, or null. */
+const noteTime = (line: string): number | null => {
+  const m = /^- (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}): /.exec(line);
+  const t = m ? new Date(`${m[1]}T${m[2]}`).getTime() : NaN;
+  return Number.isNaN(t) ? null : t;
+};
+const RE_NOTE = /^- \S+ \S+: re-accept: (fail|not run)/;
+
+/**
+ * Whether the open goal `item` was reopened by an acceptance `fail` (the first, not `fail again`) written
+ * in [since, before), and has had no worker note since. A `re-accept: fail` ends it; `re-accept: not run`
+ * (an infra error) leaves it for the next pass.
+ */
+export function reopenedByAcceptance(item: todos.Item, since = -Infinity, before = Infinity): boolean {
+  if (todos.status(item) !== "open") return false;
+  const notes = item.notes.filter((l) => !/^- \S+ \S+: re-accept: not run/.test(l));
+  const last = notes[notes.length - 1];
+  if (!last || RE_NOTE.test(last)) return false;
+  if (!/^- \S+ \S+: acceptance: fail at /.test(last)) return false;
+  const t = noteTime(last);
+  return t !== null && t >= since && t < before;
+}
+
+/**
+ * Run the Oracle again of the reopened goal `item` on origin/<main>. A pass closes it as done with a note
+ * naming each command; a failure leaves it open with a note, and so does an infra error, with the output tail.
+ * Returns a line for the log. The caller has fetched and holds the goal's lock.
+ */
+export async function reaccept(repo: Repo, item: todos.Item, run: Runner = sandboxRunner): Promise<string> {
+  const name = `${repo.key}-${item.id}`;
+  const sha = git(repo.path, "rev-parse", "--short=7", `origin/${repo.main}`).out;
+  if (!sha) return `${name}: re-accept not run: no origin/${repo.main}`;
+  const full = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
+  const commands = oracleCommands(item.body).filter((c) => !namesMissingTestFile(repo, full, c));
+  if (!commands.length) return `${name}: re-accept skipped: the Oracle has no runnable command`;
+  const passed: string[] = [];
+  for (const command of commands) {
+    const r = await run(repo, full, command);
+    if (r.infra) {
+      const bad = note(repo, item.id, `re-accept: not run at ${sha}: \`${command}\`: ${lastLines(r.output)}`);
+      return `${name}: re-accept not run: ${lastLines(r.output)}${bad ? ` (no issue note: ${bad})` : ""}`;
+    }
+    const failedTests = r.code === 0 && FAIL_SUMMARY.test(r.output);
+    if (r.code === 0 && !failedTests) { passed.push(command); continue; }
+    const bad = note(repo, item.id, `re-accept: fail at ${sha}: \`${command}\` exited ${r.code}${failedTests ? " with failing tests" : ""}: ${lastLines(r.output)}`);
+    return `${name}: re-accept failed at ${sha} (${command}); left open${bad ? ` (no issue note: ${bad})` : ""}`;
+  }
+  const bad = note(repo, item.id, `acceptance: pass at ${sha} (re-run after an infra error): ${passed.map((c) => `\`${c}\` exited 0`).join(", ")}`, { done: true });
+  if (!bad) writeRecord(repo.key, item.id, { result: "pass", sha, fails: readRecord(repo.key, item.id)?.fails ?? 0 });
+  return `${name}: re-accept passed at ${sha}; closed as done${bad ? ` (no issue note: ${bad})` : ""}`;
+}

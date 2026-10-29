@@ -15,7 +15,7 @@ import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
-import { accept, final, readRecord, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
+import { accept, final, readRecord, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
 import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
@@ -375,6 +375,44 @@ export async function acceptanceStep(run: Runner = sandboxRunner, now = todos.cl
       } finally {
         release();
       }
+    }
+  }
+  for (const l of lines) factoryLog(l);
+  return lines;
+}
+
+/** The commit that made an acceptance infra error no result (9fd990c): goals reopened by a fail written before it are candidates. */
+const INFRA_FIX = "9fd990c";
+
+/**
+ * `aleph accept <repo>`: the open goals whose last note is an `acceptance: fail` written before the infra
+ * fix (or before `before`) and after `since`, and whose job landed, get their Oracle run again on origin/<main>.
+ * See reaccept in acceptance.ts.
+ */
+export async function reacceptReopened(repoKey: string, o: { since?: string; before?: string; run?: Runner } = {}): Promise<string[]> {
+  const repo = sandboxRepos().find((r) => r.key === repoKey) ?? loadRegistry()[repoKey];
+  if (!repo) throw new Error(`no repo ${repoKey} in the registry`);
+  if (!fetchOrigin(repo.path).ok) return [`${repo.key}: re-accept not run: fetch failed`];
+  const ms = (s: string | undefined, what: string): number | undefined => {
+    if (s === undefined) return undefined;
+    const t = Date.parse(s);
+    if (Number.isNaN(t)) throw new Error(`${what}: not a date: ${s}`);
+    return t;
+  };
+  const fixed = Number(git(repo.path, "log", "-1", "--format=%ct", INFRA_FIX).out) * 1000;
+  const before = ms(o.before, "--before") ?? (fixed || Infinity);
+  const since = ms(o.since, "--reopened-since") ?? -Infinity;
+  const lines: string[] = [];
+  const list = reader().list(repo.key)?.items ?? [];
+  for (const listed of list.filter((i) => hasLabel(i, "goal") && reopenedByAcceptance(i, since, before))) {
+    const release = await lock(`acceptance-${repo.key}-${listed.id}`, 0);
+    if (!release) continue;
+    try {
+      const item = reader().item(repo.key, listed.id);
+      if (!item || !reopenedByAcceptance(item, since, before) || !itemOnMain(repo, item.id)) continue;
+      lines.push(await reaccept(repo, item, o.run));
+    } finally {
+      release();
     }
   }
   for (const l of lines) factoryLog(l);

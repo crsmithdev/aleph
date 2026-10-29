@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { hasLabel, readList, writeList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import { oracleCommands, readRecord, resultLine, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
-import { acceptanceStep, dispatchGoals } from "./factory.ts";
+import { acceptanceStep, dispatchGoals, reacceptReopened } from "./factory.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): string {
@@ -270,4 +270,50 @@ test("sandboxRunner: a sandbox that ends before writing code returns its stdout.
   expect(r.code).toBe(7);
   expect(r.output).toContain("the command did not start");
   expect(r.output).toContain("sandbox-said-this");
+});
+
+/** A landed goal the store says is open again, after an acceptance fail. */
+function reopened(oracle: string): number {
+  const id = doneGoal(oracle);
+  writeList({ key: "fac" }, "reopen", (doc) => { const i = todos.find(doc, id)!; todos.setStatus(i, "open"); todos.note(i, "acceptance: fail at abc1234: `bun test x` exited 128: the command did not start (exit 128)"); return true; });
+  return id;
+}
+
+test("reacceptReopened closes the goal whose Oracle passes and leaves the failing one open with a note", async () => {
+  const good = reopened("`bun test good`");
+  const bad = reopened("`bun test bad`");
+  const lines = await reacceptReopened("fac", { run: async (_r, _s, c) => (c.includes("bad") ? { code: 1, output: "boom" } : { code: 0, output: "" }) });
+  expect(lines.length).toBe(2);
+  expect(todos.status(item(good))).toBe("done");
+  expect(notes(good)).toContain("`bun test good` exited 0");
+  expect(todos.status(item(bad))).toBe("open");
+  expect(notes(bad)).toContain("re-accept: fail");
+  expect(notes(bad)).toContain("`bun test bad` exited 1: boom");
+  // a second pass does not run the failed goal again
+  expect(await reacceptReopened("fac", { run: runner(0) })).toEqual([]);
+});
+
+test("reacceptReopened leaves the goal open after an infra error, notes the tail, and retries next time", async () => {
+  const id = reopened("`bun test x`");
+  await reacceptReopened("fac", { run: async () => ({ code: 1, output: "bundle failed: nope", infra: true }) });
+  expect(todos.status(item(id))).toBe("open");
+  expect(notes(id)).toContain("re-accept: not run");
+  expect(notes(id)).toContain("bundle failed: nope");
+  await reacceptReopened("fac", { run: runner(0) });
+  expect(todos.status(item(id))).toBe("done");
+});
+
+test("reacceptReopened skips goals not landed, not reopened by acceptance, or outside the window", async () => {
+  const unlanded = writeList({ key: "fac" }, "add", (doc) => { const i = todos.add(doc, "t", { labels: ["goal"], body: "## Oracle\n`bun test x`" }); todos.note(i, "acceptance: fail at abc1234: x"); return i.id; }, true)!.value;
+  const plain = writeList({ key: "fac" }, "add", (doc) => todos.add(doc, "t", { labels: ["goal"], body: "## Oracle\n`bun test x`" }).id)!.value;
+  land(plain);
+  const old = reopened("`bun test x`");
+  expect(await reacceptReopened("fac", { run: runner(0), since: "2999-01-01T00:00" })).toEqual([]);
+  expect(await reacceptReopened("fac", { run: runner(0), before: "2000-01-01T00:00" })).toEqual([]);
+  expect(ran).toEqual([]);
+  const lines = await reacceptReopened("fac", { run: runner(0) });
+  expect(lines.length).toBe(1);
+  expect(todos.status(item(old))).toBe("done");
+  expect(todos.status(item(unlanded))).toBe("open");
+  expect(todos.status(item(plain))).toBe("open");
 });
