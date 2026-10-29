@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
@@ -30,8 +30,19 @@ const OBS: Record<string, any[]> = {
 let lf: ReturnType<typeof Bun.serve>;
 let hits: string[] = [];
 let status = 200;
+let fixtures: string;
+let savedRepos: string | undefined;
+let savedJobs: string | undefined;
 
 beforeAll(() => {
+  // The route lists projects from the registry and reads runs from the jobs dir: give it our own, not ~/.aleph.
+  savedRepos = process.env.ALEPH_REPOS;
+  savedJobs = process.env.ALEPH_JOBS_DIR;
+  fixtures = mkdtempSync(join(tmpdir(), "sessions-fixtures-"));
+  writeFileSync(join(fixtures, "repos.json"), JSON.stringify({ aleph: { path: join(fixtures, "aleph") }, sidetone: { path: join(fixtures, "sidetone") } }));
+  mkdirSync(join(fixtures, "jobs"));
+  process.env.ALEPH_REPOS = join(fixtures, "repos.json");
+  process.env.ALEPH_JOBS_DIR = join(fixtures, "jobs");
   lf = Bun.serve({
     port: 0,
     fetch(req) {
@@ -49,7 +60,12 @@ beforeAll(() => {
   process.env.LANGFUSE_PUBLIC_KEY = "pk";
   process.env.LANGFUSE_SECRET_KEY = "sk";
 });
-afterAll(() => lf.stop(true));
+afterAll(() => {
+  lf.stop(true);
+  if (savedRepos === undefined) delete process.env.ALEPH_REPOS; else process.env.ALEPH_REPOS = savedRepos;
+  if (savedJobs === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = savedJobs;
+  rmSync(fixtures, { recursive: true, force: true });
+});
 beforeEach(() => { clearCache(); hits = []; status = 200; });
 
 const TABLE = new URLSearchParams("view=table");
