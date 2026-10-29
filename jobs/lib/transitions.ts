@@ -196,7 +196,7 @@ export async function startPlain(a: { name: string; argv: string[]; cwd: string 
  * from before this rule, needs-you for a manual check, lands the same way.
  * The land unit takes the job lock.
  */
-export async function land(name: string, a: { checked?: boolean } = {}, o: StartOpts = {}): Promise<Start> {
+export async function land(name: string, a: { checked?: boolean; lander?: "Chris" | "firefighter" } = {}, o: StartOpts = {}): Promise<Start> {
   checkName(name);
   // Two lands of one job at once (the dispatch's batch pull and the leader's) each pass the live check below: it and the start share a lock.
   const repoKey = openJob(name)?.at(-1)!.run.repo;
@@ -219,7 +219,7 @@ export async function land(name: string, a: { checked?: boolean } = {}, o: Start
       kind: "land", job: agent.job, name, repo: agent.repo, branch: agent.branch, worktree: agent.worktree,
       state: "running", phase: "land", told: false, shown: false, started: new Date().toISOString(),
       ...(unchecked ? { check: "open" as const, say: agent.say } : {}),
-      ...(held ? { held: true } : {}),
+      ...(held ? { held: true, lander: a.lander ?? "Chris" } : {}),
       ...(agent.checkedBase ? { checkedBase: agent.checkedBase } : {}),
       ...(agent.checkedTip ? { checkedTip: agent.checkedTip } : {}),
       ...(agent.todo !== undefined ? { todo: agent.todo } : {}),

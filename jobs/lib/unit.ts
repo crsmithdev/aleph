@@ -221,7 +221,7 @@ function landMessage(subjects: string[], run: Run, repo: Repo): string {
   const trailers = [
     ...(run.todo !== undefined ? [`Item: ${repo.key}-${run.todo}`] : []),
     `Job: ${run.job}`,
-    ...(run.held ? ["Held-by: Chris"] : []),
+    ...(run.held ? [`Held-by: ${run.lander ?? "Chris"}`] : []),
   ];
   // A subject is never on a line of its own after the title, so none can read as a trailer.
   const body = subjects.length > 1 ? ["", ...subjects.map((s) => `- ${s}`)] : [];

@@ -47,8 +47,10 @@ export interface Run {
   checkedTip?: string;
   /** A run that needs Chris for a held path or a test edit: the diff stat. */
   stat?: string;
-  /** A land of a held run, by Chris: the commit gets `Held-by: Chris`. */
+  /** A land of a held run: the commit gets `Held-by: <lander>`. */
   held?: boolean;
+  /** Who landed a held run: absent (a run from before this field) means Chris. */
+  lander?: "Chris" | "firefighter";
   /** Sidetone's flag: the news line went out. `shown` is the report's. */
   told: boolean; shown?: boolean; started: string; ended?: string;
   /** Milliseconds since the epoch, set under the dispatch lock: the order runs were made in. */

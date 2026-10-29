@@ -224,7 +224,7 @@ export interface Ports {
   tell: (line: string) => Promise<boolean>;
 }
 export const defaultPorts: Ports = {
-  land: (name) => refusal(async () => { await (await landJob(name, {}, { output: "ignore" })).child?.exited; }),
+  land: (name) => refusal(async () => { await (await landJob(name, { lander: "firefighter" }, { output: "ignore" })).child?.exited; }),
   drop: (name, reason) => refusal(() => dropJob(name, { reason, quiet: true })),
   tell,
 };
