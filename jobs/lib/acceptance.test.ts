@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hasLabel, readList, writeList } from "../../todo/lib/store.ts";
@@ -29,6 +29,8 @@ beforeEach(() => {
   sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "repo.git"));
   sh(base, "git", "clone", "-q", join(base, "repo.git"), join(base, "repo"));
   writeFileSync(join(base, "repo", "package.json"), JSON.stringify({ scripts: { ok: "true", bad: "echo boom; exit 3" } }));
+  mkdirSync(join(base, "repo", "jobs", "lib"), { recursive: true });
+  writeFileSync(join(base, "repo", "jobs", "lib", "acceptance.test.ts"), "");
   sh(join(base, "repo"), "git", "add", ".");
   sh(join(base, "repo"), "git", "commit", "-q", "-m", "init");
   sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
@@ -110,10 +112,10 @@ test("a run with exit 0 whose bun test summary reports failures fails; with 0 fa
 });
 
 test("a done goal whose Oracle command passes gets the pass note and stays done", async () => {
-  const id = doneGoal("`bun test jobs/lib/a.test.ts`");
+  const id = doneGoal("`bun test jobs/lib/acceptance.test.ts`");
   const sha = sh(repoDir(), "git", "rev-parse", "--short=7", "origin/main");
   const lines = await acceptanceStep(runner(0));
-  expect(ran).toEqual(["bun test jobs/lib/a.test.ts"]);
+  expect(ran).toEqual(["bun test jobs/lib/acceptance.test.ts"]);
   expect(lines).toEqual([`fac-${id}: acceptance passed at ${sha}`]);
   expect(notes(id)).toContain(`acceptance: pass at ${sha}`);
   expect(todos.status(item(id))).toBe("done");
@@ -185,6 +187,23 @@ test("an Oracle with no runnable command is skipped and the goal stays done", as
   expect(item(id).notes).toEqual([]);
   expect(readRecord("fac", id)?.result).toBe("skipped");
   expect(await acceptanceStep(runner(1))).toEqual([]);
+});
+
+test("a command that names a test file missing on main is dropped; the real file's command runs", async () => {
+  const id = doneGoal("`bun test jobs/lib/a.test.ts 2>&1` `bun test jobs/lib/acceptance.test.ts`");
+  const lines = await acceptanceStep(runner(0));
+  expect(ran).toEqual(["bun test jobs/lib/acceptance.test.ts"]);
+  expect(lines).toEqual([`fac-${id}: acceptance passed at ${sh(repoDir(), "git", "rev-parse", "--short=7", "origin/main")}`]);
+  expect(readRecord("fac", id)?.result).toBe("pass");
+});
+
+test("a done goal whose only command names a missing test file is skipped and runs nothing", async () => {
+  const id = doneGoal("`bun test ./jobs/lib/a.test.ts 2>&1`");
+  const lines = await acceptanceStep(runner(1));
+  expect(ran).toEqual([]);
+  expect(lines[0]).toContain("acceptance skipped");
+  expect(todos.status(item(id))).toBe("done");
+  expect(readRecord("fac", id)?.result).toBe("skipped");
 });
 
 test("a goal closed with no landing on main is not accepted", async () => {

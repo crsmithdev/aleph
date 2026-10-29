@@ -67,6 +67,18 @@ const PLACEHOLDER = /<[A-Za-z][A-Za-z0-9_-]*(?: [A-Za-z][A-Za-z0-9_-]*)*>/;
 /** A `bun test` summary line that counts failures, such as ` 2 fail`. */
 const FAIL_SUMMARY = /^\s*[1-9]\d* fail\s*$/m;
 
+/** A test file by its name, as `bun test` takes one. */
+const TEST_FILE = /\.(?:test|spec)\.(?:ts|js)$/;
+
+/** A plain `bun test` that names a test file the commit `sha` does not have. Such a command is the Oracle's quoted fixture text, not a check. */
+function namesMissingTestFile(repo: Repo, sha: string, command: string): boolean {
+  if (!/^bun test(\s|$)/.test(command)) return false;
+  return command.split(/\s+/).some((arg) => {
+    const path = arg.replace(/^\.\//, "");
+    return TEST_FILE.test(path) && !git(repo.path, "cat-file", "-e", `${sha}:${path}`).ok;
+  });
+}
+
 /** The commands in backticks in the issue's `## Oracle` section that start with a command the repo's checks use. */
 export function oracleCommands(body: string): string[] {
   return [...section(body, "Oracle").matchAll(/`([^`\n]+)`/g)].map((m) => m[1].trim()).filter((c) => RUNNABLE.test(c) && !PLACEHOLDER.test(c));
@@ -134,10 +146,10 @@ export async function accept(repo: Repo, item: todos.Item, run: Runner = sandbox
   const sha = git(repo.path, "rev-parse", "--short=7", `origin/${repo.main}`).out;
   if (!sha) return `${name}: acceptance not run: no origin/${repo.main}`;
   const full = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
-  const commands = oracleCommands(item.body);
+  const commands = oracleCommands(item.body).filter((c) => !namesMissingTestFile(repo, full, c));
   if (!commands.length) {
     writeRecord(repo.key, item.id, { result: "skipped", fails: prev?.fails ?? 0 });
-    return `${name}: acceptance skipped: the Oracle has no command that starts with bun test, bun run or bunx tsc, or loops over one`;
+    return `${name}: acceptance skipped: the Oracle has no command that starts with bun test, bun run or bunx tsc, or loops over one, or that names a test file missing on ${repo.main}`;
   }
   for (const command of commands) {
     const r = await run(repo, full, command);
