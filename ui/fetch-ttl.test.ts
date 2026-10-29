@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { add } from "../todo/lib/todo.ts";
 import { cacheFetches, readList, readLists, uiFetchTtl, writeList } from "../todo/lib/store.ts";
 import { routes } from "./api/issues.ts";
+import { serve } from "./server.ts";
 import { state } from "./state.ts";
 
 let base: string, log: string;
@@ -99,4 +100,15 @@ test("a write fetches in the foreground even with the cache on, and builds on th
     readList({ key: "a" });
     expect(fetches()).toBe(before + 2);
   } finally { now.mockRestore(); }
+});
+
+test("serve() leaves the cache off: only the UI process turns it on, in its main block", async () => {
+  cacheFetches(0);
+  const server = await serve(0, { warm: false });
+  server.stop();
+  const before = fetches();
+  readList({ key: "a" });
+  readList({ key: "a" });
+  expect(fetches()).toBe(before + 2);
+  cacheFetches(uiFetchTtl());
 });

@@ -57,8 +57,6 @@ export function views(dir = join(import.meta.dir, "views")): string[] {
 /** `warm: false` skips the warm-ups: a test that does not test them keeps Langfuse and the vault out of its process. */
 export async function serve(port: number, { warm = true }: { warm?: boolean } = {}) {
   const dir = import.meta.dir;
-  // Every read of the work store in this process reuses a fetch for ALEPH_UI_FETCH_TTL seconds.
-  cacheFetches(uiFetchTtl());
   warmers.length = 0;
   const routes = await loadRoutes(join(dir, "api"));
   const server = Bun.serve({
@@ -107,6 +105,8 @@ if (import.meta.main) {
     console.error("usage: aleph-ui [--port <n>]");
     process.exit(2);
   }
+  // Every read of the work store in this process reuses a fetch for ALEPH_UI_FETCH_TTL seconds.
+  cacheFetches(uiFetchTtl());
   const server = await serve(port);
   console.log(`http://127.0.0.1:${server.port}/`);
 }
