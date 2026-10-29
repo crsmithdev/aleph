@@ -140,7 +140,7 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .mark svg { width: 22px; height: 22px; flex: none; }
 
 /* ---------- Now: metric cards ---------- */
-.metrics { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; margin: 0 0 24px; }
+.metrics { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px; margin: 0 0 24px; }
 .metric { display: grid; gap: 10px; min-width: 0; padding: 20px 22px 18px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); color: var(--ink); text-decoration: none; }
 .metric:hover { border-color: var(--muted); }
 .metric .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -453,6 +453,29 @@ details.fold { margin: 0 0 8px; }
 .clear p { margin: 0; }
 .clear p + p { margin-top: 4px; }
 .clear b { color: var(--ink); font-weight: 600; }
+
+
+/* ---------- Status: Speed ---------- */
+.meds { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin: 12px 0 8px; }
+.med { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); min-width: 0; }
+.med .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+.med .v { font: 600 22px/1.2 var(--metric); font-variant-numeric: lining-nums tabular-nums; }
+.med .quiet { font-size: var(--fs-xs); color: var(--muted); }
+.sh.sub h2 { font-size: var(--fs-md); }
+.hbar { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: var(--rule-2); gap: 2px; }
+.hbar span { min-width: 3px; }
+.hbar .seg-done { background: var(--done); } .hbar .seg-quiet { background: var(--muted); } .hbar .seg-stuck { background: var(--stuck); } .hbar .seg-need { background: var(--need); }
+.hlegend { display: flex; flex-wrap: wrap; gap: 6px 24px; list-style: none; padding: 0; margin: 10px 0 6px; font-size: var(--fs-sm); }
+.wasted { margin: 6px 0 16px; font-size: var(--fs-sm); color: var(--ink-2); }
+.charts3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+.chartbox { margin: 0; min-width: 0; }
+.chartbox figcaption { font-size: var(--fs-xs); color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.speedchart { height: 160px; width: 100%; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+@media (min-width: 1200px) { .pair { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
+.pair .half { min-width: 0; }
+@media (max-width: 1020px) { .meds { grid-template-columns: repeat(3, minmax(0, 1fr)); } .charts3 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 720px) { .meds { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ---------- narrow ---------- */
 @media (max-width: 1020px) {

@@ -59,7 +59,7 @@ const section = (h: string, id: string) => h.match(new RegExp(`<section id="${id
 
 test("the page order is metric cards, status line and time, then Issues, Lands, Triage, Jobs; no old section", () => {
   const page = r.view.render(full);
-  expect([...page.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1])).toEqual(["issues", "lands", "triage", "jobs", "queued"]);
+  expect([...page.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1])).toEqual(["issues", "lands", "triage", "jobs", "queued", "speed"]);
   const at = (t: string) => page.indexOf(t);
   const order = ['class="metrics"', 'class="lede"', 'class="asof"', 'id="issues"', 'id="lands"', 'id="triage"', 'id="jobs"'];
   expect(order.map(at)).toEqual([...order.map(at)].sort((a, b) => a - b));
@@ -69,15 +69,16 @@ test("the page order is metric cards, status line and time, then Issues, Lands, 
   for (const t of ["Next tick", "Cost today", "Runs today", 'id="ticks"', 'class="strip"', 'id="stuck"', 'class="banner"']) expect(page).not.toContain(t);
 });
 
-test("the metric cards are Lands (live), Needs you, Stuck, Failed, Running, Queued, Weekly usage; no Issues or Triage card", () => {
+test("the metric cards are Lands (live), Needs you, Stuck, Failed, Running, Queued, Median run, Weekly usage; no Issues or Triage card", () => {
   const delivered = [job({ name: "aleph-50", state: "landing" }), ...Array.from({ length: 9 }, (_, i) => job({ name: `aleph-6${i}`, state: "landed", ended: "2026-10-27T16:30:00Z" }))];
   const s = { ...full, delivered, stuck: [job({ name: "aleph-30", state: "stuck", reason: "x" }), job({ name: "aleph-31", state: "failed", reason: "y" }), job({ name: "aleph-32", state: "failed", reason: "z" })], usage: { now: { seven_day: 41.2, five_hour: 7, seven_day_resets_at: "2026-10-30T09:00:00Z" }, series: [] }, needsIssues: [{ ...issue(7), question: "Q?" }], proposals: [] };
   const h = r.renderMetrics(s);
   const cards = [...h.matchAll(/<a class="metric[^"]*" href="#[^"]*"><span class="k">([^<]+)<\/span><span class="v">(\d+)%?<\/span>/g)].map((m) => [m[1], Number(m[2])]);
-  expect(cards).toEqual([["Lands", 1], ["Needs you", 3], ["Stuck", 1], ["Failed", 2], ["Running", 1], ["Queued", 1], ["Weekly usage", 41]]);
+  expect(cards).toEqual([["Lands", 1], ["Needs you", 3], ["Stuck", 1], ["Failed", 2], ["Running", 1], ["Queued", 1], ["Weekly usage", 41]]); // the Median run card shows a duration, not a number
+  expect(h.indexOf("Median run")).toBeLessThan(h.indexOf("Weekly usage"));
   expect(h).not.toMatch(/>(Issues|Triage)</);
   expect(h).toMatch(/Weekly usage[^]*5-hour 7% \u00b7 resets/);
-  expect(h.match(/<a class="metric/g)?.length).toBe(7);
+  expect(h.match(/<a class="metric/g)?.length).toBe(8);
 });
 
 test("every section header has a count, in one style", () => {

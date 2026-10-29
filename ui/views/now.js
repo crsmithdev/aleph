@@ -2,6 +2,7 @@
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
 import { denyReasons, diffHtml, elapsed, costHtml, esc, idLink, openDiffs, shortModel, when } from "../lib.js";
+import { mountSpeed, renderMedianCard, speedSection } from "./speed.js";
 import { act, actMsg, checkFacts, fact, issueCard, itemId, landCard, shell as jobCard, triageCard, trailerLine } from "./cards.js";
 
 export const view = {
@@ -17,7 +18,9 @@ export const view = {
     `<section id="lands" aria-labelledby="h-lands">${renderLands(s)}</section>` +
     `<section id="triage" aria-labelledby="h-triage">${renderTriage(s)}</section>` +
     `<section id="jobs" aria-labelledby="h-jobs">${renderJobs(s)}</section>` +
-    `<section id="queued" aria-labelledby="h-queued">${renderQueued(s)}</section></div>`,
+    `<section id="queued" aria-labelledby="h-queued">${renderQueued(s)}</section>` +
+    `<section id="speed" aria-labelledby="h-speed">${speedSection()}</section></div>`,
+  mount: (root) => mountSpeed(root),
 };
 
 /** The count of a section: `N / cap` where a cap applies. */
@@ -47,7 +50,7 @@ const liveLands = (s) => s.delivered.filter((j) => j.state === "landing").length
 /** The needs-you group's rows: held runs, needs-chris issues, proposals, errors. */
 const needsCount = (s) => (s.attention ?? []).length + errorLines(s).length;
 
-/** The row of metric cards, each a link to its section: Lands live now, Needs you, Stuck, Failed, Running, Queued, and Weekly usage. */
+/** The row of metric cards, each a link to its section: Lands live now, Needs you, Stuck, Failed, Running, Queued, Median run and Weekly usage. */
 export function renderMetrics(s) {
   const card = (href, k, n, tone = "") => `<a class="metric${tone ? " " + tone : ""}" href="#${href}"><span class="k">${k}</span><span class="v">${n}</span></a>`;
   const failed = s.stuck.filter((j) => j.state === "failed").length;
@@ -57,7 +60,7 @@ export function renderMetrics(s) {
     card("jobs-stuck", "Stuck", s.stuck.length - failed) +
     card("jobs-stuck", "Failed", failed) +
     card("jobs-running", "Running", runningCount(s), "run") +
-    card("queued", "Queued", s.waiting.length) + renderUsage(s) + `</div>`;
+    card("queued", "Queued", s.waiting.length) + renderMedianCard(s.speed) + renderUsage(s) + `</div>`;
 }
 
 /** Weekly usage as the last metric card: the 7-day % now, with the 5-hour % and the reset time on its second line; "usage unknown" when the endpoint gave nothing. */
