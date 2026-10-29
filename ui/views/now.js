@@ -2,7 +2,7 @@
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
 import { denyReasons, diffHtml, elapsed, costHtml, esc, idLink, openDiffs, shortModel, when } from "../lib.js";
-import { mountSpeed, speedTop } from "./speed.js";
+import { efficiency, mountSpeed, renderPicker, setWindow, speedData, speedTop } from "./speed.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
 
 export const view = {
@@ -12,9 +12,11 @@ export const view = {
   order: 0,
   api: "/api/state",
   refresh: 15,
-  render: (s) =>
-    `<div class="page">${renderStatusLine(s)}${renderNeeds(s)}${renderFlow(s)}` +
-    `<section id="speed" aria-label="Speed">${speedTop()}</section>${renderLanes(s)}</div>`,
+  render: (s, _params, query) => {
+    setWindow(query);
+    return `<div class="page">${renderStatusLine(s)}${renderNeeds(s)}${renderFlow(s, speedData())}` +
+      `<section id="speed" aria-label="Speed">${speedTop()}</section><section id="efficiency" aria-label="Efficiency">${efficiency()}</section>${renderLanes(s)}</div>`;
+  },
   mount: (root) => mountSpeed(root),
 };
 
@@ -45,20 +47,17 @@ const liveLands = (s) => s.delivered.filter((j) => j.state === "landing").length
 /** The needs-you group's rows: held runs, needs-chris issues, proposals, errors. */
 const needsCount = (s) => (s.attention ?? []).length + errorLines(s).length;
 
-/** The 7-day and 5-hour usage as text; "usage unknown" when the endpoint gave nothing. */
+/** The weekly and 5-hour usage as text with the weekly reset time; "usage unknown" when the endpoint gave nothing. */
 export function renderUsage(s) {
   const cur = s.usage?.now;
-  if (!cur) return `<span class="cnt quiet">usage unknown</span>`;
-  return `<span class="cnt">Week ${esc(Math.round(cur.seven_day))}%</span><span class="cnt">5-hour ${esc(Math.round(cur.five_hour))}%</span>`;
+  if (!cur) return `<span class="quiet">usage unknown</span>`;
+  const reset = cur.seven_day_resets_at && !Number.isNaN(Date.parse(cur.seven_day_resets_at)) ? `<span class="quiet">resets ${esc(when(cur.seven_day_resets_at, new Date(s.now)))}</span>` : "";
+  return `<span class="cnt">Week ${esc(Math.round(cur.seven_day))}%</span><span class="cnt">5-hour ${esc(Math.round(cur.five_hour))}%</span>${reset}`;
 }
 
-/** The status line: the time, the status sentence, the counts (each a link to its list), Pause or Resume. */
+/** The status line: the time, the status sentence, the page time picker, Pause or Resume. */
 export function renderStatusLine(s) {
-  const failed = s.stuck.filter((j) => j.state === "failed").length;
-  const cnt = (href, k, n, tone) => `<a class="cnt${n && tone ? " " + tone : ""}" href="#${href}">${k} ${n}</a>`;
-  return `<p class="lede"><span class="asof">${renderAsOf(s)}</span>${renderLede(s)}<span class="counts">` +
-    cnt("needs", "Needs you", needsCount(s), "need") + cnt("jobs-stuck", "Stuck", s.stuck.length - failed, "stuck") + cnt("jobs-stuck", "Failed", failed, "stuck") +
-    renderUsage(s) + `</span>${renderControls(s)}</p>`;
+  return `<p class="lede"><span class="asof">${renderAsOf(s)}</span>${renderLede(s)}${renderPicker()}${renderControls(s)}</p>`;
 }
 
 /** The 7-day % since the last reset as an SVG polyline over the 0-100 % scale. */
@@ -190,68 +189,25 @@ export function renderLanes(s) {
 /** The untriaged issues: all of them when the state counts them, else the ones listed. */
 const incomingCount = (s) => Math.max(s.newIssues ?? 0, (s.issues ?? []).length);
 
-const FF_SHOWN = 3;
-
-/** The item a firefighter log line acted on: the first `repo-N` id in it. */
-const ffItem = (text) => /\b([a-z][\w]*-\d+)\b/.exec(text)?.[1] ?? "";
-
-/** One firefighter action as a line: time, action, the item as a link, a short reason. */
-function ffLine(s, l) {
-  const text = l.line.replace(/^firefighter:?\s*/, "");
-  const m = /^(did|needs-chris|tell|failed|malformed reply):?\s*(.*)$/.exec(text);
-  const action = m ? m[1] : "note", rest = m ? m[2] : text;
-  const id = ffItem(rest);
-  const [repo, n] = id ? id.split(/-(?=\d+$)/) : [];
-  const reason = oneSentence(id ? rest.replace(id, "") : rest).replace(/^[\s,:;-]+/, "");
-  return `<li><span class="num">${esc(when(l.at, new Date(s.now)))}</span> <b>${esc(action)}</b> ` +
-    `${id ? idLink(id, `#/issues/${encodeURIComponent(repo)}/${n}`) + " " : ""}<span class="why">${esc(reason.length > 90 ? `${reason.slice(0, 89).trimEnd()}\u2026` : reason)}</span></li>`;
-}
-
-/** An agent line of the flow strip: a dot, name, state and a summary; opens to its last 3 actions and the folded full log. */
-function flowAgent(s, key, name, live, summary, lines, log) {
-  return `<details class="agentline ${key}" data-keep="agent:${key}"><summary><span class="dot ${live ? "run" : "idle"}" aria-hidden="true"></span><b>${name}</b> ${live ? "running" : "idle"} \u00b7 <span class="num">${esc(summary)}</span></summary>` +
-    (lines ? `<ul class="ff-lines">${lines.slice(0, FF_SHOWN).join("")}</ul>` + more(key, `<ul class="ff-lines">${log}</ul>`) : "") + `</details>`;
-}
-
-const lastAction = (s, at) => (at ? `last action ${when(at, new Date(s.now))}` : "no action yet");
-
-const firefighterLine = (s) => {
-  const newest = [...(s.factory?.firefighter ?? [])].reverse();
-  const run = s.running.find((j) => j.name === "firefighter" || j.run?.kind === "firefighter");
-  return flowAgent(s, "firefighter", "Firefighter", !!run, lastAction(s, newest[0]?.at),
-    newest.map((l) => ffLine(s, l)),
-    newest.map((l) => `<li><span class="num">${esc(when(l.at, new Date(s.now)))}</span> ${esc(l.line.replace(/^firefighter:?\s*/, ""))}</li>`).join(""));
-};
-
-const PLAN_OUT = { planned: "split", goal: "goal" };
-const plannerLine = (s) => {
-  const runs = s.planner ?? [];
-  const live = runs.find((j) => j.state === "running");
-  const at = (j) => (j.state === "running" ? j.started : j.ended ?? j.started);
-  const line = (j) => `<li><span class="num">${esc(when(at(j), new Date(s.now)))}</span> <b>${j.state === "running" ? "planning" : esc(j.outcome ? (PLAN_OUT[j.outcome] ?? j.outcome) : "no plan")}</b> ` +
-    `${j.item ? idLink(`${j.repo}-${j.item.id}`, `#/issues/${encodeURIComponent(j.repo)}/${j.item.id}`) + " " : ""}<span class="why">${esc(j.item?.title ?? "")}</span></li>`;
-  const last = runs.find((j) => j.state !== "running");
-  return flowAgent(s, "planner", "Planner", !!live, lastAction(s, last ? at(last) : live?.started), runs.map(line), runs.map(line).join(""));
-};
-
-const kindOf = (j) => j.run?.kind ?? "agent";
-const triageLine = (s) => flowAgent(s, "triage", "Triage", s.running.some((j) => kindOf(j) === "triage"), `${s.velocity?.triaged?.day ?? 0} runs today`);
-const workersLine = (s) => {
-  const busy = s.running.filter((j) => kindOf(j) === "agent").length;
-  return flowAgent(s, "workers", "Workers", busy > 0, `${busy} of ${s.factory.liveCap ?? 0} busy`);
-};
-
-/** The flow strip: Incoming \u2192 Queued \u2192 Running \u2192 Done today, each stage a link to its lane with the agent that feeds it. */
-export function renderFlow(s) {
-  const stage = (lane, k, n, of, sub, agent) =>
-    `<div class="stage"><a class="stage-main" href="#lane-${lane}"><span class="k">${k}</span><span class="v">${n}${of ? `<span class="of"> of ${of}</span>` : ""}</span><span class="quiet">${esc(sub)}</span></a>${agent}</div>`;
+/** The flow strip: Incoming \u2192 Queued \u2192 Running \u2192 Done, then the Context card. `sp` is /api/speed for the picked window (Done counts its lands); null while it loads. */
+export function renderFlow(s, sp = null) {
+  const stage = (lane, k, n, of, id = "") =>
+    `<div class="stage"><a class="stage-main" href="#lane-${lane}"><span class="k">${k}</span><span class="v"${id ? ` id="${id}"` : ""}>${n}${of ? `<span class="of"> of ${of}</span>` : ""}</span></a></div>`;
   const arrow = `<span class="arrow" aria-hidden="true">\u2192</span>`;
-  const d = s.velocity?.landed ?? { day: 0, avg: 0 };
   return `<div class="flow" id="flow">` +
-    stage("incoming", "Incoming", incomingCount(s), 0, "untriaged issues", triageLine(s)) + arrow +
-    stage("queued", "Queued", (s.waiting ?? []).length, s.factory.waitingCap > 0 ? s.factory.waitingCap : 0, "waiting for a slot", plannerLine(s)) + arrow +
-    stage("running", "Running", runningCount(s), s.factory.liveCap > 0 ? s.factory.liveCap : 0, "jobs live now", workersLine(s)) + arrow +
-    stage("done", "Done today", d.day, 0, `avg ${Math.round(d.avg * 10) / 10}`, firefighterLine(s)) + `</div>`;
+    stage("incoming", "Incoming", incomingCount(s), 0) + arrow +
+    stage("queued", "Queued", (s.waiting ?? []).length, 0) + arrow +
+    stage("running", "Running", runningCount(s), s.factory.liveCap > 0 ? s.factory.liveCap : 0) + arrow +
+    stage("done", "Done", sp && !sp.error ? sp.done : "\u2013", 0, "done-n") + renderContext(s) + `</div>`;
+}
+
+/** The Context card: Needs you, Stuck and Failed (a count above 0 takes its color and links to Needs you), then the usage. */
+export function renderContext(s) {
+  const failed = s.stuck.filter((j) => j.state === "failed").length;
+  const cnt = (k, n, tone) => `<a class="cnt${n ? " " + tone : ""}" href="#needs"><span class="n">${n}</span> ${k}</a>`;
+  return `<div class="stage context" id="context"><span class="k">Context</span><div class="ctx">` +
+    cnt("Needs you", needsCount(s), "need") + cnt("Stuck", s.stuck.length - failed, "stuck") + cnt("Failed", failed, "stuck") +
+    `</div><div class="ctx usage">${renderUsage(s)}</div></div>`;
 }
 
 /** Needs you: the needs-you rows, then the stuck and failed jobs; absent when nothing needs Chris. */
@@ -383,10 +339,10 @@ function attentionRow(i) {
 /** An error line as a row: the Problem sentence, no buttons and no Always. */
 const errorRow = (l) => `<article class="job-card small issue-row error" data-kind="error"><p class="problem">${esc(`${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`)}</p></article>`;
 
-/** "Oct 28 09:17": the time of the state, as every Status time reads (a date for another year). */
+/** "12:49 pm": the time of the state. */
 export function renderAsOf(s) {
-  const d = new Date(s.now);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const d = new Date(s.now), h = d.getHours();
+  return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
 }
 
 /** The Pause or Resume button of the page head. */

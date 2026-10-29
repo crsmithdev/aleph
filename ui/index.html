@@ -149,20 +149,22 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .stage-main .v .of { font: 400 22px/1 var(--metric); color: var(--muted); }
 .stage-main .quiet { font-size: var(--fs-xs); color: var(--muted); }
 .arrow { flex: none; align-self: center; color: var(--muted); font-size: 24px; }
-.agentline { font-size: var(--fs-sm); }
-.agentline summary { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.agentline .dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--muted); }
-.agentline .dot.run { background: var(--run); }
-.agentline ul { margin: 6px 0 0; padding-left: 16px; }
+.stage.context { flex: 1.4 1 0; display: grid; gap: 8px; align-content: start; }
+.stage.context .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+.ctx { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 500 var(--fs-sm) var(--sans); color: var(--muted); }
+.ctx a.cnt { color: var(--muted); text-decoration: none; }
+.ctx a.cnt .n { font: 700 18px/1 var(--metric); font-variant-numeric: lining-nums tabular-nums; }
+.ctx a.cnt.need, .ctx a.cnt.need .n { color: var(--need); } .ctx a.cnt.stuck, .ctx a.cnt.stuck .n { color: var(--stuck); }
+.ctx a.cnt:hover { text-decoration: underline; }
+.ctx.usage { font-size: var(--fs-xs); }
 .lanes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; align-items: start; margin-top: 24px; }
 .lane { min-width: 0; }
 .lane-card .ih { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .lane-card > .t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 4px 0; font-weight: 600; text-decoration: none; color: inherit; }
 .lane-card .run-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--fs-sm); color: var(--muted); }
 .needs { margin: 0 0 24px; }
-.lede .counts { flex: none; display: flex; gap: 6px 14px; font: 500 var(--fs-sm) var(--sans); color: var(--muted); }
-.lede .counts .cnt { border-bottom: 0; color: var(--muted); }
-.lede .counts a.need { color: var(--need); } .lede .counts a.stuck { color: var(--stuck); }
+.lede .wpick { flex: none; margin-left: auto; }
+.lede .wpick + .act { margin-left: 0; }
 .usage-line { width: 300px; height: 40px; color: var(--muted); }
 .wk { cursor: help; font-weight: 600; }
 .agent { margin: 0; font-size: var(--fs-sm); color: var(--muted); }
@@ -470,11 +472,14 @@ details.fold { margin: 0 0 8px; }
 
 
 /* ---------- Status: Speed ---------- */
-.meds { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin: 12px 0 8px; }
+.meds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 12px 0 8px; }
 .med { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); min-width: 0; }
 .med .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
 .med .v { font: 600 22px/1.2 var(--metric); font-variant-numeric: lining-nums tabular-nums; }
 .med .quiet { font-size: var(--fs-xs); color: var(--muted); }
+.med .p90 { font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
+.med .runs { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.meds.one { grid-template-columns: minmax(0, 1fr); max-width: 260px; }
 .sh.sub h2 { font-size: var(--fs-md); }
 .hbar { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: var(--rule-2); gap: 2px; }
 .hbar span { min-width: 3px; }
@@ -499,7 +504,7 @@ details.fold { margin: 0 0 8px; }
   .lanes { grid-template-columns: minmax(0, 1fr); }
   .meds { grid-template-columns: minmax(0, 1fr); }
   .lede { flex-wrap: wrap; white-space: normal; }
-  .lede .counts { flex-wrap: wrap; order: 3; width: 100%; }
+  .lede .wpick { order: 3; margin-left: 0; }
   .page { padding: 20px 16px 48px; }
   .ev { grid-template-columns: minmax(0, 1fr); }
   .ev > div { border-left: 0; border-top: 1px solid var(--rule-2); }
@@ -788,6 +793,12 @@ pre.stat b { color: var(--need); }
       el.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
     });
   }, 1000);
+
+  // The page time picker keeps its choice in the hash and routes again.
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest(".wpick button");
+    if (b) location.hash = `#/?window=${b.dataset.value}`;
+  });
 
   // In-page anchors (#needs) scroll to their element instead of routing.
   document.addEventListener("click", (e) => {

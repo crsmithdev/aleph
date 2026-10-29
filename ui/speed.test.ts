@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearCache, pct, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { dur, renderSpeedTop } from "./views/speed.js";
+import { areaOption, dur, renderEfficiency, renderPicker, renderSpeedTop, windowOf } from "./views/speed.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -45,8 +45,8 @@ test("percentiles are nearest rank", () => {
   expect([pct([1, 2, 3, 4], 0.5), pct([1, 2, 3, 4], 0.9), pct([5], 0.9)]).toEqual([2, 4, 5]);
 });
 
-test("today: counts, medians, wasted share, buckets, slowest, models", () => {
-  const d = speed(1, now);
+test("day: counts, medians, wasted share, buckets, slowest, models", () => {
+  const d = speed("day", now);
   expect(d.kinds.agent).toEqual({ count: 3, p50: 1200, p90: 1800 }); // the 5 h run and the running one are out
   expect(d.kinds.land).toEqual({ count: 3, p50: 46, p90: 100 });
   expect(d.kinds.triage.count).toBe(1);
@@ -56,9 +56,12 @@ test("today: counts, medians, wasted share, buckets, slowest, models", () => {
   expect(d.ends.dropped.count + d.ends.stuck.count).toBe(2);
   expect(d.ends["needs-you"].count).toBe(0);
   expect(d.wasted).toBeCloseTo(3000 / 3600, 3);
+  expect(d.window).toBe("day");
+  expect(d.done).toBe(2);
   expect(d.buckets.length).toBe(24);
-  expect(d.buckets[9]).toMatchObject({ label: "09:00", agent: 600, tests: 36, lands: 2 });
-  expect(d.buckets[10]).toMatchObject({ agent: 1200, tests: null, lands: 0 });
+  const b = (h: string) => d.buckets.find((x) => x.label === h)!;
+  expect(b("09:00")).toMatchObject({ agent: 600, tests: 36, lands: 2 });
+  expect(b("10:00")).toMatchObject({ agent: 1200, tests: null, lands: 0 });
   expect(d.slowest.map((r) => [r.state, r.took])).toEqual([["stuck", 1800], ["dropped", 1200], ["passed", 600]]);
   expect(d.slowest[0].model).toBe("unset");
   expect(d.slowest[2]).toMatchObject({ tests: 36, cost: 1 });
@@ -66,36 +69,59 @@ test("today: counts, medians, wasted share, buckets, slowest, models", () => {
   expect(d.flaky).toBe(0);
 });
 
-test("7 and 30 days: one bucket per local day, wider windows add runs", () => {
-  const w = speed(7, now);
+test("hour: twelve 5-minute buckets over the last hour", () => {
+  const h = speed("hour", new Date(2026, 9, 28, 9, 47, 0));
+  expect(h.buckets.length).toBe(12);
+  expect(h.buckets[0].label).toBe("08:50");
+  expect(h.buckets[11].label).toBe("09:45");
+  expect(h.kinds.agent.count).toBe(1); // the 09:00 run
+  const m = speed("hour", new Date(2026, 9, 28, 9, 7, 0));
+  expect(m.buckets.find((x) => x.label === "09:00")).toMatchObject({ lands: 2 });
+  expect(m.done).toBe(2);
+});
+
+test("week and month: one bucket per local day, wider windows add runs", () => {
+  const w = speed("week", now);
   expect(w.buckets.length).toBe(7);
   expect(w.kinds.agent.count).toBe(4);
   expect(w.buckets[6]).toMatchObject({ label: "10-28", lands: 2 });
   expect(w.buckets[3]).toMatchObject({ label: "10-25", agent: 300, tests: 40 });
   expect(w.models.map((m) => m.model)).toContain("claude-sonnet-5-5");
-  const m = speed(30, now);
+  const m = speed("month", now);
   expect(m.buckets.length).toBe(30);
   expect(m.kinds.plan.count).toBe(1);
 });
 
-test("GET /api/speed validates days and answers JSON", async () => {
+test("GET /api/speed takes a window (default week) and answers JSON", async () => {
   clearCache();
-  const res = await routes["GET /api/speed"](new Request("http://x/api/speed?days=7"), {}, new URL("http://x/api/speed?days=7"));
-  expect((await res.json()).days).toBe(7);
-  const bad = await routes["GET /api/speed"](new Request("http://x/api/speed?days=3"), {}, new URL("http://x/api/speed?days=3"));
-  expect(bad.status).toBe(400);
+  const get = async (q: string) => routes["GET /api/speed"](new Request(`http://x/api/speed${q}`), {}, new URL(`http://x/api/speed${q}`));
+  expect((await (await get("?window=month")).json()).window).toBe("month");
+  expect((await (await get("")).json()).window).toBe("week");
+  expect((await get("?window=year")).status).toBe(400);
 });
 
-test("the view: range control, wasted sentence, hours bar, six medians, charts, empty states", () => {
-  const h = renderSpeedTop(speed(1, now), 1);
-  for (const t of ["Today", "7 days", "30 days", "24–27 s alone", "Where the agent hours went", 'data-chart="lands"', "of the agent hours were wasted"]) expect(h).toContain(t);
-  expect(h.indexOf("were wasted")).toBeLessThan(h.indexOf('class="hbar"'));
-  expect(h.indexOf('class="hbar"')).toBeLessThan(h.indexOf('class="meds"'));
+test("the view: medians with p50, p90 and runs; charts; efficiency with reruns and the wasted share", () => {
+  const d = speed("day", now);
+  const h = renderSpeedTop(d);
+  expect(h).toContain('data-chart="lands"');
   expect(h.indexOf('class="meds"')).toBeLessThan(h.indexOf('class="charts3"'));
-  expect(h.match(/class="med"/g)?.length).toBe(6);
-  expect(h).not.toContain("Agent runs by model");
-  expect(renderSpeedTop(null, 7)).toContain("Loading");
-  expect(h).not.toContain("Slowest agent runs");
+  expect(h.match(/class="med"/g)?.length).toBe(5);
+  expect(h).toContain("p90 30m 00s");
+  expect(h).toContain('<span class="runs">3</span>');
+  for (const t of ["Tests", "Agent", "Land", "Triage", "Plan"]) expect(h).toContain(`<span class="k">${t}</span>`);
+  for (const t of ["Tests check", "Flaky", "24–27 s", "Today", "7 days"]) expect(h).not.toContain(t);
+  const e = renderEfficiency(d);
+  expect(e).toContain("Reruns");
+  expect(e).toContain("<b>83%</b> of 1.0 agent hours went to dropped or stuck runs");
+  expect(e.indexOf("went to")).toBeLessThan(e.indexOf('class="hbar"'));
+  expect(e).toContain('class="hlegend"');
+  expect(renderSpeedTop(null)).toContain("Loading");
+  const o = areaOption(d.buckets, "agent", { color: "#000" });
+  expect(o.series[0].areaStyle).toBeDefined();
+  expect(o.series[0].data.length).toBe(24);
+  expect(renderPicker("hour")).toMatch(/aria-pressed="true">Hour<[^]*aria-pressed="false">Day/);
+  expect(windowOf(new URLSearchParams("window=day"))).toBe("day");
+  expect(windowOf(new URLSearchParams("window=x"))).toBe("week");
   expect(dur(43)).toBe("43s");
   expect(dur(245)).toBe("4m 05s");
 });

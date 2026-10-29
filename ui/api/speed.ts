@@ -1,8 +1,8 @@
 /**
- * `GET /api/speed?days=1|7|30`: how fast the factory's runs are, read from the run folders'
+ * `GET /api/speed?window=hour|day|week|month` (default week): how fast the factory's runs are, read from the run folders'
  * state.json (no Langfuse). Runs with a `started` and an `ended` count; one longer than 4 hours
- * is a broken clock and is skipped. Days are local: `days=1` is since midnight today, 7 the last
- * seven days with today. A percentile is the nearest rank.
+ * is a broken clock and is skipped. Hour is the last 60 minutes in 5-minute buckets, day the last 24 hours in hourly ones, week and
+ * month the last 7 and 30 local days (today included) in daily ones. A percentile is the nearest rank.
  */
 import { flakes } from "../../jobs/lib/factory.ts";
 import { allRuns, type Run } from "../../jobs/lib/ledger.ts";
@@ -18,13 +18,15 @@ type End = (typeof END_STATES)[number];
 
 export interface Pct { count: number; p50: number; p90: number }
 export interface Speed {
-  days: number;
+  window: Window;
+  /** Land runs that landed in the window: the issues done. */
+  done: number;
   kinds: Record<(typeof KINDS)[number], Pct>;
   checks: { name: string; count: number; p50: number; p90: number }[];
   ends: Record<End, { hours: number; cost: number; count: number }>;
   /** Dropped and stuck agent hours over all agent hours, 0 to 1; 0 with no agent hours. */
   wasted: number;
-  /** One bucket per hour (days=1) or per local day (7, 30); `at` is its local start as an ISO string. */
+  /** hour: 12 buckets of 5 minutes; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string. */
   buckets: { label: string; at: string; agent: number | null; tests: number | null; lands: number }[];
   slowest: { name: string; state: string; model: string; tests: number | null; cost: number; took: number }[];
   models: { model: string; count: number; p50: number }[];
@@ -45,12 +47,20 @@ const isTests = (name: string) => /^tests?$/.test(name);
 const endOf = (state: string): End | null =>
   state === "passed" || state === "landed" || state === "done" ? "passed" : state === "failed" ? "stuck" : (END_STATES as readonly string[]).includes(state) ? (state as End) : null;
 
-export function speed(days: number, now = new Date()): Speed {
-  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const since = new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate() - (days - 1));
-  const hourly = days === 1;
-  const n = hourly ? 24 : days;
-  const slot = (t: number): number => (hourly ? new Date(t).getHours() : Math.round((new Date(t).setHours(0, 0, 0, 0) - since.getTime()) / DAY));
+export const WINDOWS = ["hour", "day", "week", "month"] as const;
+export type Window = (typeof WINDOWS)[number];
+const STEP: Record<Window, number> = { hour: 5 * 60_000, day: HOUR, week: DAY, month: DAY };
+const COUNT: Record<Window, number> = { hour: 12, day: 24, week: 7, month: 30 };
+
+export function speed(window: Window, now = new Date()): Speed {
+  const n = COUNT[window];
+  const daily = window === "week" || window === "month";
+  const stepMs = STEP[window];
+  // The first bucket starts at the local midnight (week, month), the full hour (day) or the 5-minute mark (hour), n - 1 steps before the bucket that holds `now`.
+  const last = daily ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) : new Date(Math.floor(now.getTime() / stepMs) * stepMs);
+  const startOf = (i: number) => (daily ? new Date(last.getFullYear(), last.getMonth(), last.getDate() - (n - 1 - i)) : new Date(last.getTime() - (n - 1 - i) * stepMs));
+  const since = startOf(0);
+  const slot = (t: number): number => (daily ? Math.round((new Date(t).setHours(0, 0, 0, 0) - since.getTime()) / DAY) : Math.floor((t - since.getTime()) / stepMs));
   const times: Record<string, number[]> = { agent: [], land: [], triage: [], plan: [] };
   const checks = new Map<string, number[]>();
   const ends = Object.fromEntries(END_STATES.map((s) => [s, { hours: 0, cost: 0, count: 0 }])) as Speed["ends"];
@@ -64,7 +74,7 @@ export function speed(days: number, now = new Date()): Speed {
     const r = run as Run;
     const t0 = Date.parse(r.started), t1 = Date.parse(r.ended ?? "");
     if (!(t0 >= since.getTime()) || t0 > now.getTime() || !(t1 >= t0) || t1 - t0 > MAX_RUN) continue;
-    const secs = (t1 - t0) / 1000, i = slot(t0);
+    const secs = (t1 - t0) / 1000, i = Math.min(n - 1, Math.max(0, slot(t0)));
     const kind = r.kind === "recheck" ? "agent" : r.kind;
     if (kind in times) times[kind].push(secs);
     for (const c of r.checks ?? []) {
@@ -86,35 +96,32 @@ export function speed(days: number, now = new Date()): Speed {
   const wasted = total ? (ends.dropped.hours + ends.stuck.hours) / total : 0;
   for (const s of END_STATES) { ends[s].hours = round(ends[s].hours, 2); ends[s].cost = round(ends[s].cost, 2); }
   const med = (xs: number[]) => (xs.length ? round(pct(xs, 0.5)) : null);
-  const weekAgo = now.getTime() - 7 * DAY;
   return {
-    days,
+    window,
+    done: lands.reduce((a, b) => a + b, 0),
     kinds: Object.fromEntries(KINDS.map((k) => [k, stat(times[k])])) as Speed["kinds"],
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
     ends,
     wasted: round(wasted, 4),
     buckets: Array.from({ length: n }, (_, i) => {
-      const d = hourly ? new Date(since.getFullYear(), since.getMonth(), since.getDate(), i) : new Date(since.getFullYear(), since.getMonth(), since.getDate() + i);
-      return { label: hourly ? `${pad(i)}:00` : `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, at: d.toISOString(), agent: med(agentIn[i]), tests: med(testsIn[i]), lands: lands[i] };
+      const d = startOf(i);
+      return { label: daily ? `${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : `${pad(d.getHours())}:${pad(d.getMinutes())}`, at: d.toISOString(), agent: med(agentIn[i]), tests: med(testsIn[i]), lands: lands[i] };
     }),
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),
     models: [...models].map(([model, xs]) => ({ model, count: xs.length, p50: round(pct(xs, 0.5)) })).sort((a, b) => b.count - a.count || a.model.localeCompare(b.model)),
-    flaky: flakes().filter((f) => Date.parse(f.at) >= weekAgo).length,
+    flaky: flakes().filter((f) => Date.parse(f.at) >= since.getTime()).length,
   };
 }
 
 const cache = staleSync<Speed>();
 export const clearCache = () => cache.clear();
-/** `speed`, kept `ALEPH_UI_FETCH_TTL` seconds like the other fetches; the key holds the local date, so a new day starts fresh. */
-export const cachedSpeed = (days: number): Speed => {
-  const d = new Date();
-  return cache.get(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}|${days}`, uiFetchTtl() * 1000, () => speed(days));
-};
+/** `speed`, kept `ALEPH_UI_FETCH_TTL` seconds like the other fetches. */
+export const cachedSpeed = (window: Window): Speed => cache.get(window, uiFetchTtl() * 1000, () => speed(window));
 
 export const routes: Routes = {
   "GET /api/speed": (_req, _params, url) => {
-    const days = Number(url.searchParams.get("days") ?? 7);
-    if (![1, 7, 30].includes(days)) return Response.json({ error: "days must be 1, 7 or 30" }, { status: 400 });
-    return Response.json(cachedSpeed(days));
+    const w = url.searchParams.get("window") ?? "week";
+    if (!(WINDOWS as readonly string[]).includes(w)) return Response.json({ error: "window must be hour, day, week or month" }, { status: 400 });
+    return Response.json(cachedSpeed(w as Window));
   },
 };

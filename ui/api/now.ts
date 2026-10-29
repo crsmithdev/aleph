@@ -16,6 +16,6 @@ export const routes: Routes = {
   "GET /api/state": async (_req, _params, url) => {
     const s = forProject(state(), url.searchParams.get("project"));
     annotate([...s.needs, ...s.stuck, ...s.running, ...s.delivered, ...s.planner], await currentFit().catch(() => null));
-    return Response.json({ ...s, usage: summary(), speed: cachedSpeed(7), proposals: proposals().map(({ id, kind, sentence, count, signals }) => ({ id, kind, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) });
+    return Response.json({ ...s, usage: summary(), speed: cachedSpeed("week"), proposals: proposals().map(({ id, kind, sentence, count, signals }) => ({ id, kind, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) });
   },
 };

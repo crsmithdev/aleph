@@ -7,7 +7,7 @@ import { actMessages, openDiffs } from "./lib.js";
 
 // The server derives `attention` from needs, needsIssues and proposals; a fixture without it gets the same derivation.
 const att = (s: any) => (s.attention ? s : { ...s, attention: attend({ needs: s.needs ?? [], needsIssues: s.needsIssues ?? [] }, {}, s.proposals ?? []).items });
-const r: any = { ...view, renderJobs: (s: any) => view.renderNeeds(att(s)) + view.renderLanes(att(s)), renderLede: (s: any) => view.renderLede(att(s)), view: { ...view.view, render: (s: any) => view.view.render(att(s)) } };
+const r: any = { ...view, renderJobs: (s: any) => view.renderNeeds(att(s)) + view.renderLanes(att(s)), renderLede: (s: any) => view.renderLede(att(s)), view: { ...view.view, render: (s: any, p?: any, q?: any) => view.view.render(att(s), p, q) } };
 
 // @ts-ignore
 import { landCard } from "./views/cards.js";
@@ -60,9 +60,9 @@ const section = (h: string, id: string) => h.match(new RegExp(`<section id="${id
 
 test("the page order is status line, flow strip, Speed, then four lanes; no metric cards", () => {
   const page = r.view.render(full);
-  expect([...page.matchAll(/<(?:section|div)[^>]* id="([^"]+)"/g)].map((m) => m[1]).filter((id) => ["needs", "flow", "speed"].includes(id) || id.startsWith("lane-"))).toEqual(["needs", "flow", "speed", "lane-incoming", "lane-queued", "lane-running", "lane-done"]);
+  expect([...page.matchAll(/<(?:section|div)[^>]* id="([^"]+)"/g)].map((m) => m[1]).filter((id) => ["needs", "flow", "speed", "efficiency"].includes(id) || id.startsWith("lane-"))).toEqual(["needs", "flow", "speed", "efficiency", "lane-incoming", "lane-queued", "lane-running", "lane-done"]);
   const at = (t: string) => page.indexOf(t);
-  const order = ['class="lede"', 'class="asof"', 'class="say', 'class="counts"', 'data-act="pause"', 'id="needs"', 'id="flow"', 'id="speed"', 'id="lane-incoming"', 'id="lane-queued"', 'id="lane-running"', 'id="lane-done"'];
+  const order = ['class="lede"', 'class="asof"', 'class="say', 'class="seg wpick"', 'data-act="pause"', 'id="needs"', 'id="flow"', 'id="speed"', 'id="efficiency"', 'id="lane-incoming"', 'id="lane-queued"', 'id="lane-running"', 'id="lane-done"'];
   expect(order.map(at)).toEqual([...order.map(at)].sort((a, b) => a - b));
   expect(order.every((t) => at(t) >= 0)).toBe(true);
   for (const t of ['class="metrics"', "Agent runs by model", "Median run", 'id="issues"', 'id="jobs"', 'id="agents"', 'id="queued"', "Incoming: 10 newest", 'class="banner"']) expect(page).not.toContain(t);
@@ -76,33 +76,43 @@ test("the Needs-you section sits between the status line and the flow strip, onl
   expect(calm).not.toContain('id="needs"');
 });
 
-test("the status line has the counts as links, the usage and the Pause button at the end", () => {
-  const stuck = [job({ name: "aleph-30", state: "stuck", reason: "x" }), job({ name: "aleph-31", state: "failed", reason: "y" }), job({ name: "aleph-32", state: "failed", reason: "z" })];
-  const s = { ...full, stuck, usage: { now: { seven_day: 41.2, five_hour: 7, seven_day_resets_at: "2026-10-30T09:00:00Z" }, series: [] }, needsIssues: [{ ...issue(7), question: "Q?" }], proposals: [] };
-  const h = r.view.render(att(s));
+test("the status line: am/pm time, the sentence, the Hour/Day/Week/Month picker and Pause; no counts", () => {
+  const h = r.view.render(att(full), {}, new URLSearchParams("window=day"));
   const line = h.match(/<p class="lede">[^]*?<\/p>/)![0];
-  const txt = line.replace(/<[^>]+>/g, "");
-  expect(txt).toMatch(/Needs you 3\s*Stuck 1\s*Failed 2\s*Week 41%\s*5-hour 7%\s*Pause$/);
-  expect(line).toMatch(/<a class="cnt[^"]*" href="#[^"]+">Failed 2<\/a>/);
-  expect(line.indexOf("Week")).toBeLessThan(line.indexOf('data-act="pause"'));
-  expect(r.view.render(att({ ...full, usage: undefined }))).toContain("usage unknown");
+  expect(line).toMatch(/<span class="asof">\d{1,2}:\d\d (am|pm)<\/span>/);
+  expect(r.renderAsOf({ now: new Date(2026, 9, 29, 12, 49).toISOString() })).toBe("12:49 pm");
+  expect(r.renderAsOf({ now: new Date(2026, 9, 29, 0, 5).toISOString() })).toBe("12:05 am");
+  expect(r.renderAsOf({ now: new Date(2026, 9, 29, 9, 7).toISOString() })).toBe("9:07 am");
+  expect(line.replace(/<[^>]+>/g, "")).toMatch(/Hour\s*Day\s*Week\s*Month\s*Pause$/);
+  expect(line).toMatch(/aria-pressed="true">Day</);
+  for (const t of ["Needs you 3", "Stuck", "Week 4", "5-hour", 'class="counts"']) expect(line).not.toContain(t);
+  expect(r.view.render(att(full))).toMatch(/aria-pressed="true">Week</);
 });
 
-test("the flow strip: Incoming, Queued of cap, Running of cap, Done today with avg, each linking to its lane, with its agent line", () => {
-  const s = { ...full, issues: [issue(1)], newIssues: 1, factory: { ...full.factory, liveCap: 3, waitingCap: 5, firefighter: [] }, velocity: { landed: { day: 4, avg: 2.5 }, triaged: { day: 6, avg: 3 } } };
-  const h = r.renderFlow(s);
-  const stages = [...h.matchAll(/<a class="stage-main" href="#lane-(\w+)"><span class="k">([^<]+)<\/span><span class="v">(\d+)(?:<span class="of"> of (\d+)<\/span>)?<\/span><span class="quiet">([^<]+)</g)].map((m) => m.slice(1));
-  expect(stages).toEqual([["incoming", "Incoming", "1", undefined, "untriaged issues"], ["queued", "Queued", "1", "5", "waiting for a slot"], ["running", "Running", "1", "3", "jobs live now"], ["done", "Done today", "4", undefined, "avg 2.5"]]);
+test("the flow strip: Incoming, Queued, Running of cap, Done, then the Context card; no agent lines", () => {
+  const stuck = [job({ name: "aleph-30", state: "stuck", reason: "x" }), job({ name: "aleph-31", state: "failed", reason: "y" }), job({ name: "aleph-32", state: "failed", reason: "z" })];
+  const s = { ...att({ ...full, stuck }), usage: { now: { seven_day: 41.2, five_hour: 7, seven_day_resets_at: "2026-10-30T09:00:00Z" }, series: [] }, issues: [issue(1)], newIssues: 1, factory: { ...full.factory, liveCap: 3, waitingCap: 5, firefighter: [] } };
+  const h = r.renderFlow(s, { done: 4 });
+  const stages = [...h.matchAll(/<a class="stage-main" href="#lane-(\w+)"><span class="k">([^<]+)<\/span><span class="v"[^>]*>(\d+)(?:<span class="of"> of (\d+)<\/span>)?<\/span><\/a>/g)].map((m) => m.slice(1));
+  expect(stages).toEqual([["incoming", "Incoming", "1", undefined], ["queued", "Queued", "1", undefined], ["running", "Running", "1", "3"], ["done", "Done", "4", undefined]]);
   expect(h.match(/class="arrow"/g)?.length).toBe(3);
-  expect(h).toContain("Triage</b> idle \u00b7 <span class=\"num\">6 runs today");
-  expect(h).toContain("Workers</b> running \u00b7 <span class=\"num\">1 of 3 busy");
-  expect(h).toContain("Planner</b> idle");
-  expect(h).toContain("Firefighter</b> idle");
+  for (const t of ["agentline", "avg", "Done today", "Triage", "Workers", "Planner", "Firefighter"]) expect(h).not.toContain(t);
+  const ctx = h.slice(h.indexOf('id="context"'));
+  expect(h.indexOf('id="done-n"')).toBeLessThan(h.indexOf('id="context"'));
+  expect(h.slice(h.indexOf('id="done-n"'), h.indexOf('id="context"')).match(/arrow/g)).toBeNull();
+  expect(ctx.replace(/<[^>]+>/g, "")).toMatch(/Context\s*\d+ Needs you\s*1 Stuck\s*2 Failed\s*Week 41%\s*5-hour 7%/);
+  expect(ctx).toMatch(/<a class="cnt stuck" href="#needs"><span class="n">2<\/span> Failed<\/a>/);
+  expect(r.renderFlow({ ...s, stuck: [] }, null)).toMatch(/<a class="cnt" href="#needs"><span class="n">0<\/span> Stuck/);
+  expect(r.renderFlow({ ...s, usage: undefined })).toContain("usage unknown");
+  expect(r.renderFlow(s, null)).toContain('id="done-n">\u2013');
 });
 
-test("Speed is one section under the flow strip", () => {
+test("Speed is one section under the flow strip, with Efficiency directly below it", () => {
   const h = r.view.render(full);
   expect(h.match(/<section id="speed"/g)?.length).toBe(1);
+  expect(h.match(/<section id="efficiency"/g)?.length).toBe(1);
+  expect(h.indexOf('id="speed"')).toBeLessThan(h.indexOf('id="efficiency"'));
+  expect(h.indexOf('id="efficiency"')).toBeLessThan(h.indexOf('id="lane-incoming"'));
 });
 
 test("every lane header has a count, in one style", () => {
@@ -292,10 +302,10 @@ test("a flake line is not shown on the Status page", () => {
   expect(r.renderJobs(calm)).not.toContain("rerun");
 });
 
-test("the as-of line is hh:mm, 24-hour, no date", () => {
-  expect(r.renderAsOf({ now: new Date(2026, 9, 28, 9, 5).toISOString() })).toBe("09:05");
-  expect(r.renderAsOf({ now: new Date(2026, 9, 28, 21, 5).toISOString() })).toBe("21:05");
-  expect(r.renderAsOf(state)).toMatch(/^\d{2}:\d{2}$/);
+test("the as-of line is h:mm am or pm, no date", () => {
+  expect(r.renderAsOf({ now: new Date(2026, 9, 28, 9, 5).toISOString() })).toBe("9:05 am");
+  expect(r.renderAsOf({ now: new Date(2026, 9, 28, 21, 5).toISOString() })).toBe("9:05 pm");
+  expect(r.renderAsOf(state)).toMatch(/^\d{1,2}:\d{2} (am|pm)$/);
 });
 
 test("a running job past 40 minutes says so", () => {
@@ -570,26 +580,6 @@ test("approve and decline handlers", async () => {
   }
 });
 
-test("the firefighter line: state, last action time, its last 3 actions with item links, the log folded; none when it did nothing in 24 hours", () => {
-  const ff = [
-    { at: "2026-10-27T15:00:00Z", line: "firefighter: did old aleph-1" },
-    { at: "2026-10-27T16:10:00Z", line: "firefighter: did land aleph-27" },
-    { at: "2026-10-27T16:20:00Z", line: "firefighter: needs-chris: aleph-30 changes hooks/x.ts, a held security path, so it needs your review before it lands." },
-    { at: "2026-10-27T16:30:00Z", line: "firefighter: tell: refused aleph-31 not ours" },
-  ];
-  const h = r.renderFlow({ ...state, factory: { ...state.factory, firefighter: ff } });
-  const row = h.match(/<details class="agentline firefighter"[^]*?<\/details><\/details>/)![0];
-  expect(row).toContain("idle");
-  expect(row).toContain("last action Oct 27 16:30");
-  const shown = row.split('<details class="more"')[0];
-  expect(shown.match(/<li>/g)?.length).toBe(3);
-  expect(shown).not.toContain("aleph-1<");
-  expect(shown).toContain('<a class="idl" href="#/issues/aleph/30">aleph-30</a>');
-  expect(shown.indexOf("aleph-31")).toBeLessThan(shown.indexOf("aleph-27"));
-  expect(row.split('<details class="more"')[1]).toContain("did old aleph-1");
-  expect(h).toContain("Planner</b>");
-});
-
 test("a running firefighter run shows its role as the kind", () => {
   const s = { ...state, running: [job({ name: "firefighter", phase: "firefighter", run: { kind: "firefighter", started: "2026-10-27T16:55:00Z" } })] };
   expect(r.renderJobs(s)).toContain('<span class="badge run">firefighter</span>');
@@ -654,7 +644,7 @@ test("the Needs-you group is one list; its articles are the attention items plus
   expect(red).toContain('<p class="problem">Fix: aleph main is red');
   expect(red).not.toContain("always");
   expect(red).not.toContain("<button");
-  expect(r.view.render(att(s))).toContain(">Needs you 4</a>");
+  expect(r.view.render(att(s))).toContain('<span class="n">4</span> Needs you</a>');
 });
 
 test("Status has no Standing permissions section", () => {
@@ -684,14 +674,6 @@ test("Incoming lists the untriaged issues only, with link, time and badge", () =
   expect(h).toContain('<a href="#/issues/aleph/1" class="t">Issue 1</a>');
   expect(h).not.toContain("Issue 3");
   expect(h).toMatch(/Oct 27/);
-});
-
-test("the planner line shows its state and last action", () => {
-  const planner = [job({ name: "plan-aleph-9", state: "done", outcome: "planned", repo: "aleph", item: { id: 9, title: "Big goal" }, ended: "2026-10-27T16:40:00Z" })];
-  const h = r.renderFlow({ ...state, planner, factory: { ...state.factory, firefighter: [{ at: "2026-10-27T16:30:00Z", line: "firefighter: did land aleph-27" }] } });
-  expect(h.match(/<details class="agentline [a-z]+"/g)).toEqual(['<details class="agentline triage"', '<details class="agentline planner"', '<details class="agentline workers"', '<details class="agentline firefighter"']);
-  expect(h).toContain("last action Oct 27 16:40");
-  expect(h).toContain("Big goal");
 });
 
 test("a question attention item renders the Answer button with a text input in the same row", () => {
