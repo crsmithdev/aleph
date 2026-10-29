@@ -11,7 +11,8 @@ import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
 import { decide } from "../../hooks/lib/jev.ts";
 import { fetchObservations } from "../../hooks/lib/otlp.ts";
 import { factoryLog, factoryDir } from "./factory.ts";
-import { allRuns } from "./ledger.ts";
+import { allRuns, loadRegistry } from "./ledger.ts";
+import { logStanding, standing } from "./standing.ts";
 import { file as fileIssues, type Place } from "../../todo/lib/store.ts";
 
 export const CORRECTION_AT = 0.7;
@@ -175,14 +176,16 @@ export async function mine(now = Date.now()): Promise<Store> {
   signals.push(...dropSignals(from, seen));
   signals.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   for (const s of signals) await group(store.lessons, s);
-  await propose(store.lessons);
+  const proposed = await propose(store.lessons);
   store.minedAt = new Date(now).toISOString();
   writeStore(store);
+  standingProposals(proposed);
   return store;
 }
 
 /** Every open lesson at PROPOSE_AT() signals becomes a proposal of the kind Jev finds. A Jev failure leaves it open. */
-async function propose(lessons: Lesson[]): Promise<void> {
+async function propose(lessons: Lesson[]): Promise<Lesson[]> {
+  const made: Lesson[] = [];
   for (const l of lessons) {
     if (l.state !== "open" || l.count < PROPOSE_AT()) continue;
     try {
@@ -196,8 +199,30 @@ async function propose(lessons: Lesson[]): Promise<void> {
       const yes = (id: string) => { const a = d.answers[id]; return a?.type === "noul" && a.noul >= 0.5; };
       l.kind = yes("check") ? "check" : yes("rule") ? "claude-md" : "skill";
       l.state = "proposed";
+      made.push(l);
     } catch (e) {
       factoryLog(`corrections: jev failed on proposal ${l.id}: ${(e as Error).message}`);
+    }
+  }
+  return made;
+}
+
+/** A proposal with a standing approve or decline is answered at once, as the route would. */
+function standingProposals(made: Lesson[]): void {
+  for (const l of made) {
+    const reason = `proposal-${l.kind}`;
+    const action = standing(reason)?.action;
+    if (action === "approve") {
+      // The lesson is about aleph itself: the first registry repo that runs in the sandbox.
+      const repo = Object.values(loadRegistry()).find((r) => r.sandbox);
+      if (!repo) { factoryLog(`standing: ${reason}: approve on ${l.id} failed: no sandboxed repo in the registry`); continue; }
+      const ref = approve(l.id, repo);
+      if (ref.startsWith(`${repo.key}-`)) logStanding(reason, "approve", ref);
+      else factoryLog(`standing: ${reason}: approve on ${l.id} failed: ${ref}`);
+    } else if (action === "decline") {
+      const refusal = decline(l.id);
+      if (refusal) factoryLog(`standing: ${reason}: decline on ${l.id} failed: ${refusal}`);
+      else logStanding(reason, "decline", l.id);
     }
   }
 }

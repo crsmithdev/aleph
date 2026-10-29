@@ -173,6 +173,55 @@ test("an item with no verdict twice is labelled needs-chris and not triaged agai
   expect(calls()).toBe(n);
 });
 
+const factory = () => process.env.ALEPH_FACTORY_DIR!;
+const grant = (reason: string, action: string) => {
+  mkdirSync(factory(), { recursive: true });
+  writeFileSync(join(factory(), "standing.json"), JSON.stringify({ [reason]: { action, at: new Date().toISOString() } }));
+};
+const tickLog = () => readFileSync(join(factory(), "tick.log"), "utf8");
+
+describe("standing permissions", () => {
+  const saved = process.env.ALEPH_FACTORY_DIR;
+  beforeEach(() => { process.env.ALEPH_FACTORY_DIR = join(base, `factory-${++lists}`); });
+  afterAll(() => { if (saved === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = saved; });
+
+  test("retry: no label, the count starts again, and a third triage runs the command", async () => {
+    grant("triage-no-verdict", "retry");
+    reset([{ title: "a", body: "nothing" }]);
+    await run();
+    const t = await run();
+    expect(labels(1) ?? []).not.toContain("needs-chris");
+    expect(t.skipped).toEqual([`${repo.key}-1: no verdict in 2 triages; standing: triage again next tick`]);
+    const n = calls();
+    const t3 = await run();
+    expect(calls()).toBe(n + 1);
+    expect(t3.skipped[0]).toContain("malformed verdict");
+    expect(tickLog()).toContain("standing: triage-no-verdict: retry");
+  });
+
+  test("close: the item is done with the note", async () => {
+    grant("triage-no-verdict", "close");
+    reset([{ title: "a", body: "nothing" }]);
+    await run();
+    await run();
+    expect(todos.status(item(1))).toBe("done");
+    expect(item(1).notes.at(-1)).toEndWith("triage: no verdict in 2 runs; standing: closed");
+    expect(tickLog()).toContain("standing: triage-no-verdict: close");
+  });
+
+  test("recommended: a structured decision becomes a goal; a prose question is labelled as today", async () => {
+    grant("decision", "recommended");
+    reset([{ title: "a", body: "VERDICT:structured" }, { title: "b", body: "VERDICT:chris" }]);
+    await run();
+    expect(labels(1)).toContain("goal");
+    expect(labels(1)).not.toContain("needs-chris");
+    expect(item(1).notes.at(-1)).toEndWith("standing: took the recommendation B: do b");
+    expect(readDecision(item(1))).toBeNull();
+    expect(labels(2)).toContain("needs-chris");
+    expect(tickLog()).toContain(`standing: decision: recommended on ${repo.key}-1`);
+  });
+});
+
 test("a triage that exits non-zero counts toward the limit", async () => {
   reset([{ title: "a", body: "VERDICT:fail" }]);
   await run();

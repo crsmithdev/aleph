@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -189,6 +189,31 @@ test("decline is for good; a fourth signal joins but makes no proposal; approve 
   expect(proposals().length).toBe(0);
   expect(approve(id, repo)).toContain("declined");
   expect(decline(id)).toContain("declined");
+});
+
+describe("standing proposals", () => {
+  const grant = (action: string) => {
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "standing.json"), JSON.stringify({ "proposal-check": { action, at: new Date().toISOString() } }));
+    writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: base, sandbox: true } }));
+  };
+
+  test("approve files the goal at once", async () => {
+    grant("approve");
+    pickFirst = true;
+    await mine(NOW);
+    expect(stored().lessons[0]).toMatchObject({ state: "approved", issue: "fac-1" });
+    expect(readList(repo)!.items.length).toBe(1);
+    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("standing: proposal-check: approve on fac-1");
+  });
+
+  test("decline marks it declined", async () => {
+    grant("decline");
+    pickFirst = true;
+    await mine(NOW);
+    expect(stored().lessons[0].state).toBe("declined");
+    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("standing: proposal-check: decline on");
+  });
 });
 
 test("an unknown id is a refusal, not a throw", () => {

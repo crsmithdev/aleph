@@ -21,6 +21,7 @@ import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
 import { alreadyMet } from "./gate.ts";
+import { logStanding, standing } from "./standing.ts";
 import { detached } from "./launch.ts";
 import { PLANNED, needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import type { Tier } from "./route.ts";
@@ -516,6 +517,17 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
     if (why) factoryLog(`${name}: no issue note: ${why}`);
   };
   const chris = async (question: string, decision?: Decision) => {
+    // A standing permission to take the recommendation: Rerun drops the run, and the goal reruns.
+    if (decision && decision.recommended === "Rerun" && standing("rescue")?.action === "recommended") {
+      const why = await act.drop(name, question);
+      if (!why) {
+        logStanding("rescue", "recommended", `${repo.key}-${issue ?? name}`);
+        record("standing: Rerun");
+        await say(`standing: Rerun; dropped, and the goal reruns`);
+        return;
+      }
+      factoryLog(`${name}: standing Rerun failed (${why})`);
+    }
     markNeedsChris(last, question);
     record(`needs-chris: ${question}`, { label: "needs-chris", decision, reason: "rescue" });
     await say(`needs-chris: ${question}`);

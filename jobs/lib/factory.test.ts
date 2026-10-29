@@ -617,6 +617,19 @@ test("a run that is not safe is labelled needs-chris with a question and does no
   expect(readRun(allRuns()[0].folder)!.state).toBe("stuck");
 });
 
+test("a standing rescue: recommended drops the unsafe stuck run, no needs-chris, a standing: Rerun note", async () => {
+  mkdirSync(join(base, "factory"), { recursive: true });
+  writeFileSync(join(base, "factory", "standing.json"), JSON.stringify({ rescue: { action: "recommended", at: new Date().toISOString() } }));
+  const id = goal();
+  mk(`fac-${id}`, "agent", "stuck", { reason: "tests failed after 2 fix rounds" });
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls).toContain(`drop fac-${id}`);
+  expect(labels(id)).not.toContain("needs-chris");
+  expect(notes(id)).toContain("standing: Rerun");
+  expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain(`standing: rescue: recommended on fac-${id}`);
+});
+
 test("without rescue actions a stuck run still holds the factory", async () => {
   const id = goal();
   mk(`fac-${id}`, "agent", "stuck", { reason: "time box" });

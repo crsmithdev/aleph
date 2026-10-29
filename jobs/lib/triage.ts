@@ -3,7 +3,7 @@
  * `claude -p` run per issue gives one verdict, which is applied through the
  * work store. Each run is a job in the ledger, kind `triage`.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { GOAL, NEEDS_CHRIS, isSorted, label, reader, sort } from "../../todo/lib/store.ts";
@@ -11,7 +11,8 @@ import { decisionNote, normalizeDecision, writeDecision, type Decision } from ".
 import { allRuns, jobsDir, lock, readRun, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
-import { gates, pendingWaits } from "./factory.ts";
+import { factoryDir, gates, pendingWaits } from "./factory.ts";
+import { logStanding, standing } from "./standing.ts";
 /** Triage runs that end with no verdict, for one item, before it is labelled `needs-chris`; `ALEPH_TRIAGE_TRIES` changes it. */
 export const TRIAGE_TRIES = () => Number(process.env.ALEPH_TRIAGE_TRIES ?? 2);
 const TIME_BOX_MS = () => Number(process.env.ALEPH_TRIAGE_TIMEOUT ?? 600) * 1000;
@@ -111,6 +112,12 @@ function apply(repo: Repo, id: number, v: Verdict): boolean {
     } else if (v.verdict === "close") {
       todos.setStatus(item, "done");
       todos.note(item, `triage: closed: ${v.reason}`);
+    } else if (v.verdict === "chris" && v.decision && standing("decision")?.action === "recommended") {
+      const o = v.decision.options.find((x) => x.label === v.decision!.recommended) ?? v.decision.options[0]!;
+      todos.note(item, `standing: took the recommendation ${o.label}: ${o.line}`);
+      label(item, [GOAL]);
+      todos.edit(item, { waitingOn: o.waiting_on });
+      logStanding("decision", "recommended", `${repo.key}-${id}`);
     } else if (v.verdict === "chris") {
       label(item, [NEEDS_CHRIS]);
       item.fm.reason = "decision";
@@ -128,9 +135,30 @@ function apply(repo: Repo, id: number, v: Verdict): boolean {
  * limit, label it `needs-chris` so later ticks skip it. The line to report, or null.
  */
 function giveUp(repo: Repo, id: number, reason: string): string | null {
+  // After a standing retry, only the runs since it count.
+  const mark = join(factoryDir(), "standing-retry", `${repo.key}-${id}`);
+  let since = 0;
+  try { since = Number(readFileSync(mark, "utf8")) || 0; } catch {}
   const n = allRuns().filter((e) => e.run.kind === "triage" && e.run.repo === repo.key && e.run.todo === id
+    && (e.run.made ?? 0) > since
     && /^(malformed verdict|failed):/.test(e.run.reason ?? "")).length;
   if (n < TRIAGE_TRIES()) return null;
+  const grant = standing("triage-no-verdict")?.action;
+  const ref = `${repo.key}-${id}`;
+  if (grant === "retry") {
+    mkdirSync(join(factoryDir(), "standing-retry"), { recursive: true });
+    writeFileSync(mark, String(Date.now()));
+    logStanding("triage-no-verdict", "retry", ref);
+    return `${ref}: no verdict in ${n} triages; standing: triage again next tick`;
+  }
+  if (grant === "close") {
+    const closed = sort(repo, id, `triage ${ref}: no verdict`, (item) => {
+      todos.setStatus(item, "done");
+      todos.note(item, `triage: no verdict in ${n} runs; standing: closed`);
+    });
+    if (closed) logStanding("triage-no-verdict", "close", ref);
+    return closed ? `${ref}: no verdict in ${n} triages; standing: closed` : null;
+  }
   const written = sort(repo, id, `triage ${repo.key}-${id}: no verdict`, (item) => {
     label(item, [NEEDS_CHRIS]);
     item.fm.reason = "triage-no-verdict";
