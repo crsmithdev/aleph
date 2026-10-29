@@ -1,0 +1,33 @@
+import { expect, test } from "bun:test";
+import { bridge, sandboxNetnsPid } from "./netns.ts";
+import { freePort } from "./review2-browser.ts";
+
+const can = (cmd: string[]) => { try { return Bun.spawnSync(cmd, { stdout: "ignore", stderr: "ignore" }).exitCode === 0; } catch { return false; } };
+const usable = can(["unshare", "-Urn", "true"]) && can(["socat", "-V"]) && can(["nsenter", "--version"]);
+
+test("sandboxNetnsPid is null for a child in the host namespace", async () => {
+  const p = Bun.spawn(["sleep", "30"]);
+  try { expect(sandboxNetnsPid(process.pid)).toBeNull(); } finally { p.kill(); await p.exited; }
+});
+
+test.skipIf(!usable)("bridge reaches a server bound inside a network namespace", async () => {
+  const port = await freePort(3002);
+  const script = `Bun.serve({port: ${port}, hostname: "127.0.0.1", fetch: () => new Response("inside")})`;
+  const server = Bun.spawn(["unshare", "-Urn", "sh", "-c", `ip link set lo up; exec ${process.execPath} -e '${script}'`], { stdout: "ignore", stderr: "ignore" });
+  let b: Awaited<ReturnType<typeof bridge>> | undefined;
+  try {
+    let pid: number | null = null;
+    for (let i = 0; i < 100 && pid === null; i++) { pid = sandboxNetnsPid(process.pid); if (pid === null) await Bun.sleep(50); }
+    expect(pid).not.toBeNull();
+    b = await bridge(pid!, port);
+    let text = "";
+    for (let i = 0; i < 100 && text !== "inside"; i++) {
+      try { text = await (await fetch(b.url)).text(); } catch { await Bun.sleep(50); }
+    }
+    expect(text).toBe("inside");
+  } finally {
+    await b?.stop();
+    server.kill();
+    await server.exited;
+  }
+}, 30_000);
