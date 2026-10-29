@@ -22,10 +22,14 @@ export interface Details {
 }
 export type Standing = Record<string, Granted>;
 
+const STAMP = /^\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?:\s*/;
+/** A note without its optional leading timestamp and its `needs-chris:` lead. */
+const unlead = (s: string): string => s.replace(STAMP, "").replace(/^needs-chris:\s*/, "");
+
 /** The held-reason, from the item's own field or, for an old item, the last note. */
 export function issueReason(i: Pick<NewIssue, "reason" | "question" | "decision">): string {
   if (i.reason && REASONS[i.reason]) return i.reason;
-  const n = (i.question ?? "").replace(/^needs-chris:\s*/, "");
+  const n = unlead(i.question ?? "");
   if (/^triage: no verdict in/.test(n)) return "triage-no-verdict";
   if (/^acceptance: fail again/.test(n)) return "acceptance-failed";
   if (/ended with no commit, so the factory stopped/.test(n)) return "no-commit";
@@ -39,7 +43,7 @@ export function clean(text: unknown): string {
   const t = String(text ?? "")
     .replace(/<(task-notification|agent-message)\b[\s\S]*?(<\/\1>|$)/g, " ")
     .replace(/<[^>]*>/g, " ").replace(/[<>]/g, " ")
-    .replace(/^\s*-\s*/, "").replace(/^\s*needs-chris:\s*/i, "").replace(/^\s*triage: for Chris:\s*/i, "")
+    .replace(/^\s*-\s*/, "").replace(STAMP, "").replace(/^\s*needs-chris:\s*/i, "").replace(/^\s*triage: for Chris:\s*/i, "")
     .replace(/\s+/g, " ").trim();
   return oneSentence(t);
 }
@@ -49,7 +53,7 @@ const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 type Ctx = { id: string; run?: Job; issue?: NewIssue; lesson?: Lesson };
 
 const failure = (note: string): string => {
-  const m = /^triage: no verdict in \d+ runs?:\s*(.*)$/.exec(note.replace(/^needs-chris:\s*/, ""));
+  const m = /^triage: no verdict in \d+ runs?:\s*(.*)$/.exec(unlead(note));
   const why = (m?.[1] ?? "").trim();
   if (/^malformed verdict/.test(why)) return "it gave a verdict that could not be read";
   return clean(why.replace(/^failed:\s*/, "")).replace(/\.$/, "") || "it gave no verdict";
@@ -70,7 +74,7 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
   decision: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your decision is needed"),
   rescue: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your decision is needed"),
   firefighter: (c) => {
-    const note = String(c.issue?.question ?? "").replace(/^needs-chris:\s*/, "");
+    const note = unlead(String(c.issue?.question ?? ""));
     const m = /^(\S+) changes (\S+?),? a held security path/.exec(note);
     return m ? `The firefighter would land ${c.id}, but it changes ${m[2]}, a held security path, so it needs your review.`
       : `The firefighter would land ${c.id}, but it changes a held security path, so it needs your review.`;

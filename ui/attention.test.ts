@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { attend, attention, issueReason } from "./attention.ts";
+import { attend, attention, clean, issueReason } from "./attention.ts";
 import { REASONS } from "../jobs/lib/standing.ts";
 import type { Lesson } from "../jobs/lib/corrections.ts";
 import type { Job, NewIssue } from "./state.ts";
@@ -77,6 +77,16 @@ describe("attention", () => {
     expect(r("needs-chris: x changes hooks/a.ts, a held security path, so it needs you")).toBe("firefighter");
     expect(r("needs-chris: what now?", decision)).toBe("rescue");
     expect(r("needs-chris: what now?")).toBe("decision");
+  });
+
+  test("an old note with a leading timestamp loses it", () => {
+    expect(clean("2026-10-27 14:05: needs-chris: Should it be A or B?")).toBe("Should it be A or B?");
+    const q = "2026-10-27 14:05: needs-chris: aleph-30 changes hooks/x.ts, a held security path, so it needs your review before it lands.";
+    expect(issueReason({ question: q })).toBe("firefighter");
+    const [ff] = attention({ needs: [], needsIssues: [issue({ id: "aleph-30", question: q })] }, {}, []);
+    expect(ff.problem).toContain("hooks/x.ts");
+    const [d] = attention({ needs: [], needsIssues: [issue({ question: "2026-10-27 14:05: needs-chris: what now?" })] }, {}, []);
+    expect(d.problem).not.toMatch(/^\d{4}-|needs-chris:/);
   });
 
   test("a raw task-notification note leaves a problem with no tag", () => {
