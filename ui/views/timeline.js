@@ -1,7 +1,8 @@
-// The Activity view: an ECharts stacked area chart (events per day, 30 days, one series per
-// kind), a segmented kind filter (All, Jobs, Lands, Issues; the state is `?kinds=` in the hash), then a
+// The Activity view: an ECharts stacked area chart (events per day over the chosen range, one series per
+// kind), a from/to date range (default the last 7 days; `?from=&to=` in the hash, and the API loads only that range) and a
+// segmented kind filter (All (n), Jobs (n), Lands (n), Issues (n); the state is `?kinds=` in the hash), then a
 // sortable table (Id, Title, Status, Type, Project, Contents, Time, X): one row per event (a job started,
-// passed or failed; an issue opened, triaged, decided or closed; a land), 50 rows and a "Show 50 more" pager. `data` is /api/timeline: { rows, now, strip }.
+// passed or failed; an issue opened, triaged, decided or closed; a land; or one issue's passed → landed → closed run merged), 50 rows and a "Show 50 more" pager. `data` is /api/timeline: { rows, now, strip }.
 import { chart, chips, empty, esc, filterBar, idLink, labelName, money, pageHead, pager, readTokens, shortModel, sortHead, tone, when } from "../lib.js";
 
 export const view = {
@@ -9,7 +10,11 @@ export const view = {
   title: "Activity",
   group: "factory",
   order: 1,
-  api: "/api/timeline",
+  api: (_params, query) => {
+    const q = new URLSearchParams();
+    for (const k of ["from", "to"]) if (DAY.test(query?.get?.(k) ?? "")) q.set(k, query.get(k));
+    return `/api/timeline${q.size ? `?${q}` : ""}`;
+  },
   render: (d, _params, query) => renderTimeline(d, query),
   mount: (root, d, query) => mountTimeline(root, d, query),
 };
@@ -24,9 +29,12 @@ export function redirect(hash) {
   return path.replace(/\/$/, "") === "/list" ? "#/timeline" : null;
 }
 
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 export const KINDS = [["job", "Jobs"], ["land", "Lands"], ["issue", "Issues"]];
 
 const PAGE_STYLE = `<style>
+.tl .fbar .dates { display: inline-flex; align-items: center; gap: 6px; }
+.tl .fbar input[type=date] { font: inherit; padding: 3px 6px; }
 .tl .strip { width: 100%; height: 230px; margin-bottom: 12px; }
 .tl .tbl .c-title { font-weight: 500; }
 .tl .tbl td.c-con { max-width: 34ch; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-xs); }
@@ -97,10 +105,10 @@ export function statusOf(e) {
 }
 
 const idOf = (e) => e.id ?? (e.kind === "job" || e.kind === "land" ? e.title : "");
-/** The Id cell's text: the job or issue id as it is ("aleph-247"), a commit's short sha. */
-export const idText = idOf;
+/** The Id cell's text: the number of a job or issue id ("482" for aleph-482, "480" for plan-aleph-480), a name with no number as it is ("firefighter"), a commit's short sha. */
+export const idText = (e) => { const id = idOf(e); return /^.*-(\d+)$/.exec(id)?.[1] ?? id; };
 const SORT = {
-  time: (e) => Date.parse(e.at) || 0, status: (e) => statusOf(e).text, type: (e) => e.kind, project: (e) => e.project ?? "",
+  time: (e) => Date.parse(e.at) || 0, status: (e) => statusOf(e).text, type: (e) => (e.kinds ?? [e.kind]).join(","), project: (e) => e.project ?? "",
   id: idOf, title: (e) => e.title ?? "",
 };
 export const COLUMNS = [["id", "Id"], ["title", "Title"], ["status", "Status"], ["type", "Type"], ["project", "Project"], ["con", "Contents"], ["time", "Time"], ["act", ""]];
@@ -124,6 +132,7 @@ export const nextSort = (sort, key) => sort.key === key ? { key, dir: -sort.dir 
 export function contentsParts(e, now) {
   const d = Object.fromEntries(e.details ?? []);
   const plain = (...kv) => kv.filter(([, text]) => text).map(([key, text]) => ({ key, text }));
+  if (e.trail) return plain(["trail", e.trail.join(" → ")], ["commit", e.commit?.slice(0, 7)], ["cost", e.cost == null ? "" : money(e.cost)]);
   if (e.kind === "job") return plain(["run", e.sub ?? "agent"], ["model", shortModel(d.model)], ["cost", e.cost == null ? "" : money(e.cost)], ["took", duration(e, now) || d.took]);
   if (e.kind === "land") return plain(["commit", d.commit ?? e.commit?.slice(0, 7)], ["landed", e.sub]);
   const labels = (d.labels ?? "").split(",").filter(Boolean).map((l) => ({ text: labelName(l), raw: l }));
@@ -143,6 +152,11 @@ export const rowKey = (e) => `${e.kind}.${e.what}.${idOf(e)}.${Date.parse(e.at) 
  * the cost, the run kind and a long title when the details lack them), and a link to its page.
  */
 export function renderMore(e, now) {
+  if (e.steps) {
+    const list = e.steps.map((st) => `<div>${pair({ key: when(st.at), text: [st.what, st.kind === "land" && st.commit ? st.commit.slice(0, 7) : "", st.cost != null ? money(st.cost) : ""].filter(Boolean).join(" ") })}</div>`).join("");
+    const link = e.href ? `<a class="open" href="${esc(e.href)}">Open ${e.kind} page →</a>` : "";
+    return `<tr class="more" data-key="${esc(rowKey(e))}"><td colspan="${COLUMNS.length}"><dl>${list}</dl>${link}</td></tr>`;
+  }
   const kv = (e.details ?? []).map(([key, text]) => ({ key, text: key === "labels" ? text.split(",").map(labelName).join(" ") : text }));
   const has = (k) => kv.some((p) => p.key === k);
   // The API leaves out pairs the row repeats at top level; put them back.
@@ -170,7 +184,7 @@ export function renderEvent(e, now = Date.now(), closed = new Set(), open = fals
   return `<tr class="evr" data-kind="${esc(e.kind)}" data-key="${esc(rowKey(e))}" aria-expanded="${open}"><td class="c-id">${idCell}</td>` +
     `<td class="c-title wide" title="${esc(e.title)}">${esc(e.title)}</td>` +
     `<td class="c-status">${st.text ? `<span class="badge ${st.tone}">${esc(st.text)}</span>` : ""}</td>` +
-    `<td class="c-type">${esc(e.kind)}</td><td class="c-project">${esc(e.project ?? "")}</td>` +
+    `<td class="c-type">${esc((e.kinds ?? [e.kind]).join(", "))}</td><td class="c-project">${esc(e.project ?? "")}</td>` +
     `<td class="c-con" title="${esc(contentsText(e, now))}">${contents(e, now)}</td>` +
     `<td class="c-time time">${esc(stamp(e))}</td>` +
     `<td class="c-act">${x}<span class="cmsg" role="status"></span></td></tr>`;
@@ -202,28 +216,50 @@ export function parseKinds(query) {
 export function parseOpen(query) {
   return new Set(String(query?.get?.("open") ?? "").split("~").filter(Boolean));
 }
-/** The hash for a set of kinds and expanded rows: the Activity address with `?kinds=` unless all are on, and `?open=` when rows are open. */
-export function kindsHash(on, open = new Set()) {
+/** The date range named by `?from=&to=`, or null when either is missing or not a date. */
+export function parseRange(query) {
+  const from = query?.get?.("from") ?? "", to = query?.get?.("to") ?? "";
+  return DAY.test(from) && DAY.test(to) && from <= to ? { from, to } : null;
+}
+/** The hash for a date range, a set of kinds and expanded rows: the Activity address with `?from=&to=`, `?kinds=` unless all are on, and `?open=` when rows are open. */
+export function kindsHash(on, open = new Set(), range = null) {
   const q = [];
+  if (range?.from && range?.to) q.push(`from=${range.from}`, `to=${range.to}`);
   if (on.size !== KINDS.length) q.push(`kinds=${KINDS.filter(([k]) => on.has(k)).map(([k]) => k).join(",")}`);
   if (open.size) q.push(`open=${[...open].map(encodeURIComponent).join("~")}`);
   return q.length ? `#/timeline?${q.join("&")}` : "#/timeline";
 }
 
-/** The kind control: All, then one button per kind, pressed while shown. */
-export function renderKinds(on) {
+/** The rows a kind set shows: a merged row has every kind it holds. */
+export const shows = (on, e) => (e.kinds ?? [e.kind]).some((k) => on.has(k));
+/** The rows of the range, in all and per kind: the API's `counts`, or counted from the rows. */
+export function countsOf(d) {
+  const rows = d?.rows ?? [];
+  return d?.counts ?? { all: rows.length, ...Object.fromEntries(KINDS.map(([k]) => [k, rows.filter((e) => shows(new Set([k]), e)).length])) };
+}
+
+/** The date range controls: from and to. */
+export function renderDates(range) {
+  const input = (name, label, value) => `<input type="date" name="${name}" value="${esc(value ?? "")}" aria-label="${label}">`;
+  return `<div class="fg dates" role="group" aria-label="Date range">${input("from", "From", range?.from)}<span class="k">–</span>${input("to", "To", range?.to)}</div>`;
+}
+
+/** The date range and the kind control: All (n), then one button per kind, pressed while shown. */
+export function renderKinds(on, counts = {}, range = null) {
   const all = on.size === KINDS.length;
-  const bar = filterBar([{ label: "Kinds", name: "kind", options: [{ value: "all", label: "All" }, ...KINDS.map(([value, label]) => ({ value, label }))], value: "all" }]);
+  const n = (k) => counts[k] == null ? "" : ` (${counts[k]})`;
+  const bar = filterBar([{ label: "Kind", name: "kind", options: [{ value: "all", label: `All${n("all")}` }, ...KINDS.map(([value, label]) => ({ value, label: `${label}${n(value)}` }))], value: "all" }]);
   // filterBar shows one value; several kinds can be on at once, so set each button's state here.
-  return bar.replace(/data-value="(\w+)" aria-pressed="\w+"/g, (_, k) => `data-value="${k}" aria-pressed="${k === "all" ? all : !all && on.has(k)}"`);
+  return bar.replace(/data-value="(\w+)" aria-pressed="\w+"/g, (_, k) => `data-value="${k}" aria-pressed="${k === "all" ? all : !all && on.has(k)}"`)
+    .replace(/<span class="k">Kind<\/span>/, "").replace(/<\/div>$/, `${renderDates(range)}</div>`);
 }
 
 export function renderTimeline(d, query) {
   if (!d) return `<div class="page">${empty("No data.")}</div>`;
   const rows = d.rows ?? [], on = parseKinds(query);
-  const shownRows = rows.filter((e) => on.has(e.kind));
-  return `${PAGE_STYLE}<div class="page tl">${pageHead("Activity", { count: rows.length })}${renderKinds(on)}` +
-    `<div class="strip" id="tl-strip" role="img" aria-label="Events per day by kind, stacked, last 30 days"></div>` +
+  const shownRows = rows.filter((e) => shows(on, e));
+  return `${PAGE_STYLE}<div class="page tl">${pageHead("Activity")}${renderKinds(on, countsOf(d), d.range ?? parseRange(query))}` +
+    `<div class="strip" id="tl-strip" role="img" aria-label="Events per day by kind, stacked, over the chosen range"></div>` +
     `<div id="tl-stream">${renderStream(shownRows, PAGE, d.now ? Date.parse(d.now) : Date.now(), undefined, parseOpen(query))}</div>` +
     (rows.length ? "" : empty("Nothing happened yet.", "Jobs, issues and lands show up here.")) + `</div>`;
 }
@@ -233,13 +269,15 @@ const SERIES_TONE = { job: "run", land: "done", issue: "need" };
 
 /**
  * The strip's ECharts option: a stacked area chart of events per day, one line series per shown
- * kind, over the last 30 days ending at `now`. Series are stacked and have an area fill.
+ * kind, over the days of `range` ({ from, to }), or the last 30 days ending at `now`. Series are stacked and have an area fill.
  */
-export function stripOption(strip, kinds = KINDS.map(([k]) => k), now = Date.now()) {
-  const days = Array.from({ length: DAYS }, (_, i) => {
-    const d = new Date(now), x = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (DAYS - 1 - i), 12);
-    return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
-  });
+export function stripOption(strip, kinds = KINDS.map(([k]) => k), now = Date.now(), range = null) {
+  const key = (x) => `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
+  const days = [];
+  if (range?.from && range?.to) {
+    const [y, m, dd] = range.from.split("-").map(Number);
+    for (let x = new Date(y, m - 1, dd, 12); key(x) <= range.to && days.length < 3660; x = new Date(x.getFullYear(), x.getMonth(), x.getDate() + 1, 12)) days.push(key(x));
+  } else for (let i = 0; i < DAYS; i++) { const d = new Date(now); days.push(key(new Date(d.getFullYear(), d.getMonth(), d.getDate() - (DAYS - 1 - i), 12))); }
   const shown = KINDS.filter(([k]) => kinds.includes(k));
   const t = typeof document === "undefined" ? {} : readTokens();
   return {
@@ -275,16 +313,18 @@ export function mountTimeline(root, d, query) {
   const on = parseKinds(query ?? (typeof location === "undefined" ? undefined : new URLSearchParams(location.hash.split("?")[1] ?? "")));
   const now = d?.now ? Date.parse(d.now) : Date.now();
   const open = parseOpen(query ?? (typeof location === "undefined" ? undefined : new URLSearchParams(location.hash.split("?")[1] ?? "")));
+  const range = d?.range ?? parseRange(query ?? (typeof location === "undefined" ? undefined : new URLSearchParams(location.hash.split("?")[1] ?? "")));
   let shown = PAGE, c = null, sort = { key: "time", dir: -1 };
 
   const show = () => {
-    const rows = (d?.rows ?? []).filter((e) => on.has(e.kind));
+    const rows = (d?.rows ?? []).filter((e) => shows(on, e));
     stream.innerHTML = renderStream(rows, shown, now, sort, open);
   };
   const saveHash = () => {
     // The hash keeps the state over a reload; replaceState does not reload the view.
-    if (typeof history !== "undefined" && typeof location !== "undefined") history.replaceState(null, "", kindsHash(on, open));
+    if (typeof history !== "undefined" && typeof location !== "undefined") history.replaceState(null, "", kindsHash(on, open, range));
   };
+  saveHash();
   const toggle = (key, to = !open.has(key)) => { if (to) open.add(key); else open.delete(key); saveHash(); show(); };
   const onKey = (ev) => {
     if (stream.isConnected === false) return document.removeEventListener("keydown", onKey);
@@ -293,7 +333,7 @@ export function mountTimeline(root, d, query) {
   if (typeof document !== "undefined") document.addEventListener("keydown", onKey);
   if (d?.strip && globalThis.echarts) {
     try {
-      c = chart(root.querySelector("#tl-strip"), stripOption(d.strip, [...on], now));
+      c = chart(root.querySelector("#tl-strip"), stripOption(d.strip, [...on], now, range));
     } catch (e) { console.error("timeline strip failed", e); }
   }
   const buttons = [...(root.querySelectorAll?.(".fbar .seg button") ?? [])];
@@ -304,7 +344,13 @@ export function mountTimeline(root, d, query) {
     const all = on.size === KINDS.length;
     for (const b of buttons) b.setAttribute("aria-pressed", String(b.dataset.value === "all" ? all : !all && on.has(b.dataset.value)));
     saveHash();
-    shown = PAGE; show(); c?.setOption(stripOption(d?.strip ?? [], [...on], now), true);
+    shown = PAGE; show(); c?.setOption(stripOption(d?.strip ?? [], [...on], now, range), true);
+  });
+  // A new date: the hash changes and the shell loads that range from the API.
+  root.querySelector(".fbar")?.addEventListener?.("change", (ev) => {
+    if (ev.target?.type !== "date") return;
+    const from = root.querySelector('.fbar input[name="from"]')?.value, to = root.querySelector('.fbar input[name="to"]')?.value;
+    if (DAY.test(from) && DAY.test(to) && from <= to && typeof location !== "undefined") location.hash = kindsHash(on, open, { from, to });
   });
   // Rows by position on the page, so a click finds its event again after a redraw.
   stream.addEventListener("click", async (ev) => {
@@ -324,7 +370,7 @@ export function mountTimeline(root, d, query) {
   });
   async function cancelClick(btn) {
     const tr = btn.closest("tr"), msg = tr.querySelector(".cmsg");
-    const rows = sortRows((d?.rows ?? []).filter((e) => on.has(e.kind)), sort).slice(0, shown);
+    const rows = sortRows((d?.rows ?? []).filter((e) => shows(on, e)), sort).slice(0, shown);
     const e = rows[[...stream.querySelectorAll("tbody tr.evr")].indexOf(tr)];
     const closed = closedIssues(d?.rows ?? []);
     const target = e && cancelTarget(e, closed);

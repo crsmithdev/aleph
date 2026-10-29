@@ -1,9 +1,11 @@
 /**
- * `GET /api/timeline?before=<iso>&days=1&project=<key>`: the factory's events as one stream,
- * newest first. A page is the latest `days` local days, each with events, that end before
+ * `GET /api/timeline?from=<day>&to=<day>&before=<iso>&days=1&project=<key>`: the factory's events as one stream,
+ * newest first. Only events on the local days `from` to `to` (default: the last 7 days, today included) are loaded.
+ * Events of one issue that end its work in sequence (a job's pass or drop, the land, the issue's close, each
+ * less than 10 minutes after the one before) are one row. A page is the latest `days` local days, each with events, that end before
  * `before` (default now); `next` is the `before` for the page after it, null at the end.
- * The first page (no `before`) also carries `strip`: the items of the last 30 days for the swimlanes,
- * each with its kind and local day.
+ * The first page (no `before`) also carries `strip`: the items of the range for the swimlanes,
+ * each with its kind and local day, and `counts`: the rows of the range, in all and per kind.
  * One event is one thing that happened at one time, with a verb in `what`. Sources: the ledger
  * (job runs, triage runs left out: the issue's own triaged row records them), the work store (issues
  * and their timestamped notes) and `git log` of the registry repos (lands). Sessions have their own page.
@@ -16,7 +18,7 @@ import type { Routes } from "../server.ts";
 
 export const KINDS = ["job", "land", "issue"] as const;
 export type Kind = (typeof KINDS)[number];
-const HORIZON_DAYS = 90, STRIP_DAYS = 30;
+const DEFAULT_DAYS = 7, MERGE_GAP_MS = 10 * 60_000;
 
 export interface TimelineEvent {
   at: string;
@@ -38,6 +40,12 @@ export interface TimelineEvent {
   commit?: string;
   /** A bar's end: the end of the job a started row belongs to. */
   end?: string;
+  /** The issue the event belongs to (its page address), for grouping. */
+  issue?: string;
+  /** A merged row only: every kind it holds (the kind filter counts it under each), its steps' verbs in order, and the events themselves, oldest first. */
+  kinds?: Kind[];
+  trail?: string[];
+  steps?: TimelineEvent[];
   /** The item's own fields as key/value pairs, less those the row repeats at top level (state, run, commit, job, message): the view puts them back. */
   details?: [string, string][];
 }
@@ -51,6 +59,10 @@ export interface Timeline {
   days?: { day: string; events: TimelineEvent[] }[];
   next: string | null;
   strip?: StripItem[];
+  /** The first page only: the rows of the range, in all and per kind (a merged row counts under each kind it holds). */
+  counts?: Record<"all" | Kind, number>;
+  /** The first page only: the local days the page shows, `from` to `to`. */
+  range?: { from: string; to: string };
   /** The first page only: every row of the stream table, newest first: one row per event. */
   rows?: TimelineEvent[];
   /** The server's clock, for the duration of running jobs. */
@@ -84,7 +96,7 @@ function jobEvents(project: string | null, since: number, inGit: (sha: string) =
   for (const { run } of allRuns()) {
     if (project && run.repo !== project) continue;
     const href = `#/jobs/${enc(run.name)}`;
-    const base = { href, project: run.repo };
+    const base = { href, project: run.repo, ...(run.repo && run.todo ? { issue: `#/issues/${enc(run.repo)}/${run.todo}` } : {}) };
     if (run.kind === "triage") continue;
     const isLand = run.kind === "land" && !!run.commit && run.state === "landed";
     if (isLand) {
@@ -111,7 +123,7 @@ function issueEvents(project: string | null, since: number): TimelineEvent[] {
     if (project && repo.key !== project) continue;
     for (const item of lists.list(repo.key)?.items ?? []) {
       const git = times.get(`${repo.key}-${item.id}`);
-      const base = { href: `#/issues/${enc(repo.key)}/${item.id}`, project: repo.key, title: item.title, id: `${repo.key}-${item.id}`, ...(git ? {} : { dateOnly: true }), kind: "issue" as const,
+      const base = { href: `#/issues/${enc(repo.key)}/${item.id}`, issue: `#/issues/${enc(repo.key)}/${item.id}`, project: repo.key, title: item.title, id: `${repo.key}-${item.id}`, ...(git ? {} : { dateOnly: true }), kind: "issue" as const,
         details: pairs(["status", status(item)], ["labels", labels(item).join(",")], ["waiting on", item.fm.waiting_on], ["notes", item.notes.length || ""], ["last note", lastNote(item.notes)]) };
       const created = String(item.fm.created ?? ""), updated = String(item.fm.updated ?? "");
       const st = status(item);
@@ -132,7 +144,7 @@ function issueEvents(project: string | null, since: number): TimelineEvent[] {
   return out.filter((e) => !Number.isNaN(Date.parse(e.at)) && new Date(e.at).getTime() >= since);
 }
 
-function commitEvents(project: string | null, since: number, landed: Map<string, string>, held: Set<string>, shas: Set<string>): TimelineEvent[] {
+function commitEvents(project: string | null, since: number, landed: Map<string, { name: string; issue?: string }>, held: Set<string>, shas: Set<string>): TimelineEvent[] {
   const out: TimelineEvent[] = [];
   for (const repo of Object.values(loadRegistry())) {
     if ((project && repo.key !== project) || !existsSync(repo.path)) continue;
@@ -141,37 +153,85 @@ function commitEvents(project: string | null, since: number, landed: Map<string,
     for (const line of p.stdout.toString().split("\n")) {
       const [ct, short, full, ...subject] = line.split("\t");
       if (!ct || !short) continue;
-      const job = landed.get(full);
+      const run = landed.get(full), job = run?.name;
       shas.add(full);
       out.push({
         at: new Date(Number(ct) * 1000).toISOString(), kind: "land", what: "landed", state: "landed", sub: landSub(!!job, held.has(full)), title: subject.join("\t"), id: job ?? short,
-        href: job ? `#/jobs/${enc(job)}` : `#/projects/${enc(repo.key)}`, project: repo.key, commit: short, details: [],
+        href: job ? `#/jobs/${enc(job)}` : `#/projects/${enc(repo.key)}`, project: repo.key, commit: short, details: [], ...(run?.issue ? { issue: run.issue } : {}),
       });
     }
   }
   return out;
 }
 
-/** Every event of the last 90 days, newest first. */
-export async function events(project: string | null, now = new Date()): Promise<TimelineEvent[]> {
-  const since = startOf(today(new Date(now.getFullYear(), now.getMonth(), now.getDate() - HORIZON_DAYS + 1, 12))).getTime();
-  const landed = new Map<string, string>();
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const addDays = (day: string, n: number) => today(new Date(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8)) + n, 12));
+
+/** The local days a request asks for: `from` to `to`, by default the last 7 days. Null when a day is not a date or `from` is after `to`. */
+export function rangeOf(from: string | null | undefined, to: string | null | undefined, now = new Date()): { from: string; to: string } | null {
+  const last = to || today(now), first = from || addDays(last, -(DEFAULT_DAYS - 1));
+  const ok = (d: string) => DAY_RE.test(d) && !Number.isNaN(startOf(d).getTime());
+  return ok(first) && ok(last) && first <= last ? { from: first, to: last } : null;
+}
+
+const isStep = (e: TimelineEvent) => (e.kind === "job" && e.sub === "land") || e.kind === "land" || (e.kind === "issue" && (e.what === "closed" || e.what === "dropped"));
+const isEnd = (e: TimelineEvent) => e.kind === "job" && e.sub !== "land" && (e.what === "passed" || e.what === "dropped");
+
+/** One row for a chain of one issue's events: the issue's own row if it has one (the close), at the time of the last event, with the steps as a trail. */
+function mergeChain(chain: TimelineEvent[]): TimelineEvent {
+  const last = chain.at(-1)!;
+  const issue = chain.findLast((e) => e.kind === "issue") ?? last;
+  const cost = chain.reduce((n, e) => n + (e.cost ?? 0), 0);
+  const commit = chain.findLast((e) => e.commit)?.commit;
+  const kinds = KINDS.filter((k) => chain.some((e) => e.kind === k));
+  return { ...issue, at: last.at, what: last.what, state: last.state, kinds, trail: chain.map((e) => e.what), commit, ...(cost ? { cost } : {}), dateOnly: undefined, steps: chain };
+}
+
+/** Events of one issue less than 10 minutes apart, from a job's pass or drop up to the issue's close, become one row. Starts, triage and opens stay alone. */
+export function mergeEvents(all: TimelineEvent[]): TimelineEvent[] {
+  const byIssue = new Map<string, TimelineEvent[]>();
+  const out: TimelineEvent[] = [];
+  for (const e of [...all].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))) {
+    if (!e.issue) out.push(e); else byIssue.set(e.issue, [...(byIssue.get(e.issue) ?? []), e]);
+  }
+  for (const evs of byIssue.values()) {
+    let chain: TimelineEvent[] = [];
+    const flush = () => { if (chain.length > 1) out.push(mergeChain(chain)); else out.push(...chain); chain = []; };
+    for (const e of evs) {
+      if (chain.length && isStep(e) && Date.parse(e.at) - Date.parse(chain.at(-1)!.at) < MERGE_GAP_MS && !(chain.at(-1)!.kind === "issue")) { chain.push(e); continue; }
+      flush();
+      if (isEnd(e)) chain = [e]; else out.push(e);
+    }
+    flush();
+  }
+  out.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  return out;
+}
+
+/** Every event on the days `range` names (default: the last 7), newest first, one issue's closing sequence as one row. `raw` keeps the events apart, for the strip. */
+export async function events(project: string | null, now = new Date(), range = rangeOf(null, null, now)!, raw?: TimelineEvent[]): Promise<TimelineEvent[]> {
+  // A day more before the range, so a sequence that starts the evening before still merges.
+  const since = startOf(addDays(range.from, -1)).getTime(), lo = startOf(range.from).getTime(), hi = startOf(addDays(range.to, 1)).getTime();
+  const landed = new Map<string, { name: string; issue?: string }>();
   const held = new Set<string>();
-  for (const { run } of allRuns()) if (run.kind === "land" && run.commit) { landed.set(run.commit, run.name); if (run.held) held.add(run.commit); }
+  for (const { run } of allRuns()) if (run.kind === "land" && run.commit) { landed.set(run.commit, { name: run.name, issue: run.repo && run.todo ? `#/issues/${enc(run.repo)}/${run.todo}` : undefined }); if (run.held) held.add(run.commit); }
   const shas = new Set<string>();
   const commits = commitEvents(project, since, landed, held, shas);
   const inGit = (sha: string) => [...shas].some((f) => f.startsWith(sha) || sha.startsWith(f));
-  const all = [...jobEvents(project, since, inGit), ...issueEvents(project, since), ...commits].filter((e) => dayOf(e.at) && Date.parse(e.at) >= since && Date.parse(e.at) <= now.getTime() + 60_000);
-  all.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  return all;
+  const all = [...jobEvents(project, since, inGit), ...issueEvents(project, since), ...commits].filter((e) => dayOf(e.at) && Date.parse(e.at) <= now.getTime() + 60_000);
+  const within = (e: TimelineEvent) => Date.parse(e.at) >= lo && Date.parse(e.at) < hi;
+  raw?.push(...all.filter(within));
+  return mergeEvents(all).filter(within);
 }
 
-export async function timeline(opts: { before?: string | null; days?: number; project?: string | null; now?: Date }): Promise<Timeline> {
+export async function timeline(opts: { before?: string | null; days?: number; project?: string | null; from?: string | null; to?: string | null; now?: Date }): Promise<Timeline> {
   const now = opts.now ?? new Date();
   const project = opts.project ?? null;
+  const range = rangeOf(opts.from, opts.to, now) ?? rangeOf(null, null, now)!;
   const cut = opts.before ? Date.parse(opts.before) : now.getTime() + 1;
   const take = Math.max(1, Math.min(opts.days ?? 1, 30));
-  const all = await events(project, now);
+  const raw: TimelineEvent[] = [];
+  const all = await events(project, now, range, raw);
   const older = all.filter((e) => Date.parse(e.at) < cut);
   const byDay = new Map<string, TimelineEvent[]>();
   for (const e of older) {
@@ -187,8 +247,9 @@ export async function timeline(opts: { before?: string | null; days?: number; pr
   else {
     out.rows = all;
     out.now = now.toISOString();
-    const from = startOf(today(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (STRIP_DAYS - 1), 12))).getTime();
-    out.strip = all.filter((e) => Date.parse(e.at) >= from && (e.kind !== "job" || e.what === "started")).reverse().map((e) => ({ kind: e.kind, day: dayOf(e.at)! }));
+    out.range = range;
+    out.counts = { all: all.length, ...Object.fromEntries(KINDS.map((k) => [k, all.filter((e) => (e.kinds ?? [e.kind]).includes(k)).length])) } as Timeline["counts"];
+    out.strip = raw.filter((e) => e.kind !== "job" || e.what === "started").sort((a, b) => Date.parse(a.at) - Date.parse(b.at)).map((e) => ({ kind: e.kind, day: dayOf(e.at)! }));
   }
   return out;
 }
@@ -197,6 +258,8 @@ export const routes: Routes = {
   "GET /api/timeline": async (_req, _p, url) => {
     const before = url.searchParams.get("before");
     if (before && Number.isNaN(Date.parse(before))) return Response.json({ error: `bad before: ${before}` }, { status: 400 });
-    return Response.json(await timeline({ before, days: Number(url.searchParams.get("days")) || 1, project: url.searchParams.get("project") || null }));
+    const from = url.searchParams.get("from"), to = url.searchParams.get("to");
+    if ((from || to) && !rangeOf(from, to)) return Response.json({ error: `bad range: ${from ?? ""}..${to ?? ""}` }, { status: 400 });
+    return Response.json(await timeline({ before, from, to, days: Number(url.searchParams.get("days")) || 1, project: url.searchParams.get("project") || null }));
   },
 };
