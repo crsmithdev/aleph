@@ -147,11 +147,16 @@ function renderProspective(p) {
 const renderParametric = () =>
   `<p>The model weights. Aleph does not store them. <a href="#/memory/${encodeURIComponent("Seven Agent Memory Types Mapped Onto Aleph")}">The rule</a>: keep what the model already knows out of the vault.</p>`;
 
-function renderGates(g) {
+function renderGates(g, runs = [], week = { days: 7, kept: 0, rejected: 0 }) {
   const none2 = (what, fills) => none(`No ${what} yet.`, fills);
-  const facts = (xs, what) => (xs.length ? fold(xs, (f) => esc(f.fact ?? JSON.stringify(f))) : none2(what, "The factory's reviewer gate (aleph-352) fills this."));
   const lessons = (xs, what, fills) => (xs.length ? fold(xs, (l) => `${esc(l.sentence)} ${q(`seen ${l.count}×${l.kind ? ` · ${esc(l.kind)}` : ""}`)}`) : none2(what, fills));
-  return `<div class="kinds">${sub("Kept facts", g.facts.kept.length, facts(g.facts.kept, "kept fact"))}${sub("Rejected facts", g.facts.rejected.length, facts(g.facts.rejected, "rejected fact"))}` +
+  const run = (r) => `<div class="sub"><h4>${esc(r.job)} ${q(`${esc(r.run)} · ${ago(r.at)}`)}</h4>` +
+    (r.kept.length ? fold(r.kept, (k) => `${link(k.title)} ${q(esc(k.source))}`) : `<p class="quiet">Nothing kept.</p>`) +
+    (r.rejected.length ? fold(r.rejected, (x) => `${esc(x.fact)} ${q(esc(x.reason))}`) : `<p class="quiet">Nothing rejected.</p>`) + `</div>`;
+  const facts = runs.length
+    ? `<p>${q(`Last ${week.days} days:`)} <strong>${week.kept}</strong> kept, <strong>${week.rejected}</strong> rejected</p>${runs.map(run).join("")}`
+    : none2("facts run", "The factory's facts gate (aleph-352) fills this.");
+  return `<div class="kinds">${sub("Facts runs", runs.length, facts)}` +
     `${sub("Corrections", g.corrections.length, lessons(g.corrections, "correction", "The correction miner (aleph-353) fills this."))}${sub("Proposals", g.proposals.length, lessons(g.proposals, "proposal", "A correction seen 3 times (aleph-353) becomes one."))}</div>`;
 }
 
@@ -181,7 +186,7 @@ export function renderMemory(m) {
   return `<div class="page">${pageHead("Memory", { count: m.exists ? m.total : 0 })}${renderSearch()}${cards}` +
     `<details class="fold"><summary>Health and recent writes</summary><section id="health">${renderHealth(m)}</section><section id="writes">${renderWrites(m)}</section></details>` +
     types.map(([id, name, n, , , body]) => `<details class="fold" id="${id}"><summary>${head(id, name, n)}</summary>${body}</details>`).join("") +
-    `<details class="fold" id="gates"><summary>${head("gates", "Factory memory gates")}</summary>${renderGates(t.gates)}</details></div>`;
+    `<details class="fold" id="gates"><summary>${head("gates", "Factory memory gates")}</summary>${renderGates(t.gates, m.facts, m.factsWeek)}</details></div>`;
 }
 
 const crumbs = (t) => (t.length ? `<ul>${t.map((n) => `<li>${link(n.title)} <span class="hint">${esc([n.kind, n.scope].filter(Boolean).join(" · "))}</span></li>`).join("")}</ul>` : `<p class="quiet">None.</p>`);

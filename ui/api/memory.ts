@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { Routes } from "../server.ts";
 import { staleAsync, staleSync } from "../stale.ts";
 import { uiFetchTtl } from "../../todo/lib/store.ts";
+import { allRuns } from "../../jobs/lib/ledger.ts";
 import { memoryTypes } from "./memory-types.ts";
 import { KINDS, linkTargets, links, lintVault, loadVault, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 
@@ -83,6 +84,30 @@ async function runMisses(): Promise<unknown | null> {
   } catch { return null; }
 }
 
+const WEEK = 7 * 86_400_000;
+/** A rejection is stored as `<fact>: <reason>`; the reason is what follows the last colon. */
+const splitRejection = (s: string) => { const i = s.lastIndexOf(": "); return i < 0 ? { fact: s, reason: "" } : { fact: s.slice(0, i), reason: s.slice(i + 2) }; };
+
+/** The 20 latest facts runs of the job ledger, newest first, with what each kept (the note's title and its first source) and rejected; and the facts kept and rejected in the last 7 days. */
+function factsRuns(all: Note[], project: string | null) {
+  const targets = linkTargets(all);
+  const runs = allRuns().filter((e) => e.run.kind === "facts" && (!project || e.run.repo === project)).reverse();
+  const at = (e: (typeof runs)[number]) => e.run.ended ?? e.run.started;
+  const since = Date.now() - WEEK;
+  const week = { days: 7, kept: 0, rejected: 0 };
+  for (const e of runs) if (Date.parse(at(e)) >= since) { week.kept += e.run.kept?.length ?? 0; week.rejected += e.run.rejected?.length ?? 0; }
+  const list = runs.slice(0, 20).map((e) => ({
+    job: e.run.job, run: e.id, at: at(e),
+    kept: (e.run.kept ?? []).map((title) => {
+      const fm = targets.get(title.toLowerCase())?.fm.sources;
+      const sources = Array.isArray(fm) ? fm.map(String) : fm ? [String(fm)] : [];
+      return { title, source: sources.find((x) => !x.startsWith("job:")) ?? "" };
+    }),
+    rejected: (e.run.rejected ?? []).map(splitRejection),
+  }));
+  return { list, week };
+}
+
 async function overview(url: URL): Promise<Response> {
   const slow = misses();
   const project = url.searchParams.get("project") || null;
@@ -105,6 +130,9 @@ async function overview(url: URL): Promise<Response> {
   };
   const m = await slow;
   if (m) { body.misses = m.value; body.cachedAt = m.cachedAt; }
+  const f = factsRuns(all, project);
+  body.facts = f.list;
+  body.factsWeek = f.week;
   body.types = await memoryTypes(root, wiki, m?.value);
   return json(body);
 }

@@ -86,7 +86,7 @@ test("every memory type has its block", async () => {
 
 test("the page shows all seven types, and an empty one says what fills it", () => {
   const h = v.renderMemory({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [] });
-  for (const t of ["Working", "Semantic", "Episodic", "Procedural", "Retrieval", "Prospective", "Parametric", "Kept facts", "Proposals"]) expect(h).toContain(t);
+  for (const t of ["Working", "Semantic", "Episodic", "Procedural", "Retrieval", "Prospective", "Parametric", "Facts runs", "Proposals"]) expect(h).toContain(t);
   for (const id of ["working", "semantic", "episodic", "procedural", "retrieval", "prospective", "parametric"]) expect(h).toContain(`href="#h-${id}"`);
   expect(h).toContain("No handoff yet.");
   expect(h).toContain("aleph-352");
@@ -194,4 +194,34 @@ test("warm() fills the misses cache, so the first request runs vault misses zero
     process.env.PATH = saveEnv.PATH;
     clearCache();
   }
+});
+
+function factsRun(id: string, repo: string, started: string, kept: string[], rejected: string[]) {
+  const dir = join(base, "jobs", id);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "facts", job: `job-${id}`, name: id, repo, state: "done", told: true, started, ended: started, kept, rejected }));
+}
+
+test("facts runs fill the gates section, newest first, scoped by project", async () => {
+  const empty: any = await (await at("/api/memory")).json();
+  expect(empty.facts).toEqual([]);
+  expect(v.renderMemory(empty)).toContain("facts gate");
+
+  for (const [t, src] of [["Kept One", "ui/a.ts:3"], ["Kept Two", "abc1234"]])
+    writeFileSync(join(base, "vault", "wiki", "gotchas", `${t}.md`), `---\nkind: gotcha\nscope: aleph\nconfidence: reported\nupdated: ${today}\nsupersedes: []\nsources: [${src}, job:x]\nwritten_by: factory\n---\n**Claim.** ${t}.\n`);
+  const now = Date.now();
+  factsRun("20261001-000000-a-facts", "aleph", new Date(now - 3600_000).toISOString(), ["Kept One", "Kept Two"], ["A fact: it is stale"]);
+  factsRun("20261002-000000-b-facts", "aleph", new Date(now).toISOString(), [], ["Fact X: reason X", "Fact Y: reason Y"]);
+  clearCache();
+  const m: any = await (await at("/api/memory")).json();
+  expect(m.facts.map((r: any) => r.run)).toEqual(["20261002-000000-b-facts", "20261001-000000-a-facts"]);
+  expect(m.facts[1].kept).toEqual([{ title: "Kept One", source: "ui/a.ts:3" }, { title: "Kept Two", source: "abc1234" }]);
+  expect(m.facts[0].rejected).toEqual([{ fact: "Fact X", reason: "reason X" }, { fact: "Fact Y", reason: "reason Y" }]);
+  expect(m.factsWeek).toMatchObject({ kept: 2, rejected: 3 });
+
+  const h = v.renderMemory(m);
+  for (const s of ['href="#/memory/Kept%20One"', 'href="#/memory/Kept%20Two"', "stale", "reason X", "reason Y"]) expect(h).toContain(s);
+
+  const other: any = await (await at("/api/memory?project=other")).json();
+  expect(other.facts).toEqual([]);
 });
