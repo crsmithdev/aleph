@@ -374,3 +374,30 @@ test("the chat shows the assistant's text blocks between the tool rows, not the 
   expect(at("second words")).toBeLessThan(at('<span class="tn">Glob</span>'));
   expect(at('<span class="tn">Glob</span>')).toBeLessThan(at('<div class="msg reply md">'));
 });
+
+test("the chat route gives each call an id, parent, kind and offsets from the session start", async () => {
+  const d = await chat("s1");
+  expect(d.turns[0].startMs).toBe(0);
+  expect(d.turns[1].startMs).toBe(10 * 60000);
+  const bash = d.turns[0].tools[0];
+  expect(bash).toMatchObject({ id: "o1", parent: null, kind: "tool", startMs: 60000, endMs: 61500 });
+});
+
+test("the waterfall: one row per turn and call, summary names the 3 longest and the errors, a row is selectable", async () => {
+  const d = await chat("s1");
+  const tools = Array.from({ length: 100 }, (_, i) => ({ id: `c${i}`, parent: null, kind: "tool", name: "Bash", args: `cmd ${i}`, input: "in", output: "out", start: d.turns[0].start, startMs: i * 1000, endMs: i * 1000 + (i % 10 === 9 ? 5000 + i : 500), durationMs: i % 10 === 9 ? 5000 + i : 500, error: i === 50 ? "boom" : null, children: [] }));
+  const turn = { ...d.turns[0], tools };
+  const rows = v.wfRows([turn]);
+  expect(rows.length).toBe(101);
+  expect(rows[0].kind).toBe("turn");
+  const h = v.waterfall(rows, "c50");
+  expect(h.match(/class="wf-row /g)!.length).toBe(101);
+  expect(h).toContain('wf-row k-tool err sel');
+  expect(h).toContain("1 error");
+  expect(h).toContain('data-select="c99"');
+  expect(h).toContain('data-select="c89"');
+  expect(h).toContain('data-select="c79"');
+  const q = new URLSearchParams("view=waterfall");
+  expect(v.renderSession({ ...d, turns: [turn] }, {}, q)).toContain('data-value="waterfall" aria-pressed="true"');
+  expect(v.wfDetail(rows.find((r: any) => r.id === "c50"))).toContain("boom");
+});

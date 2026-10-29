@@ -129,16 +129,17 @@ export function pairAgents(obs: any[]): Map<string, string> {
 }
 
 /** A turn's tool calls in start order; a subagent's calls nest under the `Agent` call that launched it, and those of an unpaired subagent are left to the turn page. */
-function toolCalls(obs: any[]) {
+function toolCalls(obs: any[], t0 = 0) {
   const agents = new Set(obs.filter((o) => isType(o, "agent") && o.name !== "turn").map((o) => o.id));
   const spanOf = new Map([...pairAgents(obs)].map(([a, t]) => [t, a]));
-  const call = (o: any): any => ({
-    name: o.name, start: o.startTime, args: argSummary(o.input), input: pretty(o.input), output: text(o.output),
+  const call = (o: any, parent: string | null = null): any => ({
+    id: o.id, parent, name: o.name, start: o.startTime, startMs: Math.max(0, ms(o.startTime) - t0), endMs: Math.max(0, ms(o.startTime) - t0) + (durationMs(o) ?? 0), args: argSummary(o.input), input: pretty(o.input), output: text(o.output),
     error: o.level === "ERROR" ? o.statusMessage || "error" : null, durationMs: durationMs(o),
-    children: spanOf.has(o.id) ? list((p) => p === spanOf.get(o.id)) : [],
+    kind: spanOf.has(o.id) ? "subagent" : "tool",
+    children: spanOf.has(o.id) ? list((p) => p === spanOf.get(o.id), o.id) : [],
   });
-  const list = (under: (parent: string | undefined) => boolean) =>
-    obs.filter((o) => isType(o, "tool") && under(o.parentObservationId)).sort((a, b) => ms(a.startTime) - ms(b.startTime)).map(call);
+  const list = (under: (parent: string | undefined) => boolean, parent: string | null = null) =>
+    obs.filter((o) => isType(o, "tool") && under(o.parentObservationId)).sort((a, b) => ms(a.startTime) - ms(b.startTime)).map((o) => call(o, parent));
   return list((p) => !agents.has(p as string));
 }
 
@@ -216,8 +217,11 @@ export const routes: Routes = {
       const page = ts.slice(from - 1, from - 1 + limit);
       const all = await Promise.all(page.map((t) => observations(cfg, t.id)));
       const fit = await currentFit().catch(() => null);
+      const t0 = ms(ts[0].timestamp); // the waterfall's axis starts at the session's first turn
       const turns = page.map((t, i) => ({
         n: from + i,
+        startMs: Math.max(0, ms(t.timestamp) - t0),
+        endMs: Math.max(0, ms(t.timestamp) - t0) + (durationMs(t) ?? 0),
         ...wkOf(fit, t.totalCost, modelOf(all[i])),
         traceId: t.id,
         start: t.timestamp,
@@ -226,7 +230,7 @@ export const routes: Routes = {
         model: modelOf(all[i]),
         durationMs: durationMs(t),
         cost: t.totalCost ?? 0,
-        tools: toolCalls(all[i]),
+        tools: toolCalls(all[i], t0),
         texts: textBlocks(all[i], text(t.output)),
       }));
       // A factory worker's session is one turn Langfuse prices at 0; the ledger has its cost, as on the list.

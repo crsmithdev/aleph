@@ -163,24 +163,109 @@ const chatPager = (shown, total) => {
 const chatBody = (d) => `<div class="chat">${d.turns.map((t) => chatTurn(d.id, t)).join("")}</div>${chatPager(d.from - 1 + d.turns.length, d.total)}`;
 
 const isTable = (query) => query?.get?.("view") === "table";
+const isWaterfall = (query) => query?.get?.("view") === "waterfall";
+
+// ---- Waterfall: one row per turn, tool call and subagent on a shared time axis ----
+
+/** The waterfall's rows in draw order: each turn, then its calls nested by parent. */
+export function wfRows(turns) {
+  const rows = [];
+  const add = (c, depth, turn) => {
+    rows.push({ id: c.id, depth, kind: c.kind, name: c.name, args: c.args, start: c.start, startMs: c.startMs, endMs: c.endMs, error: c.error, input: c.input, output: c.output, durationMs: c.durationMs, turn });
+    for (const k of c.children ?? []) add(k, depth + 1, turn);
+  };
+  for (const t of turns) {
+        const lastEnd = (cs) => cs.reduce((m, c) => Math.max(m, c.endMs, lastEnd(c.children ?? [])), 0);
+    rows.push({ id: `turn-${t.n}`, depth: 0, kind: "turn", name: `Turn ${t.n}`, args: line(systemParts(t.prompt).text), start: t.start, startMs: t.startMs, endMs: Math.max(t.endMs, lastEnd(t.tools ?? [])),
+      error: null, input: t.prompt, output: t.output, durationMs: t.durationMs, model: t.model, cost: t.cost, wk: t.wk, turn: t.n });
+    for (const c of t.tools ?? []) add(c, 1, t.n);
+  }
+  return rows;
+}
+
+const axisTick = (ms) => (ms <= 0 ? "0 s" : dur(Math.round(ms)));
+
+/** Wall time, summed tool time, the 3 longest calls (links that select their row) and the error count. */
+export function wfSummary(rows) {
+  const calls = rows.filter((r) => r.kind !== "turn");
+  const wall = rows.reduce((m, r) => Math.max(m, r.endMs), 0);
+  const toolMs = calls.filter((r) => r.kind === "tool").reduce((n, r) => n + (r.durationMs ?? 0), 0);
+  const longest = [...calls].sort((a, b) => (b.durationMs ?? 0) - (a.durationMs ?? 0)).slice(0, 3).filter((r) => r.durationMs);
+  const errors = calls.filter((r) => r.error).length;
+  return `<p class="wf-sum">Wall time <strong>${esc(dur(Math.round(wall)) || "0 ms")}</strong><span class="dot">·</span>Tool time <strong>${esc(dur(Math.round(toolMs)) || "0 ms")}</strong>` +
+    `<span class="dot">·</span>Longest ${longest.length ? longest.map((r) => `<a href="#" data-select="${esc(r.id)}">${esc(r.name)}${r.args ? `(${esc(r.args.slice(0, 30))})` : ""} ${esc(dur(r.durationMs))}</a>`).join(", ") : "none"}` +
+    `<span class="dot">·</span>${errors ? `<strong class="terr">${errors} error${errors === 1 ? "" : "s"}</strong>` : "No errors"}</p>`;
+}
+
+function wfRow(r, max, sel) {
+  const left = (r.startMs / max) * 100;
+  const width = Math.max(0.2, ((r.endMs - r.startMs) / max) * 100);
+  const label = r.kind === "turn" ? `<span class="tn">${esc(r.name)}</span>${r.args ? `<span class="ta">${esc(r.args)}</span>` : ""}` : `<span class="tn">${esc(r.name)}</span>${r.args ? `<code class="ta">${esc(r.args)}</code>` : ""}`;
+  return `<div class="wf-row k-${r.kind}${r.error ? " err" : ""}${r.id === sel ? " sel" : ""}" role="row" tabindex="0" data-id="${esc(r.id)}" aria-selected="${r.id === sel}">` +
+    `<div class="wf-l" style="padding-left:${r.depth * 14}px" title="${esc(r.name + " " + (r.args ?? ""))}">${label}</div>` +
+    `<div class="wf-r"><span class="wf-bar" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%"></span><span class="wf-d">${esc(dur(r.durationMs))}</span></div></div>`;
+}
+
+/** Summary, axis and rows; the id of the selected row marks its row. */
+export function waterfall(rows, sel = null) {
+  const max = Math.max(1, rows.reduce((m, r) => Math.max(m, r.endMs), 0));
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => `<span style="left:${f * 100}%">${esc(axisTick(max * f))}</span>`).join("");
+  return wfSummary(rows) +
+    `<div class="wf-grid" role="table"><div class="wf-axis"><div class="wf-l">Elapsed from session start</div><div class="wf-r">${ticks}</div></div>` +
+    rows.map((r) => wfRow(r, max, sel)).join("") + `</div>`;
+}
+
+/** The detail pane of one row. */
+export function wfDetail(r) {
+  if (!r) return `<p class="quiet">Select a row to see its input and output.</p>`;
+  const io = (label, text) => (text ? `<h4>${label}</h4>${clip(text, `<pre>${esc(text)}</pre>`)}` : "");
+  const f = (k, v) => (v ? `<div><dt>${k}</dt><dd>${v}</dd></div>` : "");
+  return `<h3>${esc(r.name)}${r.args && r.kind !== "turn" ? ` <code>${esc(r.args)}</code>` : ""}</h3><dl class="facts">` +
+    f("Kind", esc(r.kind)) + f("Start", `${esc(when(r.start))} (+${esc(axisTick(r.startMs))})`) + f("Duration", esc(dur(r.durationMs))) +
+    f("Model", r.model ? esc(shortModel(r.model)) : "") + f("Cost", r.cost ? costHtml(r.cost, r.wk) : "") + `</dl>` +
+    io("Input", r.input) + (r.error ? io("Error", r.error) : "") + io("Output", r.output);
+}
+
+const wfBody = (rows, sel) => `<div class="wf"><div class="wf-main">${waterfall(rows, sel)}</div><aside class="wf-detail" aria-label="Detail">${wfDetail(rows.find((r) => r.id === sel))}</aside></div>`;
 
 export function renderSession(d, _params, query = new URLSearchParams()) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
-  const table = isTable(query);
+  const table = isTable(query), wf = isWaterfall(query);
   const aside = [sessionLink(d), langfuse(d.base, d.turns[0]?.traceId)].filter(Boolean).join(" ");
   return `<div class="page"><p class="quiet"><a href="#/sessions">← Sessions</a></p>${pageHead(d.project, { count: table ? d.turns.length : d.total, aside })}` +
     `${d.taskTypes?.length ? `<p>${chips(d.taskTypes)}</p>` : ""}` +
-    filterBar([{ label: "", name: "view", options: [{ value: "chat", label: "Chat" }, { value: "table", label: "Table" }], value: table ? "table" : "chat" }]) +
-    (table ? turnTable(d) : chatBody(d)) + `</div>`;
+    filterBar([{ label: "", name: "view", options: [{ value: "chat", label: "Chat" }, { value: "table", label: "Table" }, { value: "waterfall", label: "Waterfall" }], value: table ? "table" : wf ? "waterfall" : "chat" }]) +
+    (table ? turnTable(d) : wf ? `<div class="wf-wrap">${wfBody(wfRows(d.turns), null)}</div>${chatPager(d.from - 1 + d.turns.length, d.total)}` : chatBody(d)) + `</div>`;
 }
 
 // The toggle writes the hash; "Show all" uncuts a long message; "Show 20 more" appends the next turns in place.
 export function mountSession(root, d, query = new URLSearchParams()) {
   if (!d || d.error) return;
+  const wf = isWaterfall(query);
+  let loaded = [...d.turns], sel = null;
+  const redrawWf = () => {
+    const w = root.querySelector(".wf-wrap");
+    if (w) w.innerHTML = wfBody(wfRows(loaded), sel);
+  };
+  const select = (id) => {
+    sel = id;
+    redrawWf();
+    root.querySelector(".wf-row.sel")?.scrollIntoView?.({ block: "nearest" });
+  };
+  if (wf) root.onkeydown = (e) => {
+    const row = e.target.closest?.(".wf-row");
+    if (row && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); select(row.dataset.id); root.querySelector(".wf-row.sel")?.focus(); }
+  };
   root.onclick = async (e) => {
+    if (wf) {
+      const a = e.target.closest?.("a[data-select]");
+      if (a) { e.preventDefault(); return select(a.dataset.select); }
+      const row = e.target.closest?.(".wf-row");
+      if (row) return select(row.dataset.id);
+    }
     const seg = e.target.closest?.(".fbar .seg button");
     if (seg) {
-      location.hash = `#/sessions/${encodeURIComponent(d.id)}${seg.dataset.value === "table" ? "?view=table" : ""}`;
+      location.hash = `#/sessions/${encodeURIComponent(d.id)}${seg.dataset.value === "chat" ? "" : `?view=${seg.dataset.value}`}`;
       return;
     }
     const un = e.target.closest?.("button.unclip");
@@ -197,7 +282,7 @@ export function mountSession(root, d, query = new URLSearchParams()) {
       const res = await fetch(`/api/sessions/${encodeURIComponent(d.id)}/chat?from=${b.dataset.chatFrom}&limit=${CHAT_PAGE}`, { cache: "no-store" });
       const next = await res.json();
       if (!res.ok || next.error) throw new Error(next.error ?? res.statusText);
-      root.querySelector(".chat").insertAdjacentHTML("beforeend", next.turns.map((t) => chatTurn(d.id, t)).join(""));
+      if (wf) { loaded = [...loaded, ...next.turns]; redrawWf(); } else root.querySelector(".chat").insertAdjacentHTML("beforeend", next.turns.map((t) => chatTurn(d.id, t)).join(""));
       pager.outerHTML = chatPager(next.from - 1 + next.turns.length, next.total);
     } catch (err) {
       b.disabled = false;
