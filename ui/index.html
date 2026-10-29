@@ -198,6 +198,18 @@ a.act { text-decoration: none; display: inline-block; }
 section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
 .cards > * { min-width: 0; margin: 0; }
+.list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.list > * { min-width: 0; margin: 0; }
+.issue-row .problem { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }
+.issue-row .hints { flex: 1 1 100%; display: flex; flex-direction: column; gap: 2px; margin: 0; font-size: var(--fs-sm); color: var(--muted); overflow-wrap: anywhere; }
+.issue-row .actions { max-width: 100%; }
+.issue-row input.reason { max-width: 100%; }
+.act.always { background: none; border-color: transparent; color: var(--muted); font-size: var(--fs-sm); text-decoration: underline; }
+.act.always:hover { color: var(--ink); }
+details.standing { margin-top: 18px; font-size: var(--fs-sm); }
+details.standing summary { cursor: pointer; font-weight: 600; }
+details.standing ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+details.standing li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; overflow-wrap: anywhere; }
 .job-card .ih .id { white-space: nowrap; flex: none; }
 .grp + .grp { margin-top: 16px; }
 .grp h3 { display: flex; align-items: baseline; gap: 8px; font: 600 var(--fs-sm)/1.3 var(--sans); color: var(--muted); margin: 0 0 8px; }
@@ -736,7 +748,8 @@ pre.stat b { color: var(--need); }
   document.addEventListener("click", async (e) => {
     const b = e.target.closest && e.target.closest("button.act[data-act]");
     if (!b) return;
-    const { act, name, label } = b.dataset;
+    const { act, label } = b.dataset;
+    const name = b.dataset.name ?? (act === "approve" || act === "decline" ? b.dataset.id : undefined);
     const note = (m) => { let n = b.parentElement.querySelector(".act-msg"); if (!n) { n = document.createElement("span"); n.className = "act-msg"; n.setAttribute("role", "alert"); b.parentElement.append(n); } n.textContent = m; if (name) actMessages.set(name, m); };
     if (act === "diff") {
       const panel = b.closest("article").querySelector(".diff-panel");
@@ -760,6 +773,35 @@ pre.stat b { color: var(--need); }
       return;
     }
     clearTimeout(b._t);
+    const post = (url, body) => fetch(url, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body) });
+    if (act === "always" || act === "revoke") {
+      // Always: grant the standing permission, then click the row's first action (its second-click confirm applies). Revoke: take it back.
+      const { reason, action, first } = b.dataset;
+      b.disabled = true;
+      try {
+        const res = await post(`/api/standing/${encodeURIComponent(reason)}${act === "revoke" ? "/revoke" : ""}`, act === "always" ? { action } : {});
+        const r = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(r.error || res.statusText);
+      } catch (err) { b.disabled = false; note(`${act} failed: ${err.message}`); return; }
+      if (act === "always") {
+        const next = [...b.closest("article").querySelectorAll("button.act:not(.always)")].find((x) => x.dataset.act === first);
+        b.disabled = false;
+        if (next) { next.click(); return; }
+      }
+      if (shown) load(shown, false);
+      return;
+    }
+    if (act === "retriage" || act === "rerun" || act === "close" || (act === "drop" && b.dataset.repo)) {
+      const { repo, id } = b.dataset;
+      b.disabled = true;
+      try {
+        const res = await post(`/api/issues/${encodeURIComponent(repo)}/${encodeURIComponent(id)}/${act === "close" ? "drop" : act}`, act === "close" ? { reason: "Chris closed it" } : {});
+        const r = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(r.error || res.statusText);
+      } catch (err) { b.disabled = false; note(`${act} failed: ${err.message}`); return; }
+      if (shown) load(shown, false);
+      return;
+    }
     if (act === "decide" || act === "deny") {
       // A Decide row: approve one option, or deny with the reason typed beside the button.
       const { repo, id, option, recommendation } = b.dataset;

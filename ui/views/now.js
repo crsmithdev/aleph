@@ -2,7 +2,6 @@
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
 import { denyReasons, diffHtml, elapsed, costHtml, esc, idLink, openDiffs, shortModel, when } from "../lib.js";
-import { proseDecision } from "../decision.js";
 import { act, actMsg, checkFacts, fact, issueCard, itemId, landCard, shell as jobCard, triageCard, trailerLine } from "./cards.js";
 
 export const view = {
@@ -44,7 +43,7 @@ function statLines(stat) {
 /** How many cards the running group holds: the running jobs and the firefighter's role row. */
 const runningCount = (s) => s.running.length + ((s.factory?.firefighter ?? []).length ? 1 : 0);
 /** The needs-you group's rows: held runs, needs-chris issues, proposals, errors. */
-const needsCount = (s) => s.needs.length + (s.needsIssues ?? []).length + (s.proposals ?? []).length + errorLines(s).length;
+const needsCount = (s) => (s.attention ?? []).length + errorLines(s).length;
 
 /** The row of metric cards, one count per section, each a link to it: Issues, Triage, Lands, Jobs by state, and Waiting. */
 export function renderMetrics(s) {
@@ -85,12 +84,14 @@ export function renderLede(s) {
   const f = s.factory;
   const problems = []; // [tone, html]
   const notices = [];
-  if (s.needs.length) problems.push(["warning", `<a href="#jobs-needs">${s.needs.length} ${s.needs.length === 1 ? "job needs" : "jobs need"} you</a>`]);
+  const att = s.attention ?? [];
+  const isRun = (i) => ["held", "review", "question"].includes(i.reason);
+  const isProposal = (i) => i.reason.startsWith("proposal-");
+  const runs = att.filter(isRun).length, issues = att.filter((i) => !isRun(i) && !isProposal(i)).length, props = att.filter(isProposal).length;
+  if (runs) problems.push(["warning", `<a href="#jobs-needs">${runs} ${runs === 1 ? "job needs" : "jobs need"} you</a>`]);
   if (s.stuck.length) problems.push(["error", `<a href="#jobs-stuck">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`]);
-  const needing = s.needsIssues ?? [];
-  if (needing.length) problems.push(["warning", `<a href="#jobs-needs">${needing.length} ${needing.length === 1 ? "issue needs" : "issues need"} a decision</a>`]);
-  const props = s.proposals ?? [];
-  if (props.length) problems.push(["warning", `<a href="#jobs-needs">${props.length} ${props.length === 1 ? "proposal waits" : "proposals wait"} for Yes or No</a>`]);
+  if (issues) problems.push(["warning", `<a href="#jobs-needs">${issues} ${issues === 1 ? "issue needs" : "issues need"} a decision</a>`]);
+  if (props) problems.push(["warning", `<a href="#jobs-needs">${props} ${props === 1 ? "proposal waits" : "proposals wait"} for Yes or No</a>`]);
   const health = [...(f.health || [])];
   if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   for (const l of health) {
@@ -109,6 +110,7 @@ export function renderLede(s) {
   return `<span class="say ${tone}">${count} ${problems.map(([, h]) => h).join(". ")}.</span>${note}`;
 }
 
+const list = (html) => `<div class="list">${html}</div>`;
 const cards = (html) => `<div class="cards">${html}</div>`;
 
 /** The one folded "Details" of an Issues row; `key` keeps it open across refreshes. */
@@ -160,13 +162,13 @@ function firefighterCard(s, lines) {
 
 /** Jobs by state: needs you, stuck or failed, running; each group is there even when empty, so its metric card has a target. */
 export function renderJobs(s) {
-  const group = (id, t, n, html, none) => `<div class="grp" id="jobs-${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${n ? cards(html) : empty(none)}</div>`;
+  const group = (id, t, n, html, none, wrap = cards) => `<div class="grp" id="jobs-${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${n ? wrap(html) : empty(none)}</div>`;
   const ff = s.factory?.firefighter ?? [];
-  const needs = s.needs.map(heldRow(s)).concat((s.needsIssues ?? []).map(decideRow), (s.proposals ?? []).map(proposalRow), errorLines(s).map(errorRow));
-  const body = group("needs", "Needs you", needs.length, needs.join(""), "Nothing needs you.") +
+  const needs = (s.attention ?? []).map(attentionRow).concat(errorLines(s).map(errorRow));
+  const body = group("needs", "Needs you", needs.length, needs.join(""), "Nothing needs you.", list) +
     group("stuck", "Stuck or failed", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), "Nothing is stuck or failed.") +
     group("running", "Running", runningCount(s), s.running.map((j) => runningCard(s, j)).join("") + (ff.length ? firefighterCard(s, ff) : ""), "Nothing is running.");
-  return section("jobs", "Jobs", needsCount(s) + s.stuck.length + runningCount(s), body, 0);
+  return section("jobs", "Jobs", needsCount(s) + s.stuck.length + runningCount(s), body, 0) + renderStanding(s);
 }
 
 /** Waiting: the goals with no job yet, as a section of its own below Jobs; one card each. */
@@ -232,9 +234,7 @@ const fold = (s, j, held) => details(s, j, held
   : j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "");
 
 const jobHref = (j) => `#/jobs/${encodeURIComponent(j.name)}`;
-const heldRow = (s) => (j) => row("held", oneSentence(holdReason(j)) || "Review the run, then land or drop it.", j.name, jobHref(j), j.item?.title || "", `${act("land", j.name, "Land", true)}${act("drop", j.name, "Drop")}${actMsg(j.name)}`, fold(s, j, true), j);
 const stuckRow = (s) => (j) => row("stuck", `${j.state === "failed" ? "Failed" : "Stuck"}${j.reason ? ` with ${oneSentence(j.reason).replace(/\.$/, "")}` : ""}.`, j.name, jobHref(j), j.item?.title || "", `${act("recheck", j.name, "Re-check")}${act("drop", j.name, "Drop")}${actMsg(j.name)}`, fold(s, j, false), j);
-const open = (i) => `<a class="act" href="${esc(i.href)}">Open</a>`;
 /** Text with `inline code` as <code>, everything else escaped. */
 const code = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
 
@@ -250,37 +250,59 @@ function proseBody(p) {
   return p.paragraphs.map((t) => `<p class="dp${t === p.recommendation ? " rec" : ""}">${code(t)}</p>`).join("");
 }
 
-/** The Approve buttons (recommended first, primary), the optional reason and Deny. */
-function decideButtons(i, d, prose) {
-  const [repo, n] = i.id.split(/-(?=\d+$)/);
-  const at = `data-repo="${esc(repo)}" data-id="${esc(n)}"`;
-  const btn = (verb, label, extra = "", primary = false) =>
-    `<button class="act${primary ? " primary" : ""}" type="button" data-act="${verb}" ${at}${extra} data-label="${esc(label)}">${esc(label)}</button>`;
-  const approve = d
-    ? [...d.options].sort((a, b) => (b.label === d.recommended) - (a.label === d.recommended))
-        .map((o) => btn("decide", `Approve ${o.label}`, ` data-option="${esc(o.label)}"`, o.label === d.recommended)).join("")
-    : prose.recommendation ? btn("decide", "Approve recommendation", ' data-recommendation="1"', true) : "";
-  return approve + `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason to deny (optional)" aria-label="Reason to deny ${esc(i.id)}" ${at} value="${esc(denyReasons.get(i.id) ?? "")}">` + btn("deny", "Deny");
-}
-
-/** A needs-chris row: the id, the title, the question as one sentence, the buttons; the options, the context and the rest are folded in Details. */
-function decideRow(i) {
-  const d = i.decision;
-  const prose = d ? null : proseDecision(i.question);
-  const body = d ? decisionBody(d) : prose.paragraphs.length ? proseBody(prose) : "";
-  const ask = oneSentence(d ? d.question : prose.paragraphs[0] ?? i.question) || "Your decision is needed.";
-  return row("decide", ask, i.id, i.href, i.title, `${decideButtons(i, d, prose || { recommendation: null })}${open(i)}`, body ? more(i.id, body) : "");
-}
-const KIND_WORDS = { check: "a check", "claude-md": "a CLAUDE.md line", skill: "a skill change" };
 const isUrl = (u) => /^https?:\/\//.test(u);
+const RUN_REASONS = ["held", "review", "question"];
 
-/** A proposal row: the lesson sentence, Yes and No; the signals are folded in Details. */
-function proposalRow(p) {
-  const signals = (p.signals ?? []).map((g) => `<li>${esc(g.at)} ${esc(g.source)}: ${esc(g.quote)}${isUrl(g.link) ? ` <a href="${esc(g.link)}">link</a>` : ""}</li>`).join("");
-  return row("decide", p.sentence, p.id, "", `Proposal: ${KIND_WORDS[p.kind] ?? KIND_WORDS.skill}`,
-    `${act("approve", p.id, "Yes", true)}${act("decline", p.id, "No")}${actMsg(p.id)}`, signals ? more(p.id, `<ul>${signals}</ul>`) : "");
+/** One button of an attention row: the action's args as data attributes. */
+function actionButton(a) {
+  const args = Object.entries(a.args ?? {}).map(([k, v]) => ` data-${esc(k)}="${esc(v)}"`).join("");
+  return `<button class="act${a.primary ? " primary" : ""}" type="button" data-act="${esc(a.act)}"${args} data-label="${esc(a.label)}">${esc(a.label)}</button>`;
 }
-const errorRow = (l) => row("error", `${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`, "", "", "", "");
+
+/** The one folded Details of an attention row: the raw note, the options, the signals, the stat and the review note. */
+function attentionDetails(i) {
+  const d = i.details ?? {};
+  const isRun = RUN_REASONS.includes(i.reason);
+  const sig = (d.signals ?? []).map((g) => `<li>${esc(g.at)} ${esc(g.source)}: ${esc(g.quote)}${isUrl(g.link) ? ` <a href="${esc(g.link)}">link</a>` : ""}</li>`).join("");
+  const body = (d.note ? `<p class="quiet q">${esc(d.note)}</p>` : "") +
+    (d.decision ? decisionBody(d.decision) : "") +
+    (sig ? `<ul>${sig}</ul>` : "") +
+    (d.review2 ? `<p class="quiet q">Reviewer: ${esc(d.review2.verdict)}${d.review2.reason ? `: ${esc(d.review2.reason)}` : ""}</p>` : "") +
+    (d.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(d.stat)}</pre></div></div>` : "") +
+    (isRun ? `<div class="actions">${act("diff", i.id, "Diff")}</div><div class="diff-panel" data-diff-for="${esc(i.id)}"${openDiffs.has(i.id) ? `>${diffHtml(openDiffs.get(i.id))}` : " hidden>"}</div>` : "");
+  return body ? more(i.key ?? i.id, body) : "";
+}
+
+/** A Needs-you row from a server `attention` item: the id and title, the Problem, the named buttons with their hints, Always, Details. */
+function attentionRow(i) {
+  const acts = i.actions ?? [];
+  const buttons = acts.map(actionButton);
+  const deny = acts.findIndex((a) => a.act === "deny");
+  if (deny >= 0) {
+    const [repo, n] = i.id.split(/-(?=\d+$)/);
+    buttons.splice(deny, 0, `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason to deny (optional)" aria-label="Reason to deny ${esc(i.id)}" data-repo="${esc(repo)}" data-id="${esc(n)}" value="${esc(denyReasons.get(i.id) ?? "")}">`);
+  }
+  const always = i.always ? `<button class="act always" type="button" data-act="always" data-reason="${esc(i.reason)}" data-action="${esc(i.always.action)}" data-first="${esc(acts[0]?.act ?? "")}" data-label="${esc(i.always.label)}">${esc(i.always.label)}</button>` : "";
+  return `<article class="job-card small issue-row ${esc(i.reason)}" data-reason="${esc(i.reason)}"><div class="row-main">` +
+    `${i.href ? idLink(i.id, i.href) : `<span class="id">${esc(i.id)}</span>`} ${i.title ? `<span class="t">${esc(i.title)}</span>` : ""}</div>` +
+    `<p class="problem">${esc(i.problem)}</p>` +
+    `<div class="actions">${buttons.join("")}${RUN_REASONS.includes(i.reason) ? actMsg(i.id) : ""}</div>` +
+    (acts.length ? `<p class="hints">${acts.map((a) => `<span>${code(a.hint)}</span>`).join("")}</p>` : "") +
+    (always ? `<div class="actions">${always}</div>` : "") + attentionDetails(i) + `</article>`;
+}
+
+/** An error line as a row: the Problem sentence, no buttons and no Always. */
+const errorRow = (l) => `<article class="job-card small issue-row error" data-kind="error"><p class="problem">${esc(`${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`)}</p></article>`;
+
+/** The folded "Standing permissions" section: what Chris has let the factory do without asking, each with Revoke. */
+export function renderStanding(s) {
+  const st = s.standing ?? [];
+  const d = new Date(s.now);
+  const rows = st.map((g) => `<li><span>${esc(g.reason)}: ${esc(g.action)}, since ${esc(when(g.at, d))}${g.handed ? `, ${g.handed} ${g.handed === 1 ? "item" : "items"} with the firefighter` : ""}</span> ` +
+    `<button class="act" type="button" data-act="revoke" data-reason="${esc(g.reason)}" data-label="Revoke">Revoke</button></li>`).join("");
+  return `<details class="standing" data-keep="standing"><summary>Standing permissions</summary><div class="body">${st.length ? `<ul class="standing-list">${rows}</ul>` : `<p class="hint">None.</p>`}</div></details>`;
+}
+
 
 /** Issues: the issues filed recently that are not yet triaged, as Issue cards. */
 export function renderIssues(s) {

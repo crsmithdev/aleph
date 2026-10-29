@@ -1,23 +1,28 @@
 import { expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
-import * as r from "./views/now.js";
+import * as view from "./views/now.js";
+import { attend } from "./attention.ts";
 // @ts-ignore
 import { actMessages, openDiffs } from "./lib.js";
+
+// The server derives `attention` from needs, needsIssues and proposals; a fixture without it gets the same derivation.
+const att = (s: any) => (s.attention ? s : { ...s, attention: attend({ needs: s.needs ?? [], needsIssues: s.needsIssues ?? [] }, {}, s.proposals ?? []).items });
+const r: any = { ...view, renderJobs: (s: any) => view.renderJobs(att(s)), renderLede: (s: any) => view.renderLede(att(s)), renderMetrics: (s: any) => view.renderMetrics(att(s)), view: { ...view.view, render: (s: any) => view.view.render(att(s)) } };
 
 const job = (o: object) => ({ repo: "aleph", item: null, state: "running", started: "2026-10-27T16:00:00Z", defaults: [], followups: [], ...o });
 const state: any = {
   now: "2026-10-27T17:00:00Z",
   factory: { paused: false, dayCap: 12, runsToday: 5, costToday: 0.25, nextTick: "2026-10-27T17:12:00Z", probe: { at: "2026-10-27T14:35:00Z", ok: true, failed: [] }, health: ["judge is down"] },
-  needs: [job({ name: "aleph-27", state: "needs-you", reason: "Held path: hooks/lib/digest.ts", stat: " a.ts | 2 +-", defaults: ["Haiku tier per request"], item: { id: 27, title: "Digest head and tail" } })],
+  needs: [job({ name: "aleph-27", state: "needs-you", needs: "held", reason: "Held path: hooks/lib/digest.ts", stat: " a.ts | 2 +-", defaults: ["Haiku tier per request"], item: { id: 27, title: "Digest head and tail" } })],
   stuck: [job({ name: "aleph-30", state: "stuck", reason: "types failed" })],
   running: [job({ name: "aleph-36", phase: "worker", item: { id: 36, title: "Route tiers" } })],
   delivered: [job({ name: "aleph-28", state: "landed", ended: "2026-10-27T16:30:00Z", commit: "50f301fabc", commitUrl: "https://github.com/o/r/commit/50f301fabc" })],
   waiting: [],
 };
 
-test("needs shows name, reason and defaults, and no copy commands", () => {
+test("needs shows name, reason and stat, and no copy commands", () => {
   const h = withAttn(state);
-  for (const t of ["aleph-27", "Held path: hooks/lib/digest.ts", "Haiku tier per request", "a.ts | 2 +-"]) expect(h).toContain(t);
+  for (const t of ["aleph-27", "Held path: hooks/lib/digest.ts", "a.ts | 2 +-"]) expect(h).toContain(t);
   expect(h).not.toContain("data-cmd=");
 });
 
@@ -42,7 +47,8 @@ test("an empty section shows its empty state", () => {
   expect(r.renderLands({ ...state, delivered: [] })).toContain("Nothing has landed yet.");
   // Every state has its group, empty or not: the metric cards link to them.
   for (const g of ["needs", "stuck", "running"]) expect(r.renderJobs(calm)).toContain(`id="jobs-${g}"`);
-  expect(r.renderJobs(calm).match(/<p/g)?.length).toBe(3);
+  expect(r.renderJobs(calm).match(/<p/g)?.length).toBe(4); // three empty groups and the standing list
+  expect(r.renderJobs(calm)).toContain("None.");
 });
 
 const issue = (n: number) => ({ id: `aleph-${n}`, title: `Issue ${n}`, status: "open", href: `#/issues/aleph/${n}`, labels: [], notes: 0, created: "2026-10-27", updated: "2026-10-27" });
@@ -105,53 +111,45 @@ test("Jobs groups needs you, then stuck or failed, then running; Waiting is its 
 });
 
 const rows = (h: string) => h.split('<article class="job-card small issue-row ').slice(1);
+const problem = (row: string) => row.match(/<p class="problem">([^<]*)<\/p>/)![1];
 const verb = (row: string) => row.match(/<span class="verb">([^<]*)<\/span>/)![1];
 
-test("a held run, a stuck run, a needs-chris issue and a red main are one Issues row each, with a verb phrase, id, title and buttons", () => {
+test("a held run, a stuck run, a needs-chris issue and a red main are one row each, with the id, title, Problem and buttons", () => {
   const needsIssues = [{ ...issue(7), labels: ["needs-chris"], title: "Which tier?", question: "Haiku or Sonnet for the digest?" }];
   const s = { ...full, needs: [{ ...state.needs[0], review2: { verdict: "chris", reason: "touches hooks" } }], stuck: [job({ name: "aleph-30", state: "stuck", reason: "no commit", item: { id: 30, title: "Fix it" } })], needsIssues, issues: [], factory: { ...full.factory, health: ["health: aleph main is red at abc1234: tests"], hold: "Held: aleph-30 is stuck (no commit). No run starts or lands until it is cleared." } };
   const page = r.view.render(s);
   const top = section(page, "jobs");
   const rs = rows(top);
   expect(rs.length).toBe(4);
-  expect(rs.map((x) => x.match(/^(\w+)/)![1])).toEqual(["held", "decide", "error", "stuck"]);
-  expect(verb(rs[0])).toBe("Review the run, then land or drop it."); // the reason is only a path
-  expect(rs[0]).toContain("Reviewer: the reviewer left it to you: touches hooks");
+  expect(rs.map((x) => x.match(/^(\w+)/)![1])).toEqual(["held", "decision", "error", "stuck"]);
+  expect(problem(rs[0])).toContain("changes a path the repo holds");
+  expect(rs[0]).toContain("Reviewer: chris: touches hooks");
   expect(verb(rs[3])).toBe("Stuck with no commit.");
-  expect(verb(rs[1])).toBe("Haiku or Sonnet for the digest?");
-  expect(verb(rs[2])).toBe("Fix: aleph main is red at abc1234: tests");
-  // The id comes first, then the title and the one sentence, then the buttons.
-  for (const [row, id, title, btns] of [[rs[0], "aleph-27", "Digest head and tail", ["land", "drop"]], [rs[3], "aleph-30", "Fix it", ["recheck", "drop"]], [rs[1], "aleph-7", "Which tier?", []]] as const) {
+  expect(problem(rs[1])).toBe("Haiku or Sonnet for the digest?");
+  expect(problem(rs[2])).toBe("Fix: aleph main is red at abc1234: tests");
+  expect(rs[2]).not.toContain("<button");
+  expect(rs[2]).not.toContain("always");
+  // The id comes first, then the title and the Problem, then the buttons.
+  for (const [row, id, title, btns] of [[rs[0], "aleph-27", "Digest head and tail", ["land", "drop"]], [rs[3], "aleph-30", "Fix it", ["recheck", "drop"]], [rs[1], "aleph-7", "Which tier?", ["decide", "deny"]]] as const) {
     expect(row.indexOf(id)).toBeLessThan(row.indexOf(title));
-    expect(row.indexOf(title)).toBeLessThan(row.indexOf("verb"));
-    expect(row.indexOf("verb")).toBeLessThan(row.indexOf('class="actions"'));
-    expect(row.match(/<details/g)?.length ?? 0).toBeLessThanOrEqual(1);
+    expect(row.indexOf(title)).toBeLessThan(row.indexOf(row.startsWith("stuck") ? "verb" : "problem"));
+    expect(row.match(/<details class="more"/g)?.length ?? 0).toBeLessThanOrEqual(1);
     for (const b of btns) expect(row).toContain(`data-act="${b}"`);
   }
-  // Diff and Details sit behind the row; a needs-chris issue links to the issue.
   expect(rs[0]).toMatch(/<details class="more"[^]*data-act="diff"/);
   expect(rs[1]).toContain('href="#/issues/aleph/7"');
-  // Internal noise stays out, a red main shows once, and the hold of a stuck run that has its row adds none.
-  for (const t of ["No agent working", "Review running"]) expect(top).not.toContain(t);
   expect(top.match(/main is red/g)?.length).toBe(1);
   expect(top).not.toContain("Held: aleph-30");
-  expect(top).not.toContain("Decide the thing");
   expect(section(page, "jobs")).toContain("aleph-36");
   expect(section(page, "issues")).not.toContain("aleph-27");
-  // A needs-chris issue is not run together: its parts are separate elements.
-  expect(rs[1]).toContain('<a class="idl" href="#/issues/aleph/7">aleph-7</a> <span class="t">Which tier?</span> <span class="verb">');
 });
 
-test("a held run says why: no verdict, a verdict with its reason, a failed review; a running review is left out", () => {
-  const why = (review2: any) => rows(r.renderJobs({ ...state, stuck: [], factory: { ...state.factory, health: [] }, needs: [{ ...state.needs[0], reason: undefined, review2 }] }))[0];
-  expect(why(undefined)).toContain("Reviewer: the reviewer gave no verdict");
-  expect(why({ verdict: "back", reason: "lost an assertion" })).toContain("Reviewer: the reviewer sent it back: lost an assertion");
-  expect(why({ verdict: "error" })).toContain("Reviewer: the review failed");
-  expect(why({ verdict: "pending" })).not.toContain("Reviewer:");
-  // The row's one sentence is the hold reason, with no file paths or line numbers.
-  const held = (reason: string) => verb(rows(r.renderJobs({ ...state, stuck: [], factory: { ...state.factory, health: [] }, needs: [{ ...state.needs[0], reason }] }))[0]);
-  expect(held("Touches `hooks/lib/digest.ts:12-30` and the `digest` tier. More words.")).toBe("Touches and the digest tier.");
-  expect(held("Review ui/now.js line 40 before landing.")).toBe("Review before landing.");
+test("a held run's details carry the hold note and the reviewer's verdict", () => {
+  const why = (review2: any) => rows(r.renderJobs({ ...state, stuck: [], factory: { ...state.factory, health: [] }, needs: [{ ...state.needs[0], review2 }] }))[0];
+  expect(why({ verdict: "back", reason: "lost an assertion" })).toContain("Reviewer: back: lost an assertion");
+  expect(why({ verdict: "error" })).toContain("Reviewer: error");
+  expect(why(undefined)).not.toContain("Reviewer:");
+  expect(why(undefined)).toContain("Held path: hooks/lib/digest.ts");
 });
 
 test("issues that wait for triage are not rows and not in the status line: triage is the factory's", () => {
@@ -184,7 +182,7 @@ test("Issues holds the held runs before the stuck and failed ones, and none says
 });
 
 test("text from the state is escaped", () => {
-  const bad = { ...state, needs: [job({ name: "x", state: "needs-you", item: { id: 1, title: "<script>alert(1)</script>" } })], waiting: [{ repo: "a", id: 1, title: "<script>w</script>" }] };
+  const bad = { ...state, needs: [job({ name: "x", state: "needs-you", needs: "held", item: { id: 1, title: "<script>alert(1)</script>" } })], waiting: [{ repo: "a", id: 1, title: "<script>w</script>" }] };
   for (const h of [withAttn(bad), withAttn(bad)]) {
     expect(h).not.toContain("<script>");
     expect(h).toContain("&lt;script&gt;");
@@ -216,7 +214,7 @@ test("a stuck job shows its reason, the failed check and its seconds, and Re-che
 });
 
 test("many needs-you jobs all render as rows, each with its details folded and its buttons", () => {
-  const needs = [1, 2, 3, 4].map((i) => job({ name: `aleph-${i}`, state: "needs-you", reason: "Held path", item: { id: i, title: `t${i}` } }));
+  const needs = [1, 2, 3, 4].map((i) => job({ name: `aleph-${i}`, state: "needs-you", needs: "held", reason: "Held path", item: { id: i, title: `t${i}` } }));
   const h = withAttn({ ...state, needs });
   expect(h.match(/class="job-card small issue-row held"/g)?.length).toBe(4);
   expect(h.match(/<details class="more" data-keep="more:[^"]*">/g)?.length).toBe(4 + 1);
@@ -307,15 +305,13 @@ test("a worker run older than 40 minutes is past the time box", () => {
 
 test("a 30-file stat shows 12 lines and +18 more files", () => {
   const stat = Array.from({ length: 30 }, (_, i) => ` f${i}.ts | 2 +-`).join("\n") + "\n 30 files changed, 30 insertions(+), 30 deletions(-)";
-  const h = withAttn({ ...state, needs: [job({ name: "x", state: "needs-you", stat })] });
+  const h = withAttn({ ...state, needs: [job({ name: "x", state: "needs-you", needs: "held", stat })] });
   expect(h.match(/ f\d+\.ts \| 2/g)?.length).toBe(12);
   expect(h).toContain("+18 more files");
 });
 
-test("a job with checks shows them as facts; one without shows none", () => {
+test("a land does not show checks as facts", () => {
   const checks = [{ name: "tests", ok: true, seconds: 71 }, { name: "types", ok: false, seconds: 9 }];
-  const both = "<div><dt>Tests</dt><dd>71 s ✓</dd></div><div><dt>Types</dt><dd>9 s ✗</dd></div></dl>";
-  expect(withAttn({ ...state, needs: [{ ...state.needs[0], checks }] })).toContain(both);
   const land = r.renderLands({ ...state, delivered: [{ ...state.delivered[0], checks }] });
   expect(land).not.toContain("<dt>Tests</dt>");
   expect(land).not.toContain("<dt>Types</dt>");
@@ -339,17 +335,12 @@ test("the Pause or Resume button sits in the page head beside the time; no Contr
 
 test("trailers show on one line joined by ' · ', escaped, and only when there are some", () => {
   const trailers = [{ key: "Item", value: "aleph-27" }, { key: "Job", value: "<script>x</script>" }, { key: "Held-by", value: "Chris" }];
-  const needs = { ...state, needs: [job({ name: "aleph-27", state: "needs-you", trailers })] };
   const del = { ...state, delivered: [job({ name: "aleph-28", state: "landed", trailers })] };
-  for (const h of [withAttn(needs), r.renderLands(del)]) {
-    expect(h).toContain("aleph-27 · Job &lt;script&gt;x&lt;/script&gt; · Held-by Chris");
-    expect(h).not.toContain("Item aleph-27");
-    expect(h).not.toContain("<script>");
-    expect(h).not.toContain("pre.trailers");
-    expect(h).not.toContain('<pre class="trailers"');
-  }
-  const bare = { ...state, needs: [job({ name: "aleph-27", state: "needs-you" })] };
-  expect(withAttn(bare)).not.toContain("trailers");
+  const h = r.renderLands(del);
+  expect(h).toContain("aleph-27 · Job &lt;script&gt;x&lt;/script&gt; · Held-by Chris");
+  expect(h).not.toContain("Item aleph-27");
+  expect(h).not.toContain("<script>");
+  expect(h).not.toContain('<pre class="trailers"');
   expect(r.renderLands(state)).not.toContain("trailers");
 });
 
@@ -372,7 +363,7 @@ test("Lands lists a running land before landed ones, has no origin/main aside, a
   expect(h).toMatch(/class="job-card big[ "]/);
 });
 
-const two: any = { ...state, needs: [job({ name: "job-a", state: "needs-you", defaults: [] }), job({ name: "job-b", state: "needs-you", defaults: [] })] };
+const two: any = { ...state, needs: [job({ name: "job-a", state: "needs-you", needs: "held", defaults: [] }), job({ name: "job-b", state: "needs-you", needs: "held", defaults: [] })] };
 const panel = (h: string, n: string) => h.match(new RegExp(`<div class="diff-panel" data-diff-for="${n}"[^>]*>`))![0];
 
 test("an open diff survives a render; other panels stay hidden", () => {
@@ -407,13 +398,12 @@ test("message and diff text are escaped", () => {
   } finally { actMessages.clear(); openDiffs.clear(); }
 });
 
-test("a held row shows the review2 verdict and its reason in its verb phrase", () => {
+test("a held row shows the review2 verdict and its reason in Details", () => {
   const withReview = (review2: object) => ({ ...state, needs: [{ ...state.needs[0], review2 }] });
   const h = withAttn(withReview({ verdict: "back", reason: "a test lost <an> assertion" }));
-  expect(h).toContain("the reviewer sent it back: a test lost &lt;an&gt; assertion");
-  expect(h.indexOf("sent it back")).toBeGreaterThan(h.indexOf("<details"));
-  expect(withAttn(withReview({ verdict: "land" }))).toContain("the reviewer says land");
-  expect(withAttn(state)).toContain("the reviewer gave no verdict");
+  expect(h).toContain("Reviewer: back: a test lost &lt;an&gt; assertion");
+  expect(h.indexOf("Reviewer: back")).toBeGreaterThan(h.indexOf("<details"));
+  expect(withAttn(state)).not.toContain("Reviewer:");
 });
 
 test("a needs-chris issue with fields shows the question, the options, the recommended mark, the context and the buttons in the row", () => {
@@ -425,28 +415,25 @@ test("a needs-chris issue with fields shows the question, the options, the recom
   expect(row).toMatch(/<li class="rec"><b>Sonnet<\/b> <span class="badge run">Recommended<\/span>/);
   expect(row).toContain("Digests run daily");
   // The row says the question in one sentence; the options and context are in the one Details.
-  expect(row).toContain('<span class="verb">Haiku or Sonnet for the digest?</span>');
-  expect(row.match(/<details/g)?.length).toBe(1);
+  expect(problem(row)).toBe("Haiku or Sonnet for the digest?");
+  expect(row.match(/<details class="more"/g)?.length).toBe(1);
   expect(row.indexOf("<details")).toBeLessThan(row.indexOf('<p class="dq">'));
   expect(row).toContain('href="#/issues/aleph/152"');
   const buttons = [...row.matchAll(/<button class="act( primary)?"[^>]*data-act="(\w+)"[^>]*data-label="([^"]*)"/g)].map((m) => [m[2], m[3], !!m[1]]);
-  expect(buttons).toEqual([["decide", "Approve Sonnet", true], ["decide", "Approve Haiku", false], ["deny", "Deny", false]]);
+  expect(buttons).toEqual([["decide", "Approve Sonnet", true], ["decide", "Approve Haiku", false], ["drop", "Drop the issue", false]]);
   expect(row).toContain('data-option="Sonnet"');
-  expect(row).toContain('class="reason"');
 });
 
-test("an old prose needs-chris note is readable: paragraphs, code, the recommendation picked out, Approve recommendation and Deny", () => {
-  const note = "2026-10-28 04:00: triage: for Chris: Should `ui/x.ts` use A or B?\nA is simpler. My recommendation is A, because it is simpler. Then more words.";
+test("an old prose needs-chris note gets a Problem with no tag or lead, Approve recommendation and Deny", () => {
+  const note = "triage: for Chris: Should `ui/x.ts` use A or B?\nA is simpler. My recommendation is A, because it is simpler. Then more words.";
   const s = { ...state, needs: [], stuck: [], issues: [], factory: { ...state.factory, health: [] }, needsIssues: [{ ...issue(152), labels: ["needs-chris"], title: "Which?", question: note }] };
   const [row] = rows(r.renderJobs(s));
-  expect(row).toContain("<code>ui/x.ts</code>");
-  expect(row).not.toContain("triage: for Chris");
-  expect(row).toContain('<p class="dp rec">My recommendation is A, because it is simpler.</p>');
+  expect(problem(row)).not.toContain("triage: for Chris");
   expect(row).toContain('data-label="Approve recommendation"');
-  expect(row).toContain('data-recommendation="1"');
+  expect(row).toContain('data-recommendation="true"');
   expect(row).toContain('data-label="Deny"');
-  expect(row).toContain('<span class="verb">Should use A or B?</span>');
-  expect(row.match(/<details/g)?.length).toBe(1);
+  expect(row).toContain('class="reason"');
+  expect(row.match(/<details class="more"/g)?.length).toBe(1);
 });
 
 test("the status line is not 'All is well.' when the Issues section has an item", () => {
@@ -462,9 +449,8 @@ test("Status times use the state's own now for the year check", () => {
   const run = (started: string) => withAttn({ ...state, now: "2027-01-05T12:00:00Z", running: [job({ name: "a", started, run: { kind: "land", started } })] });
   expect(run("2026-10-27T16:50:00Z")).toContain("Started 2026-10-27 \u00b7");
   expect(run("2027-01-05T11:00:00Z")).toMatch(/Started [A-Z][a-z]{2} \d\d \d\d:\d\d \u00b7/);
-  const held = withAttn({ ...state, now: "2027-01-05T12:00:00Z", needs: [job({ name: "aleph-27", state: "needs-you", started: "2026-10-27T16:50:00Z", trailers: [{ key: "Job", value: "20261028-042822-aleph-aleph-240-agent" }] })] });
+  const held = withAttn({ ...state, now: "2027-01-05T12:00:00Z", needs: [job({ name: "aleph-27", state: "needs-you", needs: "held", started: "2026-10-27T16:50:00Z", trailers: [{ key: "Job", value: "20261028-042822-aleph-aleph-240-agent" }] })] });
   expect(held).toContain("Started</dt><dd>2026-10-27");
-  expect(held).toContain("agent run, 2026-10-28");
   expect(held).not.toMatch(/\d\d? ?[AP]M/i);
 });
 
@@ -498,28 +484,27 @@ const prop = { id: "l-1234abcd", kind: "check", sentence: "Do not mock the db.",
   { source: "gate", at: "2026-10-27T11:00:00Z", quote: "deny", link: "" },
 ] };
 
-test("a proposal is a decide row with Yes and No and its signals folded", () => {
+test("a proposal is a row with Yes-like buttons and its signals folded", () => {
   const h = r.renderJobs({ ...state, proposals: [prop] });
-  const row = h.match(/<article class="job-card small issue-row decide"[^]*?<\/article>/)![0];
-  expect(row).toContain("Proposal: a check");
-  expect(row).toContain('<span class="verb">Do not mock the db.</span>');
-  expect(row).toContain('class="act primary" type="button" data-act="approve" data-name="l-1234abcd" data-label="Yes">Yes<');
-  expect(row).toContain('data-act="decline" data-name="l-1234abcd" data-label="No">No<');
-  expect(row.match(/<details/g)?.length).toBe(1);
+  const row = h.match(/<article class="job-card small issue-row proposal-check"[^]*?<\/article>/)![0];
+  expect(problem(row)).toContain("Do not mock the db");
+  expect(row).toContain('class="act primary" type="button" data-act="approve" data-id="l-1234abcd" data-label="File the goal">File the goal<');
+  expect(row).toContain('data-act="decline" data-id="l-1234abcd" data-label="Never propose this">');
+  expect(row.match(/<details class="more"/g)?.length).toBe(1);
   expect(row).toContain('<a href="https://lf/trace/t2">');
   expect(row).not.toContain("<script>");
   expect(row).toContain("&lt;script&gt;");
-  expect(row).not.toContain("<a href=\"#/");
 });
 
-test("rows are ordered held, stuck, needs-chris, proposal, error", () => {
+test("rows are ordered held, then needs-chris, then proposal, then error; the group is a list", () => {
   const s = { ...state, proposals: [prop], needsIssues: [{ id: "aleph-5", title: "T", href: "#/x", question: "Pick one?" }], factory: { ...state.factory, health: ["main is red"] } };
   const h = r.renderJobs(s);
-  const at = ["held", "decide", "decide", "error", "stuck"].reduce<number[]>((a, k) => [...a, h.indexOf(`data-kind="${k}"`, (a.at(-1) ?? -1) + 1)], []);
-  expect(at.every((n) => n >= 0)).toBe(true);
+  expect(h).toContain('<div class="list">');
+  expect(h).not.toMatch(/id="jobs-needs"[^]*class="cards"[^]*id="jobs-stuck"/);
+  expect(h.indexOf("aleph-27")).toBeLessThan(h.indexOf("aleph-5"));
   expect(h.indexOf("aleph-5")).toBeLessThan(h.indexOf("l-1234abcd"));
   expect(h.indexOf("l-1234abcd")).toBeLessThan(h.indexOf("main is red"));
-  expect(h).toContain(">6<");
+  expect(h).toContain(">4<");
 });
 
 test("the lede counts proposals as one warning", () => {
@@ -588,9 +573,78 @@ test("a running firefighter run shows its role as the kind", () => {
   expect(r.renderJobs(s)).toContain('<span class="badge run">firefighter</span>');
 });
 
-test("a held job card keeps its review2 badge and its Agent working line", () => {
+test("a held job card has no badge or agent line", () => {
   const h = r.renderJobs({ ...state, stuck: [], needs: [{ ...state.needs[0], agent: true, review2: { verdict: "back", reason: "x" } }] });
-  const card = rows(h)[0];
-  expect(card).toContain('review2">Review: back</span>');
-  expect(card).toContain('<span class="agent">Agent working</span>');
+  expect(rows(h)[0]).not.toContain("badge");
+});
+
+// ---- the attention rows ----
+import { REASONS } from "../jobs/lib/standing.ts";
+
+const sample = (reason: string) => {
+  const run = (needs: string, o: object = {}) => ({ needs: [job({ name: "aleph-27", state: "needs-you", needs, reason: "<task-notification>x</task-notification> needs-chris: y", item: { id: 27, title: "T" }, ...o })], needsIssues: [] as any[], lessons: [] as any[] });
+  const iss = (o: object) => ({ needs: [], needsIssues: [{ ...issue(7), labels: ["needs-chris"], title: "T", ...o }], lessons: [] as any[] });
+  if (["held", "review"].includes(reason)) return run(reason, reason === "review" ? { review2: { verdict: "chris", reason: "r" } } : {});
+  if (reason === "question") return run("question", { question: "<agent-message>q</agent-message> Which?" });
+  if (reason.startsWith("proposal-")) return { needs: [], needsIssues: [] as any[], lessons: [{ ...prop, kind: reason.slice(9) }] };
+  const q: Record<string, object> = {
+    "no-commit": { reason: "no-commit", question: "needs-chris: ended with no commit, so the factory stopped" },
+    "triage-no-verdict": { reason: "triage-no-verdict", question: "needs-chris: triage: no verdict in 2 runs: failed: x" },
+    "acceptance-failed": { reason: "acceptance-failed", question: "needs-chris: acceptance: fail again" },
+    decision: { reason: "decision", question: "needs-chris: Which one?" },
+    rescue: { reason: "rescue", question: "needs-chris: Which one?", decision: { question: "Which?", options: [{ label: "A", line: "a" }], recommended: "A", why: [] } },
+    firefighter: { reason: "firefighter", question: "needs-chris: x changes y.ts, a held security path" },
+  };
+  return iss(q[reason]);
+};
+
+for (const reason of Object.keys(REASONS)) {
+  test(`attention row for ${reason}: Problem, named buttons, a hint each, and Always`, () => {
+    const sm = sample(reason);
+    const items = attend({ needs: sm.needs as any, needsIssues: sm.needsIssues }, {}, sm.lessons).items;
+    expect(items.map((i) => i.reason)).toEqual([reason]);
+    const h = r.renderJobs({ ...state, needs: [], stuck: [], factory: { ...state.factory, health: [] }, attention: items });
+    const row = h.match(new RegExp(`<article class="job-card small issue-row ${reason}"[^]*?</article>`))![0];
+    expect(row).toContain(`data-reason="${reason}"`);
+    const p = problem(row);
+    expect(p.length).toBeGreaterThan(5);
+    for (const t of ["<task-notification", "<agent-message", "needs-chris:"]) expect(p).not.toContain(t);
+    const buttons = [...row.split("<details")[0].matchAll(/<button class="act( primary)?" [^>]*data-label="([^"]*)"/g)].map((m) => m[2]);
+    expect(buttons).toEqual(items[0].actions.map((a) => a.label));
+    for (const b of buttons) expect(["Yes", "No", "Open"]).not.toContain(b);
+    expect(row.match(/<p class="hints">[^]*?<\/p>/)![0].match(/<span>/g)?.length).toBe(buttons.length);
+    expect(row.match(/class="act always"/g)?.length).toBe(1);
+    expect(row).toMatch(new RegExp(`class="act always" type="button" data-act="always" data-reason="${reason}" data-action="[^"]+" data-first="${items[0].actions[0].act}" data-label="Always `));
+    expect(row.match(/<details class="more"/g)?.length ?? 0).toBeLessThanOrEqual(1);
+  });
+}
+
+test("the Needs-you group is one list; its articles are the attention items plus the error lines", () => {
+  const sm = sample("decision");
+  const items = [...attend({ needs: state.needs, needsIssues: sm.needsIssues }, {}, [prop as any]).items];
+  const s = { ...state, attention: items, stuck: [], factory: { ...state.factory, health: ["health: aleph main is red at abc1234: tests"] } };
+  const h = r.renderJobs(s);
+  const grp = h.match(/<div class="grp" id="jobs-needs">[^]*?<div class="grp" id="jobs-stuck">/)![0];
+  expect(grp).toContain('<div class="list">');
+  expect(grp).not.toContain('class="cards"');
+  expect(grp.match(/<article /g)?.length).toBe(items.length + 1);
+  const red = grp.match(/<article class="job-card small issue-row error"[^]*?<\/article>/)![0];
+  expect(red).toContain('<p class="problem">Fix: aleph main is red');
+  expect(red).not.toContain("always");
+  expect(red).not.toContain("<button");
+  expect(r.renderMetrics(s)).toContain('<span class="k">Needs you</span><span class="v">4</span>');
+});
+
+test("Standing permissions is a folded section after Jobs with a Revoke per entry", () => {
+  const none = r.renderJobs({ ...state, standing: [] });
+  expect(none).toMatch(/<details class="standing"[^>]*><summary>Standing permissions<\/summary>[^]*None\./);
+  expect(none).not.toMatch(/<details class="standing"[^>]* open/);
+  const s = { ...state, standing: [{ reason: "held", action: "firefighter", at: "2026-10-27T16:00:00Z", handed: 3 }, { reason: "triage-no-verdict", action: "retry", at: "2026-10-27T16:30:00Z", handed: 0 }] };
+  const h = r.renderJobs(s);
+  expect(h.indexOf('id="jobs-running"')).toBeLessThan(h.indexOf('<details class="standing"'));
+  expect(h).toContain("held: firefighter, since Oct 27 16:00, 3 items with the firefighter");
+  expect(h).toContain("triage-no-verdict: retry, since Oct 27 16:30");
+  expect(h).toContain('data-act="revoke" data-reason="held"');
+  expect(h.match(/data-act="revoke"/g)?.length).toBe(2);
+  expect(h).not.toContain("None.</p></div></details>");
 });

@@ -153,3 +153,16 @@ test("the shared table parts have top-level rules, and .sh h2/h3 share one", () 
   for (const sel of ["table.tbl td.num.bad", "table.tbl.fit", "table.tbl .spark", "table.tbl tr.muted td", "a.nml"]) expect(selectors).toContain(sel);
   expect(top).toContain(".sh h2, .sh h3");
 });
+
+test("the Needs-you list and row parts have top-level rules", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const css = html.match(/<style>([\s\S]*?)<\/style>/)![1].replace(/\/\*[\s\S]*?\*\//g, "").replace(/"[^"\n]*"|'[^'\n]*'/g, "");
+  for (const sel of ["\n.list {", "\n.issue-row .problem", "\n.issue-row .hints", "\n.act.always"]) {
+    const i = css.indexOf(sel);
+    expect(i).toBeGreaterThan(-1);
+    let depth = 0;
+    for (const ch of css.slice(0, i)) depth += ch === "{" ? 1 : ch === "}" ? -1 : 0;
+    expect(depth).toBe(0);
+  }
+  expect(css).toContain("grid-template-columns: minmax(0, 1fr)");
+});

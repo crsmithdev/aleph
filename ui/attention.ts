@@ -103,7 +103,7 @@ function actionsFor(reason: string, c: Ctx): Action[] {
         const d = c.issue?.decision;
         if (d) return [...d.options].sort((x, y) => +(y.label === d.recommended) - +(x.label === d.recommended))
           .map((o) => a("decide", `Approve ${o.label}`, o.line || "Records this choice on the issue and lets the factory act on it.", { ...issue, option: o.label }));
-        return [a("decide", "Approve recommendation", "Records the recommended choice on the issue.", issue)];
+        return [a("decide", "Approve recommendation", "Records the recommended choice on the issue.", { ...issue, recommendation: "true" })];
       }
       default: return [];
     }
