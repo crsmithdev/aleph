@@ -66,6 +66,9 @@ export function resultText(log: string): string {
   return result ?? text;
 }
 
+// A worker that backgrounds a command and ends its turn is never woken again in a headless run.
+const FOREGROUND = "Run every command in the foreground and wait for it: nothing wakes you after your turn ends.";
+
 const FIXED = (run: Run, main: string) => `You are a worker on job \`${run.name}\` in \`${run.worktree}\`, branch \`${run.branch}\`. Work
 only there. Commit every change on the branch; the run fails if anything is
 left uncommitted or untracked. Never merge, never push, never touch another
@@ -73,8 +76,8 @@ branch. \`aleph issue\` is not your push: it writes the list of issues on main b
 itself, so use it for every change to the list. If the previous run was a
 failed land, merge \`origin/${main}\` into the branch, resolve the conflicts,
 and commit. If you need a decision from Chris, stop
-and make your last line \`QUESTION: <one question>\`. End with a short summary
-of what you did and what you ran.`;
+and make your last line \`QUESTION: <one question>\`. ${FOREGROUND} End with a
+short summary of what you did and what you ran.`;
 
 const FACTORY = (run: Run, main: string) => `You are a worker on job \`${run.name}\`, in a git repo on branch \`${run.branch}\`, inside
 a sandbox. You see this repo and nothing else of the machine, and the network
@@ -90,7 +93,7 @@ facts about the repo or its tools that you learned and checked. If the goal alre
 holds on your branch and no edit is needed, make no commit, run the repo's tests,
 and print exactly one line \`${ALREADY_MET}: <evidence>\`, the evidence being the
 files, the lines and the commit on \`${main}\` that show it. Run the repo's
-tests before you end. End with a short summary of what you did and what you ran.`;
+tests before you end. ${FOREGROUND} End with a short summary of what you did and what you ran.`;
 
 /** The fixed text, the spec, every note in order, and the previous run's files. */
 export function prompt(id: string, folder: string, run: Run, repo: Repo): string {
@@ -838,7 +841,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   mkdirSync(ghDir, { recursive: true });
   const workerEnv = {
     ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "url.aleph-no-push:.pushInsteadOf", GIT_CONFIG_VALUE_0: "git@github.com:",
-    GH_CONFIG_DIR: ghDir, GH_TOKEN: undefined, GITHUB_TOKEN: undefined,
+    GH_CONFIG_DIR: ghDir, GH_TOKEN: undefined, GITHUB_TOKEN: undefined, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1",
   };
   const argv = [process.env.ALEPH_WORKER_CMD ?? "claude", "-p", "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", "Skill",
     "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
@@ -908,7 +911,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     phase("worker");
     const w = await sandboxed(dir, script, {
       read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
-      env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken() },
+      env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
       stdout: join(folder, "output.log"), stderr: join(folder, "stderr.log"), limit: limit("ALEPH_JOB_TIMEOUT", 2400),
       stall: limit("ALEPH_STALL_SECONDS", 600),
       onSpawn: (p) => { child = p; },
