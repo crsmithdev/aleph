@@ -143,6 +143,24 @@ function toolCalls(obs: any[], t0 = 0) {
   return list((p) => !agents.has(p as string));
 }
 
+/** A turn's model calls (GENERATION observations) in start order, apart from the tool calls; one in a paired subagent has the `Agent` call's id as parent, one in an unpaired subagent is left out. */
+function generations(obs: any[], t0 = 0) {
+  const agents = new Set(obs.filter((o) => isType(o, "agent") && o.name !== "turn").map((o) => o.id));
+  const spanTool = pairAgents(obs);
+  const num = (v: unknown) => (typeof v === "number" ? v : null);
+  return obs.filter((o) => isType(o, "generation") && (!agents.has(o.parentObservationId) || spanTool.has(o.parentObservationId)))
+    .sort((a, b) => ms(a.startTime) - ms(b.startTime))
+    .map((o) => {
+      const startMs = Math.max(0, ms(o.startTime) - t0), durMs = durationMs(o);
+      return {
+        id: o.id, parent: agents.has(o.parentObservationId) ? spanTool.get(o.parentObservationId)! : null, kind: "generation", name: o.name, model: o.model ?? null,
+        start: o.startTime, startMs, endMs: startMs + (durMs ?? 0), durationMs: durMs,
+        cost: num(o.calculatedTotalCost) ?? num(o.totalCost), inputTokens: num(o.usage?.input ?? o.usageDetails?.input), outputTokens: num(o.usage?.output ?? o.usageDetails?.output),
+        error: o.level === "ERROR" ? o.statusMessage || "error" : null, input: cut(o.input, 400), output: cut(o.output, 400),
+      };
+    });
+}
+
 /** A turn's assistant text blocks (hooks/obs.ts writes each as an event named `text`) in time order; the final reply, which the turn's output already holds, is left out. */
 function textBlocks(obs: any[], output: string) {
   return obs.filter((o) => isType(o, "event") && o.name === "text" && text(o.output).trim())
@@ -231,6 +249,7 @@ export const routes: Routes = {
         durationMs: durationMs(t),
         cost: t.totalCost ?? 0,
         tools: toolCalls(all[i], t0),
+        generations: generations(all[i], t0),
         texts: textBlocks(all[i], text(t.output)),
       }));
       // A factory worker's session is one turn Langfuse prices at 0; the ledger has its cost, as on the list.

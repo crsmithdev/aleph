@@ -386,7 +386,7 @@ test("the chat route gives each call an id, parent, kind and offsets from the se
 test("the waterfall: one row per turn and call, summary names the 3 longest and the errors, a row is selectable", async () => {
   const d = await chat("s1");
   const tools = Array.from({ length: 100 }, (_, i) => ({ id: `c${i}`, parent: null, kind: "tool", name: "Bash", args: `cmd ${i}`, input: "in", output: "out", start: d.turns[0].start, startMs: i * 1000, endMs: i * 1000 + (i % 10 === 9 ? 5000 + i : 500), durationMs: i % 10 === 9 ? 5000 + i : 500, error: i === 50 ? "boom" : null, children: [] }));
-  const turn = { ...d.turns[0], tools };
+  const turn = { ...d.turns[0], tools, generations: [] };
   const rows = v.wfRows([turn]);
   expect(rows.length).toBe(101);
   expect(rows[0].kind).toBe("turn");
@@ -400,4 +400,38 @@ test("the waterfall: one row per turn and call, summary names the 3 longest and 
   const q = new URLSearchParams("view=waterfall");
   expect(v.renderSession({ ...d, turns: [turn] }, {}, q)).toContain('data-value="waterfall" aria-pressed="true"');
   expect(v.wfDetail(rows.find((r: any) => r.id === "c50"))).toContain("boom");
+});
+
+test("generations: listed apart from tools with model, offsets, parent and cost; the waterfall draws them as rows", async () => {
+  const at = (m: number) => new Date(now - m * 60000).toISOString();
+  const extra = [
+    { id: "g1", parentObservationId: "p0", type: "GENERATION", name: "gen", model: "claude-opus", startTime: at(19.85), endTime: new Date(now - 19.85 * 60000 + 4000).toISOString(), calculatedTotalCost: 0.25, usage: { input: 100, output: 20 }, input: "i".repeat(600), output: "ok" },
+    { id: "a0", parentObservationId: "p0", type: "AGENT", name: "Explore", metadata: { agent_type: "Explore" }, startTime: at(19.4), endTime: at(19.0) },
+    { id: "ag", parentObservationId: "p0", type: "TOOL", name: "Agent", input: { subagent_type: "Explore" }, startTime: at(19.45), endTime: at(18.9) },
+    { id: "g2", parentObservationId: "a0", type: "GENERATION", name: "sub", model: "claude-haiku", startTime: at(19.3), endTime: new Date(now - 19.3 * 60000 + 2000).toISOString(), totalCost: 0.05, level: "ERROR", statusMessage: "overloaded" },
+  ];
+  OBS.t2.push(...extra);
+  try {
+    const d = await chat("s1");
+    const t = d.turns[1];
+    expect(t.tools.some((c: any) => c.kind === "generation" || c.id === "g1" || c.children.some((k: any) => k.id === "g2"))).toBe(false);
+    expect(t.generations.map((g: any) => g.id)).toEqual(["g1", "g2"]);
+    expect(t.generations[0]).toMatchObject({ parent: null, kind: "generation", model: "claude-opus", startMs: 10 * 60000 + 9000, durationMs: 4000, cost: 0.25, inputTokens: 100, outputTokens: 20, error: null });
+    expect(t.generations[0].input.length).toBeLessThanOrEqual(401);
+    expect(t.generations[1]).toMatchObject({ parent: "ag", model: "claude-haiku", cost: 0.05, error: "overloaded" });
+    expect(d.turns[0].generations.map((g: any) => g.id)).toEqual(["o4"]);
+    const rows = v.wfRows([t]);
+    const g1 = rows.findIndex((r: any) => r.id === "g1"), g2 = rows.findIndex((r: any) => r.id === "g2"), ag = rows.findIndex((r: any) => r.id === "ag");
+    expect(rows[g1]).toMatchObject({ kind: "generation", name: "claude-opus", depth: 1, startMs: t.generations[0].startMs });
+    expect(rows[g2]).toMatchObject({ kind: "generation", depth: rows[ag].depth + 1 });
+    expect(g2).toBeGreaterThan(ag);
+    expect(rows.findIndex((r: any) => r.id === "p2")).toBeGreaterThan(g1);
+    const h = v.waterfall(rows, "g1");
+    expect(h).toContain("wf-row k-generation sel");
+    expect(h).toContain("Model time <strong>6.0 s</strong>");
+    expect(h).not.toContain('data-select="g1"');
+    const det = v.wfDetail(rows[g1]);
+    expect(det).toContain("100 in, 20 out");
+    expect(det).toContain("generation");
+  } finally { OBS.t2.splice(-extra.length); }
 });

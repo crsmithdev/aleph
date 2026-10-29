@@ -171,14 +171,20 @@ const isWaterfall = (query) => query?.get?.("view") === "waterfall";
 export function wfRows(turns) {
   const rows = [];
   const add = (c, depth, turn) => {
-    rows.push({ id: c.id, depth, kind: c.kind, name: c.name, args: c.args, start: c.start, startMs: c.startMs, endMs: c.endMs, error: c.error, input: c.input, output: c.output, durationMs: c.durationMs, turn });
-    for (const k of c.children ?? []) add(k, depth + 1, turn);
+    const gen = c.kind === "generation";
+    rows.push({ id: c.id, depth, kind: c.kind, name: gen ? c.model || c.name : c.name, args: c.args, start: c.start, startMs: c.startMs, endMs: c.endMs, error: c.error, input: c.input, output: c.output, durationMs: c.durationMs, turn,
+      ...(gen ? { model: c.model, cost: c.cost, inputTokens: c.inputTokens, outputTokens: c.outputTokens } : {}) });
+    for (const k of kids(c.id, c.children)) add(k, depth + 1, turn);
   };
+  let gens = [];
+  // A parent's tool rows and generations in time order.
+  const kids = (parent, tools = []) => [...tools, ...gens.filter((g) => g.parent === parent)].sort((a, b) => a.startMs - b.startMs);
   for (const t of turns) {
         const lastEnd = (cs) => cs.reduce((m, c) => Math.max(m, c.endMs, lastEnd(c.children ?? [])), 0);
-    rows.push({ id: `turn-${t.n}`, depth: 0, kind: "turn", name: `Turn ${t.n}`, args: line(systemParts(t.prompt).text), start: t.start, startMs: t.startMs, endMs: Math.max(t.endMs, lastEnd(t.tools ?? [])),
+    rows.push({ id: `turn-${t.n}`, depth: 0, kind: "turn", name: `Turn ${t.n}`, args: line(systemParts(t.prompt).text), start: t.start, startMs: t.startMs, endMs: Math.max(t.endMs, lastEnd([...(t.tools ?? []), ...(t.generations ?? [])])),
       error: null, input: t.prompt, output: t.output, durationMs: t.durationMs, model: t.model, cost: t.cost, wk: t.wk, turn: t.n });
-    for (const c of t.tools ?? []) add(c, 1, t.n);
+    gens = t.generations ?? [];
+    for (const c of kids(null, t.tools ?? [])) add(c, 1, t.n);
   }
   return rows;
 }
@@ -190,10 +196,11 @@ export function wfSummary(rows) {
   const calls = rows.filter((r) => r.kind !== "turn");
   const wall = rows.reduce((m, r) => Math.max(m, r.endMs), 0);
   const toolMs = calls.filter((r) => r.kind === "tool").reduce((n, r) => n + (r.durationMs ?? 0), 0);
-  const longest = [...calls].sort((a, b) => (b.durationMs ?? 0) - (a.durationMs ?? 0)).slice(0, 3).filter((r) => r.durationMs);
+  const modelMs = calls.filter((r) => r.kind === "generation").reduce((n, r) => n + (r.durationMs ?? 0), 0);
+  const longest = calls.filter((r) => r.kind !== "generation").sort((a, b) => (b.durationMs ?? 0) - (a.durationMs ?? 0)).slice(0, 3).filter((r) => r.durationMs);
   const errors = calls.filter((r) => r.error).length;
   return `<p class="wf-sum">Wall time <strong>${esc(dur(Math.round(wall)) || "0 ms")}</strong><span class="dot">·</span>Tool time <strong>${esc(dur(Math.round(toolMs)) || "0 ms")}</strong>` +
-    `<span class="dot">·</span>Longest ${longest.length ? longest.map((r) => `<a href="#" data-select="${esc(r.id)}">${esc(r.name)}${r.args ? `(${esc(r.args.slice(0, 30))})` : ""} ${esc(dur(r.durationMs))}</a>`).join(", ") : "none"}` +
+    `<span class="dot">·</span>Model time <strong>${esc(dur(Math.round(modelMs)) || "0 ms")}</strong><span class="dot">·</span>Longest ${longest.length ? longest.map((r) => `<a href="#" data-select="${esc(r.id)}">${esc(r.name)}${r.args ? `(${esc(r.args.slice(0, 30))})` : ""} ${esc(dur(r.durationMs))}</a>`).join(", ") : "none"}` +
     `<span class="dot">·</span>${errors ? `<strong class="terr">${errors} error${errors === 1 ? "" : "s"}</strong>` : "No errors"}</p>`;
 }
 
@@ -222,7 +229,8 @@ export function wfDetail(r) {
   const f = (k, v) => (v ? `<div><dt>${k}</dt><dd>${v}</dd></div>` : "");
   return `<h3>${esc(r.name)}${r.args && r.kind !== "turn" ? ` <code>${esc(r.args)}</code>` : ""}</h3><dl class="facts">` +
     f("Kind", esc(r.kind)) + f("Start", `${esc(when(r.start))} (+${esc(axisTick(r.startMs))})`) + f("Duration", esc(dur(r.durationMs))) +
-    f("Model", r.model ? esc(shortModel(r.model)) : "") + f("Cost", r.cost ? costHtml(r.cost, r.wk) : "") + `</dl>` +
+    f("Model", r.model ? esc(shortModel(r.model)) : "") + f("Cost", r.cost ? costHtml(r.cost, r.wk) : "") +
+    f("Tokens", r.inputTokens != null || r.outputTokens != null ? `${esc(r.inputTokens ?? "?")} in, ${esc(r.outputTokens ?? "?")} out` : "") + `</dl>` +
     io("Input", r.input) + (r.error ? io("Error", r.error) : "") + io("Output", r.output);
 }
 
