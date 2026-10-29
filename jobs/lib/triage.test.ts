@@ -97,6 +97,8 @@ test("the prompt says the factory runs the checks, and names no aleph check comm
   expect(p).toContain("The factory runs this repo's checks itself");
   expect(p).toContain("There is no `aleph check` command");
   expect(p).not.toMatch(/aleph check\s+\S/);
+  expect(p).toContain("`bun run test`");
+  expect(p).not.toContain("such as `bun test`");
 });
 
 test("a triage is a job in the ledger, of kind triage", async () => {
