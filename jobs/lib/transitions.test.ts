@@ -120,6 +120,12 @@ describe("drop", () => {
 });
 
 describe("checked", () => {
+  test("a land run marked by the facts gate keeps its check and is still found", () => {
+    const folder = run("20261028-000002-y-agent", "20261028-000002-y-agent", { name: "y", repo: undefined, state: "landed", check: "open", facts: true });
+    expect(checked("y")).toEqual({ job: "20261028-000002-y-agent", name: "y", state: "landed", check: "done" });
+    expect(readRun(folder)).toMatchObject({ state: "landed", check: "done", facts: true });
+  });
+
   test("refuses a job with no open check, and closes an open one once", () => {
     expect(() => checked("x")).toThrow("x has no open check");
     const folder = run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined, state: "landed", check: "open" });

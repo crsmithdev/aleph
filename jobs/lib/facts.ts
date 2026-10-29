@@ -185,6 +185,8 @@ export async function factsGate(repo: Repo, landed: Entry, commit: string, log: 
   const result = (worker && readFile(worker, "result.md")) ?? "";
   const { facts, unsourced } = parseFacts(result);
   for (const line of unsourced) log(`${name}: fact dropped, no source: ${line}`);
+  // Mark the land run first: the job is handled whatever the gate finds next.
+  updateRun(landed.folder, { facts: true });
   if (!facts.length) return null;
   const { folder, verdicts } = await reviewFacts(repo, landed, facts, commit);
   const kept: string[] = [];

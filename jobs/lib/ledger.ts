@@ -23,6 +23,8 @@ export interface Run {
   check?: "open" | "done";
   /** The issue that holds an open manual check. */
   checkItem?: number;
+  /** A land run the facts gate has looked at: dispatch does not read its job again. */
+  facts?: true;
   /** The repo's issue the job works on: land marks it done, drop adds a note. */
   todo?: number;
   /** An agent run started with --land: it lands when it passes. */

@@ -126,7 +126,7 @@ export function waitingToLand(jobs = allJobs()): string[] {
 }
 
 /**
- * The facts gate for every landed job of a factory repo that has a commit and no facts run yet. A land that
+ * The facts gate for every landed job of a factory repo that has a commit, no facts marker on its land run and no facts run yet. A land that
  * comes through the unit's own next step is picked up by the dispatch the unit starts when it ends.
  */
 async function factsStep(): Promise<void> {
@@ -134,14 +134,14 @@ async function factsStep(): Promise<void> {
   for (const j of allJobs()) {
     const last = lastReal(j);
     const repo = last.run.repo ? keys.get(last.run.repo) : undefined;
-    if (!repo || last.run.state !== "landed" || !last.run.commit || j.some((e) => e.run.kind === "facts")) continue;
+    if (!repo || last.run.state !== "landed" || !last.run.commit || last.run.facts || j.some((e) => e.run.kind === "facts")) continue;
     const name = last.run.name;
     const release = await lock(`facts-${name}`, 0);
     if (!release) continue;
     try {
       // Read again under the lock: another dispatch may have run the gate meanwhile.
       const now = allJobs().find((x) => x[0].run.job === j[0].run.job);
-      if (!now || now.some((e) => e.run.kind === "facts")) continue;
+      if (!now || now.some((e) => e.run.kind === "facts" || e.run.facts)) continue;
       await factsGate(repo, last, last.run.commit, factoryLog);
     } catch (e: any) {
       factoryLog(`${name}: facts gate failed: ${e?.message ?? e}`);

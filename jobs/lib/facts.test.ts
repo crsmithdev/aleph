@@ -236,4 +236,33 @@ describe("factsGate through the dispatch", () => {
     await dispatchGoals((() => { throw new Error("no start"); }) as any);
     expect(factsRuns()).toHaveLength(before);
   });
+
+  test("a job with only unsourced FACT lines is gated once and marked", async () => {
+    const before = factsRuns().length;
+    landed("gate-04", "FACT: nothing to cite\nFACT: still nothing [source: not a source!]\n");
+    const count = () => log().split("\n").filter((l) => l.includes("gate-04: fact dropped, no source")).length;
+    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    expect(count()).toBe(2);
+    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    expect(count()).toBe(2);
+    expect(factsRuns()).toHaveLength(before);
+    const land = JSON.parse(readFileSync(join(jobs, "20261028-000004-gate-04-land", "state.json"), "utf8"));
+    expect(land.facts).toBe(true);
+    expect(land.state).toBe("landed");
+  });
+
+  test("a job with no FACT lines gets the marker; a sourced one gets one run over two dispatches", async () => {
+    const before = factsRuns().length;
+    landed("gate-05", "nothing\n");
+    landed("gate-06", "FACT: ok [source: src/a.ts:1]\n");
+    reviewer({ verdicts: [{ fact: "ok", verdict: "reject", reason: "no", scope: "fac", title: "Ok" }] });
+    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    expect(factsRuns()).toHaveLength(before + 1);
+    for (const n of ["000005-gate-05", "000006-gate-06"]) {
+      const land = JSON.parse(readFileSync(join(jobs, `20261028-${n}-land`, "state.json"), "utf8"));
+      expect(land.facts).toBe(true);
+      expect(land.state).toBe("landed");
+    }
+  });
 });
