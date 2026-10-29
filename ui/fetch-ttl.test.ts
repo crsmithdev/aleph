@@ -102,6 +102,26 @@ test("a write fetches in the foreground even with the cache on, and builds on th
   } finally { now.mockRestore(); }
 });
 
+test("with the cache on and warm, a write fetches synchronously once and a read right after fetches none", async () => {
+  const now = spyOn(Date, "now");
+  try {
+    now.mockReturnValue(Date.now() + 4_000_000);
+    const start = fetches();
+    readList({ key: "a" });
+    // The warm read past the TTL starts one fetch; wait for it to start and finish.
+    for (let i = 0; i < 100 && fetches() < start + 1; i++) await Bun.sleep(20);
+    expect(fetches()).toBe(start + 1);
+    await Bun.sleep(300);
+    const before = fetches();
+    writeList({ key: "a" }, "ttl write", () => true, true);
+    expect(fetches()).toBe(before + 1);
+    readList({ key: "a" });
+    expect(fetches()).toBe(before + 1);
+  } finally {
+    now.mockRestore();
+  }
+});
+
 test("serve() leaves the cache off: only the UI process turns it on, in its main block", async () => {
   cacheFetches(0);
   const server = await serve(0, { warm: false });

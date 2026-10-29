@@ -152,7 +152,10 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
     const commit = git(dir, "commit-tree", tree, "-p", base, "-m", `${repo.key}: ${message}`);
     if (!commit.ok) throw new Error(`commit-tree failed: ${commit.out}`);
     const push = git(dir, "push", "-q", "origin", `${commit.out}:refs/heads/${MAIN}`);
-    if (push.ok) return { value, commit: commit.out, follow: followMain(dir, MAIN) };
+    if (push.ok) {
+      fetchedAt.set(dir, Date.now());
+      return { value, commit: commit.out, follow: followMain(dir, MAIN) };
+    }
     if (attempt === ATTEMPTS) throw new Error(`push refused ${ATTEMPTS} times: ${push.out}`);
   }
 }
@@ -180,7 +183,10 @@ export function writeHidden(repo: Place, id: number, files: Record<string, strin
     const commit = git(dir, "commit-tree", tree, "-p", base, "-m", `${repo.key}: hidden checks for item ${id}`);
     if (!commit.ok) throw new Error(`commit-tree failed: ${commit.out}`);
     const push = git(dir, "push", "-q", "origin", `${commit.out}:refs/heads/${MAIN}`);
-    if (push.ok) return { commit: commit.out, follow: followMain(dir, MAIN) };
+    if (push.ok) {
+      fetchedAt.set(dir, Date.now());
+      return { commit: commit.out, follow: followMain(dir, MAIN) };
+    }
     if (attempt === ATTEMPTS) throw new Error(`push refused ${ATTEMPTS} times: ${push.out}`);
   }
 }
