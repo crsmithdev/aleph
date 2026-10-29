@@ -3,14 +3,14 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { add } from "../todo/lib/todo.ts";
-import { cacheFetches, readList, readLists, uiFetchTtl, writeList } from "../todo/lib/store.ts";
+import { cacheFetches, readFetched, readList, readLists, uiFetchTtl, writeList } from "../todo/lib/store.ts";
 import { routes } from "./api/issues.ts";
 import { serve } from "./server.ts";
 import { state } from "./state.ts";
 
-let base: string, log: string;
+let base: string, log: string, stale: string, staleRemote: string;
 const saved: Record<string, string | undefined> = {};
-const fetches = (): number => readFileSync(log, "utf8").split("\n").filter(Boolean).length;
+const fetches = (): number => readFileSync(log, "utf8").split("\n").filter((l) => l === "fetch").length;
 const sh = (cwd: string, ...a: string[]) => { const p = Bun.spawnSync(a, { cwd }); if (p.exitCode) throw new Error(p.stderr.toString()); };
 
 beforeAll(() => {
@@ -20,12 +20,15 @@ beforeAll(() => {
   sh(base, "git", "clone", "-q", remote, items);
   sh(items, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
-  // a PATH shim that logs each `git fetch`
+  // a PATH shim that logs each `git fetch`. While the stale flag exists, the next fetch of `origin`
+  // fetches the stale remote instead (its args are `fetch -q origin <ref>`), then logs `done`.
   const real = Bun.spawnSync(["which", "git"]).stdout.toString().trim();
   log = join(base, "fetch.log");
+  stale = join(base, "stale");
+  staleRemote = join(base, "stale.git");
   writeFileSync(log, "");
   mkdirSync(join(base, "bin"));
-  writeFileSync(join(base, "bin", "git"), `#!/bin/sh\n[ "$1" = fetch ] && echo fetch >> ${log}\nexec ${real} "$@"\n`);
+  writeFileSync(join(base, "bin", "git"), `#!/bin/sh\n[ "$1" = fetch ] && echo fetch >> ${log}\nif [ "$1" = fetch ] && [ -e ${stale} ]; then rm -f ${stale}; ${real} fetch "$2" stale "$4"; s=$?; echo done >> ${log}; exit $s; fi\nexec ${real} "$@"\n`);
   chmodSync(join(base, "bin", "git"), 0o755);
   writeFileSync(join(base, "repos.json"), JSON.stringify({ a: { path: join(base, "a"), sandbox: true }, b: { path: join(base, "b") } }));
   mkdirSync(join(base, "jobs"));
@@ -131,4 +134,23 @@ test("serve() leaves the cache off: only the UI process turns it on, in its main
   readList({ key: "a" });
   expect(fetches()).toBe(before + 2);
   cacheFetches(uiFetchTtl());
+});
+
+test("a background fetch that brings an older remote state cannot move origin/main back", async () => {
+  cacheFetches(uiFetchTtl());
+  const items = join(base, "items");
+  // the remote as it is before the write: the older state the stale fetch will bring
+  sh(base, "git", "clone", "-q", "--bare", join(base, "items.git"), staleRemote);
+  sh(items, "git", "remote", "add", "stale", staleRemote);
+  sh(items, "git", "config", "remote.stale.fetch", "+refs/heads/*:refs/remotes/origin/*");
+  const w = writeList({ key: "a" }, "write after the snapshot", (doc) => { add(doc, "written"); return true; });
+  expect(w).not.toBeNull();
+  const now = spyOn(Date, "now");
+  now.mockReturnValue(Date.now() + 60_000);
+  writeFileSync(stale, "");
+  try { readList({ key: "a" }); } finally { now.mockRestore(); }
+  for (let i = 0; i < 100 && !readFileSync(log, "utf8").includes("done"); i++) await Bun.sleep(20);
+  expect(readFileSync(log, "utf8")).toContain("done");
+  expect(Bun.spawnSync(["git", "rev-parse", "origin/main"], { cwd: items }).stdout.toString().trim()).toBe(w!.commit);
+  expect(readFetched({ key: "a" })!.items.some((i) => i.title === "written")).toBe(true);
 });

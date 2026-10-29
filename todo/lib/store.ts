@@ -64,7 +64,9 @@ function fetch(dir: string): void {
   if (reuse > 0 && last !== undefined && Date.now() - last < reuse * 1000) return;
   if (reuse > 0 && last !== undefined) {
     fetchedAt.set(dir, Date.now());
-    Bun.spawn(["git", "fetch", "-q", "origin", MAIN], { cwd: dir, env: process.env, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+    // An explicit, non-forced refspec: a write may move origin/main while this runs, and the
+    // clone's forced `origin` refspec would then set it back to the remote's older value. Git refuses that here.
+    Bun.spawn(["git", "fetch", "-q", "origin", `refs/heads/${MAIN}:refs/remotes/origin/${MAIN}`], { cwd: dir, env: process.env, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
     return;
   }
   fetchNow(dir);
