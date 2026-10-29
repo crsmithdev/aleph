@@ -15,7 +15,7 @@ const proposal: Reason = { actions: ["approve", "decline"], always: "approve" };
 export const REASONS: Record<string, Reason> = {
   "held": { actions: ["land", "drop"], always: "firefighter" },
   "review": { actions: ["land", "drop"], always: "firefighter" },
-  "question": { actions: ["drop", "drop"], always: "firefighter" },
+  "question": { actions: ["drop"], always: "firefighter" },
   "no-commit": { actions: ["rerun", "close"], always: "firefighter" },
   "triage-no-verdict": { actions: ["retry", "close"], always: "retry" },
   "acceptance-failed": { actions: ["rerun", "close"], always: "firefighter" },

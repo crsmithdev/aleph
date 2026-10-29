@@ -31,7 +31,9 @@ test("REASONS names every reason with actions and an always", () => {
   for (const r of Object.values(REASONS)) {
     expect(r.actions.length).toBeGreaterThan(0);
     expect([...r.actions, "firefighter", "recommended"]).toContain(r.always);
+    expect(new Set(r.actions).size).toBe(r.actions.length);
   }
+  expect(REASONS.question.actions).toEqual(["drop"]);
 });
 
 test("logStanding appends one standing line to tick.log", () => {
