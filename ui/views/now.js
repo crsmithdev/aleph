@@ -2,7 +2,7 @@
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
 import { denyReasons, diffHtml, elapsed, costHtml, esc, idLink, openDiffs, shortModel, when } from "../lib.js";
-import { mountSpeed, renderMedianCard, speedSection } from "./speed.js";
+import { mountSpeed, renderMedianCard, speedSection, speedTop } from "./speed.js";
 import { act, actMsg, checkFacts, fact, issueCard, itemId, landCard, shell as jobCard, triageCard, trailerLine } from "./cards.js";
 
 export const view = {
@@ -13,7 +13,7 @@ export const view = {
   api: "/api/state",
   refresh: 15,
   render: (s) =>
-    `<div class="page">${renderMetrics(s)}<p class="lede"><span class="asof">${renderAsOf(s)}</span>${renderLede(s)}${renderControls(s)}</p>` +
+    `<div class="page">${renderMetrics(s)}<section id="speedtop" aria-label="Speed">${speedTop()}</section><p class="lede"><span class="asof">${renderAsOf(s)}</span>${renderLede(s)}${renderControls(s)}</p>` +
     `<section id="issues" aria-labelledby="h-issues">${renderIssues(s)}</section>` +
     `<div class="pair"><section id="done" aria-labelledby="h-done">${renderDone(s)}</section>` +
     `<section id="incoming" aria-labelledby="h-incoming">${renderIncoming(s)}</section></div>` +

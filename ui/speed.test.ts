@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearCache, pct, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { dur, renderMedianCard, renderSpeed, renderSpeedBody } from "./views/speed.js";
+import { dur, renderMedianCard, renderSpeed, renderSpeedBody, renderSpeedTop } from "./views/speed.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -92,9 +92,10 @@ test("the view: median card, section parts and empty states", () => {
   expect(card).toContain("Median run");
   expect(card).toMatch(/land 46s · tests 36s · 77% wasted/);
   expect(renderMedianCard(null)).toContain("no runs yet");
-  const h = renderSpeed(speed(1, now), 1);
-  for (const t of ["Speed", "Today", "7 days", "30 days", "24–27 s alone", "Where the agent hours went", "Slowest agent runs", "Agent runs by model", "unset", 'data-chart="lands"', "of the agent hours were wasted", 'href="#/jobs/j']) expect(h).toContain(t);
-  expect(renderSpeedBody(null, 7)).toContain("Loading");
+  const h = renderSpeedTop(speed(1, now), 1) + renderSpeed(speed(1, now));
+  for (const t of ["Speed", "Today", "7 days", "30 days", "24–27 s alone", "Where the agent hours went", "Agent runs by model", "unset", 'data-chart="lands"', "of the agent hours were wasted"]) expect(h).toContain(t);
+  expect(renderSpeedTop(null, 7)).toContain("Loading");
+  expect(h).not.toContain("Slowest agent runs");
   expect(dur(43)).toBe("43s");
   expect(dur(245)).toBe("4m 05s");
 });

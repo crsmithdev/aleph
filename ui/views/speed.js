@@ -1,6 +1,6 @@
-// The Speed section of the Status page: how fast runs are. `d` is /api/speed. The render functions
+// The speed parts of the Status page: how fast runs are. `d` is /api/speed. The render functions
 // return HTML strings; `mountSpeed` fetches the data, draws the three ECharts and wires the control.
-import { badge, chart, esc, filterBar, idLink, money, readTokens, shortModel } from "../lib.js";
+import { badge, chart, esc, filterBar, money, readTokens, shortModel } from "../lib.js";
 
 export const RANGES = [{ value: "1", label: "Today" }, { value: "7", label: "7 days" }, { value: "30", label: "30 days" }];
 const END_LABEL = { passed: "Passed", dropped: "Dropped", stuck: "Stuck", "needs-you": "Needs you" };
@@ -60,14 +60,6 @@ export const renderCharts = (d) => `<div class="charts3">` +
   chartBox("tests", d.days === 1 ? "Tests check time by hour (median)" : "Tests check time by day (median)", "Median tests check time per bucket") +
   chartBox("lands", d.days === 1 ? "Lands by hour" : "Lands by day", "Lands per bucket") + `</div>`;
 
-export const renderSlowest = (d) => {
-  const rows = d.slowest.map((r) => `<tr><td>${idLink(r.name, `#/jobs/${encodeURIComponent(r.name)}`)}</td><td>${badge(r.state)}</td><td>${esc(shortModel(r.model) || r.model)}</td>` +
-    `<td class="num">${esc(dur(r.tests))}</td><td class="num">${esc(money(r.cost))}</td><td class="num">${esc(dur(r.took))}</td></tr>`).join("");
-  return `<div class="half"><div class="sh"><h3>Slowest agent runs</h3></div>` + (rows
-    ? `<div class="tscroll"><table class="tbl" data-table="slowest"><thead><tr><th>Run</th><th>State</th><th>Model</th><th class="num">Tests</th><th class="num">Cost</th><th class="num">Took</th></tr></thead><tbody>${rows}</tbody></table></div>`
-    : `<div class="empty"><p class="hint">No agent run in this period.</p></div>`) + `</div>`;
-};
-
 export const renderModels = (d) => {
   const rows = d.models.map((m) => `<tr><td>${esc(m.model === "unset" ? "unset" : shortModel(m.model) || m.model)}</td><td class="num">${m.count}</td><td class="num">${esc(dur(m.p50))}</td></tr>`).join("");
   return `<div class="half"><div class="sh"><h3>Agent runs by model</h3></div>` + (rows
@@ -75,18 +67,23 @@ export const renderModels = (d) => {
     : `<div class="empty"><p class="hint">No agent run in this period.</p></div>`) + `</div>`;
 };
 
-/** The section's inside, below its head: the control, then the parts. `d` is null while loading, `{error}` on a failed load. */
-export function renderSpeedBody(d, days) {
+/** The top block under the metric cards: the range control, the medians, the hours and the charts. `d` is null while loading, `{error}` on a failed load. */
+export function renderSpeedTop(d, days) {
   const bar = filterBar([{ label: "", name: "days", value: String(days), options: RANGES }]);
   if (!d) return bar + `<p class="quiet loading" role="status">Loading speed…</p>`;
   if (d.error) return bar + `<div class="empty"><p class="hint">${esc(d.error)}</p></div>`;
-  return bar + renderMedians(d) + `<div class="sh sub"><h3>Where the agent hours went</h3></div>` + renderHours(d) +
-    renderCharts(d) + `<div class="pair">${renderSlowest(d)}${renderModels(d)}</div>`;
+  return bar + renderMedians(d) + `<div class="sh sub"><h3>Where the agent hours went</h3></div>` + renderHours(d) + renderCharts(d);
 }
 
-/** The whole section. */
-export const renderSpeed = (d, days) =>
-  `<div class="sh"><h2 id="h-speed">Speed</h2></div><div class="speed-body">${renderSpeedBody(d, days)}</div>`;
+/** The Speed section further down: the model table. */
+export function renderSpeedBody(d) {
+  if (!d) return `<p class="quiet loading" role="status">Loading speed…</p>`;
+  if (d.error) return `<div class="empty"><p class="hint">${esc(d.error)}</p></div>`;
+  return renderModels(d);
+}
+
+export const renderSpeed = (d) =>
+  `<div class="sh"><h2 id="h-speed">Speed</h2></div><div class="speed-body">${renderSpeedBody(d)}</div>`;
 
 /** The bar option of one chart: `values` per bucket (null draws nothing), `unit` for the tooltip. */
 export function barOption(buckets, key, { unit, color, fmt = String }) {
@@ -107,7 +104,8 @@ let drawn = [];
 const clear = () => { for (const c of drawn) c.dispose(); drawn = []; };
 
 /** The section for the current choice; from the last answer when there is one. */
-export const speedSection = () => renderSpeed(got.get(days) ?? null, days);
+export const speedSection = () => renderSpeed(got.get(days) ?? null);
+export const speedTop = () => renderSpeedTop(got.get(days) ?? null, days);
 export const speedDays = () => days;
 export const resetSpeed = () => { days = 7; got.clear(); };
 
@@ -125,10 +123,12 @@ function draw(box, d) {
 /** Fetch the data for `days`, put it in the section and draw the charts; the control reloads it. */
 export async function mountSpeed(root, fetcher = fetch) {
   const sec = root.querySelector?.("#speed");
-  if (!sec) return;
+  const top = root.querySelector?.("#speedtop");
+  if (!sec || !top) return;
   const show = (d) => {
-    sec.innerHTML = renderSpeed(d, days);
-    if (d && !d.error) draw(sec, d); else clear();
+    top.innerHTML = renderSpeedTop(d, days);
+    sec.innerHTML = renderSpeed(d);
+    if (d && !d.error) draw(top, d); else clear();
   };
   const load = async () => {
     const want = days;
@@ -139,13 +139,13 @@ export async function mountSpeed(root, fetcher = fetch) {
     } catch (e) { if (!got.has(want)) got.set(want, { error: e.message }); }
     if (want === days && sec.isConnected !== false) show(got.get(want));
   };
-  sec.addEventListener("click", (ev) => {
+  top.addEventListener("click", (ev) => {
     const b = ev.target?.closest?.(".seg button");
     if (!b) return;
     days = Number(b.dataset.value);
     show(got.get(days) ?? null);
     load();
   });
-  if (got.has(days) && !got.get(days).error) draw(sec, got.get(days));
+  if (got.has(days) && !got.get(days).error) draw(top, got.get(days));
   await load();
 }

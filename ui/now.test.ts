@@ -62,9 +62,9 @@ const section = (h: string, id: string) => h.match(new RegExp(`<section id="${id
 
 test("the page order is metric cards, the status line with the time, then Issues, Done beside Incoming, Jobs, Agents; no old section", () => {
   const page = r.view.render(full);
-  expect([...page.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1])).toEqual(["issues", "done", "incoming", "jobs", "agents", "queued", "speed"]);
+  expect([...page.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1])).toEqual(["speedtop", "issues", "done", "incoming", "jobs", "agents", "queued", "speed"]);
   const at = (t: string) => page.indexOf(t);
-  const order = ['class="metrics"', 'class="lede"', 'class="asof"', 'class="say', 'data-act="pause"', 'id="issues"', 'id="done"', 'id="incoming"', 'id="jobs"', 'id="agents"'];
+  const order = ['class="metrics"', 'id="speedtop"', 'class="lede"', 'class="asof"', 'class="say', 'data-act="pause"', 'id="issues"', 'id="done"', 'id="incoming"', 'id="jobs"', 'id="agents"'];
   expect(order.map(at)).toEqual([...order.map(at)].sort((a, b) => a - b));
   expect(order.every((t) => at(t) >= 0)).toBe(true);
   expect(page).not.toContain('class="cols"');
