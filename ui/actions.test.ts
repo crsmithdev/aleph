@@ -28,14 +28,14 @@ beforeAll(async () => {
   writeFileSync(join(repo, "b.txt"), "main moved\n");
   sh(repo, "add", "."); sh(repo, "commit", "-qm", "main moves on");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ r: { path: repo } }));
-  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}]] as const) {
+  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { needs: "question" }]] as const) {
     const folder = join(base, "jobs", `20261027-100000-r-${name}-agent`);
     mkdirSync(folder, { recursive: true });
     writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "agent", state: "needs-you", started: new Date().toISOString(), name, job: name, repo: "r", ...extra }));
   }
   calls = join(base, "calls");
   const fake = join(base, "fake-aleph");
-  writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\necho out\nexit 0\n`);
+  writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\nif [ "$4" = "--spec" ]; then cat >> ${calls}.stdin; fi\necho out\nexit 0\n`);
   chmodSync(fake, 0o755);
   for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake })) {
     saved[k] = process.env[k];
@@ -127,4 +127,18 @@ test("a bad judge is 400 and the controls without the header are 403, running no
   expect((await post("/api/judge", {}, { judge: "jev" })).status).toBe(403);
   expect((await post("/api/pause", { "X-Aleph-UI": "1", Origin: "https://evil.example" })).status).toBe(403);
   expect(recorded().length).toBe(before);
+});
+
+test("POST /api/jobs/:name/answer follows up a question, and refuses anything else without running the CLI", async () => {
+  const before = recorded().length;
+  const url = "/api/jobs/asks/answer";
+  expect((await post(url, {}, { answer: "blue" })).status).toBe(403);
+  expect((await post("/api/jobs/nope/answer", { "X-Aleph-UI": "1" }, { answer: "blue" })).status).toBe(404);
+  expect((await post(url, { "X-Aleph-UI": "1" }, { answer: "  " })).status).toBe(400);
+  expect((await post("/api/jobs/x/answer", { "X-Aleph-UI": "1" }, { answer: "blue" })).status).toBe(409);
+  expect(recorded().length).toBe(before);
+  const res = await post(url, { "X-Aleph-UI": "1" }, { answer: "blue" });
+  expect(res.status).toBe(200);
+  expect(recorded().at(-1)).toBe("job r asks --spec -");
+  expect(readFileSync(`${calls}.stdin`, "utf8")).toBe("Chris: blue");
 });

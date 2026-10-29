@@ -33,7 +33,7 @@ test("REASONS names every reason with actions and an always", () => {
     expect([...r.actions, "firefighter", "recommended"]).toContain(r.always);
     expect(new Set(r.actions).size).toBe(r.actions.length);
   }
-  expect(REASONS.question.actions).toEqual(["drop"]);
+  expect(REASONS.question.actions).toEqual(["answer", "drop"]);
 });
 
 test("logStanding appends one standing line to tick.log", () => {
