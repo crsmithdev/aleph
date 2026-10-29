@@ -69,6 +69,9 @@ export function landedCommits(cwd: string, main: string, key: string, n: number)
   return landedIndex(cwd, main, key).get(n) ?? [];
 }
 
+/** For a `landedIndex` result, the items with a trailer commit on main that a later commit reverts and none that is not reverted. */
+const revertedOnly = new WeakMap<Map<number, string[]>, Set<number>>();
+
 /** Each of the repo's items that a commit on `main` names in an `Item:` trailer, to those commits, less the reverted ones: two git calls for every item. */
 export function landedIndex(cwd: string, main: string, key: string): Map<number, string[]> {
   const out = new Map<number, string[]>();
@@ -81,8 +84,11 @@ export function landedIndex(cwd: string, main: string, key: string): Map<number,
     }
   }
   if (!hits.length) return out;
+  revertedOnly.set(out, new Set());
   const reverted = new Set([...git(cwd, "log", main, "-E", "--grep=^This reverts commit [0-9a-f]{40}", "--format=%B").out.matchAll(/This reverts commit ([0-9a-f]{40})/g)].map((m) => m[1]));
   for (const [h, n] of hits) if (!reverted.has(h)) out.set(n, [...(out.get(n) ?? []), h]);
+  // An item whose trailer commits are all reverted: the store's done is stale for it.
+  for (const [h, n] of hits) if (reverted.has(h) && !out.has(n)) revertedOnly.get(out)!.add(n);
   // A goal the acceptance run reopened is done again only by a commit after the reopening.
   for (const [n, hs] of out) {
     const later = afterReopen(cwd, key, n, hs);
@@ -106,10 +112,11 @@ export function derive(cwd: string, main: string, f: Facts, n: number, landed?: 
   const store = f.store[n];
   if (store === undefined) return null;
   if (store === "dropped") return { item, state: "dropped", why: "the store says dropped" };
-  const hits = landed ? landed.get(n) ?? [] : landedCommits(cwd, main, f.repo, n);
+  const index = landed ?? landedIndex(cwd, main, f.repo);
+  const hits = index.get(n) ?? [];
   if (hits.length) return { item, state: "done", why: `commit ${hits[0].slice(0, 7)} on ${main.replace(/^refs\/remotes\//, "")}` };
-  // An item done before the trailers, or by hand, keeps the store's done; a factory item needs its trailer.
-  if (store === "done" && !f.touched.includes(n)) return { item, state: "done", why: "the store says done" };
+  // The store's done stands, unless a revert undid the item's only trailer commits; a reopen would have set the store back to open.
+  if (store === "done" && !revertedOnly.get(index)?.has(n)) return { item, state: "done", why: "the store says done" };
   const run = f.open[n];
   if (run === "needs-you") return { item, state: "needs-you", why: "its job needs Chris" };
   if (run === "stuck" || run === "failed") return { item, state: "stuck", why: `its job is ${run}` };

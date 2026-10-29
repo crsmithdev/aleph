@@ -63,7 +63,7 @@ test("a reverted commit does not make the item done", () => {
   expect(itemStates(repo, { fetch: true, doc, items: [1] })[0].state).toBe("open");
 });
 
-test("a triage run does not make its item touched; an agent run does", () => {
+test("a triage run does not make its item touched; an agent run does, and the store's done still stands", () => {
   const sandbox: Repo = { ...repo, sandbox: true };
   const done: Doc = { head: "", items: [item(5, "done"), item(6, "done")] };
   const run = (job: string, kind: Run["kind"], todo: number, state: Run["state"]) => {
@@ -79,7 +79,7 @@ test("a triage run does not make its item touched; an agent run does", () => {
   const states = itemStates(sandbox, { fetch: false, doc: done, items: [5, 6] });
   expect(states.map((s) => [s.item, s.state, s.why])).toEqual([
     ["demo-5", "done", "the store says done"],
-    ["demo-6", "open", "no commit on main names it"],
+    ["demo-6", "done", "the store says done"],
   ]);
 });
 
@@ -103,4 +103,30 @@ test("recentRepos keeps repos with an item updated in the last week, latest firs
   const at = (days: number) => ({ ...doc, items: [{ ...item(1, "open"), fm: { status: "open", updated: new Date(Date.now() - days * 86400_000).toISOString() } }] });
   expect(recentRepos([mk("a"), mk("b"), mk("c")], [at(3), at(30), at(1)])).toEqual([2, 0]);
   expect(recentRepos([mk("a")], [null])).toEqual([]);
+});
+
+test("a touched item the store closed is done without a fresh trailer commit, unless a revert undid its trailer", () => {
+  const sandbox: Repo = { ...repo, sandbox: true };
+  const closed: Doc = { head: "", items: [item(11, "done"), item(12, "done"), item(13, "done")] };
+  for (const n of [11, 12, 13]) {
+    const folder = join(base, "jobs", `20261028-0001${n}-demo-${n}-agent`);
+    mkdirSync(folder, { recursive: true });
+    writeRun(folder, { kind: "agent", job: `j${n}`, name: `j${n}`, repo: "demo", todo: n, state: "done", told: true, shown: true, started: new Date().toISOString() });
+  }
+  // 12: its trailer commit is at or before the acceptance since.
+  sh(clone, "git", "fetch", "-q");
+  sh(clone, "git", "reset", "-q", "--hard", "origin/main");
+  commit(clone, "land 12\n\nItem: demo-12");
+  const since = sh(clone, "git", "rev-parse", "HEAD");
+  // 13: landed, then reverted.
+  commit(clone, "land 13\n\nItem: demo-13");
+  sh(clone, "git", "revert", "--no-edit", "HEAD");
+  sh(clone, "git", "push", "-q", "origin", "HEAD:main");
+  process.env.ALEPH_FACTORY_DIR = join(base, "factory");
+  mkdirSync(join(base, "factory", "acceptance"), { recursive: true });
+  writeFileSync(join(base, "factory", "acceptance", "demo-12.json"), JSON.stringify({ result: "fail", fails: 1, since }));
+  const states = (items?: number[]) => itemStates(sandbox, { fetch: true, doc: closed, items }).map((s) => [s.item, s.state]);
+  expect(states()).toEqual([["demo-11", "done"], ["demo-12", "done"], ["demo-13", "open"]]);
+  expect(states([11])).toEqual([["demo-11", "done"]]);
+  expect(states([13])).toEqual([["demo-13", "open"]]);
 });
