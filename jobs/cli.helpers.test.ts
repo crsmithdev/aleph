@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { base, env, jobsDir, startScript, setup, teardown } from "./cli.helpers";
 
@@ -16,5 +16,15 @@ describe("startScript", () => {
     // A bad repo key: the job quits at once and never writes a pid.
     const p = Bun.spawn([cmd, "no-such-repo", "stale", "t"], { env: env({ START_LOG: join(base, "start-log") }), stdin: new Blob(["Goal: x\n"]), stdout: "pipe", stderr: "pipe" });
     expect(await p.exited).not.toBe(0);
+  });
+});
+
+describe("env", () => {
+  test("ALEPH_VAULT is an empty directory under base, so no test touches the real vault", () => {
+    const vault = env().ALEPH_VAULT;
+    expect(vault.startsWith(base + "/")).toBe(true);
+    expect(readdirSync(vault)).toEqual([]);
+    // A test may still point its own run at another vault.
+    expect(env({ ALEPH_VAULT: "/elsewhere" }).ALEPH_VAULT).toBe("/elsewhere");
   });
 });

@@ -118,6 +118,8 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
     ALEPH_TRIAGE_CAP: "0",
     // No Langfuse unless a test points one at the fake server.
     LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "",
+    // The vault is empty and under base, so no test reads or writes the real ~/.aleph/vault.
+    ALEPH_VAULT: join(base, "vault"),
     SIDETONE_TELL_URL: `https://127.0.0.1:${server.port}/tell`, ...extra,
   };
 }
@@ -220,7 +222,7 @@ echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"result":"did '"$a
 
 export function setup(): void {
   base = mkdtempSync(join(tmpdir(), "aleph-jobs-"));
-  for (const d of ["run", "fake", "jobs"]) mkdirSync(join(base, d));
+  for (const d of ["run", "fake", "jobs", "vault"]) mkdirSync(join(base, d));
   jobsDir = join(base, "jobs");
   fakeLog = join(base, "fake");
   setupLog = join(base, "setup.log");
