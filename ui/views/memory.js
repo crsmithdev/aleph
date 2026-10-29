@@ -167,7 +167,7 @@ const EMPTY_TYPES = {
   procedural: { skills: [], claudeMd: null, hooks: [], last: "" },
   retrieval: { stats: null, missed: [], last: "" },
   prospective: { issues: [], triggers: [], last: "" },
-  gates: { facts: { kept: [], rejected: [] }, corrections: [], proposals: [] },
+  gates: { corrections: [], proposals: [] },
 };
 
 export function renderMemory(m) {

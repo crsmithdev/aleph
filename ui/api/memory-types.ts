@@ -131,12 +131,11 @@ function prospective() {
   return { issues: open, triggers: [] as unknown[], last: "" };
 }
 
-/** The factory's memory gates: corrections and proposals from the store; kept and rejected facts once aleph-352 writes them. */
+/** The factory's memory gates: corrections and proposals from the store. */
 function gates() {
   const s = readStore();
   const by = (state: string) => s.lessons.filter((l) => l.state === state);
   return {
-    facts: { kept: [] as unknown[], rejected: [] as unknown[] },
     corrections: s.lessons.filter((l) => l.state === "open").map((l) => ({ id: l.id, sentence: l.sentence, count: l.count })),
     proposals: by("proposed").map((l) => ({ id: l.id, sentence: l.sentence, count: l.count, kind: l.kind ?? "" })),
     minedAt: s.minedAt,
