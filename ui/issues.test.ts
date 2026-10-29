@@ -356,7 +356,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
   }
   const ask = (decision: boolean, wait?: string) => writeList({ key: "fac" }, "seed", (doc) => {
     const i = add(doc, "which way", { labels: ["needs-chris"], body: "x" });
-    if (decision) writeDecision(i, { question: "A or B?", options: [{ label: "A", line: "do a", ...(wait ? { waiting_on: wait } : {}) }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] });
+    if (decision) writeDecision(i, { question: "A or B?", options: [{ label: "A", line: "do a", ...(wait ? { waiting_on: wait } : {}) }, { label: "B", line: "do b" }], recommended: "B", kind: "product" as const, why: ["w"] });
     else todos.note(i, "triage: for Chris: Should it be A or B? My recommendation is B, it is smaller.");
     return i.id;
   })!.value;

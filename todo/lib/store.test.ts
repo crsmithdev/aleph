@@ -115,7 +115,7 @@ describe("the writes", () => {
 
   test("note with a label and a decision", () => {
     const r = repo([{ title: "one", labels: ["goal"] }]);
-    const decision = { question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], recommended: "A", why: ["w"] };
+    const decision = { question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], recommended: "A", kind: "product" as const, why: ["w"] };
     expect(issues.note(r, 1, "asked", { label: "needs-chris", decision })).toBeNull();
     expect(issues.note(r, 1, "asked again", { label: "needs-chris" })).toBeNull();
     expect(issues.labels(item(r, 1))).toEqual(["goal", "needs-chris"]);

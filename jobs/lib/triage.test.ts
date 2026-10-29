@@ -114,7 +114,7 @@ test("a triage is a job in the ledger, of kind triage", async () => {
 test("a chris verdict with options is stored as fields next to the prose note; a malformed structure keeps the question", async () => {
   reset([{ title: "a", body: "VERDICT:structured" }]);
   await run();
-  expect(readDecision(item(1))).toEqual({ question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["one", "two"] });
+  expect(readDecision(item(1))).toEqual({ question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", kind: "product", why: ["one", "two"] });
   expect(item(1).fm.reason).toBe("decision");
   expect(item(1).notes.at(-1)).toContain("A or B? Options: A: do a; B: do b. My recommendation is B.");
   const bad = parseVerdict('{"verdict":"chris","question":"Q?","options":[{"label":"A","line":"x"}],"recommended":"A"}');

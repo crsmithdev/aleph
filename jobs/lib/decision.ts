@@ -11,6 +11,7 @@ export interface Decision {
   options: { label: string; line: string; waiting_on?: string }[];
   recommended: string;
   why: string[];
+  kind: "product" | "build";
 }
 
 const SEP = " :: ";
@@ -29,7 +30,7 @@ export function normalizeDecision(raw: any): Decision | null {
   const recommended = clean(raw.recommended);
   if (!options.some((o: { label: string }) => o.label === recommended)) return null;
   const why = (Array.isArray(raw.why) ? raw.why : []).map(clean).filter(Boolean).slice(0, MAX_WHY);
-  return { question, options, recommended, why };
+  return { question, options, recommended, why, kind: raw.kind === "build" ? "build" : "product" };
 }
 
 /** The decision in an item's fields, or null when it has none. */
@@ -45,7 +46,7 @@ export function readDecision(item: todos.Item): Decision | null {
   });
   const question = typeof item.fm.question === "string" ? item.fm.question : "";
   const recommended = typeof item.fm.recommended === "string" ? item.fm.recommended : "";
-  return question && options.length ? { question, options, recommended, why: list(item.fm.why) } : null;
+  return question && options.length ? { question, options, recommended, why: list(item.fm.why), kind: item.fm.kind === "build" ? "build" : "product" } : null;
 }
 
 export function writeDecision(item: todos.Item, d: Decision): void {
@@ -53,10 +54,11 @@ export function writeDecision(item: todos.Item, d: Decision): void {
   item.fm.options = d.options.map((o) => o.label + SEP + o.line + (o.waiting_on ? WAIT + o.waiting_on : ""));
   item.fm.recommended = d.recommended;
   item.fm.why = d.why;
+  item.fm.kind = d.kind;
 }
 
 export function clearDecision(item: todos.Item): void {
-  for (const k of ["question", "options", "recommended", "why", "reason"]) delete item.fm[k];
+  for (const k of ["question", "options", "recommended", "why", "kind", "reason"]) delete item.fm[k];
 }
 
 /** The prose note of a decision, for the CLI and the history. */

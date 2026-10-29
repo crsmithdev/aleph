@@ -10,7 +10,7 @@ const run = (needs: string, extra: Partial<Job> = {}): Job => ({
 } as Job);
 const issue = (extra: Partial<NewIssue> = {}): NewIssue => ({ id: "aleph-387", title: "t", status: "open", href: "#/issues/aleph/387", labels: ["needs-chris"], notes: 1, created: "", updated: "", ...extra });
 const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", sentence: "Run the formatter before landing", state: "proposed", kind, count: 3, signals: [{ id: "s", source: "chris", at: "2026-10-27", quote: "format it", link: "" }] });
-const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] };
+const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", kind: "product" as const, why: ["w"] };
 
 const CASES: Record<string, () => ReturnType<typeof attention>> = {
   held: () => attention({ needs: [run("held", { reason: "changes hooks/x.ts" })], needsIssues: [] }, {}, []),
