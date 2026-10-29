@@ -104,7 +104,7 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
   return {
     ...(process.env as Record<string, string>), ...gitEnv,
     ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: items, ALEPH_JOB_FOREGROUND: "1",
-    ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, ALEPH_REVIEW2_CMD: join(base, "fake-review2"), XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
+    ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, ALEPH_REVIEW2_CMD: join(base, "fake-review2"), ALEPH_FIREFIGHTER_CMD: join(base, "fake-firefighter"), XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
     ALEPH_SANDBOX_CMD: join(base, "pass"), ALEPH_RUNS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_WORKER_TOKEN: join(base, "token"),
     // The tests start more factory runs than a day's cap; the cap has its own test.
     ALEPH_DAY_CAP: "100",
@@ -238,6 +238,8 @@ esac
 echo '{"type":"result","is_error":false,"result":"Checked.\\n'"$v"'"}'
 `, { mode: 0o755 });
   writeFileSync(fake, FAKE, { mode: 0o755 });
+  // The fake firefighter: reads the prompt, takes no action.
+  writeFileSync(join(base, "fake-firefighter"), `#!/bin/bash\ncat > /dev/null\necho '{"actions":[]}'\n`, { mode: 0o755 });
   // The tests' stand-in for srt: the clean environment, and FAKE_LOG for the fake worker.
   writeFileSync(join(base, "pass"), `#!/bin/bash\nshift\nexec env -i FAKE_LOG="$FAKE_LOG" "$@"\n`, { mode: 0o755 });
   writeFileSync(join(base, "token"), "tok-123\n");
