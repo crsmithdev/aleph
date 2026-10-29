@@ -12,7 +12,7 @@ import type { Job, NewIssue, State } from "./state.ts";
 export interface Action { act: string; label: string; hint: string; primary: boolean; args: Record<string, string> }
 export interface AttentionItem {
   key: string; reason: string; id: string; href: string; title: string; problem: string;
-  actions: Action[]; always: { label: string; action: string }; details: Details;
+  actions: Action[]; always: { label: string; action: string; hint?: string }; details: Details;
   /** The project key, for `?project=`. */
   repo?: string;
 }
@@ -131,12 +131,22 @@ function detailsFor(c: Ctx): Details {
   return d;
 }
 
+/** The Always button: what it grants, named for the rule rather than the first option when the rule covers every decision. */
+function alwaysFor(action: string, first: string | undefined): AttentionItem["always"] {
+  if (action === "firefighter") return { label: "Always let the firefighter decide", action };
+  if (action === "recommended") return {
+    label: "Always approve the recommendation", action,
+    hint: "From now on, the factory takes the recommended option of every decision without asking you. Revoke with `aleph standing revoke decision`.",
+  };
+  return { label: `Always ${lower(first ?? action)}`, action };
+}
+
 function item(reason: string, c: Ctx, key: string, href: string, title: string, repo?: string): AttentionItem {
   const actions = actionsFor(reason, c);
   const r = REASONS[reason];
   return {
     key, reason, id: c.id, href, title, problem: PROBLEM[reason](c), actions,
-    always: { label: r.always === "firefighter" ? "Always let the firefighter decide" : `Always ${lower(actions[0]?.label ?? r.always)}`, action: r.always },
+    always: alwaysFor(r.always, actions[0]?.label),
     details: detailsFor(c), ...(repo ? { repo } : {}),
   };
 }

@@ -66,6 +66,9 @@ describe("attention", () => {
     expect(CASES.firefighter()[0].problem).toBe("The firefighter would land aleph-30, but it changes hooks/x.ts, a held security path, so it needs your review.");
     expect(CASES.held()[0].always).toEqual({ label: "Always let the firefighter decide", action: "firefighter" });
     expect(CASES["triage-no-verdict"]()[0].always.label).toBe("Always run triage again");
+    expect(CASES.decision()[0].always).toEqual({ label: "Always approve the recommendation", action: "recommended", hint: "From now on, the factory takes the recommended option of every decision without asking you. Revoke with `aleph standing revoke decision`." });
+    expect(CASES.rescue()[0].always.label).toBe("Always approve the recommendation");
+    expect(CASES.held()[0].always.hint).toBeUndefined();
   });
 
   test("old items get their reason from the last note", () => {
