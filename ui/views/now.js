@@ -12,10 +12,10 @@ export const view = {
   api: "/api/state",
   refresh: 15,
   render: (s) =>
-    `<div class="page">${renderMetrics(s)}${renderUsage(s)}<p class="lede">${renderLede(s)}</p><div class="head"><p class="asof">${renderAsOf(s)}</p>${renderControls(s)}</div>` +
+    `<div class="page">${renderMetrics(s)}<p class="lede">${renderLede(s)}</p><div class="head"><p class="asof">${renderAsOf(s)}</p>${renderControls(s)}</div>` +
     `<section id="issues" aria-labelledby="h-issues">${renderIssues(s)}</section>` +
-    `<section id="triage" aria-labelledby="h-triage">${renderTriage(s)}</section>` +
     `<section id="lands" aria-labelledby="h-lands">${renderLands(s)}</section>` +
+    `<section id="triage" aria-labelledby="h-triage">${renderTriage(s)}</section>` +
     `<section id="jobs" aria-labelledby="h-jobs">${renderJobs(s)}</section>` +
     `<section id="queued" aria-labelledby="h-queued">${renderQueued(s)}</section></div>`,
 };
@@ -40,32 +40,33 @@ function statLines(stat) {
   return esc(kept.filter((l) => l.includes(" | ")).join("\n")) + `\n<b>+${files.length - STAT_FILES} more files</b>` + (summary.length ? "\n" + esc(summary.join("\n")) : "");
 }
 
-/** How many cards the running group holds: the running jobs and the firefighter's role row. */
-const runningCount = (s) => s.running.length + ((s.factory?.firefighter ?? []).length ? 1 : 0);
+/** How many cards the running group holds: the running jobs. */
+const runningCount = (s) => s.running.length;
+/** Land runs live now, not the landed ones the Lands list also shows. */
+const liveLands = (s) => s.delivered.filter((j) => j.state === "landing").length;
 /** The needs-you group's rows: held runs, needs-chris issues, proposals, errors. */
 const needsCount = (s) => (s.attention ?? []).length + errorLines(s).length;
 
-/** The row of metric cards, one count per section, each a link to it: Issues, Triage, Lands, Jobs by state, and Waiting. */
+/** The row of metric cards, each a link to its section: Lands live now, Needs you, Stuck, Failed, Running, Queued, and Weekly usage. */
 export function renderMetrics(s) {
   const card = (href, k, n, tone = "") => `<a class="metric${tone ? " " + tone : ""}" href="#${href}"><span class="k">${k}</span><span class="v">${n}</span></a>`;
+  const failed = s.stuck.filter((j) => j.state === "failed").length;
   return `<div class="metrics">` +
-    card("issues", "Issues", (s.issues ?? []).length) +
-    card("triage", "Triage", (s.triage ?? []).length) +
-    card("lands", "Lands", s.delivered.length, "done") +
+    card("lands", "Lands", liveLands(s), "done") +
     card("jobs-needs", "Needs you", needsCount(s)) +
-    card("jobs-stuck", "Stuck or failed", s.stuck.length) +
+    card("jobs-stuck", "Stuck", s.stuck.length - failed) +
+    card("jobs-stuck", "Failed", failed) +
     card("jobs-running", "Running", runningCount(s), "run") +
-    card("queued", "Waiting", s.waiting.length) + `</div>`;
+    card("queued", "Queued", s.waiting.length) + renderUsage(s) + `</div>`;
 }
 
-/** Weekly plan usage: the % now, the reset time and the 5-hour %, with the 7-day % since the last reset as a line; "usage unknown" when the endpoint gave nothing. */
+/** Weekly usage as the last metric card: the 7-day % now, with the 5-hour % and the reset time on its second line; "usage unknown" when the endpoint gave nothing. */
 export function renderUsage(s) {
-  const u = s.usage;
-  const cur = u?.now;
-  if (!cur) return `<div class="usage"><span class="k">Weekly usage</span> <span class="quiet">usage unknown</span></div>`;
+  const cur = s.usage?.now;
+  if (!cur) return `<a class="metric usage" href="#/"><span class="k">Weekly usage</span><span class="v">\u2013</span><span class="quiet">usage unknown</span></a>`;
   const reset = cur.seven_day_resets_at ? ` \u00b7 resets ${esc(when(cur.seven_day_resets_at, new Date(s.now)))}` : "";
-  return `<div class="usage"><a class="metric" href="#/"><span class="k">Weekly usage</span><span class="v">${esc(Math.round(cur.seven_day))}%</span>` +
-    `<span class="quiet">5-hour ${esc(Math.round(cur.five_hour))}%${reset}</span></a>${usageLine(u.series)}</div>`;
+  return `<a class="metric usage" href="#/"><span class="k">Weekly usage</span><span class="v">${esc(Math.round(cur.seven_day))}%</span>` +
+    `<span class="quiet">5-hour ${esc(Math.round(cur.five_hour))}%${reset}</span></a>`;
 }
 
 /** The 7-day % since the last reset as an SVG polyline over the 0-100 % scale. */
@@ -77,41 +78,45 @@ export function usageLine(series) {
 }
 
 export const FINE = ["Everything is fine.", "All is well.", "Everything is running smoothly.", "The factory is humming along."];
-const NUMBER_WORDS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
 
-/** The status sentence: all fine, or a count of what needs attention and the items as links; notices under it, muted. */
+/** The status sentence: all fine, or one sentence that lists what needs attention, each part a link; notices under it, muted. */
 export function renderLede(s) {
   const f = s.factory;
-  const problems = []; // [tone, html]
+  const problems = []; // [tone, text, href]
   const notices = [];
   const att = s.attention ?? [];
   const isRun = (i) => ["held", "review", "question"].includes(i.reason);
   const isProposal = (i) => i.reason.startsWith("proposal-");
   const runs = att.filter(isRun).length, issues = att.filter((i) => !isRun(i) && !isProposal(i)).length, props = att.filter(isProposal).length;
-  if (runs) problems.push(["warning", `<a href="#jobs-needs">${runs} ${runs === 1 ? "job needs" : "jobs need"} you</a>`]);
-  if (s.stuck.length) problems.push(["error", `<a href="#jobs-stuck">${s.stuck.length} ${s.stuck.length === 1 ? "job is" : "jobs are"} stuck or failed</a>`]);
-  if (issues) problems.push(["warning", `<a href="#jobs-needs">${issues} ${issues === 1 ? "issue needs" : "issues need"} a decision</a>`]);
-  if (props) problems.push(["warning", `<a href="#jobs-needs">${props} ${props === 1 ? "proposal waits" : "proposals wait"} for Yes or No</a>`]);
+  const failed = s.stuck.filter((j) => j.state === "failed").length, stuck = s.stuck.length - failed;
+  if (runs) problems.push(["warning", `${runs} ${runs === 1 ? "job needs" : "jobs need"} you`, "#jobs-needs"]);
+  if (stuck) problems.push(["error", `${stuck} ${stuck === 1 ? "job is" : "jobs are"} stuck`, "#jobs-stuck"]);
+  if (failed) problems.push(["error", `${failed} ${failed === 1 ? "job has" : "jobs have"} failed`, "#jobs-stuck"]);
+  if (issues) problems.push(["warning", `${issues} ${issues === 1 ? "issue needs" : "issues need"} a decision`, "#jobs-needs"]);
+  if (props) problems.push(["warning", `${props} ${props === 1 ? "proposal waits" : "proposals wait"} for Yes or No`, "#jobs-needs"]);
   const health = [...(f.health || [])];
   if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   for (const l of health) {
     const text = l.replace(/^health:\s*/, "");
     if (/passed on rerun/.test(text)) { notices.push(text); continue; }
-    problems.push(["error", `<a href="#jobs-needs">${esc(text)}</a>`]);
+    problems.push(["error", text.replace(/\.$/, ""), "#jobs-needs"]);
   }
-  if (f.hold) problems.push(["error", `<a href="#jobs-needs">${esc(f.hold)}</a>`]);
-  if (f.paused) problems.push(["warning", "The factory is paused"]);
-  if (f.dayCap > 0 && f.runsToday >= f.dayCap) problems.push(["warning", "The day cap is reached"]);
-  const n = problems.length;
+  if (f.hold) problems.push(["error", f.hold.replace(/\.$/, ""), "#jobs-needs"]);
+  if (f.paused) problems.push(["warning", "the factory is paused", ""]);
+  if (f.dayCap > 0 && f.runsToday >= f.dayCap) problems.push(["warning", "the day cap is reached", ""]);
   const note = notices.map((x) => `<span class="notice">${esc(x)}</span>`).join("");
-  if (!n) return `<span class="say fine">${FINE[Math.floor((Date.parse(s.now) || Date.now()) / 600000) % FINE.length]}</span>${note}`;
+  if (!problems.length) return `<span class="say fine">${FINE[Math.floor((Date.parse(s.now) || Date.now()) / 600000) % FINE.length]}</span>${note}`;
   const tone = problems.some(([t]) => t === "error") ? "error" : "warning";
-  const count = `${n < 10 ? NUMBER_WORDS[n] : n} ${n === 1 ? "thing needs" : "things need"} your attention.`;
-  return `<span class="say ${tone}">${count} ${problems.map(([, h]) => h).join(". ")}.</span>${note}`;
+  const parts = problems.map(([, t, href], k) => {
+    const text = k === 0 ? t[0].toUpperCase() + t.slice(1) : t;
+    return href ? `<a href="${href}">${esc(text)}</a>` : esc(text);
+  });
+  const sentence = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
+  return `<span class="say ${tone}">${sentence}.</span>${note}`;
 }
 
 const list = (html) => `<div class="list">${html}</div>`;
-const cards = (html) => `<div class="cards">${html}</div>`;
+const cards = (html, cls = "") => `<div class="cards${cls ? " " + cls : ""}">${html}</div>`;
 
 /** The one folded "Details" of an Issues row; `key` keeps it open across refreshes. */
 const more = (key, body) => `<details class="more" data-keep="more:${esc(key)}"><summary>Details</summary><div class="body">${body}</div></details>`;
@@ -145,19 +150,41 @@ const queuedCard = (w) => jobCard("small", "run-row", `<div class="ih"><span cla
 /** Lands: land runs in progress first, then the latest landed. */
 export function renderLands(s) {
   const rows = s.delivered.map((j) => landCard(j, "full", s.now)).join("");
-  return section("lands", "Lands", s.delivered.length, rows ? cards(rows) : empty("Nothing has landed yet."));
+  return section("lands", "Lands", s.delivered.length, rows ? cards(rows, "one") : empty("Nothing has landed yet."));
 }
 
 /** Triage: triage runs in progress first, then the latest finished, with their outcome. */
 export function renderTriage(s) {
   const rows = (s.triage ?? []).map((j) => triageCard(j, "full", s.now)).join("");
-  return section("triage", "Triage", (s.triage ?? []).length, rows ? cards(rows) : empty("Nothing has been triaged yet."));
+  return section("triage", "Triage", (s.triage ?? []).length, rows ? cards(rows, "one") : empty("Nothing has been triaged yet."));
 }
 
-/** The firefighter's role row: what it did in the last 24 hours, newest first, from the factory log. */
-function firefighterCard(s, lines) {
-  const items = [...lines].reverse().map((l) => `<li><span class="num">${esc(when(l.at, new Date(s.now)))}</span> ${esc(l.line.replace(/^firefighter:?\s*/, ""))}</li>`).join("");
-  return jobCard("small", "run-row firefighter", `<div class="ih"><span class="t">Firefighter</span></div><div class="run-meta"><span class="badge quiet">role</span></div><ul class="ff-lines">${items}</ul>`);
+const FF_SHOWN = 3;
+
+/** The item a firefighter log line acted on: the first `repo-N` id in it. */
+const ffItem = (text) => /\b([a-z][\w]*-\d+)\b/.exec(text)?.[1] ?? "";
+
+/** One firefighter action as a line: time, action, the item as a link, a short reason. */
+function ffLine(s, l) {
+  const text = l.line.replace(/^firefighter:?\s*/, "");
+  const m = /^(did|needs-chris|tell|failed|malformed reply):?\s*(.*)$/.exec(text);
+  const action = m ? m[1] : "note", rest = m ? m[2] : text;
+  const id = ffItem(rest);
+  const [repo, n] = id ? id.split(/-(?=\d+$)/) : [];
+  const reason = oneSentence(id ? rest.replace(id, "") : rest).replace(/^[\s,:;-]+/, "");
+  return `<li><span class="num">${esc(when(l.at, new Date(s.now)))}</span> <b>${esc(action)}</b> ` +
+    `${id ? idLink(id, `#/issues/${encodeURIComponent(repo)}/${n}`) + " " : ""}<span class="why">${esc(reason.length > 90 ? `${reason.slice(0, 89).trimEnd()}\u2026` : reason)}</span></li>`;
+}
+
+/** The firefighter as one full-width row: its state, the time of its last action, its last 3 actions, the whole log folded under Details. */
+function firefighterRow(s, lines) {
+  const newest = [...lines].reverse();
+  const live = s.running.some((j) => j.name === "firefighter" || j.run?.kind === "firefighter");
+  const last = newest[0];
+  return `<article class="job-card small firefighter ff-row"><div class="ih"><span class="t">Firefighter</span> <span class="badge ${live ? "run" : "quiet"}">${live ? "running" : "idle"}</span> ` +
+    `<span class="num">last action ${esc(when(last.at, new Date(s.now)))}</span></div>` +
+    `<ul class="ff-lines">${newest.slice(0, FF_SHOWN).map((l) => ffLine(s, l)).join("")}</ul>` +
+    more("firefighter", `<ul class="ff-lines">${newest.map((l) => `<li><span class="num">${esc(when(l.at, new Date(s.now)))}</span> ${esc(l.line.replace(/^firefighter:?\s*/, ""))}</li>`).join("")}</ul>`) + `</article>`;
 }
 
 /** Jobs by state: needs you, stuck or failed, running; each group is there even when empty, so its metric card has a target. */
@@ -167,13 +194,14 @@ export function renderJobs(s) {
   const needs = (s.attention ?? []).map(attentionRow).concat(errorLines(s).map(errorRow));
   const body = group("needs", "Needs you", needs.length, needs.join(""), "Nothing needs you.", list) +
     group("stuck", "Stuck or failed", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), "Nothing is stuck or failed.") +
-    group("running", "Running", runningCount(s), s.running.map((j) => runningCard(s, j)).join("") + (ff.length ? firefighterCard(s, ff) : ""), "Nothing is running.");
+    group("running", "Running", runningCount(s), s.running.map((j) => runningCard(s, j)).join(""), "Nothing is running.") +
+    (ff.length ? `<div class="grp" id="jobs-firefighter">${firefighterRow(s, ff)}</div>` : "");
   return section("jobs", "Jobs", needsCount(s) + s.stuck.length + runningCount(s), body, 0) + renderStanding(s);
 }
 
 /** Waiting: the goals with no job yet, as a section of its own below Jobs; one card each. */
 export function renderQueued(s) {
-  return section("queued", "Waiting", s.waiting.length, s.waiting.length ? cards(s.waiting.map(queuedCard).join("")) : empty("Nothing is waiting."), 0);
+  return section("queued", "Queued", s.waiting.length, s.waiting.length ? cards(s.waiting.map(queuedCard).join(""), "one") : empty("Nothing is waiting."), 0);
 }
 
 /** Lines of the factory's own trouble that are errors: health (a red main among them), the hold, a failed probe; each once. The hold is left out when its stuck run has a row of its own. */

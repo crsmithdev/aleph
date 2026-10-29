@@ -57,11 +57,11 @@ const full: any = { ...state, issues: [issue(1), issue(2)], triage: [triaged(3, 
 const withAttn = (s: any) => r.renderJobs(s);
 const section = (h: string, id: string) => h.match(new RegExp(`<section id="${id}"[^]*?</section>`))![0];
 
-test("the page order is metric cards, status line and time, then Issues, Triage, Lands, Jobs; no old section", () => {
+test("the page order is metric cards, status line and time, then Issues, Lands, Triage, Jobs; no old section", () => {
   const page = r.view.render(full);
-  expect([...page.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1])).toEqual(["issues", "triage", "lands", "jobs", "queued"]);
+  expect([...page.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1])).toEqual(["issues", "lands", "triage", "jobs", "queued"]);
   const at = (t: string) => page.indexOf(t);
-  const order = ['class="metrics"', 'class="lede"', 'class="asof"', 'id="issues"', 'id="triage"', 'id="lands"', 'id="jobs"'];
+  const order = ['class="metrics"', 'class="lede"', 'class="asof"', 'id="issues"', 'id="lands"', 'id="triage"', 'id="jobs"'];
   expect(order.map(at)).toEqual([...order.map(at)].sort((a, b) => a - b));
   expect(order.every((t) => at(t) >= 0)).toBe(true);
   expect(page).not.toContain('class="cols"');
@@ -69,19 +69,15 @@ test("the page order is metric cards, status line and time, then Issues, Triage,
   for (const t of ["Next tick", "Cost today", "Runs today", 'id="ticks"', 'class="strip"', 'id="stuck"', 'class="banner"']) expect(page).not.toContain(t);
 });
 
-test("the metric cards are one count per section, each a link to it, and the count is the number of cards there", () => {
-  const s = { ...full, needsIssues: [{ ...issue(7), question: "Q?" }], proposals: [], factory: { ...full.factory, firefighter: [{ at: "2026-10-27T16:10:00Z", line: "firefighter: did x" }] } };
-  const page = r.view.render(s);
+test("the metric cards are Lands (live), Needs you, Stuck, Failed, Running, Queued, Weekly usage; no Issues or Triage card", () => {
+  const delivered = [job({ name: "aleph-50", state: "landing" }), ...Array.from({ length: 9 }, (_, i) => job({ name: `aleph-6${i}`, state: "landed", ended: "2026-10-27T16:30:00Z" }))];
+  const s = { ...full, delivered, stuck: [job({ name: "aleph-30", state: "stuck", reason: "x" }), job({ name: "aleph-31", state: "failed", reason: "y" }), job({ name: "aleph-32", state: "failed", reason: "z" })], usage: { now: { seven_day: 41.2, five_hour: 7, seven_day_resets_at: "2026-10-30T09:00:00Z" }, series: [] }, needsIssues: [{ ...issue(7), question: "Q?" }], proposals: [] };
   const h = r.renderMetrics(s);
-  const cards = [...h.matchAll(/<a class="metric[^"]*" href="#([^"]+)"><span class="k">([^<]+)<\/span><span class="v">(\d+)<\/span>/g)].map((m) => [m[1], m[2], Number(m[3])]);
-  expect(cards.map((c) => c[1])).toEqual(["Issues", "Triage", "Lands", "Needs you", "Stuck or failed", "Running", "Waiting"]);
-  expect(cards.map((c) => c[0])).toEqual(["issues", "triage", "lands", "jobs-needs", "jobs-stuck", "jobs-running", "queued"]);
-  const inside = (id: string) => {
-    const m = page.match(new RegExp(`<(?:section|div) (?:id="${id}"|class="grp" id="${id}")[^]*?(?=<div class="grp" id="jobs-|</section>)`));
-    return m![0].match(/<article /g)?.length ?? 0;
-  };
-  for (const [href, , n] of cards) expect([href, inside(href as string)]).toEqual([href, n]);
-  expect(cards.map((c) => c[2])).toEqual([2, 2, 1, 3, 1, 2, 1]);
+  const cards = [...h.matchAll(/<a class="metric[^"]*" href="#[^"]*"><span class="k">([^<]+)<\/span><span class="v">(\d+)%?<\/span>/g)].map((m) => [m[1], Number(m[2])]);
+  expect(cards).toEqual([["Lands", 1], ["Needs you", 3], ["Stuck", 1], ["Failed", 2], ["Running", 1], ["Queued", 1], ["Weekly usage", 41]]);
+  expect(h).not.toMatch(/>(Issues|Triage)</);
+  expect(h).toMatch(/Weekly usage[^]*5-hour 7% \u00b7 resets/);
+  expect(h.match(/<a class="metric/g)?.length).toBe(7);
 });
 
 test("every section header has a count, in one style", () => {
@@ -92,18 +88,17 @@ test("every section header has a count, in one style", () => {
   expect(r.renderTriage(full)).toContain('<span class="badge done">To factory</span>');
 });
 
-test("Jobs groups needs you, then stuck or failed, then running; Waiting is its own section below; every job card is compact", () => {
+test("Jobs groups needs you, then stuck or failed, then running; Queued is its own section below; every job card is compact", () => {
   const h = r.renderJobs(full);
   const at = (id: string) => h.indexOf(`id="jobs-${id}"`);
   expect(at("needs")).toBeGreaterThan(-1);
   expect(at("needs")).toBeLessThan(at("stuck"));
   expect(at("stuck")).toBeLessThan(at("running"));
   expect(h).not.toContain("jobs-waiting");
-  expect(h).not.toContain("Waiting");
+  expect(h).not.toContain("Queued");
   const q = r.renderQueued(full);
-  expect(q).toMatch(/^<div class="sh"><h2 id="h-queued">Waiting<\/h2><span class="count">1<\/span><\/div>/);
-  expect(q).toContain('<div class="cards">');
-  expect(q).not.toContain("Queued");
+  expect(q).toMatch(/^<div class="sh"><h2 id="h-queued">Queued<\/h2><span class="count">1<\/span><\/div>/);
+  expect(q).toContain('<div class="cards one">');
   expect(h).not.toContain("job-card big");
   expect(h.match(/class="job-card small[ "]/g)?.length).toBe(h.match(/<article /g)?.length);
   expect(h.match(/class="job-card small[ "]/g)?.length).toBe(4);
@@ -223,9 +218,9 @@ test("many needs-you jobs all render as rows, each with its details folded and i
 
 test("the lede leads with a count and the items, colored; the page has no banner", () => {
   const h = r.renderLede(withFactory({}));
-  expect(h).toContain("Two things need your attention.");
-  expect(h).toContain("1 job needs you");
-  expect(h).toContain("1 job is stuck or failed");
+  expect(h).toContain("1 job needs you</a> and ");
+  expect(h).toContain("1 job is stuck</a>.");
+  expect(h).not.toContain("attention");
   expect(h).toContain('class="say error"');
   expect(h.indexOf("needs you")).toBeLessThan(h.indexOf("stuck"));
   const cases: [object, string][] = [
@@ -243,8 +238,8 @@ test("the lede leads with a count and the items, colored; the page has no banner
 
 test("warning-only problems get the warning class; a failed probe gets error", () => {
   const calm = { ...withFactory({}), needs: [], stuck: [] };
-  expect(r.renderLede({ ...calm, factory: { ...calm.factory, paused: true } })).toMatch(/say warning">One thing needs your attention\. The factory is paused/);
-  expect(r.renderLede({ ...calm, factory: { ...calm.factory, paused: true, runsToday: 12 } })).toContain("Two things need your attention");
+  expect(r.renderLede({ ...calm, factory: { ...calm.factory, paused: true } })).toMatch(/say warning">The factory is paused\./);
+  expect(r.renderLede({ ...calm, factory: { ...calm.factory, paused: true, runsToday: 12 } })).toContain("The factory is paused and the day cap is reached.");
   expect(r.renderLede(withFactory({ needs: [], probe: { at: "x", ok: false, failed: [] } }))).toContain('say error">');
 });
 
@@ -441,7 +436,8 @@ test("the status line is not 'All is well.' when the Issues section has an item"
   for (const o of [{ needsIssues: [{ ...issue(7), labels: ["needs-chris"], question: "q" }] }]) {
     const h = r.renderLede({ ...calm, ...o });
     for (const v of r.FINE) expect(h).not.toContain(v);
-    expect(h).toContain("One thing needs your attention.");
+    expect(h).toContain("1 issue needs a decision");
+    expect(h).not.toContain("attention");
   }
 });
 
@@ -509,7 +505,7 @@ test("rows are ordered held, then needs-chris, then proposal, then error; the gr
 
 test("the lede counts proposals as one warning", () => {
   const s = { ...state, needs: [], stuck: [], factory: { ...state.factory, health: [] }, proposals: [prop] };
-  expect(r.renderLede(s)).toContain("One thing needs your attention. <a href=\"#jobs-needs\">1 proposal waits for Yes or No</a>");
+  expect(r.renderLede(s)).toContain("<a href=\"#jobs-needs\">1 proposal waits for Yes or No</a>.");
   expect(r.renderLede({ ...s, proposals: [prop, prop] })).toContain("2 proposals wait for Yes or No");
 });
 
@@ -557,14 +553,23 @@ test("approve and decline handlers", async () => {
   }
 });
 
-test("the firefighter has a role row in Jobs with its log lines, newest first; none when it did nothing in 24 hours", () => {
-  const ff = [{ at: "2026-10-27T16:10:00Z", line: "firefighter: did land aleph-27" }, { at: "2026-10-27T16:20:00Z", line: "firefighter: needs-chris: aleph-30 changes hooks/x.ts, a held security path, so it needs your review before it lands." }];
+test("the firefighter is one full-width row: state, last action time, its last 3 actions with item links, the log folded; none when it did nothing in 24 hours", () => {
+  const ff = [
+    { at: "2026-10-27T15:00:00Z", line: "firefighter: did old aleph-1" },
+    { at: "2026-10-27T16:10:00Z", line: "firefighter: did land aleph-27" },
+    { at: "2026-10-27T16:20:00Z", line: "firefighter: needs-chris: aleph-30 changes hooks/x.ts, a held security path, so it needs your review before it lands." },
+    { at: "2026-10-27T16:30:00Z", line: "firefighter: tell: refused aleph-31 not ours" },
+  ];
   const h = r.renderJobs({ ...state, factory: { ...state.factory, firefighter: ff } });
-  const grp = h.match(/<h3>Running[^]*?<\/ul>/)![0];
-  expect(grp).toContain("Firefighter");
-  expect(grp.indexOf("needs-chris: aleph-30")).toBeLessThan(grp.indexOf("did land aleph-27"));
-  expect(grp).not.toContain("firefighter: did");
-  expect(h.indexOf("Firefighter")).toBeGreaterThan(h.indexOf('id="jobs-running"'));
+  const row = h.match(/<article class="job-card small firefighter ff-row">[^]*?<\/article>/)![0];
+  expect(row).toContain("idle");
+  expect(row).toContain("last action Oct 27 16:30");
+  const shown = row.split("<details")[0];
+  expect(shown.match(/<li>/g)?.length).toBe(3);
+  expect(shown).not.toContain("aleph-1<");
+  expect(shown).toContain('<a class="idl" href="#/issues/aleph/30">aleph-30</a>');
+  expect(shown.indexOf("aleph-31")).toBeLessThan(shown.indexOf("aleph-27"));
+  expect(row.split("<details")[1]).toContain("did old aleph-1");
   expect(r.renderJobs(state)).not.toContain("Firefighter");
 });
 

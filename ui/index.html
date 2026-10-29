@@ -140,13 +140,12 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .mark svg { width: 22px; height: 22px; flex: none; }
 
 /* ---------- Now: metric cards ---------- */
-.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; margin: 0 0 24px; }
+.metrics { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; margin: 0 0 24px; }
 .metric { display: grid; gap: 10px; min-width: 0; padding: 20px 22px 18px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); color: var(--ink); text-decoration: none; }
 .metric:hover { border-color: var(--muted); }
 .metric .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
 .metric .v { font: 700 var(--fs-metric)/1 var(--metric); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); white-space: nowrap; }
-.usage { display: flex; align-items: center; gap: 16px; margin: 0 0 24px; flex-wrap: wrap; }
-.usage .metric { min-width: 200px; }
+.metric .quiet { font-size: var(--fs-xs); color: var(--muted); min-height: 2.6em; }
 .usage-line { width: 300px; height: 40px; color: var(--muted); }
 .wk { cursor: help; font-weight: 600; }
 .metric.done .v { color: var(--done); }
@@ -197,7 +196,12 @@ a.act { text-decoration: none; display: inline-block; }
 .page > section, section.wide { margin: 0 0 28px; min-width: 0; }
 section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+.cards.one { grid-template-columns: minmax(0, 1fr); }
 .cards > * { min-width: 0; margin: 0; }
+.ff-row { margin-top: 12px; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; }
+.ff-lines { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: var(--fs-sm); }
+.ff-lines li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ff-row details .ff-lines li { white-space: normal; }
 .list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .list > * { min-width: 0; margin: 0; }
 .issue-row .problem { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }
