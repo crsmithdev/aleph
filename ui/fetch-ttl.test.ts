@@ -154,3 +154,24 @@ test("a background fetch that brings an older remote state cannot move origin/ma
   expect(Bun.spawnSync(["git", "rev-parse", "origin/main"], { cwd: items }).stdout.toString().trim()).toBe(w!.commit);
   expect(readFetched({ key: "a" })!.items.some((i) => i.title === "written")).toBe(true);
 });
+
+test("with the cache on and warm, a write builds on origin/main as another clone just moved it", () => {
+  cacheFetches(uiFetchTtl());
+  if (!readList({ key: "a" })) {
+    writeList({ key: "a" }, "give a a list", (doc) => { add(doc, "one"); return true; }, true);
+    expect(readList({ key: "a" })).not.toBeNull();
+  }
+  const rev = (cwd: string, r: string): string => Bun.spawnSync(["git", "rev-parse", r], { cwd }).stdout.toString().trim();
+  const items = join(base, "items"), pusher = join(base, "pusher");
+  sh(base, "git", "clone", "-q", join(base, "items.git"), pusher);
+  writeFileSync(join(pusher, "elsewhere.txt"), "pushed inside the TTL\n");
+  sh(pusher, "git", "add", "elsewhere.txt");
+  sh(pusher, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "elsewhere");
+  sh(pusher, "git", "push", "-q", "origin", "main");
+  const pushed = rev(pusher, "HEAD");
+  const w = writeList({ key: "a" }, "write over a moved origin", () => true);
+  expect(w).not.toBeNull();
+  expect(rev(items, "origin/main^")).toBe(pushed);
+  expect(rev(items, "origin/main")).not.toBe(pushed);
+  expect(rev(items, "origin/main")).toBe(w!.commit);
+});
