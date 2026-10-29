@@ -118,7 +118,7 @@ describe("state", () => {
     run("20261027-000031-a", { kind: "triage", job: "fac-t2", name: "triage-fac-2", state: "running", todo: 2, started: ago(0.1) });
     run("20261027-000032-a", { kind: "triage", job: "fac-t3", name: "triage-fac-3", state: "done", reason: "malformed verdict: x", todo: 3, started: ago(7), ended: ago(6) });
     const s = state(now);
-    expect(s.triage.map((j) => [j.name, j.outcome])).toEqual([["triage-fac-2", undefined], ["triage-fac-1", "closed"], ["triage-fac-3", undefined]]);
+    expect("triage" in s).toBe(false);
     expect(s.running.map((j) => j.name)).toEqual(["fac-4"]);
     expect(s.issues.length).toBe(s.newIssues);
     expect(s.issues.every((i) => i.id.startsWith("fac-") && i.href.startsWith("#/issues/fac/") && i.status === "open")).toBe(true);

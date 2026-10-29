@@ -82,8 +82,6 @@ export interface State {
   newIssues: number;
   /** Every open issue in factory repos, whatever its labels: the count of the Issues metric card. */
   openIssues: number;
-  /** Triage runs: those running, then the latest finished. */
-  triage: Job[];
   /** Done: the last 10 done issues, newest first, each with the triage and land jobs that belong to it. */
   done: DoneItem[];
   /** Incoming: the last 10 issues added, newest first, each with its current status. */
@@ -102,7 +100,6 @@ export interface State {
 const DELIVERED = 10;
 /** So do the Issues and Triage sections. */
 const NEW_ISSUES = 10, TRIAGED = 10, DONE = 10;
-const OUTCOME: Record<string, string> = { goal: "goal", close: "closed", chris: "needs-chris", live: "live-check", planned: "planned" };
 
 /** The next firing of aleph-tick.timer, or null when systemctl fails or lists no such timer. */
 export function nextTick(): string | null {
@@ -206,14 +203,10 @@ export function state(now = new Date()): State {
   const liveJobs = new Set<string>(), liveItems = new Set<string>();
   const landRuns: Job[] = [];
   const openNames = new Set<string>();
-  const triageRuns: { at: number; runs: Runs; reason?: string }[] = [];
   for (const runs of jobs) {
     const last = runs.at(-1)!.run;
-    // A planner or facts run is shown like a triage: it sorts a goal and never lands.
-    if (last.kind === "triage" || last.kind === "plan" || last.kind === "facts") {
-      triageRuns.push({ at: Date.parse(last.state === "running" ? "9999-01-01" : last.ended ?? last.started), runs, reason: last.reason });
-      continue;
-    }
+    // A triage, planner or facts run sorts a goal and never lands.
+    if (last.kind === "triage" || last.kind === "plan" || last.kind === "facts") continue;
     if (isOpen(runs)) {
       const real = lastReal(runs).run;
       openNames.add(`${last.repo}/${last.name}`);
@@ -325,11 +318,6 @@ export function state(now = new Date()): State {
     attention: att.items, done, incoming: everyone.slice(0, NEW_ISSUES).map((e) => e.card), planner,
     standing: Object.entries(granted).map(([reason, g]) => ({ reason, action: g.action, at: g.at, handed: att.handed[reason] ?? 0 })),
     needs, stuck, running, landing, newIssues: fresh.length, openIssues, issues: fresh.slice(0, NEW_ISSUES), needsIssues: waitingOnChris,
-    triage: triageRuns.sort((a, b) => b.at - a.at).slice(0, TRIAGED).map((t) => {
-      const job = toJob(t.runs);
-      if (OUTCOME[t.reason ?? ""]) job.outcome = OUTCOME[t.reason!];
-      return job;
-    }),
     velocity: { landed: rate(landedAt), triaged: rate(triagedAt) },
     // Lands: land runs in progress first, then the latest landed, DELIVERED in all.
     delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).slice(0, Math.max(0, DELIVERED - landRuns.length)).map((d) => toJob(d.runs))].slice(0, DELIVERED),

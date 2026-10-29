@@ -56,8 +56,7 @@ test("an empty section shows its empty state", () => {
 });
 
 const issue = (n: number) => ({ id: `aleph-${n}`, title: `Issue ${n}`, status: "open", href: `#/issues/aleph/${n}`, labels: [], notes: 0, created: "2026-10-27", updated: "2026-10-27" });
-const triaged = (n: number, o: object = {}) => job({ name: `triage-aleph-${n}`, state: "done", outcome: "goal", item: { id: n, title: `Triaged ${n}` }, ended: "2026-10-27T16:40:00Z", ...o });
-const full: any = { ...state, issues: [issue(1), issue(2)], triage: [triaged(3, { state: "running", outcome: undefined }), triaged(4)], waiting: [{ repo: "aleph", id: 9, title: "w" }] };
+const full: any = { ...state, issues: [issue(1), issue(2)], waiting: [{ repo: "aleph", id: 9, title: "w" }] };
 const withAttn = (s: any) => r.renderJobs(s);
 const section = (h: string, id: string) => h.match(new RegExp(`<section id="${id}"[^]*?</section>`))![0];
 

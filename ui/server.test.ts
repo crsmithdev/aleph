@@ -45,7 +45,7 @@ test("/api/state is JSON with the spec's keys", async () => {
   const res = await at("/api/state");
   expect(res.headers.get("content-type")).toContain("application/json");
   const body: any = await res.json();
-  expect(Object.keys(body).sort()).toEqual(["attention", "delivered", "done", "factory", "incoming", "issues", "landing", "needs", "needsIssues", "newIssues", "now", "openIssues", "planner", "proposals", "running", "speed", "standing", "stuck", "triage", "usage", "velocity", "waiting"]);
+  expect(Object.keys(body).sort()).toEqual(["attention", "delivered", "done", "factory", "incoming", "issues", "landing", "needs", "needsIssues", "newIssues", "now", "openIssues", "planner", "proposals", "running", "speed", "standing", "stuck", "usage", "velocity", "waiting"]);
 });
 
 test("/api/state?project= keeps only that project's jobs", async () => {
