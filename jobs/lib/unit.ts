@@ -11,6 +11,8 @@ import { fetchOrigin, followMain, git } from "./git.ts";
 import { ALREADY_MET, heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { checkSlot, readReview2, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
+import { bridge, sandboxNetnsPid } from "./netns.ts";
+import { serveShots } from "./shot.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
 import { dispatchOn, gates, triageDetached, recordFlake, waitingToLand } from "./factory.ts";
 import { startReview2 } from "./review2.ts";
@@ -93,7 +95,10 @@ facts about the repo or its tools that you learned and checked. If the goal alre
 holds on your branch and no edit is needed, make no commit, run the repo's tests,
 and print exactly one line \`${ALREADY_MET}: <evidence>\`, the evidence being the
 files, the lines and the commit on \`${main}\` that show it. Run the repo's
-tests before you end. ${FOREGROUND} End with a short summary of what you did and what you ran.`;
+tests before you end. Chrome cannot start in the sandbox. For a screenshot of a page
+served by your own server on 127.0.0.1, run \`aleph-shot <url> <out.png> [--width 1440] [--height 900] [--scheme light|dark] [--click <css selector>] [--wait <ms>]\`:
+the factory takes the shot outside the sandbox and writes the PNG at the path, which must be inside the repo, and you commit it.
+Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. ${FOREGROUND} End with a short summary of what you did and what you ran.`;
 
 /** The fixed text, the spec, every note in order, and the previous run's files. */
 export function prompt(id: string, folder: string, run: Run, repo: Repo): string {
@@ -909,13 +914,25 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       ...repo.setup, "exec 1>&3 3>&-", `exec ${argv.map(q).join(" ")}`,
     ].join("\n");
     phase("worker");
-    const w = await sandboxed(dir, script, {
-      read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
-      env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
-      stdout: join(folder, "output.log"), stderr: join(folder, "stderr.log"), limit: limit("ALEPH_JOB_TIMEOUT", 2400),
-      stall: limit("ALEPH_STALL_SECONDS", 600),
-      onSpawn: (p) => { child = p; },
-    });
+    // Chrome stays outside the sandbox: the worker's shot requests are served here, through a bridge into its network namespace.
+    const reach = async (url: string) => {
+      const pid = child ? sandboxNetnsPid(child.pid) : null;
+      if (pid === null) return { url, stop: async () => {} };
+      const u = new URL(url);
+      const b = await bridge(pid, Number(u.port));
+      return { url: new URL(u.pathname + u.search + u.hash, b.url).href, stop: b.stop };
+    };
+    const shots = serveShots(dir, { reach });
+    let w: Awaited<ReturnType<typeof sandboxed>>;
+    try {
+      w = await sandboxed(dir, script, {
+        read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
+        env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
+        stdout: join(folder, "output.log"), stderr: join(folder, "stderr.log"), limit: limit("ALEPH_JOB_TIMEOUT", 2400),
+        stall: limit("ALEPH_STALL_SECONDS", 600),
+        onSpawn: (p) => { child = p; },
+      });
+    } finally { await shots.stop(); }
     child = null;
     const o = outcome(readFileSync(join(folder, "output.log"), "utf8"));
     writeFileSync(join(folder, "result.md"), o.result);

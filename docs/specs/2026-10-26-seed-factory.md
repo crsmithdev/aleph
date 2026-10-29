@@ -210,6 +210,7 @@ One given moves: the map's "`aleph land` is the only path to `main`" becomes "th
 - **Time box.** `RuntimeMaxSec` makes systemd stop the whole cgroup, including `setsid` children (probed with bwrap). The uid is Chris's, so `systemctl --user stop` and `aleph drop` still work.
 - **Token.** It comes from `claude setup-token`, is stored in `~/.aleph/secrets/worker-token` (0600) and is passed into the sandbox's environment. It lasts one year and draws on Chris's subscription quota. Inside the sandbox it can reach only the allowed domains.
 - **Probe.** `aleph sandbox probe` runs the checks of criterion 11 from inside the profile. It runs before the first run, and nightly from the timer.
+- **Screenshots.** Chrome stays outside the sandbox and keeps its own sandbox. `bin/aleph-shot` writes a request in `tmp/shots/`; the harness bridges the worker's port into the host with socat and nsenter (`jobs/lib/netns.ts`) and takes the shot over CDP (`jobs/lib/shot.ts`). The output path must be under `work/`. Nothing else leaves the sandbox.
 - **Worker prompt.** It is rewritten for the sandbox: no `aleph todo`, no push, no rebase. Follow-ups go in the result. Questions are answered with the recommended default and printed as `DEFAULT: <question> -> <answer>`.
 
 ### Work store

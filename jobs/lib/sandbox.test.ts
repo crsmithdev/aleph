@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { makeRunFolder, runPath } from "./sandbox.ts";
@@ -42,4 +42,9 @@ test("makeRunFolder finds claude in ~/.local/bin when PATH lacks it", () => {
     // git too: a step's own server (ui/server.ts) spawns it.
     expect(realpathSync(join(dir, "bin/git"))).toBe(realpathSync(Bun.which("git", { PATH: "/usr/bin:/bin" })!));
   } finally { process.env.HOME = old.HOME; process.env.PATH = old.PATH; }
+});
+
+test("makeRunFolder writes an executable bin/aleph-shot", () => {
+  const dir = makeRunFolder("r-shot");
+  expect(statSync(join(dir, "bin/aleph-shot")).mode & 0o111).toBe(0o111);
 });

@@ -4,10 +4,11 @@
  * folder and the bundles; each step is one `srt` call with its own profile.
  * See "Sandbox" in docs/specs/2026-10-26-seed-factory.md.
  */
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { expand, testParallel } from "./ledger.ts";
+import { SHOT_CLIENT } from "./shot.ts";
 
 export const runsDir = () => expand(process.env.ALEPH_RUNS_DIR ?? "~/.aleph/runs");
 const SRT = () => expand(process.env.ALEPH_SRT ?? "~/.aleph/tools/bin/srt");
@@ -52,7 +53,7 @@ export function linkBins(dir: string): void {
  * A new run folder: home/ with Claude Code settings and a git identity, work/,
  * tmp/, sock/ for srt's own sockets, out/ for the bundle the worker hands
  * back, check/ and checklog/ for the checks, and bin/ with links to claude, bun,
- * bunx and git.
+ * bunx and git, and aleph-shot, the client of the screenshot requests.
  */
 export function makeRunFolder(id: string): string {
   const dir = join(runsDir(), id);
@@ -60,6 +61,8 @@ export function makeRunFolder(id: string): string {
   for (const d of ["home", "work", "tmp", "sock", "out", "check", "checklog"]) mkdirSync(join(dir, d), { recursive: true });
   writeHome(join(dir, "home"));
   linkBins(dir);
+  writeFileSync(join(dir, "bin", "aleph-shot"), SHOT_CLIENT);
+  chmodSync(join(dir, "bin", "aleph-shot"), 0o755);
   return dir;
 }
 

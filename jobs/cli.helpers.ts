@@ -212,6 +212,7 @@ case $action in
   status\\ *) set -- \${action#status }; cli=$1; shift
     for i in "$@"; do bun "$cli" status "$i" --json; done > "$FAKE_LOG/status-inside"
     echo s > s.txt; git add s.txt; git commit -qm "add s.txt" ;;
+  shot\\ *) url=\${action#shot }; aleph-shot "$url" shot.png --width 1440 --height 900 > "$FAKE_LOG/shot.out" 2>&1; echo $? > "$FAKE_LOG/shot.code"; git add shot.png; git commit -qm "add shot.png" ;;
   push)
     GIT_SSH_COMMAND="$FAKE_LOG/ssh" git push git@github.com:x/y.git HEAD > /dev/null 2>&1; echo $? > "$FAKE_LOG/push.code"
     gh auth status > /dev/null 2>&1; echo $? > "$FAKE_LOG/gh.code" ;;

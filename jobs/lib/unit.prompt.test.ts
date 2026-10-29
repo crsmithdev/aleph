@@ -33,3 +33,13 @@ test("the sandbox prompt asks for FACT lines that parseFacts reads; the other pr
   expect(parseFacts(filled).facts).toEqual([{ fact: "x is y", source: "a/b.ts:3" }]);
   expect(prompt("run-2", join(dir, "run-2"), run, { sandbox: false, main: "main" } as any)).not.toContain("FACT:");
 });
+
+test("the sandbox prompt names aleph-shot and its options; the other prompt does not", () => {
+  mkdirSync(join(dir, "run-3"), { recursive: true });
+  mkdirSync(join(dir, "job-z"), { recursive: true });
+  writeFileSync(join(dir, "job-z", "spec.md"), "# a goal\n");
+  const run = { name: "job-z", job: "job-z", branch: "factory/job-z", kind: "agent", state: "running" } as any;
+  const text = prompt("run-3", join(dir, "run-3"), run, { sandbox: true, main: "main" } as any);
+  for (const w of ["aleph-shot", "--width", "--height", "--scheme", "--click", "--wait"]) expect(text).toContain(w);
+  expect(prompt("run-3", join(dir, "run-3"), run, { sandbox: false, main: "main" } as any)).not.toContain("aleph-shot");
+});
