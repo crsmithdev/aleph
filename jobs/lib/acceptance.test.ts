@@ -82,6 +82,11 @@ test("shell loops that run a check are runnable; loops that run no check are not
   expect(oracleCommands(body)).toEqual([a, b, c, "bun test y"]);
 });
 
+test("a placeholder of more than one word is not runnable; a redirection with a space is", () => {
+  const body = "## Oracle\n`bun test <that file>`\n`bun test <test file path>`\n`bun test jobs/lib/a.test.ts 2>&1`\n`bun test jobs/lib/a.test.ts <in >out`\n`bun test jobs/lib/a.test.ts > out.log`";
+  expect(oracleCommands(body)).toEqual(["bun test jobs/lib/a.test.ts 2>&1", "bun test jobs/lib/a.test.ts <in >out", "bun test jobs/lib/a.test.ts > out.log"]);
+});
+
 test("a command with an angle-bracket placeholder is not runnable; a redirection is", async () => {
   const body = "## Oracle\n`bun test <file>`\n`bun test jobs/<name>.test.ts`\n`bun test jobs/lib/a.test.ts 2>&1`";
   expect(oracleCommands(body)).toEqual(["bun test jobs/lib/a.test.ts 2>&1"]);
