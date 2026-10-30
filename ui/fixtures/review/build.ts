@@ -33,7 +33,11 @@ function copyPlain(from: string, to: string): void {
   }
 }
 
-interface FixtureItem { title: string; labels?: string[]; priority?: string; body?: string; status?: string; waitingOn?: string; due?: string; notes?: string[] }
+interface FixtureItem { title: string; labels?: string[]; priority?: string; body?: string; status?: string; waitingOn?: string; due?: string; notes?: string[];
+  /** The new-shape fields, written as the item's own: `kind`, `source`, `issue`, `goals`, `after`, `areas`, `ask` and the ask's `reason` and `question`. */
+  kind?: string; source?: string; issue?: string; goals?: string[]; after?: string[]; areas?: string[]; ask?: string; reason?: string; question?: string }
+
+const NEW_SHAPE = ["kind", "source", "issue", "goals", "after", "areas", "ask", "reason", "question"] as const;
 
 /** Build the home under `dest` from `src`; returns the environment that points aleph at it. */
 export function buildReviewFixture(dest: string, src = import.meta.dir): Record<string, string> {
@@ -44,7 +48,7 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
   const registry: Record<string, unknown> = {};
   for (const [key, r] of Object.entries(named)) {
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(key)) throw new Error(`fixture project name ${JSON.stringify(key)} is not a plain name`);
-    registry[key] = { path: join(dest, "repos", key), main: "main", checks: r.checks ?? [] };
+    registry[key] = { path: join(dest, "repos", key), main: "main", sandbox: true, checks: r.checks ?? [] };
   }
   writeFileSync(join(dest, "repos.json"), JSON.stringify(registry, null, 2) + "\n");
   // Each project is a git repo with one commit, so the pages that read a repo's log and branches find one.
@@ -79,6 +83,7 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
       writeList({ key }, "fixture", (doc) => {
         for (const r of rows) {
           const item = add(doc, r.title, { labels: r.labels, priority: r.priority, body: r.body, waitingOn: r.waitingOn, due: r.due });
+          for (const k of NEW_SHAPE) if (r[k] !== undefined) item.fm[k] = r[k];
           for (const n of r.notes ?? []) note(item, n);
           if (r.status && r.status !== "open") setStatus(item, r.status as "done" | "dropped");
         }

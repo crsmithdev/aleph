@@ -154,11 +154,11 @@ function doneLane(s) {
   return lane("done", "Done", (s.done ?? []).length, rows, "Nothing is done yet.");
 }
 
-/** Incoming: the untriaged issues, newest first. */
+/** Incoming: the new issues, newest first, each with its stage. */
 function incomingLane(s) {
   const d = new Date(s.now);
   const rows = (s.issues ?? []).map((i) =>
-    laneCard("incoming-row", idLink(i.id, i.href), statusBadge("untriaged"), i.created ? when(i.created, d) : "", i.title, i.href, "")).join("");
+    laneCard("incoming-row", idLink(i.id, i.href), statusBadge(i.status), i.created ? when(i.created, d) : "", i.title, i.href, "")).join("");
   return lane("incoming", "Incoming", incomingCount(s), rows, "No untriaged issues.");
 }
 

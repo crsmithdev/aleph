@@ -5,14 +5,16 @@
  */
 import { resultLine } from "../jobs/lib/acceptance.ts";
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { DAY_CAP, LIVE_CAP, WAITING_CAP, baselines, doneChecker, firefighterLines, gates, health, hold, lastProbe, openGoals, paused, redLine, runsToday, waitReason, type WaitReason } from "../jobs/lib/factory.ts";
-import { allRuns, loadRegistry, type Repo } from "../jobs/lib/ledger.ts";
+import { DAY_CAP, LIVE_CAP, WAITING_CAP, baselines, doneChecker, firefighterLines, gates, health, hold, lastProbe, paused, redLine, runsToday, waitReason, type WaitReason } from "../jobs/lib/factory.ts";
+import { allRuns, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { readDecision, type Decision } from "../jobs/lib/decision.ts";
 import { attend, stuckBlocker, type AttentionItem, type Blocker } from "./attention.ts";
 import { readStanding } from "../jobs/lib/standing.ts";
-import { isSorted, labels, needsChris, reader } from "../todo/lib/store.ts";
+import { askOf, labels, reader } from "../todo/lib/store.ts";
 import { parseRef, status } from "../todo/lib/todo.ts";
+import { facts, landedIndex, stages } from "../jobs/lib/status.ts";
+import type { Stage } from "../jobs/lib/stage.ts";
 import type { Wk } from "./usage.ts";
 
 export interface Job {
@@ -57,7 +59,7 @@ export interface NewIssue { id: string; title: string; status: string; href: str
 
 /** A done issue as the Done list shows it: the issue is the head, its jobs are links. */
 export interface DoneItem { id: string; title: string; href: string; finished: string; jobs: Job[] }
-/** An issue as the Incoming list shows it: `status` is untriaged, waiting on Chris, queued, building, landing, needs you, stuck, landed, sorted, done or dropped. */
+/** An issue as the Incoming list shows it: `status` is the item's stage from stage(). */
 export interface IncomingItem { id: string; title: string; href: string; created: string; status: string }
 
 export interface State {
@@ -192,39 +194,54 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
     if (trailers.length) job.trailers = trailers;
     return job;
   };
-  return { lists, toJob };
+  // One landedIndex per repo per request: the stage of each item of a repo, by number.
+  const staged = new Map<string, Map<number, Stage>>();
+  const stagesOf = (repo: Repo): Map<number, Stage> => {
+    let m = staged.get(repo.key);
+    if (!m) {
+      m = new Map();
+      const doc = lists.list(repo.key);
+      if (doc) {
+        try {
+          const f = facts(repo, doc), main = `refs/remotes/origin/${f.main}`;
+          for (const st of stages(repo.path, main, f, Object.keys(f.items).map(Number), landedIndex(repo.path, main, repo.key))) m.set(Number(st.id.slice(repo.key.length + 1)), st);
+        } catch {}
+      }
+      staged.set(repo.key, m);
+    }
+    return m;
+  };
+  return { lists, toJob, stagesOf };
 }
 
 export function state(now = new Date()): State {
   const registry = loadRegistry();
   const jobs = allJobs();
-  const { lists, toJob } = jobProjector(registry);
+  const { lists, toJob, stagesOf } = jobProjector(registry);
 
   let landing = 0;
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
   const delivered: { at: number; runs: Runs }[] = [];
   const liveJobs = new Set<string>(), liveItems = new Set<string>();
   const landRuns: Job[] = [];
-  const openNames = new Set<string>();
   const planned = new Set<string>();
   for (const runs of jobs) {
     const last = runs.at(-1)!.run;
-    // A running planner counts as running and holds its goal out of Queued; it is not a live agent.
+    // A running planner counts as running; it is not a live agent.
     if (last.kind === "plan" && last.state === "running") {
       running.push(toJob(runs));
-      if (last.todo !== undefined) planned.add(`${last.repo}/${last.todo}`);
+      if (onOf(last) !== undefined) planned.add(`${last.repo}/${onOf(last)}`);
       continue;
     }
     // A triage, planner or facts run sorts a goal and never lands.
     if (last.kind === "triage" || last.kind === "plan" || last.kind === "facts") continue;
     if (isOpen(runs)) {
       const real = lastReal(runs).run;
-      openNames.add(`${last.repo}/${last.name}`);
-      if (real.state === "needs-you") needs.push(toJob(runs));
+      if (isAwaiting(real.state)) needs.push(toJob(runs));
       else if (real.state === "stuck" || real.state === "failed") stuck.push(toJob(runs));
       else {
         liveJobs.add(real.job);
-        if (real.todo !== undefined) liveItems.add(`${real.repo}/${real.todo}`);
+        if (onOf(real) !== undefined) liveItems.add(`${real.repo}/${onOf(real)}`);
         const job = toJob(runs);
         running.push(job);
         if (real.kind === "land") { landing++; landRuns.push(job); }
@@ -266,44 +283,33 @@ export function state(now = new Date()): State {
   const ofItem = new Map<string, Runs[]>();
   for (const runs of jobs) {
     const real = lastReal(runs).run;
-    if (real.todo === undefined) continue;
-    const k = `${real.repo}-${real.todo}`;
+    const n = onOf(real);
+    if (n === undefined) continue;
+    const k = `${real.repo}-${n}`;
     ofItem.set(k, [...(ofItem.get(k) ?? []), runs]);
   }
-  const SORTING = ["triage", "plan", "facts"];
-  const itemStatus = (repoKey: string, item: any): string => {
-    const st = status(item);
-    if (st !== "open") return st;
-    if (needsChris(item)) return "waiting on Chris";
-    const mine = ofItem.get(`${repoKey}-${item.id}`) ?? [];
-    const open = mine.find((r) => isOpen(r) && !SORTING.includes(r.at(-1)!.run.kind));
-    if (open) {
-      const real = lastReal(open).run;
-      return real.state === "needs-you" ? "needs you" : real.state === "stuck" || real.state === "failed" ? "stuck" : real.kind === "land" ? "landing" : "building";
-    }
-    if (mine.some((r) => r.at(-1)!.run.state === "landed")) return "landed";
-    if (labels(item).includes("goal")) return "queued";
-    return isSorted(item) ? "sorted" : "untriaged";
-  };
   const everyone: { at: string; n: number; card: IncomingItem }[] = [];
   const doneItems: { at: number; repo: Repo; item: any }[] = [];
 
   const fresh: NewIssue[] = [];
   const waitingOnChris: NewIssue[] = [];
+  const queued: { repo: Repo; item: any }[] = [];
   let openIssues = 0;
   for (const repo of Object.values(registry)) {
     if (!repo.sandbox) continue;
+    const stageById = stagesOf(repo);
     for (const item of lists.list(repo.key)?.items ?? []) {
+      const st = stageById.get(item.id)?.stage ?? status(item);
       const card = (): NewIssue => ({ id: `${repo.key}-${item.id}`, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}`, labels: labels(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? "") });
       const created = String(item.fm.created ?? "");
-      everyone.push({ at: created, n: item.id, card: { id: `${repo.key}-${item.id}`, title: item.title, href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}`, created, status: itemStatus(repo.key, item) } });
-      if (status(item) === "done") {
+      everyone.push({ at: created, n: item.id, card: { id: `${repo.key}-${item.id}`, title: item.title, href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}`, created, status: st } });
+      if (st === "done") {
         const ends = (ofItem.get(`${repo.key}-${item.id}`) ?? []).map((r) => Date.parse(r.at(-1)!.run.ended ?? "")).filter((t) => t > 0);
         doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(String(item.fm.updated ?? "")) || 0, repo, item });
       }
-      if (status(item) !== "open") continue;
+      if (status(item) !== "open" || st === "done" || st === "dropped") continue;
       openIssues++;
-      if (needsChris(item)) {
+      if (st === "awaiting" && askOf(item)) {
         const c = card();
         const q = item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
         if (q) c.question = q;
@@ -312,7 +318,8 @@ export function state(now = new Date()): State {
         if (typeof item.fm.reason === "string" && item.fm.reason) c.reason = item.fm.reason;
         waitingOnChris.push(c);
       }
-      else if (!isSorted(item)) fresh.push(card());
+      else if ((st === "queued" || st === "blocked") && !planned.has(`${repo.key}/${item.id}`)) queued.push({ repo, item });
+      else if (st === "new") fresh.push({ ...card(), status: st });
     }
   }
 
@@ -346,24 +353,23 @@ export function state(now = new Date()): State {
     velocity: { landed: rate(landedAt), triaged: rate(triagedAt) },
     // Lands: land runs in progress first, then the latest landed, DELIVERED in all.
     delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).slice(0, Math.max(0, DELIVERED - landRuns.length)).map((d) => toJob(d.runs))].slice(0, DELIVERED),
-    waiting: openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`) && !planned.has(`${repo.key}/${item.id}`) && !labels(item).includes("planned"))
-      .map(({ repo, item }) => {
-        const href = `#/issues/${encodeURIComponent(repo.key)}/${item.id}`;
-        let red: string | null = null;
-        const b = baselines()[repo.key];
-        if (b && !b.ok) {
-          const p = Bun.spawnSync(["git", "-C", repo.path, "rev-parse", `origin/${repo.main}`], { stdout: "pipe", stderr: "ignore" });
-          if (p.stdout.toString().trim() === b.commit) red = redLine(b);
-        }
-        const w = waitReason(repo, item, { done: isDone, jobs, gated, red, now });
-        return {
-          repo: repo.key, id: item.id, title: item.title, why: w.text, kind: w.kind,
-          ...(w.kind === "waits_on" ? { waits: w.ids.map((id) => {
-            const r = parseRef(id), found = r ? lists.item(r.repo, r.id) : undefined;
-            return { id, href: r ? `#/issues/${encodeURIComponent(r.repo)}/${r.id}` : "", state: r && found ? itemStatus(r.repo, found) : null };
-          }) } : {}),
-          ...(w.kind === "needs-chris" ? { ask: { href } } : {}),
-        };
-      }),
+    waiting: queued.map(({ repo, item }) => {
+      const href = `#/issues/${encodeURIComponent(repo.key)}/${item.id}`;
+      let red: string | null = null;
+      const b = baselines()[repo.key];
+      if (b && !b.ok) {
+        const p = Bun.spawnSync(["git", "-C", repo.path, "rev-parse", `origin/${repo.main}`], { stdout: "pipe", stderr: "ignore" });
+        if (p.stdout.toString().trim() === b.commit) red = redLine(b);
+      }
+      const w = waitReason(repo, item, { done: isDone, jobs, gated, red, now });
+      return {
+        repo: repo.key, id: item.id, title: item.title, why: w.text, kind: w.kind,
+        ...(w.kind === "waits_on" ? { waits: w.ids.map((id) => {
+          const r = parseRef(id), found = r ? lists.item(r.repo, r.id) : undefined;
+          return { id, href: r ? `#/issues/${encodeURIComponent(r.repo)}/${r.id}` : "", state: r && found && registry[r.repo] ? stagesOf(registry[r.repo]).get(r.id)?.stage ?? status(found) : null };
+        }) } : {}),
+        ...(w.kind === "needs-chris" ? { ask: { href } } : {}),
+      };
+    }),
   };
 }

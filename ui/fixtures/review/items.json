@@ -1,20 +1,229 @@
 {
   "demo": [
-    { "title": "Show the build time on the status page", "labels": ["goal"], "priority": "high", "body": "The status page lists builds without how long each took.\n\n## Goal\nAdd a duration column.", "status": "done" },
-    { "title": "Retry flaky uploads", "labels": ["goal"], "status": "dropped", "notes": ["Dropped: the upload is gone."] },
-    { "title": "Rename the config keys", "labels": ["goal"], "priority": "low", "body": "Held: touches a protected path." },
-    { "title": "Cache the index page", "labels": ["goal"], "waitingOn": "demo-3", "due": "2026-11-15" },
-    { "title": "Which license should the repo carry?", "labels": ["needs-chris"], "body": "MIT or Apache-2.0.", "notes": ["Triage: only Chris can decide."] },
-    { "title": "Crash on an empty config", "labels": ["bug", "triaged"], "priority": "high" },
-    { "title": "Check the dark theme on the phone", "labels": ["live-check"] },
-    { "title": "Add a dry-run flag", "labels": ["proposal"] },
-    { "title": "Typo in the README", "labels": [] },
-    { "title": "Speed up the import", "labels": ["goal"], "status": "dropped", "notes": ["Dropped: not worth it."] }
+    {
+      "title": "Show the build time on the status page",
+      "labels": [
+        "goal"
+      ],
+      "priority": "high",
+      "body": "The status page lists builds without how long each took.\n\n## Goal\nAdd a duration column.",
+      "status": "done"
+    },
+    {
+      "title": "Retry flaky uploads",
+      "labels": [
+        "goal"
+      ],
+      "status": "dropped",
+      "notes": [
+        "Dropped: the upload is gone."
+      ]
+    },
+    {
+      "title": "Rename the config keys",
+      "labels": [
+        "goal"
+      ],
+      "priority": "low",
+      "body": "Held: touches a protected path."
+    },
+    {
+      "title": "Cache the index page",
+      "labels": [
+        "goal"
+      ],
+      "waitingOn": "demo-3",
+      "due": "2026-11-15"
+    },
+    {
+      "title": "Which license should the repo carry?",
+      "labels": [
+        "needs-chris"
+      ],
+      "body": "MIT or Apache-2.0.",
+      "notes": [
+        "Triage: only Chris can decide."
+      ]
+    },
+    {
+      "title": "Crash on an empty config",
+      "labels": [
+        "bug",
+        "triaged"
+      ],
+      "priority": "high"
+    },
+    {
+      "title": "Check the dark theme on the phone",
+      "labels": [
+        "live-check"
+      ]
+    },
+    {
+      "title": "Add a dry-run flag",
+      "labels": [
+        "proposal"
+      ]
+    },
+    {
+      "title": "Typo in the README",
+      "labels": []
+    },
+    {
+      "title": "Speed up the import",
+      "labels": [
+        "goal"
+      ],
+      "status": "dropped",
+      "notes": [
+        "Dropped: not worth it."
+      ]
+    },
+    {
+      "title": "Resize the avatar upload",
+      "labels": [
+        "goal"
+      ]
+    },
+    {
+      "title": "Land the CSV export",
+      "labels": [
+        "goal"
+      ]
+    },
+    {
+      "title": "Show the build log tail",
+      "labels": [
+        "goal"
+      ]
+    },
+    {
+      "title": "Plan the settings page",
+      "labels": [
+        "bug"
+      ]
+    },
+    {
+      "title": "Drop the legacy exporter",
+      "kind": "goal",
+      "source": "chris",
+      "status": "dropped",
+      "notes": [
+        "Dropped: the exporter is gone."
+      ]
+    },
+    {
+      "title": "Add a --json flag to the report",
+      "kind": "goal",
+      "source": "chris",
+      "status": "done"
+    },
+    {
+      "title": "Which cache backend should the index use?",
+      "kind": "issue",
+      "source": "chris",
+      "ask": "input",
+      "reason": "question",
+      "question": "Redis or in-process?"
+    },
+    {
+      "title": "Batch the thumbnail jobs",
+      "kind": "goal",
+      "source": "worker",
+      "areas": [
+        "images"
+      ]
+    },
+    {
+      "title": "Stream the log tail",
+      "kind": "goal",
+      "source": "worker",
+      "issue": "demo-23"
+    },
+    {
+      "title": "Land the thumbnail cache",
+      "kind": "goal",
+      "source": "worker",
+      "issue": "demo-23",
+      "after": [
+        "demo-16"
+      ]
+    },
+    {
+      "title": "Warm the cache on deploy",
+      "kind": "goal",
+      "source": "chris",
+      "after": [
+        "demo-17"
+      ]
+    },
+    {
+      "title": "Prune stale thumbnails",
+      "kind": "goal",
+      "source": "chris",
+      "areas": [
+        "images"
+      ]
+    },
+    {
+      "title": "Rework the thumbnail pipeline",
+      "kind": "issue",
+      "source": "chris",
+      "goals": [
+        "demo-19"
+      ]
+    },
+    {
+      "title": "Plan the metrics page",
+      "kind": "issue",
+      "source": "worker"
+    },
+    {
+      "title": "Show a spinner on slow pages",
+      "kind": "issue",
+      "source": "worker",
+      "labels": [
+        "triaged"
+      ]
+    },
+    {
+      "title": "Footer link is dead",
+      "kind": "issue",
+      "source": "chris"
+    },
+    {
+      "title": "Approve the schema change",
+      "kind": "goal",
+      "source": "chris"
+    }
   ],
   "tools": [
-    { "title": "Parse dates in the import command", "labels": ["goal"], "body": "Dates in the CSV come through as text." },
-    { "title": "Flaky test in the parser suite", "labels": ["goal"], "priority": "high" },
-    { "title": "Old export format", "labels": ["bug"], "status": "done" },
-    { "title": "Support a second input file", "labels": ["proposal"] }
+    {
+      "title": "Parse dates in the import command",
+      "labels": [
+        "goal"
+      ],
+      "body": "Dates in the CSV come through as text."
+    },
+    {
+      "title": "Flaky test in the parser suite",
+      "labels": [
+        "goal"
+      ],
+      "priority": "high"
+    },
+    {
+      "title": "Old export format",
+      "labels": [
+        "bug"
+      ],
+      "status": "done"
+    },
+    {
+      "title": "Support a second input file",
+      "labels": [
+        "proposal"
+      ]
+    }
   ]
 }

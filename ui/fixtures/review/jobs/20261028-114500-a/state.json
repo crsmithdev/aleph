@@ -1,0 +1,1 @@
+{"kind":"build","job":"demo-27","name":"demo-27","repo":"demo","branch":"factory/demo-27","state":"awaiting","on":"demo-27","told":true,"started":"2026-10-28T11:45:00.000Z","ended":"2026-10-28T11:55:00.000Z","model":"claude-sonnet-5-5","ask":{"kind":"approval","reason":"held-path","question":"The change touches schema.sql. Approve?","options":[],"why":["schema.sql | 3 ++-"]}}

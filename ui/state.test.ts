@@ -2,8 +2,9 @@ import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { mkdirSync, renameSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeList } from "../todo/lib/store.ts";
-import { add, note } from "../todo/lib/todo.ts";
+import { goalsOf, kindOf, readList, writeList } from "../todo/lib/store.ts";
+import { buildReviewFixture } from "./fixtures/review/build.ts";
+import { add } from "../todo/lib/todo.ts";
 import { state } from "./state.ts";
 import { loadRegistry } from "../jobs/lib/ledger.ts";
 import { spawn } from "node:child_process";
@@ -122,7 +123,7 @@ describe("state", () => {
     expect("triage" in s).toBe(false);
     expect(s.running.map((j) => j.name)).toEqual(["fac-4"]);
     expect(s.issues.length).toBe(s.newIssues);
-    expect(s.issues.every((i) => i.id.startsWith("fac-") && i.href.startsWith("#/issues/fac/") && i.status === "open")).toBe(true);
+    expect(s.issues.every((i) => i.id.startsWith("fac-") && i.href.startsWith("#/issues/fac/") && i.status === "new")).toBe(true);
     for (const id of ["20261027-000030-a", "20261027-000031-a", "20261027-000032-a"]) rmSync(join(jobsDir, id), { recursive: true });
   });
 
@@ -135,8 +136,8 @@ describe("state", () => {
     run("20261027-000009-a", { kind: "land", job: "fac-8", name: "fac-8", state: "running" });
     const s = state(now);
     expect(s.landing).toBe(1);
-    // The seeded items and "bare" have no label; the goal and the triaged one do.
-    expect(s.newIssues).toBe(6);
+    // New is stage "new": the items with a job (fac-1, 3, 4), the goal and the triaged one are not.
+    expect(s.newIssues).toBe(3);
   });
 
   test("openIssues counts every open issue, past the 10 that issues lists and whatever the labels", () => {
@@ -265,12 +266,59 @@ describe("a planner run", () => {
   });
 });
 
+describe("the review fixture", () => {
+  const LISTS = ["issues", "waiting", "running", "needs", "needsIssues", "stuck", "done"] as const;
+  /** The list that holds an item of this stage; none for the stages the lists do not name. */
+  const LIST_OF: Record<string, (typeof LISTS)[number][]> = {
+    new: ["issues"], queued: ["waiting"], building: ["running"], landing: ["running"], awaiting: ["needs", "needsIssues"], stuck: ["stuck"], done: ["done"],
+    blocked: ["waiting"], triaged: [], planning: [], dropped: [],
+  };
+
+  test("every item's Incoming status is its `aleph status` stage, and its list is the list of that stage", () => {
+    const home = mkdtempSync(join(tmpdir(), "aleph-ui-review-"));
+    const env = buildReviewFixture(home);
+    const savedEnv: Record<string, string | undefined> = {};
+    for (const [k, v] of Object.entries(env)) { savedEnv[k] = process.env[k]; process.env[k] = v; }
+    try {
+      const s = state();
+      const incoming = new Map(s.incoming.map((i) => [i.id, i.status]));
+      const held = (id: string, repo: string, n: number) => {
+        const of = (js: { repo: string; item?: { id: number } | null; id?: number }[]) => js.some((j) => j.repo === repo && (j.item?.id ?? j.id) === n);
+        return LISTS.filter((l) => l === "needsIssues" || l === "issues" ? s[l].some((i) => i.id === id) : l === "done" ? s.done.some((d) => d.id === id) : of(s[l] as any));
+      };
+      const stages: Record<string, number> = {};
+      const registry = loadRegistry();
+      for (const key of Object.keys(registry)) {
+        const doc = readList({ key })!;
+        for (const item of doc.items) {
+          const id = `${key}-${item.id}`;
+          const p = Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts"), "status", id, "--json"], { env: { ...process.env, ...env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
+          expect(p.exitCode, `${id}: ${p.stderr}`).toBe(0);
+          const stage = JSON.parse(p.stdout.toString()).stage as string;
+          stages[stage] = (stages[stage] ?? 0) + 1;
+          if (incoming.has(id)) expect(incoming.get(id), id).toBe(stage);
+          // A planned goal is held out of Waiting; a job's own list holds an item whose stage came from the job.
+          const lists = held(id, key, item.id);
+          const want = LIST_OF[stage];
+          if (want.length === 0) expect(lists.filter((l) => l !== "running"), id).toEqual([]);
+          // An issue that stands on its goals has no run of its own: its goals' runs are in the lists.
+          else if (!(kindOf(item) === "issue" && goalsOf(item).length)) expect(lists.some((l) => want.includes(l)), `${id} ${stage} in ${lists}`).toBe(true);
+          for (const l of lists) if (l !== "running" && l !== "needs" && l !== "stuck") expect(want, `${id} ${stage} is in ${l}`).toContain(l);
+        }
+      }
+      // Every stage has an item, and the fixture holds one of each shape.
+      expect(Object.keys(stages).sort()).toEqual(Object.keys(LIST_OF).sort());
+    } finally {
+      for (const [k, v] of Object.entries(savedEnv)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("waiting entries", () => {
   test("carry why, kind, and the links the Queued lane shows", async () => {
     writeList({ key: "fac" }, "waiting fixtures", (doc) => {
       add(doc, "waits goal", { labels: ["goal"], waitingOn: "fac-2" });
-      const ask = add(doc, "ask goal", { labels: ["goal", "needs-chris"] });
-      note(ask, "needs-chris: which port?");
       return true;
     }, true);
     // The stuck fac-3 would hold every start: set it aside, so only the reasons under test remain.
@@ -281,10 +329,7 @@ describe("waiting entries", () => {
     const by = (s: ReturnType<typeof state>, title: string) => s.waiting.find((w) => w.title === title)!;
     const s = state(now);
     expect(by(s, "waits goal")).toMatchObject({ kind: "waits_on", why: "Waits on fac-2", waits: [{ id: "fac-2", href: "#/issues/fac/2", state: "queued" }] });
-    const ask = by(s, "ask goal");
-    expect(ask.kind).toBe("needs-chris");
-    expect(ask.why.startsWith("Waits for you: ")).toBe(true);
-    expect(ask.ask).toEqual({ href: `#/issues/fac/${ask.id}` });
+    // A goal that asks for you is awaiting: it is in needsIssues, not Waiting.
     expect(by(s, "waiting goal").why).toBe("Starts at the next dispatch");
 
     const dir = join(jobsDir, "20261027-000060-a");

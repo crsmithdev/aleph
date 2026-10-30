@@ -678,9 +678,9 @@ test("Done lists the issue as head with its triage, work and land jobs and commi
 });
 
 test("Incoming lists the untriaged issues only, with link, time and badge", () => {
-  const inc = [1, 2].map((i) => ({ ...issue(i), created: "2026-10-27" }));
+  const inc = [1, 2].map((i) => ({ ...issue(i), created: "2026-10-27", status: "new" }));
   const h = r.renderLanes({ ...state, issues: inc, incoming: [{ ...issue(3), status: "queued" }] }).match(/<section id="lane-incoming"[^]*?<\/section>/)![0];
-  expect(h).toContain(">untriaged</span>");
+  expect(h).toContain(">new</span>");
   expect(h).toContain('<a href="#/issues/aleph/1" class="t">Issue 1</a>');
   expect(h).not.toContain("Issue 3");
   expect(h).toMatch(/Oct 27/);
