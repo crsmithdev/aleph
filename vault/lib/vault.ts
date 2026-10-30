@@ -3,7 +3,7 @@
  * over a directory; the CLI decides what to write and commit.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "./frontmatter.ts";
@@ -77,7 +77,7 @@ function parseNote(path: string, root: string, text: string): Note {
   return { path, rel, title: basename(path, ".md"), fm: frontmatter === null ? {} : parseFrontmatter(frontmatter), hasFrontmatter: frontmatter !== null, body, text, wiki: rel.startsWith("wiki/"), archived: rel.startsWith("archive/") };
 }
 
-function walk(dir: string, out: string[] = []): string[] {
+export function walk(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out;
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     if (e.name.startsWith(".")) continue;
@@ -96,19 +96,21 @@ const cache = new Map<string, { mtimeMs: number; size: number; note: Note }>();
 export const loadStats = { reads: 0 };
 
 /** Every markdown file outside .obsidian/, archive included: archived notes are link targets. */
-export function loadVault(root: string): Note[] {
+export async function loadVault(root: string): Promise<Note[]> {
   const seen = new Set<string>();
-  const notes = walk(root).map((p) => {
-    const key = `${root}\0${p}`;
-    seen.add(key);
-    const st = statSync(p);
-    const hit = cache.get(key);
-    if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return { ...hit.note };
-    loadStats.reads++;
-    const note = readNote(p, root);
-    cache.set(key, { mtimeMs: st.mtimeMs, size: st.size, note });
-    return { ...note };
-  });
+  const notes = await Promise.all(
+    walk(root).map(async (p) => {
+      const key = `${root}\0${p}`;
+      seen.add(key);
+      const st = await stat(p);
+      const hit = cache.get(key);
+      if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return { ...hit.note };
+      loadStats.reads++;
+      const note = parseNote(p, root, await readFile(p, "utf8"));
+      cache.set(key, { mtimeMs: st.mtimeMs, size: st.size, note });
+      return { ...note };
+    }),
+  );
   for (const key of cache.keys()) if (key.startsWith(`${root}\0`) && !seen.has(key)) cache.delete(key);
   return notes;
 }

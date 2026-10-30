@@ -73,7 +73,7 @@ const missesCache = staleAsync<{ value: unknown; cachedAt: string }>();
 const ttlMs = () => { const n = Number(process.env.ALEPH_UI_CACHE_TTL ?? 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
 /** The vault's notes, reloaded at most every ALEPH_UI_FETCH_TTL seconds: a load stats every file, which is slow on /mnt/c. */
 const notes = staleAsync<Note[]>();
-export const vaultNotes = (root: string): Promise<Note[]> => notes.get(root, uiFetchTtl() * 1000, async () => loadVault(root));
+export const vaultNotes = (root: string): Promise<Note[]> => notes.get(root, uiFetchTtl() * 1000, () => loadVault(root));
 export const clearCache = () => { missesCache.clear(); notes.clear(); };
 async function runMisses(): Promise<unknown | null> {
   try {
