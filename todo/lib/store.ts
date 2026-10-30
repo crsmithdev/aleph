@@ -150,6 +150,8 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
       const text = renderItem(repo.key, item);
       if (before.get(item.id) !== text) files[itemPath(repo.key, item.id)] = text;
     }
+    // Nothing changed: no commit, so the store's history holds only real writes.
+    if (Object.keys(files).length === 0) return { value, commit: base, follow: null };
     const tree = treeWithFiles(dir, `${base}^{tree}`, files);
     const commit = git(dir, "commit-tree", tree, "-p", base, "-m", `${repo.key}: ${message}`);
     if (!commit.ok) throw new Error(`commit-tree failed: ${commit.out}`);

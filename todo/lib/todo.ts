@@ -136,7 +136,9 @@ export function render(doc: Doc): string {
  */
 export function renderItem(repo: string, item: Item): string {
   const { id: _, ...fields } = item.fm;
-  const fm = serializeFrontmatter({ id: `${repo}-${item.id}`, title: item.title, ...fields, repo });
+  // Backlog.md reads the creation date only from `created_date`, so the store writes that key.
+  const written = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k === "created" ? "created_date" : k, v]));
+  const fm = serializeFrontmatter({ id: `${repo}-${item.id}`, title: item.title, ...written, repo });
   const block: string[] = [];
   if (item.body.trim()) block.push(item.body.replace(/\n+$/, ""));
   if (item.notes.length) block.push(["### Notes", "", ...item.notes].join("\n"));
@@ -145,7 +147,12 @@ export function renderItem(repo: string, item: Item): string {
 
 export function parseItem(text: string): Item {
   const { frontmatter, body: rest } = splitFrontmatter(text);
-  const { title, repo: _, id: full, ...fields } = parseFrontmatter(frontmatter ?? "");
+  const { title, repo: _, id: full, ...raw } = parseFrontmatter(frontmatter ?? "");
+  // `created_date` is what Backlog.md reads and wins when a file has both keys; `created` is what older files carry.
+  // Both become `created`, in the place the file gave them.
+  const fields = Object.fromEntries(
+    Object.entries(raw).filter(([k]) => k !== "created" || raw.created_date === undefined).map(([k, v]) => [k === "created_date" ? "created" : k, v]),
+  );
   const id = Number(/-(\d+)$/.exec(String(full))?.[1]);
   const { body, notes } = splitNotes(rest);
   return {

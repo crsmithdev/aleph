@@ -174,3 +174,37 @@ describe("the writes", () => {
     expect(issues.isGoal(item(r, 1))).toBe(true);
   });
 });
+
+describe("the work store file", () => {
+  const file = (created: string) => `---\nid: st1-4\ntitle: Old\nstatus: open\n${created}\nupdated: 2026-10-30\npriority: medium\nlabels: []\nrepo: st1\n---\n\nBody.\n`;
+  const withItem = (text: string): todos.Item => ({ ...todos.parseItem(text), fm: todos.parseItem(text).fm });
+
+  test("renderItem writes created_date and no created key", () => {
+    const i = todos.parseItem(file("created: 2026-10-30"));
+    const text = todos.renderItem("st1", i);
+    expect(text).toContain("created_date: 2026-10-30\n");
+    expect(text).not.toMatch(/^created:/m);
+    expect(text).toContain("updated: 2026-10-30\n");
+  });
+
+  test("parseItem reads created_date and still accepts a file with only created", () => {
+    expect(todos.parseItem(file("created_date: 2026-10-30")).fm.created).toBe("2026-10-30");
+    expect(todos.parseItem(file("created: 2026-10-30")).fm.created).toBe("2026-10-30");
+  });
+
+  test("a file with both keys takes the created_date value", () => {
+    expect(todos.parseItem(file("created: 2026-09-01\ncreated_date: 2026-10-30")).fm.created).toBe("2026-10-30");
+  });
+
+  test("render, parse, render gives the same text", () => {
+    const once = todos.renderItem("st1", todos.parseItem(file("created: 2026-10-30")));
+    expect(todos.renderItem("st1", todos.parseItem(once))).toBe(once);
+  });
+
+  test("a writeList that changes nothing makes no commit", () => {
+    const r = repo([{ title: "one" }]);
+    const before = commits();
+    expect(issues.writeList(r, "nothing", () => true)).not.toBeNull();
+    expect(commits()).toBe(before);
+  });
+});

@@ -95,7 +95,7 @@ test("a write fetches in the foreground even with the cache on, and builds on th
     sh(other, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "elsewhere");
     sh(other, "git", "push", "-q", "origin", "main");
     const head = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: other }).stdout.toString().trim();
-    const w = writeList({ key: "a" }, "write", () => true);
+    const w = writeList({ key: "a" }, "write", (doc) => { add(doc, "two"); return true; });
     expect(w).not.toBeNull();
     expect(fetches()).toBe(before + 2);
     const parent = Bun.spawnSync(["git", "rev-parse", `${w!.commit}^`], { cwd: join(base, "items") }).stdout.toString().trim();
@@ -169,7 +169,7 @@ test("with the cache on and warm, a write builds on origin/main as another clone
   sh(pusher, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "elsewhere");
   sh(pusher, "git", "push", "-q", "origin", "main");
   const pushed = rev(pusher, "HEAD");
-  const w = writeList({ key: "a" }, "write over a moved origin", () => true);
+  const w = writeList({ key: "a" }, "write over a moved origin", (doc) => { add(doc, "two"); return true; });
   expect(w).not.toBeNull();
   expect(rev(items, "origin/main^")).toBe(pushed);
   expect(rev(items, "origin/main")).not.toBe(pushed);
