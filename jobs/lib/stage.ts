@@ -14,7 +14,7 @@ import { isOpen, lastReal } from "./job.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 
-export type GoalStage = "dropped" | "done" | "awaiting" | "stuck" | "landing" | "building" | "blocked" | "queued";
+export type GoalStage = "dropped" | "done" | "awaiting" | "stuck" | "landing" | "building" | "planning" | "blocked" | "queued";
 export type IssueStage = "dropped" | "done" | "awaiting" | "stuck" | "building" | "planning" | "triaged" | "new";
 export interface Stage { id: string; stage: GoalStage | IssueStage; why: string; of?: { n: number; m: number } }
 
@@ -87,7 +87,7 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
 
 type Out = (s: Stage["stage"], why: string, of?: Stage["of"]) => Stage;
 
-function goalStage(item: Subject, ctx: Ctx, out: Out, _live: RunView[], work: RunView[]): Stage {
+function goalStage(item: Subject, ctx: Ctx, out: Out, live: RunView[], work: RunView[]): Stage {
   const last = work.at(-1);
   if (item.ask) return out("awaiting", asks(item.ask));
   if (last && isAwaiting(last.state)) return out("awaiting", asks(last.ask!));
@@ -98,6 +98,7 @@ function goalStage(item: Subject, ctx: Ctx, out: Out, _live: RunView[], work: Ru
   const n = numberOf(item.id);
   const lastJob = ctx.runs(item.id).at(-1);
   if (lastJob?.state === "landed" && !(n !== undefined && ctx.reverted.has(n))) return out("landing", "its job landed and the goal is not closed");
+  if (live.some((r) => r.kind === "plan")) return out("planning", "a plan run is open");
   const blockers = item.after.filter((ref) => {
     const s = ctx.item(ref);
     return s !== undefined && s.status === "open" && !doneWhy(s, ctx);

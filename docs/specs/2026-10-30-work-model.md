@@ -120,6 +120,7 @@ goal.stage  = dropped | done                        from status
             | stuck                                 last run stuck or failed
             | landing                               last run is a land, running
             | building                              last run open, not a land
+            | planning                              a plan run is open
             | blocked                               an `after` goal not done
             | queued
 issue.stage = dropped | done                        from status
