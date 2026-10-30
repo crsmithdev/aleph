@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { clearCache } from "./langfuse.ts";
+import { clearFit } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { idLink, pageHead, when } from "./lib.js";
 import { routes } from "./api/sessions.ts";
@@ -40,16 +41,20 @@ let status = 200;
 let fixtures: string;
 let savedRepos: string | undefined;
 let savedJobs: string | undefined;
+let savedUsage: string | undefined;
 
 beforeAll(() => {
   // The route lists projects from the registry and reads runs from the jobs dir: give it our own, not ~/.aleph.
   savedRepos = process.env.ALEPH_REPOS;
   savedJobs = process.env.ALEPH_JOBS_DIR;
+  // The chat route adds `wk` from the usage fit: read no snapshots from ~/.aleph. The file is never written.
+  savedUsage = process.env.ALEPH_USAGE_FILE;
   fixtures = mkdtempSync(join(tmpdir(), "sessions-fixtures-"));
   writeFileSync(join(fixtures, "repos.json"), JSON.stringify({ aleph: { path: join(fixtures, "aleph") }, sidetone: { path: join(fixtures, "sidetone") } }));
   mkdirSync(join(fixtures, "jobs"));
   process.env.ALEPH_REPOS = join(fixtures, "repos.json");
   process.env.ALEPH_JOBS_DIR = join(fixtures, "jobs");
+  process.env.ALEPH_USAGE_FILE = join(fixtures, "usage.jsonl");
   lf = Bun.serve({
     port: 0,
     fetch(req) {
@@ -71,9 +76,10 @@ afterAll(() => {
   lf.stop(true);
   if (savedRepos === undefined) delete process.env.ALEPH_REPOS; else process.env.ALEPH_REPOS = savedRepos;
   if (savedJobs === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = savedJobs;
+  if (savedUsage === undefined) delete process.env.ALEPH_USAGE_FILE; else process.env.ALEPH_USAGE_FILE = savedUsage;
   rmSync(fixtures, { recursive: true, force: true });
 });
-beforeEach(() => { clearCache(); hits = []; status = 200; });
+beforeEach(() => { clearCache(); clearFit(); hits = []; status = 200; });
 
 const TABLE = new URLSearchParams("view=table");
 const call = (key: string, path: string, params: Record<string, string> = {}) => {
