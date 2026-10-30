@@ -140,3 +140,23 @@ test("mountSpeed: a click on the toggle re-renders the efficiency section", asyn
   expect(eff.innerHTML).toContain('class="brk" data-class="loop"');
   resetSpeed();
 });
+
+test("renderEfficiency wraps the bar and the detail in one .effbody after the cards; loading has none", () => {
+  const d = withTop();
+  const h = renderEfficiency(d);
+  expect(h.match(/class="effbody"/g)?.length).toBe(1);
+  const at = h.indexOf('class="effbody"');
+  expect(at).toBeGreaterThan(h.lastIndexOf('class="med"'));
+  const body = h.slice(at);
+  expect(body).toContain('class="abar"');
+  expect(body).toContain('class="brk"');
+  expect(body.indexOf('class="effbar"')).toBeGreaterThanOrEqual(0);
+  expect(body.indexOf('class="effbar"')).toBeLessThan(body.indexOf('class="brk"'));
+  expect(renderEfficiency(null)).not.toContain("effbody");
+});
+
+test("Efficiency at 1600px and wider: bar and detail in two columns, detail blocks stacked", async () => {
+  const css = await Bun.file(new URL("./index.html", import.meta.url)).text();
+  expect(css).toMatch(/@media \(min-width: 1600px\) \{[^@]*\.effbody \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  expect(css).toContain(".effbody .brk .two { grid-template-columns: minmax(0, 1fr); }");
+});

@@ -123,7 +123,7 @@ export function renderEfficiency(d, { measure = "hours", pinned = null } = {}) {
   const pick = (m, label, extra = "") => `<button type="button" data-measure="${m}" aria-pressed="${measure === m}"${extra}>${label}</button>`;
   const head = `<div class="sh sub"><h2 id="h-efficiency">Efficiency</h2><span class="seg mpick" role="group" aria-label="Measure">${pick("hours", "Hours")}${pick("week", "% of week", d?.hasWeek ? "" : ' disabled title="Needs 6 hours of usage snapshots"')}</span></div>`;
   if (!d || d.error) return head + loading("efficiency", d);
-  return head + renderEffCards(d) + renderBar(d, { measure, pinned }) + renderBreakdown(d, shownClass(d, measure, pinned), measure);
+  return head + renderEffCards(d) + "<div class=\"effbody\"><div class=\"effbar\">" + renderBar(d, { measure, pinned }) + "</div>" + renderBreakdown(d, shownClass(d, measure, pinned), measure) + "</div>";
 }
 
 const card = (k, v, note) => `<div class="med"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span><span class="quiet">${esc(note)}</span></div>`;
