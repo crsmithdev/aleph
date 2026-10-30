@@ -58,3 +58,18 @@ Each week shot shows the Status page with the status line, with "Week" selected 
 ### Difference between /#/ and /#/?window=week
 - The hours bar does not differ. The week window is the default (`windowOf` in ui/views/speed.js answers "week"; ui/speed.test.ts:97), so `/#/` already had Week selected, and status-tall-light.png and week-tall-light.png have the same bar, same numbers and same "last 7 days" sentence. The "Hours / % of week" toggle is likewise in its Hours state in both. The other state (day, hour, month) needs `?window=day` etc.; it was not shot here.
 - Only difference between the two sets: week-tall-light.png draws the Speed charts (axes, grid, the Lands-by-day line), where status-tall-light.png shows empty gaps under the chart titles. The week shots were taken after the ECharts vendor fix (95779b5); the earlier shots predate it, so the empty-chart finding above no longer holds.
+
+## Fixes (aleph-595)
+
+The four shots status-light.png, status-dark.png, week-light.png and week-dark.png were retaken after the fixes in deb6170; the picker and tall shots are the earlier ones and were not retaken.
+
+- Status line a tiny serif beside the clock (small): fixed in deb6170; it is now the 26 px display size, level with the clock, in all four shots.
+- "Needs you 3" followed by "Needs you 2" (small): fixed in deb6170; the group heading is visually hidden (still read by screen readers), so one heading shows in all four shots.
+- Red status line low contrast on dark (small): no change; in status-dark.png and week-dark.png it reads clearly at the new size.
+- Font picker "Aa" overlapping the Context card (small): fixed in deb6170; `.page` keeps 72 px free at the right, and the circle sits clear of the cards in the four shots.
+- Picker popover edge past the card column (small): fixed in deb6170 by the same right padding; the open popover (status-picker-*.png) was not retaken, so it is not re-checked.
+- Swatch touches "Dropped" (small): fixed in deb6170 (6 px gap); only visible in the tall shots, not retaken.
+- "1 runs · 1 goals" (small): fixed in deb6170 (singular); only in the tall shots, not retaken.
+- "By cause" bar colour differs from the class segment (small): fixed in deb6170 (the bar takes the class colour); only in the tall shots, not retaken.
+- Empty chart gaps (status-light.png before 95779b5): fixed in 95779b5; the retaken shots draw the charts.
+- Hours bar below the fold at 900 px (was large, page order): closed as accepted, no defect. `aleph issue add aleph ...` cannot run in this sandbox ("no repo named aleph", no repo registry), so no issue exists; the finding itself allowed "no defect if scrolling is accepted", and the tall shots (status-tall-light.png, week-tall-light.png) show the bar renders correctly once scrolled to. Reopen with `aleph issue add aleph "Status: hours bar is below the fold at 1440x900" --body -` if the page order should change.

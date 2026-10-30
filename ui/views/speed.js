@@ -102,6 +102,8 @@ export function shownClass(d, measure = "hours", pinned = null) {
   return best?.key ?? null;
 }
 
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
 /** The breakdown of one class: its causes and the goals that took the most. "" when `key` is null. */
 export function renderBreakdown(d, key, measure = "hours") {
   const c = key && (d.classes ?? []).find((x) => x.key === key);
@@ -109,9 +111,9 @@ export function renderBreakdown(d, key, measure = "hours") {
   const other = measure === "week" ? "hours" : "week";
   const f = (v) => esc(fmt(v, measure));
   const alt = d.hasWeek ? `${esc(fmt(c[other], other))} · ` : "";
-  const causes = (c.causes ?? []).map((x) => `<div class="crow"><span class="cn">${esc(x.name)}</span><span class="cbar"><i style="width:${c[measure] > 0 ? (x[measure] / c[measure]) * 100 : 0}%"></i></span><span class="cv">${f(x[measure])} · ${x.runs} runs</span></div>`).join("");
-  const top = (c.top ?? []).map((x) => `<div class="grow"><a class="idl" href="${esc(x.href)}">${esc(x.goal)}</a> <b>${f(x[measure])}</b> <span class="quiet">${x.runs} runs</span><div class="quiet reason">${esc(x.reason)}</div></div>`).join("");
-  return `<section class="brk" data-class="${key}"><h3><i class="sw seg-${key}"></i>${esc(CLASS_NAME[key] ?? c.name)} <b>${f(c[measure])}</b> <span class="quiet">${alt}${c.runs} runs · ${c.goals} goals</span></h3>` +
+  const causes = (c.causes ?? []).map((x) => `<div class="crow"><span class="cn">${esc(x.name)}</span><span class="cbar"><i style="width:${c[measure] > 0 ? (x[measure] / c[measure]) * 100 : 0}%"></i></span><span class="cv">${f(x[measure])} · ${plural(x.runs, "run")}</span></div>`).join("");
+  const top = (c.top ?? []).map((x) => `<div class="grow"><a class="idl" href="${esc(x.href)}">${esc(x.goal)}</a> <b>${f(x[measure])}</b> <span class="quiet">${plural(x.runs, "run")}</span><div class="quiet reason">${esc(x.reason)}</div></div>`).join("");
+  return `<section class="brk" data-class="${key}"><h3><i class="sw seg-${key}"></i>${esc(CLASS_NAME[key] ?? c.name)} <b>${f(c[measure])}</b> <span class="quiet">${alt}${plural(c.runs, "run")} · ${plural(c.goals, "goal")}</span></h3>` +
     `<p class="def">${esc(CLASS_TEXT[key] ?? c.text)}</p>` +
     `<div class="two"><div><h4>By cause</h4>${causes}</div><div><h4>Goals that took the most</h4>${top}</div></div></section>`;
 }
