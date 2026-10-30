@@ -114,6 +114,9 @@ test("Speed is one section under the flow strip, with Efficiency directly below 
   expect(h.match(/<section id="efficiency"/g)?.length).toBe(1);
   expect(h.indexOf('id="speed"')).toBeLessThan(h.indexOf('id="efficiency"'));
   expect(h.indexOf('id="efficiency"')).toBeLessThan(h.indexOf('id="lane-incoming"'));
+  expect(h.match(/class="speedrow"/g)?.length).toBe(1);
+  expect(h.indexOf('id="flow"')).toBeLessThan(h.indexOf('class="speedrow"'));
+  expect(h.indexOf('class="speedrow"')).toBeLessThan(h.indexOf('id="speed"'));
 });
 
 test("every lane header has a count, in one style", () => {

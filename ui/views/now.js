@@ -15,7 +15,7 @@ export const view = {
   render: (s, _params, query) => {
     setWindow(query);
     return `<div class="page">${renderStatusLine(s)}${renderNeeds(s)}${renderFlow(s, speedData())}` +
-      `<section id="speed" aria-label="Speed">${speedTop()}</section><section id="efficiency" aria-label="Efficiency">${efficiency()}</section>${renderLanes(s)}</div>`;
+      `<div class="speedrow"><section id="speed" aria-label="Speed">${speedTop()}</section><section id="efficiency" aria-label="Efficiency">${efficiency()}</section></div>${renderLanes(s)}</div>`;
   },
   mount: (root) => mountSpeed(root),
 };
