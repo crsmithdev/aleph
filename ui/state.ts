@@ -224,13 +224,11 @@ export function state(now = new Date()): State {
   const delivered: { at: number; runs: Runs }[] = [];
   const liveJobs = new Set<string>(), liveItems = new Set<string>();
   const landRuns: Job[] = [];
-  const planned = new Set<string>();
   for (const runs of jobs) {
     const last = runs.at(-1)!.run;
     // A running planner counts as running; it is not a live agent.
     if (last.kind === "plan" && last.state === "running") {
       running.push(toJob(runs));
-      if (onOf(last) !== undefined) planned.add(`${last.repo}/${onOf(last)}`);
       continue;
     }
     // A triage, planner or facts run sorts a goal and never lands.
@@ -318,7 +316,7 @@ export function state(now = new Date()): State {
         if (typeof item.fm.reason === "string" && item.fm.reason) c.reason = item.fm.reason;
         waitingOnChris.push(c);
       }
-      else if ((st === "queued" || st === "blocked") && !planned.has(`${repo.key}/${item.id}`)) queued.push({ repo, item });
+      else if (st === "queued" || st === "blocked") queued.push({ repo, item });
       else if (st === "new") fresh.push({ ...card(), status: st });
     }
   }
