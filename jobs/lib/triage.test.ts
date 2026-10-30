@@ -10,6 +10,8 @@ import { lock, readRun, stamp, writeRun, type Repo } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
+// The factory dir for the whole file: nothing here may read or write ~/.aleph/factory.
+let factoryHome: string;
 const repo = { key: "tri", path: "" } as Repo;
 
 function sh(cwd: string, ...args: string[]): void {
@@ -49,6 +51,7 @@ const run = (done: (r: string) => boolean = () => false) => triageOpen([repo], d
 
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-triage-"));
+  factoryHome = join(base, "factory");
   sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
   sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
   sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
@@ -58,7 +61,7 @@ beforeAll(() => {
   repo.path = base;
   Object.assign(process.env, gitEnv, {
     ALEPH_ITEMS: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_TRIAGE_CMD: join(base, "fake"),
-    FAKE_LOG: join(base, "calls"), ALEPH_LIVE_CAP: "10",
+    FAKE_LOG: join(base, "calls"), ALEPH_LIVE_CAP: "10", ALEPH_FACTORY_DIR: factoryHome,
     // Locks live in $XDG_RUNTIME_DIR/aleph, shared by every process on the machine; keep this process's own.
     XDG_RUNTIME_DIR: join(base, "run"),
   });
@@ -190,9 +193,8 @@ const grant = (reason: string, action: string) => {
 const tickLog = () => readFileSync(join(factory(), "tick.log"), "utf8");
 
 describe("standing permissions", () => {
-  const saved = process.env.ALEPH_FACTORY_DIR;
   beforeEach(() => { process.env.ALEPH_FACTORY_DIR = join(base, `factory-${++lists}`); });
-  afterAll(() => { if (saved === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = saved; });
+  afterAll(() => { process.env.ALEPH_FACTORY_DIR = factoryHome; });
 
   test("retry: no label, the count starts again, and a third triage runs the command", async () => {
     grant("triage-no-verdict", "retry");
@@ -296,7 +298,7 @@ test("a lost triage run whose item's lock is held is left running", async () => 
 
 // Triage at once: `triageNow` is what `aleph triage <repo>-<n>` runs, after an add, an answer or a follow-up.
 describe("triage at once", () => {
-  beforeAll(() => { process.env.ALEPH_FACTORY_DIR = join(base, "factory"); });
+  beforeAll(() => { process.env.ALEPH_FACTORY_DIR = factoryHome; });
   test("a non-goal issue is triaged with no tick; a goal is not", async () => {
     reset([{ title: "a", body: "VERDICT:close" }, { title: "g", body: "VERDICT:close", labels: ["goal"] }]);
     const { triageNow } = await import("./factory.ts");
