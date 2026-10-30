@@ -10,10 +10,11 @@ test("sandboxNetnsPid is null for a child in the host namespace", async () => {
   try { expect(sandboxNetnsPid(process.pid)).toBeNull(); } finally { p.kill(); await p.exited; }
 });
 
-test.skipIf(!usable)("bridge reaches a server bound inside a network namespace", async () => {
+// bwrap, under srt, puts the worker in a second user namespace inside the one that owns its network namespace.
+for (const nested of [false, true]) test.skipIf(!usable)(`bridge reaches a server bound inside a network namespace${nested ? " from a nested user namespace" : ""}`, async () => {
   const port = await freePort(3002);
   const script = `Bun.serve({port: ${port}, hostname: "127.0.0.1", fetch: () => new Response("inside")})`;
-  const server = Bun.spawn(["unshare", "-Urn", "sh", "-c", `ip link set lo up; exec ${process.execPath} -e '${script}'`], { stdout: "ignore", stderr: "ignore" });
+  const server = Bun.spawn(["unshare", "-Urn", "sh", "-c", `ip link set lo up; exec ${nested ? "unshare -U " : ""}${process.execPath} -e '${script}'`], { stdout: "ignore", stderr: "ignore" });
   let b: Awaited<ReturnType<typeof bridge>> | undefined;
   try {
     let pid: number | null = null;

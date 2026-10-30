@@ -4,7 +4,8 @@
  * namespaces and reaches the worker's server through a host socat listener that
  * relays each connection in with nsenter.
  */
-import { readdirSync, readFileSync, readlinkSync } from "node:fs";
+import { dlopen, FFIType } from "bun:ffi";
+import { closeSync, openSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { connect } from "node:net";
 import { freePort } from "./review2-browser.ts";
 
@@ -46,15 +47,35 @@ function accepts(port: number): Promise<boolean> {
   });
 }
 
+/**
+ * An open fd on the user namespace that owns the network namespace of pid. bwrap
+ * puts its child in a second user namespace inside that owner, and no process
+ * lives in the owner, so `nsenter -U` on pid enters a namespace without the
+ * rights to join the network namespace.
+ */
+function netnsOwner(pid: number): number {
+  const libc = dlopen("libc.so.6", { ioctl: { args: [FFIType.i32, FFIType.u64], returns: FFIType.i32 } });
+  const net = openSync(`/proc/${pid}/ns/net`, "r");
+  try {
+    const fd = libc.symbols.ioctl(net, NS_GET_USERNS);
+    if (fd < 0) throw new Error(`NS_GET_USERNS failed on the network namespace of ${pid}`);
+    return fd;
+  } finally { closeSync(net); libc.close(); }
+}
+const NS_GET_USERNS = 0xb701;
+
 /** A host 127.0.0.1 port that relays into 127.0.0.1:port inside the network namespace of pid. */
 export async function bridge(pid: number, port: number, waitMs = 10_000): Promise<{ url: string; stop: () => Promise<void> }> {
   const hostPort = await freePort(3002);
+  // nsenter opens the owner through this process's fd table, so the fd stays open until stop.
+  const owner = netnsOwner(pid);
   const child = Bun.spawn(["socat", `TCP-LISTEN:${hostPort},bind=127.0.0.1,reuseaddr,fork`,
-    `EXEC:"nsenter -t ${pid} -U -n --preserve-credentials socat STDIO TCP:127.0.0.1:${port}"`],
+    `EXEC:"nsenter --user=/proc/${process.pid}/fd/${owner} --net=/proc/${pid}/ns/net --preserve-credentials socat STDIO TCP:127.0.0.1:${port}"`],
     { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
   const stop = async () => {
     if (child.exitCode === null) child.kill("SIGTERM");
     await child.exited;
+    closeSync(owner);
   };
   const end = Date.now() + waitMs;
   while (!(await accepts(hostPort))) {
