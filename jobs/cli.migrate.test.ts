@@ -102,6 +102,10 @@ beforeAll(() => {
   by("memory", item("a lesson", { labels: ["memory"] }));
   by("live", item("check on the host", { labels: ["live-check", "triaged"] }));
   by("goalAsk", item("a goal awaiting Chris", { labels: ["goal", "needs-chris"] }, "## Goal\n\nDo it.", ["- 2026-10-02 10:00: needs-chris: the last 3 runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal."]));
+  for (const [k, f, text] of [["child2", "h.test.ts", "// hidden child\n"], ["queued", "g.test.ts", "// hidden goal\n"]]) {
+    mkdirSync(join(dir("items"), "aleph", "hidden", String(ID[k])), { recursive: true });
+    writeFileSync(join(dir("items"), "aleph", "hidden", String(ID[k]), f), text);
+  }
   sh(dir("items"), "git", "add", "-A");
   sh(dir("items"), "git", "commit", "-qm", "seed");
   sh(dir("items"), "git", "push", "-q", "origin", "main");
@@ -131,6 +135,9 @@ describe("aleph migrate", () => {
     };
     for (const [name, pair] of Object.entries(want)) expect(pairs[`aleph-${ID[name]}`], name).toBe(pair);
     expect(Object.keys(pairs).length).toBe(Object.keys(want).length);
+    const moves = r.stdout.split("\n").filter((l) => l.startsWith("move\t"));
+    expect(moves).toContain(`move\taleph/hidden/${ID.child2}\taleph/hidden/aleph-${ID.child2}`);
+    expect(moves).toContain(`move\taleph/hidden/${ID.queued}\taleph/hidden/aleph-${ID.queued}.1`);
     expect(world()).toEqual(before);
   });
 
@@ -196,6 +203,12 @@ describe("aleph migrate", () => {
     expect(sh(dir("issues"), "git", "log", "--format=%s", "-2")).toContain("migrate: work model");
     expect(sh(dir("issues"), "git", "rev-list", "--count", "origin/main")).toBe("2");
 
+    // The hidden checks moved in the same commit.
+    const hidden = join(issues, "aleph", "hidden");
+    expect(readFileSync(join(hidden, `aleph-${ID.child2}`, "h.test.ts"), "utf8")).toBe("// hidden child\n");
+    expect(readFileSync(join(hidden, `aleph-${ID.queued}.1`, "g.test.ts"), "utf8")).toBe("// hidden goal\n");
+    expect(readdirSync(hidden).filter((d) => /^\d+$/.test(d))).toEqual([]);
+
     // The rules.
     expect(fileOf(issues, `${ID.queued}`)).toMatch(/kind: issue[\s\S]*goals: \[aleph-\d+\.1\]/);
     expect(fileOf(issues, `${ID.queued}`)).toContain("## Request\n\n## Goal\n\nDo it.");
@@ -248,6 +261,8 @@ describe("aleph migrate", () => {
     expect(r.code, r.stderr).toBe(0);
     expect(files()).toEqual(preFiles);
     expect(originTree()).toBe(preTree);
+    expect(existsSync(join(dir("items"), "aleph", "hidden", String(ID.child2), "h.test.ts"))).toBe(true);
+    expect(existsSync(join(dir("items"), "aleph", "hidden", String(ID.queued), "g.test.ts"))).toBe(true);
     expect(sh(dir("items.git"), "git", "rev-list", "main")).toContain(applyCommit);
     expect(sh(dir("items.git"), "git", "rev-parse", "main~1")).toBe(applyCommit);
     expect(sh(dir("items"), "git", "rev-parse", "HEAD")).toBe(sh(dir("items.git"), "git", "rev-parse", "main"));

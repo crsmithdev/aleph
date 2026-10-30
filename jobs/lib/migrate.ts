@@ -67,7 +67,34 @@ interface New {
 
 interface Plan {
   rows: Row[]; items: New[]; runs: { folder: string; before: Run; after: Run }[]; old: Map<string, { status: string; planned: boolean; ruled: boolean }>;
-  repos: string[];
+  repos: string[]; moves: Move[];
+}
+
+export interface Move { repo: string; from: string; to: string; files: string[] }
+
+/** The hidden checks under a numeric directory move to the directory of the goal id the item became. */
+function hiddenMoves(dir: string, repos: string[], split: Set<string>): Move[] {
+  const moves: Move[] = [];
+  for (const repo of repos) {
+    const ls = git(dir, "ls-tree", "-r", "origin/main", "--", `${repo}/hidden/`);
+    if (!ls.ok) continue;
+    const by = new Map<string, string[]>();
+    for (const line of ls.out.split("\n")) {
+      const tab = line.indexOf("\t");
+      if (tab < 0) continue;
+      const rest = line.slice(tab + 1).slice(`${repo}/hidden/`.length);
+      const slash = rest.indexOf("/");
+      if (slash < 0) continue;
+      const num = rest.slice(0, slash);
+      if (!/^\d+$/.test(num)) continue;
+      by.set(num, [...(by.get(num) ?? []), rest.slice(slash + 1)]);
+    }
+    for (const [num, names] of by) {
+      const ref = `${repo}-${num}`;
+      moves.push({ repo, from: `${repo}/hidden/${num}`, to: `${repo}/hidden/${split.has(ref) ? `${ref}.1` : ref}`, files: names });
+    }
+  }
+  return moves;
 }
 
 function repoKeys(dir: string): string[] {
@@ -236,14 +263,14 @@ export function plan(r: Roots = roots()): Plan {
     const allowed = [...(TABLE[info.status] ?? []), ...(info.status === "sorted" && info.ruled ? RULED["sorted+ask"] : []), ...(info.planned ? RULED.planned : [])];
     rows.push({ repo: n.repo, id: `${n.repo}-${n.num}`, old: info.status, stage: s, ok: allowed.includes(s) });
   }
-  return { rows, items, runs: migrated, old: oldInfo, repos };
+  return { rows, items, runs: migrated, old: oldInfo, repos, moves: hiddenMoves(r.store, repos, split) };
 }
 
-export function dryRun(r: Roots = roots()): { rows: Row[]; violations: Row[]; counts: Record<string, number> } {
+export function dryRun(r: Roots = roots()): { rows: Row[]; violations: Row[]; counts: Record<string, number>; moves: Move[] } {
   const p = plan(r);
   const counts: Record<string, number> = {};
   for (const row of p.rows) counts[`${row.old} -> ${row.stage}`] = (counts[`${row.old} -> ${row.stage}`] ?? 0) + 1;
-  return { rows: p.rows, violations: p.rows.filter((x) => !x.ok), counts };
+  return { rows: p.rows, violations: p.rows.filter((x) => !x.ok), counts, moves: p.moves };
 }
 
 // Apply.
@@ -286,8 +313,14 @@ export function apply(r: Roots = roots()): { backup: string; commit: string; ite
   for (const f of FACTORY_FILES) if (existsSync(join(r.factory, f))) { had.push(f); writeFileSync(join(backup, "factory", f), readFileSync(join(r.factory, f))); }
 
   // The store: one commit on origin/main.
-  const files: Record<string, string> = {};
+  const files: Record<string, string | null> = {};
   for (const n of p.items) files[`${n.repo}/backlog/tasks/${n.ref}.md`] = renderNew(n);
+  for (const m of p.moves) for (const name of m.files) {
+    const blob = Bun.spawnSync(["git", "cat-file", "blob", `origin/main:${m.from}/${name}`], { cwd: r.store, stdout: "pipe", stderr: "pipe" });
+    if (blob.exitCode !== 0) throw new Error(`cat-file ${m.from}/${name}: ${blob.stderr.toString()}`);
+    files[`${m.to}/${name}`] = blob.stdout.toString();
+    files[`${m.from}/${name}`] = null;
+  }
   const base = git(r.store, "rev-parse", "origin/main").out;
   const tree = treeWithFiles(r.store, `${base}^{tree}`, files);
   const commit = git(r.store, "commit-tree", tree, "-p", base, "-m", `migrate: work model, ${p.items.length} items`);

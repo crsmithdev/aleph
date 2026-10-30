@@ -420,7 +420,8 @@ function migrateCmd(): void {
     if (rest.includes("--apply")) return out(migrate.apply());
     const d = migrate.dryRun();
     for (const row of d.rows) console.log(`${row.id}\t${row.old}\t${row.stage}${row.ok ? "" : "\tOUTSIDE THE MAPPING TABLE"}`);
-    out({ items: d.rows.length, counts: d.counts, violations: d.violations });
+    for (const m of d.moves) console.log(`move\t${m.from}\t${m.to}`);
+    out({ items: d.rows.length, counts: d.counts, moves: d.moves, violations: d.violations });
     if (d.violations.length) refuse(`${d.violations.length} pair(s) outside the mapping table`);
   } catch (e) {
     if (e instanceof migrate.MigrateRefusal) refuse(e.message);
