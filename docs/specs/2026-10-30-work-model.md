@@ -77,6 +77,7 @@ The factory flow (triage, dispatch, build, checks, review, land, facts), the gat
 ```text
 Issue   <store>/<repo>/backlog/tasks/<repo>-<n>.md
   id, title, repo, created, updated, priority
+  The store file holds created under the key created_date, because Backlog.md reads only that key.
   kind: issue
   source: chris | worker | deps | memory
   status: open | done | dropped           only stored state
