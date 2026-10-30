@@ -509,6 +509,7 @@ details.fold { margin: 0 0 8px; }
 .chartbox figcaption { font-size: var(--fs-xs); color: var(--muted); font-weight: 600; margin-bottom: 4px; }
 .speedchart { height: 160px; width: 100%; }
 @media (max-width: 1020px) { .meds { grid-template-columns: repeat(3, minmax(0, 1fr)); } .charts3 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1020px) { .meds.eff { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
 /* ---------- narrow ---------- */
 @media (max-width: 1020px) {
@@ -519,7 +520,7 @@ details.fold { margin: 0 0 8px; }
 @media (max-width: 720px) {
   .flow { flex-direction: column; }
   .lanes { grid-template-columns: minmax(0, 1fr); }
-  .meds { grid-template-columns: minmax(0, 1fr); }
+  .meds, .meds.eff { grid-template-columns: minmax(0, 1fr); }
   .lede { flex-wrap: wrap; white-space: normal; }
   .lede .wpick { order: 3; margin-left: 0; }
   .page { padding: 20px 16px 48px; }
