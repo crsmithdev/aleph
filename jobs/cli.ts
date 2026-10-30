@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * aleph <job|run|land|checked|recheck|drop|jobs|issue|unit|tick|report|pause|resume|sandbox|status|judge>
+ * aleph <migrate|job|run|land|checked|recheck|drop|jobs|issue|unit|tick|report|pause|resume|sandbox|status|judge>
  * — detached agent jobs, plain runs, each repo's issues, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/jobs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal.
@@ -23,6 +23,7 @@ import { checkName, checked, drop, land, recheck, refuse, Refusal, repoOf, runDi
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
 import { runReview2 } from "./lib/review2.ts";
+import * as migrate from "./lib/migrate.ts";
 import { facts, FACTS_REF, readFacts, repoStages, stages } from "./lib/status.ts";
 import type { Stage } from "./lib/stage.ts";
 
@@ -38,7 +39,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--spec", "--model", "--todo", "--priority", "--labels", "--status", "--label", "--body", "--title", "--due", "--waiting-on", "--reopened-since", "--before"];
+const VALUED = ["--spec", "--model", "--todo", "--priority", "--labels", "--status", "--label", "--body", "--title", "--due", "--waiting-on", "--reopened-since", "--before", "--undo"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
 const command = process.argv.slice(2);
@@ -408,8 +409,28 @@ function statusRecent(): void {
   for (const s of states) console.log(`${s.id} ${s.stage}: ${s.why}`);
 }
 
+/** `aleph migrate --dry-run | --apply | --undo <time>`: the work-model migration, see jobs/lib/migrate.ts. */
+function migrateCmd(): void {
+  const usage = "usage: aleph migrate --dry-run | --apply | --undo <time>";
+  const undoing = flag("undo");
+  const modes = [rest.includes("--dry-run"), rest.includes("--apply"), undoing !== undefined].filter(Boolean).length;
+  if (modes !== 1) refuse(usage);
+  try {
+    if (undoing !== undefined) return out(migrate.undo(undoing));
+    if (rest.includes("--apply")) return out(migrate.apply());
+    const d = migrate.dryRun();
+    for (const row of d.rows) console.log(`${row.id}\t${row.old}\t${row.stage}${row.ok ? "" : "\tOUTSIDE THE MAPPING TABLE"}`);
+    out({ items: d.rows.length, counts: d.counts, violations: d.violations });
+    if (d.violations.length) refuse(`${d.violations.length} pair(s) outside the mapping table`);
+  } catch (e) {
+    if (e instanceof migrate.MigrateRefusal) refuse(e.message);
+    throw e;
+  }
+}
+
 try {
   switch (cmd) {
+    case "migrate": migrateCmd(); break;
     case "job": await job(); break;
     case "run": await plain(); break;
     case "jobs": jobs(); break;

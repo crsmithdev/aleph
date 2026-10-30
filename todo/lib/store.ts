@@ -104,7 +104,7 @@ function load(dir: string, rev: string, key: string): Doc | null {
   const ls = git(dir, "ls-tree", "-r", "-z", "--name-only", rev, "--", configPath(key), `${tasksDir(key)}/`);
   const paths = ls.ok ? ls.out.split("\0") : [];
   if (!paths.includes(configPath(key))) return null;
-  const names = paths.filter((p) => p.startsWith(`${tasksDir(key)}/`) && p.endsWith(".md") && !p.slice(tasksDir(key).length + 1).includes("/"));
+  const names = paths.filter((p) => p.startsWith(`${tasksDir(key)}/`) && p.endsWith(".md") && !p.slice(tasksDir(key).length + 1).includes("/") && !/-\d+\.\d+\.md$/.test(p));
   const items = readFiles(dir, names.map((p) => `${rev}:${p}`)).map(parseItem);
   return { head: "", items: items.sort((a, b) => a.id - b.id) };
 }
@@ -298,7 +298,7 @@ export function askOf(item: Item): Ask | null {
 }
 
 /** An item with a label of SORTED: triage leaves it alone. */
-export const isSorted = (item: Item): boolean => labels(item).some((l) => SORTED.includes(l));
+export const isSorted = (item: Item): boolean => item.fm.route !== undefined || labels(item).some((l) => SORTED.includes(l));
 /** An item labelled `needs-chris`: it waits for Chris's answer. */
 export const needsChris = (item: Item): boolean => hasLabel(item, NEEDS_CHRIS);
 
