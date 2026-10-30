@@ -920,7 +920,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       if (pid === null) return { url, stop: async () => {} };
       const u = new URL(url);
       const b = await bridge(pid, Number(u.port));
-      return { url: new URL(u.pathname + u.search + u.hash, b.url).href, stop: b.stop };
+      return { url: new URL(u.pathname + u.search + u.hash, b.url).href, stop: b.stop, stderr: b.stderr };
     };
     const shots = serveShots(dir, { reach });
     let w: Awaited<ReturnType<typeof sandboxed>>;

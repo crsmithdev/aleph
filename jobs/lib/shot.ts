@@ -159,7 +159,7 @@ const writeResult = (file: string, res: ShotResult) => {
  * Serve the shot requests in `dir/tmp/shots/`, one at a time, until `stop()`, which finishes the one in flight.
  * `reach` maps the worker's URL to the URL Chrome loads. Never throws.
  */
-export function serveShots(dir: string, o: { reach?: (url: string) => Promise<{ url: string; stop: () => Promise<void> }> } = {}): { stop(): Promise<void> } {
+export function serveShots(dir: string, o: { reach?: (url: string) => Promise<{ url: string; stop: () => Promise<void>; stderr?: () => string }> } = {}): { stop(): Promise<void> } {
   const shots = join(dir, "tmp", "shots");
   let stopping = false;
   const seen = new Set<string>();
@@ -172,7 +172,14 @@ export function serveShots(dir: string, o: { reach?: (url: string) => Promise<{ 
       if (typeof req === "string") res = { ok: false, error: req };
       else {
         const reached = o.reach ? await o.reach(req.url) : { url: req.url, stop: async () => {} };
-        try { await takeShot(req, reached.url); } finally { await reached.stop().catch(() => {}); }
+        try { await takeShot(req, reached.url); } catch (e: any) {
+          // The bridge's own stderr names the cause that Chrome only reports as ERR_EMPTY_RESPONSE.
+          const lines = (reached.stderr?.() ?? "").replace(/\s+/g, " ").trim().slice(-400);
+          if (!lines) throw e;
+          const msg = String(e?.message ?? e).replace(/\s+/g, " ");
+          const tailText = ` [bridge stderr: ${lines}]`;
+          throw new Error(msg.slice(0, 1000 - tailText.length) + tailText);
+        } finally { await reached.stop().catch(() => {}); }
         res = { ok: true, out: req.out, width: req.width, height: req.height };
       }
     } catch (e: any) { res = { ok: false, error: String(e?.message ?? e).replace(/\s+/g, " ").slice(0, 1000) }; }

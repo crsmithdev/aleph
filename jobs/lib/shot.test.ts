@@ -26,7 +26,7 @@ createReadStream("", { fd: 3 }).on("data", (d) => {
     else if (m.method === "Target.attachToTarget") result = { sessionId: "s" + n };
     else if (m.method === "Emulation.setDeviceMetricsOverride") widths[s] = m.params.width;
     else if (m.method === "Emulation.setEmulatedMedia") rec({ scheme: m.params.features[0].value });
-    else if (m.method === "Page.navigate") rec({ navigate: m.params.url });
+    else if (m.method === "Page.navigate") { rec({ navigate: m.params.url }); if (m.params.url.includes("/refuse")) result = { errorText: "net::ERR_EMPTY_RESPONSE" }; }
     else if (m.method === "Runtime.evaluate") rec({ expression: m.params.expression });
     else if (m.method === "Page.captureScreenshot") {
       const b = Buffer.alloc(24); Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b); b.write("IHDR", 12);
@@ -112,6 +112,18 @@ describe("aleph-shot and serveShots", () => {
       expect(seen).toEqual(["http://localhost:4999/page"]);
       expect(records()).toContainEqual({ navigate: `http://127.0.0.1:${srv.port}/mapped` });
       expect(stopped).toBe(true);
+    } finally { await server.stop(); }
+  }, 30_000);
+
+  test("a failed shot through a bridge holds the bridge stderr lines in its error", async () => {
+    const { dir, run, serveShots } = await setup("four");
+    const server = serveShots(dir, { reach: async () => ({ url: "http://127.0.0.1:9/refuse", stop: async () => {}, stderr: () => "nsenter: setns failed\nsocat: Connection refused" }) });
+    try {
+      const r = await run("http://localhost:4999/page", "work/docs/w.png", "--wait", "50");
+      expect(r.code).toBe(1);
+      expect(r.err).toContain("shot failed:");
+      expect(r.err).toContain("ERR_EMPTY_RESPONSE");
+      expect(r.err).toContain("nsenter: setns failed socat: Connection refused");
     } finally { await server.stop(); }
   }, 30_000);
 });

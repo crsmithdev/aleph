@@ -32,3 +32,22 @@ for (const nested of [false, true]) test.skipIf(!usable)(`bridge reaches a serve
     await server.exited;
   }
 }, 30_000);
+
+test.skipIf(!usable)("bridge keeps the inner socat's connection error", async () => {
+  const port = await freePort(3002);
+  const holder = Bun.spawn(["unshare", "-Urn", "sh", "-c", "ip link set lo up; exec sleep 30"], { stdout: "ignore", stderr: "ignore" });
+  let b: Awaited<ReturnType<typeof bridge>> | undefined;
+  try {
+    let pid: number | null = null;
+    for (let i = 0; i < 100 && pid === null; i++) { pid = sandboxNetnsPid(process.pid); if (pid === null) await Bun.sleep(50); }
+    expect(pid).not.toBeNull();
+    b = await bridge(pid!, port);
+    try { await (await fetch(b.url)).text(); } catch { /* the relay closes the connection */ }
+    for (let i = 0; i < 100 && !/refused/i.test(b.stderr()); i++) await Bun.sleep(50);
+    expect(b.stderr()).toMatch(/refused/i);
+  } finally {
+    await b?.stop();
+    holder.kill();
+    await holder.exited;
+  }
+}, 30_000);
