@@ -242,3 +242,24 @@ describe("a land that found the job lock busy", () => {
     for (const id of ["20261027-000040-a", "20261027-000041-a"]) rmSync(join(jobsDir, id), { recursive: true });
   });
 });
+
+describe("a planner run", () => {
+  test("counts as running and takes its goal out of waiting; triage does not; a done one does neither", () => {
+    const landing = state(now).landing;
+    const ids = ["20261027-000050-a", "20261027-000051-a"];
+    run(ids[0], { kind: "plan", job: "plan-fac-2", name: "plan-fac-2", state: "running", todo: 2, started: ago(1) });
+    run(ids[1], { kind: "triage", job: "triage-fac-2", name: "triage-fac-2", state: "running", todo: 2, started: ago(1) });
+    let s = state(now);
+    expect(s.running.map((j) => j.name)).toContain("plan-fac-2");
+    expect(s.running.map((j) => j.name)).not.toContain("triage-fac-2");
+    expect(s.waiting).toEqual([]);
+    expect(s.needs.map((j) => j.name)).toEqual(["fac-1"]);
+    expect(s.stuck.map((j) => j.name)).toEqual(["fac-3"]);
+    expect(s.landing).toBe(landing);
+    run(ids[0], { kind: "plan", job: "plan-fac-2", name: "plan-fac-2", state: "done", todo: 2, started: ago(1), ended: ago(0.5) });
+    s = state(now);
+    expect(s.running.map((j) => j.name)).not.toContain("plan-fac-2");
+    expect(s.waiting).toEqual([{ repo: "fac", id: 2, title: "waiting goal" }]);
+    for (const id of ids) rmSync(join(jobsDir, id), { recursive: true });
+  });
+});

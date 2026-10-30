@@ -205,8 +205,15 @@ export function state(now = new Date()): State {
   const liveJobs = new Set<string>(), liveItems = new Set<string>();
   const landRuns: Job[] = [];
   const openNames = new Set<string>();
+  const planned = new Set<string>();
   for (const runs of jobs) {
     const last = runs.at(-1)!.run;
+    // A running planner counts as running and holds its goal out of Queued; it is not a live agent.
+    if (last.kind === "plan" && last.state === "running") {
+      running.push(toJob(runs));
+      if (last.todo !== undefined) planned.add(`${last.repo}/${last.todo}`);
+      continue;
+    }
     // A triage, planner or facts run sorts a goal and never lands.
     if (last.kind === "triage" || last.kind === "plan" || last.kind === "facts") continue;
     if (isOpen(runs)) {
@@ -337,7 +344,7 @@ export function state(now = new Date()): State {
     velocity: { landed: rate(landedAt), triaged: rate(triagedAt) },
     // Lands: land runs in progress first, then the latest landed, DELIVERED in all.
     delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).slice(0, Math.max(0, DELIVERED - landRuns.length)).map((d) => toJob(d.runs))].slice(0, DELIVERED),
-    waiting: openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`) && !labels(item).includes("planned"))
+    waiting: openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`) && !planned.has(`${repo.key}/${item.id}`) && !labels(item).includes("planned"))
       .map(({ repo, item }) => ({ repo: repo.key, id: item.id, title: item.title })),
   };
 }
