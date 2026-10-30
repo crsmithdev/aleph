@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fit, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
+import { fit, gainSince, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { costHtml, wkText } from "./lib.js";
 // @ts-ignore plain JS view
@@ -85,4 +85,13 @@ test("the share is shown first, with a tooltip, and the dollars stay", () => {
   expect(html).toContain("pooled");
   expect(costHtml(2.3)).toBe("$2.30");
   expect(wkText({ pct: 0.01, pooled: false })).toBe("≈<0.1% wk");
+});
+
+test("gainSince: the latest weekly percent minus the snapshot nearest to 5 hours before, in the reset window", () => {
+  const t = (h: number) => new Date(Date.UTC(2026, 9, 29, 12) - h * 3600_000).toISOString();
+  const snap = (h: number, seven_day: number): Snapshot => ({ at: t(h), five_hour: 1, seven_day, seven_day_resets_at: "2026-11-02T09:00:00Z" });
+  expect(gainSince([snap(6, 20), snap(5.1, 22), snap(2, 25), snap(0, 30)], 5 * 3600_000)).toBe(8);
+  expect(gainSince([snap(1, 20), snap(0, 30)], 5 * 3600_000)).toBeNull();
+  expect(gainSince([snap(0, 30)], 5 * 3600_000)).toBeNull();
+  expect(gainSince([], 5 * 3600_000)).toBeNull();
 });

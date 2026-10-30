@@ -44,8 +44,6 @@ function statLines(stat) {
 const runningCount = (s) => (s.running ?? []).length;
 /** Land runs live now, not the landed ones the Lands list also shows. */
 const liveLands = (s) => s.delivered.filter((j) => j.state === "landing").length;
-/** The needs-you group's rows: held runs, needs-chris issues, proposals, errors. */
-const needsCount = (s) => (s.attention ?? []).length + errorLines(s).length;
 
 /** The weekly and 5-hour usage as text with the weekly reset time; "usage unknown" when the endpoint gave nothing. */
 export function renderUsage(s) {
@@ -189,25 +187,27 @@ export function renderLanes(s) {
 /** The untriaged issues: all of them when the state counts them, else the ones listed. */
 const incomingCount = (s) => Math.max(s.newIssues ?? 0, (s.issues ?? []).length);
 
-/** The flow strip: Incoming \u2192 Queued \u2192 Running \u2192 Done, then the Context card. `sp` is /api/speed for the picked window (Done counts its lands); null while it loads. */
+/** The flow strip: Incoming, Queued, Running, Done, then the Context card. `sp` is /api/speed for the picked window (Done counts its lands); null while it loads. */
 export function renderFlow(s, sp = null) {
   const stage = (lane, k, n, of, id = "") =>
     `<div class="stage"><a class="stage-main" href="#lane-${lane}"><span class="k">${k}</span><span class="v"${id ? ` id="${id}"` : ""}>${n}${of ? `<span class="of"> of ${of}</span>` : ""}</span></a></div>`;
-  const arrow = `<span class="arrow" aria-hidden="true">\u2192</span>`;
   return `<div class="flow" id="flow">` +
-    stage("incoming", "Incoming", incomingCount(s), 0) + arrow +
-    stage("queued", "Queued", (s.waiting ?? []).length, 0) + arrow +
-    stage("running", "Running", runningCount(s), s.factory.liveCap > 0 ? s.factory.liveCap : 0) + arrow +
+    stage("incoming", "Incoming", incomingCount(s), 0) +
+    stage("queued", "Queued", (s.waiting ?? []).length, 0) +
+    stage("running", "Running", runningCount(s), s.factory.liveCap > 0 ? s.factory.liveCap : 0) +
     stage("done", "Done", sp && !sp.error ? sp.done : "\u2013", 0, "done-n") + renderContext(s) + `</div>`;
 }
 
-/** The Context card: Needs you, Stuck and Failed (a count above 0 takes its color and links to Needs you), then the usage. */
+/** The Context card: the weekly limit %, the 5-hour limit % and the weekly % used in the last 5 hours ("+N%", "–" with no snapshot near 5 hours ago). */
 export function renderContext(s) {
-  const failed = s.stuck.filter((j) => j.state === "failed").length;
-  const cnt = (k, n, tone) => `<a class="cnt${n ? " " + tone : ""}" href="#needs"><span class="n">${n}</span> ${k}</a>`;
+  const cur = s.usage?.now;
+  const pct = (n) => (cur && Number.isFinite(n) ? `${Math.round(n)}%` : "\u2013");
+  const gain = s.usage?.last5h;
+  const stat = (k, v) => `<span class="cnt"><span class="n">${esc(v)}</span> ${esc(k)}</span>`;
   return `<div class="stage context" id="context"><span class="k">Context</span><div class="ctx">` +
-    cnt("Needs you", needsCount(s), "need") + cnt("Stuck", s.stuck.length - failed, "stuck") + cnt("Failed", failed, "stuck") +
-    `</div><div class="ctx usage">${renderUsage(s)}</div></div>`;
+    stat("weekly limit", pct(cur?.seven_day)) + stat("5-hour limit", pct(cur?.five_hour)) +
+    stat("weekly, last 5 h", gain === null || gain === undefined ? "\u2013" : `+${Math.round(gain)}%`) +
+    `</div><div class="ctx usage">${cur?.seven_day_resets_at && !Number.isNaN(Date.parse(cur.seven_day_resets_at)) ? `<span class="quiet">weekly limit resets ${esc(when(cur.seven_day_resets_at, new Date(s.now)))}</span>` : `<span class="quiet">${cur ? "" : "usage unknown"}</span>`}</div></div>`;
 }
 
 /** Needs you: the needs-you rows, then the stuck and failed jobs; absent when nothing needs Chris. */

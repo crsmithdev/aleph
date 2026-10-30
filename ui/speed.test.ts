@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearCache, pct, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { areaOption, dur, renderEfficiency, renderPicker, renderSpeedTop, windowOf } from "./views/speed.js";
+import { areaOption, dur, renderCharts, renderEfficiency, renderPicker, renderSpeedTop, windowOf } from "./views/speed.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -69,11 +69,11 @@ test("day: counts, medians, wasted share, buckets, slowest, models", () => {
   expect(d.flaky).toBe(0);
 });
 
-test("hour: twelve 5-minute buckets over the last hour", () => {
+test("hour: sixty 1-minute buckets over the last hour", () => {
   const h = speed("hour", new Date(2026, 9, 28, 9, 47, 0));
-  expect(h.buckets.length).toBe(12);
-  expect(h.buckets[0].label).toBe("08:50");
-  expect(h.buckets[11].label).toBe("09:45");
+  expect(h.buckets.length).toBe(60);
+  expect(h.buckets[0].label).toBe("08:48");
+  expect(h.buckets[59].label).toBe("09:47");
   expect(h.kinds.agent.count).toBe(1); // the 09:00 run
   const m = speed("hour", new Date(2026, 9, 28, 9, 7, 0));
   expect(m.buckets.find((x) => x.label === "09:00")).toMatchObject({ lands: 2 });
@@ -108,13 +108,21 @@ test("the view: medians with p50, p90 and runs; charts; efficiency with reruns a
   expect(h.match(/class="med"/g)?.length).toBe(5);
   expect(h).toContain("p90 30m 00s");
   expect(h).toContain('<span class="runs">3</span>');
-  for (const t of ["Tests", "Agent", "Land", "Triage", "Plan"]) expect(h).toContain(`<span class="k">${t}</span>`);
+  for (const t of ["Build", "Land", "Triage", "Plan", "Test"]) expect(h).toContain(`<span class="k">${t}</span>`);
+  for (const t of ["Tests", "Agent"]) expect(h).not.toContain(`<span class="k">${t}</span>`);
+  expect(h).toContain('<span class="pp"><span class="v">20m 00s</span><span class="p90">p90 30m 00s</span></span>');
   for (const t of ["Tests check", "Flaky", "24–27 s", "Today", "7 days"]) expect(h).not.toContain(t);
   const e = renderEfficiency(d);
   expect(e).toContain("Reruns");
   expect(e).toContain("<b>83%</b> of 1.0 agent hours went to dropped or stuck runs");
   expect(e.indexOf("went to")).toBeLessThan(e.indexOf('class="hbar"'));
   expect(e).toContain('class="hlegend"');
+  for (const [w, step] of [["hour", "minute"], ["day", "hour"], ["week", "day"], ["month", "day"]] as const) {
+    const c = renderCharts({ ...d, window: w });
+    expect(c).toContain(`Build run time by ${step} (median)`);
+    expect(c).toContain(`Test time by ${step} (median)`);
+    expect(c).toContain(`Lands by ${step}<`);
+  }
   expect(renderSpeedTop(null)).toContain("Loading");
   const o = areaOption(d.buckets, "agent", { color: "#000" });
   expect(o.series[0].areaStyle).toBeDefined();

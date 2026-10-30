@@ -203,6 +203,27 @@ export interface UsageSummary {
   series: { at: string; seven_day: number }[];
   /** Hours of snapshots since the last reset. */
   hours: number;
+  /** Weekly percent points used in the last 5 hours (`gainSince`); null with no snapshot near 5 hours ago in the reset window. */
+  last5h: number | null;
+}
+
+/** How far from the target time a snapshot may lie to count as "nearest": a bit over the 10-minute poll, times 3. */
+const NEAR_MS = 30 * 60_000;
+
+/**
+ * The latest seven_day minus the seven_day of the snapshot nearest to `ms` before the latest one, among
+ * the snapshots of one reset window (`w`). Null when there is no snapshot within NEAR_MS of that time.
+ */
+export function gainSince(w: Snapshot[], ms: number): number | null {
+  const last = w.at(-1);
+  if (!last) return null;
+  const target = Date.parse(last.at) - ms;
+  let best: Snapshot | null = null;
+  for (const s of w.slice(0, -1)) {
+    const d = Math.abs(Date.parse(s.at) - target);
+    if (d <= NEAR_MS && (!best || d < Math.abs(Date.parse(best.at) - target))) best = s;
+  }
+  return best ? Math.max(0, last.seven_day - best.seven_day) : null;
 }
 
 /** What the Status page shows; `now` is null while the last poll failed or the last row is old. */
@@ -214,6 +235,7 @@ export function summary(clock = Date.now()): UsageSummary {
     now: known ? last : null,
     series: w.map((s) => ({ at: s.at, seven_day: s.seven_day })),
     hours: w.length > 1 ? (Date.parse(w.at(-1)!.at) - Date.parse(w[0].at)) / HOUR : 0,
+    last5h: gainSince(w, 5 * HOUR),
   };
 }
 

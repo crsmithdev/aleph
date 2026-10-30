@@ -95,14 +95,15 @@ test("the flow strip: Incoming, Queued, Running of cap, Done, then the Context c
   const h = r.renderFlow(s, { done: 4 });
   const stages = [...h.matchAll(/<a class="stage-main" href="#lane-(\w+)"><span class="k">([^<]+)<\/span><span class="v"[^>]*>(\d+)(?:<span class="of"> of (\d+)<\/span>)?<\/span><\/a>/g)].map((m) => m.slice(1));
   expect(stages).toEqual([["incoming", "Incoming", "1", undefined], ["queued", "Queued", "1", undefined], ["running", "Running", "1", "3"], ["done", "Done", "4", undefined]]);
-  expect(h.match(/class="arrow"/g)?.length).toBe(3);
+  expect(h).not.toContain("arrow");
   for (const t of ["agentline", "avg", "Done today", "Triage", "Workers", "Planner", "Firefighter"]) expect(h).not.toContain(t);
   const ctx = h.slice(h.indexOf('id="context"'));
   expect(h.indexOf('id="done-n"')).toBeLessThan(h.indexOf('id="context"'));
-  expect(h.slice(h.indexOf('id="done-n"'), h.indexOf('id="context"')).match(/arrow/g)).toBeNull();
-  expect(ctx.replace(/<[^>]+>/g, "")).toMatch(/Context\s*\d+ Needs you\s*1 Stuck\s*2 Failed\s*Week 41%\s*5-hour 7%/);
-  expect(ctx).toMatch(/<a class="cnt stuck" href="#needs"><span class="n">2<\/span> Failed<\/a>/);
-  expect(r.renderFlow({ ...s, stuck: [] }, null)).toMatch(/<a class="cnt" href="#needs"><span class="n">0<\/span> Stuck/);
+  expect(ctx.replace(/<[^>]+>/g, "")).toMatch(/Context\s*41% weekly limit\s*7% 5-hour limit\s*\u2013 weekly, last 5 h/);
+  for (const t of ["Needs you", "Stuck", "Failed", "<a "]) expect(ctx).not.toContain(t);
+  const gained = r.renderContext({ ...s, usage: { ...s.usage, last5h: 3.4 } });
+  expect(gained.replace(/<[^>]+>/g, "")).toContain("+3% weekly, last 5 h");
+  expect(r.renderContext({ ...s, usage: { ...s.usage, last5h: 0 } }).replace(/<[^>]+>/g, "")).toContain("+0% weekly, last 5 h");
   expect(r.renderFlow({ ...s, usage: undefined })).toContain("usage unknown");
   expect(r.renderFlow(s, null)).toContain('id="done-n">\u2013');
 });
@@ -644,7 +645,7 @@ test("the Needs-you group is one list; its articles are the attention items plus
   expect(red).toContain('<p class="problem">Fix: aleph main is red');
   expect(red).not.toContain("always");
   expect(red).not.toContain("<button");
-  expect(r.view.render(att(s))).toContain('<span class="n">4</span> Needs you</a>');
+  expect(r.view.render(att(s))).toContain('<span class="count">4</span>');
 });
 
 test("Status has no Standing permissions section", () => {

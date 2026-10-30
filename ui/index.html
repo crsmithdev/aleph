@@ -148,14 +148,11 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .stage-main .v { font: 700 var(--fs-metric)/1 var(--metric); font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; }
 .stage-main .v .of { font: 400 22px/1 var(--metric); color: var(--muted); }
 .stage-main .quiet { font-size: var(--fs-xs); color: var(--muted); }
-.arrow { flex: none; align-self: center; color: var(--muted); font-size: 24px; }
 .stage.context { flex: 1.4 1 0; display: grid; gap: 8px; align-content: start; }
 .stage.context .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
 .ctx { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 500 var(--fs-sm) var(--sans); color: var(--muted); }
-.ctx a.cnt { color: var(--muted); text-decoration: none; }
-.ctx a.cnt .n { font: 700 18px/1 var(--metric); font-variant-numeric: lining-nums tabular-nums; }
-.ctx a.cnt.need, .ctx a.cnt.need .n { color: var(--need); } .ctx a.cnt.stuck, .ctx a.cnt.stuck .n { color: var(--stuck); }
-.ctx a.cnt:hover { text-decoration: underline; }
+.ctx .cnt { color: var(--muted); }
+.ctx .cnt .n { font: 700 18px/1 var(--metric); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); }
 .ctx.usage { font-size: var(--fs-xs); }
 .lanes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; align-items: start; margin-top: 24px; }
 .lane { min-width: 0; }
@@ -177,9 +174,10 @@ main { min-width: 0; }
   font: 400 var(--fs-md)/1.35 var(--display); letter-spacing: -0.01em;
   margin: 0 0 20px; display: flex; align-items: center; gap: 12px; white-space: nowrap;
 }
+.lede .say.fine { font-family: var(--display); font-size: var(--fs-xl); }
 .lede .say { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.lede .asof { flex: none; }
-.lede .act { flex: none; margin-left: auto; font: 500 var(--fs-sm) var(--sans, inherit); }
+.lede .asof { flex: none; font-size: var(--fs-xl); }
+.lede .act { flex: none; margin-left: auto; box-sizing: border-box; height: 28px; padding-block: 0; font: 500 var(--fs-sm) var(--sans, inherit); }
 .lede a { text-decoration: none; border-bottom: 1px solid var(--rule); }
 .lede a:hover { border-bottom-color: currentColor; }
 .lede .say.error, .lede .say.error a { color: var(--stuck); }
@@ -475,16 +473,19 @@ details.fold { margin: 0 0 8px; }
 .meds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 12px 0 8px; }
 .med { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); min-width: 0; }
 .med .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
-.med .v { font: 600 22px/1.2 var(--metric); font-variant-numeric: lining-nums tabular-nums; }
+.med .v { font: 600 22px/1.2 var(--metric); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); }
+.med .pp { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .med .quiet { font-size: var(--fs-xs); color: var(--muted); }
-.med .p90 { font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
+.med .p90 { font-size: var(--fs-sm); font-weight: 500; color: var(--muted); font-variant-numeric: lining-nums tabular-nums; }
 .med .runs { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
-.meds.one { grid-template-columns: minmax(0, 1fr); max-width: 260px; }
+.meds.eff { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .sh.sub h2 { font-size: var(--fs-md); }
-.hbar { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: var(--rule-2); gap: 2px; }
-.hbar span { min-width: 3px; }
+.hbar { display: flex; height: 36px; border-radius: 8px; overflow: hidden; background: var(--rule-2); gap: 2px; }
+.hbar > span { min-width: 3px; display: flex; align-items: center; padding: 0 10px; overflow: hidden; white-space: nowrap; font-size: var(--fs-sm); font-weight: 600; color: #fff; }
 .hbar .seg-done { background: var(--done); } .hbar .seg-quiet { background: var(--muted); } .hbar .seg-stuck { background: var(--stuck); } .hbar .seg-need { background: var(--need); }
-.hlegend { display: flex; flex-wrap: wrap; gap: 6px 24px; list-style: none; padding: 0; margin: 10px 0 6px; font-size: var(--fs-sm); }
+.hlegend { display: flex; gap: 2px; list-style: none; padding: 0; margin: 6px 0; font-size: var(--fs-sm); }
+.hlegend li { min-width: 3px; }
+.hlegend .under { display: inline-block; white-space: nowrap; }
 .wasted { margin: 6px 0 16px; font-size: var(--fs-sm); color: var(--ink-2); }
 .charts3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
 .chartbox { margin: 0; min-width: 0; }
@@ -500,7 +501,6 @@ details.fold { margin: 0 0 8px; }
 @media (max-width: 1020px) { .lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) {
   .flow { flex-direction: column; }
-  .arrow { display: none; }
   .lanes { grid-template-columns: minmax(0, 1fr); }
   .meds { grid-template-columns: minmax(0, 1fr); }
   .lede { flex-wrap: wrap; white-space: normal; }
@@ -1008,12 +1008,14 @@ pre.stat b { color: var(--need); }
 details.fontpick > summary::before, details.fontpick[open] > summary::before { content: none; }
 .fontpick .fp { position: absolute; right: 0; bottom: 48px; width: min(320px, calc(100vw - 32px)); display: grid; gap: 10px; padding: 14px;
   background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; box-shadow: 0 6px 24px rgb(0 0 0 / .25); }
-.fontpick .fp-role { display: grid; gap: 4px; color: var(--muted); }
-.fontpick .fp-row { display: flex; gap: 4px; }
-.fontpick select { flex: 1; min-width: 0; font: var(--fs-sm) var(--sans); padding: 4px 6px; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; }
-.fontpick .fp-css { margin: 0; padding: 8px; font: var(--fs-xs) var(--mono); white-space: pre-wrap; background: var(--sunk); border-radius: 4px; color: var(--ink-2); }
+.fontpick .fp { box-sizing: border-box; width: 320px; max-width: calc(100vw - 32px); }
+.fontpick .fp-role { display: grid; gap: 4px; color: var(--muted); height: 52px; }
+.fontpick .fp-role > span { height: 20px; line-height: 20px; overflow: hidden; white-space: nowrap; }
+.fontpick .fp-row { display: flex; gap: 4px; height: 28px; }
+.fontpick select { flex: 1; min-width: 0; height: 28px; box-sizing: border-box; text-overflow: ellipsis; font: var(--fs-sm) var(--sans); padding: 4px 6px; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; }
+.fontpick .fp-css { height: 6em; overflow: auto; box-sizing: border-box; margin: 0; padding: 8px; font: var(--fs-xs) var(--mono); white-space: pre-wrap; background: var(--sunk); border-radius: 4px; color: var(--ink-2); }
 .fontpick button { justify-self: start; font: var(--fs-sm) var(--sans); padding: 3px 10px; background: none; color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; cursor: pointer; }
-.fontpick .fp-row button { padding: 0 9px; font-size: var(--fs-lg); line-height: 1; }`;
+.fontpick .fp-row button { flex: none; width: 32px; height: 28px; box-sizing: border-box; padding: 0; text-align: center; font-size: var(--fs-lg); line-height: 1; }`;
   document.head.append(style);
   document.body.append(panel);
   apply();
