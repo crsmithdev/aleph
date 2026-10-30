@@ -93,30 +93,36 @@ function saveSnapshot(events: Event[]): void {
 
 export type Action =
   | { do: "land"; job: string }
-  | { do: "drop"; job: string; reason: string }
+  | { do: "drop"; job: string; reason: string; waiting_on?: string }
   | { do: "close"; repo: string; n: number; note: string }
   | { do: "note"; repo: string; n: number; text: string }
   | { do: "add"; repo: string; title: string; body: string }
   | { do: "clear-needs-chris"; repo: string; n: number; note: string }
-  | { do: "edit-goal"; repo: string; n: number; body: string }
+  | { do: "edit-goal"; repo: string; n: number; body?: string; waiting_on?: string }
   | { do: "tell"; text: string };
 
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 const num = (v: unknown): number | null => (Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : null);
+/** A `<repo>-<n>` ref, or undefined: any other value is ignored, as triage's verdict ignores it. */
+const ref = (v: unknown): string | undefined => {
+  const t = text(v);
+  return t && /^[a-z0-9-]+-\d+$/.test(t) ? t : undefined;
+};
 
 /** One action from the reply's JSON, or why it is none. */
 function parseAction(raw: any): Action | string {
   if (!raw || typeof raw !== "object") return "not an object";
   const f = (k: string) => text(raw[k]);
   const n = num(raw.n);
+  const wait = ref(raw.waiting_on);
   switch (raw.do) {
     case "land": return f("job") ? { do: "land", job: f("job")! } : "land without a job";
-    case "drop": return f("job") && f("reason") ? { do: "drop", job: f("job")!, reason: f("reason")! } : "drop without a job and a reason";
+    case "drop": return f("job") && f("reason") ? { do: "drop", job: f("job")!, reason: f("reason")!, ...(wait ? { waiting_on: wait } : {}) } : "drop without a job and a reason";
     case "close": return f("repo") && n && f("note") ? { do: "close", repo: f("repo")!, n, note: f("note")! } : "close without a repo, n and note";
     case "note": return f("repo") && n && f("text") ? { do: "note", repo: f("repo")!, n, text: f("text")! } : "note without a repo, n and text";
     case "add": return f("repo") && f("title") ? { do: "add", repo: f("repo")!, title: f("title")!, body: f("body") ?? "" } : "add without a repo and a title";
     case "clear-needs-chris": return f("repo") && n && f("note") ? { do: "clear-needs-chris", repo: f("repo")!, n, note: f("note")! } : "clear-needs-chris without a repo, n and note";
-    case "edit-goal": return f("repo") && n && f("body") ? { do: "edit-goal", repo: f("repo")!, n, body: f("body")! } : "edit-goal without a repo, n and body";
+    case "edit-goal": return f("repo") && n && (f("body") || wait) ? { do: "edit-goal", repo: f("repo")!, n, ...(f("body") ? { body: f("body")! } : {}), ...(wait ? { waiting_on: wait } : {}) } : "edit-goal without a repo, n, and a body or waiting_on";
     case "tell": return f("text") ? { do: "tell", text: f("text")! } : "tell without text";
     default: return `unknown action ${JSON.stringify(raw.do)}`;
   }
@@ -133,9 +139,9 @@ export function parseReply(output: string): (Action | string)[] | string {
 }
 
 export const describe = (a: Action): string =>
-  a.do === "land" ? `land ${a.job}` : a.do === "drop" ? `drop ${a.job}: ${a.reason}` : a.do === "close" ? `close ${a.repo}-${a.n}: ${a.note}` : a.do === "note" ? `note ${a.repo}-${a.n}: ${a.text}`
+  a.do === "land" ? `land ${a.job}` : a.do === "drop" ? `drop ${a.job}: ${a.reason}${a.waiting_on ? ` (waits on ${a.waiting_on})` : ""}` : a.do === "close" ? `close ${a.repo}-${a.n}: ${a.note}` : a.do === "note" ? `note ${a.repo}-${a.n}: ${a.text}`
   : a.do === "add" ? `add ${a.repo}: ${a.title}` : a.do === "clear-needs-chris" ? `clear-needs-chris ${a.repo}-${a.n}: ${a.note}`
-  : a.do === "edit-goal" ? `edit-goal ${a.repo}-${a.n}` : `tell: ${a.text}`;
+  : a.do === "edit-goal" ? `edit-goal ${a.repo}-${a.n}${a.waiting_on ? ` (waits on ${a.waiting_on})` : ""}` : `tell: ${a.text}`;
 
 const MAX_FILE = 4000;
 const clip = (s: string) => (s.length > MAX_FILE ? `…${s.slice(-MAX_FILE)}` : s);
@@ -176,6 +182,7 @@ export function prompt(events: Event[], jobs = allJobs()): string {
 - A land with a merge conflict, a run that loops with no commit, or a goal that is already met on main is fixed without Chris: drop the first two; for a goal already met on main use close (it drops the open job and marks the issue done), never sent to Chris.
 - A how-to-build question (code structure, which module, naming, test shape, whether to wait for an issue) is yours to decide: clear-needs-chris with the decision. A product choice (what the product does for Chris, what he sees, what it costs, what comes first) stays with Chris, unless Chris has handed its reason to you.
 - File every follow-up you find as an issue with add.
+- When a run cannot pass until another open issue lands, drop it with \`waiting_on\` set to that issue, or use edit-goal with \`waiting_on\`. A note or a drop reason alone does not stop a rerun.
 - At most ${MAX_ACTIONS} actions. No action is a fine answer when nothing needs doing.${handedRule}
 
 # What is new since the last look
@@ -184,12 +191,12 @@ ${events.map((e) => `## ${e.kind}: ${e.line}\n\n${context(e, jobs)}`).join("\n\n
 
 Reply with one JSON object and nothing else: {"actions": [ ... ]}, each action one of
 - {"do": "land", "job": "<job name>"}
-- {"do": "drop", "job": "<job name>", "reason": "<why; the next run reads it>"}
+- {"do": "drop", "job": "<job name>", "reason": "<why; the next run reads it>", "waiting_on": "<repo>-<n>, optional: the open issue this waits for>"}
 - {"do": "close", "repo": "<repo>", "n": <issue number>, "note": "<why the goal is already met>"}
 - {"do": "note", "repo": "<repo>", "n": <issue number>, "text": "<note>"}
 - {"do": "add", "repo": "<repo>", "title": "<title>", "body": "<body>"}
 - {"do": "clear-needs-chris", "repo": "<repo>", "n": <issue number>, "note": "<the decision>"}
-- {"do": "edit-goal", "repo": "<repo>", "n": <issue number>, "body": "<the new goal body>"}
+- {"do": "edit-goal", "repo": "<repo>", "n": <issue number>, "body": "<the new goal body, optional>", "waiting_on": "<repo>-<n>, optional: the open issue this waits for>"}
 - {"do": "tell", "text": "<one sentence for Chris>"}
 `;
 }
@@ -249,8 +256,10 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
       const why = await ports.drop(a.job, a.reason);
       if (why) return { refused: `${describe(a)}: ${why}` };
       writeRerun(a.job, `The last run was dropped by the firefighter: ${a.reason}`);
-      if (issue !== undefined) store.note(repo, issue, `firefighter: dropped ${a.job}: ${a.reason}`);
-      return { applied: describe(a) };
+      // A run that cannot pass until another issue lands waits on it: the dispatch reads waiting_on and starts nothing until it is done.
+      const waits = a.waiting_on && issue !== undefined ? await refusal(async () => issues.edit(repo, issue, { waitingOn: a.waiting_on })) : null;
+      if (issue !== undefined) store.note(repo, issue, `firefighter: dropped ${a.job}: ${a.reason}${a.waiting_on ? `; waits on ${a.waiting_on}` : ""}`);
+      return waits ? { refused: `${describe(a)}: dropped, but waiting_on not set: ${waits}` } : { applied: describe(a) };
     }
     const agent = runs.findLast((e) => e.run.kind === "agent" || e.run.kind === "recheck") ?? last;
     if (!reviewVerdict(readFile(agent, "review.md") ?? "")) return { refused: `${describe(a)}: the reviewer has no verdict yet` };
@@ -305,7 +314,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
   }
   if (!store.hasLabel(item, store.GOAL)) return { refused: `${describe(a)}: it is not a goal` };
-  const why = await refusal(async () => issues.edit(repo, a.n, { body: a.body }));
+  const why = await refusal(async () => issues.edit(repo, a.n, { ...(a.body !== undefined ? { body: a.body } : {}), ...(a.waiting_on ? { waitingOn: a.waiting_on } : {}) }));
   return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
 }
 

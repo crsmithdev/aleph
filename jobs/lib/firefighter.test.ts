@@ -6,7 +6,7 @@ import * as todos from "../../todo/lib/todo.ts";
 import { labels as storeLabels, readList, writeList } from "../../todo/lib/store.ts";
 import { writeDecision, type Decision } from "./decision.ts";
 import { firefighterStep } from "./factory.ts";
-import { defaultPorts, parseReply, prompt, snapshot, type Ports } from "./firefighter.ts";
+import { applyActions, defaultPorts, parseReply, prompt, snapshot, type Ports } from "./firefighter.ts";
 import { readRun, stamp, writeRun, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -32,14 +32,14 @@ let key = "";
 const repoPath = () => join(base, "repo");
 
 /** A new repo key, ledger and factory directory, with these items in its list. */
-function fresh(items: { title: string; labels?: string[]; notes?: string[]; reason?: string; decision?: Decision }[] = []): void {
+function fresh(items: { title: string; body?: string; labels?: string[]; notes?: string[]; reason?: string; decision?: Decision }[] = []): void {
   key = `ff${++n}`;
   writeFileSync(join(base, "repos.json"), JSON.stringify({ [key]: { path: repoPath(), sandbox: true, autoland: false } }));
   process.env.ALEPH_JOBS_DIR = join(base, `jobs${n}`);
   process.env.ALEPH_FACTORY_DIR = join(base, `factory${n}`);
   writeList({ key }, "reset", (doc) => {
     for (const i of items) {
-      const it = todos.add(doc, i.title, { labels: i.labels });
+      const it = todos.add(doc, i.title, { labels: i.labels, body: i.body });
       for (const note of i.notes ?? []) todos.note(it, note);
       if (i.reason) it.fm.reason = i.reason;
       if (i.decision) writeDecision(it, i.decision);
@@ -382,4 +382,37 @@ test("clear-needs-chris is applied on a build decision or no decision, even with
     expect(storeLabels(item(id))).not.toContain("needs-chris");
     expect(storeLabels(item(id))).toContain("goal");
   }
+});
+
+test("a drop with waiting_on drops the job, and the issue waits on that ref, with the note saying so", async () => {
+  fresh([{ title: "waiter", labels: ["goal"] }, { title: "blocker", labels: ["goal"] }]);
+  run({ name: `${key}-1`, state: "stuck", reason: "time box", todo: 1 });
+  reply([{ do: "drop", job: `${key}-1`, reason: "needs the blocker", waiting_on: `${key}-2` }]);
+  const f = await firefighterStep(ports());
+  expect(f?.refused).toEqual([]);
+  expect(dropped.map((d) => d.name)).toEqual([`${key}-1`]);
+  expect(item(1).fm.waiting_on).toBe(`${key}-2`);
+  expect(item(1).notes.at(-1)).toContain(`waits on ${key}-2`);
+});
+
+test("an edit-goal with only waiting_on sets it and leaves the body unchanged", async () => {
+  fresh([{ title: "goal", body: "Ship the thing.\n", labels: ["goal"] }]);
+  const r = await applyActions([{ do: "edit-goal", repo: key, n: 1, waiting_on: `${key}-2` }], ports());
+  expect(r.refused).toEqual([]);
+  expect(item(1).fm.waiting_on).toBe(`${key}-2`);
+  expect(item(1).body.trim()).toBe("Ship the thing.");
+});
+
+test("parse keeps a well-formed waiting_on, ignores a malformed one, and refuses an edit-goal with neither body nor waiting_on", () => {
+  expect(parseReply(JSON.stringify({ actions: [{ do: "drop", job: "x-1", reason: "r", waiting_on: "Not A Ref" }] }))).toEqual([{ do: "drop", job: "x-1", reason: "r" }]);
+  expect(parseReply(JSON.stringify({ actions: [{ do: "drop", job: "x-1", reason: "r", waiting_on: "ff-2" }] }))).toEqual([{ do: "drop", job: "x-1", reason: "r", waiting_on: "ff-2" }]);
+  expect(parseReply(JSON.stringify({ actions: [{ do: "edit-goal", repo: "ff", n: 1 }] }))).toEqual(["edit-goal without a repo, n, and a body or waiting_on"]);
+});
+
+test("prompt lists waiting_on in the drop and edit-goal lines, and says a note alone does not stop a rerun", () => {
+  const p = prompt([]);
+  const lines = p.split("\n");
+  expect(lines.find((l) => l.startsWith('- {"do": "drop"'))).toContain('"waiting_on"');
+  expect(lines.find((l) => l.startsWith('- {"do": "edit-goal"'))).toContain('"waiting_on"');
+  expect(p).toContain("A note or a drop reason alone does not stop a rerun.");
 });
