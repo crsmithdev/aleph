@@ -12,6 +12,7 @@ import { allRuns, jobsDir, lock, readRun, stamp, updateRun, writeRun, type Repo 
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
 import { factoryDir, gates, pendingWaits } from "./factory.ts";
+import { git } from "./git.ts";
 import { logStanding, standing } from "./standing.ts";
 /** Triage runs that end with no verdict, for one item, before it is labelled `needs-chris`; `ALEPH_TRIAGE_TRIES` changes it. */
 export const TRIAGE_TRIES = () => Number(process.env.ALEPH_TRIAGE_TRIES ?? 2);
@@ -20,6 +21,7 @@ const TIME_BOX_MS = () => Number(process.env.ALEPH_TRIAGE_TIMEOUT ?? 600) * 1000
 export type Verdict =
   | { verdict: "goal"; body: string; waitingOn?: string }
   | { verdict: "close"; reason: string }
+  | { verdict: "done"; commit: string; reason: string }
   | { verdict: "chris"; question: string; decision?: Decision }
   | { verdict: "live"; note: string };
 
@@ -43,6 +45,11 @@ export function parseVerdict(output: string): Verdict | string {
     }
     case "close": { const reason = field("reason"); return reason ? { verdict: "close", reason } : "close without a reason"; }
     case "chris": { const question = field("question"); if (!question) return "chris without a question"; const decision = normalizeDecision(raw); return decision ? { verdict: "chris", question: decision.question, decision } : { verdict: "chris", question }; }
+    case "done": {
+      const commit = field("commit"), reason = field("reason");
+      if (!commit || !/^[0-9a-f]{7,40}$/i.test(commit)) return "done without a commit";
+      return reason ? { verdict: "done", commit, reason } : "done without a reason";
+    }
     case "live": { const note = field("note"); return note ? { verdict: "live", note } : "live without a note"; }
     default: return `unknown verdict ${JSON.stringify(raw.verdict)}`;
   }
@@ -52,6 +59,32 @@ export function parseVerdict(output: string): Verdict | string {
 function openIssues(repo: Repo, item: todos.Item): string {
   const others = (reader().list(repo.key)?.items ?? []).filter((o) => o.id !== item.id && todos.status(o) === "open");
   return others.map((o) => `${repo.key}-${o.id}: ${o.title.replace(/\s+/g, " ").trim()}`).join("\n") || "(none)";
+}
+
+/** The ref of the repo's main: origin/main when it has one, else main. */
+function mainRef(repo: Repo): string | null {
+  for (const ref of ["origin/main", "main"]) if (git(repo.path, "rev-parse", "--verify", "-q", `${ref}^{commit}`).ok) return ref;
+  return null;
+}
+
+/** The commits on main since the day the item was created, one line each: what a goal may already be done by. */
+function mainSince(repo: Repo, item: todos.Item): string {
+  const ref = mainRef(repo);
+  if (!ref) return "(main is not readable)";
+  // `created` is a day; start a day early, so a time zone cannot drop the commits of the day itself.
+  const day = new Date(`${String(item.fm.created ?? "").trim()}T00:00:00Z`);
+  const r = git(repo.path, "log", "--oneline", "--no-decorate", ...(isNaN(+day) ? ["-n", "50"] : [`--since=${new Date(+day - 864e5).toISOString()}`]), ref);
+  return (r.ok && r.out.trim()) || "(none)";
+}
+
+/** The full sha of `commit` when it is a commit on main, else null. */
+function commitOnMain(repo: Repo, commit: string): string | null {
+  const ref = mainRef(repo);
+  if (!ref) return null;
+  const full = git(repo.path, "rev-parse", "--verify", "-q", `${commit}^{commit}`);
+  if (!full.ok) return null;
+  const sha = full.out.trim();
+  return git(repo.path, "merge-base", "--is-ancestor", sha, ref).ok ? sha : null;
 }
 
 export function prompt(repo: Repo, item: todos.Item): string {
@@ -65,6 +98,10 @@ ${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}
 
 ${openIssues(repo, item)}
 
+# Commits on main since ${String(item.fm.created ?? "").trim() || "the issue was created"}
+
+${mainSince(repo, item)}
+
 Reply with one JSON object and nothing else, with one of these verdicts:
 
 - {"verdict": "goal", "body": "<goal body>", "waiting_on": "<optional <repo>-<n>>"}: the issue is work a factory run can do alone. "body" replaces the issue's body, in the goal format:
@@ -75,6 +112,7 @@ Reply with one JSON object and nothing else, with one of these verdicts:
 
   The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`), or a new test that asserts the end state. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one.
 - {"verdict": "close", "reason": "<why>"}: it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
+- {"verdict": "done", "commit": "<sha>", "reason": "<what the commit holds>"}: main already holds the work. Before a "goal" verdict, check this: read the commits listed above, and grep main for the names the issue gives (files, functions, test names). When a commit on main already makes the change, return "done" with that commit's sha and say what it holds; no worker runs. When you are unsure, return "goal" as usual.
 - {"verdict": "chris", "question": "<one plain sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>", "waiting_on": "<optional <repo>-<n>: set only when choosing this option means waiting for that issue first>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first. Write the question and the options in plain words a user of the product reads: no file paths, function names, line numbers or code. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
 
 Duplicates: when the issue asks for the same work as an open issue listed above, return "close" with the reason "duplicate of <repo>-<n>", naming that issue. When it only waits for that open issue, return "goal" with "waiting_on" set to it.
@@ -121,6 +159,9 @@ function apply(repo: Repo, id: number, v: Verdict): boolean {
       todos.edit(item, { body: v.body, ...(v.waitingOn ? { waitingOn: v.waitingOn } : {}) });
       label(item, [GOAL]);
       todos.note(item, v.waitingOn ? `triage: rewritten as a goal; waits on ${v.waitingOn}` : "triage: rewritten as a goal");
+    } else if (v.verdict === "done") {
+      todos.setStatus(item, "done");
+      todos.note(item, `triage: already on main in ${v.commit}: ${v.reason}`);
     } else if (v.verdict === "close") {
       todos.setStatus(item, "done");
       todos.note(item, `triage: closed: ${v.reason}`);
@@ -197,6 +238,16 @@ async function triageItem(repo: Repo, item: todos.Item, triaged: Counts, skipped
         end(reason);
         skipped.push(giveUp(repo, item.id, reason) ?? `${name}: triage gave a malformed verdict: ${v}`);
         return;
+      }
+      if (v.verdict === "done") {
+        const sha = commitOnMain(repo, v.commit);
+        if (!sha) {
+          const reason = `malformed verdict: done names ${v.commit}, not a commit on main`;
+          end(reason);
+          skipped.push(giveUp(repo, item.id, reason) ?? `${name}: ${reason}`);
+          return;
+        }
+        v.commit = sha.slice(0, 12);
       }
       if (apply(repo, item.id, v)) {
         triaged[v.verdict] = (triaged[v.verdict] ?? 0) + 1;

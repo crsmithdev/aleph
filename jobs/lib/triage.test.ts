@@ -355,3 +355,75 @@ test("the prompt lists the open issues of the repo, one line each, without the o
   expect(p).toContain('return "close" with the reason "duplicate of <repo>-<n>"');
   expect(p).toContain('return "goal" with "waiting_on"');
 });
+
+describe("a goal whose work is already on main", () => {
+  // The fake reads the commit list in the prompt: a line naming the file the issue asks for gives "done", else "goal".
+  const SMART = `#!/bin/bash
+prompt=$(cat)
+echo "$PWD" >> "$FAKE_LOG"
+file=$(echo "$prompt" | grep -m1 '^# Issue' | grep -o '[a-z]*\.ts')
+sha=$(echo "$prompt" | sed -n '/^# Commits on main/,/^Reply/p' | grep -F "$file" | head -1 | cut -d' ' -f1)
+if [ -n "$sha" ]; then echo "{\\"verdict\\":\\"done\\",\\"commit\\":\\"$sha\\",\\"reason\\":\\"widget.ts exists\\"}"
+else echo '{"verdict":"goal","body":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}'; fi
+`;
+  let fixture: string;
+  let saved: string | undefined;
+  beforeAll(() => {
+    fixture = join(base, "fixture");
+    mkdirSync(fixture);
+    sh(fixture, "git", "init", "-q", "-b", "main");
+    writeFileSync(join(fixture, "README"), "x\n");
+    sh(fixture, "git", "add", "-A");
+    sh(fixture, "git", "commit", "-q", "-m", "start");
+    writeFileSync(join(fixture, "widget.ts"), "export const widget = 1;\n");
+    sh(fixture, "git", "add", "-A");
+    sh(fixture, "git", "commit", "-q", "-m", "Add widget.ts");
+    writeFileSync(join(base, "smart"), SMART);
+    chmodSync(join(base, "smart"), 0o755);
+    saved = process.env.ALEPH_TRIAGE_CMD;
+    process.env.ALEPH_TRIAGE_CMD = join(base, "smart");
+    repo.path = fixture;
+  });
+  afterAll(() => { repo.path = base; process.env.ALEPH_TRIAGE_CMD = saved; });
+
+  test("the prompt lists the commits on main since the item was created", () => {
+    reset([{ title: "Add widget.ts" }]);
+    const p = prompt(repo, item(1));
+    expect(p).toContain("# Commits on main since");
+    expect(p).toMatch(/^[0-9a-f]{7,} Add widget\.ts$/m);
+    expect(p).toContain('"verdict": "done"');
+  });
+
+  test("triage closes it as done with the commit in the note, and starts no worker", async () => {
+    reset([{ title: "Add widget.ts", body: "Create widget.ts exporting widget." }]);
+    const t = await run();
+    expect(t.skipped).toEqual([]);
+    expect(t.triaged).toEqual({ done: 1 });
+    expect(todos.status(item(1))).toBe("done");
+    expect(labels(1)).not.toContain("goal");
+    const sha = Bun.spawnSync(["git", "rev-parse", "--short=12", "HEAD"], { cwd: fixture }).stdout.toString().trim();
+    expect(item(1).notes.join("\n")).toContain(`triage: already on main in ${sha}`);
+  });
+
+  test("a goal whose work is not on main still becomes a goal for a worker", async () => {
+    reset([{ title: "Add gadget.ts", body: "Create gadget.ts exporting gadget." }]);
+    const t = await run();
+    expect(t.triaged).toEqual({ goal: 1 });
+    expect(todos.status(item(1))).toBe("open");
+    expect(labels(1)).toContain("goal");
+  });
+
+  test("a done verdict naming a commit that is not on main is not applied", async () => {
+    expect(parseVerdict('{"verdict":"done","commit":"nothex","reason":"x"}')).toBe("done without a commit");
+    expect(parseVerdict('{"verdict":"done","commit":"abc1234","reason":"x"}')).toEqual({ verdict: "done", commit: "abc1234", reason: "x" });
+    reset([{ title: "Add widget.ts" }]);
+    process.env.ALEPH_TRIAGE_CMD = join(base, "bogus");
+    writeFileSync(join(base, "bogus"), `#!/bin/bash\necho '{"verdict":"done","commit":"deadbeef1","reason":"x"}'\n`);
+    chmodSync(join(base, "bogus"), 0o755);
+    try {
+      const t = await run();
+      expect(t.triaged).toEqual({});
+      expect(todos.status(item(1))).toBe("open");
+    } finally { process.env.ALEPH_TRIAGE_CMD = join(base, "smart"); }
+  });
+});
