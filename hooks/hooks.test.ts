@@ -519,17 +519,20 @@ describe("secret scan", () => {
 });
 
 describe("fetchObservations", () => {
-  function fake(failPage?: number) {
-    const state = { open: 0, maxOpen: 0 };
+  function fake(failPage?: number, opts: { pages?: number; delay?: number; failOnce?: number } = {}) {
+    const state = { open: 0, maxOpen: 0, seen: new Set<number>() };
     const server = Bun.serve({
       port: 0,
       fetch: async (req) => {
         const page = Number(new URL(req.url).searchParams.get("page"));
         state.maxOpen = Math.max(state.maxOpen, ++state.open);
-        await Bun.sleep(100);
+        await Bun.sleep(opts.delay ?? 100);
         state.open--;
+        const again = state.seen.has(page);
+        state.seen.add(page);
+        if (page === opts.failOnce && !again) return new Response("boom", { status: 500 });
         if (page === failPage) return new Response("boom", { status: 500 });
-        return Response.json({ data: [{ id: `o${page}a` }, { id: `o${page}b` }], meta: { page, totalPages: 4 } });
+        return Response.json({ data: [{ id: `o${page}a` }, { id: `o${page}b` }], meta: { page, totalPages: opts.pages ?? 4 } });
       },
     });
     const cfg: any = { baseUrl: `http://localhost:${server.port}`, publicKey: "pk", secretKey: "sk" };
@@ -549,6 +552,26 @@ describe("fetchObservations", () => {
     try {
       await fetchObservations(cfg, new Date(0), new Date());
       expect(state.maxOpen).toBeGreaterThanOrEqual(2);
+      expect(state.maxOpen).toBeLessThanOrEqual(4);
+    } finally { server.stop(true); }
+  });
+
+  test("the timeout is per request: a run longer than timeoutMs passes when each page is shorter", async () => {
+    const { server, state, cfg } = fake(undefined, { pages: 21, delay: 150 });
+    try {
+      const t0 = Date.now();
+      const rows = await fetchObservations(cfg, new Date(0), new Date(), 500);
+      expect(Date.now() - t0).toBeGreaterThan(500);
+      expect(state.maxOpen).toBeLessThanOrEqual(4);
+      expect(rows.map((r: any) => r.id)).toEqual(Array.from({ length: 21 }, (_, i) => [`o${i + 1}a`, `o${i + 1}b`]).flat());
+    } finally { server.stop(true); }
+  });
+
+  test("a page that fails once is tried again", async () => {
+    const { server, cfg } = fake(undefined, { failOnce: 3 });
+    try {
+      const rows = await fetchObservations(cfg, new Date(0), new Date());
+      expect(rows).toHaveLength(8);
     } finally { server.stop(true); }
   });
 

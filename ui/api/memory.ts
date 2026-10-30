@@ -77,7 +77,7 @@ export const vaultNotes = (root: string): Promise<Note[]> => notes.get(root, uiF
 export const clearCache = () => { missesCache.clear(); notes.clear(); };
 async function runMisses(): Promise<unknown | null> {
   try {
-    const p = Bun.spawn(["bun", CLI, "misses", "--days", "7"], { env: process.env, stdout: "pipe", stderr: "ignore", timeout: 15_000 });
+    const p = Bun.spawn(["bun", CLI, "misses", "--days", "7"], { env: process.env, stdout: "pipe", stderr: "ignore", timeout: 60_000 });
     const text = await new Response(p.stdout).text();
     if ((await p.exited) !== 0) return null;
     return JSON.parse(text);

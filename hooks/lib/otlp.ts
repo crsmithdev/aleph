@@ -138,6 +138,16 @@ export async function fetchObservations(cfg: LangfuseConfig, from: Date, to: Dat
   };
   const first = await page(1);
   const pages = first.meta ? Math.min(Number(first.meta.totalPages) || 1, 499) : 1;
-  const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => page(i + 2)));
-  return [first, ...rest].flatMap((b) => b.data ?? []);
+  const out: any[][] = [first.data ?? []];
+  let next = 2;
+  let failed = false;
+  // A pool of 4, as ui/api/skills.ts does: all pages at once overload Langfuse. Each request has its own timeout.
+  const worker = async () => {
+    try { for (let n = next++; n <= pages && !failed; n = next++) out[n - 1] = (await page(n).catch(() => page(n))).data ?? []; }
+    catch (e) { failed = true; throw e; }
+  };
+  const results = await Promise.allSettled(Array.from({ length: Math.min(4, pages - 1) }, worker));
+  const bad = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+  if (bad) throw bad.reason;
+  return out.flat();
 }
