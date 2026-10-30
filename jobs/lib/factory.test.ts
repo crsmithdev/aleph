@@ -350,7 +350,8 @@ const chrisNotes = (id: number) => notes(id).split("needs-chris:").length - 1;
 
 test("removing needs-chris restarts the no-commit streak; three more no-commit runs label it again", async () => {
   const id = goal();
-  noCommitRuns(id, 3, 600);
+  // Two hours back: outside the run cap's hour, so only the streak holds the goal.
+  noCommitRuns(id, 3, 7200);
   const f = fakes();
   expect((await dispatch(f)).started).toEqual([]);
   expect(labels(id)).toContain("needs-chris");
@@ -384,6 +385,75 @@ test("two no-commit runs in a row are still dispatched", async () => {
   const f = fakes();
   const out = await dispatch(f);
   expect(out.started).toEqual([`fac-${id}`]);
+});
+
+test("an item that the store closes while an earlier goal starts gets no run", async () => {
+  const first = goal();
+  const second = goal();
+  const f = fakes();
+  const out = await dispatchGoals(async (_repo, name) => {
+    f.calls.push(`start ${name}`);
+    if (name === `fac-${first}`) await change(second, (item) => todos.setStatus(item, "done"));
+    return null;
+  }, async () => null, f.land, f.rescue);
+  expect(f.calls).toEqual([`start fac-${first}`]);
+  expect(out.skipped.join()).toContain(`fac-${second}`);
+  expect(out.started).toEqual([`fac-${first}`]);
+});
+
+test("a done item gets no run and no run-cap note, even with three recent runs", async () => {
+  const id = goal();
+  await change(id, (item) => todos.setStatus(item, "done"));
+  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "time box" });
+  const f = fakes();
+  await dispatch(f);
+  expect(f.specs).toEqual([]);
+  expect(labels(id)).not.toContain("needs-chris");
+});
+
+// The run cap: a fourth agent run of a goal in 60 minutes is not started; one needs-chris note says so.
+const RUN_CAP_NOTE = "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it";
+test("a fourth start in an hour is skipped with one needs-chris note, and the goal is not started", async () => {
+  const id = goal();
+  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - (i + 1) * 60_000).toISOString() });
+  const f = fakes();
+  const out = await dispatch(f);
+  expect(out.started).toEqual([]);
+  expect(out.skipped.join()).toContain("3 runs in the last hour");
+  expect(f.specs).toEqual([]);
+  expect(labels(id)).toContain("needs-chris");
+  expect(notes(id)).toContain(RUN_CAP_NOTE);
+  await dispatch(f);
+  await dispatch(f);
+  expect(f.specs).toEqual([]);
+  expect(notes(id).split("needs-chris:").length - 1).toBe(1);
+});
+
+test("a run that is three runs old, or three runs of other goals, does not hold the goal", async () => {
+  const id = goal();
+  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - 7200_000).toISOString() });
+  mk(`fac-${id + 100}`, "agent", "dropped", { reason: "time box" });
+  const f = fakes();
+  const out = await dispatch(f);
+  expect(out.started).toEqual([`fac-${id}`]);
+  expect(labels(id)).not.toContain("needs-chris");
+});
+
+test("the run cap holds with a standing Rerun: the rerun of the third run is the fourth start and gets the note", async () => {
+  mkdirSync(join(base, "factory"), { recursive: true });
+  writeFileSync(join(base, "factory", "standing.json"), JSON.stringify({ rescue: { action: "recommended", at: new Date().toISOString() } }));
+  const id = goal();
+  mk(`fac-${id}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - 120_000).toISOString() });
+  mk(`fac-${id}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - 60_000).toISOString() });
+  mk(`fac-${id}`, "agent", "stuck", { reason: "tests failed after 2 fix rounds" });
+  const f = fakes();
+  const out = await dispatch(f);
+  expect(f.calls).toContain(`drop fac-${id}`);
+  expect(f.calls.filter((c) => c.startsWith("start"))).toEqual([]);
+  expect(out.skipped.join()).toContain("3 runs in the last hour");
+  expect(labels(id)).toContain("needs-chris");
+  expect(notes(id)).toContain(RUN_CAP_NOTE);
+  expect(notes(id)).toContain("standing: Rerun");
 });
 
 // A claim that the goal is met is checked on origin/main: a new commit there, so the baseline is run again.

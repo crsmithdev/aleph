@@ -326,6 +326,9 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       if (await planning(repo, item.id)) { skipped.push(`${name}: planning`); continue; }
       const gated = gates({ only: ["live", "day", "waiting"], jobs });
       if (gated) { skipped.push(`${name}: ${gated.why}`); continue; }
+      // Read again just before the start: an item done or dropped since it was read starts no run, whatever the trigger.
+      const latest = reader().item(repo.key, item.id);
+      if (!latest || todos.status(latest) === "done" || todos.status(latest) === "dropped") { skipped.push(`${name}: the item is ${latest ? todos.status(latest) : "gone"}`); continue; }
       const marked = streakMark(name) !== null;
       if ((marked && hasLabel(item, "needs-chris")) || noCommitStreak(repo.key, name) >= NO_COMMIT_LIMIT) {
         if (!hasLabel(item, "needs-chris")) {
@@ -335,6 +338,17 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
           if (bad) factoryLog(`${name}: no issue note: ${bad}`);
         }
         skipped.push(`${name}: ${NO_COMMIT_LIMIT} runs in a row with no commit`);
+        continue;
+      }
+      const started60 = agentStartsInHour(repo.key, name);
+      if (started60 >= MAX_RUNS_PER_HOUR) {
+        if (!capMarked(name)) {
+          writeCapMark(name);
+          const text = `needs-chris: the factory started this goal ${started60} times in the last hour; it stops starting it until Chris reruns it.`;
+          const bad = note(repo, item.id, text, { label: "needs-chris", reason: "run-cap" });
+          if (bad) factoryLog(`${name}: no issue note: ${bad}`);
+        }
+        skipped.push(`${name}: ${started60} runs in the last hour`);
         continue;
       }
       const again = rerunNote(name);
@@ -348,7 +362,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       }
       const why = await start(repo, name, item.id, spec, tier);
       if (why) skipped.push(`${name}: ${why}`);
-      else { started.push(name); if (again) rmSync(rerunFile(name), { force: true }); }
+      else { started.push(name); rmSync(capFile(name), { force: true }); if (again) rmSync(rerunFile(name), { force: true }); }
     } finally {
       release();
     }
@@ -479,6 +493,22 @@ function noCommitStreak(repoKey: string, name: string): number {
   let n = 0;
   for (const e of runs.reverse()) { if (e.run.reason !== "no commit" && !e.run.noCommit) break; n++; }
   return n;
+}
+
+/** A goal starts at most this many agent runs in any 60 minutes, whatever the trigger: a fourth start is skipped. */
+export const MAX_RUNS_PER_HOUR = 3;
+
+const capFile = (name: string) => join(factoryDir(), "cap", `${name}.txt`);
+/** Whether the cap's needs-chris note is written for the goal's current streak of skipped starts. */
+const capMarked = (name: string): boolean => existsSync(capFile(name));
+const writeCapMark = (name: string) => {
+  mkdirSync(dirname(capFile(name)), { recursive: true });
+  writeFileSync(capFile(name), new Date().toISOString() + "\n");
+};
+
+/** How many agent runs of the goal started in the last 60 minutes. */
+function agentStartsInHour(repoKey: string, name: string, now = Date.now()): number {
+  return allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && e.run.kind === "agent" && now - Date.parse(e.run.started) < 3600_000).length;
 }
 
 const rerunFile = (name: string) => join(factoryDir(), "rerun", `${name}.md`);
