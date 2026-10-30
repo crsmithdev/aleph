@@ -54,6 +54,8 @@ export function validDate(s: string): boolean {
 }
 
 const REF = /^(.+)-(\d+)$/;
+/** A ref in `after`, `goals` or `issue`: `<repo>-<n>` or `<repo>-<n>.<k>`. */
+const GOAL_REF = /^[^\s,]+-\d+(\.\d+)?$/;
 /** The refs a `waiting_on` names: its comma-separated parts, trimmed, empty parts dropped. */
 export const waitParts = (waits: string): string[] => waits.split(",").map((s) => s.trim()).filter(Boolean);
 
@@ -272,6 +274,18 @@ export function lint(doc: Doc, exists?: (repo: string, id: number) => boolean): 
       const refs = parts.map(parseRef);
       if (!parts.length || refs.some((r) => !r)) findings.push({ id: item.id, problem: `waiting_on: ${waits} is not <repo>-<n>[,<repo>-<n>...]`, fixable: false });
       else if (exists && refs.some((r) => !exists(r!.repo, r!.id))) findings.push({ id: item.id, problem: `waiting_on: ${waits} names no issue`, fixable: false });
+    }
+    for (const key of ["after", "goals", "issue"] as const) {
+      const v = item.fm[key];
+      if (v === undefined) continue;
+      const refs = Array.isArray(v) ? v : [v];
+      if (key === "issue" ? typeof v !== "string" : false) findings.push({ id: item.id, problem: `${key} must be one ref`, fixable: false });
+      else if (refs.some((r) => !GOAL_REF.test(r))) findings.push({ id: item.id, problem: `${key}: ${refs.join(", ")} is not <repo>-<n>[.<k>]`, fixable: false });
+    }
+    for (const key of ["kind", "source", "ask"] as const) {
+      const v = item.fm[key];
+      const ok = { kind: ["goal", "issue", "product", "build"], source: ["chris", "worker", "deps", "memory"], ask: ["input", "approval"] }[key];
+      if (v !== undefined && !ok.includes(v as string)) findings.push({ id: item.id, problem: `${key} "${v}" is not one of ${ok.join(", ")}`, fixable: false });
     }
     if (item.fm.labels !== undefined && !Array.isArray(item.fm.labels)) findings.push({ id: item.id, problem: "labels must be a list", fixable: true });
     if (item.fm.id !== undefined && Number(item.fm.id) !== item.id) findings.push({ id: item.id, problem: `id says ${item.fm.id} but the heading says ${item.id}`, fixable: true });

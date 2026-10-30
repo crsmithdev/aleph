@@ -14,7 +14,7 @@
  */
 import { fetchOrigin, followMain, git, treeWithFiles } from "../../jobs/lib/git.ts";
 import { expand } from "../../jobs/lib/ledger.ts";
-import { writeDecision, type Decision } from "../../jobs/lib/decision.ts";
+import { readDecision, writeDecision, type Decision } from "../../jobs/lib/decision.ts";
 import * as todos from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Item } from "./todo.ts";
 
@@ -235,6 +235,66 @@ export const SORTED: readonly string[] = [GOAL, NEEDS_CHRIS, "triaged", "live-ch
 export const hasLabel = (item: Item, label: string): boolean => labels(item).includes(label);
 /** An open item labelled `goal`: a factory run's work. */
 export const isGoal = (item: Item): boolean => status(item) === "open" && hasLabel(item, GOAL);
+/** Labels that map to a spec field of their own, so `areasOf` leaves them out. */
+const MAPPED: readonly string[] = [GOAL, NEEDS_CHRIS, "planned", "followup", "triaged", "live-check", "proposal", "deps", "memory"];
+
+const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
+const text = (v: unknown): string => (typeof v === "string" ? v : "");
+
+/** `goal` when the item says `kind: goal` or has the `goal` label, else `issue`; reads both item shapes. */
+export const kindOf = (item: Item): "goal" | "issue" => (item.fm.kind === "goal" || hasLabel(item, GOAL) ? "goal" : "issue");
+/** Who raised the item: its `source`, else `followup` -> worker, `deps` -> deps, `memory` -> memory, else chris. */
+export function sourceOf(item: Item): "chris" | "worker" | "deps" | "memory" {
+  const s = text(item.fm.source);
+  if (s === "chris" || s === "worker" || s === "deps" || s === "memory") return s;
+  return hasLabel(item, "followup") ? "worker" : hasLabel(item, "deps") ? "deps" : hasLabel(item, "memory") ? "memory" : "chris";
+}
+/** The issue a goal belongs to: its `issue`, else the ref of a body that starts "Part of <repo>-<n>."; null for none. */
+export const issueOf = (item: Item): string | null => text(item.fm.issue) || /^Part of ([^\s,]+-\d+(?:\.\d+)?)\./.exec(item.body)?.[1] || null;
+/** The goals of an issue: its `goals`, else the `waiting_on` of a `planned` item. */
+export const goalsOf = (item: Item): string[] => (item.fm.goals !== undefined ? list(item.fm.goals) : hasLabel(item, "planned") ? list(item.fm.waiting_on) : []);
+/** The goals a goal waits for: its `after`, else the `waiting_on` of an item not `planned`. */
+export const afterOf = (item: Item): string[] => (item.fm.after !== undefined ? list(item.fm.after) : hasLabel(item, "planned") ? [] : list(item.fm.waiting_on));
+/** The item's areas: its `areas`, else its labels less the mapped ones. */
+export const areasOf = (item: Item): string[] => (item.fm.areas !== undefined ? list(item.fm.areas) : labels(item).filter((l) => !MAPPED.includes(l)));
+
+export interface Ask {
+  kind: "input" | "approval";
+  reason: string;
+  question: string;
+  options: { label: string; line: string; after?: string }[];
+  recommended?: string;
+  why: string[];
+}
+
+/** The reason code of an old item's ask, from `reason`, else from the question as `issueReason` in ui/attention.ts reads it. */
+function oldReason(reason: string, question: string): string {
+  if (reason === "triage-no-verdict" || reason === "triage-failed") return "triage-failed";
+  if (reason === "no-commit") return "no-commit";
+  if (reason && reason !== "decision" && reason !== "question") return reason;
+  const q = question.replace(/^\s*-\s*/, "").replace(/^\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?:\s*/, "").replace(/^\s*needs-chris:\s*/i, "");
+  if (/^triage: no verdict in/.test(q)) return "triage-failed";
+  if (/ended with no commit, so the factory stopped/.test(q)) return "no-commit";
+  return "question";
+}
+
+/** The item's ask: `ask: input|approval` with its flat fields, or for an old item the `needs-chris` label; null for none. */
+export function askOf(item: Item): Ask | null {
+  const kind = item.fm.ask;
+  const approval = kind === "approval";
+  if (!approval && kind !== "input" && !needsChris(item)) return null;
+  const d = readDecision(item);
+  const question = d?.question ?? text(item.fm.question) ?? "";
+  const reason = text(item.fm.reason);
+  const options = (d?.options ?? []).map((o) => ({ label: o.label, line: o.line, ...(o.waiting_on ? { after: o.waiting_on } : {}) }));
+  const recommended = d?.recommended || undefined;
+  return {
+    kind: approval ? "approval" : "input",
+    reason: kind === undefined ? oldReason(reason, question || item.notes.at(-1) || "") : reason || "question",
+    question, options, ...(recommended ? { recommended } : {}), why: list(item.fm.why),
+  };
+}
+
 /** An item with a label of SORTED: triage leaves it alone. */
 export const isSorted = (item: Item): boolean => labels(item).some((l) => SORTED.includes(l));
 /** An item labelled `needs-chris`: it waits for Chris's answer. */
