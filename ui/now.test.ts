@@ -738,3 +738,11 @@ test("Queued cards show why each goal waits", () => {
   expect(q).toContain('href="#/issues/aleph/1"');
   expect(r.renderLanes({ ...state, waiting: [{ repo: "aleph", id: 5, title: "x" }] })).toContain(">Queued</div>");
 });
+
+test("the status sentence wraps instead of clipping: .lede .say has no ellipsis or hidden overflow, and wraps", async () => {
+  const html = await Bun.file(new URL("./index.html", import.meta.url)).text();
+  const say = [...html.matchAll(/\.lede \.say[^{}]*\{([^}]*)\}/g)].map((m) => m[1]).join("\n");
+  expect(say).not.toContain("text-overflow: ellipsis");
+  expect(say).not.toContain("overflow: hidden");
+  expect(say).toContain("white-space: normal");
+});

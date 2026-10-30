@@ -175,7 +175,7 @@ main { min-width: 0; }
   margin: 0 0 20px; display: flex; align-items: center; gap: 12px; white-space: nowrap;
 }
 .lede .say { font-family: var(--display); font-size: var(--fs-xl); }
-.lede .say { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lede .say { flex: 1 1 0; min-width: 0; white-space: normal; }
 .lede .asof { flex: none; font-size: var(--fs-xl); }
 .lede .act { flex: none; margin-left: auto; box-sizing: border-box; height: 28px; padding-block: 0; font: 500 var(--fs-sm) var(--sans, inherit); }
 .lede a { text-decoration: none; border-bottom: 1px solid var(--rule); }
@@ -523,7 +523,8 @@ details.fold { margin: 0 0 8px; }
   .flow { flex-direction: column; }
   .lanes { grid-template-columns: minmax(0, 1fr); }
   .meds, .meds.eff { grid-template-columns: minmax(0, 1fr); }
-  .lede { flex-wrap: wrap; white-space: normal; }
+  .lede { flex-wrap: wrap; }
+  .lede .say { flex-basis: 100%; }
   .lede .wpick { order: 3; margin-left: 0; }
   .page { padding: 20px 16px 48px; }
   .ev { grid-template-columns: minmax(0, 1fr); }
