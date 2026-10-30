@@ -147,17 +147,19 @@ async function gateSignals(cfg: LangfuseConfig, from: Date, now: number, seen: S
     }));
 }
 
-/** Only a drop for a fault in the agent's work counts; already-done, duplicate, rebase and stale-base drops are dispatch races. */
+/** Only a drop for a fault in the agent's work counts; already-done, no-commit, duplicate, rebase and stale-base drops are dispatch races. */
 async function dropSignals(from: Date, seen: Set<string>): Promise<Signal[]> {
   const out: Signal[] = [];
   for (const e of allRuns()) {
     const { run } = e;
     const ended = Date.parse(run.ended ?? "");
     if (run.state !== "dropped" || !run.reason || !(ended >= from.getTime()) || seen.has(e.id)) continue;
+    // The run's own fact: it made no commit, so the drop is no fault in work that does not exist.
+    if (run.noCommit || run.reason === "no commit") continue;
     try {
       const d = await decide(
         { reason: run.reason },
-        { fault: { type: "noul", instructions: "Did the reviewer drop the run for a fault in the agent's own work, rather than because the work is already done or on main, a duplicate, needs a rebase, or has a stale base?" } },
+        { fault: { type: "noul", instructions: "Did the reviewer drop the run for a fault in the agent's own work, rather than because the work is already done or on main, the run made no commit, found nothing to commit or found the goal already met, a duplicate, needs a rebase, or has a stale base?" } },
       );
       const a = d.answers.fault;
       if (a.type !== "noul" || !(a.noul >= CORRECTION_AT)) continue;

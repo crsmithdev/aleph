@@ -263,6 +263,13 @@ describe("noise", () => {
     expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source)).sort()).toEqual(["chris", "gate"]);
   });
 
+  test("a drop whose run made no commit is not a signal, whatever Jev says", async () => {
+    const dir = join(base, "jobs", "20261027-aleph-9");
+    writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "agent", job: "aleph-9", name: "aleph-9", state: "dropped", reason: "the work is on main; this run found nothing to commit", noCommit: true, told: true, started: ago(1), ended: ago(1) }));
+    await mine(NOW);
+    expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source)).sort()).toEqual(["chris", "gate"]);
+  });
+
   test("three pushbacks about one rule make one proposal with the imperative sentence", async () => {
     traces = [0, 1, 2].flatMap((i) => [
       { id: `a${i}`, sessionId: `s${i}`, timestamp: ago(5 - i * 2), input: "start", output: "All the checks pass." },
