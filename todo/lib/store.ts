@@ -164,20 +164,31 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
   }
 }
 
-const hiddenDir = (key: string, id: number): string => `${key}/hidden/${id}`;
+const hiddenDir = (key: string, id: number | string): string => `${key}/hidden/${id}`;
 
-/** An item's hidden check files on the store's origin/main, by file name; empty when it has none. */
-export function readHidden(repo: Place, id: number): Record<string, string> {
+/** Where an item's hidden checks may be, first choice first: the goal id directory, then the old number. */
+function hiddenDirs(key: string, id: number | string): string[] {
+  if (typeof id === "number") return [hiddenDir(key, `${key}-${id}`), hiddenDir(key, id)];
+  const n = id.startsWith(`${key}-`) ? id.slice(key.length + 1).match(/^\d+/)?.[0] : undefined;
+  return n === undefined ? [hiddenDir(key, id)] : [hiddenDir(key, id), hiddenDir(key, n)];
+}
+
+/** An item's hidden check files on the store's origin/main, by file name; empty when it has none. The goal id directory wins over the old number's. */
+export function readHidden(repo: Place, id: number | string): Record<string, string> {
   const dir = storeDir();
   fetch(dir);
-  const ls = git(dir, "ls-tree", "--name-only", `origin/${MAIN}:${hiddenDir(repo.key, id)}`);
-  const names = ls.ok ? ls.out.split("\n").filter(Boolean) : [];
-  const texts = readFiles(dir, names.map((n) => `origin/${MAIN}:${hiddenDir(repo.key, id)}/${n}`));
-  return Object.fromEntries(names.map((n, i) => [n, texts[i]]));
+  for (const where of hiddenDirs(repo.key, id)) {
+    const ls = git(dir, "ls-tree", "--name-only", `origin/${MAIN}:${where}`);
+    const names = ls.ok ? ls.out.split("\n").filter(Boolean) : [];
+    if (!names.length) continue;
+    const texts = readFiles(dir, names.map((n) => `origin/${MAIN}:${where}/${n}`));
+    return Object.fromEntries(names.map((n, i) => [n, texts[i]]));
+  }
+  return {};
 }
 
 /** Put `files` (by file name) in an item's hidden checks as one commit on the store's origin/main. */
-export function writeHidden(repo: Place, id: number, files: Record<string, string>): { commit: string; follow: string | null } {
+export function writeHidden(repo: Place, id: number | string, files: Record<string, string>): { commit: string; follow: string | null } {
   const dir = storeDir();
   for (let attempt = 1; ; attempt++) {
     fetchNow(dir);

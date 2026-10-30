@@ -353,6 +353,31 @@ test("hidden copies files into the store as one commit, lists them, and show cou
   expect(aleph("todo", "hidden", "proj", "3", join(base, "nope.ts")).code).toBe(1);
 });
 
+test("hidden reads the goal id directory, then the old number", async () => {
+  seed("# To do\n\n" + [3, 4].map((n) => sec(n, "labels: [goal]")).join("\n"));
+  for (const [p, text] of [["3/a.test.ts", "a"], ["proj-4/b.test.ts", "b"], ["proj-5.1/c.test.ts", "c"]]) {
+    mkdirSync(join(items, "proj", "hidden", p.split("/")[0]), { recursive: true });
+    writeFileSync(join(items, "proj", "hidden", p), text);
+  }
+  sh(items, "git", "add", "-A");
+  sh(items, "git", "commit", "-qm", "hidden");
+  sh(items, "git", "push", "-q", "origin", "main");
+  expect(aleph("todo", "hidden", "proj", "3").out.trim()).toBe("a.test.ts");
+  expect(aleph("todo", "hidden", "proj", "4").out.trim()).toBe("b.test.ts");
+  expect(aleph("todo", "show", "proj", "4").out).toContain("hidden checks: 1");
+  const was = process.env.ALEPH_ITEMS;
+  process.env.ALEPH_ITEMS = items;
+  try {
+    const { readHidden } = await import("./lib/store.ts");
+    expect(Object.keys(readHidden({ key: "proj" }, "proj-5.1"))).toEqual(["c.test.ts"]);
+    expect(Object.keys(readHidden({ key: "proj" }, "proj-3"))).toEqual(["a.test.ts"]);
+    expect(Object.keys(readHidden({ key: "proj" }, 3))).toEqual(["a.test.ts"]);
+    expect(Object.keys(readHidden({ key: "proj" }, 4))).toEqual(["b.test.ts"]);
+  } finally {
+    if (was === undefined) delete process.env.ALEPH_ITEMS; else process.env.ALEPH_ITEMS = was;
+  }
+});
+
 // One old-shape and one new-shape item per spec field; the store reader gives each pair the same derived fields.
 const sec = (id: number, fm: string, body = "Body.") => `## ${id}. Item ${id}\n---\nid: ${id}\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\npriority: medium\n${fm}\n---\n\n${body}\n`;
 const PAIRS: { field: string; old: string; oldBody?: string; now: string; want: Record<string, unknown> }[] = [

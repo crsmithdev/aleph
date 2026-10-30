@@ -417,7 +417,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         let why: string | null;
         if (repo.sandbox) {
           const hidden: Record<string, string> = {};
-          for (const i of items) for (const [name, text] of Object.entries(hiddenOf(repo, i.m.run))) hidden[name in hidden ? `${i.m.run.todo}-${name}` : name] = text;
+          for (const i of items) for (const [name, text] of Object.entries(hiddenOf(repo, i.m.run))) hidden[name in hidden ? `${i.m.run.on ?? i.m.run.todo}-${name}` : name] = text;
           why = await sandboxChecks(id, folder, repo, tip, changed, phase, hidden);
         } else {
           const owner = items.map((i) => i.m.run).find((r) => r.worktree && existsSync(r.worktree)) ?? first;
@@ -603,8 +603,9 @@ async function checksInSandbox(folder: string, dir: string, bundle: string, ref:
 
 /** The hidden files of the run's item, or none: a read of the work store that fails gives none, as a repo without an item has none. */
 function hiddenOf(repo: Repo, run: Run): Record<string, string> {
-  if (run.todo === undefined) return {};
-  try { return readHidden(repo, run.todo); } catch { return {}; }
+  const id = run.on ?? run.todo;
+  if (id === undefined) return {};
+  try { return readHidden(repo, id); } catch { return {}; }
 }
 
 /** The checks on a land's squash commit: the commit goes in as a bundle. */
