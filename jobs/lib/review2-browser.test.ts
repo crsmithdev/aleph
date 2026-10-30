@@ -45,6 +45,18 @@ beforeAll(() => {
 });
 afterAll(() => { srv.stop(true); rmSync(base, { recursive: true, force: true }); });
 
+describe("review2 browser argv", () => {
+  test("the resolver rule maps every host to NOTFOUND but leaves loopback by name and by address", async () => {
+    const { chromeArgv } = await import("./review2-browser.ts");
+    const rule = chromeArgv("/p").find((a) => a.startsWith("--host-resolver-rules="));
+    expect(rule).toBeDefined();
+    const entries = rule!.slice("--host-resolver-rules=".length).split(",").map((e) => e.trim());
+    expect(entries).toContain("MAP * ~NOTFOUND");
+    expect(entries).toContain("EXCLUDE localhost");
+    expect(entries).toContain("EXCLUDE 127.0.0.1");
+  });
+});
+
 describe("review2 browser step overflow over CDP", () => {
   test("report.md has the overflow with its element for one view, none for another, and a CDP failure stays with its view", async () => {
     const { browserStep } = await import("./review2-browser.ts");

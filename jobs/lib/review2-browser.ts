@@ -32,7 +32,7 @@ const chrome = () => process.env.ALEPH_REVIEW2_CHROME ?? "/usr/bin/google-chrome
 export function chromeArgv(profileDir: string): string[] {
   return [chrome(), "--headless=new", "--remote-debugging-pipe", `--user-data-dir=${profileDir}`,
     "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-sync", "--disable-background-networking",
-    "--disable-gpu", "--hide-scrollbars", "--mute-audio", "--no-proxy-server", "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost", "about:blank"];
+    "--disable-gpu", "--hide-scrollbars", "--mute-audio", "--no-proxy-server", "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1", "about:blank"];
 }
 
 /** Spawn Chrome on a pipe with `profileDir` as its profile and HOME, its output appended to `log`. */
