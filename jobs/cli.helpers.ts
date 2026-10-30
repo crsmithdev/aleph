@@ -1,6 +1,9 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { writeRun, type Run } from "./lib/ledger.ts";
+import { config as storeConfig } from "../todo/lib/store.ts";
+import { renderItem } from "../todo/lib/todo.ts";
 
 export const CLI = join(import.meta.dir, "cli.ts");
 export let base: string, remote: string, repo: string, other: string, items: string, itemsRemote: string, jobsDir: string, fake: string, reviewer: string, fakeLog: string, setupLog: string;
@@ -326,4 +329,33 @@ export function setLfStatus(n: number): void { lfStatus = n; }
 export function setOnTell(f: ((text: string) => void) | undefined): void { onTell = f; }
 export async function fjobFor(name: string, action: string, id: number) {
   return aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), "--todo", String(id)]);
+}
+
+/**
+ * Files an item in the test store as one commit, with the given frontmatter fields (`kind`, `goals`, `after`, `ask`,
+ * `labels` ...) beside the ones every item has, and returns its number. This is how a test seeds a new-shape item,
+ * which no verb of `aleph issue` writes yet, or an old-shape one with a field the verbs do not set.
+ */
+export function seedItem(repoKey: string, title: string, fm: Record<string, unknown> = {}, body = "Body."): number {
+  sh(items, "git", "pull", "-q", "--rebase", "origin", "main");
+  const dir = join(items, repoKey, "backlog", "tasks");
+  mkdirSync(dir, { recursive: true });
+  if (!existsSync(join(items, repoKey, "backlog", "config.yml"))) writeFileSync(join(items, repoKey, "backlog", "config.yml"), storeConfig(repoKey));
+  const id = Math.max(0, ...readdirSync(dir).map((f) => Number(/^.+-(\d+)\.md$/.exec(f)?.[1] ?? 0))) + 1;
+  const item = { id, title, fm: { id: String(id), status: "open", created: "2026-10-30", updated: "2026-10-30", priority: "medium", labels: [], ...fm }, body, notes: [], legacy: false };
+  writeFileSync(join(dir, `${repoKey}-${id}.md`), renderItem(repoKey, item as any));
+  sh(items, "git", "add", "-A");
+  sh(items, "git", "commit", "-qm", `seed ${repoKey}-${id}`);
+  sh(items, "git", "push", "-q", "origin", "main");
+  return id;
+}
+
+/** Writes a run folder into the test ledger: `run` holds the fields the test cares about. */
+let seeded = 0;
+export function seedRun(repoKey: string, run: Partial<Run> & Pick<Run, "kind" | "state">): string {
+  const id = `20261030-${String(++seeded).padStart(6, "0")}-${repoKey}-seed-${run.kind}`;
+  const folder = join(jobsDir, id);
+  mkdirSync(folder, { recursive: true });
+  writeRun(folder, { job: id, name: id, repo: repoKey, told: true, shown: true, started: new Date().toISOString(), ...run } as Run);
+  return id;
 }

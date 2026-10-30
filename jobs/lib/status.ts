@@ -1,7 +1,6 @@
 /**
- * Item state, derived (seed milestone 2): from the `Item:` trailers on
- * origin/<main>, the work store and the ledger. The precedence is dropped,
- * done, needs-you, stuck, running, open. Nothing writes it back to the store.
+ * Item stage (seed milestone 2): stage() over the `Item:` trailers on
+ * origin/<main>, the work store and the ledger. Nothing writes it back to the store.
  *
  * A factory run's bundle carries the store and ledger facts as a snapshot
  * commit at refs/aleph/facts, so `aleph status` inside the sandbox gives the
@@ -13,14 +12,17 @@ import * as todos from "../../todo/lib/todo.ts";
 import { fetchOrigin, git, gitWith } from "./git.ts";
 import { allRuns, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";
+import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type Subject } from "./stage.ts";
 
 export const FACTS_REF = "refs/aleph/facts";
 
-/** What the store and the ledger say about a repo's items. */
+/** What the store and the ledger say about a repo's items: what stage() needs of each. */
 export interface Facts {
   repo: string; main: string;
-  /** Item number to the store's status. */
-  store: Record<string, string>;
+  /** Item number to its status, kind, after, goals and ask kind. */
+  items: Record<string, Subject>;
+  /** Item number to its jobs, each as its last run: the open run state is in there. */
+  runs: Record<string, RunView[]>;
   /** Item number to the state of its open job's latest run. */
   open: Record<string, State>;
   /** Items that a run of the factory has worked on. */
@@ -29,19 +31,21 @@ export interface Facts {
 
 /** `doc` is the repo's list when the caller has read it already. */
 export function facts(repo: Repo, doc: todos.Doc | null = readList(repo)): Facts {
-  const store: Record<string, string> = {};
-  for (const i of doc?.items ?? []) store[i.id] = todos.status(i);
+  const items: Record<string, Subject> = {};
+  for (const i of doc?.items ?? []) items[i.id] = subjectOf(i, repo.key);
+  const runs: Record<string, RunView[]> = {};
   const open: Record<string, State> = {};
   const touched = new Set<number>();
-  for (const runs of allJobs()) {
-    const item = issue(runs);
-    if (item === undefined || runs[0].run.repo !== repo.key) continue;
+  for (const job of allJobs()) {
+    const item = issue(job);
+    if (item === undefined || job[0].run.repo !== repo.key) continue;
     // A triage run marks its item in the store, and a planner run files children and does not land:
     // neither is a factory run working on the item, so a goal they close in the store is done.
-    if (repo.sandbox && runs.some((e) => e.run.kind !== "triage" && e.run.kind !== "plan")) touched.add(item);
-    if (isOpen(runs)) open[item] = stateOf(runs);
+    if (repo.sandbox && job.some((e) => e.run.kind !== "triage" && e.run.kind !== "plan")) touched.add(item);
+    (runs[item] ??= []).push(runViewOf(job));
+    if (isOpen(job)) open[item] = stateOf(job);
   }
-  return { repo: repo.key, main: repo.main, store, open, touched: [...touched].sort((a, b) => a - b) };
+  return { repo: repo.key, main: repo.main, items, runs, open, touched: [...touched].sort((a, b) => a - b) };
 }
 
 /** A commit with no parent whose tree holds facts.json, at refs/aleph/facts. Returns the ref. */
@@ -71,6 +75,7 @@ export function landedCommits(cwd: string, main: string, key: string, n: number)
 
 /** For a `landedIndex` result, the items with a trailer commit on main that a later commit reverts and none that is not reverted. */
 const revertedOnly = new WeakMap<Map<number, string[]>, Set<number>>();
+export const revertedIn = (index: Map<number, string[]>): Set<number> => revertedOnly.get(index) ?? new Set();
 
 /** Each of the repo's items that a commit on `main` names in an `Item:` trailer, to those commits, less the reverted ones: two git calls for every item. */
 export function landedIndex(cwd: string, main: string, key: string): Map<number, string[]> {
@@ -104,41 +109,36 @@ export function itemOnMain(repo: { path: string; key: string; main: string } | u
   return hit ? hit.slice(0, 7) : null;
 }
 
-export interface ItemState { item: string; state: "dropped" | "done" | "needs-you" | "stuck" | "running" | "open"; why: string }
-
-/** One item's state, from the repo at `cwd`, its main ref and the facts. `landed` is `landedIndex` of the same, when the caller derives many items. */
-export function derive(cwd: string, main: string, f: Facts, n: number, landed?: Map<number, string[]>): ItemState | null {
-  const item = `${f.repo}-${n}`;
-  const store = f.store[n];
-  if (store === undefined) return null;
-  if (store === "dropped") return { item, state: "dropped", why: "the store says dropped" };
-  const index = landed ?? landedIndex(cwd, main, f.repo);
-  const hits = index.get(n) ?? [];
-  if (hits.length) return { item, state: "done", why: `commit ${hits[0].slice(0, 7)} on ${main.replace(/^refs\/remotes\//, "")}` };
-  // The store's done stands, unless a revert undid the item's only trailer commits; a reopen would have set the store back to open.
-  if (store === "done" && !revertedOnly.get(index)?.has(n)) return { item, state: "done", why: "the store says done" };
-  const run = f.open[n];
-  if (run === "needs-you") return { item, state: "needs-you", why: "its job needs Chris" };
-  if (run === "stuck" || run === "failed") return { item, state: "stuck", why: `its job is ${run}` };
-  if (run === "running" || run === "passed") return { item, state: "running", why: `its job is ${run}` };
-  return { item, state: "open", why: "no commit on main names it" };
+/** The items of `ns` that the facts hold, with the stage() context for them: one `landedIndex` for all. */
+export function stages(cwd: string, main: string, f: Facts, ns: number[], landed: Map<number, string[]> = landedIndex(cwd, main, f.repo)): Stage[] {
+  const num = (ref: string) => (ref.startsWith(`${f.repo}-`) && /^\d+$/.test(ref.slice(f.repo.length + 1)) ? ref.slice(f.repo.length + 1) : undefined);
+  const ctx: Ctx = {
+    main, landed, reverted: revertedIn(landed),
+    item: (ref) => f.items[num(ref) ?? ""],
+    runs: (ref) => f.runs[num(ref) ?? ""] ?? [],
+  };
+  return ns.filter((n) => f.items[n] !== undefined).map((n) => stage(f.items[n], ctx));
 }
 
+/** The old state words, for the callers that have not moved to stages. A later goal removes them. */
+export interface OldState { item: string; state: "dropped" | "done" | "needs-you" | "stuck" | "running" | "open"; why: string }
+const OLD: Partial<Record<Stage["stage"], OldState["state"]>> = { dropped: "dropped", done: "done", awaiting: "needs-you", stuck: "stuck", building: "running", landing: "running" };
+
 /**
- * The states of `items` (all the repo's items when omitted), from the repo's
+ * The stages of `items` (all the repo's items when omitted), from the repo's
  * origin/<main>. `fetch` says whether to fetch origin first; `doc` is the
  * list when the caller has read it already. Items the store lacks are left
  * out. It throws when the store cannot be read.
  */
-export function itemStates(repo: Repo, opts: { fetch: boolean; doc?: todos.Doc | null; items?: number[] }): ItemState[] {
+export function repoStages(repo: Repo, opts: { fetch: boolean; doc?: todos.Doc | null; items?: number[] }): Stage[] {
   if (opts.fetch) fetchOrigin(repo.path);
   const f = facts(repo, opts.doc);
-  const main = `refs/remotes/origin/${f.main}`;
-  const ids = opts.items ?? Object.keys(f.store).map(Number);
-  const landed = ids.length > 1 ? landedIndex(repo.path, main, repo.key) : undefined;
-  const states: ItemState[] = [];
-  for (const n of ids) { const s = derive(repo.path, main, f, n, landed); if (s) states.push(s); }
-  return states;
+  return stages(repo.path, `refs/remotes/origin/${f.main}`, f, opts.items ?? Object.keys(f.items).map(Number));
+}
+
+/** A thin wrapper over stage(): `repoStages` with the stage mapped to the old state words. */
+export function itemStates(repo: Repo, opts: { fetch: boolean; doc?: todos.Doc | null; items?: number[] }): OldState[] {
+  return repoStages(repo, opts).map((s) => ({ item: s.id, state: OLD[s.stage] ?? "open", why: s.why }));
 }
 
 const DAY_MS = 24 * 3600_000;

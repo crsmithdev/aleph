@@ -23,7 +23,8 @@ import { checkName, checked, drop, land, recheck, refuse, Refusal, repoOf, runDi
 import { probe } from "./lib/probe.ts";
 import { sweep } from "./lib/deps.ts";
 import { runReview2 } from "./lib/review2.ts";
-import { derive, facts, FACTS_REF, itemStates, landedIndex, readFacts, type ItemState } from "./lib/status.ts";
+import { facts, FACTS_REF, readFacts, repoStages, stages } from "./lib/status.ts";
+import type { Stage } from "./lib/stage.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -365,7 +366,7 @@ function reportCmd(): void {
 }
 
 /**
- * `aleph status <repo>-<n>`: the issue's derived state; with no issue, see statusRecent. In Chris's session the
+ * `aleph status <repo>-<n>`: the issue's stage; with no issue, see statusRecent. In Chris's session the
  * facts come from the store and the ledger; in a sandbox, where neither is,
  * they come from the bundle's snapshot at refs/aleph/facts in the current repo.
  */
@@ -374,23 +375,23 @@ function statusCmd(): void {
   const m = (positional[0] ?? "").match(/^(.+)-(\d+)$/) ?? refuse("usage: aleph status [<repo>-<n>] [--json]");
   const [, key, n] = m!;
   const repo = loadRegistry()[key];
-  let s: ItemState | undefined;
+  let s: Stage | undefined;
   if (repo) {
-    try { s = itemStates(repo, { fetch: true, items: [Number(n)] })[0]; } catch (e: any) { refuse(e?.message ?? String(e)); }
+    try { s = repoStages(repo, { fetch: true, items: [Number(n)] })[0]; } catch (e: any) { refuse(e?.message ?? String(e)); }
   } else {
     const cwd = process.cwd();
     const snap = readFacts(cwd);
     if (!snap || snap.repo !== key) refuse(`no repo named ${key} in the registry, and no ${FACTS_REF} for it here`);
-    s = derive(cwd, `refs/remotes/origin/${snap!.main}`, snap!, Number(n)) ?? undefined;
+    s = stages(cwd, `refs/remotes/origin/${snap!.main}`, snap!, [Number(n)])[0];
   }
   if (!s) refuse(`${key} has no issue ${n}`);
   if (rest.includes("--json")) return out(s);
-  console.log(`${s!.item} ${s!.state}: ${s!.why}`);
+  console.log(`${s!.id} ${s!.stage}: ${s!.why}`);
 }
 
-/** `aleph status` with no issue: the derived state of each open issue in each recent repo. */
+/** `aleph status` with no issue: the stage of each open issue in each recent repo. */
 function statusRecent(): void {
-  const states: ItemState[] = [];
+  const states: Stage[] = [];
   for (const { repo, doc } of listRecent()) {
     const open = (doc?.items ?? []).filter((i) => todos.status(i) === "open");
     if (!open.length) continue;
@@ -398,14 +399,13 @@ function statusRecent(): void {
       fetchOrigin(repo.path);
       const f = facts(repo, doc);
       const main = `refs/remotes/origin/${f.main}`;
-      const landed = landedIndex(repo.path, main, repo.key);
-      for (const i of open) { const s = derive(repo.path, main, f, i.id, landed); if (s) states.push(s); }
+      states.push(...stages(repo.path, main, f, open.map((i) => i.id)));
     }
     catch (e: any) { console.error(`warn: ${repo.key}: ${e?.message ?? e}`); }
   }
   if (rest.includes("--json")) return out(states);
   if (!states.length) { console.log("no open items"); return; }
-  for (const s of states) console.log(`${s.item} ${s.state}: ${s.why}`);
+  for (const s of states) console.log(`${s.id} ${s.stage}: ${s.why}`);
 }
 
 try {

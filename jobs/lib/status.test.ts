@@ -130,3 +130,17 @@ test("a touched item the store closed is done without a fresh trailer commit, un
   expect(states([11])).toEqual([["demo-11", "done"]]);
   expect(states([13])).toEqual([["demo-13", "open"]]);
 });
+
+test("facts carry what stage() needs: status, kind, after, goals, ask kind and each job's last run", () => {
+  const doc: Doc = { head: "", items: [
+    { ...item(21, "open"), fm: { status: "open", kind: "goal", after: ["demo-22"], ask: "approval", reason: "review" } },
+    { ...item(22, "open"), fm: { status: "open", labels: ["planned"], waiting_on: "demo-21" } },
+  ] };
+  const folder = join(base, "jobs", "20261028-000021-demo-21-build");
+  mkdirSync(folder, { recursive: true });
+  writeRun(folder, { kind: "build", job: "j21", name: "j21", repo: "demo", on: "demo-21", state: "awaiting", ask: { kind: "input", reason: "question", question: "?", options: [], why: [] }, told: true, shown: true, started: new Date().toISOString() });
+  const f = facts(repo, doc);
+  expect(f.items[21]).toMatchObject({ id: "demo-21", status: "open", kind: "goal", after: ["demo-22"], goals: [], ask: { kind: "approval", reason: "review" } });
+  expect(f.items[22]).toMatchObject({ kind: "issue", goals: ["demo-21"], after: [] });
+  expect(f.runs[21]).toEqual([{ kind: "build", state: "awaiting", open: true, ask: { kind: "input", reason: "question" } }]);
+});
