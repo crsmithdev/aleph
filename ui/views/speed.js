@@ -79,17 +79,18 @@ export function renderEfficiency(d) {
 
 const card = (k, v, note) => `<div class="med"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span><span class="quiet">${esc(note)}</span></div>`;
 
-/** The efficiency cards: reruns, first-pass rate, fix rounds, cost per landed goal, wasted share. */
+/** The efficiency cards: reruns, first-pass rate, fix rounds, week per landed goal, lost time. */
 export function renderEffCards(d) {
-  const g = d.goals ?? { landed: 0, firstPass: null, fixRounds: null, cost: null };
+  const g = d.goals ?? { landed: 0, firstPass: null, fixRounds: null, week: null };
   const none = g.landed ? null : "no goal landed";
   const w = WINDOW_TEXT[d.window];
+  const week = g.week ?? null, lost = d.lost ?? { hours: 0, share: 0 };
   return `<div class="meds eff">` +
     card("Reruns", String(d.flaky), `passed on rerun, ${w}`) +
     card("First pass", g.firstPass === null ? "–" : pctText(g.firstPass), none ?? "landed goals with 0 fix rounds") +
     card("Fix rounds", g.fixRounds === null ? "–" : String(g.fixRounds), none ?? "median per landed goal") +
-    card("Cost per goal", g.cost === null ? "–" : money(g.cost), none ?? "per landed goal") +
-    card("Wasted", pctText(d.wasted), "of agent hours on dropped or stuck runs") + `</div>`;
+    card("Week per goal", week === null ? "–" : `${week.toFixed(1)}%`, none ?? (week === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median per landed goal")) +
+    card("Lost time", hours(lost.hours), `${Math.round(lost.share * 100)}% of agent hours on runs whose work did not reach main`) + `</div>`;
 }
 
 /** The area-chart option of one chart: `values` per bucket (null leaves a gap), `unit` for the tooltip. */

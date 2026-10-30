@@ -38,8 +38,6 @@ export interface Speed {
     firstPass: number | null;
     /** Median fix rounds per landed goal; null with none landed. */
     fixRounds: number | null;
-    /** Mean cost of the worker runs of a landed goal, dollars; null with none landed. */
-    cost: number | null;
   };
 }
 
@@ -107,18 +105,16 @@ export function speed(window: Window, now = new Date()): Speed {
   const wasted = total ? (ends.dropped.hours + ends.stuck.hours) / total : 0;
   for (const s of END_STATES) { ends[s].hours = round(ends[s].hours, 2); ends[s].cost = round(ends[s].cost, 2); }
   // A fix round is a worker run of the goal that a failed check or the reviewer sent back (`failed` set).
-  const rounds = new Map<string, number>(), spent = new Map<string, number>();
+  const rounds = new Map<string, number>();
   for (const r of all) {
     if (r.kind !== "agent" && r.kind !== "recheck") continue;
     if (r.failed) rounds.set(r.job, (rounds.get(r.job) ?? 0) + 1);
-    spent.set(r.job, (spent.get(r.job) ?? 0) + (r.cost ?? 0));
   }
   const fixes = landed.map((r) => rounds.get(r.job) ?? 0);
   const goals: Speed["goals"] = {
     landed: landed.length,
     firstPass: landed.length ? round(fixes.filter((f) => f === 0).length / landed.length, 4) : null,
     fixRounds: landed.length ? pct(fixes, 0.5) : null,
-    cost: landed.length ? round(landed.reduce((a, r) => a + (spent.get(r.job) ?? 0), 0) / landed.length, 2) : null,
   };
   const med = (xs: number[]) => (xs.length ? round(pct(xs, 0.5)) : null);
   return {

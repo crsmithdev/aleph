@@ -37,24 +37,36 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-test("goal stats: first-pass share, median fix rounds, cost per landed goal", () => {
+test("goal stats: first-pass share, median fix rounds", () => {
   const g = speed("day", now).goals;
-  expect(g).toEqual({ landed: 3, firstPass: 0.6667, fixRounds: 0, cost: 3.33 });
+  expect(g).toEqual({ landed: 3, firstPass: 0.6667, fixRounds: 0 });
+  expect(g).not.toHaveProperty("cost");
 });
 
-test("the efficiency cards say first pass, fix rounds, cost per goal, wasted and reruns", () => {
+test("the efficiency cards say reruns, first pass, fix rounds, week per goal and lost time", () => {
   const d = speed("day", now);
   const h = renderEfficiency(d);
-  for (const k of ["Reruns", "First pass", "Fix rounds", "Cost per goal", "Wasted"]) expect(h).toContain(`<span class="k">${k}</span>`);
+  for (const k of ["Reruns", "First pass", "Fix rounds", "Week per goal", "Lost time"]) expect(h).toContain(`<span class="k">${k}</span>`);
+  expect([...h.matchAll(/<span class="k">([^<]*)<\/span>/g)].map((m) => m[1])).toEqual(["Reruns", "First pass", "Fix rounds", "Week per goal", "Lost time"]);
+  const cards = renderEffCards(d);
+  for (const t of ["Cost per goal", "Wasted", "$"]) expect(cards).not.toContain(t);
   expect(h.match(/class="med"/g)?.length).toBe(5);
   expect(h).toContain('<span class="v">67%</span><span class="quiet">landed goals with 0 fix rounds</span>');
   expect(h).toContain('<span class="v">0</span><span class="quiet">median per landed goal</span>');
-  expect(h).toContain('<span class="v">$3.33</span>');
-  expect(h).toContain("of agent hours on dropped or stuck runs");
+});
+
+test("Week per goal and Lost time show their values and notes", () => {
+  const base = { window: "week", flaky: 0, goals: { landed: 2, firstPass: 1, fixRounds: 0, week: 2.5 }, lost: { hours: 1.5, share: 0.25 } };
+  const h = renderEffCards(base);
+  expect(h).toContain('<span class="v">2.5%</span><span class="quiet">of the weekly limit, median per landed goal</span>');
+  expect(h).toContain("1.5 h");
+  expect(h).toContain("25% of agent hours on runs whose work did not reach main");
+  const n = renderEffCards({ ...base, goals: { ...base.goals, week: null } });
+  expect(n).toContain('<span class="v">–</span><span class="quiet">needs 6 hours of usage snapshots</span>');
 });
 
 test("with no landed goal the goal cards show a dash", () => {
-  const h = renderEffCards({ window: "week", flaky: 0, wasted: 0, goals: { landed: 0, firstPass: null, fixRounds: null, cost: null } });
+  const h = renderEffCards({ window: "week", flaky: 0, wasted: 0, goals: { landed: 0, firstPass: null, fixRounds: null, week: null }, lost: { hours: 0, share: 0 } });
   expect(h.match(/<span class="v">–<\/span><span class="quiet">no goal landed<\/span>/g)?.length).toBe(3);
 });
 
