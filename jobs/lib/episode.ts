@@ -36,9 +36,29 @@ export function doneGoals(repo: Repo): todos.Item[] {
   return goals.filter((i) => done.has(`${repo.key}-${i.id}`) && ran.has(i.id) && !pages.some((f) => f.startsWith(`${repo.key}-${i.id} `)));
 }
 
-/** `<repo>-<id> <title>` without the characters a vault title forbids. */
+const NAME_MAX = 255; // bytes one file name may take
+const MD = ".md";
+
+/** The longest prefix of `s` that fits in `max` UTF-8 bytes, never splitting a character. */
+function cutBytes(s: string, max: number): string {
+  let out = "", used = 0;
+  for (const ch of s) {
+    const n = Buffer.byteLength(ch);
+    if (used + n > max) break;
+    out += ch;
+    used += n;
+  }
+  return out;
+}
+
+/** `<repo>-<id> <title>` without the characters a vault title forbids, cut to fit a file name. */
 export function episodeTitle(repo: Repo, item: todos.Item): string {
-  return `${repo.key}-${item.id} ${item.title}`.replace(/[\/\\:*?"<>|]/g, " ").replace(/ +/g, " ").trim();
+  const head = `${repo.key}-${item.id}`;
+  const full = `${head} ${item.title}`.replace(/[\/\\:*?"<>|]/g, " ").replace(/ +/g, " ").trim();
+  if (Buffer.byteLength(full) + MD.length <= NAME_MAX) return full;
+  const room = NAME_MAX - MD.length - Buffer.byteLength(`${head} `);
+  const rest = cutBytes(full.slice(head.length + 1), room).replace(/[ .]+$/, "");
+  return `${head} ${rest}`;
 }
 
 export interface Commit { sha: string; subject: string; stat: string }

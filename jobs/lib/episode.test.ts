@@ -128,6 +128,41 @@ test("a goal title with a colon gets a file name without it", async () => {
   expect(pages()).toEqual([`fac-${id} fix the login.md`]);
 });
 
+test("a 400-character title gets a page, and writing again writes and fails nothing", async () => {
+  const id = add("word ".repeat(80).trim());
+  land(id);
+  run("20261028-100000-fac-1-agent", { todo: id });
+  const repo = loadRegistry().fac;
+  const r = await writeEpisodes([repo]);
+  expect(r.failed).toEqual([]);
+  expect(r.written.length).toBe(1);
+  expect(pages().filter((f) => f.startsWith(`fac-${id} `)).length).toBe(1);
+  expect(pages().every((f) => Buffer.byteLength(f) <= 255)).toBe(true);
+  const again = await writeEpisodes([repo]);
+  expect(again.written).toEqual([]);
+  expect(again.failed).toEqual([]);
+});
+
+test("a 400-character multi-byte title is cut to fit a file name", () => {
+  const repo = { key: "fac" } as any;
+  for (const ch of ["é", "日"]) {
+    const title = episodeTitle(repo, { id: 7, title: ch.repeat(400) } as any);
+    expect(Buffer.byteLength(`${title}.md`)).toBeLessThanOrEqual(255);
+    expect(title.startsWith("fac-7 ")).toBe(true);
+    expect(title).not.toContain("�");
+    expect(title.endsWith(ch)).toBe(true);
+  }
+});
+
+test("a cut title drops trailing spaces and dots and keeps short titles as they are", () => {
+  const repo = { key: "fac" } as any;
+  // the 246 bytes left after the prefix end on the space, which the cut drops
+  const cut = episodeTitle(repo, { id: 7, title: "a".repeat(245) + " " + "b".repeat(20) } as any);
+  expect(cut).toBe(`fac-7 ${"a".repeat(245)}`);
+  expect(Buffer.byteLength(`${cut}.md`)).toBeLessThanOrEqual(255);
+  expect(episodeTitle(repo, { id: 7, title: "ship it" } as any)).toBe("fac-7 ship it");
+});
+
 test("an unreachable Langfuse does not block the page", async () => {
   const id = add("ship it");
   land(id);
