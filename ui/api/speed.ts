@@ -15,8 +15,6 @@ import { currentFit, share, type Fit } from "../usage.ts";
 const HOUR = 3600_000, DAY = 24 * HOUR;
 export const MAX_RUN = 4 * HOUR;
 export const KINDS = ["agent", "land", "triage", "plan"] as const;
-export const END_STATES = ["passed", "dropped", "stuck", "needs-you"] as const;
-type End = (typeof END_STATES)[number];
 
 export interface Pct { count: number; p50: number; p90: number }
 export interface Speed {
@@ -25,9 +23,6 @@ export interface Speed {
   done: number;
   kinds: Record<(typeof KINDS)[number], Pct>;
   checks: { name: string; count: number; p50: number; p90: number }[];
-  ends: Record<End, { hours: number; cost: number; count: number }>;
-  /** Dropped and stuck agent hours over all agent hours, 0 to 1; 0 with no agent hours. */
-  wasted: number;
   /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string. */
   buckets: { label: string; at: string; agent: number | null; tests: number | null; lands: number }[];
   slowest: { name: string; state: string; model: string; tests: number | null; cost: number; took: number }[];
@@ -62,7 +57,7 @@ export const CLASS_TEXT: Record<Class, string> = {
 };
 export interface Measure { hours: number; week: number; runs: number }
 export interface ClassStat extends Measure {
-  key: Class; name: string; goals: number;
+  key: Class; name: string; text: string; goals: number;
   causes: (Measure & { name: string })[];
   top: (Measure & { goal: string; href: string; reason: string })[];
 }
@@ -77,9 +72,6 @@ const round = (n: number, d = 0) => { const k = 10 ** d; return Math.round(n * k
 const stat = (xs: number[]): Pct => ({ count: xs.length, p50: round(pct(xs, 0.5)), p90: round(pct(xs, 0.9)) });
 const pad = (n: number) => String(n).padStart(2, "0");
 const isTests = (name: string) => /^tests?$/.test(name);
-/** The end state an agent run counts under: a failed run is stuck, a landed or done one passed; a running one has none. */
-const endOf = (state: string): End | null =>
-  state === "passed" || state === "landed" || state === "done" ? "passed" : state === "failed" ? "stuck" : (END_STATES as readonly string[]).includes(state) ? (state as End) : null;
 
 export const WINDOWS = ["hour", "day", "week", "month"] as const;
 export type Window = (typeof WINDOWS)[number];
@@ -166,7 +158,7 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
       const m = goal.lastIndexOf("-");
       return { goal, sum: sum(x), reason: (last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").slice(0, 140), href: `#/issues/${encodeURIComponent(goal.slice(0, m))}/${goal.slice(m + 1)}` };
     }).sort((a, b) => b.sum.hours - a.sum.hours).slice(0, 8).map((t) => ({ goal: t.goal, href: t.href, reason: t.reason, ...rd(t.sum) }));
-    return { key, name: CLASS_NAME[key], ...rd(sum(rs)), goals: new Set(rs.map((r) => r.goal)).size, causes, top };
+    return { key, name: CLASS_NAME[key], text: CLASS_TEXT[key], ...rd(sum(rs)), goals: new Set(rs.map((r) => r.goal)).size, causes, top };
   });
   const raw = CLASSES.map((c) => sum(rows.get(c)!).hours);
   const total = raw.reduce((x, y) => x + y, 0), lostH = raw.slice(2).reduce((x, y) => x + y, 0);
@@ -189,7 +181,6 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
   const slot = (t: number): number => (daily ? Math.round((new Date(t).setHours(0, 0, 0, 0) - since.getTime()) / DAY) : Math.floor((t - since.getTime()) / stepMs));
   const times: Record<string, number[]> = { agent: [], land: [], triage: [], plan: [] };
   const checks = new Map<string, number[]>();
-  const ends = Object.fromEntries(END_STATES.map((s) => [s, { hours: 0, cost: 0, count: 0 }])) as Speed["ends"];
   const agentIn: number[][] = Array.from({ length: n }, () => []);
   const testsIn: number[][] = Array.from({ length: n }, () => []);
   const lands = new Array<number>(n).fill(0);
@@ -212,16 +203,11 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     if (kind === "land" && r.state === "landed") { lands[i]++; landed.push(r); }
     if (kind !== "agent") continue;
     agentIn[i].push(secs);
-    const end = endOf(r.state);
-    if (end) { const e = ends[end]; e.hours += secs / 3600; e.cost += r.cost ?? 0; e.count++; }
     const model = r.model || "unset";
     if (!models.has(model)) models.set(model, []);
     models.get(model)!.push(secs);
     agents.push({ name: r.name, state: r.state, model, tests: (r.checks ?? []).find((c) => isTests(c.name))?.seconds ?? null, cost: round(r.cost ?? 0, 2), took: round(secs) });
   }
-  const total = END_STATES.reduce((a, s) => a + ends[s].hours, 0);
-  const wasted = total ? (ends.dropped.hours + ends.stuck.hours) / total : 0;
-  for (const s of END_STATES) { ends[s].hours = round(ends[s].hours, 2); ends[s].cost = round(ends[s].cost, 2); }
   // A fix round is a worker run of the goal that a failed check or the reviewer sent back (`failed` set).
   const rounds = new Map<string, number>();
   for (const r of all) {
@@ -254,8 +240,6 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     done: lands.reduce((a, b) => a + b, 0),
     kinds: Object.fromEntries(KINDS.map((k) => [k, stat(times[k])])) as Speed["kinds"],
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
-    ends,
-    wasted: round(wasted, 4),
     buckets: Array.from({ length: n }, (_, i) => {
       const d = startOf(i);
       return { label: daily ? `${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : `${pad(d.getHours())}:${pad(d.getMinutes())}`, at: d.toISOString(), agent: med(agentIn[i]), tests: med(testsIn[i]), lands: lands[i] };

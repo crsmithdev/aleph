@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { renderEffCards, renderEfficiency, renderHours } from "./views/speed.js";
+import { renderEffCards, renderEfficiency, renderBar } from "./views/speed.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -70,12 +70,37 @@ test("with no landed goal the goal cards show a dash", () => {
   expect(h.match(/<span class="v">–<\/span><span class="quiet">no goal landed<\/span>/g)?.length).toBe(3);
 });
 
-test("the agent-hours bar puts a label in a wide segment and under a thin one, in the same slot", () => {
-  const ends = { passed: { hours: 8, cost: 10, count: 4 }, dropped: { hours: 1, cost: 1, count: 1 }, stuck: { hours: 1, cost: 2, count: 2 }, "needs-you": { hours: 0, cost: 0, count: 0 } };
-  const h = renderHours({ ends, wasted: 0.2 });
-  expect(h).toContain('<span class="in">Passed 8.0 h · $10.00 · 4 runs</span>');
-  expect(h).not.toContain('<span class="in">Dropped');
-  expect(h).toContain('<li style="flex:8"></li>');
-  expect(h).toContain('<li style="flex:1"><span class="under">');
-  expect(h.match(/<li /g)?.length).toBe(h.match(/style="flex:/g)!.length / 2);
+const C = (key: string, name: string, hours: number, week: number, text = `${name} text.`) => ({ key, name, text, hours, week, runs: 5, goals: 2, causes: [{ name: "First run of the job", hours, week, runs: 5 }], top: [] });
+const classes = (h: number[], w: number[]) => [["landed", "Landed"], ["fixed", "Fixed in place"], ["nothing", "Nothing to do"], ["loop", "Loop"], ["restarted", "Restarted"], ["dropped", "Dropped"]].map(([k, n], i) => C(k, n, h[i], w[i]));
+const D = { window: "week", notCounted: { runs: 11, goals: 4, hours: 0.4 } };
+
+test("the agent-time bar: sentence, brackets, segments, narrow line, not counted", () => {
+  const d = { ...D, classes: classes([60, 10, 20, 1, 24, 1], [3, 0.5, 1, 0.1, 1.2, 0.1]) };
+  const h = renderBar(d);
+  const bar = h.slice(h.indexOf('class="abar"'), h.indexOf("</div>", h.indexOf('class="abar"')));
+  for (const n of ["Landed", "Fixed in place", "Nothing to do", "Loop", "Restarted", "Dropped"]) expect(bar.split(`>${n}<`).length - 1).toBeLessThanOrEqual(1);
+  expect(h).toContain("<b>46 h</b> of 116 h (40%) of agent time in the last 7 days went to runs whose work did not reach main.");
+  const br = h.slice(h.indexOf('class="brackets"'), h.indexOf("</div>", h.indexOf('class="brackets"')));
+  expect(br).toContain("Reached main");
+  expect(br).toContain("Did not reach main");
+  expect(br.replace(/style="[^"]*"/g, "")).not.toMatch(/\d/);
+  expect([...bar.matchAll(/data-class="(\w+)"/g)].map((m) => m[1])).toEqual(["landed", "fixed", "nothing", "loop", "restarted", "dropped"]);
+  expect(bar).toContain('title="Landed text.\nFirst run of the job: 60 h · 5 runs"');
+  expect(h).not.toContain("undefined");
+  const nar = h.slice(h.indexOf('class="narrow"'), h.indexOf("</ul>"));
+  for (const n of ["Fixed in place", "Loop", "Dropped"]) expect(nar).toContain(` ${n} <b>`);
+  for (const n of ["Landed", "Nothing to do", "Restarted"]) expect(nar).not.toContain(` ${n} <b>`);
+  expect(h).toContain("Not counted: 11 runs of 4 open goals, 0.4 h");
+  const w = renderBar(d, { measure: "week" });
+  expect(w).toMatch(/<b>\d+\.\d%<\/b> of [\d.]+% \(/);
+  expect(w.slice(w.indexOf('class="lost"'), w.indexOf("</p>"))).not.toContain(" h");
+  expect(renderBar({ ...d, classes: classes([0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]) })).toContain("No agent run of a goal ended in this period.");
+});
+
+test("the flex values are shares of the total, also under 1 h", () => {
+  const h = renderBar({ ...D, classes: classes([0.3, 0.1, 0.05, 0.02, 0.1, 0.03], [0, 0, 0, 0, 0, 0]) });
+  const bar = h.slice(h.indexOf('class="abar"'), h.indexOf("</div>", h.indexOf('class="abar"')));
+  const flex = [...bar.matchAll(/style="flex:([\d.e-]+)"/g)].map((m) => Number(m[1]));
+  expect(flex.length).toBe(6);
+  expect(Math.abs(flex.reduce((a, b) => a + b, 0) - 1)).toBeLessThan(0.001);
 });

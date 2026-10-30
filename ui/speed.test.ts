@@ -52,10 +52,8 @@ test("day: counts, medians, wasted share, buckets, slowest, models", () => {
   expect(d.kinds.triage.count).toBe(1);
   expect(d.kinds.plan.count).toBe(0);
   expect(d.checks).toEqual([{ name: "tests", count: 1, p50: 36, p90: 36 }, { name: "types", count: 1, p50: 8, p90: 8 }]);
-  expect(d.ends.passed).toEqual({ hours: round(600 / 3600), cost: 1, count: 1 });
-  expect(d.ends.dropped.count + d.ends.stuck.count).toBe(2);
-  expect(d.ends["needs-you"].count).toBe(0);
-  expect(d.wasted).toBeCloseTo(3000 / 3600, 3);
+  expect("ends" in d || "wasted" in d).toBe(false);
+  expect(d.classes.every((c) => c.text.length > 0)).toBe(true);
   expect(d.window).toBe("day");
   expect(d.done).toBe(2);
   expect(d.buckets.length).toBe(24);
@@ -114,9 +112,6 @@ test("the view: medians with p50, p90 and runs; charts; efficiency with reruns a
   for (const t of ["Tests check", "Flaky", "24–27 s", "Today", "7 days"]) expect(h).not.toContain(t);
   const e = renderEfficiency(d);
   expect(e).toContain("Reruns");
-  expect(e).toContain("<b>83%</b> of 1.0 agent hours went to dropped or stuck runs");
-  expect(e.indexOf("went to")).toBeLessThan(e.indexOf('class="hbar"'));
-  expect(e).toContain('class="hlegend"');
   for (const [w, step] of [["hour", "minute"], ["day", "hour"], ["week", "day"], ["month", "day"]] as const) {
     const c = renderCharts({ ...d, window: w });
     expect(c).toContain(`Build run time by ${step} (median)`);
@@ -133,7 +128,6 @@ test("the view: medians with p50, p90 and runs; charts; efficiency with reruns a
   expect(dur(43)).toBe("43s");
   expect(dur(245)).toBe("4m 05s");
 });
-const round = (x: number) => Math.round(x * 100) / 100;
 
 test("classify: one run of each class, with its cause", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();

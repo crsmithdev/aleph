@@ -1,13 +1,11 @@
 // The speed parts of the Status page: how fast runs are. `d` is /api/speed. The render functions
 // return HTML strings; `mountSpeed` fetches the data, draws the three ECharts and wires the control.
-import { badge, chart, esc, money, readTokens } from "../lib.js";
+import { chart, esc, readTokens } from "../lib.js";
 
 export const WINDOWS = [{ value: "hour", label: "Hour" }, { value: "day", label: "Day" }, { value: "week", label: "Week" }, { value: "month", label: "Month" }];
 export const DEFAULT_WINDOW = "week";
 const WINDOW_TEXT = { hour: "the last hour", day: "the last 24 hours", week: "the last 7 days", month: "the last 30 days" };
 const STEP_TEXT = { hour: "minute", day: "hour", week: "day", month: "day" };
-const END_LABEL = { passed: "Passed", dropped: "Dropped", stuck: "Stuck", "needs-you": "Needs you" };
-const END_TONE = { passed: "done", dropped: "quiet", stuck: "stuck", "needs-you": "need" };
 
 /** Seconds as "43s", "4m 05s" or "1h 02m"; "–" for none. */
 export function dur(s) {
@@ -36,22 +34,36 @@ export function renderMedians(d) {
     med("Test", tests) + `</div>`;
 }
 
-/** "Where the agent hours went": one stacked bar by end state with its labels in or under the segments, and the wasted sentence. */
-export function renderHours(d) {
-  const total = Object.values(d.ends).reduce((a, e) => a + e.hours, 0);
-  if (!total) return `<div class="empty"><p class="hint">No agent run ended in this period.</p></div>`;
-  const live = Object.entries(d.ends).filter(([, e]) => e.hours > 0);
-  const text = (s, e) => `${END_LABEL[s]} ${hours(e.hours)} · ${money(e.cost)} · ${e.count} ${e.count === 1 ? "run" : "runs"}`;
-  // A segment holds its label when it is at least FIT of the bar; a thinner one gets the label under it, in the same flex slot.
-  const segs = live.map(([s, e]) => {
-    const fits = e.hours / total >= FIT;
-    return `<span class="seg-${END_TONE[s]}" style="flex:${e.hours}" title="${esc(text(s, e))}">${fits ? `<span class="in">${esc(text(s, e))}</span>` : ""}</span>`;
+const BAR_PX = 760;
+const fmt = (v, measure) => (measure === "week" ? `${v.toFixed(1)}%` : hours(v));
+
+/** The agent-time bar: the lost sentence, the brackets, one segment per class, the narrow line and the not-counted line. */
+export function renderBar(d, { measure = "hours", pinned = null } = {}) {
+  const cs = d.classes ?? [];
+  const f = (v) => fmt(v, measure);
+  const total = cs.reduce((a, c) => a + c[measure], 0);
+  if (!(total > 0)) return `<div class="empty"><p class="hint">No agent run of a goal ended in this period.</p></div>`;
+  const sum = (xs) => xs.reduce((a, c) => a + c[measure], 0);
+  const good = sum(cs.slice(0, 2)), lost = sum(cs.slice(2));
+  const share = (v) => Math.round((v / total) * 100);
+  const sentence = `<p class="lost"><b>${esc(f(lost))}</b> of ${esc(f(total))} (${share(lost)}%) of agent time in ${WINDOW_TEXT[d.window]} went to runs whose work did not reach main.</p>`;
+  const bracket = (v, t) => (v > 0 ? `<span class="bracket" style="flex:${v / total}">${t}</span>` : "");
+  const brackets = `<div class="brackets">${bracket(good, "Reached main")}${bracket(lost, "Did not reach main")}</div>`;
+  const live = cs.filter((c) => c[measure] > 0);
+  const px = (c) => (c[measure] / total) * BAR_PX;
+  const segs = live.map((c) => {
+    const v = c[measure], w = px(c);
+    const title = [c.text, ...(c.causes ?? []).slice(0, 5).map((x) => `${x.name}: ${f(x[measure])} · ${x.runs} runs`)].join("\n");
+    const inside = w <= 70 ? "" : `<span class="nm">${esc(c.name)}</span>` + (w <= 8 + c.name.length * 7 + 90 ? "" : `<span class="val">${esc(f(v))} · ${share(v)}%</span>`);
+    return `<button type="button" class="seg-${c.key}" data-class="${c.key}" style="flex:${v / total}" aria-pressed="${c.key === pinned}" aria-label="${esc(`${c.name}: ${f(v)}, ${share(v)}%`)}" title="${esc(title)}">${inside}</button>`;
   }).join("");
-  const under = live.map(([s, e]) => `<li style="flex:${e.hours}">${e.hours / total >= FIT ? "" : `<span class="under">${badge(s)} <b>${esc(hours(e.hours))}</b> <span class="quiet">${esc(money(e.cost))} · ${e.count} ${e.count === 1 ? "run" : "runs"}</span></span>`}</li>`).join("");
-  return `<p class="wasted"><b>${esc(pctText(d.wasted))}</b> of ${esc(hours(total).replace(' h', ''))} agent hours went to dropped or stuck runs.</p>` +
-    `<div class="hbar" role="img" aria-label="Agent hours by end state">${segs}</div><ul class="hlegend">${under}</ul>`;
+  const bar = `<div class="abar" role="group" aria-label="Agent time by what each run's work came to">${segs}</div>`;
+  const thin = live.filter((c) => px(c) <= 70);
+  const narrow = thin.length ? `<ul class="narrow">${thin.map((c) => `<li><button type="button" class="nar" data-class="${c.key}"><i class="sw seg-${c.key}"></i> ${esc(c.name)} <b>${esc(f(c[measure]))}</b></button></li>`).join("")}</ul>` : "";
+  const nc = d.notCounted;
+  const not = nc && nc.runs ? `<p class="quiet notcounted">Not counted: ${nc.runs} runs of ${nc.goals} open goals, ${hours(nc.hours)}</p>` : "";
+  return sentence + brackets + bar + narrow + not;
 }
-const FIT = 0.3;
 
 const chartBox = (key, title, label) => `<figure class="chartbox"><figcaption>${esc(title)}</figcaption><div class="speedchart" data-chart="${key}" role="img" aria-label="${esc(label)}"></div></figure>`;
 
@@ -70,11 +82,11 @@ export function renderSpeedTop(d) {
   return head + renderMedians(d) + renderCharts(d);
 }
 
-/** The Efficiency block: reruns, the wasted share and the agent hours by end state, for the picked window. */
+/** The Efficiency block: reruns, the agent time by class, for the picked window. */
 export function renderEfficiency(d) {
   const head = `<div class="sh sub"><h2 id="h-efficiency">Efficiency</h2></div>`;
   if (!d || d.error) return head + loading("efficiency", d);
-  return head + renderEffCards(d) + renderHours(d);
+  return head + renderEffCards(d) + renderBar(d);
 }
 
 const card = (k, v, note) => `<div class="med"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span><span class="quiet">${esc(note)}</span></div>`;
