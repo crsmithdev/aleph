@@ -31,7 +31,7 @@ case $prompt in
 Here is the plan. ${THREE}
 J
   ;;
-  *PLAN:slow*) sleep 1; echo '${THREE}' ;;
+  *PLAN:slow*) for _ in $(seq 600); do { [ -e "${join(base, "release")}" ] || [ ! -d "${base}" ]; } && break; sleep 0.05; done; echo '${THREE}' ;;
   *PLAN:one*) echo '${ONE}' ;;
   *PLAN:nooracle*) echo '${NO_ORACLE}' ;;
   *PLAN:badthengood*) if [ -e "${join(base, "once")}" ]; then echo '${THREE}'; else touch "${join(base, "once")}"; echo '${ONE}'; fi ;;
@@ -69,6 +69,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  writeFileSync(join(base, "release"), "");
   for (const k of KEYS) {
     if (saved[k] === undefined) delete process.env[k];
     else process.env[k] = saved[k];
@@ -202,12 +203,10 @@ test("the check: sections, the oracle, the waits and the count", () => {
 test("a dispatch returns before a slow planner replies; the small goal starts, and the large goal is planning", async () => {
   const big = addGoal("slow");
   const small = writeList({ key: "fac" }, "add", (doc) => todos.add(doc, "small", { labels: ["goal"], body: body("small") }).id, true)!.value;
-  const t0 = Date.now();
   const starts: string[] = [];
   const plans: Promise<unknown>[] = [];
   const out = await dispatchGoals(async (_r, name) => { starts.push(name); return null; }, undefined, undefined, undefined,
     async (spec) => (spec.includes("PLAN:slow") ? "opus" : "sonnet"), (repo, id) => { plans.push(planNow(repo, id)); });
-  expect(Date.now() - t0).toBeLessThan(900);
   expect(starts).toEqual([`fac-${small}`]);
   expect(out.planned).toEqual([`fac-${big}`]);
   // A bounded wait, of at most about 3 seconds, for the fake planner to log its call while the plan runs.
@@ -223,6 +222,8 @@ test("a dispatch returns before a slow planner replies; the small goal starts, a
   expect(plans.length).toBe(1);
   expect(planCalls().length).toBe(1);
 
+  // The planner waits for this file, so the dispatch returned while it was still running, whatever the load.
+  writeFileSync(join(base, "release"), "");
   await Promise.all(plans);
   expect(item(big).fm.waiting_on).toBe(`fac-${big + 2},fac-${big + 3},fac-${big + 4}`);
   expect(itemLabels(item(big))).toContain("planned");
