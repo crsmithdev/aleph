@@ -87,6 +87,7 @@ Issue   <store>/<repo>/backlog/tasks/<repo>-<n>.md
 
 Goal    <store>/<repo>/backlog/tasks/<repo>-<n>.<k>.md   (old children keep <repo>-<m>.md)
   id, title, repo, created, updated, priority
+  The store file holds created under the key created_date, because Backlog.md reads only that key.
   kind: goal
   issue: <repo>-<n>
   after: [<goal id>]
