@@ -73,6 +73,7 @@ export function parsePlan(output: string): Child[] | string {
     const n = i + 1;
     const title = text(c?.title), body = text(c?.body);
     if (!title) return `child ${n} has no title`;
+    if (title.length > 60) return `child ${n}'s title is over 60 characters`;
     if (!body) return `child ${n} has no body`;
     for (const s of SECTIONS) if (!section(body, s)) return `child ${n} has no ${s}`;
     if (!realOracle(section(body, "Oracle"))) return `child ${n}'s Oracle names no command or test file`;
@@ -126,9 +127,9 @@ ${item.body.trim() || "(no body)"}
 ${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}${episodes.length ? `\n# How similar goals went\n\n${episodes.map(episodeText).join("\n")}` : ""}
 Split it into 2 to 6 child goals. Each child is work one factory run can do alone, in one run of under an hour, and the children together do the whole goal. Reply with one JSON object and nothing else:
 
-{"children": [{"title": "<short title>", "body": "<child goal body>", "waits_on": [<optional numbers of earlier children, from 1>]}]}
+{"children": [{"title": "<title>", "body": "<child goal body>", "waits_on": [<optional numbers of earlier children, from 1>]}]}
 
-Each body is in the goal format, with all four sections non-empty:
+Each "title" is short and descriptive, a noun phrase of at most 60 characters ("Status layout C: metrics left, lanes in a rail"), not a sentence. Each body is in the goal format, with all four sections non-empty:
   ## Goal (what and why, short)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)

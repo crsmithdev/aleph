@@ -24,7 +24,7 @@ const FAKE = `#!/bin/bash
 prompt=$(cat)
 echo "$PWD" >> "$FAKE_LOG"
 case $prompt in
-  *VERDICT:goal*) echo '{"verdict":"goal","body":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}' ;;
+  *VERDICT:goal*) echo '{"verdict":"goal","title":"Do it","body":"## Request\\nx\\n## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}' ;;
   *VERDICT:close*) echo 'Looked at it. {"verdict":"close","reason":"duplicate of tri-1"}' ;;
   *VERDICT:chris*) echo '{"verdict":"chris","question":"Which plan, A or B?"}' ;;
   *VERDICT:structured*) echo '{"verdict":"chris","question":"A or B?","options":[{"label":"A","line":"do a"},{"label":"B","line":"do b"}],"recommended":"B","why":["one","two"]}' ;;
@@ -262,8 +262,8 @@ test("a blocked day cap or live cap starts no triage", async () => {
 test("parseVerdict wants the field its verdict needs", () => {
   expect(parseVerdict('{"verdict":"close","reason":" stale "}')).toEqual({ verdict: "close", reason: "stale" });
   expect(parseVerdict('{"verdict":"goal"}')).toBe("goal without a body");
-  expect(parseVerdict('{"verdict":"goal","body":"b","waiting_on":"aleph-265"}')).toEqual({ verdict: "goal", body: "b", waitingOn: "aleph-265" });
-  expect(parseVerdict('{"verdict":"goal","body":"b","waiting_on":"soon"}')).toEqual({ verdict: "goal", body: "b" });
+  expect(parseVerdict('{"verdict":"goal","title":"T","body":"## Request\\nb","waiting_on":"aleph-265"}')).toEqual({ verdict: "goal", title: "T", body: "## Request\nb", waitingOn: "aleph-265" });
+  expect(parseVerdict('{"verdict":"goal","title":"T","body":"## Request\\nb","waiting_on":"soon"}')).toEqual({ verdict: "goal", title: "T", body: "## Request\nb" });
   expect(parseVerdict("[]")).toBe("no JSON");
 });
 
@@ -366,7 +366,7 @@ echo "$PWD" >> "$FAKE_LOG"
 file=$(echo "$prompt" | grep -m1 '^# Issue' | grep -o '[a-z]*\.ts')
 sha=$(echo "$prompt" | sed -n '/^# Commits on main/,/^Reply/p' | grep -F "$file" | head -1 | cut -d' ' -f1)
 if [ -n "$sha" ]; then echo "{\\"verdict\\":\\"done\\",\\"commit\\":\\"$sha\\",\\"reason\\":\\"widget.ts exists\\"}"
-else echo '{"verdict":"goal","body":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}'; fi
+else echo '{"verdict":"goal","title":"Do it","body":"## Request\\nx\\n## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}'; fi
 `;
   let fixture: string;
   let saved: string | undefined;
@@ -427,5 +427,49 @@ else echo '{"verdict":"goal","body":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\
       expect(t.triaged).toEqual({});
       expect(todos.status(item(1))).toBe("open");
     } finally { process.env.ALEPH_TRIAGE_CMD = join(base, "smart"); }
+  });
+});
+
+describe("issue titles and the kept request", () => {
+  const LONG_TITLE = "Status: layout C, the metrics on the left and the four lanes in a rail on the right, with the detail pinned";
+  const INPUT = "The status page is hard to scan.\n\n- put the metrics on the left\n- put the four lanes in a rail on the right\n";
+  // The fake copies the issue's body into the `## Request` section and writes a short title.
+  const ECHO = `#!/bin/bash
+body=$(cat | sed -n '/^# Issue /,/^# Open issues/p' | sed '1d;$d' | sed -e :a -e '/^\\n*$/{$d;N;ba' -e '}')
+printf '{"verdict":"goal","title":"Status layout C: metrics left, lanes in a rail","body":%s}\\n' "$(printf '## Request\\n\\n%s\\n\\n## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes' "$body" | bun -e 'console.log(JSON.stringify(await Bun.stdin.text()))')"
+`;
+
+  test("a long input gets a short title and stays word for word under ## Request", async () => {
+    const saved = process.env.ALEPH_TRIAGE_CMD;
+    writeFileSync(join(base, "echo"), ECHO);
+    chmodSync(join(base, "echo"), 0o755);
+    process.env.ALEPH_TRIAGE_CMD = join(base, "echo");
+    try {
+      reset([{ title: LONG_TITLE, body: INPUT }]);
+      expect((await run()).triaged).toEqual({ goal: 1 });
+      const got = item(1);
+      expect(got.title.length).toBeLessThanOrEqual(60);
+      expect(got.title).not.toBe(LONG_TITLE);
+      const request = got.body.split(/^## Goal/m)[0]!.replace(/^## Request/, "");
+      const flat = (t: string) => t.replace(/\s+/g, " ").trim();
+      expect(flat(request)).toBe(flat(INPUT));
+      expect(got.body.indexOf("## Request")).toBeLessThan(got.body.indexOf("## Goal"));
+    } finally {
+      process.env.ALEPH_TRIAGE_CMD = saved;
+    }
+  });
+
+  test("a verdict with a long title, no title or no ## Request is malformed", () => {
+    const body = "## Request\\nx\\n## Goal\\ng";
+    expect(parseVerdict(`{"verdict":"goal","title":"${"t".repeat(61)}","body":"${body}"}`)).toBe("goal title over 60 characters");
+    expect(parseVerdict(`{"verdict":"goal","body":"${body}"}`)).toBe("goal without a title");
+    expect(parseVerdict('{"verdict":"goal","title":"T","body":"## Goal\\ng"}')).toBe("goal body without a ## Request section");
+  });
+
+  test("the prompt states the title and request rules", () => {
+    const p = prompt(repo, item(1));
+    expect(p).toContain("at most 60 characters");
+    expect(p).toContain('under a "## Request" heading');
+    expect(p).toContain("word for word");
   });
 });

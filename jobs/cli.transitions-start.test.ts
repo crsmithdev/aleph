@@ -68,7 +68,7 @@ describe("every transition dispatches at once", () => {
   test("a triage run that ends with a goal starts it", async () => {
     const x = track(await add("vague", open("triage"), ["--labels", "followup"], { ALEPH_DISPATCH: "off" }));
     const cmd = join(base, "ttriage-cmd");
-    writeFileSync(cmd, `#!/bin/bash\ncat > /dev/null\necho '{"verdict":"goal","body":"ACTION: hold ${gate("triage")}"}'\n`, { mode: 0o755 });
+    writeFileSync(cmd, `#!/bin/bash\ncat > /dev/null\necho '{"verdict":"goal","title":"Hold","body":"## Request\\nx\\nACTION: hold ${gate("triage")}"}'\n`, { mode: 0o755 });
     const t = await aleph(["triage", `fac-${x}`], on({ ALEPH_TRIAGE_CMD: cmd }));
     expect(t.json.triaged).toEqual({ goal: 1 });
     await until(() => started().includes(`fac-${x}`));

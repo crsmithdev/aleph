@@ -18,8 +18,11 @@ import { logStanding, standing } from "./standing.ts";
 export const TRIAGE_TRIES = () => Number(process.env.ALEPH_TRIAGE_TRIES ?? 2);
 const TIME_BOX_MS = () => Number(process.env.ALEPH_TRIAGE_TIMEOUT ?? 600) * 1000;
 
+/** The longest title an issue gets. */
+export const TITLE_MAX = 60;
+
 export type Verdict =
-  | { verdict: "goal"; body: string; waitingOn?: string }
+  | { verdict: "goal"; title: string; body: string; waitingOn?: string }
   | { verdict: "close"; reason: string }
   | { verdict: "done"; commit: string; reason: string }
   | { verdict: "chris"; question: string; decision?: Decision }
@@ -39,9 +42,12 @@ export function parseVerdict(output: string): Verdict | string {
   const field = (key: string) => text(raw[key]);
   switch (raw.verdict) {
     case "goal": {
-      const body = field("body"), wait = field("waiting_on") ?? "";
+      const body = field("body"), title = field("title")?.replace(/\s+/g, " ") ?? null, wait = field("waiting_on") ?? "";
       if (!body) return "goal without a body";
-      return /^[a-z0-9-]+-\d+$/.test(wait) ? { verdict: "goal", body, waitingOn: wait } : { verdict: "goal", body };
+      if (!title) return "goal without a title";
+      if (title.length > TITLE_MAX) return `goal title over ${TITLE_MAX} characters`;
+      if (!/^## Request[ \t]*$/m.test(body)) return "goal body without a ## Request section";
+      return /^[a-z0-9-]+-\d+$/.test(wait) ? { verdict: "goal", title, body, waitingOn: wait } : { verdict: "goal", title, body };
     }
     case "close": { const reason = field("reason"); return reason ? { verdict: "close", reason } : "close without a reason"; }
     case "chris": { const question = field("question"); if (!question) return "chris without a question"; const decision = normalizeDecision(raw); return decision ? { verdict: "chris", question: decision.question, decision } : { verdict: "chris", question }; }
@@ -104,13 +110,14 @@ ${mainSince(repo, item)}
 
 Reply with one JSON object and nothing else, with one of these verdicts:
 
-- {"verdict": "goal", "body": "<goal body>", "waiting_on": "<optional <repo>-<n>>"}: the issue is work a factory run can do alone. "body" replaces the issue's body, in the goal format:
+- {"verdict": "goal", "title": "<short title>", "body": "<goal body>", "waiting_on": "<optional <repo>-<n>>"}: the issue is work a factory run can do alone. "title" replaces the issue's title: a short, descriptive noun phrase of at most ${TITLE_MAX} characters, in the style of the good titles ("Status layout C: metrics left, lanes in a rail", not a sentence). "body" replaces the issue's body: it starts with the input text under a "## Request" heading, then the goal format:
+  ## Request (the issue's own text above, as Markdown, word for word: change only spelling and grammar, never the content, and never edit it again in later sections)
   ## Goal (what and why, short)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)
   ## Time box (default: 45 minutes, one run)
 
-  The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`), or a new test that asserts the end state. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one.
+  The "## Request" text is the issue's title and body as written, kept for the reader; the sections after it are yours. The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`), or a new test that asserts the end state. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one.
 - {"verdict": "close", "reason": "<why>"}: it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
 - {"verdict": "done", "commit": "<sha>", "reason": "<what the commit holds>"}: main already holds the work. Before a "goal" verdict, check this: read the commits listed above, and grep main for the names the issue gives (files, functions, test names). When a commit on main already makes the change, return "done" with that commit's sha and say what it holds; no worker runs. When you are unsure, return "goal" as usual.
 - {"verdict": "chris", "question": "<one plain sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>", "waiting_on": "<optional <repo>-<n>: set only when choosing this option means waiting for that issue first>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first. Write the question and the options in plain words a user of the product reads: no file paths, function names, line numbers or code. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
@@ -156,7 +163,7 @@ async function ask(repo: Repo, item: todos.Item, folder: string): Promise<string
 function apply(repo: Repo, id: number, v: Verdict): boolean {
   return sort(repo, id, `triage ${repo.key}-${id}: ${v.verdict}`, (item) => {
     if (v.verdict === "goal") {
-      todos.edit(item, { body: v.body, ...(v.waitingOn ? { waitingOn: v.waitingOn } : {}) });
+      todos.edit(item, { title: v.title, body: v.body, ...(v.waitingOn ? { waitingOn: v.waitingOn } : {}) });
       label(item, [GOAL]);
       todos.note(item, v.waitingOn ? `triage: rewritten as a goal; waits on ${v.waitingOn}` : "triage: rewritten as a goal");
     } else if (v.verdict === "done") {
