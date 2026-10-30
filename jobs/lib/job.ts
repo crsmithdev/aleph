@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { tagged } from "./gate.ts";
-import { allJobs, isLost, isOpen, LOCK_BUSY, readReview2, type CheckResult, type Entry, type Review2, type Run, type State } from "./ledger.ts";
+import { allJobs, askOf, isBuild, isLost, isOpen, LOCK_BUSY, needsOf, oldState, onOf, reviewOf, type CheckResult, type Entry, type Review2, type Run, type State } from "./ledger.ts";
 
 export { allJobs, isOpen };
 
@@ -38,13 +38,13 @@ export const findJob = (name: string, repo?: string | null, jobs = allJobs()): J
 export const jobById = (id: string, jobs = allJobs()): Job | undefined => jobs.find((j) => j[0].id === id);
 
 /** The repo issue the job works on: the latest run that names one. */
-export const issue = (j: Job): number | undefined => j.findLast((e) => e.run.todo !== undefined)?.run.todo;
+export const issue = (j: Job): number | undefined => j.map((e) => onOf(e.run)).findLast((n) => n !== undefined);
 
 /** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts; a facts run is not the job's state. */
 export const lastReal = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts" && !(e.run.kind === "land" && e.run.state === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
 
 /** The job's state: that of the run that counts. */
-export const stateOf = (j: Job): State => lastReal(j).run.state;
+export const stateOf = (j: Job): State => oldState(lastReal(j).run.state);
 
 /** A file in a run's folder, or undefined when it is not there. */
 export function readFile(e: Entry, file: RunFile): string | undefined {
@@ -122,12 +122,15 @@ export function view(j: Job): JobView {
   const r = last.run;
   const latest = <K extends keyof Run>(k: K): Run[K] | undefined => r[k] ?? j.findLast((e) => e.run[k])?.run[k];
   const v: JobView = {
-    job: r.job, name: r.name, run: { id: last.id, kind: r.kind, started: r.started }, state: r.state, started: j[0].run.started,
+    job: r.job, name: r.name, run: { id: last.id, kind: r.kind, started: r.started }, state: oldState(r.state), started: j[0].run.started,
     defaults: j.findLast((e) => e.run.defaults !== undefined)?.run.defaults ?? [],
-    followups: tagged(latestFile(j, "result.md", (e) => e.run.kind === "agent")?.text ?? "", "FOLLOWUP"),
+    followups: tagged(latestFile(j, "result.md", (e) => isBuild(e.run.kind))?.text ?? "", "FOLLOWUP"),
   };
   if (r.repo) v.repo = r.repo;
   for (const k of ["needs", "phase", "reason", "question", "say", "session", "ended"] as const) if (r[k]) (v as any)[k] = r[k];
+  const needs = needsOf(askOf(r));
+  if (needs && !v.needs) v.needs = needs;
+  if (r.ask?.reason === "question" && !v.question) v.question = r.ask.question;
   const item = issue(j);
   if (item !== undefined) v.item = item;
   if (j.some((e) => e.run.cost !== undefined)) v.cost = j.reduce((a, e) => a + (e.run.cost ?? 0), 0);
@@ -140,8 +143,8 @@ export function view(j: Job): JobView {
   if (Array.isArray(checks)) v.checks = checks;
   const hid = j.findLast((e) => e.run.checks?.some((c) => c.name === "hidden" && c.total))?.run.checks?.find((c) => c.name === "hidden");
   if (hid?.total) v.hidden = { passed: hid.passed ?? 0, total: hid.total };
-  const review2 = readReview2(last.folder);
-  if (review2) v.review2 = review2;
+  const review = reviewOf(last);
+  if (review) v.review2 = { verdict: review.call === "ask" ? "chris" : review.call, ...(review.reason !== undefined && { reason: review.reason }) };
   if (r.state === "landed" && r.check) v.check = r.check;
   if (isLost(last.folder)) v.lost = true;
   return v;

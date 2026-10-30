@@ -6,13 +6,23 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { availableParallelism, homedir } from "node:os";
 import { join } from "node:path";
 
-export type State = "running" | "passed" | "needs-you" | "failed" | "stuck" | "done" | "landed" | "dropped";
+export type State = "running" | "passed" | "needs-you" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
 /** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. The hidden check adds its test counts. */
 export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number; rerun?: boolean }
 
+/** What a run waits for Chris on: the spec's Ask. */
+export interface Ask {
+  kind: "input" | "approval"; reason: string; question: string;
+  options: { label: string; line: string; after?: string }[];
+  recommended?: string; why: string[];
+}
+
+/** A review's call; `chris` of the old review2.md reads as `ask`. */
+export type Review = { call: "land" | "back" | "ask"; reason?: string };
+
 export interface Run {
-  kind: "agent" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter";
+  kind: "agent" | "build" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
   state: State; needs?: "manual" | "question" | "held" | "review"; phase?: string;
   reason?: string; question?: string; say?: string;
@@ -27,6 +37,12 @@ export interface Run {
   facts?: true;
   /** The repo's issue the job works on: land marks it done, drop adds a note. */
   todo?: number;
+  /** New shape: the goal or issue the run is on, `<repo>-<n>`. */
+  on?: string;
+  /** New shape: what the run waits on. */
+  ask?: Ask;
+  /** New shape: the run's review. */
+  review?: Review;
   /** An agent run started with --land: it lands when it passes. */
   land?: boolean;
   /** A land run's conflicted paths, read before the rebase abort. */
@@ -77,7 +93,7 @@ export interface Repo {
   hiddenRun: string;
 }
 
-export const OPEN: State[] = ["running", "passed", "needs-you", "failed", "stuck"];
+export const OPEN: State[] = ["running", "passed", "needs-you", "awaiting", "failed", "stuck"];
 
 export function expand(p: string): string {
   return p === "~" || p.startsWith("~/") ? join(homedir(), p.slice(1)) : p;
@@ -164,6 +180,51 @@ export function isOpen(runs: Entry[]): boolean {
   return OPEN.includes(last.run.state);
 }
 
+/** A run waits for Chris: the new state or the old. */
+export const isAwaiting = (state: State): boolean => state === "awaiting" || state === "needs-you";
+
+/** A build run: the new kind or the old. */
+export const isBuild = (kind: Run["kind"]): boolean => kind === "build" || kind === "agent";
+
+/** The state under its old name: `awaiting` reads as `needs-you`. */
+export const oldState = (state: State): State => (state === "awaiting" ? "needs-you" : state);
+
+/** The number of the run's `on` (`<repo>-<n>`, for the run's repo), else its `todo`. A dotted `on` gives none. */
+export function onOf(run: Run): number | undefined {
+  if (run.on === undefined) return run.todo;
+  const m = run.on.match(/^(.+)-(\d+)$/);
+  return m && m[1] === run.repo ? Number(m[2]) : undefined;
+}
+
+const OLD_NEEDS: Record<NonNullable<Run["needs"]>, { kind: Ask["kind"]; reason: string }> = {
+  held: { kind: "approval", reason: "held-path" }, review: { kind: "approval", reason: "review" },
+  question: { kind: "input", reason: "question" }, manual: { kind: "input", reason: "manual" },
+};
+
+/** The run's ask: `ask`, else built from `needs`, `question`, `reason` and `stat`. Undefined when the run asks nothing. */
+export function askOf(run: Run): Ask | undefined {
+  if (run.ask) return run.ask;
+  if (!run.needs) return undefined;
+  const { kind, reason } = OLD_NEEDS[run.needs];
+  return { kind, reason, question: run.question ?? run.reason ?? "", options: [], why: run.stat ? [run.stat] : [] };
+}
+
+/** The old `needs` of an ask: the reason of a kind the old shape had, else none. */
+export function needsOf(ask: Ask | undefined): Run["needs"] {
+  if (!ask) return undefined;
+  return (Object.keys(OLD_NEEDS) as NonNullable<Run["needs"]>[]).find((n) => OLD_NEEDS[n].reason === ask.reason);
+}
+
+/** The run's review: `review`, else its folder's review2.md with `chris` read as `ask`. */
+export function reviewOf(e: Entry): (Review | { call: "pending" | "error"; reason?: string }) | undefined {
+  if (e.run.review) return e.run.review;
+  const r = readReview2(e.folder);
+  if (!r) return undefined;
+  const out: { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string } = { call: r.verdict === "chris" ? "ask" : r.verdict };
+  if (r.reason !== undefined) out.reason = r.reason;
+  return out as any;
+}
+
 function cmdline(pid: number): string | null {
   try { return readFileSync(`/proc/${pid}/cmdline`, "utf8").replaceAll("\0", " "); } catch { return null; }
 }
@@ -224,8 +285,9 @@ export function stamp(d = new Date()): string {
 /** The one line of news for an ended run. */
 export function newsLine(run: Run, note?: string): string {
   if (run.kind === "plain") return `${run.name} ${run.state === "done" ? "finished" : "failed"}`;
-  let line = `${run.repo}/${run.name} ${run.state}`;
-  if (run.state === "needs-you" && run.needs) line += ` ${run.needs}`;
+  let line = `${run.repo}/${run.name} ${oldState(run.state)}`;
+  const needs = run.needs ?? needsOf(run.ask);
+  if (isAwaiting(run.state) && needs) line += ` ${needs}`;
   // Only a check's reason ends in "failed"; see the state rule in unit.ts.
   const check = run.state === "failed" && run.reason?.match(/^(.+) failed$/);
   if (check) line += ` ${check[1]}`;

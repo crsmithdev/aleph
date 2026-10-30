@@ -19,7 +19,7 @@ export const lastLines = (s: string | undefined, n = 80): string | undefined => 
   const lines = s.replace(/\n+$/, "").split("\n");
   return lines.slice(-n).join("\n");
 };
-const KIND = { agent: "worker", recheck: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter" } as const;
+const KIND = { agent: "worker", build: "worker", recheck: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter" } as const;
 function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
   const out: RunInfo[] = [];
   for (const e of runs) {
