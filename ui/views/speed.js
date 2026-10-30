@@ -82,11 +82,46 @@ export function renderSpeedTop(d) {
   return head + renderMedians(d) + renderCharts(d);
 }
 
-/** The Efficiency block: reruns, the agent time by class, for the picked window. */
-export function renderEfficiency(d) {
-  const head = `<div class="sh sub"><h2 id="h-efficiency">Efficiency</h2></div>`;
+// Duplicated from ui/api/speed.ts: keep the texts identical.
+const CLASS_NAME = { landed: "Landed", fixed: "Fixed in place", nothing: "Nothing to do", loop: "Loop", restarted: "Restarted", dropped: "Dropped" };
+const CLASS_TEXT = {
+  landed: "The run whose work landed on main.",
+  fixed: "A run of the landing job before the run that landed: a fix round the goal needed.",
+  nothing: "A run that started after its goal had landed, or found the work already on main.",
+  loop: "A run that was the 4th or later start of its goal inside an hour.",
+  restarted: "A run of an earlier job of a goal whose later job landed.",
+  dropped: "A run of a goal that was then dropped or closed without landing.",
+};
+
+/** The class shown under the bar: the pinned one if it has a value, else the largest of classes 3 to 6; null when all are 0. */
+export function shownClass(d, measure = "hours", pinned = null) {
+  const cs = d.classes ?? [];
+  if (pinned && cs.some((c) => c.key === pinned && c[measure] > 0)) return pinned;
+  let best = null;
+  for (const c of cs.slice(2)) if (c[measure] > 0 && (!best || c[measure] > best[measure])) best = c;
+  return best?.key ?? null;
+}
+
+/** The breakdown of one class: its causes and the goals that took the most. "" when `key` is null. */
+export function renderBreakdown(d, key, measure = "hours") {
+  const c = key && (d.classes ?? []).find((x) => x.key === key);
+  if (!c) return "";
+  const other = measure === "week" ? "hours" : "week";
+  const f = (v) => esc(fmt(v, measure));
+  const alt = d.hasWeek ? `${esc(fmt(c[other], other))} · ` : "";
+  const causes = (c.causes ?? []).map((x) => `<div class="crow"><span class="cn">${esc(x.name)}</span><span class="cbar"><i style="width:${c[measure] > 0 ? (x[measure] / c[measure]) * 100 : 0}%"></i></span><span class="cv">${f(x[measure])} · ${x.runs} runs</span></div>`).join("");
+  const top = (c.top ?? []).map((x) => `<div class="grow"><a class="idl" href="${esc(x.href)}">${esc(x.goal)}</a> <b>${f(x[measure])}</b> <span class="quiet">${x.runs} runs</span><div class="quiet reason">${esc(x.reason)}</div></div>`).join("");
+  return `<section class="brk" data-class="${key}"><h3><i class="sw seg-${key}"></i>${esc(CLASS_NAME[key] ?? c.name)} <b>${f(c[measure])}</b> <span class="quiet">${alt}${c.runs} runs · ${c.goals} goals</span></h3>` +
+    `<p class="def">${esc(CLASS_TEXT[key] ?? c.text)}</p>` +
+    `<div class="two"><div><h4>By cause</h4>${causes}</div><div><h4>Goals that took the most</h4>${top}</div></div></section>`;
+}
+
+/** The Efficiency block: reruns, the agent time by class and the breakdown of one class, for the picked window. */
+export function renderEfficiency(d, { measure = "hours", pinned = null } = {}) {
+  const pick = (m, label, extra = "") => `<button type="button" data-measure="${m}" aria-pressed="${measure === m}"${extra}>${label}</button>`;
+  const head = `<div class="sh sub"><h2 id="h-efficiency">Efficiency</h2><span class="seg mpick" role="group" aria-label="Measure">${pick("hours", "Hours")}${pick("week", "% of week", d?.hasWeek ? "" : ' disabled title="Needs 6 hours of usage snapshots"')}</span></div>`;
   if (!d || d.error) return head + loading("efficiency", d);
-  return head + renderEffCards(d) + renderBar(d);
+  return head + renderEffCards(d) + renderBar(d, { measure, pinned }) + renderBreakdown(d, shownClass(d, measure, pinned), measure);
 }
 
 const card = (k, v, note) => `<div class="med"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span><span class="quiet">${esc(note)}</span></div>`;
@@ -119,6 +154,8 @@ export function areaOption(buckets, key, { unit, color, fmt = String }) {
 
 // What the reader chose and what came back, so a refresh of the page re-renders at once.
 let win = DEFAULT_WINDOW;
+let measure = "hours";
+let pinned = null;
 const got = new Map();
 let drawn = [];
 const clear = () => { for (const c of drawn) c.dispose(); drawn = []; };
@@ -134,8 +171,8 @@ export const speedData = () => got.get(win) ?? null;
 export const renderPicker = (w = win) =>
   `<span class="seg wpick" role="group" aria-label="Time window" data-name="window">${WINDOWS.map((o) => `<button type="button" data-value="${o.value}" aria-pressed="${o.value === w}">${o.label}</button>`).join("")}</span>`;
 export const speedTop = () => renderSpeedTop(speedData());
-export const efficiency = () => renderEfficiency(speedData());
-export const resetSpeed = () => { win = DEFAULT_WINDOW; got.clear(); };
+export const efficiency = () => renderEfficiency(speedData(), { measure, pinned });
+export const resetSpeed = () => { win = DEFAULT_WINDOW; measure = "hours"; pinned = null; got.clear(); };
 
 function draw(box, d) {
   clear();
@@ -155,7 +192,7 @@ export async function mountSpeed(root, fetcher = fetch) {
   const eff = root.querySelector("#efficiency"), doneN = root.querySelector("#done-n");
   const show = (d) => {
     top.innerHTML = renderSpeedTop(d);
-    if (eff) eff.innerHTML = renderEfficiency(d);
+    if (eff) eff.innerHTML = renderEfficiency(d, { measure, pinned });
     if (doneN && d && !d.error) doneN.textContent = String(d.done);
     if (d && !d.error) draw(top, d); else clear();
   };
@@ -170,4 +207,17 @@ export async function mountSpeed(root, fetcher = fetch) {
   };
   if (got.has(win) && !got.get(win).error) draw(top, got.get(win));
   await load();
+  if (eff && eff.dataset && !eff.dataset.wired) {
+    eff.dataset.wired = "1";
+    eff.addEventListener("click", (e) => {
+      const m = e.target.closest(".mpick button");
+      const c = m ? null : e.target.closest(".abar button[data-class], .narrow button[data-class]");
+      if (m) { if (m.disabled) return; measure = m.dataset.measure; } else if (c) pinned = c.dataset.class; else return;
+      const d = got.get(win);
+      if (!d) return;
+      eff.innerHTML = renderEfficiency(d, { measure, pinned });
+      const sel = m ? `.mpick button[data-measure="${measure}"]` : `button[data-class="${pinned}"]`;
+      eff.querySelector?.(sel)?.focus?.();
+    });
+  }
 }

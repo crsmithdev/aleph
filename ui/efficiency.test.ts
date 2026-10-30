@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { renderEffCards, renderEfficiency, renderBar } from "./views/speed.js";
+import { renderEffCards, renderEfficiency, renderBar, renderBreakdown, mountSpeed, resetSpeed } from "./views/speed.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -103,4 +103,40 @@ test("the flex values are shares of the total, also under 1 h", () => {
   const flex = [...bar.matchAll(/style="flex:([\d.e-]+)"/g)].map((m) => Number(m[1]));
   expect(flex.length).toBe(6);
   expect(Math.abs(flex.reduce((a, b) => a + b, 0) - 1)).toBeLessThan(0.001);
+});
+
+const withTop = () => {
+  const cs = classes([60, 10, 20, 1, 24, 1], [3, 0.5, 1, 0.1, 1.2, 0.1]);
+  cs[4].causes = [{ name: "Land conflict", hours: 20, week: 1, runs: 3 }, { name: "Other", hours: 4, week: 0.2, runs: 1 }];
+  (cs[4] as any).top = [{ goal: "fx-7", href: "#/issues/fx/7", reason: "merge conflict in ui/x.ts", hours: 20, week: 1, runs: 3 }];
+  return { ...D, hasWeek: true, classes: cs };
+};
+
+test("the breakdown under the bar, the toggle, the pin", () => {
+  const d = withTop();
+  const h = renderEfficiency(d);
+  for (const t of ['class="brk" data-class="restarted"', "By cause", "Goals that took the most", 'href="#/issues/fx/7"', "merge conflict in ui/x.ts", 'data-measure="hours" aria-pressed="true"']) expect(h).toContain(t);
+  expect(renderEfficiency(d, { pinned: "loop" })).toContain('class="brk" data-class="loop"');
+  const w = renderEfficiency(d, { measure: "week" });
+  expect(w).toContain('aria-pressed="true">% of week');
+  expect(w.slice(w.indexOf('class="brk"'))).toContain("24 h · 5 runs"); // the other measure, as the quiet part of the heading
+  const nw = renderEfficiency({ ...d, hasWeek: false }, { measure: "week" });
+  expect(nw.slice(nw.indexOf('class="brk"'))).not.toMatch(/\d h\b/);
+  expect(renderEfficiency({ ...d, hasWeek: false })).toContain('data-measure="week" aria-pressed="false" disabled');
+  expect(renderBreakdown(d, null, "hours")).toBe("");
+});
+
+test("mountSpeed: a click on the toggle re-renders the efficiency section", async () => {
+  resetSpeed();
+  const d = { ...withTop(), window: "week", kinds: Object.fromEntries(["agent","land","triage","plan"].map((k) => [k, { count: 0, p50: null, p90: null }])), checks: [], buckets: [], done: 1, flaky: 0, goals: { landed: 1, firstPass: 1, fixRounds: 0, week: 1 }, lost: { hours: 1, share: 0.1 } };
+  const mk = () => ({ innerHTML: "", dataset: {} as Record<string, string>, isConnected: true, handler: null as any, addEventListener(_: string, f: any) { this.handler = f; }, querySelector: () => null, querySelectorAll: () => [] });
+  const top = mk(), eff = mk();
+  const root = { querySelector: (s: string) => (s === "#speed" ? top : s === "#efficiency" ? eff : null) };
+  await mountSpeed(root, async () => ({ ok: true, json: async () => d }));
+  expect(eff.innerHTML).toContain('aria-pressed="true">Hours');
+  eff.handler({ target: { closest: (s: string) => (s.includes("mpick") ? { dataset: { measure: "week" } } : null) } });
+  expect(eff.innerHTML).toContain('aria-pressed="true">% of week');
+  eff.handler({ target: { closest: (s: string) => (s.includes("abar") ? { dataset: { class: "loop" } } : null) } });
+  expect(eff.innerHTML).toContain('class="brk" data-class="loop"');
+  resetSpeed();
 });
