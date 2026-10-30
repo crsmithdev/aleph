@@ -82,6 +82,14 @@ test("/ is the page, /lib.js and /views/now.js its modules", async () => {
   expect(await (await at("/views/now.js")).text()).toContain("export function renderFlow");
 });
 
+test("/vendor/echarts.min.js is the vendored ECharts, served as JavaScript", async () => {
+  const res = await at("/vendor/echarts.min.js");
+  expect(res.status).toBe(200);
+  expect(res.headers.get("content-type")).toContain("javascript");
+  const want = readFileSync(join(import.meta.dir, "vendor", "echarts.min.js"));
+  expect(Buffer.from(await res.arrayBuffer()).equals(want)).toBe(true);
+});
+
 test("every module a view imports from ui/ is served", async () => {
   const dir = join(import.meta.dir, "views");
   const shared = new Set(readdirSync(dir).flatMap((f) => [...readFileSync(join(dir, f), "utf8").matchAll(/from "\.\.\/([^"/]+\.js)"/g)].map((m) => m[1])));

@@ -61,7 +61,8 @@ test("the page builds the sidebar from /api/views and has no project selector", 
 test("index.html loads Web Awesome and ECharts at pinned versions", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   expect(html).toMatch(/cdn\.jsdelivr\.net\/npm\/@awesome\.me\/webawesome@\d+\.\d+\.\d+\/dist-cdn\/webawesome\.loader\.js/);
-  expect(html).toMatch(/cdn\.jsdelivr\.net\/npm\/echarts@\d+\.\d+\.\d+\/dist\/echarts\.min\.js/);
+  expect(html).toContain('<script src="/vendor/echarts.min.js"></script>');
+  expect(html).not.toMatch(/cdn\.jsdelivr\.net\/npm\/echarts/);
   expect(html).toContain("--wa-color-brand-fill-loud: var(--run)");
 });
 

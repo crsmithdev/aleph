@@ -85,6 +85,7 @@ export async function serve(port: number, { warm = true }: { warm?: boolean } = 
         const page = join(dir, "index.html");
         return new Response(Bun.file(page), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       }
+      if (path === "/vendor/echarts.min.js") return new Response(Bun.file(join(dir, "vendor", "echarts.min.js")), { headers: JS });
       if (SHARED.has(path)) return new Response(Bun.file(join(dir, path.slice(1))), { headers: JS });
       const v = path.match(/^\/views\/([^/]+)$/);
       if (v && VIEW_FILE.test(v[1]) && existsSync(join(dir, "views", v[1]))) return new Response(Bun.file(join(dir, "views", v[1])), { headers: JS });
