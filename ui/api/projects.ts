@@ -81,16 +81,16 @@ function commits(repo: Repo): Detail["commits"] {
 
 const stamp = (s: string | null | undefined) => (s ? Date.parse(s) || 0 : 0);
 
-export function projects(only: string | null): Card[] {
-  const notes = loaders.vault(), jobs = loaders.jobs();
+export async function projects(only: string | null): Promise<Card[]> {
+  const notes = await loaders.vault(), jobs = loaders.jobs();
   return Object.values(loadRegistry()).filter((r) => !only || r.key === only).map((r) => card(r, openIssues(r.key), jobsOf(r, jobs), scoped(r, notes).length))
     .sort((a, b) => stamp(b.activity) - stamp(a.activity) || a.key.localeCompare(b.key));
 }
 
-export function project(key: string): Detail | null {
+export async function project(key: string): Promise<Detail | null> {
   const repo = loadRegistry()[key];
   if (!repo) return null;
-  const issues = openIssues(key), jobs = jobsOf(repo, loaders.jobs()), notes = scoped(repo, loaders.vault());
+  const issues = openIssues(key), jobs = jobsOf(repo, loaders.jobs()), notes = scoped(repo, await loaders.vault());
   return {
     ...card(repo, issues, jobs, notes.length),
     commits: commits(repo),
@@ -105,10 +105,10 @@ export function project(key: string): Detail | null {
 }
 
 export const routes: Routes = {
-  "GET /api/projects": (_req, _p, url) => Response.json(projects(url.searchParams.get("project") || null)),
-  "GET /api/projects/:key": (_req, params, url) => {
+  "GET /api/projects": async (_req, _p, url) => Response.json(await projects(url.searchParams.get("project") || null)),
+  "GET /api/projects/:key": async (_req, params, url) => {
     const only = url.searchParams.get("project");
-    const d = only && only !== params.key ? null : project(params.key);
+    const d = only && only !== params.key ? null : await project(params.key);
     return d ? Response.json(d) : Response.json({ error: `no project ${params.key}` }, { status: 404 });
   },
 };

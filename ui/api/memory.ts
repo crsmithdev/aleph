@@ -2,7 +2,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Routes } from "../server.ts";
-import { staleAsync, staleSync } from "../stale.ts";
+import { staleAsync } from "../stale.ts";
 import { uiFetchTtl } from "../../todo/lib/store.ts";
 import { allRuns } from "../../jobs/lib/ledger.ts";
 import { memoryTypes } from "./memory-types.ts";
@@ -72,8 +72,8 @@ export async function warm(): Promise<void> {
 const missesCache = staleAsync<{ value: unknown; cachedAt: string }>();
 const ttlMs = () => { const n = Number(process.env.ALEPH_UI_CACHE_TTL ?? 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
 /** The vault's notes, reloaded at most every ALEPH_UI_FETCH_TTL seconds: a load stats every file, which is slow on /mnt/c. */
-const notes = staleSync<Note[]>();
-export const vaultNotes = (root: string): Note[] => notes.get(root, uiFetchTtl() * 1000, () => loadVault(root));
+const notes = staleAsync<Note[]>();
+export const vaultNotes = (root: string): Promise<Note[]> => notes.get(root, uiFetchTtl() * 1000, async () => loadVault(root));
 export const clearCache = () => { missesCache.clear(); notes.clear(); };
 async function runMisses(): Promise<unknown | null> {
   try {
@@ -112,7 +112,7 @@ async function overview(url: URL): Promise<Response> {
   const slow = misses();
   const project = url.searchParams.get("project") || null;
   const root = vaultDir();
-  const all = existsSync(join(root, "Home.md")) ? vaultNotes(root) : [];
+  const all = existsSync(join(root, "Home.md")) ? await vaultNotes(root) : [];
   const keep = inScope(project);
   const wiki = wikiNotes(all).filter(keep);
   const names = new Set(wiki.map((n) => n.title));
@@ -152,11 +152,11 @@ async function search(url: URL): Promise<Response> {
   } catch { return json({ q, results: [], error: "vault recall failed" }); }
 }
 
-function note(url: URL): Response {
+async function note(url: URL): Promise<Response> {
   const title = (url.searchParams.get("title") ?? "").trim();
   const project = url.searchParams.get("project") || null;
   const root = vaultDir();
-  const all = existsSync(join(root, "Home.md")) ? vaultNotes(root) : [];
+  const all = existsSync(join(root, "Home.md")) ? await vaultNotes(root) : [];
   const targets = linkTargets(all);
   const hit = title ? targets.get(title.toLowerCase()) : undefined;
   // Under a project filter, a note outside the project does not exist.

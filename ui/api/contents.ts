@@ -13,6 +13,6 @@ export const routes: Routes = {
     all.searchParams.set("all", "1");
     const res = await issueRoutes["GET /api/issues"](req, params, all);
     if (!res.ok) return res;
-    return Response.json({ issues: await res.json(), projects: projects(url.searchParams.get("project") || null), specs: specs(url.searchParams.get("project") || null) });
+    return Response.json({ issues: await res.json(), projects: await projects(url.searchParams.get("project") || null), specs: specs(url.searchParams.get("project") || null) });
   },
 };
