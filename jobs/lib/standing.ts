@@ -50,7 +50,7 @@ export const standing = (reason: string): Granted | null => readStanding()[reaso
 
 /** Let the factory take `action` for `reason` without asking. Returns why it could not, or null. */
 export function grant(reason: string, action: string): string | null {
-  const r = REASONS[reason];
+  const r = REASONS[reason.startsWith("proposal-") ? reason.replace(/:[^:]*$/, "") : reason];
   if (!r) return `unknown reason ${reason}; known: ${Object.keys(REASONS).join(", ")}`;
   if (!r.actions.includes(action) && action !== r.always) return `${reason} has no action ${action}; actions: ${[...new Set([...r.actions, r.always])].join(", ")}`;
   write({ ...readStanding(), [reason]: { action, at: new Date().toISOString() } });

@@ -26,6 +26,13 @@ test("grant refuses an unknown reason and an action the reason does not list", (
   expect(readStanding()).toEqual({});
 });
 
+test("grant accepts proposal-<kind>:<place> only", () => {
+  expect(grant("proposal-claude-md:global", "approve")).toBeNull();
+  expect(standing("proposal-claude-md:global")?.action).toBe("approve");
+  expect(grant("held:x", "land")).toContain("unknown reason");
+  expect(grant("proposal-nope:global", "approve")).toContain("unknown reason");
+});
+
 test("REASONS names every reason with actions and an always", () => {
   expect(Object.keys(REASONS).sort()).toEqual(["acceptance-failed", "decision", "firefighter", "held", "no-commit", "proposal-check", "proposal-claude-md", "proposal-skill", "question", "rescue", "review", "triage-no-verdict"]);
   for (const r of Object.values(REASONS)) {

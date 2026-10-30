@@ -320,10 +320,20 @@ async function propose(lessons: Lesson[]): Promise<Lesson[]> {
   return made;
 }
 
+/** The short name of a proposal's target: global, the repo key, or the skill name. */
+export function place(kind: Kind, target = ""): string {
+  if (kind === "check") return target.replace(/ checks$/, "");
+  if (kind === "skill") return target.match(/^skills\/([^/]+)\/SKILL\.md$/)?.[1] ?? target;
+  return target === "identity/CLAUDE.md" ? "global" : target.replace(/\/CLAUDE\.md$/, "");
+}
+
+/** The standing key for a lesson: `proposal-<kind>:<place>`. */
+export const standingKey = (l: Lesson): string => `proposal-${l.kind ?? "skill"}:${place(l.kind ?? "skill", l.target)}`;
+
 /** A proposal with a standing approve or decline is answered at once, as the route would. */
 function standingProposals(made: Lesson[]): void {
   for (const l of made) {
-    const reason = `proposal-${l.kind}`;
+    const reason = standingKey(l);
     const action = standing(reason)?.action;
     if (action === "approve") {
       // The lesson is about aleph itself: the first registry repo that runs in the sandbox.
