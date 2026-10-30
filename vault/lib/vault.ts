@@ -3,6 +3,7 @@
  * over a directory; the CLI decides what to write and commit.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "./frontmatter.ts";
@@ -67,7 +68,10 @@ export function clock(d = new Date()): string {
 }
 
 export function readNote(path: string, root: string): Note {
-  const text = readFileSync(path, "utf8");
+  return parseNote(path, root, readFileSync(path, "utf8"));
+}
+
+function parseNote(path: string, root: string, text: string): Note {
   const { frontmatter, body } = splitFrontmatter(text);
   const rel = relative(root, path);
   return { path, rel, title: basename(path, ".md"), fm: frontmatter === null ? {} : parseFrontmatter(frontmatter), hasFrontmatter: frontmatter !== null, body, text, wiki: rel.startsWith("wiki/"), archived: rel.startsWith("archive/") };
@@ -107,6 +111,14 @@ export function loadVault(root: string): Note[] {
   });
   for (const key of cache.keys()) if (key.startsWith(`${root}\0`) && !seen.has(key)) cache.delete(key);
   return notes;
+}
+
+/**
+ * The notes under wiki/, read in parallel. Each read on a /mnt/c vault costs
+ * about 4 ms over 9P, so a serial loadVault of 700 notes takes 3-5 s.
+ */
+export async function loadWiki(root: string): Promise<Note[]> {
+  return Promise.all(walk(join(root, "wiki")).map(async (p) => parseNote(p, root, await readFile(p, "utf8"))));
 }
 
 export function wikiNotes(notes: Note[]): Note[] {

@@ -9,7 +9,7 @@ import { decide, judgeChoice, type Question } from "./lib/jev.ts";
 import { langfuseConfig, sessionEnvironment } from "./lib/env.ts";
 import { peek } from "./lib/handshake.ts";
 import { attrs, nano, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor } from "./lib/otlp.ts";
-import { loadVault, vaultDir, wikiNotes, type Note } from "../vault/lib/vault.ts";
+import { loadWiki, vaultDir, type Note } from "../vault/lib/vault.ts";
 
 const MIN_PROMPT = 20;
 const MAX_ASKED = 40;
@@ -82,7 +82,7 @@ async function main() {
   if (prompt.length < MIN_PROMPT || judgeChoice() === "haiku") return;
   const start = Date.now();
   const root = vaultDir();
-  const all = rankAll(wikiNotes(loadVault(root)), prompt);
+  const all = rankAll(await loadWiki(root), prompt);
   const candidates = all.slice(0, MAX_ASKED);
   const meta = { candidates: all.length, asked: candidates.length, kept: 0, capped: all.length > MAX_ASKED };
   if (!candidates.length) { await postSpan(input, start, meta, [], ""); return; }

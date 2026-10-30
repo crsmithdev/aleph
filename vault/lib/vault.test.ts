@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { lintVault, links, loadStats, loadVault, readNote, screenCandidates } from "./vault.ts";
+import { lintVault, links, loadStats, loadVault, loadWiki, readNote, screenCandidates, wikiNotes } from "./vault.ts";
 
 let root: string;
 const N = 300;
@@ -29,6 +29,13 @@ test("loadVault returns the notes a plain read of each file gives", () => {
     expect(n).toEqual(fresh);
   }
   expect(notes.find((n) => n.title === "Note 5")!.fm.aliases).toEqual(["a5", "b5"]);
+});
+
+test("loadWiki returns the wiki notes loadVault gives", async () => {
+  writeFileSync(join(root, "Outside.md"), "not wiki");
+  const byPath = (a: { path: string }, b: { path: string }) => a.path.localeCompare(b.path);
+  expect((await loadWiki(root)).sort(byPath)).toEqual(wikiNotes(loadVault(root)).sort(byPath));
+  rmSync(join(root, "Outside.md"));
 });
 
 test("a second call with no file changed reads no file", () => {
