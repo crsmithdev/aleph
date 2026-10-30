@@ -1,27 +1,12 @@
-# aleph-643: Backlog.md Created check
+# aleph-663 result
 
-Folder: a temporary directory with `backlog/config.yml` from `config("proj")` in `todo/lib/store.ts`, and `backlog/tasks/proj-1.md` from `renderItem("proj", item)` in `todo/lib/todo.ts` with `created: 2026-10-30`.
+Temp folder: `/tmp/aleph663-bl-5ad8` (outside the repo). `backlog/config.yml` was written from `config("st1")`, and `backlog/tasks/st1-1.md` from `renderItem("st1", item)` with `created` and `updated` set to `2026-10-30`.
 
-The file the store wrote:
+Command:
 
-```yaml
----
-id: proj-1
-title: Check created
-created_date: 2026-10-30
-updated: 2026-10-30
-priority: medium
-kind: issue
-status: open
-repo: proj
----
-
-## Request
-
-Check the Created line.
 ```
-
-Command: `bunx backlog.md@1.55.3 task view 1 --plain`
+bunx backlog.md@1.55.3 task view st1-1 --plain
+```
 
 Output (exit 0):
 
@@ -29,14 +14,15 @@ Output (exit 0):
 Resolving dependencies
 Resolved, downloaded and extracted [17]
 Saved lockfile
-File: /tmp/aleph652-task.1chT/backlog/tasks/proj-1.md
+File: /tmp/aleph663-bl-5ad8/backlog/tasks/st1-1.md
 
-Task PROJ-1 - Check created
+Task TASK-ST1-1 - Smoke
 ==================================================
 
 Status: ○ open
 Priority: Medium
 Created: 2026-10-30 (UTC)
+Updated: 2026-10-30 (UTC)
 
 Description:
 --------------------------------------------------
@@ -51,6 +37,4 @@ Definition of Done:
 No Definition of Done items defined
 ```
 
-The `Created:` line is filled.
-
-Control: the same folder with a task file that has only `created: 2026-10-30` (no `created_date`) prints `Created: ` with no date. The `created_date` key is what makes Backlog.md fill the line.
+Both `Created:` and `Updated:` are filled, so Backlog.md reads `created_date` and `updated_date` from the store file.
