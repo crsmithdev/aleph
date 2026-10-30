@@ -27,6 +27,8 @@ let ruleP = 0.1;
 let traceFrom: string | null = null;
 let generalP = 0.9;
 let faultP = 0.9;
+let scope = "global";
+let skillPick = "alpha";
 /** The sentence-writing stub echoes this prefix and the quote's first word. */
 const RULE_STUB = "#!/bin/sh\nfor a; do :; done\nw=$(printf '%s' \"$a\" | tr -cd 'A-Za-z' | cut -c1-12)\nprintf '{\"result\":\"Follow rule %s.\"}' \"$w\"\n";
 const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "ALEPH_JEV_URL", "OPENROUTER_API_KEY", "HOME", "ALEPH_ITEMS", "ALEPH_REPOS", "ALEPH_PROPOSE_AT", "ALEPH_RULE_CMD", ...Object.keys(gitEnv)];
@@ -52,6 +54,8 @@ beforeAll(() => {
       if (questions.fault) answers.fault = { type: "noul", noul: faultP };
       if (questions.check) answers.check = { type: "noul", noul: checkP };
       if (questions.rule) answers.rule = { type: "noul", noul: ruleP };
+      if (questions.scope) answers.scope = { type: "choice", choice: scope };
+      if (questions.skill) answers.skill = { type: "choice", choice: skillPick };
       if (questions.lesson) answers.lesson = { type: "choice", choice: pickFirst ? Object.keys(questions.lesson.criteria).find((k) => k !== "new") : choice };
       return Response.json({ answers, usage: { cost: 0 } });
     },
@@ -76,7 +80,10 @@ beforeEach(() => {
   const stub = join(base, "rule.sh");
   writeFileSync(stub, RULE_STUB, { mode: 0o755 });
   process.env.ALEPH_RULE_CMD = stub;
-  generalP = 0.9; faultP = 0.9;
+  generalP = 0.9; faultP = 0.9; scope = "global"; skillPick = "alpha";
+  mkdirSync(join(base, "fac-repo", "skills", "alpha"), { recursive: true });
+  writeFileSync(join(base, "fac-repo", "skills", "alpha", "SKILL.md"), "---\nname: alpha\ndescription: Does alpha things.\n---\n");
+  writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: join(base, "fac-repo"), sandbox: true } }));
   checkP = 0.9; ruleP = 0.1; delete process.env.ALEPH_PROPOSE_AT;
   noul = 0.9; choice = "new"; pickFirst = false; traceFrom = null;
   traces = [
@@ -157,6 +164,46 @@ test("the kind falls to claude-md, then skill", async () => {
   expect(proposals()[0].kind).toBe("skill");
 });
 
+test("every proposal has a title and a target by kind", async () => {
+  pickFirst = true;
+  await mine(NOW);
+  let p = proposals()[0];
+  expect(p.title!.length).toBeGreaterThanOrEqual(1);
+  expect(p.title!.length).toBeLessThanOrEqual(60);
+  expect(p.target).toBe("fac checks");
+  checkP = 0.4; ruleP = 0.5;
+  rmSync(join(base, "factory", "corrections.json"));
+  await mine(NOW);
+  expect(proposals()[0].target).toBe("identity/CLAUDE.md");
+  scope = "repo";
+  rmSync(join(base, "factory", "corrections.json"));
+  await mine(NOW);
+  expect(proposals()[0].target).toBe("fac/CLAUDE.md");
+  ruleP = 0.1;
+  rmSync(join(base, "factory", "corrections.json"));
+  await mine(NOW);
+  expect(proposals()[0].target).toBe("skills/alpha/SKILL.md");
+});
+
+test("with no sandboxed repo the lesson stays open", async () => {
+  pickFirst = true;
+  writeFileSync(join(base, "repos.json"), "{}");
+  await mine(NOW);
+  expect(proposals().length).toBe(0);
+  expect(stored().lessons[0].state).toBe("open");
+});
+
+test("a proposed lesson without target gets title and target on the next mine", async () => {
+  pickFirst = true;
+  await mine(NOW);
+  const s = stored();
+  delete s.lessons[0].target; delete s.lessons[0].title;
+  writeFileSync(join(base, "factory", "corrections.json"), JSON.stringify(s));
+  await mine(NOW + 1000);
+  expect(proposals()[0].target).toBe("fac checks");
+  expect(proposals()[0].title!.length).toBeGreaterThan(0);
+});
+
 test("two signals make no proposal; ALEPH_PROPOSE_AT=2 makes one", async () => {
   pickFirst = true;
   noul = 0.1;
@@ -177,8 +224,9 @@ test("approve files one goal issue quoting all signals", async () => {
   const items = readList(repo)!.items;
   expect(items.length).toBe(1);
   expect(itemLabels(items[0])).toEqual(["goal", "memory"]);
-  expect(items[0].title).toStartWith("Add a check: ");
+  expect(items[0].title).toBe(stored().lessons[0].title);
   expect(items[0].body).toContain("Add a check");
+  expect(items[0].body).toContain("Target: fac checks");
   for (const s of stored().lessons[0].signals) expect(items[0].body).toContain(`- ${s.at} ${s.source}: "${s.quote}" (${s.link})`);
   expect(stored().lessons[0]).toMatchObject({ state: "approved", issue: "fac-1" });
   expect(proposals().length).toBe(0);

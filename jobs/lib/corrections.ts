@@ -5,13 +5,13 @@
  * Jev. The store is corrections.json in the factory directory.
  */
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
 import { decide } from "../../hooks/lib/jev.ts";
 import { fetchObservations } from "../../hooks/lib/otlp.ts";
 import { factoryLog, factoryDir } from "./factory.ts";
-import { allRuns, loadRegistry } from "./ledger.ts";
+import { allRuns, loadRegistry, type Repo } from "./ledger.ts";
 import { logStanding, standing } from "./standing.ts";
 import { file as fileIssues, type Place } from "../../todo/lib/store.ts";
 
@@ -24,12 +24,13 @@ export const PROPOSE_AT = (): number => {
 const WINDOW = 14 * 24 * 3600_000;
 const QUOTE = 300;
 const SENTENCE = 160;
+const TITLE = 60;
 
 export interface Signal { id: string; source: "chris" | "gate" | "drop"; at: string; quote: string; link: string }
 export type Kind = "check" | "claude-md" | "skill";
 export interface Lesson {
   id: string; sentence: string; state: "open" | "proposed" | "approved" | "declined"; signals: Signal[]; count: number;
-  kind?: Kind; issue?: string; declinedAt?: string;
+  kind?: Kind; title?: string; target?: string; issue?: string; declinedAt?: string;
 }
 export interface Store { minedAt: string; lessons: Lesson[] }
 
@@ -58,19 +59,18 @@ const cut = (s: string) => s.slice(0, QUOTE);
 const NOT_CHRIS = /^\s*(?:<task-notification>|<agent-message|<system-reminder>|\[From the bridge|<command-)/;
 
 /**
- * One imperative rule from a signal's quote. Jev answers typed questions and writes no text,
- * so a nested Haiku `claude -p` writes it. "" when it fails or finds no rule.
+ * One line of text from a nested Haiku `claude -p` given a system prompt and an input.
+ * Jev answers typed questions and writes no text. "" when it fails or finds nothing.
  */
-async function writeRule(quote: string): Promise<string> {
+async function writeLine(system: string, input: string, max: number): Promise<string> {
   const cmd = process.env.ALEPH_RULE_CMD ?? "claude";
   const env = { ...process.env };
   delete env.CLAUDECODE;
   delete env.CLAUDE_CODE_ENTRYPOINT;
   delete env.ANTHROPIC_API_KEY;
   env.MAX_THINKING_TOKENS = "0";
-  const system = "You turn one correction into the rule it teaches. Reply with exactly one sentence in the imperative, under 160 characters, that states how Claude should work across tasks (for example: Run the checks after the last edit before claiming they pass). No quotes, no preamble, nothing about the single task.";
   try {
-    const proc = Bun.spawn([cmd, "-p", "--model", "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, quote], { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+    const proc = Bun.spawn([cmd, "-p", "--model", "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, input], { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
     const timer = setTimeout(() => proc.kill(), 30_000);
     const [stdout] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
     const code = await proc.exited;
@@ -78,11 +78,65 @@ async function writeRule(quote: string): Promise<string> {
     if (code !== 0) return "";
     let result = stdout;
     try { result = JSON.parse(stdout).result ?? stdout; } catch { /* plain text */ }
-    return String(result).trim().split("\n")[0].trim().slice(0, SENTENCE);
+    return String(result).trim().split("\n")[0].trim().slice(0, max);
   } catch {
     return "";
   }
 }
+
+const RULE_SYSTEM = "You turn one correction into the rule it teaches. Reply with exactly one sentence in the imperative, under 160 characters, that states how Claude should work across tasks (for example: Run the checks after the last edit before claiming they pass). No quotes, no preamble, nothing about the single task.";
+const TITLE_SYSTEM = "You title one rule as an issue title. Reply with exactly one imperative title of at most 60 characters, no final period, no quotes, no preamble.";
+const writeRule = (quote: string) => writeLine(RULE_SYSTEM, quote, SENTENCE);
+
+/** The sentence cut to 60 characters at a word boundary. */
+function cutTitle(sentence: string): string {
+  const t = sentence.trim().replace(/\.$/, "");
+  if (t.length <= TITLE) return t;
+  const head = t.slice(0, TITLE + 1);
+  const i = head.lastIndexOf(" ");
+  return (i > 0 ? head.slice(0, i) : head.slice(0, TITLE)).trim();
+}
+
+async function writeTitle(sentence: string): Promise<string> {
+  const t = (await writeLine(TITLE_SYSTEM, sentence, TITLE)).replace(/\.$/, "").trim();
+  return t || cutTitle(sentence);
+}
+
+/** The skills under `<repo.path>/skills/*\/SKILL.md`: name to description. */
+function repoSkills(repo: Repo): Record<string, string> {
+  const out: Record<string, string> = {};
+  const dir = join(repo.path, "skills");
+  let names: string[] = [];
+  try { names = readdirSync(dir).sort(); } catch { return out; }
+  for (const n of names) {
+    const f = join(dir, n, "SKILL.md");
+    if (!existsSync(f)) continue;
+    const fm = readFileSync(f, "utf8").match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
+    const name = fm.match(/^name:\s*(.+)$/m)?.[1].trim().replace(/^["']|["']$/g, "") || n;
+    out[name] = fm.match(/^description:\s*(.+)$/m)?.[1].trim() ?? "";
+  }
+  return out;
+}
+
+/** The exact place the change goes; throws when Jev fails or there is no skill to pick. */
+async function targetOf(l: Lesson, repo: Repo): Promise<string> {
+  const kind = l.kind ?? "skill";
+  if (kind === "check") return `${repo.key} checks`;
+  const input = { lesson: l.sentence, signals: l.signals.map((s) => s.quote) };
+  if (kind === "claude-md") {
+    const d = await decide(input, { scope: { type: "choice", instructions: "Where does this rule belong?", criteria: { global: "The rule holds in every repo and task", repo: "The rule is about this repo's code or workflow" } } });
+    const a = d.answers.scope;
+    if (a?.type !== "choice" || (a.choice !== "global" && a.choice !== "repo")) throw new Error("no scope chosen");
+    return a.choice === "global" ? "identity/CLAUDE.md" : `${repo.key}/CLAUDE.md`;
+  }
+  const skills = repoSkills(repo);
+  if (!Object.keys(skills).length) throw new Error(`no skills under ${repo.path}/skills`);
+  const d = await decide(input, { skill: { type: "choice", instructions: "Which skill should this lesson change?", criteria: skills } });
+  const a = d.answers.skill;
+  if (a?.type !== "choice" || !skills[a.choice]) throw new Error("no skill chosen");
+  return `skills/${a.choice}/SKILL.md`;
+}
+
 const lessonId = (sentence: string) => "l-" + createHash("sha256").update(sentence).digest("hex").slice(0, 8);
 
 interface Trace { id: string; name?: string; sessionId?: string; timestamp?: string; input?: unknown; output?: unknown }
@@ -231,23 +285,34 @@ export async function mine(now = Date.now()): Promise<Store> {
   return store;
 }
 
-/** Every open lesson at PROPOSE_AT() signals becomes a proposal of the kind Jev finds. A Jev failure leaves it open. */
+/** Every open lesson at PROPOSE_AT() signals becomes a proposal of the kind Jev finds, with a title and a target. A Jev failure leaves it open. */
 async function propose(lessons: Lesson[]): Promise<Lesson[]> {
   const made: Lesson[] = [];
-  for (const l of lessons) {
-    if (l.state !== "open" || l.count < PROPOSE_AT()) continue;
+  const todo = lessons.filter((l) => (l.state === "open" && l.count >= PROPOSE_AT()) || (l.state === "proposed" && !l.target));
+  if (!todo.length) return made;
+  // The lesson is about aleph itself: the first registry repo that runs in the sandbox.
+  const repo = Object.values(loadRegistry()).find((r) => r.sandbox);
+  if (!repo) { factoryLog("corrections: no sandboxed repo in the registry; proposals stay open"); return made; }
+  for (const l of todo) {
     try {
-      const d = await decide(
-        { lesson: l.sentence, signals: l.signals.map((s) => s.quote) },
-        {
-          check: { type: "noul", instructions: "Can a test or a lint catch this before a run ends?" },
-          rule: { type: "noul", instructions: "Is this one rule a repo CLAUDE.md line can state?" },
-        },
-      );
-      const yes = (id: string) => { const a = d.answers[id]; return a?.type === "noul" && a.noul >= 0.5; };
-      l.kind = yes("check") ? "check" : yes("rule") ? "claude-md" : "skill";
-      l.state = "proposed";
-      made.push(l);
+      if (l.state === "open") {
+        const d = await decide(
+          { lesson: l.sentence, signals: l.signals.map((s) => s.quote) },
+          {
+            check: { type: "noul", instructions: "Can a test or a lint catch this before a run ends?" },
+            rule: { type: "noul", instructions: "Is this one rule a CLAUDE.md line can state?" },
+          },
+        );
+        const yes = (id: string) => { const a = d.answers[id]; return a?.type === "noul" && a.noul >= 0.5; };
+        const kind: Kind = yes("check") ? "check" : yes("rule") ? "claude-md" : "skill";
+        l.target = await targetOf({ ...l, kind }, repo);
+        l.kind = kind;
+        l.state = "proposed";
+        made.push(l);
+      } else {
+        l.target = await targetOf(l, repo);
+      }
+      l.title ||= await writeTitle(l.sentence);
     } catch (e) {
       factoryLog(`corrections: jev failed on proposal ${l.id}: ${(e as Error).message}`);
     }
@@ -298,6 +363,7 @@ export function approve(id: string, repo: Place): string {
     `Chris approved a proposal from the correction memory: ${KIND_TITLE[kind]}.`,
     "",
     `Kind: ${kind}`,
+    ...(l.target ? [`Target: ${l.target}`] : []),
     `Lesson: ${l.sentence}`,
     "",
     "Signals:",
@@ -306,7 +372,7 @@ export function approve(id: string, repo: Place): string {
   ].join("\n");
   let ids: number[];
   try {
-    ids = fileIssues(repo, `memory: ${KIND_TITLE[kind]}`, [{ title: `${KIND_TITLE[kind]}: ${l.sentence}`, labels: ["goal", "memory"], body }]);
+    ids = fileIssues(repo, `memory: ${KIND_TITLE[kind]}`, [{ title: l.title ?? `${KIND_TITLE[kind]}: ${l.sentence}`, labels: ["goal", "memory"], body }]);
   } catch (e) {
     return `the work store refused: ${(e as Error).message}`;
   }

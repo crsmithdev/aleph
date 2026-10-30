@@ -17,6 +17,6 @@ export const routes: Routes = {
     const s = forProject(state(), url.searchParams.get("project"));
     const fit = await currentFit().catch(() => null);
     annotate([...s.needs, ...s.stuck, ...s.running, ...s.delivered, ...s.planner], fit);
-    return Response.json({ ...s, usage: summary(), speed: cachedSpeed("week", fit), proposals: proposals().map(({ id, kind, sentence, count, signals }) => ({ id, kind, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) });
+    return Response.json({ ...s, usage: summary(), speed: cachedSpeed("week", fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) });
   },
 };
