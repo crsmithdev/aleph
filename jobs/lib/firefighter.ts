@@ -16,6 +16,7 @@ import { allJobs, isOpen, issue as issueOf, lastReal, markNeedsChris, openJob, r
 import { verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
 import { factoryDir, factoryLog, factoryRepos, redBaselines, writeRerun } from "./factory.ts";
+import { ciLine, redCi } from "./ci.ts";
 import { drop as dropJob, land as landJob, refusal } from "./transitions.ts";
 import { readDecision } from "./decision.ts";
 import { handed, logStanding, readStanding, standing } from "./standing.ts";
@@ -73,6 +74,8 @@ export function snapshot(now = Date.now()): Event[] {
       line: `${r.name} started ${runs.length} runs in 30 minutes: ${runs.map((e) => e.run.reason ?? e.run.state).join("; ")}` });
   }
   for (const b of redBaselines()) if (keys.has(b.repo)) events.push({ key: `red:${b.repo}:${b.commit}`, kind: "red", repo: b.repo, line: `${b.repo} main is red at ${b.commit.slice(0, 7)}: ${b.failed}` });
+  // GitHub CI: one event per red streak, keyed by its first failed commit.
+  for (const c of redCi()) if (keys.has(c.repo)) events.push({ key: `ci:${c.repo}:${c.sinceSha}`, kind: "red", repo: c.repo, line: ciLine(c) });
   const lists = store.reader();
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {

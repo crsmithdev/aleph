@@ -8,6 +8,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      # The tests make commits in temp repos, so git needs an identity.
+      - run: git config --global user.name ci && git config --global user.email ci@localhost
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run test
