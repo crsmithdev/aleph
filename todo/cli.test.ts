@@ -1,9 +1,12 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse, renderItem } from "./lib/todo.ts";
 import { config } from "./lib/store.ts";
+
+// Matches `--timeout=30000` in the package.json test script, so running this file by name gets the same limit.
+setDefaultTimeout(30000);
 
 const CLI = join(import.meta.dir, "..", "jobs", "cli.ts");
 // `repo` is a product repo; `items` is the work store's checkout and `remote` its origin.
