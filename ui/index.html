@@ -214,8 +214,7 @@ a.act { text-decoration: none; display: inline-block; }
 /* Status: Issues rows, then Lands 2/3 beside Jobs 1/3, then Triage; sections hold grids of cards */
 .page > section, section.wide { margin: 0 0 28px; min-width: 0; }
 .speedrow > section { min-width: 0; margin: 0 0 28px; }
-@media (min-width: 1600px) { .speedrow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; } }
-@media (min-width: 1600px) and (max-width: 1699px) { .speedrow .charts3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .speedrow .charts3 > :last-child { grid-column: 1 / -1; } }
+@media (min-width: 1600px) { .status-grid { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr); gap: 40px; align-items: start; } .speedrow { display: grid; gap: 28px; } .speedrow > section { margin: 0; } .lanes { grid-template-columns: minmax(0, 1fr); margin-top: 0; } }
 section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
 .cards.one { grid-template-columns: minmax(0, 1fr); }

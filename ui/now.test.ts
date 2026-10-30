@@ -699,3 +699,18 @@ test("efficiency cards stack at narrow widths: .meds.eff has its own media rules
   expect(css).toMatch(/@media \(max-width: 1020px\) \{ \.meds\.eff \{ grid-template-columns: repeat\(3,/);
   expect(css).toMatch(/@media \(max-width: 720px\) \{[^@]*\.meds, \.meds\.eff \{ grid-template-columns: minmax\(0, 1fr\); \}/);
 });
+
+test("Status grid: at 1600px and wider the metrics sit left and the four lanes stack in a right rail", async () => {
+  const js = await Bun.file(new URL("./views/now.js", import.meta.url)).text();
+  const css = await Bun.file(new URL("./index.html", import.meta.url)).text();
+  expect(js.match(/class="status-grid"/g)?.length).toBe(1);
+  expect(js.indexOf('class="status-grid"')).toBeLessThan(js.indexOf('class="speedrow"'));
+  expect(js.indexOf('class="status-grid"')).toBeLessThan(js.indexOf("renderLanes(s)}"));
+  const block = css.match(/@media \(min-width: 1600px\) \{[^\n]*\.status-grid[^\n]*\}/)![0];
+  expect(block).toMatch(/\.status-grid \{[^}]*grid-template-columns: minmax\(0, 2\.2fr\) minmax\(0, 1fr\)/);
+  expect(block).toMatch(/\.status-grid \{[^}]*gap: 40px/);
+  expect(block).toMatch(/\.status-grid \{[^}]*align-items: start/);
+  expect(block).toMatch(/\.lanes \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
+  expect(block).toMatch(/\.speedrow \{[^}]*gap: 28px/);
+  expect(css).not.toContain(".speedrow { display: grid; grid-template-columns: repeat(2");
+});
