@@ -746,3 +746,11 @@ test("the status sentence wraps instead of clipping: .lede .say has no ellipsis 
   expect(say).not.toContain("overflow: hidden");
   expect(say).toContain("white-space: normal");
 });
+
+test("at 720px and below Pause sorts after the picker, so the screen order matches the tab order", () => {
+  const html = require("node:fs").readFileSync(new URL("./index.html", import.meta.url), "utf8") as string;
+  const rules = [...html.matchAll(/@media \(max-width: 720px\) \{([^]*?)\n\}/g)].map((m) => m[1]).join("\n");
+  const order = (sel: string) => Number(rules.match(new RegExp(`\\.lede \\.${sel}\\s*\\{[^}]*?\\border:\\s*(\\d+)`))?.[1] ?? 0);
+  expect(order("wpick")).toBeGreaterThan(0);
+  expect(order("act")).toBeGreaterThan(order("wpick"));
+});
