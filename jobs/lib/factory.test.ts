@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { labels as itemLabels, readList, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/issues.ts";
 import * as todos from "../../todo/lib/todo.ts";
-import { correctionsDue, dispatchGoals, episodeStep, report, gates, notReady, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
+import { correctionsDue, dispatchGoals, episodeStep, report, gates, notReady, waitReason, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
 import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -764,6 +764,30 @@ test("notReady: a waiting_on list is ready when every part is done, and names on
   const item = { fm: { waiting_on: "fac-1, fac-2" } } as unknown as todos.Item;
   expect(notReady(item, () => true)).toBeNull();
   expect(notReady(item, (r) => r === "fac-1")).toBe("waiting on fac-2");
+});
+
+const repoX = { key: "fac" } as never;
+const mkItem = (fm: Record<string, unknown>, notes: string[] = []) => ({ fm, notes }) as unknown as todos.Item;
+
+test("waitReason: waits_on names only the open refs", () => {
+  const r = waitReason(repoX, mkItem({ waiting_on: "fac-1, fac-2" }), { done: (ref) => ref === "fac-1" });
+  expect(r).toEqual({ kind: "waits_on", ids: ["fac-2"], text: "Waits on fac-2" });
+});
+
+test("waitReason: needs-chris takes the last note's reason", () => {
+  const item = mkItem({ labels: ["needs-chris"] }, ["- 2026-10-30 10:00: needs-chris: the last 3 runs ended with no commit"]);
+  const r = waitReason(repoX, item, { done: () => true });
+  expect(r).toEqual({ kind: "needs-chris", reason: "the last 3 runs ended with no commit", text: "Waits for you: the last 3 runs ended with no commit" });
+});
+
+test("waitReason: ready, gated live, and red", () => {
+  const item = mkItem({});
+  expect(waitReason(repoX, item, { done: () => true, gated: null })).toEqual({ kind: "ready", text: "Starts at the next dispatch" });
+  process.env.ALEPH_LIVE_CAP = "12";
+  const live = waitReason(repoX, item, { done: () => true, gated: { gate: "live", why: "12 agent runs are live" } });
+  expect(live).toEqual({ kind: "gate", gate: "live", text: "Waiting for a slot (12 of 12 running)" });
+  expect(waitReason(repoX, item, { done: () => true, red: "main is red" })).toEqual({ kind: "red", text: "main is red" });
+  expect(waitReason(repoX, mkItem({ due: "2999-01-01" }), { done: () => true }).text).toBe("Due 2999-01-01");
 });
 
 const storeAt = (lessons: unknown[], minedAt = "") => {

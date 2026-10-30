@@ -196,6 +196,44 @@ export function pendingWaits(waits: unknown, done: (ref: string) => boolean): st
   return typeof waits === "string" ? todos.waitParts(waits).filter((w) => !done(w)) : [];
 }
 
+export type WaitReason =
+  | { kind: "ready"; text: string }
+  | { kind: "waits_on"; ids: string[]; text: string }
+  | { kind: "due"; text: string }
+  | { kind: "needs-chris"; reason: string; text: string }
+  | { kind: "planning"; text: string }
+  | { kind: "red"; text: string }
+  | { kind: "gate"; gate: Gate; text: string };
+
+/** What `waitReason` reads: the caller computes these once for all its goals. `planning` is `planning(repo, id)`'s answer. */
+export interface WaitContext { done: (ref: string) => boolean; jobs?: Job[]; gated?: ReturnType<typeof gates>; red?: string | null; planning?: boolean; now?: Date }
+
+/** Why a queued goal does not start now, by the order and the texts `dispatchGoals` skips it with; `ready` when nothing stops it. */
+export function waitReason(_repo: Repo, item: todos.Item, ctx: WaitContext): WaitReason {
+  if (ctx.red) return { kind: "red", text: ctx.red };
+  const due = item.fm.due;
+  if (typeof due === "string" && todos.validDate(due) && due > todos.today(ctx.now ?? todos.clock())) return { kind: "due", text: `Due ${due}` };
+  const ids = pendingWaits(item.fm.waiting_on, ctx.done);
+  if (ids.length) return { kind: "waits_on", ids, text: `Waits on ${ids.join(", ")}` };
+  if (hasLabel(item, "needs-chris")) {
+    const last = item.notes.at(-1)?.replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, "").replace(/^needs-chris: /, "");
+    const reason = last || (typeof item.fm.reason === "string" && item.fm.reason) || "the factory stopped starting it";
+    return { kind: "needs-chris", reason, text: `Waits for you: ${reason}` };
+  }
+  if (ctx.planning) return { kind: "planning", text: "A planner run is splitting it" };
+  const g = ctx.gated;
+  if (g) {
+    const n = g.why.match(/^\d+/)?.[0];
+    const text = g.gate === "live" ? `Waiting for a slot (${n ?? liveRuns()} of ${LIVE_CAP()} running)`
+      : g.gate === "day" ? `Day cap reached (${runsToday().length} of ${DAY_CAP()} runs in 24 hours)`
+      : g.gate === "pause" ? "The factory is paused"
+      : g.gate === "waiting" ? `${n ?? ""} runs wait for Chris (cap ${WAITING_CAP()})`
+      : g.why;
+    return { kind: "gate", gate: g.gate, text };
+  }
+  return { kind: "ready", text: "Starts at the next dispatch" };
+}
+
 /** The job name for a goal item: its store id, as `aleph-28`. */
 export const goalJob = (repo: Repo, id: number) => `${repo.key}-${id}`;
 
