@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git } from "./git.ts";
-import { facts, itemStates, recentRepos } from "./status.ts";
+import { facts, repoStages, recentRepos } from "./status.ts";
 import { writeRun } from "./ledger.ts";
 import type { Repo, Run } from "./ledger.ts";
 import type { Doc } from "../../todo/lib/todo.ts";
@@ -39,19 +39,19 @@ test("without a fetch, the states read origin/main as it is; with one, they see 
   commit(other, "do it\n\nItem: demo-1");
   sh(other, "git", "push", "-q", "origin", "HEAD:main");
 
-  const before = itemStates(repo, { fetch: false, doc });
-  expect(before.map((s) => [s.item, s.state])).toEqual([["demo-1", "open"], ["demo-2", "open"], ["demo-3", "dropped"], ["demo-4", "done"]]);
+  const before = repoStages(repo, { fetch: false, doc });
+  expect(before.map((s) => [s.id, s.stage])).toEqual([["demo-1", "new"], ["demo-2", "new"], ["demo-3", "dropped"], ["demo-4", "done"]]);
 
-  const after = itemStates(repo, { fetch: true, doc });
-  expect(after.map((s) => [s.item, s.state])).toEqual([["demo-1", "done"], ["demo-2", "open"], ["demo-3", "dropped"], ["demo-4", "done"]]);
+  const after = repoStages(repo, { fetch: true, doc });
+  expect(after.map((s) => [s.id, s.stage])).toEqual([["demo-1", "done"], ["demo-2", "new"], ["demo-3", "dropped"], ["demo-4", "done"]]);
   expect(after[0].why).toMatch(/^commit [0-9a-f]{7} on origin\/main$/);
   expect(after[3].why).toBe("the store says done");
 });
 
 test("items picks which states come back, and an item the store lacks is left out", () => {
-  expect(itemStates(repo, { fetch: false, doc, items: [2] }).map((s) => s.item)).toEqual(["demo-2"]);
-  expect(itemStates(repo, { fetch: false, doc, items: [1, 9, 2] }).map((s) => s.item)).toEqual(["demo-1", "demo-2"]);
-  expect(itemStates(repo, { fetch: false, doc, items: [9] })).toEqual([]);
+  expect(repoStages(repo, { fetch: false, doc, items: [2] }).map((s) => s.id)).toEqual(["demo-2"]);
+  expect(repoStages(repo, { fetch: false, doc, items: [1, 9, 2] }).map((s) => s.id)).toEqual(["demo-1", "demo-2"]);
+  expect(repoStages(repo, { fetch: false, doc, items: [9] })).toEqual([]);
 });
 
 test("a reverted commit does not make the item done", () => {
@@ -60,7 +60,7 @@ test("a reverted commit does not make the item done", () => {
   sh(clone, "git", "reset", "-q", "--hard", "origin/main");
   sh(clone, "git", "revert", "--no-edit", sha);
   sh(clone, "git", "push", "-q", "origin", "HEAD:main");
-  expect(itemStates(repo, { fetch: true, doc, items: [1] })[0].state).toBe("open");
+  expect(repoStages(repo, { fetch: true, doc, items: [1] })[0].stage).toBe("new");
 });
 
 test("a triage run does not make its item touched; an agent run does, and the store's done still stands", () => {
@@ -76,8 +76,8 @@ test("a triage run does not make its item touched; an agent run does, and the st
 
   const f = facts(sandbox, done);
   expect(f.touched).toEqual([6]);
-  const states = itemStates(sandbox, { fetch: false, doc: done, items: [5, 6] });
-  expect(states.map((s) => [s.item, s.state, s.why])).toEqual([
+  const states = repoStages(sandbox, { fetch: false, doc: done, items: [5, 6] });
+  expect(states.map((s) => [s.id, s.stage, s.why])).toEqual([
     ["demo-5", "done", "the store says done"],
     ["demo-6", "done", "the store says done"],
   ]);
@@ -93,8 +93,8 @@ test("a passed agent run whose later land found the job lock busy leaves the ite
   write("20261028-000003-demo-7-agent", {});
   write("20261028-000004-demo-7-land", { kind: "land", state: "failed", reason: "job lock busy" });
 
-  expect(itemStates(repo, { fetch: false, doc: open, items: [7] }).map((s) => [s.item, s.state, s.why])).toEqual([
-    ["demo-7", "running", "its job is passed"],
+  expect(repoStages(repo, { fetch: false, doc: open, items: [7] }).map((s) => [s.id, s.stage, s.why])).toEqual([
+    ["demo-7", "building", "its job is passed"],
   ]);
 });
 
@@ -125,10 +125,10 @@ test("a touched item the store closed is done without a fresh trailer commit, un
   process.env.ALEPH_FACTORY_DIR = join(base, "factory");
   mkdirSync(join(base, "factory", "acceptance"), { recursive: true });
   writeFileSync(join(base, "factory", "acceptance", "demo-12.json"), JSON.stringify({ result: "fail", fails: 1, since }));
-  const states = (items?: number[]) => itemStates(sandbox, { fetch: true, doc: closed, items }).map((s) => [s.item, s.state]);
-  expect(states()).toEqual([["demo-11", "done"], ["demo-12", "done"], ["demo-13", "open"]]);
+  const states = (items?: number[]) => repoStages(sandbox, { fetch: true, doc: closed, items }).map((s) => [s.id, s.stage]);
+  expect(states()).toEqual([["demo-11", "done"], ["demo-12", "done"], ["demo-13", "new"]]);
   expect(states([11])).toEqual([["demo-11", "done"]]);
-  expect(states([13])).toEqual([["demo-13", "open"]]);
+  expect(states([13])).toEqual([["demo-13", "new"]]);
 });
 
 test("facts carry what stage() needs: status, kind, after, goals, ask kind and each job's last run", () => {

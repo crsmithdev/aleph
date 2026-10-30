@@ -120,10 +120,6 @@ export function stages(cwd: string, main: string, f: Facts, ns: number[], landed
   return ns.filter((n) => f.items[n] !== undefined).map((n) => stage(f.items[n], ctx));
 }
 
-/** The old state words, for the callers that have not moved to stages. A later goal removes them. */
-export interface OldState { item: string; state: "dropped" | "done" | "needs-you" | "stuck" | "running" | "open"; why: string }
-const OLD: Partial<Record<Stage["stage"], OldState["state"]>> = { dropped: "dropped", done: "done", awaiting: "needs-you", stuck: "stuck", building: "running", landing: "running" };
-
 /**
  * The stages of `items` (all the repo's items when omitted), from the repo's
  * origin/<main>. `fetch` says whether to fetch origin first; `doc` is the
@@ -134,11 +130,6 @@ export function repoStages(repo: Repo, opts: { fetch: boolean; doc?: todos.Doc |
   if (opts.fetch) fetchOrigin(repo.path);
   const f = facts(repo, opts.doc);
   return stages(repo.path, `refs/remotes/origin/${f.main}`, f, opts.items ?? Object.keys(f.items).map(Number));
-}
-
-/** A thin wrapper over stage(): `repoStages` with the stage mapped to the old state words. */
-export function itemStates(repo: Repo, opts: { fetch: boolean; doc?: todos.Doc | null; items?: number[] }): OldState[] {
-  return repoStages(repo, opts).map((s) => ({ item: s.id, state: OLD[s.stage] ?? "open", why: s.why }));
 }
 
 const DAY_MS = 24 * 3600_000;

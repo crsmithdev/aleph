@@ -10,7 +10,7 @@ import { goal, goals, hasLabel, note, readList, readLists, reader } from "../../
 import { fetchOrigin, git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
 import { normalizeDecision, type Decision } from "./decision.ts";
-import { itemOnMain, itemStates } from "./status.ts";
+import { itemOnMain, repoStages } from "./status.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
@@ -173,7 +173,7 @@ export function doneChecker(): (ref: string) => boolean {
       try {
         const doc = readList(repo);
         for (const i of doc?.items ?? []) if (todos.status(i) === "done") done.add(`${r.repo}-${i.id}`);
-        for (const s of itemStates(repo, { fetch: true, doc })) if (s.state === "done") done.add(s.item);
+        for (const s of repoStages(repo, { fetch: true, doc })) if (s.stage === "done") done.add(s.id);
       } catch {}
       known.set(r.repo, done);
     }

@@ -14,7 +14,7 @@ import { vaultDir } from "../../vault/lib/vault.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { allRuns, type Entry, type Repo } from "./ledger.ts";
 import { PLANNED, section } from "./plan.ts";
-import { itemStates, landedCommits } from "./status.ts";
+import { landedCommits, repoStages } from "./status.ts";
 
 const VAULT_CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
 const today = () => new Date().toISOString().slice(0, 10);
@@ -29,7 +29,7 @@ export function doneGoals(repo: Repo): todos.Item[] {
   if (!doc) return [];
   const goals = doc.items.filter((i) => hasLabel(i, "goal"));
   if (!goals.length) return [];
-  const done = new Set(itemStates(repo, { fetch: true, doc, items: goals.map((i) => i.id) }).filter((s) => s.state === "done").map((s) => s.item));
+  const done = new Set(repoStages(repo, { fetch: true, doc, items: goals.map((i) => i.id) }).filter((s) => s.stage === "done").map((s) => s.id));
   const dir = join(vaultDir(), "wiki", "episodes");
   const pages = existsSync(dir) ? readdirSync(dir) : [];
   const ran = new Set(allRuns().filter((e) => e.run.repo === repo.key && e.run.todo !== undefined).map((e) => e.run.todo));

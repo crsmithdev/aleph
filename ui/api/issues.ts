@@ -8,7 +8,7 @@ import { runCli } from "../../jobs/lib/launch.ts";
 import { allJobs, lastReal } from "../../jobs/lib/job.ts";
 import { loadRegistry, type Repo } from "../../jobs/lib/ledger.ts";
 import { git } from "../../jobs/lib/git.ts";
-import { itemStates, landedCommits, recentRepos } from "../../jobs/lib/status.ts";
+import { landedCommits, recentRepos, repoStages } from "../../jobs/lib/status.ts";
 import { readDecision } from "../../jobs/lib/decision.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
@@ -24,7 +24,7 @@ export interface Row {
   id: number; repo: string; title: string; status: string; priority: string | null; labels: string[];
   due: string | null; waiting_on: string | null; updated: string | null; notes: number;
   /** Only on an issue labelled `goal`. */
-  state?: string; why?: string;
+  stage?: string; state?: string; why?: string;
 }
 
 function row(repo: string, i: todos.Item): Row {
@@ -34,15 +34,19 @@ function row(repo: string, i: todos.Item): Row {
   };
 }
 
-/** Each goal's state, from the list already read and one pass over main's trailers. */
+/** The old state words, beside `stage` until the Issues page moves to stages. */
+const OLD: Record<string, string> = { dropped: "dropped", done: "done", awaiting: "needs-you", stuck: "stuck", building: "running", landing: "running" };
+const oldState = (stage: string): string => OLD[stage] ?? "open";
+
+/** Each goal's stage, from the list already read and one pass over main's trailers. */
 function derived(repo: Repo, doc: todos.Doc, rows: Row[]): void {
   const goals = rows.filter((r) => r.labels.includes("goal"));
   if (!goals.length) return;
   let states;
-  try { states = itemStates(repo, { fetch: false, doc, items: goals.map((r) => r.id) }); } catch { return; }
+  try { states = repoStages(repo, { fetch: false, doc, items: goals.map((r) => r.id) }); } catch { return; }
   for (const r of goals) {
-    const s = states.find((x) => x.item === `${repo.key}-${r.id}`);
-    if (s) { r.state = s.state; r.why = s.why; }
+    const s = states.find((x) => x.id === `${repo.key}-${r.id}`);
+    if (s) { r.stage = s.stage; r.state = oldState(s.stage); r.why = s.why; }
   }
 }
 
@@ -83,7 +87,10 @@ function detail(params: Record<string, string>, url: URL): Response {
 
   const main = `refs/remotes/origin/${repo.main}`;
   let state = null;
-  try { state = itemStates(repo, { fetch: false, items: [n] })[0] ?? null; } catch {}
+  try {
+    const s = repoStages(repo, { fetch: false, items: [n] })[0];
+    if (s) state = { item: s.id, stage: s.stage, state: oldState(s.stage), why: s.why };
+  } catch {}
 
   const jobs = allJobs()
     .filter((runs) => runs[0].run.repo === repo.key && runs.some((e) => e.run.todo === n))
