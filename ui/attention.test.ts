@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { attend, attention, clean, issueReason } from "./attention.ts";
+import { attend, attention, clean, issueReason, stuckActions, stuckBlocker } from "./attention.ts";
 import { REASONS } from "../jobs/lib/standing.ts";
 import type { Lesson } from "../jobs/lib/corrections.ts";
 import type { Job, NewIssue } from "./state.ts";
@@ -121,5 +121,25 @@ describe("attention", () => {
   test("the order is held, review, question, issues, proposals", () => {
     const items = attention({ needs: [run("question", { name: "q" }), run("review", { name: "r" }), run("held", { name: "h" })], needsIssues: [issue()] }, {}, [lesson("skill")]);
     expect(items.map((i) => i.reason)).toEqual(["held", "review", "question", "decision", "proposal-skill"]);
+  });
+});
+
+describe("stuck rows", () => {
+  const stuck = run("held", { state: "stuck", reason: "no commit" });
+  const open = new Map([["aleph-12", { title: "Land the base", href: "#/issues/aleph/12" }]]);
+  test("an item waiting on an open issue gets its id, title and Wait, not Re-check", () => {
+    const b = stuckBlocker(stuck, "aleph-12", open);
+    expect(b).toEqual({ id: "aleph-12", title: "Land the base", href: "#/issues/aleph/12" });
+    const acts = stuckActions(stuck, b);
+    expect(acts.map((a) => a.label)).toEqual(["Wait for aleph-12", "Drop"]);
+    expect(acts[0].args).toEqual({ name: "aleph-27", on: "aleph-12" });
+  });
+  test("a last run that names an open issue is the blocker", () => {
+    expect(stuckBlocker({ ...stuck, reason: "needs aleph-12 to land first" }, undefined, open)?.id).toBe("aleph-12");
+  });
+  test("no open blocker keeps Re-check and Drop", () => {
+    expect(stuckBlocker(stuck, "aleph-99", open)).toBeNull();
+    expect(stuckBlocker({ ...stuck, reason: "aleph-27 again" }, "aleph-27", new Map([["aleph-27", { title: "t", href: "" }]]))).toBeNull();
+    expect(stuckActions(stuck, null).map((a) => a.act)).toEqual(["recheck", "drop"]);
   });
 });

@@ -175,3 +175,21 @@ export function attend(s: Pick<State, "needs" | "needsIssues">, standing: Standi
 
 /** The Needs-you items alone. */
 export const attention = (s: Pick<State, "needs" | "needsIssues">, standing: Standing = {}, lessons?: Lesson[]): AttentionItem[] => attend(s, standing, lessons).items;
+
+/** The open issue a stuck job cannot succeed before: the item's own waiting_on, else one its last run's reason names. */
+export interface Blocker { id: string; title: string; href: string }
+export function stuckBlocker(j: Pick<Job, "repo" | "item" | "reason">, waitingOn: string | null | undefined, open: ReadonlyMap<string, { title: string; href: string }>): Blocker | null {
+  const own = j.item ? `${j.repo}-${j.item.id}` : "";
+  const hit = (id: string): Blocker | null => (id !== own && open.has(id) ? { id, ...open.get(id)! } : null);
+  const w = waitingOn?.trim();
+  if (w && hit(w)) return hit(w);
+  for (const m of (j.reason ?? "").matchAll(/\b([A-Za-z][\w.]*-\d+)\b/g)) if (hit(m[1])) return hit(m[1]);
+  return null;
+}
+
+/** The buttons of a stuck row: with a blocker, Wait for it and Drop; without, Re-check and Drop. */
+export function stuckActions(j: Pick<Job, "name">, blocker: Blocker | null | undefined): Action[] {
+  const drop: Action = { act: "drop", label: "Drop", hint: "Discards the run's branch; the issue stays open.", primary: false, args: { name: j.name } };
+  if (!blocker) return [{ act: "recheck", label: "Re-check", hint: "Runs the job again.", primary: false, args: { name: j.name } }, drop];
+  return [{ act: "wait", label: `Wait for ${blocker.id}`, hint: `Sets waiting_on to ${blocker.id} and drops the stuck job; the factory starts nothing until ${blocker.id} lands.`, primary: true, args: { name: j.name, on: blocker.id } }, drop];
+}

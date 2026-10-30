@@ -9,7 +9,7 @@ import { DAY_CAP, LIVE_CAP, WAITING_CAP, firefighterLines, health, hold, lastPro
 import { allRuns, loadRegistry, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { readDecision, type Decision } from "../jobs/lib/decision.ts";
-import { attend, type AttentionItem } from "./attention.ts";
+import { attend, stuckBlocker, type AttentionItem, type Blocker } from "./attention.ts";
 import { readStanding } from "../jobs/lib/standing.ts";
 import { isSorted, labels, needsChris, reader } from "../todo/lib/store.ts";
 import { status } from "../todo/lib/todo.ts";
@@ -42,6 +42,8 @@ export interface Job {
   outcome?: string;
   /** Lands: the acceptance run's result for the job's goal, as `acceptance: pass at <sha>`. */
   acceptance?: string;
+  /** Stuck: the open issue this job waits on or its last run names; the row offers Wait instead of Re-check. */
+  blocker?: Blocker;
 }
 
 /** A new issue of a factory repo, in the shape of the Issue card. */
@@ -228,6 +230,20 @@ export function state(now = new Date()): State {
   for (const j of [...needs, ...stuck]) {
     const todo = j.item?.id;
     j.agent = liveJobs.has(j.name) || (todo !== undefined && liveItems.has(`${j.repo}/${todo}`));
+  }
+
+  const openById = new Map<string, { title: string; href: string }>(), waitsOf = new Map<string, string>();
+  for (const repo of Object.values(registry)) {
+    if (!repo.sandbox) continue;
+    for (const item of lists.list(repo.key)?.items ?? []) {
+      const id = `${repo.key}-${item.id}`;
+      if (status(item) === "open") openById.set(id, { title: item.title, href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}` });
+      if (typeof item.fm.waiting_on === "string") waitsOf.set(id, item.fm.waiting_on);
+    }
+  }
+  for (const j of stuck) {
+    const b = stuckBlocker(j, j.item ? waitsOf.get(`${j.repo}-${j.item.id}`) : undefined, openById);
+    if (b) j.blocker = b;
   }
 
   const DAY_MS = 86_400_000, t0 = now.getTime();

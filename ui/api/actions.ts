@@ -70,7 +70,23 @@ const answerAndRerun: Handler = async (req, { name }) => {
   return Response.json(await runCli(["drop", name, `Chris answered the worker's question "${last.run.question ?? ""}": ${said}`]));
 };
 
+/** "Wait for <repo>-<n>": set the stuck job's item to wait on that open issue, then drop the job. */
+const wait: Handler = async (req, { name }) => {
+  if (!sameSite(req)) return text("forbidden", 403);
+  const last = find(name);
+  if (!last) return text(`no job named ${name}`, 404);
+  const body: any = await req.json().catch(() => ({}));
+  const on = typeof body?.on === "string" ? body.on.trim() : "";
+  const m = /^(.+)-(\d+)$/.exec(on);
+  const repo = last.run.repo, todo = last.run.todo;
+  if (!m || !repo || todo === undefined) return text("on must name a <repo>-<n> issue and the job an item", 400);
+  const set = await runCli(["issue", "edit", repo, String(todo), "--waiting-on", on]);
+  if (set.code !== 0) return Response.json({ error: (set.stderr || set.stdout).trim() || `aleph exited ${set.code}` }, { status: 422 });
+  return Response.json(await runCli(["drop", name, `Chris chose to wait for ${on}: this job cannot succeed until it lands.`]));
+};
+
 export const routes: Routes = {
+  "POST /api/wait/:name": wait,
   "GET /api/diff/:name": diff,
   "POST /api/land/:name": action("land"),
   "POST /api/recheck/:name": action("recheck"),

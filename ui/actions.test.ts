@@ -63,6 +63,10 @@ test("POST /api/recheck runs `aleph recheck x`", async () => {
   expect(recorded().at(-1)).toBe("recheck x");
 });
 
+test("POST /api/wait 400s without a blocker or an item", async () => {
+  expect((await post("/api/wait/x", undefined, {})).status).toBe(400);
+});
+
 test("a POST without the header, or from another origin, is 403 and runs nothing", async () => {
   const before = recorded().length;
   expect((await post("/api/land/x", {})).status).toBe(403);

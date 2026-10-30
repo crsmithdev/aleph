@@ -277,7 +277,13 @@ const fold = (s, j, held) => details(s, j, held
   : j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "");
 
 const jobHref = (j) => `#/jobs/${encodeURIComponent(j.name)}`;
-const stuckRow = (s) => (j) => row("stuck", `${j.state === "failed" ? "Failed" : "Stuck"}${j.reason ? ` with ${oneSentence(j.reason).replace(/\.$/, "")}` : ""}.`, j.name, jobHref(j), j.item?.title || "", `${act("recheck", j.name, "Re-check")}${act("drop", j.name, "Drop")}${actMsg(j.name)}`, fold(s, j, false), j);
+const stuckRow = (s) => (j) => {
+  const b = j.blocker;
+  const why = b ? `Waits on ${b.id}: ${b.title}.` : `${j.state === "failed" ? "Failed" : "Stuck"}${j.reason ? ` with ${oneSentence(j.reason).replace(/\.$/, "")}` : ""}.`;
+  const first = b ? act("wait", j.name, `Wait for ${b.id}`, true).replace('data-label=', `data-on="${esc(b.id)}" data-label=`) : act("recheck", j.name, "Re-check");
+  return row("stuck", why, j.name, jobHref(j), j.item?.title || "", `${first}${act("drop", j.name, "Drop")}${actMsg(j.name)}`,
+    (b ? `<p class="quiet q">Waits on <a href="${esc(b.href)}">${esc(b.id)}</a>: ${esc(b.title)}</p>` : "") + fold(s, j, false), j);
+};
 /** Text with `inline code` as <code>, everything else escaped. */
 const code = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
 
