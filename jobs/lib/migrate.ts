@@ -12,8 +12,9 @@
  * ALEPH_SANDBOX_DIR (where the sandbox folders go, default a sibling `sandbox`),
  * ALEPH_BACKUPS_DIR (default a sibling `backups` of the factory folder).
  */
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { expand, isLive, readReview2, readRun, stamp, type Ask, type Entry, type Run } from "./ledger.ts";
 import { isOpen, lastReal } from "./job.ts";
 import { fetchOrigin, followMain, git, treeWithFiles } from "./git.ts";
@@ -66,7 +67,7 @@ interface New {
 
 interface Plan {
   rows: Row[]; items: New[]; runs: { folder: string; before: Run; after: Run }[]; old: Map<string, { status: string; planned: boolean; ruled: boolean }>;
-  repos: string[]; originPath: string | null;
+  repos: string[];
 }
 
 function repoKeys(dir: string): string[] {
@@ -194,8 +195,6 @@ export function plan(r: Roots = roots()): Plan {
   const repos = repoKeys(r.store);
   const runs = oldRuns(r.ledger);
   const jobs = jobsOf(runs);
-  const origin = git(r.store, "remote", "get-url", "origin");
-  const originPath = origin.ok && origin.out.startsWith("/") && existsSync(origin.out) ? origin.out : null;
 
   const items: New[] = [];
   const split = new Set<string>();
@@ -237,7 +236,7 @@ export function plan(r: Roots = roots()): Plan {
     const allowed = [...(TABLE[info.status] ?? []), ...(info.status === "sorted" && info.ruled ? RULED["sorted+ask"] : []), ...(info.planned ? RULED.planned : [])];
     rows.push({ repo: n.repo, id: `${n.repo}-${n.num}`, old: info.status, stage: s, ok: allowed.includes(s) });
   }
-  return { rows, items, runs: migrated, old: oldInfo, repos, originPath };
+  return { rows, items, runs: migrated, old: oldInfo, repos };
 }
 
 export function dryRun(r: Roots = roots()): { rows: Row[]; violations: Row[]; counts: Record<string, number> } {
@@ -272,13 +271,12 @@ export function apply(r: Roots = roots()): { backup: string; commit: string; ite
   const bad = p.rows.filter((x) => !x.ok);
   if (bad.length) refuse(`${bad.length} item(s) have a status/stage pair outside the mapping table; run --dry-run`);
 
-  // Back up first: the store (checkout and its origin), the ledger's state files, and the factory's files.
+  // Back up first: the store checkout, the ledger's state files, and the factory's files.
   const time = stamp(todos.clock());
   const backup = join(r.backups, `${time}-migrate`);
   if (existsSync(backup)) refuse(`${backup} already exists`);
   mkdirSync(join(backup, "ledger"), { recursive: true });
   cpDir(r.store, join(backup, "store"));
-  if (p.originPath) cpDir(p.originPath, join(backup, "origin"));
   for (const m of p.runs) {
     mkdirSync(join(backup, "ledger", basename(m.folder)), { recursive: true });
     writeFileSync(join(backup, "ledger", basename(m.folder), "state.json"), readFileSync(join(m.folder, "state.json")));
@@ -286,7 +284,6 @@ export function apply(r: Roots = roots()): { backup: string; commit: string; ite
   const had: string[] = [];
   mkdirSync(join(backup, "factory"), { recursive: true });
   for (const f of FACTORY_FILES) if (existsSync(join(r.factory, f))) { had.push(f); writeFileSync(join(backup, "factory", f), readFileSync(join(r.factory, f))); }
-  writeFileSync(join(backup, "meta.json"), JSON.stringify({ time, roots: r, originPath: p.originPath, had, hadSandbox: existsSync(r.sandboxOld) }, null, 2) + "\n");
 
   // The store: one commit on origin/main.
   const files: Record<string, string> = {};
@@ -295,6 +292,8 @@ export function apply(r: Roots = roots()): { backup: string; commit: string; ite
   const tree = treeWithFiles(r.store, `${base}^{tree}`, files);
   const commit = git(r.store, "commit-tree", tree, "-p", base, "-m", `migrate: work model, ${p.items.length} items`);
   if (!commit.ok) throw new Error(`commit-tree failed: ${commit.out}`);
+  // Written before the push: undo needs both commits to roll origin back through git.
+  writeFileSync(join(backup, "meta.json"), JSON.stringify({ time, roots: r, had, hadSandbox: existsSync(r.sandboxOld), preCommit: base, applyCommit: commit.out }, null, 2) + "\n");
   const push = git(r.store, "push", "-q", "origin", `${commit.out}:refs/heads/main`);
   if (!push.ok) throw new Error(`push refused: ${push.out}`);
   const follow = followMain(r.store, "main");
@@ -341,18 +340,45 @@ export function apply(r: Roots = roots()): { backup: string; commit: string; ite
 export function undo(time: string, r: Roots = roots()): { backup: string } {
   const backup = join(r.backups, time.endsWith("-migrate") ? time : `${time}-migrate`);
   if (!existsSync(join(backup, "meta.json"))) refuse(`no backup at ${backup}`);
-  const meta = JSON.parse(readFileSync(join(backup, "meta.json"), "utf8")) as { roots: Roots; originPath: string | null; had: string[]; hadSandbox: boolean };
+  const meta = JSON.parse(readFileSync(join(backup, "meta.json"), "utf8")) as { roots: Roots; had: string[]; hadSandbox: boolean; preCommit: string; applyCommit: string };
   const o = meta.roots;
+
+  // Origin first, before anything changes: undo only goes on when origin's main is the commit apply pushed.
+  const live = existsSync(o.issues) ? o.issues : o.store;
+  const url = git(live, "remote", "get-url", "origin");
+  if (!url.ok) refuse(`the store has no origin: ${url.out}`);
+  const remote = url.out.includes("://") || url.out.includes("@") || isAbsolute(url.out) ? url.out : resolve(live, url.out);
+  const head = git(live, "ls-remote", "origin", "refs/heads/main");
+  if (!head.ok) refuse(`cannot read origin: ${head.out}`);
+  const tip = head.out.split(/\s/)[0];
+  if (tip !== meta.applyCommit) {
+    // Fetch into a scratch repo, so a refusal leaves the store as it was.
+    const scratch = mkdtempSync(join(tmpdir(), "aleph-undo-"));
+    try {
+      git(scratch, "init", "-q", "--bare");
+      const got = git(scratch, "fetch", "-q", remote, "refs/heads/main");
+      const later = got.ok ? git(scratch, "log", "--format=%h %s", `${meta.applyCommit}..FETCH_HEAD`).out.split("\n").filter(Boolean) : [];
+      refuse(`origin main is ${tip.slice(0, 7)}, not the apply commit ${meta.applyCommit.slice(0, 7)}; commits after the apply:${later.length ? "\n" + later.join("\n") : ` ${tip.slice(0, 7)}`}`);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
+
   // Reverse the renames, then put the saved bytes back.
   if (existsSync(o.issues) && !existsSync(o.store)) renameSync(o.issues, o.store);
   if (existsSync(o.sandboxOld) && !existsSync(o.ledger)) renameSync(o.sandboxOld, o.ledger);
   if (meta.hadSandbox && existsSync(o.sandbox) && !existsSync(o.sandboxOld)) renameSync(o.sandbox, o.sandboxOld);
   rmSync(o.store, { recursive: true, force: true });
   cpDir(join(backup, "store"), o.store);
-  if (meta.originPath && existsSync(join(backup, "origin"))) {
-    rmSync(meta.originPath, { recursive: true, force: true });
-    cpDir(join(backup, "origin"), meta.originPath);
-  }
+  // Origin: one new commit on the apply commit, with the pre-apply tree. A plain push, so a push made since is refused.
+  const fetched = fetchOrigin(o.store, "main");
+  if (!fetched.ok) throw new Error(`store fetch failed: ${fetched.out}`);
+  const back = git(o.store, "commit-tree", `${meta.preCommit}^{tree}`, "-p", meta.applyCommit, "-m", `migrate: undo, back to ${meta.preCommit.slice(0, 7)}`);
+  if (!back.ok) throw new Error(`commit-tree failed: ${back.out}`);
+  const push = git(o.store, "push", "-q", "origin", `${back.out}:refs/heads/main`);
+  if (!push.ok) throw new Error(`push refused: ${push.out}`);
+  const follow = followMain(o.store, "main");
+  if (follow) console.error(`warn: ${follow}`);
   for (const id of readdirSync(join(backup, "ledger"))) {
     if (statSync(join(backup, "ledger", id)).isDirectory() && existsSync(join(o.ledger, id))) writeFileSync(join(o.ledger, id, "state.json"), readFileSync(join(backup, "ledger", id, "state.json")));
   }

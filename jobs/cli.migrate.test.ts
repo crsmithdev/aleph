@@ -29,17 +29,21 @@ async function aleph(args: string[], over: Record<string, string> = {}) {
 }
 
 /** Every file under `root` with its bytes' hash, so a restore can be compared byte for byte. */
-function snapshot(root: string, at = ""): Record<string, string> {
+function snapshot(root: string, at = "", skipGit = false): Record<string, string> {
   const out: Record<string, string> = {};
   for (const name of readdirSync(join(root, at)).sort()) {
     const rel = join(at, name);
-    if (rel === ".git/FETCH_HEAD") continue;
-    if (statSync(join(root, rel)).isDirectory()) Object.assign(out, snapshot(root, rel));
+    if (rel === ".git/FETCH_HEAD" || (skipGit && rel === ".git")) continue;
+    if (statSync(join(root, rel)).isDirectory()) Object.assign(out, snapshot(root, rel, skipGit));
     else out[rel] = new Bun.CryptoHasher("sha256").update(readFileSync(join(root, rel))).digest("hex");
   }
   return out;
 }
 const world = () => ({ items: snapshot(dir("items")), origin: snapshot(dir("items.git")), jobs: snapshot(dir("jobs")), runs: snapshot(dir("runs")), factory: snapshot(dir("factory")) });
+
+/** What an undo gives back: the item files (not .git: undo adds a commit), the ledger and the factory's files. */
+const files = () => ({ items: snapshot(dir("items"), "", true), jobs: snapshot(dir("jobs")), runs: snapshot(dir("runs")), factory: snapshot(dir("factory")) });
+const originTree = () => sh(dir("items.git"), "git", "rev-parse", "main^{tree}");
 
 type Fm = Record<string, unknown>;
 let n = 0;
@@ -110,6 +114,9 @@ const fileOf = (root: string, ref: string) => readFileSync(join(tasks(root), `al
 
 describe("aleph migrate", () => {
   let before: ReturnType<typeof world>;
+  let preFiles: ReturnType<typeof files>;
+  let preTree: string;
+  let preCommit: string;
 
   test("the dry run lists every old item with its old status and new stage, and writes nothing", async () => {
     before = world();
@@ -160,6 +167,9 @@ describe("aleph migrate", () => {
     expect(existsSync(dir("backups"))).toBe(false);
     // The baseline for the undo: the fixture as apply finds it, paused.
     before = world();
+    preFiles = files();
+    preTree = originTree();
+    preCommit = sh(dir("items.git"), "git", "rev-parse", "main");
   });
 
   test("apply migrates the store, the ledger and the folders", async () => {
@@ -230,12 +240,43 @@ describe("aleph migrate", () => {
     expect(r.code).toBe(1);
   });
 
-  test("undo restores the fixture byte for byte", async () => {
+  test("undo pushes a commit with the pre-apply tree on top of the apply commit, and the store follows it", async () => {
+    const applyCommit = sh(dir("items.git"), "git", "rev-parse", "main");
+    expect(JSON.parse(readFileSync(join(dir("backups"), "20261030-141516-migrate", "meta.json"), "utf8"))).toMatchObject({ preCommit, applyCommit });
+    expect(existsSync(join(dir("backups"), "20261030-141516-migrate", "origin"))).toBe(false);
     const r = await aleph(["migrate", "--undo", "20261030-141516"]);
     expect(r.code, r.stderr).toBe(0);
-    expect(world()).toEqual(before);
+    expect(files()).toEqual(preFiles);
+    expect(originTree()).toBe(preTree);
+    expect(sh(dir("items.git"), "git", "rev-list", "main")).toContain(applyCommit);
+    expect(sh(dir("items.git"), "git", "rev-parse", "main~1")).toBe(applyCommit);
+    expect(sh(dir("items"), "git", "rev-parse", "HEAD")).toBe(sh(dir("items.git"), "git", "rev-parse", "main"));
     expect(existsSync(dir("issues")) || existsSync(dir("sandbox"))).toBe(false);
+    // A fetch in the restored store brings nothing back.
+    sh(dir("items"), "git", "fetch", "-q", "origin");
+    expect(files().items).toEqual(preFiles.items);
     expect((await aleph(["migrate", "--undo", "20990101-000000"])).code).toBe(1);
+  });
+
+  test("undo refuses, changing nothing, when a push came after the apply", async () => {
+    const at = { ALEPH_NOW: "2026-10-31T09:00:00" };
+    expect((await aleph(["migrate", "--apply"], at)).code).toBe(0);
+    const other = dir("other");
+    sh(base, "git", "clone", "-q", dir("items.git"), other);
+    writeFileSync(join(other, "later.txt"), "pushed after the apply\n");
+    sh(other, "git", "add", "-A");
+    sh(other, "git", "commit", "-qm", "a later push");
+    sh(other, "git", "push", "-q", "origin", "main");
+    const later = sh(other, "git", "rev-parse", "--short", "HEAD");
+    const tip = sh(dir("items.git"), "git", "rev-parse", "main");
+    const state = { issues: snapshot(dir("issues")), runs: snapshot(dir("runs")), factory: snapshot(dir("factory")), sandbox: snapshot(dir("sandbox")) };
+
+    const r = await aleph(["migrate", "--undo", "20261031-090000"]);
+    expect(r.code).toBe(1);
+    expect(r.stdout + r.stderr).toContain(later);
+    expect(sh(dir("items.git"), "git", "rev-parse", "main")).toBe(tip);
+    expect({ issues: snapshot(dir("issues")), runs: snapshot(dir("runs")), factory: snapshot(dir("factory")), sandbox: snapshot(dir("sandbox")) }).toEqual(state);
+    expect(existsSync(dir("items"))).toBe(false);
   });
 
   test("with no mode, or two, it refuses", async () => {
