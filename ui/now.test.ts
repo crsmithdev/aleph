@@ -720,3 +720,21 @@ test("Status grid: at 1600px and wider the metrics sit left and the four lanes s
   expect(block).toMatch(/\.speedrow \{[^}]*gap: 28px/);
   expect(css).not.toContain(".speedrow { display: grid; grid-template-columns: repeat(2");
 });
+
+test("Queued cards show why each goal waits", () => {
+  const w = (id: number, why: string, kind: string, more: any = {}) => ({ repo: "aleph", id, title: `t${id}`, why, kind, ...more });
+  const lanes = r.renderLanes({ ...state, waiting: [
+    w(1, "Waits on aleph-630", "waits_on", { waits: [{ id: "aleph-630", href: "#/issues/aleph/630", state: "building" }] }),
+    w(2, "Waits for you: pick one", "needs-chris", { ask: { href: "#/issues/aleph/2" } }),
+    w(3, "Starts at the next dispatch", "ready"),
+    w(4, "Waiting for a slot (12 of 12 running)", "gate"),
+  ] });
+  const q = lanes.match(/<section id="lane-queued"[^]*?<\/section>/)![0];
+  expect(q).toContain('Waits on <a href="#/issues/aleph/630">aleph-630</a> <span class="badge quiet">building</span>');
+  expect(q).toContain('<a href="#/issues/aleph/2">Waits for you: pick one</a>');
+  expect(q).toContain("Starts at the next dispatch");
+  expect(q).toContain("Waiting for a slot (12 of 12 running)");
+  expect(q.match(/Waiting for a slot/g)?.length).toBe(1);
+  expect(q).toContain('href="#/issues/aleph/1"');
+  expect(r.renderLanes({ ...state, waiting: [{ repo: "aleph", id: 5, title: "x" }] })).toContain(">Queued</div>");
+});

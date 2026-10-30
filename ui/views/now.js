@@ -162,8 +162,17 @@ function incomingLane(s) {
   return lane("incoming", "Incoming", incomingCount(s), rows, "No untriaged issues.");
 }
 
+/** Why a queued goal waits: links to what it waits on, the ask for Chris, or the reason text. */
+function waitMeta(w) {
+  if (!w.why) return "Queued";
+  if (w.kind === "waits_on" && w.waits?.length)
+    return `Waits on ${w.waits.map((x) => `<a href="${esc(x.href)}">${esc(x.id)}</a>${x.state ? ` <span class="badge quiet">${esc(x.state)}</span>` : ""}`).join(", ")}`;
+  if (w.kind === "needs-chris" && w.ask?.href) return `<a href="${esc(w.ask.href)}">${esc(w.why)}</a>`;
+  return esc(w.why);
+}
+
 function queuedLane(s) {
-  const rows = (s.waiting ?? []).map((w) => laneCard("queued-row", `<span class="id">${esc(w.repo)}-${esc(w.id)}</span>`, statusBadge("queued"), "", w.title, "", "Waiting for a slot")).join("");
+  const rows = (s.waiting ?? []).map((w) => laneCard("queued-row", idLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`), statusBadge("queued"), "", w.title, "", waitMeta(w))).join("");
   return lane("queued", "Queued", (s.waiting ?? []).length, rows, "Nothing is waiting.");
 }
 
