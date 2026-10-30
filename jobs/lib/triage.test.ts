@@ -339,3 +339,19 @@ test("the prompt keeps how-to-build questions away from Chris and asks him in pl
   expect(p).toContain("no file paths, function names, line numbers or code");
   expect(p).toContain('"waiting_on": "<optional <repo>-<n>>"');
 });
+
+test("the prompt lists the open issues of the repo, one line each, without the one under triage or the done and dropped ones", () => {
+  reset([{ title: "Fix the bridge" }, { title: "Rerun  the shot" }, { title: "Under triage" }, { title: "Done one" }, { title: "Dropped one" }]);
+  writeList(repo, "status", (doc) => {
+    todos.setStatus(todos.find(doc, 4)!, "done");
+    todos.setStatus(todos.find(doc, 5)!, "dropped");
+    return true;
+  });
+  const p = prompt(repo, item(3));
+  const lines = p.split("\n").filter((l) => l.startsWith(`${repo.key}-`));
+  expect(lines).toEqual([`${repo.key}-1: Fix the bridge`, `${repo.key}-2: Rerun the shot`]);
+  expect(p).not.toContain("Done one");
+  expect(p).not.toContain("Dropped one");
+  expect(p).toContain('return "close" with the reason "duplicate of <repo>-<n>"');
+  expect(p).toContain('return "goal" with "waiting_on"');
+});

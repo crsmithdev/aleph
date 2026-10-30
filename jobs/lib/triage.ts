@@ -48,6 +48,12 @@ export function parseVerdict(output: string): Verdict | string {
   }
 }
 
+/** The open issues of the repo, one line each, but not the issue under triage: the others a duplicate can name. */
+function openIssues(repo: Repo, item: todos.Item): string {
+  const others = (reader().list(repo.key)?.items ?? []).filter((o) => o.id !== item.id && todos.status(o) === "open");
+  return others.map((o) => `${repo.key}-${o.id}: ${o.title.replace(/\s+/g, " ").trim()}`).join("\n") || "(none)";
+}
+
 export function prompt(repo: Repo, item: todos.Item): string {
   return `You triage one open issue of the repo ${repo.key}, which is your working directory. You have read-only tools: read the code to decide. Change nothing.
 
@@ -55,6 +61,10 @@ export function prompt(repo: Repo, item: todos.Item): string {
 
 ${item.body.trim() || "(no body)"}
 ${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}
+# Open issues of ${repo.key}
+
+${openIssues(repo, item)}
+
 Reply with one JSON object and nothing else, with one of these verdicts:
 
 - {"verdict": "goal", "body": "<goal body>", "waiting_on": "<optional <repo>-<n>>"}: the issue is work a factory run can do alone. "body" replaces the issue's body, in the goal format:
@@ -66,6 +76,8 @@ Reply with one JSON object and nothing else, with one of these verdicts:
   The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`), or a new test that asserts the end state. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one.
 - {"verdict": "close", "reason": "<why>"}: it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
 - {"verdict": "chris", "question": "<one plain sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>", "waiting_on": "<optional <repo>-<n>: set only when choosing this option means waiting for that issue first>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first. Write the question and the options in plain words a user of the product reads: no file paths, function names, line numbers or code. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
+
+Duplicates: when the issue asks for the same work as an open issue listed above, return "close" with the reason "duplicate of <repo>-<n>", naming that issue. When it only waits for that open issue, return "goal" with "waiting_on" set to it.
 
 Never ask Chris about how to build it: code structure, which module or helper, naming, test shape, whether to wait for another open issue, or whether a refactor is worth it. Decide those yourself: pick the best option and return "goal" (with "waiting_on" when the work must wait for an open issue), or "close" when it is not worth doing or is already done.
 - {"verdict": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.
