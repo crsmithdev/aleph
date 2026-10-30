@@ -11,6 +11,13 @@ import type { Note } from "../../vault/lib/vault.ts";
 import { activity } from "./activity.ts";
 import { skillsDir } from "./skills.ts";
 import { config, traces } from "../langfuse.ts";
+import { staleAsync } from "../stale.ts";
+
+/** Langfuse-backed loads, kept `ALEPH_UI_CACHE_TTL` seconds like `vault misses`; a failure is kept as an answer with no data (null). */
+const ttlMs = () => { const n = Number(process.env.ALEPH_UI_CACHE_TTL ?? 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
+const sessionsCache = staleAsync<Sessions | null>();
+const callsCache = staleAsync<Map<string, number> | null>();
+export const clearTypesCache = () => { sessionsCache.clear(); callsCache.clear(); };
 
 const mtime = (p: string): string => { try { return statSync(p).mtime.toISOString(); } catch { return ""; } };
 const newest = (xs: (string | undefined | null)[]): string => xs.filter(Boolean).sort().at(-1) ?? "";
@@ -50,7 +57,9 @@ function semantic(root: string, wiki: Note[]) {
 }
 
 /** The last 7 days' sessions from Langfuse, newest first; null when Langfuse is off or fails. */
-async function sessions(): Promise<{ id: string; project: string; firstPrompt: string; turns: number; last: string }[] | null> {
+type Sessions = { id: string; project: string; firstPrompt: string; turns: number; last: string }[];
+const sessions = (): Promise<Sessions | null> => sessionsCache.get("sessions", ttlMs(), loadSessions);
+async function loadSessions(): Promise<Sessions | null> {
   if (!langfuseConfig()) return null;
   try {
     const from = new Date(Math.floor((Date.now() - 7 * 86400_000) / 3600_000) * 3600_000).toISOString();
@@ -80,13 +89,13 @@ async function hooks() {
   const file = join(homedir(), ".claude", "settings.json");
   let cfg: any = {};
   try { cfg = JSON.parse(readFileSync(file, "utf8")); } catch {}
-  const calls = new Map<string, number>();
-  let counted = false;
-  try {
-    const a = await activity(7, null);
-    counted = a.langfuse === "ok";
-    for (const h of a.hooks) calls.set(h.name, h.calls);
-  } catch {}
+  const counts = await callsCache.get("calls", ttlMs(), async () => {
+    try {
+      const a = await activity(7, null);
+      return a.langfuse === "ok" ? new Map(a.hooks.map((h) => [h.name, h.calls] as const)) : null;
+    } catch { return null; }
+  });
+  const counted = counts !== null, calls = counts ?? new Map<string, number>();
   const out: { event: string; matcher: string; command: string; calls: number | null }[] = [];
   for (const [event, groups] of Object.entries<any>(cfg.hooks ?? {}))
     for (const g of Array.isArray(groups) ? groups : [])

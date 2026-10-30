@@ -149,6 +149,16 @@ export function linkTargets(notes: Note[]): Map<string, Note> {
   return m;
 }
 
+/** Every note a name resolves to, in note order: `linkTargets` keeps only the last of them. */
+function nameIndex(notes: Note[]): Map<string, Note[]> {
+  const m = new Map<string, Note[]>();
+  for (const n of notes) for (const name of [n.title, ...list(n.fm, "aliases")]) {
+    const k = name.toLowerCase();
+    m.set(k, [...(m.get(k) ?? []), n]);
+  }
+  return m;
+}
+
 export function folderFor(kind: string): string | null {
   return (KINDS as readonly string[]).includes(kind) ? `wiki/${FOLDERS[kind as Kind]}` : null;
 }
@@ -161,7 +171,7 @@ export function validTitle(title: string): boolean {
 const EPISODE_SECTIONS = ["Goal", "What landed", "How it went", "Cost", "What went wrong"] as const;
 
 /** Refuse-class findings for one wiki note against the rest of the vault. */
-export function validateNote(note: Note, others: Note[]): Finding[] {
+export function validateNote(note: Note, others: Note[], index: Map<string, Note[]> = nameIndex(others)): Finding[] {
   const f: Finding[] = [];
   const add = (rule: string, detail: string) => f.push({ note: note.title, rule, detail });
   if (!validTitle(note.title)) add("title", `title has a forbidden character or surrounding whitespace: ${JSON.stringify(note.title)}`);
@@ -177,13 +187,11 @@ export function validateNote(note: Note, others: Note[]): Finding[] {
   if (folder && dirname(note.rel) !== folder) add("folder", `kind ${kind} belongs in ${folder}/, note is in ${dirname(note.rel)}/`);
 
   const mine = [note.title, ...list(note.fm, "aliases")].map((s) => s.toLowerCase());
-  const targets = linkTargets(others.filter((o) => o.path !== note.path));
   for (const name of mine) {
-    const hit = targets.get(name);
+    const hit = index.get(name)?.filter((o) => o.path !== note.path).at(-1);
     if (hit) add("duplicate", `"${name}" is already the title or an alias of ${hit.rel}`);
   }
-  const all = linkTargets([...others.filter((o) => o.path !== note.path), note]);
-  for (const target of links(note.body)) if (!all.has(target.toLowerCase())) add("dangling", `[[${target}]] resolves to nothing`);
+  for (const target of links(note.body)) if (!index.has(target.toLowerCase()) && !mine.includes(target.toLowerCase())) add("dangling", `[[${target}]] resolves to nothing`);
 
   if (kind === "episode") {
     let from = 0;
@@ -272,8 +280,9 @@ export function lintVault(notes: Note[], { read = {}, overlap = false, now = new
   // rules are claims about prose that no repair can make true, so they warn
   // here — one line per note, not one per missing heading.
   const template: Finding[] = [];
+  const index = nameIndex(notes);
   for (const n of wiki) {
-    const found = validateNote(n, notes);
+    const found = validateNote(n, notes, index);
     refuse.push(...found.filter((f) => f.rule !== "template"));
     const broken = found.filter((f) => f.rule === "template");
     if (broken.length) template.push({ note: n.title, rule: "template", detail: broken.map((f) => f.detail).join("; ") });

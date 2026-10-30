@@ -225,3 +225,86 @@ test("facts runs fill the gates section, newest first, scoped by project", async
   const other: any = await (await at("/api/memory?project=other")).json();
   expect(other.facts).toEqual([]);
 });
+
+/** A stub `bun` that fails and logs each call, and a Langfuse that answers 500 and counts requests. */
+async function failing(name: string, ttl: string) {
+  const bin = join(base, name), log = join(base, `${name}-calls`);
+  mkdirSync(bin);
+  writeFileSync(join(bin, "bun"), `#!/bin/sh\necho x >> ${log}\nexit 1\n`);
+  chmodSync(join(bin, "bun"), 0o755);
+  let requests = 0;
+  const lf = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => { requests++; return new Response("boom", { status: 500 }); } });
+  const keys = ["PATH", "ALEPH_UI_CACHE_TTL", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"];
+  const saveEnv = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  Object.assign(process.env, { PATH: `${bin}:${process.env.PATH}`, ALEPH_UI_CACHE_TTL: ttl, LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
+  clearCache();
+  const calls = () => { try { return readFileSync(log, "utf8").trim().split("\n").length; } catch { return 0; } };
+  const done = () => {
+    lf.stop(true);
+    for (const [k, val] of Object.entries(saveEnv)) { if (val === undefined) delete process.env[k]; else process.env[k] = val; }
+    clearCache();
+  };
+  return { calls, requests: () => requests, done };
+}
+
+test("failed loads are kept for the TTL: no second spawn, no second Langfuse request", async () => {
+  const f = await failing("bin-fail", "300");
+  try {
+    const a = await at("/api/memory");
+    expect(a.status).toBe(200);
+    const body: any = await a.json();
+    expect(body.misses).toBeUndefined();
+    expect(body.types.episodic.sessions).toBeNull();
+    const seen = f.requests();
+    expect(seen).toBeGreaterThan(0);
+    const b = await at("/api/memory");
+    expect(b.status).toBe(200);
+    expect(f.calls()).toBe(1);
+    expect(f.requests()).toBe(seen);
+    await expect(warm()).rejects.toThrow();
+  } finally { f.done(); }
+});
+
+test("after the TTL a failed answer comes back at once and the reload runs in the background", async () => {
+  const f = await failing("bin-fail-ttl", "1");
+  try {
+    await (await at("/api/memory")).json();
+    expect(f.calls()).toBe(1);
+    const seen = f.requests();
+    await Bun.sleep(1100);
+    const t = Date.now();
+    const c = await at("/api/memory");
+    expect(c.status).toBe(200);
+    expect((await c.json() as any).misses).toBeUndefined();
+    expect(Date.now() - t).toBeLessThan(1000);
+    const deadline = Date.now() + 5000;
+    while ((f.calls() < 2 || f.requests() === seen) && Date.now() < deadline) await Bun.sleep(20);
+    expect(f.calls()).toBe(2);
+    expect(f.requests()).toBeGreaterThan(seen);
+  } finally { f.done(); }
+});
+
+test("with about 1000 notes the warm call takes under 1 s", async () => {
+  const dir = join(base, "vault", "wiki", "concepts");
+  for (let i = 0; i < 1000; i++)
+    writeFileSync(join(dir, `Gen ${i}.md`), `---\nkind: concept\nscope: aleph\nconfidence: measured\nupdated: ${today}\nsupersedes: []\nsources: [trace:abc123]\naliases: [Alias ${i}]\n---\n**Claim.** Note ${i}, as of ${today}. See [[Gen ${(i + 1) % 1000}]] and [[Use Bun]].\n\n## Related\n[[Alias ${(i + 7) % 1000}]]\n`);
+  for (let i = 0; i < 1000; i++) {
+    const d = join(base, "jobs", `20261003-${String(i).padStart(6, "0")}-g-facts`);
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, "state.json"), JSON.stringify({ kind: "facts", job: `g${i}`, name: `g${i}`, repo: "aleph", state: "done", told: true, started: new Date().toISOString(), ended: new Date().toISOString(), kept: ["Gen 1"], rejected: ["F: r"] }));
+  }
+  const f = await failing("bin-fail-big", "300");
+  try {
+    await (await at("/api/memory")).json();  // loads the notes and fills the caches
+    const t = Date.now();
+    const r = await at("/api/memory");
+    expect(r.status).toBe(200);
+    expect(((await r.json()) as any).total).toBeGreaterThan(1000);
+    expect(Date.now() - t).toBeLessThan(1000);
+  } finally {
+    f.done();
+    for (let i = 0; i < 1000; i++) rmSync(join(dir, `Gen ${i}.md`), { force: true });
+    rmSync(join(base, "jobs"), { recursive: true, force: true }); mkdirSync(join(base, "jobs"));
+    clearCache();
+  }
+});

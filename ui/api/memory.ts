@@ -5,7 +5,7 @@ import type { Routes } from "../server.ts";
 import { staleAsync } from "../stale.ts";
 import { uiFetchTtl } from "../../todo/lib/store.ts";
 import { allRuns } from "../../jobs/lib/ledger.ts";
-import { memoryTypes } from "./memory-types.ts";
+import { clearTypesCache, memoryTypes } from "./memory-types.ts";
 import { KINDS, linkTargets, links, lintVault, loadVault, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 
 const CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
@@ -59,9 +59,8 @@ function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, p
 async function misses(): Promise<{ value: unknown; cachedAt: string } | null> {
   return missesCache.get("misses", ttlMs(), async () => {
     const value = await runMisses();
-    if (value == null) throw new Error("vault misses failed");
-    return { value, cachedAt: new Date().toISOString() };
-  }).catch(() => null);
+    return value == null ? null : { value, cachedAt: new Date().toISOString() };
+  });
 }
 
 /** Fills the misses cache; throws when `vault misses` fails. */
@@ -69,12 +68,12 @@ export async function warm(): Promise<void> {
   if (!(await misses())) throw new Error("memory warm-up: vault misses failed");
 }
 /** `vault misses` is slow (Langfuse), so its answer is kept `ALEPH_UI_CACHE_TTL` seconds (default 300; 0 turns it off); an older one is served while it reloads. */
-const missesCache = staleAsync<{ value: unknown; cachedAt: string }>();
+const missesCache = staleAsync<{ value: unknown; cachedAt: string } | null>();
 const ttlMs = () => { const n = Number(process.env.ALEPH_UI_CACHE_TTL ?? 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
 /** The vault's notes, reloaded at most every ALEPH_UI_FETCH_TTL seconds: a load stats every file, which is slow on /mnt/c. */
 const notes = staleAsync<Note[]>();
 export const vaultNotes = (root: string): Promise<Note[]> => notes.get(root, uiFetchTtl() * 1000, () => loadVault(root));
-export const clearCache = () => { missesCache.clear(); notes.clear(); };
+export const clearCache = () => { missesCache.clear(); notes.clear(); clearTypesCache(); };
 async function runMisses(): Promise<unknown | null> {
   try {
     const p = Bun.spawn(["bun", CLI, "misses", "--days", "7"], { env: process.env, stdout: "pipe", stderr: "ignore", timeout: 60_000 });
