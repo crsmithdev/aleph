@@ -416,3 +416,21 @@ test("prompt lists waiting_on in the drop and edit-goal lines, and says a note a
   expect(lines.find((l) => l.startsWith('- {"do": "edit-goal"'))).toContain('"waiting_on"');
   expect(p).toContain("A note or a drop reason alone does not stop a rerun.");
 });
+
+test("clear-needs-chris keeps waiting_on in parse, and leaves it out when absent", () => {
+  const a = { do: "clear-needs-chris" as const, repo: "ff", n: 1, note: "x" };
+  expect(parseReply(JSON.stringify({ actions: [{ ...a, waiting_on: "ff-2" }] }))).toEqual([{ ...a, waitingOn: "ff-2" }]);
+  expect(parseReply(JSON.stringify({ actions: [a] }))).toEqual([a]);
+});
+
+test("clear-needs-chris with waiting_on clears the mark and sets it; a malformed ref is refused and keeps the mark", async () => {
+  fresh([{ title: "a", labels: ["needs-chris"], notes: ["needs-chris: which module?"] }, { title: "b" }]);
+  const r = await applyActions([{ do: "clear-needs-chris", repo: key, n: 1, note: "wait", waitingOn: `${key}-2` }], ports());
+  expect(r.refused).toEqual([]);
+  expect(storeLabels(item(1))).not.toContain("needs-chris");
+  expect(item(1).fm.waiting_on).toBe(`${key}-2`);
+  fresh([{ title: "a", labels: ["needs-chris"], notes: ["needs-chris: which module?"] }]);
+  const bad = await applyActions([{ do: "clear-needs-chris", repo: key, n: 1, note: "wait", waitingOn: "nope" }], ports());
+  expect(bad.refused.length).toBe(1);
+  expect(storeLabels(item(1))).toContain("needs-chris");
+});

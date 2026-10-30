@@ -97,7 +97,7 @@ export type Action =
   | { do: "close"; repo: string; n: number; note: string }
   | { do: "note"; repo: string; n: number; text: string }
   | { do: "add"; repo: string; title: string; body: string }
-  | { do: "clear-needs-chris"; repo: string; n: number; note: string }
+  | { do: "clear-needs-chris"; repo: string; n: number; note: string; waitingOn?: string }
   | { do: "edit-goal"; repo: string; n: number; body?: string; waiting_on?: string }
   | { do: "tell"; text: string };
 
@@ -121,7 +121,7 @@ function parseAction(raw: any): Action | string {
     case "close": return f("repo") && n && f("note") ? { do: "close", repo: f("repo")!, n, note: f("note")! } : "close without a repo, n and note";
     case "note": return f("repo") && n && f("text") ? { do: "note", repo: f("repo")!, n, text: f("text")! } : "note without a repo, n and text";
     case "add": return f("repo") && f("title") ? { do: "add", repo: f("repo")!, title: f("title")!, body: f("body") ?? "" } : "add without a repo and a title";
-    case "clear-needs-chris": return f("repo") && n && f("note") ? { do: "clear-needs-chris", repo: f("repo")!, n, note: f("note")! } : "clear-needs-chris without a repo, n and note";
+    case "clear-needs-chris": return f("repo") && n && f("note") ? { do: "clear-needs-chris", repo: f("repo")!, n, note: f("note")!, ...(f("waiting_on") ? { waitingOn: f("waiting_on")! } : {}) } : "clear-needs-chris without a repo, n and note";
     case "edit-goal": return f("repo") && n && (f("body") || wait) ? { do: "edit-goal", repo: f("repo")!, n, ...(f("body") ? { body: f("body")! } : {}), ...(wait ? { waiting_on: wait } : {}) } : "edit-goal without a repo, n, and a body or waiting_on";
     case "tell": return f("text") ? { do: "tell", text: f("text")! } : "tell without text";
     default: return `unknown action ${JSON.stringify(raw.do)}`;
@@ -140,7 +140,7 @@ export function parseReply(output: string): (Action | string)[] | string {
 
 export const describe = (a: Action): string =>
   a.do === "land" ? `land ${a.job}` : a.do === "drop" ? `drop ${a.job}: ${a.reason}${a.waiting_on ? ` (waits on ${a.waiting_on})` : ""}` : a.do === "close" ? `close ${a.repo}-${a.n}: ${a.note}` : a.do === "note" ? `note ${a.repo}-${a.n}: ${a.text}`
-  : a.do === "add" ? `add ${a.repo}: ${a.title}` : a.do === "clear-needs-chris" ? `clear-needs-chris ${a.repo}-${a.n}: ${a.note}`
+  : a.do === "add" ? `add ${a.repo}: ${a.title}` : a.do === "clear-needs-chris" ? `clear-needs-chris ${a.repo}-${a.n}: ${a.note}${a.waitingOn ? ` (waits on ${a.waitingOn})` : ""}`
   : a.do === "edit-goal" ? `edit-goal ${a.repo}-${a.n}${a.waiting_on ? ` (waits on ${a.waiting_on})` : ""}` : `tell: ${a.text}`;
 
 const MAX_FILE = 4000;
@@ -183,6 +183,7 @@ export function prompt(events: Event[], jobs = allJobs()): string {
 - A how-to-build question (code structure, which module, naming, test shape, whether to wait for an issue) is yours to decide: clear-needs-chris with the decision. A product choice (what the product does for Chris, what he sees, what it costs, what comes first) stays with Chris, unless Chris has handed its reason to you.
 - File every follow-up you find as an issue with add.
 - When a run cannot pass until another open issue lands, drop it with \`waiting_on\` set to that issue, or use edit-goal with \`waiting_on\`. A note or a drop reason alone does not stop a rerun.
+- When you clear a mark on an item whose waiting_on is done or wrong, set waiting_on to the open issue that really blocks it.
 - At most ${MAX_ACTIONS} actions. No action is a fine answer when nothing needs doing.${handedRule}
 
 # What is new since the last look
@@ -195,7 +196,7 @@ Reply with one JSON object and nothing else: {"actions": [ ... ]}, each action o
 - {"do": "close", "repo": "<repo>", "n": <issue number>, "note": "<why the goal is already met>"}
 - {"do": "note", "repo": "<repo>", "n": <issue number>, "text": "<note>"}
 - {"do": "add", "repo": "<repo>", "title": "<title>", "body": "<body>"}
-- {"do": "clear-needs-chris", "repo": "<repo>", "n": <issue number>, "note": "<the decision>"}
+- {"do": "clear-needs-chris", "repo": "<repo>", "n": <issue number>, "note": "<the decision>", "waiting_on": "<optional <repo>-<n>: the open issue it really waits for>"}
 - {"do": "edit-goal", "repo": "<repo>", "n": <issue number>, "body": "<the new goal body, optional>", "waiting_on": "<repo>-<n>, optional: the open issue this waits for>"}
 - {"do": "tell", "text": "<one sentence for Chris>"}
 `;
@@ -310,7 +311,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     const reason = reasonOf(item);
     const productChoice = reason === "decision" || (isProductChoice(item) && !(reason !== null && handed(reason)));
     if (productChoice && !handed("decision")) return { refused: `${describe(a)}: its question is a product choice, which is Chris's` };
-    const why = await refusal(async () => issues.decide(repo, a.n, `firefighter decided: ${a.note}`));
+    const why = await refusal(async () => issues.decide(repo, a.n, `firefighter decided: ${a.note}`, a.waitingOn ? { waitingOn: a.waitingOn } : {}));
     return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
   }
   if (!store.hasLabel(item, store.GOAL)) return { refused: `${describe(a)}: it is not a goal` };
