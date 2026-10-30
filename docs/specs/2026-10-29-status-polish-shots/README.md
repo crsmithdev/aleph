@@ -1,6 +1,6 @@
 # Shots of /#/ at 1440 px, with findings
 
-Fixture: `bun ui/fixtures/review/build.ts /tmp/fx`; server: `bun ui/server.ts --port 3002`. All shots by `aleph-shot`, `--width 1440`, window 1440x900 unless noted.
+Fixture and server: `eval "$(bun ui/fixtures/review/build.ts /tmp/fx | sed 's/^/export /')" && bun ui/server.ts --port 3002` (the build prints the ALEPH_* variables the server needs to read the fixture runs; without them `/api/speed` reports no hours). All shots by `aleph-shot`, `--width 1440`, window 1440x900 unless noted.
 
 | File | URL | Width | Scheme |
 | --- | --- | --- | --- |
