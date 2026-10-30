@@ -176,7 +176,7 @@ describe("the writes", () => {
 });
 
 describe("the work store file", () => {
-  const file = (created: string) => `---\nid: st1-4\ntitle: Old\nstatus: open\n${created}\nupdated: 2026-10-30\npriority: medium\nlabels: []\nrepo: st1\n---\n\nBody.\n`;
+  const file = (created: string, updated = "updated: 2026-10-30") => `---\nid: st1-4\ntitle: Old\nstatus: open\n${created}\n${updated}\npriority: medium\nlabels: []\nrepo: st1\n---\n\nBody.\n`;
   const withItem = (text: string): todos.Item => ({ ...todos.parseItem(text), fm: todos.parseItem(text).fm });
 
   test("renderItem writes created_date and no created key", () => {
@@ -184,7 +184,22 @@ describe("the work store file", () => {
     const text = todos.renderItem("st1", i);
     expect(text).toContain("created_date: 2026-10-30\n");
     expect(text).not.toMatch(/^created:/m);
-    expect(text).toContain("updated: 2026-10-30\n");
+    expect(text).toContain("updated_date: 2026-10-30\n");
+    expect(text).not.toMatch(/^updated:/m);
+  });
+
+  test("parseItem reads updated_date and still accepts a file with only updated", () => {
+    expect(todos.parseItem(file("created: 2026-10-30", "updated_date: 2026-10-30")).fm.updated).toBe("2026-10-30");
+    expect(todos.parseItem(file("created: 2026-10-30", "updated: 2026-10-30")).fm.updated).toBe("2026-10-30");
+  });
+
+  test("a file with both update keys takes the updated_date value", () => {
+    expect(todos.parseItem(file("created: 2026-10-30", "updated: 2026-09-01\nupdated_date: 2026-10-30")).fm.updated).toBe("2026-10-30");
+  });
+
+  test("render, parse, render of a file with the old updated key gives the same text", () => {
+    const once = todos.renderItem("st1", todos.parseItem(file("created: 2026-10-30", "updated: 2026-09-01")));
+    expect(todos.renderItem("st1", todos.parseItem(once))).toBe(once);
   });
 
   test("parseItem reads created_date and still accepts a file with only created", () => {

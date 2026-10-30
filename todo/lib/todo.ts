@@ -136,8 +136,9 @@ export function render(doc: Doc): string {
  */
 export function renderItem(repo: string, item: Item): string {
   const { id: _, ...fields } = item.fm;
-  // Backlog.md reads the creation date only from `created_date`, so the store writes that key.
-  const written = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k === "created" ? "created_date" : k, v]));
+  // Backlog.md reads the creation and update dates only from `created_date` and `updated_date`, so the store writes those keys.
+  const dateKey: Record<string, string> = { created: "created_date", updated: "updated_date" };
+  const written = Object.fromEntries(Object.entries(fields).map(([k, v]) => [dateKey[k] ?? k, v]));
   const fm = serializeFrontmatter({ id: `${repo}-${item.id}`, title: item.title, ...written, repo });
   const block: string[] = [];
   if (item.body.trim()) block.push(item.body.replace(/\n+$/, ""));
@@ -148,10 +149,13 @@ export function renderItem(repo: string, item: Item): string {
 export function parseItem(text: string): Item {
   const { frontmatter, body: rest } = splitFrontmatter(text);
   const { title, repo: _, id: full, ...raw } = parseFrontmatter(frontmatter ?? "");
-  // `created_date` is what Backlog.md reads and wins when a file has both keys; `created` is what older files carry.
-  // Both become `created`, in the place the file gave them.
+  // `created_date` and `updated_date` are what Backlog.md reads and win when a file has both keys; `created` and `updated` are what older files carry.
+  // Each pair becomes one field, in the place the file gave the winning key.
+  const dateKey: Record<string, string> = { created_date: "created", updated_date: "updated" };
   const fields = Object.fromEntries(
-    Object.entries(raw).filter(([k]) => k !== "created" || raw.created_date === undefined).map(([k, v]) => [k === "created_date" ? "created" : k, v]),
+    Object.entries(raw)
+      .filter(([k]) => !(k === "created" && raw.created_date !== undefined) && !(k === "updated" && raw.updated_date !== undefined))
+      .map(([k, v]) => [dateKey[k] ?? k, v]),
   );
   const id = Number(/-(\d+)$/.exec(String(full))?.[1]);
   const { body, notes } = splitNotes(rest);
