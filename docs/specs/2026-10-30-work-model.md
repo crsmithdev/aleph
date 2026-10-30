@@ -216,7 +216,45 @@ Rejected: a big-bang rename in one goal (one diff over about 100 files, and the 
 
 ## Open Questions
 
-- Does Backlog.md 1.55.3 accept a dotted id such as `aleph-577.1` in a file name and in `id:`? Unblocked by a check in step 1. If it does not, goals go in `<store>/<repo>/backlog/goals/` with the same ids, and `backlog browser` shows only issues.
+- Does Backlog.md 1.55.3 accept a dotted id such as `aleph-577.1` in a file name and in `id:`? **Yes.** Checked against Backlog.md 1.55.3 (`bunx backlog.md@1.55.3 --version` printed `1.55.3`; no `backlog` binary on PATH). In a temporary project with `config()`'s `config.yml` (`task_prefix: "aleph"`) and `aleph-577.md` and `aleph-577.1.md` (`id: aleph-577.1`) shaped as `renderItem` writes them, `task list` lists `ALEPH-577.1`, `task view aleph-577.1` and `task 577.1` both open that file, and `task create` gives the next integer id (`ALEPH-578`), not a subtask of 577. Commands and output:
+
+  ```text
+  $ backlog task list --plain
+  open:
+    ALEPH-577 - Parent goal
+    ALEPH-577.1 - Dotted child goal
+
+  $ backlog task view aleph-577.1 --plain
+  File: /tmp/backlog-dotted-vuQB/backlog/tasks/aleph-577.1.md
+
+  Task ALEPH-577.1 - Dotted child goal
+  ==================================================
+
+  Status: ○ open
+  Created:
+  (description, acceptance criteria and definition of done: none defined)
+
+  $ backlog task 577.1 --plain
+  File: /tmp/backlog-dotted-vuQB/backlog/tasks/aleph-577.1.md
+
+  Task ALEPH-577.1 - Dotted child goal
+  (same output as task view aleph-577.1)
+
+  $ backlog task create "next" --plain
+  File: /tmp/backlog-dotted-vuQB/backlog/tasks/aleph-578 - next.md
+
+  Task ALEPH-578 - next
+  Status: ○ open
+  Created: 2026-10-30 19:53 (UTC)
+
+  $ backlog task list --plain
+  open:
+    ALEPH-577 - Parent goal
+    ALEPH-577.1 - Dotted child goal
+    ALEPH-578 - next
+  ```
+
+  The `Created:` line is blank for the hand-written files; this was not investigated and does not concern the id. Consequence: goals stay in `<store>/<repo>/backlog/tasks/` with dotted ids, so `backlog/goals/` is not needed. Backlog.md does not number a child from its parent, so aleph must allocate the dotted ids itself. `backlog browser` was not checked.
 - Which current vault notes count as current-state notes for criterion 19? Unblocked by a `vault lint` pass in step 6 that lists notes of kind decision, concept and gotcha that use an old name.
 
 ## Further Notes
