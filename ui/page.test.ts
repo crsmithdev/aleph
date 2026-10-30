@@ -51,6 +51,18 @@ test("the Memory view's classes have top-level rules, and .two stacks at 720px",
   expect(css).toMatch(/@media \(max-width: 720px\) \{\s*\.two \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
 });
 
+test("at 720px and below the top nav wraps its links and does not scroll sideways", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const css = html.match(/<style>([\s\S]*?)<\/style>/)![1].replace(/\/\*[\s\S]*?\*\//g, "");
+  const m = css.match(/@media \(max-width: 720px\) \{([\s\S]*?)\n\}/g)?.find((b) => b.includes(".side {"));
+  expect(m).toBeDefined();
+  const side = m!.slice(m!.indexOf(".side {"), m!.indexOf("}", m!.indexOf(".side {")));
+  expect(side).not.toMatch(/overflow-x:\s*auto/);
+  expect(side).toMatch(/flex-wrap:\s*wrap/);
+  expect(m!).toMatch(/#nav \{[^}]*flex-wrap: wrap/);
+  expect(m!).toMatch(/\.nav-group ul \{[^}]*flex-wrap: wrap/);
+});
+
 test("the page builds the sidebar from /api/views and has no project selector", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   for (const s of ["/api/views", 'aria-current="page"', '"factory", "Factory"', '"memory", "Memory"']) expect(html).toContain(s);

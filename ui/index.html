@@ -571,15 +571,15 @@ pre.stat b { color: var(--need); }
 @media (max-width: 720px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
   .side {
-    position: sticky; z-index: 2; height: auto; flex-direction: row; align-items: center; gap: 10px;
-    border-right: 0; border-bottom: 1px solid var(--rule); padding: 8px 16px; overflow-x: auto;
+    position: sticky; z-index: 2; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+    border-right: 0; border-bottom: 1px solid var(--rule); padding: 8px 16px; overflow: visible;
   }
   .side .mark { padding: 0; flex: none; }
-  #nav { display: flex; gap: 2px; flex: none; }
-  .nav-group { flex: none; }
+  #nav { display: flex; flex-wrap: wrap; gap: 2px; flex: 1 1 0; min-width: 0; }
+  .nav-group { flex: 0 1 auto; min-width: 0; }
   .nav-group + .nav-group { margin-top: 0; }
   .nav-group h2 { display: none; }
-  .nav-group ul { display: flex; gap: 2px; }
+  .nav-group ul { display: flex; flex-wrap: wrap; gap: 2px; }
   .nav-group a { white-space: nowrap; padding: 4px 8px; }
   .nav-group a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--ink); }
 }
