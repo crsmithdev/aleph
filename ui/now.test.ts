@@ -506,7 +506,7 @@ import { join } from "node:path";
 import { readList, labels as itemLabels } from "../todo/lib/store.ts";
 import { routes as proposalRoutes } from "./api/proposals.ts";
 
-const prop = { id: "l-1234abcd", kind: "check", sentence: "Do not mock the db.", count: 3, signals: [
+const prop = { id: "l-1234abcd", kind: "check", title: "No db mocks", target: "aleph checks", sentence: "Do not mock the db.", count: 3, signals: [
   { source: "chris", at: "2026-10-27T10:00:00Z", quote: "No, <script>alert(1)</script>", link: "https://lf/trace/t2" },
   { source: "gate", at: "2026-10-27T11:00:00Z", quote: "deny", link: "" },
 ] };
@@ -515,8 +515,11 @@ test("a proposal is a row with Yes-like buttons and its signals folded", () => {
   const h = r.renderJobs({ ...state, proposals: [prop] });
   const row = h.match(/<article class="job-card small issue-row proposal-check"[^]*?<\/article>/)![0];
   expect(problem(row)).toContain("Do not mock the db");
-  expect(row).toContain('class="act primary" type="button" data-act="approve" data-id="l-1234abcd" data-label="File the goal">File the goal<');
-  expect(row).toContain('data-act="decline" data-id="l-1234abcd" data-label="Never propose this">');
+  expect(row).toContain('<span class="t">No db mocks</span>');
+  expect(row).toContain('class="act primary" type="button" data-act="approve" data-id="l-1234abcd" data-label="Add a check to aleph">Add a check to aleph<');
+  expect(row).toContain('data-act="decline" data-id="l-1234abcd" data-label="Add no check">');
+  expect(row).toContain('data-reason="proposal-check:aleph"');
+  expect(row).toContain('data-label="Checks for aleph"');
   expect(row.match(/<details class="more"/g)?.length).toBe(1);
   expect(row).toContain('<a href="https://lf/trace/t2">');
   expect(row).not.toContain("<script>");
@@ -602,7 +605,7 @@ const sample = (reason: string) => {
   const iss = (o: object) => ({ needs: [], needsIssues: [{ ...issue(7), labels: ["needs-chris"], title: "T", ...o }], lessons: [] as any[] });
   if (["held", "review"].includes(reason)) return run(reason, reason === "review" ? { review2: { verdict: "chris", reason: "r" } } : {});
   if (reason === "question") return run("question", { question: "<agent-message>q</agent-message> Which?" });
-  if (reason.startsWith("proposal-")) return { needs: [], needsIssues: [] as any[], lessons: [{ ...prop, kind: reason.slice(9) }] };
+  if (reason.startsWith("proposal-")) return { needs: [], needsIssues: [] as any[], lessons: [{ ...prop, kind: reason.slice(9), target: { check: "aleph checks", "claude-md": "aleph/CLAUDE.md", skill: "skills/aleph/SKILL.md" }[reason.slice(9)] }] };
   const q: Record<string, object> = {
     "no-commit": { reason: "no-commit", question: "needs-chris: ended with no commit, so the factory stopped" },
     "triage-no-verdict": { reason: "triage-no-verdict", question: "needs-chris: triage: no verdict in 2 runs: failed: x" },
@@ -630,7 +633,10 @@ for (const reason of Object.keys(REASONS)) {
     for (const b of buttons) expect(["Yes", "No", "Open"]).not.toContain(b);
     expect(row.match(/<p class="hints">[^]*?<\/p>/)![0].match(/<span>/g)?.length).toBe(buttons.length);
     expect(row.match(/class="act always"/g)?.length).toBe(1);
-    expect(row).toMatch(new RegExp(`class="act always" type="button" data-act="always" data-reason="${reason}" data-action="[^"]+" data-first="${items[0].actions[0].act}" data-label="Always `));
+    const prefix = reason.startsWith("proposal-") ? "" : "Always ";
+    const keyed = reason.startsWith("proposal-") ? `${reason}:aleph` : reason;
+    expect(row).toMatch(new RegExp(`class="act always" type="button" data-act="always" data-reason="${keyed}" data-action="[^"]+" data-first="${items[0].actions[0].act}" data-label="${prefix}`));
+    if (prefix === "") expect(row).toContain(`data-label="${items[0].always.label}"`);
     expect(row.match(/<details class="more"/g)?.length ?? 0).toBeLessThanOrEqual(1);
   });
 }

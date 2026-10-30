@@ -2,7 +2,7 @@
  * What the Needs-you rows say and offer. The server decides from the reason code and the item's data;
  * the page only renders. One item per held, review or question run, per needs-chris issue and per proposal.
  */
-import { proposals as openProposals, type Lesson } from "../jobs/lib/corrections.ts";
+import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/corrections.ts";
 import type { Decision } from "../jobs/lib/decision.ts";
 import { REASONS, type Granted } from "../jobs/lib/standing.ts";
 // @ts-ignore plain JS, shared with the page
@@ -12,7 +12,7 @@ import type { Job, NewIssue, State } from "./state.ts";
 export interface Action { act: string; label: string; hint: string; primary: boolean; args: Record<string, string> }
 export interface AttentionItem {
   key: string; reason: string; id: string; href: string; title: string; problem: string;
-  actions: Action[]; always: { label: string; action: string; hint?: string }; details: Details;
+  actions: Action[]; always: { label: string; action: string; hint?: string; reason?: string }; details: Details;
   /** The project key, for `?project=`. */
   repo?: string;
 }
@@ -80,7 +80,22 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
       : `The firefighter would land ${c.id}, but it changes a held security path, so it needs your review.`;
   },
 };
-for (const k of ["check", "claude-md", "skill"]) PROBLEM[`proposal-${k}`] = (c) => `The correction memory proposes ${k === "check" ? "a check" : k === "claude-md" ? "a CLAUDE.md line" : "a skill change"}: ${clean(c.lesson?.sentence).replace(/\.$/, "")}.`;
+/** What a proposal changes and where, in the words of its buttons and hints. */
+function words(l: Lesson | undefined) {
+  const kind = l?.kind ?? "skill";
+  const p = place(kind, l?.target);
+  if (kind === "claude-md") {
+    const f = p ? `${p} CLAUDE.md` : "CLAUDE.md";
+    return { problem: `a line in ${f}`, approve: `Add a line to ${f}`, always: `Additions to ${f}`, decline: "Leave CLAUDE.md unchanged", hint: `adds the line to ${f}`, every: `proposed addition to ${f}` };
+  }
+  if (kind === "skill") {
+    const s = p ? `the ${p} skill` : "the skill";
+    return { problem: p ? `a change to ${s}` : "a skill change", approve: `Change ${s}`, always: `Changes to ${s}`, decline: `Leave ${s} unchanged`, hint: `changes ${s}`, every: `proposed change to ${s}` };
+  }
+  const r = p ? p : "the repo";
+  return { problem: `a check for ${r}`, approve: `Add a check to ${r}`, always: `Checks for ${r}`, decline: "Add no check", hint: `adds the check to ${r}`, every: `proposed check for ${r}` };
+}
+for (const k of ["check", "claude-md", "skill"]) PROBLEM[`proposal-${k}`] = (c) => `The correction memory proposes ${words(c.lesson).problem}: ${clean(c.lesson?.sentence).replace(/\.$/, "")}.`;
 
 function actionsFor(reason: string, c: Ctx): Action[] {
   const run: Record<string, string> = c.run ? { name: c.run.name } : {};
@@ -97,8 +112,12 @@ function actionsFor(reason: string, c: Ctx): Action[] {
       case "retry": return [a("retriage", "Run triage again", "Removes the label; the next tick triages the issue again.", issue)];
       case "close": return [a("close", "Close the issue", "Marks the issue dropped; nothing more runs for it.", issue)];
       case "deny": return [a("deny", "Deny", "Records your refusal on the issue and closes the question.", issue)];
-      case "approve": return [a("approve", "File the goal", "Files the proposal as a goal for the factory.", { id: c.id })];
-      case "decline": return [a("decline", "Never propose this", "Drops the proposal and stops the memory proposing it again.", { id: c.id })];
+      case "approve":
+        if (c.lesson) { const w = words(c.lesson); return [a("approve", w.approve, `Files the goal that ${w.hint}.`, { id: c.id })]; }
+        return [a("approve", "File the goal", "Files the proposal as a goal for the factory.", { id: c.id })];
+      case "decline":
+        if (c.lesson) return [a("decline", words(c.lesson).decline, "Drops the proposal; the memory does not propose this lesson again.", { id: c.id })];
+        return [a("decline", "Never propose this", "Drops the proposal and stops the memory proposing it again.", { id: c.id })];
       case "decide": {
         const d = c.issue?.decision;
         if (d) return [...d.options].sort((x, y) => +(y.label === d.recommended) - +(x.label === d.recommended))
@@ -141,12 +160,20 @@ function alwaysFor(action: string, first: string | undefined): AttentionItem["al
   return { label: `Always ${lower(first ?? action)}`, action };
 }
 
+function proposalAlways(l: Lesson): NonNullable<AttentionItem["always"]> {
+  const key = standingKey(l);
+  return {
+    label: words(l).always, action: "approve", reason: key,
+    hint: `From now on, the factory files every ${words(l).every} without asking you. Revoke with \`aleph standing revoke ${key}\`.`,
+  };
+}
+
 function item(reason: string, c: Ctx, key: string, href: string, title: string, repo?: string): AttentionItem {
   const actions = actionsFor(reason, c);
   const r = REASONS[reason];
   return {
     key, reason, id: c.id, href, title, problem: PROBLEM[reason](c), actions,
-    always: alwaysFor(r.always, actions[0]?.label),
+    always: c.lesson ? proposalAlways(c.lesson) : alwaysFor(r.always, actions[0]?.label),
     details: detailsFor(c), ...(repo ? { repo } : {}),
   };
 }
@@ -168,7 +195,7 @@ export function attend(s: Pick<State, "needs" | "needsIssues">, standing: Standi
   for (const i of s.needsIssues) add(item(issueReason(i), { id: i.id, issue: i }, `issue:${i.id}`, i.href, i.title, i.id.split(/-(?=\d+$)/)[0]));
   for (const l of lessons) {
     const reason = `proposal-${l.kind ?? "skill"}`;
-    if (REASONS[reason]) add(item(reason, { id: l.id, lesson: l }, `proposal:${l.id}`, "", l.sentence));
+    if (REASONS[reason]) add(item(reason, { id: l.id, lesson: l }, `proposal:${l.id}`, "", l.title || l.sentence));
   }
   return { items: out, handed };
 }

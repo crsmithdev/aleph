@@ -9,7 +9,8 @@ const run = (needs: string, extra: Partial<Job> = {}): Job => ({
   run: { kind: "agent", started: "2026-10-28T00:00:00Z" }, defaults: [], followups: [], ...extra,
 } as Job);
 const issue = (extra: Partial<NewIssue> = {}): NewIssue => ({ id: "aleph-387", title: "t", status: "open", href: "#/issues/aleph/387", labels: ["needs-chris"], notes: 1, created: "", updated: "", ...extra });
-const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", sentence: "Run the formatter before landing", state: "proposed", kind, count: 3, signals: [{ id: "s", source: "chris", at: "2026-10-27", quote: "format it", link: "" }] });
+const TARGET = { check: "aleph checks", "claude-md": "identity/CLAUDE.md", skill: "skills/tdd/SKILL.md" } as const;
+const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", title: "Format first", target: TARGET[kind!], sentence: "Run the formatter before landing", state: "proposed", kind, count: 3, signals: [{ id: "s", source: "chris", at: "2026-10-27", quote: "format it", link: "" }] });
 const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", kind: "product" as const, why: ["w"] };
 
 const CASES: Record<string, () => ReturnType<typeof attention>> = {
@@ -40,7 +41,7 @@ describe("attention", () => {
       expect(it.actions[0].primary).toBe(true);
       expect(it.actions.slice(1).some((a) => a.primary)).toBe(false);
       for (const a of it.actions) { expect(a.label).toBeTruthy(); expect(a.hint).toBeTruthy(); expect(a.act).toBeTruthy(); }
-      expect(it.always.label.startsWith("Always ")).toBe(true);
+      if (!reason.startsWith("proposal-")) expect(it.always.label.startsWith("Always ")).toBe(true);
       expect(it.always.action).toBe(REASONS[reason].always);
     });
   }
@@ -60,8 +61,20 @@ describe("attention", () => {
     expect(CASES.decision()[0].problem).toBe("Should it be A or B?");
     expect(CASES.decision()[0].actions.map((a) => a.label)).toEqual(["Approve B", "Approve A", "Deny"]);
     expect(CASES.decision()[0].actions[0].args).toEqual({ repo: "aleph", id: "387", option: "B" });
-    expect(CASES["proposal-check"]()[0].problem).toBe("The correction memory proposes a check: Run the formatter before landing.");
-    expect(CASES["proposal-check"]()[0].actions.map((a) => a.label)).toEqual(["File the goal", "Never propose this"]);
+    expect(CASES["proposal-check"]()[0].problem).toBe("The correction memory proposes a check for aleph: Run the formatter before landing.");
+    expect(CASES["proposal-check"]()[0].title).toBe("Format first");
+    expect(CASES["proposal-check"]()[0].actions.map((a) => a.label)).toEqual(["Add a check to aleph", "Add no check"]);
+    expect(CASES["proposal-check"]()[0].always).toMatchObject({ label: "Checks for aleph", reason: "proposal-check:aleph" });
+    const md = CASES["proposal-claude-md"]()[0];
+    expect(md.problem).toBe("The correction memory proposes a line in global CLAUDE.md: Run the formatter before landing.");
+    expect(md.actions.map((a) => a.label)).toEqual(["Add a line to global CLAUDE.md", "Leave CLAUDE.md unchanged"]);
+    expect(md.actions[0].hint).toBe("Files the goal that adds the line to global CLAUDE.md.");
+    expect(md.always).toEqual({ label: "Additions to global CLAUDE.md", action: "approve", reason: "proposal-claude-md:global", hint: "From now on, the factory files every proposed addition to global CLAUDE.md without asking you. Revoke with `aleph standing revoke proposal-claude-md:global`." });
+    const sk = CASES["proposal-skill"]()[0];
+    expect(sk.actions.map((a) => a.label)).toEqual(["Change the tdd skill", "Leave the tdd skill unchanged"]);
+    expect(sk.always.label).toBe("Changes to the tdd skill");
+    expect(sk.problem).toContain("a change to the tdd skill:");
+    expect(sk.actions[0].hint).toBe("Files the goal that changes the tdd skill.");
     expect(CASES["proposal-check"]()[0].actions[0].args).toEqual({ id: "L1" });
     expect(CASES.firefighter()[0].problem).toBe("The firefighter would land aleph-30, but it changes hooks/x.ts, a held security path, so it needs your review.");
     expect(CASES.held()[0].always).toEqual({ label: "Always let the firefighter decide", action: "firefighter" });
