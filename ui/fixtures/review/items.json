@@ -8,7 +8,8 @@
     { "title": "Crash on an empty config", "labels": ["bug", "triaged"], "priority": "high" },
     { "title": "Check the dark theme on the phone", "labels": ["live-check"] },
     { "title": "Add a dry-run flag", "labels": ["proposal"] },
-    { "title": "Typo in the README", "labels": [] }
+    { "title": "Typo in the README", "labels": [] },
+    { "title": "Speed up the import", "labels": ["goal"], "status": "dropped", "notes": ["Dropped: not worth it."] }
   ],
   "tools": [
     { "title": "Parse dates in the import command", "labels": ["goal"], "body": "Dates in the CSV come through as text." },

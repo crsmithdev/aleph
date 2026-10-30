@@ -22,7 +22,7 @@ afterAll(() => { proc.kill(); rmSync(base, { recursive: true, force: true }); })
 test("the review fixture gives the one-off server jobs, issues, projects and notes", async () => {
   const jobs = await get("/api/jobs");
   expect(jobs.map((j: any) => [j.state, j.needs ?? null]).sort()).toEqual([
-    ["dropped", null], ["landed", null], ["needs-you", "held"], ["needs-you", "review"], ["running", null], ["stuck", null],
+    ["dropped", null], ["dropped", null], ["dropped", null], ["landed", null], ["needs-you", "held"], ["needs-you", "review"], ["running", null], ["stuck", null],
   ]);
   const issues = await get("/api/issues?all=1");
   expect(new Set(issues.map((i: any) => i.repo))).toEqual(new Set(["demo", "tools"]));
@@ -30,6 +30,14 @@ test("the review fixture gives the one-off server jobs, issues, projects and not
   for (const l of ["goal", "needs-chris", "triaged", "live-check", "proposal"]) expect(issues.some((i: any) => i.labels.includes(l))).toBe(true);
   expect((await get("/api/memory")).total).toBe(4);
   expect(JSON.stringify(await get("/api/projects"))).toContain("tools");
+});
+
+test("the review fixture's speed API fills four Efficiency classes, two or more of them lost", async () => {
+  const { classes } = await get("/api/speed?window=week");
+  const filled = classes.filter((c: any) => c.hours > 0);
+  expect(filled.length).toBeGreaterThanOrEqual(4);
+  expect(filled.filter((c: any) => ["nothing", "loop", "restarted", "dropped"].includes(c.key)).length).toBeGreaterThanOrEqual(2);
+  expect(filled.some((c: any) => ["nothing", "loop", "restarted", "dropped"].includes(c.key) && c.causes.length >= 2 && c.goals >= 2)).toBe(true);
 });
 
 test("project paths come from the project names, never from the fixture's own repos.json", () => {

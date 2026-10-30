@@ -1,0 +1,1 @@
+{"kind":"agent","job":"demo-1b","name":"demo-1b","repo":"demo","told":true,"model":"claude-sonnet-5-5","branch":"factory/demo-1b","state":"dropped","reason":"the goal had landed","todo":1,"started":"2026-10-28T09:40:00.000Z","ended":"2026-10-28T10:00:00.000Z","cost":0.05}
