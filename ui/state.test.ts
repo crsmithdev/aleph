@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../todo/lib/store.ts";
-import { add } from "../todo/lib/todo.ts";
+import { add, note } from "../todo/lib/todo.ts";
 import { state } from "./state.ts";
 import { loadRegistry } from "../jobs/lib/ledger.ts";
+import { spawn } from "node:child_process";
 import { facts } from "../jobs/lib/status.ts";
 
 let base: string, jobsDir: string, factory: string;
@@ -77,7 +78,7 @@ describe("state", () => {
     // Delivered is the latest lands, not only today's: fac-6 landed 30 hours ago.
     expect(s.delivered.map((j) => j.name)).toEqual(["fac-5", "fac-6"]);
     expect(s.delivered[0].commitUrl).toBe("https://github.com/chris/demo/commit/abcdef1234567");
-    expect(s.waiting).toEqual([{ repo: "fac", id: 2, title: "waiting goal" }]);
+    expect(s.waiting).toEqual([{ repo: "fac", id: 2, title: "waiting goal", why: "Held: fac-3 is stuck (a check failed). No run starts or lands until it is cleared.", kind: "gate" }]);
     expect(s.factory.runsToday).toBe(4);
     expect(s.factory.dayCap).toBe(12);
     expect(s.factory.paused).toBe(false);
@@ -259,7 +260,46 @@ describe("a planner run", () => {
     run(ids[0], { kind: "plan", job: "plan-fac-2", name: "plan-fac-2", state: "done", todo: 2, started: ago(1), ended: ago(0.5) });
     s = state(now);
     expect(s.running.map((j) => j.name)).not.toContain("plan-fac-2");
-    expect(s.waiting).toEqual([{ repo: "fac", id: 2, title: "waiting goal" }]);
+    expect(s.waiting).toEqual([{ repo: "fac", id: 2, title: "waiting goal", why: "Held: fac-3 is stuck (a check failed). No run starts or lands until it is cleared.", kind: "gate" }]);
     for (const id of ids) rmSync(join(jobsDir, id), { recursive: true });
+  });
+});
+
+describe("waiting entries", () => {
+  test("carry why, kind, and the links the Queued lane shows", async () => {
+    writeList({ key: "fac" }, "waiting fixtures", (doc) => {
+      add(doc, "waits goal", { labels: ["goal"], waitingOn: "fac-2" });
+      const ask = add(doc, "ask goal", { labels: ["goal", "needs-chris"] });
+      note(ask, "needs-chris: which port?");
+      return true;
+    }, true);
+    // The stuck fac-3 would hold every start: set it aside, so only the reasons under test remain.
+    const stuckDir = join(jobsDir, "20261027-000002-a"), aside = join(base, "stuck-aside");
+    renameSync(stuckDir, aside);
+    try { await check(); } finally { renameSync(aside, stuckDir); }
+    async function check() {
+    const by = (s: ReturnType<typeof state>, title: string) => s.waiting.find((w) => w.title === title)!;
+    const s = state(now);
+    expect(by(s, "waits goal")).toMatchObject({ kind: "waits_on", why: "Waits on fac-2", waits: [{ id: "fac-2", href: "#/issues/fac/2", state: "queued" }] });
+    const ask = by(s, "ask goal");
+    expect(ask.kind).toBe("needs-chris");
+    expect(ask.why.startsWith("Waits for you: ")).toBe(true);
+    expect(ask.ask).toEqual({ href: `#/issues/fac/${ask.id}` });
+    expect(by(s, "waiting goal").why).toBe("Starts at the next dispatch");
+
+    const dir = join(jobsDir, "20261027-000060-a");
+    run("20261027-000060-a", { job: "live-x", name: "live-x", state: "running" });
+    const child = spawn("bash", ["-c", "sleep 30; true", "_", dir], { stdio: "ignore" });
+    writeFileSync(join(dir, "pid"), String(child.pid));
+    const keep = process.env.ALEPH_LIVE_CAP;
+    process.env.ALEPH_LIVE_CAP = "1";
+    try {
+      expect(by(state(now), "waiting goal")).toMatchObject({ kind: "gate", why: "Waiting for a slot (1 of 1 running)" });
+    } finally {
+      if (keep === undefined) delete process.env.ALEPH_LIVE_CAP; else process.env.ALEPH_LIVE_CAP = keep;
+      child.kill();
+      rmSync(dir, { recursive: true });
+    }
+    }
   });
 });

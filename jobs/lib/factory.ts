@@ -836,14 +836,14 @@ export function recordFlake(repo: string, check: string, run: string, now = Date
 
 export interface Baseline { repo: string; commit: string; ok: boolean; failed?: string }
 const baselineFile = () => join(factoryDir(), "baseline.json");
-const baselines = (): Record<string, Baseline> => {
+export const baselines = (): Record<string, Baseline> => {
   try { return JSON.parse(readFileSync(baselineFile(), "utf8")); } catch { return {}; }
 };
 /** The baselines that are red now, one per repo. */
 export const redBaselines = (): Baseline[] => Object.values(baselines()).filter((b) => !b.ok);
 /** The check that failed, from the gate's reason: `tests failed` is `tests`. */
 const failedCheck = (why: string) => why.replace(/^timed out: check /, "").replace(/ failed$/, "");
-const redLine = (b: Baseline) => `main is red at ${b.commit.slice(0, 7)}: ${b.failed}`;
+export const redLine = (b: Baseline) => `main is red at ${b.commit.slice(0, 7)}: ${b.failed}`;
 
 /** A baseline that could not run its checks, as against a check that failed: never recorded. */
 const infraError = (why: string) => /^(checks did not start|bundle failed|baseline did not run|worktree gone)/.test(why);

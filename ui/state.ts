@@ -5,14 +5,14 @@
  */
 import { resultLine } from "../jobs/lib/acceptance.ts";
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { DAY_CAP, LIVE_CAP, WAITING_CAP, firefighterLines, health, hold, lastProbe, openGoals, paused, runsToday } from "../jobs/lib/factory.ts";
+import { DAY_CAP, LIVE_CAP, WAITING_CAP, baselines, doneChecker, firefighterLines, gates, health, hold, lastProbe, openGoals, paused, redLine, runsToday, waitReason, type WaitReason } from "../jobs/lib/factory.ts";
 import { allRuns, loadRegistry, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { readDecision, type Decision } from "../jobs/lib/decision.ts";
 import { attend, stuckBlocker, type AttentionItem, type Blocker } from "./attention.ts";
 import { readStanding } from "../jobs/lib/standing.ts";
 import { isSorted, labels, needsChris, reader } from "../todo/lib/store.ts";
-import { status } from "../todo/lib/todo.ts";
+import { parseRef, status } from "../todo/lib/todo.ts";
 import type { Wk } from "./usage.ts";
 
 export interface Job {
@@ -73,7 +73,8 @@ export interface State {
     firefighter: { at: string; line: string }[];
   };
   needs: Job[]; stuck: Job[]; running: Job[]; delivered: Job[];
-  waiting: { repo: string; id: number; title: string }[];
+  waiting: { repo: string; id: number; title: string; why: string; kind: WaitReason["kind"];
+    waits?: { id: string; href: string; state: string | null }[]; ask?: { href: string } }[];
   /** Land runs in progress. */
   landing: number;
   /** Open issues in factory repos that are not goals and not yet triaged: the newest NEW_ISSUES. */
@@ -329,6 +330,7 @@ export function state(now = new Date()): State {
   const today = runsToday(now.getTime());
   const probe = lastProbe();
   const granted = readStanding();
+  const isDone = doneChecker(), gated = gates({ only: ["pause", "hold", "probe", "live", "day", "waiting"], jobs });
   const att = attend({ needs, needsIssues: waitingOnChris }, granted);
   return {
     now: now.toISOString(),
@@ -345,6 +347,23 @@ export function state(now = new Date()): State {
     // Lands: land runs in progress first, then the latest landed, DELIVERED in all.
     delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).slice(0, Math.max(0, DELIVERED - landRuns.length)).map((d) => toJob(d.runs))].slice(0, DELIVERED),
     waiting: openGoals().filter(({ repo, item }) => !openNames.has(`${repo.key}/${repo.key}-${item.id}`) && !planned.has(`${repo.key}/${item.id}`) && !labels(item).includes("planned"))
-      .map(({ repo, item }) => ({ repo: repo.key, id: item.id, title: item.title })),
+      .map(({ repo, item }) => {
+        const href = `#/issues/${encodeURIComponent(repo.key)}/${item.id}`;
+        let red: string | null = null;
+        const b = baselines()[repo.key];
+        if (b && !b.ok) {
+          const p = Bun.spawnSync(["git", "-C", repo.path, "rev-parse", `origin/${repo.main}`], { stdout: "pipe", stderr: "ignore" });
+          if (p.stdout.toString().trim() === b.commit) red = redLine(b);
+        }
+        const w = waitReason(repo, item, { done: isDone, jobs, gated, red, now });
+        return {
+          repo: repo.key, id: item.id, title: item.title, why: w.text, kind: w.kind,
+          ...(w.kind === "waits_on" ? { waits: w.ids.map((id) => {
+            const r = parseRef(id), found = r ? lists.item(r.repo, r.id) : undefined;
+            return { id, href: r ? `#/issues/${encodeURIComponent(r.repo)}/${r.id}` : "", state: r && found ? itemStatus(r.repo, found) : null };
+          }) } : {}),
+          ...(w.kind === "needs-chris" ? { ask: { href } } : {}),
+        };
+      }),
   };
 }
