@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { clearCache, pct, routes, speed } from "./api/speed.ts";
+import { CLASSES, classify, clearCache, pct, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
 import { areaOption, dur, renderCharts, renderEfficiency, renderPicker, renderSpeedTop, windowOf } from "./views/speed.js";
 
@@ -134,3 +134,41 @@ test("the view: medians with p50, p90 and runs; charts; efficiency with reruns a
   expect(dur(245)).toBe("4m 05s");
 });
 const round = (x: number) => Math.round(x * 100) / 100;
+
+test("classify: one run of each class, with its cause", () => {
+  const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
+  const r = (job: string, todo: number, h: number, m: number, o: Record<string, unknown> = {}) =>
+    ({ kind: "agent", job, name: job, repo: "fx", todo, state: "passed", started: t(h, m), ended: t(h, m + 10), ...o }) as any;
+  const runs = [
+    // goal 1: a fix round and the landing run in job a, an earlier job z restarted, then a run after the land
+    r("z", 1, 1, 0, { state: "stuck", reason: "agent run z: stalled" }),
+    r("a", 1, 2, 0, { state: "failed", failed: "tests" }),
+    r("a", 1, 3, 0),
+    { kind: "land", job: "a", name: "a", repo: "fx", todo: 1, state: "landed", started: t(3, 20), ended: t(3, 25) },
+    r("b", 1, 5, 0),
+    // goal 2: four starts in an hour, the 4th is a loop; they have no landing, the first three are not counted
+    r("l1", 2, 6, 0), r("l2", 2, 6, 10), r("l3", 2, 6, 20), r("l4", 2, 6, 30),
+    // goal 3 is dropped
+    r("d", 3, 8, 0, { state: "stuck", noCommit: true }),
+    // goal 4 is open and unclassed
+    r("o", 4, 9, 0),
+  ];
+  const status = (g: string) => (g === "fx-3" ? "dropped" : "open");
+  const out = classify(runs, status, new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
+  const by = (k: string) => out.classes.find((c) => c.key === k)!;
+  expect(out.classes.map((c) => c.key)).toEqual([...CLASSES]);
+  expect(by("landed").causes.map((c) => c.name)).toEqual(["After fix rounds"]);
+  expect(by("fixed").causes.map((c) => c.name)).toEqual(["Checks failed"]);
+  expect(by("restarted").causes.map((c) => c.name)).toEqual(["Stalled or timed out"]);
+  expect(by("nothing").causes.map((c) => c.name)).toEqual(["Goal had landed"]);
+  expect(by("loop").causes.map((c) => c.name)).toEqual(["4–9 starts in an hour"]);
+  expect(by("dropped").causes.map((c) => c.name)).toEqual(["No commit"]);
+  expect(by("dropped").top[0]).toMatchObject({ goal: "fx-3", href: "#/issues/fx/3" });
+  expect(out.notCounted).toEqual({ runs: 4, goals: 2, hours: round2(4 * 10 / 60) });
+  expect(out.lost.hours).toBeCloseTo(Math.round(out.classes.slice(2).reduce((a, c) => a + c.hours, 0) * 100) / 100, 1);
+  const d = speed("day", now);
+  expect(d.classes.map((c) => c.key)).toEqual([...CLASSES]);
+  expect(d.goals.week).toBeNull();
+  expect(d.hasWeek).toBe(false);
+});
+const round2 = (n: number) => Math.round(n * 100) / 100;
