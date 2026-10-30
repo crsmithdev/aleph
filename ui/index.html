@@ -1048,7 +1048,8 @@ details.fontpick > summary::before, details.fontpick[open] > summary::before { c
 .fontpick select { flex: 1; min-width: 0; height: 28px; box-sizing: border-box; text-overflow: ellipsis; font: var(--fs-sm) var(--sans); padding: 4px 6px; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; }
 .fontpick .fp-css { height: 6em; overflow: auto; box-sizing: border-box; margin: 0; padding: 8px; font: var(--fs-xs) var(--mono); white-space: pre-wrap; background: var(--sunk); border-radius: 4px; color: var(--ink-2); }
 .fontpick button { justify-self: start; font: var(--fs-sm) var(--sans); padding: 3px 10px; background: none; color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; cursor: pointer; }
-.fontpick .fp-row button { flex: none; width: 32px; height: 28px; box-sizing: border-box; padding: 0; text-align: center; font-size: var(--fs-lg); line-height: 1; }`;
+.fontpick .fp-row button { flex: none; width: 32px; height: 28px; box-sizing: border-box; padding: 0; text-align: center; font-size: var(--fs-lg); line-height: 1; }
+@media (max-width: 720px) { .fontpick { display: none; } }`;
   document.head.append(style);
   document.body.append(panel);
   apply();

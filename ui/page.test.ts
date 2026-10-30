@@ -178,3 +178,9 @@ test("the Needs-you list and row parts have top-level rules", () => {
   }
   expect(css).toContain("grid-template-columns: minmax(0, 1fr)");
 });
+
+test("the font picker is hidden at 720px and below, and keeps its top-level rule", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  expect(html).toMatch(/@media \(max-width: 720px\) \{\s*\.fontpick \{\s*display: none;?\s*\}\s*\}/);
+  expect(html).toMatch(/\.fontpick \{ position: fixed; right: 16px; bottom: 16px;/);
+});
