@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { askOf, clearAsk, readList, writeList } from "../../todo/lib/store.ts";
@@ -356,6 +356,43 @@ test("a land killed by a host restart fails and lands again, and the goal does n
   expect(f.calls).not.toContain(`drop fac-${id}`);
   expect(readRun(l.folder)).toMatchObject({ state: "failed", reason: "host restart" });
   expect(existsSync(join(l.folder, "exit"))).toBe(true);
+});
+
+// A review that a host restart killed: the run is awaiting a held-path ask, call.md says PENDING.
+const heldRun = (id: number, call: string, mtime: Date) => {
+  const r = mk(`fac-${id}`, "build", "awaiting", { ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } }, { "call.md": call });
+  utimesSync(join(r.folder, "call.md"), mtime, mtime);
+  return r;
+};
+const reviewDispatch = (starts: string[]) => {
+  const f = fakes();
+  // Like startReview: the start writes a new PENDING.
+  f.rescue.review = (folder) => { starts.push(folder); writeFileSync(join(folder, "call.md"), "PENDING\n"); return true; };
+  return dispatch(f);
+};
+
+test("a held run whose PENDING call.md is older than the boot gets one new review start", async () => {
+  const r = heldRun(goal(), "PENDING\n", new Date(BEFORE_BOOT));
+  const starts: string[] = [];
+  await reviewDispatch(starts);
+  expect(starts).toEqual([r.folder]);
+  await reviewDispatch(starts);
+  expect(starts).toEqual([r.folder]);
+});
+
+test("a held run whose PENDING call.md was written after the boot gets no start", async () => {
+  heldRun(goal(), "PENDING\n", new Date());
+  const starts: string[] = [];
+  await reviewDispatch(starts);
+  expect(starts).toEqual([]);
+});
+
+test("a held run with a verdict or an ERROR in an old call.md gets no start", async () => {
+  heldRun(goal(), "VERDICT: land\n", new Date(BEFORE_BOOT));
+  heldRun(goal(), "ERROR: could not start: x\n", new Date(BEFORE_BOOT));
+  const starts: string[] = [];
+  await reviewDispatch(starts);
+  expect(starts).toEqual([]);
 });
 
 test("a paused factory leaves a killed run alone", async () => {

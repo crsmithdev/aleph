@@ -3,7 +3,7 @@
  * tick, the report and its health line. Its state lives in ~/.aleph/factory,
  * which no sandbox can see. See docs/specs/2026-10-26-seed-factory.md.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { afterOf, askOf, flakeTracker, goal, goals, goalsOf, issueOf as issueRefOf, kindOf, note, readList, readLists, reader } from "../../todo/lib/store.ts";
@@ -17,6 +17,7 @@ import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, askOf as runAskOf, expand, isAwaiting, isBuild, needsOf, onOf, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, jobsNamed, asked, lastReal, markAsked, markRescued, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { accept, final, readRecord, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
+import { startReview } from "./review.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
 import { factsGate } from "./facts.ts";
 import { writeEpisodes } from "./episode.ts";
@@ -304,6 +305,8 @@ export interface Rescue {
   drop: (name: string, reason: string) => Promise<string | null>;
   /** Start a recheck of the job. */
   recheck: (name: string) => Promise<string | null>;
+  /** Start a review of the run's folder (startReview, when absent). */
+  review?: (folder: string) => boolean;
 }
 
 /** A file is busy when this many land runs of its repo conflicted on it in the last BUSY_MS. */
@@ -662,6 +665,39 @@ const killed = (jobs: Job[]): Job[] => {
   });
 };
 
+/**
+ * The folders of runs a host restart left with a review that cannot be alive: `awaiting` for a held-path or review
+ * ask, call.md still `PENDING` and written before this boot. Sandbox repos only, as `killed`.
+ */
+const killedReviews = (): string[] => {
+  const keys = new Set(sandboxRepos().map((r) => r.key));
+  const booted = bootedAt();
+  const out: string[] = [];
+  for (const j of allJobs()) {
+    const last = lastReal(j);
+    const r = last.run;
+    if (!isOpen(j) || !r.repo || !keys.has(r.repo) || !isAwaiting(r.state) || !["held-path", "review"].includes(runAskOf(r)?.reason ?? "")) continue;
+    const call = join(last.folder, "call.md");
+    try {
+      if (readFileSync(call, "utf8").trim() === "PENDING" && statSync(call).mtimeMs < booted) out.push(last.folder);
+    } catch { /* no call.md */ }
+  }
+  return out;
+};
+
+/** Start again each review that a host restart killed: the stale call.md goes, and the new start writes a new PENDING. */
+function restartReviews(act: Rescue): void {
+  for (const folder of killedReviews()) {
+    try {
+      rmSync(join(folder, "call.md"), { force: true });
+      factoryLog(`${folder}: a host restart killed its review; starting it again`);
+      (act.review ?? startReview)(folder);
+    } catch (e: any) {
+      factoryLog(`review restart of ${folder} failed: ${e?.message ?? e}`);
+    }
+  }
+}
+
 /** How long a dispatch waits for a run's rescue lock before it skips the run. */
 const RESCUE_WAIT_MS = () => Number(process.env.ALEPH_RESCUE_WAIT_MS ?? 60_000);
 
@@ -675,6 +711,7 @@ const RESCUE_WAIT_MS = () => Number(process.env.ALEPH_RESCUE_WAIT_MS ?? 60_000);
  * restart killed comes first: it is dropped for a new run of the goal, or landed again, and uses up no rerun.
  */
 async function rescueStuck(act: Rescue, land?: Land, checks?: Checks): Promise<void> {
+  restartReviews(act);
   const pending = (jobs: Job[]) => [...killed(jobs), ...holders(jobs)];
   for (const first of pending(allJobs())) {
     const name = first[0].run.name;
