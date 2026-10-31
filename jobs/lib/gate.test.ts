@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reviewPrompt } from "./unit.ts";
-import { heldRule, testFindings, verdict, outcome, replyOf, tagged, alreadyMet } from "./gate.ts";
+import { heldRule, securityChange, testFindings, verdict, outcome, replyOf, tagged, alreadyMet } from "./gate.ts";
 
 let dir: string;
 const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -38,6 +38,21 @@ test("a held path that is not a test needs Chris; test changes are findings, not
   expect(findings(() => git("mv", "a.test.ts", "b.test.ts"))).toEqual(["renames the test a.test.ts to b.test.ts"]);
   expect(findings(() => put("a.test.ts", 'test("a", () => { expect(1).toBe(1); });\n'))).toEqual(["changes the test a.test.ts"]);
   expect(findings(() => put("tests/new.test.ts", 'test.skip("later", () => {});\n'))).toEqual(["adds .skip, .only or .todo in tests/new.test.ts"]);
+});
+
+test("a security path is found by name, also when a rename takes it away; its test is not one", () => {
+  const on = (change: () => void) => { rule(change); return securityChange(dir, "main", "b"); };
+  git("switch", "-q", "main");
+  put("jobs/lib/sandbox.ts", "// the sandbox\n".repeat(20));
+  git("add", "-A"); git("commit", "-qm", "sandbox");
+  expect(on(() => put("jobs/lib/sandbox.ts", "// changed\n"))).toBe("jobs/lib/sandbox.ts");
+  expect(on(() => git("mv", "jobs/lib/sandbox.ts", "jobs/lib/box.ts"))).toBe("jobs/lib/sandbox.ts");
+  expect(on(() => put("hooks/any.ts", "x\n"))).toBe("hooks/any.ts");
+  expect(on(() => put("jobs/lib/review.ts", "x\n"))).toBe("jobs/lib/review.ts");
+  expect(on(() => put("package.json", "{}\n"))).toBe("package.json");
+  expect(on(() => put("identity/CLAUDE.md", "x\n"))).toBe("identity/CLAUDE.md");
+  expect(on(() => put("jobs/lib/sandbox.test.ts", "x\n"))).toBeNull();
+  expect(on(() => put("jobs/cli.ts", "// changed\n"))).toBeNull();
 });
 
 test("additions to an existing test give no finding, also under a held path", () => {

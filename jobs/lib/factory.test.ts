@@ -1082,3 +1082,32 @@ test("the day's spend counts every kind that records a cost", () => {
   for (const [name, kind, cost] of [["fac-1", "build", 1], ["fac-2", "triage", 2], ["fac-3", "plan", 4], ["fac-4", "facts", 8], ["fac-5", "firefighter", 16]] as const) mk(name, kind, "done", { cost });
   expect(spentToday()).toBe(31);
 });
+
+test("a goal that names a busy file an open job also names waits; a job waiting for Chris does not count", async () => {
+  const surface = "## Edit surface\n- jobs/busy.ts (the change)\n- jobs/other.ts\n";
+  const withSurface = () => writeList({ key: "fac" }, "add a goal", (doc) => { const item = issues.add(doc, "ship it", { body: surface }); item.fm.kind = "goal"; return item.id; }, true)!.value;
+  for (const n of [901, 902, 903]) mk(`fac-${n}`, "land", "dropped", { conflicts: ["jobs/busy.ts"] });
+  const first = withSurface();
+  const second = withSurface();
+  const { folder } = mk(`fac-${first}`, "build", "passed");
+  const calls: string[] = [];
+  const start = async (_repo: unknown, name: string) => { calls.push(name); return null; };
+  const out = await dispatchGoals(start);
+  expect(calls).toEqual([]);
+  expect(out.skipped).toContain(`fac-${second}: waits for fac-${first}: both change the busy file jobs/busy.ts`);
+  writeRun(folder, { ...readRun(folder)!, state: "awaiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
+  await dispatchGoals(start);
+  expect(calls).toEqual([`fac-${second}`]);
+});
+
+test("a goal that shares only a quiet file with an open job starts", async () => {
+  const body = "## Edit surface\n- jobs/quiet.ts\n";
+  const add = () => writeList({ key: "fac" }, "add a goal", (doc) => { const item = issues.add(doc, "ship it", { body }); item.fm.kind = "goal"; return item.id; }, true)!.value;
+  mk("fac-901", "land", "dropped", { conflicts: ["jobs/quiet.ts"] });
+  const first = add();
+  const second = add();
+  mk(`fac-${first}`, "build", "passed");
+  const calls: string[] = [];
+  await dispatchGoals(async (_repo, name) => { calls.push(name); return null; });
+  expect(calls).toEqual([`fac-${second}`]);
+});

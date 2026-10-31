@@ -5,7 +5,7 @@
  * edit surface, and for a `ui` goal the harness starts the ui server on the merge
  * result and loads the changed views in Chrome (review-browser.ts), both outside the sandbox, before the reviewer starts. It writes call.md in the run folder, and only that: state.json belongs to the
  * run's owner. The verdict, a `PENDING` line or a last `ERROR: <reason>` line
- * are read back from call.md (`readCall`), and `recordReview` puts the call on the run's state.json. Nothing lands: Land stays a click.
+ * are read back from call.md (`readCall`), and `recordReview` puts the call on the run's state.json. Nothing lands here: `reviewBack` in unit.ts passes a held run that passed both reviews.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";

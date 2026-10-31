@@ -14,7 +14,7 @@ import { itemOnMain, repoStages } from "./status.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
-import { allRuns, askOf as runAskOf, expand, isAwaiting, isBuild, needsOf, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, askOf as runAskOf, expand, isAwaiting, isBuild, needsOf, onOf, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, jobsNamed, asked, lastReal, markAsked, markRescued, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { accept, final, readRecord, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
@@ -25,7 +25,7 @@ import { readdirSync } from "node:fs";
 import { alreadyMet } from "./gate.ts";
 import { always, logAlways } from "./always.ts";
 import { detached } from "./launch.ts";
-import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
+import { needsPlan, planning, runPlan, section, type Rate } from "./plan.ts";
 import type { Tier } from "./route.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
@@ -306,6 +306,37 @@ export interface Rescue {
   recheck: (name: string) => Promise<string | null>;
 }
 
+/** A file is busy when this many land runs of its repo conflicted on it in the last BUSY_MS. */
+const BUSY_CONFLICTS = 3;
+const BUSY_MS = 7 * 86_400_000;
+
+/** The paths named in a goal's Edit surface. */
+const surfaceOf = (body: string): string[] => section(body, "Edit surface").split(/[^\w./@-]+/).map((t) => t.replace(/\.+$/, "")).filter(Boolean);
+
+/**
+ * Why a goal waits for an open job: both name the same busy file in their Edit surface, so one
+ * of the two lands would conflict. A job waiting for Chris does not count, as it can wait for hours.
+ */
+export function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()): string | null {
+  const counts = new Map<string, number>();
+  for (const j of jobs) for (const { run } of j) {
+    if (run.kind !== "land" || run.repo !== repo.key || now - Date.parse(run.started) > BUSY_MS) continue;
+    for (const f of run.conflicts ?? []) counts.set(f, (counts.get(f) ?? 0) + 1);
+  }
+  const mine = surfaceOf(item.body).filter((f) => (counts.get(f) ?? 0) >= BUSY_CONFLICTS);
+  if (!mine.length) return null;
+  const lists = reader({ fetch: false });
+  for (const j of jobs) {
+    const last = lastReal(j).run;
+    const on = onOf(last);
+    if (last.repo !== repo.key || on === undefined || !isOpen(j) || isAwaiting(last.state)) continue;
+    const theirs = lists.item(repo.key, on);
+    const shared = theirs && surfaceOf(theirs.body).find((f) => mine.includes(f));
+    if (shared) return `waits for ${last.name}: both change the busy file ${shared}`;
+  }
+  return null;
+}
+
 /**
  * Start every ready goal, in order, until the live cap: an open goal item with
  * no open job, while the factory is not paused and the other gates allow. It
@@ -388,6 +419,8 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       // Read again just before the start: an item done or dropped since it was read starts no run, whatever the trigger.
       const latest = reader().item(repo.key, ref);
       if (!latest || issues.status(latest) === "done" || issues.status(latest) === "dropped") { skipped.push(`${name}: the item is ${latest ? issues.status(latest) : "gone"}`); continue; }
+      const busy = busyWait(repo, latest, jobs);
+      if (busy) { skipped.push(`${name}: ${busy}`); continue; }
       const marked = streakMark(name) !== null;
       if ((marked && askOf(item)) || noCommitStreak(repo.key, name) >= NO_COMMIT_LIMIT) {
         if (!askOf(item)) {

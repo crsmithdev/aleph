@@ -13,7 +13,7 @@ import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
 import { allRuns, askOf, isAwaiting, isBuild, isLost, runsDir, loadRegistry, lock, onOf, readRun, reviewOf, stamp, tell, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, openJob, readFile, type Job } from "./job.ts";
-import { replyOf, verdict as reviewVerdict } from "./gate.ts";
+import { replyOf, SECURITY_PATHS, securityChange, verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
 import { factoryDir, factoryLog, factoryRepos, redBaselines, writeRerun } from "./factory.ts";
 import { ciLine, redCi } from "./ci.ts";
@@ -28,9 +28,6 @@ const LOOP_RUNS = 3;
 const LOOP_MS = 30 * 60_000;
 const TIME_BOX_MS = () => Number(process.env.ALEPH_FIREFIGHTER_TIMEOUT ?? 900) * 1000;
 const stateFile = () => join(factoryDir(), "firefighter.json");
-
-/** Paths a firefighter never lands: a diff that touches one goes to Chris. */
-export const SECURITY_PATHS = ["hooks/", "jobs/lib/sandbox.ts", "jobs/lib/gate.ts", "jobs/lib/review-browser.ts"];
 
 export type EventKind = "awaiting" | "stuck" | "failed" | "loop" | "red" | "ask" | "lost";
 /**
@@ -182,7 +179,7 @@ export function prompt(events: Event[], jobs = allJobs()): string {
 
 # The rules
 
-- Land a held run once both reviews have a verdict and say land, unless its diff changes a held security path (${SECURITY_PATHS.join(", ")}, or REVIEW_SANDBOX in jobs/lib/review.ts). The code refuses those and sends them to Chris${always("firefighter")?.action === "land" ? ", except that Chris has let you land them" : ""}.
+- Land a held run once both reviews have a verdict and say land, unless its diff changes a held security path (${SECURITY_PATHS.join(", ")}). The code refuses those and sends them to Chris${always("firefighter")?.action === "land" ? ", except that Chris has let you land them" : ""}.
 - Drop a run a reviewer sent back, with the reviewer's reason as the drop's reason: it becomes the next run's note.
 - A land with a merge conflict, a run that loops with no commit, or a goal that is already met on main is fixed without Chris: drop the first two; for a goal already met on main use close (it drops the open job and marks the issue done), never sent to Chris.
 - A how-to-build question (code structure, which module, naming, test shape, whether to wait for an issue) is yours to decide: answer with the decision. A product choice (what the product does for Chris, what he sees, what it costs, what comes first) stays with Chris, unless Chris has handed its reason to you.
@@ -208,22 +205,12 @@ Reply with one JSON object and nothing else: {"actions": [ ... ]}, each action o
 `;
 }
 
-/** The changed paths of a run's branch against its repo's main, or null when there is no branch to read. */
-function changedPaths(repo: Repo, branch: string | undefined): { paths: string[]; reviewSandbox: boolean } | null {
-  if (!branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok) return null;
-  const base = git(repo.path, "rev-parse", "--verify", "-q", `origin/${repo.main}`).ok ? `origin/${repo.main}` : repo.main;
-  const d = git(repo.path, "diff", "--name-only", `${base}...${branch}`);
-  if (!d.ok) return null;
-  const sandbox = git(repo.path, "diff", `${base}...${branch}`, "--", "jobs/lib/review.ts").out.split("\n").some((l) => /^[+-](?![+-])/.test(l) && /REVIEW_SANDBOX/.test(l));
-  return { paths: d.out.split("\n").filter(Boolean), reviewSandbox: sandbox };
-}
-
-/** A held security path the branch changes, or null. */
+/** A held security path the branch changes, or null; "unknown" when there is no branch to read. */
 export function securityPath(repo: Repo, branch: string | undefined): string | null | "unknown" {
-  const c = changedPaths(repo, branch);
-  if (!c) return "unknown";
-  const hit = c.paths.find((p) => SECURITY_PATHS.some((s) => (s.endsWith("/") ? p.startsWith(s) : p === s)));
-  return hit ?? (c.reviewSandbox ? "REVIEW_SANDBOX in jobs/lib/review.ts" : null);
+  if (!branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok) return "unknown";
+  const main = git(repo.path, "rev-parse", "--verify", "-q", `origin/${repo.main}`).ok ? `origin/${repo.main}` : repo.main;
+  const fork = git(repo.path, "merge-base", main, `refs/heads/${branch}`);
+  return fork.ok ? securityChange(repo.path, fork.out, `refs/heads/${branch}`) : "unknown";
 }
 
 /** Whether an item's Ask is a product choice: it offers options to pick from (triage's `chris` verdict and the rescue write them). A plain question has none. */

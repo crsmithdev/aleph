@@ -8,14 +8,14 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { closeAndFile, file as fileIssues, issueOf, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
 import { addWorktree, fetchOrigin, followMain, git } from "./git.ts";
-import { ALREADY_MET, heldRule, testFindings, outcome as agentOutcome, tagged, verdict as reviewVerdict } from "./gate.ts";
+import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { askOf, checkSlot, isAwaiting, isBuild, needsOf, onOf, readCall, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type Ask, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
 import { serverGraph } from "./ui-graph.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
-import { dispatchOn, gates, recordFlake, waitingToLand } from "./factory.ts";
+import { dispatchDetached, dispatchOn, gates, recordFlake, waitingToLand } from "./factory.ts";
 import { startReview } from "./review.ts";
 import { postTrace } from "./trace.ts";
 import { runLogged, startUnit } from "./launch.ts";
@@ -305,8 +305,26 @@ async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
 }
 
 /**
+ * The commits of `fork..tip` replayed one by one onto `onto`, in memory, as a land's mechanical rebase:
+ * the commit it ends on, or null when one conflicts or the range holds a merge, whose resolution a replay would lose.
+ */
+function rebased(repo: Repo, onto: string, fork: string, tip: string): string | null {
+  if (git(repo.path, "rev-list", "--merges", "--count", `${fork}..${tip}`).out !== "0") return null;
+  let cur = onto;
+  for (const c of git(repo.path, "rev-list", "--reverse", `${fork}..${tip}`).out.split("\n").filter(Boolean)) {
+    const merged = git(repo.path, "merge-tree", "--write-tree", `--merge-base=${c}^`, cur, c);
+    if (!merged.ok) return null;
+    const made = git(repo.path, "commit-tree", merged.out, "-p", cur, "-m", git(repo.path, "log", "-1", "--format=%s", c).out);
+    if (!made.ok) return null;
+    cur = made.out;
+  }
+  return cur;
+}
+
+/**
  * Land a job, and the land runs queued behind it. Each run's branch merges onto
  * origin/<main> in memory, in order, as one squash commit with its own trailers.
+ * A merge that conflicts tries a mechanical rebase first, so the worker wakes only when that conflicts too.
  * The checks run once on the last commit; when they fail the batch splits in
  * half, until the run that fails is found. That run fails, the others land, and
  * one plain push takes all their commits. A conflict takes only its run out. A
@@ -392,8 +410,17 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         const items: Pending[] = [];
         let cur = from;
         for (const m of list) {
-          const tip = tips.get(m)!;
-          const merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", cur, tip);
+          let tip = tips.get(m)!;
+          let merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", cur, tip);
+          if (!merged.ok) {
+            const replayed = rebased(repo, cur, git(repo.path, "merge-base", cur, tip).out, tip);
+            m.log(`mechanical rebase: ${replayed ? "ok" : "conflicts"}`);
+            if (replayed) {
+              tip = replayed;
+              tips.set(m, tip);
+              merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", cur, tip);
+            }
+          }
           if (!merged.ok) {
             const lines = merged.out.split("\n");
             const conflicts = lines.slice(1, lines.indexOf("") < 0 ? undefined : lines.indexOf("")).filter(Boolean);
@@ -1023,15 +1050,19 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
 const times = (n: number) => n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
 
 /**
- * After the checks pass: the held rule, then the reviewer. `earlier` is the runs
+ * After the checks pass: a security path waits for Chris with no reviewer. Else
+ * the reviewer, then the held rule: a held run the reviewer passes gets the second
+ * review, and `reviewBack` passes it when that says land. `earlier` is the runs
  * of the job that were sent back (a worker run; a recheck has none): a reviewer
  * finding goes back to the worker like a failed check, while rounds are left.
  */
 async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, facts: Partial<Outcome>, earlier?: Run[]): Promise<{ outcome: Outcome; code: number }> {
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
   const stat = git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out;
-  if (rule) return { outcome: { ...awaiting("approval", "held-path", rule, [stat]), reason: rule, stat, ...facts }, code: 0 };
+  const held = (rule: string) => ({ outcome: { ...awaiting("approval", "held-path", rule, [stat]), reason: rule, stat, ...facts }, code: 0 });
+  const security = securityChange(repo.path, base, `refs/heads/${branch}`);
+  if (security) return held(`held path ${security}`);
+  const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
   phase("review");
   const findings = testFindings(repo.path, base, `refs/heads/${branch}`);
   let rv = await review(id, folder, run, repo, dir, base, branch, findings);
@@ -1042,7 +1073,7 @@ async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, d
     rv = await review(id, folder, run, repo, dir, base, branch, findings);
     if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
   }
-  if (!rv.reason) return { outcome: { state: "passed", ...facts }, code: 0 };
+  if (!rv.reason) return rule ? held(rule) : { outcome: { state: "passed", ...facts }, code: 0 };
   if (rv.none) return { outcome: { ...awaiting("approval", "review", rv.reason, [stat]), reason: rv.reason, stat, ...facts }, code: 0 };
   if (earlier) {
     if (earlier.length < fixRounds()) return { outcome: { state: "stuck", reason: rv.reason, stat, ...facts, failed: "review", round: earlier.length }, code: 1 };
@@ -1058,12 +1089,20 @@ const sentBack = (n: number, reason: string) => `the reviewer sent it back ${tim
 /**
  * A held run whose review says `back` goes to the worker as a fix round, while
  * rounds are left; after the last round it stays with Chris, its reason saying so.
- * Called by `aleph review` when the review ends.
+ * A run held for a held path that the reviewer passed and whose review says `land`
+ * has passed both reviews, so it passes and lands like any other run. A security
+ * path never gets here: it has no reviewer's verdict. Called by `aleph review` when the review ends.
  */
 export async function reviewBack(folder: string): Promise<void> {
   const run = readRun(folder);
   const r2 = readCall(folder);
-  if (!run || !isBuild(run.kind) || !isAwaiting(run.state) || r2?.call !== "back") return;
+  if (!run || (!isBuild(run.kind) && run.kind !== "recheck") || !isAwaiting(run.state)) return;
+  if (r2?.call === "land" && askOf(run)?.reason === "held-path" && existsSync(join(folder, "review.md")) && reviewVerdict(readFileSync(join(folder, "review.md"), "utf8"))?.pass) {
+    updateRun(folder, { state: "passed", ask: undefined, reason: undefined });
+    dispatchDetached();
+    return;
+  }
+  if (!isBuild(run.kind) || r2?.call !== "back") return;
   const earlier = (jobById(run.job) ?? []).filter((e) => e.id !== basename(folder) && isBuild(e.run.kind) && e.run.failed).map((e) => e.run);
   const reason = r2.reason ?? "no reason given";
   if (earlier.length < fixRounds()) {

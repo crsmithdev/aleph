@@ -53,6 +53,26 @@ describe("a factory run", () => {
     expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain("Held-by: Chris");
   });
 
+  test("a held run that passes both reviews passes by itself and lands with no Held-by", async () => {
+    const r = await aleph(["job", "fac", "fboth", "--spec", specFile("Goal: fboth REVIEW:land\nACTION: commit held/both.txt\n")]);
+    const run = r.json.run;
+    await until(() => state(run).state === "passed");
+    expect(state(run).ask).toBeUndefined();
+    expect(state(run).review).toEqual({ call: "land" });
+    const l = await aleph(["land", "fboth"]);
+    expect(state(l.json.run).state).toBe("landed");
+    expect(state(l.json.run).held).toBeUndefined();
+    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).not.toContain("Held-by");
+  });
+
+  test("a security path stays with Chris when the review says land", async () => {
+    const r = await aleph(["job", "fac", "fsec", "--spec", specFile("Goal: fsec REVIEW:land\nACTION: commit jobs/lib/gate.ts\n")]);
+    const run = r.json.run;
+    await until(() => state(run).review !== undefined);
+    expect(state(run)).toMatchObject({ state: "awaiting", ask: expect.objectContaining({ reason: "held-path" }), review: { call: "land" }, reason: "held path jobs/lib/gate.ts" });
+    await aleph(["drop", "fsec"]);
+  });
+
   test("a held run landed with the firefighter as lander gets Held-by: firefighter, not Chris", async () => {
     const r = await fjob("fheldff", "commit held/y.txt");
     expect(state(r.json.run)).toMatchObject({ state: "awaiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }) });

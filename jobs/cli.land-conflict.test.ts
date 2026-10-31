@@ -34,6 +34,17 @@ describe("land: conflicts", () => {
     expect(remoteHead()).toBe(runs[3].commit);
   }, 30_000);
 
+  test("a conflict that a mechanical rebase clears lands with no worker", async () => {
+    pushFromOther("step.txt", "start\n");
+    await job("rebase", "two-commits step.txt theirs mine");
+    pushFromOther("step.txt", "theirs\n");
+    const r = await aleph(["land", "rebase"]);
+    expect(state(r.json.run).state).toBe("landed");
+    expect(file(r.json.run, "land.log")).toContain("mechanical rebase: ok");
+    expect(runsOf("rebase").map((x) => x.kind)).toEqual(["build", "land"]);
+    expect(sh(base, "git", "--git-dir", remote, "show", "main:step.txt")).toBe("mine");
+  }, 30_000);
+
   test("a conflict the worker cannot resolve goes back twice, then stops and leaves the remote alone", async () => {
     await job("clash", "commit-fixed clash.txt");
     pushFromOther("clash.txt", "different\n");

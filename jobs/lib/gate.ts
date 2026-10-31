@@ -80,6 +80,19 @@ export function heldRule(cwd: string, held: string[], base: string, tip: string)
 }
 
 /**
+ * What runs the sandbox, and the review and safety checks. A diff that changes one
+ * waits for Chris; any other run that passes both reviews lands by itself.
+ */
+export const SECURITY_PATHS = ["hooks/", "jobs/lib/sandbox.ts", "jobs/lib/netns.ts", "jobs/lib/probe.ts", "jobs/lib/shot.ts", "jobs/lib/gate.ts", "jobs/lib/review.ts", "jobs/lib/review-browser.ts", "package.json", "tsconfig.json", "bunfig.toml", "identity/CLAUDE.md"];
+
+/** A security path the diff from `base` to `tip` changes that is not a test, or null. A rename counts both of its paths. */
+export function securityChange(cwd: string, base: string, tip: string): string | null {
+  const rows = git(cwd, "diff", "--name-status", "-M", base, tip).out.split("\n").filter(Boolean).map((l) => l.split("\t"));
+  for (const [, ...paths] of rows) for (const p of paths) if (!TEST.test(p) && SECURITY_PATHS.some((s) => (s.endsWith("/") ? p.startsWith(s) : p === s))) return p;
+  return null;
+}
+
+/**
  * What the diff does to tests, one finding each: an existing test deleted or
  * renamed, a removed or changed `test`, `it`, `describe` or `expect` line, or
  * a `.skip`, `.only` or `.todo` added. A run that only adds tests gives none.

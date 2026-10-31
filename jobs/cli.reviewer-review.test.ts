@@ -142,11 +142,19 @@ describe("a factory run", () => {
       }
     }, 60_000);
 
-    test("a held path holds without a review", async () => {
+    test("a security path holds without a review", async () => {
+      const n = calls();
+      const r = await rjob("rsec", "REVIEW:pass", "commit hooks/r.txt");
+      expect(state(r.json.run)).toMatchObject({ ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "held path hooks/r.txt" });
+      expect(calls()).toBe(n);
+      await aleph(["drop", "rsec"]);
+    });
+
+    test("a held path gets the reviewer first", async () => {
       const n = calls();
       const r = await rjob("rheld", "REVIEW:pass", "commit held/r.txt");
       expect(state(r.json.run)).toMatchObject({ ask: expect.objectContaining({ kind: "approval", reason: "held-path" }) });
-      expect(calls()).toBe(n);
+      expect(calls()).toBe(n + 1);
       await aleph(["drop", "rheld"]);
     });
   });

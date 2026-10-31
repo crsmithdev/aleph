@@ -222,11 +222,7 @@ One given moves: the map's "`aleph land` is the only path to `main`" becomes "th
 
 ### Held paths
 
-A list of globs per repo in `~/.aleph/repos.json`, which the sandbox cannot see. The list covers the factory's own gate, not every path that runs in Chris's sessions; for aleph, Chris's pull is the review. aleph's list:
-- `jobs/**`;
-- `hooks/hooks.json`, `hooks/verify-gate.ts`, `hooks/lib/judge.ts`, `hooks/lib/digest.ts`, `hooks/git-guard.ts`;
-- `identity/CLAUDE.md`;
-- `package.json`, `bunfig.toml`, `tsconfig.json`, `bun.lock`.
+Two lists. `SECURITY_PATHS` in `jobs/lib/gate.ts` names what runs the sandbox and the review and safety checks; a diff that changes one waits for Chris, also when it is not in the registry. `held` in `~/.aleph/repos.json`, which the sandbox cannot see, names paths that get a second review: a run that changes one and passes the first reviewer goes to the review, and when that says land the run passes and lands with no `Held-by` trailer.
 
 Plus the test rule in criterion 19. A run that only adds to an existing test file passes, also under a held path (Chris, 27 Oct: nearly every goal adds to a test file, so the old rule held nearly every run). aleph computes the diff in Chris's session from the fetched branch against its merge-base with `origin/main`. The seed works on aleph only, so the other repos get no list yet.
 

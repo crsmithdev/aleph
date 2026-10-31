@@ -183,6 +183,7 @@ case $action in
   commit-big\\ *) f=\${action#commit-big }; for i in $(seq 1 60); do echo "line $i of the big file"; done > "$f"; git add "$f"; git commit -qm "add $f" ;;
   commit-fixed\\ *) f=\${action#commit-fixed }; echo same > "$f"; git add "$f"; git commit -qm "add $f" ;;
   commit-result-and\\ *) f=\${action#commit-result-and }; echo "$RANDOM" > result.md; echo "$RANDOM" > "$f"; git add result.md "$f"; git commit -qm "result and $f" ;;
+  two-commits\\ *) set -- \${action#two-commits }; echo "$2" > "$1"; git add "$1"; git commit -qm "first $1"; echo "$3" > "$1"; git add "$1"; git commit -qm "second $1" ;;
   resolve-later\\ *) f=\${action#resolve-later }
     if printf '%s' "$prompt" | grep -q 'The land conflicted'; then git fetch -q origin && git rebase -q -X theirs origin/main
     else echo mine > "$f"; git add "$f"; git commit -qm "add $f"; fi ;;
