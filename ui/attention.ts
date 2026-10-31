@@ -76,6 +76,8 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
     const r = c.run?.review2;
     if (r?.verdict === "back") return `The reviewer sent ${c.id} back twice${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
     if (r?.verdict === "chris") return `The reviewer left ${c.id} to you${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
+    const back = /^the reviewer sent it back twice:\s*(.*)$/s.exec(c.run?.reason ?? "");
+    if (back) return `The reviewer sent ${c.id} back twice: ${clean(back[1]).replace(/\.$/, "")}.`;
     return `The reviewer could not reach a verdict on ${c.id} in two tries.`;
   },
   question: (c) => `The worker on ${c.id} asked: ${clean(c.run?.question) || "it needs an answer"}`,

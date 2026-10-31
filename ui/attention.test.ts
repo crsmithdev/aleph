@@ -58,6 +58,7 @@ describe("attention", () => {
     expect(CASES.held()[0].actions.map((a) => a.label)).toEqual(["Land it", "Drop the job"]);
     expect(CASES.held()[0].actions[0].args).toEqual({ name: "aleph-27" });
     expect(CASES.review()[0].problem).toBe("The reviewer sent aleph-27 back twice: tests are missing.");
+    expect(attention({ needs: [run("review", { reason: "the reviewer sent it back twice: tests are missing." })], needsIssues: [] }, {}, [])[0].problem).toBe("The reviewer sent aleph-27 back twice: tests are missing.");
     expect(CASES.question()[0].problem).toBe("The worker on aleph-27 asked: Which port?");
     expect(CASES.question()[0].actions.map((a) => a.label)).toEqual(["Answer and rerun", "Drop the job"]);
     expect(CASES["no-commit"]()[0].problem).toBe("The last 3 runs of aleph-387 ended with no commit, so the factory stopped starting it.");
