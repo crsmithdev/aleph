@@ -3,7 +3,8 @@ import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, base, diagnose, dispatching, file, jobsDir, specFile, state, stateNow, setup, teardown, unitAlive, until } from "./cli.helpers";
 
-beforeAll(setup);
+// setup spawns openssl and git, so it can outlast the 5 s bun default; bun run test uses 30 s.
+beforeAll(setup, 30_000);
 afterAll(teardown);
 
 describe("a factory run", () => {
