@@ -8,7 +8,7 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { closeAndFile, file as fileIssues, issueOf, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
 import { addWorktree, fetchOrigin, followMain, git } from "./git.ts";
-import { ALREADY_MET, heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
+import { ALREADY_MET, heldRule, testFindings, outcome as agentOutcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { askOf, checkSlot, isAwaiting, isBuild, needsOf, onOf, readCall, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type Ask, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
@@ -254,8 +254,8 @@ function landMessage(subjects: string[], run: Run, repo: Repo): string {
 /** One run in a land: the leader's own, or a land run queued behind it. */
 interface Member { id: string; folder: string; run: Run; log: (step: string, out?: string) => void }
 /** A member's squash commit, on top of the commit before it in the chain. */
-interface Item { m: Member; commit: string }
-type Outcome = { verdict: Verdict; code: number };
+interface Pending { m: Member; commit: string }
+type Landing = { outcome: Outcome; code: number };
 
 const landBatch = () => Math.max(1, Math.floor(Number(process.env.ALEPH_LAND_BATCH ?? 8)) || 1);
 
@@ -314,15 +314,15 @@ async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
  * in the work store after the push, and the main checkout follows origin/<main>
  * if it is clean. Every failure leaves the remote as it was.
  */
-async function land(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ verdict: Verdict; code: number }> {
+async function land(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
   const main = repo.main;
   const logFile = join(folder, "land.log");
   const log = (step: string, out = "") => appendFileSync(logFile, `## ${step}\n${out ? out + "\n" : ""}\n`);
   const logged = (name: string, r: { ok: boolean; out: string }) => { log(`${name}: ${r.ok ? "ok" : "failed"}`, r.out); return r; };
   const step = (name: string, ...args: string[]) => logged(name, git(repo.path, ...args));
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const failed = (reason: string, extra: Partial<Verdict> = {}): Outcome => ({ verdict: { state: "failed", reason, ...extra }, code: 1 });
-  const fail = (reason: string, extra: Partial<Verdict> = {}) => { log(`failed: ${reason}`); return failed(reason, extra); };
+  const failed = (reason: string, extra: Partial<Outcome> = {}): Landing => ({ outcome: { state: "failed", reason, ...extra }, code: 1 });
+  const fail = (reason: string, extra: Partial<Outcome> = {}) => { log(`failed: ${reason}`); return failed(reason, extra); };
 
   const release = await lock(`job-${repo.key}-${run.name}`, 60_000);
   if (!release) return fail(LOCK_BUSY);
@@ -335,7 +335,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
     if (existsSync(given)) {
       const b = JSON.parse(readFileSync(given, "utf8"));
       if (b.checks) updateRun(folder, { checks: b.checks });
-      return { verdict: b.verdict, code: b.code };
+      return { outcome: b.verdict, code: b.code };
     }
     phase("land");
     const cap = landBatch();
@@ -346,12 +346,12 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
     if (members.length > 1) log(`batch of ${members.length}`, members.map((m) => m.run.name).join("\n"));
 
     // Members that failed in an earlier attempt keep their verdict and are not tried again.
-    const failedBefore = new Map<Member, Outcome & { after?: () => void }>();
+    const failedBefore = new Map<Member, Landing & { after?: () => void }>();
     for (let attempt = 0; ; attempt++) {
       { const f = logged("fetch", fetchOrigin(repo.path)); if (!f.ok) return fail(`fetch failed: ${f.out}`); }
       const base0 = git(repo.path, "rev-parse", `origin/${main}`).out;
-      const done = new Map<Member, Outcome & { after?: () => void }>(failedBefore);
-      const finish = (m: Member, o: Outcome & { after?: () => void }) => { done.set(m, o); if (o.verdict.state === "failed") m.log(`failed: ${o.verdict.reason}`); };
+      const done = new Map<Member, Landing & { after?: () => void }>(failedBefore);
+      const finish = (m: Member, o: Landing & { after?: () => void }) => { done.set(m, o); if (o.outcome.state === "failed") m.log(`failed: ${o.outcome.reason}`); };
       const tips = new Map<Member, string>();
       // The checks of the last check call that covered each member; that call decided its verdict.
       const checksOf = new Map<Member, Run["checks"]>();
@@ -363,7 +363,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         const pushed = git(repo.path, "log", `origin/${main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${m.run.job}$`).out;
         if (pushed) {
           m.log(`already on main as ${pushed}`);
-          finish(m, { verdict: { state: "landed", commit: pushed }, code: 0, after: () => {
+          finish(m, { outcome: { state: "landed", commit: pushed }, code: 0, after: () => {
             // The land that pushed may have died before it closed the item.
             const { todo, checkItem } = closeItems(repo, m.run);
             if (todo) m.log(todo === "done" ? `todo ${onOf(m.run)} done` : `todo ${onOf(m.run)} not closed: ${todo}`);
@@ -377,7 +377,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         const there = itemOnMain(repo, onOf(m.run));
         if (there) {
           m.log(`item landed as ${there}`);
-          finish(m, { verdict: { state: "done", reason: `item landed as ${there}` }, code: 0, after: () => { closeItems(repo, { ...m.run, check: undefined }); removeBranch(repo, m.run); } });
+          finish(m, { outcome: { state: "done", reason: `item landed as ${there}` }, code: 0, after: () => { closeItems(repo, { ...m.run, check: undefined }); removeBranch(repo, m.run); } });
           continue;
         }
         const tip = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${m.run.branch}`);
@@ -387,8 +387,8 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
       }
 
       // Merge each run onto the one before it. A conflict, a run with no net change and a run that edits the list leave the chain.
-      const build = (list: Member[], from: string): Item[] => {
-        const items: Item[] = [];
+      const build = (list: Member[], from: string): Pending[] => {
+        const items: Pending[] = [];
         let cur = from;
         for (const m of list) {
           const tip = tips.get(m)!;
@@ -403,7 +403,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
           const tree = merged.out.split("\n")[0];
           if (tree === git(repo.path, "rev-parse", `${cur}^{tree}`).out) {
             m.log("no net change");
-            finish(m, { verdict: { state: "done", reason: "no net change" }, code: 0, after: () => removeBranch(repo, m.run) });
+            finish(m, { outcome: { state: "done", reason: "no net change" }, code: 0, after: () => removeBranch(repo, m.run) });
             continue;
           }
           // Only aleph issue writes the list. A worker can go past git-guard with a script, so the land refuses it.
@@ -420,7 +420,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
       };
 
       // The checks on the chain's last commit, or none when the run's own checks passed on this very origin/<main>.
-      const check = async (items: Item[], base: string): Promise<string | null> => {
+      const check = async (items: Pending[], base: string): Promise<string | null> => {
         const first = items[0].m.run;
         if (items.length === 1 && base === base0 && first.checkedBase === base0 && first.checkedTip === tips.get(items[0].m)) {
           log(`checks skipped: main unchanged since ${base0}`);
@@ -448,7 +448,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
       };
 
       // The commits of `items` that pass, in order, and the commit they end on. `known` is why the whole chain is already known to fail.
-      const settle = async (items: Item[], base: string, known: string | null): Promise<{ ok: Item[]; tip: string }> => {
+      const settle = async (items: Pending[], base: string, known: string | null): Promise<{ ok: Pending[]; tip: string }> => {
         if (!items.length) return { ok: [], tip: base };
         const why = known ?? await check(items, base);
         if (!why) return { ok: items, tip: items.at(-1)!.commit };
@@ -475,7 +475,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
             if (checkItem !== undefined) m.log(`todo ${checkItem} holds the manual check`);
             removeBranch(repo, m.run);
             if (m !== leader) m.log(`landed as ${commit} with ${run.name}; the checks ran in ${id}`);
-            finish(m, { verdict: { state: "landed", commit, checkItem }, code: 0 });
+            finish(m, { outcome: { state: "landed", commit, checkItem }, code: 0 });
           }
           followCheckout(repo, log);
           return conclude(leader, done, checksOf);
@@ -489,7 +489,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         }
         log("main moved; merging again");
         for (const [m, o] of done) {
-          if (o.verdict.state !== "failed" || ok.some((i) => i.m === m)) continue;
+          if (o.outcome.state !== "failed" || ok.some((i) => i.m === m)) continue;
           if (failedBefore.has(m)) continue;
           failedBefore.set(m, o);
           members.splice(members.indexOf(m), 1);
@@ -505,16 +505,16 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
 }
 
 /** Run the deferred steps of the runs that ended without a push, give the queued runs their verdicts, and return the leader's. */
-function conclude(leader: Member, done: Map<Member, Outcome & { after?: () => void }>, checksOf: Map<Member, Run["checks"]>): Outcome {
+function conclude(leader: Member, done: Map<Member, Landing & { after?: () => void }>, checksOf: Map<Member, Run["checks"]>): Landing {
   for (const [m, o] of done) {
     o.after?.();
     if (m === leader) continue;
     const checks = checksOf.get(m);
-    writeFileSync(join(m.folder, "batch.json"), JSON.stringify({ verdict: o.verdict, code: o.code, ...(checks ? { checks } : {}) }));
+    writeFileSync(join(m.folder, "batch.json"), JSON.stringify({ verdict: o.outcome, code: o.code, ...(checks ? { checks } : {}) }));
   }
   const own = checksOf.get(leader);
   if (own) updateRun(leader.folder, { checks: own });
-  return done.get(leader) ?? { verdict: { state: "failed", reason: "not landed" }, code: 1 };
+  return done.get(leader) ?? { outcome: { state: "failed", reason: "not landed" }, code: 1 };
 }
 
 /**
@@ -686,10 +686,10 @@ export function removeBranch(repo: Repo, run: Run): void {
   if (run.branch) git(repo.path, "branch", "-D", run.branch);
 }
 
-type Verdict = Pick<Run, "state" | "ask" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat" | "checkedBase" | "checkedTip">;
+type Outcome = Pick<Run, "state" | "ask" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat" | "checkedBase" | "checkedTip">;
 
 /** A verdict that waits for Chris: the state `awaiting` and the Ask. */
-const awaiting = (kind: Ask["kind"], reason: string, question: string, why: string[] = []): Pick<Verdict, "state" | "ask"> =>
+const awaiting = (kind: Ask["kind"], reason: string, question: string, why: string[] = []): Pick<Outcome, "state" | "ask"> =>
   ({ state: "awaiting", ask: { kind, reason, question, options: [], why: why.filter(Boolean) } });
 
 export async function unit(folder: string): Promise<void> {
@@ -717,28 +717,28 @@ export async function unit(folder: string): Promise<void> {
   // The job variables are for the worker: a check that runs aleph's own tests must not see them.
   const checkEnv = { ...env, ALEPH_JOB_ID: undefined, ALEPH_JOB_RUN: undefined };
 
-  let verdict: Verdict;
+  let outcome: Outcome;
   let code = 0;
   try {
     if (run.kind === "plain") {
       const r = await exec(["bash", "-c", readFileSync(join(folder, "command.txt"), "utf8")], { cwd: process.cwd(), env, out: join(folder, "output.log") });
       code = r.code;
-      verdict = code === 0 ? { state: "done" } : { state: "failed", reason: `exited ${code}` };
+      outcome = code === 0 ? { state: "done" } : { state: "failed", reason: `exited ${code}` };
     } else if (run.kind === "land") {
-      ({ verdict, code } = await land(id, folder, run, repo!, checkEnv));
+      ({ outcome, code } = await land(id, folder, run, repo!, checkEnv));
     } else if (run.kind === "recheck") {
-      ({ verdict, code } = await recheck(id, folder, run, repo!));
+      ({ outcome, code } = await recheck(id, folder, run, repo!));
     } else if (repo!.sandbox) {
-      ({ verdict, code } = await factoryAgent(id, folder, run, repo!));
+      ({ outcome, code } = await factoryAgent(id, folder, run, repo!));
     } else {
-      ({ verdict, code } = await agent(id, folder, run, repo!, env, checkEnv));
+      ({ outcome, code } = await agent(id, folder, run, repo!, env, checkEnv));
     }
   } catch (e: any) {
-    verdict = { state: "failed", reason: `error: ${e?.message ?? e}` };
+    outcome = { state: "failed", reason: `error: ${e?.message ?? e}` };
     code = 1;
   }
 
-  let ended = updateRun(folder, { ...verdict, phase: undefined, ended: new Date().toISOString() });
+  let ended = updateRun(folder, { ...outcome, phase: undefined, ended: new Date().toISOString() });
   const next = nextStep(ended, repo);
   if (next) ended = updateRun(folder, { next });
   writeFileSync(join(folder, "exit"), String(code));
@@ -839,11 +839,11 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   }
 }
 
-async function agent(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>, checkEnv: Record<string, string | undefined>): Promise<{ verdict: Verdict; code: number }> {
+async function agent(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>, checkEnv: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
   const wt = run.worktree!;
   const branch = run.branch!;
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const fail = (reason: string) => ({ verdict: { state: "failed" as const, reason }, code: 1 });
+  const fail = (reason: string) => ({ outcome: { state: "failed" as const, reason }, code: 1 });
 
   // A new job starts from origin/<main>, after it clears what an ended job of that name left.
   if (run.job === id || !existsSync(wt)) {
@@ -896,9 +896,9 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
 
   // The state rule: the first match wins.
   if (w.timedOut) return fail("timed out: worker");
-  if (w.code !== 0) return { verdict: { state: "failed", reason: `worker exited ${w.code}` }, code: w.code };
+  if (w.code !== 0) return { outcome: { state: "failed", reason: `worker exited ${w.code}` }, code: w.code };
   const question = result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("QUESTION:")).at(-1);
-  if (question) return { verdict: { ...awaiting("input", "question", question.slice("QUESTION:".length).trim()), question: question.slice("QUESTION:".length).trim() }, code: 0 };
+  if (question) return { outcome: { ...awaiting("input", "question", question.slice("QUESTION:".length).trim()), question: question.slice("QUESTION:".length).trim() }, code: 0 };
   const dirty = git(wt, "status", "--porcelain").out;
   if (dirty) return fail(`uncommitted: ${dirty.split("\n")[0].slice(3)}`);
   const refetched = fetchOrigin(wt);
@@ -909,7 +909,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   const base = git(wt, "merge-base", `origin/${repo.main}`, "HEAD").out;
   if (git(wt, "rev-list", "--count", `${base}..HEAD`).out === "0") {
     removeBranch(repo, run);
-    return { verdict: { state: "done", reason: "no commits" }, code: 0 };
+    return { outcome: { state: "done", reason: "no commits" }, code: 0 };
   }
   stampJob(wt, base, run.job);
   const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
@@ -918,7 +918,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
   // A manual check does not hold the run: it lands with the check open (see land).
   const manual = repo.manual.find((m) => matches(m.when));
-  return { verdict: { state: "passed", checkedBase: base, checkedTip: git(wt, "rev-parse", "HEAD").out, ...(manual ? { say: manual.say } : {}) }, code: 0 };
+  return { outcome: { state: "passed", checkedBase: base, checkedTip: git(wt, "rev-parse", "HEAD").out, ...(manual ? { say: manual.say } : {}) }, code: 0 };
 }
 
 /**
@@ -928,11 +928,11 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
  * branch, aleph fetches it, and a third runs the checks on a fresh clone.
  * The run folder goes when the verdict is known. See the seed spec's "Sandbox".
  */
-async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): Promise<{ verdict: Verdict; code: number }> {
+async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): Promise<{ outcome: Outcome; code: number }> {
   const branch = run.branch!;
   const main = `refs/remotes/origin/${repo.main}`;
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const stuck = (reason: string, extra: Partial<Verdict> = {}) => ({ verdict: { state: "stuck" as const, reason, ...extra }, code: 1 });
+  const stuck = (reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { state: "stuck" as const, reason, ...extra }, code: 1 });
   phase("setup");
   { const f = fetchOrigin(repo.path); if (!f.ok) return stuck(`fetch failed: ${f.out}`); }
   const prev = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok;
@@ -974,9 +974,9 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       });
     } finally { await shots.stop(); }
     child = null;
-    const o = outcome(readFileSync(join(folder, "output.log"), "utf8"));
+    const o = agentOutcome(readFileSync(join(folder, "output.log"), "utf8"));
     writeFileSync(join(folder, "result.md"), o.result);
-    const facts: Partial<Verdict> = { ...(o.cost !== undefined ? { cost: o.cost } : {}), defaults: tagged(o.result, "DEFAULT") };
+    const facts: Partial<Outcome> = { ...(o.cost !== undefined ? { cost: o.cost } : {}), defaults: tagged(o.result, "DEFAULT") };
     fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
     noteFlakes(repo, run, tagged(o.result, "FLAKE"));
     if (w.stalled) {
@@ -1028,11 +1028,11 @@ const times = (n: number) => n === 1 ? "once" : n === 2 ? "twice" : `${n} times`
  * of the job that were sent back (a worker run; a recheck has none): a reviewer
  * finding goes back to the worker like a failed check, while rounds are left.
  */
-async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, facts: Partial<Verdict>, earlier?: Run[]): Promise<{ verdict: Verdict; code: number }> {
+async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, facts: Partial<Outcome>, earlier?: Run[]): Promise<{ outcome: Outcome; code: number }> {
   const phase = (p: string) => updateRun(folder, { phase: p });
   const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
   const stat = git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out;
-  if (rule) return { verdict: { ...awaiting("approval", "held-path", rule, [stat]), reason: rule, stat, ...facts }, code: 0 };
+  if (rule) return { outcome: { ...awaiting("approval", "held-path", rule, [stat]), reason: rule, stat, ...facts }, code: 0 };
   phase("review");
   const findings = testFindings(repo.path, base, `refs/heads/${branch}`);
   let rv = await review(id, folder, run, repo, dir, base, branch, findings);
@@ -1043,14 +1043,14 @@ async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, d
     rv = await review(id, folder, run, repo, dir, base, branch, findings);
     if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
   }
-  if (!rv.reason) return { verdict: { state: "passed", ...facts }, code: 0 };
-  if (rv.none) return { verdict: { ...awaiting("approval", "review", rv.reason, [stat]), reason: rv.reason, stat, ...facts }, code: 0 };
+  if (!rv.reason) return { outcome: { state: "passed", ...facts }, code: 0 };
+  if (rv.none) return { outcome: { ...awaiting("approval", "review", rv.reason, [stat]), reason: rv.reason, stat, ...facts }, code: 0 };
   if (earlier) {
-    if (earlier.length < fixRounds()) return { verdict: { state: "stuck", reason: rv.reason, stat, ...facts, failed: "review", round: earlier.length }, code: 1 };
+    if (earlier.length < fixRounds()) return { outcome: { state: "stuck", reason: rv.reason, stat, ...facts, failed: "review", round: earlier.length }, code: 1 };
     const back = earlier.filter((r) => r.failed === "review").length;
-    if (back) return { verdict: { ...awaiting("approval", "review", sentBack(back, rv.reason), [stat]), reason: sentBack(back, rv.reason), stat, ...facts }, code: 0 };
+    if (back) return { outcome: { ...awaiting("approval", "review", sentBack(back, rv.reason), [stat]), reason: sentBack(back, rv.reason), stat, ...facts }, code: 0 };
   }
-  return { verdict: { ...awaiting("approval", "review", rv.reason, [stat]), reason: rv.reason, stat, ...facts }, code: 0 };
+  return { outcome: { ...awaiting("approval", "review", rv.reason, [stat]), reason: rv.reason, stat, ...facts }, code: 0 };
 }
 
 /** The reason of a run that came back from the reviewer after the last fix round. */
@@ -1081,12 +1081,12 @@ export async function reviewBack(folder: string): Promise<void> {
  * memory (a conflict makes the run stuck and names the files), the checks run
  * in the sandbox on the result, then the held rule and the reviewer, as after a worker.
  */
-async function recheck(id: string, folder: string, run: Run, repo: Repo): Promise<{ verdict: Verdict; code: number }> {
+async function recheck(id: string, folder: string, run: Run, repo: Repo): Promise<{ outcome: Outcome; code: number }> {
   const branch = run.branch!;
   const ref = `refs/heads/${branch}`;
   const main = `refs/remotes/origin/${repo.main}`;
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const stuck = (reason: string, extra: Partial<Verdict> = {}) => ({ verdict: { state: "stuck" as const, reason, ...extra }, code: 1 });
+  const stuck = (reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { state: "stuck" as const, reason, ...extra }, code: 1 });
   phase("setup");
   { const f = fetchOrigin(repo.path); if (!f.ok) return stuck(`fetch failed: ${f.out}`); }
   const tip = git(repo.path, "rev-parse", "--verify", "-q", ref);
@@ -1169,7 +1169,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
       onSpawn: (p) => { child = p; },
     });
     child = null;
-    const o = outcome(existsSync(log) ? readFileSync(log, "utf8") : "");
+    const o = agentOutcome(existsSync(log) ? readFileSync(log, "utf8") : "");
     writeFileSync(join(folder, "review.md"), o.result);
     const cost = o.cost;
     const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true });

@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { askOf, clearAsk, labels as itemLabels, readList, writeList } from "../../todo/lib/store.ts";
 import * as store from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/issues.ts";
-import * as todos from "../../todo/lib/todo.ts";
+import * as verbs from "../../todo/lib/issues.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import { AWAITING_CAP, correctionsDue, dispatchGoals, episodeStep, report, gates, notReady, waitReason, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
 import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
 
@@ -50,11 +50,11 @@ afterEach(() => {
 
 /** A new open item in the store's factory list `fac`, with the given labels; returns its id. */
 const goal = (labels = ["goal"], key = "fac"): number =>
-  writeList({ key }, "add a goal", (doc) => todos.addLegacy(doc, "ship it", { labels, body: "Do the thing." }).id, true)!.value;
+  writeList({ key }, "add a goal", (doc) => issues.addLegacy(doc, "ship it", { labels, body: "Do the thing." }).id, true)!.value;
 
 /** Change item `id` in the store, as Chris would while the baseline runs. */
-const change = (id: number, f: (item: todos.Item) => void) =>
-  writeList({ key: "fac" }, "edit", (doc) => { f(todos.find(doc, id)!); return true; });
+const change = (id: number, f: (item: issues.Issue) => void) =>
+  writeList({ key: "fac" }, "edit", (doc) => { f(issues.find(doc, id)!); return true; });
 
 test("a goal whose label is removed during the baseline is not started", async () => {
   const id = goal();
@@ -62,7 +62,7 @@ test("a goal whose label is removed during the baseline is not started", async (
   let baselined = false;
   const out = await dispatchGoals(async (_repo, name) => { calls.push(name); return null; }, async () => {
     baselined = true;
-    await change(id, (item) => todos.edit(item, { labels: [] }));
+    await change(id, (item) => issues.edit(item, { labels: [] }));
     return null;
   });
   expect(baselined).toBe(true);
@@ -74,7 +74,7 @@ test("a goal closed during the baseline is not started", async () => {
   const id = goal();
   const calls: string[] = [];
   const out = await dispatchGoals(async (_repo, name) => { calls.push(name); return null; }, async () => {
-    await change(id, (item) => todos.setStatus(item, "done"));
+    await change(id, (item) => issues.setStatus(item, "done"));
     return null;
   });
   expect(calls).toEqual([]);
@@ -86,7 +86,7 @@ test("a goal closed during the baseline is not started", async () => {
 test("a goal given an after while an earlier goal starts is not started", async () => {
   const first = goal();
   const second = goal();
-  const other = writeList({ key: "fac" }, "add an open item", (doc) => { const i = todos.add(doc, "not a goal"); todos.setStatus(todos.addGoal(doc, i, { title: "g", body: "b" }), "dropped"); return i.id; }, true)!.value;
+  const other = writeList({ key: "fac" }, "add an open item", (doc) => { const i = issues.add(doc, "not a goal"); issues.setStatus(issues.addGoal(doc, i, { title: "g", body: "b" }), "dropped"); return i.id; }, true)!.value;
   const calls: string[] = [];
   const out = await dispatchGoals(async (_repo, name) => {
     calls.push(name);
@@ -100,11 +100,11 @@ test("a goal given an after while an earlier goal starts is not started", async 
 
 // An "already met" drop closes a factory item with no commit that names it; the goals that wait on it still start.
 test("a goal waiting on a factory item the store says done, with no commit naming it, starts", async () => {
-  const blocker = writeList({ key: "fac" }, "add the blocker", (doc) => todos.addLegacy(doc, "met elsewhere", { labels: [] }).id, true)!.value;
+  const blocker = writeList({ key: "fac" }, "add the blocker", (doc) => issues.addLegacy(doc, "met elsewhere", { labels: [] }).id, true)!.value;
   mk(`fac-${blocker}`, "agent", "dropped", { reason: "the goal is already met" });
-  await change(blocker, (item) => todos.setStatus(item, "done"));
+  await change(blocker, (item) => issues.setStatus(item, "done"));
   const waiter = goal();
-  await change(waiter, (item) => todos.edit(item, { waitingOn: `fac-${blocker}` }));
+  await change(waiter, (item) => issues.edit(item, { waitingOn: `fac-${blocker}` }));
   const f = fakes();
   const out = await dispatch(f);
   expect(out.started).toEqual([`fac-${waiter}`]);
@@ -118,7 +118,7 @@ test("a goal whose label is removed while an earlier goal starts is not started"
   const calls: string[] = [];
   const out = await dispatchGoals(async (_repo, name) => {
     calls.push(name);
-    if (name === `fac-${first}`) await change(second, (item) => todos.edit(item, { labels: [] }));
+    if (name === `fac-${first}`) await change(second, (item) => issues.edit(item, { labels: [] }));
     return null;
   }, async () => null);
   expect(calls).toEqual([`fac-${first}`]);
@@ -133,7 +133,7 @@ test("a goal closed while an earlier goal starts is not started", async () => {
   const calls: string[] = [];
   const out = await dispatchGoals(async (_repo, name) => {
     calls.push(name);
-    if (name === `fac-${first}`) await change(second, (item) => todos.setStatus(item, "done"));
+    if (name === `fac-${first}`) await change(second, (item) => issues.setStatus(item, "done"));
     return null;
   }, async () => null);
   expect(calls).toEqual([`fac-${first}`]);
@@ -281,7 +281,7 @@ const dispatch = (f: ReturnType<typeof fakes>) => dispatchGoals(f.start, async (
 
 test("no commit, the item already done: the run is dropped as a duplicate, once, and the factory is not held", async () => {
   const id = goal();
-  await change(id, (item) => todos.setStatus(item, "done"));
+  await change(id, (item) => issues.setStatus(item, "done"));
   mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" });
   const f = fakes();
   const out = await dispatch(f);
@@ -302,7 +302,7 @@ test("no commit, the work on main by its Job trailer: dropped as a duplicate and
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`]);
   expect(notes(id)).toMatch(/on main as [0-9a-f]{7}: dropped as a duplicate/);
-  expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
+  expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
   expect(f.specs).toEqual([]);
 });
 
@@ -316,7 +316,7 @@ test("no commit, the item on main by its Item trailer: the open item is closed w
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`]);
   expect(notes(id)).toContain(`on main as ${sha}: dropped as a duplicate`);
-  expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
+  expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
   expect(f.specs).toEqual([]);
 });
 
@@ -395,7 +395,7 @@ test("an item that the store closes while an earlier goal starts gets no run", a
   const f = fakes();
   const out = await dispatchGoals(async (_repo, name) => {
     f.calls.push(`start ${name}`);
-    if (name === `fac-${first}`) await change(second, (item) => todos.setStatus(item, "done"));
+    if (name === `fac-${first}`) await change(second, (item) => issues.setStatus(item, "done"));
     return null;
   }, async () => null, f.land, f.rescue);
   expect(f.calls).toEqual([`start fac-${first}`]);
@@ -405,7 +405,7 @@ test("an item that the store closes while an earlier goal starts gets no run", a
 
 test("a done item gets no run and no run-cap note, even with three recent runs", async () => {
   const id = goal();
-  await change(id, (item) => todos.setStatus(item, "done"));
+  await change(id, (item) => issues.setStatus(item, "done"));
   for (let i = 0; i < 3; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "time box" });
   const f = fakes();
   await dispatch(f);
@@ -448,7 +448,7 @@ test("a cap mark with the label holds the goal below the hour count; once Chris 
   mk(`fac-${g}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - 60_000).toISOString() });
   mkdirSync(join(base, "factory", "cap"), { recursive: true });
   writeFileSync(capPath(g), "x\n");
-  await change(g, (item) => { todos.edit(item, { labels: ["goal"] }); store.setAsk(item, { kind: "input", reason: "run-cap", question: "q", options: [], why: [] }); });
+  await change(g, (item) => { issues.edit(item, { labels: ["goal"] }); store.setAsk(item, { kind: "input", reason: "run-cap", question: "q", options: [], why: [] }); });
   const out = await dispatch(fakes());
   expect(out.started).not.toContain(`fac-${g}`);
   // An item with an Ask is no goal: the dispatch lists nothing to skip.
@@ -553,7 +553,7 @@ test("no commit and the worker says the goal is already met, the checks pass on 
   expect(f.calls).toEqual([`drop fac-${id}`]);
   expect(f.specs).toEqual([]);
   expect(out.held).toBeUndefined();
-  expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
+  expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
   expect(notes(id)).toContain("says the goal is already met (timeline.ts uses itemTimes), and the checks pass on origin/main");
   expect(ask(id)).toBeNull();
   expect(allRuns()[0].run.reason).toContain("the item is done");
@@ -567,7 +567,7 @@ test("no commit and the worker says the goal is already met, but main is red: dr
   await withChecks(f, async () => "tests failed");
   expect(f.calls).toEqual([`drop fac-${id}`]);
   expect(notes(id)).toContain("but main is red at");
-  expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
+  expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
   expect(ask(id)).toBeNull();
   sh(join(base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", "fix main");
   sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
@@ -583,7 +583,7 @@ test("no commit and the claim, but main cannot be checked: the run waits for the
   await withChecks(f, async () => "checks did not start");
   expect(f.calls).toEqual([]);
   expect(allRuns()[0].run.state).toBe("stuck");
-  expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
+  expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
 });
 
 test("a met goal: the claim waits on an unchecked main, then the next dispatch on green main drops it and the item is done", async () => {
@@ -594,7 +594,7 @@ test("a met goal: the claim waits on an unchecked main, then the next dispatch o
   expect(f.calls).toEqual([]);
   await withChecks(f, async () => null);
   expect(f.calls).toEqual([`drop fac-${id}`]);
-  expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
+  expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
   expect(ask(id)).toBeNull();
 });
 
@@ -610,9 +610,9 @@ for (const red of [false, true]) {
     expect(ask(id)).toBeNull();
     if (red) {
       expect(labels(id)).not.toContain("goal");
-      expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
+      expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
     } else {
-      expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
+      expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
     }
   });
 }
@@ -658,7 +658,7 @@ test("a repeated no-commit run on an issue already sent back to triage once gets
   await dispatch(f);
   expect(labels(id)).not.toContain("goal");
   // Triage rewrote the goal; the goal label is back and the run ends with no commit again.
-  await change(id, (item) => todos.edit(item, { labels: ["goal"] }));
+  await change(id, (item) => issues.edit(item, { labels: ["goal"] }));
   mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
   await dispatch(f);
   expect(ask(id)).not.toBeNull();
@@ -774,7 +774,7 @@ test("a run that is not safe gets an Ask with a question and does not hold the f
   expect(stored().fm).toMatchObject({ ask: "input", reason: "rescue", recommended: "Rerun" });
   expect(askOf(stored())!.options.map((o) => o.label)).toEqual(["Rerun", "Another way"]);
   expect(existsSync(join(readdirSync(join(base, "jobs")).map((d) => join(base, "jobs", d))[0], "asked"))).toBe(true);
-  issues.decide({ key: "fac" }, id, "drop it");
+  verbs.decide({ key: "fac" }, id, "drop it");
   expect("reason" in stored().fm).toBe(false);
   expect(out.held).toBeUndefined();
   expect(f.calls).toEqual([`start fac-${other}`]);
@@ -843,19 +843,19 @@ test("a rescue whose lock wait runs out skips the job and does not throw", async
 });
 
 test("notReady: an old item's waiting_on list is read as its after, and names only the parts not done", () => {
-  const item = { fm: { waiting_on: "fac-1, fac-2" } } as unknown as todos.Item;
+  const item = { fm: { waiting_on: "fac-1, fac-2" } } as unknown as issues.Issue;
   expect(notReady(item, () => true)).toBeNull();
   expect(notReady(item, (r) => r === "fac-1")).toBe("blocked: after fac-2");
 });
 
 test("notReady: a migrated goal waits on its after list, dotted ids included", () => {
-  const item = { fm: { after: ["fac-1", "fac-2.1"] } } as unknown as todos.Item;
+  const item = { fm: { after: ["fac-1", "fac-2.1"] } } as unknown as issues.Issue;
   expect(notReady(item, () => true)).toBeNull();
   expect(notReady(item, (r) => r === "fac-1")).toBe("blocked: after fac-2.1");
 });
 
 const repoX = { key: "fac" } as never;
-const mkItem = (fm: Record<string, unknown>, notes: string[] = []) => ({ fm, notes }) as unknown as todos.Item;
+const mkItem = (fm: Record<string, unknown>, notes: string[] = []) => ({ fm, notes }) as unknown as issues.Issue;
 
 test("waitReason: waits_on names only the open refs", () => {
   const r = waitReason(repoX, mkItem({ waiting_on: "fac-1, fac-2" }), { done: (ref) => ref === "fac-1" });
@@ -946,8 +946,8 @@ test("episodeStep writes the page of a done goal and logs its title", async () =
   const v = withVault();
   try {
     const id = writeList({ key: "fac" }, "add", (doc) => {
-      const item = todos.addLegacy(doc, "ship it", { labels: ["goal"], body: "## Goal\nShip it." });
-      todos.setStatus(item, "done");
+      const item = issues.addLegacy(doc, "ship it", { labels: ["goal"], body: "## Goal\nShip it." });
+      issues.setStatus(item, "done");
       return item.id;
     }, true)!.value;
     const repo = join(base, "repo");

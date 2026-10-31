@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import { askNote, clearAsk, normalizeAsk, readAsk, writeAsk, type Ask } from "./ask.ts";
 
-const item = (fm: Record<string, unknown> = {}): todos.Item => ({ id: 1, title: "t", fm: fm as any, body: "", notes: [], legacy: false });
+const item = (fm: Record<string, unknown> = {}): issues.Issue => ({ id: 1, title: "t", fm: fm as any, body: "", notes: [], legacy: false });
 const ask: Ask = { kind: "approval", reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a", after: "fac-2.1" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] };
 
 test("writeAsk writes the flat fields and store.askOf reads them back", () => {

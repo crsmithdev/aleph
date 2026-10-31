@@ -72,7 +72,7 @@ describe("issue verbs without argv", () => {
   });
 
   test("decide needs an issue with an Ask or a needs-chris label, clears it and makes no goal", () => {
-    const r = repo([{ title: "a" }, { title: "b", labels: [store.NEEDS_CHRIS] }]);
+    const r = repo([{ title: "a" }, { title: "b", labels: ["needs-chris"] }]);
     store.writeList(r, "ask", (doc) => { store.setAsk(todos.find(doc, 1)!, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
     store.writeList(r, "ask", (doc) => { const i = todos.addLegacy(doc, "c"); store.setAsk(i, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
     expect(refusal(() => issues.decide(r, 99, "yes"))).toContain("has no issue");

@@ -14,7 +14,7 @@ export const STATUSES = ["open", "done", "dropped"] as const;
 export type Status = (typeof STATUSES)[number];
 const REQUIRED = ["id", "status", "created", "updated"] as const;
 
-export interface Item {
+export interface Issue {
   id: number;
   /** The goal's number under item `id`: `proj-5.1` is id 5, sub 1. Absent on a plain item. */
   sub?: number;
@@ -29,13 +29,12 @@ export interface Item {
 }
 
 /** An issue (`kind: issue`) and a goal (`kind: goal`) are both stored as an `Item`; the names say which one a signature means. */
-export type Issue = Item;
-export type Goal = Item;
+export type Goal = Issue;
 
 export interface Doc {
   /** Everything above the first issue, verbatim. */
   head: string;
-  items: Item[];
+  items: Issue[];
   /** The registry key the store read the list for; absent on a list parsed from docs/todo.md. */
   repo?: string;
 }
@@ -84,12 +83,12 @@ export function todoPath(repoPath: string): string {
 }
 
 /** `status`, defaulting a legacy issue to open rather than dropping it from every view. */
-export function status(item: Item): string {
+export function status(item: Issue): string {
   return (item.fm.status as string) ?? "open";
 }
 
 /** An item's labels. A lone label not in a list, which lint flags and fix wraps, counts as a list of one. */
-export function labels(item: Item): string[] {
+export function labels(item: Issue): string[] {
   const l = item.fm.labels;
   if (Array.isArray(l)) return l.map(String);
   return l === undefined || l === null || l === "" ? [] : [String(l)];
@@ -111,7 +110,7 @@ export function parse(text: string): Doc {
   const starts: number[] = [];
   for (let i = 0; i < lines.length; i++) if (HEADING.test(lines[i])) starts.push(i);
   const head = lines.slice(0, starts[0] ?? lines.length).join("\n");
-  const items: Item[] = [];
+  const items: Issue[] = [];
   for (let n = 0; n < starts.length; n++) {
     const from = starts[n];
     const to = starts[n + 1] ?? lines.length;
@@ -148,7 +147,7 @@ export function render(doc: Doc): string {
  * `title` and `repo` beside the item's own fields, so Backlog.md can read it.
  * The body and the Notes follow as they do in a list section.
  */
-export function renderItem(repo: string, item: Item): string {
+export function renderItem(repo: string, item: Issue): string {
   const { id: _, ...fields } = item.fm;
   // Backlog.md reads the creation and update dates only from `created_date` and `updated_date`, so the store writes those keys.
   const dateKey: Record<string, string> = { created: "created_date", updated: "updated_date" };
@@ -160,7 +159,7 @@ export function renderItem(repo: string, item: Item): string {
   return fm + (block.length ? "\n" + block.join("\n\n") + "\n" : "");
 }
 
-export function parseItem(text: string): Item {
+export function parseItem(text: string): Issue {
   const { frontmatter, body: rest } = splitFrontmatter(text);
   const { title, repo: _, id: full, ...raw } = parseFrontmatter(frontmatter ?? "");
   // `created_date` and `updated_date` are what Backlog.md reads and win when a file has both keys; `created` and `updated` are what older files carry.
@@ -202,11 +201,11 @@ export function blank(repo: string): Doc {
 }
 
 /** `"5"` for a plain item, `"5.1"` for a goal. */
-export const refOf = (item: Item): string => (item.sub === undefined ? String(item.id) : `${item.id}.${item.sub}`);
+export const refOf = (item: Issue): string => (item.sub === undefined ? String(item.id) : `${item.id}.${item.sub}`);
 /** The id that finds the item: its number for a plain item, `"5.1"` for a goal. */
-export const idOf = (item: Item): number | string => (item.sub === undefined ? item.id : refOf(item));
+export const idOf = (item: Issue): number | string => (item.sub === undefined ? item.id : refOf(item));
 /** A number resolves to the plain item, never to a goal under it; a string like `"5.1"` to the goal. */
-export const find = (doc: Doc, id: number | string): Item | undefined => doc.items.find((i) => refOf(i) === String(id));
+export const find = (doc: Doc, id: number | string): Issue | undefined => doc.items.find((i) => refOf(i) === String(id));
 // The max of `id` ignores `sub` on purpose: a goal's id is its parent's number, so a goal never takes a new issue number.
 export const nextId = (doc: Doc): number => doc.items.reduce((m, i) => Math.max(m, i.id), 0) + 1;
 
@@ -223,12 +222,12 @@ export const nextSub = (doc: Doc, n: number): number => doc.items.reduce((m, i) 
  * and `areas`, the labels that remain. It never writes `labels`, `waiting_on` or a label of RETIRED_LABELS.
  * `route: "triaged"` marks the issue sorted, for the one the factory files for itself.
  */
-export function add(doc: Doc, title: string, o: { priority?: string; labels?: string[]; body?: string; due?: string; source?: Source; route?: string; now?: Date } = {}): Item {
+export function add(doc: Doc, title: string, o: { priority?: string; labels?: string[]; body?: string; due?: string; source?: Source; route?: string; now?: Date } = {}): Issue {
   const day = today(o.now);
   const given = o.labels ?? [];
   const source = o.source ?? (given.includes("followup") ? "worker" : given.includes("deps") ? "deps" : given.includes("memory") ? "memory" : "chris");
   const areas = given.filter((l) => !RETIRED_LABELS.includes(l) && !(SOURCES as readonly string[]).includes(l) && l !== "deps" && l !== "memory");
-  const item: Item = {
+  const item: Issue = {
     id: nextId(doc),
     title,
     fm: { id: String(nextId(doc)), status: "open", created: day, updated: day, priority: o.priority ?? "medium", kind: "issue", source, areas, ...(o.route ? { route: o.route } : {}) },
@@ -245,12 +244,12 @@ export function add(doc: Doc, title: string, o: { priority?: string; labels?: st
  * Add goal `<n>.<k>` under issue `issue` (`k` the next free number): `kind: goal`, `issue: <repo>-<n>`, `after`, and the
  * issue's priority. The issue's `goals` gains it. The refs carry the doc's repo key (`doc.repo`, set by the store), or `o.repo`.
  */
-export function addGoal(doc: Doc, issue: Item, o: { title: string; body: string; after?: string[]; repo?: string; now?: Date }): Item {
+export function addGoal(doc: Doc, issue: Issue, o: { title: string; body: string; after?: string[]; repo?: string; now?: Date }): Issue {
   const day = today(o.now);
   const repo = o.repo ?? doc.repo ?? (() => { throw new Error("addGoal: the doc names no repo"); })();
   const sub = nextSub(doc, issue.id);
   const ref = `${repo}-${issue.id}.${sub}`;
-  const goal: Item = {
+  const goal: Issue = {
     id: issue.id,
     sub,
     title: o.title,
@@ -267,9 +266,9 @@ export function addGoal(doc: Doc, issue: Item, o: { title: string; body: string;
 }
 
 /** The old `add`, for the code that still writes the old shape (the planner, the UI's wait route) until aleph-849 and aleph-628: labels, `waiting_on`, no `kind`. */
-export function addLegacy(doc: Doc, title: string, o: { priority?: string; labels?: string[]; body?: string; due?: string; waitingOn?: string; now?: Date } = {}): Item {
+export function addLegacy(doc: Doc, title: string, o: { priority?: string; labels?: string[]; body?: string; due?: string; waitingOn?: string; now?: Date } = {}): Issue {
   const day = today(o.now);
-  const item: Item = {
+  const item: Issue = {
     id: nextId(doc),
     title,
     fm: { id: String(nextId(doc)), status: "open", created: day, updated: day, priority: o.priority ?? "medium", labels: o.labels ?? [] },
@@ -283,12 +282,12 @@ export function addLegacy(doc: Doc, title: string, o: { priority?: string; label
 }
 
 /** Set `waiting_on` on an item, or remove it with `none`: the old shape's only writer of the field. */
-export function setWaitingOn(item: Item, waitingOn: string, now = new Date()): void {
+export function setWaitingOn(item: Issue, waitingOn: string, now = new Date()): void {
   edit(item, { waitingOn }, now);
 }
 
 /** Set `due` and `waiting_on` from the values given; `none` removes the field. */
-function setReadiness(item: Item, o: { due?: string; waitingOn?: string }): void {
+function setReadiness(item: Issue, o: { due?: string; waitingOn?: string }): void {
   for (const [key, value] of [["due", o.due], ["waiting_on", o.waitingOn]] as const) {
     if (value === undefined) continue;
     if (value === "none") delete item.fm[key];
@@ -297,7 +296,7 @@ function setReadiness(item: Item, o: { due?: string; waitingOn?: string }): void
 }
 
 /** Append-only: an existing note line is never rewritten, which is the lost update this format exists to stop. */
-export function note(item: Item, text: string, now = new Date()): string {
+export function note(item: Issue, text: string, now = new Date()): string {
   const line = `- ${minute(now)}: ${text}`;
   item.notes.push(line);
   item.fm.updated = today(now);
@@ -306,7 +305,7 @@ export function note(item: Item, text: string, now = new Date()): string {
 }
 
 /** Replace the fields given. Notes are never edited: they stay append-only. */
-export function edit(item: Item, change: { title?: string; body?: string; priority?: string; labels?: string[]; areas?: string[]; due?: string; waitingOn?: string }, now = new Date()): void {
+export function edit(item: Issue, change: { title?: string; body?: string; priority?: string; labels?: string[]; areas?: string[]; due?: string; waitingOn?: string }, now = new Date()): void {
   if (item.legacy) adopt(item, now);
   if (change.title !== undefined) item.title = change.title;
   if (change.body !== undefined) item.body = change.body;
@@ -317,14 +316,14 @@ export function edit(item: Item, change: { title?: string; body?: string; priori
   item.fm.updated = today(now);
 }
 
-export function setStatus(item: Item, next: Status, now = new Date()): void {
+export function setStatus(item: Issue, next: Status, now = new Date()): void {
   if (item.legacy) adopt(item, now);
   item.fm.status = next;
   item.fm.updated = today(now);
 }
 
 /** Give a legacy item the header it never had, keeping its prose untouched. */
-export function adopt(item: Item, now = new Date(), created?: string): void {
+export function adopt(item: Issue, now = new Date(), created?: string): void {
   const day = today(now);
   item.fm = {
     id: String(item.id),

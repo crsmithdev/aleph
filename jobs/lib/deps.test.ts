@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
 import { parseOutdated, propose, startProposals, sweep } from "./deps.ts";
 import { grant } from "./always.ts";
@@ -59,7 +59,7 @@ describe("propose", () => {
 
   test("files a proposal once, and an item with the same title is reused, not filed again", () => {
     const repo = { key: "dp1" } as Repo;
-    writeList(repo, "start", (doc) => { todos.addLegacy(doc, "Update left-pad 1.0.0 to 1.2.0", {}); return true; }, true);
+    writeList(repo, "start", (doc) => { issues.addLegacy(doc, "Update left-pad 1.0.0 to 1.2.0", {}); return true; }, true);
     const found = [{ name: "left-pad", current: "1.0.0", latest: "1.2.0" }, { name: "a", current: "1.9.0", latest: "1.10.0" }];
     expect(propose(repo, found)).toEqual(["dp1-1 Update left-pad 1.0.0 to 1.2.0", "dp1-2 Update a 1.9.0 to 1.10.0"]);
     expect(readList(repo)!.items.map((i) => i.title)).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update a 1.9.0 to 1.10.0"]);
@@ -113,7 +113,7 @@ describe("sweep", () => {
 
   test("two sweeps at once for one repo do not remove each other's deps folder", async () => {
     const repo = { key: "sw1", path: join(base, "repo"), main: "main", setup: [] } as unknown as Repo;
-    writeList(repo, "start", (doc) => { todos.addLegacy(doc, "seed", {}); return true; }, true);
+    writeList(repo, "start", (doc) => { issues.addLegacy(doc, "seed", {}); return true; }, true);
     const errors: string[] = [];
     const [a, b] = await Promise.all([sweep([repo], (l) => errors.push(l)), sweep([repo], (l) => errors.push(l))]);
     expect(errors).toEqual([]);
@@ -125,9 +125,9 @@ describe("sweep", () => {
   test("a standing proposal grant starts a minor update and leaves a major one asking", () => {
     const repo = { key: "dp2" } as Repo;
     writeList(repo, "start", (doc) => {
-      const m = todos.add(doc, "Update a 1.9.0 to 1.10.0", {});
+      const m = issues.add(doc, "Update a 1.9.0 to 1.10.0", {});
       Object.assign(m.fm, { kind: "issue", source: "deps", ask: "approval", reason: "proposal", question: "Update a 1.9.0 to 1.10.0" });
-      const j = todos.add(doc, "Update typescript 5.9.3 to 7.0.2", {});
+      const j = issues.add(doc, "Update typescript 5.9.3 to 7.0.2", {});
       Object.assign(j.fm, { kind: "issue", source: "deps", ask: "approval", reason: "proposal", question: "x" });
       return true;
     }, true);

@@ -5,7 +5,7 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import { afterOf, askOf, flakeTracker, goal, goals, goalsOf, issueOf as issueRefOf, kindOf, note, readList, readLists, reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { startProposals, takeFresh } from "./deps.ts";
@@ -156,7 +156,7 @@ async function factsStep(): Promise<void> {
 }
 
 /** The open items labelled `goal` in each factory repo. */
-export const openGoals = (): { repo: Repo; item: todos.Item }[] => goals(sandboxRepos()).filter(({ item }) => kindOf(item) === "goal");
+export const openGoals = (): { repo: Repo; item: issues.Issue }[] => goals(sandboxRepos()).filter(({ item }) => kindOf(item) === "goal");
 
 /**
  * Whether `<repo>-<n>` is done: the store says done, or the derived state
@@ -168,14 +168,14 @@ export function doneChecker(): (ref: string) => boolean {
   const reg = loadRegistry();
   const known = new Map<string, Set<string>>();
   return (ref) => {
-    const r = todos.parseGoalRef(ref);
+    const r = issues.parseGoalRef(ref);
     const repo = r && reg[r.repo];
     if (!r || !repo) return false;
     if (!known.has(r.repo)) {
       const done = new Set<string>();
       try {
         const doc = readList(repo);
-        for (const i of doc?.items ?? []) if (todos.status(i) === "done") done.add(`${r.repo}-${todos.refOf(i)}`);
+        for (const i of doc?.items ?? []) if (issues.status(i) === "done") done.add(`${r.repo}-${issues.refOf(i)}`);
         for (const s of repoStages(repo, { fetch: true, doc })) if (s.stage === "done") done.add(s.id);
       } catch {}
       known.set(r.repo, done);
@@ -185,9 +185,9 @@ export function doneChecker(): (ref: string) => boolean {
 }
 
 /** Why an item is not ready to start today, or null: its `due` is after today, or a goal it is `after` is not done. */
-export function notReady(item: todos.Item, done: (ref: string) => boolean, now = todos.clock()): string | null {
+export function notReady(item: issues.Issue, done: (ref: string) => boolean, now = issues.clock()): string | null {
   const due = item.fm.due;
-  if (typeof due === "string" && todos.validDate(due) && due > todos.today(now)) return `due ${due}`;
+  if (typeof due === "string" && issues.validDate(due) && due > issues.today(now)) return `due ${due}`;
   const open = pendingWaits(afterOf(item), done);
   if (open.length) return `blocked: after ${open.join(",")}`;
   return null;
@@ -211,10 +211,10 @@ export type WaitReason =
 export interface WaitContext { done: (ref: string) => boolean; jobs?: Job[]; gated?: ReturnType<typeof gates>; red?: string | null; planning?: boolean; now?: Date }
 
 /** Why a queued goal does not start now, by the order and the texts `dispatchGoals` skips it with; `ready` when nothing stops it. */
-export function waitReason(_repo: Repo, item: todos.Item, ctx: WaitContext): WaitReason {
+export function waitReason(_repo: Repo, item: issues.Issue, ctx: WaitContext): WaitReason {
   if (ctx.red) return { kind: "red", text: ctx.red };
   const due = item.fm.due;
-  if (typeof due === "string" && todos.validDate(due) && due > todos.today(ctx.now ?? todos.clock())) return { kind: "due", text: `Due ${due}` };
+  if (typeof due === "string" && issues.validDate(due) && due > issues.today(ctx.now ?? issues.clock())) return { kind: "due", text: `Due ${due}` };
   const ids = pendingWaits(afterOf(item), ctx.done);
   if (ids.length) return { kind: "waits_on", ids, text: `Waits on ${ids.join(", ")}` };
   const ask = askOf(item);
@@ -239,7 +239,7 @@ export function waitReason(_repo: Repo, item: todos.Item, ctx: WaitContext): Wai
 
 /** The job name for a goal: its id, `aleph-28.1` for a goal under an issue, `aleph-28` for an old goal. */
 /** The number of the issue a goal belongs to in this repo, or null. */
-const issueNumber = (repo: Repo, item: todos.Item): number | null => {
+const issueNumber = (repo: Repo, item: issues.Issue): number | null => {
   const m = /^(.+)-(\d+)$/.exec(issueRefOf(item) ?? "");
   return m && m[1] === repo.key ? Number(m[2]) : null;
 };
@@ -352,7 +352,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
   }
   for (const repo of sandboxRepos()) if (!reds.get(repo.key)) for (const l of await closeIssues(repo, done)) skipped.push(l);
   for (const { repo, item: listed } of goals) {
-    const ref = todos.idOf(listed);
+    const ref = issues.idOf(listed);
     const name = goalJob(repo, ref);
     const red = reds.get(repo.key);
     if (red) { skipped.push(`${name}: ${red}`); continue; }
@@ -380,7 +380,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       if (gated) { skipped.push(`${name}: ${gated.why}`); continue; }
       // Read again just before the start: an item done or dropped since it was read starts no run, whatever the trigger.
       const latest = reader().item(repo.key, ref);
-      if (!latest || todos.status(latest) === "done" || todos.status(latest) === "dropped") { skipped.push(`${name}: the item is ${latest ? todos.status(latest) : "gone"}`); continue; }
+      if (!latest || issues.status(latest) === "done" || issues.status(latest) === "dropped") { skipped.push(`${name}: the item is ${latest ? issues.status(latest) : "gone"}`); continue; }
       const marked = streakMark(name) !== null;
       if ((marked && askOf(item)) || noCommitStreak(repo.key, name) >= NO_COMMIT_LIMIT) {
         if (!askOf(item)) {
@@ -433,16 +433,16 @@ async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<
   const doc = reader({ fetch: false }).list(repo.key);
   for (const listed of doc?.items ?? []) {
     const goalIds = goalsOf(listed);
-    if (kindOf(listed) !== "issue" || todos.status(listed) !== "open" || !goalIds.length) continue;
+    if (kindOf(listed) !== "issue" || issues.status(listed) !== "open" || !goalIds.length) continue;
     if (!goalIds.every((g) => done(g))) continue;
     const name = `${repo.key}-${listed.id}`;
     const release = await lock(`issue-${name}`, 0);
     if (!release) { lines.push(`${name}: another dispatch holds it`); continue; }
     try {
       const item = reader().item(repo.key, listed.id);
-      if (!item || todos.status(item) !== "open" || kindOf(item) !== "issue" || !goalsOf(item).length || !goalsOf(item).every((g) => done(g))) continue;
+      if (!item || issues.status(item) !== "open" || kindOf(item) !== "issue" || !goalsOf(item).length || !goalsOf(item).every((g) => done(g))) continue;
       const commits = goalsOf(item).map((g) => {
-        const r = todos.parseGoalRef(g);
+        const r = issues.parseGoalRef(g);
         return `${g} (${(r && itemOnMain(r.repo === repo.key ? repo : undefined, r.id)) ?? "no commit"})`;
       });
       const bad = note(repo, item.id, `its goals are all done: ${commits.join(", ")}`, { done: true });
@@ -463,22 +463,22 @@ const ACCEPTANCE_DAYS = 2;
  * under srt. Pass: a note; first failure: the goal reopens with the output as a note and the
  * dispatch starts it again; second: an Ask (input, acceptance-failed). See acceptance.ts.
  */
-export async function acceptanceStep(run: Runner = sandboxRunner, now = todos.clock()): Promise<string[]> {
+export async function acceptanceStep(run: Runner = sandboxRunner, now = issues.clock()): Promise<string[]> {
   const lines: string[] = [];
-  const since = todos.today(new Date(now.getTime() - ACCEPTANCE_DAYS * 86_400_000));
+  const since = issues.today(new Date(now.getTime() - ACCEPTANCE_DAYS * 86_400_000));
   const lists = reader();
   for (const repo of sandboxRepos()) {
     const list = lists.list(repo.key)?.items ?? [];
-    const due = list.filter((i) => kindOf(i) === "goal" && todos.status(i) === "done" && String(i.fm.updated ?? "") >= since && !final(readRecord(repo.key, todos.refOf(i))));
+    const due = list.filter((i) => kindOf(i) === "goal" && issues.status(i) === "done" && String(i.fm.updated ?? "") >= since && !final(readRecord(repo.key, issues.refOf(i))));
     if (!due.length) continue;
     if (!fetchOrigin(repo.path).ok) { lines.push(`${repo.key}: acceptance not run: fetch failed`); continue; }
     for (const listed of due) {
-      const release = await lock(`acceptance-${repo.key}-${todos.refOf(listed)}`, 0);
+      const release = await lock(`acceptance-${repo.key}-${issues.refOf(listed)}`, 0);
       if (!release) continue;
       try {
-        const item = reader().item(repo.key, todos.refOf(listed));
-        if (!item || todos.status(item) !== "done" || final(readRecord(repo.key, todos.refOf(item)))) continue;
-        if (kindOf(item) !== "issue" && !itemOnMain(repo, todos.idOf(item))) continue;
+        const item = reader().item(repo.key, issues.refOf(listed));
+        if (!item || issues.status(item) !== "done" || final(readRecord(repo.key, issues.refOf(item)))) continue;
+        if (kindOf(item) !== "issue" && !itemOnMain(repo, issues.idOf(item))) continue;
         lines.push(await accept(repo, item, run));
       } finally {
         release();
@@ -513,11 +513,11 @@ export async function reacceptReopened(repoKey: string, o: { since?: string; bef
   const lines: string[] = [];
   const list = reader().list(repo.key)?.items ?? [];
   for (const listed of list.filter((i) => kindOf(i) === "goal" && reopenedByAcceptance(i, since, before))) {
-    const release = await lock(`acceptance-${repo.key}-${todos.refOf(listed)}`, 0);
+    const release = await lock(`acceptance-${repo.key}-${issues.refOf(listed)}`, 0);
     if (!release) continue;
     try {
-      const item = reader().item(repo.key, todos.refOf(listed));
-      if (!item || !reopenedByAcceptance(item, since, before) || !itemOnMain(repo, todos.idOf(item))) continue;
+      const item = reader().item(repo.key, issues.refOf(listed));
+      if (!item || !reopenedByAcceptance(item, since, before) || !itemOnMain(repo, issues.idOf(item))) continue;
       lines.push(await reaccept(repo, item, o.run));
     } finally {
       release();
@@ -667,7 +667,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
     const there = itemOnMain(repo, issue);
     if (there) { onMain = there; return true; }
     const item = issue === undefined ? undefined : reader().item(repo.key, issue);
-    return !!item && todos.status(item) !== "open";
+    return !!item && issues.status(item) !== "open";
   };
   const claim = r.reason === "no commit" ? alreadyMet(readFile(last, "result.md") ?? "") : null;
   const key = caseOf(r, onMainOrDone, claim);
@@ -1037,20 +1037,20 @@ const seenFile = () => join(factoryDir(), "seen");
  */
 function cameDue(): string[] {
   const seen = new Set(existsSync(seenFile()) ? readFileSync(seenFile(), "utf8").split("\n").filter(Boolean) : []);
-  const day = todos.today(todos.clock());
+  const day = issues.today(issues.clock());
   const done = doneChecker();
   const lines: string[] = [];
   const ids: string[] = [];
   const repos = Object.values(loadRegistry());
-  let docs: (todos.Doc | null)[] = [];
+  let docs: (issues.Doc | null)[] = [];
   try { docs = readLists(repos); } catch {}
   for (const [n, repo] of docs.map((_, n) => [n, repos[n]] as const)) {
     for (const item of docs[n]?.items ?? []) {
       const id = `${repo.key}-${item.id}`;
-      if (todos.status(item) !== "open" || seen.has(id)) continue;
+      if (issues.status(item) !== "open" || seen.has(id)) continue;
       const due = item.fm.due;
       const waits = afterOf(item);
-      if ((typeof due === "string" && todos.validDate(due) && due <= day) || (waits.length > 0 && !pendingWaits(waits, done).length)) {
+      if ((typeof due === "string" && issues.validDate(due) && due <= day) || (waits.length > 0 && !pendingWaits(waits, done).length)) {
         ids.push(id);
         lines.push(`${id} ${item.title}`);
       }

@@ -9,7 +9,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { clearAsk, file, readList, sourceOf, writeList } from "../../todo/lib/store.ts";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import { always, logAlways } from "./always.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { factoryDir, factoryLog } from "./factory.ts";
@@ -135,8 +135,8 @@ export function takeFresh(): string[] {
 const majorOf = (v: string): number | null => { const m = /^[^\d]*(\d+)\./.exec(v) ?? /^[^\d]*(\d+)$/.exec(v); return m ? Number(m[1]) : null; };
 
 /** Whether `item` is an open dependency proposal waiting for a yes, (an approval Ask of reason `proposal`, raised by deps). */
-function waitingProposal(item: todos.Item): boolean {
-  if (todos.status(item) !== "open") return false;
+function waitingProposal(item: issues.Issue): boolean {
+  if (issues.status(item) !== "open") return false;
   return item.fm.ask === "approval" && item.fm.reason === "proposal" && sourceOf(item) === "deps";
 }
 
@@ -159,8 +159,8 @@ export function startProposals(repos: Repo[]): string[] {
           if (from === null || to === null || from !== to) continue;
           clearAsk(item);
           item.fm.kind = "goal";
-          todos.note(item, `standing: started; ${m![1]} stays in major version ${from}`);
-          started.push(`${repo.key}-${todos.refOf(item)}`);
+          issues.note(item, `standing: started; ${m![1]} stays in major version ${from}`);
+          started.push(`${repo.key}-${issues.refOf(item)}`);
           changed = true;
         }
         return changed ? true : null;

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import { areasOf, clearAsk, isSorted, readList, writeList } from "../../todo/lib/store.ts";
 import { askOf } from "../../todo/lib/store.ts";
 import { countsLine, parseRoute, prompt, triageOpen } from "./triage.ts";
@@ -42,11 +42,11 @@ let lists = 0;
 function reset(items: { title: string; body?: string; labels?: string[]; waitingOn?: string }[]): void {
   repo.key = `tri${++lists}`;
   writeList(repo, "reset", (doc) => {
-    for (const i of items) todos.addLegacy(doc, i.title, { body: i.body, labels: i.labels, waitingOn: i.waitingOn });
+    for (const i of items) issues.addLegacy(doc, i.title, { body: i.body, labels: i.labels, waitingOn: i.waitingOn });
     return true;
   }, true);
 }
-const item = (id: number) => todos.find(readList(repo)!, id)!;
+const item = (id: number) => issues.find(readList(repo)!, id)!;
 const run = (done: (r: string) => boolean = () => false) => triageOpen([repo], done);
 
 beforeAll(() => {
@@ -84,18 +84,18 @@ test("each of the routes leaves the item in its state", async () => {
   expect(item(1).body).toContain("VERDICT:goal");
   expect(item(1).body).not.toContain("## Oracle");
   expect(item(1).fm.goals).toEqual([`${repo.key}-1.1`]);
-  expect(todos.status(item(1))).toBe("open");
-  const goal = todos.find(readList(repo)!, "1.1")!;
+  expect(issues.status(item(1))).toBe("open");
+  const goal = issues.find(readList(repo)!, "1.1")!;
   expect(goal).toMatchObject({ title: "Do it", fm: { kind: "goal", issue: `${repo.key}-1` } });
   expect(goal.body).toContain("## Oracle");
   expect(goal.body).not.toContain("## Request");
 
-  expect(todos.status(item(2))).toBe("done");
+  expect(issues.status(item(2))).toBe("done");
   expect(item(2).notes.at(-1)).toContain("duplicate of tri-1");
 
   expect(askOf(item(3))).toMatchObject({ kind: "input", reason: "question", question: "Which plan, A or B?" });
   expect(item(3).notes.at(-1)).toContain("Which plan, A or B?");
-  expect(todos.status(item(3))).toBe("open");
+  expect(issues.status(item(3))).toBe("open");
 
   expect(askOf(item(4))).toMatchObject({ kind: "input", reason: "host-check", question: "check the prod dashboard" });
   expect(item(4).notes.at(-1)).toContain("check the prod dashboard");
@@ -113,7 +113,7 @@ test("a triage run records its route and the issue it is on", async () => {
 });
 
 test("the prompt says the factory runs the checks, and names no aleph check command", () => {
-  const p = prompt(repo, { id: 1, title: "t", body: "", notes: [], fm: {} } as unknown as todos.Item);
+  const p = prompt(repo, { id: 1, title: "t", body: "", notes: [], fm: {} } as unknown as issues.Issue);
   expect(p).toContain("The factory runs this repo's checks itself");
   expect(p).toContain("There is no `aleph check` command");
   expect(p).not.toMatch(/aleph check\s+\S/);
@@ -171,18 +171,18 @@ test("the default cap is five", async () => {
 
 test("a malformed verdict leaves the item unchanged and is skipped", async () => {
   reset([{ title: "a", body: "VERDICT:bad" }, { title: "b", body: "nothing" }]);
-  const before = [item(1), item(2)].map((i) => todos.renderItem(repo.key, i));
+  const before = [item(1), item(2)].map((i) => issues.renderItem(repo.key, i));
   const t = await run();
   expect(t.triaged).toEqual({});
   expect(t.skipped).toEqual([expect.stringContaining(`${repo.key}-1: triage gave a malformed verdict`), expect.stringContaining(`${repo.key}-2: triage gave a malformed verdict: no JSON`)]);
-  expect([item(1), item(2)].map((i) => todos.renderItem(repo.key, i))).toEqual(before);
+  expect([item(1), item(2)].map((i) => issues.renderItem(repo.key, i))).toEqual(before);
 });
 
 test("an item with no route twice gets an Ask triage-failed and is not triaged again", async () => {
   reset([{ title: "a", body: "nothing" }]);
-  const before = todos.renderItem(repo.key, item(1));
+  const before = issues.renderItem(repo.key, item(1));
   await run();
-  expect(todos.renderItem(repo.key, item(1))).toBe(before);
+  expect(issues.renderItem(repo.key, item(1))).toBe(before);
   const t = await run();
   expect(askOf(item(1))).toMatchObject({ kind: "input", reason: "triage-failed" });
   expect(item(1).fm.ask).toBe("input");
@@ -224,9 +224,32 @@ describe("standing permissions", () => {
     reset([{ title: "a", body: "nothing" }]);
     await run();
     await run();
-    expect(todos.status(item(1))).toBe("done");
+    expect(issues.status(item(1))).toBe("done");
     expect(item(1).notes.at(-1)).toEndWith("triage: no verdict in 2 runs; standing: closed");
     expect(tickLog()).toContain("always: triage-failed: close");
+  });
+
+  test("criterion 7: `aleph always grant triage-failed close` writes always.json, and two malformed triages close the issue with no Ask, as `aleph issue show --json` sees it", async () => {
+    const CLI = join(import.meta.dir, "..", "cli.ts");
+    reset([{ title: "a", body: "nothing" }]);
+    writeFileSync(join(base, "repos.json"), JSON.stringify({ [repo.key]: { path: base } }));
+    const aleph = (...args: string[]) => {
+      const p = Bun.spawnSync(["bun", CLI, ...args], { env: { ...process.env, ALEPH_REPOS: join(base, "repos.json") }, stdout: "pipe", stderr: "pipe" });
+      return { code: p.exitCode, out: p.stdout.toString(), err: p.stderr.toString() };
+    };
+    const g = aleph("always", "grant", "triage-failed", "close");
+    expect(g.code).toBe(0);
+    expect(JSON.parse(readFileSync(join(factory(), "always.json"), "utf8"))).toEqual({ "triage-failed": { action: "close", at: expect.any(String) } });
+    await run();
+    await run();
+    expect(item(1).fm.ask).toBeUndefined();
+    expect(askOf(item(1))).toBeNull();
+    expect(issues.status(item(1))).toBe("done");
+    const shown = aleph("issue", "show", repo.key, "1", "--json");
+    expect(shown.code).toBe(0);
+    const j = JSON.parse(shown.out);
+    expect(j.status).toBe("done");
+    expect(j.ask).toBeNull();
   });
 
   test("recommended: an ask with options leaves no Ask and a note naming the recommendation; a prose question is asked", async () => {
@@ -312,7 +335,7 @@ describe("triage at once", () => {
     reset([{ title: "a", body: "VERDICT:close" }, { title: "g", body: "VERDICT:close", labels: ["goal"] }]);
     const { triageNow } = await import("./factory.ts");
     expect((await triageNow(repo, 1)).triaged).toEqual({ close: 1 });
-    expect(todos.status(item(1))).toBe("done");
+    expect(issues.status(item(1))).toBe("done");
     expect((await triageNow(repo, 2)).triaged).toEqual({});
     expect(calls()).toBe(1);
   });
@@ -323,7 +346,7 @@ describe("triage at once", () => {
     await triageNow(repo, 1);
     expect(item(1).fm.ask).toBe("input");
     // Chris's answer: the Ask goes, the note stays, the triage sees it.
-    writeList(repo, "answer", (doc) => { const i = todos.find(doc, 1)!; todos.note(i, "Plan B, VERDICT:close"); clearAsk(i); return true; });
+    writeList(repo, "answer", (doc) => { const i = issues.find(doc, 1)!; issues.note(i, "Plan B, VERDICT:close"); clearAsk(i); return true; });
     setPaused(true);
     expect((await triageNow(repo, 1)).triaged).toEqual({});
     expect(calls()).toBe(1);
@@ -345,7 +368,7 @@ describe("triage at once", () => {
 });
 
 test("the prompt keeps how-to-build questions away from Chris and asks him in plain words", () => {
-  const p = prompt(repo, { id: 1, title: "t", body: "", notes: [], fm: {} } as unknown as todos.Item);
+  const p = prompt(repo, { id: 1, title: "t", body: "", notes: [], fm: {} } as unknown as issues.Issue);
   expect(p).toContain("Never ask Chris about how to build it");
   expect(p).toContain("no file paths, function names, line numbers or code");
   expect(p).toContain('"after": ["<optional <repo>-<n>.<k>>"]');
@@ -354,8 +377,8 @@ test("the prompt keeps how-to-build questions away from Chris and asks him in pl
 test("the prompt lists the open issues of the repo, one line each, without the one under triage or the done and dropped ones", () => {
   reset([{ title: "Fix the bridge" }, { title: "Rerun  the shot" }, { title: "Under triage" }, { title: "Done one" }, { title: "Dropped one" }]);
   writeList(repo, "status", (doc) => {
-    todos.setStatus(todos.find(doc, 4)!, "done");
-    todos.setStatus(todos.find(doc, 5)!, "dropped");
+    issues.setStatus(issues.find(doc, 4)!, "done");
+    issues.setStatus(issues.find(doc, 5)!, "dropped");
     return true;
   });
   const p = prompt(repo, item(3));
@@ -410,7 +433,7 @@ else echo '{"route":"goal","title":"Do it","body":"## Goal\\nDo it.\\n## Edit su
     const t = await run();
     expect(t.skipped).toEqual([]);
     expect(t.triaged).toEqual({ done: 1 });
-    expect(todos.status(item(1))).toBe("done");
+    expect(issues.status(item(1))).toBe("done");
     expect(item(1).fm.goals).toBeUndefined();
     const sha = Bun.spawnSync(["git", "rev-parse", "--short=12", "HEAD"], { cwd: fixture }).stdout.toString().trim();
     expect(item(1).notes.join("\n")).toContain(`triage: already on main in ${sha}`);
@@ -420,7 +443,7 @@ else echo '{"route":"goal","title":"Do it","body":"## Goal\\nDo it.\\n## Edit su
     reset([{ title: "Add gadget.ts", body: "Create gadget.ts exporting gadget." }]);
     const t = await run();
     expect(t.triaged).toEqual({ goal: 1 });
-    expect(todos.status(item(1))).toBe("open");
+    expect(issues.status(item(1))).toBe("open");
     expect(item(1).fm.goals).toEqual([`${repo.key}-1.1`]);
   });
 
@@ -434,7 +457,7 @@ else echo '{"route":"goal","title":"Do it","body":"## Goal\\nDo it.\\n## Edit su
     try {
       const t = await run();
       expect(t.triaged).toEqual({});
-      expect(todos.status(item(1))).toBe("open");
+      expect(issues.status(item(1))).toBe("open");
     } finally { process.env.ALEPH_TRIAGE_CMD = join(base, "smart"); }
   });
 });
@@ -449,7 +472,7 @@ describe("the issue keeps its text; the goal gets the four sections", () => {
     const got = item(1);
     expect(got.title).toBe(LONG_TITLE);
     expect(got.body).toBe(`## Request\n\n${INPUT}\n\nVERDICT:goal`);
-    const goal = todos.find(readList(repo)!, "1.1")!;
+    const goal = issues.find(readList(repo)!, "1.1")!;
     expect(goal.title.length).toBeLessThanOrEqual(60);
     expect(goal.body.match(/^## .*/gm)).toEqual(["## Goal", "## Edit surface", "## Oracle", "## Time box"]);
   });
@@ -476,7 +499,7 @@ describe("the flake route", () => {
   });
 
   test("the prompt lists the flake verdict", () => {
-    expect(prompt(repo, { id: 1, title: "t", body: "", notes: [], fm: {} } as unknown as todos.Item)).toContain('"route": "flake"');
+    expect(prompt(repo, { id: 1, title: "t", body: "", notes: [], fm: {} } as unknown as issues.Issue)).toContain('"route": "flake"');
   });
 
   test("a flake is noted on the tracker and the issue closed", async () => {
@@ -489,7 +512,7 @@ describe("the flake route", () => {
     const tracker = list.items.find((i) => areasOf(i).includes("flakes"))!;
     expect(tracker).toBeDefined();
     expect(tracker.notes.at(-1)).toContain(`triage of ${repo.key}-1: a.test.ts > does x: timed out under load`);
-    expect(todos.status(item(1))).toBe("done");
+    expect(issues.status(item(1))).toBe("done");
     expect(item(1).notes.at(-1)).toContain(`triage: a flake, noted on ${repo.key}-${tracker.id}`);
     expect(list.items.some((i) => i.sub !== undefined)).toBe(false);
   });
@@ -539,7 +562,7 @@ esac
     reset([{ title: "The status page is hard to scan, a long title for an issue", body: text }]);
     const r = await triage(1);
     expect(r.json).toMatchObject({ triaged: { goal: 1 }, skipped: [] });
-    const goal = todos.find(readList(repo)!, "1.1")!;
+    const goal = issues.find(readList(repo)!, "1.1")!;
     expect(goal).toMatchObject({ title: "Do it", fm: { kind: "goal", issue: `${repo.key}-1` } });
     expect(goal.body).toContain("## Oracle");
     expect(goal.body).not.toContain("## Request");
@@ -556,11 +579,11 @@ esac
     for (const id of [1, 2, 3, 4]) expect((await triage(id)).json.skipped).toEqual([]);
     expect(item(1).fm).toMatchObject({ ask: "input", reason: "host-check" });
     expect(runOf(1).route).toBe("ask");
-    expect(todos.status(item(2))).toBe("done");
+    expect(issues.status(item(2))).toBe("done");
     expect(runOf(2).route).toBe("close");
     expect(item(3).fm).toMatchObject({ ask: "input", reason: "question" });
     expect(runOf(3).route).toBe("ask");
-    expect(todos.status(item(4))).toBe("done");
+    expect(issues.status(item(4))).toBe("done");
     expect(runOf(4).route).toBe("close");
     expect(readList(repo)!.items.find((i) => areasOf(i).includes("flakes"))!.notes.at(-1)).toContain(`triage of ${repo.key}-4`);
   }, 60_000);
@@ -578,7 +601,7 @@ esac
     writeFileSync(join(base, "repos.json"), JSON.stringify({ [repo.key]: { path: fixture } }));
     const p = Bun.spawn(["bun", CLI, "triage", `${repo.key}-1`], { cwd: base, stdout: "pipe", stderr: "pipe", env: { ...process.env, ALEPH_REPOS: join(base, "repos.json"), ALEPH_TRIAGE_CMD: join(base, "cli-done"), ALEPH_FACTORY_DIR: home, ALEPH_DISPATCH: "off" } });
     await p.exited;
-    expect(todos.status(item(1))).toBe("done");
+    expect(issues.status(item(1))).toBe("done");
     expect(runOf(1).route).toBe("done");
   }, 30_000);
 

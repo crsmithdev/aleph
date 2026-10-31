@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { goalsOf, kindOf, readList, writeList } from "../todo/lib/store.ts";
 import { buildReviewFixture } from "./fixtures/review/build.ts";
-import { addGoal, addLegacy as add, refOf, type Item } from "../todo/lib/todo.ts";
+import { addGoal, addLegacy as add, refOf, type Issue } from "../todo/lib/todo.ts";
 import { state } from "./state.ts";
 import { loadRegistry } from "../jobs/lib/ledger.ts";
 import { spawn } from "node:child_process";
@@ -317,7 +317,7 @@ describe("the review fixture", () => {
     try {
       const s = state();
       const incoming = new Map(s.incoming.map((i) => [i.id, i.stage]));
-      const held = (id: string, repo: string, item: Item) => {
+      const held = (id: string, repo: string, item: Issue) => {
         const of = (js: { repo: string; item?: { id: number } | null; id?: number }[]) => js.some((j) => j.repo === repo && (j.item?.id ?? j.id) === item.id);
         return LISTS.filter((l) => l === "asks" ? s.asks.some((a) => a.id === id || a.on === id) : l === "issues" ? s[l].some((i) => i.id === id) : l === "done" ? s.done.some((d) => d.id === id) : l === "queued" ? s.queued.some((q) => q.repo === repo && String(q.id) === refOf(item)) : of(s[l] as any));
       };

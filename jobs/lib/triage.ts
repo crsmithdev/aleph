@@ -5,10 +5,10 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import { isSorted, noteFlake, reader, setAsk, sort } from "../../todo/lib/store.ts";
 import { askNote, normalizeAsk, type Ask } from "./ask.ts";
-import { allRuns, jobsDir, onOf, lock, readRun, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
+import { allRuns, runsDir, onOf, lock, readRun, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
 import { factoryDir, gates } from "./factory.ts";
@@ -76,8 +76,8 @@ export function parseRoute(output: string): Route | string {
 }
 
 /** The open issues of the repo, one line each, but not the issue under triage: the others a duplicate can name. */
-function openIssues(repo: Repo, item: todos.Item): string {
-  const others = (reader().list(repo.key)?.items ?? []).filter((o) => o.id !== item.id && todos.status(o) === "open");
+function openIssues(repo: Repo, item: issues.Issue): string {
+  const others = (reader().list(repo.key)?.items ?? []).filter((o) => o.id !== item.id && issues.status(o) === "open");
   return others.map((o) => `${repo.key}-${o.id}: ${o.title.replace(/\s+/g, " ").trim()}`).join("\n") || "(none)";
 }
 
@@ -88,7 +88,7 @@ function mainRef(repo: Repo): string | null {
 }
 
 /** The commits on main since the day the item was created, one line each: what a goal may already be done by. */
-function mainSince(repo: Repo, item: todos.Item): string {
+function mainSince(repo: Repo, item: issues.Issue): string {
   const ref = mainRef(repo);
   if (!ref) return "(main is not readable)";
   // `created` is a day; start a day early, so a time zone cannot drop the commits of the day itself.
@@ -107,7 +107,7 @@ function commitOnMain(repo: Repo, commit: string): string | null {
   return git(repo.path, "merge-base", "--is-ancestor", sha, ref).ok ? sha : null;
 }
 
-export function prompt(repo: Repo, item: todos.Item): string {
+export function prompt(repo: Repo, item: issues.Issue): string {
   return `You triage one open issue of the repo ${repo.key}, which is your working directory. You have read-only tools: read the code to decide. Change nothing.
 
 # Issue ${repo.key}-${item.id}: ${item.title}
@@ -144,11 +144,11 @@ Never ask Chris about how to build it: code structure, which module or helper, n
 }
 
 /** Make the run folder of a triage: its own job in the ledger. */
-function makeRun(repo: Repo, item: todos.Item): string {
-  mkdirSync(jobsDir(), { recursive: true });
+function makeRun(repo: Repo, item: issues.Issue): string {
+  mkdirSync(runsDir(), { recursive: true });
   const name = `triage-${repo.key}-${item.id}`;
   for (let n = 0; ; n++) {
-    const folder = join(jobsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-triage`);
+    const folder = join(runsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-triage`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
     // `shown`: the tick's own line reports a triage, so the report has no line for the run.
     writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name, repo: repo.key, on: `${repo.key}-${item.id}`, state: "running", phase: "triage", told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
@@ -157,7 +157,7 @@ function makeRun(repo: Repo, item: todos.Item): string {
   }
 }
 
-async function ask(repo: Repo, item: todos.Item, folder: string): Promise<string> {
+async function ask(repo: Repo, item: issues.Issue, folder: string): Promise<string> {
   const input = prompt(repo, item);
   writeFileSync(join(folder, "prompt.md"), input);
   const argv = [process.env.ALEPH_TRIAGE_CMD ?? "claude", "-p", "--tools", "Read", "Grep", "Glob"];
@@ -187,28 +187,28 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
   let standing = false;
   const ok = sort(repo, id, `triage ${ref}: ${applied}`, (item, doc) => {
     if (v.route === "goal") {
-      const goal = todos.addGoal(doc, item, { title: v.title, body: v.body, after: v.after, repo: repo.key });
-      todos.note(item, `triage: filed goal ${repo.key}-${todos.refOf(goal)}${v.after.length ? `, after ${v.after.join(", ")}` : ""}`);
+      const goal = issues.addGoal(doc, item, { title: v.title, body: v.body, after: v.after, repo: repo.key });
+      issues.note(item, `triage: filed goal ${repo.key}-${issues.refOf(goal)}${v.after.length ? `, after ${v.after.join(", ")}` : ""}`);
     } else if (v.route === "done") {
-      todos.setStatus(item, "done");
-      todos.note(item, `triage: already on main in ${v.commit}: ${v.reason}`);
+      issues.setStatus(item, "done");
+      issues.note(item, `triage: already on main in ${v.commit}: ${v.reason}`);
     } else if (v.route === "flake") {
-      todos.setStatus(item, "done");
-      todos.note(item, `triage: a flake, noted on ${repo.key}-${tracker}`);
+      issues.setStatus(item, "done");
+      issues.note(item, `triage: a flake, noted on ${repo.key}-${tracker}`);
     } else if (v.route === "close") {
-      todos.setStatus(item, "done");
-      todos.note(item, `triage: closed: ${v.reason}`);
+      issues.setStatus(item, "done");
+      issues.note(item, `triage: closed: ${v.reason}`);
     } else if (v.route === "ask" && v.ask.recommended && always("question")?.action === "recommended") {
       // The issue stays unsorted: the next triage reads this note and routes goal.
       const o = v.ask.options.find((x) => x.label === v.ask.recommended) ?? v.ask.options[0]!;
-      todos.note(item, `always: took the recommendation ${o.label}: ${o.line}${o.after ? ` (after ${o.after})` : ""}`);
+      issues.note(item, `always: took the recommendation ${o.label}: ${o.line}${o.after ? ` (after ${o.after})` : ""}`);
       standing = true;
     } else if (v.route === "ask") {
       setAsk(item, v.ask);
-      todos.note(item, `triage: for Chris: ${askNote(v.ask)}`);
+      issues.note(item, `triage: for Chris: ${askNote(v.ask)}`);
     } else {
       setAsk(item, { kind: "input", reason: "host-check", question: v.note, options: [], why: [] });
-      todos.note(item, `triage: a live check: ${v.note}`);
+      issues.note(item, `triage: a live check: ${v.note}`);
     }
   });
   if (ok && standing) logAlways("question", "recommended", ref);
@@ -238,21 +238,21 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   }
   if (grant === "close") {
     const closed = sort(repo, id, `triage ${ref}: no verdict`, (item) => {
-      todos.setStatus(item, "done");
-      todos.note(item, `triage: no verdict in ${n} runs; standing: closed`);
+      issues.setStatus(item, "done");
+      issues.note(item, `triage: no verdict in ${n} runs; standing: closed`);
     });
     if (closed) logAlways("triage-failed", "close", ref);
     return closed ? `${ref}: no verdict in ${n} triages; standing: closed` : null;
   }
   const written = sort(repo, id, `triage ${repo.key}-${id}: no verdict`, (item) => {
     setAsk(item, { kind: "input", reason: "triage-failed", question: `Triage gave no route in ${n} runs: ${reason}`, options: [], why: [] });
-    todos.note(item, `triage: no verdict in ${n} runs: ${reason}`);
+    issues.note(item, `triage: no verdict in ${n} runs: ${reason}`);
   });
   return written ? `${repo.key}-${id}: no verdict in ${n} triages; asked Chris` : null;
 }
 
 /** One triage run of one item and its verdict applied; counts and skipped lines are added to. */
-async function triageItem(repo: Repo, item: todos.Item, triaged: Counts, skipped: string[]): Promise<void> {
+async function triageItem(repo: Repo, item: issues.Issue, triaged: Counts, skipped: string[]): Promise<void> {
   const name = `${repo.key}-${item.id}`;
   // One triage of an item at a time: an issue write's run and the tick may meet.
   const release = await lock(`triage-${name}`, 0);
@@ -323,7 +323,7 @@ export async function triageIssue(repo: Repo, id: number, _done: (ref: string) =
   const skipped: string[] = [];
   await endLost();
   const item = reader().item(repo.key, id);
-  if (!item || todos.status(item) !== "open" || isSorted(item)) return { triaged, skipped };
+  if (!item || issues.status(item) !== "open" || isSorted(item)) return { triaged, skipped };
   const blocked = gates({ only: ["live", "day"] });
   if (blocked) { skipped.push(`triage: ${blocked.why}`); return { triaged, skipped }; }
   await triageItem(repo, item, triaged, skipped);
@@ -338,11 +338,11 @@ export async function triageOpen(repos: Repo[], _done: (ref: string) => boolean)
   const triaged: Counts = {};
   const skipped: string[] = [];
   await endLost();
-  const queue: { repo: Repo; item: todos.Item }[] = [];
+  const queue: { repo: Repo; item: issues.Issue }[] = [];
   const lists = reader();
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
-      if (todos.status(item) !== "open" || isSorted(item)) continue;
+      if (issues.status(item) !== "open" || isSorted(item)) continue;
       queue.push({ repo, item });
     }
   }

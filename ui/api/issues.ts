@@ -30,7 +30,7 @@ export interface Row {
   stage?: string; state?: string; why?: string;
 }
 
-function row(repo: string, i: todos.Item): Row {
+function row(repo: string, i: todos.Issue): Row {
   return {
     id: i.id, repo, title: i.title, status: todos.status(i), priority: str(i.fm.priority), labels: labels(i),
     due: str(i.fm.due), waiting_on: str(i.fm.waiting_on), updated: str(i.fm.updated), notes: i.notes.length,

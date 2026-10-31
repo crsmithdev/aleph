@@ -10,7 +10,7 @@ import { git } from "../../jobs/lib/git.ts";
 import { loadRegistry, onOf, type Entry, type Repo } from "../../jobs/lib/ledger.ts";
 import { allJobs, lastReal } from "../../jobs/lib/job.ts";
 import { isGoal, labels, readFetched } from "../../todo/lib/store.ts";
-import { status, type Item } from "../../todo/lib/todo.ts";
+import { status, type Issue } from "../../todo/lib/todo.ts";
 import { vaultDir, type Note } from "../../vault/lib/vault.ts";
 import { vaultNotes } from "./memory.ts";
 import type { Routes } from "../server.ts";
@@ -35,7 +35,7 @@ export interface Detail extends Card {
 }
 
 /** The repo's open issues on the work store's last-fetched origin/main; no fetch. */
-function openIssues(key: string): Item[] {
+function openIssues(key: string): Issue[] {
   return (readFetched({ key })?.items ?? []).filter((i) => status(i) === "open");
 }
 
@@ -60,7 +60,7 @@ const itemOf = (j: Entry[]): number | string | null => {
 
 const jobsOf = (repo: Repo, jobs: Entry[][]): Entry[][] => jobs.filter((j) => j.at(-1)!.run.repo === repo.key);
 
-function card(repo: Repo, issues: Item[], jobs: Entry[][], notes: number): Card {
+function card(repo: Repo, issues: Issue[], jobs: Entry[][], notes: number): Card {
   const landed = jobs.map((j) => j.at(-1)!.run).filter((r) => r.state === "landed" && r.ended)
     .sort((a, b) => Date.parse(b.ended!) - Date.parse(a.ended!))[0];
   const started = jobs.map((j) => j[0].run.started).sort().at(-1);
@@ -82,7 +82,7 @@ function commits(repo: Repo): Detail["commits"] {
   if (!r.ok) return [];
   return r.out.split("\x1e").map((s) => s.trim()).filter(Boolean).map((rec) => {
     const [hash, subject, date, issue, goal, legacy] = rec.split("\x1f");
-    // A land writes Issue and Goal; a commit that only has Item: (history) still gives its item.
+    // A land writes Issue and Goal; a commit that only has Issue: (history) still gives its item.
     const item = [issue, goal, legacy].map((v) => v?.trim()).find((v) => !!v) || null;
     return { hash, subject, date, item, ...(base ? { commitUrl: `${base}/commit/${hash}` } : {}) };
   });

@@ -8,7 +8,7 @@
  */
 import { Refusal, refuse } from "../../jobs/lib/transitions.ts";
 import { recentRepos } from "../../jobs/lib/status.ts";
-import * as todos from "./todo.ts";
+import * as issues from "./todo.ts";
 import * as store from "./store.ts";
 import { triage } from "./triage.ts";
 
@@ -29,35 +29,35 @@ export interface Fields {
   after?: string[];
 }
 
-export const brief = (i: todos.Issue) => ({ id: i.id, ...(i.sub === undefined ? {} : { ref: todos.refOf(i) }), title: i.title, status: todos.status(i), priority: i.fm.priority ?? null, updated: i.fm.updated ?? null, due: i.fm.due ?? null, kind: store.kindOf(i), source: store.sourceOf(i), issue: store.issueOf(i), goals: store.goalsOf(i), after: store.afterOf(i), areas: store.areasOf(i), ask: store.askOf(i), notes: i.notes.length, legacy: i.legacy || undefined });
+export const brief = (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ? {} : { ref: issues.refOf(i) }), title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: i.fm.updated ?? null, due: i.fm.due ?? null, kind: store.kindOf(i), source: store.sourceOf(i), issue: store.issueOf(i), goals: store.goalsOf(i), after: store.afterOf(i), areas: store.areasOf(i), ask: store.askOf(i), notes: i.notes.length, legacy: i.legacy || undefined });
 
 /** A bad value is refused before anything is written. */
 export function checkFields(f: Fields): void {
-  if (f.due !== undefined && f.due !== "none" && !todos.validDate(f.due)) refuse("--due takes YYYY-MM-DD or none");
-  if (f.status !== undefined && !(todos.STATUSES as readonly string[]).includes(f.status)) refuse(`--status takes ${todos.STATUSES.join(", ")}`);
-  if (f.waitingOn !== undefined && f.waitingOn !== "none" && !(todos.waitParts(f.waitingOn).length && todos.waitParts(f.waitingOn).every((p) => todos.parseRef(p)))) refuse("--waiting-on takes <repo>-<n>[,<repo>-<n>...] or none");
+  if (f.due !== undefined && f.due !== "none" && !issues.validDate(f.due)) refuse("--due takes YYYY-MM-DD or none");
+  if (f.status !== undefined && !(issues.STATUSES as readonly string[]).includes(f.status)) refuse(`--status takes ${issues.STATUSES.join(", ")}`);
+  if (f.waitingOn !== undefined && f.waitingOn !== "none" && !(issues.waitParts(f.waitingOn).length && issues.waitParts(f.waitingOn).every((p) => issues.parseRef(p)))) refuse("--waiting-on takes <repo>-<n>[,<repo>-<n>...] or none");
 }
 
 /** Set the goals a goal waits for (`after`), checked for form and, in this repo, for existence; an old `waiting_on` goes. */
-function setAfter(repo: store.Place, doc: todos.Doc, i: todos.Issue, after: string[]): void {
+function setAfter(repo: store.Place, doc: issues.Doc, i: issues.Issue, after: string[]): void {
   checkAfter(after);
-  for (const r of after) if (r.startsWith(`${repo.key}-`) && !todos.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no goal`);
-  if (i.legacy) todos.adopt(i);
+  for (const r of after) if (r.startsWith(`${repo.key}-`) && !issues.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no goal`);
+  if (i.legacy) issues.adopt(i);
   i.fm.after = after;
   delete i.fm.waiting_on;
-  i.fm.updated = todos.today();
+  i.fm.updated = issues.today();
 }
 
 /** The repo's list in the work store; a refusal when the store has none or the fetch fails. */
-export function readIssues(repo: store.Place): todos.Doc {
-  let doc: todos.Doc | null = null;
+export function readIssues(repo: store.Place): issues.Doc {
+  let doc: issues.Doc | null = null;
   try { doc = store.readList(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
   return doc ?? refuse(`the work store has no list for ${repo.key}`);
 }
 
-function pick(repo: store.Place, doc: todos.Doc, id: number | string): todos.Issue {
+function pick(repo: store.Place, doc: issues.Doc, id: number | string): issues.Issue {
   if (typeof id === "number" && !Number.isInteger(id)) refuse("name an issue by its number");
-  return todos.find(doc, id) ?? refuse(`${repo.key} has no issue ${id}`);
+  return issues.find(doc, id) ?? refuse(`${repo.key} has no issue ${id}`);
 }
 
 /** A goal id as typed (`<n>.<k>`, or `<m>` for an old child goal that keeps its plain number); a refusal for anything else. */
@@ -66,24 +66,24 @@ export function goalId(raw: string | undefined): string {
   return raw as string;
 }
 
-function pickGoal(repo: store.Place, doc: todos.Doc, id: string): todos.Goal {
+function pickGoal(repo: store.Place, doc: issues.Doc, id: string): issues.Goal {
   const g = pick(repo, doc, goalId(id));
   if (store.kindOf(g) !== "goal") refuse(`${repo.key}-${id} is an issue, not a goal`);
   return g;
 }
 
 /** The repo's goals (`kindOf` goal) that pass `status`. */
-export function goalList(repo: store.Place, o: { status?: string } = {}): todos.Goal[] {
+export function goalList(repo: store.Place, o: { status?: string } = {}): issues.Goal[] {
   return filterRows(readIssues(repo), o).filter((i) => store.kindOf(i) === "goal");
 }
 
-export function goalShow(repo: store.Place, id: string): { item: todos.Goal; hidden: number } {
+export function goalShow(repo: store.Place, id: string): { item: issues.Goal; hidden: number } {
   const item = pickGoal(repo, readIssues(repo), id);
   return { item, hidden: Object.keys(readHiddenOf(repo, item)).length };
 }
 
-const readHiddenOf = (repo: store.Place, g: todos.Goal): Record<string, string> => {
-  try { return store.readHidden(repo, `${repo.key}-${todos.refOf(g)}`); } catch (e: any) { return refuse(e?.message ?? String(e)); }
+const readHiddenOf = (repo: store.Place, g: issues.Goal): Record<string, string> => {
+  try { return store.readHidden(repo, `${repo.key}-${issues.refOf(g)}`); } catch (e: any) { return refuse(e?.message ?? String(e)); }
 };
 
 /** The names of a goal's hidden check files. */
@@ -94,7 +94,7 @@ export function goalHiddenList(repo: store.Place, id: string): string[] {
 /** Store `files` as the goal's hidden checks, in `<repo>/hidden/<repo>-<n>.<k>/`. */
 export function goalHiddenAdd(repo: store.Place, id: string, files: Record<string, string>) {
   const g = pickGoal(repo, readIssues(repo), id);
-  const ref = `${repo.key}-${todos.refOf(g)}`;
+  const ref = `${repo.key}-${issues.refOf(g)}`;
   try {
     const w = store.writeHidden(repo, ref, files);
     return { result: { repo: repo.key, id: ref, hidden: Object.keys(files), commit: w.commit }, follow: w.follow };
@@ -109,7 +109,7 @@ export function goalNote(repo: store.Place, id: string, text: string) {
   text = text.trim() || refuse("give the note some text");
   const w = write(repo, `todo: a note on goal ${id}`, (doc) => {
     const g = pickGoal(repo, doc, id);
-    return { id: todos.refOf(g), line: todos.note(g, text) };
+    return { id: issues.refOf(g), line: issues.note(g, text) };
   })!;
   return { result: { repo: repo.key, id: `${repo.key}-${w.value.id}`, note: w.value.line, commit: w.commit }, follow: w.follow };
 }
@@ -125,18 +125,18 @@ export function goalEdit(repo: store.Place, id: string, f: { title?: string; bod
   const w = write(repo, `todo: edit goal ${id}`, (doc) => {
     const g = pickGoal(repo, doc, id);
     for (const r of after ?? []) {
-      if (r.startsWith(`${repo.key}-`) && !todos.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no goal`);
-      if (r === `${repo.key}-${todos.refOf(g)}`) refuse("a goal cannot wait for itself");
+      if (r.startsWith(`${repo.key}-`) && !issues.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no goal`);
+      if (r === `${repo.key}-${issues.refOf(g)}`) refuse("a goal cannot wait for itself");
     }
-    todos.edit(g, { title, body: f.body, priority: f.priority });
-    if (f.after !== undefined) { g.fm.after = after ?? []; g.fm.updated = todos.today(); }
+    issues.edit(g, { title, body: f.body, priority: f.priority });
+    if (f.after !== undefined) { g.fm.after = after ?? []; g.fm.updated = issues.today(); }
     return g;
   })!;
   return { result: { repo: repo.key, ...brief(w.value), commit: w.commit }, item: w.value, follow: w.follow };
 }
 
 // Every verb but `add` needs a list on main; `add` starts one.
-function write<T>(repo: store.Place, message: string, change: (doc: todos.Doc) => T | null, create = false) {
+function write<T>(repo: store.Place, message: string, change: (doc: issues.Doc) => T | null, create = false) {
   try {
     return store.writeList(repo, message, change, create);
   } catch (e: any) {
@@ -162,7 +162,7 @@ function checkAfter(after: string[]): void {
  * issue is filed with a `## Request` holding that text as written and with goal `.1`, in one commit; `fields.after` is the goal's order.
  * `item` is the stored issue, `goal` the goal beside it, `follow` a store warning.
  */
-export async function add(repo: store.Place, title: string, fields: Fields = {}): Promise<{ result: Added; item: todos.Issue; goal?: todos.Goal; follow: string | null }> {
+export async function add(repo: store.Place, title: string, fields: Fields = {}): Promise<{ result: Added; item: issues.Issue; goal?: issues.Goal; follow: string | null }> {
   checkFields(fields);
   title = title.trim() || refuse("give the item a title");
   if (fields.waitingOn !== undefined) refuse("an issue does not take --waiting-on: file a goal with --goal - and --after <goal id>");
@@ -173,33 +173,33 @@ export async function add(repo: store.Place, title: string, fields: Fields = {})
   checkAfter(fields.after ?? []);
   const t = await triage(store.reader().list(repo.key), title, fields.body ?? text ?? "");
   const w = write(repo, "todo: add an item", (doc) => {
-    const issue = todos.add(doc, title, { priority: fields.priority, labels: fields.labels ?? t.labels, body: text ? `## Request\n\n${text}` : fields.body, due: fields.due });
+    const issue = issues.add(doc, title, { priority: fields.priority, labels: fields.labels ?? t.labels, body: text ? `## Request\n\n${text}` : fields.body, due: fields.due });
     if (!text) return { issue };
     const own = (fields.after ?? []).filter((r) => r.startsWith(`${repo.key}-`));
-    for (const r of own) if (!todos.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no goal`);
-    return { issue, goal: todos.addGoal(doc, issue, { title, body: text, after: fields.after ?? [] }) };
+    for (const r of own) if (!issues.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no goal`);
+    return { issue, goal: issues.addGoal(doc, issue, { title, body: text, after: fields.after ?? [] }) };
   }, true)!;
   const { issue, goal } = w.value;
-  const result: Added = { repo: repo.key, added: issue.id, title: issue.title, commit: w.commit, ...(goal ? { goal: `${repo.key}-${todos.refOf(goal)}` } : {}), ...(t.maybeSame.length ? { maybeSame: t.maybeSame } : {}) };
+  const result: Added = { repo: repo.key, added: issue.id, title: issue.title, commit: w.commit, ...(goal ? { goal: `${repo.key}-${issues.refOf(goal)}` } : {}), ...(t.maybeSame.length ? { maybeSame: t.maybeSame } : {}) };
   return { result, item: issue, goal, follow: w.follow };
 }
 
 /** The items of the repo's list that pass `status` and `label`. */
-export function list(repo: store.Place, o: { status?: string; label?: string } = {}): todos.Issue[] {
+export function list(repo: store.Place, o: { status?: string; label?: string } = {}): issues.Issue[] {
   return filterRows(readIssues(repo), o);
 }
 
-export function filterRows(doc: todos.Doc, o: { status?: string; label?: string }): todos.Issue[] {
-  if (o.status && !todos.STATUSES.includes(o.status as todos.Status)) refuse(`status must be one of ${todos.STATUSES.join(", ")}`);
+export function filterRows(doc: issues.Doc, o: { status?: string; label?: string }): issues.Issue[] {
+  if (o.status && !issues.STATUSES.includes(o.status as issues.Status)) refuse(`status must be one of ${issues.STATUSES.join(", ")}`);
   return doc.items
-    .filter((i) => (o.status ? todos.status(i) === o.status : true))
+    .filter((i) => (o.status ? issues.status(i) === o.status : true))
     .filter((i) => (o.label ? store.areasOf(i).includes(o.label) : true));
 }
 
 /** How many hidden check files an item has in the store. */
 export const hiddenCount = (repo: store.Place, id: number): number => Object.keys(store.readHidden(repo, id)).length;
 
-export function show(repo: store.Place, id: number): { item: todos.Issue; hidden: number } {
+export function show(repo: store.Place, id: number): { item: issues.Issue; hidden: number } {
   const item = pick(repo, readIssues(repo), id);
   return { item, hidden: hiddenCount(repo, id) };
 }
@@ -209,7 +209,7 @@ export function note(repo: store.Place, id: number, text: string, answer = false
   text = text.trim() || refuse("give the note some text");
   const w = write(repo, `todo: a note on item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
-    const line = todos.note(i, text);
+    const line = issues.note(i, text);
     const answered = answer && store.awaitsChris(i);
     if (answered) store.clearAsk(i);
     return { id: i.id, line, answered };
@@ -226,12 +226,12 @@ export function decide(repo: store.Place, id: number, text: string, fields: Fiel
   text = text.trim() || refuse("give the decision");
   const w = write(repo, `todo: item ${id}: decided`, (doc) => {
     const i = pick(repo, doc, id);
-    if (todos.status(i) !== "open" || !store.awaitsChris(i)) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
-    todos.note(i, text);
+    if (issues.status(i) !== "open" || !store.awaitsChris(i)) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
+    issues.note(i, text);
     store.clearAsk(i);
     // The old shape stored the decision's own kind (product or build) in `kind`.
     if (i.fm.kind === "product" || i.fm.kind === "build") delete i.fm.kind;
-    if (fields.waitingOn !== undefined) todos.setWaitingOn(i, fields.waitingOn);
+    if (fields.waitingOn !== undefined) issues.setWaitingOn(i, fields.waitingOn);
     if (fields.after !== undefined) setAfter(repo, doc, i, fields.after);
     return i;
   })!;
@@ -246,8 +246,8 @@ export function edit(repo: store.Place, id: number, fields: Fields) {
   if (title === "") refuse("the title cannot be empty");
   const w = write(repo, `todo: edit item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
-    todos.edit(i, { title, body, priority, areas: labels, due, waitingOn });
-    if (status !== undefined) todos.setStatus(i, status as todos.Status);
+    issues.edit(i, { title, body, priority, areas: labels, due, waitingOn });
+    if (status !== undefined) issues.setStatus(i, status as issues.Status);
     if (after !== undefined) setAfter(repo, doc, i, after);
     return i;
   })!;
@@ -260,47 +260,47 @@ export function close(repo: store.Place, id: number | string, how: "done" | "dro
   if (how === "drop" && !text) refuse("say why it is dropped");
   const w = write(repo, `todo: item ${id} ${how === "done" ? "done" : "dropped"}`, (doc) => {
     const i = pick(repo, doc, id);
-    todos.setStatus(i, how === "done" ? "done" : "dropped");
-    if (text) todos.note(i, text);
+    issues.setStatus(i, how === "done" ? "done" : "dropped");
+    if (text) issues.note(i, text);
     if (how === "drop") store.askIfPartDropped(doc, i, text);
     return i;
   })!;
-  return { result: { repo: repo.key, id: w.value.id, status: todos.status(w.value), title: w.value.title, commit: w.commit }, follow: w.follow };
+  return { result: { repo: repo.key, id: w.value.id, status: issues.status(w.value), title: w.value.title, commit: w.commit }, follow: w.follow };
 }
 
 /** Whether `<repo>-<n>` names an item in the work store; `own` is the list already read for `key`. */
-export function itemExists(key: string, registry: Record<string, unknown>, own?: todos.Doc): (repo: string, id: number) => boolean {
+export function itemExists(key: string, registry: Record<string, unknown>, own?: issues.Doc): (repo: string, id: number) => boolean {
   const lists = store.reader();
-  return (r, id) => (own && r === key ? todos.find(own, id) : registry[r] ? lists.item(r, id) : undefined) !== undefined;
+  return (r, id) => (own && r === key ? issues.find(own, id) : registry[r] ? lists.item(r, id) : undefined) !== undefined;
 }
 
-export type Finding = ReturnType<typeof todos.lint>[number];
+export type Finding = ReturnType<typeof issues.lint>[number];
 
 export function lint(repo: store.Place, registry: Record<string, unknown>): { repo: string; items: number; findings: Finding[] } {
   const doc = readIssues(repo);
-  return { repo: repo.key, items: doc.items.length, findings: todos.lint(doc, itemExists(repo.key, registry, doc)) };
+  return { repo: repo.key, items: doc.items.length, findings: issues.lint(doc, itemExists(repo.key, registry, doc)) };
 }
 
 /** Repair what lint can; `remaining` is what is left. */
 export function lintFix(repo: store.Place, registry: Record<string, unknown>) {
-  const w = write(repo, "todo: lint --fix", (doc) => { const fixed = todos.fix(doc); return fixed.length ? { fixed, left: todos.lint(doc, itemExists(repo.key, registry, doc)) } : null; });
-  const remaining = w?.value.left ?? todos.lint(readIssues(repo), itemExists(repo.key, registry));
+  const w = write(repo, "todo: lint --fix", (doc) => { const fixed = issues.fix(doc); return fixed.length ? { fixed, left: issues.lint(doc, itemExists(repo.key, registry, doc)) } : null; });
+  const remaining = w?.value.left ?? issues.lint(readIssues(repo), itemExists(repo.key, registry));
   return { result: { repo: repo.key, fixed: w?.value.fixed ?? [], remaining }, follow: w?.follow ?? null };
 }
 
 /** The repos with a ledger run or an item update in the last 7 days, the latest first, each with its list (null when the store has none). */
-export function recentLists<R extends store.Place>(repos: R[]): { repo: R; doc: todos.Doc | null }[] {
-  let docs: (todos.Doc | null)[] = [];
+export function recentLists<R extends store.Place>(repos: R[]): { repo: R; doc: issues.Doc | null }[] {
+  let docs: (issues.Doc | null)[] = [];
   try { docs = store.readLists(repos); } catch (e: any) { refuse(e?.message ?? String(e)); }
   return recentRepos(repos as any, docs).map((n) => ({ repo: repos[n], doc: docs[n] }));
 }
 
 /** `list` with no repo: each recent repo's rows that pass the filter. */
-export function listRecent<R extends store.Place>(repos: R[], o: { status?: string; label?: string } = {}): { repo: R; items: todos.Issue[] }[] {
+export function listRecent<R extends store.Place>(repos: R[], o: { status?: string; label?: string } = {}): { repo: R; items: issues.Issue[] }[] {
   return recentLists(repos).filter((r) => r.doc).map(({ repo, doc }) => ({ repo, items: filterRows(doc!, o) })).filter((r) => r.items.length);
 }
 
 /** `lint` with no repo: each recent repo's findings. */
 export function lintRecent<R extends store.Place>(repos: R[], registry: Record<string, unknown>) {
-  return recentLists(repos).filter((r) => r.doc).map(({ repo, doc }) => ({ repo: repo.key, items: doc!.items.length, findings: todos.lint(doc!, itemExists(repo.key, registry, doc!)) }));
+  return recentLists(repos).filter((r) => r.doc).map(({ repo, doc }) => ({ repo: repo.key, items: doc!.items.length, findings: issues.lint(doc!, itemExists(repo.key, registry, doc!)) }));
 }

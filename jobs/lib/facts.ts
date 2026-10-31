@@ -3,7 +3,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { tagged } from "./gate.ts";
 import { readFile, allJobs } from "./job.ts";
-import { isBuild, jobsDir, stamp, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
+import { isBuild, runsDir, stamp, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
 
 export interface Fact { fact: string; source: string }
 
@@ -30,19 +30,19 @@ export function parseFacts(result: string): { facts: Fact[]; unsourced: string[]
 export const FACTS_MODEL = "claude-opus-5-5";
 const TIME_BOX_MS = () => Number(process.env.ALEPH_FACTS_TIMEOUT ?? 600) * 1000;
 
-export interface Verdict { fact: string; source: string; verdict: "keep" | "reject"; reason: string; scope: string; title: string; kind?: "gotcha" | "concept" }
+export interface FactCheck { fact: string; source: string; verdict: "keep" | "reject"; reason: string; scope: string; title: string; kind?: "gotcha" | "concept" }
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
 /** The verdicts in the reviewer's output (the whole output, or its outermost braces), or why they fail the check. `source` is filled in by the caller. */
-export function parseVerdicts(output: string): Verdict[] | string {
+export function parseFactChecks(output: string): FactCheck[] | string {
   let raw: any;
   for (const s of [output.trim(), output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1)]) {
     try { raw = JSON.parse(s); break; } catch {}
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no JSON";
   if (!Array.isArray(raw.verdicts)) return "no verdicts list";
-  const out: Verdict[] = [];
+  const out: FactCheck[] = [];
   for (const [i, v] of raw.verdicts.entries()) {
     const fact = str(v?.fact);
     if (!fact) return `entry ${i + 1} has no fact`;
@@ -71,10 +71,10 @@ Give exactly one entry per fact, in the order above.
 }
 
 function makeRun(repo: Repo, landed: Entry): string {
-  mkdirSync(jobsDir(), { recursive: true });
+  mkdirSync(runsDir(), { recursive: true });
   const name = `facts-${landed.run.name}`;
   for (let n = 0; ; n++) {
-    const folder = join(jobsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-facts`);
+    const folder = join(runsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-facts`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
     writeRun(folder, { kind: "facts", job: landed.run.job, name, repo: repo.key, ...(landed.run.on !== undefined ? { on: landed.run.on } : landed.run.todo !== undefined ? { todo: landed.run.todo } : {}), state: "running", phase: "facts", model: FACTS_MODEL, told: true, shown: false, started: new Date().toISOString(), made: Date.now() });
     writeFileSync(join(folder, "command.txt"), `facts ${landed.run.name}\n`);
@@ -83,10 +83,10 @@ function makeRun(repo: Repo, landed: Entry): string {
 }
 
 /** One fresh read-only Opus run judges each fact against its source. A failed run rejects every fact. */
-export async function reviewFacts(repo: Repo, landed: Entry, facts: Fact[], commit: string): Promise<{ folder: string; verdicts: Verdict[] }> {
+export async function reviewFacts(repo: Repo, landed: Entry, facts: Fact[], commit: string): Promise<{ folder: string; verdicts: FactCheck[] }> {
   const folder = makeRun(repo, landed);
   const end = (reason: string) => updateRun(folder, { state: "done", reason, phase: undefined, ended: new Date().toISOString() });
-  const rejectAll = (why: string): Verdict[] => facts.map((f) => ({ ...f, verdict: "reject", reason: why, scope: repo.key, title: "" }));
+  const rejectAll = (why: string): FactCheck[] => facts.map((f) => ({ ...f, verdict: "reject", reason: why, scope: repo.key, title: "" }));
   try {
     const input = factsPrompt(facts, commit);
     writeFileSync(join(folder, "prompt.md"), input);
@@ -104,7 +104,7 @@ export async function reviewFacts(repo: Repo, landed: Entry, facts: Fact[], comm
     } finally {
       clearTimeout(timer);
     }
-    const parsed = parseVerdicts(out);
+    const parsed = parseFactChecks(out);
     const bad = typeof parsed === "string" ? parsed : parsed.length !== facts.length ? `${parsed.length} verdicts for ${facts.length} facts` : "";
     if (bad || typeof parsed === "string") {
       const why = `malformed verdicts: ${bad}`;
@@ -125,10 +125,10 @@ export async function reviewFacts(repo: Repo, landed: Entry, facts: Fact[], comm
 const VAULT_CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
 
 /** The note kind for a kept fact: the reviewer's `kind`, else concept when its scope or reason says so, else gotcha. */
-export const kindOf = (v: Verdict): "gotcha" | "concept" => v.kind ?? (/concept/i.test(`${v.scope} ${v.reason}`) ? "concept" : "gotcha");
+export const kindOf = (v: FactCheck): "gotcha" | "concept" => v.kind ?? (/concept/i.test(`${v.scope} ${v.reason}`) ? "concept" : "gotcha");
 
 /** Writes a kept fact to the vault as a draft through `vault write`. A refusal (schema, duplicate title, contradiction screen) is a rejection, not an error. */
-export async function writeFact(v: Verdict, job: string, kind: "gotcha" | "concept"): Promise<{ written: true; path: string } | { written: false; reason: string }> {
+export async function writeFact(v: FactCheck, job: string, kind: "gotcha" | "concept"): Promise<{ written: true; path: string } | { written: false; reason: string }> {
   const title = v.title.replace(/[\/\\:*?"<>|\n\r]+/g, " ").replace(/\s+/g, " ").trim();
   if (!title) return { written: false, reason: "the verdict has no title" };
   // `vault write` replaces a note of the same title; the gate must not.
@@ -191,7 +191,7 @@ export async function factsGate(repo: Repo, landed: Entry, commit: string, log: 
   const { folder, verdicts } = await reviewFacts(repo, landed, facts, commit);
   const kept: string[] = [];
   const rejected: { fact: string; reason: string }[] = [];
-  const reject = (v: Verdict, reason: string) => {
+  const reject = (v: FactCheck, reason: string) => {
     rejected.push({ fact: v.fact, reason });
     log(`${name}: fact rejected (${reason}): ${v.fact}`);
   };

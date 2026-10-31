@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as todos from "./todo.ts";
 import * as issues from "./store.ts";
-import { readDecision } from "../../jobs/lib/decision.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
@@ -125,13 +124,13 @@ describe("the writes", () => {
     expect(todos.status(item(r, 1))).toBe("open");
   });
 
-  test("note with a label and a decision", () => {
+  test("note with a label and an ask", () => {
     const r = repo([{ title: "one", labels: ["goal"] }]);
-    const decision = { question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], recommended: "A", kind: "product" as const, why: ["w"] };
-    expect(issues.note(r, 1, "asked", { label: "needs-chris", decision })).toBeNull();
+    const ask = { kind: "input" as const, reason: "question", question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], recommended: "A", why: ["w"] };
+    expect(issues.note(r, 1, "asked", { label: "needs-chris", ask })).toBeNull();
     expect(issues.note(r, 1, "asked again", { label: "needs-chris" })).toBeNull();
     expect(issues.labels(item(r, 1))).toEqual(["goal", "needs-chris"]);
-    expect(readDecision(item(r, 1))?.question).toBe("A or B?");
+    expect(issues.askOf(item(r, 1))?.question).toBe("A or B?");
   });
 
   test("close is done with a note", () => {

@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
 import { fetchTrace, traceIdFor } from "../../hooks/lib/otlp.ts";
 import { goalsOf, kindOf, readList } from "../../todo/lib/store.ts";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { allRuns, onOf, type Entry, type Repo } from "./ledger.ts";
@@ -24,7 +24,7 @@ const runsOf = (repo: Repo, id: number): Entry[] =>
   allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) === id).sort((a, b) => epoch(a.run.started) - epoch(b.run.started));
 
 /** The repo's done goals with a ledger run and no episode page yet. */
-export function doneGoals(repo: Repo): todos.Item[] {
+export function doneGoals(repo: Repo): issues.Issue[] {
   const doc = readList(repo);
   if (!doc) return [];
   const goals = doc.items.filter((i) => kindOf(i) === "goal");
@@ -52,7 +52,7 @@ function cutBytes(s: string, max: number): string {
 }
 
 /** `<repo>-<id> <title>` without the characters a vault title forbids, cut to fit a file name. */
-export function episodeTitle(repo: Repo, item: todos.Item): string {
+export function episodeTitle(repo: Repo, item: issues.Issue): string {
   const head = `${repo.key}-${item.id}`;
   const full = `${head} ${item.title}`.replace(/[\/\\:*?"<>|]/g, " ").replace(/ +/g, " ").trim();
   if (Buffer.byteLength(full) + MD.length <= NAME_MAX) return full;
@@ -65,10 +65,10 @@ export interface Commit { sha: string; subject: string; stat: string }
 export type Langfuse = { error: string } | { traces: { id: string; tokens: number | null }[] };
 
 /** The land commits of the goal; a planned parent has those of the items it waits on. */
-function commitsOf(repo: Repo, item: todos.Item): Commit[] {
+function commitsOf(repo: Repo, item: issues.Issue): Commit[] {
   fetchOrigin(repo.path);
   const main = `origin/${repo.main}`;
-  const refs = goalsOf(item).length ? goalsOf(item).map(todos.parseGoalRef).filter((r) => r?.repo === repo.key).map((r) => r!.id) : [item.id];
+  const refs = goalsOf(item).length ? goalsOf(item).map(issues.parseGoalRef).filter((r) => r?.repo === repo.key).map((r) => r!.id) : [item.id];
   const shas = [...new Set(refs.flatMap((n) => (typeof n === "string" ? [itemOnMain(repo, n) ?? ""].filter(Boolean) : landedCommits(repo.path, main, repo.key, n))))];
   return shas.map((sha) => ({
     sha,
@@ -104,7 +104,7 @@ async function langfuseFor(runs: Entry[]): Promise<Langfuse> {
 
 const minutes = (e: Entry) => Math.max(0, Math.round((epoch(e.run.ended) - epoch(e.run.started)) / 60000)) || 0;
 
-export function episodePage(repo: Repo, item: todos.Item, runs: Entry[], commits: Commit[], langfuse: Langfuse): string {
+export function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commits: Commit[], langfuse: Langfuse): string {
   const id = `${repo.key}-${item.id}`;
   const sources = [id, ...commits.map((c) => `commit:${c.sha.slice(0, 7)}`), ...runs.map((e) => `run:${e.id}`)];
   const goal = section(item.body, "Goal") || item.body.trim();
@@ -138,7 +138,7 @@ export function episodePage(repo: Repo, item: todos.Item, runs: Entry[], commits
 }
 
 /** Build the page and write it through the vault CLI. */
-export async function writeEpisode(repo: Repo, item: todos.Item): Promise<{ title: string } | { error: string }> {
+export async function writeEpisode(repo: Repo, item: issues.Issue): Promise<{ title: string } | { error: string }> {
   const dir = mkdtempSync(join(tmpdir(), "aleph-episode-"));
   try {
     const title = episodeTitle(repo, item);
@@ -159,7 +159,7 @@ export async function writeEpisode(repo: Repo, item: todos.Item): Promise<{ titl
 
 /** The done goals of `repos`, the one whose last run ended longest ago first, at most `cap` pages. */
 export async function writeEpisodes(repos: Repo[], cap = 10): Promise<{ written: string[]; failed: string[] }> {
-  const todo: { repo: Repo; item: todos.Item; at: number }[] = [];
+  const todo: { repo: Repo; item: issues.Issue; at: number }[] = [];
   for (const repo of repos) {
     for (const item of doneGoals(repo)) {
       const last = Math.max(...runsOf(repo, item.id).map((e) => epoch(e.run.ended) || epoch(e.run.started)));

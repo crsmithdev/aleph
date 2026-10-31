@@ -12,7 +12,7 @@ import { askOf as runAsk, isAwaiting, type Run, type State } from "./ledger.ts";
 import type { Job } from "./job.ts";
 import { isOpen, lastReal } from "./job.ts";
 import * as store from "../../todo/lib/store.ts";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 
 export type GoalStage = "dropped" | "done" | "awaiting" | "stuck" | "landing" | "building" | "planning" | "blocked" | "queued";
 export type IssueStage = "dropped" | "done" | "awaiting" | "stuck" | "building" | "planning" | "triaged" | "new";
@@ -44,10 +44,10 @@ export interface Ctx {
   runs(ref: string): RunView[];
 }
 
-export function subjectOf(item: todos.Item, key: string): Subject {
+export function subjectOf(item: issues.Issue, key: string): Subject {
   const a = store.askOf(item);
   return {
-    id: `${key}-${todos.refOf(item)}`, status: todos.status(item), kind: store.kindOf(item),
+    id: `${key}-${issues.refOf(item)}`, status: issues.status(item), kind: store.kindOf(item),
     after: store.afterOf(item), goals: store.goalsOf(item),
     ...(a ? { ask: { kind: a.kind, reason: a.reason } } : {}), sorted: store.isSorted(item),
   };

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import type * as todos from "../../todo/lib/todo.ts";
 import { clearDecision, normalizeDecision, readDecision, writeDecision, type Decision } from "./decision.ts";
 
-const item = (fm: Record<string, unknown> = {}): todos.Item => ({ id: 1, title: "t", fm: fm as any, body: "", notes: [], legacy: false });
+const item = (fm: Record<string, unknown> = {}): todos.Issue => ({ id: 1, title: "t", fm: fm as any, body: "", notes: [], legacy: false });
 const base = { question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] };
 
 test("writeDecision then readDecision keeps the kind", () => {

@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { CLI } from "../cli.helpers.ts";
 import { renderItem } from "../../todo/lib/todo.ts";
 import { config, storeDir } from "../../todo/lib/store.ts";
-import { jobsDir } from "./ledger.ts";
+import { runsDir } from "./ledger.ts";
 import { layout } from "./layout.ts";
-import { runsDir } from "./sandbox.ts";
+import { sandboxDir } from "./sandbox.ts";
 
 // A temporary HOME and no layout variables: the paths follow what is on disk.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -62,7 +62,7 @@ afterAll(() => {
 
 test("the old layout before the migration, the new one after, and the CLI reads the migrated data", async () => {
   expect(layout()).toEqual({ store: join(a, "items"), ledger: join(a, "jobs"), sandbox: join(a, "runs") });
-  expect([storeDir(), jobsDir(), runsDir()]).toEqual([join(a, "items"), join(a, "jobs"), join(a, "runs")]);
+  expect([storeDir(), runsDir(), sandboxDir()]).toEqual([join(a, "items"), join(a, "jobs"), join(a, "runs")]);
 
   const before = await aleph("issue", "list", "aleph");
   expect(before.stdout).toContain("the one issue");
@@ -73,7 +73,7 @@ test("the old layout before the migration, the new one after, and the CLI reads 
   expect(existsSync(join(a, "issues"))).toBe(true);
 
   expect(layout()).toEqual({ store: join(a, "issues"), ledger: join(a, "runs"), sandbox: join(a, "sandbox") });
-  expect([storeDir(), jobsDir(), runsDir()]).toEqual([join(a, "issues"), join(a, "runs"), join(a, "sandbox")]);
+  expect([storeDir(), runsDir(), sandboxDir()]).toEqual([join(a, "issues"), join(a, "runs"), join(a, "sandbox")]);
 
   const list = await aleph("issue", "list", "aleph");
   expect(list.code).toBe(0);

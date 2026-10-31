@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { aleph, fjobFor, seedGoal, seedItem, seedRun, setup, teardown } from "../cli.helpers";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import { subjectOf } from "./stage.ts";
 
 beforeAll(setup);
@@ -172,7 +172,7 @@ describe("the mapping table", () => {
 });
 
 describe("subjectOf", () => {
-  const item = (id: number, sub?: number): todos.Item => ({ id, ...(sub === undefined ? {} : { sub }), title: "t", fm: {}, body: "", notes: [], legacy: false });
+  const item = (id: number, sub?: number): issues.Issue => ({ id, ...(sub === undefined ? {} : { sub }), title: "t", fm: {}, body: "", notes: [], legacy: false });
   test("a dotted goal is keyed by its dotted id, a plain item by its number", () => {
     expect(subjectOf(item(5, 1), "proj").id).toBe("proj-5.1");
     expect(subjectOf(item(5), "proj").id).toBe("proj-5");

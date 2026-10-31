@@ -4,7 +4,7 @@
  * when choosing it means waiting for that goal), `recommended` (an option label) and `why` (short context lines).
  * The work store's front matter is flat, so the values are kept free of quotes, backslashes and line breaks.
  */
-import type * as todos from "../../todo/lib/todo.ts";
+import type * as issues from "../../todo/lib/todo.ts";
 
 export interface Ask {
   kind: "input" | "approval";
@@ -59,7 +59,7 @@ export function normalizeAsk(raw: any, defaults: { kind?: Ask["kind"]; reason?: 
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
 
 /** The ask in an item's fields, or null when it has no question with options. `kind` and `reason` come from `ask` and `reason`. */
-export function readAsk(item: todos.Item): Ask | null {
+export function readAsk(item: issues.Issue): Ask | null {
   const question = typeof item.fm.question === "string" ? item.fm.question : "";
   const options = list(item.fm.options).map(decodeOption);
   if (!question || !options.length) return null;
@@ -72,7 +72,7 @@ export function readAsk(item: todos.Item): Ask | null {
 }
 
 /** Put `ask` on the item: `ask`, `reason`, `question`, `options`, `recommended` and `why`, as `readAsk` and `store.askOf` read them. */
-export function writeAsk(item: todos.Item, ask: Ask): void {
+export function writeAsk(item: issues.Issue, ask: Ask): void {
   clearAsk(item);
   item.fm.ask = ask.kind;
   item.fm.reason = ask.reason;
@@ -82,7 +82,7 @@ export function writeAsk(item: todos.Item, ask: Ask): void {
   item.fm.why = ask.why;
 }
 
-export function clearAsk(item: todos.Item): void {
+export function clearAsk(item: issues.Issue): void {
   for (const k of ["ask", "reason", "question", "options", "recommended", "why"]) delete item.fm[k];
 }
 

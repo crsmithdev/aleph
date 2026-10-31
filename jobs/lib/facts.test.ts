@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { parseFacts, writeFact, kindOf, parseVerdicts, type Verdict } from "./facts.ts";
+import { parseFacts, writeFact, kindOf, parseFactChecks, type FactCheck } from "./facts.ts";
 
 test("sourced FACT lines give facts with their sources", () => {
   const r = parseFacts("done\nFACT: bun test runs everything [source: package.json:7]\nFACT: the gate lives in gate.ts [source: abc1234]\nFACT: docs [source: https://example.com/a]");
@@ -81,7 +81,7 @@ describe("writeFact", () => {
   const git = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
   const saved: Record<string, string | undefined> = {};
   const set = (k: string, val: string) => { saved[k] = process.env[k]; process.env[k] = val; };
-  const verdict = (title: string, over: Partial<Verdict> = {}): Verdict => ({ fact: `${title} behaves oddly`, source: "src/a.ts:3", verdict: "keep", reason: "a.ts shows it", scope: "screen", title, ...over });
+  const verdict = (title: string, over: Partial<FactCheck> = {}): FactCheck => ({ fact: `${title} behaves oddly`, source: "src/a.ts:3", verdict: "keep", reason: "a.ts shows it", scope: "screen", title, ...over });
   const files = () => Bun.spawnSync(["bash", "-c", `cd ${vault} && find wiki -type f | sort`], { stdout: "pipe" }).stdout.toString();
 
   beforeAll(() => {
@@ -138,8 +138,8 @@ describe("writeFact", () => {
   test("kindOf and the parser's kind field", () => {
     expect(kindOf(verdict("A", { scope: "concept" }))).toBe("concept");
     expect(kindOf(verdict("A"))).toBe("gotcha");
-    const p = parseVerdicts('{"verdicts":[{"fact":"f","verdict":"keep","reason":"r","kind":"concept"}]}');
-    expect((p as Verdict[])[0].kind).toBe("concept");
+    const p = parseFactChecks('{"verdicts":[{"fact":"f","verdict":"keep","reason":"r","kind":"concept"}]}');
+    expect((p as FactCheck[])[0].kind).toBe("concept");
   });
 });
 

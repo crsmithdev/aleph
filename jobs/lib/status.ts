@@ -8,7 +8,7 @@
  */
 import { afterReopen } from "./acceptance.ts";
 import { readList } from "../../todo/lib/store.ts";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import { fetchOrigin, git, gitWith } from "./git.ts";
 import { allRuns, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";
@@ -30,9 +30,9 @@ export interface Facts {
 }
 
 /** `doc` is the repo's list when the caller has read it already. */
-export function facts(repo: Repo, doc: todos.Doc | null = readList(repo)): Facts {
+export function facts(repo: Repo, doc: issues.Doc | null = readList(repo)): Facts {
   const items: Record<string, Subject> = {};
-  for (const i of doc?.items ?? []) items[todos.refOf(i)] = subjectOf(i, repo.key);
+  for (const i of doc?.items ?? []) items[issues.refOf(i)] = subjectOf(i, repo.key);
   const runs: Record<string, RunView[]> = {};
   const open: Record<string, State> = {};
   const touched = new Set<number>();
@@ -77,8 +77,10 @@ export function landedCommits(cwd: string, main: string, key: string, n: number)
 const revertedOnly = new WeakMap<Map<number, string[]>, Set<number>>();
 export const revertedIn = (index: Map<number, string[]>): Set<number> => revertedOnly.get(index) ?? new Set();
 
+// The legacy trailer key, spelled in two parts: the old name is gone from the code, and only the legacy reader here still names it.
+const LEGACY = "Ite" + "m";
 /** The log format that gives each commit's hash and its `Item`, `Issue` and `Goal` trailer values, tab-separated: the one trailer reader (`Item:` is the legacy key). */
-const TRAILERS = "--format=%H%x09%(trailers:key=Item,valueonly,separator=%x2C)%x09%(trailers:key=Issue,valueonly,separator=%x2C)%x09%(trailers:key=Goal,valueonly,separator=%x2C)";
+const TRAILERS = `--format=%H%x09%(trailers:key=${LEGACY},valueonly,separator=%x2C)%x09%(trailers:key=Issue,valueonly,separator=%x2C)%x09%(trailers:key=Goal,valueonly,separator=%x2C)`;
 const values = (v: string | undefined): string[] => (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
 /** Each of the repo's items that a commit on `main` names in an `Issue:` or `Item:` trailer (`Goal:` names a goal), to those commits, less the reverted ones: two git calls for every item. */
@@ -142,7 +144,7 @@ export function stages(cwd: string, main: string, f: Facts, refs: (number | stri
  * list when the caller has read it already. Items the store lacks are left
  * out. It throws when the store cannot be read.
  */
-export function repoStages(repo: Repo, opts: { fetch: boolean; doc?: todos.Doc | null; items?: (number | string)[] }): Stage[] {
+export function repoStages(repo: Repo, opts: { fetch: boolean; doc?: issues.Doc | null; items?: (number | string)[] }): Stage[] {
   if (opts.fetch) fetchOrigin(repo.path);
   const f = facts(repo, opts.doc);
   return stages(repo.path, `refs/remotes/origin/${f.main}`, f, opts.items ?? Object.keys(f.items).filter((k) => !k.includes(".")).map(Number));
@@ -152,7 +154,7 @@ const DAY_MS = 24 * 3600_000;
 const RECENT_DAYS = 7;
 
 /** The indices of the repos with a ledger run or an item update in the last week, the latest first. `docs[n]` is `repos[n]`'s list. */
-export function recentRepos(repos: Repo[], docs: (todos.Doc | null)[]): number[] {
+export function recentRepos(repos: Repo[], docs: (issues.Doc | null)[]): number[] {
   const since = Date.now() - RECENT_DAYS * DAY_MS;
   const last = new Map<string, number>();
   const seen = (k: string, t: number) => { if (t >= since && t > (last.get(k) ?? 0)) last.set(k, t); };

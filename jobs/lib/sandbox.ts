@@ -11,7 +11,7 @@ import { expand, testParallel } from "./ledger.ts";
 import { layout } from "./layout.ts";
 import { SHOT_CLIENT } from "./shot.ts";
 
-export const runsDir = () => layout().sandbox;
+export const sandboxDir = () => layout().sandbox;
 const SRT = () => expand(process.env.ALEPH_SRT ?? "~/.aleph/tools/bin/srt");
 const TOKEN = () => expand(process.env.ALEPH_WORKER_TOKEN ?? "~/.aleph/secrets/worker-token");
 
@@ -57,7 +57,7 @@ export function linkBins(dir: string): void {
  * bunx and git, and aleph-shot, the client of the screenshot requests.
  */
 export function makeRunFolder(id: string): string {
-  const dir = join(runsDir(), id);
+  const dir = join(sandboxDir(), id);
   rmSync(dir, { recursive: true, force: true });
   for (const d of ["home", "work", "tmp", "out", "check", "checklog"]) mkdirSync(join(dir, d), { recursive: true });
   writeHome(join(dir, "home"));

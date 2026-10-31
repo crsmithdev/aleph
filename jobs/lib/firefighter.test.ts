@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import { areasOf, askOf, labels as storeLabels, readList, setAsk, writeList } from "../../todo/lib/store.ts";
 import type { Ask } from "./ask.ts";
 import { firefighterStep } from "./factory.ts";
@@ -39,8 +39,8 @@ function fresh(items: { title: string; body?: string; labels?: string[]; notes?:
   process.env.ALEPH_FACTORY_DIR = join(base, `factory${n}`);
   writeList({ key }, "reset", (doc) => {
     for (const i of items) {
-      const it = todos.addLegacy(doc, i.title, { labels: i.labels, body: i.body });
-      for (const note of i.notes ?? []) todos.note(it, note);
+      const it = issues.addLegacy(doc, i.title, { labels: i.labels, body: i.body });
+      for (const note of i.notes ?? []) issues.note(it, note);
       if (i.ask) setAsk(it, i.ask);
     }
     return true;
@@ -51,7 +51,7 @@ const choice = (reason = "question"): Ask => ({ kind: "input", reason, question:
 /** A plain question with no options: a how-to-build one. */
 const plain = (question = "which module?"): Ask => ({ kind: "input", reason: "question", question, options: [], why: [] });
 const asked = (id: number) => askOf(item(id));
-const item = (id: number) => todos.find(readList({ key })!, id)!;
+const item = (id: number) => issues.find(readList({ key })!, id)!;
 const reply = (actions: object[]) => writeFileSync(join(base, "reply.json"), JSON.stringify({ actions }));
 const calls = () => (existsSync(join(base, "calls")) ? readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean).length : 0);
 const log = () => readFileSync(join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), "utf8");
@@ -232,7 +232,7 @@ test("a close reply drops the stuck job, writes no rerun file, and marks the iss
   await firefighterStep(ports());
   expect(dropped.map((d) => d.name)).toEqual([name]);
   expect(existsSync(join(process.env.ALEPH_FACTORY_DIR!, "rerun", `${name}.md`))).toBe(false);
-  expect(todos.status(item(1))).toBe("done");
+  expect(issues.status(item(1))).toBe("done");
   expect(item(1).notes.at(-1)).toContain("firefighter: closed: the goal is already met on main");
 });
 
@@ -365,7 +365,7 @@ test("parseReply reads each action, and names a malformed one", () => {
 });
 
 /** Goal `.1` under issue `id`, as `fresh` files none: the goal a drop or an answer can wait for. */
-const addGoal = (id: number) => writeList({ key }, "a goal", (doc) => { todos.addGoal(doc, todos.find(doc, id)!, { title: "blocker goal", body: "Do it.", repo: key }); return true; });
+const addGoal = (id: number) => writeList({ key }, "a goal", (doc) => { issues.addGoal(doc, issues.find(doc, id)!, { title: "blocker goal", body: "Do it.", repo: key }); return true; });
 
 test("an Ask of reason question is an event, and answer clears it", async () => {
   fresh([{ title: "q", ask: plain("which helper?") }]);

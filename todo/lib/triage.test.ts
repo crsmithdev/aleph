@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { triage } from "./triage.ts";
-import * as todos from "./todo.ts";
+import * as issues from "./todo.ts";
 
 let dir: string;
 let server: ReturnType<typeof Bun.serve>;
@@ -26,11 +26,11 @@ beforeAll(() => {
 afterAll(() => { server.stop(true); rmSync(dir, { recursive: true, force: true }); delete process.env.ALEPH_JUDGE; delete process.env.ALEPH_JUDGE_FILE; });
 beforeEach(() => { asked = []; reply = { status: 200, answers: {} }; delete process.env.ALEPH_JUDGE; });
 
-function list(n = 3): todos.Doc {
-  const doc = todos.blank("r");
-  todos.add(doc, "item one", { labels: ["obs"] });
-  todos.add(doc, "item two", { labels: ["factory"] });
-  for (let i = 3; i <= n; i++) todos.add(doc, `item ${i}`);
+function list(n = 3): issues.Doc {
+  const doc = issues.blank("r");
+  issues.add(doc, "item one", { labels: ["obs"] });
+  issues.add(doc, "item two", { labels: ["factory"] });
+  for (let i = 3; i <= n; i++) issues.add(doc, `item ${i}`);
   return doc;
 }
 
@@ -49,7 +49,7 @@ test("labels and duplicates at p >= 0.7", async () => {
 
 test("closed items are not asked about", async () => {
   const doc = list();
-  todos.setStatus(doc.items[0], "done");
+  issues.setStatus(doc.items[0], "done");
   await triage(doc, "t");
   expect(Object.keys(asked[0].questions)).not.toContain("item:1");
 });

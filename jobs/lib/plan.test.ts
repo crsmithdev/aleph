@@ -4,7 +4,7 @@ import type { FSWatcher } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { labels as itemLabels, readList, writeList } from "../../todo/lib/store.ts";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import { dispatchGoals, planNow } from "./factory.ts";
 import { readRun, writeRun } from "./ledger.ts";
 import { isLarge, parsePlan, prompt, realOracle, runPlan, topFolders } from "./plan.ts";
@@ -82,11 +82,11 @@ const body = (marker: string, surface = "jobs/lib/a.ts") => `## Goal\nA big thin
 /** Files an issue with its goal `.1`, as `aleph issue add --goal -` does; the issue's number. */
 const addGoal = (marker: string, surface?: string, title = "big"): number =>
   writeList({ key: "fac" }, "add a goal", (doc) => {
-    const issue = todos.add(doc, title, { labels: ["ui"], body: `## Request\n\n${body(marker, surface)}` });
-    todos.addGoal(doc, issue, { title, body: body(marker, surface) });
+    const issue = issues.add(doc, title, { labels: ["ui"], body: `## Request\n\n${body(marker, surface)}` });
+    issues.addGoal(doc, issue, { title, body: body(marker, surface) });
     return issue.id;
   }, true)!.value;
-const item = (id: number | string) => todos.find(readList({ key: "fac" })!, id)!;
+const item = (id: number | string) => issues.find(readList({ key: "fac" })!, id)!;
 const planCalls = () => readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean);
 const planRuns = () => readdirSync(join(base, "jobs")).filter((d) => d.endsWith("-plan")).map((d) => readRun(join(base, "jobs", d))!);
 
@@ -165,18 +165,18 @@ test("an issue with goals is not dispatched, goals wait on their after, and the 
   const id = addGoal("three");
   await dispatch("opus");
   const kids = [1, 2, 3].map((k) => `${id}.${k}`);
-  const finish = (n: string) => writeList({ key: "fac" }, "done", (doc) => { todos.setStatus(todos.find(doc, n)!, "done"); return true; });
+  const finish = (n: string) => writeList({ key: "fac" }, "done", (doc) => { issues.setStatus(issues.find(doc, n)!, "done"); return true; });
   finish(kids[0]);
   finish(kids[1]);
   let { starts, out } = await dispatch("opus");
   expect(starts.map(([n]) => n)).toEqual([`fac-${kids[2]}`]);
-  expect(todos.status(item(id))).toBe("open");
+  expect(issues.status(item(id))).toBe("open");
   expect(planCalls().length).toBe(1);
   finish(kids[2]);
   ({ starts, out } = await dispatch("opus"));
   expect(starts).toEqual([]);
   expect(out.skipped).toContain(`fac-${id}: closed as done`);
-  expect(todos.status(item(id))).toBe("done");
+  expect(issues.status(item(id))).toBe("done");
   expect(item(id).notes.at(-1)).toEndWith(`its goals are all done: ${kids.map((k) => `fac-${k} (no commit)`).join(", ")}`);
 });
 
@@ -352,9 +352,9 @@ test("aleph plan on an issue filed with --goal - files goals .1 to .3 and the is
   const tree = Bun.spawnSync(["git", "ls-tree", "-r", "--name-only", "main"], { cwd: join(base, "items.git") }).stdout.toString();
   for (const k of [1, 2, 3]) expect(tree).toContain(`fac-${n}.${k}.md`);
   const doc = readList({ key: "fac" })!;
-  for (const k of [1, 2, 3]) expect(todos.find(doc, `${n}.${k}`)!.fm).toMatchObject({ kind: "goal", issue: `fac-${n}` });
-  expect(todos.find(doc, `${n}.3`)!.fm.after).toContain(`fac-${n}.1`);
-  expect(todos.find(doc, n)!.fm.goals).toEqual([`fac-${n}.1`, `fac-${n}.2`, `fac-${n}.3`]);
+  for (const k of [1, 2, 3]) expect(issues.find(doc, `${n}.${k}`)!.fm).toMatchObject({ kind: "goal", issue: `fac-${n}` });
+  expect(issues.find(doc, `${n}.3`)!.fm.after).toContain(`fac-${n}.1`);
+  expect(issues.find(doc, n)!.fm.goals).toEqual([`fac-${n}.1`, `fac-${n}.2`, `fac-${n}.3`]);
   expect(fileAt(`fac/backlog/tasks/fac-${n}.md`)).toContain(`fac-${n}.3`);
   expect(planRuns()).toEqual([expect.objectContaining({ kind: "plan", on: `fac-${n}`, state: "done", reason: "planned" })]);
   const state = JSON.parse(readFileSync(join(base, "jobs", readdirSync(join(base, "jobs")).find((d) => d.endsWith("-plan"))!, "state.json"), "utf8"));

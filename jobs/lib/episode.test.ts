@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { traceIdFor } from "../../hooks/lib/otlp.ts";
 import { writeList } from "../../todo/lib/store.ts";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import { episodeTitle, writeEpisodes } from "./episode.ts";
 import { loadRegistry, writeRun, type Run } from "./ledger.ts";
 
@@ -62,9 +62,9 @@ afterEach(() => {
 
 const add = (title: string, o: { labels?: string[]; done?: boolean; waitingOn?: string } = {}): number =>
   writeList({ key: "fac" }, "add", (doc) => {
-    const item = todos.addLegacy(doc, title, { labels: o.labels ?? ["goal"], body: "## Goal\nShip it." });
-    if (o.waitingOn) todos.edit(item, { waitingOn: o.waitingOn });
-    if (o.done) todos.setStatus(item, "done");
+    const item = issues.addLegacy(doc, title, { labels: o.labels ?? ["goal"], body: "## Goal\nShip it." });
+    if (o.waitingOn) issues.edit(item, { waitingOn: o.waitingOn });
+    if (o.done) issues.setStatus(item, "done");
     return item.id;
   }, true)!.value;
 

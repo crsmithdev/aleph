@@ -102,7 +102,7 @@ export function expand(p: string): string {
   return p === "~" || p.startsWith("~/") ? join(homedir(), p.slice(1)) : p;
 }
 
-export const jobsDir = () => layout().ledger;
+export const runsDir = () => layout().ledger;
 
 export function loadRegistry(): Record<string, Repo> {
   const file = expand(process.env.ALEPH_REPOS ?? "~/.aleph/repos.json");
@@ -150,7 +150,7 @@ export interface Entry { id: string; folder: string; run: Run }
 
 /** Every run, oldest first. Folder names start with the time, so they sort. */
 export function allRuns(): Entry[] {
-  const dir = jobsDir();
+  const dir = runsDir();
   if (!existsSync(dir)) return [];
   const out: Entry[] = [];
   for (const id of readdirSync(dir).sort()) {

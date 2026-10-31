@@ -8,9 +8,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { vaultDir } from "../../vault/lib/vault.ts";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import { goalsOf, issueOf, kindOf, readList, note, writeList } from "../../todo/lib/store.ts";
-import { allRuns, jobsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
+import { allRuns, runsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 import { jobsNamed } from "./job.ts";
 import type { Tier } from "./route.ts";
 
@@ -117,7 +117,7 @@ function episodeText(e: Episode): string {
   return `## ${e.title}\n${parts.map(([n, t]) => `\n### ${n}\n${t}\n`).join("")}`;
 }
 
-export function prompt(repo: Repo, item: todos.Item, episodes: Episode[] = []): string {
+export function prompt(repo: Repo, item: issues.Issue, episodes: Episode[] = []): string {
   return `You plan one large goal of the repo ${repo.key}, which is your working directory. You have read-only tools: read the code to plan. Change nothing.
 
 # Goal ${repo.key}-${item.id}: ${item.title}
@@ -141,21 +141,21 @@ The factory runs this repo's checks itself, so the Oracle names only real comman
 }
 
 /** Make the run folder of a planner run: its own job in the ledger. */
-function makeRun(repo: Repo, item: todos.Item): string {
-  mkdirSync(jobsDir(), { recursive: true });
-  const name = `plan-${repo.key}-${todos.refOf(item)}`;
-  const on = `${repo.key}-${todos.refOf(item)}`;
+function makeRun(repo: Repo, item: issues.Issue): string {
+  mkdirSync(runsDir(), { recursive: true });
+  const name = `plan-${repo.key}-${issues.refOf(item)}`;
+  const on = `${repo.key}-${issues.refOf(item)}`;
   for (let n = 0; ; n++) {
-    const folder = join(jobsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-plan`);
+    const folder = join(runsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-plan`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
     // `shown`: the dispatch's line reports a plan, so the report has no line for the run.
     writeRun(folder, { kind: "plan", job: folder.split("/").at(-1)!, name, repo: repo.key, on, state: "running", phase: "plan", model: PLAN_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
-    writeFileSync(join(folder, "command.txt"), `plan ${repo.key}-${todos.refOf(item)}: ${item.title}\n`);
+    writeFileSync(join(folder, "command.txt"), `plan ${repo.key}-${issues.refOf(item)}: ${item.title}\n`);
     return folder;
   }
 }
 
-async function ask(repo: Repo, item: todos.Item, folder: string): Promise<string> {
+async function ask(repo: Repo, item: issues.Issue, folder: string): Promise<string> {
   const input = prompt(repo, item, await recallEpisodes(`${item.title}\n${section(item.body, "Goal")}`));
   writeFileSync(join(folder, "prompt.md"), input);
   const argv = [process.env.ALEPH_PLAN_CMD ?? "claude", "-p", "--model", PLAN_MODEL, "--tools", "Read", "Grep", "Glob"];
@@ -177,12 +177,12 @@ const firstGoal = (repo: Repo, id: number | string) => `${repo.key}-${id}.1`;
  * The goal `.1` of an issue when it is the issue's only goal, open, with no run; `null` for an issue with no goal; a
  * string, why the issue cannot be planned, for any other shape.
  */
-function planTarget(repo: Repo, doc: todos.Doc, issue: todos.Item): todos.Item | null | string {
-  if (kindOf(issue) !== "issue" || todos.status(issue) !== "open") return "not an open issue";
+function planTarget(repo: Repo, doc: issues.Doc, issue: issues.Issue): issues.Issue | null | string {
+  if (kindOf(issue) !== "issue" || issues.status(issue) !== "open") return "not an open issue";
   const goals = goalsOf(issue);
   if (!goals.length) return section(issue.body, "Goal") ? null : "no goal, and the issue's body is not in goal format";
-  const g = goals.length === 1 && goals[0] === firstGoal(repo, issue.id) ? todos.find(doc, `${issue.id}.1`) : undefined;
-  if (!g || todos.status(g) !== "open") return "already planned";
+  const g = goals.length === 1 && goals[0] === firstGoal(repo, issue.id) ? issues.find(doc, `${issue.id}.1`) : undefined;
+  if (!g || issues.status(g) !== "open") return "already planned";
   if (jobsNamed(goals[0]).length) return "the goal has had a run";
   return g;
 }
@@ -193,24 +193,24 @@ function planTarget(repo: Repo, doc: todos.Doc, issue: todos.Item): todos.Item |
  */
 export function fileChildren(repo: Repo, id: number | string, children: Child[]): string[] | null {
   const w = writeList(repo, `plan ${repo.key}-${id}: ${children.length} goals`, (doc) => {
-    const issue = todos.find(doc, id);
+    const issue = issues.find(doc, id);
     if (!issue) return null;
     const first = planTarget(repo, doc, issue);
     if (typeof first === "string") return null;
     const refs: string[] = [];
     for (const [i, c] of children.entries()) {
       const after = c.waits.map((w) => refs[w - 1]);
-      let g: todos.Item;
+      let g: issues.Issue;
       if (i === 0 && first) {
         g = first;
-        todos.edit(g, { title: c.title, body: c.body });
+        issues.edit(g, { title: c.title, body: c.body });
         g.fm.after = after;
       } else {
-        g = todos.addGoal(doc, issue, { title: c.title, body: c.body, after });
+        g = issues.addGoal(doc, issue, { title: c.title, body: c.body, after });
       }
-      refs.push(`${repo.key}-${todos.refOf(g)}`);
+      refs.push(`${repo.key}-${issues.refOf(g)}`);
     }
-    todos.note(issue, `planner: split into ${refs.map((r, i) => `${r} (${children[i].title})`).join(", ")}; this issue closes when they are all done`);
+    issues.note(issue, `planner: split into ${refs.map((r, i) => `${r} (${children[i].title})`).join(", ")}; this issue closes when they are all done`);
     return refs;
   });
   return w?.value ?? null;
@@ -228,13 +228,13 @@ export type Plan = { plan: true } | { tier: Tier | null };
  * large, and whose issue has had fewer than PLAN_TRIES failed planner runs, is
  * planned (`plan`, on its issue); any other gets a worker run at the rated tier.
  */
-export async function needsPlan(repo: Repo, item: todos.Item, spec: string, rate: Rate): Promise<Plan> {
+export async function needsPlan(repo: Repo, item: issues.Issue, spec: string, rate: Rate): Promise<Plan> {
   const tier = await rate(spec);
-  if (jobsNamed(`${repo.key}-${todos.refOf(item)}`).length || !isLarge(tier, item.body)) return { tier };
+  if (jobsNamed(`${repo.key}-${issues.refOf(item)}`).length || !isLarge(tier, item.body)) return { tier };
   const issue = /^(.+)-(\d+)$/.exec(issueOf(item) ?? "");
   if (!issue || issue[1] !== repo.key) return { tier };
-  const parent = todos.find(readList(repo)!, Number(issue[2]));
-  if (!parent || goalsOf(parent).length !== 1 || goalsOf(parent)[0] !== `${repo.key}-${todos.refOf(item)}`) return { tier };
+  const parent = issues.find(readList(repo)!, Number(issue[2]));
+  if (!parent || goalsOf(parent).length !== 1 || goalsOf(parent)[0] !== `${repo.key}-${issues.refOf(item)}`) return { tier };
   return badPlans(repo, parent.id) >= PLAN_TRIES ? { tier } : { plan: true };
 }
 
@@ -273,13 +273,13 @@ export async function runPlan(repo: Repo, id: number): Promise<Planned> {
   if (!release) return { why: "another plan run holds the goal" };
   try {
     const doc = readList(repo);
-    const issue = doc && todos.find(doc, id);
+    const issue = doc && issues.find(doc, id);
     if (!issue) return { why: "not an open issue" };
     const target = planTarget(repo, doc, issue);
     if (typeof target === "string") return { why: target };
     if (badPlans(repo, id) >= PLAN_TRIES) return { why: `${PLAN_TRIES} plan runs failed already` };
     // The planner reads the goal's body, or the issue's own when it has no goal.
-    const item: todos.Item = { ...issue, title: target?.title ?? issue.title, body: target?.body ?? issue.body };
+    const item: issues.Issue = { ...issue, title: target?.title ?? issue.title, body: target?.body ?? issue.body };
     let why = "";
     while (badPlans(repo, id) < PLAN_TRIES) {
       const folder = makeRun(repo, item);

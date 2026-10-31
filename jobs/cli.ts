@@ -13,9 +13,9 @@ import { allJobs, findJob, goal, isOpen, issue as issueOf, lastReal, readFile, v
 import { git, onMain, removeBranch, reviewBack, unit } from "./lib/unit.ts";
 import { fetchOrigin } from "./lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
-import * as todos from "../todo/lib/todo.ts";
+import * as issues from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
-import * as issues from "../todo/lib/issues.ts";
+import * as verbs from "../todo/lib/issues.ts";
 import { grant, readAlways, revoke } from "./lib/always.ts";
 import { OLD_REASON, readStanding } from "./lib/standing.ts";
 import { ciStep } from "./lib/ci.ts";
@@ -144,7 +144,7 @@ function jobs(): void {
 }
 
 /** After `aleph issue add` or `edit` of an open goal in a factory repo: a dispatch, so the goal starts at once. It never fails the write. */
-function dispatchAfterGoal(repo: Repo, item: todos.Item): void {
+function dispatchAfterGoal(repo: Repo, item: issues.Issue): void {
   if (!repo.sandbox || !store.isGoal(item)) return;
   dispatchDetached();
 }
@@ -168,7 +168,7 @@ async function todoCmd(): Promise<void> {
   const goalArg = flag("goal");
   if (rest.includes("--goal") && goalArg !== "-") refuse("--goal takes - (the goal text on stdin)");
   const afterArg = flag("after");
-  const fields: issues.Fields = {
+  const fields: verbs.Fields = {
     title: flag("title"),
     body: bodyArg === undefined ? undefined : (bodyArg === "-" ? await Bun.stdin.text() : bodyArg).trim(),
     priority: flag("priority"),
@@ -182,14 +182,14 @@ async function todoCmd(): Promise<void> {
   const registry = loadRegistry();
   if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(sub, registry, { status: stat, label }, json);
   const repo = registry[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
-  issues.checkFields(fields);
+  verbs.checkFields(fields);
   const id = Number(args[0]);
   const text = args.slice(1).join(" ").trim();
   const warn = (follow: string | null | undefined) => { if (follow) console.error(`warn: ${follow}`); };
 
   switch (sub) {
     case "add": {
-      const a = await issues.add(repo, args.join(" "), fields);
+      const a = await verbs.add(repo, args.join(" "), fields);
       warn(a.follow);
       for (const m of a.result.maybeSame ?? []) console.error(`aleph-${m.id} may be the same task: ${m.title}`);
       out(a.result);
@@ -198,18 +198,18 @@ async function todoCmd(): Promise<void> {
       return;
     }
     case "list": {
-      const rows = issues.list(repo, { status: stat, label });
-      if (json) { out(rows.map(issues.brief)); return; }
+      const rows = verbs.list(repo, { status: stat, label });
+      if (json) { out(rows.map(verbs.brief)); return; }
       if (!rows.length) { console.log("no issues"); return; }
       printRows(rows);
       return;
     }
     case "show": {
-      const { item: i, hidden } = issues.show(repo, id);
-      if (json) { out({ ...issues.brief(i), body: i.body, notes: i.notes, hidden }); return; }
+      const { item: i, hidden } = verbs.show(repo, id);
+      if (json) { out({ ...verbs.brief(i), body: i.body, notes: i.notes, hidden }); return; }
       console.log(`## ${i.id}. ${i.title}`);
       const ask = store.askOf(i);
-      console.log(`status ${todos.status(i)}   kind ${store.kindOf(i)}   source ${store.sourceOf(i)}   priority ${i.fm.priority ?? "-"}   updated ${i.fm.updated ?? "-"}`);
+      console.log(`status ${issues.status(i)}   kind ${store.kindOf(i)}   source ${store.sourceOf(i)}   priority ${i.fm.priority ?? "-"}   updated ${i.fm.updated ?? "-"}`);
       console.log(`goals ${store.goalsOf(i).join(", ") || "-"}   after ${store.afterOf(i).join(", ") || "-"}   areas ${store.areasOf(i).join(", ") || "-"}   due ${i.fm.due ?? "-"}`);
       console.log(`ask ${ask ? `${ask.kind} (${ask.reason}): ${ask.question}` : "-"}`);
       console.log(`hidden checks: ${hidden}`);
@@ -219,14 +219,14 @@ async function todoCmd(): Promise<void> {
     }
     case "note": {
       // Chris's answer to a `needs-chris` issue: not a worker's note (ALEPH_JOB_ID) and not the factory's own.
-      const n = issues.note(repo, id, text, issues.isAnswer(text, process.env.ALEPH_JOB_ID));
+      const n = verbs.note(repo, id, text, verbs.isAnswer(text, process.env.ALEPH_JOB_ID));
       warn(n.follow);
       out(n.result);
       if (n.answered) triageDetached(repo, n.result.id);
       return;
     }
     case "decide": {
-      const d = issues.decide(repo, id, text, fields);
+      const d = verbs.decide(repo, id, text, fields);
       warn(d.follow);
       out(d.result);
       // The note is Chris's answer: the triage that follows a note takes the issue from here.
@@ -234,7 +234,7 @@ async function todoCmd(): Promise<void> {
       return;
     }
     case "edit": {
-      const e = issues.edit(repo, id, fields);
+      const e = verbs.edit(repo, id, fields);
       warn(e.follow);
       out(e.result);
       dispatchAfterGoal(repo, e.item);
@@ -242,20 +242,20 @@ async function todoCmd(): Promise<void> {
     }
     case "done":
     case "drop": {
-      const c = issues.close(repo, id, sub, text);
+      const c = verbs.close(repo, id, sub, text);
       warn(c.follow);
       out(c.result);
       return;
     }
     case "lint": {
       if (fixing) {
-        const l = issues.lintFix(repo, registry);
+        const l = verbs.lintFix(repo, registry);
         warn(l.follow);
         out(l.result);
         if (l.result.remaining.length) process.exit(1);
         return;
       }
-      const l = issues.lint(repo, registry);
+      const l = verbs.lint(repo, registry);
       if (!l.findings.length) { out({ repo: l.repo, items: l.items, findings: [] }); return; }
       for (const f of l.findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${l.findings.length} problem${l.findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
@@ -278,24 +278,24 @@ async function goalCmd(): Promise<void> {
   const text = args.join(" ").trim();
   switch (verb) {
     case "list": {
-      const rows = issues.goalList(repo, { status: flag("status") });
-      if (json) { out(rows.map(issues.brief)); return; }
+      const rows = verbs.goalList(repo, { status: flag("status") });
+      if (json) { out(rows.map(verbs.brief)); return; }
       if (!rows.length) { console.log("no goals"); return; }
-      for (const g of rows) console.log(`${repo.key}-${todos.refOf(g)}  ${todos.status(g).padEnd(7)} ${g.title}${store.afterOf(g).length ? `  (after ${store.afterOf(g).join(",")})` : ""}`);
+      for (const g of rows) console.log(`${repo.key}-${issues.refOf(g)}  ${issues.status(g).padEnd(7)} ${g.title}${store.afterOf(g).length ? `  (after ${store.afterOf(g).join(",")})` : ""}`);
       return;
     }
     case "show": {
-      const { item: g, hidden } = issues.goalShow(repo, issues.goalId(id));
-      if (json) { out({ ...issues.brief(g), body: g.body, notes: g.notes, hidden }); return; }
-      console.log(`## ${repo.key}-${todos.refOf(g)}. ${g.title}`);
-      console.log(`status ${todos.status(g)}   issue ${store.issueOf(g) ?? "-"}   after ${store.afterOf(g).join(", ") || "-"}   priority ${g.fm.priority ?? "-"}`);
+      const { item: g, hidden } = verbs.goalShow(repo, verbs.goalId(id));
+      if (json) { out({ ...verbs.brief(g), body: g.body, notes: g.notes, hidden }); return; }
+      console.log(`## ${repo.key}-${issues.refOf(g)}. ${g.title}`);
+      console.log(`status ${issues.status(g)}   issue ${store.issueOf(g) ?? "-"}   after ${store.afterOf(g).join(", ") || "-"}   priority ${g.fm.priority ?? "-"}`);
       console.log(`hidden checks: ${hidden}`);
       if (g.body.trim()) console.log(`\n${g.body}`);
       if (g.notes.length) console.log(`\n### Notes\n${g.notes.join("\n")}`);
       return;
     }
     case "note": {
-      const n = issues.goalNote(repo, issues.goalId(id), text);
+      const n = verbs.goalNote(repo, verbs.goalId(id), text);
       warn(n.follow);
       out(n.result);
       return;
@@ -303,7 +303,7 @@ async function goalCmd(): Promise<void> {
     case "edit": {
       const bodyArg = flag("body");
       const afterArg = flag("after");
-      const e = issues.goalEdit(repo, issues.goalId(id), {
+      const e = verbs.goalEdit(repo, verbs.goalId(id), {
         title: flag("title"),
         body: bodyArg === undefined ? undefined : (bodyArg === "-" ? await Bun.stdin.text() : bodyArg).trim(),
         priority: flag("priority"),
@@ -315,15 +315,15 @@ async function goalCmd(): Promise<void> {
       return;
     }
     case "drop": {
-      const c = issues.close(repo, issues.goalId(id), "drop", text);
+      const c = verbs.close(repo, verbs.goalId(id), "drop", text);
       warn(c.follow);
       out(c.result);
       return;
     }
     case "hidden": {
-      issues.goalId(id);
+      verbs.goalId(id);
       if (!args.length) {
-        const have = issues.goalHiddenList(repo, id);
+        const have = verbs.goalHiddenList(repo, id);
         if (json) { out(have); return; }
         if (!have.length) console.log("no hidden checks");
         for (const n of have) console.log(n);
@@ -334,7 +334,7 @@ async function goalCmd(): Promise<void> {
         if (!existsSync(p) || !statSync(p).isFile()) refuse(`${p} is not a file`);
         files[basename(p)] = readFileSync(p, "utf8");
       }
-      const h = issues.goalHiddenAdd(repo, id, files);
+      const h = verbs.goalHiddenAdd(repo, id, files);
       warn(h.follow);
       out(h.result);
       return;
@@ -343,44 +343,44 @@ async function goalCmd(): Promise<void> {
   }
 }
 
-const ready = (i: todos.Item) => [i.fm.due ? `due ${i.fm.due}` : "", store.afterOf(i).length ? `after ${store.afterOf(i).join(",")}` : ""].filter(Boolean).join("  ");
+const ready = (i: issues.Issue) => [i.fm.due ? `due ${i.fm.due}` : "", store.afterOf(i).length ? `after ${store.afterOf(i).join(",")}` : ""].filter(Boolean).join("  ");
 
-function printRows(rows: todos.Item[], indent = ""): void {
+function printRows(rows: issues.Issue[], indent = ""): void {
   const w = String(Math.max(...rows.map((i) => i.id))).length;
-  for (const i of rows) console.log(`${indent}${String(i.id).padStart(w)}  ${todos.status(i).padEnd(7)} ${i.title}${ready(i) ? `  (${ready(i)})` : ""}`);
+  for (const i of rows) console.log(`${indent}${String(i.id).padStart(w)}  ${issues.status(i).padEnd(7)} ${i.title}${ready(i) ? `  (${ready(i)})` : ""}`);
 }
 
 /** The registry's repos with a ledger run or an item update in the last 7 days, the latest first, each with its list. */
-function listRecent(): { repo: Repo; doc: todos.Doc | null }[] {
-  return issues.recentLists(Object.values(loadRegistry()));
+function listRecent(): { repo: Repo; doc: issues.Doc | null }[] {
+  return verbs.recentLists(Object.values(loadRegistry()));
 }
 
 /** `aleph issue list` and `aleph issue lint` with no repo: each recent repo. */
 function todoRecent(sub: "list" | "lint", registry: Record<string, Repo>, o: { status?: string; label?: string }, json: boolean): void {
   const repos = Object.values(registry);
   if (sub === "lint") {
-    const results = issues.lintRecent(repos, registry);
+    const results = verbs.lintRecent(repos, registry);
     for (const r of results) for (const f of r.findings) console.error(`${r.repo} item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
     out(results);
     if (results.some((r) => r.findings.length)) process.exit(1);
     return;
   }
-  const rows = issues.listRecent(repos, o).map((r) => ({ repo: r.repo.key, items: r.items }));
-  if (json) { out(rows.map((r) => ({ repo: r.repo, items: r.items.map(issues.brief) }))); return; }
+  const rows = verbs.listRecent(repos, o).map((r) => ({ repo: r.repo.key, items: r.items }));
+  if (json) { out(rows.map((r) => ({ repo: r.repo, items: r.items.map(verbs.brief) }))); return; }
   if (!rows.length) { console.log("no issues"); return; }
   for (const r of rows) { console.log(r.repo); printRows(r.items, "  "); }
 }
 
 /** `aleph triage <repo>-<n>`: triage one issue now, under the dispatch's gates. */
 async function triageCmd(): Promise<void> {
-  const ref = todos.parseRef(rest[0] ?? "") ?? refuse("usage: aleph triage <repo>-<n>");
+  const ref = issues.parseRef(rest[0] ?? "") ?? refuse("usage: aleph triage <repo>-<n>");
   const repo = loadRegistry()[ref.repo] ?? refuse(`no repo ${ref.repo}`);
   out(await triageNow(repo, ref.id));
 }
 
 /** `aleph plan <repo>-<n>`: plan one issue now, under the dispatch's gates. */
 async function planCmd(): Promise<void> {
-  const ref = todos.parseRef(rest[0] ?? "") ?? refuse("usage: aleph plan <repo>-<n> (an issue)");
+  const ref = issues.parseRef(rest[0] ?? "") ?? refuse("usage: aleph plan <repo>-<n> (an issue)");
   const repo = loadRegistry()[ref.repo] ?? refuse(`no repo ${ref.repo}`);
   out(await planNow(repo, ref.id));
 }
@@ -467,13 +467,13 @@ function statusCmd(): void {
 function statusRecent(): void {
   const states: Stage[] = [];
   for (const { repo, doc } of listRecent()) {
-    const open = (doc?.items ?? []).filter((i) => todos.status(i) === "open");
+    const open = (doc?.items ?? []).filter((i) => issues.status(i) === "open");
     if (!open.length) continue;
     try {
       fetchOrigin(repo.path);
       const f = facts(repo, doc);
       const main = `refs/remotes/origin/${f.main}`;
-      states.push(...stages(repo.path, main, f, open.map((i) => todos.refOf(i))));
+      states.push(...stages(repo.path, main, f, open.map((i) => issues.refOf(i))));
     }
     catch (e: any) { console.error(`warn: ${repo.key}: ${e?.message ?? e}`); }
   }

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import type { Review } from "./ledger.ts";
 
 let base: string, jobs: string, uiTodo: number, plainTodo: number;
@@ -47,8 +47,8 @@ Bun.serve({ hostname: "127.0.0.1", port, fetch: () => Response.json({ pid: proce
   sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
   sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(join(base, "items"), "git", "push", "-q", "origin", "main");
-  uiTodo = writeList({ key: "demo" }, "add", (doc) => todos.addLegacy(doc, "a view", { labels: ["goal", "ui"], body: "b" }).id, true)!.value;
-  plainTodo = writeList({ key: "demo" }, "add", (doc) => todos.addLegacy(doc, "a fix", { labels: ["goal"], body: "b" }).id, true)!.value;
+  uiTodo = writeList({ key: "demo" }, "add", (doc) => issues.addLegacy(doc, "a view", { labels: ["goal", "ui"], body: "b" }).id, true)!.value;
+  plainTodo = writeList({ key: "demo" }, "add", (doc) => issues.addLegacy(doc, "a fix", { labels: ["goal"], body: "b" }).id, true)!.value;
   process.env.TEST_SERVER_MARK = join(base, "server-mark");
   process.env.ALEPH_REVIEW_SETTLE_MS = "0";
   // The stand-in for srt: the clean environment, as cli.test.ts has it.

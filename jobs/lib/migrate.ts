@@ -63,7 +63,7 @@ const RULED: Record<string, string[]> = { "sorted+ask": ["awaiting"], "planned":
 export interface Row { repo: string; id: string; old: string; stage: string; ok: boolean }
 
 interface New {
-  repo: string; ref: string; num: number; item: todos.Item; fm: Frontmatter; kind: "goal" | "issue"; sorted: boolean;
+  repo: string; ref: string; num: number; item: todos.Issue; fm: Frontmatter; kind: "goal" | "issue"; sorted: boolean;
   ask?: { kind: "input" | "approval"; reason: string }; goals: string[]; after: string[];
 }
 
@@ -121,7 +121,7 @@ const jobsOf = (runs: Entry[]): Entry[][] => {
 };
 
 /** What the old `itemStatus` of the UI said of an item: the ledger's open jobs and the item's labels. */
-function oldStatus(item: todos.Item, mine: Entry[][]): string {
+function oldStatus(item: todos.Issue, mine: Entry[][]): string {
   const st = todos.status(item);
   if (st !== "open") return st;
   if (store.needsChris(item)) return "waiting on Chris";
@@ -143,7 +143,7 @@ function askFields(fm: Frontmatter, kind: "input" | "approval", reason: string, 
 }
 
 /** The new item(s) one old item becomes. */
-function convert(key: string, item: todos.Item, goalOf: Map<number, string>): New[] {
+function convert(key: string, item: todos.Issue, goalOf: Map<number, string>): New[] {
   const L = store.labels(item);
   const has = (l: string) => L.includes(l);
   const parent = /^Part of ([^\s,]+-\d+(?:\.\d+)?)\./.exec(item.body)?.[1] ?? null;

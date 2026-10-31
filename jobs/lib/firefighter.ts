@@ -8,10 +8,10 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/issues.ts";
-import { allRuns, askOf, isAwaiting, isBuild, isLost, jobsDir, loadRegistry, lock, onOf, readRun, reviewOf, stamp, tell, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
+import * as verbs from "../../todo/lib/issues.ts";
+import { allRuns, askOf, isAwaiting, isBuild, isLost, runsDir, loadRegistry, lock, onOf, readRun, reviewOf, stamp, tell, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, openJob, readFile, type Job } from "./job.ts";
 import { verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
@@ -79,7 +79,7 @@ export function snapshot(now = Date.now()): Event[] {
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
       const ask = store.askOf(item);
-      if (todos.status(item) !== "open" || !ask) continue;
+      if (issues.status(item) !== "open" || !ask) continue;
       events.push(hand({ key: `ask:${repo.key}-${item.id}:${item.notes.length}`, kind: "ask", repo: repo.key, item: item.id, reason: ask.reason, line: `${repo.key}-${item.id} ${item.title} waits for Chris (${ask.reason}): ${ask.question || item.notes.at(-1) || ""}` }));
     }
   }
@@ -228,10 +228,10 @@ export function securityPath(repo: Repo, branch: string | undefined): string | n
 }
 
 /** Whether an item's Ask is a product choice: it offers options to pick from (triage's `chris` verdict and the rescue write them). A plain question has none. */
-export const isProductChoice = (item: todos.Item): boolean => (store.askOf(item)?.options.length ?? 0) > 0;
+export const isProductChoice = (item: issues.Issue): boolean => (store.askOf(item)?.options.length ?? 0) > 0;
 
 /** The reason code an item's Ask waits for, or null when it has none. */
-export const reasonOf = (item: todos.Item): string | null => store.askOf(item)?.reason ?? null;
+export const reasonOf = (item: issues.Issue): string | null => store.askOf(item)?.reason ?? null;
 
 /** How actions reach the factory; each returns the refusal, or null. Tests replace land and drop. */
 export interface Ports {
@@ -265,7 +265,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
       if (why) return { refused: `${describe(a)}: ${why}` };
       writeRerun(a.job, `The last run was dropped by the firefighter: ${a.reason}`);
       // A run that cannot pass until another goal lands waits on it: the dispatch reads the goal's after and starts nothing until it is done.
-      const waits = a.after && typeof issue === "number" ? await refusal(async () => issues.edit(repo, issue, { after: a.after })) : null;
+      const waits = a.after && typeof issue === "number" ? await refusal(async () => verbs.edit(repo, issue, { after: a.after })) : null;
       if (issue !== undefined) store.note(repo, issue, `firefighter: dropped ${a.job}: ${a.reason}${a.after ? `; after ${a.after.join(", ")}` : ""}`);
       return waits ? { refused: `${describe(a)}: dropped, but after not set: ${waits}` } : { applied: describe(a) };
     }
@@ -300,7 +300,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     return typeof r === "string" ? { refused: `${describe(a)}: ${r}` } : { applied: `${describe(a)} (${repo.key}-${r.id})` };
   }
   const item = store.reader().item(repo.key, a.n);
-  if (!item || todos.status(item) !== "open") return { refused: `${describe(a)}: no open issue ${repo.key}-${a.n}` };
+  if (!item || issues.status(item) !== "open") return { refused: `${describe(a)}: no open issue ${repo.key}-${a.n}` };
   if (a.do === "close") {
     const open = allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === a.n);
     if (open) {
@@ -319,11 +319,11 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     if (!ask) return { refused: `${describe(a)}: it has no Ask` };
     // A question that offers options is a product choice: it is Chris's unless he handed its reason to the firefighter.
     if (isProductChoice(item) && !handed(ask.reason)) return { refused: `${describe(a)}: its question is a product choice, which is Chris's` };
-    const why = await refusal(async () => issues.decide(repo, a.n, `firefighter decided: ${a.note}`, a.after ? { after: a.after } : {}));
+    const why = await refusal(async () => verbs.decide(repo, a.n, `firefighter decided: ${a.note}`, a.after ? { after: a.after } : {}));
     return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
   }
   if (store.kindOf(item) !== "goal") return { refused: `${describe(a)}: it is not a goal` };
-  const why = await refusal(async () => issues.edit(repo, a.n, { ...(a.body !== undefined ? { body: a.body } : {}), ...(a.after ? { after: a.after } : {}) }));
+  const why = await refusal(async () => verbs.edit(repo, a.n, { ...(a.body !== undefined ? { body: a.body } : {}), ...(a.after ? { after: a.after } : {}) }));
   return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
 }
 
@@ -346,9 +346,9 @@ export async function applyActions(actions: (Action | string)[], ports: Ports = 
 
 /** Make the run folder of a firefighter run: its own job in the ledger. */
 function makeRun(events: Event[]): string {
-  mkdirSync(jobsDir(), { recursive: true });
+  mkdirSync(runsDir(), { recursive: true });
   for (let n = 0; ; n++) {
-    const folder = join(jobsDir(), `${stamp()}-firefighter${n ? `-${n}` : ""}-firefighter`);
+    const folder = join(runsDir(), `${stamp()}-firefighter${n ? `-${n}` : ""}-firefighter`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
     writeRun(folder, { kind: "firefighter", job: folder.split("/").at(-1)!, name: "firefighter", state: "running", phase: "firefighter", model: FIREFIGHTER_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
     writeFileSync(join(folder, "command.txt"), `firefighter: ${events.length} new event${events.length > 1 ? "s" : ""}\n`);
@@ -362,7 +362,7 @@ async function ask(input: string, folder: string): Promise<string> {
   writeFileSync(join(folder, "prompt.md"), input);
   const dirs = factoryRepos().flatMap((r) => ["--add-dir", r.path]);
   const argv = [process.env.ALEPH_FIREFIGHTER_CMD ?? "claude", "-p", "--model", FIREFIGHTER_MODEL, "--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", ...READ_ONLY, ...dirs];
-  const p = Bun.spawn(argv, { cwd: jobsDir(), env: process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawn(argv, { cwd: runsDir(), env: process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
   const timer = setTimeout(() => p.kill(), TIME_BOX_MS());
   try {
     const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);

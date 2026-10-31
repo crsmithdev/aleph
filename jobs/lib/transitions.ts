@@ -7,7 +7,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { askOf, CALL_FILE, isAwaiting, isBuild, isLive, jobsDir, loadRegistry, lock, needsOf, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
+import { askOf, CALL_FILE, isAwaiting, isBuild, isLive, runsDir, loadRegistry, lock, needsOf, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
 import { baselineChecks, git, removeBranch } from "./unit.ts";
 import { fetchOrigin } from "./git.ts";
@@ -15,7 +15,7 @@ import { itemOnMain } from "./status.ts";
 import { dispatchDetached, dispatchGoals, factoryLog, gates, liveEntries } from "./factory.ts";
 import { route, type Tier } from "./route.ts";
 import { startUnit, type Output } from "./launch.ts";
-import * as todos from "../../todo/lib/todo.ts";
+import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 
 /** A transition said no: the message is what `aleph` prints on stderr before it exits 1. */
@@ -65,16 +65,16 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
       const full = gates({ only: ["live"] });
       if (full) refuse(`${full.why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
     }
-    mkdirSync(jobsDir(), { recursive: true });
+    mkdirSync(runsDir(), { recursive: true });
     // Runs sort by folder name, so two runs of one job never share a second:
     // a follow-up started in its land's second would sort before that land.
     for (;;) {
       const prefix = `${stamp()}-${tag}-`;
       id = `${prefix}${run.kind}`;
-      if (!readdirSync(jobsDir()).some((d) => d.startsWith(prefix))) break;
+      if (!readdirSync(runsDir()).some((d) => d.startsWith(prefix))) break;
       await Bun.sleep(200);
     }
-    const folder = join(jobsDir(), id);
+    const folder = join(runsDir(), id);
     mkdirSync(folder);
     writeFileSync(join(folder, "command.txt"), quote(["aleph", ...command]) + "\n");
     prep(folder);
@@ -101,7 +101,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
   } finally {
     release!();
   }
-  return { started: { run: id!, job: run.job ?? id!, folder: join(jobsDir(), id!) }, child };
+  return { started: { run: id!, job: run.job ?? id!, folder: join(runsDir(), id!) }, child };
 }
 
 export interface JobArgs {
@@ -135,10 +135,10 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     const ref = String(on).startsWith(`${repo.key}-`) ? String(on).slice(repo.key.length + 1) : String(on);
     if (!/^\d+(\.\d+)?$/.test(ref)) refuse("--on takes an issue number");
     on = ref.includes(".") ? ref : Number(ref);
-    let doc: todos.Doc | null = null;
+    let doc: issues.Doc | null = null;
     try { doc = store.readList(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
     if (!doc) refuse(`the work store has no list for ${repo.key}`);
-    if (!todos.find(doc!, on)) refuse(`${repo.key} has no issue ${on}`);
+    if (!issues.find(doc!, on)) refuse(`${repo.key} has no issue ${on}`);
   }
 
   const release = await lock(`job-${repo.key}-${name}`);

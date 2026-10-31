@@ -15,9 +15,8 @@
 import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../jobs/lib/git.ts";
 import { layout } from "../../jobs/lib/layout.ts";
 import { clearAsk as clearAskFields, readAsk, writeAsk, type Ask } from "../../jobs/lib/ask.ts";
-import { writeDecision, type Decision } from "../../jobs/lib/decision.ts";
-import * as todos from "./todo.ts";
-import { labels, parseItem, renderItem, status, type Doc, type Item } from "./todo.ts";
+import * as issues from "./todo.ts";
+import { labels, parseItem, renderItem, status, type Doc, type Issue } from "./todo.ts";
 
 export { labels };
 
@@ -29,7 +28,7 @@ const ATTEMPTS = 5;
 export const storeDir = (): string => layout().store;
 const tasksDir = (key: string): string => `${key}/backlog/tasks`;
 const configPath = (key: string): string => `${key}/backlog/config.yml`;
-const itemPath = (key: string, item: todos.Item | string): string => `${tasksDir(key)}/${key}-${typeof item === "string" ? item : todos.refOf(item)}.md`;
+const itemPath = (key: string, item: issues.Issue | string): string => `${tasksDir(key)}/${key}-${typeof item === "string" ? item : issues.refOf(item)}.md`;
 
 /**
  * The Backlog.md project file for a repo: its statuses are aleph's, and
@@ -143,13 +142,13 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
     const found = load(dir, base, repo.key);
     if (found === null && !create) throw new Error(`the work store has no list for ${repo.key}`);
     const doc = found ?? { head: "", repo: repo.key, items: [] };
-    const before = new Map(doc.items.map((i) => [todos.refOf(i), renderItem(repo.key, i)]));
+    const before = new Map(doc.items.map((i) => [issues.refOf(i), renderItem(repo.key, i)]));
     const value = change(doc);
     if (value === null) return null;
     const files: Record<string, string> = found === null ? { [configPath(repo.key)]: config(repo.key) } : {};
     for (const item of doc.items) {
       const text = renderItem(repo.key, item);
-      if (before.get(todos.refOf(item)) !== text) files[itemPath(repo.key, item)] = text;
+      if (before.get(issues.refOf(item)) !== text) files[itemPath(repo.key, item)] = text;
     }
     // Nothing changed: no commit, so the store's history holds only real writes.
     if (Object.keys(files).length === 0) return { value, commit: base, follow: null };
@@ -237,51 +236,51 @@ export function itemTimes(): Map<string, { added: number; changed: number }> {
 // The labels.
 
 export const GOAL = "goal";
-export const NEEDS_CHRIS = "needs-chris";
 /**
  * Labels that mark an issue as sorted: triage skips it, and the UI does not
  * count it as new. One set for both. `live-check` is in it: triage labels a
  * live check `live-check` and `triaged` together, and an issue labelled
  * `live-check` by hand is a check the sandbox cannot reach either.
  */
-export const SORTED: readonly string[] = [GOAL, NEEDS_CHRIS, "triaged", "live-check", "proposal"];
+// The literal "needs-chris" below is the old shape's label: the legacy readers (askOf, needsChris, clearAsk) and the SORTED and MAPPED sets keep it until step 6 drops the old shape.
+export const SORTED: readonly string[] = [GOAL, "needs-chris", "triaged", "live-check", "proposal"];
 
-export const hasLabel = (item: Item, label: string): boolean => labels(item).includes(label);
+export const hasLabel = (item: Issue, label: string): boolean => labels(item).includes(label);
 /** An open item labelled `goal`: a factory run's work. */
-export const isGoal = (item: Item): boolean => status(item) === "open" && !hasAsk(item) && kindOf(item) === "goal";
+export const isGoal = (item: Issue): boolean => status(item) === "open" && !hasAsk(item) && kindOf(item) === "goal";
 /** Put `ask` on the item, as `askOf` reads it. */
-export const setAsk = (item: Item, ask: Ask): void => writeAsk(item, ask);
+export const setAsk = (item: Issue, ask: Ask): void => writeAsk(item, ask);
 
 /** Take the item's Ask off: the `ask` fields, and the old shape's `needs-chris` label if it has one. */
-export function clearAsk(item: Item): void {
+export function clearAsk(item: Issue): void {
   clearAskFields(item);
-  label(item, [], [NEEDS_CHRIS]);
+  label(item, [], ["needs-chris"]);
 }
 
 /** An item with an `ask` (new shape): it waits for Chris, so it is never dispatched and never triaged. */
-const hasAsk = (item: Item): boolean => item.fm.ask !== undefined;
+const hasAsk = (item: Issue): boolean => item.fm.ask !== undefined;
 /** Labels that map to a spec field of their own, so `areasOf` leaves them out. */
-const MAPPED: readonly string[] = [GOAL, NEEDS_CHRIS, "planned", "followup", "triaged", "live-check", "proposal", "deps", "memory"];
+const MAPPED: readonly string[] = [GOAL, "needs-chris", "planned", "followup", "triaged", "live-check", "proposal", "deps", "memory"];
 
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /** The item's `kind` when it has one (new shape), else `goal` for the `goal` label and `issue` for none. */
-export const kindOf = (item: Item): "goal" | "issue" => (item.fm.kind === "goal" || item.fm.kind === "issue" ? item.fm.kind : hasLabel(item, GOAL) ? "goal" : "issue");
+export const kindOf = (item: Issue): "goal" | "issue" => (item.fm.kind === "goal" || item.fm.kind === "issue" ? item.fm.kind : hasLabel(item, GOAL) ? "goal" : "issue");
 /** Who raised the item: its `source`, else `followup` -> worker, `deps` -> deps, `memory` -> memory, else chris. */
-export function sourceOf(item: Item): "chris" | "worker" | "deps" | "memory" {
+export function sourceOf(item: Issue): "chris" | "worker" | "deps" | "memory" {
   const s = text(item.fm.source);
   if (s === "chris" || s === "worker" || s === "deps" || s === "memory") return s;
   return hasLabel(item, "followup") ? "worker" : hasLabel(item, "deps") ? "deps" : hasLabel(item, "memory") ? "memory" : "chris";
 }
 /** The issue a goal belongs to: its `issue`, else the ref of a body that starts "Part of <repo>-<n>."; null for none. */
-export const issueOf = (item: Item): string | null => text(item.fm.issue) || /^Part of ([^\s,]+-\d+(?:\.\d+)?)\./.exec(item.body)?.[1] || null;
+export const issueOf = (item: Issue): string | null => text(item.fm.issue) || /^Part of ([^\s,]+-\d+(?:\.\d+)?)\./.exec(item.body)?.[1] || null;
 /** The goals of an issue: its `goals`, else the `waiting_on` of a `planned` item. */
-export const goalsOf = (item: Item): string[] => (item.fm.goals !== undefined ? list(item.fm.goals) : hasLabel(item, "planned") ? list(item.fm.waiting_on) : []);
+export const goalsOf = (item: Issue): string[] => (item.fm.goals !== undefined ? list(item.fm.goals) : hasLabel(item, "planned") ? list(item.fm.waiting_on) : []);
 /** The goals a goal waits for: its `after`, else the `waiting_on` of an item not `planned`. */
-export const afterOf = (item: Item): string[] => (item.fm.after !== undefined ? list(item.fm.after) : hasLabel(item, "planned") ? [] : list(item.fm.waiting_on));
+export const afterOf = (item: Issue): string[] => (item.fm.after !== undefined ? list(item.fm.after) : hasLabel(item, "planned") ? [] : list(item.fm.waiting_on));
 /** The item's areas: its `areas`, else its labels less the mapped ones. */
-export const areasOf = (item: Item): string[] => (item.fm.areas !== undefined ? list(item.fm.areas) : labels(item).filter((l) => !MAPPED.includes(l)));
+export const areasOf = (item: Issue): string[] => (item.fm.areas !== undefined ? list(item.fm.areas) : labels(item).filter((l) => !MAPPED.includes(l)));
 
 export type { Ask };
 
@@ -297,7 +296,7 @@ function oldReason(reason: string, question: string): string {
 }
 
 /** The item's ask: `ask: input|approval` with its flat fields, or for an old item the `needs-chris` label; null for none. */
-export function askOf(item: Item): Ask | null {
+export function askOf(item: Issue): Ask | null {
   const kind = item.fm.ask;
   const approval = kind === "approval";
   if (!approval && kind !== "input" && !needsChris(item)) return null;
@@ -314,18 +313,18 @@ export function askOf(item: Item): Ask | null {
 }
 
 /** An item with a label of SORTED: triage leaves it alone. */
-export const isSorted = (item: Item): boolean =>
+export const isSorted = (item: Issue): boolean =>
   item.fm.route !== undefined || hasAsk(item) || kindOf(item) === "goal" || list(item.fm.goals).length > 0 || labels(item).some((l) => SORTED.includes(l));
 /** An item labelled `needs-chris`: it waits for Chris's answer. */
-export const needsChris = (item: Item): boolean => hasLabel(item, NEEDS_CHRIS);
+export const needsChris = (item: Issue): boolean => hasLabel(item, "needs-chris");
 /** An item that waits for Chris in either shape: the `needs-chris` label or an `ask`. */
-export const awaitsChris = (item: Item): boolean => needsChris(item) || hasAsk(item);
+export const awaitsChris = (item: Issue): boolean => needsChris(item) || hasAsk(item);
 
 /** Add the labels `add` the item lacks and take out `remove`, as one edit; no edit when nothing changes. */
-export function label(item: Item, add: string[], remove: string[] = []): void {
+export function label(item: Issue, add: string[], remove: string[] = []): void {
   const had = labels(item);
   const next = [...new Set([...had, ...add])].filter((l) => !remove.includes(l));
-  if (next.join("\0") !== had.join("\0")) todos.edit(item, { labels: next });
+  if (next.join("\0") !== had.join("\0")) issues.edit(item, { labels: next });
 }
 
 // The read.
@@ -335,7 +334,7 @@ export interface Reader {
   /** The repo's list, or null when the store has none or cannot be read. */
   list(key: string): Doc | null;
   /** Item `id` of the repo's list, or undefined. */
-  item(key: string, id: number | string): Item | undefined;
+  item(key: string, id: number | string): Issue | undefined;
 }
 
 /** A reader of the store's lists; it fetches at most once, on its first list. `fetch: false` reads origin/main as last fetched. */
@@ -352,11 +351,11 @@ export function reader(o: { fetch?: boolean } = {}): Reader {
     }
     return lists.get(key)!;
   };
-  return { list, item: (key, id) => { const doc = list(key); return doc ? todos.find(doc, id) : undefined; } };
+  return { list, item: (key, id) => { const doc = list(key); return doc ? issues.find(doc, id) : undefined; } };
 }
 
 /** The open goals of each repo, in repo then number order. A repo whose list cannot be read has none. */
-export function goals<R extends Place>(repos: R[]): { repo: R; item: Item }[] {
+export function goals<R extends Place>(repos: R[]): { repo: R; item: Issue }[] {
   const lists = reader();
   return repos.flatMap((repo) => (lists.list(repo.key)?.items ?? []).filter(isGoal).map((item) => ({ repo, item })));
 }
@@ -366,7 +365,7 @@ export function goals<R extends Place>(repos: R[]): { repo: R; item: Item }[] {
  * may have been closed, had its `goal` label removed, or had a note added
  * since the list was read. A store that cannot be read counts as not a goal.
  */
-export function goal(repo: Place, id: number | string): Item | null {
+export function goal(repo: Place, id: number | string): Issue | null {
   const item = reader().item(repo.key, id);
   return item && isGoal(item) ? item : null;
 }
@@ -378,20 +377,19 @@ const why = (e: any): string => e?.message ?? String(e);
 
 /**
  * A note on item `id`, as one commit; with `done` the item is done too, with
- * `label` it gains that label, with `decision` it carries that decision, with `reason` it carries the reason code (`fm.reason`), with `ask` it waits for Chris (`setAsk`).
+ * `label` it gains that label, with `reason` it carries the reason code (`fm.reason`), with `ask` it waits for Chris (`setAsk`).
  * Returns why it could not, or null.
  */
-export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean; label?: string; unlabel?: string; decision?: Decision; reason?: string; ask?: Ask } = {}): string | null {
+export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean; label?: string; unlabel?: string; reason?: string; ask?: Ask } = {}): string | null {
   try {
     const w = writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
-      const item = todos.find(doc, id);
+      const item = issues.find(doc, id);
       if (!item) return null;
-      if (opts.done) todos.setStatus(item, "done");
+      if (opts.done) issues.setStatus(item, "done");
       if (opts.label || opts.unlabel) label(item, opts.label ? [opts.label] : [], opts.unlabel ? [opts.unlabel] : []);
-      if (opts.decision) writeDecision(item, opts.decision);
       if (opts.reason) item.fm.reason = opts.reason;
       if (opts.ask) setAsk(item, opts.ask);
-      return todos.note(item, text);
+      return issues.note(item, text);
     });
     return w ? null : `no issue ${id}`;
   } catch (e) {
@@ -406,9 +404,9 @@ export const close = (repo: Place, id: number | string, text: string): string | 
  * Change item `id` with `change` as one commit, while it is still open and not
  * sorted: triage's write. False when the item is gone, closed or sorted.
  */
-export function sort(repo: Place, id: number | string, message: string, change: (item: Item, doc: Doc) => void): boolean {
+export function sort(repo: Place, id: number | string, message: string, change: (item: Issue, doc: Doc) => void): boolean {
   const w = writeList(repo, message, (doc) => {
-    const item = todos.find(doc, id);
+    const item = issues.find(doc, id);
     if (!item || status(item) !== "open" || isSorted(item)) return null;
     change(item, doc);
     return true;
@@ -420,17 +418,17 @@ export function sort(repo: Place, id: number | string, message: string, change: 
  * Called in the write that sets goal `goal` to dropped: when its issue is open, has no Ask and no other open goal,
  * the issue gets the part-dropped Ask, so the same commit that drops the goal asks Chris what now.
  */
-export function askIfPartDropped(doc: Doc, goal: Item, reason: string): void {
+export function askIfPartDropped(doc: Doc, goal: Issue, reason: string): void {
   if (kindOf(goal) !== "goal" || status(goal) !== "dropped") return;
   const ref = issueOf(goal);
-  const issue = ref ? doc.items.find((i) => `${doc.repo}-${todos.refOf(i)}` === ref) : undefined;
+  const issue = ref ? doc.items.find((i) => `${doc.repo}-${issues.refOf(i)}` === ref) : undefined;
   if (!issue || kindOf(issue) !== "issue" || status(issue) !== "open" || hasAsk(issue)) return;
   const open = goalsOf(issue).some((r) => {
-    const g = doc.items.find((i) => `${doc.repo}-${todos.refOf(i)}` === r);
+    const g = doc.items.find((i) => `${doc.repo}-${issues.refOf(i)}` === r);
     return g && g !== goal && status(g) === "open";
   });
   if (open) return;
-  const id = `${doc.repo}-${todos.refOf(goal)}`;
+  const id = `${doc.repo}-${issues.refOf(goal)}`;
   setAsk(issue, {
     kind: "input",
     reason: "part-dropped",
@@ -441,7 +439,7 @@ export function askIfPartDropped(doc: Doc, goal: Item, reason: string): void {
     ],
     why: [],
   });
-  issue.fm.updated = todos.today();
+  issue.fm.updated = issues.today();
 }
 
 /** A new issue for `file` and `closeAndFile`; `goal` files the body as goal `.1` too. */
@@ -458,18 +456,18 @@ export function closeAndFile(repo: Place, message: string, id: number | string |
   try {
     writeList(repo, message, (doc) => {
       if (id !== undefined) {
-        const item = todos.find(doc, id);
+        const item = issues.find(doc, id);
         if (item) {
-          todos.setStatus(item, "done");
-          todos.note(item, text);
+          issues.setStatus(item, "done");
+          issues.note(item, text);
         }
         todo = item ? "done" : `no issue ${id}`;
       }
       ids = filed.map((f) => {
         // `goal`: the body is goal-format, so the issue holds it as its Request and files goal `.1` beside it, as `aleph issue add --goal -` does.
-        const item = todos.add(doc, f.title, { labels: f.labels, body: f.goal ? `## Request\n\n${f.body ?? ""}` : f.body, priority: f.priority, source: f.source });
+        const item = issues.add(doc, f.title, { labels: f.labels, body: f.goal ? `## Request\n\n${f.body ?? ""}` : f.body, priority: f.priority, source: f.source });
         if (f.areas) item.fm.areas = f.areas;
-        if (f.goal) todos.addGoal(doc, item, { title: f.title, body: f.body ?? "" });
+        if (f.goal) issues.addGoal(doc, item, { title: f.title, body: f.body ?? "" });
         if (f.ask) setAsk(item, f.ask);
         return item.id;
       });
@@ -490,7 +488,7 @@ export const file = (repo: Place, message: string, filed: Filing[]): number[] =>
 export const FLAKES = "flakes";
 
 /** The open item labelled `flakes`, the lowest id when there are several; undefined when there is none. */
-export function flakeTracker(doc: Doc): Item | undefined {
+export function flakeTracker(doc: Doc): Issue | undefined {
   return doc.items
     .filter((i) => i.sub === undefined && status(i) === "open" && areasOf(i).includes(FLAKES))
     .sort((a, b) => a.id - b.id)[0];
@@ -505,13 +503,13 @@ export function flakeTracker(doc: Doc): Item | undefined {
 export function noteFlake(repo: Place, text: string): { id: number } | string {
   try {
     const w = writeList(repo, `todo: flake: ${text}`, (doc) => {
-      const tracker = flakeTracker(doc) ?? todos.add(doc, "Flaky tests seen by runs", {
+      const tracker = flakeTracker(doc) ?? issues.add(doc, "Flaky tests seen by runs", {
         priority: "low",
         labels: [FLAKES],
         route: "triaged",
         body: "Flaky tests that runs met and did not cause. Each note is one flake a run saw. Chris picks from these notes which flakes get a goal.",
       });
-      todos.note(tracker, text);
+      issues.note(tracker, text);
       return { id: tracker.id };
     }, true);
     return w ? w.value : "no flake tracker written";
