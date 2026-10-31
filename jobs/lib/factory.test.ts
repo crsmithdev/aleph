@@ -358,6 +358,30 @@ test("a land killed by a host restart fails and lands again, and the goal does n
   expect(existsSync(join(l.folder, "exit"))).toBe(true);
 });
 
+// A landed job whose facts run is `running` with no pid: a facts run writes none, so only its start tells a restart from a live review.
+const factsOf = (id: number, started: string) => {
+  const first = mk(`fac-${id}`, "build", "passed", { branch: "b", started: BEFORE_BOOT });
+  mk(`fac-${id}`, "land", "landed", { job: first.job, branch: "b", commit: "abc1234", facts: true, started: BEFORE_BOOT });
+  return mk(`fac-${id}`, "facts", "running", { job: first.job, phase: "facts", shown: false, started });
+};
+
+test("a facts run a host restart killed ends done, with the reason, and stays unshown for the news", async () => {
+  const id = goal();
+  const fr = factsOf(id, BEFORE_BOOT);
+  await dispatch(fakes());
+  const run = readRun(fr.folder)!;
+  expect(run).toMatchObject({ state: "done", reason: "host restart", shown: false });
+  expect(run.ended).toBeTruthy();
+  expect(run.phase).toBeUndefined();
+});
+
+test("a facts run started after this boot is still running", async () => {
+  const id = goal();
+  const fr = factsOf(id, new Date().toISOString());
+  await dispatch(fakes());
+  expect(readRun(fr.folder)!.state).toBe("running");
+});
+
 // A review that a host restart killed: the run is awaiting a held-path ask, call.md says PENDING.
 const heldRun = (id: number, call: string, mtime: Date) => {
   const r = mk(`fac-${id}`, "build", "awaiting", { ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } }, { "call.md": call });

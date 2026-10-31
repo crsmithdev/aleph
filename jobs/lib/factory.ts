@@ -142,6 +142,7 @@ export function waitingToLand(jobs = allJobs()): string[] {
  * comes through the unit's own next step is picked up by the dispatch the unit starts when it ends.
  */
 async function factsStep(): Promise<void> {
+  endKilledFacts();
   const keys = new Map(sandboxRepos().map((r) => [r.key, r]));
   for (const j of allJobs()) {
     const last = lastReal(j);
@@ -683,6 +684,23 @@ const killedReviews = (): string[] => {
     } catch { /* no call.md */ }
   }
   return out;
+};
+
+/**
+ * End each facts run that a host restart killed: `running`, started before this boot. A facts run writes no pid, so its
+ * process cannot be checked, and a run from before the boot has no reviewer left. It ends `done` with the reason, and
+ * stays unshown so the news reports it. It is not run again: its facts are lost, and the job has a facts run, so the
+ * gate never reviews them. Sandbox repos only, as `killed`.
+ */
+const endKilledFacts = (): void => {
+  const keys = new Set(sandboxRepos().map((r) => r.key));
+  const booted = bootedAt();
+  for (const e of allRuns()) {
+    const r = e.run;
+    if (r.kind !== "facts" || r.state !== "running" || !r.repo || !keys.has(r.repo) || Date.parse(r.started) >= booted) continue;
+    updateRun(e.folder, { state: "done", reason: "host restart", phase: undefined, ended: new Date().toISOString() });
+    factoryLog(`${r.name}: a host restart killed its facts run; its facts are lost`);
+  }
 };
 
 /** Start again each review that a host restart killed: the stale call.md goes, and the new start writes a new PENDING. */
