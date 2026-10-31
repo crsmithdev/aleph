@@ -62,6 +62,9 @@ describe("propose", () => {
     const found = [{ name: "left-pad", current: "1.0.0", latest: "1.2.0" }, { name: "a", current: "1.9.0", latest: "1.10.0" }];
     expect(propose(repo, found)).toEqual(["dp1-1 Update left-pad 1.0.0 to 1.2.0", "dp1-2 Update a 1.9.0 to 1.10.0"]);
     expect(readList(repo)!.items.map((i) => i.title)).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update a 1.9.0 to 1.10.0"]);
+    const filed = readList(repo)!.items[1];
+    expect(filed.fm).toMatchObject({ kind: "issue", source: "deps", areas: ["deps"], ask: "approval", reason: "proposal" });
+    expect(filed.fm.labels).toBeUndefined();
     const before = commits();
     expect(propose(repo, found)).toEqual([]);
     expect(readList(repo)!.items).toHaveLength(2);

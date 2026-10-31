@@ -176,7 +176,7 @@ async function todoCmd(): Promise<void> {
     ...(goalArg === "-" ? { goal: await Bun.stdin.text() } : {}),
     ...(afterArg === undefined ? {} : { after: afterArg.split(",").map((s) => s.trim()).filter(Boolean) }),
   };
-  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|hidden|lint> <repo> ...");
+  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint> <repo> ...");
   const registry = loadRegistry();
   if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(sub, registry, { status: stat, label }, json);
   const repo = registry[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
@@ -213,26 +213,6 @@ async function todoCmd(): Promise<void> {
       console.log(`hidden checks: ${hidden}`);
       if (i.body.trim()) console.log(`\n${i.body}`);
       if (i.notes.length) console.log(`\n### Notes\n${i.notes.join("\n")}`);
-      return;
-    }
-    case "hidden": {
-      const paths = args.slice(1);
-      if (!paths.length) {
-        const have = issues.hiddenList(repo, id);
-        if (json) { out(have); return; }
-        if (!have.length) console.log("no hidden checks");
-        for (const n of have) console.log(n);
-        return;
-      }
-      issues.show(repo, id);
-      const files: Record<string, string> = {};
-      for (const p of paths) {
-        if (!existsSync(p) || !statSync(p).isFile()) refuse(`${p} is not a file`);
-        files[basename(p)] = readFileSync(p, "utf8");
-      }
-      const h = issues.hiddenAdd(repo, id, files);
-      warn(h.follow);
-      out(h.result);
       return;
     }
     case "note": {
@@ -278,7 +258,86 @@ async function todoCmd(): Promise<void> {
       for (const f of l.findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${l.findings.length} problem${l.findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
     }
-    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|hidden|lint> <repo> ...");
+    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint> <repo> ...");
+  }
+}
+
+/**
+ * aleph goal <list|show|note|edit|drop|hidden> <repo> <n>.<k> ... — the verbs on a repo's goals (`kindOf` goal), over todo/lib/issues.ts.
+ * A goal's id is `<n>.<k>`, or `<m>` for an old child goal that keeps its plain number.
+ */
+async function goalCmd(): Promise<void> {
+  const usage = "usage: aleph goal <list|show|note|edit|drop|hidden> <repo> <n>.<k> ...";
+  const [verb, repoKey, id, ...args] = positional;
+  const json = rest.includes("--json");
+  const registry = loadRegistry();
+  const repo = registry[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
+  const warn = (follow: string | null | undefined) => { if (follow) console.error(`warn: ${follow}`); };
+  const text = args.join(" ").trim();
+  switch (verb) {
+    case "list": {
+      const rows = issues.goalList(repo, { status: flag("status") });
+      if (json) { out(rows.map(issues.brief)); return; }
+      if (!rows.length) { console.log("no goals"); return; }
+      for (const g of rows) console.log(`${repo.key}-${todos.refOf(g)}  ${todos.status(g).padEnd(7)} ${g.title}${store.afterOf(g).length ? `  (after ${store.afterOf(g).join(",")})` : ""}`);
+      return;
+    }
+    case "show": {
+      const { item: g, hidden } = issues.goalShow(repo, issues.goalId(id));
+      if (json) { out({ ...issues.brief(g), body: g.body, notes: g.notes, hidden }); return; }
+      console.log(`## ${repo.key}-${todos.refOf(g)}. ${g.title}`);
+      console.log(`status ${todos.status(g)}   issue ${store.issueOf(g) ?? "-"}   after ${store.afterOf(g).join(", ") || "-"}   priority ${g.fm.priority ?? "-"}`);
+      console.log(`hidden checks: ${hidden}`);
+      if (g.body.trim()) console.log(`\n${g.body}`);
+      if (g.notes.length) console.log(`\n### Notes\n${g.notes.join("\n")}`);
+      return;
+    }
+    case "note": {
+      const n = issues.goalNote(repo, issues.goalId(id), text);
+      warn(n.follow);
+      out(n.result);
+      return;
+    }
+    case "edit": {
+      const bodyArg = flag("body");
+      const afterArg = flag("after");
+      const e = issues.goalEdit(repo, issues.goalId(id), {
+        title: flag("title"),
+        body: bodyArg === undefined ? undefined : (bodyArg === "-" ? await Bun.stdin.text() : bodyArg).trim(),
+        priority: flag("priority"),
+        after: afterArg === undefined ? undefined : afterArg.split(",").map((s) => s.trim()).filter(Boolean),
+      });
+      warn(e.follow);
+      out(e.result);
+      dispatchAfterGoal(repo, e.item);
+      return;
+    }
+    case "drop": {
+      const c = issues.close(repo, issues.goalId(id), "drop", text);
+      warn(c.follow);
+      out(c.result);
+      return;
+    }
+    case "hidden": {
+      issues.goalId(id);
+      if (!args.length) {
+        const have = issues.goalHiddenList(repo, id);
+        if (json) { out(have); return; }
+        if (!have.length) console.log("no hidden checks");
+        for (const n of have) console.log(n);
+        return;
+      }
+      const files: Record<string, string> = {};
+      for (const p of args) {
+        if (!existsSync(p) || !statSync(p).isFile()) refuse(`${p} is not a file`);
+        files[basename(p)] = readFileSync(p, "utf8");
+      }
+      const h = issues.goalHiddenAdd(repo, id, files);
+      warn(h.follow);
+      out(h.result);
+      return;
+    }
+    default: refuse(usage);
   }
 }
 
@@ -471,6 +530,7 @@ try {
     case "land": await started(await land(positional[0], { checked: rest.includes("--checked") }, { command })); break;
     case "checked": out(checked(positional[0])); break;
     case "issue": await todoCmd(); break;
+    case "goal": await goalCmd(); break;
     case "accept": {
       const lines = await reacceptReopened(positional[0] ?? refuse("usage: aleph accept <repo> [--reopened-since <iso>] [--before <iso>]"), { since: flag("reopened-since"), before: flag("before") });
       console.log(lines.join("\n") || "nothing to re-accept");

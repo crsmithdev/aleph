@@ -45,9 +45,84 @@ export function readIssues(repo: store.Place): todos.Doc {
   return doc ?? refuse(`the work store has no list for ${repo.key}`);
 }
 
-function pick(repo: store.Place, doc: todos.Doc, id: number): todos.Issue {
-  if (!Number.isInteger(id)) refuse("name an issue by its number");
+function pick(repo: store.Place, doc: todos.Doc, id: number | string): todos.Issue {
+  if (typeof id === "number" && !Number.isInteger(id)) refuse("name an issue by its number");
   return todos.find(doc, id) ?? refuse(`${repo.key} has no issue ${id}`);
+}
+
+/** A goal id as typed (`<n>.<k>`, or `<m>` for an old child goal that keeps its plain number); a refusal for anything else. */
+export function goalId(raw: string | undefined): string {
+  if (!raw || !/^\d+(\.\d+)?$/.test(raw)) refuse("name a goal by its id, <n>.<k>");
+  return raw as string;
+}
+
+function pickGoal(repo: store.Place, doc: todos.Doc, id: string): todos.Goal {
+  const g = pick(repo, doc, goalId(id));
+  if (store.kindOf(g) !== "goal") refuse(`${repo.key}-${id} is an issue, not a goal`);
+  return g;
+}
+
+/** The repo's goals (`kindOf` goal) that pass `status`. */
+export function goalList(repo: store.Place, o: { status?: string } = {}): todos.Goal[] {
+  return filterRows(readIssues(repo), o).filter((i) => store.kindOf(i) === "goal");
+}
+
+export function goalShow(repo: store.Place, id: string): { item: todos.Goal; hidden: number } {
+  const item = pickGoal(repo, readIssues(repo), id);
+  return { item, hidden: Object.keys(readHiddenOf(repo, item)).length };
+}
+
+const readHiddenOf = (repo: store.Place, g: todos.Goal): Record<string, string> => {
+  try { return store.readHidden(repo, `${repo.key}-${todos.refOf(g)}`); } catch (e: any) { return refuse(e?.message ?? String(e)); }
+};
+
+/** The names of a goal's hidden check files. */
+export function goalHiddenList(repo: store.Place, id: string): string[] {
+  return Object.keys(readHiddenOf(repo, pickGoal(repo, readIssues(repo), id)));
+}
+
+/** Store `files` as the goal's hidden checks, in `<repo>/hidden/<repo>-<n>.<k>/`. */
+export function goalHiddenAdd(repo: store.Place, id: string, files: Record<string, string>) {
+  const g = pickGoal(repo, readIssues(repo), id);
+  const ref = `${repo.key}-${todos.refOf(g)}`;
+  try {
+    const w = store.writeHidden(repo, ref, files);
+    return { result: { repo: repo.key, id: ref, hidden: Object.keys(files), commit: w.commit }, follow: w.follow };
+  } catch (e: any) {
+    if (e instanceof Refusal) throw e;
+    return refuse(e?.message ?? String(e));
+  }
+}
+
+/** A note on a goal. */
+export function goalNote(repo: store.Place, id: string, text: string) {
+  text = text.trim() || refuse("give the note some text");
+  const w = write(repo, `todo: a note on goal ${id}`, (doc) => {
+    const g = pickGoal(repo, doc, id);
+    return { id: todos.refOf(g), line: todos.note(g, text) };
+  })!;
+  return { result: { repo: repo.key, id: `${repo.key}-${w.value.id}`, note: w.value.line, commit: w.commit }, follow: w.follow };
+}
+
+/** Edit a goal's title, body, priority or `after` (`none` clears it; issue ids are refused). */
+export function goalEdit(repo: store.Place, id: string, f: { title?: string; body?: string; priority?: string; after?: string[] }) {
+  goalId(id);
+  const title = f.title?.trim();
+  if (title === undefined && f.body === undefined && f.priority === undefined && f.after === undefined) refuse("give --title, --body, --priority or --after");
+  if (title === "") refuse("the title cannot be empty");
+  const after = f.after?.filter((r) => r !== "none");
+  if (after) checkAfter(after);
+  const w = write(repo, `todo: edit goal ${id}`, (doc) => {
+    const g = pickGoal(repo, doc, id);
+    for (const r of after ?? []) {
+      if (r.startsWith(`${repo.key}-`) && !todos.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no goal`);
+      if (r === `${repo.key}-${todos.refOf(g)}`) refuse("a goal cannot wait for itself");
+    }
+    todos.edit(g, { title, body: f.body, priority: f.priority });
+    if (f.after !== undefined) { g.fm.after = after ?? []; g.fm.updated = todos.today(); }
+    return g;
+  })!;
+  return { result: { repo: repo.key, ...brief(w.value), commit: w.commit }, item: w.value, follow: w.follow };
 }
 
 // Every verb but `add` needs a list on main; `add` starts one.
@@ -119,24 +194,6 @@ export function show(repo: store.Place, id: number): { item: todos.Issue; hidden
   return { item, hidden: hiddenCount(repo, id) };
 }
 
-/** The names of an item's hidden check files. */
-export function hiddenList(repo: store.Place, id: number): string[] {
-  const i = pick(repo, readIssues(repo), id);
-  try { return Object.keys(store.readHidden(repo, i.id)); } catch (e: any) { return refuse(e?.message ?? String(e)); }
-}
-
-/** Store `files` (name to content) as the item's hidden checks. */
-export function hiddenAdd(repo: store.Place, id: number, files: Record<string, string>): { result: { repo: string; id: number; hidden: string[]; commit: string }; follow: string | null } {
-  const i = pick(repo, readIssues(repo), id);
-  try {
-    const w = store.writeHidden(repo, i.id, files);
-    return { result: { repo: repo.key, id: i.id, hidden: Object.keys(files), commit: w.commit }, follow: w.follow };
-  } catch (e: any) {
-    if (e instanceof Refusal) throw e;
-    return refuse(e?.message ?? String(e));
-  }
-}
-
 /** Add a note; `answer` marks it as Chris's answer, which clears the item's Ask (`answered`). */
 export function note(repo: store.Place, id: number, text: string, answer = false) {
   text = text.trim() || refuse("give the note some text");
@@ -186,13 +243,14 @@ export function edit(repo: store.Place, id: number, fields: Fields) {
 }
 
 /** Close an item as done, or as dropped (which needs a reason); `text` goes on it as a note. */
-export function close(repo: store.Place, id: number, how: "done" | "drop", text = "") {
+export function close(repo: store.Place, id: number | string, how: "done" | "drop", text = "") {
   text = text.trim();
   if (how === "drop" && !text) refuse("say why it is dropped");
   const w = write(repo, `todo: item ${id} ${how === "done" ? "done" : "dropped"}`, (doc) => {
     const i = pick(repo, doc, id);
     todos.setStatus(i, how === "done" ? "done" : "dropped");
     if (text) todos.note(i, text);
+    if (how === "drop") store.askIfPartDropped(doc, i, text);
     return i;
   })!;
   return { result: { repo: repo.key, id: w.value.id, status: todos.status(w.value), title: w.value.title, commit: w.commit }, follow: w.follow };

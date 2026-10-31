@@ -86,9 +86,9 @@ export function propose(repo: Repo, found: Proposal[]): string[] {
   const had = new Map(list.items.map((i) => [i.title, i.id]));
   const missing = fresh.filter((p) => !had.has(titleOf(p)));
   const made = file(repo, "dependency proposals", missing.map((p) => ({
-    title: titleOf(p), priority: "low", source: "deps",
+    title: titleOf(p), priority: "low", source: "deps", areas: ["deps"],
     ask: { kind: "approval", reason: "proposal", question: `Update ${p.name} from ${p.current} to ${p.latest}?`, options: [], why: [] },
-    body: `Proposed by the nightly dependency sweep: \`bun outdated\` shows ${p.name} at ${p.current} in the lockfile and ${p.latest} as the latest.\nRelabel it \`goal\` to have the factory update it.\n`,
+    body: `Proposed by the nightly dependency sweep: \`bun outdated\` shows ${p.name} at ${p.current} in the lockfile and ${p.latest} as the latest.\nApprove it to have the factory plan the update.\n`,
   })));
   if (made.length !== missing.length || made.some((id) => !id)) return [];
   missing.forEach((p, i) => had.set(titleOf(p), made[i]));

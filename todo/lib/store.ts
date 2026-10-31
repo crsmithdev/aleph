@@ -415,8 +415,36 @@ export function sort(repo: Place, id: number | string, message: string, change: 
   return w?.value === true;
 }
 
+/**
+ * Called in the write that sets goal `goal` to dropped: when its issue is open, has no Ask and no other open goal,
+ * the issue gets the part-dropped Ask, so the same commit that drops the goal asks Chris what now.
+ */
+export function askIfPartDropped(doc: Doc, goal: Item, reason: string): void {
+  if (kindOf(goal) !== "goal" || status(goal) !== "dropped") return;
+  const ref = issueOf(goal);
+  const issue = ref ? doc.items.find((i) => `${doc.repo}-${todos.refOf(i)}` === ref) : undefined;
+  if (!issue || kindOf(issue) !== "issue" || status(issue) !== "open" || hasAsk(issue)) return;
+  const open = goalsOf(issue).some((r) => {
+    const g = doc.items.find((i) => `${doc.repo}-${todos.refOf(i)}` === r);
+    return g && g !== goal && status(g) === "open";
+  });
+  if (open) return;
+  const id = `${doc.repo}-${todos.refOf(goal)}`;
+  setAsk(issue, {
+    kind: "input",
+    reason: "part-dropped",
+    question: `Goal ${id} was dropped: ${reason}. What now?`,
+    options: [
+      { label: "Close with what landed", line: "Close the issue: the parts that landed are enough." },
+      { label: "Plan the missing part", line: "File a new goal for what the dropped goal was to do." },
+    ],
+    why: [],
+  });
+  issue.fm.updated = todos.today();
+}
+
 /** A new issue for `file` and `closeAndFile`; `goal` files the body as goal `.1` too. */
-export interface Filing { title: string; labels?: string[]; body?: string; priority?: string; source?: "chris" | "worker" | "deps" | "memory"; ask?: Ask; goal?: boolean }
+export interface Filing { title: string; labels?: string[]; areas?: string[]; body?: string; priority?: string; source?: "chris" | "worker" | "deps" | "memory"; ask?: Ask; goal?: boolean }
 
 /**
  * Item `id` done with the note `text` (when `id` is given), and `filed` added,
@@ -439,6 +467,7 @@ export function closeAndFile(repo: Place, message: string, id: number | string |
       ids = filed.map((f) => {
         // `goal`: the body is goal-format, so the issue holds it as its Request and files goal `.1` beside it, as `aleph issue add --goal -` does.
         const item = todos.add(doc, f.title, { labels: f.labels, body: f.goal ? `## Request\n\n${f.body ?? ""}` : f.body, priority: f.priority, source: f.source });
+        if (f.areas) item.fm.areas = f.areas;
         if (f.goal) todos.addGoal(doc, item, { title: f.title, body: f.body ?? "" });
         if (f.ask) setAsk(item, f.ask);
         return item.id;

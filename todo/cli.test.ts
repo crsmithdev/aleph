@@ -369,19 +369,21 @@ test("aleph issue is the only command: aleph todo is gone", () => {
 });
 
 test("hidden copies files into the store as one commit, lists them, and show counts them", () => {
+  seed("# To do\n\n" + sec(3, "labels: [goal]"));
   const f = join(base, "a.test.ts");
   writeFileSync(f, 'import { test } from "bun:test";\ntest("a", () => {});\n');
   expect(aleph("issue", "show", "proj", "3").out).toContain("hidden checks: 0");
-  expect(aleph("issue", "hidden", "proj", "3").out).toContain("no hidden checks");
+  expect(aleph("goal", "hidden", "proj", "3").out).toContain("no hidden checks");
   const before = sh(base, "git", "--git-dir", remote, "rev-list", "--count", "main");
-  const h = aleph("issue", "hidden", "proj", "3", f);
+  const h = aleph("goal", "hidden", "proj", "3", f);
   expect(h.code).toBe(0);
   expect(Number(sh(base, "git", "--git-dir", remote, "rev-list", "--count", "main"))).toBe(Number(before) + 1);
-  expect(sh(base, "git", "--git-dir", remote, "show", "main:proj/hidden/3/a.test.ts")).toContain('test("a"');
-  expect(aleph("issue", "hidden", "proj", "3").out.trim()).toBe("a.test.ts");
+  expect(sh(base, "git", "--git-dir", remote, "show", "main:proj/hidden/proj-3/a.test.ts")).toContain('test("a"');
+  expect(aleph("goal", "hidden", "proj", "3").out.trim()).toBe("a.test.ts");
   expect(aleph("issue", "show", "proj", "3").out).toContain("hidden checks: 1");
-  expect(aleph("issue", "hidden", "proj", "99", f).err).toContain("has no issue 99");
-  expect(aleph("issue", "hidden", "proj", "3", join(base, "nope.ts")).code).toBe(1);
+  expect(aleph("goal", "hidden", "proj", "99", f).err).toContain("has no issue 99");
+  expect(aleph("goal", "hidden", "proj", "3", join(base, "nope.ts")).code).toBe(1);
+  expect(aleph("issue", "hidden", "proj", "3").code).toBe(1);
 });
 
 test("hidden reads the goal id directory, then the old number", async () => {
@@ -393,8 +395,8 @@ test("hidden reads the goal id directory, then the old number", async () => {
   sh(items, "git", "add", "-A");
   sh(items, "git", "commit", "-qm", "hidden");
   sh(items, "git", "push", "-q", "origin", "main");
-  expect(aleph("issue", "hidden", "proj", "3").out.trim()).toBe("a.test.ts");
-  expect(aleph("issue", "hidden", "proj", "4").out.trim()).toBe("b.test.ts");
+  expect(aleph("goal", "hidden", "proj", "3").out.trim()).toBe("a.test.ts");
+  expect(aleph("goal", "hidden", "proj", "4").out.trim()).toBe("b.test.ts");
   expect(aleph("issue", "show", "proj", "4").out).toContain("hidden checks: 1");
   const was = process.env.ALEPH_ITEMS;
   process.env.ALEPH_ITEMS = items;

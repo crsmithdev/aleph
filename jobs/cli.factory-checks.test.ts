@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { noteFlake } from "../todo/lib/store.ts";
-import { aleph, base, items, fakeLog, file, jobsDir, specFile, state, told, setup, teardown } from "./cli.helpers";
+import { aleph, base, items, fakeLog, file, jobsDir, seedItem, specFile, state, told, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -15,9 +15,9 @@ describe("a factory run's checks", () => {
   describe("hidden checks", () => {
     const SOURCE = `import { expect, test } from "bun:test";\nimport { existsSync } from "node:fs";\n// SECRET-HIDDEN-LINE\ntest("hid file exists", () => { expect(existsSync("hid.txt")).toBe(true); });\n`;
     const hiddenItem = async () => {
-      const id = (await aleph(["issue", "add", "fac", "an item with a hidden check"])).json.added;
+      const id = seedItem("fac", "an item with a hidden check", { kind: "goal", issue: "fac-1", after: [] });
       writeFileSync(join(base, "a.test.ts"), SOURCE);
-      expect((await aleph(["issue", "hidden", "fac", String(id), join(base, "a.test.ts")])).code).toBe(0);
+      expect((await aleph(["goal", "hidden", "fac", String(id), join(base, "a.test.ts")])).code).toBe(0);
       return id;
     };
     const runs = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-fac-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));

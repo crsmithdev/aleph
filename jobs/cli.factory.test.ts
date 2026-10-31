@@ -73,3 +73,30 @@ describe("a factory run", () => {
   }, 60_000);
 
 });
+
+describe("a worker's FOLLOWUP line (criterion 15)", () => {
+  test("files an issue with source worker that status calls new; FLAKE adds a tracker note and no issue", async () => {
+    const titles = async () => (await aleph(["issue", "list", "fac", "--json"])).json as any[];
+    const before = (await titles()).map((i) => i.id);
+    const r = await aleph(["job", "fac", "ffollow", "--spec", specFile("Goal: ffollow\nACTION: defaults\n")]);
+    expect(r.code, r.stderr).toBe(0);
+    const added = (await titles()).filter((i) => !before.includes(i.id));
+    expect(added).toHaveLength(1);
+    expect(added[0]).toMatchObject({ title: "paint the fence", source: "worker", kind: "issue" });
+    const full = (await aleph(["issue", "show", "fac", String(added[0].id), "--json"])).json;
+    expect(full.body).toContain("## Request");
+    expect(full.body).toContain("ffollow");
+    expect((await aleph(["status", `fac-${added[0].id}`])).stdout).toContain("new");
+    expect(existsSync(join(base, "factory", "followups.log"))).toBe(false);
+
+    const mid = (await titles()).length;
+    const f = await aleph(["job", "fac", "fflake2", "--spec", specFile("Goal: fflake2\nACTION: flake\n")]);
+    expect(f.code, f.stderr).toBe(0);
+    const after = await titles();
+    // A tracker (once) and the followup line's issue, but none for the FLAKE line.
+    expect(after.length).toBe(mid + 2);
+    expect(after.map((i) => i.title)).not.toContain("a.test.ts > slow one: timed out, passed alone");
+    const tracker = after.find((i) => i.areas.includes("flakes"));
+    expect((await aleph(["issue", "show", "fac", String(tracker.id), "--json"])).json.notes.join("\n")).toContain("job fflake2: a.test.ts > slow one");
+  }, 60_000);
+});

@@ -31,7 +31,7 @@ describe("a factory run", () => {
     expect(first.map((r) => r.title).sort()).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update typescript 5.8.3 to 5.9.2"]);
     for (const r of first) {
       const item = (await aleph(["issue", "show", "fac", String(r.id), "--json"])).json;
-      expect(item).toMatchObject({ source: "deps", kind: "issue", areas: [], ask: { kind: "approval", reason: "proposal" } });
+      expect(item).toMatchObject({ source: "deps", kind: "issue", areas: ["deps"], ask: { kind: "approval", reason: "proposal" } });
     }
     const rep = (await aleph(["report"])).stdout;
     expect(rep).toContain("Update left-pad 1.0.0 to 1.2.0");

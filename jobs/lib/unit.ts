@@ -6,7 +6,7 @@
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { closeAndFile, noteFlake, readHidden } from "../../todo/lib/store.ts";
+import { closeAndFile, file as fileIssues, noteFlake, readHidden } from "../../todo/lib/store.ts";
 import { addWorktree, fetchOrigin, followMain, git } from "./git.ts";
 import { ALREADY_MET, heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { checkSlot, readReview2, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
@@ -14,7 +14,7 @@ import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./j
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
-import { dispatchOn, factoryDir, gates, recordFlake, waitingToLand } from "./factory.ts";
+import { dispatchOn, gates, recordFlake, waitingToLand } from "./factory.ts";
 import { startReview2 } from "./review2.ts";
 import { postTrace } from "./trace.ts";
 import { runLogged, startUnit } from "./launch.ts";
@@ -1158,10 +1158,13 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
   }
 }
 
-/** A worker's `FOLLOWUP:` lines go to a log and file nothing: Chris chose this until the inbox of aleph-826. */
+/**
+ * A worker's `FOLLOWUP:` lines each become an issue with `source: worker` (the line as the title, the run in a `## Request` line),
+ * filed in one store commit. This reverses the aleph-826 choice (a log and no issue), which the spec supersedes.
+ */
 function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
-  if (titles.length) mkdirSync(factoryDir(), { recursive: true });
-  for (const title of titles) appendFileSync(join(factoryDir(), "followups.log"), `${new Date().toISOString()}\t${repo.key}\t${run.name}\t${title}\n`);
+  if (!titles.length) return;
+  fileIssues(repo, `followups from ${run.name}`, titles.map((title) => ({ title, source: "worker" as const, body: `## Request\n\nA follow-up the worker met in run ${run.name}.\n` })));
 }
 
 /** A worker's `FLAKE:` lines become notes on the repo's flake tracker; they file no issue and start no triage. */
