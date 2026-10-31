@@ -197,15 +197,15 @@ export function filterRows(doc: issues.Doc, o: { status?: string; label?: string
 }
 
 /** How many hidden check files an item has in the store. */
-export const hiddenCount = (repo: store.Place, id: number): number => Object.keys(store.readHidden(repo, id)).length;
+export const hiddenCount = (repo: store.Place, id: number | string): number => Object.keys(store.readHidden(repo, id)).length;
 
-export function show(repo: store.Place, id: number): { item: issues.Issue; hidden: number } {
+export function show(repo: store.Place, id: number | string): { item: issues.Issue; hidden: number } {
   const item = pick(repo, readIssues(repo), id);
   return { item, hidden: hiddenCount(repo, id) };
 }
 
 /** Add a note; `answer` marks it as Chris's answer, which clears the item's Ask (`answered`). */
-export function note(repo: store.Place, id: number, text: string, answer = false) {
+export function note(repo: store.Place, id: number | string, text: string, answer = false) {
   text = text.trim() || refuse("give the note some text");
   const w = write(repo, `todo: a note on item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
@@ -221,7 +221,7 @@ export function note(repo: store.Place, id: number, text: string, answer = false
  * Chris's answer to an issue that asks him something, in one write: the decision note, and the Ask cleared. The issue is
  * left to the triage that follows a note. `fields.waitingOn` (the UI's option that waits on another issue) sets `waiting_on`.
  */
-export function decide(repo: store.Place, id: number, text: string, fields: Fields = {}) {
+export function decide(repo: store.Place, id: number | string, text: string, fields: Fields = {}) {
   checkFields(fields);
   text = text.trim() || refuse("give the decision");
   const w = write(repo, `todo: item ${id}: decided`, (doc) => {
@@ -238,7 +238,7 @@ export function decide(repo: store.Place, id: number, text: string, fields: Fiel
   return { result: { repo: repo.key, ...brief(w.value), commit: w.commit }, item: w.value, follow: w.follow };
 }
 
-export function edit(repo: store.Place, id: number, fields: Fields) {
+export function edit(repo: store.Place, id: number | string, fields: Fields) {
   checkFields(fields);
   const title = fields.title?.trim();
   const { body, priority, labels, due, waitingOn, status, after } = fields;

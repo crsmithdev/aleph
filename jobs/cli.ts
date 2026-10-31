@@ -182,7 +182,7 @@ async function todoCmd(): Promise<void> {
   if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(sub, registry, { status: stat, label }, json);
   const repo = registry[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
   verbs.checkFields(fields);
-  const id = Number(args[0]);
+  const id = /^\d+\.\d+$/.test(args[0] ?? "") ? args[0] : Number(args[0]);
   const text = args.slice(1).join(" ").trim();
   const warn = (follow: string | null | undefined) => { if (follow) console.error(`warn: ${follow}`); };
 

@@ -444,6 +444,29 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
     });
   });
 
+  test("the card routes take a goal's dotted id", async () => {
+    const dotted = () => writeList({ key: "fac" }, "seed", (doc) => {
+      const i = add(doc, "a capped goal", { body: "x" });
+      Object.assign(i, { id: 9000 + i.id, sub: 1 });
+      Object.assign(i.fm, { kind: "goal", ask: "input", reason: "run-cap", question: "stopped" });
+      return `${i.id}.1`;
+    })!.value;
+    const find = (ref: string) => readList({ key: "fac" })!.items.find((i) => `${i.id}.${i.sub}` === ref)!;
+    await withRealCli(async () => {
+      const a = dotted();
+      expect((await at(`/api/issues/fac/${a}/rerun`, { method: "POST", headers: h, body: "{}" })).status).toBe(200);
+      expect(find(a).fm.ask).toBeUndefined();
+      expect(find(a).notes.at(-1)).toContain("run it again");
+      const b = dotted();
+      expect((await at(`/api/issues/fac/${b}/checked`, { method: "POST", headers: h, body: "{}" })).status).toBe(200);
+      expect(todos.status(find(b))).toBe("done");
+      const c = dotted();
+      expect((await at(`/api/issues/fac/${c}/drop`, { method: "POST", headers: h, body: JSON.stringify({ reason: "no" }) })).status).toBe(200);
+      expect(todos.status(find(c))).toBe("dropped");
+      expect((await at(`/api/issues/fac/x.y/rerun`, { method: "POST", headers: h, body: "{}" })).status).toBe(404);
+    });
+  });
+
   test("marking a migrated host check as checked closes it as done", async () => {
     const n = migrated("host-check", "input");
     await withRealCli(async () => {

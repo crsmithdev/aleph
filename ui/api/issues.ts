@@ -20,6 +20,9 @@ import * as todos from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { githubBase } from "../state.ts";
 
+/** An issue or goal id from a route: `7` or `7.1`; null for anything else. */
+const refOf = (raw: string): number | string | null => (/^\d+$/.test(raw) ? Number(raw) : /^\d+\.\d+$/.test(raw) ? raw : null);
+
 
 const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : String(v));
 
@@ -166,9 +169,9 @@ async function drop(req: Request, params: Record<string, string>, url: URL): Pro
   const origin = req.headers.get("origin");
   if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
   const repo = loadRegistry()[params.repo];
-  const n = Number(params.id);
+  const n = refOf(params.id);
   const none = Response.json({ error: "no such issue" }, { status: 404 });
-  if (!repo || !Number.isInteger(n)) return none;
+  if (!repo || n === null) return none;
   let doc: todos.Doc | null;
   try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
   if (!doc || !todos.find(doc, n)) return none;
@@ -187,8 +190,8 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
   const origin = req.headers.get("origin");
   if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
   const repo = loadRegistry()[params.repo];
-  const n = Number(params.id);
-  if (!repo || !Number.isInteger(n)) return Response.json({ error: "no such issue" }, { status: 404 });
+  const n = refOf(params.id);
+  if (!repo || n === null) return Response.json({ error: "no such issue" }, { status: 404 });
   let doc: todos.Doc | null;
   try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
   const item = doc && todos.find(doc, n);
@@ -229,9 +232,9 @@ function answer(verb: "note" | "decide" | "done", text: string) {
     const origin = req.headers.get("origin");
     if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
     const repo = loadRegistry()[params.repo];
-    const n = Number(params.id);
+    const n = refOf(params.id);
     const none = Response.json({ error: "no such issue" }, { status: 404 });
-    if (!repo || !Number.isInteger(n)) return none;
+    if (!repo || n === null) return none;
     let doc: todos.Doc | null;
     try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
     const item = doc && todos.find(doc, n);
