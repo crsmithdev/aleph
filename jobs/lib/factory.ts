@@ -6,7 +6,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { goal, goals, hasLabel, note, readList, readLists, reader } from "../../todo/lib/store.ts";
+import { flakeTracker, goal, goals, hasLabel, note, readList, readLists, reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
 import { normalizeDecision, type Decision } from "./decision.ts";
@@ -907,6 +907,25 @@ export function health(now = Date.now()): string[] {
   const counts = new Map<string, number>();
   for (const f of flakes()) if (now - Date.parse(f.at) < 7 * DAY) counts.set(`${f.repo} check ${f.check}`, (counts.get(`${f.repo} check ${f.check}`) ?? 0) + 1);
   for (const [k, n] of counts) if (n >= 2) lines.push(`health: ${k} passed on rerun ${n} times in 7 days`);
+  const lists = reader();
+  for (const repo of factoryRepos()) {
+    const doc = lists.list(repo.key);
+    const tracker = doc && flakeTracker(doc);
+    if (!tracker) continue;
+    const files = new Set<string>();
+    let k = 0;
+    for (const line of tracker.notes) {
+      const m = /^- (\d{4}-\d\d-\d\d) (\d\d:\d\d): (.*)$/.exec(line);
+      if (!m) continue;
+      const at = Date.parse(`${m[1]}T${m[2]}`);
+      if (!(now - at < 7 * DAY)) continue;
+      k++;
+      const cut = m[3].indexOf(" > ");
+      // The caller's prefix ("job x: ", "firefighter: ") is not part of the file name.
+      if (cut >= 0) files.add(m[3].slice(0, cut).split(": ").at(-1)!.trim());
+    }
+    if (k) lines.push(`health: ${repo.key}-${tracker.id} holds ${k} flake notes in 7 days, ${files.size} test files`);
+  }
   return lines;
 }
 

@@ -36,7 +36,7 @@ The design was drawn in the "Aleph Work Model" page (https://claude.ai/artifact/
 12. As the factory, I want `after` to mean order only, so that a dependency list never holds a decomposition.
 13. As the factory, I want the ledger in `~/.aleph/runs` and the sandboxes in `~/.aleph/sandbox`, so that "run" names one thing on disk.
 14. As Claude in the chat, I want to file a ready goal for Chris in one command, so that I do not need a triage run for work already in goal format.
-15. As a worker, I want my `FOLLOWUP:` lines to become issues with source `worker`, so that follow-ups go through triage like any other issue.
+15. As a worker, I want my `FOLLOWUP:` lines to become issues with source `worker`, so that follow-ups go through triage like any other issue; a `FLAKE:` line is a note on the flake tracker, not a new issue.
 16. As the triage step, I want my verdict to be a route (goal, close, done, ask), so that its name does not clash with the review's call.
 17. As the reviewer, I want my verdict to be a call (land, back, ask), so that its name does not clash with triage.
 18. As Chris, I want `aleph issue lint` to refuse the old fields and labels after the migration, so that old names do not come back.
@@ -59,7 +59,7 @@ The design was drawn in the "Aleph Work Model" page (https://claude.ai/artifact/
 12. WHILE a goal's `after` list names an open goal THE goal's stage SHALL be `blocked` and dispatch SHALL not start it; WHEN an issue has `goals` THE issue SHALL never appear in any goal's `after` list.
 13. WHEN the migration finishes THE ledger SHALL be in `~/.aleph/runs/`, the sandbox folders in `~/.aleph/sandbox/`, the store in `~/.aleph/issues/`, and no code path SHALL read `~/.aleph/jobs` or `~/.aleph/items`.
 14. WHEN Claude runs `aleph issue add aleph "<title>" --goal -` with a goal-format body THE store SHALL hold the issue and its goal `.1` in one commit, the goal SHALL be `queued` (or `blocked` with `--after`), and no triage run SHALL start.
-15. WHEN a worker's result holds a `FOLLOWUP:` line THE store SHALL hold a new issue with `source: worker` and stage `new`.
+15. WHEN a worker's result holds a `FOLLOWUP:` line THE store SHALL hold a new issue with `source: worker` and stage `new`, AND a `FLAKE:` line SHALL be a note on the flake tracker, not a new issue.
 16. WHEN triage ends THE triage run SHALL record `route` with one of `goal`, `close`, `done`, `ask`; the old `live` route SHALL be an `ask` with reason `host-check`.
 17. WHEN the reviewer ends THE run SHALL record `review.call` with one of `land`, `back`, `ask`.
 18. IF an issue or goal file holds a label from the list in criterion 9, or a `waiting_on` field, THEN `aleph issue lint` SHALL exit 1 and name the file and the field.

@@ -108,6 +108,8 @@ describe("a factory run", () => {
     expect(tracker).toHaveLength(1);
     const full = (await aleph(["todo", "show", "fac", String(tracker[0].id), "--json"])).json;
     expect(JSON.stringify(full)).toContain("job fflake: a.test.ts > slow one: timed out, passed alone");
+    // An open tracker with fresh notes is a health line, so close it before the hook test wants silence.
+    await aleph(["todo", "done", "fac", String(tracker[0].id), "test over"]);
     expect(readFileSync(join(base, "factory", "followups.log"), "utf8")).toContain("paint the fence");
     await aleph(["drop", "fflake"]);
   });

@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, fakeLog, file, jobsDir, specFile, state, told, setup, teardown } from "./cli.helpers";
+import { noteFlake } from "../todo/lib/store.ts";
+import { aleph, base, items, fakeLog, file, jobsDir, specFile, state, told, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -79,6 +80,22 @@ describe("a factory run's checks", () => {
       expect((await aleph(["report"])).stdout).toContain("health: fac check flaky passed on rerun 2 times in 7 days");
       rmSync(join(base, "factory", "flaky.json"));
     }, 60_000);
+
+    test("flake notes on a tracker make a health line; a repo with no tracker makes none", async () => {
+      expect((await aleph(["report"])).stdout).not.toContain("flake notes in 7 days");
+      const was = process.env.ALEPH_ITEMS;
+      process.env.ALEPH_ITEMS = items;
+      let id: number;
+      try {
+        const first = noteFlake({ key: "fac" }, "job x: a.test.ts > slow one: timed out");
+        noteFlake({ key: "fac" }, "firefighter: b.test.ts > other: failed under load");
+        id = (first as { id: number }).id;
+      } finally {
+        if (was === undefined) delete process.env.ALEPH_ITEMS; else process.env.ALEPH_ITEMS = was;
+      }
+      expect(typeof id).toBe("number");
+      expect((await aleph(["report"])).stdout).toContain(`health: fac-${id} holds 2 flake notes in 7 days, 2 test files`);
+    });
 
     test("a check that always fails is still stuck, with one rerun in its log", async () => {
       const r = await fjob("flk3", "fail-always", { ALEPH_FIX_ROUNDS: "0" });
