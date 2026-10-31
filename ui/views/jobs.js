@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (one job's runs, result, checks,
 // logs, and a diff loaded on demand). Render functions take the /api/jobs
 // objects and return HTML strings, with no DOM, so tests can call them.
-import { costHtml, STATES, badge, cmd, empty, esc, filterBar, idLink, localId, md, pageHead, pager, shortModel, span, when } from "../lib.js";
+import { costHtml, STATES, badge, cmd, crumb, empty, esc, filterBar, idLink, localId, md, pageHead, pager, shortModel, span, when } from "../lib.js";
 
 
 /** The list's data URL: the filters in the hash go to the API. */
@@ -104,8 +104,8 @@ const log = (title, body) => body ? `<div class="sh"><h2>${esc(title)}</h2></div
 
 export function renderJob(j) {
   const checks = (j.checks ?? []).map((c) => `<li>${c.ok ? "✓" : "✗"} ${esc(c.name)} <span class="quiet">${esc(c.seconds)} s</span></li>`).join("");
-  return `${JOB_STYLE}<div class="page"><p class="quiet"><a href="#/jobs">← Jobs</a></p>` +
-    pageHead(j.item?.title || j.name, { count: localId(j.name, j.repo), aside: badge(j.state) }) +
+  return `${JOB_STYLE}<div class="page">${crumb("#/jobs", [[j.repo, `#/jobs?repo=${encodeURIComponent(j.repo)}`], ["jobs", "#/jobs"], [localId(j.name, j.repo)]])}` +
+    pageHead(j.item?.title || j.name) + `<div class="status-row">${badge(j.state)}</div>` +
     `<dl class="facts job-facts">${fact("Repo", esc(j.repo))}${fact("Started", esc(when(j.started)))}${j.cost !== undefined ? fact("Cost", costHtml(j.cost, j.wk)) : ""}` +
     `${j.model ? fact("Model", esc(shortModel(j.model))) : ""}${j.commit ? fact("Commit", j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`) : ""}` +
     `${j.trace ? fact("Trace", `<a href="${esc(j.trace)}">Langfuse</a>`) : ""}</dl>` +

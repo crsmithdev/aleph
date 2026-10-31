@@ -21,6 +21,7 @@ export interface Fields {
   body?: string;
   priority?: string;
   labels?: string[];
+  source?: string;
   due?: string;
   status?: string;
   goal?: string;
@@ -233,12 +234,14 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
 export function edit(repo: store.Place, id: number | string, fields: Fields) {
   checkFields(fields);
   const title = fields.title?.trim();
-  const { body, priority, labels, due, status, after } = fields;
-  if (title === undefined && body === undefined && priority === undefined && labels === undefined && due === undefined && status === undefined && after === undefined) refuse("give --title, --body, --priority, --labels, --due (or --status)");
+  const { body, priority, labels, source, due, status, after } = fields;
+  if (source !== undefined && !["chris", "worker", "deps", "memory"].includes(source)) refuse("--source takes chris, worker, deps, memory");
+  if (title === undefined && body === undefined && priority === undefined && labels === undefined && source === undefined && due === undefined && status === undefined && after === undefined) refuse("give --title, --body, --priority, --labels, --due (or --status)");
   if (title === "") refuse("the title cannot be empty");
   const w = write(repo, `todo: edit item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
     issues.edit(i, { title, body, priority, areas: labels, due });
+    if (source !== undefined) i.fm.source = source;
     if (status !== undefined) issues.setStatus(i, status as issues.Status);
     if (after !== undefined) setAfter(repo, doc, i, after);
     return i;

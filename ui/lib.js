@@ -297,6 +297,9 @@ export const shortModel = (m) => String(m ?? "").replace(/^claude-/, "").replace
 /** An id as a link: mono, small, muted, underlined on hover. */
 export const idLink = (id, href) => `<a class="idl" href="${esc(safeHref(href))}">${esc(id)}</a>`;
 
+/** The page's place at its top: `« aleph / issues / 628`. Each part is [text, href], and the last part is the page itself; the mark links to `back`. */
+export const crumb = (back, parts) => `<nav class="crumb" aria-label="Breadcrumb"><a href="${esc(safeHref(back))}" aria-label="Back">«</a> ${parts.map(([t, h]) => (h ? `<a href="${esc(safeHref(h))}">${esc(t)}</a>` : `<span>${esc(t)}</span>`)).join(" / ")}</nav>`;
+
 /** The text with each `<repo>-<n>` of this repo as `<n>`. An id of another repo, and a name such as `triage-<repo>-<n>`, stay whole. */
 export const localId = (text, repo) => (repo ? String(text ?? "").replace(new RegExp(`(^|[^\\w-])${repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(?=\\d)`, "g"), "$1") : String(text ?? ""));
 /** The repo of an id `<repo>-<n>[.<k>]`, or "" for any other name. */

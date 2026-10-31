@@ -5,6 +5,7 @@
  * `aleph issue add`, so the CLI stays the one writer. A POST must carry `X-Aleph-UI: 1` and, when it has
  * an Origin, the server's own. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
+import { specs } from "./specs.ts";
 import { runCli } from "../../jobs/lib/launch.ts";
 import { allJobs, lastReal } from "../../jobs/lib/job.ts";
 import { loadRegistry, onOf, type Repo } from "../../jobs/lib/ledger.ts";
@@ -134,7 +135,7 @@ function detail(params: Record<string, string>, url: URL): Response {
     return { hash, subject: subject ?? "", date, ...(base ? { commitUrl: `${base}/commit/${hash}` } : {}) };
   });
 
-  return Response.json({ ...row(repo.key, item), id: n, ref, kind, request: kind === "issue" ? requestOf(item.body) : null, goals, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), body: item.body, notes: item.notes, frontmatter: item.fm, derived: state, jobs, commits });
+  return Response.json({ ...row(repo.key, item), id: n, ref, kind, request: kind === "issue" ? requestOf(item.body) : null, goals, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), body: item.body, notes: item.notes, frontmatter: item.fm, derived: state, jobs, commits, specs: specs(repo.key).map((s) => s.file) });
 }
 
 async function create(req: Request, url: URL): Promise<Response> {
@@ -227,6 +228,41 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
  * An asking issue's one-line answer, run as the CLI: `retriage` is `aleph issue note` (the label leaves; the tick triages it),
  * `rerun` is `aleph issue decide`. `aleph issue note` takes the answer as its text, not as a flag.
  */
+/** `aleph issue edit` from the Issue page: the CLI stays the one writer. A body that opens with `## Request` keeps that heading. */
+async function edit(req: Request, params: Record<string, string>, url: URL): Promise<Response> {
+  const origin = req.headers.get("origin");
+  if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
+  const repo = loadRegistry()[params.repo];
+  const n = refOf(params.id);
+  const none = Response.json({ error: "no such issue" }, { status: 404 });
+  if (!repo || n === null) return none;
+  let doc: todos.Doc | null;
+  try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
+  const item = doc && todos.find(doc, n);
+  if (!item) return none;
+  const b: any = await req.json().catch(() => ({}));
+  const text = String(b?.description ?? "").trim();
+  const args = ["issue", "edit", repo.key, String(n), "--title", String(b?.title ?? ""), "--priority", String(b?.priority ?? ""), "--source", String(b?.source ?? ""), "--labels", String(b?.areas ?? ""), "--body", "-"];
+  const { stdout: out, stderr: err, code } = await runCli(args, { stdin: /^\s*## Request[ \t]*\r?(\n|$)/.test(item.body) ? `## Request\n\n${text}` : text });
+  if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
+  try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }
+}
+
+/** `aleph issue note` from the Issue page. */
+async function addNote(req: Request, params: Record<string, string>, url: URL): Promise<Response> {
+  const origin = req.headers.get("origin");
+  if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
+  const repo = loadRegistry()[params.repo];
+  const n = refOf(params.id);
+  if (!repo || n === null) return Response.json({ error: "no such issue" }, { status: 404 });
+  const b: any = await req.json().catch(() => ({}));
+  const text = String(b?.text ?? "").trim();
+  if (!text) return Response.json({ error: "the note is empty" }, { status: 400 });
+  const { stdout: out, stderr: err, code } = await runCli(["issue", "note", repo.key, String(n), text]);
+  if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
+  try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }
+}
+
 function answer(verb: "note" | "decide" | "done", text: string) {
   return async (req: Request, params: Record<string, string>, url: URL): Promise<Response> => {
     const origin = req.headers.get("origin");
@@ -250,6 +286,8 @@ export const routes: Routes = {
   "POST /api/issues/:repo/:id/retriage": answer("note", "Chris: run triage again"),
   "POST /api/issues/:repo/:id/rerun": answer("decide", "Chris: run it again"),
   "POST /api/issues/:repo/:id/checked": answer("done", "Chris: checked on the host"),
+  "POST /api/issues/:repo/:id/edit": (req, params, url) => edit(req, params, url),
+  "POST /api/issues/:repo/:id/note": (req, params, url) => addNote(req, params, url),
   "POST /api/issues/:repo/:id/drop": (req, params, url) => drop(req, params, url),
   "POST /api/issues/:repo/:id/decide": (req, params, url) => decide(req, params, url),
   "GET /api/issues": (_req, _p, url) => list(url),

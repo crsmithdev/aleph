@@ -129,7 +129,7 @@ aleph issue add <repo> "<title>" [--body -] [--priority high] [--labels a,b]
 aleph issue add <repo> "<title>" --goal - [--after <goal id>]   # goal-format text on stdin: files the issue and its goal .1, no triage run
 aleph issue list [<repo>] [--status open|done|dropped] [--label <area>] [--json]
 aleph issue show <repo> <id> [--json]
-aleph issue edit <repo> <id> [--title "<title>"] [--body -] [--priority p] [--labels a,b]
+aleph issue edit <repo> <id> [--title "<title>"] [--body -] [--priority p] [--labels a,b] [--source s]
 aleph issue note <repo> <id> "<text>"      # appends one timestamped line, never rewrites
 aleph issue done <repo> <id> ["<summary>"]
 aleph issue drop <repo> <id> "<reason>"

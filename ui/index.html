@@ -450,6 +450,14 @@ table.tbl th button:hover, table.tbl th button:focus-visible { color: var(--ink)
 table.tbl th[aria-sort] { color: var(--ink); }
 table.tbl th .arr { display: inline-block; width: 1em; margin-left: 2px; font-size: var(--fs-xs); }
 .tscroll { overflow-x: auto; max-width: 100%; }
+.crumb { margin: 0 0 8px; font: var(--fs-sm) var(--mono); color: var(--muted); }
+.crumb a { color: var(--muted); text-decoration: none; }
+.crumb a:hover, .crumb a:focus-visible { color: var(--ink); text-decoration: underline; }
+form[data-ui="issue-note"], form[data-ui="issue-edit"] { margin-top: 8px; }
+form[data-ui="issue-note"] label, form[data-ui="issue-edit"] label { display: block; margin-bottom: 8px; }
+form[data-ui="issue-note"] textarea, form[data-ui="issue-edit"] textarea, form[data-ui="issue-edit"] input { display: block; width: 100%; margin-top: 4px; font: inherit; }
+form[data-ui="issue-edit"] select { display: block; margin-top: 4px; font: inherit; }
+.status-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; }
 .idp { white-space: nowrap; font: var(--fs-xs) var(--mono); color: var(--muted); }
 a.idl { white-space: nowrap; font: 500 var(--fs-xs) var(--mono); color: var(--muted); text-decoration: none; }
 a.idl:hover, a.idl:focus-visible { color: var(--ink); text-decoration: underline; }

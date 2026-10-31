@@ -167,10 +167,39 @@ describe("the Issue page", () => {
     expect((await fetch(`http://127.0.0.1:${server.port}/api/issues/fac/9.9`)).status).toBe(404);
   });
 
+  test("the page edits an issue and appends a note through the CLI", async () => {
+    const post = (path: string, body: unknown, ui = true) => fetch(`http://127.0.0.1:${server.port}/api/issues/fac/1/${path}`, { method: "POST", headers: { "content-type": "application/json", ...(ui ? { "x-aleph-ui": "1" } : {}) }, body: JSON.stringify(body) });
+    expect((await post("note", { text: "x" }, false)).status).toBe(403);
+    expect((await post("note", { text: " " })).status).toBe(400);
+    const before = await getJson("/api/issues/fac/1");
+    const edited = await post("edit", { title: "[Group] A new title", priority: "high", source: "worker", areas: "ui, bug", description: "New words." });
+    expect(edited.status, await edited.clone().text()).toBe(200);
+    expect((await post("note", { text: "a page note" })).status).toBe(200);
+    const d = await getJson("/api/issues/fac/1");
+    expect(d).toMatchObject({ title: "[Group] A new title", priority: "high", labels: ["ui", "bug"], frontmatter: { source: "worker" }, request: "New words." });
+    expect(d.notes.join("\n")).toContain("a page note");
+    expect((await post("edit", { title: "t", priority: "high", source: "nobody", areas: "", description: "x" })).status).toBe(422);
+    await post("edit", { title: before.title, priority: before.priority ?? "medium", source: before.frontmatter.source ?? "chris", areas: before.labels.join(","), description: before.request ?? before.body });
+  }, 60_000);
+
+  test("the Issue page has a breadcrumb, the stage on the left, a State column, and links a spec it has", async () => {
+    const base = await getJson("/api/issues/fac/1");
+    const html = renderIssue({ ...base, specs: ["2026-01-01-a.md"], body: "## Request\n\nSee docs/specs/2026-01-01-a.md and docs/specs/gone.md." , request: null });
+    expect(html).toContain('<nav class="crumb"');
+    expect(html).toContain('<span>1</span></nav>');
+    expect(html).toContain('<a href="#/specs/fac/2026-01-01-a.md">docs/specs/2026-01-01-a.md</a>');
+    expect(html).not.toContain('">docs/specs/gone.md</a>');
+    expect(html).toContain('<div class="status-row"><span class="badge');
+    expect(html).toContain("<th>Stage</th><th>State</th><th>Job</th>");
+    expect(html).toContain("<h2>Runs</h2>");
+    expect(html).not.toContain(base.derived.why);
+    expect(html).not.toContain("<h2>Request</h2>");
+  });
+
   test("the page shows the Request, then Goals with each goal's Job, in the spec's names", async () => {
     const html = renderIssue(await getJson("/api/issues/fac/1"));
     const at = (t: string) => html.indexOf(t);
-    expect(at('id="h-request">Request<')).toBeGreaterThan(-1);
+    expect(at('id="h-request">Description<')).toBeGreaterThan(-1);
     expect(at("Do three things.")).toBeGreaterThan(at('id="h-request"'));
     expect(at('id="h-goals">Goals<')).toBeGreaterThan(at("Do three things."));
     const goals = html.match(/<table class="tbl" id="goals">[^]*?<\/table>/)![0];

@@ -129,7 +129,7 @@ Split it into 2 to 6 child goals. Each child is work one factory run can do alon
 
 {"children": [{"title": "<title>", "body": "<child goal body>", "waits_on": [<optional numbers of earlier children, from 1>]}]}
 
-Each "title" is short and descriptive, a noun phrase of at most 60 characters ("Status layout C: metrics left, lanes in a rail"), not a sentence. Each body is in the goal format, with all four sections non-empty:
+Each "title" is a grammatically correct phrase or sentence of at most 60 characters. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"). Each body is in the goal format, with all four sections non-empty:
   ## Goal (what and why, short)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)

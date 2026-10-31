@@ -64,6 +64,8 @@ The body has these sections, each non-empty:
 - <question>: <answer>   (only the questions answered by default)
 ```
 
+The title is a grammatically correct phrase or sentence. When the work is part of a larger group, it opens with the group in brackets: `[<group>] <title>`.
+
 A new goal:
 
 ```

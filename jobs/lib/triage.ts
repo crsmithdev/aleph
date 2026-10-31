@@ -125,7 +125,7 @@ ${mainSince(repo, item)}
 
 Reply with one JSON object and nothing else, with one of these routes:
 
-- {"route": "goal", "title": "<short title>", "body": "<goal body>", "after": ["<optional <repo>-<n>.<k>>"]}: the issue is work a factory run can do alone. The issue keeps its own title and text (its "## Request"); the run files a goal under it. "title" is the goal's title: a short, descriptive noun phrase of at most ${TITLE_MAX} characters, in the style of the good titles ("Status layout C: metrics left, lanes in a rail", not a sentence). "body" is the goal's body, in the goal format, with these four sections and no "## Request":
+- {"route": "goal", "title": "<short title>", "body": "<goal body>", "after": ["<optional <repo>-<n>.<k>>"]}: the issue is work a factory run can do alone. The issue keeps its own title and text (its "## Request"); the run files a goal under it. "title" is the goal's title: a grammatically correct phrase or sentence of at most ${TITLE_MAX} characters. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"). "body" is the goal's body, in the goal format, with these four sections and no "## Request":
   ## Goal (what and why, short)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)

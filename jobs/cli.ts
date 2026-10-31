@@ -172,6 +172,7 @@ async function todoCmd(): Promise<void> {
     body: bodyArg === undefined ? undefined : (bodyArg === "-" ? await Bun.stdin.text() : bodyArg).trim(),
     priority: flag("priority"),
     labels: labelsArg === undefined ? undefined : labelsArg.split(",").map((s) => s.trim()).filter(Boolean),
+    source: flag("source"),
     due: flag("due"),
     status: stat,
     ...(goalArg === "-" ? { goal: await Bun.stdin.text() } : {}),

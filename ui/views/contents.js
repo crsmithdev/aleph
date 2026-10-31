@@ -1,7 +1,7 @@
 // The Inventory view: the state to browse, not the process: every project and every issue of every repo,
 // three tables and a form that files an issue. `data` is /api/contents: { issues, projects, specs }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { badge, chips, empty, esc, filterBar, idLink, labelName, localId, md, pageHead, pager, sortHead, when } from "../lib.js";
+import { badge, chips, crumb, empty, esc, filterBar, idLink, labelName, localId, md, pageHead, pager, sortHead, when } from "../lib.js";
 
 export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 
@@ -270,8 +270,34 @@ export function renderContents(d, o = {}) {
 /** The Job of a goal on the Issue page: a link to each of its jobs with the state, or a quiet line. */
 function goalJobs(g, repo) {
   if (!g.jobs.length) return `<span class="quiet">No job yet</span>`;
-  return g.jobs.map((j) => `${idLink(localId(j.name, repo), `#/jobs/${encodeURIComponent(j.name)}`)} ${stateBadge(j.state)} <span class="time">${esc(when(j.started))}</span>`).join("<br>");
+  return g.jobs.map((j) => `${idLink(localId(j.name, repo), `#/jobs/${encodeURIComponent(j.name)}`)} <span class="time">${esc(when(j.started))}</span>`).join("<br>");
 }
+
+/** The body as the page shows it: the `## Request` heading goes, because the section has its own heading. */
+export const description = (body) => String(body ?? "").replace(/^\s*## Request[ \t]*\r?\n+/, "");
+
+/** Each `docs/specs/<file>.md` that this project has becomes a link to its Spec page. */
+export const linkSpecs = (html, repo, files = []) => html.replace(/docs\/specs\/([\w.-]+\.md)/g, (m, f) => (files.includes(f) ? `<a href="#/specs/${encodeURIComponent(repo)}/${encodeURIComponent(f)}">${m}</a>` : m));
+
+const PRIORITIES = ["high", "medium", "low"], SOURCES = ["chris", "worker", "deps", "memory"];
+const choose = (name, all, cur) => `<select name="${name}">${(all.includes(cur) || !cur ? all : [cur, ...all]).map((o) => `<option${o === cur ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+
+/** The form that edits what Chris can change on an issue or goal. */
+function renderEdit(d, ref) {
+  const fm = d.frontmatter ?? {};
+  return `<details class="new"><summary>Edit</summary><form data-ui="issue-edit" class="stack" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}">` +
+    `<label>Title <input name="title" required value="${esc(d.title)}"></label>` +
+    `<label>Priority ${choose("priority", PRIORITIES, d.priority ?? "medium")}</label>` +
+    `<label>Source ${choose("source", SOURCES, fm.source ?? "chris")}</label>` +
+    `<label>Areas <input name="areas" placeholder="comma separated" value="${esc((d.labels ?? []).join(", "))}"></label>` +
+    `<label>${d.kind === "goal" ? "Goal" : "Description"} <textarea name="body" rows="14">${esc(description(d.body))}</textarea></label>` +
+    `<button type="submit" class="cmd primary">Save</button> <span class="form-msg" role="status"></span></form></details>`;
+}
+
+/** The form that appends a note. */
+const renderNoteForm = (d, ref) => `<form data-ui="issue-note" class="stack" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}">` +
+  `<label>Add a note <textarea name="text" rows="3" required></textarea></label>` +
+  `<button type="submit" class="cmd">Add note</button> <span class="form-msg" role="status"></span></form>`;
 
 /** The Issue page: the `## Request`, then the goals each with its Job, then the notes, the issue's own runs and the commits. Shared with views/issue.js. */
 export function renderIssue(d) {
@@ -281,7 +307,7 @@ export function renderIssue(d) {
   const notes = d.notes.length ? `<ul class="notes">${d.notes.map((n) => `<li>${esc(n.replace(/^- /, ""))}</li>`).join("")}</ul>` : empty("No notes.");
   const goals = d.goals ?? [];
   const goalTable = goals.length
-    ? `<div class="tscroll"><table class="tbl" id="goals"><thead><tr><th>Goal</th><th>Title</th><th>Stage</th><th>Job</th></tr></thead><tbody>${goals.map((g) => `<tr><td>${idLink(localId(g.id, d.repo), g.href)}</td><td class="wide" title="${esc(localId(g.why, d.repo))}">${esc(g.title)}</td><td>${stateBadge(g.stage)}</td><td>${goalJobs(g, d.repo)}</td></tr>`).join("")}</tbody></table></div>`
+    ? `<div class="tscroll"><table class="tbl" id="goals"><thead><tr><th>Goal</th><th>Title</th><th>Stage</th><th>State</th><th>Job</th></tr></thead><tbody>${goals.map((g) => `<tr><td>${idLink(localId(g.id, d.repo), g.href)}</td><td class="wide" title="${esc(localId(g.why, d.repo))}">${esc(g.title)}</td><td>${stateBadge(g.stage)}</td><td>${g.jobs.map((j) => stateBadge(j.state)).join("<br>")}</td><td>${goalJobs(g, d.repo)}</td></tr>`).join("")}</tbody></table></div>`
     : empty("No goal is filed for this issue.");
   const jobs = d.jobs.length
     ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Job</th><th>State</th><th>Started</th></tr></thead><tbody>${d.jobs.map((j) => `<tr><td>${idLink(localId(j.name, d.repo), `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${stateBadge(j.state)}</td><td class="time">${esc(when(j.started))}</td></tr>`).join("")}</tbody></table></div>`
@@ -294,16 +320,17 @@ export function renderIssue(d) {
     : empty("No commit on main names this issue in its trailers.");
   const isIssue = d.kind !== "goal";
   // An issue shows its Request as written; a goal (or an old item with no Request) shows its body.
-  const request = isIssue && d.request ? d.request : d.body;
-  const label = isIssue && d.request ? "Request" : isIssue ? "Request" : "Goal";
-  return `<div class="page"><p class="quiet"><a href="#/inventory">← Inventory</a></p>` +
-    pageHead(d.title, { count: `${d.repo} · ${d.ref ?? d.id}`, aside: d.derived ? stateBadge(d.derived.stage) : badge(d.status) }) +
-    (d.issue ? `<p class="quiet">Goal of ${idLink(localId(d.issue.id, d.repo), d.issue.href)}</p>` : "") +
-    (d.derived ? `<p class="quiet">${esc(localId(d.derived.why, d.repo))}</p>` : "") + (fm.labels?.length ? `<p>${chips(fm.labels)}</p>` : "") +
+  const request = isIssue && d.request ? d.request : description(d.body);
+  const ref = String(d.ref ?? d.id), inventory = "#/inventory", project = [d.repo, `#/inventory?project=${encodeURIComponent(d.repo)}`];
+  const place = isIssue ? [project, ["issues", inventory], [ref]]
+    : d.issue ? [project, ["issues", inventory], [localId(d.issue.id, d.repo), d.issue.href], ["goals"], [ref]]
+    : [project, ["goals"], [ref]];
+  return `<div class="page">${crumb(inventory, place)}` + pageHead(d.title) +
+    `<div class="status-row">${d.derived ? stateBadge(d.derived.stage) : badge(d.status)}${chips(fm.labels)}</div>` +
     (facts ? `<dl class="facts">${facts}</dl>` : "") +
-    `<div class="sh"><h2 id="h-request">${label}</h2></div><div class="md" id="request">${md(request)}</div>` +
+    `<div class="sh"><h2 id="h-request">${isIssue ? "Description" : "Goal"}</h2></div><div class="md" id="request">${linkSpecs(md(request), d.repo, d.specs)}</div>${renderEdit(d, ref)}` +
     (isIssue ? `<div class="sh"><h2 id="h-goals">Goals</h2><span class="count">${goals.length}</span></div>${goalTable}` : "") +
-    `<div class="sh"><h2>Notes</h2></div>${notes}<div class="sh"><h2>${isIssue ? "Runs on the issue" : "Job"}</h2></div>${jobs}<div class="sh"><h2>Commits</h2></div>${commits}</div>`;
+    `<div class="sh"><h2>Notes</h2></div>${notes}${renderNoteForm(d, ref)}<div class="sh"><h2>Runs</h2></div>${jobs}<div class="sh"><h2>Commits</h2></div>${commits}</div>`;
 }
 
 // Interaction: the shell renders with innerHTML and has no hooks, so the view
@@ -336,6 +363,24 @@ if (typeof document !== "undefined") {
     if (b) return setQuery(b.closest(".seg").dataset.name, b.dataset.value);
     const more = e.target.closest && e.target.closest("#issues-table button[data-more]");
     if (more) setQuery("limit", String(hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? "")).limit + Number(more.dataset.more)));
+  });
+  document.addEventListener("submit", async (e) => {
+    const form = e.target.closest && e.target.closest('form[data-ui="issue-edit"], form[data-ui="issue-note"]');
+    if (!form) return;
+    e.preventDefault();
+    const edit = form.dataset.ui === "issue-edit", el = form.elements;
+    const body = edit
+      ? { title: el.title.value, priority: el.priority.value, source: el.source.value, areas: el.areas.value, description: el.body.value }
+      : { text: el.text.value };
+    const msg = form.querySelector(".form-msg");
+    try {
+      const res = await fetch(`/api/issues/${encodeURIComponent(form.dataset.repo)}/${encodeURIComponent(form.dataset.ref)}/${edit ? "edit" : "note"}`, {
+        method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `answered ${res.status}`);
+      location.reload();
+    } catch (err) { msg.textContent = `Could not save it: ${err.message}`; }
   });
   document.addEventListener("submit", async (e) => {
     const form = e.target.closest && e.target.closest('form[data-ui="issue-form"]');
