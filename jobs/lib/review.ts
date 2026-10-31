@@ -183,16 +183,23 @@ async function review(folder: string): Promise<void> {
     const argv = [process.env.ALEPH_REVIEW_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
     const log = join(folder, "review.log");
-    const r = await sandboxed(folder, `exec ${argv.map(q).join(" ")}`, {
-      ...REVIEW_SANDBOX, cwd: "review/work", env, stdin: text, stdout: log, stderr: log,
-      limit: Number(process.env.ALEPH_REVIEW_CALL_TIMEOUT ?? 1500), stall: stallSeconds(),
-    });
-    const o = outcome(existsSync(log) ? readFileSync(log, "utf8") : "");
-    writeFileSync(md, o.result.trimEnd() + "\n");
-    if (r.stalled) return void fail(stallReason());
-    if (r.timedOut) return void fail("time box");
-    if (!o.ok) return void fail(o.line || `exit ${r.code}`);
-    if (!parseVerdict(o.result)) return void fail("no VERDICT line");
+    const once = async (): Promise<string | null> => {
+      const r = await sandboxed(folder, `exec ${argv.map(q).join(" ")}`, {
+        ...REVIEW_SANDBOX, cwd: "review/work", env, stdin: text, stdout: log, stderr: log,
+        limit: Number(process.env.ALEPH_REVIEW_CALL_TIMEOUT ?? 1500), stall: stallSeconds(),
+      });
+      const o = outcome(existsSync(log) ? readFileSync(log, "utf8") : "");
+      writeFileSync(md, o.result.trimEnd() + "\n");
+      if (r.stalled) return stallReason();
+      if (r.timedOut) return "time box";
+      if (!o.ok) return o.line || `exit ${r.code}`;
+      return parseVerdict(o.result) ? null : "no VERDICT line";
+    };
+    // A reviewer that gives no verdict runs once more; a second miss stays with Chris as an error.
+    if (!await once()) return;
+    writeFileSync(md, "PENDING\n");
+    const why = await once();
+    if (why) fail(why);
   } catch (e: any) {
     fail(`error: ${e?.message ?? e}`);
   } finally {

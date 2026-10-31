@@ -130,6 +130,56 @@ describe("review", () => {
     expect(state(folder)).toMatchObject({ state: "awaiting", ask: { kind: "approval", reason: "held-path" } });
   });
 
+  /** A reviewer that counts its runs in a file and runs `first` on its first run, `rest` on the others. */
+  const counting = (tag: string, first: string, rest: string) => {
+    const f = join(base, `claude-${tag}`), n = join(base, `count-${tag}`);
+    writeFileSync(f, `#!/bin/bash\ncat > /dev/null\necho run >> '${n}'\nif [ "$(wc -l < '${n}')" = 1 ]; then ${first}; else ${rest}; fi\n`, { mode: 0o755 });
+    process.env.ALEPH_REVIEW_CMD = f;
+    return () => readFileSync(n, "utf8").trim().split("\n").length;
+  };
+  const line = (result: string) => `printf '%s\\n' '${JSON.stringify({ type: "result", is_error: false, result })}'`;
+
+  test("a review with no verdict runs once more, and the second call counts", async () => {
+    const { runReview } = await import("./review.ts");
+    const folder = held("again");
+    const runs = counting("again", line("no call"), line("VERDICT: land"));
+    await runReview(folder);
+    expect(runs()).toBe(2);
+    expect(await reviewAt(folder)).toEqual({ call: "land" });
+  });
+
+  test("a sandbox that fails to start counts as no verdict and runs once more", async () => {
+    const { runReview } = await import("./review.ts");
+    const folder = held("bridge");
+    const runs = counting("bridge", `echo 'Error: Failed to create bridge sockets after 5 attempts' >&2; exit 1`, line("VERDICT: land"));
+    await runReview(folder);
+    expect(runs()).toBe(2);
+    expect(await reviewAt(folder)).toEqual({ call: "land" });
+  });
+
+  test("a verdict on the first run starts no second run", async () => {
+    const { runReview } = await import("./review.ts");
+    const folder = held("first");
+    const runs = counting("first", line("VERDICT: land"), line("VERDICT: back no"));
+    await runReview(folder);
+    expect(runs()).toBe(1);
+    expect(await reviewAt(folder)).toEqual({ call: "land" });
+  });
+
+  test("a silent reviewer is stopped at ALEPH_STALL_SECONDS, twice, and the error says stalled", async () => {
+    const { runReview } = await import("./review.ts");
+    const folder = held("silent");
+    const runs = counting("silent", "exec sleep 60", "exec sleep 60");
+    process.env.ALEPH_STALL_SECONDS = "1";
+    try {
+      const t = performance.now();
+      await runReview(folder);
+      expect(performance.now() - t).toBeLessThan(20_000);
+    } finally { delete process.env.ALEPH_STALL_SECONDS; }
+    expect(runs()).toBe(2);
+    expect(readFileSync(join(folder, "call.md"), "utf8")).toContain("ERROR: stalled: no output for 1 seconds");
+  }, 30_000);
+
   test("a held run starts one review, a second pass none", async () => {
     const { startReview } = await import("./review.ts");
     process.env.ALEPH_REVIEW_CMD = fakeClaude("VERDICT: land");
