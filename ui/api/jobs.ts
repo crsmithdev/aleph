@@ -1,6 +1,6 @@
 /** `GET /api/jobs`, `/api/jobs/:name`, `/api/jobs/:name/diff`: the Jobs and Job views' data. */
 import { git } from "../../jobs/lib/git.ts";
-import { loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
+import { isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
 import { allJobs, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
 import { jobProjector, type Job } from "../state.ts";
 import type { Routes } from "../server.ts";
@@ -33,7 +33,7 @@ function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
     if (r.reason) info.reason = r.reason;
     out.push(info);
     // The reviewer runs inside the worker's run folder and leaves review.md there.
-    if ((r.kind === "agent" || r.kind === "recheck") && hasFile(e, "review.md")) {
+    if ((isBuild(r.kind) || r.kind === "recheck") && hasFile(e, "review.md")) {
       out.push({ id: `${e.id}-review`, kind: "review", state: r.state, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: "claude-opus-5-5" });
     }
   }
@@ -98,7 +98,7 @@ export const routes: Routes = {
     const fit = await currentFit().catch(() => null);
     const detail: JobDetail = { ...jobProjector().toJob(runs, v), runs: runInfos(runs, fit) };
     annotate([detail], fit);
-    const result = latestFile(runs, "result.md", (e) => e.run.kind === "agent")?.text;
+    const result = latestFile(runs, "result.md", (e) => isBuild(e.run.kind))?.text;
     const review = latestFile(runs, "review.md")?.text;
     const checksLog = latestFile(runs, "checks.log")?.text;
     const stderr = latestFile(runs, "stderr.log")?.text;

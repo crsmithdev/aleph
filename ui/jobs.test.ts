@@ -128,6 +128,15 @@ describe("item titles", () => {
 });
 
 describe("GET /api/jobs/:name", () => {
+  test("a build run reads like an agent run: review row and result", async () => {
+    run("20261027-000006-a", { job: "oth-2", name: "oth-2", kind: "build", repo: "oth", state: "passed", started: ago(1), ended: ago(0.5) },
+      { "result.md": "built it\n", "review.md": "Fine.\nVERDICT: pass\n" });
+    const j = await (await get("/api/jobs/oth-2")).json();
+    rmSync(join(jobsDir, "20261027-000006-a"), { recursive: true, force: true });
+    expect(j.runs.map((r: any) => r.kind)).toEqual(["worker", "review"]);
+    expect(j.result).toBe("built it\n");
+    expect(j.review).toContain("VERDICT: pass");
+  });
   test("returns runs in order, the review and the log tails", async () => {
     const j = await (await get("/api/jobs/fac-9")).json();
     expect(j.runs.map((r: any) => r.kind)).toEqual(["worker", "worker", "review", "land"]);

@@ -5,7 +5,7 @@
  * month the last 7 and 30 local days (today included) in daily ones. A percentile is the nearest rank.
  */
 import { flakes } from "../../jobs/lib/factory.ts";
-import { allRuns, type Run } from "../../jobs/lib/ledger.ts";
+import { allRuns, isBuild, type Run } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
 import { staleSync } from "../stale.ts";
 import { reader, uiFetchTtl } from "../../todo/lib/store.ts";
@@ -79,7 +79,7 @@ const STEP: Record<Window, number> = { hour: 60_000, day: HOUR, week: DAY, month
 const COUNT: Record<Window, number> = { hour: 60, day: 24, week: 7, month: 30 };
 
 const HOUR_MS = HOUR;
-const isAgent = (r: Run) => r.kind === "agent" || r.kind === "recheck";
+const isAgent = (r: Run) => isBuild(r.kind) || r.kind === "recheck";
 const passedState = (st: string) => st === "passed" || st === "landed" || st === "done";
 
 /** Class every agent run of the window by what its work came to; see the parent goal's Classes list. */
@@ -194,7 +194,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     const t0 = Date.parse(r.started), t1 = Date.parse(r.ended ?? "");
     if (!(t0 >= since.getTime()) || t0 > now.getTime() || !(t1 >= t0) || t1 - t0 > MAX_RUN) continue;
     const secs = (t1 - t0) / 1000, i = Math.min(n - 1, Math.max(0, slot(t0)));
-    const kind = r.kind === "recheck" ? "agent" : r.kind;
+    const kind = r.kind === "recheck" || r.kind === "build" ? "agent" : r.kind;
     if (kind in times) times[kind].push(secs);
     for (const c of r.checks ?? []) {
       if (!checks.has(c.name)) checks.set(c.name, []);
@@ -212,7 +212,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
   // A fix round is a worker run of the goal that a failed check or the reviewer sent back (`failed` set).
   const rounds = new Map<string, number>();
   for (const r of all) {
-    if (r.kind !== "agent" && r.kind !== "recheck") continue;
+    if (!isAgent(r)) continue;
     if (r.failed) rounds.set(r.job, (rounds.get(r.job) ?? 0) + 1);
   }
   const fixes = landed.map((r) => rounds.get(r.job) ?? 0);

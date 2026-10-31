@@ -171,3 +171,21 @@ test("classify: one run of each class, with its cause", () => {
   expect(d.hasWeek).toBe(false);
 });
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+test("a build run counts as an agent run", () => {
+  const before = speed("week", now);
+  run({ kind: "build", state: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 20 }], ...secs(1, 11, 7000) });
+  const d = speed("week", now);
+  expect(d.kinds.agent.count).toBe(before.kinds.agent.count + 1);
+  expect(d.slowest[0]).toMatchObject({ state: "passed", took: 7000, tests: 20 });
+  expect(d.models.find((m) => m.model === "claude-opus-5-5")!.count).toBe(before.models.find((m) => m.model === "claude-opus-5-5")!.count + 1);
+  expect(d.buckets.some((b) => b.agent === 7000 && b.tests === 20)).toBe(true);
+  const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
+  const r = (o: Record<string, unknown>) => ({ job: "b", name: "b", repo: "fx", todo: 1, state: "passed", ...o }) as any;
+  const out = classify([
+    r({ kind: "build", state: "failed", failed: "tests", started: t(2), ended: t(2, 10) }),
+    r({ kind: "build", started: t(3), ended: t(3, 10) }),
+    { kind: "land", job: "b", name: "b", repo: "fx", todo: 1, state: "landed", started: t(3, 20), ended: t(3, 25) },
+  ], () => "open", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
+  expect(out.classes.find((c) => c.key === "landed")!.causes.map((c) => c.name)).toEqual(["After fix rounds"]);
+});
