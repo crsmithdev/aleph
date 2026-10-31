@@ -192,3 +192,14 @@ test("at 720px and below the shell's nav row is only as tall as the nav, and mai
   expect(m).toBeDefined();
   expect(m!).toMatch(/\.shell \{[^}]*grid-template-rows: auto minmax\(0, 1fr\)/);
 });
+
+test("the shell reloads on 401 and offers a Log out link only behind the gate", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const script = html;
+  const fn = script.match(/async function api\(url\) \{[\s\S]*?\n  \}/)![0];
+  expect(fn).toMatch(/if \(res\.status === 401\) \{[^}]*location\.reload\(\)/);
+  expect(html).toMatch(/<a id="logout"[^>]*\bhidden\b[^>]*>Log out<\/a>/);
+  expect(fn).toContain('res.headers.get("x-aleph-login")');
+  expect(fn).toContain('$("logout").hidden = false');
+  expect(script).toMatch(/\$\("logout"\)\.addEventListener\("click"[\s\S]*?"\/api\/logout", \{ method: "POST", headers: \{ "X-Aleph-UI": "1" \}[\s\S]*?location\.reload\(\)/);
+});

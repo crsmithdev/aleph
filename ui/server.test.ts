@@ -111,3 +111,18 @@ test("every API answer carries the server's version; the page and its modules ar
   expect(a.headers.get("x-aleph-version")).toBe(VERSION);
   for (const p of ["/", "/lib.js", "/views/_test.js"]) expect((await at(p)).headers.get("cache-control")).toBe("no-cache");
 });
+
+test("x-aleph-login is on every API answer behind the gate, and absent without a password", async () => {
+  expect((await at("/api/_test/x")).headers.get("x-aleph-login")).toBeNull();
+  process.env.ALEPH_UI_PASSWORD = "hunter2";
+  const gated = await serve(0, { warm: false });
+  try {
+    const g = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${gated.port}${p}`, init);
+    const ok = await g("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "hunter2" }) });
+    const cookie = ok.headers.get("set-cookie")!.split(";")[0];
+    expect((await g("/api/state", { headers: { cookie } })).headers.get("x-aleph-login")).toBe("1");
+  } finally {
+    gated.stop(true);
+    delete process.env.ALEPH_UI_PASSWORD;
+  }
+});

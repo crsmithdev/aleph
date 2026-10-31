@@ -7,7 +7,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { cacheFetches, uiFetchTtl } from "../todo/lib/store.ts";
 import { loadDotenv } from "../hooks/lib/env.ts";
-import { gate, routes as authRoutes } from "./auth.ts";
+import { gateOn, gate, routes as authRoutes } from "./auth.ts";
 import { startPoller } from "./usage.ts";
 
 export type Handler = (req: Request, params: Record<string, string>, url: URL) => Response | Promise<Response>;
@@ -84,6 +84,7 @@ export async function serve(port: number, { warm = true }: { warm?: boolean } = 
         r.names.forEach((n, i) => { params[n] = decodeURIComponent(m[i + 1]); });
         const res = await r.handler(req, params, url);
         res.headers.set("x-aleph-version", VERSION);
+        if (gateOn()) res.headers.set("x-aleph-login", "1");
         return res;
       }
       if (allowed) return new Response("method not allowed", { status: 405 });

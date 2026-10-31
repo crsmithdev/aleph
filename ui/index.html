@@ -573,6 +573,9 @@ pre.stat b { color: var(--need); }
   color: var(--ink-2); font-size: var(--fs-sm); transition: background-color .15s ease-out;
 }
 .nav-group a:hover { background: var(--sunk); color: var(--ink); }
+#logout { display: block; margin-top: 14px; padding: 5px 8px; border-radius: 6px; font-size: var(--fs-sm); color: var(--muted); text-decoration: none; }
+#logout[hidden] { display: none; }
+#logout:hover { background: var(--sunk); color: var(--ink); }
 .nav-group a[aria-current="page"] { background: var(--sunk); color: var(--ink); font-weight: 600; box-shadow: inset 2px 0 0 var(--ink); }
 .error p { margin: 0; color: var(--stuck); }
 .error .hint { color: var(--muted); font-size: var(--fs-sm); margin-top: 2px; }
@@ -589,6 +592,7 @@ pre.stat b { color: var(--need); }
   }
   .side .mark { padding: 0; flex: none; }
   #nav { display: flex; flex-wrap: wrap; gap: 2px; flex: 1 1 0; min-width: 0; }
+  #logout { margin: 0; padding: 4px 8px; }
   .nav-group { flex: 0 1 auto; min-width: 0; }
   .nav-group + .nav-group { margin-top: 0; }
   .nav-group h2 { display: none; }
@@ -712,6 +716,7 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap:
         <circle cx="35.5" cy="64.5" r="20" fill="currentColor"/>
       </svg>aleph</a>
     <div id="nav"></div>
+    <a id="logout" href="#" hidden>Log out</a>
   </nav>
   <main>
     <p id="offline" role="alert" hidden>The server is unreachable. Showing the last data.</p>
@@ -754,11 +759,19 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap:
   let version = null;
   async function api(url) {
     const res = await fetch(url, { cache: "no-store" });
+    if (res.status === 401) { location.reload(); return res; }
+    if (res.headers.get("x-aleph-login") === "1") $("logout").hidden = false;
     const v = res.headers.get("x-aleph-version");
     if (v && version && v !== version && !document.activeElement?.matches("input, textarea, select")) location.reload();
     if (v && !version) version = v;
     return res;
   }
+
+  $("logout").addEventListener("click", async (e) => {
+    e.preventDefault();
+    await fetch("/api/logout", { method: "POST", headers: { "X-Aleph-UI": "1" } }).catch(() => {});
+    location.reload();
+  });
 
   function nav(path) {
     // The entry whose path is the longest segment prefix of the route is active: #/jobs/x marks Jobs.
