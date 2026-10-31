@@ -6,7 +6,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { GOAL, NEEDS_CHRIS, isSorted, label, reader, sort } from "../../todo/lib/store.ts";
+import { GOAL, NEEDS_CHRIS, isSorted, label, noteFlake, reader, sort } from "../../todo/lib/store.ts";
 import { decisionNote, normalizeDecision, writeDecision, type Decision } from "./decision.ts";
 import { allRuns, jobsDir, lock, readRun, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 
@@ -26,7 +26,8 @@ export type Verdict =
   | { verdict: "close"; reason: string }
   | { verdict: "done"; commit: string; reason: string }
   | { verdict: "chris"; question: string; decision?: Decision }
-  | { verdict: "live"; note: string };
+  | { verdict: "live"; note: string }
+  | { verdict: "flake"; note: string };
 
 export type Counts = Partial<Record<Verdict["verdict"], number>>;
 
@@ -57,6 +58,7 @@ export function parseVerdict(output: string): Verdict | string {
       return reason ? { verdict: "done", commit, reason } : "done without a reason";
     }
     case "live": { const note = field("note"); return note ? { verdict: "live", note } : "live without a note"; }
+    case "flake": { const note = field("note"); return note ? { verdict: "flake", note } : "flake without a note"; }
     default: return `unknown verdict ${JSON.stringify(raw.verdict)}`;
   }
 }
@@ -126,6 +128,7 @@ Duplicates: when the issue asks for the same work as an open issue listed above,
 
 Never ask Chris about how to build it: code structure, which module or helper, naming, test shape, whether to wait for another open issue, or whether a refactor is worth it. Decide those yourself: pick the best option and return "goal" (with "waiting_on" when the work must wait for an open issue), or "close" when it is not worth doing or is already done.
 - {"verdict": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.
+- {"verdict": "flake", "note": "<test file> > <test name>: <what was seen>"}: the issue reports a test that fails or times out now and then, or under load, and asks for no change to the product. Name the test file, the test name and what was seen. Do not return "goal" for it: Chris picks from the tracker which flakes get a goal, and files those himself. An issue that asks to fix a named test's own bug, with a cause, is still a "goal".
 `;
 }
 
@@ -161,6 +164,13 @@ async function ask(repo: Repo, item: todos.Item, folder: string): Promise<string
 
 /** Apply a verdict to the item through the work store; false when the item changed under the run. */
 function apply(repo: Repo, id: number, v: Verdict): boolean {
+  // The tracker first, then the close: a failed note leaves the issue open for the next triage.
+  let tracker = 0;
+  if (v.verdict === "flake") {
+    const noted = noteFlake(repo, `triage of ${repo.key}-${id}: ${v.note}`);
+    if (typeof noted === "string") throw new Error(`flake not noted: ${noted}`);
+    tracker = noted.id;
+  }
   return sort(repo, id, `triage ${repo.key}-${id}: ${v.verdict}`, (item) => {
     if (v.verdict === "goal") {
       todos.edit(item, { title: v.title, body: v.body, ...(v.waitingOn ? { waitingOn: v.waitingOn } : {}) });
@@ -169,6 +179,9 @@ function apply(repo: Repo, id: number, v: Verdict): boolean {
     } else if (v.verdict === "done") {
       todos.setStatus(item, "done");
       todos.note(item, `triage: already on main in ${v.commit}: ${v.reason}`);
+    } else if (v.verdict === "flake") {
+      todos.setStatus(item, "done");
+      todos.note(item, `triage: a flake, noted on ${repo.key}-${tracker}`);
     } else if (v.verdict === "close") {
       todos.setStatus(item, "done");
       todos.note(item, `triage: closed: ${v.reason}`);

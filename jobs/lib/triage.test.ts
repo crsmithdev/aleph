@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { labels as storeLabels, readList, writeList } from "../../todo/lib/store.ts";
 import { readDecision } from "./decision.ts";
-import { parseVerdict, prompt, triageOpen } from "./triage.ts";
+import { countsLine, parseVerdict, prompt, triageOpen } from "./triage.ts";
 import { lock, readRun, stamp, writeRun, type Repo } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -30,6 +30,7 @@ case $prompt in
   *VERDICT:structured*) echo '{"verdict":"chris","question":"A or B?","options":[{"label":"A","line":"do a"},{"label":"B","line":"do b"}],"recommended":"B","why":["one","two"]}' ;;
   *VERDICT:build*) echo '{"verdict":"chris","question":"Ship it?","options":[{"label":"A","line":"ship"},{"label":"B","line":"wait"}],"recommended":"A","kind":"build"}' ;;
   *VERDICT:live*) echo '{"verdict":"live","note":"check the prod dashboard"}' ;;
+  *VERDICT:flake*) echo '{"verdict":"flake","note":"a.test.ts > does x: timed out under load"}' ;;
   *VERDICT:fail*) exit 3 ;;
   *VERDICT:bad*) echo '{"verdict":"maybe"}' ;;
   *) echo 'no json here' ;;
@@ -471,5 +472,43 @@ printf '{"verdict":"goal","title":"Status layout C: metrics left, lanes in a rai
     expect(p).toContain("at most 60 characters");
     expect(p).toContain('under a "## Request" heading');
     expect(p).toContain("word for word");
+  });
+});
+
+describe("the flake verdict", () => {
+  test("parseVerdict reads a flake and refuses one without a note", () => {
+    expect(parseVerdict('{"verdict":"flake","note":"a.test.ts > t: timed out"}')).toEqual({ verdict: "flake", note: "a.test.ts > t: timed out" });
+    expect(parseVerdict('{"verdict":"flake","note":"  "}')).toBe("flake without a note");
+    expect(parseVerdict('{"verdict":"flake"}')).toBe("flake without a note");
+  });
+
+  test("the prompt lists the flake verdict", () => {
+    expect(prompt(repo, { id: 1, title: "t", body: "", notes: [], fm: {} } as unknown as todos.Item)).toContain('"verdict": "flake"');
+  });
+
+  test("a flake is noted on the tracker and the issue closed", async () => {
+    reset([{ title: "a test times out", body: "VERDICT:flake" }]);
+    const t = await run();
+    expect(t.skipped).toEqual([]);
+    expect(t.triaged).toEqual({ flake: 1 });
+    expect(countsLine(t.triaged)).toBe("flake 1");
+    const list = readList(repo)!;
+    const tracker = list.items.find((i) => storeLabels(i).includes("flakes"))!;
+    expect(tracker).toBeDefined();
+    expect(tracker.notes.at(-1)).toContain(`triage of ${repo.key}-1: a.test.ts > does x: timed out under load`);
+    expect(todos.status(item(1))).toBe("done");
+    expect(item(1).notes.at(-1)).toContain(`triage: a flake, noted on ${repo.key}-${tracker.id}`);
+    expect(list.items.some((i) => storeLabels(i).includes("goal"))).toBe(false);
+  });
+
+  test("an open tracker is never triaged itself", async () => {
+    reset([{ title: "a test times out", body: "VERDICT:flake" }]);
+    await run();
+    const before = calls();
+    const t = await run();
+    expect(t.triaged).toEqual({});
+    expect(calls()).toBe(before);
+    const tracker = readList(repo)!.items.find((i) => storeLabels(i).includes("flakes"))!;
+    expect(storeLabels(tracker)).toContain("triaged");
   });
 });
