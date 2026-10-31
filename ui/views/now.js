@@ -70,6 +70,9 @@ export function usageLine(series) {
 export const FINE = ["Everything is fine.", "All is well.", "Everything is running smoothly.", "The factory is humming along."];
 
 /** The status sentence: all fine, or one sentence that lists what needs attention, each part a link. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
+/** Health lines that are counts for later, not problems: they stay off the headline and the cards. */
+const QUIET_HEALTH = /passed on rerun|holds \d+ flake notes?/;
+
 export function renderLede(s) {
   const f = s.factory;
   const problems = []; // [tone, text, href]
@@ -87,7 +90,7 @@ export function renderLede(s) {
   if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   for (const l of health) {
     const text = l.replace(/^health:\s*/, "");
-    if (/passed on rerun/.test(text)) continue;
+    if (QUIET_HEALTH.test(text)) continue;
     problems.push(["error", text.replace(/\.$/, ""), "#jobs-needs"]);
   }
   if (f.hold) problems.push(["error", f.hold.replace(/\.$/, ""), "#jobs-needs"]);
@@ -232,7 +235,7 @@ export function renderNeeds(s) {
 /** Lines of the factory's own trouble that are errors: health (a red main among them), the hold, a failed probe; each once. The hold is left out when its stuck run has a row of its own. */
 function errorLines(s) {
   const f = s.factory;
-  const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter((l) => !/passed on rerun/.test(l));
+  const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter((l) => !QUIET_HEALTH.test(l));
   if (f.probe && !f.probe.ok && !(f.health || []).some((l) => /probe/.test(l))) out.push(`the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   if (f.hold && !s.stuck.some((j) => f.hold.includes(j.name))) out.push(f.hold);
   return [...new Set(out)];

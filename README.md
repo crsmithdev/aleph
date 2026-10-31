@@ -174,7 +174,7 @@ WSL starts from a Startup shortcut only after a Windows logon, so after a power 
 Open PowerShell as administrator:
 
 ```powershell
-pushd \\wsl$\<distro>\home\crsmi\aleph\jobs\windows   # the UNC path may need pushd; or copy the file to C:\Users\crsmi\tmp\
+pushd \\wsl$\Ubuntu-24.04\home\crsmi\aleph\jobs\windows   # the UNC path may need pushd; or copy the file to C:\Users\crsmi\tmp\
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start-wsl-at-boot.ps1
 # enter the Windows password once at the prompt
 ```
