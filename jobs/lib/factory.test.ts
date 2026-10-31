@@ -940,3 +940,25 @@ test("report prints the kept and rejected lines of a facts run, once", () => {
   expect(out.split("rejected: pears sink").length).toBe(2);
   expect(report()).not.toContain("fac/facts-n1");
 });
+
+test("a dispatch with checks, three factory repos and no open goals fetches the work store at most twice", async () => {
+  const items = join(base, "items");
+  writeFileSync(join(base, "repos.json"), JSON.stringify(Object.fromEntries(["fac", "fac2", "fac3"].map((k) => [k, { path: join(base, "repo"), sandbox: true, autoland: false }]))));
+  const log = join(base, "fetch.log");
+  mkdirSync(join(base, "bin"));
+  const real = Bun.spawnSync(["which", "git"]).stdout.toString().trim();
+  writeFileSync(log, "");
+  writeFileSync(join(base, "bin", "git"), `#!/bin/sh\n[ "$1" = fetch ] && [ "$PWD" = ${items} ] && echo fetch >> ${log}\nexec ${real} "$@"\n`);
+  Bun.spawnSync(["chmod", "+x", join(base, "bin", "git")]);
+  const path = process.env.PATH;
+  process.env.PATH = `${join(base, "bin")}:${path}`;
+  try {
+    const out = await dispatchGoals(async () => null, async () => null);
+    expect(out.started).toEqual([]);
+  } finally {
+    process.env.PATH = path;
+  }
+  const n = readFileSync(log, "utf8").split("\n").filter(Boolean).length;
+  console.log(`store fetches: ${n}`);
+  expect(n).toBeLessThanOrEqual(2);
+});

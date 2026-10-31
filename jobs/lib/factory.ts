@@ -450,8 +450,9 @@ const ACCEPTANCE_DAYS = 2;
 export async function acceptanceStep(run: Runner = sandboxRunner, now = todos.clock()): Promise<string[]> {
   const lines: string[] = [];
   const since = todos.today(new Date(now.getTime() - ACCEPTANCE_DAYS * 86_400_000));
+  const lists = reader();
   for (const repo of sandboxRepos()) {
-    const list = reader().list(repo.key)?.items ?? [];
+    const list = lists.list(repo.key)?.items ?? [];
     const due = list.filter((i) => hasLabel(i, "goal") && todos.status(i) === "done" && String(i.fm.updated ?? "") >= since && !final(readRecord(repo.key, i.id)));
     if (!due.length) continue;
     if (!fetchOrigin(repo.path).ok) { lines.push(`${repo.key}: acceptance not run: fetch failed`); continue; }

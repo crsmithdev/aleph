@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as todos from "./todo.ts";
@@ -276,5 +276,38 @@ describe("dotted goal files", () => {
     issues.readList(r);
     sh(join(base, "items"), "git", "fetch", "-q", "origin");
     expect(issues.itemTimes().has(`${r.key}-5.1`)).toBe(true);
+  });
+});
+
+describe("store fetches", () => {
+  let log: string, bin: string, path: string | undefined;
+  const fetches = (): number => readFileSync(log, "utf8").split("\n").filter((l) => l === "fetch").length;
+  beforeAll(() => {
+    bin = join(base, "bin");
+    log = join(base, "fetch.log");
+    writeFileSync(log, "");
+    mkdirSync(bin);
+    const real = Bun.spawnSync(["which", "git"]).stdout.toString().trim();
+    writeFileSync(join(bin, "git"), `#!/bin/sh\n[ "$1" = fetch ] && echo fetch >> ${log}\nexec ${real} "$@"\n`);
+    chmodSync(join(bin, "git"), 0o755);
+    path = process.env.PATH;
+    process.env.PATH = `${bin}:${path}`;
+  });
+  afterAll(() => { process.env.PATH = path; });
+
+  test("one reader fetches once for the lists of two repos", () => {
+    const a = repo([{ title: "a" }]), b = repo([{ title: "b" }]);
+    const before = fetches();
+    const lists = issues.reader();
+    expect(lists.list(a.key)?.items.length).toBe(1);
+    expect(lists.list(b.key)?.items.length).toBe(1);
+    expect(fetches() - before).toBe(1);
+  });
+
+  test("goals over three repos fetches once", () => {
+    const rs = [repo([{ title: "a", labels: ["goal"] }]), repo([{ title: "b", labels: ["goal"] }]), repo([{ title: "c", labels: ["goal"] }])];
+    const before = fetches();
+    expect(issues.goals(rs).length).toBe(3);
+    expect(fetches() - before).toBe(1);
   });
 });

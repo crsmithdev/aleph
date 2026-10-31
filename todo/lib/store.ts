@@ -330,13 +330,16 @@ export interface Reader {
   item(key: string, id: number): Item | undefined;
 }
 
-/** A reader of the store's lists; `fetch: false` reads origin/main as last fetched. */
+/** A reader of the store's lists; it fetches at most once, on its first list. `fetch: false` reads origin/main as last fetched. */
 export function reader(o: { fetch?: boolean } = {}): Reader {
   const lists = new Map<string, Doc | null>();
+  let fetched = o.fetch === false;
   const list = (key: string): Doc | null => {
     if (!lists.has(key)) {
       let doc: Doc | null = null;
-      try { doc = o.fetch === false ? readFetched({ key }) : readList({ key }); } catch {}
+      const read = fetched ? readFetched : readList;
+      fetched = true;
+      try { doc = read({ key }); } catch {}
       lists.set(key, doc);
     }
     return lists.get(key)!;

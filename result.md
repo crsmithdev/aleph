@@ -105,6 +105,29 @@ Not determined. The sandbox has only this repo, and nothing in it names aleph-74
 
 Merged `origin/main` (40241a2). Conflicts in `jobs/cli.basic.test.ts` (kept main's version of the guards test and added `endedRun` to its assertion message), `jobs/lib/unit.ts` (setup lock kept; main's `setup.log` entry and fetch error text in the reason kept inside it) and `result.md` (both sections kept). After the merge: `bun test jobs/cli.basic.test.ts` 22 pass; one `bun run test` run: 1172 pass, 0 fail (`six starts at once` passed). Only one full run was made after the merge, so the 5-run pass-rate above is from before it.
 
+---
+
+# aleph-770: fewer work store fetches per dispatch
+
+## Count
+Method: a `git` shim on PATH logs each `git fetch` run in the work store's clone. Test: `dispatchGoals` with
+checks, three factory repos and no open goals (jobs/lib/factory.test.ts).
+
+- Before: 6 store fetches (3 in `acceptanceStep`, one per repo; 3 in `openGoals`, one per repo).
+- After: 2 (one shared reader in `acceptanceStep`; one in `openGoals`).
+
+## Changes
+- `reader()` (todo/lib/store.ts) fetches at most once, on its first list; later lists use `readFetched`.
+  `goals()` over three repos is one fetch.
+- `acceptanceStep` shares one reader for its list reads across repos; the re-read under each acceptance lock
+  still makes a new reader and fetches fresh.
+- `readList`, `readHidden`, `writeList`, `writeHidden`, the fresh reads in `dispatchGoals`, `fetchOrigin` retries
+  and product repo fetches are unchanged. This does not fix aleph-771.
+- Tests: store.test.ts (one reader over two repos, `goals()` over three: one fetch each); factory.test.ts
+  (at most 2 store fetches).
+
+---
+
 # aleph-742: six starts at once early exit
 
 No code change. The branch already has the fix: bdd3dae (aleph-702) holds `lock("setup-<repo.key>")` around fetch, worktree remove/prune, branch -D and worktree add (jobs/lib/unit.ts:828).
