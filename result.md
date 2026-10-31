@@ -104,3 +104,15 @@ Not determined. The sandbox has only this repo, and nothing in it names aleph-74
 # aleph-702: land merge with origin/main
 
 Merged `origin/main` (40241a2). Conflicts in `jobs/cli.basic.test.ts` (kept main's version of the guards test and added `endedRun` to its assertion message), `jobs/lib/unit.ts` (setup lock kept; main's `setup.log` entry and fetch error text in the reason kept inside it) and `result.md` (both sections kept). After the merge: `bun test jobs/cli.basic.test.ts` 22 pass; one `bun run test` run: 1172 pass, 0 fail (`six starts at once` passed). Only one full run was made after the merge, so the 5-run pass-rate above is from before it.
+
+# aleph-742: six starts at once early exit
+
+No code change. The branch already has the fix: bdd3dae (aleph-702) holds `lock("setup-<repo.key>")` around fetch, worktree remove/prune, branch -D and worktree add (jobs/lib/unit.ts:828).
+
+- The assertion message is on main (bdd3dae, jobs/cli.basic.test.ts:~205).
+- `bun run test`: 2 full runs finished, 1172 pass / 0 fail each; a third was cut by the time box. `six starts at once` did not end early in any run, so there is no recorded state/reason of an early exit.
+- Stress script (scratch, not in the diff): the setup git commands for 5 branches on one repo, concurrent and with no lock, 10 rounds. Collisions in 5 of 10 rounds:
+  `could not lock config file .git/config: File exists` / `unable to write upstream branch configuration` (worktree add -b) and
+  `could not create directory of '.git/worktrees/w5'` (prune removed another unit's half-made entry).
+  Without the lock the hypothesis is reproduced, and `fetch`/`worktree add` failing makes the unit `failed` with code 0 from `started()`. With the lock these run one at a time.
+- Not proven: that the lock removes all early exits, since the pre-lock failure never showed in my 2 runs. Pass rate with the lock: 2/2 full runs.
