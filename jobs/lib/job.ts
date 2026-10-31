@@ -38,7 +38,7 @@ export const findJob = (name: string, repo?: string | null, jobs = allJobs()): J
 export const jobById = (id: string, jobs = allJobs()): Job | undefined => jobs.find((j) => j[0].id === id);
 
 /** The repo issue the job works on: the latest run that names one. */
-export const issue = (j: Job): number | undefined => j.map((e) => onOf(e.run)).findLast((n) => n !== undefined);
+export const issue = (j: Job): number | string | undefined => j.map((e) => onOf(e.run)).findLast((n) => n !== undefined);
 
 /** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts; a facts run is not the job's state. */
 export const lastReal = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts" && !(e.run.kind === "land" && e.run.state === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
@@ -104,7 +104,7 @@ export interface JobView {
   run: { id: string; kind: Run["kind"]; started: string };
   state: State; needs?: Run["needs"]; phase?: string; reason?: string; question?: string; say?: string; session?: string;
   started: string; ended?: string;
-  item?: number; cost?: number; model?: string; commit?: string; stat?: string;
+  item?: number | string; cost?: number; model?: string; commit?: string; stat?: string;
   defaults: string[]; followups: string[];
   checks?: CheckResult[];
   /** The hidden check's test counts, when the job's item has hidden checks. */

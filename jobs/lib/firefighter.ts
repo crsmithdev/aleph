@@ -38,7 +38,7 @@ export type EventKind = "needs-you" | "stuck" | "failed" | "loop" | "red" | "nee
  * One thing the snapshot found. `key` is what makes it new: it changes when the thing does.
  * `reason` is the reason code it waits for; `handed` marks one whose reason Chris handed to the firefighter (standing.json).
  */
-export interface Event { key: string; kind: EventKind; repo: string; job?: string; item?: number; line: string; reason?: string; handed?: boolean }
+export interface Event { key: string; kind: EventKind; repo: string; job?: string; item?: number | string; line: string; reason?: string; handed?: boolean }
 
 /** Marks an event whose reason Chris handed to the firefighter, and says so on its line. */
 const hand = (e: Event): Event => (e.reason && handed(e.reason) ? { ...e, handed: true, line: `${e.line} (handed to you by Chris)` } : e);
@@ -264,7 +264,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
       if (why) return { refused: `${describe(a)}: ${why}` };
       writeRerun(a.job, `The last run was dropped by the firefighter: ${a.reason}`);
       // A run that cannot pass until another issue lands waits on it: the dispatch reads waiting_on and starts nothing until it is done.
-      const waits = a.waiting_on && issue !== undefined ? await refusal(async () => issues.edit(repo, issue, { waitingOn: a.waiting_on })) : null;
+      const waits = a.waiting_on && typeof issue === "number" ? await refusal(async () => issues.edit(repo, issue, { waitingOn: a.waiting_on })) : null;
       if (issue !== undefined) store.note(repo, issue, `firefighter: dropped ${a.job}: ${a.reason}${a.waiting_on ? `; waits on ${a.waiting_on}` : ""}`);
       return waits ? { refused: `${describe(a)}: dropped, but waiting_on not set: ${waits}` } : { applied: describe(a) };
     }
@@ -322,7 +322,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     const why = await refusal(async () => issues.decide(repo, a.n, `firefighter decided: ${a.note}`, a.waitingOn ? { waitingOn: a.waitingOn } : {}));
     return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
   }
-  if (!store.hasLabel(item, store.GOAL)) return { refused: `${describe(a)}: it is not a goal` };
+  if (store.kindOf(item) !== "goal") return { refused: `${describe(a)}: it is not a goal` };
   const why = await refusal(async () => issues.edit(repo, a.n, { ...(a.body !== undefined ? { body: a.body } : {}), ...(a.waiting_on ? { waitingOn: a.waiting_on } : {}) }));
   return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
 }

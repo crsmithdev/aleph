@@ -41,7 +41,7 @@ export function facts(repo: Repo, doc: todos.Doc | null = readList(repo)): Facts
     if (item === undefined || job[0].run.repo !== repo.key) continue;
     // A triage run marks its item in the store, and a planner run files children and does not land:
     // neither is a factory run working on the item, so a goal they close in the store is done.
-    if (repo.sandbox && job.some((e) => e.run.kind !== "triage" && e.run.kind !== "plan")) touched.add(item);
+    if (typeof item === "number" && repo.sandbox && job.some((e) => e.run.kind !== "triage" && e.run.kind !== "plan")) touched.add(item);
     (runs[item] ??= []).push(runViewOf(job));
     if (isOpen(job)) open[item] = stateOf(job);
   }
@@ -102,9 +102,20 @@ export function landedIndex(cwd: string, main: string, key: string): Map<number,
   return out;
 }
 
+/** The short sha of a commit on `main` whose `Item:` trailer names the goal `ref` (`<repo>-<n>.<m>`) and that no later commit reverts, or null. */
+function dottedOnMain(cwd: string, main: string, ref: string): string | null {
+  const rows = git(cwd, "log", main, "--format=%H%x09%(trailers:key=Item,valueonly,separator=%x2C)").out.split("\n").filter(Boolean);
+  const hits = rows.map((r) => r.split("\t")).filter(([, v]) => (v ?? "").split(",").some((s) => s.trim() === ref)).map(([h]) => h);
+  if (!hits.length) return null;
+  const reverted = new Set([...git(cwd, "log", main, "-E", "--grep=^This reverts commit [0-9a-f]{40}", "--format=%B").out.matchAll(/This reverts commit ([0-9a-f]{40})/g)].map((m) => m[1]));
+  const hit = hits.find((h) => !reverted.has(h));
+  return hit ? hit.slice(0, 7) : null;
+}
+
 /** The short sha of a commit on origin/<main> that names the item, or null. It reads the ref as it is: the caller fetches. */
-export function itemOnMain(repo: { path: string; key: string; main: string } | undefined, n: number | undefined): string | null {
+export function itemOnMain(repo: { path: string; key: string; main: string } | undefined, n: number | string | undefined): string | null {
   if (!repo || n === undefined) return null;
+  if (typeof n === "string") return dottedOnMain(repo.path, `origin/${repo.main}`, `${repo.key}-${n}`);
   const hit = landedCommits(repo.path, `origin/${repo.main}`, repo.key, n)[0];
   return hit ? hit.slice(0, 7) : null;
 }

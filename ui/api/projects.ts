@@ -30,7 +30,7 @@ export interface Card {
 export interface Detail extends Card {
   commits: { hash: string; subject: string; date: string; item: string | null; commitUrl?: string }[];
   items: { id: number; title: string; labels: string[]; priority: string }[];
-  jobs: { name: string; state: string; started: string; ended?: string; item: number | null }[];
+  jobs: { name: string; state: string; started: string; ended?: string; item: number | string | null }[];
   vault: { title: string; kind: string; updated: string }[];
 }
 

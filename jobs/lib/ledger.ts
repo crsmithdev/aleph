@@ -37,7 +37,7 @@ export interface Run {
   /** A land run the facts gate has looked at: dispatch does not read its job again. */
   facts?: true;
   /** The repo's issue the job works on: land marks it done, drop adds a note. */
-  todo?: number;
+  todo?: number | string;
   /** New shape: the goal or issue the run is on, `<repo>-<n>`. */
   on?: string;
   /** New shape: what the run waits on. */
@@ -190,11 +190,11 @@ export const isBuild = (kind: Run["kind"]): boolean => kind === "build" || kind 
 /** The state under its old name: `awaiting` reads as `needs-you`. */
 export const oldState = (state: State): State => (state === "awaiting" ? "needs-you" : state);
 
-/** The number of the run's `on` (`<repo>-<n>`, for the run's repo), else its `todo`. A dotted `on` gives none. */
-export function onOf(run: Run): number | undefined {
+/** The number of the run's `on` (`<repo>-<n>`, for the run's repo), else its `todo`. A dotted `on` gives the goal's `<n>.<m>` as a string. */
+export function onOf(run: Run): number | string | undefined {
   if (run.on === undefined) return run.todo;
-  const m = run.on.match(/^(.+)-(\d+)$/);
-  return m && m[1] === run.repo ? Number(m[2]) : undefined;
+  const m = run.on.match(/^(.+)-(\d+(?:\.\d+)?)$/);
+  return m && m[1] === run.repo ? (m[2].includes(".") ? m[2] : Number(m[2])) : undefined;
 }
 
 const OLD_NEEDS: Record<NonNullable<Run["needs"]>, { kind: Ask["kind"]; reason: string }> = {

@@ -61,6 +61,18 @@ describe("labels", () => {
     expect(issues.isSorted(it({ labels: ["followup", "ui"] }))).toBe(false);
   });
 
+  test("the predicates read both item shapes", () => {
+    expect(issues.isGoal(it({ kind: "goal" }))).toBe(true);
+    expect(issues.isGoal(it({ kind: "goal", ask: "input" }))).toBe(false);
+    expect(issues.isGoal(it({ labels: ["goal"], ask: "approval" }))).toBe(false);
+    // `kind` wins over a label an old item kept.
+    expect(issues.isGoal(it({ kind: "issue", labels: ["goal"] }))).toBe(false);
+    expect(issues.isSorted(it({ kind: "goal" }))).toBe(true);
+    expect(issues.isSorted(it({ kind: "issue", goals: ["x-1.1"] }))).toBe(true);
+    expect(issues.isSorted(it({ kind: "issue", ask: "approval" }))).toBe(true);
+    expect(issues.isSorted(it({ kind: "issue" }))).toBe(false);
+  });
+
   test("label adds what is missing and takes out what is named, once", () => {
     const i = it({ labels: ["a", "needs-chris"] });
     issues.label(i, ["goal", "a", "goal"], ["needs-chris"]);

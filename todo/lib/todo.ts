@@ -67,6 +67,12 @@ export function parseRef(s: string): { repo: string; id: number } | null {
   return m ? { repo: m[1], id: Number(m[2]) } : null;
 }
 
+/** `<repo>-<n>` or a goal's `<repo>-<n>.<m>` split into its parts: the id is a number for the first, `"n.m"` for the second. Null for neither. */
+export function parseGoalRef(s: string): { repo: string; id: number | string } | null {
+  const m = /^(.+)-(\d+(?:\.\d+)?)$/.exec(s);
+  return m ? { repo: m[1], id: m[2].includes(".") ? m[2] : Number(m[2]) } : null;
+}
+
 export function todoPath(repoPath: string): string {
   return join(repoPath, "docs", "todo.md");
 }
@@ -191,8 +197,10 @@ export function blank(repo: string): Doc {
 
 /** `"5"` for a plain item, `"5.1"` for a goal. */
 export const refOf = (item: Item): string => (item.sub === undefined ? String(item.id) : `${item.id}.${item.sub}`);
-/** A number resolves to the plain item, never to a goal under it. */
-export const find = (doc: Doc, id: number): Item | undefined => doc.items.find((i) => i.id === id && i.sub === undefined);
+/** The id that finds the item: its number for a plain item, `"5.1"` for a goal. */
+export const idOf = (item: Item): number | string => (item.sub === undefined ? item.id : refOf(item));
+/** A number resolves to the plain item, never to a goal under it; a string like `"5.1"` to the goal. */
+export const find = (doc: Doc, id: number | string): Item | undefined => doc.items.find((i) => refOf(i) === String(id));
 // The max of `id` ignores `sub` on purpose: a goal's id is its parent's number, so a goal never takes a new issue number.
 export const nextId = (doc: Doc): number => doc.items.reduce((m, i) => Math.max(m, i.id), 0) + 1;
 

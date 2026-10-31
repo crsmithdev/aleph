@@ -18,7 +18,7 @@ import type { Stage } from "../jobs/lib/stage.ts";
 import type { Wk } from "./usage.ts";
 
 export interface Job {
-  name: string; repo: string; item: { id: number; title: string } | null;
+  name: string; repo: string; item: { id: number | string; title: string } | null;
   state: string; needs?: string; phase?: string; reason?: string; question?: string;
   started: string;
   /** The current (last) run: its kind and start. `started` is the job's first. */

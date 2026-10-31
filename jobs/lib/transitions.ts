@@ -33,7 +33,7 @@ export async function refusal(f: () => Promise<unknown>): Promise<string | null>
 }
 
 export function checkName(name: string | undefined): string {
-  if (!name || !/^[A-Za-z0-9-]+$/.test(name)) refuse("the name must be letters, digits and hyphens");
+  if (!name || !/^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/.test(name)) refuse("the name must be letters, digits and hyphens");
   return name!;
 }
 
@@ -110,7 +110,7 @@ export interface JobArgs {
   name: string;
   /** The spec of a new job, or the note of a follow-up. */
   spec: string;
-  todo?: number;
+  todo?: number | string;
   model?: string;
   land?: boolean;
 }
@@ -131,7 +131,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
   const name = checkName(a.name);
   let todo = a.todo;
   if (todo !== undefined) {
-    if (!Number.isInteger(todo)) refuse("--todo takes an issue number");
+    if (!/^\d+(\.\d+)?$/.test(String(todo))) refuse("--todo takes an issue number");
     let doc: todos.Doc | null = null;
     try { doc = store.readList(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
     if (!doc) refuse(`the work store has no list for ${repo.key}`);
@@ -325,7 +325,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean }
  * Start the run for a goal: `aleph job` in-process, or `ALEPH_START_CMD` (tests) as a process.
  * A foreground unit is waited for, its output dropped. Returns the refusal, or null.
  */
-export async function startGoal(repo: Repo, name: string, id: number, spec: string, tier?: Tier | null): Promise<string | null> {
+export async function startGoal(repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null): Promise<string | null> {
   const model = tier !== undefined ? tier : await route(spec);
   factoryLog(`starting ${name} with model ${model ?? "default"}`);
   if (process.env.ALEPH_START_CMD) {

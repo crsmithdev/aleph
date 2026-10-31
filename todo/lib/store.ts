@@ -247,15 +247,17 @@ export const SORTED: readonly string[] = [GOAL, NEEDS_CHRIS, "triaged", "live-ch
 
 export const hasLabel = (item: Item, label: string): boolean => labels(item).includes(label);
 /** An open item labelled `goal`: a factory run's work. */
-export const isGoal = (item: Item): boolean => status(item) === "open" && hasLabel(item, GOAL);
+export const isGoal = (item: Item): boolean => status(item) === "open" && !hasAsk(item) && kindOf(item) === "goal";
+/** An item with an `ask` (new shape): it waits for Chris, so it is never dispatched and never triaged. */
+const hasAsk = (item: Item): boolean => item.fm.ask !== undefined;
 /** Labels that map to a spec field of their own, so `areasOf` leaves them out. */
 const MAPPED: readonly string[] = [GOAL, NEEDS_CHRIS, "planned", "followup", "triaged", "live-check", "proposal", "deps", "memory"];
 
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
-/** `goal` when the item says `kind: goal` or has the `goal` label, else `issue`; reads both item shapes. */
-export const kindOf = (item: Item): "goal" | "issue" => (item.fm.kind === "goal" || hasLabel(item, GOAL) ? "goal" : "issue");
+/** The item's `kind` when it has one (new shape), else `goal` for the `goal` label and `issue` for none. */
+export const kindOf = (item: Item): "goal" | "issue" => (item.fm.kind === "goal" || item.fm.kind === "issue" ? item.fm.kind : hasLabel(item, GOAL) ? "goal" : "issue");
 /** Who raised the item: its `source`, else `followup` -> worker, `deps` -> deps, `memory` -> memory, else chris. */
 export function sourceOf(item: Item): "chris" | "worker" | "deps" | "memory" {
   const s = text(item.fm.source);
@@ -309,7 +311,8 @@ export function askOf(item: Item): Ask | null {
 }
 
 /** An item with a label of SORTED: triage leaves it alone. */
-export const isSorted = (item: Item): boolean => item.fm.route !== undefined || labels(item).some((l) => SORTED.includes(l));
+export const isSorted = (item: Item): boolean =>
+  item.fm.route !== undefined || hasAsk(item) || kindOf(item) === "goal" || list(item.fm.goals).length > 0 || labels(item).some((l) => SORTED.includes(l));
 /** An item labelled `needs-chris`: it waits for Chris's answer. */
 export const needsChris = (item: Item): boolean => hasLabel(item, NEEDS_CHRIS);
 
@@ -327,7 +330,7 @@ export interface Reader {
   /** The repo's list, or null when the store has none or cannot be read. */
   list(key: string): Doc | null;
   /** Item `id` of the repo's list, or undefined. */
-  item(key: string, id: number): Item | undefined;
+  item(key: string, id: number | string): Item | undefined;
 }
 
 /** A reader of the store's lists; it fetches at most once, on its first list. `fetch: false` reads origin/main as last fetched. */
@@ -344,7 +347,7 @@ export function reader(o: { fetch?: boolean } = {}): Reader {
     }
     return lists.get(key)!;
   };
-  return { list, item: (key, id) => list(key)?.items.find((i) => i.id === id && i.sub === undefined) };
+  return { list, item: (key, id) => { const doc = list(key); return doc ? todos.find(doc, id) : undefined; } };
 }
 
 /** The open goals of each repo, in repo then number order. A repo whose list cannot be read has none. */
@@ -358,7 +361,7 @@ export function goals<R extends Place>(repos: R[]): { repo: R; item: Item }[] {
  * may have been closed, had its `goal` label removed, or had a note added
  * since the list was read. A store that cannot be read counts as not a goal.
  */
-export function goal(repo: Place, id: number): Item | null {
+export function goal(repo: Place, id: number | string): Item | null {
   const item = reader().item(repo.key, id);
   return item && isGoal(item) ? item : null;
 }
@@ -373,7 +376,7 @@ const why = (e: any): string => e?.message ?? String(e);
  * `label` it gains that label, with `decision` it carries that decision, with `reason` it carries the reason code (`fm.reason`).
  * Returns why it could not, or null.
  */
-export function note(repo: Place, id: number, text: string, opts: { done?: boolean; label?: string; unlabel?: string; decision?: Decision; reason?: string } = {}): string | null {
+export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean; label?: string; unlabel?: string; decision?: Decision; reason?: string } = {}): string | null {
   try {
     const w = writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
       const item = todos.find(doc, id);
@@ -391,13 +394,13 @@ export function note(repo: Place, id: number, text: string, opts: { done?: boole
 }
 
 /** Item `id` done, with the note `text`. Returns why it could not, or null. */
-export const close = (repo: Place, id: number, text: string): string | null => note(repo, id, text, { done: true });
+export const close = (repo: Place, id: number | string, text: string): string | null => note(repo, id, text, { done: true });
 
 /**
  * Change item `id` with `change` as one commit, while it is still open and not
  * sorted: triage's write. False when the item is gone, closed or sorted.
  */
-export function sort(repo: Place, id: number, message: string, change: (item: Item) => void): boolean {
+export function sort(repo: Place, id: number | string, message: string, change: (item: Item) => void): boolean {
   const w = writeList(repo, message, (doc) => {
     const item = todos.find(doc, id);
     if (!item || status(item) !== "open" || isSorted(item)) return null;
@@ -415,7 +418,7 @@ export interface Filing { title: string; labels: string[]; body?: string; priori
  * as one commit; a repo the store has no list for gets one. Returns what became
  * of the item (`done`, `no issue <id>`, or the write's error) and the new numbers.
  */
-export function closeAndFile(repo: Place, message: string, id: number | undefined, text: string, filed: Filing[]): { todo?: string; ids: number[] } {
+export function closeAndFile(repo: Place, message: string, id: number | string | undefined, text: string, filed: Filing[]): { todo?: string; ids: number[] } {
   let todo: string | undefined;
   let ids: number[] = [];
   try {

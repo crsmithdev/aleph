@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
 import { fetchTrace, traceIdFor } from "../../hooks/lib/otlp.ts";
-import { hasLabel, readList } from "../../todo/lib/store.ts";
+import { hasLabel, kindOf, readList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { fetchOrigin, git } from "./git.ts";
@@ -27,7 +27,7 @@ const runsOf = (repo: Repo, id: number): Entry[] =>
 export function doneGoals(repo: Repo): todos.Item[] {
   const doc = readList(repo);
   if (!doc) return [];
-  const goals = doc.items.filter((i) => hasLabel(i, "goal"));
+  const goals = doc.items.filter((i) => kindOf(i) === "goal");
   if (!goals.length) return [];
   const done = new Set(repoStages(repo, { fetch: true, doc, items: goals.map((i) => i.id) }).filter((s) => s.stage === "done").map((s) => s.id));
   const dir = join(vaultDir(), "wiki", "episodes");

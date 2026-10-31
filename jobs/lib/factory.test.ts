@@ -272,7 +272,7 @@ function fakes() {
   };
   const land = async (name: string) => { calls.push(`land ${name}`); return null; };
   const specs: string[] = [];
-  const start = async (_r: unknown, name: string, _id: number, spec: string) => { calls.push(`start ${name}`); specs.push(spec); return null; };
+  const start = async (_r: unknown, name: string, _id: number | string, spec: string) => { calls.push(`start ${name}`); specs.push(spec); return null; };
   return { calls, rescue, land, specs, start };
 }
 const dispatch = (f: ReturnType<typeof fakes>) => dispatchGoals(f.start, async () => null, f.land, f.rescue);

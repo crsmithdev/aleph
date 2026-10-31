@@ -15,7 +15,7 @@ import { section } from "./plan.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 
 const dir = () => join(expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory"), "acceptance");
-const file = (key: string, id: number) => join(dir(), `${key}-${id}.json`);
+const file = (key: string, id: number | string) => join(dir(), `${key}-${id}.json`);
 
 export interface Accepted {
   /** `pass`, `skipped` (no runnable command), or `fail`. */
@@ -32,17 +32,17 @@ export interface Accepted {
   shown?: boolean;
 }
 
-export function readRecord(key: string, id: number): Accepted | null {
+export function readRecord(key: string, id: number | string): Accepted | null {
   try { return JSON.parse(readFileSync(file(key, id), "utf8")); } catch { return null; }
 }
 
-function writeRecord(key: string, id: number, r: Accepted): void {
+function writeRecord(key: string, id: number | string, r: Accepted): void {
   mkdirSync(dir(), { recursive: true });
   writeFileSync(file(key, id), JSON.stringify(r, null, 2) + "\n");
 }
 
 /** The result as one line for the report and the Lands card, or null when the goal has none. */
-export function resultLine(key: string, id: number): string | null {
+export function resultLine(key: string, id: number | string): string | null {
   const r = readRecord(key, id);
   if (!r) return null;
   if (r.result === "pass") return `acceptance: pass at ${r.sha}`;
@@ -54,7 +54,7 @@ export function resultLine(key: string, id: number): string | null {
 export const final = (r: Accepted | null): boolean => !!r && (r.result !== "fail" || r.fails >= 2);
 
 /** The commits of `hits` the goal's reopening has not already counted: those that are not at or before its `since`. */
-export function afterReopen(cwd: string, key: string, id: number, hits: string[]): string[] {
+export function afterReopen(cwd: string, key: string, id: number | string, hits: string[]): string[] {
   const since = readRecord(key, id)?.since;
   return since ? hits.filter((h) => !git(cwd, "merge-base", "--is-ancestor", h, since).ok) : hits;
 }
@@ -128,7 +128,7 @@ export const lastLines = (text: string, n = 40): string =>
   text.replace(/\s+$/, "").split("\n").slice(-n).map((l) => l.slice(0, 200)).join(" ⏎ ");
 
 /** Item `id` open again, with `text` as a note. Returns why it could not, or null. */
-function reopen(repo: Repo, id: number, text: string): string | null {
+function reopen(repo: Repo, id: number | string, text: string): string | null {
   try {
     const w = writeList(repo, `todo: item ${id}: ${text.slice(0, 80)}`, (doc) => {
       const item = todos.find(doc, id);
@@ -147,14 +147,14 @@ function reopen(repo: Repo, id: number, text: string): string | null {
  * Returns a line for the log. The caller has fetched and holds the goal's lock.
  */
 export async function accept(repo: Repo, item: todos.Item, run: Runner = sandboxRunner): Promise<string> {
-  const name = `${repo.key}-${item.id}`;
-  const prev = readRecord(repo.key, item.id);
+  const name = `${repo.key}-${todos.refOf(item)}`;
+  const prev = readRecord(repo.key, todos.refOf(item));
   const sha = git(repo.path, "rev-parse", "--short=7", `origin/${repo.main}`).out;
   if (!sha) return `${name}: acceptance not run: no origin/${repo.main}`;
   const full = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
   const commands = oracleCommands(item.body).filter((c) => !namesMissingTestFile(repo, full, c));
   if (!commands.length) {
-    writeRecord(repo.key, item.id, { result: "skipped", fails: prev?.fails ?? 0 });
+    writeRecord(repo.key, todos.refOf(item), { result: "skipped", fails: prev?.fails ?? 0 });
     return `${name}: acceptance skipped: the Oracle has no command that starts with bun test, bun run or bunx tsc, or loops over one, or that names a test file missing on ${repo.main}`;
   }
   for (const command of commands) {
@@ -165,17 +165,17 @@ export async function accept(repo: Repo, item: todos.Item, run: Runner = sandbox
     const fails = (prev?.fails ?? 0) + 1;
     const out = `\`${command}\` exited ${r.code}${failedTests ? " with failing tests" : ""}: ${lastLines(r.output)}`;
     if (fails < 2) {
-      const bad = reopen(repo, item.id, `acceptance: fail at ${sha}: ${out}`);
+      const bad = reopen(repo, todos.refOf(item), `acceptance: fail at ${sha}: ${out}`);
       if (bad) return `${name}: acceptance failed but the issue was not reopened: ${bad}`;
-      writeRecord(repo.key, item.id, { result: "fail", sha, command, fails, since: full });
+      writeRecord(repo.key, todos.refOf(item), { result: "fail", sha, command, fails, since: full });
       return `${name}: acceptance failed at ${sha} (${command}); reopened for one more run`;
     }
-    const bad = note(repo, item.id, `acceptance: fail again at ${sha}: ${out} | needs-chris: the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, { label: "needs-chris", reason: "acceptance-failed" });
-    writeRecord(repo.key, item.id, { result: "fail", sha, command, fails, since: full });
+    const bad = note(repo, todos.refOf(item), `acceptance: fail again at ${sha}: ${out} | needs-chris: the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, { label: "needs-chris", reason: "acceptance-failed" });
+    writeRecord(repo.key, todos.refOf(item), { result: "fail", sha, command, fails, since: full });
     return `${name}: acceptance failed again at ${sha} (${command}); needs-chris${bad ? ` (no issue note: ${bad})` : ""}`;
   }
-  const bad = note(repo, item.id, `acceptance: pass at ${sha}`);
-  writeRecord(repo.key, item.id, { result: "pass", sha, fails: prev?.fails ?? 0 });
+  const bad = note(repo, todos.refOf(item), `acceptance: pass at ${sha}`);
+  writeRecord(repo.key, todos.refOf(item), { result: "pass", sha, fails: prev?.fails ?? 0 });
   return `${name}: acceptance passed at ${sha}${bad ? ` (no issue note: ${bad})` : ""}`;
 }
 
@@ -222,7 +222,7 @@ export function reopenedByAcceptance(item: todos.Item, since = -Infinity, before
  * Returns a line for the log. The caller has fetched and holds the goal's lock.
  */
 export async function reaccept(repo: Repo, item: todos.Item, run: Runner = sandboxRunner): Promise<string> {
-  const name = `${repo.key}-${item.id}`;
+  const name = `${repo.key}-${todos.refOf(item)}`;
   const sha = git(repo.path, "rev-parse", "--short=7", `origin/${repo.main}`).out;
   if (!sha) return `${name}: re-accept not run: no origin/${repo.main}`;
   const full = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
@@ -232,15 +232,15 @@ export async function reaccept(repo: Repo, item: todos.Item, run: Runner = sandb
   for (const command of commands) {
     const r = await run(repo, full, command);
     if (r.infra) {
-      const bad = note(repo, item.id, `re-accept: not run at ${sha}: \`${command}\`: ${lastLines(r.output)}`);
+      const bad = note(repo, todos.refOf(item), `re-accept: not run at ${sha}: \`${command}\`: ${lastLines(r.output)}`);
       return `${name}: re-accept not run: ${lastLines(r.output)}${bad ? ` (no issue note: ${bad})` : ""}`;
     }
     const failedTests = r.code === 0 && FAIL_SUMMARY.test(r.output);
     if (r.code === 0 && !failedTests) { passed.push(command); continue; }
-    const bad = note(repo, item.id, `re-accept: fail at ${sha}: \`${command}\` exited ${r.code}${failedTests ? " with failing tests" : ""}: ${lastLines(r.output)}`);
+    const bad = note(repo, todos.refOf(item), `re-accept: fail at ${sha}: \`${command}\` exited ${r.code}${failedTests ? " with failing tests" : ""}: ${lastLines(r.output)}`);
     return `${name}: re-accept failed at ${sha} (${command}); left open${bad ? ` (no issue note: ${bad})` : ""}`;
   }
-  const bad = note(repo, item.id, `acceptance: pass at ${sha} (re-run after an infra error): ${passed.map((c) => `\`${c}\` exited 0`).join(", ")}`, { done: true });
-  if (!bad) writeRecord(repo.key, item.id, { result: "pass", sha, fails: readRecord(repo.key, item.id)?.fails ?? 0 });
+  const bad = note(repo, todos.refOf(item), `acceptance: pass at ${sha} (re-run after an infra error): ${passed.map((c) => `\`${c}\` exited 0`).join(", ")}`, { done: true });
+  if (!bad) writeRecord(repo.key, todos.refOf(item), { result: "pass", sha, fails: readRecord(repo.key, todos.refOf(item))?.fails ?? 0 });
   return `${name}: re-accept passed at ${sha}; closed as done${bad ? ` (no issue note: ${bad})` : ""}`;
 }

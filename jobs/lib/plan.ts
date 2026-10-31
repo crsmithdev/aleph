@@ -144,13 +144,13 @@ The factory runs this repo's checks itself, so the Oracle names only real comman
 /** Make the run folder of a planner run: its own job in the ledger. */
 function makeRun(repo: Repo, item: todos.Item): string {
   mkdirSync(jobsDir(), { recursive: true });
-  const name = `plan-${repo.key}-${item.id}`;
+  const name = `plan-${repo.key}-${todos.refOf(item)}`;
   for (let n = 0; ; n++) {
     const folder = join(jobsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-plan`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
     // `shown`: the dispatch's line reports a plan, so the report has no line for the run.
-    writeRun(folder, { kind: "plan", job: folder.split("/").at(-1)!, name, repo: repo.key, todo: item.id, state: "running", phase: "plan", model: PLAN_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
-    writeFileSync(join(folder, "command.txt"), `plan ${repo.key}-${item.id}: ${item.title}\n`);
+    writeRun(folder, { kind: "plan", job: folder.split("/").at(-1)!, name, repo: repo.key, todo: todos.idOf(item), state: "running", phase: "plan", model: PLAN_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
+    writeFileSync(join(folder, "command.txt"), `plan ${repo.key}-${todos.refOf(item)}: ${item.title}\n`);
     return folder;
   }
 }
@@ -176,7 +176,7 @@ async function ask(repo: Repo, item: todos.Item, folder: string): Promise<string
  * commit. The children's refs, or null when the parent is no longer an open,
  * unplanned goal.
  */
-export function fileChildren(repo: Repo, id: number, children: Child[]): string[] | null {
+export function fileChildren(repo: Repo, id: number | string, children: Child[]): string[] | null {
   const w = writeList(repo, `plan ${repo.key}-${id}: ${children.length} children`, (doc) => {
     const parent = todos.find(doc, id);
     if (!parent || !isGoal(parent) || hasLabel(parent, PLANNED)) return null;
@@ -199,10 +199,10 @@ export function fileChildren(repo: Repo, id: number, children: Child[]): string[
 }
 
 /** A child a planner filed: its body starts with "Part of <repo>-<n>.". It is never planned again. */
-export const isChild = (item: todos.Item): boolean => /^Part of [a-z0-9-]+-\d+\./.test(item.body.trim());
+export const isChild = (item: todos.Item): boolean => /^Part of [a-z0-9-]+-\d+(?:\.\d+)?\./.test(item.body.trim());
 
 /** Planner runs of a goal that ended with no children. */
-const badPlans = (repo: Repo, id: number) =>
+const badPlans = (repo: Repo, id: number | string) =>
   allRuns().filter((e) => e.run.kind === "plan" && e.run.repo === repo.key && e.run.todo === id && /^(malformed plan|failed):/.test(e.run.reason ?? "")).length;
 
 export type Plan = { plan: true } | { tier: Tier | null };
@@ -215,11 +215,11 @@ export type Plan = { plan: true } | { tier: Tier | null };
  */
 export async function needsPlan(repo: Repo, item: todos.Item, spec: string, rate: Rate): Promise<Plan> {
   const tier = await rate(spec);
-  if (jobsNamed(`${repo.key}-${item.id}`).length || isChild(item) || hasLabel(item, PLANNED) || !isLarge(tier, item.body)) return { tier };
-  return badPlans(repo, item.id) >= PLAN_TRIES ? { tier } : { plan: true };
+  if (jobsNamed(`${repo.key}-${todos.refOf(item)}`).length || isChild(item) || hasLabel(item, PLANNED) || !isLarge(tier, item.body)) return { tier };
+  return badPlans(repo, todos.idOf(item)) >= PLAN_TRIES ? { tier } : { plan: true };
 }
 
-const planLock = (repo: Repo, id: number) => lock(`plan-${repo.key}-${id}`, 0);
+const planLock = (repo: Repo, id: number | string) => lock(`plan-${repo.key}-${id}`, 0);
 
 /**
  * Whether a plan run of the goal is going. A plan process holds the goal's plan
@@ -227,7 +227,7 @@ const planLock = (repo: Repo, id: number) => lock(`plan-${repo.key}-${id}`, 0);
  * planning it: a plan run left `running` is then ended as failed, and the goal
  * is planned again.
  */
-export async function planning(repo: Repo, id: number): Promise<boolean> {
+export async function planning(repo: Repo, id: number | string): Promise<boolean> {
   const release = await planLock(repo, id);
   if (!release) return true;
   try {
@@ -249,7 +249,7 @@ export type Planned = { planned: string[] } | { why: string };
  * the check, at most PLAN_TRIES. It returns the children filed, or why it filed
  * none (then the goal runs as one worker run).
  */
-export async function runPlan(repo: Repo, id: number): Promise<Planned> {
+export async function runPlan(repo: Repo, id: number | string): Promise<Planned> {
   const release = await planLock(repo, id);
   if (!release) return { why: "another plan run holds the goal" };
   try {

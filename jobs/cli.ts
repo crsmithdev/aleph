@@ -58,7 +58,7 @@ async function job(): Promise<void> {
   const [repo, name] = positional;
   const spec = specArg === "-" ? await Bun.stdin.text() : readFileSync(specArg, "utf8");
   const todoArg = flag("todo");
-  await started(await startJob({ repo, name, spec, todo: todoArg === undefined ? undefined : Number(todoArg), model: flag("model"), land: rest.includes("--land") }, { command }));
+  await started(await startJob({ repo, name, spec, todo: todoArg === undefined ? undefined : /^\d+\.\d+$/.test(todoArg) ? todoArg : Number(todoArg), model: flag("model"), land: rest.includes("--land") }, { command }));
 }
 
 async function plain(): Promise<void> {
@@ -185,7 +185,7 @@ async function todoCmd(): Promise<void> {
       for (const m of a.result.maybeSame ?? []) console.error(`aleph-${m.id} may be the same task: ${m.title}`);
       out(a.result);
       dispatchAfterGoal(repo, a.item);
-      if (!store.hasLabel(a.item, store.GOAL)) triageDetached(repo, a.item.id);
+      if (!store.isSorted(a.item)) triageDetached(repo, a.item.id);
       return;
     }
     case "list": {
@@ -309,7 +309,7 @@ async function triageCmd(): Promise<void> {
 
 /** `aleph plan <repo>-<n>`: plan one goal now, under the dispatch's gates. */
 async function planCmd(): Promise<void> {
-  const ref = todos.parseRef(rest[0] ?? "") ?? refuse("usage: aleph plan <repo>-<n>");
+  const ref = todos.parseGoalRef(rest[0] ?? "") ?? refuse("usage: aleph plan <repo>-<n>");
   const repo = loadRegistry()[ref.repo] ?? refuse(`no repo ${ref.repo}`);
   out(await planNow(repo, ref.id));
 }
