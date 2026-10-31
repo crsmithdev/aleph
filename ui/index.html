@@ -467,6 +467,8 @@ a.idl:hover, a.idl:focus-visible { color: var(--ink); text-decoration: underline
 ul.tight { margin: 4px 0; padding-left: 18px; }
 ul.tight li { margin: 1px 0; overflow-wrap: anywhere; }
 details.fold { margin: 0 0 8px; }
+details.fold > summary { display: flex; align-items: baseline; }
+details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
 .pager { display: flex; align-items: center; gap: 12px; margin: 10px 0 0; }
 .pager button { box-sizing: border-box; height: 28px; font: 500 var(--fs-sm) var(--sans); padding: 0 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
 .pager button:hover { background: var(--sunk); }
