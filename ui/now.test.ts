@@ -58,11 +58,11 @@ const full: any = { ...state, issues: [issue(1), issue(2)], waiting: [{ repo: "a
 const withAttn = (s: any) => r.renderJobs(s);
 const section = (h: string, id: string) => h.match(new RegExp(`<section id="${id}"[^]*?</section>`))![0];
 
-test("the page order is status line, flow strip, Speed, then four lanes; no metric cards", () => {
+test("the page order is status line, flow strip, Performance, then four lanes; no metric cards", () => {
   const page = r.view.render(full);
-  expect([...page.matchAll(/<(?:section|div)[^>]* id="([^"]+)"/g)].map((m) => m[1]).filter((id) => ["needs", "flow", "speed", "efficiency"].includes(id) || id.startsWith("lane-"))).toEqual(["needs", "flow", "speed", "efficiency", "lane-incoming", "lane-queued", "lane-running", "lane-done"]);
+  expect([...page.matchAll(/<(?:section|div)[^>]* id="([^"]+)"/g)].map((m) => m[1]).filter((id) => ["needs", "flow", "speed", "efficiency"].includes(id) || id.startsWith("lane-"))).toEqual(["needs", "flow", "speed", "efficiency", "lane-running", "lane-queued", "lane-done", "lane-incoming"]);
   const at = (t: string) => page.indexOf(t);
-  const order = ['class="lede"', 'class="asof"', 'class="say', 'class="seg wpick"', 'data-act="pause"', 'id="needs"', 'id="flow"', 'id="speed"', 'id="efficiency"', 'id="lane-incoming"', 'id="lane-queued"', 'id="lane-running"', 'id="lane-done"'];
+  const order = ['class="lede"', 'class="asof"', 'class="say', 'class="seg wpick"', 'data-act="pause"', 'id="needs"', 'id="flow"', 'id="speed"', 'id="efficiency"', 'id="lane-running"', 'id="lane-queued"', 'id="lane-done"', 'id="lane-incoming"'];
   expect(order.map(at)).toEqual([...order.map(at)].sort((a, b) => a - b));
   expect(order.every((t) => at(t) >= 0)).toBe(true);
   for (const t of ['class="metrics"', "Agent runs by model", "Median run", 'id="issues"', 'id="jobs"', 'id="agents"', 'id="queued"', "Incoming: 10 newest", 'class="banner"']) expect(page).not.toContain(t);
@@ -99,11 +99,11 @@ test("the flow strip: Incoming, Queued, Running of cap, Done, then the Context c
   for (const t of ["agentline", "avg", "Done today", "Triage", "Workers", "Planner", "Firefighter"]) expect(h).not.toContain(t);
   const ctx = h.slice(h.indexOf('id="context"'));
   expect(h.indexOf('id="done-n"')).toBeLessThan(h.indexOf('id="context"'));
-  expect(ctx.replace(/<[^>]+>/g, "")).toMatch(/Context\s*41% weekly limit\s*7% 5-hour limit\s*\u2013 weekly, last 5 h/);
+  expect(ctx.replace(/<[^>]+>/g, "")).toMatch(/Context\s*41% weekly\s*\/\s*7% 5 hours/);
   for (const t of ["Needs you", "Stuck", "Failed", "<a "]) expect(ctx).not.toContain(t);
   const gained = r.renderContext({ ...s, usage: { ...s.usage, last5h: 3.4 } });
-  expect(gained.replace(/<[^>]+>/g, "")).toContain("+3% weekly, last 5 h");
-  expect(r.renderContext({ ...s, usage: { ...s.usage, last5h: 0 } }).replace(/<[^>]+>/g, "")).toContain("+0% weekly, last 5 h");
+  expect(gained.replace(/<[^>]+>/g, "")).toMatch(/41% weekly \(\+3%\)\s*\/\s*7% 5 hours/);
+  expect(r.renderContext({ ...s, usage: { ...s.usage, last5h: 0 } }).replace(/<[^>]+>/g, "")).toContain("41% weekly (+0%)");
   expect(r.renderFlow({ ...s, usage: undefined })).toContain("usage unknown");
   expect(r.renderFlow(s, null)).toContain('id="done-n">\u2013');
 });

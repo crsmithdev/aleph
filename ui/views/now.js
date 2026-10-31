@@ -15,7 +15,7 @@ export const view = {
   render: (s, _params, query) => {
     setWindow(query);
     return `<div class="page">${renderStatusLine(s)}${renderNeeds(s)}${renderFlow(s, speedData())}` +
-      `<div class="status-grid"><div class="speedrow"><section id="speed" aria-label="Speed">${speedTop()}</section><section id="efficiency" aria-label="Efficiency">${efficiency()}</section></div>${renderLanes(s)}</div></div>`;
+      `<div class="status-grid"><div class="speedrow"><section id="speed" aria-label="Performance">${speedTop()}</section><section id="efficiency" aria-label="Efficiency">${efficiency()}</section></div>${renderLanes(s)}</div></div>`;
   },
   mount: (root) => mountSpeed(root),
 };
@@ -188,9 +188,9 @@ function runningLane(s) {
   return lane("running", "Running", runningCount(s), rows, "Nothing is running.");
 }
 
-/** The four lanes: Incoming, Queued, Running, Done. */
+/** The four lanes: Running, Queued, Done, Incoming. */
 export function renderLanes(s) {
-  return `<div class="lanes">${incomingLane(s)}${queuedLane(s)}${runningLane(s)}${doneLane(s)}</div>`;
+  return `<div class="lanes">${runningLane(s)}${queuedLane(s)}${doneLane(s)}${incomingLane(s)}</div>`;
 }
 
 /** The untriaged issues: all of them when the state counts them, else the ones listed. */
@@ -207,16 +207,16 @@ export function renderFlow(s, sp = null) {
     stage("done", "Done", sp && !sp.error ? sp.done : "\u2013", 0, "done-n") + renderContext(s) + `</div>`;
 }
 
-/** The Context card: the weekly limit %, the 5-hour limit % and the weekly % used in the last 5 hours ("+N%", "–" with no snapshot near 5 hours ago). */
+/** The Context card: "37% weekly (+2%) / 12% 5 hours". The +N% is the weekly % used in the last 5 hours; it is absent with no snapshot near 5 hours ago. */
 export function renderContext(s) {
   const cur = s.usage?.now;
-  const pct = (n) => (cur && Number.isFinite(n) ? `${Math.round(n)}%` : "\u2013");
+  const head = `<div class="stage context" id="context"><span class="k">Context</span><div class="ctx">`;
+  if (!cur) return `${head}<span class="quiet">usage unknown</span></div></div>`;
+  const pct = (n) => (Number.isFinite(n) ? `${Math.round(n)}%` : "\u2013");
   const gain = s.usage?.last5h;
-  const stat = (k, v) => `<span class="cnt"><span class="n">${esc(v)}</span> ${esc(k)}</span>`;
-  return `<div class="stage context" id="context"><span class="k">Context</span><div class="ctx">` +
-    stat("weekly limit", pct(cur?.seven_day)) + stat("5-hour limit", pct(cur?.five_hour)) +
-    stat("weekly, last 5 h", gain === null || gain === undefined ? "\u2013" : `+${Math.round(gain)}%`) +
-    `</div><div class="ctx usage">${cur?.seven_day_resets_at && !Number.isNaN(Date.parse(cur.seven_day_resets_at)) ? `<span class="quiet">weekly limit resets ${esc(when(cur.seven_day_resets_at, new Date(s.now)))}</span>` : `<span class="quiet">${cur ? "" : "usage unknown"}</span>`}</div></div>`;
+  const stat = (k, v, after = "") => `<span class="cnt"><span class="n">${esc(v)}</span> ${esc(k)}${after}</span>`;
+  const gained = gain === null || gain === undefined ? "" : ` (+${Math.round(gain)}%)`;
+  return head + stat("weekly", pct(cur.seven_day), gained) + `<span class="sep">/</span>` + stat("5 hours", pct(cur.five_hour)) + `</div></div>`;
 }
 
 /** Needs you: the needs-you rows, then the stuck and failed jobs; absent when nothing needs Chris. */

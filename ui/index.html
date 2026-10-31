@@ -36,7 +36,11 @@
   --focus: #7E57C2;
   --display: 'Merriweather', Georgia, serif;
   --metric: 'Merriweather', Georgia, serif;  /* the big numbers on the Status metric cards */
+  --brand: 'Merriweather', Georgia, serif;  /* the sidebar wordmark */
   --sans: 'Work Sans', system-ui, sans-serif;
+  --chart: var(--sans);   /* text inside the ECharts canvas, with its two relative settings */
+  --chart-scale: 1;
+  --chart-weight: 400;
   --num: var(--sans);     /* numbers: counts, costs, times */
   --mono: 'Hack Nerd Font', 'Hack', ui-monospace, monospace;
   /* Type scale. Weights: 400 text, 500 ids and numbers, 600 headings and table headers.
@@ -136,7 +140,7 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
 
 /* The sidebar's mark and title. The title stays in Merriweather when the font picker changes --display. */
-.mark { display: flex; align-items: center; gap: 8px; text-decoration: none; font: 700 20px/1 'Merriweather', Georgia, serif; letter-spacing: -0.01em; margin-right: 4px; }
+.mark { display: flex; align-items: center; gap: 8px; text-decoration: none; font: 700 20px/1 var(--brand); letter-spacing: -0.01em; margin-right: 4px; }
 .mark svg { width: 22px; height: 22px; flex: none; }
 
 /* ---------- Now: flow strip and lanes ---------- */
@@ -153,7 +157,6 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .ctx { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 500 var(--fs-sm) var(--sans); color: var(--muted); }
 .ctx .cnt { color: var(--muted); }
 .ctx .cnt .n { font: 700 18px/1 var(--metric); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); }
-.ctx.usage { font-size: var(--fs-xs); }
 .lanes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; align-items: start; margin-top: 24px; }
 .lane { min-width: 0; }
 .lane-card .ih { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
@@ -215,7 +218,7 @@ a.act { text-decoration: none; display: inline-block; }
 .page > section, section.wide { margin: 0 0 28px; min-width: 0; }
 .speedrow > section { min-width: 0; margin: 0 0 28px; }
 @media (min-width: 1600px) { .status-grid { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr); gap: 40px; align-items: start; } .speedrow { display: grid; gap: 28px; } .speedrow > section { margin: 0; } .lanes { grid-template-columns: minmax(0, 1fr); margin-top: 0; }
-.effbody { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; } .effbody .brk { margin-top: 0; } .effbody .brk .two { grid-template-columns: minmax(0, 1fr); } }
+}
 .effbar, .effbody { min-width: 0; }
 section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
@@ -476,13 +479,13 @@ details.fold { margin: 0 0 8px; }
 
 
 /* ---------- Status: Speed ---------- */
-.meds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 12px 0 8px; }
-.med { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); min-width: 0; }
+.meds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 12px 0 8px; }
+.med { display: grid; gap: 4px; padding: 12px 10px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); min-width: 0; }
 .med .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
-.med .v { font: 600 22px/1.2 var(--metric); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); }
-.med .pp { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.med .v { font: 600 20px/1.2 var(--metric); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); }
+.med .pp { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .med .quiet { font-size: var(--fs-xs); color: var(--muted); }
-.med .p90 { font-size: var(--fs-sm); font-weight: 500; color: var(--muted); font-variant-numeric: lining-nums tabular-nums; }
+.med .p90 { font: 600 18px/1.2 var(--metric); color: var(--muted); font-variant-numeric: lining-nums tabular-nums; }
 .med .runs { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .meds.eff { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .sh.sub h2 { font-size: var(--fs-md); }
@@ -970,12 +973,14 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap:
 </script>
 <!-- TEMPORARY font picker: Chris chooses the fonts, then this block goes. -->
 <script type="module">
-  const SANS = ["Work Sans", "Inter", "Roboto", "Open Sans", "Montserrat", "Lato", "Poppins", "Nunito Sans", "Source Sans 3", "Raleway",
-    "Noto Sans", "Rubik", "DM Sans", "Manrope", "IBM Plex Sans", "Figtree", "Outfit", "Plus Jakarta Sans", "Lexend", "Barlow"];
-  const SERIF = ["Merriweather", "Playfair Display", "Lora", "Roboto Slab", "PT Serif", "Libre Baskerville", "Source Serif 4", "Noto Serif",
-    "EB Garamond", "Crimson Pro", "Fraunces", "DM Serif Display", "Bitter", "Cormorant Garamond", "Spectral"];
-  const MONO = ["Hack Nerd Font", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "Roboto Mono", "Source Code Pro", "Space Mono",
-    "Ubuntu Mono", "Inconsolata", "DM Mono", "Red Hat Mono", "Geist Mono"];
+  const byName = (a) => a.sort((x, y) => x.localeCompare(y));
+  const SANS = byName(["Work Sans", "Inter", "Roboto", "Open Sans", "Montserrat", "Lato", "Poppins", "Nunito Sans", "Source Sans 3", "Raleway",
+    "Noto Sans", "Rubik", "DM Sans", "Manrope", "IBM Plex Sans", "Figtree", "Outfit", "Plus Jakarta Sans", "Lexend", "Barlow"]);
+  const SERIF = byName(["Merriweather", "Playfair Display", "Lora", "Roboto Slab", "PT Serif", "Libre Baskerville", "Source Serif 4", "Noto Serif",
+    "EB Garamond", "Crimson Pro", "Fraunces", "DM Serif Display", "Bitter", "Cormorant Garamond", "Spectral"]);
+  const MONO = byName(["Hack Nerd Font", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "Roboto Mono", "Source Code Pro", "Space Mono",
+    "Ubuntu Mono", "Inconsolata", "DM Mono", "Red Hat Mono", "Geist Mono"]);
+  const TYPES = [["Serif", SERIF], ["Sans", SANS], ["Mono", MONO]];
   const LOCAL = new Set(["Hack Nerd Font"]);
   const ROLES = [
     ["display", "Titles", [...SERIF, ...SANS], "Merriweather", "Georgia, serif"],
@@ -983,28 +988,74 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap:
     ["sans", "Text", SANS, "Work Sans", "system-ui, sans-serif"],
     ["num", "Numbers", [...SANS, ...MONO], "", "system-ui, sans-serif"],
     ["mono", "Code", MONO, "Hack Nerd Font", "ui-monospace, monospace"],
+    ["brand", "Logo", [...SERIF, ...SANS], "Merriweather", "Georgia, serif"],
+    ["chart", "Charts", [...SANS, ...MONO], "", "system-ui, sans-serif"],
   ];
+  // Relative steps, not sizes. The first entry of each is its default; spacing is letter spacing in em. A canvas has no letter spacing, so Charts has none, and ECharts reads its tokens when it draws, at the next 15-second refresh.
+  const STEPS = {
+    size: ["Size", [["Smaller", 0.85], ["Small", 0.92], ["Large", 1.08], ["Larger", 1.18]]],
+    weight: ["Weight", [["Lighter", -200], ["Light", -100], ["Heavy", 100], ["Heavier", 200]]],
+    spacing: ["Spacing", [["Tighter", -0.02], ["Tight", -0.01], ["Wide", 0.02], ["Wider", 0.05]]],
+  };
   const KEY = "aleph-fonts";
   const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; } };
   const save = (v) => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch {} };
   const loaded = new Set();
-  // Ask for four weights; a family without them gets a plain request instead.
+  // Ask for five weights; a family without them gets a plain request instead.
   function load(family) {
     if (!family || LOCAL.has(family) || loaded.has(family)) return;
     loaded.add(family);
     const q = family.replaceAll(" ", "+");
-    const link = Object.assign(document.createElement("link"), { rel: "stylesheet", href: `https://fonts.googleapis.com/css2?family=${q}:wght@400;500;600;700&display=swap` });
+    const link = Object.assign(document.createElement("link"), { rel: "stylesheet", href: `https://fonts.googleapis.com/css2?family=${q}:wght@300;400;500;600;700&display=swap` });
     link.onerror = () => { link.href = `https://fonts.googleapis.com/css2?family=${q}&display=swap`; link.onerror = null; };
     document.head.append(link);
   }
   const chosen = read();
+  const step = (role, prop) => { const v = chosen[`${role}:${prop}`]; return v === undefined ? (prop === "size" ? 1 : 0) : Number(v); };
+  // Each rule of the page's stylesheet, with the role whose text it styles. A rule that names no family counts as Text.
+  // This reads the source: CSSOM gives an empty `font` for a var() shorthand that a longhand follows.
+  function scan(source) {
+    const out = [];
+    let media = "";
+    for (const [, at, selector, body] of source.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(@media[^{]+)\{|([^{}]+)\{([^{}]*)\}|\}/g)) {
+      if (at) { media = at.trim(); continue; }
+      if (!selector) { media = ""; continue; }
+      const get = (prop) => body.match(new RegExp(`(?:^|;)\\s*${prop}:\\s*([^;]+)`))?.[1].trim() ?? "";
+      const font = get("font"), family = get("font-family");
+      const role = ROLES.find(([x]) => `${font} ${family}`.includes(`var(--${x})`))?.[0];
+      const m = font.match(/^(?:(\d{3})\s+)?(\S+?)(?:\/\S+)?\s/);
+      const size = m?.[2] || get("font-size"), spacing = get("letter-spacing");
+      out.push({ selector: selector.trim(), media, role: role ?? "sans", bound: Boolean(role), size: /px$|var\(--fs/.test(size) ? size : "",
+        weight: Number(m?.[1] || get("font-weight")) || 0, spacing: /em$/.test(spacing) ? spacing : "" });
+    }
+    return out;
+  }
+  const adjusted = document.createElement("style");
+  let rules = null;
   function apply() {
-    for (const [role, , , , fallback] of ROLES) {
+    rules ??= scan(document.querySelector("style").textContent);
+    for (const [role, , , def, fallback] of ROLES) {
       const f = chosen[role];
-      if (f) { load(f); document.documentElement.style.setProperty(`--${role}`, `'${f}', ${fallback}`); }
+      if (f || chosen[`${role}:weight`]) load(f || def);
+      if (f) document.documentElement.style.setProperty(`--${role}`, `'${f}', ${fallback}`);
       else document.documentElement.style.removeProperty(`--${role}`);
     }
-    css.textContent = ROLES.filter(([r]) => chosen[r]).map(([r, , , , fb]) => `--${r}: '${chosen[r]}', ${fb};`).join("\n") || "(the defaults)";
+    document.documentElement.style.setProperty("--chart-scale", step("chart", "size"));
+    document.documentElement.style.setProperty("--chart-weight", 400 + step("chart", "weight"));
+    adjusted.textContent = rules.map((r) => {
+      const s = step(r.role, "size"), w = step(r.role, "weight"), sp = step(r.role, "spacing");
+      const out = [];
+      if (s !== 1 && r.size) out.push(`font-size: calc(${r.size} * ${s})`);
+      if (w && (r.weight || r.bound)) out.push(`font-weight: ${Math.min(900, Math.max(100, (r.weight || 400) + w))}`);
+      if (sp && (r.spacing || r.bound)) out.push(`letter-spacing: calc(${r.spacing || "0em"} + ${sp}em)`);
+      if (!out.length) return "";
+      const rule = `${r.selector} { ${out.join("; ")}; }`;
+      return r.media ? `${r.media} { ${rule} }` : rule;
+    }).join("\n");
+    css.textContent = ROLES.flatMap(([r, label, , , fb]) => [
+      ...(chosen[r] ? [`--${r}: '${chosen[r]}', ${fb};`] : []),
+      ...Object.keys(STEPS).filter((p) => chosen[`${r}:${p}`] !== undefined).map((p) => `${label} ${p}: ${STEPS[p][1].find(([, v]) => v === step(r, p))[0]}`),
+    ]).join("\n") || "(the defaults)";
   }
   const panel = document.createElement("details");
   panel.className = "fontpick";
@@ -1012,14 +1063,20 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap:
     ROLES.map(([role, label, list, def]) => `<div class="fp-role"><span>${label}</span><div class="fp-row">` +
       `<button type="button" data-step="-1" aria-label="Previous ${label.toLowerCase()} font">&lsaquo;</button>` +
       `<select data-role="${role}" aria-label="${label} font"><option value="">${def ? `Default (${def})` : "Same as text"}</option>` +
-      [...new Set(list)].map((f) => `<option${chosen[role] === f ? " selected" : ""}>${f}</option>`).join("") + `</select>` +
-      `<button type="button" data-step="1" aria-label="Next ${label.toLowerCase()} font">&rsaquo;</button></div></div>`).join("") +
+      TYPES.filter(([, fonts]) => fonts.some((f) => list.includes(f))).map(([type, fonts]) => `<optgroup label="${type}">` +
+        fonts.map((f) => `<option${chosen[role] === f ? " selected" : ""}>${f}</option>`).join("") + `</optgroup>`).join("") + `</select>` +
+      `<button type="button" data-step="1" aria-label="Next ${label.toLowerCase()} font">&rsaquo;</button></div><div class="fp-row">` +
+      Object.entries(STEPS).filter(([prop]) => !(role === "chart" && prop === "spacing")).map(([prop, [name, steps]]) =>
+        `<select data-role="${role}" data-prop="${prop}" aria-label="${label} ${prop}"><option value="">${name}</option>` +
+        steps.map(([n, v]) => `<option value="${v}"${step(role, prop) === v ? " selected" : ""}>${n}</option>`).join("") + `</select>`).join("") +
+      `</div></div>`).join("") +
     `<pre class="fp-css"></pre><button type="button" data-reset>Reset</button></div>`;
   const css = panel.querySelector(".fp-css");
   panel.addEventListener("change", (e) => {
-    const role = e.target.dataset.role;
+    const { role, prop } = e.target.dataset;
     if (!role) return;
-    if (e.target.value) chosen[role] = e.target.value; else delete chosen[role];
+    const key = prop ? `${role}:${prop}` : role;
+    if (e.target.value) chosen[key] = e.target.value; else delete chosen[key];
     save(chosen); apply();
   });
   // The arrows step the select next to them and wrap at the ends.
@@ -1044,8 +1101,8 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap:
 details.fontpick > summary::before, details.fontpick[open] > summary::before { content: none; }
 .fontpick .fp { position: absolute; right: 0; bottom: 48px; width: min(320px, calc(100vw - 32px)); display: grid; gap: 10px; padding: 14px;
   background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; box-shadow: 0 6px 24px rgb(0 0 0 / .25); }
-.fontpick .fp { box-sizing: border-box; width: 320px; max-width: calc(100vw - 32px); }
-.fontpick .fp-role { display: grid; gap: 4px; color: var(--muted); height: 52px; }
+.fontpick .fp { box-sizing: border-box; width: 320px; max-width: calc(100vw - 32px); max-height: calc(100vh - 96px); overflow-y: auto; }
+.fontpick .fp-role { display: grid; gap: 4px; color: var(--muted); height: 84px; }
 .fontpick .fp-role > span { height: 20px; line-height: 20px; overflow: hidden; white-space: nowrap; }
 .fontpick .fp-row { display: flex; gap: 4px; height: 28px; }
 .fontpick select { flex: 1; min-width: 0; height: 28px; box-sizing: border-box; text-overflow: ellipsis; font: var(--fs-sm) var(--sans); padding: 4px 6px; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; }
@@ -1053,7 +1110,7 @@ details.fontpick > summary::before, details.fontpick[open] > summary::before { c
 .fontpick button { justify-self: start; font: var(--fs-sm) var(--sans); padding: 3px 10px; background: none; color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; cursor: pointer; }
 .fontpick .fp-row button { flex: none; width: 32px; height: 28px; box-sizing: border-box; padding: 0; text-align: center; font-size: var(--fs-lg); line-height: 1; }
 @media (max-width: 720px) { .fontpick { display: none; } }`;
-  document.head.append(style);
+  document.head.append(style, adjusted);
   document.body.append(panel);
   apply();
 </script>

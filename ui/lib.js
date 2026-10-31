@@ -149,11 +149,11 @@ const PALETTE_EXTRA = ["#C792EA", "#89DDFF"];
  * Series colours run, done, need, stuck, then purple and cyan.
  */
 export function chartTheme(t) {
-  const axis = { axisLine: { lineStyle: { color: t.rule } }, axisTick: { lineStyle: { color: t.rule } }, axisLabel: { color: t.ink }, splitLine: { lineStyle: { color: t.rule } }, nameTextStyle: { color: t.ink } };
+  const axis = { axisLine: { lineStyle: { color: t.rule } }, axisTick: { lineStyle: { color: t.rule } }, axisLabel: { color: t.ink, fontSize: 12 * (Number(t["chart-scale"]) || 1), fontWeight: Number(t["chart-weight"]) || 400 }, splitLine: { lineStyle: { color: t.rule } }, nameTextStyle: { color: t.ink } };
   return {
     color: [t.run, t.done, t.need, t.stuck, ...PALETTE_EXTRA],
     backgroundColor: "transparent",
-    textStyle: { color: t.ink, fontFamily: t.sans },
+    textStyle: { color: t.ink, fontFamily: t.chart || t.sans },
     title: { textStyle: { color: t.ink }, subtextStyle: { color: t.ink } },
     legend: { textStyle: { color: t.ink } },
     categoryAxis: axis, valueAxis: axis, timeAxis: axis, logAxis: axis,
@@ -161,7 +161,7 @@ export function chartTheme(t) {
   };
 }
 
-const TOKENS = ["bg", "surface", "ink", "rule", "run", "done", "need", "stuck", "focus", "sans", "mono"];
+const TOKENS = ["bg", "surface", "ink", "rule", "run", "done", "need", "stuck", "focus", "sans", "mono", "chart", "chart-scale", "chart-weight"];
 /** Read the page tokens off :root into a token map. */
 export const readTokens = (el = document.documentElement) => {
   const cs = getComputedStyle(el);

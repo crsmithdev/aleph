@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CLASSES, classify, clearCache, pct, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { areaOption, dur, renderCharts, renderEfficiency, renderPicker, renderSpeedTop, windowOf } from "./views/speed.js";
+import { barOption, dur, renderCharts, renderEfficiency, renderPicker, renderSpeedTop, windowOf } from "./views/speed.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -104,11 +104,11 @@ test("the view: medians with p50, p90 and runs; charts; efficiency with reruns a
   expect(h).toContain('data-chart="lands"');
   expect(h.indexOf('class="meds"')).toBeLessThan(h.indexOf('class="charts3"'));
   expect(h.match(/class="med"/g)?.length).toBe(5);
-  expect(h).toContain("p90 30m 00s");
+  expect(h).not.toContain("p90 30m");
   expect(h).toContain('<span class="runs">3</span>');
   for (const t of ["Build", "Land", "Triage", "Plan", "Test"]) expect(h).toContain(`<span class="k">${t}</span>`);
   for (const t of ["Tests", "Agent"]) expect(h).not.toContain(`<span class="k">${t}</span>`);
-  expect(h).toContain('<span class="pp"><span class="v">20m 00s</span><span class="p90">p90 30m 00s</span></span>');
+  expect(h).toContain('<span class="pp" title="median / p90"><span class="v">20m 00s</span><span class="p90">/ 30m 00s</span></span>');
   for (const t of ["Tests check", "Flaky", "24–27 s", "Today", "7 days"]) expect(h).not.toContain(t);
   const e = renderEfficiency(d);
   expect(e).toContain("Reruns");
@@ -118,9 +118,10 @@ test("the view: medians with p50, p90 and runs; charts; efficiency with reruns a
     expect(c).toContain(`Test time by ${step} (median)`);
     expect(c).toContain(`Lands by ${step}<`);
   }
-  expect(renderSpeedTop(null)).toContain("Loading");
-  const o = areaOption(d.buckets, "agent", { color: "#000" });
-  expect(o.series[0].areaStyle).toBeDefined();
+  expect(renderSpeedTop(null)).toContain("Loading performance");
+  expect(renderSpeedTop(null)).toContain(">Performance</h2>");
+  const o = barOption(d.buckets, "agent", { color: "#000" });
+  expect(o.series[0].type).toBe("bar");
   expect(o.series[0].data.length).toBe(24);
   expect(renderPicker("hour")).toMatch(/aria-pressed="true">Hour<[^]*aria-pressed="false">Day/);
   expect(windowOf(new URLSearchParams("window=day"))).toBe("day");

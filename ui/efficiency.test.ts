@@ -91,9 +91,6 @@ test("the agent-time bar: sentence, brackets, segments, narrow line, not counted
   for (const n of ["Fixed in place", "Loop", "Dropped"]) expect(nar).toContain(` ${n} <b>`);
   for (const n of ["Landed", "Nothing to do", "Restarted"]) expect(nar).not.toContain(` ${n} <b>`);
   expect(h).toContain("Not counted: 11 runs of 4 open goals, 0.4 h");
-  const w = renderBar(d, { measure: "week" });
-  expect(w).toMatch(/<b>\d+\.\d%<\/b> of [\d.]+% \(/);
-  expect(w.slice(w.indexOf('class="lost"'), w.indexOf("</p>"))).not.toContain(" h");
   expect(renderBar({ ...d, classes: classes([0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]) })).toContain("No agent run of a goal ended in this period.");
 });
 
@@ -112,30 +109,24 @@ const withTop = () => {
   return { ...D, hasWeek: true, classes: cs };
 };
 
-test("the breakdown under the bar, the toggle, the pin", () => {
+test("the breakdown under the bar, the hours view, the pin", () => {
   const d = withTop();
   const h = renderEfficiency(d);
-  for (const t of ['class="brk" data-class="restarted"', "By cause", "Goals that took the most", 'href="#/issues/fx/7"', "merge conflict in ui/x.ts", 'data-measure="hours" aria-pressed="true"']) expect(h).toContain(t);
+  for (const t of ['class="brk" data-class="restarted"', "By cause", "Goals that took the most", 'href="#/issues/fx/7"', "merge conflict in ui/x.ts"]) expect(h).toContain(t);
   expect(renderEfficiency(d, { pinned: "loop" })).toContain('class="brk" data-class="loop"');
-  const w = renderEfficiency(d, { measure: "week" });
-  expect(w).toContain('aria-pressed="true">% of week');
-  expect(w.slice(w.indexOf('class="brk"'))).toContain("24 h · 5 runs"); // the other measure, as the quiet part of the heading
-  const nw = renderEfficiency({ ...d, hasWeek: false }, { measure: "week" });
-  expect(nw.slice(nw.indexOf('class="brk"'))).not.toMatch(/\d h\b/);
-  expect(renderEfficiency({ ...d, hasWeek: false })).toContain('data-measure="week" aria-pressed="false" disabled');
-  expect(renderBreakdown(d, null, "hours")).toBe("");
+  expect(h).not.toContain("data-measure");
+  expect(h.slice(h.indexOf('class="brk"'))).toContain("1.2% of week · 5 runs"); // the week share, as the quiet part of the heading
+  expect(renderEfficiency({ ...d, hasWeek: false })).not.toContain("of week ·");
+  expect(renderBreakdown(d, null)).toBe("");
 });
 
-test("mountSpeed: a click on the toggle re-renders the efficiency section", async () => {
+test("mountSpeed: a click on a segment re-renders the efficiency section", async () => {
   resetSpeed();
   const d = { ...withTop(), window: "week", kinds: Object.fromEntries(["agent","land","triage","plan"].map((k) => [k, { count: 0, p50: null, p90: null }])), checks: [], buckets: [], done: 1, flaky: 0, goals: { landed: 1, firstPass: 1, fixRounds: 0, week: 1 }, lost: { hours: 1, share: 0.1 } };
   const mk = () => ({ innerHTML: "", dataset: {} as Record<string, string>, isConnected: true, handler: null as any, addEventListener(_: string, f: any) { this.handler = f; }, querySelector: () => null, querySelectorAll: () => [] });
   const top = mk(), eff = mk();
   const root = { querySelector: (s: string) => (s === "#speed" ? top : s === "#efficiency" ? eff : null) };
   await mountSpeed(root, async () => ({ ok: true, json: async () => d }));
-  expect(eff.innerHTML).toContain('aria-pressed="true">Hours');
-  eff.handler({ target: { closest: (s: string) => (s.includes("mpick") ? { dataset: { measure: "week" } } : null) } });
-  expect(eff.innerHTML).toContain('aria-pressed="true">% of week');
   eff.handler({ target: { closest: (s: string) => (s.includes("abar") ? { dataset: { class: "loop" } } : null) } });
   expect(eff.innerHTML).toContain('class="brk" data-class="loop"');
   resetSpeed();
@@ -155,8 +146,7 @@ test("renderEfficiency wraps the bar and the detail in one .effbody after the ca
   expect(renderEfficiency(null)).not.toContain("effbody");
 });
 
-test("Efficiency at 1600px and wider: bar and detail in two columns, detail blocks stacked", async () => {
+test("Efficiency at 1600px and wider: the bar spans the column, the detail sits below it", async () => {
   const css = await Bun.file(new URL("./index.html", import.meta.url)).text();
-  expect(css).toMatch(/@media \(min-width: 1600px\) \{[^@]*\.effbody \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-  expect(css).toContain(".effbody .brk .two { grid-template-columns: minmax(0, 1fr); }");
+  expect(css).not.toContain(".effbody { display: grid");
 });
