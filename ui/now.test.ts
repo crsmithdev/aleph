@@ -179,7 +179,8 @@ test("a held run, a stuck run, an asking issue and a red main are one row each, 
   expect(rs[2]).not.toContain("<button");
   expect(rs[2]).not.toContain("always");
   // The id comes first, then the title and the Problem, then the buttons.
-  for (const [row, id, title, btns] of [[rs[0], "aleph-27", "Digest head and tail", ["land", "drop"]], [rs[3], "aleph-30", "Fix it", ["recheck", "drop"]], [rs[1], "aleph-7", "Which tier?", ["decide", "deny"]]] as const) {
+  for (const [row, id, title, btns] of [[rs[0], ">27</a>", "Digest head and tail", ["land", "drop"]], [rs[3], ">30</a>", "Fix it", ["recheck", "drop"]], [rs[1], ">7</a>", "Which tier?", ["decide", "deny"]]] as const) {
+    expect(row).toContain('<span class="idp">aleph</span>');
     expect(row.indexOf(id)).toBeLessThan(row.indexOf(title));
     expect(row.indexOf(title)).toBeLessThan(row.indexOf("problem"));
     expect(row.match(/<details class="more"/g)?.length ?? 0).toBeLessThanOrEqual(1);
@@ -775,7 +776,7 @@ test("Queued cards show why each goal waits", () => {
     w(4, "Waiting for a slot (12 of 12 running)", "gate"),
   ] });
   const q = lanes.match(/<section id="lane-queued"[^]*?<\/section>/)![0];
-  expect(q).toContain('After <a href="#/issues/aleph/630">aleph-630</a> <span class="badge quiet">building</span>');
+  expect(q).toContain('After <a href="#/issues/aleph/630">630</a> <span class="badge quiet">building</span>');
   expect(q).toContain("Starts at the next dispatch");
   expect(q).toContain("Waiting for a slot (12 of 12 running)");
   expect(q.match(/Waiting for a slot/g)?.length).toBe(1);

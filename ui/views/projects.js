@@ -1,6 +1,6 @@
 // The project card and detail renderers, shared by views/project.js. The list of
 // projects is part of views/contents.js.
-import { badge, chips, empty, esc, idLink, pageHead, when } from "../lib.js";
+import { badge, chips, empty, esc, idLink, localId, pageHead, when } from "../lib.js";
 
 const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -33,10 +33,10 @@ export function renderDetail(p) {
   const commits = p.commits.map((c) => {
     const sha = c.hash.slice(0, 7);
     return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>` +
-      `<td>${c.item ? esc(c.item) : ""}</td><td class="time">${esc(when(c.date))}</td></tr>`;
+      `<td>${c.item ? esc(localId(c.item, p.key)) : ""}</td><td class="time">${esc(when(c.date))}</td></tr>`;
   });
-  const items = p.items.map((i) => `<tr><td>${idLink(`${p.key}-${i.id}`, `#/issues/${encodeURIComponent(p.key)}/${i.id}`)}</td><td class="wide" title="${esc(i.title)}">${esc(i.title)}</td><td>${chips(i.labels)}</td></tr>`);
-  const jobs = p.jobs.map((j) => `<tr><td>${idLink(j.name, `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${badge(j.state)}</td><td class="time">${esc(when(j.started))}</td></tr>`);
+  const items = p.items.map((i) => `<tr><td>${idLink(i.id, `#/issues/${encodeURIComponent(p.key)}/${i.id}`)}</td><td class="wide" title="${esc(i.title)}">${esc(i.title)}</td><td>${chips(i.labels)}</td></tr>`);
+  const jobs = p.jobs.map((j) => `<tr><td>${idLink(localId(j.name, p.key), `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${badge(j.state)}</td><td class="time">${esc(when(j.started))}</td></tr>`);
   const notes = p.vault.map((n) => `<tr><td class="wide">${esc(n.title)}</td><td>${chips([n.kind])}</td><td class="time">${esc(when(n.updated))}</td></tr>`);
   return `<div class="page"><p class="quiet"><a href="#/inventory">← Projects</a></p>` +
     pageHead(p.key, { count: p.factory ? "Factory" : "Plain repo", aside: `<code>${esc(p.path)}</code>` }) + renderFacts(p) +

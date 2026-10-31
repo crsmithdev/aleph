@@ -200,7 +200,7 @@ async function todoCmd(): Promise<void> {
       const rows = verbs.list(repo, { status: stat, label });
       if (json) { out(rows.map(verbs.brief)); return; }
       if (!rows.length) { console.log("no issues"); return; }
-      printRows(rows);
+      printRows(rows, repo.key);
       return;
     }
     case "show": {
@@ -209,7 +209,7 @@ async function todoCmd(): Promise<void> {
       console.log(`## ${i.id}. ${i.title}`);
       const ask = store.askOf(i);
       console.log(`status ${issues.status(i)}   kind ${store.kindOf(i)}   source ${store.sourceOf(i)}   priority ${i.fm.priority ?? "-"}   updated ${i.fm.updated ?? "-"}`);
-      console.log(`goals ${store.goalsOf(i).join(", ") || "-"}   after ${store.afterOf(i).join(", ") || "-"}   areas ${store.areasOf(i).join(", ") || "-"}   due ${i.fm.due ?? "-"}`);
+      console.log(`goals ${issues.localRefs(repo.key, store.goalsOf(i).join(", ")) || "-"}   after ${issues.localRefs(repo.key, store.afterOf(i).join(", ")) || "-"}   areas ${store.areasOf(i).join(", ") || "-"}   due ${i.fm.due ?? "-"}`);
       console.log(`ask ${ask ? `${ask.kind} (${ask.reason}): ${ask.question}` : "-"}`);
       console.log(`hidden checks: ${hidden}`);
       if (i.body.trim()) console.log(`\n${i.body}`);
@@ -280,14 +280,14 @@ async function goalCmd(): Promise<void> {
       const rows = verbs.goalList(repo, { status: flag("status") });
       if (json) { out(rows.map(verbs.brief)); return; }
       if (!rows.length) { console.log("no goals"); return; }
-      for (const g of rows) console.log(`${repo.key}-${issues.refOf(g)}  ${issues.status(g).padEnd(7)} ${g.title}${store.afterOf(g).length ? `  (after ${store.afterOf(g).join(",")})` : ""}`);
+      for (const g of rows) console.log(`${issues.refOf(g)}  ${issues.status(g).padEnd(7)} ${g.title}${store.afterOf(g).length ? `  (after ${issues.localRefs(repo.key, store.afterOf(g).join(","))})` : ""}`);
       return;
     }
     case "show": {
       const { item: g, hidden } = verbs.goalShow(repo, verbs.goalId(id));
       if (json) { out({ ...verbs.brief(g), body: g.body, notes: g.notes, hidden }); return; }
-      console.log(`## ${repo.key}-${issues.refOf(g)}. ${g.title}`);
-      console.log(`status ${issues.status(g)}   issue ${store.issueOf(g) ?? "-"}   after ${store.afterOf(g).join(", ") || "-"}   priority ${g.fm.priority ?? "-"}`);
+      console.log(`## ${issues.refOf(g)}. ${g.title}`);
+      console.log(`status ${issues.status(g)}   issue ${issues.localRefs(repo.key, store.issueOf(g) ?? "-")}   after ${issues.localRefs(repo.key, store.afterOf(g).join(", ")) || "-"}   priority ${g.fm.priority ?? "-"}`);
       console.log(`hidden checks: ${hidden}`);
       if (g.body.trim()) console.log(`\n${g.body}`);
       if (g.notes.length) console.log(`\n### Notes\n${g.notes.join("\n")}`);
@@ -342,11 +342,11 @@ async function goalCmd(): Promise<void> {
   }
 }
 
-const ready = (i: issues.Issue) => [i.fm.due ? `due ${i.fm.due}` : "", store.afterOf(i).length ? `after ${store.afterOf(i).join(",")}` : ""].filter(Boolean).join("  ");
+const ready = (i: issues.Issue, key: string) => [i.fm.due ? `due ${i.fm.due}` : "", store.afterOf(i).length ? `after ${issues.localRefs(key, store.afterOf(i).join(","))}` : ""].filter(Boolean).join("  ");
 
-function printRows(rows: issues.Issue[], indent = ""): void {
+function printRows(rows: issues.Issue[], key: string, indent = ""): void {
   const w = String(Math.max(...rows.map((i) => i.id))).length;
-  for (const i of rows) console.log(`${indent}${String(i.id).padStart(w)}  ${issues.status(i).padEnd(7)} ${i.title}${ready(i) ? `  (${ready(i)})` : ""}`);
+  for (const i of rows) console.log(`${indent}${String(i.id).padStart(w)}  ${issues.status(i).padEnd(7)} ${i.title}${ready(i, key) ? `  (${ready(i, key)})` : ""}`);
 }
 
 /** The registry's repos with a ledger run or an item update in the last 7 days, the latest first, each with its list. */
@@ -367,7 +367,7 @@ function todoRecent(sub: "list" | "lint", registry: Record<string, Repo>, o: { s
   const rows = verbs.listRecent(repos, o).map((r) => ({ repo: r.repo.key, items: r.items }));
   if (json) { out(rows.map((r) => ({ repo: r.repo, items: r.items.map(verbs.brief) }))); return; }
   if (!rows.length) { console.log("no issues"); return; }
-  for (const r of rows) { console.log(r.repo); printRows(r.items, "  "); }
+  for (const r of rows) { console.log(r.repo); printRows(r.items, r.repo, "  "); }
 }
 
 /** `aleph triage <repo>-<n>`: triage one issue now, under the dispatch's gates. */
@@ -459,12 +459,12 @@ function statusCmd(): void {
   }
   if (!s) refuse(`${key} has no issue ${n}`);
   if (rest.includes("--json")) return out(s);
-  console.log(`${s!.id} ${s!.stage}: ${s!.why}`);
+  console.log(issues.localRefs(key, `${s!.id} ${s!.stage}: ${s!.why}`));
 }
 
 /** `aleph status` with no issue: the stage of each open issue in each recent repo. */
 function statusRecent(): void {
-  const states: Stage[] = [];
+  const states: Stage[] = [], ofRepo: { key: string; rows: Stage[] }[] = [];
   for (const { repo, doc } of listRecent()) {
     const open = (doc?.items ?? []).filter((i) => issues.status(i) === "open");
     if (!open.length) continue;
@@ -472,13 +472,15 @@ function statusRecent(): void {
       fetchOrigin(repo.path);
       const f = facts(repo, doc);
       const main = `refs/remotes/origin/${f.main}`;
-      states.push(...stages(repo.path, main, f, open.map((i) => issues.refOf(i))));
+      const rows = stages(repo.path, main, f, open.map((i) => issues.refOf(i)));
+      states.push(...rows);
+      if (rows.length) ofRepo.push({ key: repo.key, rows });
     }
     catch (e: any) { console.error(`warn: ${repo.key}: ${e?.message ?? e}`); }
   }
   if (rest.includes("--json")) return out(states);
   if (!states.length) { console.log("no open items"); return; }
-  for (const s of states) console.log(`${s.id} ${s.stage}: ${s.why}`);
+  for (const { key, rows } of ofRepo) { console.log(key); for (const s of rows) console.log(issues.localRefs(key, `  ${s.id} ${s.stage}: ${s.why}`)); }
 }
 
 /** `aleph migrate --dry-run | --apply | --undo <time>`: the work-model migration, see jobs/lib/migrate.ts. */

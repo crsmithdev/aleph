@@ -68,6 +68,16 @@ describe("aleph goal verbs", () => {
     expect(shown).toMatchObject({ title: "Renamed", priority: "high", after: [`fac-${m}.1`] });
     expect(shown.body).toContain("## Goal");
     expect(shown.notes.join("\n")).toContain("a worker note");
+    const text = (await aleph(["goal", "show", "fac", `${n}.1`])).stdout;
+    expect(text).toContain(`## ${n}.1. Renamed`);
+    expect(text).toContain(`issue ${n}   after ${m}.1   priority`);
+    expect(text).not.toContain("fac-");
+    const rows = (await aleph(["goal", "list", "fac", "--status", "open"])).stdout;
+    expect(rows).toContain(`${n}.1  open    Renamed  (after ${m}.1)`);
+    expect(rows).not.toContain("fac-");
+    const issueText = (await aleph(["issue", "show", "fac", String(n)])).stdout;
+    expect(issueText).toContain(`goals ${n}.1 `);
+    expect(issueText).not.toContain("fac-");
     expect((await aleph(["goal", "edit", "fac", `${n}.1`, "--after", "none"])).code).toBe(0);
     expect((await aleph(["goal", "show", "fac", `${n}.1`, "--json"])).json.after).toEqual([]);
     expect((await aleph(["goal", "show", "fac", String(n)])).code).toBe(1);

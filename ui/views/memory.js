@@ -1,7 +1,7 @@
 // The Memory view: the vault's counts, Home's sections, health and recent
 // writes, with a search box. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { empty, error, esc, filterBar, md, pageHead, when } from "../lib.js";
+import { empty, error, esc, filterBar, localId, md, pageHead, when } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -138,7 +138,7 @@ function renderRetrieval(r) {
 
 function renderProspective(p) {
   const issues = p.issues.length
-    ? fold(p.issues, (i) => `<a href="#/issues/${encodeURIComponent(i.repo)}/${i.id}">${esc(i.repo)}-${i.id}</a> ${esc(i.title)} ${q(esc([i.due && `due ${i.due}`, i.after?.length && `after ${i.after.join(", ")}`].filter(Boolean).join(" · ")))}`)
+    ? fold(p.issues, (i) => `<a href="#/issues/${encodeURIComponent(i.repo)}/${i.id}">${i.id}</a> ${esc(i.title)} ${q(esc([i.repo, i.due && `due ${i.due}`, i.after?.length && `after ${localId(i.after.join(", "), i.repo)}`].filter(Boolean).join(" · ")))}`)
     : none("No open issue has a due date or an after.", "<code>aleph todo add --due</code> or <code>--after</code> fills this.");
   const trig = p.triggers.length ? fold(p.triggers, (t) => esc(JSON.stringify(t))) : none("No scheduled trigger.", "The aleph-tick sweep reads them once they exist.");
   return `<div class="kinds">${sub("Open issues with a date or a wait", p.issues.length, issues)}${sub("Scheduled triggers", p.triggers.length, trig)}</div>`;

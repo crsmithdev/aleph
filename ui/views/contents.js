@@ -1,7 +1,7 @@
 // The Inventory view: the state to browse, not the process: every project and every issue of every repo,
 // three tables and a form that files an issue. `data` is /api/contents: { issues, projects, specs }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { badge, chips, empty, esc, filterBar, idLink, labelName, md, pageHead, pager, sortHead, when } from "../lib.js";
+import { badge, chips, empty, esc, filterBar, idLink, labelName, localId, md, pageHead, pager, sortHead, when } from "../lib.js";
 
 export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 
@@ -131,7 +131,7 @@ const SPEC_SORT = { date: (r) => r.date, title: (r) => r.title, project: (r) => 
 export const COLUMNS = [["id", "Id"], ["title", "Title"], ["status", "Status"], ["project", "Project"], ["labels", "Labels"], ["updated", "Updated"], ["act", ""]];
 export const PROJECT_COLUMNS = [["title", "Name"], ["open", "Open issues", { num: true }], ["updated", "Last activity"]];
 const SORT = {
-  project: (r) => r.project, status: (r) => r.status, id: (r) => r.id, title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => ms(r.at),
+  project: (r) => r.project, status: (r) => r.status, id: (r) => r.n, title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => ms(r.at),
 };
 const PROJECT_SORT = { title: (r) => r.project, open: (r) => r.open, updated: (r) => ms(r.at) };
 
@@ -161,7 +161,7 @@ export function dropTarget(r) {
 export function renderRow(r) {
   const x = dropTarget(r)
     ? `<button type="button" class="cancel" data-cancel aria-label="Drop ${esc(r.id)}" title="Stop or drop">${X_ICON}</button>` : "";
-  return `<tr class="crow" data-repo="${esc(r.repo)}" data-n="${r.n}"><td>${idLink(r.id, r.href)}</td>` +
+  return `<tr class="crow" data-repo="${esc(r.repo)}" data-n="${r.n}"><td>${idLink(r.n, r.href)}</td>` +
     `<td class="wide"><a href="${esc(r.href)}">${esc(r.title)}</a></td>` +
     `<td>${badge(r.status)}</td><td>${esc(r.project)}</td><td>${chips(r.labels)}</td>` +
     `<td class="time">${esc(when(r.at))}</td><td class="drop">${x}<span class="cmsg" role="status"></span></td></tr>`;
@@ -268,9 +268,9 @@ export function renderContents(d, o = {}) {
 }
 
 /** The Job of a goal on the Issue page: a link to each of its jobs with the state, or a quiet line. */
-function goalJobs(g) {
+function goalJobs(g, repo) {
   if (!g.jobs.length) return `<span class="quiet">No job yet</span>`;
-  return g.jobs.map((j) => `${idLink(j.name, `#/jobs/${encodeURIComponent(j.name)}`)} ${stateBadge(j.state)} <span class="time">${esc(when(j.started))}</span>`).join("<br>");
+  return g.jobs.map((j) => `${idLink(localId(j.name, repo), `#/jobs/${encodeURIComponent(j.name)}`)} ${stateBadge(j.state)} <span class="time">${esc(when(j.started))}</span>`).join("<br>");
 }
 
 /** The Issue page: the `## Request`, then the goals each with its Job, then the notes, the issue's own runs and the commits. Shared with views/issue.js. */
@@ -281,10 +281,10 @@ export function renderIssue(d) {
   const notes = d.notes.length ? `<ul class="notes">${d.notes.map((n) => `<li>${esc(n.replace(/^- /, ""))}</li>`).join("")}</ul>` : empty("No notes.");
   const goals = d.goals ?? [];
   const goalTable = goals.length
-    ? `<div class="tscroll"><table class="tbl" id="goals"><thead><tr><th>Goal</th><th>Title</th><th>Stage</th><th>Job</th></tr></thead><tbody>${goals.map((g) => `<tr><td>${idLink(g.id, g.href)}</td><td class="wide" title="${esc(g.why)}">${esc(g.title)}</td><td>${stateBadge(g.stage)}</td><td>${goalJobs(g)}</td></tr>`).join("")}</tbody></table></div>`
+    ? `<div class="tscroll"><table class="tbl" id="goals"><thead><tr><th>Goal</th><th>Title</th><th>Stage</th><th>Job</th></tr></thead><tbody>${goals.map((g) => `<tr><td>${idLink(localId(g.id, d.repo), g.href)}</td><td class="wide" title="${esc(localId(g.why, d.repo))}">${esc(g.title)}</td><td>${stateBadge(g.stage)}</td><td>${goalJobs(g, d.repo)}</td></tr>`).join("")}</tbody></table></div>`
     : empty("No goal is filed for this issue.");
   const jobs = d.jobs.length
-    ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Job</th><th>State</th><th>Started</th></tr></thead><tbody>${d.jobs.map((j) => `<tr><td>${idLink(j.name, `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${stateBadge(j.state)}</td><td class="time">${esc(when(j.started))}</td></tr>`).join("")}</tbody></table></div>`
+    ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Job</th><th>State</th><th>Started</th></tr></thead><tbody>${d.jobs.map((j) => `<tr><td>${idLink(localId(j.name, d.repo), `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${stateBadge(j.state)}</td><td class="time">${esc(when(j.started))}</td></tr>`).join("")}</tbody></table></div>`
     : empty("No job has worked on this.");
   const commits = d.commits.length
     ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Commit</th><th>Subject</th><th>Date</th></tr></thead><tbody>${d.commits.map((c) => {
@@ -297,9 +297,9 @@ export function renderIssue(d) {
   const request = isIssue && d.request ? d.request : d.body;
   const label = isIssue && d.request ? "Request" : isIssue ? "Request" : "Goal";
   return `<div class="page"><p class="quiet"><a href="#/inventory">← Inventory</a></p>` +
-    pageHead(d.title, { count: `${d.repo}-${d.ref ?? d.id}`, aside: d.derived ? stateBadge(d.derived.stage) : badge(d.status) }) +
-    (d.issue ? `<p class="quiet">Goal of ${idLink(d.issue.id, d.issue.href)}</p>` : "") +
-    (d.derived ? `<p class="quiet">${esc(d.derived.why)}</p>` : "") + (fm.labels?.length ? `<p>${chips(fm.labels)}</p>` : "") +
+    pageHead(d.title, { count: `${d.repo} · ${d.ref ?? d.id}`, aside: d.derived ? stateBadge(d.derived.stage) : badge(d.status) }) +
+    (d.issue ? `<p class="quiet">Goal of ${idLink(localId(d.issue.id, d.repo), d.issue.href)}</p>` : "") +
+    (d.derived ? `<p class="quiet">${esc(localId(d.derived.why, d.repo))}</p>` : "") + (fm.labels?.length ? `<p>${chips(fm.labels)}</p>` : "") +
     (facts ? `<dl class="facts">${facts}</dl>` : "") +
     `<div class="sh"><h2 id="h-request">${label}</h2></div><div class="md" id="request">${md(request)}</div>` +
     (isIssue ? `<div class="sh"><h2 id="h-goals">Goals</h2><span class="count">${goals.length}</span></div>${goalTable}` : "") +

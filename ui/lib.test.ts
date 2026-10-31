@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { STATES, badge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, numCell, nameLink, shortModel, when, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone } from "./lib.js";
+import { localId, repoIdLink, repoOf, STATES, badge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, numCell, nameLink, shortModel, when, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone } from "./lib.js";
 
 test("esc escapes markup", () => {
   expect(esc("<script>alert('x')</script>")).toBe("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;");
@@ -209,6 +209,18 @@ test("chips gives labels as chips, the goal label as factory, nothing for none",
   expect(chips([])).toBe("");
   expect(chips(undefined)).toBe("");
   expect(chips(["<b>"])).toContain("&lt;b&gt;");
+});
+
+test("localId and repoIdLink show the short id and keep the project apart", () => {
+  expect(localId("aleph-578.1", "aleph")).toBe("578.1");
+  expect(localId("Waits on aleph-12 and sidetone-5, see aleph-tick", "aleph")).toBe("Waits on 12 and sidetone-5, see aleph-tick");
+  expect(localId("triage-aleph-3", "aleph")).toBe("triage-aleph-3");
+  expect(localId("aleph-3", "")).toBe("aleph-3");
+  expect(repoOf("my-repo-5.1")).toBe("my-repo");
+  expect(repoOf("wt")).toBe("");
+  expect(repoIdLink("aleph-5", "#/x")).toBe('<span class="idp">aleph</span> <a class="idl" href="#/x">5</a>');
+  expect(repoIdLink("triage-aleph-3", "#/x", "aleph")).toBe('<span class="idp">aleph</span> <a class="idl" href="#/x">triage-aleph-3</a>');
+  expect(repoIdLink("wt", "#/x")).toBe('<a class="idl" href="#/x">wt</a>');
 });
 
 test("idLink and pageHead", () => {

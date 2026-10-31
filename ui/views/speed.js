@@ -1,6 +1,6 @@
 // The speed parts of the Status page: how fast runs are. `d` is /api/speed. The render functions
 // return HTML strings; `mountSpeed` fetches the data, draws the three ECharts and wires the control.
-import { chart, esc, readTokens } from "../lib.js";
+import { chart, esc, readTokens, repoIdLink } from "../lib.js";
 
 export const WINDOWS = [{ value: "hour", label: "Hour" }, { value: "day", label: "Day" }, { value: "week", label: "Week" }, { value: "month", label: "Month" }];
 export const DEFAULT_WINDOW = "week";
@@ -111,7 +111,7 @@ export function renderBreakdown(d, key) {
   const f = (v) => esc(hours(v));
   const alt = d.hasWeek ? `${esc(weekText(c.week))} of week · ` : "";
   const causes = (c.causes ?? []).map((x) => `<div class="crow"><span class="cn">${esc(x.name)}</span><span class="cbar"><i style="width:${c.hours > 0 ? (x.hours / c.hours) * 100 : 0}%"></i></span><span class="cv">${f(x.hours)} · ${plural(x.runs, "run")}</span></div>`).join("");
-  const top = (c.top ?? []).map((x) => `<div class="grow"><a class="idl" href="${esc(x.href)}">${esc(x.goal)}</a> <b>${f(x.hours)}</b> <span class="quiet">${plural(x.runs, "run")}</span><div class="quiet reason">${esc(x.reason)}</div></div>`).join("");
+  const top = (c.top ?? []).map((x) => `<div class="grow">${repoIdLink(x.goal, x.href)} <b>${f(x.hours)}</b> <span class="quiet">${plural(x.runs, "run")}</span><div class="quiet reason">${esc(x.reason)}</div></div>`).join("");
   return `<section class="brk" data-class="${key}"><h3><i class="sw seg-${key}"></i>${esc(CLASS_NAME[key] ?? c.name)} <b>${f(c.hours)}</b> <span class="quiet">${alt}${plural(c.runs, "run")} · ${plural(c.goals, "goal")}</span></h3>` +
     `<p class="def">${esc(CLASS_TEXT[key] ?? c.text)}</p>` +
     `<div class="two"><div><h4>By cause</h4>${causes}</div><div><h4>Goals that took the most</h4>${top}</div></div></section>`;

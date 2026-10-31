@@ -297,6 +297,13 @@ export const shortModel = (m) => String(m ?? "").replace(/^claude-/, "").replace
 /** An id as a link: mono, small, muted, underlined on hover. */
 export const idLink = (id, href) => `<a class="idl" href="${esc(safeHref(href))}">${esc(id)}</a>`;
 
+/** The text with each `<repo>-<n>` of this repo as `<n>`. An id of another repo, and a name such as `triage-<repo>-<n>`, stay whole. */
+export const localId = (text, repo) => (repo ? String(text ?? "").replace(new RegExp(`(^|[^\\w-])${repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(?=\\d)`, "g"), "$1") : String(text ?? ""));
+/** The repo of an id `<repo>-<n>[.<k>]`, or "" for any other name. */
+export const repoOf = (id) => /^(.+)-\d+(?:\.\d+)?$/.exec(String(id))?.[1] ?? "";
+/** An id in a view of more than one repo: the project in its own place, then the link with the short id. */
+export const repoIdLink = (id, href, repo = repoOf(id)) => `${repo ? `<span class="idp">${esc(repo)}</span> ` : ""}${idLink(localId(id, repo), href)}`;
+
 /** A state as a badge, toned by `tone`. */
 export const badge = (state) => `<span class="badge ${tone(state)}">${esc(state)}</span>`;
 

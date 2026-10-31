@@ -87,7 +87,7 @@ for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["goals, new sha
         if (!row.of) expect(s.of).toBeUndefined();
         expect(s.why).toMatch(row.why ?? /./);
         const text = await aleph(["status", ref(await idOf(row))]);
-        expect(text.stdout.trim()).toBe(`${s.id} ${s.stage}: ${s.why}`);
+        expect(text.stdout.trim()).toBe(`${s.id} ${s.stage}: ${s.why}`.replace(/\bfac-(?=\d)/g, ""));
       }, 90_000);
     }
   });

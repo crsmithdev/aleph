@@ -78,6 +78,10 @@ describe("milestone 2", () => {
     const r = await aleph(["status", "--json"]);
     expect(r.code).toBe(0);
     expect(r.json.find((s: any) => s.id === `fac-${id}`)).toMatchObject({ stage: "new" });
+    const text = (await aleph(["status"])).stdout;
+    expect(text.split("\n")).toContain("fac");
+    expect(text).toContain(`\n  ${id} new: `);
+    expect(text).not.toContain(`fac-${id}`);
     await aleph(["issue", "done", "fac", String(id)]);
     expect((await aleph(["status", "--json"])).json.find((s: any) => s.id === `fac-${id}`)).toBeUndefined();
   }, 30_000);

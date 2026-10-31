@@ -2,10 +2,10 @@
 // land card: id, title, state badge, key facts. "compact" keeps the look in at most 2 lines
 // (two block children: id, badge and title; then one line of facts) for a table or a list.
 // Pure string functions, no DOM.
-import { actMessages, badge, esc, idLink, costHtml, labelName, shortModel, when } from "../lib.js";
+import { actMessages, badge, esc, idLink, costHtml, labelName, repoIdLink, repoOf, shortModel, when } from "../lib.js";
 
 /** A job's id, linking to its page. */
-export const itemId = (j) => idLink(j.name, j.href || `#/jobs/${encodeURIComponent(j.name)}`);
+export const itemId = (j) => repoIdLink(j.name, j.href || `#/jobs/${encodeURIComponent(j.name)}`, j.repo ?? "");
 export const title = (j) => `<h3>${esc(j.item?.title || j.name)}</h3>`;
 export const actMsg = (name) => (actMessages.has(name) ? `<span class="act-msg" role="alert">${esc(actMessages.get(name))}</span>` : "");
 export const act = (verb, name, label, primary = false) =>
@@ -39,10 +39,10 @@ const at = (iso, now) => esc(when(iso, new Date(now)));
  * The compact card: line 1 is badge, id and title; line 2 the facts, `[key, html][]`.
  * `kind` marks the card (job, land, issue, session, note); `b` is { state } for the shared badge, or { text, tone } for a badge with its own words.
  */
-export function compactCard({ kind, id = "", href = "", title: ttl, badge: b, facts = [] }) {
+export function compactCard({ kind, id = "", repo = "", href = "", title: ttl, badge: b, facts = [] }) {
   const f = facts.filter(([, v]) => v !== undefined && v !== null && v !== "")
     .map(([k, v]) => `<span class="k">${k ? `<span class="fk">${esc(k)}</span> ` : ""}${v}</span>`).join("");
-  return `<div class="card compact ${esc(kind)}"><div class="c1">${b.state ? badge(b.state) : outcomeBadge(b.text, b.tone)}${id ? idLink(id, href || (kind === "issue" ? "#/issues" : `#/jobs/${encodeURIComponent(id)}`)) : ""}<span class="t" title="${esc(ttl)}">${esc(ttl)}</span></div>` +
+  return `<div class="card compact ${esc(kind)}"><div class="c1">${b.state ? badge(b.state) : outcomeBadge(b.text, b.tone)}${id ? repoIdLink(id, href || (kind === "issue" ? "#/issues" : `#/jobs/${encodeURIComponent(id)}`), repo) : ""}<span class="t" title="${esc(ttl)}">${esc(ttl)}</span></div>` +
     `<div class="c2">${f}</div></div>`;
 }
 
@@ -66,7 +66,7 @@ export function landCard(j, size = "full", now = new Date().toISOString()) {
   const landed = j.state === "landed";
   if (size === "compact") {
     return compactCard({
-      kind: "land", id: j.name, href: j.href, title: j.item?.title || j.name, badge: { state: landed ? "landed" : "landing" },
+      kind: "land", id: j.name, repo: j.repo, href: j.href, title: j.item?.title || j.name, badge: { state: landed ? "landed" : "landing" },
       facts: [["Commit", commitHtml(j)], landed && j.ended ? ["Landed", at(j.ended, now)] : ["Started", at(j.started, now)], ["Cost", j.cost !== undefined ? costHtml(j.cost, j.wk) : ""], ["Acceptance", acceptanceHtml(j)],
         ...(j.checks || []).map((c) => [label(c.name), `${esc(String(c.seconds))} s ${c.ok ? "✓" : "✗"}`])],
     });
@@ -92,7 +92,7 @@ export function triageCard(j, size = "full", now = new Date().toISOString()) {
   const took = dur(j.started, j.ended || (running ? now : ""));
   const ttl = j.item?.title || j.name;
   if (size === "compact") {
-    return compactCard({ kind: "triage", id: j.name, href: j.href, title: ttl, badge: b, facts: [["Started", j.started ? at(j.started, now) : ""], ["Took", esc(took)], ["Cost", j.cost !== undefined ? costHtml(j.cost, j.wk) : ""]] });
+    return compactCard({ kind: "triage", id: j.name, repo: j.repo, href: j.href, title: ttl, badge: b, facts: [["Started", j.started ? at(j.started, now) : ""], ["Took", esc(took)], ["Cost", j.cost !== undefined ? costHtml(j.cost, j.wk) : ""]] });
   }
   return shell("big", "del triage", `<div class="ih">${itemId(j)}${title(j)}${outcomeBadge(b.text, b.tone)}</div>` +
     `<dl class="facts">${j.started ? fact("Started", at(j.started, now)) : ""}${took ? fact("Took", esc(took)) : ""}${j.cost !== undefined ? fact("Cost", costHtml(j.cost, j.wk)) : ""}</dl>` +
@@ -106,7 +106,7 @@ export function jobCard(j, size = "full", now = new Date().toISOString()) {
   const took = dur(j.started, j.ended || (state === "running" ? now : ""));
   if (size === "compact") {
     return compactCard({
-      kind: "job", id: j.name, href: j.href, title: j.item?.title || j.name, badge: b,
+      kind: "job", id: j.name, repo: j.repo, href: j.href, title: j.item?.title || j.name, badge: b,
       facts: [["Started", j.started ? at(j.started, now) : ""], ["Took", esc(took)], ["Phase", esc(j.phase ?? "")], ["Model", esc(shortModel(j.model))], ["Cost", j.cost !== undefined ? costHtml(j.cost, j.wk) : ""]],
     });
   }
@@ -121,10 +121,10 @@ export function issueCard(i, size = "full") {
   const labels = (i.labels ?? []).map(labelName).join(", ");
   if (size === "compact") {
     return compactCard({
-      kind: "issue", id: i.id, href: i.href, title: i.title, badge: b,
+      kind: "issue", id: i.id, repo: repoOf(i.id), href: i.href, title: i.title, badge: b,
       facts: [["Labels", esc(labels)], ["Notes", i.notes ? esc(String(i.notes)) : ""], ["Opened", esc(i.created ?? "")], ["Updated", i.updated && i.updated !== i.created ? esc(i.updated) : ""]],
     });
   }
-  return shell("big", "del", `<div class="ih">${idLink(i.id, i.href)}<h3>${esc(i.title)}</h3>${badge(status)}</div>` +
+  return shell("big", "del", `<div class="ih">${repoIdLink(i.id, i.href)}<h3>${esc(i.title)}</h3>${badge(status)}</div>` +
     `<dl class="facts">${labels ? fact("Labels", esc(labels)) : ""}${i.notes ? fact("Notes", esc(String(i.notes))) : ""}${i.created ? fact("Opened", esc(i.created)) : ""}${i.updated && i.updated !== i.created ? fact("Updated", esc(i.updated)) : ""}</dl>`);
 }

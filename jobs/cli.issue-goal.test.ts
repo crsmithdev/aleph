@@ -41,7 +41,7 @@ describe("aleph issue add --goal -", () => {
     expect(shown.json).toMatchObject({ kind: "issue", source: "chris", goals: [`fac-${n}.1`], areas: [] });
     expect(shown.json.body).toContain("## Request");
     const text = (await aleph(["issue", "show", "fac", String(n)])).stdout;
-    expect(text).toContain(`goals fac-${n}.1`);
+    expect(text).toContain(`goals ${n}.1`);
   });
 
   test("--after sets the goal's order; an issue id is refused and writes nothing", async () => {

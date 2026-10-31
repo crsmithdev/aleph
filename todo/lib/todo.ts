@@ -200,6 +200,8 @@ export function blank(repo: string): Doc {
 
 /** `"5"` for a plain item, `"5.1"` for a goal. */
 export const refOf = (item: Issue): string => (item.sub === undefined ? String(item.id) : `${item.id}.${item.sub}`);
+/** The text with each `<repo>-<n>` of this repo as `<n>`, for output where the repo is known. An id of another repo stays whole. */
+export const localRefs = (key: string, text: string): string => text.replace(new RegExp(`(^|[^\\w-])${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(?=\\d)`, "g"), "$1");
 /** The id that finds the item: its number for a plain item, `"5.1"` for a goal. */
 export const idOf = (item: Issue): number | string => (item.sub === undefined ? item.id : refOf(item));
 /** A number resolves to the plain item, never to a goal under it; a string like `"5.1"` to the goal. */
