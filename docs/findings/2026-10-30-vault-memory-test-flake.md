@@ -11,6 +11,17 @@ Measured 2026-10-30 at 564e8d6 (before) and on the aleph-690 branch (after), 24 
 | `bun test vault/cli.test.ts ui/memory.test.ts` (5 s default) | before | 5/10 |
 | `bun test vault/cli.test.ts ui/memory.test.ts` (5 s default) | after | 5/10 |
 
+## Follow-up: the 5 s default (acceptance of the first landing failed on it)
+
+The acceptance run of `bun test vault/cli.test.ts` (no `--timeout`) failed "one request holds at most 20 questions" at 5012 ms. The two 5 s timeouts named below now carry their own 30000 ms limit (`vault/cli.test.ts`, `ui/memory.test.ts`), as `ui/state.test.ts` does (aleph-747); the assertions are unchanged. After that edit, same load method (`bun run test` started 2 s earlier, 24 cores):
+
+| Command | Passed |
+|---|---|
+| `bun test vault/cli.test.ts ui/memory.test.ts` (5 s default) | 10/10 |
+| `bun test --timeout=30000 vault/cli.test.ts ui/memory.test.ts` | 10/10 |
+
+So the 5/10 of the 5 s rows below is the state before this follow-up. `bun test vault/cli.test.ts` and `bun test ui/memory.test.ts` alone pass, and `bun run test` passed (1162 pass, 0 fail). Logs were in /tmp and are not kept.
+
 ## Cause
 
 The 5 s default timeout (suspect 1) reproduces. All 10 failures of the 5 s runs (before and after) are timeouts "this test timed out after 5000ms":

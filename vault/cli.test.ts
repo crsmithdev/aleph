@@ -879,7 +879,8 @@ describe("provenance and the contradiction screen", () => {
     expect((await write(note("Turbine Summary", { scope: "screen" }))).code).toBe(0);
     expect(asked.length).toBe(1);
     expect(Object.keys(asked[0].questions).length).toBe(20);
-  });
+  // 26 CLI processes (25 live notes and the write), so it needs more than the 5 s default under load. Matches the 30 s the test script uses.
+  }, 30000);
 });
 
 describe("episode", () => {

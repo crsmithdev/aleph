@@ -309,4 +309,5 @@ test("with about 1000 notes the warm call takes under 1 s", async () => {
     rmSync(join(base, "jobs"), { recursive: true, force: true }); mkdirSync(join(base, "jobs"));
     clearCache();
   }
-});
+// 2000 files written and a cold load first, so it needs more than the 5 s default under load. The 1 s assertion on the warm call stays.
+}, 30000);
