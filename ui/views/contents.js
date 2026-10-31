@@ -303,6 +303,16 @@ const renderNoteForm = (d, ref) => `<form data-ui="issue-note" class="stack" dat
   `<label>Add a note <textarea name="text" rows="3" required></textarea></label>` +
   `<button type="submit" class="cmd">Add note</button> <span class="form-msg" role="status"></span></form>`;
 
+/** Machine note prefixes, matched after the `- ` and the stamp are removed. */
+const MACHINE = /^(?:triage|acceptance|planner|standing|always|firefighter|its goals are all done):/;
+/** The notes a person or a run needs to read, which stay visible. */
+const READ = /^(?:triage: for Chris:|triage: a live check:|acceptance rerun by hand)/;
+/** True when a note line is a machine line: the prefix at the start of the text after the `- ` and the stamp. */
+export const isMachineNote = (n) => {
+  const t = String(n).replace(/^- /, "").replace(/^\d{4}-\d\d-\d\d \d\d:\d\d(?::\d\d)?: /, "");
+  return MACHINE.test(t) && !READ.test(t);
+};
+
 /** The Issue page: the `## Request`, then the goals each with its Job, then the notes, the issue's own runs and the commits. Shared with views/issue.js. */
 export function renderIssue(d) {
   const fm = d.frontmatter ?? {};
@@ -312,7 +322,11 @@ export function renderIssue(d) {
   const facts = fact("Priority", editable(esc(priority), choose("priority", PRIORITIES, priority))) + fact("Source", editable(esc(source), choose("source", SOURCES, source))) +
     fact("Areas", editable(esc(areas.map(labelName).join(", ") || "-"), `<input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}">`)) +
     Object.entries(fm).filter(([k]) => !HIDE.includes(k) && !["priority", "source", "areas"].includes(k)).map(([k, v]) => fact(k[0].toUpperCase() + k.slice(1), esc(Array.isArray(v) ? v.map(labelName).join(", ") : v))).join("");
-  const notes = d.notes.length ? `<ul class="notes">${d.notes.map((n) => `<li>${esc(n.replace(/^- /, ""))}</li>`).join("")}</ul>` : empty("No notes.");
+  const tracker = (d.labels ?? []).includes("flakes");
+  const noteLi = (n) => `<li>${esc(n.replace(/^- /, ""))}</li>`;
+  const folded = tracker ? [] : d.notes.filter(isMachineNote), shown = tracker ? d.notes : d.notes.filter((n) => !isMachineNote(n));
+  const fold = folded.length ? `<details class="notes-fold"><summary>${folded.length} machine ${folded.length === 1 ? "note" : "notes"}</summary><ul class="notes">${folded.map(noteLi).join("")}</ul></details>` : "";
+  const notes = d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteLi).join("")}</ul>` : "") + fold : empty("No notes.");
   const goals = d.goals ?? [];
   const goalTable = goals.length
     ? `<div class="tscroll"><table class="tbl" id="goals"><thead><tr><th>Goal</th><th>Title</th><th>Stage</th><th>State</th><th>Job</th></tr></thead><tbody>${goals.map((g) => `<tr><td>${idLink(localId(g.id, d.repo), g.href)}</td><td class="wide" title="${esc(localId(g.why, d.repo))}">${esc(g.title)}</td><td>${stateBadge(g.stage)}</td><td>${g.jobs.map((j) => stateBadge(j.state)).join("<br>")}</td><td>${goalJobs(g, d.repo)}</td></tr>`).join("")}</tbody></table></div>`
