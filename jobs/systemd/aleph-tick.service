@@ -11,7 +11,7 @@ Type=oneshot
 Environment=PATH=%h/.local/bin:%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=%h/aleph
 ExecStart=%h/.bun/bin/bun %h/aleph/jobs/cli.ts tick
-# The tick starts plan, triage and dispatch runs detached (launch.ts detached).
-# They stay in this unit's cgroup, and the default KillMode=control-group kills
-# them when the tick ends. Kill only the tick itself.
+# The tick's detached starts (launch.ts detached) are transient units of their
+# own, not part of this unit's cgroup, so they outlive the tick. KillMode=process
+# stays so that the tick's end kills only the tick itself.
 KillMode=process
