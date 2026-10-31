@@ -22,6 +22,9 @@ const TIME_BOX_MS = () => Number(process.env.ALEPH_TRIAGE_TIMEOUT ?? 600) * 1000
 /** The longest title an issue gets. */
 export const TITLE_MAX = 60;
 
+/** The model a triage run asks for; `ui/usage.ts` books its cost under this name. */
+export const TRIAGE_MODEL = "claude-opus-5-5";
+
 export type Route =
   | { route: "goal"; title: string; body: string; after: string[] }
   | { route: "close"; reason: string }
@@ -152,7 +155,7 @@ function makeRun(repo: Repo, item: issues.Issue): string {
     const folder = join(runsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-triage`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
     // `shown`: the tick's own line reports a triage, so the report has no line for the run.
-    writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name, repo: repo.key, on: `${repo.key}-${item.id}`, state: "running", phase: "triage", told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
+    writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name, repo: repo.key, on: `${repo.key}-${item.id}`, state: "running", phase: "triage", model: TRIAGE_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
     writeFileSync(join(folder, "command.txt"), `triage ${repo.key}-${item.id}: ${item.title}\n`);
     return folder;
   }
@@ -161,7 +164,7 @@ function makeRun(repo: Repo, item: issues.Issue): string {
 async function ask(repo: Repo, item: issues.Issue, folder: string): Promise<string> {
   const input = prompt(repo, item);
   writeFileSync(join(folder, "prompt.md"), input);
-  const argv = [process.env.ALEPH_TRIAGE_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--tools", "Read", "Grep", "Glob"];
+  const argv = [process.env.ALEPH_TRIAGE_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--model", TRIAGE_MODEL, "--tools", "Read", "Grep", "Glob"];
   const p = Bun.spawn(argv, { cwd: repo.path, env: process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
   const timer = setTimeout(() => p.kill(), TIME_BOX_MS());
   try {

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { areasOf, clearAsk, isSorted, readList, setAsk, writeList } from "../../todo/lib/store.ts";
 import { askOf } from "../../todo/lib/store.ts";
-import { countsLine, parseRoute, prompt, triageOpen } from "./triage.ts";
+import { countsLine, parseRoute, prompt, triageOpen, TRIAGE_MODEL } from "./triage.ts";
 import { lock, readRun, stamp, writeRun, type Repo } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -22,7 +22,7 @@ function sh(cwd: string, ...args: string[]): void {
 // The fake triage command: the verdict is named by a `VERDICT:<word>` line in the issue's body.
 const FAKE = `#!/bin/bash
 prompt=$(cat)
-echo "$PWD" >> "$FAKE_LOG"
+echo "$PWD $*" >> "$FAKE_LOG"
 case $prompt in
   *VERDICT:goal*) echo '{"route":"goal","title":"Do it","body":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}' ;;
   *VERDICT:close*) echo 'Looked at it. {"route":"close","reason":"duplicate of tri-1"}' ;;
@@ -118,6 +118,14 @@ test("a triage run records its route and the issue it is on", async () => {
   expect(runs[`triage-${repo.key}-2`]).toMatchObject({ route: "ask", reason: "live" });
   expect(runs[`triage-${repo.key}-3`]!.route).toBe("close");
   expect(runs[`triage-${repo.key}-4`]!.route).toBe("close");
+});
+
+test("a triage run records its model and runs the command with it", async () => {
+  reset([{ title: "a", body: "VERDICT:close" }]);
+  await run();
+  const dir = readdirSync(join(base, "jobs")).find((d) => d.includes(`-triage-${repo.key}-`))!;
+  expect(readRun(join(base, "jobs", dir))).toMatchObject({ model: TRIAGE_MODEL });
+  expect(readFileSync(join(base, "calls"), "utf8")).toContain(`--model ${TRIAGE_MODEL} --tools Read Grep Glob`);
 });
 
 test("a triage run records the cost of its result event, also when the command fails", async () => {
