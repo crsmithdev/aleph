@@ -312,7 +312,8 @@ describe("the review fixture", () => {
       for (const [k, v] of Object.entries(savedEnv)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
       rmSync(home, { recursive: true, force: true });
     }
-  });
+  // One `jobs/cli.ts status` process per fixture item (31 here, about 120 ms each), so it needs more than the 5 s default under load. Matches the 30 s the test script uses.
+  }, 30000);
 });
 
 describe("waiting entries", () => {
