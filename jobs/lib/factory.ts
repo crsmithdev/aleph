@@ -379,14 +379,15 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
         skipped.push(`${name}: ${NO_COMMIT_LIMIT} runs in a row with no commit`);
         continue;
       }
-      const started60 = agentStartsInHour(repo.key, name);
+      // A cap mark with the label still on holds the goal until Chris reruns it; with the label gone he has, and the hour count is not applied.
+      const capHeld = capMarked(name);
+      if (capHeld && hasLabel(item, "needs-chris")) { skipped.push(`${name}: the run cap holds it until Chris reruns it`); continue; }
+      const started60 = capHeld ? 0 : agentStartsInHour(repo.key, name);
       if (started60 >= MAX_RUNS_PER_HOUR) {
-        if (!capMarked(name)) {
-          writeCapMark(name);
-          const text = `needs-chris: the factory started this goal ${started60} times in the last hour; it stops starting it until Chris reruns it.`;
-          const bad = note(repo, item.id, text, { label: "needs-chris", reason: "run-cap" });
-          if (bad) factoryLog(`${name}: no issue note: ${bad}`);
-        }
+        const text = `needs-chris: the factory started this goal ${started60} times in the last hour; it stops starting it until Chris reruns it.`;
+        const bad = note(repo, item.id, text, { label: "needs-chris", reason: "run-cap" });
+        if (bad) factoryLog(`${name}: no issue note: ${bad}`);
+        else writeCapMark(name);
         skipped.push(`${name}: ${started60} runs in the last hour`);
         continue;
       }

@@ -429,6 +429,58 @@ test("a fourth start in an hour is skipped with one needs-chris note, and the go
   expect(notes(id).split("needs-chris:").length - 1).toBe(1);
 });
 
+const recent = (id: number, n: number) => {
+  for (let i = 0; i < n; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - (i + 1) * 60_000).toISOString() });
+};
+const capPath = (id: number) => join(base, "factory", "cap", `fac-${id}.txt`);
+
+test("a cap mark with the label holds the goal below the hour count; once Chris removes the label it starts, and the next cap hit notes again", async () => {
+  const id = goal();
+  recent(id, 3);
+  const f = fakes();
+  await dispatch(f);
+  expect(existsSync(capPath(id))).toBe(true);
+  expect(notes(id).split("needs-chris:").length - 1).toBe(1);
+  // Old starts leave the window: one start 60 seconds ago.
+  const g = goal();
+  mk(`fac-${g}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - 60_000).toISOString() });
+  mkdirSync(join(base, "factory", "cap"), { recursive: true });
+  writeFileSync(capPath(g), "x\n");
+  await change(g, (item) => todos.edit(item, { labels: ["goal", "needs-chris"] }));
+  const out = await dispatch(fakes());
+  expect(out.started).not.toContain(`fac-${g}`);
+  expect(out.skipped.join()).toContain("run cap holds");
+  expect(notes(g)).not.toContain("needs-chris:");
+  // Chris reruns: the label is removed while 3 starts are in the hour.
+  recent(g, 2);
+  await change(g, (item) => todos.edit(item, { labels: ["goal"] }));
+  const f2 = fakes();
+  const out2 = await dispatch(f2);
+  expect(out2.started).toEqual([`fac-${g}`]);
+  expect(existsSync(capPath(g))).toBe(false);
+  // The started run is dropped; the hour count is still at the cap and no mark is left.
+  mk(`fac-${g}`, "agent", "dropped", { reason: "time box" });
+  const out3 = await dispatch(f2);
+  expect(out3.started).toEqual([]);
+  expect(existsSync(capPath(g))).toBe(true);
+  expect(notes(g).split("needs-chris:").length - 1).toBe(1);
+  expect(notes(g)).toContain("until Chris reruns it");
+  expect(labels(g)).toContain("needs-chris");
+});
+
+test("a failed run-cap note leaves no cap mark", async () => {
+  const id = goal();
+  recent(id, 3);
+  // The clone cannot store a new commit, so the note write fails while the goal still reads.
+  const objects = join(base, "items", ".git", "objects");
+  sh(base, "chmod", "-R", "a-w", objects);
+  const f = fakes();
+  const out = await dispatch(f).finally(() => sh(base, "chmod", "-R", "u+w", objects));
+  expect(out.started).toEqual([]);
+  expect(labels(id)).not.toContain("needs-chris");
+  expect(existsSync(capPath(id))).toBe(false);
+});
+
 test("a run that is three runs old, or three runs of other goals, does not hold the goal", async () => {
   const id = goal();
   for (let i = 0; i < 3; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - 7200_000).toISOString() });
