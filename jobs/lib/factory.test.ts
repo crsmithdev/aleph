@@ -818,6 +818,12 @@ test("notReady: a waiting_on list is ready when every part is done, and names on
   expect(notReady(item, (r) => r === "fac-1")).toBe("waiting on fac-2");
 });
 
+test("notReady: a migrated goal waits on its after list, dotted ids included", () => {
+  const item = { fm: { after: ["fac-1", "fac-2.1"] } } as unknown as todos.Item;
+  expect(notReady(item, () => true)).toBeNull();
+  expect(notReady(item, (r) => r === "fac-1")).toBe("waiting on fac-2.1");
+});
+
 const repoX = { key: "fac" } as never;
 const mkItem = (fm: Record<string, unknown>, notes: string[] = []) => ({ fm, notes }) as unknown as todos.Item;
 

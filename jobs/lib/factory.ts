@@ -165,7 +165,7 @@ export function doneChecker(): (ref: string) => boolean {
   const reg = loadRegistry();
   const known = new Map<string, Set<string>>();
   return (ref) => {
-    const r = todos.parseRef(ref);
+    const r = todos.parseGoalRef(ref);
     const repo = r && reg[r.repo];
     if (!r || !repo) return false;
     if (!known.has(r.repo)) {
@@ -185,11 +185,14 @@ export function doneChecker(): (ref: string) => boolean {
 export function notReady(item: todos.Item, done: (ref: string) => boolean, now = todos.clock()): string | null {
   const due = item.fm.due;
   if (typeof due === "string" && todos.validDate(due) && due > todos.today(now)) return `due ${due}`;
-  const waits = item.fm.waiting_on;
-  const open = pendingWaits(waits, done);
+  const open = pendingWaits(waitsOf(item), done);
   if (open.length) return `waiting on ${open.join(",")}`;
   return null;
 }
+
+/** What an item waits on, as a comma list: an old item's `waiting_on`, a migrated goal's `after`. */
+export const waitsOf = (item: todos.Item): unknown =>
+  Array.isArray(item.fm.after) ? item.fm.after.join(",") : item.fm.waiting_on;
 
 /** The parts of a `waiting_on` (a ref or a comma list of refs) that are not done; none for an absent one. */
 export function pendingWaits(waits: unknown, done: (ref: string) => boolean): string[] {
@@ -213,7 +216,7 @@ export function waitReason(_repo: Repo, item: todos.Item, ctx: WaitContext): Wai
   if (ctx.red) return { kind: "red", text: ctx.red };
   const due = item.fm.due;
   if (typeof due === "string" && todos.validDate(due) && due > todos.today(ctx.now ?? todos.clock())) return { kind: "due", text: `Due ${due}` };
-  const ids = pendingWaits(item.fm.waiting_on, ctx.done);
+  const ids = pendingWaits(waitsOf(item), ctx.done);
   if (ids.length) return { kind: "waits_on", ids, text: `Waits on ${ids.join(", ")}` };
   if (hasLabel(item, "needs-chris")) {
     const last = item.notes.at(-1)?.replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, "").replace(/^needs-chris: /, "");
@@ -1030,7 +1033,7 @@ function cameDue(): string[] {
       const id = `${repo.key}-${item.id}`;
       if (todos.status(item) !== "open" || seen.has(id)) continue;
       const due = item.fm.due;
-      const waits = item.fm.waiting_on;
+      const waits = waitsOf(item);
       if ((typeof due === "string" && todos.validDate(due) && due <= day) || (typeof waits === "string" && todos.waitParts(waits).length > 0 && !pendingWaits(waits, done).length)) {
         ids.push(id);
         lines.push(`${id} ${item.title}`);
