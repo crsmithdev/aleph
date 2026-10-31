@@ -20,3 +20,13 @@ The git error did **not** reproduce. No fetch site (setup or after the worker) w
 ## Next
 
 If `check slots` fails with `fetch failed` again, the test output now includes the `## fetch: failed` section from `setup.log` with git's text.
+
+## Pass rate after the fixes
+
+Main commit tested: `b794a01` (both the fetch-ttl settle fix and the fetchOrigin retry are on it). `bun run test` ran in the foreground, one run after another, each log kept in a scratch directory.
+
+- Runs: 6 (5 passed, 1 failed; stopped at the fifth pass).
+- `ui/fetch-ttl.test.ts` passed in 6 of 6 runs.
+- `jobs/cli.slots-check.test.ts` passed in 6 of 6 runs.
+- Other failed tests: run 3 only, `jobs/cli.basic.test.ts` > `guards > six starts at once: five run, one is refused` (93 s; the check at line 203 that all five live runs are in `phase: worker` after the 90 s wait received false). No other test failed in any run.
+- `jobs/cli.basic.test.ts` did **not** fail with `fetch failed` in any run: no log contains that text (aleph-744 did not reproduce). Its one failure is the six-starts phase wait above.
