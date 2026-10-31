@@ -89,6 +89,8 @@ test("a write fetches in the foreground even with the cache on, and builds on th
   const now = spyOn(Date, "now");
   now.mockReturnValue(t0);
   try {
+    // The background fetch of the test before can still be open; let it end before this test counts.
+    await settled();
     const before = fetches();
     readList({ key: "a" });
     // The read past the TTL starts one background fetch; its log line can come late under load.
@@ -115,12 +117,13 @@ test("with the cache on and warm, a write fetches synchronously once and a read 
   const now = spyOn(Date, "now");
   try {
     now.mockReturnValue(Date.now() + 4_000_000);
+    await settled();
     const start = fetches();
     readList({ key: "a" });
     // The warm read past the TTL starts one fetch; wait for it to start and finish.
     for (let i = 0; i < 100 && fetches() < start + 1; i++) await Bun.sleep(20);
     expect(fetches()).toBe(start + 1);
-    await Bun.sleep(300);
+    await settled();
     const before = fetches();
     writeList({ key: "a" }, "ttl write", () => true, true);
     expect(fetches()).toBe(before + 1);
