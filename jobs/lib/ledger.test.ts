@@ -62,6 +62,7 @@ describe("accessors", () => {
   test("onOf: the number for the run's repo; a dotted on of the run's repo is its goal; a foreign one gives none", () => {
     const r = { repo: "fac" } as Run;
     expect(onOf({ ...r, on: "fac-7" })).toBe(7);
+    expect(onOf({ ...r, on: "fac-7.2" })).toBe("7.2");
     expect(onOf({ ...r, on: "fac-5.1" })).toBe("5.1");
     expect(onOf({ ...r, on: "aleph-577.1" })).toBeUndefined();
     expect(onOf({ ...r, on: "oth-7" })).toBeUndefined();
@@ -69,8 +70,8 @@ describe("accessors", () => {
   });
 
   test("a run with a dotted on is found under its goal", () => {
-    write("20261030-000003-goal", { kind: "build", state: "awaiting", ask, on: "fac-5.1" });
-    expect(issue(allJobs()[0])).toBe("5.1");
+    write("20261030-000003-goal", { kind: "build", state: "awaiting", ask, on: "fac-7.2" });
+    expect(issue(allJobs()[0])).toBe("7.2");
   });
 
   test("askOf is the run's ask, else none", () => {
