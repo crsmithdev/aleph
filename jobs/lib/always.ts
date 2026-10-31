@@ -21,7 +21,7 @@ export const ASK_REASONS: Record<string, Reason> = {
   "held-path": { actions: ["land", "drop"], always: "firefighter" },
   "review": { actions: ["land", "drop"], always: "firefighter" },
   // An empty `always`: the factory has no rule that acts on these, so the card offers no auto-yes.
-  "proposal": { actions: ["start", "deny"], always: "" },
+  "proposal": { actions: ["start", "deny"], always: "start" },
   // Was `decision` (decide, deny; recommended) and `question` (answer, drop; firefighter): one reason now, so it lists both.
   "question": { actions: ["answer", "drop", "decide", "deny", "firefighter"], always: "recommended" },
   "manual": { actions: ["checked", "deny"], always: "" },

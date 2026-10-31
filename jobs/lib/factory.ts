@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import { afterOf, askOf, flakeTracker, goal, goals, goalsOf, issueOf as issueRefOf, kindOf, note, readList, readLists, reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
-import { takeFresh } from "./deps.ts";
+import { startProposals, takeFresh } from "./deps.ts";
 import { normalizeAsk, type Ask } from "./ask.ts";
 import { itemOnMain, repoStages } from "./status.ts";
 import { ciLine, redCi } from "./ci.ts";
@@ -321,6 +321,8 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
     factoryLog(held.why);
     return { started: [], skipped: [held.why], held: held.why };
   }
+  const startedProposals = startProposals(sandboxRepos());
+  if (startedProposals.length) factoryLog(`standing: proposal: started ${startedProposals.join(", ")}`);
   const landed: string[] = [];
   if (land) {
     // All at once: the lands queue on the repo's lock, and the first takes the rest into one batch.

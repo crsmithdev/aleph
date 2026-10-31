@@ -43,6 +43,8 @@ test("ASK_REASONS names every reason with actions and an always", () => {
   }
   expect(ASK_REASONS.question.always).toBe("recommended");
   expect(ASK_REASONS["triage-failed"].always).toBe("retry");
+  expect(ASK_REASONS.proposal.always).toBe("start");
+  expect(ASK_REASONS["host-check"].always).toBe("");
 });
 
 test("readAlways reads standing.json under the new reason names when always.json is missing; a write goes to always.json only", () => {

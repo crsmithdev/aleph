@@ -8,9 +8,11 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { file, readList } from "../../todo/lib/store.ts";
+import { clearAsk, file, readList, sourceOf, writeList } from "../../todo/lib/store.ts";
+import * as todos from "../../todo/lib/todo.ts";
+import { always, logAlways } from "./always.ts";
 import { fetchOrigin, git } from "./git.ts";
-import { factoryDir } from "./factory.ts";
+import { factoryDir, factoryLog } from "./factory.ts";
 import { type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 
@@ -127,4 +129,46 @@ export function takeFresh(): string[] {
   const lines = rec.fresh;
   save({ ...rec, fresh: [] });
   return lines;
+}
+
+/** The major version of `v` (`^5.9.3`, `v7.0.2`), or null when it has none. */
+const majorOf = (v: string): number | null => { const m = /^[^\d]*(\d+)\./.exec(v) ?? /^[^\d]*(\d+)$/.exec(v); return m ? Number(m[1]) : null; };
+
+/** Whether `item` is an open dependency proposal waiting for a yes, (an approval Ask of reason `proposal`, raised by deps). */
+function waitingProposal(item: todos.Item): boolean {
+  if (todos.status(item) !== "open") return false;
+  return item.fm.ask === "approval" && item.fm.reason === "proposal" && sourceOf(item) === "deps";
+}
+
+/**
+ * With a standing `proposal` grant, each dependency proposal that stays within its major version
+ * (`Update <package> <current> to <latest>`, same major) becomes a goal. A major bump, such as
+ * typescript 5.9.3 to 7.0.2, and a title that does not parse are left for Chris. Returns the refs started.
+ */
+export function startProposals(repos: Repo[]): string[] {
+  if (always("proposal")?.action !== "start") return [];
+  const started: string[] = [];
+  for (const repo of repos) {
+    try {
+      writeList(repo, "standing: start dependency proposals", (doc) => {
+        let changed = false;
+        for (const item of doc.items) {
+          if (!waitingProposal(item)) continue;
+          const m = /^Update (.+) (\S+) to (\S+)$/.exec(item.title);
+          const [from, to] = [majorOf(m?.[2] ?? ""), majorOf(m?.[3] ?? "")];
+          if (from === null || to === null || from !== to) continue;
+          clearAsk(item);
+          item.fm.kind = "goal";
+          todos.note(item, `standing: started; ${m![1]} stays in major version ${from}`);
+          started.push(`${repo.key}-${todos.refOf(item)}`);
+          changed = true;
+        }
+        return changed ? true : null;
+      });
+    } catch (e) {
+      factoryLog(`standing: proposal on ${repo.key} failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  for (const ref of started) logAlways("proposal", "start", ref);
+  return started;
 }

@@ -24,10 +24,10 @@ const CASES: Record<string, () => ReturnType<typeof attention>> = {
   "acceptance-failed": () => attention({ needs: [], needsIssues: [issue({ reason: "acceptance-failed", question: "acceptance: fail again at abc: x | needs-chris: the Oracle command `bun test` still fails" })] }, {}, []),
   decision: () => attention({ needs: [], needsIssues: [issue({ reason: "decision", decision, question: "triage: for Chris: Should it be A or B?" })] }, {}, []),
   rescue: () => attention({ needs: [], needsIssues: [issue({ reason: "rescue", decision, question: "needs-chris: Should it be A or B?" })] }, {}, []),
+  proposal: () => attention({ needs: [], needsIssues: [issue({ title: "Update left-pad 1.2.0 to 1.3.0", reason: "proposal", question: "Update left-pad 1.2.0 to 1.3.0" })] }, {}, []),
   "proposal-check": () => attention({ needs: [], needsIssues: [] }, {}, [lesson("check")]),
   "proposal-claude-md": () => attention({ needs: [], needsIssues: [] }, {}, [lesson("claude-md")]),
   "proposal-skill": () => attention({ needs: [], needsIssues: [] }, {}, [lesson("skill")]),
-  proposal: () => attention({ needs: [], needsIssues: [issue({ title: "Update x 1 to 2", reason: "proposal", question: "Update x 1 to 2" })] }, {}, []),
   "host-check": () => attention({ needs: [], needsIssues: [issue({ reason: "host-check", question: "triage: a live check: On the host, run `wsl.exe -l -q` and put it in place of `<distro>` at README.md:176." })] }, {}, []),
   firefighter: () => attention({ needs: [], needsIssues: [issue({ id: "aleph-30", reason: "firefighter", question: "needs-chris: aleph-30 changes hooks/x.ts, a held security path, so it needs your review before it lands." })] }, {}, []),
 };
@@ -95,6 +95,8 @@ describe("attention", () => {
     expect(CASES.proposal()[0].actions.map((a) => a.label)).toEqual(["Start the work", "Drop the proposal"]);
     expect(CASES.proposal()[0].actions[0].args).toEqual({ repo: "aleph", id: "387", approve: "true" });
     expect(CASES["host-check"]()[0].problem).toBe("A factory sandbox cannot run this check, so it must run on the host.");
+    expect(CASES.proposal()[0].always).toMatchObject({ label: "Start the work [auto-yes]", action: "start" });
+    expect(CASES.proposal()[0].always?.hint).toContain("a major version jump still asks");
     expect(CASES["host-check"]()[0].kind).toBe("input");
     expect(CASES["host-check"]()[0].actions.map((a) => a.label)).toEqual(["Mark it checked", "Drop the check"]);
     expect(CASES["acceptance-failed"]()[0].kind).toBe("stuck");
