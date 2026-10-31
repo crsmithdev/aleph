@@ -1,5 +1,5 @@
 // The speed parts of the Status page: how fast runs are. `d` is /api/speed. The render functions
-// return HTML strings; `mountSpeed` fetches the data, draws the three ECharts and wires the control.
+// return HTML strings; `mountSpeed` fetches the data, draws the phase ECharts and wires the control.
 import { chart, esc, readTokens, repoIdLink } from "../lib.js";
 
 export const WINDOWS = [{ value: "hour", label: "Hour" }, { value: "day", label: "Day" }, { value: "week", label: "Week" }, { value: "month", label: "Month" }];
@@ -35,7 +35,7 @@ export const renderPhases = (d) => `<div class="meds phases">${PHASES.map((p) =>
 const BAR_PX = 760;
 const weekText = (v) => `${v.toFixed(1)}%`;
 
-/** The agent-time bar: the lost sentence, the brackets, one segment per class, the narrow line and the not-counted line. */
+/** The agent-time bar: the lost sentence, the brackets, one segment per class in two sides, and the not-counted line. */
 export function renderBar(d, { pinned = null } = {}) {
   const cs = d.classes ?? [];
   const f = hours;
@@ -45,31 +45,27 @@ export function renderBar(d, { pinned = null } = {}) {
   const good = sum(cs.slice(0, 2)), lost = sum(cs.slice(2));
   const share = (v) => Math.round((v / total) * 100);
   const sentence = `<p class="lost"><b>${esc(f(lost))}</b> of ${esc(f(total))} (${share(lost)}%) of agent time in ${WINDOW_TEXT[d.window]} went to runs whose work did not reach main.</p>`;
-  const bracket = (v, t) => (v > 0 ? `<span class="bracket" style="flex:${v / total}">${t}</span>` : "");
-  const brackets = `<div class="brackets">${bracket(good, "Reached main")}${bracket(lost, "Did not reach main")}</div>`;
-  const live = cs.filter((c) => c.hours > 0);
-  const px = (c) => (c.hours / total) * BAR_PX;
-  const segs = live.map((c) => {
-    const v = c.hours, w = px(c);
+  const bracket = (v, side, t) => (v > 0 ? `<span class="bracket ${side}" style="flex:${v / total}">${t}</span>` : "");
+  const brackets = `<div class="brackets">${bracket(good, "reached", "Reached main")}${bracket(lost, "missed", "Did not reach main")}</div>`;
+  const seg = (c, sideHours) => {
+    const v = c.hours, w = (v / total) * BAR_PX;
     const title = [c.text, ...(c.causes ?? []).slice(0, 5).map((x) => `${x.name}: ${f(x.hours)} · ${x.runs} runs`)].join("\n");
     const inside = w <= 70 ? "" : `<span class="nm">${esc(c.name)}</span>` + (w <= 8 + c.name.length * 7 + 90 ? "" : `<span class="val">${esc(f(v))} · ${share(v)}%</span>`);
-    return `<button type="button" class="seg-${c.key}" data-class="${c.key}" style="flex:${v / total}" aria-pressed="${c.key === pinned}" aria-label="${esc(`${c.name}: ${f(v)}, ${share(v)}%`)}" title="${esc(title)}">${inside}</button>`;
-  }).join("");
-  const bar = `<div class="abar" role="group" aria-label="Agent time by what each run's work came to">${segs}</div>`;
-  const thin = live.filter((c) => px(c) <= 70);
-  const narrow = thin.length ? `<ul class="narrow">${thin.map((c) => `<li><button type="button" class="nar" data-class="${c.key}"><i class="sw seg-${c.key}"></i> ${esc(c.name)} <b>${esc(f(c.hours))}</b></button></li>`).join("")}</ul>` : "";
+    return `<button type="button" class="seg-${c.key}" data-class="${c.key}" style="flex:${v / sideHours}" aria-pressed="${c.key === pinned}" aria-label="${esc(`${c.name}: ${f(v)}, ${share(v)}%`)}" title="${esc(title)}">${inside}</button>`;
+  };
+  // Each side of the bar is a group of its own, sized by its share, and its segments share the group.
+  const side = (group, hrs) => (hrs > 0 ? `<div class="abar-side" style="flex:${hrs / total}">${group.filter((c) => c.hours > 0).map((c) => seg(c, hrs)).join("")}</div>` : "");
+  const bar = `<div class="abar" role="group" aria-label="Agent time by what each run's work came to">${side(cs.slice(0, 2), good)}${side(cs.slice(2), lost)}</div>`;
   const nc = d.notCounted;
   const not = nc && nc.runs ? `<p class="quiet notcounted">Not counted: ${nc.runs} runs of ${nc.goals} open goals, ${hours(nc.hours)}</p>` : "";
-  return sentence + brackets + bar + narrow + not;
+  return sentence + brackets + bar + not;
 }
 
 const chartBox = (key, title, label) => `<figure class="chartbox"><figcaption>${esc(title)}</figcaption><div class="speedchart" data-chart="${key}" role="img" aria-label="${esc(label)}"></div></figure>`;
 
-/** The three chart boxes; `mountSpeed` fills them. */
+/** One chart box per phase; `mountSpeed` fills them. */
 export const renderCharts = (d) => `<div class="charts3">` +
-  chartBox("agent", `Build run time by ${STEP_TEXT[d.window]} (median)`, "Median build run time per bucket") +
-  chartBox("tests", `Test time by ${STEP_TEXT[d.window]} (median)`, "Median test time per bucket") +
-  chartBox("lands", `Lands by ${STEP_TEXT[d.window]}`, "Lands per bucket") + `</div>`;
+  PHASES.map(([key, title]) => chartBox(key, `${title} by ${STEP_TEXT[d.window]} (median)`, `Median ${title.toLowerCase()} time per bucket`)).join("") + `</div>`;
 
 const loading = (what, d) => (!d ? `<p class="quiet loading" role="status">Loading ${what}…</p>` : `<div class="empty"><p class="hint">${esc(d.error)}</p></div>`);
 
@@ -81,17 +77,16 @@ export function renderSpeedTop(d) {
 }
 
 // Duplicated from ui/api/speed.ts: keep the texts identical.
-const CLASS_NAME = { landed: "Landed", fixed: "Fixed in place", nothing: "Nothing to do", loop: "Loop", restarted: "Restarted", dropped: "Dropped" };
+const CLASS_NAME = { landed: "Landed", fixed: "Fixed", nothing: "Late", restarted: "Restarted", dropped: "Dropped" };
 const CLASS_TEXT = {
   landed: "The run whose work landed on main.",
   fixed: "A run of the landing job before the run that landed: a fix round the goal needed.",
   nothing: "A run that started after its goal had landed, or found the work already on main.",
-  loop: "A run that was the 4th or later start of its goal inside an hour.",
-  restarted: "A run of an earlier job of a goal whose later job landed.",
+  restarted: "A run that a later start replaced: another job of the same goal landed, or the goal started 4 or more times inside an hour.",
   dropped: "A run of a goal that was then dropped or closed without landing.",
 };
 
-/** The class shown under the bar: the pinned one if it has a value, else the largest of classes 3 to 6; null when all are 0. */
+/** The class shown under the bar: the pinned one if it has a value, else the largest of the classes after the first two; null when all are 0. */
 export function shownClass(d, pinned = null) {
   const cs = d.classes ?? [];
   if (pinned && cs.some((c) => c.key === pinned && c.hours > 0)) return pinned;
@@ -109,10 +104,10 @@ export function renderBreakdown(d, key) {
   const f = (v) => esc(hours(v));
   const alt = d.hasWeek ? `${esc(weekText(c.week))} of week · ` : "";
   const causes = (c.causes ?? []).map((x) => `<div class="crow"><span class="cn">${esc(x.name)}</span><span class="cbar"><i style="width:${c.hours > 0 ? (x.hours / c.hours) * 100 : 0}%"></i></span><span class="cv">${f(x.hours)} · ${plural(x.runs, "run")}</span></div>`).join("");
-  const top = (c.top ?? []).map((x) => `<div class="grow">${repoIdLink(x.goal, x.href)} <b>${f(x.hours)}</b> <span class="quiet">${plural(x.runs, "run")}</span><div class="quiet reason">${esc(x.reason)}</div></div>`).join("");
+  const top = (c.top ?? []).map((x) => `<div class="grow">${repoIdLink(x.goal, x.href)} ${esc(x.title ?? "")} <b>${f(x.hours)}</b> <span class="quiet">${plural(x.runs, "run")}</span><div class="quiet reason">${esc(x.reason)}</div></div>`).join("");
   return `<section class="brk" data-class="${key}"><h3><i class="sw seg-${key}"></i>${esc(CLASS_NAME[key] ?? c.name)} <b>${f(c.hours)}</b> <span class="quiet">${alt}${plural(c.runs, "run")} · ${plural(c.goals, "goal")}</span></h3>` +
     `<p class="def">${esc(CLASS_TEXT[key] ?? c.text)}</p>` +
-    `<div class="two"><div><h4>By cause</h4>${causes}</div><div><h4>Goals that took the most</h4>${top}</div></div></section>`;
+    `<div class="two"><div><h4>Causes</h4>${causes}</div><div><h4>Top Affected Issues</h4>${top}</div></div></section>`;
 }
 
 /** The Efficiency block: reruns, the agent time by class and the breakdown of one class, for the picked window. */
@@ -138,32 +133,41 @@ export function renderEffCards(d) {
     card("Lost time", hours(lost.hours), `${Math.round(lost.share * 100)}% of agent hours on runs whose work did not reach main`) + `</div>`;
 }
 
-/** The nearest-rank percentile `p` (0..1) of `xs`. Same rule as `pct` in ui/api/speed.ts. */
-const rank = (xs, p) => [...xs].sort((a, b) => a - b)[Math.max(0, Math.ceil(p * xs.length) - 1)];
-
-/** The dotted threshold lines of a chart. Equal thresholds share one line; a threshold of 0 lies on the axis and has none. */
-function thresholdLines({ p50, p90 }, color, fmt) {
-  const lines = p50 === p90 ? [[p50, "p50, p90"]] : [[p50, "p50"], [p90, "p90"]];
-  return {
-    silent: true, symbol: "none",
-    lineStyle: { type: "dotted", color, width: 1 },
-    label: { position: "end", color, fontSize: 10 },
-    data: lines.filter(([v]) => v > 0).map(([yAxis, name]) => ({ yAxis, label: { formatter: `${name} ${fmt(yAxis)}` } })),
-  };
+/** The dotted threshold lines of a chart: p50 thin, p90 heavier and in its own color. Equal thresholds share one line; a threshold of 0 lies on the axis and has none. */
+function thresholdLines({ p50, p90 }, { p50: p50Color, p90: p90Color }) {
+  // The p90 label sits above its line and the p50 label below, so close thresholds stay readable.
+  const line = (yAxis, name, color, width, up) => ({ yAxis, lineStyle: { type: "dotted", color, width }, label: { color, offset: [0, up], formatter: `${name} ${dur(yAxis)}` } });
+  const lines = p50 === p90 ? [line(p90, "p50, p90", p90Color, 2, 0)] : [line(p50, "p50", p50Color, 1, 5), line(p90, "p90", p90Color, 2, -5)];
+  return { silent: true, symbol: "none", label: { position: "end", fontSize: 10 }, data: lines.filter((l) => l.yAxis > 0) };
 }
 
-/** The bar-chart option of one chart: one value per bucket (null leaves a gap), `unit` for the tooltip, `lines` the p50 and the p90 to mark. */
-export function barOption(buckets, key, { unit, color, fmt = String, lines = null, lineColor = "#888" }) {
+// The seconds an axis step can be, so the axis marks read as round times.
+const AXIS_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 14400, 28800, 86400, 172800, 345600, 604800];
+/** An axis mark at a round time: "30s", "15m", "2h". */
+const axisTime = (v) => (v < 60 ? `${v}s` : v < 3600 ? `${v / 60}m` : `${v / 3600}h`);
+
+/** A bucket's x-axis label: "4a" or "1:36p" in the hour and day windows, "Sat" in week, "10/25" in month. */
+export function xLabel(at, window) {
+  const d = new Date(at);
+  if (window === "month") return `${d.getMonth() + 1}/${d.getDate()}`;
+  if (window === "week") return d.toLocaleDateString("en-US", { weekday: "short" });
+  const m = d.getMinutes();
+  return `${d.getHours() % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""}${d.getHours() < 12 ? "a" : "p"}`;
+}
+
+/** The bar-chart option of one chart: one time per bucket (null leaves a gap), `lines` the p50 and the p90 to mark. */
+export function barOption(buckets, key, { window, color, lines = null, lineColors = { p50: "#888", p90: "#888" } }) {
   const n = buckets.length;
-  // Two axis marks and no split lines: the threshold lines are the chart's only rules. A mark line does not grow the axis, so the top has to reach the p90.
-  const top = Math.max(...buckets.map((b) => b[key] ?? 0), lines?.p90 ?? 0) || 1;
+  // A mark line does not grow the axis, so the top has to reach the p90.
+  const top = Math.max(...buckets.map((b) => b[key] ?? 0), lines?.p90 ?? 0) || 60;
+  const step = AXIS_STEPS.find((s) => top / s <= 3) ?? top;
   return {
     color: [color],
-    grid: { left: 48, right: lines ? 68 : 8, top: 8, bottom: 20 },
-    tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${q.value == null ? "none" : esc(fmt(q.value)) + (unit ? " " + unit : "")}`; } },
-    xAxis: { type: "category", data: buckets.map((b) => b.label), axisTick: { show: false }, axisLabel: { interval: Math.max(0, Math.ceil(n / 4) - 1), hideOverlap: true } },
-    yAxis: { type: "value", min: 0, max: top, interval: top, splitLine: { show: false }, axisTick: { show: false }, axisLabel: { formatter: (v) => (unit === "lands" ? String(v) : dur(v)) } },
-    series: [{ type: "bar", data: buckets.map((b) => b[key]), ...(lines ? { markLine: thresholdLines(lines, lineColor, fmt) } : {}) }],
+    grid: { left: 48, right: lines ? 78 : 8, top: 8, bottom: 20 },
+    tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${q.value == null ? "none" : esc(dur(q.value))}`; } },
+    xAxis: { type: "category", data: buckets.map((b) => xLabel(b.at, window)), axisTick: { show: false }, axisLabel: { interval: Math.max(0, Math.ceil(n / 4) - 1), hideOverlap: true } },
+    yAxis: { type: "value", min: 0, max: Math.ceil(top / step) * step, interval: step, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false }, axisLabel: { formatter: axisTime } },
+    series: [{ type: "bar", data: buckets.map((b) => b[key]), ...(lines ? { markLine: thresholdLines(lines, lineColors) } : {}) }],
   };
 }
 
@@ -192,15 +196,10 @@ function draw(box, d) {
   clear();
   if (!globalThis.echarts) return;
   const t = readTokens();
-  const counts = d.buckets.map((b) => b.lands);
-  const specs = {
-    agent: ["agent", { color: t.run, fmt: dur, lines: d.kinds.agent.count ? d.kinds.agent : null }],
-    tests: ["tests", { color: t.need, fmt: dur, lines: d.checks.find((c) => c.name === "tests" || c.name === "test") ?? null }],
-    lands: ["lands", { unit: "lands", color: t.done, lines: { p50: rank(counts, 0.5), p90: rank(counts, 0.9) } }],
-  };
+  const colors = { intake: t.run, implement: t.need, land: t.done };
   for (const el of box.querySelectorAll(".speedchart[data-chart]")) {
-    const [key, o] = specs[el.dataset.chart];
-    try { drawn.push(chart(el, barOption(d.buckets, key, { ...o, lineColor: t.ink }))); } catch (e) { console.error("speed chart failed", e); }
+    const key = el.dataset.chart, c = d.phases[key];
+    try { drawn.push(chart(el, barOption(d.buckets, key, { window: d.window, color: colors[key], lines: c.count ? c : null, lineColors: { p50: t.ink, p90: t.stuck } }))); } catch (e) { console.error("speed chart failed", e); }
   }
 }
 

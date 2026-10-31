@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CLASSES, classify, clearCache, filed, pct, phases, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { barOption, dur, renderCharts, renderEfficiency, renderPhases, renderPicker, renderSpeedTop, windowOf } from "./views/speed.js";
+import { barOption, dur, renderCharts, renderEfficiency, renderPhases, renderPicker, renderSpeedTop, windowOf, xLabel } from "./views/speed.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -58,8 +58,8 @@ test("day: counts, medians, wasted share, buckets, slowest, models", () => {
   expect(d.done).toBe(2);
   expect(d.buckets.length).toBe(24);
   const b = (h: string) => d.buckets.find((x) => x.label === h)!;
-  expect(b("09:00")).toMatchObject({ agent: 600, tests: 36, lands: 2 });
-  expect(b("10:00")).toMatchObject({ agent: 1200, tests: null, lands: 0 });
+  expect(b("09:00")).toMatchObject({ implement: 600, intake: null });
+  expect(b("10:00")).toMatchObject({ implement: null });
   expect(d.slowest.map((r) => [r.state, r.took])).toEqual([["stuck", 1800], ["dropped", 1200], ["passed", 600]]);
   expect(d.slowest[0].model).toBe("unset");
   expect(d.slowest[2]).toMatchObject({ tests: 36, cost: 1 });
@@ -74,7 +74,6 @@ test("hour: sixty 1-minute buckets over the last hour", () => {
   expect(h.buckets[59].label).toBe("09:47");
   expect(h.kinds.agent.count).toBe(1); // the 09:00 run
   const m = speed("hour", new Date(2026, 9, 28, 9, 7, 0));
-  expect(m.buckets.find((x) => x.label === "09:00")).toMatchObject({ lands: 2 });
   expect(m.done).toBe(2);
 });
 
@@ -82,8 +81,8 @@ test("week and month: one bucket per local day, wider windows add runs", () => {
   const w = speed("week", now);
   expect(w.buckets.length).toBe(7);
   expect(w.kinds.agent.count).toBe(4);
-  expect(w.buckets[6]).toMatchObject({ label: "10-28", lands: 2 });
-  expect(w.buckets[3]).toMatchObject({ label: "10-25", agent: 300, tests: 40 });
+  expect(w.buckets[6].label).toBe("10-28");
+  expect(w.buckets[3]).toMatchObject({ label: "10-25", implement: 300 });
   expect(w.models.map((m) => m.model)).toContain("claude-sonnet-5-5");
   const m = speed("month", now);
   expect(m.buckets.length).toBe(30);
@@ -101,7 +100,7 @@ test("GET /api/speed takes a window (default week) and answers JSON", async () =
 test("the view: three phase cards; charts; efficiency with reruns and the wasted share", () => {
   const d = speed("day", now);
   const h = renderSpeedTop(d);
-  expect(h).toContain('data-chart="lands"');
+  for (const k of ["intake", "implement", "land"]) expect(h).toContain(`data-chart="${k}"`);
   expect(h.indexOf('class="meds phases"')).toBeLessThan(h.indexOf('class="charts3"'));
   expect(h.match(/class="med"/g)?.length).toBe(3);
   const one = renderPhases({ phases: { intake: { count: 0, p50: 0, p90: 0 }, implement: { count: 3, p50: 1200, p90: 1800 }, land: { count: 1, p50: 43, p90: 43 } } });
@@ -113,24 +112,24 @@ test("the view: three phase cards; charts; efficiency with reruns and the wasted
   expect(e).toContain("Reruns");
   for (const [w, step] of [["hour", "minute"], ["day", "hour"], ["week", "day"], ["month", "day"]] as const) {
     const c = renderCharts({ ...d, window: w });
-    expect(c).toContain(`Build run time by ${step} (median)`);
-    expect(c).toContain(`Test time by ${step} (median)`);
-    expect(c).toContain(`Lands by ${step}<`);
+    for (const t of ["Intake", "Implement", "Land"]) expect(c).toContain(`${t} by ${step} (median)`);
   }
   expect(renderSpeedTop(null)).toContain("Loading performance");
   expect(renderSpeedTop(null)).toContain(">Performance</h2>");
-  const o = barOption(d.buckets, "agent", { color: "#000" });
+  const o = barOption(d.buckets, "implement", { window: "day", color: "#000" });
   expect(o.series[0].type).toBe("bar");
   expect(o.series[0].data.length).toBe(24);
   expect(o.series[0].markLine).toBeUndefined();
-  const marked = barOption(d.buckets, "agent", { color: "#000", fmt: dur, lines: { p50: 60, p90: 120 } });
-  expect(marked.series[0].markLine.lineStyle.type).toBe("dotted");
-  expect(marked.series[0].markLine.data.map((l: any) => [l.yAxis, l.label.formatter])).toEqual([[60, "p50 1m 00s"], [120, "p90 2m 00s"]]);
-  expect(marked.yAxis).toMatchObject({ max: 1200, interval: 1200, splitLine: { show: false } });
-  expect(barOption([{ label: "a", agent: 90 }], "agent", { color: "#000", lines: { p50: 60, p90: 120 } }).yAxis.max).toBe(120);
+  const marked = barOption([{ at: at(0, 4), implement: 3100 }, { at: at(0, 13), implement: null }], "implement", { window: "day", color: "#000", lines: { p50: 60, p90: 120 }, lineColors: { p50: "#111", p90: "#222" } });
+  expect(marked.series[0].markLine.data.map((l: any) => [l.yAxis, l.label.formatter, l.lineStyle])).toEqual([[60, "p50 1m 00s", { type: "dotted", color: "#111", width: 1 }], [120, "p90 2m 00s", { type: "dotted", color: "#222", width: 2 }]]);
+  expect(marked.yAxis).toMatchObject({ interval: 1800, max: 3600, splitLine: { lineStyle: { opacity: 0.5 } } });
+  expect(marked.yAxis.axisLabel.formatter(1800)).toBe("30m");
+  expect(barOption([{ at: at(0, 4), implement: 90 }], "implement", { window: "day", color: "#000", lines: { p50: 60, p90: 400 } }).yAxis.max).toBe(600);
   expect(marked.xAxis.axisTick.show).toBe(false);
-  expect(barOption(d.buckets, "agent", { color: "#000", lines: { p50: 60, p90: 60 } }).series[0].markLine.data.map((l: any) => l.label.formatter)).toEqual(["p50, p90 60"]);
-  expect(barOption(d.buckets, "lands", { color: "#000", lines: { p50: 0, p90: 2 } }).series[0].markLine.data.map((l: any) => l.yAxis)).toEqual([2]);
+  expect(marked.xAxis.data).toEqual(["4a", "1p"]);
+  expect([xLabel(new Date(2026, 9, 28, 0).toISOString(), "day"), xLabel(new Date(2026, 9, 28, 12).toISOString(), "day"), xLabel(new Date(2026, 9, 28, 13, 36).toISOString(), "hour"), xLabel(new Date(2026, 9, 28).toISOString(), "week"), xLabel(new Date(2026, 9, 5).toISOString(), "month")]).toEqual(["12a", "12p", "1:36p", "Wed", "10/5"]);
+  expect(barOption(d.buckets, "implement", { window: "day", color: "#000", lines: { p50: 60, p90: 60 } }).series[0].markLine.data.map((l: any) => l.label.formatter)).toEqual(["p50, p90 1m 00s"]);
+  expect(barOption(d.buckets, "implement", { window: "day", color: "#000", lines: { p50: 0, p90: 120 } }).series[0].markLine.data.map((l: any) => l.yAxis)).toEqual([120]);
   expect(renderPicker("hour")).toMatch(/aria-pressed="true">Hour<[^]*aria-pressed="false">Day/);
   expect(windowOf(new URLSearchParams("window=day"))).toBe("day");
   expect(windowOf(new URLSearchParams("window=x"))).toBe("week");
@@ -211,9 +210,8 @@ test("classify: one run of each class, with its cause", () => {
   expect(out.classes.map((c) => c.key)).toEqual([...CLASSES]);
   expect(by("landed").causes.map((c) => c.name)).toEqual(["After fix rounds"]);
   expect(by("fixed").causes.map((c) => c.name)).toEqual(["Checks failed"]);
-  expect(by("restarted").causes.map((c) => c.name)).toEqual(["Stalled or timed out"]);
+  expect(by("restarted").causes.map((c) => c.name).sort()).toEqual(["4–9 starts in an hour", "Stalled or timed out"]);
   expect(by("nothing").causes.map((c) => c.name)).toEqual(["Goal had landed"]);
-  expect(by("loop").causes.map((c) => c.name)).toEqual(["4–9 starts in an hour"]);
   expect(by("dropped").causes.map((c) => c.name)).toEqual(["No commit"]);
   expect(by("dropped").top[0]).toMatchObject({ goal: "fx-3", href: "#/issues/fx/3" });
   for (const c of out.classes) {
@@ -236,7 +234,6 @@ test("a build run counts as an agent run", () => {
   expect(d.kinds.agent.count).toBe(before.kinds.agent.count + 1);
   expect(d.slowest[0]).toMatchObject({ state: "passed", took: 7000, tests: 20 });
   expect(d.models.find((m) => m.model === "claude-opus-5-5")!.count).toBe(before.models.find((m) => m.model === "claude-opus-5-5")!.count + 1);
-  expect(d.buckets.some((b) => b.agent === 7000 && b.tests === 20)).toBe(true);
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (o: Record<string, unknown>) => ({ job: "b", name: "b", repo: "fx", on: "fx-1", state: "passed", ...o }) as any;
   const out = classify([

@@ -71,51 +71,52 @@ test("with no landed goal the goal cards show a dash", () => {
 });
 
 const C = (key: string, name: string, hours: number, week: number, text = `${name} text.`) => ({ key, name, text, hours, week, runs: 5, goals: 2, causes: [{ name: "First run of the job", hours, runs: 5 }], top: [] });
-const classes = (h: number[], w: number[]) => [["landed", "Landed"], ["fixed", "Fixed in place"], ["nothing", "Nothing to do"], ["loop", "Loop"], ["restarted", "Restarted"], ["dropped", "Dropped"]].map(([k, n], i) => C(k, n, h[i], w[i]));
+const classes = (h: number[], w: number[]) => [["landed", "Landed"], ["fixed", "Fixed"], ["nothing", "Late"], ["restarted", "Restarted"], ["dropped", "Dropped"]].map(([k, n], i) => C(k, n, h[i], w[i]));
 const D = { window: "week", notCounted: { runs: 11, goals: 4, hours: 0.4 } };
 
-test("the agent-time bar: sentence, brackets, segments, narrow line, not counted", () => {
-  const d = { ...D, classes: classes([60, 10, 20, 1, 24, 1], [3, 0.5, 1, 0.1, 1.2, 0.1]) };
+test("the agent-time bar: sentence, brackets, two sides of segments, not counted, no legend", () => {
+  const d = { ...D, classes: classes([60, 10, 20, 25, 1], [3, 0.5, 1, 1.3, 0.1]) };
   const h = renderBar(d);
-  const bar = h.slice(h.indexOf('class="abar"'), h.indexOf("</div>", h.indexOf('class="abar"')));
-  for (const n of ["Landed", "Fixed in place", "Nothing to do", "Loop", "Restarted", "Dropped"]) expect(bar.split(`>${n}<`).length - 1).toBeLessThanOrEqual(1);
+  const bar = h.slice(h.indexOf('class="abar"'), h.indexOf("Not counted"));
   expect(h).toContain("<b>46 h</b> of 116 h (40%) of agent time in the last 7 days went to runs whose work did not reach main.");
-  const br = h.slice(h.indexOf('class="brackets"'), h.indexOf("</div>", h.indexOf('class="brackets"')));
+  const br = h.slice(h.indexOf('class="brackets"'), h.indexOf('class="abar"'));
+  expect(br).toContain('class="bracket reached"');
+  expect(br).toContain('class="bracket missed"');
   expect(br).toContain("Reached main");
   expect(br).toContain("Did not reach main");
-  expect(br.replace(/style="[^"]*"/g, "")).not.toMatch(/\d/);
-  expect([...bar.matchAll(/data-class="(\w+)"/g)].map((m) => m[1])).toEqual(["landed", "fixed", "nothing", "loop", "restarted", "dropped"]);
+  expect(bar.match(/class="abar-side"/g)?.length).toBe(2);
+  expect([...bar.matchAll(/data-class="(\w+)"/g)].map((m) => m[1])).toEqual(["landed", "fixed", "nothing", "restarted", "dropped"]);
   expect(bar).toContain('title="Landed text.\nFirst run of the job: 60 h · 5 runs"');
   expect(h).not.toContain("undefined");
-  const nar = h.slice(h.indexOf('class="narrow"'), h.indexOf("</ul>"));
-  for (const n of ["Fixed in place", "Loop", "Dropped"]) expect(nar).toContain(` ${n} <b>`);
-  for (const n of ["Landed", "Nothing to do", "Restarted"]) expect(nar).not.toContain(` ${n} <b>`);
+  expect(h).not.toContain('class="narrow"');
   expect(h).toContain("Not counted: 11 runs of 4 open goals, 0.4 h");
-  expect(renderBar({ ...d, classes: classes([0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]) })).toContain("No agent run of a goal ended in this period.");
+  expect(renderBar({ ...d, classes: classes([0, 0, 0, 0, 0], [0, 0, 0, 0, 0]) })).toContain("No agent run of a goal ended in this period.");
 });
 
-test("the flex values are shares of the total, also under 1 h", () => {
-  const h = renderBar({ ...D, classes: classes([0.3, 0.1, 0.05, 0.02, 0.1, 0.03], [0, 0, 0, 0, 0, 0]) });
-  const bar = h.slice(h.indexOf('class="abar"'), h.indexOf("</div>", h.indexOf('class="abar"')));
-  const flex = [...bar.matchAll(/style="flex:([\d.e-]+)"/g)].map((m) => Number(m[1]));
-  expect(flex.length).toBe(6);
-  expect(Math.abs(flex.reduce((a, b) => a + b, 0) - 1)).toBeLessThan(0.001);
+test("the flex values share out each side, and the sides share out the total, also under 1 h", () => {
+  const h = renderBar({ ...D, classes: classes([0.3, 0.1, 0.05, 0.12, 0.03], [0, 0, 0, 0, 0]) });
+  const sides = [...h.matchAll(/class="abar-side" style="flex:([\d.e-]+)"/g)].map((m) => Number(m[1]));
+  expect(Math.abs(sides.reduce((a, b) => a + b, 0) - 1)).toBeLessThan(0.001);
+  const segs = [...h.matchAll(/data-class="\w+" style="flex:([\d.e-]+)"/g)].map((m) => Number(m[1]));
+  expect(segs.length).toBe(5);
+  expect(Math.abs(segs.slice(0, 2).reduce((a, b) => a + b, 0) - 1)).toBeLessThan(0.001);
+  expect(Math.abs(segs.slice(2).reduce((a, b) => a + b, 0) - 1)).toBeLessThan(0.001);
 });
 
 const withTop = () => {
-  const cs = classes([60, 10, 20, 1, 24, 1], [3, 0.5, 1, 0.1, 1.2, 0.1]);
-  cs[4].causes = [{ name: "Land conflict", hours: 20, runs: 3 }, { name: "Other", hours: 4, runs: 1 }];
-  (cs[4] as any).top = [{ goal: "fx-7", href: "#/issues/fx/7", reason: "merge conflict in ui/x.ts", hours: 20, runs: 3 }];
+  const cs = classes([60, 10, 20, 25, 1], [3, 0.5, 1, 1.3, 0.1]);
+  cs[3].causes = [{ name: "Land conflict", hours: 20, runs: 3 }, { name: "Other", hours: 4, runs: 1 }];
+  (cs[3] as any).top = [{ goal: "fx-7", href: "#/issues/fx/7", title: "Fix the merge", reason: "merge conflict in ui/x.ts", hours: 20, runs: 3 }];
   return { ...D, hasWeek: true, classes: cs };
 };
 
 test("the breakdown under the bar, the hours view, the pin", () => {
   const d = withTop();
   const h = renderEfficiency(d);
-  for (const t of ['class="brk" data-class="restarted"', "By cause", "Goals that took the most", 'href="#/issues/fx/7"', "merge conflict in ui/x.ts"]) expect(h).toContain(t);
-  expect(renderEfficiency(d, { pinned: "loop" })).toContain('class="brk" data-class="loop"');
+  for (const t of ['class="brk" data-class="restarted"', "Causes", "Top Affected Issues", 'href="#/issues/fx/7"', "Fix the merge <b>20 h</b>", "merge conflict in ui/x.ts"]) expect(h).toContain(t);
+  expect(renderEfficiency(d, { pinned: "nothing" })).toContain('class="brk" data-class="nothing"');
   expect(h).not.toContain("data-measure");
-  expect(h.slice(h.indexOf('class="brk"'))).toContain("1.2% of week · 5 runs"); // the week share, as the quiet part of the heading
+  expect(h.slice(h.indexOf('class="brk"'))).toContain("1.3% of week · 5 runs"); // the week share, as the quiet part of the heading
   expect(renderEfficiency({ ...d, hasWeek: false })).not.toContain("of week ·");
   expect(renderBreakdown(d, null)).toBe("");
 });
@@ -127,8 +128,8 @@ test("mountSpeed: a click on a segment re-renders the efficiency section", async
   const top = mk(), eff = mk();
   const root = { querySelector: (s: string) => (s === "#speed" ? top : s === "#efficiency" ? eff : null) };
   await mountSpeed(root, async () => ({ ok: true, json: async () => d }));
-  eff.handler({ target: { closest: (s: string) => (s.includes("abar") ? { dataset: { class: "loop" } } : null) } });
-  expect(eff.innerHTML).toContain('class="brk" data-class="loop"');
+  eff.handler({ target: { closest: (s: string) => (s.includes("abar") ? { dataset: { class: "nothing" } } : null) } });
+  expect(eff.innerHTML).toContain('class="brk" data-class="nothing"');
   resetSpeed();
 });
 

@@ -26,16 +26,17 @@ export const MAX_RUN = 4 * HOUR;
 export const KINDS = ["agent", "land", "triage", "plan"] as const;
 
 export interface Pct { count: number; p50: number; p90: number }
+export type Phase = "intake" | "implement" | "land";
 export interface Speed {
   window: Window;
   /** Land runs that landed in the window: the issues done. */
   done: number;
   kinds: Record<(typeof KINDS)[number], Pct>;
   /** Intake: issue created to first goal queued. Implement: job's first agent start to its last finish. Land: finish to landed. Each counts in the window where it ends. */
-  phases: Record<"intake" | "implement" | "land", Pct>;
+  phases: Record<Phase, Pct>;
   checks: { name: string; count: number; p50: number; p90: number }[];
   /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string. */
-  buckets: { label: string; at: string; agent: number | null; tests: number | null; lands: number }[];
+  buckets: ({ label: string; at: string } & Record<Phase, number | null>)[];
   slowest: { name: string; state: string; model: string; tests: number | null; cost: number; took: number }[];
   models: { model: string; count: number; p50: number }[];
   flaky: number;
@@ -55,22 +56,21 @@ export interface Speed {
   hasWeek: boolean;
 }
 
-export const CLASSES = ["landed", "fixed", "nothing", "loop", "restarted", "dropped"] as const;
+export const CLASSES = ["landed", "fixed", "nothing", "restarted", "dropped"] as const;
 export type Class = (typeof CLASSES)[number];
-export const CLASS_NAME: Record<Class, string> = { landed: "Landed", fixed: "Fixed in place", nothing: "Nothing to do", loop: "Loop", restarted: "Restarted", dropped: "Dropped" };
+export const CLASS_NAME: Record<Class, string> = { landed: "Landed", fixed: "Fixed", nothing: "Late", restarted: "Restarted", dropped: "Dropped" };
 export const CLASS_TEXT: Record<Class, string> = {
   landed: "The run whose work landed on main.",
   fixed: "A run of the landing job before the run that landed: a fix round the goal needed.",
   nothing: "A run that started after its goal had landed, or found the work already on main.",
-  loop: "A run that was the 4th or later start of its goal inside an hour.",
-  restarted: "A run of an earlier job of a goal whose later job landed.",
+  restarted: "A run that a later start replaced: another job of the same goal landed, or the goal started 4 or more times inside an hour.",
   dropped: "A run of a goal that was then dropped or closed without landing.",
 };
 export interface Measure { hours: number; week: number; runs: number }
 export interface ClassStat extends Measure {
   key: Class; name: string; text: string; goals: number;
   causes: (Omit<Measure, "week"> & { name: string })[];
-  top: (Omit<Measure, "week"> & { goal: string; href: string; reason: string })[];
+  top: (Omit<Measure, "week"> & { goal: string; title?: string; href: string; reason: string })[];
 }
 
 /** The nearest-rank percentile `p` (0..1) of `xs`; 0 for none. */
@@ -136,13 +136,12 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
     if (lands.has(r)) cls = "landed";
     else if ([...lands].some((l) => l.job === r.job && t0(l) > a)) cls = "fixed";
     else if (afterLand || /already (met|done|on main)|duplicate|folded into/i.test(reason)) cls = "nothing";
-    else if (startsBefore >= 3) cls = "loop";
-    else if ([...lands].some((l) => l.job !== r.job && (firstStart.get(l.job) ?? Infinity) > (firstStart.get(r.job) ?? Infinity))) cls = "restarted";
+    else if (startsBefore >= 3 || [...lands].some((l) => l.job !== r.job && (firstStart.get(l.job) ?? Infinity) > (firstStart.get(r.job) ?? Infinity))) cls = "restarted";
     else if (["done", "dropped"].includes(statusOf(g) ?? "")) cls = "dropped";
     if (!cls) { skipped.push(row); continue; }
     if (cls === "landed") row.cause = mine.some((o) => o.job === r.job && t0(o) < a) ? "After fix rounds" : "First run of the job";
     else if (cls === "nothing") row.cause = afterLand ? "Goal had landed" : "Work on main from other goal";
-    else if (cls === "loop") row.cause = startsBefore + 1 >= 10 ? "10+ starts in an hour" : "4–9 starts in an hour";
+    else if (cls === "restarted" && startsBefore >= 3) row.cause = startsBefore + 1 >= 10 ? "10+ starts in an hour" : "4–9 starts in an hour";
     else if (r.state === "awaiting") row.cause = "Waited on Chris";
     else if (r.failed === "review" || /reviewer/i.test(reason)) row.cause = "Reviewer sent back";
     else if (r.failed || / failed$|^timed out: check /.test(reason)) row.cause = "Checks failed";
@@ -215,13 +214,13 @@ export function filed(dir = storeDir()): Filed {
   return filedAt;
 }
 
-/** The three phases of the work over `runs` and the store's history, for what ended in `since`..`now`. */
-export function phases(runs: Run[], { issue, goal }: Filed, since: number, now: number): Speed["phases"] {
+/** The three phases of the work over `runs` and the store's history, for what ended in `since`..`now`: each one's end time and seconds. */
+export function phaseTimes(runs: Run[], { issue, goal }: Filed, since: number, now: number): Record<Phase, { at: number; secs: number }[]> {
   const inWindow = (t: number) => t >= since && t <= now;
-  const intake: number[] = [], implement: number[] = [], land: number[] = [];
+  const intake: { at: number; secs: number }[] = [], implement: { at: number; secs: number }[] = [], land: { at: number; secs: number }[] = [];
   for (const [key, queued] of goal) {
     const created = issue.get(key);
-    if (queued != null && created != null && inWindow(queued)) intake.push((queued - created) / 1000);
+    if (queued != null && created != null && inWindow(queued)) intake.push({ at: queued, secs: (queued - created) / 1000 });
   }
   const jobs = new Map<string, Run[]>();
   for (const r of runs) jobs.set(r.job, [...(jobs.get(r.job) ?? []), r]);
@@ -232,10 +231,16 @@ export function phases(runs: Run[], { issue, goal }: Filed, since: number, now: 
     const ends = agents.filter((r) => passedState(r.state) || r.state === "awaiting").map((r) => Date.parse(r.ended!)).filter((t) => t <= landed);
     if (!ends.length) continue;
     const finished = Math.max(...ends), started = Math.min(...agents.map((r) => Date.parse(r.started)));
-    if (inWindow(finished)) implement.push((finished - started) / 1000);
-    if (inWindow(landed)) land.push((landed - finished) / 1000);
+    if (inWindow(finished)) implement.push({ at: finished, secs: (finished - started) / 1000 });
+    if (inWindow(landed)) land.push({ at: landed, secs: (landed - finished) / 1000 });
   }
-  return { intake: stat(intake), implement: stat(implement), land: stat(land) };
+  return { intake, implement, land };
+}
+
+/** Each phase's count, p50 and p90 over `phaseTimes`. */
+export function phases(runs: Run[], filings: Filed, since: number, now: number): Speed["phases"] {
+  const t = phaseTimes(runs, filings, since, now);
+  return { intake: stat(t.intake.map((x) => x.secs)), implement: stat(t.implement.map((x) => x.secs)), land: stat(t.land.map((x) => x.secs)) };
 }
 
 export function speed(window: Window, now = new Date(), fit: Fit | null = null): Speed {
@@ -249,9 +254,6 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
   const slot = (t: number): number => (daily ? Math.round((new Date(t).setHours(0, 0, 0, 0) - since.getTime()) / DAY) : Math.floor((t - since.getTime()) / stepMs));
   const times: Record<string, number[]> = { agent: [], land: [], triage: [], plan: [] };
   const checks = new Map<string, number[]>();
-  const agentIn: number[][] = Array.from({ length: n }, () => []);
-  const testsIn: number[][] = Array.from({ length: n }, () => []);
-  const lands = new Array<number>(n).fill(0);
   const agents: { name: string; state: string; model: string; tests: number | null; cost: number; took: number }[] = [];
   const models = new Map<string, number[]>();
 
@@ -260,17 +262,15 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
   for (const r of all) {
     const t0 = Date.parse(r.started), t1 = Date.parse(r.ended ?? "");
     if (!(t0 >= since.getTime()) || t0 > now.getTime() || !(t1 >= t0) || t1 - t0 > MAX_RUN) continue;
-    const secs = (t1 - t0) / 1000, i = Math.min(n - 1, Math.max(0, slot(t0)));
+    const secs = (t1 - t0) / 1000;
     const kind = r.kind === "recheck" || r.kind === "build" ? "agent" : r.kind;
     if (kind in times) times[kind].push(secs);
     for (const c of r.checks ?? []) {
       if (!checks.has(c.name)) checks.set(c.name, []);
       checks.get(c.name)!.push(c.seconds);
-      if (kind === "agent" && isTests(c.name)) testsIn[i].push(c.seconds);
     }
-    if (kind === "land" && r.state === "landed") { lands[i]++; landed.push(r); }
+    if (kind === "land" && r.state === "landed") landed.push(r);
     if (kind !== "agent") continue;
-    agentIn[i].push(secs);
     const model = r.model || "unset";
     if (!models.has(model)) models.set(model, []);
     models.get(model)!.push(secs);
@@ -302,16 +302,24 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     return item ? status(item) : undefined;
   };
   const cls = classify(all, statusOf, since.getTime(), now.getTime(), fit);
-  const med = (xs: number[]) => (xs.length ? round(pct(xs, 0.5)) : null);
+  for (const c of cls.classes) for (const t of c.top) {
+    const m = t.goal.lastIndexOf("-");
+    t.title = lists.item(t.goal.slice(0, m), Number(t.goal.slice(m + 1)))?.title;
+  }
+  const ended = phaseTimes(all, filed(), since.getTime(), now.getTime());
+  const med = (xs: { at: number; secs: number }[], i: number) => {
+    const inBucket = xs.filter((x) => Math.min(n - 1, Math.max(0, slot(x.at))) === i).map((x) => x.secs);
+    return inBucket.length ? round(pct(inBucket, 0.5)) : null;
+  };
   return {
     window,
-    done: lands.reduce((a, b) => a + b, 0),
+    done: landed.length,
     kinds: Object.fromEntries(KINDS.map((k) => [k, stat(times[k])])) as Speed["kinds"],
-    phases: phases(all, filed(), since.getTime(), now.getTime()),
+    phases: { intake: stat(ended.intake.map((x) => x.secs)), implement: stat(ended.implement.map((x) => x.secs)), land: stat(ended.land.map((x) => x.secs)) },
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
     buckets: Array.from({ length: n }, (_, i) => {
       const d = startOf(i);
-      return { label: daily ? `${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : `${pad(d.getHours())}:${pad(d.getMinutes())}`, at: d.toISOString(), agent: med(agentIn[i]), tests: med(testsIn[i]), lands: lands[i] };
+      return { label: daily ? `${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : `${pad(d.getHours())}:${pad(d.getMinutes())}`, at: d.toISOString(), intake: med(ended.intake, i), implement: med(ended.implement, i), land: med(ended.land, i) };
     }),
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),
     models: [...models].map(([model, xs]) => ({ model, count: xs.length, p50: round(pct(xs, 0.5)) })).sort((a, b) => b.count - a.count || a.model.localeCompare(b.model)),

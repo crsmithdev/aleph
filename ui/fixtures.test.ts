@@ -41,8 +41,8 @@ test("the review fixture's speed API fills four Efficiency classes, two or more 
   const { classes } = await get("/api/speed?window=week");
   const filled = classes.filter((c: any) => c.hours > 0);
   expect(filled.length).toBeGreaterThanOrEqual(4);
-  expect(filled.filter((c: any) => ["nothing", "loop", "restarted", "dropped"].includes(c.key)).length).toBeGreaterThanOrEqual(2);
-  expect(filled.some((c: any) => ["nothing", "loop", "restarted", "dropped"].includes(c.key) && c.causes.length >= 2 && c.goals >= 2)).toBe(true);
+  expect(filled.filter((c: any) => ["nothing", "restarted", "dropped"].includes(c.key)).length).toBeGreaterThanOrEqual(2);
+  expect(filled.some((c: any) => ["nothing", "restarted", "dropped"].includes(c.key) && c.causes.length >= 2 && c.goals >= 2)).toBe(true);
 });
 
 test("project paths come from the project names, never from the fixture's own repos.json", () => {
