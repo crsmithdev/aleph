@@ -13,6 +13,7 @@ import { askOf, checkSlot, isAwaiting, isBuild, needsOf, onOf, readCall, testPar
 import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
+import { serverGraph } from "./ui-graph.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
 import { dispatchOn, gates, recordFlake, waitingToLand } from "./factory.ts";
 import { startReview } from "./review.ts";
@@ -516,8 +517,10 @@ function conclude(leader: Member, done: Map<Member, Outcome & { after?: () => vo
 
 /**
  * After the land is on origin/<main>: fast-forward the repo's main checkout,
- * and restart aleph-ui when the paths between the checkout's old and new HEAD
- * include ui/. Neither fails the land; the log says what happened. A checkout
+ * and, for the aleph repo, restart aleph-ui when a path between the checkout's
+ * old and new HEAD is in serverGraph (the files the server imports, at the new
+ * HEAD), wherever it lives. Neither fails the land; the log says what
+ * happened. A checkout
  * that did not move still holds the old code, so no restart.
  */
 function followCheckout(repo: Repo, log: (step: string, out?: string) => void): void {
@@ -527,7 +530,8 @@ function followCheckout(repo: Repo, log: (step: string, out?: string) => void): 
   log("main checkout updated");
   if (repo.key !== "aleph") return;
   const moved = git(repo.path, "diff", "--name-only", old, "HEAD").out.split("\n").filter(Boolean);
-  if (!moved.some((f) => f.startsWith("ui/"))) return;
+  const graph = serverGraph(repo.path);
+  if (!moved.some((f) => graph.has(f))) return;
   try {
     const r = Bun.spawnSync(["systemctl", "--user", "try-restart", "--no-block", "aleph-ui.service"], { stdout: "pipe", stderr: "pipe" });
     log(r.exitCode === 0 ? "aleph-ui restarted" : `aleph-ui not restarted: ${(r.stderr.toString() || r.stdout.toString() || `exit ${r.exitCode}`).trim()}`);

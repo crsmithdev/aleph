@@ -5,7 +5,7 @@ Written 2026-10-26. Version 3, with the sandbox section corrected by the `srt` p
 - Version 1 (`cae4664`) went through a five-lens red team.
 - Version 2 (`ee4d251`) took Chris's answers to it: a separate worker, one copy of aleph and no deploy, the work store in its own repo, and milestones. Version 2 went through a two-lens red team; both rounds are in [`2026-10-26-seed-factory-red-team.md`](2026-10-26-seed-factory-red-team.md).
 - Version 3 takes Chris's answers to round 2: Anthropic's sandbox-runtime (`srt`) in place of a second Unix user; for aleph, the pull is the review; and to-do 28's prices come from Chris's session.
-- 2026-10-27 (Chris, aleph-140): the land calls `followMain` again. After the push it fast-forwards the repo's clean main checkout, and restarts aleph-ui when an aleph land changes `ui/`. Chris will not pull `~/aleph` himself, so "the pull is the review" no longer holds.
+- 2026-10-27 (Chris, aleph-140): the land calls `followMain` again. After the push it fast-forwards the repo's clean main checkout, and restarts aleph-ui when the change touches a file in the server's import graph. Chris will not pull `~/aleph` himself, so "the pull is the review" no longer holds.
 
 The map is [`2026-10-25-goal-to-shipped.md`](2026-10-25-goal-to-shipped.md); this spec is its "seed". The decisions and the earlier red teams are in `~/.aleph/handoffs/seed-decisions.md` and `~/.aleph/handoffs/red-team/`.
 
