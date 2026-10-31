@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hasLabel, readList, writeList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
-import { oracleCommands, readRecord, resultLine, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
+import { accept, oracleCommands, readRecord, resultLine, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { acceptanceStep, dispatchGoals, reacceptReopened } from "./factory.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -270,6 +270,42 @@ test("sandboxRunner: a sandbox that ends before writing code returns its stdout.
   expect(r.code).toBe(7);
   expect(r.output).toContain("the command did not start");
   expect(r.output).toContain("sandbox-said-this");
+});
+
+const withSetup = (setup: string[]) => ({ key: "fac", path: repoDir(), main: "main", setup }) as any;
+
+test("sandboxRunner: a failing setup returns infra with the setup log, and the command does not run", async () => {
+  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
+  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
+  const r = await sandboxRunner(withSetup(["false"]), sha, "bun run bad");
+  expect(r.infra).toBe(true);
+  expect(r.output).toContain("setup failed");
+  expect(r.output).not.toContain("boom");
+  const known = await sandboxRunner(withSetup(["echo KNOWN-SETUP-TEXT-716; false"]), sha, "bun run ok");
+  expect(known.infra).toBe(true);
+  expect(known.output).toContain("setup failed");
+  expect(known.output).toContain("KNOWN-SETUP-TEXT-716");
+});
+
+test("accept through sandboxRunner with a failing setup leaves the goal done, writes no record and adds no fail note", async () => {
+  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
+  const id = doneGoal("`bun run bad`");
+  const line = await accept(withSetup(["false"]), item(id), sandboxRunner);
+  expect(line).toContain("acceptance not run");
+  expect(line).toContain("setup failed");
+  expect(todos.status(item(id))).toBe("done");
+  expect(readRecord("fac", id)).toBeNull();
+  expect(notes(id)).not.toContain("acceptance: fail");
+  expect(hasLabel(item(id), "needs-chris")).toBe(false);
+});
+
+test("sandboxRunner: a passing setup and a command that exits nonzero is not infra and keeps the exit code", async () => {
+  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
+  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
+  const r = await sandboxRunner(withSetup(["true"]), sha, "bun run bad");
+  expect(r.infra).toBeUndefined();
+  expect(r.code).toBe(3);
+  expect(r.output).toContain("boom");
 });
 
 /** A landed goal the store says is open again, after an acceptance fail. */

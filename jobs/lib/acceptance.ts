@@ -104,12 +104,14 @@ export const sandboxRunner: Runner = async (repo, sha, command) => {
     if (!b.ok) return { code: 1, output: `bundle failed: ${b.out}`, infra: true };
     const script = [
       "set -e", "git init -q .", `git fetch -q ../out/accept.bundle ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
-      `{ ${repo.setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1 || { echo setup failed >> ../checklog/out.log; cat ../checklog/setup.log >> ../checklog/out.log; echo 1 > ../checklog/code; exit 0; }`,
+      `{ ${repo.setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1 || { echo setup failed >> ../checklog/out.log; cat ../checklog/setup.log >> ../checklog/out.log; touch ../checklog/setup-failed; echo 1 > ../checklog/code; exit 0; }`,
       `timeout -k 30 1200 bash -c ${q(command)} > ../checklog/out.log 2>&1; echo $? > ../checklog/code`,
     ].join("\n");
     const logs = join(run, "stdout.log");
     const r = await sandboxed(run, script, { read: ["out"], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: logs, stderr: logs });
     const at = (f: string) => join(run, "checklog", f);
+    // The Oracle did not run: a setup failure is an infra error, and its log is in out.log.
+    if (existsSync(at("setup-failed"))) return { code: 1, output: existsSync(at("out.log")) ? readFileSync(at("out.log"), "utf8") : "setup failed", infra: true };
     if (!existsSync(at("code"))) {
       const tail = existsSync(logs) ? lastLines(readFileSync(logs, "utf8")) : "";
       return { code: r.code || 1, output: `the command did not start (exit ${r.code})${tail ? `: ${tail}` : ""}`, infra: true };
