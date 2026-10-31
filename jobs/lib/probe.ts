@@ -25,7 +25,7 @@ function denied(): [string, string][] {
     ["read ~/.claude", `ls ${h}/.claude`],
     // srt shows ~/.aleph as the empty mount points of the run's own allowed paths,
     // so the probe reads the folders that hold data.
-    ["read ~/.aleph", `ls ${h}/.aleph/secrets || ls ${h}/.aleph/jobs || ls ${h}/.aleph/items || ls ${h}/.aleph/vault`],
+    ["read ~/.aleph", `ls ${h}/.aleph/secrets || ls ${h}/.aleph/jobs || ls ${h}/.aleph/items || ls ${h}/.aleph/issues || ls ${h}/.aleph/vault`],
     ["docker socket", "curl -sf --max-time 3 --unix-socket /var/run/docker.sock http://x/version"],
     ["cmd.exe", "timeout 5 /mnt/c/Windows/System32/cmd.exe /c echo hi"],
     ["127.0.0.1:3010", "curl -sf --max-time 3 http://127.0.0.1:3010"],

@@ -192,7 +192,7 @@ New lands write `Issue: <issue id>` and `Goal: <goal id>`. Readers accept `Item:
 
 ### Order of work (expand, migrate, contract)
 
-1. **Readers and stage():** the store and ledger readers accept the old and the new shape; `stage()` replaces the three status functions; behaviour on old data is unchanged.
+1. **Readers and stage():** the store and ledger readers accept the old and the new shape; `stage()` replaces the three status functions; behaviour on old data is unchanged. The readers own the layout: one function (`jobs/lib/layout.ts`) gives the store, ledger and sandbox paths, the new ones (`issues`, `runs`, `sandbox`) once `~/.aleph/issues` exists and the old ones (`items`, `jobs`, `runs`) before, and the env variables still win.
 2. **The migrate command,** with dry run, apply, backup and undo, tested on fixtures.
 3. **Host migration** by Claude (not a factory goal).
 4. **Writers and the CLI:** triage, plan, dispatch, land, firefighter, review, Always rules and the CLI write the new shape only. Runs after aleph-617.

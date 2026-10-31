@@ -5,6 +5,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { availableParallelism, homedir } from "node:os";
 import { join } from "node:path";
+import { layout } from "./layout.ts";
 
 export type State = "running" | "passed" | "needs-you" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
@@ -99,7 +100,7 @@ export function expand(p: string): string {
   return p === "~" || p.startsWith("~/") ? join(homedir(), p.slice(1)) : p;
 }
 
-export const jobsDir = () => expand(process.env.ALEPH_JOBS_DIR ?? "~/.aleph/jobs");
+export const jobsDir = () => layout().ledger;
 
 export function loadRegistry(): Record<string, Repo> {
   const file = expand(process.env.ALEPH_REPOS ?? "~/.aleph/repos.json");

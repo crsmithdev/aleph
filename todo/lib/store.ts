@@ -13,7 +13,7 @@
  * `fm.labels` or name a task's path.
  */
 import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../jobs/lib/git.ts";
-import { expand } from "../../jobs/lib/ledger.ts";
+import { layout } from "../../jobs/lib/layout.ts";
 import { readDecision, writeDecision, type Decision } from "../../jobs/lib/decision.ts";
 import * as todos from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Item } from "./todo.ts";
@@ -25,7 +25,7 @@ export interface Place { key: string }
 const MAIN = "main";
 const ATTEMPTS = 5;
 
-export const storeDir = (): string => expand(process.env.ALEPH_ITEMS ?? "~/.aleph/items");
+export const storeDir = (): string => layout().store;
 const tasksDir = (key: string): string => `${key}/backlog/tasks`;
 const configPath = (key: string): string => `${key}/backlog/config.yml`;
 const itemPath = (key: string, item: todos.Item | string): string => `${tasksDir(key)}/${key}-${typeof item === "string" ? item : todos.refOf(item)}.md`;

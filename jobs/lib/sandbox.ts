@@ -8,9 +8,10 @@ import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, rea
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { expand, testParallel } from "./ledger.ts";
+import { layout } from "./layout.ts";
 import { SHOT_CLIENT } from "./shot.ts";
 
-export const runsDir = () => expand(process.env.ALEPH_RUNS_DIR ?? "~/.aleph/runs");
+export const runsDir = () => layout().sandbox;
 const SRT = () => expand(process.env.ALEPH_SRT ?? "~/.aleph/tools/bin/srt");
 const TOKEN = () => expand(process.env.ALEPH_WORKER_TOKEN ?? "~/.aleph/secrets/worker-token");
 

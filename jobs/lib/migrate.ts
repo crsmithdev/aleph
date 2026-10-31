@@ -18,6 +18,7 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { expand, isLive, readReview2, readRun, stamp, type Ask, type Entry, type Run } from "./ledger.ts";
 import { isOpen, lastReal } from "./job.ts";
 import { fetchOrigin, followMain, git, treeWithFiles } from "./git.ts";
+import { layout, oldStore } from "./layout.ts";
 import { runViewOf, stage, type Ctx, type Subject } from "./stage.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
@@ -29,12 +30,13 @@ const refuse = (m: string): never => { throw new MigrateRefusal(m); };
 export interface Roots { store: string; issues: string; ledger: string; sandboxOld: string; sandbox: string; factory: string; backups: string }
 
 export function roots(): Roots {
-  const items = expand(process.env.ALEPH_ITEMS ?? "~/.aleph/items");
+  const lay = layout();
+  const items = oldStore();
   const old = expand(process.env.ALEPH_RUNS_DIR ?? "~/.aleph/runs");
   const factory = expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
   return {
     store: items, issues: expand(process.env.ALEPH_ISSUES ?? join(dirname(items), "issues")),
-    ledger: expand(process.env.ALEPH_JOBS_DIR ?? "~/.aleph/jobs"), sandboxOld: old,
+    ledger: lay.ledger, sandboxOld: old,
     sandbox: expand(process.env.ALEPH_SANDBOX_DIR ?? join(dirname(old), "sandbox")),
     factory, backups: expand(process.env.ALEPH_BACKUPS_DIR ?? join(dirname(factory), "backups")),
   };
