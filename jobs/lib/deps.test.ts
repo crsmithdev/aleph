@@ -95,7 +95,7 @@ describe("sweep", () => {
     sh(join(base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", "start");
     sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
     mkdirSync(join(base, "runs"));
-    // The stand-in for srt: the clean environment, as review2.test.ts has it.
+    // The stand-in for srt: the clean environment, as review.test.ts has it.
     writeFileSync(join(base, "pass"), `#!/bin/bash\nshift\nexec env -i "$@"\n`, { mode: 0o755 });
     Object.assign(process.env, gitEnv, {
       ALEPH_ITEMS: join(base, "items"),

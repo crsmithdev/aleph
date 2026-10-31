@@ -45,7 +45,7 @@ beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "shot-test-"));
   record = join(base, "record.jsonl");
   writeFileSync(join(base, "chrome"), fakeChrome(), { mode: 0o755 });
-  process.env.ALEPH_REVIEW2_CHROME = join(base, "chrome");
+  process.env.ALEPH_REVIEW_CHROME = join(base, "chrome");
   srv = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response("<p class=row>x</p>") });
 });
 afterAll(() => { srv.stop(true); rmSync(base, { recursive: true, force: true }); });

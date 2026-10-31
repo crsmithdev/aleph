@@ -307,6 +307,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean }
     for (const e of runs) {
       Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}-review`, `aleph-${e.id}-review2`], { stdout: "ignore", stderr: "ignore" });
       if (existsSync(join(e.folder, CALL_FILE))) rmSync(join(e.folder, "review"), { recursive: true, force: true });
+      // Step 5: runs from before call.md keep review2.md and the review2/ scratch dir, and a review2 unit.
       if (existsSync(join(e.folder, "review2.md"))) rmSync(join(e.folder, "review2"), { recursive: true, force: true });
     }
     if (repo) removeBranch(repo, last.run);

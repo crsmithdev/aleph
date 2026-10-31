@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { tagged } from "./gate.ts";
-import { allJobs, askOf, isBuild, isLost, isOpen, LOCK_BUSY, needsOf, oldState, onOf, reviewOf, type CheckResult, type Entry, type Review2, type Run, type State } from "./ledger.ts";
+import { allJobs, askOf, isBuild, isLost, isOpen, LOCK_BUSY, needsOf, oldState, onOf, reviewOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
 
 export { allJobs, isOpen };
 
@@ -111,8 +111,8 @@ export interface JobView {
   hidden?: { passed: number; total: number };
   /** The review of the last run: its call and reason. */
   review?: { call: string; reason?: string };
-  /** The review of the last run in its old shape, for ui/ until step 5. */
-  review2?: Review2;
+  /** The review of the last run in its old shape (`verdict`, `chris`), which ui/ still reads. The field stays until step 6 moves the UI to `review`. */
+  review2?: { verdict: "land" | "back" | "chris" | "pending" | "error"; reason?: string };
   /** A landed job's manual check. */
   check?: "open" | "done";
   /** The last run died without an end. */
@@ -147,6 +147,7 @@ export function view(j: Job): JobView {
   if (hid?.total) v.hidden = { passed: hid.passed ?? 0, total: hid.total };
   const review = reviewOf(last);
   if (review) v.review = { call: review.call, ...(review.reason !== undefined && { reason: review.reason }) };
+  // Step 6: the UI reads review2 until it reads review.
   if (review) v.review2 = { verdict: review.call === "ask" ? "chris" : review.call, ...(review.reason !== undefined && { reason: review.reason }) };
   if (r.state === "landed" && r.check) v.check = r.check;
   if (isLost(last.folder)) v.lost = true;

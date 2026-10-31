@@ -7,7 +7,7 @@
 import { dlopen, FFIType } from "bun:ffi";
 import { closeSync, openSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { connect } from "node:net";
-import { freePort } from "./review2-browser.ts";
+import { freePort } from "./review-browser.ts";
 
 function childrenOf(): Map<number, number[]> {
   const kids = new Map<number, number[]>();

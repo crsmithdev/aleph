@@ -1064,7 +1064,7 @@ const sentBack = (n: number, reason: string) => `the reviewer sent it back ${tim
 export async function reviewBack(folder: string): Promise<void> {
   const run = readRun(folder);
   const r2 = readCall(folder);
-  if (!run || !isBuild(run.kind) || !isAwaiting(run.state) || r2?.verdict !== "back") return;
+  if (!run || !isBuild(run.kind) || !isAwaiting(run.state) || r2?.call !== "back") return;
   const earlier = (jobById(run.job) ?? []).filter((e) => e.id !== basename(folder) && isBuild(e.run.kind) && e.run.failed).map((e) => e.run);
   const reason = r2.reason ?? "no reason given";
   if (earlier.length < fixRounds()) {

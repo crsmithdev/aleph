@@ -69,11 +69,11 @@ describe("a factory run", () => {
     expect(trailers).not.toContain("Held-by: Chris");
   });
 
-  test("a review2 back goes to the worker as a fix round; after the last round the run needs Chris", async () => {
-    const r = await fjob("fback", "commit held/back.txt REVIEW2:back");
+  test("a review back goes to the worker as a fix round; after the last round the run needs Chris", async () => {
+    const r = await fjob("fback", "commit held/back.txt REVIEW:back");
     // A run's folder exists a moment before its state.json.
     const runs = () => readdirSync(jobsDir).filter((d) => d.includes("-fac-fback-") && existsSync(join(jobsDir, d, "state.json"))).sort().map((d) => ({ id: d, ...state(d) }));
-    // The last run's reason is written after its review2 ends, so it is what to wait for.
+    // The last run's reason is written after its review ends, so it is what to wait for.
     await until(() => runs().length === 3 && /^the reviewer sent it back/.test(runs()[2].reason ?? ""));
     const rs = runs();
     expect(rs.map((x) => x.state)).toEqual(["stuck", "stuck", "awaiting"]);

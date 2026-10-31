@@ -79,8 +79,8 @@ function run(o: Partial<Run> & { name: string }, files: Record<string, string> =
 }
 
 /** A held run of issue 1 on branch `b`, with both reviews' files. */
-const held = (b: string, review2 = "Looks right.\nVERDICT: land\n") =>
-  run({ name: `${key}-1`, needs: "held", todo: 1, branch: b, reason: "held path x" }, { "review.md": "Fine.\nVERDICT: pass\n", "review2.md": review2 });
+const held = (b: string, review = "Looks right.\nVERDICT: land\n") =>
+  run({ name: `${key}-1`, needs: "held", todo: 1, branch: b, reason: "held path x" }, { "review.md": "Fine.\nVERDICT: pass\n", "review2.md": review });
 
 let landed: string[] = [];
 let dropped: { name: string; reason: string }[] = [];
@@ -187,9 +187,9 @@ test("the same run with a diff in jobs/lib/sandbox.ts is not landed: an Ask of a
   expect(JSON.parse(told[0]).text).toContain("needs your review");
 });
 
-test("a diff that changes REVIEW2_SANDBOX in jobs/lib/review2.ts is not landed", async () => {
+test("a diff that changes REVIEW_SANDBOX in jobs/lib/review.ts is not landed", async () => {
   fresh([{ title: "held", labels: ["goal"] }]);
-  branch(`b${n}`, "jobs/lib/review2.ts", "export const REVIEW2_SANDBOX = {};\n");
+  branch(`b${n}`, "jobs/lib/review.ts", "export const REVIEW_SANDBOX = {};\n");
   held(`b${n}`);
   reply([{ do: "land", job: `${key}-1` }]);
   await firefighterStep(ports());
@@ -197,14 +197,14 @@ test("a diff that changes REVIEW2_SANDBOX in jobs/lib/review2.ts is not landed",
   expect(told.length).toBe(1);
 });
 
-test("a land before review2 has a verdict is refused", async () => {
+test("a land before the review has a verdict is refused", async () => {
   fresh([{ title: "held", labels: ["goal"] }]);
   branch(`b${n}`, "ui/views/y.js");
   held(`b${n}`, "PENDING\n");
   reply([{ do: "land", job: `${key}-1` }]);
   const f = await firefighterStep(ports());
   expect(landed).toEqual([]);
-  expect(f?.refused).toEqual([expect.stringContaining("review2 has no verdict yet")]);
+  expect(f?.refused).toEqual([expect.stringContaining("review has no verdict yet")]);
   expect(log()).toContain("firefighter: tell: refused land");
   expect(told).toEqual([]);
 });

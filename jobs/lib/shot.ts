@@ -7,7 +7,7 @@
 import { mkdirSync, mkdtempSync, lstatSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, sep } from "node:path";
-import { Pipe, startChrome, tail } from "./review2-browser.ts";
+import { Pipe, startChrome, tail } from "./review-browser.ts";
 
 export interface ShotRequest { url: string; out: string; width: number; height: number; scheme: string; click?: string; wait?: number }
 export interface ShotResult { ok: boolean; out?: string; width?: number; height?: number; error?: string }

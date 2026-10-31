@@ -19,8 +19,8 @@ export interface Ask {
   recommended?: string; why: string[];
 }
 
-/** A review's call; `chris` of the old review2.md reads as `ask`. */
-export type Review = { call: "land" | "back" | "ask"; reason?: string };
+/** A review's call: what the reviewer decided, or `pending` while it runs and `error` when it ended without one. A `chris` VERDICT line reads as `ask`. */
+export type Review = { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string };
 
 export interface Run {
   kind: "agent" | "build" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter";
@@ -218,14 +218,9 @@ export function needsOf(ask: Ask | undefined): Run["needs"] {
   return (Object.keys(OLD_NEEDS) as NonNullable<Run["needs"]>[]).find((n) => OLD_NEEDS[n].reason === ask.reason);
 }
 
-/** The run's review: `review`, else its folder's call.md, else the legacy review2.md, with `chris` read as `ask`. */
-export function reviewOf(e: Entry): (Review | { call: "pending" | "error"; reason?: string }) | undefined {
-  if (e.run.review) return e.run.review;
-  const r = readCall(e.folder) ?? readReview2(e.folder);
-  if (!r) return undefined;
-  const out: { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string } = { call: r.verdict === "chris" ? "ask" : r.verdict };
-  if (r.reason !== undefined) out.reason = r.reason;
-  return out as any;
+/** The run's review: `review` of its state.json, else its folder's call.md, else the legacy review2.md. */
+export function reviewOf(e: Entry): Review | undefined {
+  return e.run.review ?? readCall(e.folder) ?? readReview(e.folder);
 }
 
 function cmdline(pid: number): string | null {
@@ -330,15 +325,13 @@ export async function tell(line: string): Promise<boolean> {
   }
 }
 
-export type Review2 = { verdict: "land" | "back" | "chris" | "pending" | "error"; reason?: string };
-
 /** The last `VERDICT:` line of a review: `land`, `back <reason>` or `chris <question>`; null when it is none of them. */
-export function parseVerdict(result: string): Review2 | null {
+export function parseVerdict(result: string): Review | null {
   const v = result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("VERDICT:")).map((l) => l.slice(8).trim()).at(-1);
   if (v === undefined) return null;
-  if (v === "land") return { verdict: "land" };
+  if (v === "land") return { call: "land" };
   const m = v.match(/^(back|chris)\s+(\S.*)$/);
-  return m ? { verdict: m[1] as "back" | "chris", reason: m[2] } : null;
+  return m ? { call: m[1] === "chris" ? "ask" : "back", reason: m[2] } : null;
 }
 
 /** The file in a run folder where the reviewer writes: the run's call. */
@@ -349,19 +342,19 @@ export const CALL_FILE = "call.md";
  * `PENDING` line, a last line `ERROR: <reason>`, or the review ending in a
  * `VERDICT:` line. Undefined when there is no call.md.
  */
-export const readCall = (folder: string): Review2 | undefined => readVerdictFile(join(folder, CALL_FILE));
+export const readCall = (folder: string): Review | undefined => readVerdictFile(join(folder, CALL_FILE));
 
-/** The legacy reader: the same for the review2.md of a run from before the rename. */
-export const readReview2 = (folder: string): Review2 | undefined => readVerdictFile(join(folder, "review2.md"));
+/** The legacy reader: the same for the review2.md of a run from before the rename. The file name stays until step 5 moves old runs to call.md. */
+export const readReview = (folder: string): Review | undefined => readVerdictFile(join(folder, "review2.md"));
 
-/** The review a verdict file holds, as `Review2` shows it, or undefined when the file is not there. */
-function readVerdictFile(file: string): Review2 | undefined {
+/** The review a verdict file holds, as `Review` shows it, or undefined when the file is not there. */
+function readVerdictFile(file: string): Review | undefined {
   let text: string;
   try { text = readFileSync(file, "utf8"); } catch { return undefined; }
   const last = text.trim().split("\n").at(-1)?.trim() ?? "";
-  if (last === "PENDING") return { verdict: "pending" };
-  if (last.startsWith("ERROR:")) return { verdict: "error", reason: last.slice(6).trim() };
-  return parseVerdict(text) ?? { verdict: "error", reason: "no VERDICT line" };
+  if (last === "PENDING") return { call: "pending" };
+  if (last.startsWith("ERROR:")) return { call: "error", reason: last.slice(6).trim() };
+  return parseVerdict(text) ?? { call: "error", reason: "no VERDICT line" };
 }
 
 /** The reason of a land that found the job lock taken: it did nothing to the job. */

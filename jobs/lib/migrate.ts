@@ -15,7 +15,7 @@
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
-import { expand, isLive, readReview2, readRun, stamp, type Ask, type Entry, type Run } from "./ledger.ts";
+import { expand, isLive, readReview, readRun, stamp, type Ask, type Entry, type Run } from "./ledger.ts";
 import { isOpen, lastReal } from "./job.ts";
 import { fetchOrigin, followMain, git, treeWithFiles } from "./git.ts";
 import { layout, oldStore } from "./layout.ts";
@@ -334,12 +334,12 @@ export function apply(r: Roots = roots()): { backup: string; commit: string; ite
   const follow = followMain(r.store, "main");
   if (follow) console.error(`warn: ${follow}`);
 
-  // The ledger's state files: the new shape, and the review of a review2.md.
+  // The ledger's state files: the new shape, and the review of a legacy review2.md (the name stays until step 5).
   let changed = 0;
   for (const m of p.runs) {
-    const review = m.after.review === undefined ? readReview2(m.folder) : undefined;
-    const out: Run = review && (review.verdict === "land" || review.verdict === "back" || review.verdict === "chris")
-      ? { ...m.after, review: { call: review.verdict === "chris" ? "ask" : review.verdict, ...(review.reason !== undefined ? { reason: review.reason } : {}) } } : m.after;
+    const review = m.after.review === undefined ? readReview(m.folder) : undefined;
+    const out: Run = review && (review.call === "land" || review.call === "back" || review.call === "ask")
+      ? { ...m.after, review: { call: review.call, ...(review.reason !== undefined ? { reason: review.reason } : {}) } } : m.after;
     if (JSON.stringify(out) === JSON.stringify(m.before)) continue;
     writeFileSync(join(m.folder, "state.json"), JSON.stringify(out, null, 2) + "\n");
     changed++;

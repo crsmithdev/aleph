@@ -30,7 +30,7 @@ const TIME_BOX_MS = () => Number(process.env.ALEPH_FIREFIGHTER_TIMEOUT ?? 900) *
 const stateFile = () => join(factoryDir(), "firefighter.json");
 
 /** Paths a firefighter never lands: a diff that touches one goes to Chris. */
-export const SECURITY_PATHS = ["hooks/", "jobs/lib/sandbox.ts", "jobs/lib/gate.ts", "jobs/lib/review2-browser.ts"];
+export const SECURITY_PATHS = ["hooks/", "jobs/lib/sandbox.ts", "jobs/lib/gate.ts", "jobs/lib/review-browser.ts"];
 
 export type EventKind = "awaiting" | "stuck" | "failed" | "loop" | "red" | "ask" | "lost";
 /**
@@ -150,6 +150,7 @@ export const describe = (a: Action): string =>
 
 const MAX_FILE = 4000;
 const clip = (s: string) => (s.length > MAX_FILE ? `…${s.slice(-MAX_FILE)}` : s);
+// Step 5: review2.md is the file name of runs from before call.md.
 const RUN_FILES = ["review.md", "call.md", "review2.md", "browser/report.md", "result.md"];
 
 /** The run folders and issue bodies an event needs, as prompt text. */
@@ -209,13 +210,13 @@ Reply with one JSON object and nothing else: {"actions": [ ... ]}, each action o
 }
 
 /** The changed paths of a run's branch against its repo's main, or null when there is no branch to read. */
-function changedPaths(repo: Repo, branch: string | undefined): { paths: string[]; review2Sandbox: boolean } | null {
+function changedPaths(repo: Repo, branch: string | undefined): { paths: string[]; reviewSandbox: boolean } | null {
   if (!branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok) return null;
   const base = git(repo.path, "rev-parse", "--verify", "-q", `origin/${repo.main}`).ok ? `origin/${repo.main}` : repo.main;
   const d = git(repo.path, "diff", "--name-only", `${base}...${branch}`);
   if (!d.ok) return null;
-  const sandbox = git(repo.path, "diff", `${base}...${branch}`, "--", "jobs/lib/review.ts", "jobs/lib/review2.ts").out.split("\n").some((l) => /^[+-](?![+-])/.test(l) && /REVIEW2?_SANDBOX/.test(l));
-  return { paths: d.out.split("\n").filter(Boolean), review2Sandbox: sandbox };
+  const sandbox = git(repo.path, "diff", `${base}...${branch}`, "--", "jobs/lib/review.ts").out.split("\n").some((l) => /^[+-](?![+-])/.test(l) && /REVIEW_SANDBOX/.test(l));
+  return { paths: d.out.split("\n").filter(Boolean), reviewSandbox: sandbox };
 }
 
 /** A held security path the branch changes, or null. */
@@ -223,7 +224,7 @@ export function securityPath(repo: Repo, branch: string | undefined): string | n
   const c = changedPaths(repo, branch);
   if (!c) return "unknown";
   const hit = c.paths.find((p) => SECURITY_PATHS.some((s) => (s.endsWith("/") ? p.startsWith(s) : p === s)));
-  return hit ?? (c.review2Sandbox ? "REVIEW_SANDBOX in jobs/lib/review.ts" : null);
+  return hit ?? (c.reviewSandbox ? "REVIEW_SANDBOX in jobs/lib/review.ts" : null);
 }
 
 /** Whether an item's Ask is a product choice: it offers options to pick from (triage's `chris` verdict and the rescue write them). A plain question has none. */
@@ -271,8 +272,8 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     const agent = runs.findLast((e) => isBuild(e.run.kind) || e.run.kind === "recheck") ?? last;
     if (!reviewVerdict(readFile(agent, "review.md") ?? "")) return { refused: `${describe(a)}: the reviewer has no verdict yet` };
     const r2 = reviewOf(agent);
-    if (!r2 || r2.call === "pending" || r2.call === "error") return { refused: `${describe(a)}: review2 has no verdict yet` };
-    if (r2.call !== "land") return { refused: `${describe(a)}: review2 says ${r2.call === "ask" ? "chris" : r2.call}${r2.reason ? ` (${r2.reason})` : ""}` };
+    if (!r2 || r2.call === "pending" || r2.call === "error") return { refused: `${describe(a)}: review has no verdict yet` };
+    if (r2.call !== "land") return { refused: `${describe(a)}: review says ${r2.call}${r2.reason ? ` (${r2.reason})` : ""}` };
     const held = securityPath(repo, agent.run.branch);
     // Chris let the firefighter land held security paths: the check is skipped, and the land is logged. An unknown branch still goes to Chris.
     const granted = held !== null && held !== "unknown" && always("firefighter")?.action === "land";

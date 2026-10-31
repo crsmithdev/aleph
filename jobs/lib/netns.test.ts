@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
-import { freePort } from "./review2-browser.ts";
+import { freePort } from "./review-browser.ts";
 
 const can = (cmd: string[]) => { try { return Bun.spawnSync(cmd, { stdout: "ignore", stderr: "ignore" }).exitCode === 0; } catch { return false; } };
 /** Poll for the pid of the sandbox namespace holder until a deadline in time, and say so when it never shows. */

@@ -3,13 +3,13 @@
  * under srt in a scratch clone of the repo, which merges the run branch onto origin/main,
  * runs the checks, reads the test diff, lists the changes outside the goal's
  * edit surface, and for a `ui` goal the harness starts the ui server on the merge
- * result and loads the changed views in Chrome (review2-browser.ts), both outside the sandbox, before the reviewer starts. It writes call.md in the run folder, and only that: state.json belongs to the
+ * result and loads the changed views in Chrome (review-browser.ts), both outside the sandbox, before the reviewer starts. It writes call.md in the run folder, and only that: state.json belongs to the
  * run's owner. The verdict, a `PENDING` line or a last `ERROR: <reason>` line
  * are read back from call.md (`readCall`), and `recordReview` puts the call on the run's state.json. Nothing lands: Land stays a click.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { BROWSER, browserStep, changedViews, startUiServer } from "./review2-browser.ts";
+import { BROWSER, browserStep, changedViews, startUiServer } from "./review-browser.ts";
 import { hasLabel, reader } from "../../todo/lib/store.ts";
 import { git, gitWith } from "./git.ts";
 import { outcome } from "./gate.ts";
@@ -20,7 +20,7 @@ import { linkBins, runPath, sandboxed, workerToken, writeHome } from "./sandbox.
 /**
  * The reviewer's profile: it reads the run folder, writes only in review/ (its
  * clone and home) and tmp/, and reaches the Anthropic API and localhost, with
- * local binding. No Unix sockets: the ui server and Chrome run in the harness (review2-browser.ts).
+ * local binding. No Unix sockets: the ui server and Chrome run in the harness (review-browser.ts).
  */
 export const REVIEW_SANDBOX = {
   read: ["."], write: ["review", "tmp"], net: { domains: ["api.anthropic.com", "localhost"], localBinding: true },
@@ -180,12 +180,12 @@ async function review(folder: string): Promise<void> {
     };
     delete env.ANTHROPIC_API_KEY;
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
-    const argv = [process.env.ALEPH_REVIEW2_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+    const argv = [process.env.ALEPH_REVIEW_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
     const log = join(folder, "review.log");
     const r = await sandboxed(folder, `exec ${argv.map(q).join(" ")}`, {
       ...REVIEW_SANDBOX, cwd: "review/work", env, stdin: text, stdout: log, stderr: log,
-      limit: Number(process.env.ALEPH_REVIEW2_TIMEOUT ?? 1500),
+      limit: Number(process.env.ALEPH_REVIEW_CALL_TIMEOUT ?? 1500),
     });
     const o = outcome(existsSync(log) ? readFileSync(log, "utf8") : "");
     writeFileSync(md, o.result.trimEnd() + "\n");
@@ -227,8 +227,8 @@ export function startReview(folder: string): boolean {
 export function recordReview(folder: string): void {
   try {
     const r = readCall(folder);
-    if (!r || (r.verdict !== "land" && r.verdict !== "back" && r.verdict !== "chris")) return;
+    if (!r || r.call === "pending" || r.call === "error") return;
     if (!readRun(folder)) return;
-    updateRun(folder, { review: { call: r.verdict === "chris" ? "ask" : r.verdict, ...(r.reason !== undefined && { reason: r.reason }) } });
+    updateRun(folder, { review: { call: r.call, ...(r.reason !== undefined && { reason: r.reason }) } });
   } catch { /* the run folder is gone */ }
 }

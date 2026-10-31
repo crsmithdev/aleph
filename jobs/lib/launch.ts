@@ -1,6 +1,6 @@
 /**
  * The launcher: every place that starts `aleph <verb>` as a process of its
- * own goes through here. A run's unit and a held run's review2 get a transient
+ * own goes through here. A run's unit and a held run's review get a transient
  * systemd unit (or, with `ALEPH_JOB_FOREGROUND=1`, a plain child); a dispatch
  * or triage after a transition is a detached process; the UI runs a verb and
  * reads its output. The transitions themselves run in-process: see transitions.ts.

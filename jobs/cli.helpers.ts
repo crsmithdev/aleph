@@ -107,7 +107,7 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
   return {
     ...(process.env as Record<string, string>), ...gitEnv,
     ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: items, ALEPH_JOB_FOREGROUND: "1",
-    ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, ALEPH_REVIEW2_CMD: join(base, "fake-review2"), ALEPH_FIREFIGHTER_CMD: join(base, "fake-firefighter"), XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
+    ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, ALEPH_REVIEW_CMD: join(base, "fake-review"), ALEPH_FIREFIGHTER_CMD: join(base, "fake-firefighter"), XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
     ALEPH_SANDBOX_CMD: join(base, "pass"), ALEPH_RUNS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_WORKER_TOKEN: join(base, "token"),
     // The tests start more factory runs than a day's cap; the cap has its own test.
     ALEPH_DAY_CAP: "100",
@@ -235,12 +235,12 @@ export function setup(): void {
   fake = join(base, "fake-worker");
   reviewer = join(base, "fake-reviewer");
   writeFileSync(reviewer, REVIEWER, { mode: 0o755 });
-  // The verdict follows a REVIEW2:back or REVIEW2:land mark in the goal; otherwise Chris is asked.
-  writeFileSync(join(base, "fake-review2"), `#!/bin/bash
+  // The verdict follows a REVIEW:back or REVIEW:land mark in the goal; otherwise Chris is asked.
+  writeFileSync(join(base, "fake-review"), `#!/bin/bash
 p=$(cat)
 case "$p" in
-  *REVIEW2:back*) v="VERDICT: back fix the held path" ;;
-  *REVIEW2:land*) v="VERDICT: land" ;;
+  *REVIEW:back*) v="VERDICT: back fix the held path" ;;
+  *REVIEW:land*) v="VERDICT: land" ;;
   *) v="VERDICT: chris decide the held path" ;;
 esac
 echo '{"type":"result","is_error":false,"result":"Checked.\\n'"$v"'"}'

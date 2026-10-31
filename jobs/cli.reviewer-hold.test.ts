@@ -11,8 +11,8 @@ describe("a factory run", () => {
   const fjob = (name: string, action: string, extra: Record<string, string> = {}, more: string[] = []) =>
     aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), ...more], extra);
   test("a run held for a held path is awaiting, with an approval ask and no needs; aleph jobs still lists it as needs-you held", async () => {
-    // No background review2: it would rewrite the run's reason.
-    const r = await aleph(["job", "fac", "rheldpath", "--spec", specFile("Goal: rheldpath\nACTION: commit held/rp.txt\n")], { ALEPH_REVIEW2_CMD: "/bin/false" });
+    // No background review: it would rewrite the run's reason.
+    const r = await aleph(["job", "fac", "rheldpath", "--spec", specFile("Goal: rheldpath\nACTION: commit held/rp.txt\n")], { ALEPH_REVIEW_CMD: "/bin/false" });
     const s = state(r.json.run);
     expect(s).toMatchObject({ kind: "build", state: "awaiting", ask: { kind: "approval", reason: "held-path" } });
     expect(s.needs).toBeUndefined();

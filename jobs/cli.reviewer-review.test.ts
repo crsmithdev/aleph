@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, fakeLog, jobsDir, remote, sh, specFile, state, setup, teardown } from "./cli.helpers";
+import { aleph, base, fakeLog, until, jobsDir, remote, sh, specFile, state, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -10,9 +10,9 @@ describe("a factory run", () => {
   const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
   const runsLeft = () => existsSync(join(base, "runs")) ? readdirSync(join(base, "runs")) : [];
   describe("the reviewer", () => {
-    // These runs never meet review2: a background review2 would rewrite the needs-you reason the assertions read.
+    // These runs never meet review: a background review would rewrite the needs-you reason the assertions read.
     const rjob = (name: string, mark: string, action = `commit ${name}.txt`, extra: Record<string, string> = {}) =>
-      aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name} ${mark}\nACTION: ${action}\n`)], { ALEPH_REVIEW2_CMD: "/bin/false", ...extra });
+      aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name} ${mark}\nACTION: ${action}\n`)], { ALEPH_REVIEW_CMD: "/bin/false", ...extra });
     const calls = () => existsSync(join(fakeLog, "review-calls")) ? readFileSync(join(fakeLog, "review-calls"), "utf8").split("\n").length - 1 : 0;
 
     test("a pass lands; the prompt holds the item and the diff; the cost adds up", async () => {
@@ -111,6 +111,27 @@ describe("a factory run", () => {
       expect(rs[0]).toMatchObject({ state: "awaiting", ask: expect.objectContaining({ kind: "approval", reason: "review" }), reason: expect.stringMatching(/^reviewer: no verdict/) });
       await aleph(["drop", "rnone2"]);
     }, 30_000);
+
+    test("the held review's end records review.call on state.json, and aleph jobs shows it (criterion 17)", async () => {
+      const stub = (name: string, line: string) => {
+        const f = join(base, `stub-${name}`);
+        writeFileSync(f, `#!/bin/bash\ncat >/dev/null\necho '{"type":"result","is_error":false,"result":"Checked.\\n${line}"}'\n`, { mode: 0o755 });
+        return f;
+      };
+      const cases: [string, string, { call: string; reason?: string }][] = [
+        ["rcland", "VERDICT: land", { call: "land" }],
+        ["rcback", "VERDICT: back r", { call: "back", reason: "r" }],
+        ["rcask", "VERDICT: chris q", { call: "ask", reason: "q" }],
+      ];
+      for (const [name, line, want] of cases) {
+        const r = await rjob(name, "REVIEW:pass", "commit held/" + name + ".txt", { ALEPH_REVIEW_CMD: stub(name, line), ALEPH_FIX_ROUNDS: "0" });
+        const run = r.json.run;
+        await until(() => state(run).review !== undefined);
+        expect(state(run).review).toEqual(want);
+        expect((await aleph(["jobs", name])).json.review).toEqual(want);
+        await aleph(["drop", name]);
+      }
+    }, 60_000);
 
     test("a held path holds without a review", async () => {
       const n = calls();

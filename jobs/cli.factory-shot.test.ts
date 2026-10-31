@@ -44,7 +44,7 @@ afterAll(() => { srv.stop(true); rmSync(tmp, { recursive: true, force: true }); 
 
 describe("a factory run", () => {
   test("a worker's aleph-shot call yields a committed PNG of the requested width", async () => {
-    const r = await aleph(["job", "fac", "fshot", "--spec", specFile(`Goal: fshot\nACTION: shot http://127.0.0.1:${srv.port}/\n`)], { ALEPH_REVIEW2_CHROME: join(tmp, "chrome") });
+    const r = await aleph(["job", "fac", "fshot", "--spec", specFile(`Goal: fshot\nACTION: shot http://127.0.0.1:${srv.port}/\n`)], { ALEPH_REVIEW_CHROME: join(tmp, "chrome") });
     const log = (f: string) => { try { return readFileSync(join(fakeLog, f), "utf8"); } catch { return ""; } };
     expect(log("shot.out") + log("shot.code")).toContain("shot:");
     expect(state(r.json.run).state).not.toBe("stuck");

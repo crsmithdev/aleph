@@ -1,5 +1,5 @@
 /**
- * review2's browser step, run by the harness outside the reviewer's sandbox: srt's
+ * the review's browser step, run by the harness outside the reviewer's sandbox: srt's
  * profile blocks the Unix sockets Chrome needs, and srt puts the reviewer in a network
  * namespace of its own, so a server the reviewer binds on localhost is out of host Chrome's
  * reach. The harness therefore starts the one-off `bun ui/server.ts` itself, from the merge
@@ -26,7 +26,7 @@ const SIZES: [number, number][] = [[1440, 900], [390, 844]];
 const SCHEMES = ["light", "dark"] as const;
 const MAX_VIEWS = 8;
 const FIRST_PORT = 3002;
-const chrome = () => process.env.ALEPH_REVIEW2_CHROME ?? "/usr/bin/google-chrome";
+const chrome = () => process.env.ALEPH_REVIEW_CHROME ?? "/usr/bin/google-chrome";
 
 /** The argv that runs Chrome headless on a pipe, with a profile of the harness's own. */
 export function chromeArgv(profileDir: string): string[] {
@@ -201,7 +201,7 @@ async function shoot(cdp: Pipe, url: string, width: number, height: number, sche
     if (nav.errorText) errors.push(`navigation: ${nav.errorText}`);
     await Promise.race([load, Bun.sleep(15_000)]);
     // A moment for the view's scripts to draw after load.
-    await Bun.sleep(Number(process.env.ALEPH_REVIEW2_SETTLE_MS ?? 500));
+    await Bun.sleep(Number(process.env.ALEPH_REVIEW_SETTLE_MS ?? 500));
     const overflow = await measure(cdp, sessionId);
     const shotH = await cdp.send("Page.getLayoutMetrics", {}, sessionId).then((m) => Math.min(4000, Math.max(height, Math.ceil(m.cssContentSize?.height ?? height)))).catch(() => height);
     const png = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width, height: shotH, scale: 1 } }, sessionId);
@@ -225,7 +225,7 @@ export async function browserStep(folder: string, urls: string[], ): Promise<voi
   const lines: string[] = ["# Browser", ""];
   const report = () => { writeFileSync(join(out, "report.md.part"), lines.join("\n") + "\n"); renameSync(join(out, "report.md.part"), join(out, "report.md")); };
   // Chrome's profile is the harness's own, outside the run folder: the reviewer cannot plant one.
-  const profileDir = mkdtempSync(join(tmpdir(), "aleph-review2-chrome-"));
+  const profileDir = mkdtempSync(join(tmpdir(), "aleph-review-chrome-"));
   let child: ReturnType<typeof spawn> | null = null;
   try {
     if (!urls.length) { lines.push("ERROR: no view to load"); return report(); }
