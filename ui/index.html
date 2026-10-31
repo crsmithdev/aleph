@@ -164,6 +164,10 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .lane { min-width: 0; }
 .lane-card .ih { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .lane-card > .t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 4px 0; font-weight: 600; text-decoration: none; color: inherit; }
+.lane-card .goals { list-style: none; margin: 6px 0 0; padding: 0 0 0 10px; border-left: 2px solid var(--rule); display: grid; gap: 4px; font-size: var(--fs-sm); }
+.lane-card .goal-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+.lane-card .goal-row .t { flex: 1 1 12em; min-width: 0; }
+.lane-card .goal-row .job { color: var(--muted); }
 .lane-card .run-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--fs-sm); color: var(--muted); }
 .needs { margin: 0 0 24px; }
 .lede .wpick { flex: none; margin-left: auto; }
@@ -237,7 +241,6 @@ section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .issue-row input.reason { max-width: 100%; }
 .issue-row[data-kind] { --kind: var(--stuck); --kind-bg: var(--stuck-bg); border-left: 4px solid var(--kind); }
 .issue-row[data-kind="approval"] { --kind: var(--run); --kind-bg: var(--run-bg); }
-.issue-row[data-kind="decision"] { --kind: var(--focus); --kind-bg: color-mix(in srgb, var(--focus) 14%, var(--surface)); }
 .issue-row[data-kind="input"] { --kind: var(--need); --kind-bg: var(--need-bg); }
 .issue-row[data-kind="error"] { background: var(--stuck-bg); }
 .kind-tag { display: inline-block; padding: 1px 8px; border-radius: 4px; background: var(--kind-bg); color: var(--kind); font: 600 var(--fs-xs) var(--sans); }
@@ -251,7 +254,7 @@ section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 720px) { .choice { grid-template-columns: minmax(0, 1fr); } .choice input.reason { grid-column: 1; } }
 .job-card .ih .id { white-space: nowrap; flex: none; }
 .grp + .grp { margin-top: 16px; }
-#jobs-needs > h3 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } /* the section heading above already says it */
+#awaiting > h3 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } /* the section heading above already says it */
 .grp h3 { display: flex; align-items: baseline; gap: 8px; font: 600 var(--fs-sm)/1.3 var(--sans); color: var(--muted); margin: 0 0 8px; }
 .grp h3 .count { font: 500 var(--fs-sm) var(--num); }
 .job-card.small .why { font-size: var(--fs-sm); color: var(--need); font-weight: 600; margin-right: 6px; }

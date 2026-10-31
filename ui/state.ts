@@ -5,21 +5,21 @@
  */
 import { resultLine } from "../jobs/lib/acceptance.ts";
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { DAY_CAP, LIVE_CAP, liveRuns, WAITING_CAP, baselines, doneChecker, firefighterLines, gates, health, hold, lastProbe, paused, redLine, runsToday, waitReason, type WaitReason } from "../jobs/lib/factory.ts";
-import { allRuns, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
+import { DAY_CAP, LIVE_CAP, liveRuns, AWAITING_CAP, baselines, doneChecker, firefighterLines, gates, health, hold, lastProbe, paused, redLine, runsToday, waitReason, type WaitReason } from "../jobs/lib/factory.ts";
+import { allRuns, askOf as runAsk, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { readDecision, type Decision } from "../jobs/lib/decision.ts";
-import { attend, stuckBlocker, type AttentionItem, type Blocker } from "./attention.ts";
-import { readStanding } from "../jobs/lib/standing.ts";
-import { askOf, issueOf, labels, reader } from "../todo/lib/store.ts";
-import { parseRef, status } from "../todo/lib/todo.ts";
+import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
+import { readAlways } from "../jobs/lib/always.ts";
+import { afterOf, askOf, goalsOf, issueOf, kindOf, labels, reader } from "../todo/lib/store.ts";
+import { idOf, parseGoalRef, refOf, status } from "../todo/lib/todo.ts";
 import { facts, landedIndex, stages } from "../jobs/lib/status.ts";
 import type { Stage } from "../jobs/lib/stage.ts";
 import type { Wk } from "./usage.ts";
 
 export interface Job {
   name: string; repo: string; item: { id: number | string; title: string } | null;
-  state: string; needs?: string; phase?: string; reason?: string; question?: string;
+  state: string; phase?: string; reason?: string; question?: string;
   started: string;
   /** The current (last) run: its kind and start. `started` is the job's first. */
   run: { kind: string; started: string };
@@ -31,8 +31,12 @@ export interface Job {
   stat?: string;
   /** A live run exists for this job: a next run or a rerun. */
   agent?: boolean;
-  /** Needs-you: the review2 verdict of the held run. */
-  review2?: { verdict: string; reason?: string };
+  /** Running: the issue whose goals are nested in the Running lane, which shows this job under that goal. */
+  issue?: string;
+  /** Awaiting: what the run asks of Chris, an input or an approval, and why. */
+  ask?: { kind: "input" | "approval"; reason: string };
+  /** Awaiting: the reviewer's call on the held run. */
+  reviewCall?: { call: string; reason?: string };
   /** A landed job whose manual check is still open. */
   check?: "open";
   checks?: { name: string; ok: boolean; seconds: number }[];
@@ -50,22 +54,30 @@ export interface Job {
 
 /** A new issue of a factory repo, in the shape of the Issue card. */
 export interface NewIssue { id: string; title: string; status: string; href: string; labels: string[]; notes: number; created: string; updated: string;
-  /** A needs-chris issue: what Chris is asked, from its last note. */
+  /** An issue or goal that awaits you: what Chris is asked. */
   question?: string;
-  /** A needs-chris issue that carries a structured decision: its fields. */
+  /** Its Ask with options: the fields. */
   decision?: Decision;
-  /** The reason code the factory wrote on the issue (`fm.reason`); none on an old item. */
-  reason?: string }
+  /** The Ask's reason (`fm.reason`); none on an old item. */
+  reason?: string;
+  /** The Ask's kind: `input` or `approval`. */
+  askKind?: "input" | "approval";
+  /** The stage from stage(). */
+  stage?: string }
+
+/** An issue in Running: its goals, each with its stage and the job that works on it. */
+export interface RunningIssue { id: string; title: string; href: string; stage: string; of: { n: number; m: number };
+  goals: { id: string; title: string; href: string; stage: string; job?: { name: string; href: string; kind: string } }[] }
 
 /** A done issue as the Done list shows it: the issue is the head, its jobs are links. */
 export interface DoneItem { id: string; title: string; href: string; finished: string; jobs: Job[] }
-/** An issue as the Incoming list shows it: `status` is the item's stage from stage(). */
-export interface IncomingItem { id: string; title: string; href: string; created: string; status: string }
+/** An issue as the Incoming list shows it: `stage` is from stage(). */
+export interface IncomingItem { id: string; title: string; href: string; created: string; stage: string }
 
 export interface State {
   now: string;
   factory: {
-    paused: boolean; judge: "jev" | "haiku"; dayCap: number; liveCap: number; /** Live agent runs, the count the live cap checks. */ liveRuns: number; waitingCap: number; runsToday: number; costToday: number;
+    paused: boolean; judge: "jev" | "haiku"; dayCap: number; liveCap: number; /** Live agent runs, the count the live cap checks. */ liveRuns: number; awaitingCap: number; runsToday: number; costToday: number;
     nextTick: string | null;
     probe: { at: string; ok: boolean; failed: string[] } | null;
     health: string[];
@@ -74,15 +86,18 @@ export interface State {
     /** The firefighter's factory log lines of the last 24 hours, newest last. */
     firefighter: { at: string; line: string }[];
   };
-  needs: Job[]; stuck: Job[]; running: Job[]; delivered: Job[];
-  waiting: { repo: string; id: number; title: string; why: string; kind: WaitReason["kind"];
-    waits?: { id: string; href: string; state: string | null }[]; ask?: { href: string } }[];
+  stuck: Job[]; running: Job[]; delivered: Job[];
+  /** Everything that waits for Chris: one entry per awaiting run, issue, goal and proposal, with its kind (input or approval) and reason. */
+  asks: AskItem[];
+  /** Queued and blocked goals (and old items): the Queued lane. */
+  queued: { repo: string; id: number | string; title: string; stage: string; why: string; kind: WaitReason["kind"];
+    waits?: { id: string; href: string; state: string | null }[] }[];
+  /** Issues in Running: each with its goals nested and "n of m goals". */
+  runningIssues: RunningIssue[];
   /** Land runs in progress. */
   landing: number;
   /** Open issues in factory repos that are not goals and not yet triaged: the newest NEW_ISSUES. */
   issues: NewIssue[];
-  /** Open issues labelled needs-chris: they wait for Chris. */
-  needsIssues: NewIssue[];
   /** How many such issues there are in all. */
   newIssues: number;
   /** Every open issue in factory repos, whatever its labels: the count of the Issues metric card. */
@@ -93,10 +108,8 @@ export interface State {
   incoming: IncomingItem[];
   /** The planner's runs, the running ones first, then the latest finished. */
   planner: Job[];
-  /** What Needs you says: one item per held, review or question run, needs-chris issue and proposal. */
-  attention: AttentionItem[];
-  /** The standing permissions, with how many items each reason hands to the firefighter. */
-  standing: { reason: string; action: string; at: string; handed: number }[];
+  /** The Always rules, with how many asks each reason hands to the firefighter. */
+  always: { reason: string; action: string; at: string; handed: number }[];
   /** Jobs landed and issues triaged in the last 24 hours, with the 7-day daily average. */
   velocity: { landed: { day: number; avg: number }; triaged: { day: number; avg: number } };
 }
@@ -177,18 +190,21 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
     const todo = v.item;
     const found = todo !== undefined && v.repo ? lists.item(v.repo, todo) : undefined;
     const job: Job = {
-      name: v.name, repo: v.repo ?? "", item: found ? { id: found.id, title: found.title } : todo !== undefined ? { id: todo, title: "" } : null,
+      name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title } : todo !== undefined ? { id: todo, title: "" } : null,
       state: v.state, started: v.started, run: { kind: v.run.kind, started: v.run.started },
       defaults: v.defaults, followups: v.followups,
     };
-    for (const k of ["needs", "phase", "reason", "question", "ended", "cost", "model"] as const) if (v[k] !== undefined) (job as any)[k] = v[k];
+    for (const k of ["phase", "reason", "question", "ended", "cost", "model"] as const) if (v[k] !== undefined) (job as any)[k] = v[k];
     if (v.commit) {
       job.commit = v.commit;
       const url = commitUrl(repo, v.commit, bases);
       if (url) job.commitUrl = url;
     }
     if (v.state === "needs-you" && v.stat) job.stat = v.stat;
-    if (v.state === "needs-you" && v.review2) job.review2 = v.review2;
+    // An awaiting run with no ask of its own asks a question, as stage() reads it.
+    const asked = isAwaiting(lastReal(runs).run.state) ? runAsk(lastReal(runs).run) ?? { kind: "input" as const, reason: "question" } : undefined;
+    if (asked) job.ask = { kind: asked.kind, reason: asked.reason };
+    if (asked && v.review) job.reviewCall = v.review;
     if (v.checks) job.checks = v.checks;
     if (v.hidden) job.hidden = v.hidden;
     if (v.check === "open") job.check = "open";
@@ -198,14 +214,14 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
       : v.state === "needs-you" ? [
         ...needsYouIssue(v.repo, todo),
         { key: "Job", value: v.job },
-        ...(v.needs === "held" || v.needs === "review" ? [{ key: "Held-by", value: "Chris" }] : []),
+        ...(asked?.reason === "held-path" || asked?.reason === "review" ? [{ key: "Held-by", value: "Chris" }] : []),
       ] : [];
     if (trailers.length) job.trailers = trailers;
     return job;
   };
   // One landedIndex per repo per request: the stage of each item of a repo, by number.
-  const staged = new Map<string, Map<number, Stage>>();
-  const stagesOf = (repo: Repo): Map<number, Stage> => {
+  const staged = new Map<string, Map<string, Stage>>();
+  const stagesOf = (repo: Repo): Map<string, Stage> => {
     let m = staged.get(repo.key);
     if (!m) {
       m = new Map();
@@ -213,7 +229,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
       if (doc) {
         try {
           const f = facts(repo, doc), main = `refs/remotes/origin/${f.main}`;
-          for (const st of stages(repo.path, main, f, Object.keys(f.items).map(Number), landedIndex(repo.path, main, repo.key))) m.set(Number(st.id.slice(repo.key.length + 1)), st);
+          for (const st of stages(repo.path, main, f, Object.keys(f.items), landedIndex(repo.path, main, repo.key))) m.set(st.id.slice(repo.key.length + 1), st);
         } catch {}
       }
       staged.set(repo.key, m);
@@ -240,8 +256,11 @@ export function state(now = new Date()): State {
       running.push(toJob(runs));
       continue;
     }
-    // A triage, planner or facts run sorts a goal and never lands.
-    if (last.kind === "triage" || last.kind === "plan" || last.kind === "facts") continue;
+    // A triage, planner or facts run sorts a goal and never lands; it shows only when it awaits you.
+    if (last.kind === "triage" || last.kind === "plan" || last.kind === "facts") {
+      if (isOpen(runs) && isAwaiting(lastReal(runs).run.state)) needs.push(toJob(runs));
+      continue;
+    }
     if (isOpen(runs)) {
       const real = lastReal(runs).run;
       if (isAwaiting(real.state)) needs.push(toJob(runs));
@@ -268,9 +287,10 @@ export function state(now = new Date()): State {
   for (const repo of Object.values(registry)) {
     if (!repo.sandbox) continue;
     for (const item of lists.list(repo.key)?.items ?? []) {
-      const id = `${repo.key}-${item.id}`;
-      if (status(item) === "open") openById.set(id, { title: item.title, href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}` });
-      if (typeof item.fm.waiting_on === "string") waitsOf.set(id, item.fm.waiting_on);
+      const id = `${repo.key}-${refOf(item)}`;
+      if (status(item) === "open") openById.set(id, { title: item.title, href: `#/issues/${encodeURIComponent(repo.key)}/${refOf(item)}` });
+      const after = afterOf(item);
+      if (after.length) waitsOf.set(id, after[0]);
     }
   }
   for (const j of stuck) {
@@ -296,46 +316,70 @@ export function state(now = new Date()): State {
     ofItem.set(k, [...(ofItem.get(k) ?? []), runs]);
   }
   const everyone: { at: string; n: number; card: IncomingItem }[] = [];
-  const doneItems: { at: number; repo: Repo; item: any }[] = [];
+  const doneItems: { at: number; repo: Repo; item: any; runs: Runs[] }[] = [];
 
   const fresh: NewIssue[] = [];
-  const waitingOnChris: NewIssue[] = [];
-  const queued: { repo: Repo; item: any }[] = [];
+  const awaitingItems: NewIssue[] = [];
+  const queued: { repo: Repo; item: any; stage: string }[] = [];
+  const runningIssues: RunningIssue[] = [];
   let openIssues = 0;
+  const hrefOf = (repo: Repo, ref: string) => `#/issues/${encodeURIComponent(repo.key)}/${ref}`;
+  // The job that works on each goal now, by `repo-ref`.
+  const liveOf = new Map<string, Job>();
+  for (const j of running) if (j.item && j.run.kind !== "plan") liveOf.set(`${j.repo}-${j.item.id}`, j);
+  const nested = new Set<string>();
   for (const repo of Object.values(registry)) {
     if (!repo.sandbox) continue;
     const stageById = stagesOf(repo);
     for (const item of lists.list(repo.key)?.items ?? []) {
-      const st = stageById.get(item.id)?.stage ?? status(item);
-      const card = (): NewIssue => ({ id: `${repo.key}-${item.id}`, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}`, labels: labels(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? "") });
+      const ref = refOf(item), id = `${repo.key}-${ref}`, href = hrefOf(repo, ref);
+      const st = stageById.get(ref)?.stage ?? status(item);
+      // Incoming and Done list issues; a goal with an issue shows under it.
+      const top = kindOf(item) === "issue" || !issueOf(item);
+      const card = (): NewIssue => ({ id, title: item.title, status: "open", href, labels: labels(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? ""), stage: st });
       const created = String(item.fm.created ?? "");
-      everyone.push({ at: created, n: item.id, card: { id: `${repo.key}-${item.id}`, title: item.title, href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}`, created, status: st } });
-      if (st === "done") {
-        const ends = (ofItem.get(`${repo.key}-${item.id}`) ?? []).map((r) => Date.parse(r.at(-1)!.run.ended ?? "")).filter((t) => t > 0);
-        doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(String(item.fm.updated ?? "")) || 0, repo, item });
+      if (top) everyone.push({ at: created, n: item.id, card: { id, title: item.title, href, created, stage: st } });
+      if (st === "done" && top) {
+        const mine = [ref, ...goalsOf(item).map((g) => g.replace(`${repo.key}-`, ""))].flatMap((r) => ofItem.get(`${repo.key}-${r}`) ?? []);
+        const ends = mine.map((r) => Date.parse(r.at(-1)!.run.ended ?? "")).filter((t) => t > 0);
+        doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(String(item.fm.updated ?? "")) || 0, repo, item, runs: mine });
       }
       if (status(item) !== "open" || st === "done" || st === "dropped") continue;
-      openIssues++;
-      if (st === "awaiting" && askOf(item)) {
+      if (top) openIssues++;
+      const ask = askOf(item);
+      if (st === "awaiting" && ask) {
         const c = card();
-        const q = (item.fm.ask !== undefined && typeof item.fm.question === "string" && item.fm.question) || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
+        const q = ask.question || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
         if (q) c.question = q;
         const d = readDecision(item);
         if (d) c.decision = d;
-        if (typeof item.fm.reason === "string" && item.fm.reason) c.reason = item.fm.reason;
-        waitingOnChris.push(c);
+        c.reason = ask.reason;
+        c.askKind = ask.kind;
+        awaitingItems.push(c);
       }
-      else if (st === "queued" || st === "blocked") queued.push({ repo, item });
+      else if (st === "queued" || st === "blocked") queued.push({ repo, item, stage: st });
       else if (st === "new") fresh.push({ ...card(), status: st });
+      if (st === "building" && kindOf(item) === "issue" && goalsOf(item).length) {
+        const of = stageById.get(ref)?.of ?? { n: 0, m: goalsOf(item).length };
+        const goals = goalsOf(item).map((g) => {
+          const gref = g.startsWith(`${repo.key}-`) ? g.slice(repo.key.length + 1) : g;
+          const gi = lists.item(repo.key, gref), j = liveOf.get(`${repo.key}-${gref}`);
+          if (j) nested.add(j.name);
+          return { id: g, title: gi?.title ?? "", href: hrefOf(repo, gref), stage: stageById.get(gref)?.stage ?? (gi ? status(gi) : "queued"),
+            ...(j ? { job: { name: j.name, href: `#/jobs/${encodeURIComponent(j.name)}`, kind: j.run.kind } } : {}) };
+        });
+        runningIssues.push({ id, title: item.title, href, stage: st, of, goals });
+      }
     }
   }
+  for (const j of running) if (nested.has(j.name)) j.issue = j.item ? `${j.repo}-${String(j.item.id).split(".")[0]}` : undefined;
 
   everyone.sort((a, b) => b.at.localeCompare(a.at) || b.n - a.n);
   doneItems.sort((a, b) => b.at - a.at);
-  const done: DoneItem[] = doneItems.slice(0, DONE).map(({ at, repo, item }) => ({
-    id: `${repo.key}-${item.id}`, title: item.title, href: `#/issues/${encodeURIComponent(repo.key)}/${item.id}`,
+  const done: DoneItem[] = doneItems.slice(0, DONE).map(({ at, repo, item, runs }) => ({
+    id: `${repo.key}-${refOf(item)}`, title: item.title, href: hrefOf(repo, refOf(item)),
     finished: at ? new Date(at).toISOString() : "",
-    jobs: (ofItem.get(`${repo.key}-${item.id}`) ?? []).map((r) => toJob(r)),
+    jobs: runs.map((r: Runs) => toJob(r)),
   }));
   const planAt = (r: Runs) => Date.parse(r.at(-1)!.run.state === "running" ? "9999-01-01" : r.at(-1)!.run.ended ?? r.at(-1)!.run.started);
   const planner = jobs.filter((r) => r.at(-1)!.run.kind === "plan").sort((a, b) => planAt(b) - planAt(a)).slice(0, TRIAGED).map((r) => toJob(r));
@@ -343,25 +387,32 @@ export function state(now = new Date()): State {
   fresh.sort((a, b) => b.created.localeCompare(a.created));
   const today = runsToday(now.getTime());
   const probe = lastProbe();
-  const granted = readStanding();
+  const granted = readAlways();
   const isDone = doneChecker(), gated = gates({ only: ["pause", "hold", "probe", "live", "day", "awaiting"], jobs });
-  const att = attend({ needs, needsIssues: waitingOnChris }, granted);
+  const att = attend({ runs: needs, issues: awaitingItems }, granted);
+  // The run behind an ask: its live-run mark, its trailers and its notes.
+  for (const a of att.items) {
+    const j = a.key.startsWith("run:") ? needs.find((x) => `run:${x.name}` === a.key) : undefined;
+    if (!j) continue;
+    if (j.item) a.on = `${j.repo}-${j.item.id}`;
+    a.agent = j.agent ?? false; a.defaults = j.defaults; a.followups = j.followups;
+    if (j.trailers) a.trailers = j.trailers;
+  }
   return {
     now: now.toISOString(),
     factory: {
-      paused: paused(), judge: judgeChoice(), dayCap: DAY_CAP(), liveCap: LIVE_CAP(), liveRuns: liveRuns(), waitingCap: WAITING_CAP(), runsToday: today.length,
+      paused: paused(), judge: judgeChoice(), dayCap: DAY_CAP(), liveCap: LIVE_CAP(), liveRuns: liveRuns(), awaitingCap: AWAITING_CAP(), runsToday: today.length,
       costToday: today.reduce((a, e) => a + (e.run.cost ?? 0), 0),
       nextTick: nextTick(), probe, health: health(now.getTime()), hold: hold(jobs)?.line ?? null,
       firefighter: firefighterLines(now.getTime()),
     },
-    attention: att.items, done, incoming: everyone.slice(0, NEW_ISSUES).map((e) => e.card), planner,
-    standing: Object.entries(granted).map(([reason, g]) => ({ reason, action: g.action, at: g.at, handed: att.handed[reason] ?? 0 })),
-    needs, stuck, running, landing, newIssues: fresh.length, openIssues, issues: fresh.slice(0, NEW_ISSUES), needsIssues: waitingOnChris,
+    asks: att.items, done, incoming: everyone.slice(0, NEW_ISSUES).map((e) => e.card), planner,
+    always: Object.entries(granted).map(([reason, g]) => ({ reason, action: g.action, at: g.at, handed: att.handed[reason] ?? 0 })),
+    stuck, running, runningIssues, landing, newIssues: fresh.length, openIssues, issues: fresh.slice(0, NEW_ISSUES),
     velocity: { landed: rate(landedAt), triaged: rate(triagedAt) },
     // Lands: land runs in progress first, then the latest landed, DELIVERED in all.
     delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).slice(0, Math.max(0, DELIVERED - landRuns.length)).map((d) => toJob(d.runs))].slice(0, DELIVERED),
-    waiting: queued.map(({ repo, item }) => {
-      const href = `#/issues/${encodeURIComponent(repo.key)}/${item.id}`;
+    queued: queued.map(({ repo, item, stage }) => {
       let red: string | null = null;
       const b = baselines()[repo.key];
       if (b && !b.ok) {
@@ -370,12 +421,11 @@ export function state(now = new Date()): State {
       }
       const w = waitReason(repo, item, { done: isDone, jobs, gated, red, now });
       return {
-        repo: repo.key, id: item.id, title: item.title, why: w.text, kind: w.kind,
+        repo: repo.key, id: idOf(item), title: item.title, stage, why: w.text, kind: w.kind,
         ...(w.kind === "waits_on" ? { waits: w.ids.map((id) => {
-          const r = parseRef(id), found = r ? lists.item(r.repo, r.id) : undefined;
-          return { id, href: r ? `#/issues/${encodeURIComponent(r.repo)}/${r.id}` : "", state: r && found && registry[r.repo] ? stagesOf(registry[r.repo]).get(r.id)?.stage ?? status(found) : null };
+          const r = parseGoalRef(id), found = r ? lists.item(r.repo, r.id) : undefined;
+          return { id, href: r ? hrefOf({ key: r.repo } as Repo, String(r.id)) : "", state: r && found && registry[r.repo] ? stagesOf(registry[r.repo]).get(String(r.id))?.stage ?? status(found) : null };
         }) } : {}),
-        ...(w.kind === "needs-chris" ? { ask: { href } } : {}),
       };
     }),
   };

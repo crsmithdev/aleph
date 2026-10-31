@@ -25,10 +25,10 @@ test("the review fixture gives the one-off server jobs, issues, projects and not
   // The old-shape runs and the new-shape ones: every state the fixture shows, and the review runs' needs.
   expect(jobs.length).toBe(16);
   expect(["dropped", "landed", "needs-you", "running", "stuck"].map(count)).toEqual([3, 1, 3, 6, 3]);
-  expect(jobs.filter((j: any) => j.state === "needs-you").map((j: any) => j.needs ?? null).sort()).toEqual(["held", "held", "review"]);
+  expect(jobs.filter((j: any) => j.state === "needs-you").map((j: any) => j.ask?.reason ?? null).sort()).toEqual(["held-path", "held-path", "review"]);
   // Every stage has an item, in both shapes, and Incoming says the stage.
   const { incoming } = await get("/api/state");
-  expect(incoming.every((i: any) => typeof i.status === "string" && i.status !== "open")).toBe(true);
+  expect(incoming.every((i: any) => typeof i.stage === "string" && i.stage !== "open")).toBe(true);
   const issues = await get("/api/issues?all=1");
   expect(new Set(issues.map((i: any) => i.repo))).toEqual(new Set(["demo", "tools"]));
   expect(new Set(issues.map((i: any) => i.status))).toEqual(new Set(["open", "done", "dropped"]));

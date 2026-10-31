@@ -1,53 +1,58 @@
 /**
- * What the Needs-you rows say and offer. The server decides from the reason code and the item's data;
- * the page only renders. One item per held, review or question run, per needs-chris issue and per proposal.
+ * What the Awaiting-you rows say and offer (the `asks` of /api/state). The server decides from the Ask's reason and the item's data;
+ * the page only renders. One entry per run, issue or goal that waits for Chris, and per proposal.
  */
 import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/corrections.ts";
 import type { Decision } from "../jobs/lib/decision.ts";
-import { REASONS, type Granted } from "../jobs/lib/standing.ts";
+import { ASK_REASONS, type Granted } from "../jobs/lib/always.ts";
 // @ts-ignore plain JS, shared with the page
 import { oneSentence } from "./views/now.js";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "./decision.js";
-import type { Job, NewIssue, State } from "./state.ts";
+import type { Job, NewIssue } from "./state.ts";
 
 export interface Action { act: string; label: string; hint: string; primary: boolean; args: Record<string, string> }
-export interface AttentionItem {
-  key: string; reason: string; kind: string; id: string; href: string; title: string; problem: string;
+export interface AskItem {
+  key: string; reason: string; /** What the answer is: your input or your approval. */ kind: "input" | "approval"; id: string; href: string; title: string; problem: string;
   actions: Action[]; always?: { label: string; action: string; hint: string; reason?: string }; details: Details;
   /** The project key, for `?project=`. */
   repo?: string;
+  /** An awaiting run: a live run exists for it, the trailers the land will write, its defaults and follow-ups. */
+  /** An awaiting run: the goal or issue it is on. */ on?: string;
+  agent?: boolean; trailers?: { key: string; value: string }[]; defaults?: string[]; followups?: string[];
 }
 export interface Details {
-  note?: string; stat?: string; review2?: { verdict: string; reason?: string };
-  decision?: Decision; signals?: { source: string; at: string; quote: string; link: string }[];
+  note?: string; stat?: string; review?: { call: string; reason?: string };
+  ask?: Decision; signals?: { source: string; at: string; quote: string; link: string }[];
 }
-export type Standing = Record<string, Granted>;
+export type Always = Record<string, Granted>;
 
-/** The kind of a card, from its reason: the tag's text and color. */
-export function kindOf(reason: string): string {
-  if (reason === "proposal" || reason.startsWith("proposal-") || reason === "held" || reason === "review" || reason === "firefighter") return "approval";
-  if (reason === "decision" || reason === "rescue") return "decision";
-  if (reason === "question" || reason === "host-check") return "input";
-  return "stuck";
+/** Reasons whose answer is an approval; every other reason takes input. */
+const APPROVAL = ["held-path", "review", "proposal", "firefighter"];
+
+/** The kind of an Ask: the ask's own, else from its reason. */
+export function kindOf(reason: string, given?: string): "input" | "approval" {
+  if (given === "input" || given === "approval") return given;
+  return APPROVAL.includes(reason) || reason.startsWith("proposal-") ? "approval" : "input";
 }
 
 const STAMP = /^\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?:\s*/;
 /** A note without its optional leading timestamp and its `needs-chris:` lead. */
 const unlead = (s: string): string => s.replace(/^\s*-\s*/, "").replace(STAMP, "").replace(/^\s*needs-chris:\s*/i, "");
 
-/** The held-reason, from the item's own field or, for an old item, the last note. */
+/** The Ask reason of an issue or goal: its own `reason`, else read from the last note of an old item. */
 export function issueReason(i: Pick<NewIssue, "reason" | "question" | "decision">): string {
-  if (i.reason === "triage-failed") return "triage-no-verdict";
-  if (i.reason && i.reason !== "question" && REASONS[i.reason]) return i.reason;
+  if (i.reason && ASK_REASONS[i.reason]) return i.reason;
+  if (i.reason === "triage-no-verdict") return "triage-failed";
+  if (i.reason === "held") return "held-path";
   const n = unlead(i.question ?? "");
-  if (/^triage: no verdict in/.test(n)) return "triage-no-verdict";
+  if (/^triage: no verdict in/.test(n)) return "triage-failed";
   if (/^acceptance: fail again/.test(n)) return "acceptance-failed";
   if (/ended with no commit, so the factory stopped/.test(n)) return "no-commit";
   if (/times in the last hour; it stops starting it/.test(n)) return "run-cap";
-  if (/^triage: for Chris:/.test(n)) return "decision";
+  if (/^triage: a live check/.test(n)) return "host-check";
   if (/a held security path/.test(n)) return "firefighter";
-  return i.decision ? "rescue" : "decision";
+  return i.decision && i.reason === "rescue" ? "rescue" : "question";
 }
 
 /** A plain sentence from a raw note: no tags, no leads, no paths. */
@@ -71,22 +76,23 @@ const failure = (note: string): string => {
 };
 
 const PROBLEM: Record<string, (c: Ctx) => string> = {
-  held: (c) => `The run for ${c.id} changes a path the repo holds for your review, so the factory did not land it.`,
+  "held-path": (c) => `The run for ${c.id} changes a path the repo holds for your review, so the factory did not land it.`,
   review: (c) => {
-    const r = c.run?.review2;
-    if (r?.verdict === "back") return `The reviewer sent ${c.id} back twice${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
-    if (r?.verdict === "chris") return `The reviewer left ${c.id} to you${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
+    const r = c.run?.reviewCall;
+    if (r?.call === "back") return `The reviewer sent ${c.id} back twice${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
+    if (r?.call === "ask") return `The reviewer left ${c.id} to you${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
     const back = /^the reviewer sent it back twice:\s*(.*)$/s.exec(c.run?.reason ?? "");
     if (back) return `The reviewer sent ${c.id} back twice: ${clean(back[1]).replace(/\.$/, "")}.`;
     return `The reviewer could not reach a verdict on ${c.id} in two tries.`;
   },
-  question: (c) => `The worker on ${c.id} asked: ${clean(c.run?.question) || "it needs an answer"}`,
+  question: (c) => c.run ? `The worker on ${c.id} asked: ${clean(c.run.question) || "it needs an answer"}` : sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your answer is needed"),
+  manual: (c) => `The manual check of ${c.id} must be run by you, on the host.`,
+  "part-dropped": (c) => `A goal of ${c.id} was dropped and no other goal of it is open.`,
   "no-commit": (c) => `The last 3 runs of ${c.id} ended with no commit, so the factory stopped starting it.`,
   "run-cap": (c) => `The factory started ${c.id} 3 times in one hour, so it stopped starting it until you run it again.`,
-  "triage-no-verdict": (c) => `Triage of ${c.id} failed twice: ${failure(c.issue?.question ?? "")}, so no one has decided what to do with this issue.`,
+  "triage-failed": (c) => `Triage of ${c.id} failed twice: ${failure(c.issue?.question ?? "")}, so no one has decided what to do with this issue.`,
   "acceptance-failed": (c) => `The Oracle of ${c.id} still fails on main after a rerun.`,
-  decision: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your decision is needed"),
-  rescue: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your decision is needed"),
+  rescue: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your answer is needed"),
   proposal: () => "This work is a proposal, and it does not start until you approve it.",
   "host-check": () => "A factory sandbox cannot run this check, so it must run on the host.",
   firefighter: (c) => {
@@ -115,7 +121,7 @@ for (const k of ["check", "claude-md", "skill"]) PROBLEM[`proposal-${k}`] = (c) 
 
 function actionsFor(reason: string, c: Ctx): Action[] {
   const run: Record<string, string> = c.run ? { name: c.run.name } : {};
-  const [repo, n] = c.issue ? c.id.split(/-(?=\d+$)/) : ["", ""];
+  const [repo, n] = c.issue ? c.id.split(/-(?=\d+(?:\.\d+)?$)/) : ["", ""];
   const issue = { repo, id: n };
   const a = (act: string, label: string, hint: string, args: Record<string, string>): Action => ({ act, label, hint, primary: false, args });
   const one = (act: string): Action[] => {
@@ -149,9 +155,11 @@ function actionsFor(reason: string, c: Ctx): Action[] {
       default: return [];
     }
   };
-  const acts = reason === "question"
-    ? [a("answer", "Answer and rerun", "Takes your answer and starts the job again with it.", run), ...one("drop")]
-    : [...new Set(REASONS[reason].actions)].flatMap(one);
+  // One reason serves a worker's question (a run) and an issue's (a decision): the context picks the actions.
+  const names = reason === "question" ? (c.run ? ["answer", "drop"] : ["decide", "deny"])
+    : reason === "part-dropped" ? (c.issue?.decision ? ["decide", "close"] : ["rerun", "close"])
+    : ASK_REASONS[reason].actions;
+  const acts = [...new Set(names)].flatMap((n) => n === "answer" ? [a("answer", "Answer and rerun", "Takes your answer and starts the job again with it.", run)] : one(n));
   if (acts[0]) acts[0].primary = true;
   return acts;
 }
@@ -162,69 +170,70 @@ function detailsFor(c: Ctx): Details {
     const note = c.run.reason ?? c.run.question;
     if (note) d.note = note;
     if (c.run.stat) d.stat = c.run.stat;
-    if (c.run.review2) d.review2 = c.run.review2;
+    if (c.run.reviewCall) d.review = c.run.reviewCall;
   }
   if (c.issue) {
     if (c.issue.question) d.note = c.issue.question;
-    if (c.issue.decision) d.decision = c.issue.decision;
+    if (c.issue.decision) d.ask = c.issue.decision;
   }
   if (c.lesson) d.signals = c.lesson.signals.map(({ source, at, quote, link }) => ({ source, at, quote, link }));
   return d;
 }
 
 /** The auto-yes choice: the first choice's label with the mark, and a hint that names the rule it grants. No rule, no choice. */
-function alwaysFor(reason: string, action: string, first: string | undefined): AttentionItem["always"] {
+function alwaysFor(reason: string, action: string, first: string | undefined): AskItem["always"] {
   if (!action) return undefined;
   const label = `${first ?? action} [auto-yes]`;
-  const revoke = `Revoke with \`aleph standing revoke ${reason}\`.`;
+  const revoke = `Revoke with \`aleph always revoke ${reason}\`.`;
   if (action === "firefighter") return { label, action, hint: `Does this one now. From now on, the firefighter decides these cards without asking you. ${revoke}` };
   if (action === "recommended") return { label, action, hint: `Does this one now. From now on, the factory takes the recommended option of every decision without asking you. ${revoke}` };
   if (reason === "proposal" && action === "start") return { label, action, hint: `Does this one now. From now on, a dependency update within the same major version starts without asking you; a major version jump still asks. ${revoke}` };
   return { label, action, hint: `Does this one now. From now on, the factory does this without asking you. ${revoke}` };
 }
 
-function proposalAlways(l: Lesson): NonNullable<AttentionItem["always"]> {
+function proposalAlways(l: Lesson): NonNullable<AskItem["always"]> {
   const key = standingKey(l);
   return {
     label: `${words(l).approve} [auto-yes]`, action: "approve", reason: key,
-    hint: `From now on, the factory files every ${words(l).every} without asking you. Revoke with \`aleph standing revoke ${key}\`.`,
+    hint: `From now on, the factory files every ${words(l).every} without asking you. Revoke with \`aleph always revoke ${key}\`.`,
   };
 }
 
-function item(reason: string, c: Ctx, key: string, href: string, title: string, repo?: string): AttentionItem {
+function item(reason: string, c: Ctx, key: string, href: string, title: string, repo?: string, kind?: string): AskItem {
   const actions = actionsFor(reason, c);
-  const r = REASONS[reason];
+  const r = ASK_REASONS[reason];
   return {
-    key, reason, kind: kindOf(reason), id: c.id, href, title, problem: PROBLEM[reason](c), actions,
+    key, reason, kind: kindOf(reason, kind), id: c.id, href, title, problem: PROBLEM[reason](c), actions,
     ...(c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label) } : {}),
     details: detailsFor(c), ...(repo ? { repo } : {}),
   };
 }
 
 /**
- * The Needs-you rows: held, review and question runs, then needs-chris issues, then proposals.
- * Every item stays, with its actions; one whose reason Chris handed to the firefighter is also counted in the standing list's `handed`.
+ * The asks: runs that await, then issues and goals that await, then proposals. `runs` are the awaiting runs, each with its `ask`;
+ * `issues` the issues and goals that hold an Ask.
+ * Every entry stays, with its actions; one whose reason Chris handed to the firefighter is also counted in the Always list's `handed`.
  */
-export function attend(s: Pick<State, "needs" | "needsIssues">, standing: Standing = {}, lessons: Lesson[] = openProposals()): { items: AttentionItem[]; handed: Record<string, number> } {
+export function attend(s: { runs: Job[]; issues: NewIssue[] }, always: Always = {}, lessons: Lesson[] = openProposals()): { items: AskItem[]; handed: Record<string, number> } {
   const handed: Record<string, number> = {};
-  const out: AttentionItem[] = [];
-  const add = (it: AttentionItem) => {
-    if (standing[it.reason]?.action === "firefighter") handed[it.reason] = (handed[it.reason] ?? 0) + 1;
+  const out: AskItem[] = [];
+  const add = (it: AskItem) => {
+    if (always[it.reason]?.action === "firefighter") handed[it.reason] = (handed[it.reason] ?? 0) + 1;
     out.push(it);
   };
-  const rank = { held: 0, review: 1, question: 2 } as Record<string, number>;
-  const runs = s.needs.filter((j) => j.needs && j.needs in rank).sort((a, b) => rank[a.needs!] - rank[b.needs!]);
-  for (const j of runs) add(item(j.needs!, { id: j.name, run: j }, `run:${j.name}`, `#/jobs/${encodeURIComponent(j.name)}`, j.item?.title ?? "", j.repo));
-  for (const i of s.needsIssues) add(item(issueReason(i), { id: i.id, issue: i }, `issue:${i.id}`, i.href, i.title, i.id.split(/-(?=\d+$)/)[0]));
+  const rank: Record<string, number> = { "held-path": 0, review: 1 };
+  const runs = s.runs.filter((j) => j.ask && ASK_REASONS[j.ask.reason]).sort((a, b) => (rank[a.ask!.reason] ?? 2) - (rank[b.ask!.reason] ?? 2));
+  for (const j of runs) add(item(j.ask!.reason, { id: j.name, run: j }, `run:${j.name}`, `#/jobs/${encodeURIComponent(j.name)}`, j.item?.title ?? "", j.repo, j.ask!.kind));
+  for (const i of s.issues) add(item(issueReason(i), { id: i.id, issue: i }, `issue:${i.id}`, i.href, i.title, i.id.split(/-(?=\d+(?:\.\d+)?$)/)[0], i.askKind));
   for (const l of lessons) {
     const reason = `proposal-${l.kind ?? "skill"}`;
-    if (REASONS[reason]) add(item(reason, { id: l.id, lesson: l }, `proposal:${l.id}`, "", l.title || l.sentence));
+    if (ASK_REASONS[reason]) add(item(reason, { id: l.id, lesson: l }, `proposal:${l.id}`, "", l.title || l.sentence));
   }
   return { items: out, handed };
 }
 
-/** The Needs-you items alone. */
-export const attention = (s: Pick<State, "needs" | "needsIssues">, standing: Standing = {}, lessons?: Lesson[]): AttentionItem[] => attend(s, standing, lessons).items;
+/** The asks alone. */
+export const asks = (s: { runs: Job[]; issues: NewIssue[] }, always: Always = {}, lessons?: Lesson[]): AskItem[] => attend(s, always, lessons).items;
 
 /** The open issue a stuck job cannot succeed before: the item's own waiting_on, else one its last run's reason names. */
 export interface Blocker { id: string; title: string; href: string }
@@ -241,5 +250,5 @@ export function stuckBlocker(j: Pick<Job, "repo" | "item" | "reason">, waitingOn
 export function stuckActions(j: Pick<Job, "name">, blocker: Blocker | null | undefined): Action[] {
   const drop: Action = { act: "drop", label: "Drop", hint: "Discards the run's branch; the issue stays open.", primary: false, args: { name: j.name } };
   if (!blocker) return [{ act: "recheck", label: "Re-check", hint: "Runs the job again.", primary: false, args: { name: j.name } }, drop];
-  return [{ act: "wait", label: `Wait for ${blocker.id}`, hint: `Sets waiting_on to ${blocker.id} and drops the stuck job; the factory starts nothing until ${blocker.id} lands.`, primary: true, args: { name: j.name, on: blocker.id } }, drop];
+  return [{ act: "wait", label: `Wait for ${blocker.id}`, hint: `Makes the goal run after ${blocker.id} and drops the stuck job; the factory starts nothing until ${blocker.id} lands.`, primary: true, args: { name: j.name, on: blocker.id } }, drop];
 }

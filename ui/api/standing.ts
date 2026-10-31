@@ -1,6 +1,6 @@
 /**
  * `POST /api/standing/:reason` (`{ "action": "<action>" }`) and `POST /api/standing/:reason/revoke`:
- * `aleph standing grant` and `aleph standing revoke`, run as subprocesses, under the same header and Origin rule as controls.ts. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
+ * `aleph always grant` and `aleph always revoke`, run as subprocesses, under the same header and Origin rule as controls.ts. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
 import { runCli } from "../../jobs/lib/launch.ts";
 import type { Handler, Routes } from "../server.ts";
@@ -23,10 +23,10 @@ const grant: Handler = async (req, params) => {
   if (!sameSite(req)) return text("forbidden", 403);
   const body: any = await req.json().catch(() => ({}));
   if (typeof body?.action !== "string" || !body.action) return text("send an action", 400);
-  return run(["standing", "grant", params.reason, body.action]);
+  return run(["always", "grant", params.reason, body.action]);
 };
 
-const revoke: Handler = async (req, params) => (sameSite(req) ? run(["standing", "revoke", params.reason]) : text("forbidden", 403));
+const revoke: Handler = async (req, params) => (sameSite(req) ? run(["always", "revoke", params.reason]) : text("forbidden", 403));
 
 export const routes: Routes = {
   "POST /api/standing/:reason": grant,

@@ -145,7 +145,6 @@ describe("GET /api/issues/:repo/:n", () => {
     expect(d.title).toBe("first goal");
     expect(d.body).toContain("# Heading");
     expect(d.frontmatter.status).toBe("open");
-    expect(d.derived.state).toBe("done");
     expect(d.derived.stage).toBe("done");
     expect(d.jobs.map((j: any) => j.name)).toEqual(["fac-1"]);
     expect(d.commits.map((c: any) => c.subject)).toEqual(["real work"]);

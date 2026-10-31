@@ -42,7 +42,7 @@ function statLines(stat) {
 
 /** How many cards the running group holds: the running jobs. */
 /** The Running lane's rows: planner, land and agent runs. The flow card counts only the live agent runs, as the cap does. */
-const runningCount = (s) => (s.running ?? []).length;
+const runningCount = (s) => (s.runningIssues ?? []).length + (s.running ?? []).filter((j) => !j.issue).length;
 /** Land runs live now, not the landed ones the Lands list also shows. */
 const liveLands = (s) => s.delivered.filter((j) => j.state === "landing").length;
 
@@ -76,24 +76,21 @@ const QUIET_HEALTH = /passed on rerun|holds \d+ flake notes?/;
 export function renderLede(s) {
   const f = s.factory;
   const problems = []; // [tone, text, href]
-  const att = s.attention ?? [];
-  const isRun = (i) => ["held", "review", "question"].includes(i.reason);
-  const isProposal = (i) => i.reason.startsWith("proposal-");
-  const runs = att.filter(isRun).length, issues = att.filter((i) => !isRun(i) && !isProposal(i)).length, props = att.filter(isProposal).length;
+  const asks = s.asks ?? [];
+  const input = asks.filter((i) => i.kind === "input").length, approval = asks.filter((i) => i.kind === "approval").length;
   const failed = s.stuck.filter((j) => j.state === "failed").length, stuck = s.stuck.length - failed;
-  if (runs) problems.push(["warning", `${runs} ${runs === 1 ? "job needs" : "jobs need"} you`, "#jobs-needs"]);
+  if (input) problems.push(["warning", `${input} ${input === 1 ? "ask needs" : "asks need"} your input`, "#awaiting"]);
+  if (approval) problems.push(["warning", `${approval} ${approval === 1 ? "ask needs" : "asks need"} your approval`, "#awaiting"]);
   if (stuck) problems.push(["error", `${stuck} ${stuck === 1 ? "job is" : "jobs are"} stuck`, "#jobs-stuck"]);
   if (failed) problems.push(["error", `${failed} ${failed === 1 ? "job has" : "jobs have"} failed`, "#jobs-stuck"]);
-  if (issues) problems.push(["warning", `${issues} ${issues === 1 ? "issue needs" : "issues need"} a decision`, "#jobs-needs"]);
-  if (props) problems.push(["warning", `${props} ${props === 1 ? "proposal waits" : "proposals wait"} for Yes or No`, "#jobs-needs"]);
   const health = [...(f.health || [])];
   if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   for (const l of health) {
     const text = l.replace(/^health:\s*/, "");
     if (QUIET_HEALTH.test(text)) continue;
-    problems.push(["error", text.replace(/\.$/, ""), "#jobs-needs"]);
+    problems.push(["error", text.replace(/\.$/, ""), "#awaiting"]);
   }
-  if (f.hold) problems.push(["error", f.hold.replace(/\.$/, ""), "#jobs-needs"]);
+  if (f.hold) problems.push(["error", f.hold.replace(/\.$/, ""), "#awaiting"]);
   if (f.paused) problems.push(["warning", "the factory is paused", ""]);
   if (f.dayCap > 0 && f.runsToday >= f.dayCap) problems.push(["warning", "the day cap is reached", ""]);
   if (!problems.length) return `<span class="say fine">${FINE[Math.floor((Date.parse(s.now) || Date.now()) / 600000) % FINE.length]}</span>`;
@@ -126,13 +123,13 @@ function details(s, j, extra = "") {
 
 const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 
-const STATUS_TONE = { "waiting on Chris": "need", "needs you": "need", stuck: "stuck", building: "run", landing: "run", queued: "run", landed: "done", done: "done" };
+const STATUS_TONE = { awaiting: "need", stuck: "stuck", building: "run", landing: "run", planning: "run", queued: "run", blocked: "quiet", triaged: "quiet", new: "quiet", landed: "done", done: "done" };
 const statusBadge = (st) => `<span class="badge ${STATUS_TONE[st] ?? "quiet"}">${esc(st)}</span>`;
-const RUN_KIND = { agent: "work", land: "land", triage: "triage", plan: "plan", facts: "facts" };
+const RUN_KIND = { agent: "build", build: "build", land: "land", triage: "triage", plan: "plan", facts: "facts" };
 
 /** One job of a Done package, as a link to its page; a land adds its commit. */
 function doneJob(j) {
-  const kind = j.run?.kind ?? "agent";
+  const kind = j.run?.kind ?? "build";
   const sha = j.commit ? (j.commitUrl ? ` <a href="${esc(j.commitUrl)}"><code>${esc(j.commit.slice(0, 7))}</code></a>` : ` <code>${esc(j.commit.slice(0, 7))}</code>`) : "";
   const out = kind === "triage" && j.outcome ? ` (${esc(j.outcome)})` : "";
   return `<span class="dj"><a href="${jobHref(j)}">${esc(RUN_KIND[kind] ?? kind)}</a>${out}${sha}</span>`;
@@ -162,28 +159,36 @@ function doneLane(s) {
 function incomingLane(s) {
   const d = new Date(s.now);
   const rows = (s.issues ?? []).map((i) =>
-    laneCard("incoming-row", idLink(i.id, i.href), statusBadge(i.status), i.created ? when(i.created, d) : "", i.title, i.href, "")).join("");
+    laneCard("incoming-row", idLink(i.id, i.href), statusBadge(i.stage ?? i.status), i.created ? when(i.created, d) : "", i.title, i.href, "")).join("");
   return lane("incoming", "Incoming", incomingCount(s), rows, "No untriaged issues.");
 }
 
-/** Why a queued goal waits: links to what it waits on, the ask for Chris, or the reason text. */
+/** Why a queued goal waits: links to the goals it runs after, or the reason text. */
 function waitMeta(w) {
   if (!w.why) return "Queued";
   if (w.kind === "waits_on" && w.waits?.length)
-    return `Waits on ${w.waits.map((x) => `<a href="${esc(x.href)}">${esc(x.id)}</a>${x.state ? ` <span class="badge quiet">${esc(x.state)}</span>` : ""}`).join(", ")}`;
-  if (w.kind === "needs-chris" && w.ask?.href) return `<a href="${esc(w.ask.href)}">${esc(w.why)}</a>`;
+    return `After ${w.waits.map((x) => `<a href="${esc(x.href)}">${esc(x.id)}</a>${x.state ? ` <span class="badge quiet">${esc(x.state)}</span>` : ""}`).join(", ")}`;
   return esc(w.why);
 }
 
 function queuedLane(s) {
-  const rows = (s.waiting ?? []).map((w) => laneCard("queued-row", idLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`), statusBadge("queued"), "", w.title, "", waitMeta(w))).join("");
-  return lane("queued", "Queued", (s.waiting ?? []).length, rows, "Nothing is waiting.");
+  const rows = (s.queued ?? []).map((w) => laneCard("queued-row", idLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`), statusBadge(w.stage ?? "queued"), "", w.title, "", waitMeta(w))).join("");
+  return lane("queued", "Queued", (s.queued ?? []).length, rows, "Nothing is queued.");
+}
+
+/** An issue in Running: its title, "n of m goals", and its goals nested, each with its stage and its job. */
+function runningIssue(i) {
+  const goals = i.goals.map((g) =>
+    `<li class="goal-row">${idLink(g.id, g.href)} ${statusBadge(g.stage)} <span class="t">${esc(g.title)}</span>${g.job ? ` <a class="job" href="${esc(g.job.href)}">${esc(g.job.kind === "agent" || g.job.kind === "build" ? "build" : g.job.kind)}</a>` : ""}</li>`).join("");
+  return `<article class="job-card small lane-card run-row issue-run" data-issue="${esc(i.id)}"><div class="ih">${idLink(i.id, i.href)}${statusBadge(i.stage)}<span class="num">${i.of.n} of ${i.of.m} goals</span></div>` +
+    `<a href="${esc(i.href)}" class="t">${esc(i.title)}</a><ul class="goals">${goals}</ul></article>`;
 }
 
 function runningLane(s) {
   const d = new Date(s.now);
-  const rows = (s.running ?? []).map((j) => {
-    const run = j.run ?? { kind: "agent", started: j.started };
+  const issues = (s.runningIssues ?? []).map(runningIssue).join("");
+  const rows = issues + (s.running ?? []).filter((j) => !j.issue).map((j) => {
+    const run = j.run ?? { kind: "build", started: j.started };
     const worker = run.kind === "agent" || run.kind === "build";
     const kind = worker ? "worker" : run.kind === "plan" ? "planner" : run.kind;
     const over = worker && Date.parse(s.now) - Date.parse(run.started) > BOX_MIN * 60_000;
@@ -207,7 +212,7 @@ export function renderFlow(s, sp = null) {
     `<div class="stage"><a class="stage-main" href="#lane-${lane}"><span class="k">${k}</span><span class="v"${id ? ` id="${id}"` : ""}>${n}${of ? `<span class="of"> of ${of}</span>` : ""}</span></a></div>`;
   return `<div class="flow" id="flow">` +
     stage("incoming", "Incoming", incomingCount(s), 0) +
-    stage("queued", "Queued", (s.waiting ?? []).length, 0) +
+    stage("queued", "Queued", (s.queued ?? []).length, 0) +
     stage("running", "Running", s.factory.liveRuns ?? 0, s.factory.liveCap > 0 ? s.factory.liveCap : 0) +
     stage("done", "Done", sp && !sp.error ? sp.done : "\u2013", 0, "done-n") + renderContext(s) + `</div>`;
 }
@@ -224,13 +229,13 @@ export function renderContext(s) {
   return head + stat("weekly", pct(cur.seven_day), gained) + `<span class="sep">/</span>` + stat("5 hours", pct(cur.five_hour)) + `</div></div>`;
 }
 
-/** Needs you: the needs-you rows, then the stuck and failed jobs; absent when nothing needs Chris. */
+/** Awaiting you: the asks, each marked input or approval, then the stuck and failed jobs; absent when nothing awaits Chris. */
 export function renderNeeds(s) {
-  const needs = (s.attention ?? []).map(attentionRow).concat(errorLines(s).map(errorRow));
-  if (!needs.length && !s.stuck.length) return "";
-  const group = (id, t, n, html, wrap) => (n ? `<div class="grp" id="jobs-${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${wrap(html)}</div>` : "");
-  return `<section id="needs" class="needs" aria-labelledby="h-needs"><div class="sh"><h2 id="h-needs">Needs you</h2><span class="count">${needs.length + s.stuck.length}</span></div>` +
-    group("needs", "Needs you", needs.length, needs.join(""), list) + group("stuck", "Stuck or failed", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), cards) + `</section>`;
+  const asks = (s.asks ?? []).map(askRow).concat(errorLines(s).map(errorRow));
+  if (!asks.length && !s.stuck.length) return "";
+  const group = (id, t, n, html, wrap) => (n ? `<div class="grp" id="${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${wrap(html)}</div>` : "");
+  return `<section id="needs" class="needs" aria-labelledby="h-needs"><div class="sh"><h2 id="h-needs">Awaiting you</h2><span class="count">${asks.length + s.stuck.length}</span></div>` +
+    group("awaiting", "Awaiting you", asks.length, asks.join(""), list) + group("jobs-stuck", "Stuck or failed", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), cards) + `</section>`;
 }
 
 /** Lines of the factory's own trouble that are errors: health (a red main among them), the hold, a failed probe; each once. The hold is left out when its stuck run has a row of its own. */
@@ -255,43 +260,20 @@ export function oneSentence(text) {
   return first.length > 160 ? `${first.slice(0, 159).trimEnd()}\u2026` : first;
 }
 
-/** What the reviewer said of a held run, in words; "" while the review runs. */
-function reviewNote(j) {
-  const r = j.review2;
-  return !r ? "the reviewer gave no verdict"
-    : r.verdict === "pending" ? ""
-    : r.verdict === "land" ? `the reviewer says land${r.reason ? `: ${r.reason}` : ""}`
-    : r.verdict === "back" ? `the reviewer sent it back${r.reason ? `: ${r.reason}` : ""}`
-    : r.verdict === "chris" ? `the reviewer left it to you${r.reason ? `: ${r.reason}` : ""}`
-    : r.verdict === "error" ? "the review failed"
-    : `review: ${r.verdict}`;
-}
-
-/** The hold reason of a held run, whole. */
-const holdReason = (j) => j.reason || (j.needs && j.needs !== "held" && j.needs !== "review" ? j.needs : "");
-
 /** The agent line of a held or stuck job: a live run exists for it. */
 const agentLine = (j) => (j?.agent ? `<span class="agent">Agent working</span>` : "");
-/** The review2 badge of a held job. */
-const reviewBadge = (j) => {
-  const v = j?.review2?.verdict;
-  return v ? `<span class="badge ${v === "land" ? "done" : v === "pending" ? "run" : "need"} review2">Review: ${esc(v)}</span>` : "";
-};
-
 /** One Jobs card in the compact size: the id, the title, one sentence of why, the buttons; `fold` is the one Details behind it. */
-/** The one Details behind a held or stuck row: the whole reason, the reviewer's note and Diff (held), then the job's details. */
-const fold = (s, j, held) => details(s, j, held
-  ? `${holdReason(j) ? `<p class="quiet q">${esc(holdReason(j))}</p>` : ""}${reviewNote(j) ? `<p class="quiet q">Reviewer: ${esc(reviewNote(j))}</p>` : ""}<div class="actions">${act("diff", j.name, "Diff")}</div><div class="diff-panel" data-diff-for="${esc(j.name)}"${openDiffs.has(j.name) ? `>${diffHtml(openDiffs.get(j.name))}` : " hidden>"}</div>`
-  : j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "");
+/** The one Details behind a stuck row: the whole reason, then the job's details. */
+const fold = (s, j) => details(s, j, j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "");
 
 const jobHref = (j) => `#/jobs/${encodeURIComponent(j.name)}`;
 const stuckRow = (s) => (j) => {
   const b = j.blocker;
   const why = b ? `Waits on ${b.id}: ${b.title}.` : `${j.state === "failed" ? "Failed" : "Stuck"}${j.reason ? ` with ${oneSentence(j.reason).replace(/\.$/, "")}` : ""}.`;
   const first = b ? act("wait", j.name, `Wait for ${b.id}`, true).replace('data-label=', `data-on="${esc(b.id)}" data-label=`) : act("recheck", j.name, "Re-check");
-  return `<article class="job-card small issue-row stuck" data-kind="stuck">${needHead("stuck", j.name, jobHref(j), j.item?.title || "", why)}${reviewBadge(j)}${agentLine(j)}` +
-    `<div class="actions choices">${choice(first, b ? `Sets waiting_on to ${b.id} and drops the stuck job; nothing starts until ${b.id} lands.` : "Runs the job again.")}${choice(act("drop", j.name, "Drop"), "Discards the run's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
-    (b ? `<p class="quiet q">Waits on <a href="${esc(b.href)}">${esc(b.id)}</a>: ${esc(b.title)}</p>` : "") + fold(s, j, false) + `</article>`;
+  return `<article class="job-card small issue-row stuck" data-kind="stuck">${needHead("stuck", j.name, jobHref(j), j.item?.title || "", why)}${agentLine(j)}` +
+    `<div class="actions choices">${choice(first, b ? `Makes the goal run after ${b.id} and drops the stuck job; nothing starts until ${b.id} lands.` : "Runs the job again.")}${choice(act("drop", j.name, "Drop"), "Discards the run's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
+    (b ? `<p class="quiet q">Waits on <a href="${esc(b.href)}">${esc(b.id)}</a>: ${esc(b.title)}</p>` : "") + fold(s, j) + `</article>`;
 };
 /** Text with `inline code` as <code>, everything else escaped. */
 const code = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
@@ -303,48 +285,47 @@ function decisionBody(d) {
     (d.why?.length ? `<ul class="why">${d.why.map((w) => `<li>${code(w)}</li>`).join("")}</ul>` : "");
 }
 
-/** A needs-chris note without fields: its paragraphs, the recommendation sentence picked out. */
+/** An Ask without options: its paragraphs, the recommendation sentence picked out. */
 function proseBody(p) {
   return p.paragraphs.map((t) => `<p class="dp${t === p.recommendation ? " rec" : ""}">${code(t)}</p>`).join("");
 }
 
 const isUrl = (u) => /^https?:\/\//.test(u);
-const RUN_REASONS = ["held", "review", "question"];
 
-/** One button of an attention row: the action's args as data attributes. */
+/** One button of an ask row: the action's args as data attributes. */
 function actionButton(a) {
   const args = Object.entries(a.args ?? {}).map(([k, v]) => ` data-${esc(k)}="${esc(v)}"`).join("");
   return `<button class="act${a.primary ? " primary" : ""}" type="button" data-act="${esc(a.act)}"${args} data-label="${esc(a.label)}">${esc(a.label)}</button>`;
 }
 
-/** The one folded Details of an attention row: the raw note, the options, the signals, the stat and the review note. */
-function attentionDetails(i) {
+/** The one folded Details of an ask row: the raw note, the options, the signals, the stat and the review note. */
+function askDetails(i) {
   const d = i.details ?? {};
-  const isRun = RUN_REASONS.includes(i.reason);
+  const isRun = i.key?.startsWith("run:");
   const sig = (d.signals ?? []).map((g) => `<li>${esc(g.at)} ${esc(g.source)}: ${esc(g.quote)}${isUrl(g.link) ? ` <a href="${esc(g.link)}">link</a>` : ""}</li>`).join("");
   const body = (d.note ? `<p class="quiet q">${esc(d.note)}</p>` : "") +
-    (d.decision ? decisionBody(d.decision) : "") +
+    (d.ask ? decisionBody(d.ask) : "") +
     (sig ? `<ul>${sig}</ul>` : "") +
-    (d.review2 ? `<p class="quiet q">Reviewer: ${esc(d.review2.verdict)}${d.review2.reason ? `: ${esc(d.review2.reason)}` : ""}</p>` : "") +
+    (d.review ? `<p class="quiet q">Reviewer: ${esc(d.review.call)}${d.review.reason ? `: ${esc(d.review.reason)}` : ""}</p>` : "") +
     (d.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(d.stat)}</pre></div></div>` : "") +
     (isRun ? `<div class="actions">${act("diff", i.id, "Diff")}</div><div class="diff-panel" data-diff-for="${esc(i.id)}"${openDiffs.has(i.id) ? `>${diffHtml(openDiffs.get(i.id))}` : " hidden>"}</div>` : "");
   return body ? more(i.key ?? i.id, body) : "";
 }
 
-const KIND_TAG = { approval: "Approval", decision: "Decision", input: "Input", stuck: "Stuck", error: "Error" };
-/** The head of every Needs-you card: the kind's tag, the id and title, the one sentence of the problem. */
+const KIND_TAG = { approval: "Approval", input: "Input", stuck: "Stuck", error: "Error" };
+/** The head of every Awaiting-you card: the kind's mark (input or approval), the id and title, the one sentence of the problem. */
 const needHead = (kind, id, href, title, problem) =>
   `<div class="row-main"><span class="kind-tag">${KIND_TAG[kind]}</span> ${!id ? "" : href ? idLink(id, href) : `<span class="id">${esc(id)}</span>`} ${title ? `<span class="t">${esc(title)}</span>` : ""}</div>` +
   `<p class="problem">${esc(problem)}</p>`;
 /** One choice of a card: the button, what it does, and any input that belongs to it. */
 const choice = (button, hint, input = "") => `<div class="choice">${button}<span class="effect">${code(hint)}</span>${input}</div>`;
 
-/** A Needs-you card from a server `attention` item: the head, then the choices in order: positive, positive [auto-yes], negative. Details last. */
-function attentionRow(i) {
+/** An Awaiting-you card from a server `asks` entry: the head, then the choices in order: positive, positive [auto-yes], negative. Details last. */
+function askRow(i) {
   const acts = i.actions ?? [];
   const inputFor = (a) => {
     if (a.act === "deny") {
-      const [repo, n] = i.id.split(/-(?=\d+$)/);
+      const [repo, n] = i.id.split(/-(?=\d+(?:\.\d+)?$)/);
       return `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason (optional)" aria-label="Reason to deny ${esc(i.id)}" data-repo="${esc(repo)}" data-id="${esc(n)}" value="${esc(denyReasons.get(i.id) ?? "")}">`;
     }
     return a.act === "answer" ? `<input class="reason" type="text" name="answer" maxlength="500" placeholder="Your answer" aria-label="Answer for ${esc(i.id)}">` : "";
@@ -353,7 +334,7 @@ function attentionRow(i) {
   if (i.always) choices.splice(acts.length ? 1 : 0, 0, choice(`<button class="act always" type="button" data-act="always" data-reason="${esc(i.always.reason ?? i.reason)}" data-action="${esc(i.always.action)}" data-first="${esc(acts[0]?.act ?? "")}" data-label="${esc(i.always.label)}">${esc(i.always.label)}</button>`, i.always.hint));
   return `<article class="job-card small issue-row ${esc(i.reason)}" data-kind="${esc(i.kind)}" data-reason="${esc(i.reason)}">` +
     needHead(i.kind, i.id, i.href, i.title, i.problem) +
-    `<div class="actions choices">${choices.join("")}${RUN_REASONS.includes(i.reason) ? actMsg(i.id) : ""}</div>` + attentionDetails(i) + `</article>`;
+    `<div class="actions choices">${choices.join("")}${i.key?.startsWith("run:") ? actMsg(i.id) : ""}</div>` + askDetails(i) + `</article>`;
 }
 
 /** An error line as a card: the head alone, because the page has no action that fixes it. */

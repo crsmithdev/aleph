@@ -22,6 +22,7 @@ const project = {
   items: [{ id: 3, title: "An issue", labels: ["goal"] }], commits: [], jobs: [], vault: [],
 };
 
+// The Issue page and the Status lanes use the work model's names, so they say goal (see state.test.ts and issues.test.ts); the pages below keep the old rule.
 describe("the UI never says goal", () => {
   const pages: [string, string][] = [
     ["issueCard full", issueCard(issue, "full")],
@@ -31,8 +32,7 @@ describe("the UI never says goal", () => {
     ["project card", renderCard(project)],
     ["project detail", renderDetail(project)],
     ["inventory", renderContents({ projects: [project], issues: [{ repo: "aleph", id: 3, title: "An issue", status: "open", labels: ["goal"], updated: "2026-10-25" }] }, { status: "" })],
-    ["issue detail", renderIssue({ repo: "aleph", id: 3, title: "t", status: "open", frontmatter: { labels: ["goal"] }, body: BODY_TEMPLATE, notes: [], jobs: [], commits: [] })],
-    ["now issues", renderLanes({ needs: [], stuck: [], issues: [{ id: 3, title: "x", repo: "aleph" }], factory: { health: [] } })],
+    ["now issues", renderLanes({ stuck: [], issues: [{ id: 3, title: "x", repo: "aleph" }], factory: { health: [] } })],
   ];
   for (const [name, html] of pages) test(name, () => { noGoal(html); noGoal(attrs(html)); });
 

@@ -267,11 +267,22 @@ export function renderContents(d, o = {}) {
     renderForm(d?.issues ?? [], o) + `</div>`;
 }
 
-/** The detail view's pieces, shared with views/issue.js. */
+/** The Job of a goal on the Issue page: a link to each of its jobs with the state, or a quiet line. */
+function goalJobs(g) {
+  if (!g.jobs.length) return `<span class="quiet">No job yet</span>`;
+  return g.jobs.map((j) => `${idLink(j.name, `#/jobs/${encodeURIComponent(j.name)}`)} ${stateBadge(j.state)} <span class="time">${esc(when(j.started))}</span>`).join("<br>");
+}
+
+/** The Issue page: the `## Request`, then the goals each with its Job, then the notes, the issue's own runs and the commits. Shared with views/issue.js. */
 export function renderIssue(d) {
   const fm = d.frontmatter ?? {};
-  const facts = Object.entries(fm).filter(([k]) => !["labels", "id", "status"].includes(k)).map(([k, v]) => `<div><dt>${esc(k[0].toUpperCase() + k.slice(1))}</dt><dd>${esc(Array.isArray(v) ? v.map(labelName).join(", ") : v)}</dd></div>`).join("");
+  const HIDE = ["labels", "id", "status", "kind", "goals", "issue", "after", "created", "updated", "repo", "title"];
+  const facts = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => `<div><dt>${esc(k[0].toUpperCase() + k.slice(1))}</dt><dd>${esc(Array.isArray(v) ? v.map(labelName).join(", ") : v)}</dd></div>`).join("");
   const notes = d.notes.length ? `<ul class="notes">${d.notes.map((n) => `<li>${esc(n.replace(/^- /, ""))}</li>`).join("")}</ul>` : empty("No notes.");
+  const goals = d.goals ?? [];
+  const goalTable = goals.length
+    ? `<div class="tscroll"><table class="tbl" id="goals"><thead><tr><th>Goal</th><th>Title</th><th>Stage</th><th>Job</th></tr></thead><tbody>${goals.map((g) => `<tr><td>${idLink(g.id, g.href)}</td><td class="wide" title="${esc(g.why)}">${esc(g.title)}</td><td>${stateBadge(g.stage)}</td><td>${goalJobs(g)}</td></tr>`).join("")}</tbody></table></div>`
+    : empty("No goal is filed for this issue.");
   const jobs = d.jobs.length
     ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Job</th><th>State</th><th>Started</th></tr></thead><tbody>${d.jobs.map((j) => `<tr><td>${idLink(j.name, `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${stateBadge(j.state)}</td><td class="time">${esc(when(j.started))}</td></tr>`).join("")}</tbody></table></div>`
     : empty("No job has worked on this.");
@@ -281,11 +292,18 @@ export function renderIssue(d) {
       return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td><td class="time">${esc(when(c.date))}</td></tr>`;
     }).join("")}</tbody></table></div>`
     : empty("No commit on main names this issue in its trailers.");
+  const isIssue = d.kind !== "goal";
+  // An issue shows its Request as written; a goal (or an old item with no Request) shows its body.
+  const request = isIssue && d.request ? d.request : d.body;
+  const label = isIssue && d.request ? "Request" : isIssue ? "Request" : "Goal";
   return `<div class="page"><p class="quiet"><a href="#/inventory">← Inventory</a></p>` +
-    pageHead(d.title, { count: ref(d), aside: d.derived ? stateBadge(d.derived.state) : badge(d.status) }) +
+    pageHead(d.title, { count: `${d.repo}-${d.ref ?? d.id}`, aside: d.derived ? stateBadge(d.derived.stage) : badge(d.status) }) +
+    (d.issue ? `<p class="quiet">Goal of ${idLink(d.issue.id, d.issue.href)}</p>` : "") +
     (d.derived ? `<p class="quiet">${esc(d.derived.why)}</p>` : "") + (fm.labels?.length ? `<p>${chips(fm.labels)}</p>` : "") +
-    (facts ? `<dl class="facts">${facts}</dl>` : "") + `<div class="md">${md(d.body)}</div>` +
-    `<div class="sh"><h2>Notes</h2></div>${notes}<div class="sh"><h2>Jobs</h2></div>${jobs}<div class="sh"><h2>Commits</h2></div>${commits}</div>`;
+    (facts ? `<dl class="facts">${facts}</dl>` : "") +
+    `<div class="sh"><h2 id="h-request">${label}</h2></div><div class="md" id="request">${md(request)}</div>` +
+    (isIssue ? `<div class="sh"><h2 id="h-goals">Goals</h2><span class="count">${goals.length}</span></div>${goalTable}` : "") +
+    `<div class="sh"><h2>Notes</h2></div>${notes}<div class="sh"><h2>${isIssue ? "Runs on the issue" : "Job"}</h2></div>${jobs}<div class="sh"><h2>Commits</h2></div>${commits}</div>`;
 }
 
 // Interaction: the shell renders with innerHTML and has no hooks, so the view

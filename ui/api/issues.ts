@@ -15,7 +15,7 @@ import { Refusal } from "../../jobs/lib/transitions.ts";
 import * as issues from "../../todo/lib/issues.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { awaitsChris, labels, readList, readLists } from "../../todo/lib/store.ts";
+import { awaitsChris, goalsOf, issueOf, kindOf, labels, readList, readLists } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { githubBase } from "../state.ts";
@@ -78,6 +78,19 @@ function list(url: URL): Response {
   return Response.json(out);
 }
 
+/** The text under the body's `## Request` heading, up to the next `## ` heading; none when the body has no such heading. */
+export function requestOf(body: string): string | null {
+  const m = /^## Request[ \t]*\r?\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(body);
+  return m ? m[1].trim() : null;
+}
+
+/** A job as the Issue page lists it: its name, state, times, cost and how many runs it holds. */
+function jobRow(runs: ReturnType<typeof allJobs>[number]) {
+  const r = lastReal(runs).run;
+  const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
+  return { name: r.name, state: r.state, kind: r.kind, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null, runs: runs.length };
+}
+
 /** Whether an `onOf` value names issue `n`: the number itself, or a goal `<n>.<k>` of it. */
 const isOfIssue = (on: number | string | undefined, n: number): boolean =>
   typeof on === "number" ? on === n : typeof on === "string" && Number(on.split(".")[0]) === n;
@@ -85,27 +98,32 @@ const isOfIssue = (on: number | string | undefined, n: number): boolean =>
 function detail(params: Record<string, string>, url: URL): Response {
   const project = url.searchParams.get("project");
   const repo = loadRegistry()[params.repo];
-  const n = Number(params.n);
-  if (!repo || !Number.isInteger(n) || (project && project !== repo.key)) return Response.json({ error: "no such issue" }, { status: 404 });
+  const ref = params.n;
+  if (!repo || !/^\d+(\.\d+)?$/.test(ref) || (project && project !== repo.key)) return Response.json({ error: "no such issue" }, { status: 404 });
   let doc: todos.Doc | null;
   try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
-  const item = doc && todos.find(doc, n);
+  const item = doc && todos.find(doc, ref);
   if (!doc || !item) return Response.json({ error: "no such issue" }, { status: 404 });
+  const n = item.id;
 
   const main = `refs/remotes/origin/${repo.main}`;
-  let state = null;
-  try {
-    const s = repoStages(repo, { fetch: false, items: [n] })[0];
-    if (s) state = { item: s.id, stage: s.stage, state: oldState(s.stage), why: s.why };
-  } catch {}
+  const goalRefs = goalsOf(item).map((g) => (g.startsWith(`${repo.key}-`) ? g.slice(repo.key.length + 1) : g));
+  let states = new Map<string, { stage: string; why: string }>();
+  try { for (const s of repoStages(repo, { fetch: false, doc, items: [ref, ...goalRefs] })) states.set(s.id.slice(repo.key.length + 1), s); } catch {}
+  const mine = states.get(ref);
+  const state = mine ? { item: `${repo.key}-${ref}`, stage: mine.stage, why: mine.why } : null;
 
-  const jobs = allJobs()
-    .filter((runs) => runs[0].run.repo === repo.key && runs.some((e) => isOfIssue(onOf(e.run), n)))
-    .map((runs) => {
-      const r = lastReal(runs).run;
-      const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
-      return { name: r.name, state: r.state, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null };
-    });
+  const all = allJobs().filter((runs) => runs[0].run.repo === repo.key);
+  const jobsOf = (r: string) => all.filter((runs) => runs.some((e) => String(onOf(e.run)) === r)).map(jobRow);
+  const jobs = !ref.includes(".") ? all.filter((runs) => runs.some((e) => isOfIssue(onOf(e.run), n))).map(jobRow) : jobsOf(ref);
+
+  // The Issue page: the `## Request`, then the goals, each with its Job.
+  const kind = kindOf(item);
+  const goals = kind === "issue" ? goalRefs.map((g) => {
+    const gi = todos.find(doc!, g), st = states.get(g);
+    return { id: `${repo.key}-${g}`, title: gi?.title ?? "", href: `#/issues/${encodeURIComponent(repo.key)}/${g}`, stage: st?.stage ?? (gi ? todos.status(gi) : "missing"), why: st?.why ?? "", jobs: jobsOf(g) };
+  }) : [];
+  const parent = kind === "goal" ? issueOf(item) : null;
 
   const base = githubBase(git(repo.path, "remote", "get-url", "origin").out);
   const commits = landedCommits(repo.path, main, repo.key, n).map((h) => {
@@ -113,7 +131,7 @@ function detail(params: Record<string, string>, url: URL): Response {
     return { hash, subject: subject ?? "", date, ...(base ? { commitUrl: `${base}/commit/${hash}` } : {}) };
   });
 
-  return Response.json({ ...row(repo.key, item), body: item.body, notes: item.notes, frontmatter: item.fm, derived: state, jobs, commits });
+  return Response.json({ ...row(repo.key, item), id: n, ref, kind, request: kind === "issue" ? requestOf(item.body) : null, goals, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), body: item.body, notes: item.notes, frontmatter: item.fm, derived: state, jobs, commits });
 }
 
 async function create(req: Request, url: URL): Promise<Response> {
