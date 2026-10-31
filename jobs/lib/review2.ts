@@ -166,12 +166,12 @@ async function review(folder: string): Promise<void> {
     });
     writeFileSync(join(folder, "review2-prompt.md"), text);
     // The reviewer's home is in the scratch folder, so its settings and git identity are writable there.
-    // srt's sockets and the reviewer's tmp/ sit in the run folder, as a worker's do in its own.
+    // The reviewer's tmp/ sits in the run folder, as a worker's does in its own.
     const home = join(scratch, "home");
     writeHome(home);
     linkBins(folder);
     // browser/ exists before the sandbox starts, so the profile's read of "." holds it: the reviewer reads the harness's report there.
-    for (const d of ["sock", "tmp", BROWSER]) mkdirSync(join(folder, d), { recursive: true });
+    for (const d of ["tmp", BROWSER]) mkdirSync(join(folder, d), { recursive: true });
     if (ui) await uiBrowser(folder, work, run.branch);
     const env: Record<string, string> = {
       ...readEnvFile(repo.env ?? process.env.ALEPH_RUN_ENV), CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN || workerToken(),

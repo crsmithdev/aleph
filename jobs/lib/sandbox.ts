@@ -52,14 +52,14 @@ export function linkBins(dir: string): void {
 
 /**
  * A new run folder: home/ with Claude Code settings and a git identity, work/,
- * tmp/, sock/ for srt's own sockets, out/ for the bundle the worker hands
+ * tmp/, out/ for the bundle the worker hands
  * back, check/ and checklog/ for the checks, and bin/ with links to claude, bun,
  * bunx and git, and aleph-shot, the client of the screenshot requests.
  */
 export function makeRunFolder(id: string): string {
   const dir = join(runsDir(), id);
   rmSync(dir, { recursive: true, force: true });
-  for (const d of ["home", "work", "tmp", "sock", "out", "check", "checklog"]) mkdirSync(join(dir, d), { recursive: true });
+  for (const d of ["home", "work", "tmp", "out", "check", "checklog"]) mkdirSync(join(dir, d), { recursive: true });
   writeHome(join(dir, "home"));
   linkBins(dir);
   writeFileSync(join(dir, "bin", "aleph-shot"), SHOT_CLIENT);
@@ -79,6 +79,9 @@ const WORKER_NET: Net = { domains: ["api.anthropic.com", "registry.npmjs.org"], 
  * writes only where the step needs them. The network reaches the Anthropic
  * API and npm, and nothing else, unless `net` says otherwise.
  */
+/** srt's own sockets: a short folder, because a Unix socket path holds 108 characters and a run folder's name has no limit. */
+export const sockDir = (dir: string): string => join(layout().sandbox, ".s", Bun.hash(dir).toString(16).slice(0, 12));
+
 export function profile(dir: string, o: { read: string[]; write: string[]; net?: Net }): string {
   const vendor = join(expand("~/.aleph/tools/lib/node_modules/@anthropic-ai/sandbox-runtime"), "vendor");
   const bins = ["claude", "bun", "git"].map((b) => { try { return realpathSync(join(dir, "bin", b)); } catch { return null; } }).filter(Boolean) as string[];
@@ -91,7 +94,7 @@ export function profile(dir: string, o: { read: string[]; write: string[]; net?:
     network: { allowedDomains: net.domains, allowLocalBinding: net.localBinding, deniedDomains: [] },
     filesystem: {
       denyRead: ["/home", "/root", "/mnt", "/run", "/var/run", "/srv", "/tmp"],
-      allowRead: [...bins, vendor, join(dir, "bin"), join(dir, "sock"), ...read.map((p) => join(dir, p))],
+      allowRead: [...bins, vendor, join(dir, "bin"), sockDir(dir), ...read.map((p) => join(dir, p))],
       allowWrite: o.write.map((p) => join(dir, p)),
       denyWrite: [],
     },
@@ -121,12 +124,14 @@ export async function sandboxed(dir: string, script: string, o: {
   const pass = process.env.ALEPH_SANDBOX_CMD;
   // srt adds the proxy variables the sandbox needs to the environment it gets, so the
   // clean environment is set on srt itself: an `env -i` inside would drop the proxy.
-  // srt is a node script, run by node's real path, and keeps its own sockets in sock/.
+  // srt is a node script, run by node's real path, and keeps its own sockets in sockDir.
   const argv = pass
     ? [pass, "-i", ...Object.entries(inner).map(([k, v]) => `${k}=${v}`), "bash", "-c", script]
     : [resolveBin("node") ?? "node", realpathSync(SRT()), "--settings", profile(dir, o), "--", "env", `TMPDIR=${inner.TMPDIR}`, "bash", "-c", script];
   const cmd = o.limit ? ["timeout", "--kill-after=30", String(o.limit), ...argv] : argv;
-  const env = pass ? process.env : { ...inner, TMPDIR: join(dir, "sock") };
+  const sock = sockDir(dir);
+  if (!pass) mkdirSync(sock, { recursive: true });
+  const env = pass ? process.env : { ...inner, TMPDIR: sock };
   const out = openSync(o.stdout, "a");
   const err = o.stderr === o.stdout ? out : openSync(o.stderr, "a");
   const start = performance.now();
@@ -149,5 +154,6 @@ export async function sandboxed(dir: string, script: string, o: {
   clearInterval(watch);
   closeSync(out);
   if (err !== out) closeSync(err);
+  if (!pass) rmSync(sock, { recursive: true, force: true });
   return { code, timedOut: !stalled && o.limit !== undefined && performance.now() - start >= o.limit * 1000, stalled };
 }
