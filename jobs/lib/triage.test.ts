@@ -70,7 +70,7 @@ beforeAll(() => {
   repo.path = base;
   Object.assign(process.env, gitEnv, {
     ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_TRIAGE_CMD: join(base, "fake"),
-    FAKE_LOG: join(base, "calls"), ALEPH_LIVE_CAP: "10", ALEPH_FACTORY_DIR: factoryHome,
+    FAKE_LOG: join(base, "calls"), ALEPH_LIVE_CAP: "10", ALEPH_FACTORY_DIR: factoryHome, ALEPH_DISPATCH: "off",
     // Locks live in $XDG_RUNTIME_DIR/aleph, shared by every process on the machine; keep this process's own.
     XDG_RUNTIME_DIR: join(base, "run"),
   });

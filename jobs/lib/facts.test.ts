@@ -163,7 +163,7 @@ describe("factsGate through the dispatch", () => {
     writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo, sandbox: true, autoland: false } }));
     for (const [k, val] of Object.entries({ GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" })) set(k, val);
     set("ALEPH_VAULT", vault); set("ALEPH_JUDGE", "jev"); set("ALEPH_JOBS_DIR", jobs); set("ALEPH_REPOS", join(base, "repos.json"));
-    set("ALEPH_FACTORY_DIR", join(base, "factory")); set("XDG_RUNTIME_DIR", join(base, "run")); set("ALEPH_ISSUES", join(base, "items"));
+    set("ALEPH_FACTORY_DIR", join(base, "factory")); set("XDG_RUNTIME_DIR", join(base, "run")); set("ALEPH_ISSUES", join(base, "items")); set("ALEPH_DISPATCH", "off");
     expect(Bun.spawnSync(["bun", join(import.meta.dir, "..", "..", "vault", "cli.ts"), "init"], { env: { ...process.env, ALEPH_JUDGE: "haiku" } }).exitCode).toBe(0);
     server = Bun.serve({ port: 0, async fetch(req) {
       const body: any = await req.json();
