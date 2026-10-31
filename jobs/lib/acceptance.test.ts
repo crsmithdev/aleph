@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { askOf, flakeTracker, readList, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { accept, failedTests, oracleCommands, readRecord, rerunOf, resultLine, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
+import { checkSlot } from "./ledger.ts";
 import { acceptanceStep, dispatchGoals, reacceptReopened } from "./factory.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -14,7 +15,7 @@ function sh(cwd: string, ...args: string[]): string {
   return p.stdout.toString().trim();
 }
 
-const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_SANDBOX_DIR", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_DISPATCH", "ALEPH_SANDBOX_CMD", "ALEPH_QUIET_LOAD"];
+const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_SANDBOX_DIR", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_DISPATCH", "ALEPH_SANDBOX_CMD", "ALEPH_QUIET_LOAD", "ALEPH_CHECK_SLOTS"];
 let base: string;
 let saved: Record<string, string | undefined>;
 
@@ -478,4 +479,30 @@ test("an infra error on the rerun keeps the failure waiting and reopens nothing"
   expect(readRecord("fac", id)?.retest?.command).toBe("bun run test");
   await acceptanceStep(answers({ code: 0, output: "" }));
   expect(readRecord("fac", id)?.result).toBe("pass");
+});
+
+test("sandboxRunner: waits for a check slot before it runs its command", async () => {
+  process.env.ALEPH_CHECK_SLOTS = "1";
+  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
+  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
+  const repo = { key: "fac", path: repoDir(), main: "main", setup: [] } as any;
+  const free = await checkSlot();
+  let done = false;
+  const p = sandboxRunner(repo, sha, "bun run bad").then((r) => { done = true; return r; });
+  await Bun.sleep(1500);
+  expect(done).toBe(false);
+  free();
+  const r = await p;
+  expect(r.code).toBe(3);
+});
+
+test("sandboxRunner: frees the slot after a normal run and after an infra result", async () => {
+  process.env.ALEPH_CHECK_SLOTS = "1";
+  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
+  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
+  expect((await sandboxRunner({ key: "fac", path: repoDir(), main: "main", setup: [] } as any, sha, "bun run ok")).code).toBe(0);
+  (await checkSlot())();
+  const r = await sandboxRunner(withSetup(["false"]), sha, "bun run ok");
+  expect(r.infra).toBe(true);
+  (await checkSlot())();
 });

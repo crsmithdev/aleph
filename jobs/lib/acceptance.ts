@@ -13,7 +13,7 @@ import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { note, noteFlake, writeList } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
-import { expand, type Repo } from "./ledger.ts";
+import { checkSlot, expand, type Repo } from "./ledger.ts";
 import { section } from "./plan.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 import { commitsNaming } from "./status.ts";
@@ -165,7 +165,14 @@ export const sandboxRunner: Runner = async (repo, sha, command) => {
       `timeout -k 30 1200 bash -c ${q(command)} > ../checklog/out.log 2>&1; echo $? > ../checklog/code`,
     ].join("\n");
     const logs = join(run, "stdout.log");
-    const r = await sandboxed(run, script, { read: ["out"], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: logs, stderr: logs });
+    // The slot covers the sandboxed call only; the time limit is in the script, so the wait does not count against it.
+    const free = await checkSlot();
+    let r;
+    try {
+      r = await sandboxed(run, script, { read: ["out"], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: logs, stderr: logs });
+    } finally {
+      free();
+    }
     const at = (f: string) => join(run, "checklog", f);
     // The Oracle did not run: a setup failure is an infra error, and its log is in out.log.
     if (existsSync(at("setup-failed"))) return { code: 1, output: existsSync(at("out.log")) ? readFileSync(at("out.log"), "utf8") : "setup failed", infra: true };

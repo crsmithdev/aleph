@@ -238,7 +238,7 @@ Plus the test rule in criterion 19. A run that only adds to an existing test fil
 | Live runs | `CAP = 5` | Existing; shared with Chris's jobs |
 | Time box | 40 min | `ALEPH_JOB_TIMEOUT`, 2400 s today |
 | Timer | 30 min | None; a guess to tune |
-| Check slots | 2 | `ALEPH_CHECK_SLOTS`. At most this many check runs of the test suite run at once across the factory (agent-run checks, land checks, rechecks, baselines), under locks `check-slot-<n>`. A check with no free slot waits; the wait does not fail it and does not count against `ALEPH_CHECK_TIMEOUT`. |
+| Check slots | 2 | `ALEPH_CHECK_SLOTS`. At most this many check runs of the test suite run at once across the factory (agent-run checks, land checks, rechecks, baselines, acceptance Oracles with their setup), under locks `check-slot-<n>`. A check with no free slot waits; the wait does not fail it and does not count against `ALEPH_CHECK_TIMEOUT`. |
 | Test workers per suite | cores / slots (12 on 24 cores) | `ALEPH_TEST_PARALLEL`, set by the factory for checks and in the worker sandbox env. The `test` script in package.json runs `bun test --parallel=${ALEPH_TEST_PARALLEL:-$(nproc)}`, so a plain `bun run test` by Chris keeps the full core count. |
 | Run priority | `CPUWeight=20`, `--nice=10` | Every run unit (`systemd-run` for agent runs, lands, pulled lands and review2) gets both, so the shell, `aleph-ui` and Claude Code sessions win when the cores are busy. The `aleph-ui` unit and the tick keep the default weight. |
 
