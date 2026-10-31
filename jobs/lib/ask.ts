@@ -18,19 +18,19 @@ export interface Ask {
 const SEP = " :: ";
 const MAX_WHY = 4;
 const REF = /^[\w.-]+-\d+(\.\d+)?$/;
-/** The words that introduce an option's goal on disk: `after` is written, `waiting_on` is still read from an old or migrated item. */
-const WAITS = [" :: after ", " :: waiting_on "];
+/** The words that introduce an option's goal on disk. */
+const WAITS = " :: after ";
 const clean = (v: unknown): string => (typeof v === "string" ? v.replace(/\s+/g, " ").replace(/"/g, "'").replace(/\\/g, "/").trim() : "");
 
-/** One option as the line stored in `options`; `word` is `after`, or `waiting_on` for the old shape's writers. */
-export const encodeOption = (o: { label: string; line: string; after?: string }, word: "after" | "waiting_on" = "after"): string =>
-  o.label + SEP + o.line + (o.after ? ` :: ${word} ${o.after}` : "");
+/** One option as the line stored in `options`. */
+export const encodeOption = (o: { label: string; line: string; after?: string }): string =>
+  o.label + SEP + o.line + (o.after ? `${WAITS}${o.after}` : "");
 
-/** An option from its stored line, accepting both the `after` and the old `waiting_on` suffix. */
+/** An option from its stored line. */
 export function decodeOption(s: string): { label: string; line: string; after?: string } {
-  const w = WAITS.map((k) => ({ k, at: s.lastIndexOf(k) })).find((x) => x.at >= 0 && REF.test(s.slice(x.at + x.k.length)));
-  const after = w ? s.slice(w.at + w.k.length) : undefined;
-  const rest = w ? s.slice(0, w.at) : s;
+  const w = s.lastIndexOf(WAITS);
+  const after = w >= 0 && REF.test(s.slice(w + WAITS.length)) ? s.slice(w + WAITS.length) : undefined;
+  const rest = after ? s.slice(0, w) : s;
   const at = rest.indexOf(SEP);
   const o = at < 0 ? { label: rest, line: "" } : { label: rest.slice(0, at), line: rest.slice(at + SEP.length) };
   return after ? { ...o, after } : o;
@@ -38,14 +38,14 @@ export function decodeOption(s: string): { label: string; line: string; after?: 
 
 /**
  * An Ask from loose input (a verdict's JSON), or null when it has no usable question, 2–4 options, or a
- * `recommended` that is not an option's label. An option's `after` may arrive as `waiting_on`. `kind` and `reason` default to a plain question.
+ * `recommended` that is not an option's label. `kind` and `reason` default to a plain question.
  */
 export function normalizeAsk(raw: any, defaults: { kind?: Ask["kind"]; reason?: string } = {}): Ask | null {
   if (!raw || typeof raw !== "object") return null;
   const question = clean(raw.question);
   if (!question || !Array.isArray(raw.options) || raw.options.length < 2 || raw.options.length > 4) return null;
   const options = raw.options.map((o: any) => {
-    const after = clean(o?.after ?? o?.waiting_on);
+    const after = clean(o?.after);
     return { label: clean(o?.label).replaceAll(SEP.trim(), ":"), line: clean(o?.line), ...(REF.test(after) ? { after } : {}) };
   });
   if (options.some((o: { label: string }) => !o.label) || new Set(options.map((o: { label: string }) => o.label)).size !== options.length) return null;

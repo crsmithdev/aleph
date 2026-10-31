@@ -310,19 +310,43 @@ test("edit --due none removes the field; a bad --due exits 1 and changes nothing
   expect(remoteItem(4)).not.toContain("due:");
 });
 
-test("lint reports a bad date and a waiting_on that names no item, each with the item number", () => {
+/** Add item 4 with `fields` in its front matter, as an old writer would have left it. */
+function seedFields(fields: string): void {
   aleph("issue", "add", "proj", "Broken");
-  const text = remoteItem(4).replace("source: chris", "source: chris\ndue: 2026-13-40\nwaiting_on: proj-1029");
-  writeFileSync(join(items, tasks, "proj-4.md"), text);
+  writeFileSync(join(items, tasks, "proj-4.md"), remoteItem(4).replace("source: chris", `source: chris\n${fields}`));
   sh(items, "git", "add", "-A");
   sh(items, "git", "commit", "-qm", "break");
   sh(items, "git", "push", "-q", "origin", "main");
+}
+
+test("lint reports a bad date with the item number", () => {
+  seedFields("due: 2026-13-40");
   const l = aleph("issue", "lint", "proj");
   expect(l.code).toBe(1);
   expect(l.err).toContain("item 4: due: 2026-13-40");
-  expect(l.err).toContain("item 4: waiting_on: proj-1029 names no issue");
   expect(aleph("issue", "add", "proj", "Fine").code).toBe(0);
   expect(aleph("issue", "lint", "proj").err).not.toContain("item 5");
+});
+
+for (const label of ["goal", "needs-chris", "planned", "followup", "triaged", "live-check", "proposal"]) {
+  test(`lint refuses the old label ${label} and names the item`, () => {
+    seedFields(`labels: [${label}]`);
+    const l = aleph("issue", "lint", "proj");
+    expect(l.code).toBe(1);
+    expect(l.err).toContain(`item 4: label ${label} is retired`);
+  });
+}
+
+test("lint refuses a waiting_on field and names the item", () => {
+  seedFields("waiting_on: proj-1");
+  const l = aleph("issue", "lint", "proj");
+  expect(l.code).toBe(1);
+  expect(l.err).toContain("item 4: waiting_on is retired");
+});
+
+test("lint passes a label that is not retired", () => {
+  seedFields("labels: [ui]");
+  expect(aleph("issue", "lint", "proj").code).toBe(0);
 });
 
 test("aleph issue lint reads a dotted goal file and names it by its dotted id", () => {
@@ -369,7 +393,7 @@ test("aleph issue is the only command: aleph todo is gone", () => {
 });
 
 test("hidden copies files into the store as one commit, lists them, and show counts them", () => {
-  seed("# To do\n\n" + sec(3, "labels: [goal]"));
+  seed("# To do\n\n" + sec(3, "kind: goal"));
   const f = join(base, "a.test.ts");
   writeFileSync(f, 'import { test } from "bun:test";\ntest("a", () => {});\n');
   expect(aleph("issue", "show", "proj", "3").out).toContain("hidden checks: 0");
@@ -387,7 +411,7 @@ test("hidden copies files into the store as one commit, lists them, and show cou
 });
 
 test("hidden reads the goal id directory, then the old number", async () => {
-  seed("# To do\n\n" + [3, 4].map((n) => sec(n, "labels: [goal]")).join("\n"));
+  seed("# To do\n\n" + [3, 4].map((n) => sec(n, "kind: goal")).join("\n"));
   for (const [p, text] of [["3/a.test.ts", "a"], ["proj-4/b.test.ts", "b"], ["proj-5.1/c.test.ts", "c"]]) {
     mkdirSync(join(items, "proj", "hidden", p.split("/")[0]), { recursive: true });
     writeFileSync(join(items, "proj", "hidden", p), text);
@@ -411,43 +435,7 @@ test("hidden reads the goal id directory, then the old number", async () => {
   }
 });
 
-// One old-shape and one new-shape item per spec field; the store reader gives each pair the same derived fields.
 const sec = (id: number, fm: string, body = "Body.") => `## ${id}. Item ${id}\n---\nid: ${id}\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\npriority: medium\n${fm}\n---\n\n${body}\n`;
-const PAIRS: { field: string; old: string; oldBody?: string; now: string; want: Record<string, unknown> }[] = [
-  { field: "kind", old: "labels: [goal]", now: "kind: goal\nlabels: []", want: { kind: "goal" } },
-  { field: "source followup", old: "labels: [followup]", now: "source: worker\nlabels: []", want: { source: "worker" } },
-  { field: "source deps", old: "labels: [deps]", now: "source: deps\nlabels: []", want: { source: "deps" } },
-  { field: "source memory", old: "labels: [memory]", now: "source: memory\nlabels: []", want: { source: "memory" } },
-  { field: "source chris", old: "labels: []", now: "source: chris\nlabels: []", want: { source: "chris" } },
-  { field: "issue", old: "labels: [goal]", oldBody: "Part of proj-5.\n\nDo it.", now: "kind: goal\nissue: proj-5\nlabels: []", want: { issue: "proj-5" } },
-  { field: "issue dotted", old: "labels: [goal]", oldBody: "Part of proj-5.1.\n\nDo it.", now: "kind: goal\nissue: proj-5.1\nlabels: []", want: { issue: "proj-5.1" } },
-  { field: "goals", old: "labels: [planned]\nwaiting_on: proj-100, proj-101", now: "goals: [proj-100, proj-101]\nlabels: [planned]", want: { goals: ["proj-100", "proj-101"], after: [] } },
-  { field: "after", old: "labels: [goal]\nwaiting_on: proj-102", now: "kind: goal\nafter: [proj-102]\nlabels: []", want: { after: ["proj-102"], goals: [] } },
-  { field: "areas", old: "labels: [goal, ui, triaged]", now: "kind: goal\nareas: [ui]\nlabels: []", want: { areas: ["ui"] } },
-  { field: "ask question", old: "labels: [needs-chris]\nquestion: Ship it?\noptions: [Yes :: do it, No :: stop]\nrecommended: Yes\nwhy: [cheap]", now: "ask: input\nreason: question\nquestion: Ship it?\noptions: [Yes :: do it, No :: stop]\nrecommended: Yes\nwhy: [cheap]", want: { ask: { kind: "input", reason: "question", question: "Ship it?", options: [{ label: "Yes", line: "do it" }, { label: "No", line: "stop" }], recommended: "Yes", why: ["cheap"] } } },
-  { field: "ask no-commit", old: "labels: [needs-chris]\nreason: no-commit", now: "ask: input\nreason: no-commit", want: { ask: { kind: "input", reason: "no-commit", question: "", options: [], why: [] } } },
-  { field: "ask triage-failed", old: "labels: [needs-chris]\nquestion: triage: no verdict in 3 tries", now: "ask: input\nreason: triage-failed\nquestion: triage: no verdict in 3 tries", want: { ask: { kind: "input", reason: "triage-failed", question: "triage: no verdict in 3 tries", options: [], why: [] } } },
-];
-
-test("the store reader gives an old-shape and a new-shape item the same derived fields", () => {
-  const rows = PAIRS.flatMap((p, n) => [
-    sec(100 + n * 2, p.old, p.oldBody),
-    sec(101 + n * 2, p.now),
-  ]);
-  seed(`# To do\n\n${rows.join("\n")}`);
-  const derived = (id: number) => {
-    const r = aleph("issue", "show", "proj", String(id), "--json");
-    expect(r.code).toBe(0);
-    const j = JSON.parse(r.out);
-    return { kind: j.kind, source: j.source, issue: j.issue, goals: j.goals, after: j.after, areas: j.areas, ask: j.ask };
-  };
-  PAIRS.forEach((p, n) => {
-    const a = derived(100 + n * 2), b = derived(101 + n * 2);
-    expect(b, p.field).toEqual(a);
-    expect(a, p.field).toMatchObject(p.want);
-  });
-  expect(aleph("issue", "lint", "proj").code).toBe(0);
-});
 
 test("lint refuses an after ref that is not <repo>-<n>[.<k>]", () => {
   seed(`# To do\n\n${sec(20, "kind: goal\nafter: [proj-1.2]\nlabels: []")}\n${sec(21, "kind: goal\nafter: [proj-x]\nlabels: []")}`);

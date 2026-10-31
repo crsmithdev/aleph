@@ -63,8 +63,6 @@ export function validDate(s: string): boolean {
 const REF = /^(.+)-(\d+)$/;
 /** A ref in `after`, `goals` or `issue`: `<repo>-<n>` or `<repo>-<n>.<k>`. */
 const GOAL_REF = /^[^\s,]+-\d+(\.\d+)?$/;
-/** The refs a `waiting_on` names: its comma-separated parts, trimmed, empty parts dropped. */
-export const waitParts = (waits: string): string[] => waits.split(",").map((s) => s.trim()).filter(Boolean);
 
 /** `<repo>-<n>` split into its parts, or null. */
 export function parseRef(s: string): { repo: string; id: number } | null {
@@ -209,7 +207,7 @@ export const find = (doc: Doc, id: number | string): Issue | undefined => doc.it
 // The max of `id` ignores `sub` on purpose: a goal's id is its parent's number, so a goal never takes a new issue number.
 export const nextId = (doc: Doc): number => doc.items.reduce((m, i) => Math.max(m, i.id), 0) + 1;
 
-/** Labels the new shape holds as fields (or not at all): `add` never writes them, whatever the caller names. */
+/** Labels the new shape holds as fields (or not at all): `add` never writes them, whatever the caller names, and `lint` refuses them. */
 const RETIRED_LABELS: readonly string[] = ["goal", "needs-chris", "triaged", "followup", "planned", "proposal", "live-check"];
 const SOURCES = ["chris", "worker", "deps", "memory"] as const;
 export type Source = (typeof SOURCES)[number];
@@ -219,7 +217,7 @@ export const nextSub = (doc: Doc, n: number): number => doc.items.reduce((m, i) 
 
 /**
  * Add an issue in the new shape: `kind: issue`, `source` (chris unless the caller says worker, deps or memory)
- * and `areas`, the labels that remain. It never writes `labels`, `waiting_on` or a label of RETIRED_LABELS.
+ * and `areas`, the labels that remain. It never writes `labels` or a label of RETIRED_LABELS.
  * `route: "triaged"` marks the issue sorted, for the one the factory files for itself.
  */
 export function add(doc: Doc, title: string, o: { priority?: string; labels?: string[]; body?: string; due?: string; source?: Source; route?: string; now?: Date } = {}): Issue {
@@ -235,7 +233,7 @@ export function add(doc: Doc, title: string, o: { priority?: string; labels?: st
     notes: [],
     legacy: false,
   };
-  setReadiness(item, o);
+  setDue(item, o.due);
   doc.items.push(item);
   return item;
 }
@@ -265,34 +263,11 @@ export function addGoal(doc: Doc, issue: Issue, o: { title: string; body: string
   return goal;
 }
 
-/** The old `add`, for the code that still writes the old shape (the planner, the UI's wait route) until aleph-849 and aleph-628: labels, `waiting_on`, no `kind`. */
-export function addLegacy(doc: Doc, title: string, o: { priority?: string; labels?: string[]; body?: string; due?: string; waitingOn?: string; now?: Date } = {}): Issue {
-  const day = today(o.now);
-  const item: Issue = {
-    id: nextId(doc),
-    title,
-    fm: { id: String(nextId(doc)), status: "open", created: day, updated: day, priority: o.priority ?? "medium", labels: o.labels ?? [] },
-    body: o.body ?? "",
-    notes: [],
-    legacy: false,
-  };
-  setReadiness(item, o);
-  doc.items.push(item);
-  return item;
-}
-
-/** Set `waiting_on` on an item, or remove it with `none`: the old shape's only writer of the field. */
-export function setWaitingOn(item: Issue, waitingOn: string, now = new Date()): void {
-  edit(item, { waitingOn }, now);
-}
-
-/** Set `due` and `waiting_on` from the values given; `none` removes the field. */
-function setReadiness(item: Issue, o: { due?: string; waitingOn?: string }): void {
-  for (const [key, value] of [["due", o.due], ["waiting_on", o.waitingOn]] as const) {
-    if (value === undefined) continue;
-    if (value === "none") delete item.fm[key];
-    else item.fm[key] = value;
-  }
+/** Set `due` from the value given; `none` removes the field. */
+function setDue(item: Issue, due: string | undefined): void {
+  if (due === undefined) return;
+  if (due === "none") delete item.fm.due;
+  else item.fm.due = due;
 }
 
 /** Append-only: an existing note line is never rewritten, which is the lost update this format exists to stop. */
@@ -305,14 +280,14 @@ export function note(item: Issue, text: string, now = new Date()): string {
 }
 
 /** Replace the fields given. Notes are never edited: they stay append-only. */
-export function edit(item: Issue, change: { title?: string; body?: string; priority?: string; labels?: string[]; areas?: string[]; due?: string; waitingOn?: string }, now = new Date()): void {
+export function edit(item: Issue, change: { title?: string; body?: string; priority?: string; labels?: string[]; areas?: string[]; due?: string }, now = new Date()): void {
   if (item.legacy) adopt(item, now);
   if (change.title !== undefined) item.title = change.title;
   if (change.body !== undefined) item.body = change.body;
   if (change.priority !== undefined) item.fm.priority = change.priority;
   if (change.labels !== undefined) item.fm.labels = change.labels;
   if (change.areas !== undefined) item.fm.areas = change.areas;
-  setReadiness(item, change);
+  setDue(item, change.due);
   item.fm.updated = today(now);
 }
 
@@ -347,8 +322,7 @@ export interface Finding {
   fixable: boolean;
 }
 
-/** `exists` says whether `<repo>-<n>` names an item; without it a `waiting_on` is only checked for form. */
-export function lint(doc: Doc, exists?: (repo: string, id: number) => boolean): Finding[] {
+export function lint(doc: Doc): Finding[] {
   const findings: Finding[] = [];
   const seen = new Map<string, number>();
   for (const item of doc.items) {
@@ -367,13 +341,8 @@ export function lint(doc: Doc, exists?: (repo: string, id: number) => boolean): 
     }
     const due = item.fm.due;
     if (due !== undefined && !(typeof due === "string" && validDate(due))) findings.push({ id: refOf(item), problem: `due: ${due} is not a date written YYYY-MM-DD`, fixable: false });
-    const waits = item.fm.waiting_on;
-    if (waits !== undefined) {
-      const parts = typeof waits === "string" ? waitParts(waits) : [];
-      const refs = parts.map(parseRef);
-      if (!parts.length || refs.some((r) => !r)) findings.push({ id: refOf(item), problem: `waiting_on: ${waits} is not <repo>-<n>[,<repo>-<n>...]`, fixable: false });
-      else if (exists && refs.some((r) => !exists(r!.repo, r!.id))) findings.push({ id: refOf(item), problem: `waiting_on: ${waits} names no issue`, fixable: false });
-    }
+    for (const l of labels(item)) if (RETIRED_LABELS.includes(l)) findings.push({ id: refOf(item), problem: `label ${l} is retired`, fixable: false });
+    if (item.fm.waiting_on !== undefined) findings.push({ id: refOf(item), problem: "waiting_on is retired: a goal waits with after", fixable: false });
     for (const key of ["after", "goals", "issue"] as const) {
       const v = item.fm[key];
       if (v === undefined) continue;
@@ -383,7 +352,7 @@ export function lint(doc: Doc, exists?: (repo: string, id: number) => boolean): 
     }
     for (const key of ["kind", "source", "ask"] as const) {
       const v = item.fm[key];
-      const ok = { kind: ["goal", "issue", "product", "build"], source: ["chris", "worker", "deps", "memory"], ask: ["input", "approval"] }[key];
+      const ok = { kind: ["goal", "issue"], source: ["chris", "worker", "deps", "memory"], ask: ["input", "approval"] }[key];
       if (v !== undefined && !ok.includes(v as string)) findings.push({ id: refOf(item), problem: `${key} "${v}" is not one of ${ok.join(", ")}`, fixable: false });
     }
     if (item.fm.labels !== undefined && !Array.isArray(item.fm.labels)) findings.push({ id: refOf(item), problem: "labels must be a list", fixable: true });

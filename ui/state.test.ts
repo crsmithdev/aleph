@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { goalsOf, kindOf, readList, writeList } from "../todo/lib/store.ts";
 import { buildReviewFixture } from "./fixtures/review/build.ts";
-import { addGoal, addLegacy as add, refOf, type Issue } from "../todo/lib/todo.ts";
+import { add, addGoal, refOf, type Issue } from "../todo/lib/todo.ts";
 import { state } from "./state.ts";
 import { loadRegistry } from "../jobs/lib/ledger.ts";
 import { spawn } from "node:child_process";
@@ -49,7 +49,7 @@ beforeAll(() => {
   }
   Object.assign(process.env, gitEnv);
   writeList({ key: "fac" }, "seed", (doc) => {
-    for (const t of ["needs item", "waiting goal", "stuck item", "running item", "landed item", "old item"]) add(doc, t, { labels: t === "waiting goal" ? ["goal"] : [] });
+    for (const t of ["needs item", "waiting goal", "stuck item", "running item", "landed item", "old item"]) { const item = add(doc, t); if (t === "waiting goal") item.fm.kind = "goal"; }
     return true;
   }, true);
 
@@ -133,7 +133,7 @@ describe("state", () => {
 
   test("landing counts land runs in progress; New counts open unlabelled issues, not goals or labelled ones", () => {
     writeList({ key: "fac" }, "more", (doc) => {
-      add(doc, "labelled", { labels: ["triaged"] });
+      add(doc, "labelled", { route: "triaged" });
       add(doc, "bare");
       return true;
     }, true);
@@ -148,7 +148,7 @@ describe("state", () => {
     const before = state(now);
     writeList({ key: "fac" }, "many", (doc) => {
       for (let i = 0; i < 12; i++) add(doc, `bulk ${i}`);
-      add(doc, "sorted", { labels: ["triaged"] });
+      add(doc, "sorted", { route: "triaged" });
       return true;
     }, true);
     const s = state(now);
@@ -355,7 +355,9 @@ describe("the review fixture", () => {
 describe("waiting entries", () => {
   test("carry why, kind, and the links the Queued lane shows", async () => {
     writeList({ key: "fac" }, "waiting fixtures", (doc) => {
-      add(doc, "waits goal", { labels: ["goal"] }).fm.after = ["fac-2"];
+      const goal = add(doc, "waits goal");
+      goal.fm.kind = "goal";
+      goal.fm.after = ["fac-2"];
       return true;
     }, true);
     // The stuck fac-3 would hold every start: set it aside, so only the reasons under test remain.

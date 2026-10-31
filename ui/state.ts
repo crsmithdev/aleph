@@ -11,7 +11,7 @@ import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from 
 import { readAsk, type Ask } from "../jobs/lib/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { readAlways } from "../jobs/lib/always.ts";
-import { afterOf, askOf, goalsOf, issueOf, kindOf, labels, reader } from "../todo/lib/store.ts";
+import { afterOf, areasOf, askOf, goalsOf, issueOf, kindOf, reader } from "../todo/lib/store.ts";
 import { idOf, parseGoalRef, refOf, status } from "../todo/lib/todo.ts";
 import { facts, landedIndex, stages } from "../jobs/lib/status.ts";
 import type { Stage } from "../jobs/lib/stage.ts";
@@ -336,7 +336,7 @@ export function state(now = new Date()): State {
       const st = stageById.get(ref)?.stage ?? status(item);
       // Incoming and Done list issues; a goal with an issue shows under it.
       const top = kindOf(item) === "issue" || !issueOf(item);
-      const card = (): NewIssue => ({ id, title: item.title, status: "open", href, labels: labels(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? ""), stage: st });
+      const card = (): NewIssue => ({ id, title: item.title, status: "open", href, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? ""), stage: st });
       const created = String(item.fm.created ?? "");
       if (top) everyone.push({ at: created, n: item.id, card: { id, title: item.title, href, created, stage: st } });
       if (st === "done" && top) {

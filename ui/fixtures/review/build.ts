@@ -7,7 +7,7 @@
 import { copyFileSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { writeList } from "../../../todo/lib/store.ts";
-import { addLegacy as add, note, setStatus } from "../../../todo/lib/todo.ts";
+import { add, note, setStatus } from "../../../todo/lib/todo.ts";
 
 const ANCHOR = Date.parse("2026-10-28T12:00:00Z");
 const IDENT = { GIT_AUTHOR_NAME: "fixture", GIT_AUTHOR_EMAIL: "fixture@example.com", GIT_COMMITTER_NAME: "fixture", GIT_COMMITTER_EMAIL: "fixture@example.com" };
@@ -34,10 +34,10 @@ function copyPlain(from: string, to: string): void {
 }
 
 interface FixtureItem { title: string; labels?: string[]; priority?: string; body?: string; status?: string; due?: string; notes?: string[];
-  /** The new-shape fields, written as the item's own: `kind`, `source`, `issue`, `goals`, `after`, `areas`, `ask` and the ask's `reason` and `question`. */
-  kind?: string; source?: string; issue?: string; goals?: string[]; after?: string[]; areas?: string[]; ask?: string; reason?: string; question?: string }
+  /** The new-shape fields, written as the item's own: `kind`, `source`, `route`, `issue`, `goals`, `after`, `areas`, `ask` and the ask's `reason` and `question`. */
+  kind?: string; source?: string; route?: string; issue?: string; goals?: string[]; after?: string[]; areas?: string[]; ask?: string; reason?: string; question?: string }
 
-const NEW_SHAPE = ["kind", "source", "issue", "goals", "after", "areas", "ask", "reason", "question"] as const;
+const NEW_SHAPE = ["kind", "source", "route", "issue", "goals", "after", "areas", "ask", "reason", "question"] as const;
 
 /** Build the home under `dest` from `src`; returns the environment that points aleph at it. */
 export function buildReviewFixture(dest: string, src = import.meta.dir): Record<string, string> {

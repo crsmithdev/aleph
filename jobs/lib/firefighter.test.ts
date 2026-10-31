@@ -442,7 +442,6 @@ test("prompt lists after in the drop and edit-goal lines, and says a note alone 
   expect(lines.find((l) => l.startsWith('- {"do": "edit-goal"'))).toContain('"after"');
   expect(lines.find((l) => l.startsWith('- {"do": "answer"'))).toContain('"after"');
   expect(p).toContain("A note or a drop reason alone does not stop a rerun.");
-  expect(p).not.toContain("clear-needs-chris");
 });
 
 test("answer keeps after in parse, and leaves it out when absent", () => {

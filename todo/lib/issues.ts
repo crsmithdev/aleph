@@ -14,7 +14,6 @@ import { triage } from "./triage.ts";
 
 /**
  * The fields `add` and `edit` take; `due` takes `none` to remove the field. `labels` are the issue's areas.
- * `waitingOn` is for in-process callers (the UI's Wait button and decide route): `aleph issue` refuses `--waiting-on`.
  * `goal` is the goal-format text that `add` files as goal `.1`, and `after` the goals that goal waits for.
  */
 export interface Fields {
@@ -23,7 +22,6 @@ export interface Fields {
   priority?: string;
   labels?: string[];
   due?: string;
-  waitingOn?: string;
   status?: string;
   goal?: string;
   after?: string[];
@@ -35,16 +33,14 @@ export const brief = (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ?
 export function checkFields(f: Fields): void {
   if (f.due !== undefined && f.due !== "none" && !issues.validDate(f.due)) refuse("--due takes YYYY-MM-DD or none");
   if (f.status !== undefined && !(issues.STATUSES as readonly string[]).includes(f.status)) refuse(`--status takes ${issues.STATUSES.join(", ")}`);
-  if (f.waitingOn !== undefined && f.waitingOn !== "none" && !(issues.waitParts(f.waitingOn).length && issues.waitParts(f.waitingOn).every((p) => issues.parseRef(p)))) refuse("--waiting-on takes <repo>-<n>[,<repo>-<n>...] or none");
 }
 
-/** Set the goals a goal waits for (`after`), checked for form and, in this repo, for existence; an old `waiting_on` goes. */
+/** Set the goals a goal waits for (`after`), checked for form and, in this repo, for existence. */
 function setAfter(repo: store.Place, doc: issues.Doc, i: issues.Issue, after: string[]): void {
   checkAfter(after);
   for (const r of after) if (r.startsWith(`${repo.key}-`) && !issues.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no goal`);
   if (i.legacy) issues.adopt(i);
   i.fm.after = after;
-  delete i.fm.waiting_on;
   i.fm.updated = issues.today();
 }
 
@@ -145,7 +141,7 @@ function write<T>(repo: store.Place, message: string, change: (doc: issues.Doc) 
   }
 }
 
-/** Chris's answer to a `needs-chris` issue: not a worker's note (a job id) and not the factory's own. */
+/** Chris's answer to an issue with an Ask: not a worker's note (a job id) and not the factory's own. */
 export const isAnswer = (text: string, jobId: string | undefined): boolean => !jobId && !/^(triage|job \S+ landed)\b/.test(text);
 
 export interface Added { repo: string; added: number; title: string; commit: string; goal?: string; maybeSame?: { id: number; title: string }[] }
@@ -165,7 +161,6 @@ function checkAfter(after: string[]): void {
 export async function add(repo: store.Place, title: string, fields: Fields = {}): Promise<{ result: Added; item: issues.Issue; goal?: issues.Goal; follow: string | null }> {
   checkFields(fields);
   title = title.trim() || refuse("give the item a title");
-  if (fields.waitingOn !== undefined) refuse("an issue does not take --waiting-on: file a goal with --goal - and --after <goal id>");
   const text = fields.goal?.trim();
   if (fields.goal !== undefined && !text) refuse("--goal - needs the goal text on stdin");
   if (text && fields.body !== undefined) refuse("--goal - takes the text from stdin: leave --body off");
@@ -219,7 +214,7 @@ export function note(repo: store.Place, id: number | string, text: string, answe
 
 /**
  * Chris's answer to an issue that asks him something, in one write: the decision note, and the Ask cleared. The issue is
- * left to the triage that follows a note. `fields.waitingOn` (the UI's option that waits on another issue) sets `waiting_on`.
+ * left to the triage that follows a note. `fields.after` (the UI's option that waits for a goal) sets `after`.
  */
 export function decide(repo: store.Place, id: number | string, text: string, fields: Fields = {}) {
   checkFields(fields);
@@ -229,9 +224,6 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
     if (issues.status(i) !== "open" || !store.awaitsChris(i)) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
     issues.note(i, text);
     store.clearAsk(i);
-    // The old shape stored the decision's own kind (product or build) in `kind`.
-    if (i.fm.kind === "product" || i.fm.kind === "build") delete i.fm.kind;
-    if (fields.waitingOn !== undefined) issues.setWaitingOn(i, fields.waitingOn);
     if (fields.after !== undefined) setAfter(repo, doc, i, fields.after);
     return i;
   })!;
@@ -241,12 +233,12 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
 export function edit(repo: store.Place, id: number | string, fields: Fields) {
   checkFields(fields);
   const title = fields.title?.trim();
-  const { body, priority, labels, due, waitingOn, status, after } = fields;
-  if (title === undefined && body === undefined && priority === undefined && labels === undefined && due === undefined && waitingOn === undefined && status === undefined && after === undefined) refuse("give --title, --body, --priority, --labels, --due (or --status)");
+  const { body, priority, labels, due, status, after } = fields;
+  if (title === undefined && body === undefined && priority === undefined && labels === undefined && due === undefined && status === undefined && after === undefined) refuse("give --title, --body, --priority, --labels, --due (or --status)");
   if (title === "") refuse("the title cannot be empty");
   const w = write(repo, `todo: edit item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
-    issues.edit(i, { title, body, priority, areas: labels, due, waitingOn });
+    issues.edit(i, { title, body, priority, areas: labels, due });
     if (status !== undefined) issues.setStatus(i, status as issues.Status);
     if (after !== undefined) setAfter(repo, doc, i, after);
     return i;
@@ -268,23 +260,17 @@ export function close(repo: store.Place, id: number | string, how: "done" | "dro
   return { result: { repo: repo.key, id: w.value.id, status: issues.status(w.value), title: w.value.title, commit: w.commit }, follow: w.follow };
 }
 
-/** Whether `<repo>-<n>` names an item in the work store; `own` is the list already read for `key`. */
-export function itemExists(key: string, registry: Record<string, unknown>, own?: issues.Doc): (repo: string, id: number) => boolean {
-  const lists = store.reader();
-  return (r, id) => (own && r === key ? issues.find(own, id) : registry[r] ? lists.item(r, id) : undefined) !== undefined;
-}
-
 export type Finding = ReturnType<typeof issues.lint>[number];
 
-export function lint(repo: store.Place, registry: Record<string, unknown>): { repo: string; items: number; findings: Finding[] } {
+export function lint(repo: store.Place): { repo: string; items: number; findings: Finding[] } {
   const doc = readIssues(repo);
-  return { repo: repo.key, items: doc.items.length, findings: issues.lint(doc, itemExists(repo.key, registry, doc)) };
+  return { repo: repo.key, items: doc.items.length, findings: issues.lint(doc) };
 }
 
 /** Repair what lint can; `remaining` is what is left. */
-export function lintFix(repo: store.Place, registry: Record<string, unknown>) {
-  const w = write(repo, "todo: lint --fix", (doc) => { const fixed = issues.fix(doc); return fixed.length ? { fixed, left: issues.lint(doc, itemExists(repo.key, registry, doc)) } : null; });
-  const remaining = w?.value.left ?? issues.lint(readIssues(repo), itemExists(repo.key, registry));
+export function lintFix(repo: store.Place) {
+  const w = write(repo, "todo: lint --fix", (doc) => { const fixed = issues.fix(doc); return fixed.length ? { fixed, left: issues.lint(doc) } : null; });
+  const remaining = w?.value.left ?? issues.lint(readIssues(repo));
   return { result: { repo: repo.key, fixed: w?.value.fixed ?? [], remaining }, follow: w?.follow ?? null };
 }
 
@@ -301,6 +287,6 @@ export function listRecent<R extends store.Place>(repos: R[], o: { status?: stri
 }
 
 /** `lint` with no repo: each recent repo's findings. */
-export function lintRecent<R extends store.Place>(repos: R[], registry: Record<string, unknown>) {
-  return recentLists(repos).filter((r) => r.doc).map(({ repo, doc }) => ({ repo: repo.key, items: doc!.items.length, findings: issues.lint(doc!, itemExists(repo.key, registry, doc!)) }));
+export function lintRecent<R extends store.Place>(repos: R[]) {
+  return recentLists(repos).filter((r) => r.doc).map(({ repo, doc }) => ({ repo: repo.key, items: doc!.items.length, findings: issues.lint(doc!) }));
 }

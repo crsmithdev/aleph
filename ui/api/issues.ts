@@ -15,7 +15,7 @@ import { Refusal } from "../../jobs/lib/transitions.ts";
 import * as issues from "../../todo/lib/issues.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, awaitsChris, goalsOf, issueOf, kindOf, labels, readList, readLists } from "../../todo/lib/store.ts";
+import { afterOf, areasOf, awaitsChris, goalsOf, issueOf, kindOf, readList, readLists } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { githubBase } from "../state.ts";
@@ -27,15 +27,15 @@ const refOf = (raw: string): number | string | null => (/^\d+$/.test(raw) ? Numb
 const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : String(v));
 
 export interface Row {
-  id: number; repo: string; title: string; status: string; priority: string | null; labels: string[];
+  id: number; ref: string; kind: "goal" | "issue"; repo: string; title: string; status: string; priority: string | null; labels: string[];
   due: string | null; after: string[]; updated: string | null; notes: number;
-  /** Only on an issue labelled `goal`. */
+  /** Only on a goal. */
   stage?: string; state?: string; why?: string;
 }
 
 function row(repo: string, i: todos.Issue): Row {
   return {
-    id: i.id, repo, title: i.title, status: todos.status(i), priority: str(i.fm.priority), labels: labels(i),
+    id: i.id, ref: todos.refOf(i), kind: kindOf(i), repo, title: i.title, status: todos.status(i), priority: str(i.fm.priority), labels: areasOf(i),
     due: str(i.fm.due), after: afterOf(i), updated: str(i.fm.updated), notes: i.notes.length,
   };
 }
@@ -46,12 +46,12 @@ const oldState = (stage: string): string => OLD[stage] ?? "open";
 
 /** Each goal's stage, from the list already read and one pass over main's trailers. */
 function derived(repo: Repo, doc: todos.Doc, rows: Row[]): void {
-  const goals = rows.filter((r) => r.labels.includes("goal"));
+  const goals = rows.filter((r) => r.kind === "goal");
   if (!goals.length) return;
   let states;
-  try { states = repoStages(repo, { fetch: false, doc, items: goals.map((r) => r.id) }); } catch { return; }
+  try { states = repoStages(repo, { fetch: false, doc, items: goals.map((r) => r.ref) }); } catch { return; }
   for (const r of goals) {
-    const s = states.find((x) => x.id === `${repo.key}-${r.id}`);
+    const s = states.find((x) => x.id === `${repo.key}-${r.ref}`);
     if (s) { r.stage = s.stage; r.state = oldState(s.stage); r.why = s.why; }
   }
 }
@@ -75,7 +75,7 @@ function list(url: URL): Response {
     if (!doc) continue;
     const rows = doc.items.map((i) => row(repos[n].key, i));
     derived(repos[n], doc, rows);
-    const items = rows.filter((r) => (!status || r.status === status) && (!label || r.labels.includes(label)));
+    const items = rows.filter((r) => (!status || r.status === status) && (!label || (label === "goal" ? r.kind === "goal" : r.labels.includes(label))));
     if (items.length) out.push(...items);
   }
   return Response.json(out);

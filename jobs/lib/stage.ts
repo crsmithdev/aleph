@@ -24,7 +24,7 @@ export interface AskFact { kind: "input" | "approval"; reason: string }
 /** What stage() needs of an item. */
 export interface Subject {
   id: string; status: string; kind: "goal" | "issue"; after: string[]; goals: string[]; ask?: AskFact;
-  /** Triage has routed it: a `triaged`, `live-check` or `proposal` label. */
+  /** Triage has routed it, or it asks: `store.isSorted`. */
   sorted: boolean;
 }
 

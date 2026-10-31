@@ -38,7 +38,7 @@ beforeAll(() => {
   const tasks = join(a, "items", "aleph", "backlog", "tasks");
   mkdirSync(tasks, { recursive: true });
   writeFileSync(join(a, "items", "aleph", "backlog", "config.yml"), config("aleph"));
-  const task = { id: 1, title: "the one issue", fm: { id: "1", status: "open", created: "2026-10-01", updated: "2026-10-02", priority: "medium", labels: [], }, body: "Body.", notes: [], legacy: false };
+  const task = { id: 1, title: "the one issue", fm: { id: "1", status: "open", created: "2026-10-01", updated: "2026-10-02", priority: "medium", kind: "issue" }, body: "Body.", notes: [], legacy: false };
   writeFileSync(join(tasks, "aleph-1.md"), renderItem("aleph", task as any));
   sh(join(a, "items"), "git", "add", "-A");
   sh(join(a, "items"), "git", "commit", "-q", "-m", "one");

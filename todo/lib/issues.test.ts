@@ -19,7 +19,7 @@ let n = 0;
 function repo(items: { title: string; labels?: string[] }[] = []): store.Place {
   const r = { key: `is${++n}` };
   store.writeList(r, "start", (doc) => {
-    for (const i of items) issues.addLegacy(doc, i.title, { labels: i.labels });
+    for (const i of items) { const it = issues.add(doc, i.title, { labels: i.labels }); if (i.labels?.includes("goal")) it.fm.kind = "goal"; }
     return true;
   }, true);
   return r;
@@ -71,29 +71,28 @@ describe("issue verbs without argv", () => {
     expect(issues.status(item(r, 1))).toBe("open");
   });
 
-  test("decide needs an issue with an Ask or a needs-chris label, clears it and makes no goal", () => {
-    const r = repo([{ title: "a" }, { title: "b", labels: ["needs-chris"] }]);
-    store.writeList(r, "ask", (doc) => { store.setAsk(issues.find(doc, 1)!, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
-    store.writeList(r, "ask", (doc) => { const i = issues.addLegacy(doc, "c"); store.setAsk(i, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
+  test("decide needs an issue with an Ask, clears it and makes no goal", () => {
+    const r = repo([{ title: "a" }, { title: "b" }]);
+    for (const n of [1, 2]) store.writeList(r, "ask", (doc) => { store.setAsk(issues.find(doc, n)!, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
+    store.writeList(r, "ask", (doc) => { const i = issues.add(doc, "c"); store.setAsk(i, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
     expect(refusal(() => issueOps.decide(r, 99, "yes"))).toContain("has no issue");
     const d = issueOps.decide(r, 2, "yes");
-    expect(store.hasLabel(d.item, store.GOAL)).toBe(false);
-    expect(store.needsChris(item(r, 2))).toBe(false);
+    expect(store.kindOf(d.item)).toBe("issue");
+    expect(store.askOf(item(r, 2))).toBeNull();
     issueOps.decide(r, 1, "yes");
     expect(store.askOf(item(r, 1))).toBeNull();
     expect(item(r, 1).fm.ask).toBeUndefined();
     expect(item(r, 1).notes.at(-1)).toContain("yes");
-    store.writeList(r, "x", (doc) => { issues.addLegacy(doc, "plain"); return true; });
+    store.writeList(r, "x", (doc) => { issues.add(doc, "plain"); return true; });
     expect(refusal(() => issueOps.decide(r, 4, "yes"))).toContain("not waiting for a decision");
-    issueOps.decide(r, 3, "wait", { waitingOn: "x-1" });
-    expect(item(r, 3).fm.waiting_on).toBe("x-1");
+    issueOps.decide(r, 3, "wait");
+    expect(store.askOf(item(r, 3))).toBeNull();
   });
 
-  test("edit needs a field, a good --due and a good --waiting-on", () => {
+  test("edit needs a field and a good --due", () => {
     const r = repo([{ title: "a" }]);
     expect(refusal(() => issueOps.edit(r, 1, {}))).toContain("give --title");
     expect(refusal(() => issueOps.edit(r, 1, { due: "tomorrow" }))).toContain("--due takes");
-    expect(refusal(() => issueOps.edit(r, 1, { waitingOn: "soon" }))).toContain("--waiting-on takes");
     expect(item(r, 1).fm.due).toBeUndefined();
   });
 });

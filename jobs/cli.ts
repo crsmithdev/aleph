@@ -248,13 +248,13 @@ async function todoCmd(): Promise<void> {
     }
     case "lint": {
       if (fixing) {
-        const l = verbs.lintFix(repo, registry);
+        const l = verbs.lintFix(repo);
         warn(l.follow);
         out(l.result);
         if (l.result.remaining.length) process.exit(1);
         return;
       }
-      const l = verbs.lint(repo, registry);
+      const l = verbs.lint(repo);
       if (!l.findings.length) { out({ repo: l.repo, items: l.items, findings: [] }); return; }
       for (const f of l.findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${l.findings.length} problem${l.findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
@@ -358,7 +358,7 @@ function listRecent(): { repo: Repo; doc: issues.Doc | null }[] {
 function todoRecent(sub: "list" | "lint", registry: Record<string, Repo>, o: { status?: string; label?: string }, json: boolean): void {
   const repos = Object.values(registry);
   if (sub === "lint") {
-    const results = verbs.lintRecent(repos, registry);
+    const results = verbs.lintRecent(repos);
     for (const r of results) for (const f of r.findings) console.error(`${r.repo} item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
     out(results);
     if (results.some((r) => r.findings.length)) process.exit(1);

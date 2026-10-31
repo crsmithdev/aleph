@@ -71,6 +71,37 @@ const OLD_NEEDS: Record<string, { kind: Ask["kind"]; reason: string }> = {
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 const flat = (s: string): string => s.replace(/\s+/g, " ").replace(/"/g, "'").replace(/\\/g, "/").trim();
 
+// The old-shape readers: the store module reads only the new shape, and the migration reads what it migrates.
+
+const hasLabel = (item: todos.Issue, label: string): boolean => store.labels(item).includes(label);
+const needsChris = (item: todos.Issue): boolean => hasLabel(item, "needs-chris");
+/** Labels that mark an old item as sorted. */
+const SORTED: readonly string[] = ["goal", "needs-chris", "triaged", "live-check", "proposal"];
+/** Labels that map to a field of their own, so `areasOf` leaves them out. */
+const MAPPED: readonly string[] = ["goal", "needs-chris", "planned", "followup", "triaged", "live-check", "proposal", "deps", "memory"];
+const isSorted = (item: todos.Issue): boolean =>
+  item.fm.route !== undefined || item.fm.ask !== undefined || item.fm.kind === "goal" || hasLabel(item, "goal") || list(item.fm.goals).length > 0 || store.labels(item).some((l) => SORTED.includes(l));
+const areasOf = (item: todos.Issue): string[] => (item.fm.areas !== undefined ? list(item.fm.areas) : store.labels(item).filter((l) => !MAPPED.includes(l)));
+
+/** The reason code of an old item's ask, from `reason`, else from the question or its last note. */
+function oldReason(reason: string, question: string): string {
+  if (reason === "triage-no-verdict" || reason === "triage-failed") return "triage-failed";
+  if (reason === "no-commit") return "no-commit";
+  if (reason && reason !== "decision" && reason !== "question") return reason;
+  const q = question.replace(/^\s*-\s*/, "").replace(/^\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?:\s*/, "").replace(/^\s*needs-chris:\s*/i, "");
+  if (/^triage: no verdict in/.test(q)) return "triage-failed";
+  if (/ended with no commit, so the factory stopped/.test(q)) return "no-commit";
+  return "question";
+}
+
+/** An old item's question and reason code; null when it does not ask. */
+function oldAsk(item: todos.Issue): { reason: string; question: string } | null {
+  if (item.fm.ask === undefined && !needsChris(item)) return null;
+  const question = typeof item.fm.question === "string" ? item.fm.question : "";
+  const reason = typeof item.fm.reason === "string" ? item.fm.reason : "";
+  return { question, reason: item.fm.ask === undefined ? oldReason(reason, question || item.notes.at(-1) || "") : reason || "question" };
+}
+
 /** The stages an old status may become: the spec's mapping table. */
 const TABLE: Record<string, string[]> = {
   "untriaged": ["new"], "sorted": ["triaged"], "waiting on Chris": ["awaiting"], "queued": ["queued", "blocked"], "building": ["building"],
@@ -143,15 +174,15 @@ const jobsOf = (runs: Entry[]): Entry[][] => {
 function oldStatus(item: todos.Issue, mine: Entry[][]): string {
   const st = todos.status(item);
   if (st !== "open") return st;
-  if (store.needsChris(item)) return "waiting on Chris";
+  if (needsChris(item)) return "waiting on Chris";
   const open = mine.find((j) => isOpen(j) && !["triage", "plan", "facts"].includes(j.at(-1)!.run.kind));
   if (open) {
     const real = lastReal(open).run;
     return (real.state as string) === "needs-you" || real.state === "awaiting" ? "needs you" : real.state === "stuck" || real.state === "failed" ? "stuck" : real.kind === "land" ? "landing" : "building";
   }
   if (mine.some((j) => j.at(-1)!.run.state === "landed")) return "landed";
-  if (store.hasLabel(item, "goal")) return "queued";
-  return store.isSorted(item) ? "sorted" : "untriaged";
+  if (hasLabel(item, "goal")) return "queued";
+  return isSorted(item) ? "sorted" : "untriaged";
 }
 
 function askFields(fm: Frontmatter, kind: "input" | "approval", reason: string, fallback: string): void {
@@ -168,11 +199,11 @@ function convert(key: string, item: todos.Issue, goalOf: Map<number, string>): N
   const parent = /^Part of ([^\s,]+-\d+(?:\.\d+)?)\./.exec(item.body)?.[1] ?? null;
   const planned = has("planned");
   const asGoal = !planned && (parent !== null || has("goal"));
-  const needs = store.needsChris(item);
-  const old = store.askOf(item);
+  const needs = needsChris(item);
+  const old = oldAsk(item);
   const source = has("followup") ? "worker" : has("deps") ? "deps" : has("memory") ? "memory" : "chris";
   const waits = list(item.fm.waiting_on).map((r) => { const m = /^(.+)-(\d+)$/.exec(r); return m ? goalOf.get(Number(m[2])) ?? r : r; });
-  const areas = store.areasOf(item);
+  const areas = areasOf(item);
 
   let ask: New["ask"];
   const base: Frontmatter = {};
@@ -199,7 +230,7 @@ function convert(key: string, item: todos.Issue, goalOf: Map<number, string>): N
     return n;
   };
   const request = (body: string) => (/^##\s+Request\b/.test(body) ? body : `## Request\n\n${body}`.trimEnd());
-  const sorted = store.isSorted(item) && !has("goal") && !needs && !has("proposal") && !has("live-check");
+  const sorted = isSorted(item) && !has("goal") && !needs && !has("proposal") && !has("live-check");
   const mark = (n: New): New => { if (sorted && has("triaged")) { n.fm.route = "triaged"; n.sorted = true; } return n; };
 
   if (parent && !planned) {
@@ -254,14 +285,14 @@ export function plan(r: Roots = roots()): Plan {
   const goalOf = new Map<number, string>();
   for (const { key, doc } of docs) for (const i of doc?.items ?? []) {
     const parent = /^Part of ([^\s,]+-\d+(?:\.\d+)?)\./.test(i.body);
-    if (!store.hasLabel(i, "planned") && !parent && store.hasLabel(i, "goal")) { goalOf.set(i.id, `${key}-${i.id}.1`); split.add(`${key}-${i.id}`); }
+    if (!hasLabel(i, "planned") && !parent && hasLabel(i, "goal")) { goalOf.set(i.id, `${key}-${i.id}.1`); split.add(`${key}-${i.id}`); }
   }
   for (const { key, doc } of docs) for (const i of doc?.items ?? []) {
     const mine = jobs.filter((j) => { const real = lastReal(j).run as Run & { todo?: number | string }; return real.todo !== undefined && `${real.repo}-${real.todo}` === `${key}-${i.id}`; });
     const status = oldStatus(i, mine);
     const made = convert(key, i, goalOf);
     items.push(...made);
-    oldInfo.set(`${key}-${i.id}`, { status, planned: store.hasLabel(i, "planned"), ruled: store.hasLabel(i, "proposal") || store.hasLabel(i, "live-check") });
+    oldInfo.set(`${key}-${i.id}`, { status, planned: hasLabel(i, "planned"), ruled: hasLabel(i, "proposal") || hasLabel(i, "live-check") });
   }
 
   const migrated = runs.map((e) => ({ folder: e.folder, before: e.run, after: convertRun(e.run, split) }));

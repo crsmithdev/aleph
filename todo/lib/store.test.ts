@@ -21,7 +21,7 @@ let n = 0;
 function repo(items: { title: string; labels?: string[] }[] = []): store.Place {
   const r = { key: `st${++n}` };
   store.writeList(r, "start", (doc) => {
-    for (const i of items) issues.addLegacy(doc, i.title, { labels: i.labels });
+    for (const i of items) { const it = issues.add(doc, i.title, { labels: i.labels }); if (i.labels?.includes("goal")) it.fm.kind = "goal"; }
     return true;
   }, true);
   return r;
@@ -53,19 +53,10 @@ describe("labels", () => {
   });
 
   test("the predicates", () => {
-    expect(store.isGoal(it({ labels: ["goal"] }))).toBe(true);
-    expect(store.isGoal(it({ labels: ["goal"], status: "done" }))).toBe(false);
-    expect(store.needsChris(it({ labels: ["needs-chris"] }))).toBe(true);
-    for (const l of ["goal", "needs-chris", "triaged", "live-check", "proposal"]) expect(store.isSorted(it({ labels: [l] }))).toBe(true);
-    expect(store.isSorted(it({ labels: ["followup", "ui"] }))).toBe(false);
-  });
-
-  test("the predicates read both item shapes", () => {
     expect(store.isGoal(it({ kind: "goal" }))).toBe(true);
     expect(store.isGoal(it({ kind: "goal", ask: "input" }))).toBe(false);
-    expect(store.isGoal(it({ labels: ["goal"], ask: "approval" }))).toBe(false);
-    // `kind` wins over a label an old item kept.
-    expect(store.isGoal(it({ kind: "issue", labels: ["goal"] }))).toBe(false);
+    expect(store.isGoal(it({ kind: "goal", status: "done" }))).toBe(false);
+    expect(store.isGoal(it({ kind: "issue" }))).toBe(false);
     expect(store.isSorted(it({ kind: "goal" }))).toBe(true);
     expect(store.isSorted(it({ kind: "issue", goals: ["x-1.1"] }))).toBe(true);
     expect(store.isSorted(it({ kind: "issue", ask: "approval" }))).toBe(true);
@@ -73,9 +64,9 @@ describe("labels", () => {
   });
 
   test("label adds what is missing and takes out what is named, once", () => {
-    const i = it({ labels: ["a", "needs-chris"] });
-    store.label(i, ["goal", "a", "goal"], ["needs-chris"]);
-    expect(store.labels(i)).toEqual(["a", "goal"]);
+    const i = it({ labels: ["a", "b"] });
+    store.label(i, ["c", "a", "c"], ["b"]);
+    expect(store.labels(i)).toEqual(["a", "c"]);
   });
 
   test("label leaves an item alone when nothing changes", () => {
@@ -127,9 +118,9 @@ describe("the writes", () => {
   test("note with a label and an ask", () => {
     const r = repo([{ title: "one", labels: ["goal"] }]);
     const ask = { kind: "input" as const, reason: "question", question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], recommended: "A", why: ["w"] };
-    expect(store.note(r, 1, "asked", { label: "needs-chris", ask })).toBeNull();
-    expect(store.note(r, 1, "asked again", { label: "needs-chris" })).toBeNull();
-    expect(store.labels(item(r, 1))).toEqual(["goal", "needs-chris"]);
+    expect(store.note(r, 1, "asked", { label: "ui", ask })).toBeNull();
+    expect(store.note(r, 1, "asked again", { label: "ui" })).toBeNull();
+    expect(store.labels(item(r, 1))).toEqual(["ui"]);
     expect(store.askOf(item(r, 1))?.question).toBe("A or B?");
   });
 
@@ -176,14 +167,15 @@ describe("the writes", () => {
   });
 
   test("sort changes an open, unsorted item only", () => {
-    const r = repo([{ title: "new" }, { title: "live", labels: ["live-check"] }, { title: "closed" }]);
+    const r = repo([{ title: "new" }, { title: "live" }, { title: "closed" }]);
+    store.writeList(r, "ask", (doc) => { store.setAsk(issues.find(doc, 2)!, { kind: "input", reason: "host-check", question: "Check it.", options: [], why: [] }); return true; });
     store.close(r, 3, "x");
     const before = commits();
-    expect(store.sort(r, 2, "triage", (i) => store.label(i, ["goal"]))).toBe(false);
-    expect(store.sort(r, 3, "triage", (i) => store.label(i, ["goal"]))).toBe(false);
-    expect(store.sort(r, 9, "triage", (i) => store.label(i, ["goal"]))).toBe(false);
+    expect(store.sort(r, 2, "triage", (i) => { i.fm.kind = "goal"; })).toBe(false);
+    expect(store.sort(r, 3, "triage", (i) => { i.fm.kind = "goal"; })).toBe(false);
+    expect(store.sort(r, 9, "triage", (i) => { i.fm.kind = "goal"; })).toBe(false);
     expect(commits()).toBe(before);
-    expect(store.sort(r, 1, "triage", (i) => store.label(i, ["goal"]))).toBe(true);
+    expect(store.sort(r, 1, "triage", (i) => { i.fm.kind = "goal"; })).toBe(true);
     expect(store.isGoal(item(r, 1))).toBe(true);
   });
 });

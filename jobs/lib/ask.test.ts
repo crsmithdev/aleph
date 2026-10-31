@@ -14,12 +14,6 @@ test("writeAsk writes the flat fields and store.askOf reads them back", () => {
   expect(store.askOf(i)).toEqual(ask);
 });
 
-test("an option's waiting_on suffix, from an old or migrated item, reads as after", () => {
-  const i = item({ ask: "input", reason: "question", question: "Q?", options: ["A :: a :: waiting_on fac-3", "B :: b"], why: [] });
-  expect(readAsk(i)?.options[0]).toEqual({ label: "A", line: "a", after: "fac-3" });
-  expect(store.askOf(i)?.options[0].after).toBe("fac-3");
-});
-
 test("setAsk and clearAsk write and remove every ask field and keep the rest", () => {
   const i = item({ kind: "issue", priority: "low" });
   store.setAsk(i, ask);
@@ -31,8 +25,8 @@ test("setAsk and clearAsk write and remove every ask field and keep the rest", (
   clearAsk(i);
 });
 
-test("normalizeAsk takes after or waiting_on, 2 to 4 options and a recommended label that is one of them", () => {
-  const raw = { question: "Q?", options: [{ label: "A", line: "a", waiting_on: "fac-4" }, { label: "B", line: "b", after: "fac-5.1" }], recommended: "A", why: ["w"] };
+test("normalizeAsk takes after, 2 to 4 options and a recommended label that is one of them", () => {
+  const raw = { question: "Q?", options: [{ label: "A", line: "a", after: "fac-4" }, { label: "B", line: "b", after: "fac-5.1" }], recommended: "A", why: ["w"] };
   expect(normalizeAsk(raw)).toEqual({ kind: "input", reason: "question", question: "Q?", options: [{ label: "A", line: "a", after: "fac-4" }, { label: "B", line: "b", after: "fac-5.1" }], recommended: "A", why: ["w"] });
   expect(normalizeAsk({ ...raw, recommended: "C" })).toBeNull();
   expect(normalizeAsk({ ...raw, options: raw.options.slice(0, 1) })).toBeNull();

@@ -7,8 +7,8 @@
  * tree, and the store's checkout follows. No product repo's main moves when
  * an item changes, and no branch of a product repo can edit its own item.
  *
- * It is the Issues module: the label predicates (`isGoal`, `isSorted`,
- * `needsChris`), one read of a repo's list (`reader`), and the named writes
+ * It is the Issues module: the predicates (`isGoal`, `isSorted`,
+ * `awaitsChris`), one read of a repo's list (`reader`), and the named writes
  * (`note`, `close`, `label`, `closeAndFile`, `file`). Callers do not read
  * `fm.labels` or name a task's path.
  */
@@ -233,92 +233,53 @@ export function itemTimes(): Map<string, { added: number; changed: number }> {
   return out;
 }
 
-// The labels.
+// The fields.
 
-export const GOAL = "goal";
-/**
- * Labels that mark an issue as sorted: triage skips it, and the UI does not
- * count it as new. One set for both. `live-check` is in it: triage labels a
- * live check `live-check` and `triaged` together, and an issue labelled
- * `live-check` by hand is a check the sandbox cannot reach either.
- */
-// The literal "needs-chris" below is the old shape's label: the legacy readers (askOf, needsChris, clearAsk) and the SORTED and MAPPED sets keep it until step 6 drops the old shape.
-export const SORTED: readonly string[] = [GOAL, "needs-chris", "triaged", "live-check", "proposal"];
-
-export const hasLabel = (item: Issue, label: string): boolean => labels(item).includes(label);
-/** An open item labelled `goal`: a factory run's work. */
-export const isGoal = (item: Issue): boolean => status(item) === "open" && !hasAsk(item) && kindOf(item) === "goal";
+/** An open goal with no Ask: a factory run's work. */
+export const isGoal = (item: Issue): boolean => status(item) === "open" && !awaitsChris(item) && kindOf(item) === "goal";
 /** Put `ask` on the item, as `askOf` reads it. */
 export const setAsk = (item: Issue, ask: Ask): void => writeAsk(item, ask);
-
-/** Take the item's Ask off: the `ask` fields, and the old shape's `needs-chris` label if it has one. */
-export function clearAsk(item: Issue): void {
-  clearAskFields(item);
-  label(item, [], ["needs-chris"]);
-}
-
-/** An item with an `ask` (new shape): it waits for Chris, so it is never dispatched and never triaged. */
-const hasAsk = (item: Issue): boolean => item.fm.ask !== undefined;
-/** Labels that map to a spec field of their own, so `areasOf` leaves them out. */
-const MAPPED: readonly string[] = [GOAL, "needs-chris", "planned", "followup", "triaged", "live-check", "proposal", "deps", "memory"];
+/** Take the item's Ask off. */
+export const clearAsk = (item: Issue): void => clearAskFields(item);
+/** An item with an `ask`: it waits for Chris, so it is never dispatched and never triaged. */
+export const awaitsChris = (item: Issue): boolean => item.fm.ask !== undefined;
 
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
-/** The item's `kind` when it has one (new shape), else `goal` for the `goal` label and `issue` for none. */
-export const kindOf = (item: Issue): "goal" | "issue" => (item.fm.kind === "goal" || item.fm.kind === "issue" ? item.fm.kind : hasLabel(item, GOAL) ? "goal" : "issue");
-/** Who raised the item: its `source`, else `followup` -> worker, `deps` -> deps, `memory` -> memory, else chris. */
+/** The item's `kind`; `issue` when it has none. */
+export const kindOf = (item: Issue): "goal" | "issue" => (item.fm.kind === "goal" ? "goal" : "issue");
+/** Who raised the item: its `source`, else chris. */
 export function sourceOf(item: Issue): "chris" | "worker" | "deps" | "memory" {
   const s = text(item.fm.source);
-  if (s === "chris" || s === "worker" || s === "deps" || s === "memory") return s;
-  return hasLabel(item, "followup") ? "worker" : hasLabel(item, "deps") ? "deps" : hasLabel(item, "memory") ? "memory" : "chris";
+  return s === "worker" || s === "deps" || s === "memory" ? s : "chris";
 }
-/** The issue a goal belongs to: its `issue`, else the ref of a body that starts "Part of <repo>-<n>."; null for none. */
-export const issueOf = (item: Issue): string | null => text(item.fm.issue) || /^Part of ([^\s,]+-\d+(?:\.\d+)?)\./.exec(item.body)?.[1] || null;
-/** The goals of an issue: its `goals`, else the `waiting_on` of a `planned` item. */
-export const goalsOf = (item: Issue): string[] => (item.fm.goals !== undefined ? list(item.fm.goals) : hasLabel(item, "planned") ? list(item.fm.waiting_on) : []);
-/** The goals a goal waits for: its `after`, else the `waiting_on` of an item not `planned`. */
-export const afterOf = (item: Issue): string[] => (item.fm.after !== undefined ? list(item.fm.after) : hasLabel(item, "planned") ? [] : list(item.fm.waiting_on));
-/** The item's areas: its `areas`, else its labels less the mapped ones. */
-export const areasOf = (item: Issue): string[] => (item.fm.areas !== undefined ? list(item.fm.areas) : labels(item).filter((l) => !MAPPED.includes(l)));
+/** The issue a goal belongs to: its `issue`; null for none. */
+export const issueOf = (item: Issue): string | null => text(item.fm.issue) || null;
+/** The goals of an issue: its `goals`. */
+export const goalsOf = (item: Issue): string[] => list(item.fm.goals);
+/** The goals a goal waits for: its `after`. */
+export const afterOf = (item: Issue): string[] => list(item.fm.after);
+/** The item's areas: its `areas`. */
+export const areasOf = (item: Issue): string[] => list(item.fm.areas);
 
 export type { Ask };
 
-/** The reason code of an old item's ask, from `reason`, else from the question as `issueReason` in ui/attention.ts reads it. */
-function oldReason(reason: string, question: string): string {
-  if (reason === "triage-no-verdict" || reason === "triage-failed") return "triage-failed";
-  if (reason === "no-commit") return "no-commit";
-  if (reason && reason !== "decision" && reason !== "question") return reason;
-  const q = question.replace(/^\s*-\s*/, "").replace(/^\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?:\s*/, "").replace(/^\s*needs-chris:\s*/i, "");
-  if (/^triage: no verdict in/.test(q)) return "triage-failed";
-  if (/ended with no commit, so the factory stopped/.test(q)) return "no-commit";
-  return "question";
-}
-
-/** The item's ask: `ask: input|approval` with its flat fields, or for an old item the `needs-chris` label; null for none. */
+/** The item's ask: `ask: input|approval` with its flat fields; null for none. */
 export function askOf(item: Issue): Ask | null {
   const kind = item.fm.ask;
-  const approval = kind === "approval";
-  if (!approval && kind !== "input" && !needsChris(item)) return null;
+  if (kind !== "input" && kind !== "approval") return null;
   const d = readAsk(item);
-  const question = d?.question ?? text(item.fm.question) ?? "";
-  const reason = text(item.fm.reason);
-  const options = d?.options ?? [];
   const recommended = d?.recommended || undefined;
   return {
-    kind: approval ? "approval" : "input",
-    reason: kind === undefined ? oldReason(reason, question || item.notes.at(-1) || "") : reason || "question",
-    question, options, ...(recommended ? { recommended } : {}), why: list(item.fm.why),
+    kind, reason: text(item.fm.reason) || "question",
+    question: d?.question ?? text(item.fm.question), options: d?.options ?? [], ...(recommended ? { recommended } : {}), why: list(item.fm.why),
   };
 }
 
-/** An item with a label of SORTED: triage leaves it alone. */
+/** An item triage leaves alone: routed, asking, a goal, or an issue with goals. */
 export const isSorted = (item: Issue): boolean =>
-  item.fm.route !== undefined || hasAsk(item) || kindOf(item) === "goal" || list(item.fm.goals).length > 0 || labels(item).some((l) => SORTED.includes(l));
-/** An item labelled `needs-chris`: it waits for Chris's answer. */
-export const needsChris = (item: Issue): boolean => hasLabel(item, "needs-chris");
-/** An item that waits for Chris in either shape: the `needs-chris` label or an `ask`. */
-export const awaitsChris = (item: Issue): boolean => needsChris(item) || hasAsk(item);
+  item.fm.route !== undefined || awaitsChris(item) || kindOf(item) === "goal" || goalsOf(item).length > 0;
 
 /** Add the labels `add` the item lacks and take out `remove`, as one edit; no edit when nothing changes. */
 export function label(item: Issue, add: string[], remove: string[] = []): void {
@@ -362,7 +323,7 @@ export function goals<R extends Place>(repos: R[]): { repo: R; item: Issue }[] {
 
 /**
  * Item `id` as the store has it now, or null when it is not an open goal: it
- * may have been closed, had its `goal` label removed, or had a note added
+ * may have been closed, gone back to `kind: issue`, or had a note added
  * since the list was read. A store that cannot be read counts as not a goal.
  */
 export function goal(repo: Place, id: number | string): Issue | null {
@@ -377,10 +338,10 @@ const why = (e: any): string => e?.message ?? String(e);
 
 /**
  * A note on item `id`, as one commit; with `done` the item is done too, with
- * `label` it gains that label, with `reason` it carries the reason code (`fm.reason`), with `ask` it waits for Chris (`setAsk`).
+ * `label` it gains that label, with `reason` it carries the reason code (`fm.reason`), with `ask` it waits for Chris (`setAsk`), with `kind: "issue"` a goal goes back to triage.
  * Returns why it could not, or null.
  */
-export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean; label?: string; unlabel?: string; reason?: string; ask?: Ask } = {}): string | null {
+export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean; label?: string; unlabel?: string; reason?: string; ask?: Ask; kind?: "issue" } = {}): string | null {
   try {
     const w = writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
       const item = issues.find(doc, id);
@@ -389,6 +350,7 @@ export function note(repo: Place, id: number | string, text: string, opts: { don
       if (opts.label || opts.unlabel) label(item, opts.label ? [opts.label] : [], opts.unlabel ? [opts.unlabel] : []);
       if (opts.reason) item.fm.reason = opts.reason;
       if (opts.ask) setAsk(item, opts.ask);
+      if (opts.kind) item.fm.kind = opts.kind;
       return issues.note(item, text);
     });
     return w ? null : `no issue ${id}`;
@@ -422,7 +384,7 @@ export function askIfPartDropped(doc: Doc, goal: Issue, reason: string): void {
   if (kindOf(goal) !== "goal" || status(goal) !== "dropped") return;
   const ref = issueOf(goal);
   const issue = ref ? doc.items.find((i) => `${doc.repo}-${issues.refOf(i)}` === ref) : undefined;
-  if (!issue || kindOf(issue) !== "issue" || status(issue) !== "open" || hasAsk(issue)) return;
+  if (!issue || kindOf(issue) !== "issue" || status(issue) !== "open" || awaitsChris(issue)) return;
   const open = goalsOf(issue).some((r) => {
     const g = doc.items.find((i) => `${doc.repo}-${issues.refOf(i)}` === r);
     return g && g !== goal && status(g) === "open";

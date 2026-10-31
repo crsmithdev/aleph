@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../todo/lib/store.ts";
-import { addLegacy as add } from "../todo/lib/todo.ts";
+import { add } from "../todo/lib/todo.ts";
 import { serve } from "./server.ts";
 // @ts-ignore plain JS, shared with the page
 import { renderCard } from "./views/projects.js";
@@ -60,7 +60,7 @@ beforeAll(async () => {
   }
   Object.assign(process.env, gitEnv);
   writeList({ key: "fac" }, "seed", (doc) => {
-    add(doc, "a goal", { labels: ["goal"] });
+    add(doc, "a goal").fm.kind = "goal";
     add(doc, "plain issue");
     return true;
   }, true);

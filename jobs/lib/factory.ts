@@ -698,7 +698,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
   const todo = issueOf(runs) ?? Number(name.match(/-(\d+)$/)?.[1]);
   const issue = Number.isInteger(todo) ? todo : undefined;
   const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${repo.key}/${name}: ${line}`); };
-  const record = (text: string, opts: { done?: boolean; label?: string; unlabel?: string; ask?: Ask } = {}) => {
+  const record = (text: string, opts: { done?: boolean; kind?: "issue"; ask?: Ask } = {}) => {
     const why = issue === undefined ? "no issue" : note(repo, issue, text, opts);
     if (why) factoryLog(`${name}: no issue note: ${why}`);
   };
@@ -767,7 +767,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
       markRescued(last, "triaged");
       const text = `${r.kind} run ${last.id} ended with no commit again, and the worker did not say the goal is already met: dropped, and the issue went back to triage to rewrite the goal, close the issue, or ask Chris. The last 20 lines of its result.md (a note is one line, so lines are joined with " | "): ${tailOf(last, "result.md", 20).split("\n").map((l) => l.trim()).filter(Boolean).join(" | ") || "(empty)"}`;
       if (!await tryDo(await act.drop(name, text), "drop")) return;
-      record(text, { unlabel: "goal" });
+      record(text, { kind: "issue" });
       await say(`no commit twice; the issue went back to triage`);
       return;
     }
@@ -789,7 +789,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
     } else if (earlier && issue !== undefined) {
       const text = `${r.kind} run ${last.id} says the goal is already met again (${claim}), but ${red}: dropped, and the issue went back to triage`;
       if (!await tryDo(await act.drop(name, text), "drop")) return;
-      record(text, { unlabel: "goal" });
+      record(text, { kind: "issue" });
       await say(text);
     } else {
       rerun(`The last run said the goal is already met (${claim}), but the checks do not pass on origin/${repo.main} (${red}). Make the change the goal asks for.`);

@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../todo/lib/store.ts";
-import { addGoal, addLegacy } from "../todo/lib/todo.ts";
+import { add, addGoal } from "../todo/lib/todo.ts";
 import { serve } from "./server.ts";
 
 let base: string, server: Awaited<ReturnType<typeof serve>>, calls: string;
@@ -52,7 +52,7 @@ beforeAll(async () => {
     process.env[k] = v;
   }
   server = await serve(0, { warm: false });
-  writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 9; i++) addLegacy(doc, `issue ${i}`, { labels: i === 7 ? ["goal"] : [] }); for (const n of [6, 9]) addGoal(doc, doc.items.find((x) => x.id === n && x.sub === undefined)!, { title: `goal ${n}`, body: "x", repo: "r" }); return true; }, true);
+  writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 9; i++) { const item = add(doc, `issue ${i}`); if (i === 7) item.fm.kind = "goal"; } for (const n of [6, 9]) addGoal(doc, doc.items.find((x) => x.id === n && x.sub === undefined)!, { title: `goal ${n}`, body: "x", repo: "r" }); return true; }, true);
 });
 afterAll(() => {
   server.stop(true);

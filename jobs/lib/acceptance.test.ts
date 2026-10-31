@@ -244,7 +244,7 @@ test("an infra result leaves the issue done, writes no record and says acceptanc
   expect(readRecord("fac", id)).toBeNull();
 });
 
-test("an infra result after one real failure does not label needs-chris or change the record", async () => {
+test("an infra result after one real failure does not ask Chris or change the record", async () => {
   const id = doneGoal("`bun run ok`");
   await acceptanceStep(runner(1, "boom"));
   const before = readRecord("fac", id);

@@ -19,7 +19,7 @@ const issue = (fm: Record<string, unknown> = {}) => seedItem("fac", `issue ${++j
 
 const ISSUES_NEW: Row[] = [
   { name: "new issue: new", stage: "new", build: async () => issue() },
-  { name: "new issue: triaged", stage: "triaged", build: async () => issue({ labels: ["triaged"] }) },
+  { name: "new issue: triaged", stage: "triaged", build: async () => issue({ route: "triaged" }) },
   { name: "new issue: planning", stage: "planning", build: async () => newRun(issue(), { kind: "plan", state: "running" }) },
   { name: "new issue: building 1 of 2", stage: "building", of: { n: 1, m: 2 }, build: async () => {
     const a = goal({ status: "done" }), b = goal();

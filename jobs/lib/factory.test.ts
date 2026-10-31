@@ -719,7 +719,7 @@ test("no commit, the item open, first time: dropped and the goal reruns once, wi
   expect(notes(id)).toContain("made no commit");
 });
 
-test("the second no-commit run with no claim goes back to triage: the goal label is off, no Ask, the note quotes result.md", async () => {
+test("the second no-commit run with no claim goes back to triage: its kind is issue, no Ask, the note quotes result.md", async () => {
   const id = goal();
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
   const f = fakes();
@@ -727,8 +727,10 @@ test("the second no-commit run with no claim goes back to triage: the goal label
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(30) });
   const out = await dispatch(f);
-  // The back-to-triage write (unlabel "goal") is a no-op on a new-shape goal, so the dispatch may start it again: only the first three calls are the test's.
-  expect(f.calls.slice(0, 3)).toEqual([`drop fac-${id}`, `start fac-${id}`, `drop fac-${id}`]);
+  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`, `drop fac-${id}`]);
+  const item = readList({ key: "fac" })!.items.find((i) => i.id === id)!;
+  expect(store.kindOf(item)).toBe("issue");
+  expect(store.isSorted(item)).toBe(false);
   expect(out.held).toBeUndefined();
   expect(ask(id)).toBeNull();
   expect(notes(id)).toContain("went back to triage");

@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, setAsk, writeList } from "../todo/lib/store.ts";
-import { addGoal, addLegacy as add } from "../todo/lib/todo.ts";
+import { add, addGoal, type Doc } from "../todo/lib/todo.ts";
 import * as todos from "../todo/lib/todo.ts";
 import { readAsk } from "../jobs/lib/ask.ts";
 import { serve } from "./server.ts";
@@ -11,6 +11,9 @@ import { serve } from "./server.ts";
 import * as v from "./views/contents.js";
 // @ts-ignore
 import { view as issueView } from "./views/issue.js";
+
+/** An item stored as a goal: `kind: goal` on a plain number. */
+const seedGoal = (doc: Doc, title: string, body = "") => { const i = add(doc, title, { body }); i.fm.kind = "goal"; return i; };
 
 let base: string, server: Awaited<ReturnType<typeof serve>>, jobsDir: string, argvFile: string, stdinFile: string;
 const saved: Record<string, string | undefined> = {};
@@ -62,10 +65,10 @@ beforeAll(async () => {
   }
   Object.assign(process.env, gitEnv);
   writeList({ key: "fac" }, "seed", (doc) => {
-    add(doc, "first goal", { labels: ["goal"], body: "# Heading\n\n- one\n\n<script>alert(1)</script>" });
+    seedGoal(doc, "first goal", "# Heading\n\n- one\n\n<script>alert(1)</script>");
     add(doc, "plain task", { labels: ["bug"] });
-    add(doc, "second goal", { labels: ["goal"] }).fm.after = ["fac-1.1"];
-    add(doc, "third goal", { labels: ["goal"] });
+    seedGoal(doc, "second goal").fm.after = ["fac-1.1"];
+    seedGoal(doc, "third goal");
     doc.items[1].fm.status = "done";
     return true;
   }, true);
@@ -86,7 +89,7 @@ describe("GET /api/issues", () => {
     expect((await getJson("/api/issues?repo=fac&status=done")).map((r: any) => r.id)).toEqual([2]);
     expect((await getJson("/api/issues?repo=fac&label=goal")).map((r: any) => r.id)).toEqual([1, 3, 4]);
     const [r] = await getJson("/api/issues?repo=fac&label=goal");
-    expect(r).toMatchObject({ repo: "fac", title: "first goal", status: "open", priority: "medium", labels: ["goal"], due: null, after: [], notes: 0 });
+    expect(r).toMatchObject({ repo: "fac", title: "first goal", status: "open", priority: "medium", kind: "goal", labels: [], due: null, after: [], notes: 0 });
     expect(r.updated).toBeTruthy();
     expect((await at("/api/issues?status=bogus")).status).toBe(400);
   });
@@ -399,7 +402,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
       expect(r.status).toBe(200);
       const i = item(n);
       expect(i.notes.at(-1)).toContain("Chris decided: A: do a");
-      expect(i.fm.labels).toEqual([]);
+      expect(i.fm.labels).toBeUndefined();
       expect(i.fm.question).toBeUndefined();
       expect((await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) })).status).toBe(409);
     });
@@ -411,7 +414,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
     await withRealCli(async () => {
       const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) });
       expect(r.status).toBe(200);
-      expect(item(n).fm.labels).toEqual([]);
+      expect(item(n).fm.labels).toBeUndefined();
       expect(item(n).fm.after).toEqual(["fac-1.1"]);
       expect(item(n).fm.question).toBeUndefined();
     });
@@ -423,7 +426,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
       const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ recommendation: true }) });
       expect(r.status).toBe(200);
       expect(item(n).notes.at(-1)).toContain("Chris decided: My recommendation is B, it is smaller.");
-      expect(item(n).fm.labels).toEqual([]);
+      expect(item(n).fm.labels).toBeUndefined();
     });
   });
 

@@ -51,26 +51,24 @@
       "areas": [
         "bug"
       ],
-      "labels": [
-        "triaged"
-      ],
-      "priority": "high"
+      "priority": "high",
+      "route": "triaged"
     },
     {
       "title": "Check the dark theme on the phone",
       "kind": "issue",
       "source": "chris",
-      "labels": [
-        "live-check"
-      ]
+      "ask": "input",
+      "reason": "host-check",
+      "question": "Check this on the host."
     },
     {
       "title": "Add a dry-run flag",
       "kind": "issue",
       "source": "chris",
-      "labels": [
-        "proposal"
-      ]
+      "ask": "approval",
+      "reason": "proposal",
+      "question": "Add a dry-run flag"
     },
     {
       "title": "Typo in the README",
@@ -188,9 +186,7 @@
       "title": "Show a spinner on slow pages",
       "kind": "issue",
       "source": "chris",
-      "labels": [
-        "triaged"
-      ]
+      "route": "triaged"
     },
     {
       "title": "Footer link is dead",
@@ -229,9 +225,9 @@
       "title": "Support a second input file",
       "kind": "issue",
       "source": "chris",
-      "labels": [
-        "proposal"
-      ]
+      "ask": "approval",
+      "reason": "proposal",
+      "question": "Support a second input file"
     }
   ]
 }
