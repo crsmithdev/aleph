@@ -262,8 +262,11 @@ export function adopt(item: Item, now = new Date(), created?: string): void {
   item.legacy = false;
 }
 
+const refParts = (r: string): [number, number] => { const [n, k] = r.split("."); return [Number(n), k === undefined ? -1 : Number(k)]; };
+const byRef = (a: Finding, b: Finding) => { const [an, ak] = refParts(a.id), [bn, bk] = refParts(b.id); return an - bn || ak - bk; };
+
 export interface Finding {
-  id: number;
+  id: string;
   problem: string;
   fixable: boolean;
 }
@@ -277,41 +280,41 @@ export function lint(doc: Doc, exists?: (repo: string, id: number) => boolean): 
     if (item.legacy) continue;
     for (const key of REQUIRED) {
       if (item.fm[key] === undefined || item.fm[key] === "") {
-        findings.push({ id: item.id, problem: `${key} is missing`, fixable: key === "updated" || key === "created" || key === "id" });
+        findings.push({ id: refOf(item), problem: `${key} is missing`, fixable: key === "updated" || key === "created" || key === "id" });
       }
     }
     const s = item.fm.status;
-    if (s !== undefined && !STATUSES.includes(s as Status)) findings.push({ id: item.id, problem: `status "${s}" is not one of ${STATUSES.join(", ")}`, fixable: false });
+    if (s !== undefined && !STATUSES.includes(s as Status)) findings.push({ id: refOf(item), problem: `status "${s}" is not one of ${STATUSES.join(", ")}`, fixable: false });
     for (const key of ["created", "updated"] as const) {
       const v = item.fm[key];
-      if (typeof v === "string" && v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) findings.push({ id: item.id, problem: `${key} "${v}" is not YYYY-MM-DD`, fixable: false });
+      if (typeof v === "string" && v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) findings.push({ id: refOf(item), problem: `${key} "${v}" is not YYYY-MM-DD`, fixable: false });
     }
     const due = item.fm.due;
-    if (due !== undefined && !(typeof due === "string" && validDate(due))) findings.push({ id: item.id, problem: `due: ${due} is not a date written YYYY-MM-DD`, fixable: false });
+    if (due !== undefined && !(typeof due === "string" && validDate(due))) findings.push({ id: refOf(item), problem: `due: ${due} is not a date written YYYY-MM-DD`, fixable: false });
     const waits = item.fm.waiting_on;
     if (waits !== undefined) {
       const parts = typeof waits === "string" ? waitParts(waits) : [];
       const refs = parts.map(parseRef);
-      if (!parts.length || refs.some((r) => !r)) findings.push({ id: item.id, problem: `waiting_on: ${waits} is not <repo>-<n>[,<repo>-<n>...]`, fixable: false });
-      else if (exists && refs.some((r) => !exists(r!.repo, r!.id))) findings.push({ id: item.id, problem: `waiting_on: ${waits} names no issue`, fixable: false });
+      if (!parts.length || refs.some((r) => !r)) findings.push({ id: refOf(item), problem: `waiting_on: ${waits} is not <repo>-<n>[,<repo>-<n>...]`, fixable: false });
+      else if (exists && refs.some((r) => !exists(r!.repo, r!.id))) findings.push({ id: refOf(item), problem: `waiting_on: ${waits} names no issue`, fixable: false });
     }
     for (const key of ["after", "goals", "issue"] as const) {
       const v = item.fm[key];
       if (v === undefined) continue;
       const refs = Array.isArray(v) ? v : [v];
-      if (key === "issue" ? typeof v !== "string" : false) findings.push({ id: item.id, problem: `${key} must be one ref`, fixable: false });
-      else if (refs.some((r) => !GOAL_REF.test(r))) findings.push({ id: item.id, problem: `${key}: ${refs.join(", ")} is not <repo>-<n>[.<k>]`, fixable: false });
+      if (key === "issue" ? typeof v !== "string" : false) findings.push({ id: refOf(item), problem: `${key} must be one ref`, fixable: false });
+      else if (refs.some((r) => !GOAL_REF.test(r))) findings.push({ id: refOf(item), problem: `${key}: ${refs.join(", ")} is not <repo>-<n>[.<k>]`, fixable: false });
     }
     for (const key of ["kind", "source", "ask"] as const) {
       const v = item.fm[key];
       const ok = { kind: ["goal", "issue", "product", "build"], source: ["chris", "worker", "deps", "memory"], ask: ["input", "approval"] }[key];
-      if (v !== undefined && !ok.includes(v as string)) findings.push({ id: item.id, problem: `${key} "${v}" is not one of ${ok.join(", ")}`, fixable: false });
+      if (v !== undefined && !ok.includes(v as string)) findings.push({ id: refOf(item), problem: `${key} "${v}" is not one of ${ok.join(", ")}`, fixable: false });
     }
-    if (item.fm.labels !== undefined && !Array.isArray(item.fm.labels)) findings.push({ id: item.id, problem: "labels must be a list", fixable: true });
-    if (item.fm.id !== undefined && String(item.fm.id) !== refOf(item)) findings.push({ id: item.id, problem: `id says ${item.fm.id} but the heading says ${refOf(item)}`, fixable: true });
+    if (item.fm.labels !== undefined && !Array.isArray(item.fm.labels)) findings.push({ id: refOf(item), problem: "labels must be a list", fixable: true });
+    if (item.fm.id !== undefined && String(item.fm.id) !== refOf(item)) findings.push({ id: refOf(item), problem: `id says ${item.fm.id} but the heading says ${refOf(item)}`, fixable: true });
   }
-  for (const [ref, count] of seen) if (count > 1) findings.push({ id: Number.parseInt(ref), problem: `${count} items share id ${ref}`, fixable: false });
-  return findings.sort((a, b) => a.id - b.id);
+  for (const [ref, count] of seen) if (count > 1) findings.push({ id: ref, problem: `${count} items share id ${ref}`, fixable: false });
+  return findings.sort(byRef);
 }
 
 /** Repair what is mechanically repairable. Returns what it changed. */
@@ -319,11 +322,11 @@ export function fix(doc: Doc, now = new Date()): string[] {
   const fixed: string[] = [];
   for (const item of doc.items) {
     if (item.legacy) continue;
-    if (item.fm.id === undefined || Number(item.fm.id) !== item.id) { item.fm.id = String(item.id); fixed.push(`${item.id}: id set to ${item.id}`); }
-    if (!item.fm.status) { item.fm.status = "open"; fixed.push(`${item.id}: status set to open`); }
-    if (!item.fm.created) { item.fm.created = (item.fm.updated as string) || today(now); fixed.push(`${item.id}: created set to ${item.fm.created}`); }
-    if (!item.fm.updated) { item.fm.updated = (item.fm.created as string) || today(now); fixed.push(`${item.id}: updated set to ${item.fm.updated}`); }
-    if (item.fm.labels !== undefined && !Array.isArray(item.fm.labels)) { item.fm.labels = [String(item.fm.labels)]; fixed.push(`${item.id}: labels wrapped in a list`); }
+    if (item.fm.id === undefined || String(item.fm.id) !== refOf(item)) { item.fm.id = refOf(item); fixed.push(`${refOf(item)}: id set to ${refOf(item)}`); }
+    if (!item.fm.status) { item.fm.status = "open"; fixed.push(`${refOf(item)}: status set to open`); }
+    if (!item.fm.created) { item.fm.created = (item.fm.updated as string) || today(now); fixed.push(`${refOf(item)}: created set to ${item.fm.created}`); }
+    if (!item.fm.updated) { item.fm.updated = (item.fm.created as string) || today(now); fixed.push(`${refOf(item)}: updated set to ${item.fm.updated}`); }
+    if (item.fm.labels !== undefined && !Array.isArray(item.fm.labels)) { item.fm.labels = [String(item.fm.labels)]; fixed.push(`${refOf(item)}: labels wrapped in a list`); }
   }
   return fixed;
 }

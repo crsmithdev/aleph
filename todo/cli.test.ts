@@ -320,6 +320,32 @@ test("lint reports a bad date and a waiting_on that names no item, each with the
   expect(aleph("todo", "lint", "proj").err).not.toContain("item 5");
 });
 
+test("aleph issue lint reads a dotted goal file and names it by its dotted id", () => {
+  const parent = parse("# To do\n\n## 5. Parent\n---\nid: 5\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nBody.\n").items[0];
+  const goal = { ...parent, sub: 1, title: "Goal", fm: { ...parent.fm, id: "5.1" } };
+  const put = (due?: string) => {
+    seed(null);
+    mkdirSync(join(items, tasks), { recursive: true });
+    writeFileSync(join(items, "proj", "backlog", "config.yml"), config("proj"));
+    writeFileSync(join(items, tasks, "proj-5.md"), renderItem("proj", parent));
+    const g = due ? { ...goal, fm: { ...goal.fm, due } } : goal;
+    writeFileSync(join(items, tasks, "proj-5.1.md"), renderItem("proj", g));
+    sh(items, "git", "add", "-A");
+    sh(items, "git", "commit", "-qm", "dotted");
+    sh(items, "git", "push", "-q", "origin", "main");
+  };
+  put("2026-13-40");
+  const bad = aleph("issue", "lint", "proj");
+  expect(bad.code).toBe(1);
+  expect(bad.err).toContain("item 5.1: due: 2026-13-40");
+  expect(bad.err).not.toContain("share id 5");
+  expect(bad.err).not.toContain("id says 5.1");
+  put();
+  const ok = aleph("issue", "lint", "proj");
+  expect(ok.err).toBe("");
+  expect(ok.code).toBe(0);
+});
+
 test("aleph issue and aleph todo are the same command", () => {
   expect(aleph("issue", "add", "proj", "Under the new name").code).toBe(0);
   expect(aleph("todo", "add", "proj", "Under the old name").code).toBe(0);
