@@ -70,7 +70,7 @@ test("with no landed goal the goal cards show a dash", () => {
   expect(h.match(/<span class="v">–<\/span><span class="quiet">no goal landed<\/span>/g)?.length).toBe(3);
 });
 
-const C = (key: string, name: string, hours: number, week: number, text = `${name} text.`) => ({ key, name, text, hours, week, runs: 5, goals: 2, causes: [{ name: "First run of the job", hours, week, runs: 5 }], top: [] });
+const C = (key: string, name: string, hours: number, week: number, text = `${name} text.`) => ({ key, name, text, hours, week, runs: 5, goals: 2, causes: [{ name: "First run of the job", hours, runs: 5 }], top: [] });
 const classes = (h: number[], w: number[]) => [["landed", "Landed"], ["fixed", "Fixed in place"], ["nothing", "Nothing to do"], ["loop", "Loop"], ["restarted", "Restarted"], ["dropped", "Dropped"]].map(([k, n], i) => C(k, n, h[i], w[i]));
 const D = { window: "week", notCounted: { runs: 11, goals: 4, hours: 0.4 } };
 
@@ -104,8 +104,8 @@ test("the flex values are shares of the total, also under 1 h", () => {
 
 const withTop = () => {
   const cs = classes([60, 10, 20, 1, 24, 1], [3, 0.5, 1, 0.1, 1.2, 0.1]);
-  cs[4].causes = [{ name: "Land conflict", hours: 20, week: 1, runs: 3 }, { name: "Other", hours: 4, week: 0.2, runs: 1 }];
-  (cs[4] as any).top = [{ goal: "fx-7", href: "#/issues/fx/7", reason: "merge conflict in ui/x.ts", hours: 20, week: 1, runs: 3 }];
+  cs[4].causes = [{ name: "Land conflict", hours: 20, runs: 3 }, { name: "Other", hours: 4, runs: 1 }];
+  (cs[4] as any).top = [{ goal: "fx-7", href: "#/issues/fx/7", reason: "merge conflict in ui/x.ts", hours: 20, runs: 3 }];
   return { ...D, hasWeek: true, classes: cs };
 };
 

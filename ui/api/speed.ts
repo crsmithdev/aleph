@@ -58,8 +58,8 @@ export const CLASS_TEXT: Record<Class, string> = {
 export interface Measure { hours: number; week: number; runs: number }
 export interface ClassStat extends Measure {
   key: Class; name: string; text: string; goals: number;
-  causes: (Measure & { name: string })[];
-  top: (Measure & { goal: string; href: string; reason: string })[];
+  causes: (Omit<Measure, "week"> & { name: string })[];
+  top: (Omit<Measure, "week"> & { goal: string; href: string; reason: string })[];
 }
 
 /** The nearest-rank percentile `p` (0..1) of `xs`; 0 for none. */
@@ -152,12 +152,13 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
       for (const r of rs) { const k = keyOf(r); if (!m.has(k)) m.set(k, []); m.get(k)!.push(r); }
       return m;
     };
-    const causes = [...group((r) => r.cause)].map(([name, x]) => ({ name, sum: sum(x) })).sort((a, b) => b.sum.hours - a.sum.hours).map((c) => ({ name: c.name, ...rd(c.sum) }));
+    const noWeek = ({ week: _w, ...m }: Measure): Omit<Measure, "week"> => m;
+    const causes = [...group((r) => r.cause)].map(([name, x]) => ({ name, sum: sum(x) })).sort((a, b) => b.sum.hours - a.sum.hours).map((c) => ({ name: c.name, ...noWeek(rd(c.sum)) }));
     const top = [...group((r) => r.goal)].map(([goal, x]) => {
       const last = x.reduce((p, q) => (t0(q.run) > t0(p.run) ? q : p));
       const m = goal.lastIndexOf("-");
       return { goal, sum: sum(x), reason: (last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").slice(0, 140), href: `#/issues/${encodeURIComponent(goal.slice(0, m))}/${goal.slice(m + 1)}` };
-    }).sort((a, b) => b.sum.hours - a.sum.hours).slice(0, 8).map((t) => ({ goal: t.goal, href: t.href, reason: t.reason, ...rd(t.sum) }));
+    }).sort((a, b) => b.sum.hours - a.sum.hours).slice(0, 8).map((t) => ({ goal: t.goal, href: t.href, reason: t.reason, ...noWeek(rd(t.sum)) }));
     return { key, name: CLASS_NAME[key], text: CLASS_TEXT[key], ...rd(sum(rs)), goals: new Set(rs.map((r) => r.goal)).size, causes, top };
   });
   const raw = CLASSES.map((c) => sum(rows.get(c)!).hours);

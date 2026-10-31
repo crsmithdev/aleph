@@ -159,6 +159,10 @@ test("classify: one run of each class, with its cause", () => {
   expect(by("loop").causes.map((c) => c.name)).toEqual(["4–9 starts in an hour"]);
   expect(by("dropped").causes.map((c) => c.name)).toEqual(["No commit"]);
   expect(by("dropped").top[0]).toMatchObject({ goal: "fx-3", href: "#/issues/fx/3" });
+  for (const c of out.classes) {
+    expect(c).toHaveProperty("week");
+    for (const e of [...c.causes, ...c.top]) expect(e).not.toHaveProperty("week");
+  }
   expect(out.notCounted).toEqual({ runs: 4, goals: 2, hours: round2(4 * 10 / 60) });
   expect(out.lost.hours).toBeCloseTo(Math.round(out.classes.slice(2).reduce((a, c) => a + c.hours, 0) * 100) / 100, 1);
   const d = speed("day", now);
