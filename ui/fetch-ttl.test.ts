@@ -11,6 +11,9 @@ import { state } from "./state.ts";
 let base: string, log: string, stale: string, staleRemote: string;
 const saved: Record<string, string | undefined> = {};
 const fetches = (): number => readFileSync(log, "utf8").split("\n").filter((l) => l === "fetch").length;
+const doneCount = (): number => readFileSync(log, "utf8").split("\n").filter((l) => l === "done").length;
+/** Wait until every fetch the shim has logged has ended. */
+const settled = async (): Promise<void> => { for (let i = 0; i < 500 && doneCount() < fetches(); i++) await Bun.sleep(20); };
 const sh = (cwd: string, ...a: string[]) => { const p = Bun.spawnSync(a, { cwd }); if (p.exitCode) throw new Error(p.stderr.toString()); };
 
 beforeAll(() => {
@@ -20,15 +23,15 @@ beforeAll(() => {
   sh(base, "git", "clone", "-q", remote, items);
   sh(items, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
-  // a PATH shim that logs each `git fetch`. While the stale flag exists, the next fetch of `origin`
-  // fetches the stale remote instead (its args are `fetch -q origin <ref>`), then logs `done`.
+  // a PATH shim that logs each `git fetch`, then `done` when it has ended. While the stale flag exists, the next fetch of `origin`
+  // fetches the stale remote instead (its args are `fetch -q origin <ref>`).
   const real = Bun.spawnSync(["which", "git"]).stdout.toString().trim();
   log = join(base, "fetch.log");
   stale = join(base, "stale");
   staleRemote = join(base, "stale.git");
   writeFileSync(log, "");
   mkdirSync(join(base, "bin"));
-  writeFileSync(join(base, "bin", "git"), `#!/bin/sh\n[ "$1" = fetch ] && echo fetch >> ${log}\nif [ "$1" = fetch ] && [ -e ${stale} ]; then rm -f ${stale}; ${real} fetch "$2" stale "$4"; s=$?; echo done >> ${log}; exit $s; fi\nexec ${real} "$@"\n`);
+  writeFileSync(join(base, "bin", "git"), `#!/bin/sh\n[ "$1" = fetch ] && echo fetch >> ${log}\nif [ "$1" = fetch ]; then s=0; if [ -e ${stale} ]; then rm -f ${stale}; ${real} fetch "$2" stale "$4" || s=$?; else ${real} "$@" || s=$?; fi; echo done >> ${log}; exit $s; fi\nexec ${real} "$@"\n`);
   chmodSync(join(base, "bin", "git"), 0o755);
   writeFileSync(join(base, "repos.json"), JSON.stringify({ a: { path: join(base, "a"), sandbox: true }, b: { path: join(base, "b") } }));
   mkdirSync(join(base, "jobs"));
@@ -77,7 +80,7 @@ test("with the cache off, as in the CLI, every read fetches", () => {
   cacheFetches(uiFetchTtl());
 });
 
-test("a write fetches in the foreground even with the cache on, and builds on the fresh origin/main", () => {
+test("a write fetches in the foreground even with the cache on, and builds on the fresh origin/main", async () => {
   cacheFetches(uiFetchTtl());
   const other = join(base, "other");
   sh(base, "git", "clone", "-q", join(base, "items.git"), other);
@@ -88,7 +91,10 @@ test("a write fetches in the foreground even with the cache on, and builds on th
   try {
     const before = fetches();
     readList({ key: "a" });
+    // The read past the TTL starts one background fetch; its log line can come late under load.
+    for (let i = 0; i < 100 && fetches() < before + 1; i++) await Bun.sleep(20);
     expect(fetches()).toBe(before + 1);
+    await settled();
     readList({ key: "a" });
     expect(fetches()).toBe(before + 1);
     sh(other, "git", "pull", "-q", "origin", "main");
@@ -148,9 +154,11 @@ test("a background fetch that brings an older remote state cannot move origin/ma
   const now = spyOn(Date, "now");
   now.mockReturnValue(Date.now() + 60_000);
   writeFileSync(stale, "");
+  await settled();
+  const dones = doneCount();
   try { readList({ key: "a" }); } finally { now.mockRestore(); }
-  for (let i = 0; i < 100 && !readFileSync(log, "utf8").includes("done"); i++) await Bun.sleep(20);
-  expect(readFileSync(log, "utf8")).toContain("done");
+  for (let i = 0; i < 100 && doneCount() <= dones; i++) await Bun.sleep(20);
+  expect(doneCount()).toBeGreaterThan(dones);
   expect(Bun.spawnSync(["git", "rev-parse", "origin/main"], { cwd: items }).stdout.toString().trim()).toBe(w!.commit);
   expect(readFetched({ key: "a" })!.items.some((i) => i.title === "written")).toBe(true);
 });
