@@ -85,15 +85,17 @@ const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STA
 export function hashOptions(q = new URLSearchParams()) {
   return {
     limit: Math.max(PAGE, Number.parseInt(q.get("limit"), 10) || PAGE),
-    status: statusOf(q.get("status")), project: q.get("project") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "",
+    status: statusOf(q.get("status")), kind: q.get("kind") ?? "", project: q.get("project") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "",
     sort: { key: q.get("sort") || "updated", dir: q.get("dir") === "asc" ? 1 : -1 },
     psort: { key: q.get("psort") || "updated", dir: q.get("pdir") === "asc" ? 1 : -1 },
     ssort: { key: q.get("ssort") || "date", dir: q.get("sdir") === "asc" ? 1 : -1 },
   };
 }
 
-export const ref = (r) => `${r.repo}-${r.id}`;
-export const href = (r) => `#/issues/${encodeURIComponent(r.repo)}/${r.id}`;
+/** A row's own number: `910` for an issue, `910.1` for a goal. */
+const own = (r) => r.ref ?? r.id;
+export const ref = (r) => `${r.repo}-${own(r)}`;
+export const href = (r) => `#/issues/${encodeURIComponent(r.repo)}/${own(r)}`;
 const projectHref = (p) => `#/projects/${encodeURIComponent(p.key)}`;
 const stateBadge = (s) => badge(s);
 
@@ -101,7 +103,7 @@ const ms = (s) => Date.parse(s) || 0;
 
 /** The issue rows from the API data. */
 export function issueRows(d) {
-  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, labels: r.labels ?? [], at: r.updated, href: href(r), repo: r.repo, n: r.id }));
+  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, labels: r.labels ?? [], at: r.updated, href: href(r), repo: r.repo, n: own(r), kind: r.kind ?? "issue" }));
 }
 
 /** The project rows from the API data: every registered project, with its open issues (0 when none). */
@@ -118,7 +120,7 @@ export function specRows(d) {
 export function filterRows(rows, o = {}) {
   const q = (o.q ?? "").trim().toLowerCase();
   return rows.filter((r) =>
-    (!o.status || r.status === o.status) && (!o.project || r.project === o.project) && (!o.label || r.labels.includes(o.label)) &&
+    (!o.kind || r.kind === o.kind) && (!o.status || r.status === o.status) && (!o.project || r.project === o.project) && (!o.label || r.labels.includes(o.label)) &&
     (!q || r.title.toLowerCase().includes(q)));
 }
 
@@ -128,10 +130,10 @@ export const filterProjects = (rows, o = {}) => rows.filter((r) => !o.project ||
 // Column order: id or name, title, state badge, project, labels, numbers, time last. [key, label, { num }]
 export const SPEC_COLUMNS = [["title", "Title"], ["date", "Date"]];
 const SPEC_SORT = { date: (r) => r.date, title: (r) => r.title, project: (r) => r.project };
-export const COLUMNS = [["id", "Id"], ["title", "Title"], ["status", "Status"], ["project", "Project"], ["labels", "Labels"], ["updated", "Updated"], ["act", ""]];
+export const COLUMNS = [["id", "Id"], ["kind", "Kind"], ["title", "Title"], ["status", "Status"], ["project", "Project"], ["labels", "Labels"], ["updated", "Updated"], ["act", ""]];
 export const PROJECT_COLUMNS = [["title", "Name"], ["open", "Open issues", { num: true }], ["updated", "Last activity"]];
 const SORT = {
-  project: (r) => r.project, status: (r) => r.status, id: (r) => r.n, title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => ms(r.at),
+  project: (r) => r.project, status: (r) => r.status, id: (r) => String(r.n), kind: (r) => r.kind, title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => ms(r.at),
 };
 const PROJECT_SORT = { title: (r) => r.project, open: (r) => r.open, updated: (r) => ms(r.at) };
 
@@ -157,11 +159,14 @@ export function dropTarget(r) {
   return r.status === "open" ? { url: `/api/issues/${encodeURIComponent(r.repo)}/${r.n}/drop`, body: { reason: "dropped from the Inventory page" } } : null;
 }
 
-/** One issue row: id, title, state, project, labels, time, and the X. */
+/** The word that names a row or a page as an issue or a goal. */
+const kindTag = (kind) => `<span class="work-kind ${kind === "goal" ? "goal" : "issue"}">${kind === "goal" ? "Goal" : "Issue"}</span>`;
+
+/** One issue or goal row: id, kind, title, state, project, labels, time, and the X. */
 export function renderRow(r) {
   const x = dropTarget(r)
     ? `<button type="button" class="cancel" data-cancel aria-label="Drop ${esc(r.id)}" title="Stop or drop">${X_ICON}</button>` : "";
-  return `<tr class="crow" data-repo="${esc(r.repo)}" data-n="${r.n}"><td>${idLink(r.n, r.href)}</td>` +
+  return `<tr class="crow" data-repo="${esc(r.repo)}" data-n="${r.n}"><td>${idLink(r.n, r.href)}</td><td>${kindTag(r.kind)}</td>` +
     `<td class="wide"><a href="${esc(r.href)}">${esc(r.title)}</a></td>` +
     `<td>${badge(r.status)}</td><td>${esc(r.project)}</td><td>${chips(r.labels)}</td>` +
     `<td class="time">${esc(when(r.at))}</td><td class="drop">${x}<span class="cmsg" role="status"></span></td></tr>`;
@@ -191,6 +196,7 @@ export function renderFilters(d, o = {}) {
   const labels = [...new Set(issues.flatMap((r) => r.labels))].sort();
   return `<div data-ui="contents-filter">${filterBar([
     { label: "Project", name: "project", value: o.project ?? "", options: [{ value: "", label: "All" }, ...projects] },
+    { label: "Kind", name: "kind", value: o.kind ?? "", options: [{ value: "", label: "Any" }, { value: "issue", label: "Issue" }, { value: "goal", label: "Goal" }] },
     { label: "Status", name: "status", value: o.status || "any", options: [{ value: "any", label: "Any" }, "open", "done", "dropped"] },
     { label: "Label", name: "label", value: o.label ?? "", options: [{ value: "", label: "Any" }, ...labels.map((l) => ({ value: l, label: labelName(l) }))] },
     { label: "Title", name: "q", search: true, value: o.q ?? "", placeholder: "text in the title" },
@@ -261,7 +267,7 @@ export function renderContents(d, o = {}) {
   const shownSpecs = filterProjects(specs, o).length;
   const shownProjects = filterProjects(projects, o).length, shownIssues = filterRows(issues, o).length;
   return `${STYLE_CONTENTS}<div class="page contents">${pageHead("Inventory")}${renderFilters(d, o)}` +
-    `<div class="cols"><div class="main-col">${section("Issues", shownIssues)}<div id="issues-table">${renderTable(issues, o)}</div></div>` +
+    `<div class="cols"><div class="main-col">${section("Issues and goals", shownIssues)}<div id="issues-table">${renderTable(issues, o)}</div></div>` +
     `<div class="side-col">${section("Projects", shownProjects)}<div id="projects-table">${renderProjectsTable(projects, o)}</div>` +
     `${section("Specs", shownSpecs)}<div id="specs-table">${renderSpecsTable(specs, o)}</div></div></div>` +
     renderForm(d?.issues ?? [], o) + `</div>`;
@@ -328,7 +334,7 @@ export function renderIssue(d) {
     : d.issue ? [project, ["issues", inventory], [localId(d.issue.id, d.repo), d.issue.href], ["goals"], [ref]]
     : [project, ["goals"], [ref]];
   return `<div class="page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) +
-    `<div class="status-row">${d.derived ? stateBadge(d.derived.stage) : badge(d.status)}${chips(fm.labels)}</div>` +
+    `<div class="status-row">${kindTag(d.kind)}${d.derived ? stateBadge(d.derived.stage) : badge(d.status)}${chips(fm.labels)}</div>` +
     `<dl class="facts">${facts}</dl>` +
     `<div class="sh"><h2 id="h-request">${isIssue ? "Description" : "Goal"}</h2></div><div class="md view-only" id="request">${linkSpecs(md(request), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="body" ${FORM} rows="16" aria-label="${isIssue ? "Description" : "Goal"}">${esc(description(d.body))}</textarea>` +
     (isIssue ? `<div class="sh"><h2 id="h-goals">Goals</h2><span class="count">${goals.length}</span></div>${goalTable}` : "") +

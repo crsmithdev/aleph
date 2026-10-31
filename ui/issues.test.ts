@@ -204,10 +204,10 @@ describe("views", () => {
     expect(h.indexOf("<h2>Projects")).toBeGreaterThan(h.indexOf("<h2>Issues"));
     const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
     expect(ths(section(h, "projects-table"))).toEqual(["title", "open", "updated"]);
-    expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "status", "project", "labels", "updated", ""]);
+    expect(ths(section(h, "issues-table"))).toEqual(["id", "kind", "title", "status", "project", "labels", "updated", ""]);
     expect(h).not.toContain('data-name="type"');
     expect(h).toContain(`<div class="sh"><h2>Projects</h2><span class="count">${d.projects.length}</span></div>`);
-    expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
+    expect(h).toContain(`<div class="sh"><h2>Issues and goals</h2><span class="count">${d.issues.length}</span></div>`);
   });
 
   test("issue rows: Id, Title, Status, Project, Labels, Updated and an X on an open issue only", async () => {
@@ -301,6 +301,20 @@ describe("views", () => {
     const more = v.view.render(d, {}, new URLSearchParams("limit=100"));
     expect(more.match(/<tr class="crow"/g)).toHaveLength(100);
     expect(more).toContain('data-more="20"');
+  });
+
+  test("a goal row names its goal and says Goal; an issue row says Issue", () => {
+    const rows = v.issueRows({ issues: [
+      { id: 910, ref: "910", kind: "issue", repo: "fac", title: "ask", status: "open", labels: [] },
+      { id: 910, ref: "910.1", kind: "goal", repo: "fac", title: "part", status: "open", labels: [] },
+    ] });
+    const [issue, goal] = rows;
+    expect(goal).toMatchObject({ id: "fac-910.1", href: "#/issues/fac/910.1", kind: "goal" });
+    expect(v.dropTarget(goal).url).toBe("/api/issues/fac/910.1/drop");
+    expect(v.renderRow(goal)).toContain(">Goal</span>");
+    expect(v.renderRow(issue)).toContain(">Issue</span>");
+    expect(v.filterRows(rows, { kind: "goal" })).toEqual([goal]);
+    expect(v.sortRows(rows, { key: "id", dir: -1 })[0]).toBe(goal);
   });
 
   test("the X drops through the issue's drop route", async () => {

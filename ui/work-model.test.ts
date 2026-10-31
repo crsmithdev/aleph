@@ -189,7 +189,7 @@ describe("the Issue page", () => {
     expect(html).toContain('<span>1</span></nav>');
     expect(html).toContain('<a href="#/specs/fac/2026-01-01-a.md">docs/specs/2026-01-01-a.md</a>');
     expect(html).not.toContain('">docs/specs/gone.md</a>');
-    expect(html).toContain('<div class="status-row"><span class="badge');
+    expect(html).toContain('<div class="status-row"><span class="work-kind issue">Issue</span><span class="badge');
     expect(html).toContain("<th>Stage</th><th>State</th><th>Job</th>");
     expect(html).toContain("<h2>Runs</h2>");
     expect(html).not.toContain(base.derived.why);
