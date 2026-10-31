@@ -189,3 +189,22 @@ test("a build run counts as an agent run", () => {
   ], () => "open", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
   expect(out.classes.find((c) => c.key === "landed")!.causes.map((c) => c.name)).toEqual(["After fix rounds"]);
 });
+
+test("runs read their issue from on: a goal run counts under its issue, old todo runs as before", () => {
+  const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
+  const a = (job: string, o: Record<string, unknown>) => ({ kind: "agent", job, name: job, repo: "ox", state: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;
+  const runs = [
+    a("p", { on: "ox-860" }), a("q", { on: "ox-860.1" }), a("r", { todo: 7 }),
+  ];
+  const seen: string[] = [];
+  classify(runs, (g) => { seen.push(g); return "open"; }, new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
+  expect(new Set(seen)).toEqual(new Set(["ox-860", "ox-7"]));
+
+  const land = (job: string, o: Record<string, unknown>) => ({ ...a(job, o), kind: "land", state: "landed" });
+  for (const r of [a("p", { on: "ox-860" }), a("q", { on: "ox-860.1" }), land("p", { on: "ox-860" }), land("q", { on: "ox-860.1" })]) run({ ...r, started: at(1, 9), ended: at(1, 10) });
+  const fit = { pooled: 0.1, byModel: {} } as any;
+  const w = speed("week", now, fit);
+  expect(w.goals.week).toBe(0.2); // both runs under the one key ox-860
+  run({ ...a("r", { todo: 7 }), started: at(1, 9), ended: at(1, 10) }); run({ ...land("r", { todo: 7 }), started: at(1, 9), ended: at(1, 10) });
+  expect(speed("week", now, fit).goals.week).toBe(0.1); // ox-7 counts too: median of 0.2 and 0.1
+});

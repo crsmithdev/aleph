@@ -5,7 +5,7 @@
  * month the last 7 and 30 local days (today included) in daily ones. A percentile is the nearest rank.
  */
 import { flakes } from "../../jobs/lib/factory.ts";
-import { allRuns, isBuild, type Run } from "../../jobs/lib/ledger.ts";
+import { allRuns, isBuild, onOf, type Run } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
 import { staleSync } from "../stale.ts";
 import { reader, uiFetchTtl } from "../../todo/lib/store.ts";
@@ -13,6 +13,12 @@ import { status } from "../../todo/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
 
 const HOUR = 3600_000, DAY = 24 * HOUR;
+/** The issue number of a run, from `on` or old `todo`; a goal run "860.1" reads as 860. Undefined when the run has none. */
+function issueOf(r: Run): number | undefined {
+  const o = onOf(r);
+  return o === undefined ? undefined : Math.trunc(Number(o));
+}
+
 export const MAX_RUN = 4 * HOUR;
 export const KINDS = ["agent", "land", "triage", "plan"] as const;
 
@@ -84,13 +90,13 @@ const passedState = (st: string) => st === "passed" || st === "landed" || st ===
 
 /** Class every agent run of the window by what its work came to; see the parent goal's Classes list. */
 export function classify(runs: Run[], statusOf: (goal: string) => string | undefined, since: number, now: number, fit: Fit | null): { classes: ClassStat[]; notCounted: { runs: number; goals: number; hours: number }; lost: { hours: number; share: number }; total: number } {
-  const goalOf = (r: Run) => `${r.repo}-${r.todo}`;
+  const goalOf = (r: Run) => `${r.repo}-${issueOf(r)}`;
   const t0 = (r: Run) => Date.parse(r.started);
   const agentsOf = new Map<string, Run[]>(), landsOf = new Map<string, Run[]>(), firstStart = new Map<string, number>();
   for (const r of runs) {
     const t = t0(r);
     if (Number.isFinite(t)) firstStart.set(r.job, Math.min(firstStart.get(r.job) ?? Infinity, t));
-    if (r.todo === undefined) continue;
+    if (issueOf(r) === undefined) continue;
     const m = isAgent(r) ? agentsOf : r.kind === "land" && r.state === "landed" ? landsOf : null;
     if (!m) continue;
     const g = goalOf(r);
@@ -111,7 +117,7 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
   const rows = new Map<Class, Row[]>(CLASSES.map((c) => [c, []]));
   const skipped: Row[] = [];
   for (const r of runs) {
-    if (!isAgent(r) || r.todo === undefined) continue;
+    if (!isAgent(r) || issueOf(r) === undefined) continue;
     const a = t0(r), b = Date.parse(r.ended ?? "");
     if (!(a >= since) || a > now || !(b >= a) || b - a > MAX_RUN) continue;
     const g = goalOf(r), reason = r.reason ?? "";
@@ -224,8 +230,8 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
   };
   if (fit) {
     const weekOf = new Map<string, number>();
-    for (const r of all) if (isAgent(r) && r.todo !== undefined) weekOf.set(`${r.repo}-${r.todo}`, (weekOf.get(`${r.repo}-${r.todo}`) ?? 0) + (share(fit, r.cost, r.model)?.pct ?? 0));
-    const per = [...new Set(landed.filter((r) => r.todo !== undefined).map((r) => `${r.repo}-${r.todo}`))].map((g) => weekOf.get(g) ?? 0);
+    for (const r of all) if (isAgent(r) && issueOf(r) !== undefined) weekOf.set(`${r.repo}-${issueOf(r)}`, (weekOf.get(`${r.repo}-${issueOf(r)}`) ?? 0) + (share(fit, r.cost, r.model)?.pct ?? 0));
+    const per = [...new Set(landed.filter((r) => issueOf(r) !== undefined).map((r) => `${r.repo}-${issueOf(r)}`))].map((g) => weekOf.get(g) ?? 0);
     goals.week = per.length ? round(pct(per, 0.5), 2) : null;
   }
   const lists = reader({ fetch: false });
