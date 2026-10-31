@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, file, jobsDir, specFile, state, setup, teardown } from "./cli.helpers";
+import { aleph, base, diagnose, dispatching, file, jobsDir, specFile, state, stateNow, setup, teardown, unitAlive, until } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -62,6 +62,9 @@ describe("a factory run", () => {
     process.env.ALEPH_RESCUE = "off";
     try {
       await (async () => {
+    // The first test leaves a dropped run, a landed one and maybe a detached dispatch: let them end, so no run but ours is open.
+    await until(() => !dispatching() && readdirSync(jobsDir).every((r) => stateNow(r).state !== "running" && !unitAlive(join(jobsDir, r))));
+    const seen = async (label: string) => diagnose(`${label}: runs ${readdirSync(jobsDir).map((r) => `${r}=${stateNow(r).state}`).join(", ")}`, []);
     // Runs written as the ledger holds them: a conflicted land that goes back to its worker, and a stuck run.
     const made: string[] = [];
     const run = (name: string, extra: Record<string, unknown>) => {
@@ -73,18 +76,25 @@ describe("a factory run", () => {
     };
     const land = { kind: "land", state: "failed", reason: "merge conflict", conflicts: ["x.txt"] };
     const pending = run("fheldland", { ...land, next: "worker", ended: new Date().toISOString() });
-    expect((await aleph(["dispatch"])).json.held).toBeUndefined();
+    const d1 = await aleph(["dispatch"]);
+    expect(d1.json.held, await seen(`line 76: ${d1.stdout}`)).toBeUndefined();
     writeFileSync(join(pending, "state.json"), JSON.stringify({ ...state(pending.split("/").pop()!), next: undefined }));
-    expect((await aleph(["dispatch"])).json.held).toContain("Held: fheldland is failed");
+    const d2 = await aleph(["dispatch"]);
+    expect(d2.json.held, await seen(`line 78: ${d2.stdout}`)).toContain("Held: fheldland is failed");
     // a stuck run whose unit is still live does not hold; once the unit ends, it does
     const live = run("fstuck", { state: "stuck", reason: "tests" });
-    const unit = Bun.spawn(["sh", "-c", "sleep 60", live], { stdout: "ignore", stderr: "ignore" });
+    const unit = Bun.spawn(["sh", "-c", "sleep 60; :", live], { stdout: "ignore", stderr: "ignore" });
     writeFileSync(join(live, "pid"), String(unit.pid));
-    expect((await aleph(["dispatch"])).json.held).not.toContain("fstuck");
+    expect(unitAlive(live)).toBe(true);
+    const d3 = await aleph(["dispatch"]);
+    // the hold line names only the oldest holder, so the live run must not be counted in "and N more"
+    expect(d3.json.held, await seen(`line 83: ${d3.stdout}`)).toContain("Held: fheldland is failed");
+    expect(d3.json.held).not.toContain("fstuck");
     unit.kill();
     await unit.exited;
     writeFileSync(join(live, "exit"), "0\n");
-    expect((await aleph(["dispatch"])).json.held).toContain("Held: fheldland and 1 more are");
+    const d4 = await aleph(["dispatch"]);
+    expect(d4.json.held, await seen(`line 87: ${d4.stdout}`)).toContain("Held: fheldland and 1 more are");
     for (const f of made) rmSync(f, { recursive: true, force: true });
       })();
     } finally {
