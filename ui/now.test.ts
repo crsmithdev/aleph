@@ -149,7 +149,6 @@ test("Needs you groups needs you, then stuck or failed; the lanes hold running a
 
 const rows = (h: string) => h.split('<article class="job-card small issue-row ').slice(1);
 const problem = (row: string) => row.match(/<p class="problem">([^<]*)<\/p>/)![1];
-const verb = (row: string) => row.match(/<span class="verb">([^<]*)<\/span>/)![1];
 
 test("a held run, a stuck run, a needs-chris issue and a red main are one row each, with the id, title, Problem and buttons", () => {
   const needsIssues = [{ ...issue(7), labels: ["needs-chris"], title: "Which tier?", question: "Haiku or Sonnet for the digest?" }];
@@ -161,7 +160,7 @@ test("a held run, a stuck run, a needs-chris issue and a red main are one row ea
   expect(rs.map((x) => x.match(/^(\w+)/)![1])).toEqual(["held", "decision", "error", "stuck"]);
   expect(problem(rs[0])).toContain("changes a path the repo holds");
   expect(rs[0]).toContain("Reviewer: chris: touches hooks");
-  expect(verb(rs[3])).toBe("Stuck with no commit.");
+  expect(problem(rs[3])).toBe("Stuck with no commit.");
   expect(problem(rs[1])).toBe("Haiku or Sonnet for the digest?");
   expect(problem(rs[2])).toBe("Fix: aleph main is red at abc1234: tests");
   expect(rs[2]).not.toContain("<button");
@@ -169,7 +168,7 @@ test("a held run, a stuck run, a needs-chris issue and a red main are one row ea
   // The id comes first, then the title and the Problem, then the buttons.
   for (const [row, id, title, btns] of [[rs[0], "aleph-27", "Digest head and tail", ["land", "drop"]], [rs[3], "aleph-30", "Fix it", ["recheck", "drop"]], [rs[1], "aleph-7", "Which tier?", ["decide", "deny"]]] as const) {
     expect(row.indexOf(id)).toBeLessThan(row.indexOf(title));
-    expect(row.indexOf(title)).toBeLessThan(row.indexOf(row.startsWith("stuck") ? "verb" : "problem"));
+    expect(row.indexOf(title)).toBeLessThan(row.indexOf("problem"));
     expect(row.match(/<details class="more"/g)?.length ?? 0).toBeLessThanOrEqual(1);
     for (const b of btns) expect(row).toContain(`data-act="${b}"`);
   }
@@ -208,7 +207,7 @@ test("Issues holds the held runs before the stuck and failed ones, and none says
   expect(h).toContain(">Needs you<");
   expect(h.indexOf("aleph-27")).toBeLessThan(h.indexOf("aleph-30"));
   expect(h.indexOf("aleph-30")).toBeLessThan(h.indexOf("aleph-31"));
-  expect(h).toContain('<span class="verb">Failed.</span>');
+  expect(h).toContain('<p class="problem">Failed.</p>');
   // A job with a live run says so, on its own card only.
   expect(h.match(/Agent working/g)?.length).toBe(1);
   expect(h.indexOf("Agent working")).toBeGreaterThan(h.indexOf("aleph-30"));
@@ -536,7 +535,7 @@ test("a proposal is a row with Yes-like buttons and its signals folded", () => {
   expect(row).toContain('class="act primary" type="button" data-act="approve" data-id="l-1234abcd" data-label="Add a check to aleph">Add a check to aleph<');
   expect(row).toContain('data-act="decline" data-id="l-1234abcd" data-label="Add no check">');
   expect(row).toContain('data-reason="proposal-check:aleph"');
-  expect(row).toContain('data-label="Checks for aleph"');
+  expect(row).toContain('data-label="Add a check to aleph [auto-yes]"');
   expect(row.match(/<details class="more"/g)?.length).toBe(1);
   expect(row).toContain('<a href="https://lf/trace/t2">');
   expect(row).not.toContain("<script>");
@@ -624,6 +623,8 @@ const sample = (reason: string) => {
   if (reason === "question") return run("question", { question: "<agent-message>q</agent-message> Which?" });
   if (reason.startsWith("proposal-")) return { needs: [], needsIssues: [] as any[], lessons: [{ ...prop, kind: reason.slice(9), target: { check: "aleph checks", "claude-md": "aleph/CLAUDE.md", skill: "skills/aleph/SKILL.md" }[reason.slice(9)] }] };
   const q: Record<string, object> = {
+    proposal: { reason: "proposal", question: "T" },
+    "host-check": { reason: "host-check", question: "triage: a live check: run it" },
     "no-commit": { reason: "no-commit", question: "needs-chris: ended with no commit, so the factory stopped" },
     "run-cap": { reason: "run-cap", question: "needs-chris: the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it." },
     "triage-no-verdict": { reason: "triage-no-verdict", question: "needs-chris: triage: no verdict in 2 runs: failed: x" },
@@ -649,12 +650,18 @@ for (const reason of Object.keys(REASONS)) {
     const buttons = [...row.split("<details")[0].matchAll(/<button class="act( primary)?" [^>]*data-label="([^"]*)"/g)].map((m) => m[2]);
     expect(buttons).toEqual(items[0].actions.map((a) => a.label));
     for (const b of buttons) expect(["Yes", "No", "Open"]).not.toContain(b);
-    expect(row.match(/<p class="hints">[^]*?<\/p>/)![0].match(/<span>/g)?.length).toBe(buttons.length);
+    expect(row).toContain(`data-kind="${items[0].kind}"`);
+    expect(row).toContain('<span class="kind-tag">');
+    const always = items[0].always;
+    expect(row.match(/<div class="choice">/g)?.length).toBe(buttons.length + (always ? 1 : 0));
+    expect(row.match(/<span class="effect">/g)?.length).toBe(buttons.length + (always ? 1 : 0));
+    if (!always) { expect(row).not.toContain("act always"); return; }
     expect(row.match(/class="act always"/g)?.length).toBe(1);
-    const prefix = reason.startsWith("proposal-") ? "" : "Always ";
+    // The order of the choices: positive, positive [auto-yes], then the rest.
+    expect(row.indexOf(`data-label="${items[0].actions[0].label}"`)).toBeLessThan(row.indexOf("act always"));
+    expect(row.indexOf("act always")).toBeLessThan(row.indexOf(`data-label="${items[0].actions[1].label}"`));
     const keyed = reason.startsWith("proposal-") ? `${reason}:aleph` : reason;
-    expect(row).toMatch(new RegExp(`class="act always" type="button" data-act="always" data-reason="${keyed}" data-action="[^"]+" data-first="${items[0].actions[0].act}" data-label="${prefix}`));
-    if (prefix === "") expect(row).toContain(`data-label="${items[0].always.label}"`);
+    expect(row).toMatch(new RegExp(`class="act always" type="button" data-act="always" data-reason="${keyed}" data-action="[^"]+" data-first="${items[0].actions[0].act}" data-label="${always.label.replace(/[[\]]/g, "\\$&")}"`));
     expect(row.match(/<details class="more"/g)?.length ?? 0).toBeLessThanOrEqual(1);
   });
 }

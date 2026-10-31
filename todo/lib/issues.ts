@@ -113,8 +113,8 @@ export function note(repo: store.Place, id: number, text: string, answer = false
   const w = write(repo, `todo: a note on item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
     const line = todos.note(i, text);
-    const answered = answer && store.needsChris(i);
-    if (answered) { store.label(i, [], [store.NEEDS_CHRIS]); delete i.fm.reason; }
+    const answered = answer && store.awaitsChris(i);
+    if (answered) { store.label(i, [], [store.NEEDS_CHRIS]); delete i.fm.reason; delete i.fm.ask; delete i.fm.question; }
     return { id: i.id, line, answered };
   })!;
   return { result: { repo: repo.key, id: w.value.id, note: w.value.line, commit: w.commit }, answered: w.value.answered, follow: w.follow };
@@ -126,11 +126,14 @@ export function decide(repo: store.Place, id: number, text: string, fields: Fiel
   text = text.trim() || refuse("give the decision");
   const w = write(repo, `todo: item ${id}: decided`, (doc) => {
     const i = pick(repo, doc, id);
-    if (todos.status(i) !== "open" || !store.needsChris(i)) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
+    if (todos.status(i) !== "open" || !store.awaitsChris(i)) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
     todos.note(i, text);
+    const asked = i.fm.ask !== undefined;
     clearDecision(i);
     delete i.fm.reason;
-    store.label(i, [store.GOAL], [store.NEEDS_CHRIS]);
+    delete i.fm.ask;
+    if (asked) i.fm.kind = "goal";
+    store.label(i, asked ? [] : [store.GOAL], [store.NEEDS_CHRIS]);
     todos.edit(i, { waitingOn: fields.waitingOn });
     return i;
   })!;

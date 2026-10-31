@@ -169,7 +169,7 @@ test("the shared table parts have top-level rules, and .sh h2/h3 share one", () 
 test("the Needs-you list and row parts have top-level rules", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   const css = html.match(/<style>([\s\S]*?)<\/style>/)![1].replace(/\/\*[\s\S]*?\*\//g, "").replace(/"[^"\n]*"|'[^'\n]*'/g, "");
-  for (const sel of ["\n.list {", "\n.issue-row .problem", "\n.issue-row .hints", "\n.act.always"]) {
+  for (const sel of ["\n.list {", "\n.issue-row .problem", "\n.choice {", "\n.act.always"]) {
     const i = css.indexOf(sel);
     expect(i).toBeGreaterThan(-1);
     let depth = 0;

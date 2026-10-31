@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readList, writeList } from "../todo/lib/store.ts";
+import { isGoal, readList, writeList } from "../todo/lib/store.ts";
 import { add } from "../todo/lib/todo.ts";
 import * as todos from "../todo/lib/todo.ts";
 import { readDecision, writeDecision } from "../jobs/lib/decision.ts";
@@ -395,6 +395,34 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
       expect(r.status).toBe(200);
       expect(item(n).notes.at(-1)).toContain("Chris decided: My recommendation is B, it is smaller.");
       expect(item(n).fm.labels).toEqual(["goal"]);
+    });
+  });
+
+  const migrated = (reason: string, kind: "approval" | "input") => writeList({ key: "fac" }, "seed", (doc) => {
+    const i = add(doc, "a migrated ask", { body: "x" });
+    Object.assign(i.fm, { kind: "issue", ask: kind, reason, question: "a migrated ask" });
+    return i.id;
+  })!.value;
+
+  test("approving a migrated proposal makes it a goal and clears the Ask", async () => {
+    const n = migrated("proposal", "approval");
+    await withRealCli(async () => {
+      const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ approve: true }) });
+      expect(r.status).toBe(200);
+      const i = item(n);
+      expect(i.notes.at(-1)).toContain("Chris approved it");
+      expect(isGoal(i)).toBe(true);
+      for (const k of ["ask", "reason", "question"]) expect(i.fm[k]).toBeUndefined();
+    });
+  });
+
+  test("marking a migrated host check as checked closes it as done", async () => {
+    const n = migrated("host-check", "input");
+    await withRealCli(async () => {
+      const r = await at(`/api/issues/fac/${n}/checked`, { method: "POST", headers: h, body: "{}" });
+      expect(r.status).toBe(200);
+      expect(todos.status(item(n))).toBe("done");
+      expect(item(n).notes.at(-1)).toContain("checked on the host");
     });
   });
 

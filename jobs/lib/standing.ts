@@ -22,6 +22,9 @@ export const REASONS: Record<string, Reason> = {
   "acceptance-failed": { actions: ["rerun", "close"], always: "firefighter" },
   "decision": { actions: ["decide", "deny"], always: "recommended" },
   "rescue": { actions: ["decide", "drop"], always: "recommended" },
+  // An empty `always`: the factory has no rule that acts on these, so the card offers no auto-yes.
+  "proposal": { actions: ["start", "deny"], always: "" },
+  "host-check": { actions: ["checked", "deny"], always: "" },
   "proposal-check": proposal,
   "proposal-claude-md": proposal,
   "proposal-skill": proposal,

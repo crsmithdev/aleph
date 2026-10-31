@@ -315,6 +315,8 @@ export const isSorted = (item: Item): boolean =>
   item.fm.route !== undefined || hasAsk(item) || kindOf(item) === "goal" || list(item.fm.goals).length > 0 || labels(item).some((l) => SORTED.includes(l));
 /** An item labelled `needs-chris`: it waits for Chris's answer. */
 export const needsChris = (item: Item): boolean => hasLabel(item, NEEDS_CHRIS);
+/** An item that waits for Chris in either shape: the `needs-chris` label or an `ask`. */
+export const awaitsChris = (item: Item): boolean => needsChris(item) || hasAsk(item);
 
 /** Add the labels `add` the item lacks and take out `remove`, as one edit; no edit when nothing changes. */
 export function label(item: Item, add: string[], remove: string[] = []): void {

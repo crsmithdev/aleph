@@ -7,12 +7,14 @@ import type { Decision } from "../jobs/lib/decision.ts";
 import { REASONS, type Granted } from "../jobs/lib/standing.ts";
 // @ts-ignore plain JS, shared with the page
 import { oneSentence } from "./views/now.js";
+// @ts-ignore plain JS, shared with the page
+import { proseDecision } from "./decision.js";
 import type { Job, NewIssue, State } from "./state.ts";
 
 export interface Action { act: string; label: string; hint: string; primary: boolean; args: Record<string, string> }
 export interface AttentionItem {
-  key: string; reason: string; id: string; href: string; title: string; problem: string;
-  actions: Action[]; always: { label: string; action: string; hint?: string; reason?: string }; details: Details;
+  key: string; reason: string; kind: string; id: string; href: string; title: string; problem: string;
+  actions: Action[]; always?: { label: string; action: string; hint: string; reason?: string }; details: Details;
   /** The project key, for `?project=`. */
   repo?: string;
 }
@@ -22,13 +24,22 @@ export interface Details {
 }
 export type Standing = Record<string, Granted>;
 
+/** The kind of a card, from its reason: the tag's text and color. */
+export function kindOf(reason: string): string {
+  if (reason === "proposal" || reason.startsWith("proposal-") || reason === "held" || reason === "review" || reason === "firefighter") return "approval";
+  if (reason === "decision" || reason === "rescue") return "decision";
+  if (reason === "question" || reason === "host-check") return "input";
+  return "stuck";
+}
+
 const STAMP = /^\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?:\s*/;
 /** A note without its optional leading timestamp and its `needs-chris:` lead. */
 const unlead = (s: string): string => s.replace(/^\s*-\s*/, "").replace(STAMP, "").replace(/^\s*needs-chris:\s*/i, "");
 
 /** The held-reason, from the item's own field or, for an old item, the last note. */
 export function issueReason(i: Pick<NewIssue, "reason" | "question" | "decision">): string {
-  if (i.reason && REASONS[i.reason]) return i.reason;
+  if (i.reason === "triage-failed") return "triage-no-verdict";
+  if (i.reason && i.reason !== "question" && REASONS[i.reason]) return i.reason;
   const n = unlead(i.question ?? "");
   if (/^triage: no verdict in/.test(n)) return "triage-no-verdict";
   if (/^acceptance: fail again/.test(n)) return "acceptance-failed";
@@ -44,12 +55,11 @@ export function clean(text: unknown): string {
   const t = String(text ?? "")
     .replace(/<(task-notification|agent-message)\b[\s\S]*?(<\/\1>|$)/g, " ")
     .replace(/<[^>]*>/g, " ").replace(/[<>]/g, " ")
-    .replace(/^\s*-\s*/, "").replace(STAMP, "").replace(/^\s*needs-chris:\s*/i, "").replace(/^\s*triage: for Chris:\s*/i, "")
+    .replace(/^\s*-\s*/, "").replace(STAMP, "").replace(/^\s*needs-chris:\s*/i, "").replace(/^\s*triage: (for Chris|a live check):\s*/i, "")
     .replace(/\s+/g, " ").trim();
   return oneSentence(t);
 }
 const sentence = (s: string) => (/[.?!]$/.test(s) ? s : `${s}.`);
-const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
 type Ctx = { id: string; run?: Job; issue?: NewIssue; lesson?: Lesson };
 
@@ -75,6 +85,8 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
   "acceptance-failed": (c) => `The Oracle of ${c.id} still fails on main after a rerun.`,
   decision: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your decision is needed"),
   rescue: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your decision is needed"),
+  proposal: () => "This work is a proposal, and it does not start until you approve it.",
+  "host-check": () => "A factory sandbox cannot run this check, so it must run on the host.",
   firefighter: (c) => {
     const note = unlead(String(c.issue?.question ?? ""));
     const m = /^(\S+) changes (\S+?),? a held security path/.exec(note);
@@ -88,14 +100,14 @@ function words(l: Lesson | undefined) {
   const p = place(kind, l?.target);
   if (kind === "claude-md") {
     const f = p ? `${p} CLAUDE.md` : "CLAUDE.md";
-    return { problem: `a line in ${f}`, approve: `Add a line to ${f}`, always: `Additions to ${f}`, decline: "Leave CLAUDE.md unchanged", hint: `adds the line to ${f}`, every: `proposed addition to ${f}` };
+    return { problem: `a line in ${f}`, approve: `Add a line to ${f}`, decline: "Leave CLAUDE.md unchanged", hint: `adds the line to ${f}`, every: `proposed addition to ${f}` };
   }
   if (kind === "skill") {
     const s = p ? `the ${p} skill` : "the skill";
-    return { problem: p ? `a change to ${s}` : "a skill change", approve: `Change ${s}`, always: `Changes to ${s}`, decline: `Leave ${s} unchanged`, hint: `changes ${s}`, every: `proposed change to ${s}` };
+    return { problem: p ? `a change to ${s}` : "a skill change", approve: `Change ${s}`, decline: `Leave ${s} unchanged`, hint: `changes ${s}`, every: `proposed change to ${s}` };
   }
   const r = p ? p : "the repo";
-  return { problem: `a check for ${r}`, approve: `Add a check to ${r}`, always: `Checks for ${r}`, decline: "Add no check", hint: `adds the check to ${r}`, every: `proposed check for ${r}` };
+  return { problem: `a check for ${r}`, approve: `Add a check to ${r}`, decline: "Add no check", hint: `adds the check to ${r}`, every: `proposed check for ${r}` };
 }
 for (const k of ["check", "claude-md", "skill"]) PROBLEM[`proposal-${k}`] = (c) => `The correction memory proposes ${words(c.lesson).problem}: ${clean(c.lesson?.sentence).replace(/\.$/, "")}.`;
 
@@ -113,7 +125,12 @@ function actionsFor(reason: string, c: Ctx): Action[] {
       case "rerun": return [a("rerun", "Run it again", "Clears the label and lets the factory start the goal again.", issue)];
       case "retry": return [a("retriage", "Run triage again", "Removes the label; the next tick triages the issue again.", issue)];
       case "close": return [a("close", "Close the issue", "Marks the issue dropped; nothing more runs for it.", issue)];
-      case "deny": return [a("deny", "Deny", "Records your refusal on the issue and closes the question.", issue)];
+      case "deny":
+        if (reason === "proposal") return [a("deny", "Drop the proposal", "Marks the issue dropped; the work does not start.", issue)];
+        if (reason === "host-check") return [a("deny", "Drop the check", "Marks the issue dropped; no one runs the check.", issue)];
+        return [a("deny", "Deny", "Records your refusal on the issue and closes the question.", issue)];
+      case "start": return [a("decide", "Start the work", "Makes the issue a goal, and the factory starts it.", { ...issue, approve: "true" })];
+      case "checked": return [a("checked", "Mark it checked", "Closes the issue as done; use this after the check has run.", issue)];
       case "approve":
         if (c.lesson) { const w = words(c.lesson); return [a("approve", w.approve, `Files the goal that ${w.hint}.`, { id: c.id })]; }
         return [a("approve", "File the goal", "Files the proposal as a goal for the factory.", { id: c.id })];
@@ -124,7 +141,8 @@ function actionsFor(reason: string, c: Ctx): Action[] {
         const d = c.issue?.decision;
         if (d) return [...d.options].sort((x, y) => +(y.label === d.recommended) - +(x.label === d.recommended))
           .map((o) => a("decide", `Approve ${o.label}`, o.line || "Records this choice on the issue and lets the factory act on it.", { ...issue, option: o.label }));
-        return [a("decide", "Approve recommendation", "Records the recommended choice on the issue.", { ...issue, recommendation: "true" })];
+        if (proseDecision(c.issue?.question).recommendation) return [a("decide", "Approve recommendation", "Records the recommended choice on the issue, and the factory acts on it.", { ...issue, recommendation: "true" })];
+        return [a("decide", "Approve it", "Records your approval on the issue, and the factory starts it.", { ...issue, approve: "true" })];
       }
       default: return [];
     }
@@ -152,20 +170,20 @@ function detailsFor(c: Ctx): Details {
   return d;
 }
 
-/** The Always button: what it grants, named for the rule rather than the first option when the rule covers every decision. */
-function alwaysFor(action: string, first: string | undefined): AttentionItem["always"] {
-  if (action === "firefighter") return { label: "Always let the firefighter decide", action };
-  if (action === "recommended") return {
-    label: "Always approve the recommendation", action,
-    hint: "From now on, the factory takes the recommended option of every decision without asking you. Revoke with `aleph standing revoke decision`.",
-  };
-  return { label: `Always ${lower(first ?? action)}`, action };
+/** The auto-yes choice: the first choice's label with the mark, and a hint that names the rule it grants. No rule, no choice. */
+function alwaysFor(reason: string, action: string, first: string | undefined): AttentionItem["always"] {
+  if (!action) return undefined;
+  const label = `${first ?? action} [auto-yes]`;
+  const revoke = `Revoke with \`aleph standing revoke ${reason}\`.`;
+  if (action === "firefighter") return { label, action, hint: `Does this one now. From now on, the firefighter decides these cards without asking you. ${revoke}` };
+  if (action === "recommended") return { label, action, hint: `Does this one now. From now on, the factory takes the recommended option of every decision without asking you. ${revoke}` };
+  return { label, action, hint: `Does this one now. From now on, the factory does this without asking you. ${revoke}` };
 }
 
 function proposalAlways(l: Lesson): NonNullable<AttentionItem["always"]> {
   const key = standingKey(l);
   return {
-    label: words(l).always, action: "approve", reason: key,
+    label: `${words(l).approve} [auto-yes]`, action: "approve", reason: key,
     hint: `From now on, the factory files every ${words(l).every} without asking you. Revoke with \`aleph standing revoke ${key}\`.`,
   };
 }
@@ -174,8 +192,8 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
   const actions = actionsFor(reason, c);
   const r = REASONS[reason];
   return {
-    key, reason, id: c.id, href, title, problem: PROBLEM[reason](c), actions,
-    always: c.lesson ? proposalAlways(c.lesson) : alwaysFor(r.always, actions[0]?.label),
+    key, reason, kind: kindOf(reason), id: c.id, href, title, problem: PROBLEM[reason](c), actions,
+    ...(c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label) } : {}),
     details: detailsFor(c), ...(repo ? { repo } : {}),
   };
 }

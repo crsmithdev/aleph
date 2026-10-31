@@ -275,12 +275,6 @@ const reviewBadge = (j) => {
 };
 
 /** One Jobs card in the compact size: the id, the title, one sentence of why, the buttons; `fold` is the one Details behind it. */
-function row(kind, why, id, href, ttl, buttons, fold = "", j = null) {
-  return `<article class="job-card small issue-row ${kind}" data-kind="${kind}"><div class="row-main">` +
-    `${id ? `${href ? idLink(id, href) : `<span class="id">${esc(id)}</span>`} ` : ""}${ttl ? `<span class="t">${esc(ttl)}</span> ` : ""}<span class="verb">${esc(why)}</span>${reviewBadge(j)}${agentLine(j)}</div>` +
-    `<div class="actions">${buttons}</div>${fold}</article>`;
-}
-
 /** The one Details behind a held or stuck row: the whole reason, the reviewer's note and Diff (held), then the job's details. */
 const fold = (s, j, held) => details(s, j, held
   ? `${holdReason(j) ? `<p class="quiet q">${esc(holdReason(j))}</p>` : ""}${reviewNote(j) ? `<p class="quiet q">Reviewer: ${esc(reviewNote(j))}</p>` : ""}<div class="actions">${act("diff", j.name, "Diff")}</div><div class="diff-panel" data-diff-for="${esc(j.name)}"${openDiffs.has(j.name) ? `>${diffHtml(openDiffs.get(j.name))}` : " hidden>"}</div>`
@@ -291,8 +285,9 @@ const stuckRow = (s) => (j) => {
   const b = j.blocker;
   const why = b ? `Waits on ${b.id}: ${b.title}.` : `${j.state === "failed" ? "Failed" : "Stuck"}${j.reason ? ` with ${oneSentence(j.reason).replace(/\.$/, "")}` : ""}.`;
   const first = b ? act("wait", j.name, `Wait for ${b.id}`, true).replace('data-label=', `data-on="${esc(b.id)}" data-label=`) : act("recheck", j.name, "Re-check");
-  return row("stuck", why, j.name, jobHref(j), j.item?.title || "", `${first}${act("drop", j.name, "Drop")}${actMsg(j.name)}`,
-    (b ? `<p class="quiet q">Waits on <a href="${esc(b.href)}">${esc(b.id)}</a>: ${esc(b.title)}</p>` : "") + fold(s, j, false), j);
+  return `<article class="job-card small issue-row stuck" data-kind="stuck">${needHead("stuck", j.name, jobHref(j), j.item?.title || "", why)}${reviewBadge(j)}${agentLine(j)}` +
+    `<div class="actions choices">${choice(first, b ? `Sets waiting_on to ${b.id} and drops the stuck job; nothing starts until ${b.id} lands.` : "Runs the job again.")}${choice(act("drop", j.name, "Drop"), "Discards the run's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
+    (b ? `<p class="quiet q">Waits on <a href="${esc(b.href)}">${esc(b.id)}</a>: ${esc(b.title)}</p>` : "") + fold(s, j, false) + `</article>`;
 };
 /** Text with `inline code` as <code>, everything else escaped. */
 const code = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
@@ -332,28 +327,33 @@ function attentionDetails(i) {
   return body ? more(i.key ?? i.id, body) : "";
 }
 
-/** A Needs-you row from a server `attention` item: the id and title, the Problem, the named buttons with their hints, Always, Details. */
+const KIND_TAG = { approval: "Approval", decision: "Decision", input: "Input", stuck: "Stuck", error: "Error" };
+/** The head of every Needs-you card: the kind's tag, the id and title, the one sentence of the problem. */
+const needHead = (kind, id, href, title, problem) =>
+  `<div class="row-main"><span class="kind-tag">${KIND_TAG[kind]}</span> ${!id ? "" : href ? idLink(id, href) : `<span class="id">${esc(id)}</span>`} ${title ? `<span class="t">${esc(title)}</span>` : ""}</div>` +
+  `<p class="problem">${esc(problem)}</p>`;
+/** One choice of a card: the button, what it does, and any input that belongs to it. */
+const choice = (button, hint, input = "") => `<div class="choice">${button}<span class="effect">${code(hint)}</span>${input}</div>`;
+
+/** A Needs-you card from a server `attention` item: the head, then the choices in order: positive, positive [auto-yes], negative. Details last. */
 function attentionRow(i) {
   const acts = i.actions ?? [];
-  const buttons = acts.map(actionButton);
-  const deny = acts.findIndex((a) => a.act === "deny");
-  if (deny >= 0) {
-    const [repo, n] = i.id.split(/-(?=\d+$)/);
-    buttons.splice(deny, 0, `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason to deny (optional)" aria-label="Reason to deny ${esc(i.id)}" data-repo="${esc(repo)}" data-id="${esc(n)}" value="${esc(denyReasons.get(i.id) ?? "")}">`);
-  }
-  const ans = acts.findIndex((a) => a.act === "answer");
-  if (ans >= 0) buttons.splice(ans, 0, `<input class="reason" type="text" name="answer" maxlength="500" placeholder="Your answer" aria-label="Answer for ${esc(i.id)}">`);
-  const always = i.always ? `<button class="act always" type="button" data-act="always" data-reason="${esc(i.always.reason ?? i.reason)}" data-action="${esc(i.always.action)}" data-first="${esc(acts[0]?.act ?? "")}" data-label="${esc(i.always.label)}"${i.always.hint ? ` title="${esc(i.always.hint)}"` : ""}>${esc(i.always.label)}</button>` : "";
-  return `<article class="job-card small issue-row ${esc(i.reason)}" data-reason="${esc(i.reason)}"><div class="row-main">` +
-    `${i.href ? idLink(i.id, i.href) : `<span class="id">${esc(i.id)}</span>`} ${i.title ? `<span class="t">${esc(i.title)}</span>` : ""}</div>` +
-    `<p class="problem">${esc(i.problem)}</p>` +
-    `<div class="actions">${buttons.join("")}${RUN_REASONS.includes(i.reason) ? actMsg(i.id) : ""}</div>` +
-    (acts.length ? `<p class="hints">${acts.map((a) => `<span>${code(a.hint)}</span>`).join("")}</p>` : "") +
-    (always ? `<div class="actions">${always}</div>` : "") + attentionDetails(i) + `</article>`;
+  const inputFor = (a) => {
+    if (a.act === "deny") {
+      const [repo, n] = i.id.split(/-(?=\d+$)/);
+      return `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason (optional)" aria-label="Reason to deny ${esc(i.id)}" data-repo="${esc(repo)}" data-id="${esc(n)}" value="${esc(denyReasons.get(i.id) ?? "")}">`;
+    }
+    return a.act === "answer" ? `<input class="reason" type="text" name="answer" maxlength="500" placeholder="Your answer" aria-label="Answer for ${esc(i.id)}">` : "";
+  };
+  const choices = acts.map((a) => choice(actionButton(a), a.hint, inputFor(a)));
+  if (i.always) choices.splice(acts.length ? 1 : 0, 0, choice(`<button class="act always" type="button" data-act="always" data-reason="${esc(i.always.reason ?? i.reason)}" data-action="${esc(i.always.action)}" data-first="${esc(acts[0]?.act ?? "")}" data-label="${esc(i.always.label)}">${esc(i.always.label)}</button>`, i.always.hint));
+  return `<article class="job-card small issue-row ${esc(i.reason)}" data-kind="${esc(i.kind)}" data-reason="${esc(i.reason)}">` +
+    needHead(i.kind, i.id, i.href, i.title, i.problem) +
+    `<div class="actions choices">${choices.join("")}${RUN_REASONS.includes(i.reason) ? actMsg(i.id) : ""}</div>` + attentionDetails(i) + `</article>`;
 }
 
-/** An error line as a row: the Problem sentence, no buttons and no Always. */
-const errorRow = (l) => `<article class="job-card small issue-row error" data-kind="error"><p class="problem">${esc(`${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`)}</p></article>`;
+/** An error line as a card: the head alone, because the page has no action that fixes it. */
+const errorRow = (l) => `<article class="job-card small issue-row error" data-kind="error">${needHead("error", "", "", "", `${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`)}</article>`;
 
 /** "12:49 pm": the time of the state. */
 export function renderAsOf(s) {

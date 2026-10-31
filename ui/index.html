@@ -233,11 +233,22 @@ section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .list > * { min-width: 0; margin: 0; }
 .issue-row .problem { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }
-.issue-row .hints { flex: 1 1 100%; display: flex; flex-direction: column; gap: 2px; margin: 0; font-size: var(--fs-sm); color: var(--muted); overflow-wrap: anywhere; }
 .issue-row .actions { max-width: 100%; }
 .issue-row input.reason { max-width: 100%; }
-.act.always { background: none; border-color: transparent; color: var(--muted); font-size: var(--fs-sm); text-decoration: underline; }
-.act.always:hover { color: var(--ink); }
+.issue-row[data-kind] { --kind: var(--stuck); --kind-bg: var(--stuck-bg); border-left: 4px solid var(--kind); }
+.issue-row[data-kind="approval"] { --kind: var(--run); --kind-bg: var(--run-bg); }
+.issue-row[data-kind="decision"] { --kind: var(--focus); --kind-bg: color-mix(in srgb, var(--focus) 14%, var(--surface)); }
+.issue-row[data-kind="input"] { --kind: var(--need); --kind-bg: var(--need-bg); }
+.issue-row[data-kind="error"] { background: var(--stuck-bg); }
+.kind-tag { display: inline-block; padding: 1px 8px; border-radius: 4px; background: var(--kind-bg); color: var(--kind); font: 600 var(--fs-xs) var(--sans); }
+.issue-row[data-kind="error"] .kind-tag { background: var(--stuck); color: var(--surface); }
+.issue-row .choices { flex: 1 1 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.choice { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 2px 12px; align-items: center; }
+.choice .act { justify-self: stretch; text-align: left; overflow-wrap: anywhere; white-space: normal; }
+.act.always { border-color: var(--kind); color: var(--kind); }
+.choice .effect { font-size: var(--fs-sm); color: var(--muted); overflow-wrap: anywhere; }
+.choice input.reason { grid-column: 2; }
+@media (max-width: 720px) { .choice { grid-template-columns: minmax(0, 1fr); } .choice input.reason { grid-column: 1; } }
 .job-card .ih .id { white-space: nowrap; flex: none; }
 .grp + .grp { margin-top: 16px; }
 #jobs-needs > h3 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } /* the section heading above already says it */
@@ -943,7 +954,7 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap:
       if (shown) load(shown, false);
       return;
     }
-    if (act === "retriage" || act === "rerun" || act === "close" || (act === "drop" && b.dataset.repo)) {
+    if (act === "retriage" || act === "rerun" || act === "checked" || act === "close" || (act === "drop" && b.dataset.repo)) {
       const { repo, id } = b.dataset;
       b.disabled = true;
       try {
@@ -956,13 +967,13 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap:
     }
     if (act === "decide" || act === "deny") {
       // A Decide row: approve one option, or deny with the reason typed beside the button.
-      const { repo, id, option, recommendation } = b.dataset;
+      const { repo, id, option, recommendation, approve } = b.dataset;
       const reason = b.closest(".actions").querySelector("input.reason")?.value.trim() ?? "";
       const bs = [...b.closest(".actions").querySelectorAll("button.act")];
       bs.forEach((x) => { x.disabled = true; });
       try {
         const res = await fetch(`/api/issues/${encodeURIComponent(repo)}/${encodeURIComponent(id)}/${act === "deny" ? "drop" : "decide"}`, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" },
-          body: JSON.stringify(act === "deny" ? { reason: reason ? `Chris denied: ${reason}` : "Chris denied it" } : recommendation ? { recommendation: true } : { label: option }) });
+          body: JSON.stringify(act === "deny" ? { reason: reason ? `Chris denied: ${reason}` : "Chris denied it" } : approve ? { approve: true } : recommendation ? { recommendation: true } : { label: option }) });
         const r = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(r.error || res.statusText);
         denyReasons.delete(`${repo}-${id}`);

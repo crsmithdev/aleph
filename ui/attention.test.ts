@@ -27,6 +27,8 @@ const CASES: Record<string, () => ReturnType<typeof attention>> = {
   "proposal-check": () => attention({ needs: [], needsIssues: [] }, {}, [lesson("check")]),
   "proposal-claude-md": () => attention({ needs: [], needsIssues: [] }, {}, [lesson("claude-md")]),
   "proposal-skill": () => attention({ needs: [], needsIssues: [] }, {}, [lesson("skill")]),
+  proposal: () => attention({ needs: [], needsIssues: [issue({ title: "Update x 1 to 2", reason: "proposal", question: "Update x 1 to 2" })] }, {}, []),
+  "host-check": () => attention({ needs: [], needsIssues: [issue({ reason: "host-check", question: "triage: a live check: On the host, run `wsl.exe -l -q` and put it in place of `<distro>` at README.md:176." })] }, {}, []),
   firefighter: () => attention({ needs: [], needsIssues: [issue({ id: "aleph-30", reason: "firefighter", question: "needs-chris: aleph-30 changes hooks/x.ts, a held security path, so it needs your review before it lands." })] }, {}, []),
 };
 
@@ -43,8 +45,11 @@ describe("attention", () => {
       expect(it.actions[0].primary).toBe(true);
       expect(it.actions.slice(1).some((a) => a.primary)).toBe(false);
       for (const a of it.actions) { expect(a.label).toBeTruthy(); expect(a.hint).toBeTruthy(); expect(a.act).toBeTruthy(); }
-      if (!reason.startsWith("proposal-")) expect(it.always.label.startsWith("Always ")).toBe(true);
-      expect(it.always.action).toBe(REASONS[reason].always);
+      expect(it.kind).toMatch(/^(approval|decision|input|stuck)$/);
+      if (!REASONS[reason].always) { expect(it.always).toBeUndefined(); return; }
+      expect(it.always!.label).toBe(`${it.actions[0].label} [auto-yes]`);
+      expect(it.always!.hint).toContain("From now on");
+      expect(it.always!.action).toBe(REASONS[reason].always);
     });
   }
 
@@ -68,24 +73,31 @@ describe("attention", () => {
     expect(CASES["proposal-check"]()[0].problem).toBe("The correction memory proposes a check for aleph: Run the formatter before landing.");
     expect(CASES["proposal-check"]()[0].title).toBe("Format first");
     expect(CASES["proposal-check"]()[0].actions.map((a) => a.label)).toEqual(["Add a check to aleph", "Add no check"]);
-    expect(CASES["proposal-check"]()[0].always).toMatchObject({ label: "Checks for aleph", reason: "proposal-check:aleph" });
+    expect(CASES["proposal-check"]()[0].always).toMatchObject({ label: "Add a check to aleph [auto-yes]", reason: "proposal-check:aleph" });
     const md = CASES["proposal-claude-md"]()[0];
     expect(md.problem).toBe("The correction memory proposes a line in global CLAUDE.md: Run the formatter before landing.");
     expect(md.actions.map((a) => a.label)).toEqual(["Add a line to global CLAUDE.md", "Leave CLAUDE.md unchanged"]);
     expect(md.actions[0].hint).toBe("Files the goal that adds the line to global CLAUDE.md.");
-    expect(md.always).toEqual({ label: "Additions to global CLAUDE.md", action: "approve", reason: "proposal-claude-md:global", hint: "From now on, the factory files every proposed addition to global CLAUDE.md without asking you. Revoke with `aleph standing revoke proposal-claude-md:global`." });
+    expect(md.always).toEqual({ label: "Add a line to global CLAUDE.md [auto-yes]", action: "approve", reason: "proposal-claude-md:global", hint: "From now on, the factory files every proposed addition to global CLAUDE.md without asking you. Revoke with `aleph standing revoke proposal-claude-md:global`." });
     const sk = CASES["proposal-skill"]()[0];
     expect(sk.actions.map((a) => a.label)).toEqual(["Change the tdd skill", "Leave the tdd skill unchanged"]);
-    expect(sk.always.label).toBe("Changes to the tdd skill");
+    expect(sk.always!.label).toBe("Change the tdd skill [auto-yes]");
     expect(sk.problem).toContain("a change to the tdd skill:");
     expect(sk.actions[0].hint).toBe("Files the goal that changes the tdd skill.");
     expect(CASES["proposal-check"]()[0].actions[0].args).toEqual({ id: "L1" });
     expect(CASES.firefighter()[0].problem).toBe("The firefighter would land aleph-30, but it changes hooks/x.ts, a held security path, so it needs your review.");
-    expect(CASES.held()[0].always).toEqual({ label: "Always let the firefighter decide", action: "firefighter" });
-    expect(CASES["triage-no-verdict"]()[0].always.label).toBe("Always run triage again");
-    expect(CASES.decision()[0].always).toEqual({ label: "Always approve the recommendation", action: "recommended", hint: "From now on, the factory takes the recommended option of every decision without asking you. Revoke with `aleph standing revoke decision`." });
-    expect(CASES.rescue()[0].always.label).toBe("Always approve the recommendation");
-    expect(CASES.held()[0].always.hint).toBeUndefined();
+    expect(CASES.held()[0].always).toMatchObject({ label: "Land it [auto-yes]", action: "firefighter" });
+    expect(CASES["triage-no-verdict"]()[0].always!.label).toBe("Run triage again [auto-yes]");
+    expect(CASES.decision()[0].always).toMatchObject({ label: "Approve B [auto-yes]", action: "recommended" });
+    expect(CASES.decision()[0].always!.hint).toContain("`aleph standing revoke decision`");
+    expect(CASES.proposal()[0].problem).toBe("This work is a proposal, and it does not start until you approve it.");
+    expect(CASES.proposal()[0].kind).toBe("approval");
+    expect(CASES.proposal()[0].actions.map((a) => a.label)).toEqual(["Start the work", "Drop the proposal"]);
+    expect(CASES.proposal()[0].actions[0].args).toEqual({ repo: "aleph", id: "387", approve: "true" });
+    expect(CASES["host-check"]()[0].problem).toBe("A factory sandbox cannot run this check, so it must run on the host.");
+    expect(CASES["host-check"]()[0].kind).toBe("input");
+    expect(CASES["host-check"]()[0].actions.map((a) => a.label)).toEqual(["Mark it checked", "Drop the check"]);
+    expect(CASES["acceptance-failed"]()[0].kind).toBe("stuck");
   });
 
   test("old items get their reason from the last note", () => {

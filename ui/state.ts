@@ -309,7 +309,7 @@ export function state(now = new Date()): State {
       openIssues++;
       if (st === "awaiting" && askOf(item)) {
         const c = card();
-        const q = item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
+        const q = (item.fm.ask !== undefined && typeof item.fm.question === "string" && item.fm.question) || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
         if (q) c.question = q;
         const d = readDecision(item);
         if (d) c.decision = d;
