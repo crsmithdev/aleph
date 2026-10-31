@@ -88,7 +88,7 @@ export function landedIndex(cwd: string, main: string, key: string): Map<number,
   const hits: [string, number][] = [];
   for (const [h, item, issue, goal] of rows.map((r) => r.split("\t"))) {
     // The commit of a goal names its issue too: it lands the goal, and the issue is done when its goals are.
-    for (const s of new Set([...values(item), ...(values(goal).length ? [] : values(issue))])) {
+    for (const s of new Set([...values(item), ...values(goal), ...(values(goal).length ? [] : values(issue))])) {
       const m = s.startsWith(`${key}-`) ? /^\d+$/.exec(s.slice(key.length + 1)) : null;
       if (m) hits.push([h, Number(m[0])]);
     }

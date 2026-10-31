@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git } from "./git.ts";
-import { facts, repoStages, recentRepos } from "./status.ts";
+import { facts, itemOnMain, repoStages, recentRepos } from "./status.ts";
 import { writeRun } from "./ledger.ts";
 import type { Repo, Run } from "./ledger.ts";
 import type { Doc } from "../../todo/lib/todo.ts";
@@ -143,4 +143,25 @@ test("facts carry what stage() needs: status, kind, after, goals, ask kind and e
   expect(f.items[21]).toMatchObject({ id: "demo-21", status: "open", kind: "goal", after: ["demo-22"], goals: [], ask: { kind: "approval", reason: "review" } });
   expect(f.items[22]).toMatchObject({ kind: "issue", goals: ["demo-21"], after: [] });
   expect(f.runs[21]).toEqual([{ kind: "build", state: "awaiting", open: true, ask: { kind: "input", reason: "question" } }]);
+});
+
+test("a commit with Issue and Goal trailers resolves for its goal", () => {
+  const other = join(base, "other");
+  sh(other, "git", "pull", "-q", "origin", "main");
+  expect(itemOnMain(repo, "2.1")).toBeNull();
+  commit(other, "goal work\n\nIssue: demo-2\nGoal: demo-2.1\nJob: j-goal");
+  sh(other, "git", "push", "-q", "origin", "HEAD:main");
+  sh(clone, "git", "fetch", "-q");
+  expect(itemOnMain(repo, "2.1")).toMatch(/^[0-9a-f]{7}$/);
+  expect(itemOnMain(repo, "2.2")).toBeNull();
+});
+
+test("a commit with Issue and a plain-number Goal trailer resolves for that old goal", () => {
+  const other = join(base, "other");
+  sh(other, "git", "pull", "-q", "origin", "main");
+  expect(itemOnMain(repo, 7)).toBeNull();
+  commit(other, "old goal work\n\nIssue: demo-2\nGoal: demo-7\nJob: j-old");
+  sh(other, "git", "push", "-q", "origin", "HEAD:main");
+  sh(clone, "git", "fetch", "-q");
+  expect(itemOnMain(repo, 7)).toMatch(/^[0-9a-f]{7}$/);
 });

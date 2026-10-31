@@ -236,8 +236,10 @@ function landMessage(subjects: string[], run: Run, repo: Repo): string {
   const on = onOf(run);
   const ref = on === undefined ? undefined : `${repo.key}-${on}`;
   // A goal's issue is the store's; a run on an issue with no goal names only the issue.
-  const goal = typeof on === "string" ? ref : undefined;
-  const issue = goal ? readItemIssue(repo, on!) : ref;
+  // A plain number whose store item names an issue is an old goal: it writes Goal: and that Issue:.
+  const storeIssue = on === undefined ? undefined : readItemIssue(repo, on);
+  const goal = typeof on === "string" || storeIssue ? ref : undefined;
+  const issue = goal ? storeIssue : ref;
   const trailers = [
     ...(issue ? [`Issue: ${issue}`] : []),
     ...(goal ? [`Goal: ${goal}`] : []),
