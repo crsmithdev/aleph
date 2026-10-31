@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { aleph, fjobFor, seedItem, seedRun, setup, teardown } from "../cli.helpers";
+import * as todos from "../../todo/lib/todo.ts";
+import { subjectOf } from "./stage.ts";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -146,4 +148,12 @@ describe("the mapping table", () => {
     expect((await statusOf(ALL["old goal: awaiting (question)"])).why).toContain("input: question");
     expect((await statusOf(ALL["old goal: awaiting (manual)"])).why).toContain("input: manual");
   }, 90_000);
+});
+
+describe("subjectOf", () => {
+  const item = (id: number, sub?: number): todos.Item => ({ id, ...(sub === undefined ? {} : { sub }), title: "t", fm: {}, body: "", notes: [], legacy: false });
+  test("a dotted goal is keyed by its dotted id, a plain item by its number", () => {
+    expect(subjectOf(item(5, 1), "proj").id).toBe("proj-5.1");
+    expect(subjectOf(item(5), "proj").id).toBe("proj-5");
+  });
 });

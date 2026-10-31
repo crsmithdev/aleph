@@ -32,7 +32,7 @@ export interface Facts {
 /** `doc` is the repo's list when the caller has read it already. */
 export function facts(repo: Repo, doc: todos.Doc | null = readList(repo)): Facts {
   const items: Record<string, Subject> = {};
-  for (const i of doc?.items ?? []) items[i.id] = subjectOf(i, repo.key);
+  for (const i of doc?.items ?? []) items[todos.refOf(i)] = subjectOf(i, repo.key);
   const runs: Record<string, RunView[]> = {};
   const open: Record<string, State> = {};
   const touched = new Set<number>();

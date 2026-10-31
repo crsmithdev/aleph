@@ -47,7 +47,7 @@ export interface Ctx {
 export function subjectOf(item: todos.Item, key: string): Subject {
   const a = store.askOf(item);
   return {
-    id: `${key}-${item.id}`, status: todos.status(item), kind: store.kindOf(item),
+    id: `${key}-${todos.refOf(item)}`, status: todos.status(item), kind: store.kindOf(item),
     after: store.afterOf(item), goals: store.goalsOf(item),
     ...(a ? { ask: { kind: a.kind, reason: a.reason } } : {}), sorted: store.isSorted(item),
   };
