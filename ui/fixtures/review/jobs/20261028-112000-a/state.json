@@ -1,1 +1,10 @@
-{"kind":"plan","job":"plan-demo-14","name":"plan-demo-14","repo":"demo","state":"running","todo":14,"told":false,"started":"2026-10-28T11:20:00.000Z"}
+{
+  "kind": "plan",
+  "job": "plan-demo-14",
+  "name": "plan-demo-14",
+  "repo": "demo",
+  "state": "running",
+  "told": false,
+  "started": "2026-10-28T11:20:00.000Z",
+  "on": "demo-14"
+}

@@ -76,12 +76,12 @@ describe("an item that is already on main", () => {
     // A fix round that was queued and then dropped: an earlier run of the same job.
     const old = join(jobsDir, "20200101-000000-demo-dropconf-agent");
     mkdirSync(old);
-    writeFileSync(join(old, "state.json"), JSON.stringify({ kind: "agent", job: old.split("/").pop(), name: "dropconf", repo: "demo", state: "dropped", told: true, started: "2020-01-01T00:00:00Z", ended: "2020-01-01T00:00:01Z" }));
+    writeFileSync(join(old, "state.json"), JSON.stringify({ kind: "build", job: old.split("/").pop(), name: "dropconf", repo: "demo", state: "dropped", told: true, started: "2020-01-01T00:00:00Z", ended: "2020-01-01T00:00:01Z" }));
     writeFileSync(join(jobsDir, agent.id, "state.json"), JSON.stringify({ ...state(agent.id), job: old.split("/").pop() }));
     handLand("theirs", "dropconf.txt");
     const r = await aleph(["land", "dropconf"]);
     expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "merge conflict" });
-    expect(runsOf("dropconf").map((x) => x.kind)).toEqual(["agent", "build", "land"]);
+    expect(runsOf("dropconf").map((x) => x.kind)).toEqual(["build", "build", "land"]);
     expect(state(r.json.run).next).toBeUndefined();
     expect(file(r.json.run, "next.log")).toContain("dropped: no worker started");
     rmSync(old, { recursive: true });
@@ -123,7 +123,7 @@ describe("an item that is already on main", () => {
     const folders = ["20261027-235958", "20261027-235959"].map((t) => {
       const folder = join(jobsDir, `${t}-demo-twolive-agent`);
       mkdirSync(folder);
-      writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "agent", job: agent.id, name: "twolive", repo: "demo", branch: "job/twolive", worktree: worktree("twolive"), state: "running", told: false, started: new Date().toISOString() }));
+      writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", job: agent.id, name: "twolive", repo: "demo", branch: "job/twolive", worktree: worktree("twolive"), state: "running", told: false, started: new Date().toISOString() }));
       const p = Bun.spawn(["bash", "-c", "sleep 60; :", folder], { stdout: "ignore", stderr: "ignore" });
       procs.push(p);
       writeFileSync(join(folder, "pid"), String(p.pid));

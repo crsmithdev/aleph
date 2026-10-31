@@ -1,6 +1,6 @@
 /**
  * The work store holds every registry repo's issues, one file each, in a
- * git repo of its own at $ALEPH_ITEMS or ~/.aleph/items. A repo's items are
+ * git repo of its own at $ALEPH_ISSUES or ~/.aleph/issues. A repo's items are
  * `<repo>/backlog/tasks/<repo>-<n>.md`, a Backlog.md project, so `backlog
  * browser` in `<repo>/` shows them as a board. A read fetches and reads
  * origin/main; a write is one commit on origin/main, made without a working

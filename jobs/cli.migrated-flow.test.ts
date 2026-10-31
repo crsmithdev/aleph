@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, itemsRemote, seedItem, sh, startScript, until } from "./cli.helpers";
+import { aleph, base, items, itemsRemote, seedItem, sh, startScript, until } from "./cli.helpers";
 import { setup, teardown } from "./cli.helpers";
 
 // The factory on the new store shape: `aleph migrate --apply` on one open goal, one standalone goal and one
@@ -23,7 +23,7 @@ describe("the flow on migrated items", () => {
     const plain = seedItem("fac", "an untriaged issue", {}, "");
 
     writeFileSync(join(dir("factory"), "paused"), "now\n");
-    const mig = await aleph(["migrate", "--apply"], { ALEPH_BACKUPS_DIR: dir("backups") });
+    const mig = await aleph(["migrate", "--apply"], { ALEPH_ITEMS: items, ALEPH_ISSUES: dir("issues"), ALEPH_RUNS_DIR: dir("runs"), ALEPH_SANDBOX_DIR: dir("sandbox"), ALEPH_BACKUPS_DIR: dir("backups") });
     expect(mig.code, mig.stderr).toBe(0);
 
     const startLog = join(base, "start.log"), startCmd = join(base, "start-cmd"), triageLog = join(base, "triage.log");

@@ -150,8 +150,7 @@ export const describe = (a: Action): string =>
 
 const MAX_FILE = 4000;
 const clip = (s: string) => (s.length > MAX_FILE ? `…${s.slice(-MAX_FILE)}` : s);
-// Step 5: review2.md is the file name of runs from before call.md.
-const RUN_FILES = ["review.md", "call.md", "review2.md", "browser/report.md", "result.md"];
+const RUN_FILES = ["review.md", "call.md", "browser/report.md", "result.md"];
 
 /** The run folders and issue bodies an event needs, as prompt text. */
 function context(e: Event, jobs: Job[]): string {

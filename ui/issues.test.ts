@@ -28,7 +28,7 @@ const post = (body: object, headers: Record<string, string> = { "x-aleph-ui": "1
 function run(id: string, extra: Record<string, unknown>) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "agent", told: true, started: new Date().toISOString(), ...extra }));
+  writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "build", told: true, started: new Date().toISOString(), ...extra }));
 }
 
 beforeAll(async () => {
@@ -56,7 +56,7 @@ beforeAll(async () => {
   const fake = join(base, "fake-aleph");
   writeFileSync(fake, `#!/bin/sh\nprintf '%s\\n' "$@" > ${argvFile}\ncat > ${stdinFile}\necho '{"repo":"fac","added":7}'\n`);
   chmodSync(fake, 0o755);
-  for (const [k, val] of Object.entries({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake })) {
+  for (const [k, val] of Object.entries({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake })) {
     saved[k] = process.env[k];
     process.env[k] = val;
   }
@@ -70,8 +70,8 @@ beforeAll(async () => {
     return true;
   }, true);
   writeList({ key: "oth" }, "seed", (doc) => { add(doc, "other thing"); return true; }, true);
-  run("20261027-000001-a", { job: "fac-1", name: "fac-1", repo: "fac", state: "landed", todo: 1 });
-  run("20261027-000002-a", { job: "oth-1", name: "oth-1", repo: "oth", state: "running", todo: 1 });
+  run("20261027-000001-a", { job: "fac-1", name: "fac-1", repo: "fac", state: "landed", on: "fac-1" });
+  run("20261027-000002-a", { job: "oth-1", name: "oth-1", repo: "oth", state: "running", on: "oth-1" });
   server = await serve(0, { warm: false });
 });
 afterAll(() => {
@@ -132,7 +132,7 @@ describe("GET /api/issues/:repo/:n", () => {
     run("20261027-000010-a", { job: "on-4", name: "on-4", repo: "fac", state: "running", on: "fac-4" });
     run("20261027-000011-a", { job: "goal-4-1", name: "goal-4-1", repo: "fac", state: "running", on: "fac-4.1" });
     run("20261027-000012-a", { job: "on-2", name: "on-2", repo: "fac", state: "running", on: "fac-2" });
-    run("20261027-000013-a", { job: "todo-4", name: "todo-4", repo: "fac", state: "running", todo: 4 });
+    run("20261027-000013-a", { job: "todo-4", name: "todo-4", repo: "fac", state: "running", on: "fac-4" });
     run("20261027-000014-a", { job: "other-4", name: "other-4", repo: "oth", state: "running", on: "oth-4" });
     const d = await getJson("/api/issues/fac/4");
     expect(d.jobs.map((j: any) => j.name).sort()).toEqual(["goal-4-1", "on-4", "todo-4"]);

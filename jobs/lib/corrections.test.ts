@@ -31,7 +31,7 @@ let scope = "global";
 let skillPick = "alpha";
 /** The sentence-writing stub echoes this prefix and the quote's first word. */
 const RULE_STUB = "#!/bin/sh\nfor a; do :; done\nw=$(printf '%s' \"$a\" | tr -cd 'A-Za-z' | cut -c1-12)\nprintf '{\"result\":\"Follow rule %s.\"}' \"$w\"\n";
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "ALEPH_JEV_URL", "OPENROUTER_API_KEY", "HOME", "ALEPH_ITEMS", "ALEPH_REPOS", "ALEPH_PROPOSE_AT", "ALEPH_RULE_CMD", ...Object.keys(gitEnv)];
+const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "ALEPH_JEV_URL", "OPENROUTER_API_KEY", "HOME", "ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_PROPOSE_AT", "ALEPH_RULE_CMD", ...Object.keys(gitEnv)];
 let saved: Record<string, string | undefined>;
 
 beforeAll(() => {
@@ -69,7 +69,7 @@ beforeEach(() => {
   Object.assign(process.env, gitEnv, {
     ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_JOBS_DIR: join(base, "jobs"), HOME: base,
     LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk",
-    ALEPH_ITEMS: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"),
+    ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"),
     ALEPH_JEV_URL: `http://127.0.0.1:${jev.port}/`, OPENROUTER_API_KEY: "k",
   });
   mkdirSync(join(base, "jobs"), { recursive: true });
@@ -91,7 +91,7 @@ beforeEach(() => {
     { id: "t2", sessionId: "s", timestamp: ago(2), input: "No, that is wrong. Do not mock the db.", output: "ok" },
   ];
   observations = [{ id: "o1", traceId: "t1", name: "verify-gate", metadata: { verdict: "deny" }, output: "deny: no run backs tests pass", startTime: ago(1) }];
-  const run = (state: string, reason: string) => ({ kind: "agent", job: "aleph-9", name: "aleph-9", state, reason, told: true, started: ago(1), ended: ago(1) });
+  const run = (state: string, reason: string) => ({ kind: "build", job: "aleph-9", name: "aleph-9", state, reason, told: true, started: ago(1), ended: ago(1) });
   const dir = join(base, "jobs", "20261027-aleph-9");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "state.json"), JSON.stringify(run("dropped", "Drops the test it changed.")));
@@ -324,7 +324,7 @@ describe("noise", () => {
 
   test("a drop whose run made no commit is not a signal, whatever Jev says", async () => {
     const dir = join(base, "jobs", "20261027-aleph-9");
-    writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "agent", job: "aleph-9", name: "aleph-9", state: "dropped", reason: "the work is on main; this run found nothing to commit", noCommit: true, told: true, started: ago(1), ended: ago(1) }));
+    writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "build", job: "aleph-9", name: "aleph-9", state: "dropped", reason: "the work is on main; this run found nothing to commit", noCommit: true, told: true, started: ago(1), ended: ago(1) }));
     await mine(NOW);
     expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source)).sort()).toEqual(["chris", "gate"]);
   });

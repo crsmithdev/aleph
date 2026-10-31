@@ -13,12 +13,11 @@
  * ALEPH_BACKUPS_DIR (default a sibling `backups` of the factory folder).
  */
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
-import { expand, isLive, readReview, readRun, stamp, type Ask, type Entry, type Run } from "./ledger.ts";
+import { expand, isLive, parseVerdict, readRun, stamp, type Ask, type Entry, type Review, type Run } from "./ledger.ts";
 import { isOpen, lastReal } from "./job.ts";
 import { fetchOrigin, followMain, git, treeWithFiles } from "./git.ts";
-import { layout, oldStore } from "./layout.ts";
 import { runViewOf, stage, type Ctx, type Subject } from "./stage.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
@@ -29,14 +28,34 @@ const refuse = (m: string): never => { throw new MigrateRefusal(m); };
 
 export interface Roots { store: string; issues: string; ledger: string; sandboxOld: string; sandbox: string; factory: string; backups: string }
 
+/** The old roots, owned here: no other code reads ~/.aleph/items or ~/.aleph/jobs. */
+const aleph = (): string => join(process.env.HOME || homedir(), ".aleph");
+const oldStore = (): string => expand(process.env.ALEPH_ITEMS ?? join(aleph(), "items"));
+const oldLedger = (): string => expand(process.env.ALEPH_JOBS_DIR ?? join(aleph(), "jobs"));
+/** The review of a run from before call.md: its review2.md, read as call.md is. */
+const readReview2 = (folder: string): Review | undefined => {
+  let text: string;
+  try { text = readFileSync(join(folder, "review2.md"), "utf8"); } catch { return undefined; }
+  const last = text.trim().split("\n").at(-1)?.trim() ?? "";
+  if (last === "PENDING") return { call: "pending" };
+  if (last.startsWith("ERROR:")) return { call: "error", reason: last.slice(6).trim() };
+  return parseVerdict(text) ?? { call: "error", reason: "no VERDICT line" };
+};
+
+/** Runs `fn` with the store module reading `dir`: the new layout points it at the issues, and the migration reads the old items. */
+function atStore<T>(dir: string, fn: () => T): T {
+  const keep = process.env.ALEPH_ISSUES;
+  process.env.ALEPH_ISSUES = dir;
+  try { return fn(); } finally { if (keep === undefined) delete process.env.ALEPH_ISSUES; else process.env.ALEPH_ISSUES = keep; }
+}
+
 export function roots(): Roots {
-  const lay = layout();
   const items = oldStore();
-  const old = expand(process.env.ALEPH_RUNS_DIR ?? "~/.aleph/runs");
+  const old = expand(process.env.ALEPH_RUNS_DIR ?? join(aleph(), "runs"));
   const factory = expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
   return {
     store: items, issues: expand(process.env.ALEPH_ISSUES ?? join(dirname(items), "issues")),
-    ledger: lay.ledger, sandboxOld: old,
+    ledger: oldLedger(), sandboxOld: old,
     sandbox: expand(process.env.ALEPH_SANDBOX_DIR ?? join(dirname(old), "sandbox")),
     factory, backups: expand(process.env.ALEPH_BACKUPS_DIR ?? join(dirname(factory), "backups")),
   };
@@ -128,7 +147,7 @@ function oldStatus(item: todos.Issue, mine: Entry[][]): string {
   const open = mine.find((j) => isOpen(j) && !["triage", "plan", "facts"].includes(j.at(-1)!.run.kind));
   if (open) {
     const real = lastReal(open).run;
-    return real.state === "needs-you" || real.state === "awaiting" ? "needs you" : real.state === "stuck" || real.state === "failed" ? "stuck" : real.kind === "land" ? "landing" : "building";
+    return (real.state as string) === "needs-you" || real.state === "awaiting" ? "needs you" : real.state === "stuck" || real.state === "failed" ? "stuck" : real.kind === "land" ? "landing" : "building";
   }
   if (mine.some((j) => j.at(-1)!.run.state === "landed")) return "landed";
   if (store.hasLabel(item, "goal")) return "queued";
@@ -223,13 +242,14 @@ export function plan(r: Roots = roots()): Plan {
   if (!fetched.ok) refuse(`store fetch failed: ${fetched.out}`);
   const repos = repoKeys(r.store);
   const runs = oldRuns(r.ledger);
-  const jobs = jobsOf(runs);
+  // The old status reads open jobs: a run in the old state `needs-you` is open as `awaiting` is.
+  const jobs = jobsOf(runs.map((e) => ((e.run.state as string) === "needs-you" ? { ...e, run: { ...e.run, state: "awaiting" as const } } : e)));
 
   const items: New[] = [];
   const split = new Set<string>();
   const oldInfo = new Map<string, { status: string; planned: boolean; ruled: boolean }>();
   const rows: Row[] = [];
-  const docs = repos.map((key) => ({ key, doc: store.readFetched({ key }) }));
+  const docs = repos.map((key) => ({ key, doc: atStore(r.store, () => store.readFetched({ key })) }));
   // Which old numbers become an issue with a goal `.1`, so a `waiting_on` can name the goal.
   const goalOf = new Map<number, string>();
   for (const { key, doc } of docs) for (const i of doc?.items ?? []) {
@@ -237,7 +257,7 @@ export function plan(r: Roots = roots()): Plan {
     if (!store.hasLabel(i, "planned") && !parent && store.hasLabel(i, "goal")) { goalOf.set(i.id, `${key}-${i.id}.1`); split.add(`${key}-${i.id}`); }
   }
   for (const { key, doc } of docs) for (const i of doc?.items ?? []) {
-    const mine = jobs.filter((j) => { const real = lastReal(j).run; return real.todo !== undefined && `${real.repo}-${real.todo}` === `${key}-${i.id}`; });
+    const mine = jobs.filter((j) => { const real = lastReal(j).run as Run & { todo?: number | string }; return real.todo !== undefined && `${real.repo}-${real.todo}` === `${key}-${i.id}`; });
     const status = oldStatus(i, mine);
     const made = convert(key, i, goalOf);
     items.push(...made);
@@ -337,7 +357,7 @@ export function apply(r: Roots = roots()): { backup: string; commit: string; ite
   // The ledger's state files: the new shape, and the review of a legacy review2.md (the name stays until step 5).
   let changed = 0;
   for (const m of p.runs) {
-    const review = m.after.review === undefined ? readReview(m.folder) : undefined;
+    const review = m.after.review === undefined ? readReview2(m.folder) : undefined;
     const out: Run = review && (review.call === "land" || review.call === "back" || review.call === "ask")
       ? { ...m.after, review: { call: review.call, ...(review.reason !== undefined ? { reason: review.reason } : {}) } } : m.after;
     if (JSON.stringify(out) === JSON.stringify(m.before)) continue;

@@ -12,7 +12,7 @@ afterEach(() => { delete process.env.ALEPH_JOBS_DIR; rmSync(base, { recursive: t
 function run(id: string, extra: Partial<Run>, files: string[] = []): void {
   const folder = join(base, id);
   mkdirSync(folder);
-  writeRun(folder, { kind: "agent", job: id, name: id, repo: "demo", state: "running", told: true, started: "2026-10-30T00:00:00Z", made: Date.now(), ...extra } as Run);
+  writeRun(folder, { kind: "build", job: id, name: id, repo: "demo", state: "running", told: true, started: "2026-10-30T00:00:00Z", made: Date.now(), ...extra } as Run);
   for (const f of files) writeFileSync(join(folder, f), "999999");
 }
 

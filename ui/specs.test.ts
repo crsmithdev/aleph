@@ -33,7 +33,7 @@ beforeAll(async () => {
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ a: { path: a }, b: { path: b }, c: { path: c } }));
-  for (const [k, val] of Object.entries({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: join(base, "factory") })) {
+  for (const [k, val] of Object.entries({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: join(base, "factory") })) {
     saved[k] = process.env[k];
     process.env[k] = val;
   }

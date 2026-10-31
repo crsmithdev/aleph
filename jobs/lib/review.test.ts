@@ -41,7 +41,7 @@ Bun.serve({ hostname: "127.0.0.1", port, fetch: () => Response.json({ pid: proce
   writeFileSync(join(base, "repos.json"), JSON.stringify({ demo: { path: repo, main: "main", checks: [{ name: "t", run: "true" }] } }));
   process.env.ALEPH_JOBS_DIR = jobs;
   process.env.ALEPH_REPOS = join(base, "repos.json");
-  process.env.ALEPH_ITEMS = join(base, "items");
+  process.env.ALEPH_ISSUES = join(base, "items");
   // The work store, with one goal labelled ui and one not.
   sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
   sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
@@ -54,7 +54,7 @@ Bun.serve({ hostname: "127.0.0.1", port, fetch: () => Response.json({ pid: proce
   // The stand-in for srt: the clean environment, as cli.test.ts has it.
   writeFileSync(join(base, "pass"), `#!/bin/bash\nshift\nexec env -i "$@"\n`, { mode: 0o755 });
   process.env.ALEPH_SANDBOX_CMD = join(base, "pass");
-  process.env.ALEPH_RUNS_DIR = join(base, "runs");
+  process.env.ALEPH_SANDBOX_DIR = join(base, "runs");
   process.env.ALEPH_JOB_FOREGROUND = "1";
 });
 afterAll(() => {
@@ -313,7 +313,7 @@ describe("review browser step", () => {
       writeFileSync(join(base, `chrome-${tag}`), FAKE_CHROME(argvFile, answers), { mode: 0o755 });
       process.env.ALEPH_REVIEW_CHROME = join(base, `chrome-${tag}`);
       process.env.ALEPH_REVIEW_CMD = reviewer(seen, code);
-      const folder = held(tag, { todo: uiTodo });
+      const folder = held(tag, { on: `demo-${uiTodo}` });
       await runReview(folder);
 
       // The server answered on its port while Chrome ran, from the harness's process tree, on the merge result, with git on its PATH.
@@ -379,7 +379,7 @@ describe("review browser step", () => {
     const { runReview, REVIEW_SANDBOX } = await import("./review.ts");
     process.env.ALEPH_REVIEW_CHROME = join(base, "chrome-ui-0");
     process.env.ALEPH_REVIEW_CMD = reviewer(join(base, "seen-prompt"), 0);
-    const folder = held("ui-prompt", { todo: uiTodo });
+    const folder = held("ui-prompt", { on: `demo-${uiTodo}` });
     await runReview(folder);
     const prompt = readFileSync(join(folder, "review-prompt.md"), "utf8");
     expect(prompt).not.toContain("bun ui/server.ts");
@@ -397,7 +397,7 @@ describe("review browser step", () => {
     writeFileSync(join(base, "chrome-plain"), FAKE_CHROME(argvFile, join(base, "answers-plain")), { mode: 0o755 });
     process.env.ALEPH_REVIEW_CHROME = join(base, "chrome-plain");
     process.env.ALEPH_REVIEW_CMD = reviewer(join(base, "seen-plain"), 0);
-    const folder = held("plain", { todo: plainTodo });
+    const folder = held("plain", { on: `demo-${plainTodo}` });
     await runReview(folder);
     expect(existsSync(process.env.TEST_SERVER_MARK!)).toBe(false);
     expect(existsSync(argvFile)).toBe(false);
@@ -414,7 +414,7 @@ describe("review browser step", () => {
     writeFileSync(join(base, "chrome-nosandbox"), `#!/bin/bash\necho "[1:1:FATAL:zygote_host_impl_linux.cc(127)] No usable sandbox! Update your kernel" >&2\nexit 1\n`, { mode: 0o755 });
     process.env.ALEPH_REVIEW_CHROME = join(base, "chrome-nosandbox");
     process.env.ALEPH_REVIEW_CMD = reviewer(join(base, "seen-nosandbox"), 0);
-    const folder = held("ui-nosandbox", { todo: uiTodo });
+    const folder = held("ui-nosandbox", { on: `demo-${uiTodo}` });
     await runReview(folder);
     const report = readFileSync(join(folder, "browser/report.md"), "utf8");
     expect(report).toContain(SANDBOX_ERROR);

@@ -1,1 +1,16 @@
-{"kind":"agent","job":"demo-1","name":"demo-1","repo":"demo","told":true,"model":"claude-sonnet-5-5","branch":"factory/demo-1","state":"dropped","failed":"review","reason":"reviewer: the duration column has no test","todo":1,"started":"2026-10-28T08:20:00.000Z","ended":"2026-10-28T08:40:00.000Z","cost":0.18}
+{
+  "kind": "build",
+  "job": "demo-1",
+  "name": "demo-1",
+  "repo": "demo",
+  "told": true,
+  "model": "claude-sonnet-5-5",
+  "branch": "factory/demo-1",
+  "state": "dropped",
+  "failed": "review",
+  "reason": "reviewer: the duration column has no test",
+  "started": "2026-10-28T08:20:00.000Z",
+  "ended": "2026-10-28T08:40:00.000Z",
+  "cost": 0.18,
+  "on": "demo-1"
+}

@@ -69,7 +69,7 @@ const answerAndRerun: Handler = async (req, { name }) => {
   const body: any = await req.json().catch(() => ({}));
   const said = typeof body?.answer === "string" ? body.answer.trim() : "";
   if (!said) return text("answer is required", 400);
-  return Response.json(await runCli(["drop", name, `Chris answered the worker's question "${last.run.question ?? ""}": ${said}`]));
+  return Response.json(await runCli(["drop", name, `Chris answered the worker's question "${askOf(last.run)?.question ?? last.run.question ?? ""}": ${said}`]));
 };
 
 /** "Wait for <repo>-<n>": set the stuck job's issue (a goal run's dotted `on` names the issue holding the goal) to wait on that open issue, then drop the job. */

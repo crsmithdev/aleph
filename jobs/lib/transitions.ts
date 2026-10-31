@@ -195,8 +195,7 @@ export async function startPlain(a: { name: string; argv: string[]; cwd: string 
  * `aleph land`: start a land run. The latest agent run must have passed, or need Chris for a
  * held path: his land is the review, and the commit says so. A manual check does
  * not gate the land: the land run keeps it open, as an issue, until
- * `aleph checked`. With `checked`, Chris has done the check already. A run
- * from before this rule, needs-you for a manual check, lands the same way.
+ * `aleph checked`. With `checked`, Chris has done the check already.
  * The land unit takes the job lock.
  */
 export async function land(name: string, a: { checked?: boolean; lander?: "Chris" | "firefighter" } = {}, o: StartOpts = {}): Promise<Start> {
@@ -226,7 +225,7 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
       ...(held ? { held: true, lander: a.lander ?? "Chris" } : {}),
       ...(agent.checkedBase ? { checkedBase: agent.checkedBase } : {}),
       ...(agent.checkedTip ? { checkedTip: agent.checkedTip } : {}),
-      ...(agent.on !== undefined ? { on: agent.on } : agent.todo !== undefined ? { on: `${repo.key}-${agent.todo}` } : {}),
+      ...(agent.on !== undefined ? { on: agent.on } : {}),
     }, `${repo.key}-${name}`, repo.path, o.command ?? ["land", name, ...(a.checked ? ["--checked"] : [])], o.output, () => {});
   } finally {
     release!();
@@ -305,17 +304,15 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean }
     }
     // A held run's review is its own unit: stop it too, and take its scratch clone.
     for (const e of runs) {
-      Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}-review`, `aleph-${e.id}-review2`], { stdout: "ignore", stderr: "ignore" });
+      Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}-review`], { stdout: "ignore", stderr: "ignore" });
       if (existsSync(join(e.folder, CALL_FILE))) rmSync(join(e.folder, "review"), { recursive: true, force: true });
-      // Step 5: runs from before call.md keep review2.md and the review2/ scratch dir, and a review2 unit.
-      if (existsSync(join(e.folder, "review2.md"))) rmSync(join(e.folder, "review2"), { recursive: true, force: true });
     }
     if (repo) removeBranch(repo, last.run);
     // Chris asked for the drop, so it is not news.
     for (const e of new Set([...live, last])) {
       if (!existsSync(join(e.folder, "exit"))) writeFileSync(join(e.folder, "exit"), "143");
       const noCommit = e.run.reason === "no commit" || e.run.noCommit ? { noCommit: true as const } : {};
-      updateRun(e.folder, { ...noCommit, state: "dropped", reason, needs: undefined, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
+      updateRun(e.folder, { ...noCommit, state: "dropped", reason, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     }
     const todo = issueOf(runs);
     const why = repo && todo !== undefined && !a.quiet ? store.note(repo, todo, `job ${name} dropped: ${reason}`) : null;

@@ -20,7 +20,7 @@ function sh(cwd: string, ...args: string[]): string {
 }
 
 function env(extra: Record<string, string> = {}): Record<string, string> {
-  return { ...(process.env as Record<string, string>), ...gitEnv, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: items, ...extra };
+  return { ...(process.env as Record<string, string>), ...gitEnv, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ...extra };
 }
 
 function aleph(...args: string[]): { code: number; out: string; err: string } {
@@ -398,8 +398,8 @@ test("hidden reads the goal id directory, then the old number", async () => {
   expect(aleph("goal", "hidden", "proj", "3").out.trim()).toBe("a.test.ts");
   expect(aleph("goal", "hidden", "proj", "4").out.trim()).toBe("b.test.ts");
   expect(aleph("issue", "show", "proj", "4").out).toContain("hidden checks: 1");
-  const was = process.env.ALEPH_ITEMS;
-  process.env.ALEPH_ITEMS = items;
+  const was = process.env.ALEPH_ISSUES;
+  process.env.ALEPH_ISSUES = items;
   try {
     const { readHidden } = await import("./lib/store.ts");
     expect(Object.keys(readHidden({ key: "proj" }, "proj-5.1"))).toEqual(["c.test.ts"]);
@@ -407,7 +407,7 @@ test("hidden reads the goal id directory, then the old number", async () => {
     expect(Object.keys(readHidden({ key: "proj" }, 3))).toEqual(["a.test.ts"]);
     expect(Object.keys(readHidden({ key: "proj" }, 4))).toEqual(["b.test.ts"]);
   } finally {
-    if (was === undefined) delete process.env.ALEPH_ITEMS; else process.env.ALEPH_ITEMS = was;
+    if (was === undefined) delete process.env.ALEPH_ISSUES; else process.env.ALEPH_ISSUES = was;
   }
 });
 

@@ -14,7 +14,7 @@ import { itemOnMain, repoStages } from "./status.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
-import { allRuns, askOf as runAskOf, expand, isAwaiting, isBuild, needsOf, oldState, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, askOf as runAskOf, expand, isAwaiting, isBuild, needsOf, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, jobsNamed, asked, lastReal, markAsked, markRescued, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { accept, final, readRecord, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
@@ -973,7 +973,7 @@ function noteSource(title: string): string | undefined {
 function entry(e: Entry): string {
   const r = e.run;
   const needs = isAwaiting(r.state) ? needsOf(runAskOf(r)) : undefined;
-  const head = `${r.repo}/${r.name} ${oldState(r.state)}${needs ? ` (${needs})` : ""}${r.round && r.state !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
+  const head = `${r.repo}/${r.name} ${r.state}${needs ? ` (${needs})` : ""}${r.round && r.state !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
   if (r.state === "landed" && r.commit) lines.push(`  commit ${r.commit.slice(0, 7)}`);
   if (needs === "held" || needs === "review") {

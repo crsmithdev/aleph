@@ -154,3 +154,19 @@ Writers that still write an old field or label on this branch (HEAD ed7de3d, sam
 - jobs/cli.helpers.ts:395 (test helper) seeds `waiting_on`.
 
 Earlier sections above are kept.
+
+---
+
+# aleph-842: ledger, layout and runs, old-shape readers out
+
+Done in the edit surface: `State` has no `needs-you`; `Run` has no `todo`, `needs` or kind `agent`; `OPEN`/`isAwaiting`/`isBuild` read the new names; `oldState`, `readReview2`/`readReview` and the `review2.md` read are gone (`migrate.ts` has a private reader); `job.ts` has no `needs-chris` file and no `review2` on the view; `layout()` gives `issues`/`runs`/`sandbox` only (`ALEPH_ISSUES`, `ALEPH_JOBS_DIR`, `ALEPH_SANDBOX_DIR`), and `migrate.ts` owns `ALEPH_ITEMS`, `~/.aleph/items`, `~/.aleph/jobs` and `ALEPH_RUNS_DIR`; `standing.ts` and the `aleph standing` alias are deleted and `always.ts` reads `always.json` only. Tests that wrote old-shape runs are rewritten in the new shape; tests and helpers set `ALEPH_ISSUES`/`ALEPH_SANDBOX_DIR`. Edits outside the listed surface were forced by the removals: `ui/state.ts` and `ui/api/speed.ts` (read `awaiting`), `ui/api/actions.ts` (question from the ask), `ui/fixtures/review/jobs/*` and ui tests (new-shape runs), `todo/` tests and `firefighter.ts` (no `review2.md`).
+
+`bun run test`: 1291 pass, 0 fail, twice in a row under the default parallel load; `tsc` is clean.
+
+Oracle grep not clean: the remaining lines are the store side (aleph-841, not landed): `waiting_on`/`needs-chris` in jobs/lib/ask.ts, decision.ts, factory.ts, triage.ts and in store-side tests and `cli.helpers.ts` seeding (`addOld`, `patchItem`), plus `ALEPH_ITEMS` in jobs/cli.migrated-flow.test.ts (it drives `aleph migrate`). Those writers still write the old item shape, so removing them here would break them.
+
+DEFAULT: ui reads the old state name? -> ui/state.ts keeps showing `needs-you` to the page and maps `awaiting` at its boundary
+DEFAULT: ALEPH_RUNS_DIR in layout() -> dropped; only migrate.ts reads it
+FOLLOWUP: Remove waiting_on and needs-chris from ask.ts, decision.ts, factory.ts, triage.ts and the store-side tests once aleph-841 lands
+FOLLOWUP: Move the ALEPH_ITEMS env in jobs/cli.migrated-flow.test.ts into the migrate test files
+FACT: layout() in jobs/lib/layout.ts now returns the new layout only; the old roots (items, jobs, ALEPH_RUNS_DIR) are read in jobs/lib/migrate.ts, which points the store module at the old items with ALEPH_ISSUES while it plans. [source: jobs/lib/migrate.ts]

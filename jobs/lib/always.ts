@@ -2,7 +2,7 @@
  * Always rules: for each reason the factory asks Chris, the action it may take
  * without asking. `always.json` in the factory dir maps a reason to `{ action, at }`.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { factoryDir, factoryLog } from "./factory.ts";
 
@@ -40,9 +40,6 @@ export const ASK_REASONS: Record<string, Reason> = {
 };
 
 const file = () => join(factoryDir(), "always.json");
-const legacyFile = () => join(factoryDir(), "standing.json");
-/** The reasons standing.json used, as always.json names them. */
-const RENAMED: Record<string, string> = { "held": "held-path", "triage-no-verdict": "triage-failed", "decision": "question" };
 
 function readJson(f: string): Record<string, Granted> | null {
   try {
@@ -52,14 +49,8 @@ function readJson(f: string): Record<string, Granted> | null {
   return null;
 }
 
-/** always.json; when it is missing, standing.json under the new reason names (a legacy reader for step 6 to remove). A bad file is empty. */
-export function readAlways(): Record<string, Granted> {
-  const a = readJson(file());
-  if (a) return a;
-  if (existsSync(file())) return {};
-  const old = readJson(legacyFile()) ?? {};
-  return Object.fromEntries(Object.entries(old).map(([k, v]) => [RENAMED[k] ?? k, v]));
-}
+/** always.json. A missing or bad file is empty. */
+export const readAlways = (): Record<string, Granted> => readJson(file()) ?? {};
 
 function write(s: Record<string, Granted>): void {
   mkdirSync(factoryDir(), { recursive: true });

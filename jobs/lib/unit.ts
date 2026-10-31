@@ -1068,7 +1068,7 @@ export async function reviewBack(folder: string): Promise<void> {
   const earlier = (jobById(run.job) ?? []).filter((e) => e.id !== basename(folder) && isBuild(e.run.kind) && e.run.failed).map((e) => e.run);
   const reason = r2.reason ?? "no reason given";
   if (earlier.length < fixRounds()) {
-    const ended = updateRun(folder, { state: "stuck", ask: undefined, needs: undefined, reason, failed: "review", round: earlier.length, next: "worker" });
+    const ended = updateRun(folder, { state: "stuck", ask: undefined, reason, failed: "review", round: earlier.length, next: "worker" });
     await start(folder, ended, "worker");
     return;
   }

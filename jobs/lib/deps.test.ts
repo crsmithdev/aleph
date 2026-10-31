@@ -30,7 +30,7 @@ test("the box-drawing table parses the same, and noise gives nothing", () => {
 
 describe("propose", () => {
   const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
-  const keys = ["ALEPH_ITEMS", "ALEPH_FACTORY_DIR", ...Object.keys(gitEnv)];
+  const keys = ["ALEPH_ISSUES", "ALEPH_FACTORY_DIR", ...Object.keys(gitEnv)];
   const saved: Record<string, string | undefined> = {};
   let base: string;
   const sh = (cwd: string, ...args: string[]) => {
@@ -50,7 +50,7 @@ describe("propose", () => {
     sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
     sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
     sh(join(base, "items"), "git", "push", "-q", "origin", "main");
-    Object.assign(process.env, gitEnv, { ALEPH_ITEMS: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory") });
+    Object.assign(process.env, gitEnv, { ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory") });
   });
   afterAll(() => {
     for (const k of keys) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
@@ -75,7 +75,7 @@ describe("propose", () => {
 
 describe("sweep", () => {
   const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
-  const keys = ["ALEPH_ITEMS", "ALEPH_FACTORY_DIR", "ALEPH_RUNS_DIR", "ALEPH_OUTDATED_CMD", "ALEPH_SANDBOX_CMD", ...Object.keys(gitEnv)];
+  const keys = ["ALEPH_ISSUES", "ALEPH_FACTORY_DIR", "ALEPH_SANDBOX_DIR", "ALEPH_OUTDATED_CMD", "ALEPH_SANDBOX_CMD", ...Object.keys(gitEnv)];
   const saved: Record<string, string | undefined> = {};
   let base: string;
   const sh = (cwd: string, ...args: string[]) => {
@@ -98,9 +98,9 @@ describe("sweep", () => {
     // The stand-in for srt: the clean environment, as review.test.ts has it.
     writeFileSync(join(base, "pass"), `#!/bin/bash\nshift\nexec env -i "$@"\n`, { mode: 0o755 });
     Object.assign(process.env, gitEnv, {
-      ALEPH_ITEMS: join(base, "items"),
+      ALEPH_ISSUES: join(base, "items"),
       ALEPH_FACTORY_DIR: join(base, "factory"),
-      ALEPH_RUNS_DIR: join(base, "runs"),
+      ALEPH_SANDBOX_DIR: join(base, "runs"),
       ALEPH_SANDBOX_CMD: join(base, "pass"),
       // Fails when its own run folder is gone after the sleep.
       ALEPH_OUTDATED_CMD: `sleep 1; test -d "$HOME" || exit 1; printf '| Package | Current | Update | Latest |\\n|---|---|---|---|\\n| left-pad | 1.0.0 | 1.0.0 | 1.2.0 |\\n'`,

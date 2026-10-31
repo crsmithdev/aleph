@@ -14,8 +14,8 @@ function put(rel: string, text = "") {
 }
 
 test("walks relative imports from the server and api roots", () => {
-  put("ui/server.ts", `import "../jobs/lib/store.ts"; import "./attention.ts"; import "./gone.ts"; import "bun:test";`);
-  put("ui/attention.ts", `import "./views/now.js";`);
+  put("ui/server.ts", `import "../jobs/lib/store.ts"; import "./banner.ts"; import "./gone.ts"; import "bun:test";`);
+  put("ui/banner.ts", `import "./views/now.js";`);
   put("ui/views/now.js", `export const x = 1;`);
   put("ui/views/other.js", ``);
   put("ui/api/now.ts", `import "../../hooks/lib/env.ts";`);
@@ -24,7 +24,7 @@ test("walks relative imports from the server and api roots", () => {
   put("jobs/lib/store.ts", ``);
   put("hooks/lib/env.ts", ``);
   const g = serverGraph(dir);
-  for (const f of ["ui/server.ts", "ui/api/now.ts", "ui/attention.ts", "jobs/lib/store.ts", "hooks/lib/env.ts", "ui/views/now.js"]) expect(g.has(f)).toBe(true);
+  for (const f of ["ui/server.ts", "ui/api/now.ts", "ui/banner.ts", "jobs/lib/store.ts", "hooks/lib/env.ts", "ui/views/now.js"]) expect(g.has(f)).toBe(true);
   for (const f of ["ui/api/now.test.ts", "ui/views/other.js", "ui/index.html"]) expect(g.has(f)).toBe(false);
 });
 

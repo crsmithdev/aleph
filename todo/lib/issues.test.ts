@@ -30,17 +30,17 @@ const refusal = (f: () => unknown) => {
   throw new Error("did not refuse");
 };
 
-const saved = process.env.ALEPH_ITEMS;
+const saved = process.env.ALEPH_ISSUES;
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-issues-"));
   sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
   sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
   sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(join(base, "items"), "git", "push", "-q", "origin", "main");
-  Object.assign(process.env, gitEnv, { ALEPH_ITEMS: join(base, "items") });
+  Object.assign(process.env, gitEnv, { ALEPH_ISSUES: join(base, "items") });
 });
 afterAll(() => {
-  if (saved === undefined) delete process.env.ALEPH_ITEMS; else process.env.ALEPH_ITEMS = saved;
+  if (saved === undefined) delete process.env.ALEPH_ISSUES; else process.env.ALEPH_ISSUES = saved;
   rmSync(base, { recursive: true, force: true });
 });
 

@@ -17,7 +17,6 @@ import * as issues from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import * as verbs from "../todo/lib/issues.ts";
 import { grant, readAlways, revoke } from "./lib/always.ts";
-import { OLD_REASON, readStanding } from "./lib/standing.ts";
 import { ciStep } from "./lib/ci.ts";
 import { behind, correctionsStep, dispatchDetached, factoryDir, factoryLog, factoryRepos, firefighterStep, health, hold, paused, planNow, probeDue, report, setPaused, triageDetached, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
 import { checkName, checked, drop, land, recheck, refuse, Refusal, repoOf, runDispatch, startJob, startPlain, type Start } from "./lib/transitions.ts";
@@ -90,7 +89,7 @@ function reconcile(all: Entry[][]): Map<string, string> {
     }
     const found = onMain(repo, last.run);
     if (found) {
-      updateRun(last.folder, { state: "landed", commit: found.commit, reason: `found on main (${found.how})`, needs: undefined, ask: undefined, told: true });
+      updateRun(last.folder, { state: "landed", commit: found.commit, reason: `found on main (${found.how})`, ask: undefined, told: true });
       removeBranch(repo, last.run);
       const todo = issueOf(runs);
       const why = todo === undefined ? null : store.close(repo, todo, `job ${last.run.name} found on main as ${found.commit.slice(0, 7)}`);
@@ -107,7 +106,7 @@ function summary(runs: Job, fates = new Map<string, string>()) {
   const v = view(runs);
   return {
     name: v.name, repo: v.repo, kind: v.run.kind, job: v.job, run: v.run.id, goal: goal(runs), state: v.state, needs: v.needs, phase: v.phase,
-    reason: v.reason, say: v.say, review2: v.review2, review: v.review, ...(v.check ? { check: v.check } : {}), fate: fates.get(v.job), session: v.session, started: v.started, ended: v.ended,
+    reason: v.reason, say: v.say, review: v.review, ...(v.check ? { check: v.check } : {}), fate: fates.get(v.job), session: v.session, started: v.started, ended: v.ended,
     ...(v.lost ? { lost: true } : {}),
   };
 }
@@ -218,7 +217,7 @@ async function todoCmd(): Promise<void> {
       return;
     }
     case "note": {
-      // Chris's answer to a `needs-chris` issue: not a worker's note (ALEPH_JOB_ID) and not the factory's own.
+      // Chris's answer to an issue that waits for them: not a worker's note (ALEPH_JOB_ID) and not the factory's own.
       const n = verbs.note(repo, id, text, verbs.isAnswer(text, process.env.ALEPH_JOB_ID));
       warn(n.follow);
       out(n.result);
@@ -548,13 +547,9 @@ try {
     case "report": reportCmd(); break;
     case "pause": setPaused(true); out({ paused: true }); break;
     case "resume": setPaused(false); out({ paused: false }); dispatchDetached(); break;
-    case "always":
-    case "standing": {
-      // `standing` is the old name; the UI's hints still say it until step 5.
-      const [sub, given, action] = positional;
-      // The old name also takes the old reason names the UI sends.
-      const reason = cmd === "standing" && given !== undefined ? OLD_REASON[given] ?? given : given;
-      const rules = () => (cmd === "standing" ? readStanding() : readAlways());
+    case "always": {
+      const [sub, reason, action] = positional;
+      const rules = readAlways;
       if (sub === "list" || sub === undefined) out(rules());
       else if (sub === "grant") { const bad = grant(reason ?? refuse("usage: aleph always grant <reason> <action>"), action ?? refuse("usage: aleph always grant <reason> <action>")); if (bad) refuse(bad); out(rules()); }
       else if (sub === "revoke") { revoke(reason ?? refuse("usage: aleph always revoke <reason>")); out(rules()); }

@@ -191,7 +191,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
     const found = todo !== undefined && v.repo ? lists.item(v.repo, todo) : undefined;
     const job: Job = {
       name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title } : todo !== undefined ? { id: todo, title: "" } : null,
-      state: v.state, started: v.started, run: { kind: v.run.kind, started: v.run.started },
+      state: v.state === "awaiting" ? "needs-you" : v.state, started: v.started, run: { kind: v.run.kind, started: v.run.started },
       defaults: v.defaults, followups: v.followups,
     };
     for (const k of ["phase", "reason", "question", "ended", "cost", "model"] as const) if (v[k] !== undefined) (job as any)[k] = v[k];
@@ -200,7 +200,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
       const url = commitUrl(repo, v.commit, bases);
       if (url) job.commitUrl = url;
     }
-    if (v.state === "needs-you" && v.stat) job.stat = v.stat;
+    if (v.state === "awaiting" && v.stat) job.stat = v.stat;
     // An awaiting run with no ask of its own asks a question, as stage() reads it.
     const asked = isAwaiting(lastReal(runs).run.state) ? runAsk(lastReal(runs).run) ?? { kind: "input" as const, reason: "question" } : undefined;
     if (asked) job.ask = { kind: asked.kind, reason: asked.reason };
@@ -211,7 +211,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
     const accepted = v.state === "landed" && todo !== undefined && v.repo ? resultLine(v.repo, todo) : null;
     if (accepted) job.acceptance = accepted;
     const trailers = v.state === "landed" ? landedTrailers(repo, v.commit)
-      : v.state === "needs-you" ? [
+      : v.state === "awaiting" ? [
         ...needsYouIssue(v.repo, todo),
         { key: "Job", value: v.job },
         ...(asked?.reason === "held-path" || asked?.reason === "review" ? [{ key: "Held-by", value: "Chris" }] : []),

@@ -76,7 +76,7 @@ function makeRun(repo: Repo, landed: Entry): string {
   for (let n = 0; ; n++) {
     const folder = join(runsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-facts`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
-    writeRun(folder, { kind: "facts", job: landed.run.job, name, repo: repo.key, ...(landed.run.on !== undefined ? { on: landed.run.on } : landed.run.todo !== undefined ? { todo: landed.run.todo } : {}), state: "running", phase: "facts", model: FACTS_MODEL, told: true, shown: false, started: new Date().toISOString(), made: Date.now() });
+    writeRun(folder, { kind: "facts", job: landed.run.job, name, repo: repo.key, ...(landed.run.on !== undefined ? { on: landed.run.on } : {}), state: "running", phase: "facts", model: FACTS_MODEL, told: true, shown: false, started: new Date().toISOString(), made: Date.now() });
     writeFileSync(join(folder, "command.txt"), `facts ${landed.run.name}\n`);
     return folder;
   }

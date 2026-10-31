@@ -20,9 +20,9 @@ const add = async (...args: string[]): Promise<number> => {
 };
 const close = async (id: number, verb: "done" | "drop") => { expect((await aleph(["issue", verb, "fac", String(id), "closed"])).code).toBe(0); return id; };
 const job = async (action: string, id: number) => { const r = await fjobFor(name("job"), action, id); expect(r.code, r.stderr).toBe(action === "error" ? 1 : 0); return id; };
-/** An old-shape run: its item is `todo`. */
-const oldRun = (id: number, run: Parameters<typeof seedRun>[1]) => { seedRun("fac", { todo: id, ...run }); return id; };
-/** A new-shape run: its item is `on`. */
+/** A run on its item. */
+const oldRun = (id: number, run: Parameters<typeof seedRun>[1]) => { seedRun("fac", { on: `fac-${id}`, ...run }); return id; };
+/** A run on its item, as ref(). */
 const newRun = (id: number, run: Parameters<typeof seedRun>[1]) => { seedRun("fac", { on: ref(id), ...run }); return id; };
 const goal = (fm: Record<string, unknown> = {}) => seedItem("fac", `goal ${++jobs}`, { kind: "goal", ...fm });
 const issue = (fm: Record<string, unknown> = {}) => seedItem("fac", `issue ${++jobs}`, { kind: "issue", source: "chris", ...fm });
@@ -75,8 +75,8 @@ const GOALS_OLD: Row[] = [
   { name: "old goal: landed, still open", stage: "landing", build: async () => oldRun(await add("--labels", "goal"), { kind: "land", state: "landed" }) },
   { name: "old goal: awaiting (needs-chris)", stage: "awaiting", why: /input: question/, build: () => add("--labels", "goal,needs-chris") },
   { name: "old goal: awaiting (held path)", stage: "awaiting", why: /approval/, build: async () => job("commit held/g.txt", await add("--labels", "goal")) },
-  { name: "old goal: awaiting (question)", stage: "awaiting", why: /input: question/, build: async () => oldRun(await add("--labels", "goal"), { kind: "agent", state: "needs-you", needs: "question" }) },
-  { name: "old goal: awaiting (manual)", stage: "awaiting", why: /input: manual/, build: async () => oldRun(await add("--labels", "goal"), { kind: "agent", state: "needs-you", needs: "manual" }) },
+  { name: "old goal: awaiting (question)", stage: "awaiting", why: /input: question/, build: async () => oldRun(await add("--labels", "goal"), { kind: "build", state: "awaiting", ask: { kind: "input", reason: "question", question: "q", options: [], why: [] } }) },
+  { name: "old goal: awaiting (manual)", stage: "awaiting", why: /input: manual/, build: async () => oldRun(await add("--labels", "goal"), { kind: "build", state: "awaiting", ask: { kind: "input", reason: "manual", question: "", options: [], why: [] } }) },
   { name: "old goal: stuck", stage: "stuck", build: async () => job("error", await add("--labels", "goal")) },
   { name: "old goal: done", stage: "done", build: async () => close(await add("--labels", "goal"), "done") },
   { name: "old goal: dropped", stage: "dropped", build: async () => close(await add("--labels", "goal"), "drop") },

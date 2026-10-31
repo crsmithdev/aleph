@@ -23,7 +23,7 @@ const ago = (h: number) => new Date(now - h * 3600_000).toISOString();
 function run(id: string, extra: Record<string, unknown>, files: Record<string, string> = {}) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "agent", told: true, started: ago(3), ...extra }));
+  writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "build", told: true, started: ago(3), ...extra }));
   for (const [f, t] of Object.entries(files)) writeFileSync(join(dir, f), t);
 }
 async function get(path: string) {
@@ -58,7 +58,7 @@ beforeAll(() => {
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: fac }, oth: { path: oth } }));
-  for (const [k, val] of Object.entries({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: items, LANGFUSE_PUBLIC_KEY: "" })) {
+  for (const [k, val] of Object.entries({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, LANGFUSE_PUBLIC_KEY: "" })) {
     saved[k] = process.env[k]; process.env[k] = val;
   }
   Object.assign(process.env, gitEnv);
@@ -117,7 +117,7 @@ describe("GET /api/jobs", () => {
 
 describe("item titles", () => {
   test("a rename between two requests shows in the second", async () => {
-    run("20261027-000006-a", { job: "fac-7", name: "fac-7", repo: "fac", state: "running", todo: 1 });
+    run("20261027-000006-a", { job: "fac-7", name: "fac-7", repo: "fac", state: "running", on: "fac-1" });
     const title = async () => (await (await get("/api/jobs")).json()).find((j: any) => j.name === "fac-7").item.title;
     expect(await title()).toBe("old title");
     writeList({ key: "fac" }, "rename", (doc) => { doc.items.find((i) => i.id === 1)!.title = "new title"; return true; });

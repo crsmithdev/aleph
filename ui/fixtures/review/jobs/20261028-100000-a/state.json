@@ -1,1 +1,25 @@
-{"kind":"agent","job":"demo-3","name":"demo-3","repo":"demo","branch":"factory/demo-3","state":"needs-you","needs":"held","reason":"changes a held path: config.yml","stat":" config.yml | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)","todo":3,"told":true,"started":"2026-10-28T10:00:00.000Z","ended":"2026-10-28T10:15:00.000Z","cost":0.33,"model":"claude-sonnet-5-5"}
+{
+  "kind": "build",
+  "job": "demo-3",
+  "name": "demo-3",
+  "repo": "demo",
+  "branch": "factory/demo-3",
+  "state": "awaiting",
+  "reason": "changes a held path: config.yml",
+  "stat": " config.yml | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)",
+  "told": true,
+  "started": "2026-10-28T10:00:00.000Z",
+  "ended": "2026-10-28T10:15:00.000Z",
+  "cost": 0.33,
+  "model": "claude-sonnet-5-5",
+  "on": "demo-3",
+  "ask": {
+    "kind": "approval",
+    "reason": "held-path",
+    "question": "changes a held path: config.yml",
+    "options": [],
+    "why": [
+      " config.yml | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)"
+    ]
+  }
+}

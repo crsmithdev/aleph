@@ -10,14 +10,14 @@ afterAll(teardown);
 describe("a factory run", () => {
   const fjob = (name: string, action: string, extra: Record<string, string> = {}, more: string[] = []) =>
     aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), ...more], extra);
-  test("a run held for a held path is awaiting, with an approval ask and no needs; aleph jobs still lists it as needs-you held", async () => {
+  test("a run held for a held path is awaiting, with an approval ask and no needs; aleph jobs lists it as awaiting held", async () => {
     // No background review: it would rewrite the run's reason.
     const r = await aleph(["job", "fac", "rheldpath", "--spec", specFile("Goal: rheldpath\nACTION: commit held/rp.txt\n")], { ALEPH_REVIEW_CMD: "/bin/false" });
     const s = state(r.json.run);
     expect(s).toMatchObject({ kind: "build", state: "awaiting", ask: { kind: "approval", reason: "held-path" } });
     expect(s.needs).toBeUndefined();
     const listed = (await aleph(["jobs"])).json.find((j: any) => j.name === "rheldpath");
-    expect(listed).toMatchObject({ state: "needs-you", needs: "held" });
+    expect(listed).toMatchObject({ state: "awaiting", needs: "held" });
     await aleph(["drop", "rheldpath"]);
   });
   test("a stuck job holds the factory: no start, no land by itself; Chris's land works; pause is separate; a drop clears it", async () => {
@@ -79,9 +79,9 @@ describe("a factory run", () => {
     // Runs written as the ledger holds them: a conflicted land that goes back to its worker, and a stuck run.
     const made: string[] = [];
     const run = (name: string, extra: Record<string, unknown>) => {
-      const folder = join(jobsDir, `${new Date().toISOString().slice(0, 19).replace(/:/g, "").replace("T", "-")}-fac-${name}-${extra.kind ?? "agent"}`);
+      const folder = join(jobsDir, `${new Date().toISOString().slice(0, 19).replace(/:/g, "").replace("T", "-")}-fac-${name}-${extra.kind ?? "build"}`);
       mkdirSync(folder);
-      writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "agent", job: name, name, repo: "fac", told: true, started: new Date().toISOString(), ...extra }));
+      writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", job: name, name, repo: "fac", told: true, started: new Date().toISOString(), ...extra }));
       made.push(folder);
       return folder;
     };

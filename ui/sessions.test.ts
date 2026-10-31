@@ -262,7 +262,7 @@ test("a factory session shows the job name and takes its cost from the ledger", 
   const JOB = "20261028-090535-aleph-aleph-361-agent";
   const dir = mkdtempSync(join(tmpdir(), "sessions-jobs-"));
   mkdirSync(join(dir, JOB));
-  writeFileSync(join(dir, JOB, "state.json"), JSON.stringify({ kind: "agent", job: JOB, name: "aleph-361", repo: "aleph", state: "landed", cost: 1.25, told: true, started: iso(60) }));
+  writeFileSync(join(dir, JOB, "state.json"), JSON.stringify({ kind: "build", job: JOB, name: "aleph-361", repo: "aleph", state: "landed", cost: 1.25, told: true, started: iso(60) }));
   const saved = process.env.ALEPH_JOBS_DIR;
   process.env.ALEPH_JOBS_DIR = dir;
   TRACES.push(trace("t9", JOB, "aleph", iso(5), { totalCost: 0 }));

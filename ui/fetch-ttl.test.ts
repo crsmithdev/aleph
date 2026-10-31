@@ -38,9 +38,9 @@ beforeAll(() => {
   for (const [repo, name] of [["a", "a-1"], ["b", "b-1"]]) {
     const folder = join(base, "jobs", `20261027-100000-${repo}-${name}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "agent", state: "running", started: new Date().toISOString(), name, job: name, repo, todo: 1 }));
+    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", state: "running", started: new Date().toISOString(), name, job: name, repo, on: `${repo}-1` }));
   }
-  for (const [k, v] of Object.entries({ PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_ITEMS: items, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "30" })) {
+  for (const [k, v] of Object.entries({ PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_ISSUES: items, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "30" })) {
     saved[k] = process.env[k];
     process.env[k] = v;
   }

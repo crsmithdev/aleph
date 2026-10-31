@@ -13,7 +13,7 @@ test("the sandbox prompt tells the worker to print the marker the already-met pa
   mkdirSync(join(dir, "run-1"), { recursive: true });
   mkdirSync(join(dir, "job-x"), { recursive: true });
   writeFileSync(join(dir, "job-x", "spec.md"), "# a goal\n");
-  const run = { name: "job-x", job: "job-x", branch: "factory/job-x", kind: "agent", state: "running" } as any;
+  const run = { name: "job-x", job: "job-x", branch: "factory/job-x", kind: "build", state: "running" } as any;
   const text = prompt("run-1", join(dir, "run-1"), run, { sandbox: true, main: "main" } as any);
   const line = text.split("\n").join(" ").match(/print exactly one line `([^`]*)`/)?.[1] ?? "";
   expect(line.startsWith(`${ALREADY_MET}:`)).toBe(true);
@@ -25,7 +25,7 @@ test("the sandbox prompt asks for FACT lines that parseFacts reads; the other pr
   mkdirSync(join(dir, "run-2"), { recursive: true });
   mkdirSync(join(dir, "job-y"), { recursive: true });
   writeFileSync(join(dir, "job-y", "spec.md"), "# a goal\n");
-  const run = { name: "job-y", job: "job-y", branch: "factory/job-y", kind: "agent", state: "running" } as any;
+  const run = { name: "job-y", job: "job-y", branch: "factory/job-y", kind: "build", state: "running" } as any;
   const text = prompt("run-2", join(dir, "run-2"), run, { sandbox: true, main: "main" } as any);
   const line = text.split("\n").map((l) => l.trim()).find((l) => l.startsWith("`FACT:")) ?? "";
   expect(line).toContain("[source:");
@@ -38,7 +38,7 @@ test("the sandbox prompt names aleph-shot and its options; the other prompt does
   mkdirSync(join(dir, "run-3"), { recursive: true });
   mkdirSync(join(dir, "job-z"), { recursive: true });
   writeFileSync(join(dir, "job-z", "spec.md"), "# a goal\n");
-  const run = { name: "job-z", job: "job-z", branch: "factory/job-z", kind: "agent", state: "running" } as any;
+  const run = { name: "job-z", job: "job-z", branch: "factory/job-z", kind: "build", state: "running" } as any;
   const text = prompt("run-3", join(dir, "run-3"), run, { sandbox: true, main: "main" } as any);
   for (const w of ["aleph-shot", "--width", "--height", "--scheme", "--click", "--wait"]) expect(text).toContain(w);
   expect(prompt("run-3", join(dir, "run-3"), run, { sandbox: false, main: "main" } as any)).not.toContain("aleph-shot");

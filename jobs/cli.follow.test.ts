@@ -43,8 +43,8 @@ describe("land follows main", () => {
   const seedGraph = () => {
     sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
     const files: Record<string, string> = {
-      "ui/server.ts": 'import "../jobs/lib/store.ts";\nimport "./attention.ts";\n',
-      "ui/attention.ts": 'import "./views/now.js";\n',
+      "ui/server.ts": 'import "../jobs/lib/store.ts";\nimport "./banner.ts";\n',
+      "ui/banner.ts": 'import "./views/now.js";\n',
       "ui/api/now.ts": 'import "../../hooks/lib/env.ts";\n',
       "jobs/lib/store.ts": "1\n",
       "hooks/lib/env.ts": "1\n",

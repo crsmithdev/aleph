@@ -284,7 +284,7 @@ describe("git-guard", () => {
     expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
   });
   test("denies a hand edit of a work store file, naming the repo in the commands", async () => {
-    const env = { ALEPH_ITEMS: join(root, "plain", "items") };
+    const env = { ALEPH_ISSUES: join(root, "plain", "items") };
     const out = JSON.parse(await guard(join(root, "plain", "items", "demo", "backlog", "tasks", "demo-3.md"), env));
     expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
     expect(out.hookSpecificOutput.permissionDecisionReason).toContain("aleph issue edit demo");

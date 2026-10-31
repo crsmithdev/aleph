@@ -73,14 +73,14 @@ function run(o: Partial<Run> & { name: string }, files: Record<string, string> =
   const id = `${stamp(at)}-${key}-${o.name}-${++runs}-agent`;
   const folder = join(process.env.ALEPH_JOBS_DIR!, id);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "agent", job: id, repo: key, state: "needs-you", told: true, shown: true, started: at.toISOString(), ...o } as Run);
+  writeRun(folder, { kind: "build", job: id, repo: key, state: "awaiting", told: true, shown: true, started: at.toISOString(), ...o } as Run);
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
   return folder;
 }
 
 /** A held run of issue 1 on branch `b`, with both reviews' files. */
 const held = (b: string, review = "Looks right.\nVERDICT: land\n") =>
-  run({ name: `${key}-1`, needs: "held", todo: 1, branch: b, reason: "held path x" }, { "review.md": "Fine.\nVERDICT: pass\n", "review2.md": review });
+  run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "approval", reason: "held-path", question: "", options: [], why: [] }, branch: b, reason: "held path x" }, { "review.md": "Fine.\nVERDICT: pass\n", "call.md": review });
 
 let landed: string[] = [];
 let dropped: { name: string; reason: string }[] = [];
@@ -104,7 +104,7 @@ beforeAll(() => {
   chmodSync(join(base, "fake"), 0o755);
   server = Bun.serve({ port: 0, fetch: async (req) => { told.push(await req.text()); return new Response("ok"); } });
   Object.assign(process.env, gitEnv, {
-    ALEPH_ITEMS: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_FIREFIGHTER_CMD: join(base, "fake"), FF_DIR: base,
+    ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_FIREFIGHTER_CMD: join(base, "fake"), FF_DIR: base,
     ALEPH_DISPATCH: "off", SIDETONE_TELL_URL: `http://127.0.0.1:${server.port}/tell`,
     XDG_RUNTIME_DIR: join(base, "run"),
   });
@@ -120,7 +120,7 @@ test("a tick with no new events starts no firefighter run", async () => {
   expect(calls()).toBe(0);
   expect(firefighterRuns()).toEqual([]);
   // An event is judged once: the next tick with the same snapshot starts nothing.
-  run({ name: `${key}-1`, state: "stuck", reason: "time box", todo: 1 });
+  run({ name: `${key}-1`, state: "stuck", reason: "time box", on: `${key}-1` });
   await firefighterStep(ports());
   expect(calls()).toBe(1);
   await firefighterStep(ports());
@@ -212,8 +212,8 @@ test("a land before the review has a verdict is refused", async () => {
 test("a goal with 4 runs in 30 minutes is an event, and a drop from the reply is applied", async () => {
   fresh([{ title: "loops", labels: ["goal"] }]);
   const name = `${key}-1`;
-  for (const m of [25, 18, 10]) run({ name, state: "dropped", reason: "no commit", todo: 1 }, {}, m);
-  run({ name, state: "stuck", reason: "no commit", todo: 1 }, {}, 2);
+  for (const m of [25, 18, 10]) run({ name, state: "dropped", reason: "no commit", on: `${key}-1` }, {}, m);
+  run({ name, state: "stuck", reason: "no commit", on: `${key}-1` }, {}, 2);
   const kinds = snapshot().map((e) => e.kind);
   expect(kinds).toContain("loop");
   reply([{ do: "drop", job: name, reason: "the goal is already met on main" }]);
@@ -227,7 +227,7 @@ test("a goal with 4 runs in 30 minutes is an event, and a drop from the reply is
 test("a close reply drops the stuck job, writes no rerun file, and marks the issue done with the note", async () => {
   fresh([{ title: "met", labels: ["goal"] }]);
   const name = `${key}-1`;
-  run({ name, state: "stuck", reason: "no commit", todo: 1 }, {}, 2);
+  run({ name, state: "stuck", reason: "no commit", on: `${key}-1` }, {}, 2);
   reply([{ do: "close", repo: key, n: 1, note: "the goal is already met on main" }]);
   await firefighterStep(ports());
   expect(dropped.map((d) => d.name)).toEqual([name]);
@@ -397,7 +397,7 @@ test("answer is applied on a plain question even when its reason is not handed",
 test("a drop with after drops the job, and the goal waits after that goal, with the note saying so", async () => {
   fresh([{ title: "waiter", labels: ["goal"] }, { title: "blocker" }]);
   addGoal(2);
-  run({ name: `${key}-1`, state: "stuck", reason: "time box", todo: 1 });
+  run({ name: `${key}-1`, state: "stuck", reason: "time box", on: `${key}-1` });
   reply([{ do: "drop", job: `${key}-1`, reason: "needs the blocker", after: [`${key}-2.1`] }]);
   const f = await firefighterStep(ports());
   expect(f?.refused).toEqual([]);

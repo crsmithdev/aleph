@@ -15,7 +15,7 @@ function sh(cwd: string, ...args: string[]): string {
   return p.stdout.toString().trim();
 }
 
-const KEYS = ["ALEPH_ITEMS", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_VAULT", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
+const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_VAULT", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
 let base: string;
 let saved: Record<string, string | undefined>;
 let server: ReturnType<typeof Bun.serve>;
@@ -34,7 +34,7 @@ beforeEach(() => {
     },
   });
   Object.assign(process.env, gitEnv, {
-    ALEPH_ITEMS: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"),
+    ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"),
     ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_VAULT: join(base, "vault"),
     LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk",
   });
@@ -80,7 +80,7 @@ const land = (id: number): string => {
 const run = (id: string, o: Partial<Run>): void => {
   const folder = join(base, "jobs", id);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "agent", job: id, name: "fac-1", repo: "fac", state: "landed", told: true, started: "2026-10-28T10:00:00Z", ended: "2026-10-28T10:20:00Z", ...o });
+  writeRun(folder, { kind: "build", job: id, name: "fac-1", repo: "fac", state: "landed", told: true, started: "2026-10-28T10:00:00Z", ended: "2026-10-28T10:20:00Z", ...o });
 };
 
 const pages = () => readdirSync(join(base, "vault", "wiki", "episodes")).filter((f) => f.endsWith(".md"));
@@ -90,11 +90,11 @@ test("a done goal gets one page built from git, the ledger and Langfuse", async 
   const one = add("ship it");
   const sha = land(one);
   const dropped = "20261028-100000-fac-1-agent", landed = "20261028-103000-fac-1-agent";
-  run(dropped, { state: "dropped", reason: "the last run made no commit", todo: one, cost: 1.5 });
+  run(dropped, { state: "dropped", reason: "the last run made no commit", on: `fac-${one}`, cost: 1.5 });
   writeFileSync(join(base, "jobs", dropped, "result.md"), "also fixed the login bug\n");
-  run(landed, { state: "landed", commit: sha, todo: one, cost: 2, started: "2026-10-28T10:30:00Z", ended: "2026-10-28T10:50:00Z" });
+  run(landed, { state: "landed", commit: sha, on: `fac-${one}`, cost: 2, started: "2026-10-28T10:30:00Z", ended: "2026-10-28T10:50:00Z" });
   const planned = add("the parent", { labels: ["goal", "planned"], done: true, waitingOn: `fac-${one}` });
-  run("20261028-090000-fac-2-plan", { kind: "plan", state: "done", todo: planned, name: "fac-2", started: "2026-10-28T09:00:00Z", ended: "2026-10-28T09:05:00Z" });
+  run("20261028-090000-fac-2-plan", { kind: "plan", state: "done", on: `fac-${planned}`, name: "fac-2", started: "2026-10-28T09:00:00Z", ended: "2026-10-28T09:05:00Z" });
 
   const repo = loadRegistry().fac;
   const r = await writeEpisodes([repo]);
@@ -120,7 +120,7 @@ test("a done goal gets one page built from git, the ledger and Langfuse", async 
 test("a goal title with a colon gets a file name without it", async () => {
   const id = add("fix: the login");
   land(id);
-  run("20261028-100000-fac-1-agent", { todo: id });
+  run("20261028-100000-fac-1-agent", { on: `fac-${id}` });
   const repo = loadRegistry().fac;
   expect(episodeTitle(repo, { id, title: 'a/b\\c:d*e?f"g<h>i|j  k ' } as any)).toBe(`fac-${id} a b c d e f g h i j k`);
   const r = await writeEpisodes([repo]);
@@ -131,7 +131,7 @@ test("a goal title with a colon gets a file name without it", async () => {
 test("a 400-character title gets a page, and writing again writes and fails nothing", async () => {
   const id = add("word ".repeat(80).trim());
   land(id);
-  run("20261028-100000-fac-1-agent", { todo: id });
+  run("20261028-100000-fac-1-agent", { on: `fac-${id}` });
   const repo = loadRegistry().fac;
   const r = await writeEpisodes([repo]);
   expect(r.failed).toEqual([]);
@@ -166,7 +166,7 @@ test("a cut title drops trailing spaces and dots and keeps short titles as they 
 test("an unreachable Langfuse does not block the page", async () => {
   const id = add("ship it");
   land(id);
-  run("20261028-100000-fac-1-agent", { todo: id });
+  run("20261028-100000-fac-1-agent", { on: `fac-${id}` });
   process.env.LANGFUSE_BASE_URL = "http://127.0.0.1:1";
   const r = await writeEpisodes([loadRegistry().fac]);
   expect(r.failed).toEqual([]);

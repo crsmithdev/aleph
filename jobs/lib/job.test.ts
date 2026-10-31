@@ -24,7 +24,7 @@ afterEach(() => {
 function run(id: string, job: string, extra: Partial<Run> = {}, files: Record<string, string> = {}): string {
   const folder = join(base, id);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "agent", job, name: job.replace(/^\d+-\d+-/, ""), repo: "fac", state: "passed", told: true, started: `2026-10-28T00:00:${id.slice(-2)}Z`, ...extra } as Run);
+  writeRun(folder, { kind: "build", job, name: job.replace(/^\d+-\d+-/, ""), repo: "fac", state: "passed", told: true, started: `2026-10-28T00:00:${id.slice(-2)}Z`, ...extra } as Run);
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
   return folder;
 }
@@ -47,7 +47,7 @@ describe("lookups", () => {
   });
 
   test("a job is known by its last run's name, and a closed one is not open", () => {
-    run("20261028-000001-a01", "j", { name: "old", state: "needs-you" });
+    run("20261028-000001-a01", "j", { name: "old", state: "awaiting" });
     run("20261028-000002-a02", "j", { name: "new", kind: "land", state: "landed" });
     expect(latestJob("old")).toBeUndefined();
     expect(openJob("new")).toBeUndefined();
@@ -57,13 +57,13 @@ describe("lookups", () => {
 
 describe("the run that counts", () => {
   test("a land that found the job lock busy does not count; the issue is the latest named", () => {
-    run("20261028-000001-a01", "j", { name: "n", todo: 3 });
+    run("20261028-000001-a01", "j", { name: "n", repo: "fac", on: "fac-3" });
     run("20261028-000002-a02", "j", { name: "n", kind: "land", state: "failed", reason: "job lock busy" });
     const j = latestJob("n")!;
     expect(lastReal(j).id).toBe("20261028-000001-a01");
     expect(stateOf(j)).toBe("passed");
     expect(issue(j)).toBe(3);
-    run("20261028-000003-a03", "j", { name: "n", kind: "land", state: "failed", reason: "not landed", todo: 4 });
+    run("20261028-000003-a03", "j", { name: "n", kind: "land", state: "failed", reason: "not landed", repo: "fac", on: "fac-4" });
     const k = latestJob("n")!;
     expect(stateOf(k)).toBe("failed");
     expect(issue(k)).toBe(4);
@@ -95,7 +95,7 @@ describe("run-folder files", () => {
     expect(readFile(first, "result.md")).toBe("one");
     expect(readFile(first, "stderr.log")).toBeUndefined();
     expect(latestFile(j, "result.md")!.text).toBe("land");
-    expect(latestFile(j, "result.md", (e) => e.run.kind === "agent")!.entry.id).toBe(first.id);
+    expect(latestFile(j, "result.md", (e) => e.run.kind === "build")!.entry.id).toBe(first.id);
     expect(latestFile(j, "review.md")).toBeUndefined();
     expect(tailOf(first, "checks.log", 2)).toBe("b\nc");
     expect(tailOf(first, "review.md", 2)).toBe("");
@@ -108,11 +108,6 @@ describe("run-folder files", () => {
     markAsked(first, "drop it?");
     expect(asked(first)).toBe(true);
     expect(readFileSync(join(first.folder, "asked"), "utf8")).toBe("drop it?\n");
-    // The old file name is still read.
-    const old = first;
-    rmSync(join(old.folder, "asked"));
-    writeFileSync(join(old.folder, "needs-chris"), "old\n");
-    expect(asked(first)).toBe(true);
     expect(rescued(first)).toBe("");
     markRescued(first, "infra");
     expect(rescued(first)).toBe("infra");
@@ -127,9 +122,9 @@ describe("run-folder files", () => {
 describe("view", () => {
   test("run fields from the last run, the rest from the latest run that has them", () => {
     run("20261028-000001-a01", "j", {
-      name: "n", state: "needs-you", needs: "held", todo: 7, cost: 0.5, model: "m1", stat: " a | 1 +", defaults: ["q -> a"],
+      name: "n", on: "fac-7", state: "awaiting", ask: { kind: "approval", reason: "held-path", question: "", options: [], why: [] }, cost: 0.5, model: "m1", stat: " a | 1 +", defaults: ["q -> a"],
       checks: [{ name: "test", ok: true, seconds: 3 }, { name: "hidden", ok: true, seconds: 1, passed: 2, total: 3 }],
-    }, { "result.md": "done\nFOLLOWUP: tidy\nFOLLOWUP:\n", "review2.md": "PENDING\n" });
+    }, { "result.md": "done\nFOLLOWUP: tidy\nFOLLOWUP:\n", "call.md": "PENDING\n" });
     run("20261028-000002-a02", "j", { name: "n", kind: "land", state: "landed", check: "open", commit: "abc", cost: 0.25, checks: [], ended: "2026-10-28T01:00:00Z" });
     const v = view(latestJob("n")!);
     expect(v).toMatchObject({
@@ -139,16 +134,16 @@ describe("view", () => {
     });
     expect(v.checks!.map((c) => c.name)).toEqual(["test", "hidden"]);
     expect(v.needs).toBeUndefined();
-    expect(v.review2).toBeUndefined();
+    expect(v.review).toBeUndefined();
     expect(v.lost).toBeUndefined();
   });
 
-  test("a stuck job shows its last checks, even none; review2 and lost come from the last run", () => {
+  test("a stuck job shows its last checks, even none; review and lost come from the last run", () => {
     run("20261028-000001-a01", "j", { name: "n", checks: [{ name: "test", ok: true, seconds: 3 }] });
-    const f = run("20261028-000002-a02", "j", { name: "n", state: "stuck", checks: [] }, { "review2.md": "PENDING\n", pid: "999999999" });
+    const f = run("20261028-000002-a02", "j", { name: "n", state: "stuck", checks: [] }, { "call.md": "PENDING\n", pid: "999999999" });
     const v = view(latestJob("n")!);
     expect(v.checks).toEqual([]);
-    expect(v.review2).toEqual({ verdict: "pending" });
+    expect(v.review).toEqual({ call: "pending" });
     expect(v.lost).toBe(true);
     writeFileSync(join(f, "exit"), "0");
     expect(view(latestJob("n")!).lost).toBeUndefined();

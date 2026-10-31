@@ -10,7 +10,7 @@ describe("a factory run", () => {
   const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
   const runsLeft = () => existsSync(join(base, "runs")) ? readdirSync(join(base, "runs")) : [];
   describe("the reviewer", () => {
-    // These runs never meet review: a background review would rewrite the needs-you reason the assertions read.
+    // These runs never meet review: a background review would rewrite the awaiting reason the assertions read.
     const rjob = (name: string, mark: string, action = `commit ${name}.txt`, extra: Record<string, string> = {}) =>
       aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name} ${mark}\nACTION: ${action}\n`)], { ALEPH_REVIEW_CMD: "/bin/false", ...extra });
     const calls = () => existsSync(join(fakeLog, "review-calls")) ? readFileSync(join(fakeLog, "review-calls"), "utf8").split("\n").length - 1 : 0;

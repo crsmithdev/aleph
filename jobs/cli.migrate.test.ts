@@ -82,13 +82,13 @@ beforeAll(() => {
   by("queued", item("a queued goal", { labels: ["goal", "ui"] }, "## Goal\n\nDo it."));
   by("blocked", item("a blocked goal", { labels: ["goal"], waiting_on: `aleph-${ID.queued}` }));
   const building = by("building", item("a building goal", { labels: ["goal"] }));
-  run(building, { kind: "agent", state: "running" });
+  run(building, { kind: "build", state: "running" });
   const landing = by("landing", item("a landing goal", { labels: ["goal"] }));
   run(landing, { kind: "land", state: "running" });
   const needs = by("needs", item("a goal that needs you", { labels: ["goal"] }));
-  run(needs, { kind: "agent", state: "needs-you", needs: "held", stat: "1 file changed" }, { "review2.md": "Looks fine.\n\nVERDICT: back needs a test\n" });
+  run(needs, { kind: "build", state: "needs-you", needs: "held", stat: "1 file changed" }, { "review2.md": "Looks fine.\n\nVERDICT: back needs a test\n" });
   const stuck = by("stuck", item("a stuck goal", { labels: ["goal"] }));
-  run(stuck, { kind: "agent", state: "stuck" });
+  run(stuck, { kind: "build", state: "stuck" });
   const landed = by("landed", item("a landed goal still open", { labels: ["goal"] }));
   run(landed, { kind: "land", state: "landed", commit: "abc1234" });
   by("done", item("a done goal", { labels: ["goal"], status: "done" }));
@@ -161,7 +161,7 @@ describe("aleph migrate", () => {
     const liveDir = join(base, "jobs-live");
     const folder = join(liveDir, "20261030-999999-aleph-live-agent");
     mkdirSync(folder, { recursive: true });
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "agent", job: "live", name: "live", repo: "aleph", state: "running", told: true, started: "2026-10-30T10:00:00Z" }));
+    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", job: "live", name: "live", repo: "aleph", state: "running", told: true, started: "2026-10-30T10:00:00Z" }));
     const holder = Bun.spawn(["sh", "-c", "sleep 30", "run", folder], { stdout: "ignore" });
     writeFileSync(join(folder, "pid"), String(holder.pid));
     try {
@@ -244,7 +244,7 @@ describe("aleph migrate", () => {
     expect(JSON.parse(readFileSync(join(dir("factory"), "caps.json"), "utf8"))).toEqual({ day: 12, awaiting: 5 });
 
     // The lint of the migrated store passes.
-    const lint = await aleph(["issue", "lint", "aleph"], { ALEPH_ITEMS: dir("issues"), ALEPH_JOBS_DIR: dir("runs") });
+    const lint = await aleph(["issue", "lint", "aleph"], { ALEPH_ISSUES: dir("issues"), ALEPH_JOBS_DIR: dir("runs") });
     expect(lint.code, lint.stderr).toBe(0);
   });
 

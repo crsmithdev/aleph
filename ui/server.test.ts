@@ -10,7 +10,7 @@ const testView = join(import.meta.dir, "views", "_test.js");
 const testApi = join(import.meta.dir, "api", "_test.ts");
 const at = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${server.port}${p}`, init);
 
-const run = (o: object) => JSON.stringify({ kind: "agent", state: "running", started: new Date().toISOString(), ...o });
+const run = (o: object) => JSON.stringify({ kind: "build", state: "running", started: new Date().toISOString(), ...o });
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-server-"));
@@ -20,7 +20,7 @@ beforeAll(async () => {
     mkdirSync(folder, { recursive: true });
     writeFileSync(join(folder, "state.json"), run({ name, job: name, repo }));
   }
-  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory") })) {
+  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory") })) {
     saved[k] = process.env[k];
     process.env[k] = v;
   }

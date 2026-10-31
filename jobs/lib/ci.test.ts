@@ -7,14 +7,14 @@ import { health } from "./factory.ts";
 import { snapshot } from "./firefighter.ts";
 import type { Repo } from "./ledger.ts";
 
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_REPOS", "ALEPH_ITEMS", "ALEPH_JOBS_DIR"];
+const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_REPOS", "ALEPH_ISSUES", "ALEPH_JOBS_DIR"];
 let base: string;
 let saved: Record<string, string | undefined>;
 
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ci-"));
   saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
-  Object.assign(process.env, { ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs") });
+  Object.assign(process.env, { ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs") });
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: join(base, "repo"), sandbox: true, autoland: false } }));
 });
 

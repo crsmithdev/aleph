@@ -17,7 +17,7 @@ beforeEach(() => {
   git("commit", "-q", "--allow-empty", "-m", "base");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo, sandbox: true }, plain: { path: repo } }));
   for (const [k, v] of Object.entries({
-    ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory"),
+    ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory"),
     XDG_RUNTIME_DIR: join(base, "run"), ALEPH_DISPATCH: "off", ALEPH_JOB_FOREGROUND: "1",
   })) {
     saved[k] = process.env[k];
@@ -34,7 +34,7 @@ afterEach(() => {
 function run(id: string, job: string, extra: Partial<Run> = {}): string {
   const folder = join(base, "jobs", id);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "agent", job, name: "x", repo: "fac", branch: "factory/x", state: "stuck", told: true, started: "2026-10-28T00:00:00Z", ...extra } as Run);
+  writeRun(folder, { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", state: "stuck", told: true, started: "2026-10-28T00:00:00Z", ...extra } as Run);
   writeFileSync(join(folder, "exit"), "0");
   return folder;
 }
@@ -77,8 +77,8 @@ describe("land", () => {
     expect(await refused(() => land("x"))).toBe("no open job named x");
     run("20261028-000001-fac-x-agent", "20261028-000001-fac-x-agent", { state: "stuck" });
     expect(await refused(() => land("x"))).toBe("x is stuck, not passed");
-    run("20261028-000002-fac-x-agent", "20261028-000001-fac-x-agent", { state: "needs-you", needs: "question" });
-    expect(await refused(() => land("x"))).toBe("x is needs-you (question), not passed");
+    run("20261028-000002-fac-x-agent", "20261028-000001-fac-x-agent", { state: "awaiting", ask: { kind: "input", reason: "question", question: "q", options: [], why: [] } });
+    expect(await refused(() => land("x"))).toBe("x is awaiting (question), not passed");
     expect(runs()).toHaveLength(2);
   });
 });

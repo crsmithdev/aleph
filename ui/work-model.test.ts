@@ -47,7 +47,7 @@ beforeAll(async () => {
   sh(store, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(store, "git", "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo, sandbox: true, checks: [] } }));
-  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: runsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: store, ALEPH_FACTORY_DIR: factory })) {
+  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: runsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: store, ALEPH_FACTORY_DIR: factory })) {
     saved[k] = process.env[k]; process.env[k] = v;
   }
   Object.assign(process.env, gitEnv);

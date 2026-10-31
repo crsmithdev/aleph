@@ -45,7 +45,7 @@ beforeAll(() => {
   sh(join(a, "items"), "git", "push", "-q", "origin", "main");
   const run = join(a, "jobs", "20261030-100000-aleph-j1-agent");
   mkdirSync(run, { recursive: true });
-  writeFileSync(join(run, "state.json"), JSON.stringify({ job: "20261030-100000-aleph-j1-agent", name: "j1", repo: "aleph", kind: "agent", state: "failed", told: true, started: "2026-10-30T10:00:00Z" }, null, 2) + "\n");
+  writeFileSync(join(run, "state.json"), JSON.stringify({ job: "20261030-100000-aleph-j1-agent", name: "j1", repo: "aleph", kind: "build", state: "failed", told: true, started: "2026-10-30T10:00:00Z" }, null, 2) + "\n");
   mkdirSync(join(a, "runs", "sandbox-run"), { recursive: true });
   mkdirSync(join(a, "factory"), { recursive: true });
   writeFileSync(join(a, "factory", "paused"), "");
@@ -60,12 +60,10 @@ afterAll(() => {
   rmSync(home, { recursive: true, force: true });
 });
 
-test("the old layout before the migration, the new one after, and the CLI reads the migrated data", async () => {
-  expect(layout()).toEqual({ store: join(a, "items"), ledger: join(a, "jobs"), sandbox: join(a, "runs") });
-  expect([storeDir(), runsDir(), sandboxDir()]).toEqual([join(a, "items"), join(a, "jobs"), join(a, "runs")]);
-
-  const before = await aleph("issue", "list", "aleph");
-  expect(before.stdout).toContain("the one issue");
+test("layout() names the new layout only; the migration moves the old roots there and the CLI reads the migrated data", async () => {
+  const fresh = { store: join(a, "issues"), ledger: join(a, "runs"), sandbox: join(a, "sandbox") };
+  expect(layout()).toEqual(fresh);
+  expect([storeDir(), runsDir(), sandboxDir()]).toEqual([fresh.store, fresh.ledger, fresh.sandbox]);
 
   const done = await aleph("migrate", "--apply");
   if (done.code !== 0) console.log(done.stderr, done.stdout);
@@ -83,12 +81,12 @@ test("the old layout before the migration, the new one after, and the CLI reads 
   expect(jobs.stdout).toContain("j1");
 });
 
-test("the environment wins, variable by variable", () => {
+test("the environment wins, variable by variable; ALEPH_RUNS_DIR is not read", () => {
   const set = (o: Record<string, string>) => { for (const [k, v] of Object.entries(o)) process.env[k] = v; };
   try {
-    set({ ALEPH_ITEMS: "/x/items", ALEPH_JOBS_DIR: "/x/jobs", ALEPH_RUNS_DIR: "/x/runs" });
-    expect(layout()).toEqual({ store: "/x/items", ledger: "/x/jobs", sandbox: "/x/runs" });
-    set({ ALEPH_ISSUES: "/x/issues", ALEPH_SANDBOX_DIR: "/x/sandbox" });
+    set({ ALEPH_RUNS_DIR: "/x/runs" });
+    expect(layout()).toEqual({ store: join(a, "issues"), ledger: join(a, "runs"), sandbox: join(a, "sandbox") });
+    set({ ALEPH_ISSUES: "/x/issues", ALEPH_JOBS_DIR: "/x/jobs", ALEPH_SANDBOX_DIR: "/x/sandbox" });
     expect(layout()).toEqual({ store: "/x/issues", ledger: "/x/jobs", sandbox: "/x/sandbox" });
   } finally { for (const k of VARS) delete process.env[k]; }
 });

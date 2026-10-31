@@ -15,7 +15,7 @@ function sh(cwd: string, ...args: string[]): void {
   if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
 }
 
-const KEYS = ["ALEPH_ITEMS", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL"];
+const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL"];
 let base: string;
 let saved: Record<string, string | undefined>;
 
@@ -24,7 +24,7 @@ beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-factory-"));
   saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
   Object.assign(process.env, {
-    ALEPH_ITEMS: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"),
+    ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"),
     ALEPH_FACTORY_DIR: join(base, "factory"), XDG_RUNTIME_DIR: join(base, "run"), ALEPH_DAY_CAP: "100", ALEPH_LIVE_CAP: "5", SIDETONE_TELL_URL: "http://127.0.0.1:1/tell",
   });
   // The factory repo, with an origin the baseline can fetch.
@@ -101,7 +101,7 @@ test("a goal given an after while an earlier goal starts is not started", async 
 // An "already met" drop closes a factory item with no commit that names it; the goals that wait on it still start.
 test("a goal waiting on a factory item the store says done, with no commit naming it, starts", async () => {
   const blocker = writeList({ key: "fac" }, "add the blocker", (doc) => issues.addLegacy(doc, "met elsewhere", { labels: [] }).id, true)!.value;
-  mk(`fac-${blocker}`, "agent", "dropped", { reason: "the goal is already met" });
+  mk(`fac-${blocker}`, "build", "dropped", { reason: "the goal is already met" });
   await change(blocker, (item) => issues.setStatus(item, "done"));
   const waiter = goal();
   await change(waiter, (item) => issues.edit(item, { waitingOn: `fac-${blocker}` }));
@@ -196,7 +196,7 @@ const entry = (kind: string, state: string, reason?: string): any =>
   ({ id: `x-${kind}-${state}`, folder: join(base, "none", `${kind}-${state}`), run: { kind, job: "j1", name: "n1", repo: "fac", state, started: "2026-10-28T00:00:00Z", ...(reason ? { reason } : {}) } });
 
 test("gates returns the first reason, in the order pause, hold, probe, live cap, day cap, waiting", () => {
-  const stuck = [[entry("agent", "stuck")]];
+  const stuck = [[entry("build", "stuck")]];
   const order = () => gates({ jobs: stuck as any })?.gate;
   Object.assign(process.env, { ALEPH_LIVE_CAP: "0", ALEPH_DAY_CAP: "0", ALEPH_AWAITING_CAP: "0" });
   try {
@@ -223,15 +223,15 @@ test("gates returns the first reason, in the order pause, hold, probe, live cap,
 });
 
 test("a land that failed 'job lock busy' does not hold the factory", () => {
-  expect(hold([[entry("agent", "passed"), entry("land", "failed", "job lock busy")]])).toBeNull();
+  expect(hold([[entry("build", "passed"), entry("land", "failed", "job lock busy")]])).toBeNull();
 });
 
 test("a land that failed for another reason holds the factory", () => {
-  expect(hold([[entry("agent", "passed"), entry("land", "failed", "not landed")]])?.name).toBe("n1");
+  expect(hold([[entry("build", "passed"), entry("land", "failed", "not landed")]])?.name).toBe("n1");
 });
 
 test("after a land that failed 'job lock busy' the passed agent run is waiting to land again", () => {
-  const agent = entry("agent", "passed");
+  const agent = entry("build", "passed");
   agent.run.land = true;
   expect(waitingToLand([[agent, entry("land", "failed", "job lock busy")]])).toEqual(["n1"]);
   expect(waitingToLand([[agent, entry("land", "failed", "not landed")]])).toEqual([]);
@@ -246,7 +246,7 @@ function mk(name: string, kind: Run["kind"], state: Run["state"], extra: Partial
   const folder = join(base, "jobs", id);
   mkdirSync(folder, { recursive: true });
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
-  writeRun(folder, { kind, job: id, name, repo: "fac", state, todo: Number(name.split("-")[1]), told: true, shown: true, started: new Date().toISOString(), ...extra } as Run);
+  writeRun(folder, { kind, job: id, name, repo: "fac", state, on: `fac-${name.split("-")[1]}`, told: true, shown: true, started: new Date().toISOString(), ...extra } as Run);
   return { folder, job: extra.job ?? id };
 }
 const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join("\n") + "\n";
@@ -282,7 +282,7 @@ const dispatch = (f: ReturnType<typeof fakes>) => dispatchGoals(f.start, async (
 test("no commit, the item already done: the run is dropped as a duplicate, once, and the factory is not held", async () => {
   const id = goal();
   await change(id, (item) => issues.setStatus(item, "done"));
-  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" });
+  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" });
   const f = fakes();
   const out = await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`]);
@@ -295,7 +295,7 @@ test("no commit, the item already done: the run is dropped as a duplicate, once,
 
 test("no commit, the work on main by its Job trailer: dropped as a duplicate and the item closed", async () => {
   const id = goal();
-  const r = mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" });
+  const r = mk(`fac-${id}`, "build", "stuck", { reason: "no commit" });
   sh(join(base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nJob: ${r.job}`);
   sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
   const f = fakes();
@@ -308,7 +308,7 @@ test("no commit, the work on main by its Job trailer: dropped as a duplicate and
 
 test("no commit, the item on main by its Item trailer: the open item is closed with a note naming the commit", async () => {
   const id = goal();
-  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" });
+  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" });
   sh(join(base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nItem: fac-${id}\nJob: other`);
   sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
   const sha = Bun.spawnSync(["git", "rev-parse", "--short=7", "HEAD"], { cwd: join(base, "repo") }).stdout.toString().trim();
@@ -332,7 +332,7 @@ test("a goal whose item is done on main is not dispatched", async () => {
 
 test("a fourth no-commit run in a row is not dispatched; the item is labelled needs-chris", async () => {
   const id = goal();
-  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "no commit, run X ended with no commit: dropped as a duplicate", noCommit: true, started: new Date(Date.now() - (4 - i) * 60_000).toISOString() });
+  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "no commit, run X ended with no commit: dropped as a duplicate", noCommit: true, started: new Date(Date.now() - (4 - i) * 60_000).toISOString() });
   const f = fakes();
   const out = await dispatch(f);
   expect(out.started).toEqual([]);
@@ -345,7 +345,7 @@ test("a fourth no-commit run in a row is not dispatched; the item is labelled ne
 });
 
 const noCommitRuns = (id: number, n: number, ago: number) => {
-  for (let i = 0; i < n; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: new Date(Date.now() - (ago - i) * 1000).toISOString() });
+  for (let i = 0; i < n; i++) mk(`fac-${id}`, "build", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: new Date(Date.now() - (ago - i) * 1000).toISOString() });
 };
 const unlabel = (id: number) => change(id, (item) => clearAsk(item));
 const chrisNotes = (id: number) => notes(id).split("asks Chris:").length - 1;
@@ -383,7 +383,7 @@ test("while needs-chris stays on the item, dispatches start nothing and write on
 
 test("two no-commit runs in a row are still dispatched", async () => {
   const id = goal();
-  for (let i = 0; i < 2; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: new Date(Date.now() - (3 - i) * 60_000).toISOString() });
+  for (let i = 0; i < 2; i++) mk(`fac-${id}`, "build", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: new Date(Date.now() - (3 - i) * 60_000).toISOString() });
   const f = fakes();
   const out = await dispatch(f);
   expect(out.started).toEqual([`fac-${id}`]);
@@ -406,7 +406,7 @@ test("an item that the store closes while an earlier goal starts gets no run", a
 test("a done item gets no run and no run-cap note, even with three recent runs", async () => {
   const id = goal();
   await change(id, (item) => issues.setStatus(item, "done"));
-  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "time box" });
+  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "time box" });
   const f = fakes();
   await dispatch(f);
   expect(f.specs).toEqual([]);
@@ -417,7 +417,7 @@ test("a done item gets no run and no run-cap note, even with three recent runs",
 const RUN_CAP_NOTE = "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it";
 test("a fourth start in an hour is skipped with one needs-chris note, and the goal is not started", async () => {
   const id = goal();
-  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - (i + 1) * 60_000).toISOString() });
+  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "time box", started: new Date(Date.now() - (i + 1) * 60_000).toISOString() });
   const f = fakes();
   const out = await dispatch(f);
   expect(out.started).toEqual([]);
@@ -432,7 +432,7 @@ test("a fourth start in an hour is skipped with one needs-chris note, and the go
 });
 
 const recent = (id: number, n: number) => {
-  for (let i = 0; i < n; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - (i + 1) * 60_000).toISOString() });
+  for (let i = 0; i < n; i++) mk(`fac-${id}`, "build", "dropped", { reason: "time box", started: new Date(Date.now() - (i + 1) * 60_000).toISOString() });
 };
 const capPath = (id: number) => join(base, "factory", "cap", `fac-${id}.txt`);
 
@@ -445,7 +445,7 @@ test("a cap mark with the label holds the goal below the hour count; once Chris 
   expect(notes(id).split("asks Chris:").length - 1).toBe(1);
   // Old starts leave the window: one start 60 seconds ago.
   const g = goal();
-  mk(`fac-${g}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - 60_000).toISOString() });
+  mk(`fac-${g}`, "build", "dropped", { reason: "time box", started: new Date(Date.now() - 60_000).toISOString() });
   mkdirSync(join(base, "factory", "cap"), { recursive: true });
   writeFileSync(capPath(g), "x\n");
   await change(g, (item) => { issues.edit(item, { labels: ["goal"] }); store.setAsk(item, { kind: "input", reason: "run-cap", question: "q", options: [], why: [] }); });
@@ -461,7 +461,7 @@ test("a cap mark with the label holds the goal below the hour count; once Chris 
   expect(out2.started).toEqual([`fac-${g}`]);
   expect(existsSync(capPath(g))).toBe(false);
   // The started run is dropped; the hour count is still at the cap and no mark is left.
-  mk(`fac-${g}`, "agent", "dropped", { reason: "time box" });
+  mk(`fac-${g}`, "build", "dropped", { reason: "time box" });
   const out3 = await dispatch(f2);
   expect(out3.started).toEqual([]);
   expect(existsSync(capPath(g))).toBe(true);
@@ -485,8 +485,8 @@ test("a failed run-cap note leaves no cap mark", async () => {
 
 test("a run that is three runs old, or three runs of other goals, does not hold the goal", async () => {
   const id = goal();
-  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - 7200_000).toISOString() });
-  mk(`fac-${id + 100}`, "agent", "dropped", { reason: "time box" });
+  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "time box", started: new Date(Date.now() - 7200_000).toISOString() });
+  mk(`fac-${id + 100}`, "build", "dropped", { reason: "time box" });
   const f = fakes();
   const out = await dispatch(f);
   expect(out.started).toEqual([`fac-${id}`]);
@@ -496,7 +496,7 @@ test("a run that is three runs old, or three runs of other goals, does not hold 
 test("ALEPH_AWAITING_CAP=1 with one awaiting run skips the next start with the awaiting gate's line", async () => {
   const waiter = goal();
   const next = goal();
-  mk(`fac-${waiter}`, "agent", "awaiting", { ask: { kind: "input", reason: "question", question: "q?", options: [], why: [] } });
+  mk(`fac-${waiter}`, "build", "awaiting", { ask: { kind: "input", reason: "question", question: "q?", options: [], why: [] } });
   process.env.ALEPH_AWAITING_CAP = "1";
   try {
     const f = fakes();
@@ -523,9 +523,9 @@ test("the run cap holds with a standing Rerun: the rerun of the third run is the
   mkdirSync(join(base, "factory"), { recursive: true });
   writeFileSync(join(base, "factory", "always.json"), JSON.stringify({ rescue: { action: "recommended", at: new Date().toISOString() } }));
   const id = goal();
-  mk(`fac-${id}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - 120_000).toISOString() });
-  mk(`fac-${id}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - 60_000).toISOString() });
-  mk(`fac-${id}`, "agent", "stuck", { reason: "tests failed after 2 fix rounds" });
+  mk(`fac-${id}`, "build", "dropped", { reason: "time box", started: new Date(Date.now() - 120_000).toISOString() });
+  mk(`fac-${id}`, "build", "dropped", { reason: "time box", started: new Date(Date.now() - 60_000).toISOString() });
+  mk(`fac-${id}`, "build", "stuck", { reason: "tests failed after 2 fix rounds" });
   const f = fakes();
   const out = await dispatch(f);
   expect(f.calls).toContain(`drop fac-${id}`);
@@ -540,7 +540,7 @@ test("the run cap holds with a standing Rerun: the rerun of the third run is the
 const claimed = (name: string, result: string) => {
   sh(join(base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `main for ${name}`);
   sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
-  return mk(name, "agent", "stuck", { reason: "no commit" }, { "result.md": result });
+  return mk(name, "build", "stuck", { reason: "no commit" }, { "result.md": result });
 };
 const withChecks = (f: ReturnType<typeof fakes>, checks: (repo: unknown, commit: string, logs: string) => Promise<string | null>) =>
   dispatchGoals(f.start, checks, f.land, f.rescue);
@@ -601,7 +601,7 @@ test("a met goal: the claim waits on an unchecked main, then the next dispatch o
 for (const red of [false, true]) {
   test(`a second claimed run after one rescued as claimed, main ${red ? "red: the goal label is off" : "green: the item is done"}, never needs-chris`, async () => {
     const id = goal();
-    const first = mk(`fac-${id}`, "agent", "dropped", { reason: "no commit" }, { "result.md": "Goal: Already met\n" });
+    const first = mk(`fac-${id}`, "build", "dropped", { reason: "no commit" }, { "result.md": "Goal: Already met\n" });
     writeFileSync(join(first.folder, "rescued"), "claimed\n");
     claimed(`fac-${id}`, "Goal: Already met\n");
     const f = fakes();
@@ -619,7 +619,7 @@ for (const red of [false, true]) {
 
 test("no commit, the item open, first time: dropped and the goal reruns once, with the last 20 lines of result.md", async () => {
   const id = goal();
-  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(30) });
+  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(30) });
   const f = fakes();
   const out = await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
@@ -633,11 +633,11 @@ test("no commit, the item open, first time: dropped and the goal reruns once, wi
 
 test("the second no-commit run with no claim goes back to triage: the goal label is off, no needs-chris, the note quotes result.md", async () => {
   const id = goal();
-  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
+  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(30) });
+  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(30) });
   const out = await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`, `drop fac-${id}`]);
   expect(out.held).toBeUndefined();
@@ -652,14 +652,14 @@ test("the second no-commit run with no claim goes back to triage: the goal label
 test("a repeated no-commit run on an issue already sent back to triage once gets needs-chris", async () => {
   const id = goal();
   const f = fakes();
-  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
+  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
   await dispatch(f);
-  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
+  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
   await dispatch(f);
   expect(labels(id)).not.toContain("goal");
   // Triage rewrote the goal; the goal label is back and the run ends with no commit again.
   await change(id, (item) => issues.edit(item, { labels: ["goal"] }));
-  mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
+  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
   await dispatch(f);
   expect(ask(id)).not.toBeNull();
   expect(labels(id)).toContain("goal");
@@ -667,7 +667,7 @@ test("a repeated no-commit run on an issue already sent back to triage once gets
 
 test("time box, first time: dropped and the goal reruns once, with the last 20 lines of result.md", async () => {
   const id = goal();
-  mk(`fac-${id}`, "agent", "stuck", { reason: "time box" }, { "result.md": lines(25) });
+  mk(`fac-${id}`, "build", "stuck", { reason: "time box" }, { "result.md": lines(25) });
   const f = fakes();
   const out = await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
@@ -680,12 +680,12 @@ test("time box, first time: dropped and the goal reruns once, with the last 20 l
 
 test("the second time-box stuck run on one goal gets needs-chris and no third run", async () => {
   const id = goal();
-  mk(`fac-${id}`, "agent", "stuck", { reason: "time box" }, { "result.md": lines(3) });
+  mk(`fac-${id}`, "build", "stuck", { reason: "time box" }, { "result.md": lines(3) });
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
   // The rerun runs, and ends in the time box again.
-  mk(`fac-${id}`, "agent", "stuck", { reason: "time box" });
+  mk(`fac-${id}`, "build", "stuck", { reason: "time box" });
   const out = await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
   expect(ask(id)).not.toBeNull();
@@ -699,7 +699,7 @@ test("the second time-box stuck run on one goal gets needs-chris and no third ru
 test("an infrastructure failure of an agent run is rechecked once; of a land, landed again once", async () => {
   const id = goal();
   sh(join(base, "repo"), "git", "branch", `factory/fac-${id}`);
-  mk(`fac-${id}`, "agent", "failed", { reason: "fetch failed", branch: `factory/fac-${id}` });
+  mk(`fac-${id}`, "build", "failed", { reason: "fetch failed", branch: `factory/fac-${id}` });
   const f = fakes();
   const out = await dispatch(f);
   expect(f.calls).toEqual([`recheck fac-${id}`]);
@@ -708,7 +708,7 @@ test("an infrastructure failure of an agent run is rechecked once; of a land, la
   expect(notes(id)).toContain("rechecked, once");
 
   const id2 = goal();
-  const a = mk(`fac-${id2}`, "agent", "passed", { land: true });
+  const a = mk(`fac-${id2}`, "build", "passed", { land: true });
   mk(`fac-${id2}`, "land", "stuck", { reason: "bundle failed: no space", job: a.job });
   await dispatch(f);
   expect(f.calls).toEqual([`recheck fac-${id}`, `land fac-${id2}`]);
@@ -717,7 +717,7 @@ test("an infrastructure failure of an agent run is rechecked once; of a land, la
 
 test("a second infrastructure failure of one goal gets needs-chris", async () => {
   const id = goal();
-  const a = mk(`fac-${id}`, "agent", "passed", { land: true });
+  const a = mk(`fac-${id}`, "build", "passed", { land: true });
   mk(`fac-${id}`, "land", "stuck", { reason: "fetch failed", job: a.job });
   const f = fakes();
   await dispatch(f);
@@ -732,7 +732,7 @@ test("a second infrastructure failure of one goal gets needs-chris", async () =>
 
 test("failed checks after a land merge, first time: dropped and the goal reruns once on the new main", async () => {
   const id = goal();
-  const a = mk(`fac-${id}`, "agent", "passed", { land: true });
+  const a = mk(`fac-${id}`, "build", "passed", { land: true });
   mk(`fac-${id}`, "land", "stuck", { reason: "tests failed", job: a.job }, { "checks.log": `## tests: exit 1\n${lines(30)}` });
   const f = fakes();
   const out = await dispatch(f);
@@ -745,7 +745,7 @@ test("failed checks after a land merge, first time: dropped and the goal reruns 
 
 test("a land that failed with a merge conflict is dropped and the goal reruns; the second one gets needs-chris", async () => {
   const id = goal();
-  const a = mk(`fac-${id}`, "agent", "passed", { land: true });
+  const a = mk(`fac-${id}`, "build", "passed", { land: true });
   mk(`fac-${id}`, "land", "failed", { reason: "merge conflict", conflicts: ["a.ts", "b.ts"], job: a.job });
   const f = fakes();
   const out = await dispatch(f);
@@ -755,7 +755,7 @@ test("a land that failed with a merge conflict is dropped and the goal reruns; t
   expect(notes(id)).toContain("merge conflict in a.ts, b.ts");
   expect(ask(id)).toBeNull();
 
-  const b = mk(`fac-${id}`, "agent", "passed", { land: true });
+  const b = mk(`fac-${id}`, "build", "passed", { land: true });
   mk(`fac-${id}`, "land", "failed", { reason: "merge conflict", conflicts: ["a.ts"], job: b.job });
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
@@ -765,7 +765,7 @@ test("a land that failed with a merge conflict is dropped and the goal reruns; t
 test("a run that is not safe gets an Ask with a question and does not hold the factory; another goal starts", async () => {
   const id = goal();
   const other = goal();
-  mk(`fac-${id}`, "agent", "stuck", { reason: "tests failed after 2 fix rounds" });
+  mk(`fac-${id}`, "build", "stuck", { reason: "tests failed after 2 fix rounds" });
   const f = fakes();
   const out = await dispatch(f);
   expect(ask(id)).not.toBeNull();
@@ -786,7 +786,7 @@ test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an alwa
   mkdirSync(join(base, "factory"), { recursive: true });
   writeFileSync(join(base, "factory", "always.json"), JSON.stringify({ rescue: { action: "recommended", at: new Date().toISOString() } }));
   const id = goal();
-  mk(`fac-${id}`, "agent", "stuck", { reason: "tests failed after 2 fix rounds" });
+  mk(`fac-${id}`, "build", "stuck", { reason: "tests failed after 2 fix rounds" });
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toContain(`drop fac-${id}`);
@@ -797,7 +797,7 @@ test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an alwa
 
 test("without rescue actions a stuck run still holds the factory", async () => {
   const id = goal();
-  mk(`fac-${id}`, "agent", "stuck", { reason: "time box" });
+  mk(`fac-${id}`, "build", "stuck", { reason: "time box" });
   const out = await dispatchGoals(async () => null, async () => null);
   expect(out.held).toContain("Held:");
 });
@@ -805,7 +805,7 @@ test("without rescue actions a stuck run still holds the factory", async () => {
 test("a rescue that finds the lock taken waits, then acts once on the state it finds under the lock", async () => {
   const id = goal();
   const name = `fac-${id}`;
-  const { folder } = mk(name, "agent", "stuck", { reason: "weird" });
+  const { folder } = mk(name, "build", "stuck", { reason: "weird" });
   // Dispatch A holds the lock; the stuck state B must act on appears only after A is done.
   const release = (await lock(`rescue-fac-${name}`, 0))!;
   const f = fakes();
@@ -822,7 +822,7 @@ test("a rescue that finds the lock taken waits, then acts once on the state it f
 test("two dispatches at once rescue one stuck job once", async () => {
   const id = goal();
   const name = `fac-${id}`;
-  mk(name, "agent", "stuck", { reason: "time box" });
+  mk(name, "build", "stuck", { reason: "time box" });
   const f = fakes();
   const slow = { ...f.rescue, drop: async (n: string, r: string) => { await Bun.sleep(300); return f.rescue.drop(n, r); } };
   await Promise.all([dispatchGoals(f.start, async () => null, f.land, slow), dispatchGoals(f.start, async () => null, f.land, slow)]);
@@ -832,7 +832,7 @@ test("two dispatches at once rescue one stuck job once", async () => {
 test("a rescue whose lock wait runs out skips the job and does not throw", async () => {
   const id = goal();
   const name = `fac-${id}`;
-  mk(name, "agent", "stuck", { reason: "time box" });
+  mk(name, "build", "stuck", { reason: "time box" });
   const release = (await lock(`rescue-fac-${name}`, 0))!;
   process.env.ALEPH_RESCUE_WAIT_MS = "200";
   try {
@@ -957,7 +957,7 @@ test("episodeStep writes the page of a done goal and logs its title", async () =
     sh(repo, "git", "push", "-q", "origin", "main");
     const folder = join(base, "jobs", `20261028-100000-fac-${id}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeRun(folder, { kind: "agent", job: "j", name: `fac-${id}`, repo: "fac", state: "landed", told: true, todo: id, started: "2026-10-28T10:00:00Z", ended: "2026-10-28T10:20:00Z" });
+    writeRun(folder, { kind: "build", job: "j", name: `fac-${id}`, repo: "fac", state: "landed", told: true, on: `fac-${id}`, started: "2026-10-28T10:00:00Z", ended: "2026-10-28T10:20:00Z" });
     expect(await episodeStep()).toEqual([`fac-${id} ship it`]);
     expect(readdirSync(join(v.vault, "wiki", "episodes")).filter((f) => f.endsWith(".md"))).toEqual([`fac-${id} ship it.md`]);
     expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain(`episodes fac-${id} ship it\n`);

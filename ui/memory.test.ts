@@ -50,7 +50,7 @@ beforeAll(async () => {
   git(join(base, "items"), "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), "{}");
   mkdirSync(join(base, "jobs"));
-  for (const [k, val] of Object.entries({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs") })) { saved[k] = process.env[k]; process.env[k] = val; }
+  for (const [k, val] of Object.entries({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs") })) { saved[k] = process.env[k]; process.env[k] = val; }
   clearCache();
   server = await serve(0);
 });

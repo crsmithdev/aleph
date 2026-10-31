@@ -30,10 +30,10 @@ beforeAll(async () => {
   writeFileSync(join(repo, "b.txt"), "main moved\n");
   sh(repo, "add", "."); sh(repo, "commit", "-qm", "main moves on");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ r: { path: repo } }));
-  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { needs: "question", question: "which colour?" }], ["stuckjob", { state: "stuck" }], ["wt", { todo: 7 }], ["wtgone", { todo: 99 }], ["won", { on: "r-5" }], ["wgoal", { on: "r-6.1" }]] as const) {
+  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { ask: { kind: "input", reason: "question", question: "which colour?", options: [], why: [] } }], ["stuckjob", { state: "stuck" }], ["wt", { on: "r-7" }], ["wtgone", { on: "r-99" }], ["won", { on: "r-5" }], ["wgoal", { on: "r-6.1" }]] as const) {
     const folder = join(base, "jobs", `20261027-100000-r-${name}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "agent", state: "needs-you", started: new Date().toISOString(), name, job: name, repo: "r", ...extra }));
+    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", state: "awaiting", started: new Date().toISOString(), name, job: name, repo: "r", ...extra }));
   }
   // The work store, with issue 7 of `r` for the Wait button to set `waiting_on` on.
   const itemsRemote = join(base, "items.git"), items = join(base, "items");
@@ -47,7 +47,7 @@ beforeAll(async () => {
   writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\nif [ "$4" = "--spec" ]; then cat >> ${calls}.stdin; fi\nif [ "$1 $2" = "issue edit" ] && [ -e ${base}/fail-edit ]; then echo "edit refused" >&2; exit 1; fi\necho out\nexit 0\n`);
   chmodSync(fake, 0o755);
   Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
-  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake })) {
+  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake })) {
     saved[k] = process.env[k];
     process.env[k] = v;
   }
@@ -150,7 +150,7 @@ test("a name reused by a dropped job and its rerun acts on the newer job", async
   for (const [id, extra] of [["20261027-090000-r-dup-agent", { state: "dropped" }], ["20261027-110000-r-dup-agent", { state: "landed", branch: "job/x" }]] as const) {
     const folder = join(base, "jobs", id);
     mkdirSync(folder, { recursive: true });
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "agent", started: new Date().toISOString(), name: "dup", job: `dup-${extra.state}`, repo: "r", ...extra }));
+    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", started: new Date().toISOString(), name: "dup", job: `dup-${extra.state}`, repo: "r", ...extra }));
   }
   const res = await at("/api/diff/dup");
   expect(res.status).toBe(200);

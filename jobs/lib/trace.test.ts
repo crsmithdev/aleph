@@ -14,7 +14,7 @@ const STREAM = [
   ev({ type: "result", is_error: false, total_cost_usd: 0.5, result: "Done." }),
 ].join("\n");
 
-const run: Run = { kind: "agent", job: "job-1", name: "alpha", repo: "fac", state: "passed", todo: 7, cost: 0.5, model: "claude-opus-5-5", told: false, started: "2026-10-27T10:00:00Z" };
+const run: Run = { kind: "build", job: "job-1", name: "alpha", repo: "fac", state: "passed", on: "fac-7", cost: 0.5, model: "claude-opus-5-5", told: false, started: "2026-10-27T10:00:00Z" };
 const attr = (s: any, k: string) => { const a = s.attributes.find((x: any) => x.key === k)?.value; return a && (a.stringValue ?? a.doubleValue ?? a.intValue ?? a.arrayValue?.values.map((v: any) => v.stringValue)); };
 
 test("a transcript becomes a root span and one span per tool call", () => {

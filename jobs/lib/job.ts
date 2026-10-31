@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { tagged } from "./gate.ts";
-import { allJobs, askOf, isBuild, isLost, isOpen, LOCK_BUSY, needsOf, oldState, onOf, reviewOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
+import { allJobs, askOf, isBuild, isLost, isOpen, LOCK_BUSY, needsOf, onOf, reviewOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
 
 export { allJobs, isOpen };
 
@@ -15,7 +15,7 @@ export { allJobs, isOpen };
 export type Job = Entry[];
 
 /** The files a run folder may hold that a reader of the job asks for. */
-export type RunFile = "spec.md" | "command.txt" | "result.md" | "review.md" | "review2.md" | "call.md" | "checks.log" | "land.log" | "stderr.log" | "asked" | "needs-chris" | "rescued" | "batch.json";
+export type RunFile = "spec.md" | "command.txt" | "result.md" | "review.md" | "call.md" | "checks.log" | "land.log" | "stderr.log" | "asked" | "rescued" | "batch.json";
 
 /** A facts run belongs to the landed job but is not its state: names and states look past it. */
 const notFacts = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts") ?? j.at(-1)!;
@@ -44,7 +44,7 @@ export const issue = (j: Job): number | string | undefined => j.map((e) => onOf(
 export const lastReal = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts" && !(e.run.kind === "land" && e.run.state === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
 
 /** The job's state: that of the run that counts. */
-export const stateOf = (j: Job): State => oldState(lastReal(j).run.state);
+export const stateOf = (j: Job): State => lastReal(j).run.state;
 
 /** A file in a run's folder, or undefined when it is not there. */
 export function readFile(e: Entry, file: RunFile): string | undefined {
@@ -66,8 +66,8 @@ export function latestFile(j: Job, file: RunFile, only: (e: Entry) => boolean = 
 /** The last `n` lines of a file in a run's folder; empty when it is not there. */
 export const tailOf = (e: Entry, file: RunFile, n: number): string => (readFile(e, file) ?? "").trimEnd().split("\n").slice(-n).join("\n");
 
-/** The factory set an Ask on the run's issue, with this question: the run no longer holds the factory. The old `needs-chris` file counts too. */
-export const asked = (e: Entry): boolean => hasFile(e, "asked") || hasFile(e, "needs-chris");
+/** The factory set an Ask on the run's issue, with this question: the run no longer holds the factory. */
+export const asked = (e: Entry): boolean => hasFile(e, "asked");
 export const markAsked = (e: Entry, question: string): void => writeFileSync(join(e.folder, "asked"), question + "\n");
 
 /** The case of the safe default action taken on the run, or "" when none was. */
@@ -102,7 +102,7 @@ export interface JobView {
   job: string; name: string; repo?: string;
   /** The last run: its folder, kind and start. `started` is the job's first. */
   run: { id: string; kind: Run["kind"]; started: string };
-  state: State; needs?: Run["needs"]; phase?: string; reason?: string; question?: string; say?: string; session?: string;
+  state: State; needs?: ReturnType<typeof needsOf>; phase?: string; reason?: string; question?: string; say?: string; session?: string;
   started: string; ended?: string;
   item?: number | string; cost?: number; model?: string; commit?: string; stat?: string;
   defaults: string[]; followups: string[];
@@ -111,8 +111,6 @@ export interface JobView {
   hidden?: { passed: number; total: number };
   /** The review of the last run: its call and reason. */
   review?: { call: string; reason?: string };
-  /** The review of the last run in its old shape (`verdict`, `chris`), which ui/ still reads. The field stays until step 6 moves the UI to `review`. */
-  review2?: { verdict: "land" | "back" | "chris" | "pending" | "error"; reason?: string };
   /** A landed job's manual check. */
   check?: "open" | "done";
   /** The last run died without an end. */
@@ -124,14 +122,14 @@ export function view(j: Job): JobView {
   const r = last.run;
   const latest = <K extends keyof Run>(k: K): Run[K] | undefined => r[k] ?? j.findLast((e) => e.run[k])?.run[k];
   const v: JobView = {
-    job: r.job, name: r.name, run: { id: last.id, kind: r.kind, started: r.started }, state: oldState(r.state), started: j[0].run.started,
+    job: r.job, name: r.name, run: { id: last.id, kind: r.kind, started: r.started }, state: r.state, started: j[0].run.started,
     defaults: j.findLast((e) => e.run.defaults !== undefined)?.run.defaults ?? [],
     followups: tagged(latestFile(j, "result.md", (e) => isBuild(e.run.kind))?.text ?? "", "FOLLOWUP"),
   };
   if (r.repo) v.repo = r.repo;
-  for (const k of ["needs", "phase", "reason", "question", "say", "session", "ended"] as const) if (r[k]) (v as any)[k] = r[k];
+  for (const k of ["phase", "reason", "question", "say", "session", "ended"] as const) if (r[k]) (v as any)[k] = r[k];
   const needs = needsOf(askOf(r));
-  if (needs && !v.needs) v.needs = needs;
+  if (needs) v.needs = needs;
   if (r.ask?.reason === "question" && !v.question) v.question = r.ask.question;
   const item = issue(j);
   if (item !== undefined) v.item = item;
@@ -147,8 +145,6 @@ export function view(j: Job): JobView {
   if (hid?.total) v.hidden = { passed: hid.passed ?? 0, total: hid.total };
   const review = reviewOf(last);
   if (review) v.review = { call: review.call, ...(review.reason !== undefined && { reason: review.reason }) };
-  // Step 6: the UI reads review2 until it reads review.
-  if (review) v.review2 = { verdict: review.call === "ask" ? "chris" : review.call, ...(review.reason !== undefined && { reason: review.reason }) };
   if (r.state === "landed" && r.check) v.check = r.check;
   if (isLost(last.folder)) v.lost = true;
   return v;

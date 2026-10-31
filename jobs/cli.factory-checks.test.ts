@@ -83,15 +83,15 @@ describe("a factory run's checks", () => {
 
     test("flake notes on a tracker make a health line; a repo with no tracker makes none", async () => {
       expect((await aleph(["report"])).stdout).not.toContain("flake notes in 7 days");
-      const was = process.env.ALEPH_ITEMS;
-      process.env.ALEPH_ITEMS = items;
+      const was = process.env.ALEPH_ISSUES;
+      process.env.ALEPH_ISSUES = items;
       let id: number;
       try {
         const first = noteFlake({ key: "fac" }, "job x: a.test.ts > slow one: timed out");
         noteFlake({ key: "fac" }, "firefighter: b.test.ts > other: failed under load");
         id = (first as { id: number }).id;
       } finally {
-        if (was === undefined) delete process.env.ALEPH_ITEMS; else process.env.ALEPH_ITEMS = was;
+        if (was === undefined) delete process.env.ALEPH_ISSUES; else process.env.ALEPH_ISSUES = was;
       }
       expect(typeof id).toBe("number");
       expect((await aleph(["report"])).stdout).toContain(`health: fac-${id} holds 2 flake notes in 7 days, 2 test files`);

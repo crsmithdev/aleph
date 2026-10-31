@@ -137,7 +137,7 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
     if (cls === "landed") row.cause = mine.some((o) => o.job === r.job && t0(o) < a) ? "After fix rounds" : "First run of the job";
     else if (cls === "nothing") row.cause = afterLand ? "Goal had landed" : "Work on main from other goal";
     else if (cls === "loop") row.cause = startsBefore + 1 >= 10 ? "10+ starts in an hour" : "4–9 starts in an hour";
-    else if (r.state === "needs-you") row.cause = "Waited on Chris";
+    else if (r.state === "awaiting") row.cause = "Waited on Chris";
     else if (r.failed === "review" || /reviewer/i.test(reason)) row.cause = "Reviewer sent back";
     else if (r.failed || / failed$|^timed out: check /.test(reason)) row.cause = "Checks failed";
     else if (/time box|stalled|timed out|lost/i.test(reason)) row.cause = "Stalled or timed out";

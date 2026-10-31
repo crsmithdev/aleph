@@ -1,1 +1,12 @@
-{"kind":"agent","job":"tools-3","name":"tools-3","repo":"tools","branch":"factory/tools-3","state":"stuck","reason":"no output for 30 minutes","told":true,"started":"2026-10-28T08:45:00.000Z","ended":"2026-10-28T09:15:00.000Z"}
+{
+  "kind": "build",
+  "job": "tools-3",
+  "name": "tools-3",
+  "repo": "tools",
+  "branch": "factory/tools-3",
+  "state": "stuck",
+  "reason": "no output for 30 minutes",
+  "told": true,
+  "started": "2026-10-28T08:45:00.000Z",
+  "ended": "2026-10-28T09:15:00.000Z"
+}

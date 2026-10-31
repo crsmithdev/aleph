@@ -333,9 +333,9 @@ test("the as-of line is h:mm am or pm, no date", () => {
 });
 
 test("a running job past 40 minutes says so", () => {
-  const late = withAttn({ ...state, running: [job({ name: "a", started: "2026-10-27T16:19:00Z", run: { kind: "agent", started: "2026-10-27T16:19:00Z" } })] });
+  const late = withAttn({ ...state, running: [job({ name: "a", started: "2026-10-27T16:19:00Z", run: { kind: "build", started: "2026-10-27T16:19:00Z" } })] });
   expect(late).toContain("past the time box");
-  expect(withAttn({ ...state, running: [job({ name: "a", started: "2026-10-27T16:30:00Z", run: { kind: "agent", started: "2026-10-27T16:30:00Z" } })] })).not.toContain("past the time box");
+  expect(withAttn({ ...state, running: [job({ name: "a", started: "2026-10-27T16:30:00Z", run: { kind: "build", started: "2026-10-27T16:30:00Z" } })] })).not.toContain("past the time box");
 });
 
 test("a land run is measured from its own start and never past the time box", () => {
@@ -346,7 +346,7 @@ test("a land run is measured from its own start and never past the time box", ()
 });
 
 test("a worker run older than 40 minutes is past the time box", () => {
-  const h = withAttn({ ...state, running: [job({ name: "a", started: "2026-10-27T15:00:00Z", run: { kind: "agent", started: "2026-10-27T16:00:00Z" } })] });
+  const h = withAttn({ ...state, running: [job({ name: "a", started: "2026-10-27T15:00:00Z", run: { kind: "build", started: "2026-10-27T16:00:00Z" } })] });
   expect(h).toContain("past the time box");
   expect(h).toContain("worker");
 });
@@ -581,12 +581,12 @@ test("the lede counts proposals as one warning", () => {
 
 test("approve and decline handlers", async () => {
   const base = mkdtempSync(join(tmpdir(), "aleph-prop-"));
-  const keys = ["ALEPH_FACTORY_DIR", "ALEPH_ITEMS", "ALEPH_REPOS", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
+  const keys = ["ALEPH_FACTORY_DIR", "ALEPH_ISSUES", "ALEPH_REPOS", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
   const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
   const sh = (cwd: string, ...a: string[]) => { const p = Bun.spawnSync(a, { cwd, stdout: "pipe", stderr: "pipe" }); if (p.exitCode) throw new Error(String(p.stderr)); };
   try {
     Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
-      ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ITEMS: join(base, "items"), ALEPH_REPOS: join(base, "repos.json") });
+      ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json") });
     sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
     sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
     sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");

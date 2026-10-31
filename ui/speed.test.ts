@@ -22,17 +22,17 @@ beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-speed-"));
   for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0" })) { saved[k] = process.env[k]; process.env[k] = v; }
   // today: agents of 600 s (passed, tests 36), 1200 s (dropped), 1800 s (stuck, model unset), a 5 h broken clock
-  run({ kind: "agent", state: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 36 }, { name: "types", ok: true, seconds: 8 }], ...secs(0, 9, 600) });
-  run({ kind: "agent", state: "dropped", model: "claude-opus-5-5", cost: 2, ...secs(0, 10, 1200) });
-  run({ kind: "agent", state: "stuck", cost: 3, ...secs(0, 10, 1800) });
-  run({ kind: "agent", state: "passed", cost: 9, ...secs(0, 1, 5 * 3600) });
+  run({ kind: "build", state: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 36 }, { name: "types", ok: true, seconds: 8 }], ...secs(0, 9, 600) });
+  run({ kind: "build", state: "dropped", model: "claude-opus-5-5", cost: 2, ...secs(0, 10, 1200) });
+  run({ kind: "build", state: "stuck", cost: 3, ...secs(0, 10, 1800) });
+  run({ kind: "build", state: "passed", cost: 9, ...secs(0, 1, 5 * 3600) });
   run({ kind: "land", state: "landed", ...secs(0, 9, 40) });
   run({ kind: "land", state: "landed", ...secs(0, 9, 46) });
   run({ kind: "land", state: "failed", ...secs(0, 9, 100) });
   run({ kind: "triage", state: "done", ...secs(0, 11, 20) });
-  run({ kind: "agent", state: "running", started: at(0, 14) });
+  run({ kind: "build", state: "running", started: at(0, 14) });
   // three days ago and 20 days ago
-  run({ kind: "agent", state: "passed", model: "claude-sonnet-5-5", cost: 0.5, checks: [{ name: "tests", ok: true, seconds: 40 }], ...secs(3, 9, 300) });
+  run({ kind: "build", state: "passed", model: "claude-sonnet-5-5", cost: 0.5, checks: [{ name: "tests", ok: true, seconds: 40 }], ...secs(3, 9, 300) });
   run({ kind: "plan", state: "done", ...secs(20, 9, 90) });
 });
 afterAll(() => {
@@ -133,13 +133,13 @@ test("the view: medians with p50, p90 and runs; charts; efficiency with reruns a
 test("classify: one run of each class, with its cause", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (job: string, todo: number, h: number, m: number, o: Record<string, unknown> = {}) =>
-    ({ kind: "agent", job, name: job, repo: "fx", todo, state: "passed", started: t(h, m), ended: t(h, m + 10), ...o }) as any;
+    ({ kind: "build", job, name: job, repo: "fx", on: `fx-${todo}`, state: "passed", started: t(h, m), ended: t(h, m + 10), ...o }) as any;
   const runs = [
     // goal 1: a fix round and the landing run in job a, an earlier job z restarted, then a run after the land
     r("z", 1, 1, 0, { state: "stuck", reason: "agent run z: stalled" }),
     r("a", 1, 2, 0, { state: "failed", failed: "tests" }),
     r("a", 1, 3, 0),
-    { kind: "land", job: "a", name: "a", repo: "fx", todo: 1, state: "landed", started: t(3, 20), ended: t(3, 25) },
+    { kind: "land", job: "a", name: "a", repo: "fx", on: "fx-1", state: "landed", started: t(3, 20), ended: t(3, 25) },
     r("b", 1, 5, 0),
     // goal 2: four starts in an hour, the 4th is a loop; they have no landing, the first three are not counted
     r("l1", 2, 6, 0), r("l2", 2, 6, 10), r("l3", 2, 6, 20), r("l4", 2, 6, 30),
@@ -181,20 +181,20 @@ test("a build run counts as an agent run", () => {
   expect(d.models.find((m) => m.model === "claude-opus-5-5")!.count).toBe(before.models.find((m) => m.model === "claude-opus-5-5")!.count + 1);
   expect(d.buckets.some((b) => b.agent === 7000 && b.tests === 20)).toBe(true);
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const r = (o: Record<string, unknown>) => ({ job: "b", name: "b", repo: "fx", todo: 1, state: "passed", ...o }) as any;
+  const r = (o: Record<string, unknown>) => ({ job: "b", name: "b", repo: "fx", on: "fx-1", state: "passed", ...o }) as any;
   const out = classify([
     r({ kind: "build", state: "failed", failed: "tests", started: t(2), ended: t(2, 10) }),
     r({ kind: "build", started: t(3), ended: t(3, 10) }),
-    { kind: "land", job: "b", name: "b", repo: "fx", todo: 1, state: "landed", started: t(3, 20), ended: t(3, 25) },
+    { kind: "land", job: "b", name: "b", repo: "fx", on: "fx-1", state: "landed", started: t(3, 20), ended: t(3, 25) },
   ], () => "open", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
   expect(out.classes.find((c) => c.key === "landed")!.causes.map((c) => c.name)).toEqual(["After fix rounds"]);
 });
 
-test("runs read their issue from on: a goal run counts under its issue, old todo runs as before", () => {
+test("runs read their issue from on: a goal run counts under its issue, an issue run under its number", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const a = (job: string, o: Record<string, unknown>) => ({ kind: "agent", job, name: job, repo: "ox", state: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;
+  const a = (job: string, o: Record<string, unknown>) => ({ kind: "build", job, name: job, repo: "ox", state: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;
   const runs = [
-    a("p", { on: "ox-860" }), a("q", { on: "ox-860.1" }), a("r", { todo: 7 }),
+    a("p", { on: "ox-860" }), a("q", { on: "ox-860.1" }), a("r", { on: "ox-7" }),
   ];
   const seen: string[] = [];
   classify(runs, (g) => { seen.push(g); return "open"; }, new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
@@ -205,6 +205,6 @@ test("runs read their issue from on: a goal run counts under its issue, old todo
   const fit = { pooled: 0.1, byModel: {} } as any;
   const w = speed("week", now, fit);
   expect(w.goals.week).toBe(0.2); // both runs under the one key ox-860
-  run({ ...a("r", { todo: 7 }), started: at(1, 9), ended: at(1, 10) }); run({ ...land("r", { todo: 7 }), started: at(1, 9), ended: at(1, 10) });
+  run({ ...a("r", { on: "ox-7" }), started: at(1, 9), ended: at(1, 10) }); run({ ...land("r", { on: "ox-7" }), started: at(1, 9), ended: at(1, 10) });
   expect(speed("week", now, fit).goals.week).toBe(0.1); // ox-7 counts too: median of 0.2 and 0.1
 });

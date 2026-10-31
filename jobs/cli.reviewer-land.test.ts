@@ -44,7 +44,6 @@ describe("a factory run", () => {
     expect(state(run).review).toEqual({ call: "ask", reason: "decide the held path" });
     const shown = (await aleph(["jobs", "fheld"])).json;
     expect(shown.review).toEqual({ call: "ask", reason: "decide the held path" });
-    expect(shown.review2).toEqual({ verdict: "chris", reason: "decide the held path" });
     expect(state(run)).toMatchObject({ state: "awaiting", ask: { kind: "approval", reason: "held-path" } });
     expect(state(run).needs).toBeUndefined();
     const before = remoteGit("rev-parse", "main");
@@ -95,7 +94,7 @@ describe("a factory run", () => {
     expect(rep.stdout).toContain("fac/fdefault passed");
     expect(rep.stdout).toContain("DEFAULT: which colour? -> blue");
     expect(rep.stdout).toContain("cost $0.25 at the API price");
-    expect(rep.stdout).toContain("fac/fheld needs-you (held): held path held/x.txt");
+    expect(rep.stdout).toContain("fac/fheld awaiting (held): held path held/x.txt");
     expect(rep.stdout).toContain("aleph land fheld");
     expect(rep.stdout).toMatch(/runs in the last 24 hours: \d+ of 100, \$\d+\.\d{2} at the API price/);
     expect(state(r.json.run)).toMatchObject({ shown: true, told: true });

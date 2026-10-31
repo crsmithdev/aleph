@@ -122,7 +122,7 @@ Notes are `wiki/<kind>/<Title>.md` with `[[Title]]` links and frontmatter `alias
 
 ## Issues
 
-Every repo in `~/.aleph/repos.json` has a list in the work store, a private git repo cloned at `~/.aleph/items` (`$ALEPH_ITEMS`). Each item is one file, `<repo>/backlog/tasks/<repo>-<n>.md`: a small frontmatter header, free prose, and a Notes list. **Status is a field, never a filing position** — a finished item stays where it is and keeps its number, because commits, specs and the vault quote that number.
+Every repo in `~/.aleph/repos.json` has a list in the work store, a private git repo cloned at `~/.aleph/items` (`$ALEPH_ISSUES`). Each item is one file, `<repo>/backlog/tasks/<repo>-<n>.md`: a small frontmatter header, free prose, and a Notes list. **Status is a field, never a filing position** — a finished item stays where it is and keeps its number, because commits, specs and the vault quote that number.
 
 ```bash
 aleph issue add <repo> "<title>" [--body -] [--priority high] [--labels a,b]

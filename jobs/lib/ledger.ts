@@ -7,7 +7,7 @@ import { availableParallelism, homedir } from "node:os";
 import { join } from "node:path";
 import { layout } from "./layout.ts";
 
-export type State = "running" | "passed" | "needs-you" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
+export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
 /** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. The hidden check adds its test counts. */
 export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number; rerun?: boolean }
@@ -23,9 +23,9 @@ export interface Ask {
 export type Review = { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string };
 
 export interface Run {
-  kind: "agent" | "build" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter";
+  kind: "build" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
-  state: State; needs?: "manual" | "question" | "held" | "review"; phase?: string;
+  state: State; phase?: string;
   reason?: string; question?: string; say?: string;
   /** A triage run: the route it applied to its issue. */
   route?: "goal" | "close" | "done" | "ask";
@@ -38,8 +38,6 @@ export interface Run {
   checkItem?: number;
   /** A land run the facts gate has looked at: dispatch does not read its job again. */
   facts?: true;
-  /** The repo's issue the job works on: land marks it done, drop adds a note. */
-  todo?: number | string;
   /** New shape: the goal or issue the run is on, `<repo>-<n>`. */
   on?: string;
   /** New shape: what the run waits on. */
@@ -96,7 +94,7 @@ export interface Repo {
   hiddenRun: string;
 }
 
-export const OPEN: State[] = ["running", "passed", "needs-you", "awaiting", "failed", "stuck"];
+export const OPEN: State[] = ["running", "passed", "awaiting", "failed", "stuck"];
 
 export function expand(p: string): string {
   return p === "~" || p.startsWith("~/") ? join(homedir(), p.slice(1)) : p;
@@ -183,44 +181,33 @@ export function isOpen(runs: Entry[]): boolean {
   return OPEN.includes(last.run.state);
 }
 
-/** A run waits for Chris: the new state or the old. */
-export const isAwaiting = (state: State): boolean => state === "awaiting" || state === "needs-you";
+/** A run waits for Chris. */
+export const isAwaiting = (state: State): boolean => state === "awaiting";
 
-/** A build run: the new kind or the old. */
-export const isBuild = (kind: Run["kind"]): boolean => kind === "build" || kind === "agent";
+/** A build run. */
+export const isBuild = (kind: Run["kind"]): boolean => kind === "build";
 
-/** The state under its old name: `awaiting` reads as `needs-you`. */
-export const oldState = (state: State): State => (state === "awaiting" ? "needs-you" : state);
-
-/** The number of the run's `on` (`<repo>-<n>`, for the run's repo), else its `todo`. A dotted `on` gives the goal's `<n>.<m>` as a string. */
+/** The number of the run's `on` (`<repo>-<n>`, for the run's repo). A dotted `on` gives the goal's `<n>.<m>` as a string. */
 export function onOf(run: Run): number | string | undefined {
-  if (run.on === undefined) return run.todo;
+  if (run.on === undefined) return undefined;
   const m = run.on.match(/^(.+)-(\d+(?:\.\d+)?)$/);
   return m && m[1] === run.repo ? (m[2].includes(".") ? m[2] : Number(m[2])) : undefined;
 }
 
-const OLD_NEEDS: Record<NonNullable<Run["needs"]>, { kind: Ask["kind"]; reason: string }> = {
-  held: { kind: "approval", reason: "held-path" }, review: { kind: "approval", reason: "review" },
-  question: { kind: "input", reason: "question" }, manual: { kind: "input", reason: "manual" },
-};
+/** The run's ask. Undefined when the run asks nothing. */
+export const askOf = (run: Run): Ask | undefined => run.ask;
 
-/** The run's ask: `ask`, else built from `needs`, `question`, `reason` and `stat`. Undefined when the run asks nothing. */
-export function askOf(run: Run): Ask | undefined {
-  if (run.ask) return run.ask;
-  if (!run.needs) return undefined;
-  const { kind, reason } = OLD_NEEDS[run.needs];
-  return { kind, reason, question: run.question ?? run.reason ?? "", options: [], why: run.stat ? [run.stat] : [] };
-}
+const NEEDS: Record<string, "manual" | "question" | "held" | "review"> = { "held-path": "held", review: "review", question: "question", manual: "manual" };
 
-/** The old `needs` of an ask: the reason of a kind the old shape had, else none. */
-export function needsOf(ask: Ask | undefined): Run["needs"] {
+/** The kind of wait an ask is, from its reason: manual, question, held or review; else none. */
+export function needsOf(ask: Ask | undefined): "manual" | "question" | "held" | "review" | undefined {
   if (!ask) return undefined;
-  return (Object.keys(OLD_NEEDS) as NonNullable<Run["needs"]>[]).find((n) => OLD_NEEDS[n].reason === ask.reason);
+  return NEEDS[ask.reason];
 }
 
-/** The run's review: `review` of its state.json, else its folder's call.md, else the legacy review2.md. */
+/** The run's review: `review` of its state.json, else its folder's call.md. */
 export function reviewOf(e: Entry): Review | undefined {
-  return e.run.review ?? readCall(e.folder) ?? readReview(e.folder);
+  return e.run.review ?? readCall(e.folder);
 }
 
 function cmdline(pid: number): string | null {
@@ -292,7 +279,7 @@ export function stamp(d = new Date()): string {
 /** The one line of news for an ended run. */
 export function newsLine(run: Run, note?: string): string {
   if (run.kind === "plain") return `${run.name} ${run.state === "done" ? "finished" : "failed"}`;
-  let line = `${run.repo}/${run.name} ${oldState(run.state)}`;
+  let line = `${run.repo}/${run.name} ${run.state}`;
   const needs = needsOf(askOf(run));
   if (isAwaiting(run.state) && needs) line += ` ${needs}`;
   // Only a check's reason ends in "failed"; see the state rule in unit.ts.
@@ -343,9 +330,6 @@ export const CALL_FILE = "call.md";
  * `VERDICT:` line. Undefined when there is no call.md.
  */
 export const readCall = (folder: string): Review | undefined => readVerdictFile(join(folder, CALL_FILE));
-
-/** The legacy reader: the same for the review2.md of a run from before the rename. The file name stays until step 5 moves old runs to call.md. */
-export const readReview = (folder: string): Review | undefined => readVerdictFile(join(folder, "review2.md"));
 
 /** The review a verdict file holds, as `Review` shows it, or undefined when the file is not there. */
 function readVerdictFile(file: string): Review | undefined {

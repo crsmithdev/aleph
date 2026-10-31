@@ -74,7 +74,7 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
   sh(dest, "git", "clone", "-q", remote, items);
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
-  const env = { ALEPH_JOBS_DIR: join(dest, "jobs"), ALEPH_REPOS: join(dest, "repos.json"), ALEPH_ITEMS: items, ALEPH_VAULT: join(dest, "vault") };
+  const env = { ALEPH_JOBS_DIR: join(dest, "jobs"), ALEPH_REPOS: join(dest, "repos.json"), ALEPH_ISSUES: items, ALEPH_VAULT: join(dest, "vault") };
   const saved = { ...process.env };
   Object.assign(process.env, IDENT, env);
   try {

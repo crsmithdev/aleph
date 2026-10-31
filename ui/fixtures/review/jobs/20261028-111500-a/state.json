@@ -1,1 +1,11 @@
-{"kind":"land","job":"demo-12","name":"demo-12","repo":"demo","branch":"factory/demo-12","state":"running","todo":12,"told":false,"started":"2026-10-28T11:15:00.000Z"}
+{
+  "kind": "land",
+  "job": "demo-12",
+  "name": "demo-12",
+  "repo": "demo",
+  "branch": "factory/demo-12",
+  "state": "running",
+  "told": false,
+  "started": "2026-10-28T11:15:00.000Z",
+  "on": "demo-12"
+}

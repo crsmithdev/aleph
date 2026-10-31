@@ -120,7 +120,7 @@ describe("the state rule", () => {
   test("a question needs Chris", async () => {
     const r = await job("asks", "question");
     expect(state(r.json.run)).toMatchObject({ state: "awaiting", ask: expect.objectContaining({ kind: "input", reason: "question" }), question: "which colour?" });
-    expect(told).toContain("demo/asks needs-you question");
+    expect(told).toContain("demo/asks awaiting question");
   });
 
   test("an untracked file fails", async () => {
@@ -239,7 +239,7 @@ describe("news", () => {
   test("a run whose process died shows as lost", async () => {
     const folder = join(jobsDir, "20200101-000000-demo-ghost-agent");
     mkdirSync(folder);
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "agent", job: "20200101-000000-demo-ghost-agent", name: "ghost", repo: "demo", state: "running", told: false, started: "2020-01-01T00:00:00Z" }));
+    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", job: "20200101-000000-demo-ghost-agent", name: "ghost", repo: "demo", state: "running", told: false, started: "2020-01-01T00:00:00Z" }));
     writeFileSync(join(folder, "pid"), "999999");
     expect((await aleph(["jobs"])).json.find((j: any) => j.name === "ghost")).toMatchObject({ state: "running", lost: true });
     expect((await aleph(["drop", "ghost"])).code).toBe(0);

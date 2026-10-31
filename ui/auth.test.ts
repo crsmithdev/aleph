@@ -15,7 +15,7 @@ const login = (at: Awaited<ReturnType<typeof start>>, password: string) =>
 
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "aleph-ui-auth-"));
-  for (const [k, v] of Object.entries({ ALEPH_UI_PASSWORD: "hunter2", ALEPH_FACTORY_DIR: dir, ALEPH_JOBS_DIR: join(dir, "jobs"), ALEPH_REPOS: join(dir, "repos.json"), ALEPH_ITEMS: join(dir, "items") })) { saved[k] = process.env[k]; process.env[k] = v; }
+  for (const [k, v] of Object.entries({ ALEPH_UI_PASSWORD: "hunter2", ALEPH_FACTORY_DIR: dir, ALEPH_JOBS_DIR: join(dir, "jobs"), ALEPH_REPOS: join(dir, "repos.json"), ALEPH_ISSUES: join(dir, "items") })) { saved[k] = process.env[k]; process.env[k] = v; }
 });
 afterAll(() => {
   for (const s of servers) s.stop(true);

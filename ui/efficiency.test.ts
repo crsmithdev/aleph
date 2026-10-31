@@ -22,15 +22,15 @@ beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-eff-"));
   for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0" })) { saved[k] = process.env[k]; process.env[k] = v; }
   // g1 landed first try; g2 landed after two fix rounds; g3 landed first try; g4 is not landed
-  run("g1", { kind: "agent", state: "passed", cost: 1, ...span(8, 600) });
+  run("g1", { kind: "build", state: "passed", cost: 1, ...span(8, 600) });
   run("g1", { kind: "land", state: "landed", ...span(9, 30) });
-  run("g2", { kind: "agent", state: "stuck", failed: "tests", cost: 2, ...span(8, 600) });
-  run("g2", { kind: "agent", state: "stuck", failed: "review", round: 1, cost: 2, ...span(9, 600) });
-  run("g2", { kind: "agent", state: "passed", round: 2, cost: 2, ...span(10, 600) });
+  run("g2", { kind: "build", state: "stuck", failed: "tests", cost: 2, ...span(8, 600) });
+  run("g2", { kind: "build", state: "stuck", failed: "review", round: 1, cost: 2, ...span(9, 600) });
+  run("g2", { kind: "build", state: "passed", round: 2, cost: 2, ...span(10, 600) });
   run("g2", { kind: "land", state: "landed", ...span(11, 30) });
-  run("g3", { kind: "agent", state: "passed", cost: 3, ...span(8, 600) });
+  run("g3", { kind: "build", state: "passed", cost: 3, ...span(8, 600) });
   run("g3", { kind: "land", state: "landed", ...span(12, 30) });
-  run("g4", { kind: "agent", state: "stuck", failed: "tests", cost: 9, ...span(8, 600) });
+  run("g4", { kind: "build", state: "stuck", failed: "tests", cost: 9, ...span(8, 600) });
 });
 afterAll(() => {
   for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;

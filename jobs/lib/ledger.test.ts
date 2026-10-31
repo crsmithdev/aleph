@@ -29,56 +29,43 @@ function write(id: string, extra: Partial<Run>, files: Record<string, string> = 
 
 const ask = { kind: "approval" as const, reason: "held-path", question: "", options: [], why: [] };
 
-function pair() {
-  write("20261030-000001-old", { kind: "agent", state: "needs-you", needs: "held", todo: 7 }, { "review2.md": "VERDICT: chris sure?\n" });
-  write("20261030-000002-new", { kind: "build", state: "awaiting", ask, on: "fac-7", review: { call: "ask", reason: "sure?" } });
-  const [o, n] = allJobs();
-  return { o, n };
-}
-
-describe("both run shapes", () => {
-  test("an old and a new run give the same answers", () => {
-    const { o, n } = pair();
-    expect(isOpen(o)).toBe(true);
-    expect(isOpen(n)).toBe(true);
-    expect(stateOf(o)).toBe(stateOf(n));
-    expect(issue(o)).toBe(7);
-    expect(issue(n)).toBe(7);
-    expect(onOf(o[0].run)).toBe(onOf(n[0].run));
-    expect(askOf(o[0].run)).toMatchObject({ kind: "approval", reason: "held-path" });
-    expect(askOf(n[0].run)).toMatchObject({ kind: "approval", reason: "held-path" });
-    expect(reviewOf(o[0])).toEqual({ call: "ask", reason: "sure?" });
-    expect(reviewOf(n[0])).toEqual(reviewOf(o[0]));
-    const { job: _a, run: ro, started: _b, name: _c, ...vo } = view(o);
-    const { job: _d, run: rn, started: _e, name: _f, ...vn } = view(n);
-    expect(vn).toEqual(vo);
-    expect(vn.state).toBe("needs-you");
-    expect(vn.needs).toBe("held");
-    expect(rn.kind).toBe("build");
-    expect(ro.kind).toBe("agent");
+describe("the run shape", () => {
+  test("a run answers from on, ask and review", () => {
+    write("20261030-000001-run", { kind: "build", state: "awaiting", ask, on: "fac-7" }, { "call.md": "VERDICT: chris sure?\n" });
+    const [j] = allJobs();
+    expect(isOpen(j)).toBe(true);
+    expect(stateOf(j)).toBe("awaiting");
+    expect(issue(j)).toBe(7);
+    expect(onOf(j[0].run)).toBe(7);
+    expect(askOf(j[0].run)).toMatchObject({ kind: "approval", reason: "held-path" });
+    expect(reviewOf(j[0])).toEqual({ call: "ask", reason: "sure?" });
+    const v = view(j);
+    expect(v.state).toBe("awaiting");
+    expect(v.needs).toBe("held");
+    expect(v.review).toEqual({ call: "ask", reason: "sure?" });
+    expect(v.run.kind).toBe("build");
   });
 
-  test("news line reads the new shape as the old", () => {
-    const { o, n } = pair();
-    expect(newsLine(n[0].run)).toBe(newsLine(o[0].run));
-    expect(newsLine(n[0].run)).toBe("fac/n needs-you held");
+  test("news line names the state and the wait", () => {
+    write("20261030-000001-run", { kind: "build", state: "awaiting", ask, on: "fac-7" });
+    expect(newsLine(allJobs()[0][0].run)).toBe("fac/n awaiting held");
   });
 });
 
 describe("accessors", () => {
   test("predicates", () => {
     expect(OPEN).toContain("awaiting");
-    expect(isAwaiting("awaiting") && isAwaiting("needs-you") && !isAwaiting("passed")).toBe(true);
-    expect(isBuild("build") && isBuild("agent") && !isBuild("land")).toBe(true);
+    expect(isAwaiting("awaiting") && !isAwaiting("passed")).toBe(true);
+    expect(isBuild("build") && !isBuild("land")).toBe(true);
   });
 
   test("onOf: the number for the run's repo; a dotted on of the run's repo is its goal; a foreign one gives none", () => {
-    const r = { repo: "fac", todo: 4 } as Run;
+    const r = { repo: "fac" } as Run;
     expect(onOf({ ...r, on: "fac-7" })).toBe(7);
     expect(onOf({ ...r, on: "fac-5.1" })).toBe("5.1");
     expect(onOf({ ...r, on: "aleph-577.1" })).toBeUndefined();
     expect(onOf({ ...r, on: "oth-7" })).toBeUndefined();
-    expect(onOf(r)).toBe(4);
+    expect(onOf(r)).toBeUndefined();
   });
 
   test("a run with a dotted on is found under its goal", () => {
@@ -86,10 +73,8 @@ describe("accessors", () => {
     expect(issue(allJobs()[0])).toBe("5.1");
   });
 
-  test("askOf builds approval for held and review, input for question and manual", () => {
-    expect(askOf({ needs: "review" } as Run)).toMatchObject({ kind: "approval", reason: "review" });
-    expect(askOf({ needs: "question", question: "which?" } as Run)).toMatchObject({ kind: "input", reason: "question", question: "which?" });
-    expect(askOf({ needs: "manual", stat: "1 file" } as Run)).toMatchObject({ kind: "input", reason: "manual", why: ["1 file"] });
+  test("askOf is the run's ask, else none", () => {
+    expect(askOf({ ask } as unknown as Run)).toBe(ask);
     expect(askOf({} as Run)).toBeUndefined();
   });
 });

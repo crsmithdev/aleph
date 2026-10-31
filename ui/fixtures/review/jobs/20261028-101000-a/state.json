@@ -1,1 +1,22 @@
-{"kind":"agent","job":"tools-1","name":"tools-1","repo":"tools","branch":"factory/tools-1","state":"needs-you","needs":"review","reason":"review: chris","question":"The goal says dates, the code parses only ISO dates. Is ISO enough?","todo":1,"told":true,"started":"2026-10-28T10:10:00.000Z","ended":"2026-10-28T10:30:00.000Z","cost":0.52,"model":"claude-sonnet-5-5"}
+{
+  "kind": "build",
+  "job": "tools-1",
+  "name": "tools-1",
+  "repo": "tools",
+  "branch": "factory/tools-1",
+  "state": "awaiting",
+  "reason": "review: chris",
+  "told": true,
+  "started": "2026-10-28T10:10:00.000Z",
+  "ended": "2026-10-28T10:30:00.000Z",
+  "cost": 0.52,
+  "model": "claude-sonnet-5-5",
+  "on": "tools-1",
+  "ask": {
+    "kind": "approval",
+    "reason": "review",
+    "question": "The goal says dates, the code parses only ISO dates. Is ISO enough?",
+    "options": [],
+    "why": []
+  }
+}

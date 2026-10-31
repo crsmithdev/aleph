@@ -40,7 +40,7 @@ J
 esac
 `;
 
-const KEYS = ["ALEPH_ITEMS", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_PLAN_CMD", "ALEPH_DISPATCH", "ALEPH_VAULT"];
+const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_PLAN_CMD", "ALEPH_DISPATCH", "ALEPH_VAULT"];
 let base: string;
 let saved: Record<string, string | undefined>;
 
@@ -53,7 +53,7 @@ beforeEach(() => {
   // An empty vault, so the planner's recall never reads the real ~/.aleph/vault.
   mkdirSync(join(base, "vault-empty"));
   Object.assign(process.env, {
-    ALEPH_ITEMS: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"),
+    ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"),
     ALEPH_FACTORY_DIR: join(base, "factory"), XDG_RUNTIME_DIR: join(base, "run"), ALEPH_DAY_CAP: "100", ALEPH_LIVE_CAP: "5",
     SIDETONE_TELL_URL: "http://127.0.0.1:1/tell", ALEPH_PLAN_CMD: join(base, "fake"), ALEPH_DISPATCH: "off",
     ALEPH_VAULT: join(base, "vault-empty"),
@@ -206,7 +206,7 @@ test("a goal that has had a run is not planned", async () => {
   const id = addGoal("three");
   const folder = join(base, "jobs", `20261028-000000-fac-${id}.1-agent`);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "agent", job: "x", name: `fac-${id}.1`, repo: "fac", todo: `${id}.1`, state: "dropped", told: true, started: new Date().toISOString() });
+  writeRun(folder, { kind: "build", job: "x", name: `fac-${id}.1`, repo: "fac", on: `fac-${id}.1`, state: "dropped", told: true, started: new Date().toISOString() });
   await dispatch("opus");
   expect(planCalls()).toEqual([]);
 });

@@ -7,7 +7,7 @@ import * as issues from "./store.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
-const saved = { ALEPH_ITEMS: process.env.ALEPH_ITEMS };
+const saved = { ALEPH_ISSUES: process.env.ALEPH_ISSUES };
 
 function sh(cwd: string, ...args: string[]): string {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
@@ -34,12 +34,12 @@ beforeAll(() => {
   sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
   sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(join(base, "items"), "git", "push", "-q", "origin", "main");
-  Object.assign(process.env, gitEnv, { ALEPH_ITEMS: join(base, "items") });
+  Object.assign(process.env, gitEnv, { ALEPH_ISSUES: join(base, "items") });
 });
 
 afterAll(() => {
-  if (saved.ALEPH_ITEMS === undefined) delete process.env.ALEPH_ITEMS;
-  else process.env.ALEPH_ITEMS = saved.ALEPH_ITEMS;
+  if (saved.ALEPH_ISSUES === undefined) delete process.env.ALEPH_ISSUES;
+  else process.env.ALEPH_ISSUES = saved.ALEPH_ISSUES;
   rmSync(base, { recursive: true, force: true });
 });
 

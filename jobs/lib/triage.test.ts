@@ -60,7 +60,7 @@ beforeAll(() => {
   chmodSync(join(base, "fake"), 0o755);
   repo.path = base;
   Object.assign(process.env, gitEnv, {
-    ALEPH_ITEMS: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_TRIAGE_CMD: join(base, "fake"),
+    ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_TRIAGE_CMD: join(base, "fake"),
     FAKE_LOG: join(base, "calls"), ALEPH_LIVE_CAP: "10", ALEPH_FACTORY_DIR: factoryHome,
     // Locks live in $XDG_RUNTIME_DIR/aleph, shared by every process on the machine; keep this process's own.
     XDG_RUNTIME_DIR: join(base, "run"),
@@ -106,7 +106,6 @@ test("a triage run records its route and the issue it is on", async () => {
   await run();
   const runs = Object.fromEntries(readdirSync(join(base, "jobs")).filter((d) => d.includes(`-triage-${repo.key}-`)).map((d) => readRun(join(base, "jobs", d))!).map((r) => [r.name, r]));
   expect(runs[`triage-${repo.key}-1`]).toMatchObject({ route: "goal", on: `${repo.key}-1`, reason: "goal" });
-  expect(runs[`triage-${repo.key}-1`]!.todo).toBeUndefined();
   expect(runs[`triage-${repo.key}-2`]).toMatchObject({ route: "ask", reason: "live" });
   expect(runs[`triage-${repo.key}-3`]!.route).toBe("close");
   expect(runs[`triage-${repo.key}-4`]!.route).toBe("close");

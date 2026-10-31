@@ -6,7 +6,7 @@ import { join } from "node:path";
 // Run on the host, not in a sandbox: ALEPH_SHOT_LIVE=1 bun test jobs/lib/shot.live.test.ts
 const live = process.env.ALEPH_SHOT_LIVE === "1";
 const base = mkdtempSync(join(tmpdir(), "shot-live-"));
-if (live) process.env.ALEPH_RUNS_DIR = join(base, "runs");
+if (live) process.env.ALEPH_SANDBOX_DIR = join(base, "runs");
 afterAll(() => rmSync(base, { recursive: true, force: true }));
 
 test.skipIf(!live)("a sandboxed step serves its UI and aleph-shot takes the shot outside", async () => {

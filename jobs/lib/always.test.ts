@@ -3,7 +3,6 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS, always, grant, handed, logAlways, readAlways, revoke } from "./always.ts";
-import { REASONS, readStanding } from "./standing.ts";
 
 let dir = "";
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "always-")); process.env.ALEPH_FACTORY_DIR = dir; });
@@ -47,19 +46,15 @@ test("ASK_REASONS names every reason with actions and an always", () => {
   expect(ASK_REASONS["host-check"].always).toBe("");
 });
 
-test("readAlways reads standing.json under the new reason names when always.json is missing; a write goes to always.json only", () => {
-  writeFileSync(join(dir, "standing.json"), JSON.stringify({ held: { action: "firefighter", at: "t" }, "triage-no-verdict": { action: "retry", at: "t" }, decision: { action: "recommended", at: "t" } }));
-  expect(Object.keys(readAlways()).sort()).toEqual(["held-path", "question", "triage-failed"]);
+test("readAlways reads always.json only; a bad file is empty and a write goes to always.json", () => {
+  expect(readAlways()).toEqual({});
+  writeFileSync(join(dir, "always.json"), JSON.stringify({ "held-path": { action: "firefighter", at: "t" } }));
+  expect(Object.keys(readAlways())).toEqual(["held-path"]);
   expect(handed("held-path")).toBe(true);
-  expect(Object.keys(readStanding()).sort()).toEqual(["held", "question", "triage-no-verdict"]);
   expect(grant("rescue", "recommended")).toBeNull();
-  expect(Object.keys(readAlways()).sort()).toEqual(["held-path", "question", "rescue", "triage-failed"]);
-  expect(Object.keys(JSON.parse(readFileSync(join(dir, "always.json"), "utf8"))).length).toBe(4);
-  expect(JSON.parse(readFileSync(join(dir, "standing.json"), "utf8")).held.action).toBe("firefighter");
-});
-
-test("the standing shim still names the old reasons for the UI", () => {
-  expect(Object.keys(REASONS)).toContain("held");
+  expect(Object.keys(readAlways()).sort()).toEqual(["held-path", "rescue"]);
+  writeFileSync(join(dir, "always.json"), "not json");
+  expect(readAlways()).toEqual({});
 });
 
 const CLI = join(import.meta.dir, "..", "cli.ts");
@@ -68,12 +63,11 @@ const cli = (...args: string[]) => {
   return { code: p.exitCode, out: p.stdout.toString(), err: p.stderr.toString() };
 };
 
-test("aleph always grant, list and revoke work on always.json and write no standing.json", () => {
+test("aleph always grant, list and revoke work on always.json", () => {
   const g = cli("always", "grant", "rescue", "recommended");
   expect(g.code).toBe(0);
   const saved = JSON.parse(readFileSync(join(dir, "always.json"), "utf8"));
   expect(saved).toEqual({ rescue: { action: "recommended", at: expect.any(String) } });
-  expect(existsSync(join(dir, "standing.json"))).toBe(false);
   const l = cli("always", "list");
   expect(l.code).toBe(0);
   expect(JSON.parse(l.out).rescue.action).toBe("recommended");
@@ -82,14 +76,14 @@ test("aleph always grant, list and revoke work on always.json and write no stand
   expect(cli("always", "list").out).not.toContain("rescue");
 });
 
-test("aleph always grant refuses an unknown reason and takes held-path; standing is an alias", () => {
+test("aleph always grant refuses an unknown reason and takes held-path", () => {
   const bad = cli("always", "grant", "held", "firefighter");
   expect(bad.code).toBe(1);
   expect(existsSync(join(dir, "always.json"))).toBe(false);
   expect(cli("always", "grant", "held-path", "firefighter").code).toBe(0);
-  expect(cli("standing", "grant", "held", "land").code).toBe(0);
+  expect(cli("always", "grant", "held-path", "land").code).toBe(0);
   expect(JSON.parse(readFileSync(join(dir, "always.json"), "utf8"))["held-path"].action).toBe("land");
-  expect(JSON.parse(cli("standing", "list").out).held.action).toBe("land");
+  expect(JSON.parse(cli("always", "list").out)["held-path"].action).toBe("land");
 });
 
 test("logAlways appends one always line to tick.log", () => {

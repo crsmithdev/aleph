@@ -46,15 +46,15 @@ beforeAll(async () => {
   writeFileSync(join(factory, "baseline.json"), JSON.stringify({ fac: { repo: "fac", commit: "abcdef1234", ok: false, failed: "tests" } }));
   const run = (id: string, o: object) => {
     mkdirSync(join(jobs, id));
-    writeFileSync(join(jobs, id, "state.json"), JSON.stringify({ kind: "agent", told: true, started: "2026-10-27T10:00:00Z", ...o }));
+    writeFileSync(join(jobs, id, "state.json"), JSON.stringify({ kind: "build", told: true, started: "2026-10-27T10:00:00Z", ...o }));
   };
-  run("20261027-100000-a", { job: "fac-1", name: "fac-1", repo: "fac", state: "landed", todo: 1, ended: "2026-10-27T11:00:00Z" });
+  run("20261027-100000-a", { job: "fac-1", name: "fac-1", repo: "fac", state: "landed", on: "fac-1", ended: "2026-10-27T11:00:00Z" });
   run("20261027-110000-a", { job: "fac-2", name: "fac-2", repo: "fac", state: "running" });
   run("20261027-120000-a", { job: "plain-1", name: "plain-1", repo: "plain", state: "landed", ended: "2026-10-27T13:00:00Z" });
   writeFileSync(join(vault, "wiki", "A fact.md"), note("concept", "fac", "2026-10-01"));
   writeFileSync(join(vault, "wiki", "B fact.md"), note("gotcha", "fac", "2026-10-20"));
   writeFileSync(join(vault, "wiki", "C fact.md"), note("concept", "plain", "2026-10-05"));
-  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: jobs, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: factory, ALEPH_VAULT: vault })) {
+  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: jobs, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ALEPH_VAULT: vault })) {
     saved[k] = process.env[k];
     process.env[k] = v;
   }
@@ -96,11 +96,11 @@ test("/api/projects/<key> gives a job's item from its on (a dotted on stays a st
   const runs: [string, object][] = [
     ["20261001-100000-b", { job: "plain-on", name: "plain-on", repo: "plain", state: "running", on: "plain-7" }],
     ["20261001-110000-b", { job: "plain-goal", name: "plain-goal", repo: "plain", state: "running", on: "plain-8.1" }],
-    ["20261001-120000-b", { job: "plain-todo", name: "plain-todo", repo: "plain", state: "running", todo: 9 }],
+    ["20261001-120000-b", { job: "plain-todo", name: "plain-todo", repo: "plain", state: "running", on: "plain-9" }],
   ];
   for (const [id, o] of runs) {
     mkdirSync(join(base, "jobs", id));
-    writeFileSync(join(base, "jobs", id, "state.json"), JSON.stringify({ kind: "agent", told: true, started: "2026-10-01T10:00:00Z", ...o }));
+    writeFileSync(join(base, "jobs", id, "state.json"), JSON.stringify({ kind: "build", told: true, started: "2026-10-01T10:00:00Z", ...o }));
   }
   try {
     const d: any = await (await at("/api/projects/plain")).json();

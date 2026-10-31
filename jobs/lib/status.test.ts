@@ -66,13 +66,13 @@ test("a reverted commit does not make the item done", () => {
 test("a triage run does not make its item touched; an agent run does, and the store's done still stands", () => {
   const sandbox: Repo = { ...repo, sandbox: true };
   const done: Doc = { head: "", items: [item(5, "done"), item(6, "done")] };
-  const run = (job: string, kind: Run["kind"], todo: number, state: Run["state"]) => {
+  const run = (job: string, kind: Run["kind"], todo: number | undefined, state: Run["state"]) => {
     const folder = join(base, "jobs", job);
     mkdirSync(folder, { recursive: true });
-    writeRun(folder, { kind, job, name: job, repo: "demo", todo, state, told: true, shown: true, started: new Date().toISOString() });
+    writeRun(folder, { kind, job, name: job, repo: "demo", ...(todo !== undefined ? { on: `demo-${todo}` } : {}), state, told: true, shown: true, started: new Date().toISOString() });
   };
   run("20261028-000001-demo-5-triage", "triage", 5, "done");
-  run("20261028-000002-demo-6-agent", "agent", 6, "done");
+  run("20261028-000002-demo-6-agent", "build", 6, "done");
 
   const f = facts(sandbox, done);
   expect(f.touched).toEqual([6]);
@@ -88,7 +88,7 @@ test("a passed agent run whose later land found the job lock busy leaves the ite
   const job = "20261028-000003-demo-7-agent";
   const write = (folder: string, run: Partial<Run>) => {
     mkdirSync(join(base, "jobs", folder), { recursive: true });
-    writeRun(join(base, "jobs", folder), { kind: "agent", job, name: job, repo: "demo", todo: 7, state: "passed", told: true, shown: true, started: new Date().toISOString(), ...run } as Run);
+    writeRun(join(base, "jobs", folder), { kind: "build", job, name: job, repo: "demo", on: "demo-7", state: "passed", told: true, shown: true, started: new Date().toISOString(), ...run } as Run);
   };
   write("20261028-000003-demo-7-agent", {});
   write("20261028-000004-demo-7-land", { kind: "land", state: "failed", reason: "job lock busy" });
@@ -111,7 +111,7 @@ test("a touched item the store closed is done without a fresh trailer commit, un
   for (const n of [11, 12, 13]) {
     const folder = join(base, "jobs", `20261028-0001${n}-demo-${n}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeRun(folder, { kind: "agent", job: `j${n}`, name: `j${n}`, repo: "demo", todo: n, state: "done", told: true, shown: true, started: new Date().toISOString() });
+    writeRun(folder, { kind: "build", job: `j${n}`, name: `j${n}`, repo: "demo", on: `demo-${n}`, state: "done", told: true, shown: true, started: new Date().toISOString() });
   }
   // 12: its trailer commit is at or before the acceptance since.
   sh(clone, "git", "fetch", "-q");

@@ -37,7 +37,7 @@ async function review(script: string) {
   const old = { j: process.env.ALEPH_JOBS_DIR, c: process.env.ALEPH_FACTS_CMD };
   process.env.ALEPH_JOBS_DIR = jobs; process.env.ALEPH_FACTS_CMD = bin;
   try {
-    const landed: any = { id: "x", folder: "x", run: { kind: "land", job: "job-1", name: "demo-7", repo: "demo", todo: 7, state: "landed", told: true, started: "" } };
+    const landed: any = { id: "x", folder: "x", run: { kind: "land", job: "job-1", name: "demo-7", repo: "demo", on: "demo-7", state: "landed", told: true, started: "" } };
     const r = await reviewFacts({ key: "demo", path: repo, main: "main" } as any, landed, FACTS, "abc1234");
     const state = JSON.parse(readFileSync(join(r.folder, "state.json"), "utf8"));
     return { r, state, stdin: existsSync(seen) ? readFileSync(seen, "utf8") : "" };
@@ -156,7 +156,7 @@ describe("factsGate through the dispatch", () => {
     writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo, sandbox: true, autoland: false } }));
     for (const [k, val] of Object.entries({ GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" })) set(k, val);
     set("ALEPH_VAULT", vault); set("ALEPH_JUDGE", "jev"); set("ALEPH_JOBS_DIR", jobs); set("ALEPH_REPOS", join(base, "repos.json"));
-    set("ALEPH_FACTORY_DIR", join(base, "factory")); set("XDG_RUNTIME_DIR", join(base, "run")); set("ALEPH_ITEMS", join(base, "items"));
+    set("ALEPH_FACTORY_DIR", join(base, "factory")); set("XDG_RUNTIME_DIR", join(base, "run")); set("ALEPH_ISSUES", join(base, "items"));
     expect(Bun.spawnSync(["bun", join(import.meta.dir, "..", "..", "vault", "cli.ts"), "init"], { env: { ...process.env, ALEPH_JUDGE: "haiku" } }).exitCode).toBe(0);
     server = Bun.serve({ port: 0, async fetch(req) {
       const body: any = await req.json();
@@ -177,7 +177,7 @@ describe("factsGate through the dispatch", () => {
     const w = join(jobs, id);
     mkdirSync(w, { recursive: true });
     const base = { job: id, name, repo: "fac", told: true, shown: true };
-    writeFileSync(join(w, "state.json"), JSON.stringify({ ...base, kind: "agent", state: "passed", started: "2026-10-28T00:00:00Z" }));
+    writeFileSync(join(w, "state.json"), JSON.stringify({ ...base, kind: "build", state: "passed", started: "2026-10-28T00:00:00Z" }));
     writeFileSync(join(w, "result.md"), result);
     const l = join(jobs, `${id}-land`);
     mkdirSync(l, { recursive: true });
