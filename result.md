@@ -139,3 +139,18 @@ No code change. The branch already has the fix: bdd3dae (aleph-702) holds `lock(
   `could not create directory of '.git/worktrees/w5'` (prune removed another unit's half-made entry).
   Without the lock the hypothesis is reproduced, and `fetch`/`worktree add` failing makes the unit `failed` with code 0 from `started()`. With the lock these run one at a time.
 - Not proven: that the lock removes all early exits, since the pre-lock failure never showed in my 2 runs. Pass rate with the lock: 2/2 full runs.
+
+---
+
+# aleph-841: store readers, new shape only
+
+No code change. The stop condition in the spec holds: steps 4 and 5 (aleph-627.1, aleph-628.1) have not landed, and writers still write the old shape. Removing the readers now would break them. Rerun after aleph-628.1 is done.
+
+Writers that still write an old field or label on this branch (HEAD ed7de3d, same as origin/main):
+- jobs/lib/decision.ts:1-53: "Shim until step 5 (aleph-628)"; `writeDecision` stores option lines with `waiting_on` (`encodeOption(..., "waiting_on")`).
+- ui/api/actions.ts:88: the Wait route calls `issues.edit(..., { waitingOn })`, which sets `waiting_on` (todo/lib/issues.ts:234, 249).
+- todo/lib/todo.ts:269-290: `addLegacy` and `setWaitingOn`, kept for the planner and the UI "until aleph-849 and aleph-628"; ui/fixtures/review/build.ts:10,85 uses `addLegacy` with `waitingOn`.
+- jobs/lib/triage.ts:220 and jobs/lib/factory.ts:205-224 still speak of the `needs-chris` label/kind.
+- jobs/cli.helpers.ts:395 (test helper) seeds `waiting_on`.
+
+Earlier sections above are kept.
