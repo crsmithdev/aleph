@@ -95,7 +95,7 @@ export interface State {
   planner: Job[];
   /** What Needs you says: one item per held, review or question run, needs-chris issue and proposal. */
   attention: AttentionItem[];
-  /** The standing permissions, with how many items each left out of `attention`. */
+  /** The standing permissions, with how many items each reason hands to the firefighter. */
   standing: { reason: string; action: string; at: string; handed: number }[];
   /** Jobs landed and issues triaged in the last 24 hours, with the 7-day daily average. */
   velocity: { landed: { day: number; avg: number }; triaged: { day: number; avg: number } };

@@ -182,14 +182,14 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
 
 /**
  * The Needs-you rows: held, review and question runs, then needs-chris issues, then proposals.
- * A reason that Chris handed to the firefighter is left out and counted in the standing list's `handed`.
+ * Every item stays, with its actions; one whose reason Chris handed to the firefighter is also counted in the standing list's `handed`.
  */
 export function attend(s: Pick<State, "needs" | "needsIssues">, standing: Standing = {}, lessons: Lesson[] = openProposals()): { items: AttentionItem[]; handed: Record<string, number> } {
   const handed: Record<string, number> = {};
   const out: AttentionItem[] = [];
   const add = (it: AttentionItem) => {
     if (standing[it.reason]?.action === "firefighter") handed[it.reason] = (handed[it.reason] ?? 0) + 1;
-    else out.push(it);
+    out.push(it);
   };
   const rank = { held: 0, review: 1, question: 2 } as Record<string, number>;
   const runs = s.needs.filter((j) => j.needs && j.needs in rank).sort((a, b) => rank[a.needs!] - rank[b.needs!]);

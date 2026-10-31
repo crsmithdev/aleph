@@ -95,7 +95,8 @@ describe("state", () => {
     try {
       s = state(now);
       expect(s.standing).toEqual([{ reason: "held", action: "firefighter", at: "2026-10-28T00:00:00.000Z", handed: 1 }]);
-      expect(s.attention).toEqual([]);
+      expect(s.attention.map((a) => [a.reason, a.id])).toEqual([["held", "fac-1"]]);
+      expect(s.attention[0].actions.some((a) => a.act === "land")).toBe(true);
     } finally { rmSync(join(factory, "standing.json")); }
   });
 

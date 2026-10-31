@@ -130,10 +130,11 @@ describe("attention", () => {
     expect(d.problem).not.toContain("<");
   });
 
-  test("a firefighter standing leaves the item out and counts it in handed", () => {
+  test("a firefighter standing keeps the item and counts it in handed", () => {
     const s = { needs: [], needsIssues: [issue({ reason: "triage-no-verdict", question: "triage: no verdict in 2 runs: x" }), issue({ id: "aleph-5", reason: "decision", decision })] };
     const r = attend(s, { "triage-no-verdict": { action: "firefighter", at: "2026-10-28T00:00:00Z" } }, []);
-    expect(r.items.map((i) => i.id)).toEqual(["aleph-5"]);
+    expect(r.items.map((i) => i.id)).toEqual(["aleph-387", "aleph-5"]);
+    expect(r.items[0].actions.length).toBeGreaterThan(0);
     expect(r.handed).toEqual({ "triage-no-verdict": 1 });
   });
 
