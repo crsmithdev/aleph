@@ -338,6 +338,13 @@ test("a worker run older than 40 minutes is past the time box", () => {
   expect(h).toContain("worker");
 });
 
+test("a build run is a worker and is past the time box after 40 minutes", () => {
+  const h = withAttn({ ...state, running: [job({ name: "a", started: "2026-10-27T15:00:00Z", run: { kind: "build", started: "2026-10-27T16:00:00Z" } })] });
+  expect(h).toContain("worker");
+  expect(h).toContain("past the time box");
+  expect(withAttn({ ...state, running: [job({ name: "a", started: "2026-10-27T16:30:00Z", run: { kind: "build", started: "2026-10-27T16:30:00Z" } })] })).not.toContain("past the time box");
+});
+
 test("a 30-file stat shows 12 lines and +18 more files", () => {
   const stat = Array.from({ length: 30 }, (_, i) => ` f${i}.ts | 2 +-`).join("\n") + "\n 30 files changed, 30 insertions(+), 30 deletions(-)";
   const h = withAttn({ ...state, needs: [job({ name: "x", state: "needs-you", needs: "held", stat })] });

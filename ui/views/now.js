@@ -184,8 +184,9 @@ function runningLane(s) {
   const d = new Date(s.now);
   const rows = (s.running ?? []).map((j) => {
     const run = j.run ?? { kind: "agent", started: j.started };
-    const kind = run.kind === "agent" ? "worker" : run.kind === "plan" ? "planner" : run.kind;
-    const over = run.kind === "agent" && Date.parse(s.now) - Date.parse(run.started) > BOX_MIN * 60_000;
+    const worker = run.kind === "agent" || run.kind === "build";
+    const kind = worker ? "worker" : run.kind === "plan" ? "planner" : run.kind;
+    const over = worker && Date.parse(s.now) - Date.parse(run.started) > BOX_MIN * 60_000;
     return laneCard("run-row", itemId(j), `<span class="badge run">${esc(kind)}${j.phase && j.phase !== kind ? ` \u00b7 ${esc(j.phase)}` : ""}</span>`, when(run.started, d), j.item?.title || j.name, jobHref(j),
       `<span class="num"><span class="elapsed" data-since="${esc(run.started)}">${esc(elapsed(run.started, s.now))}</span> elapsed</span>${over ? ` <span class="over">past the time box</span>` : ""}`);
   }).join("");
