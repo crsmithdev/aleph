@@ -515,10 +515,9 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
 .meds > .med:nth-child(5n+1) { border-left: 0; padding-left: 0; }
 .med .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
 .med .v { font: 600 20px/1.2 var(--sans); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); }
-.med .pp { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .med .quiet { font-size: var(--fs-xs); color: var(--muted); }
 .med .p90 { font: 600 18px/1.2 var(--metric); color: var(--muted); font-variant-numeric: lining-nums tabular-nums; }
-.med .runs { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.meds.phases { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .meds.eff { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .sh.sub h2 { font-size: var(--fs-md); }
 .abar { display: flex; height: 40px; border-radius: 8px; overflow: hidden; gap: 2px; background: var(--rule-2); }
@@ -545,7 +544,7 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
 .charts3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
 .chartbox { margin: 0; min-width: 0; }
 .chartbox figcaption { font-size: var(--fs-xs); color: var(--muted); font-weight: 600; margin-bottom: 4px; }
-.speedchart { height: 160px; width: 100%; }
+.speedchart { height: 100px; width: 100%; }
 @media (max-width: 1020px) { .meds { grid-template-columns: repeat(3, minmax(0, 1fr)); } .meds > .med:nth-child(n) { border-left: 1px solid var(--rule); padding-left: 16px; } .meds > .med:nth-child(3n+1) { border-left: 0; padding-left: 0; } .charts3 { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 1020px) { .meds.eff { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
@@ -559,6 +558,7 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
   .flow { flex-direction: column; }
   .lanes { grid-template-columns: minmax(0, 1fr); }
   .meds, .meds.eff { grid-template-columns: minmax(0, 1fr); }
+  .meds.phases { grid-template-columns: minmax(0, 1fr); }
   .meds > .med:nth-child(n) { border-left: 0; padding-left: 0; }
   .lede { flex-wrap: wrap; }
   .lede .say { flex-basis: 100%; }

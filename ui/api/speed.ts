@@ -3,12 +3,15 @@
  * state.json (no Langfuse). Runs with a `started` and an `ended` count; one longer than 4 hours
  * is a broken clock and is skipped. Hour is the last 60 minutes in 1-minute buckets, day the last 24 hours in hourly ones, week and
  * month the last 7 and 30 local days (today included) in daily ones. A percentile is the nearest rank.
+ * The phases also read when each issue and goal file first came into the work store's git history.
  */
+import { existsSync } from "node:fs";
 import { flakes } from "../../jobs/lib/factory.ts";
+import { git } from "../../jobs/lib/git.ts";
 import { allRuns, isBuild, onOf, type Run } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
 import { staleSync } from "../stale.ts";
-import { reader, uiFetchTtl } from "../../todo/lib/store.ts";
+import { reader, storeDir, uiFetchTtl } from "../../todo/lib/store.ts";
 import { status } from "../../todo/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
 
@@ -28,6 +31,8 @@ export interface Speed {
   /** Land runs that landed in the window: the issues done. */
   done: number;
   kinds: Record<(typeof KINDS)[number], Pct>;
+  /** Intake: issue created to first goal queued. Implement: job's first agent start to its last finish. Land: finish to landed. Each counts in the window where it ends. */
+  phases: Record<"intake" | "implement" | "land", Pct>;
   checks: { name: string; count: number; p50: number; p90: number }[];
   /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string. */
   buckets: { label: string; at: string; agent: number | null; tests: number | null; lands: number }[];
@@ -178,6 +183,61 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
   };
 }
 
+// Bulk commits add files whose work is older: they do not say when an issue or a goal was created.
+const BULK = /^(migrate:|todo: move every )/;
+const FILED = /^([^/]+)\/backlog\/tasks\/\1-(\d+)((?:\.\d+)*)\.md$/;
+export interface Filed { issue: Map<string, number | null>; goal: Map<string, number | null> }
+let filedAt: Filed & { head: string } = { head: "", issue: new Map(), goal: new Map() };
+
+/** When each issue and its first goal came into the store, in ms. Null for one that a bulk commit added. Each read adds only the commits since the last. */
+export function filed(dir = storeDir()): Filed {
+  const rev = existsSync(dir) ? git(dir, "rev-parse", "origin/main") : null;
+  if (!rev?.ok) return { issue: new Map(), goal: new Map() };
+  const head = rev.out;
+  if (head === filedAt.head) return filedAt;
+  const known = filedAt.head && git(dir, "merge-base", "--is-ancestor", filedAt.head, head).ok;
+  const next = known ? filedAt : { head, issue: new Map(), goal: new Map() };
+  const log = git(dir, "log", "--reverse", "--diff-filter=A", "--no-renames", "--name-only", "--format=@%ct %s", known ? `${filedAt.head}..${head}` : head).out;
+  let at: number | null = null;
+  for (const line of log.split("\n")) {
+    if (line.startsWith("@")) {
+      const space = line.indexOf(" ");
+      at = BULK.test(line.slice(space + 1)) ? null : Number(line.slice(1, space)) * 1000;
+      continue;
+    }
+    const m = line.match(FILED);
+    if (!m) continue;
+    const map = m[3] ? next.goal : next.issue, key = `${m[1]}-${m[2]}`;
+    // A goal's later siblings and a file added again keep the first time.
+    if (!map.has(key)) map.set(key, at);
+  }
+  filedAt = { ...next, head };
+  return filedAt;
+}
+
+/** The three phases of the work over `runs` and the store's history, for what ended in `since`..`now`. */
+export function phases(runs: Run[], { issue, goal }: Filed, since: number, now: number): Speed["phases"] {
+  const inWindow = (t: number) => t >= since && t <= now;
+  const intake: number[] = [], implement: number[] = [], land: number[] = [];
+  for (const [key, queued] of goal) {
+    const created = issue.get(key);
+    if (queued != null && created != null && inWindow(queued)) intake.push((queued - created) / 1000);
+  }
+  const jobs = new Map<string, Run[]>();
+  for (const r of runs) jobs.set(r.job, [...(jobs.get(r.job) ?? []), r]);
+  for (const rs of jobs.values()) {
+    const agents = rs.filter((r) => { const a = Date.parse(r.started), b = Date.parse(r.ended ?? ""); return isAgent(r) && b >= a && b - a <= MAX_RUN; });
+    const landed = Math.min(...rs.filter((r) => r.kind === "land" && (r.state === "landed" || r.state === "done")).map((r) => Date.parse(r.ended ?? "")).filter(Number.isFinite));
+    // A job can run again after it lands; what finished the work is the last finish before the land.
+    const ends = agents.filter((r) => passedState(r.state) || r.state === "awaiting").map((r) => Date.parse(r.ended!)).filter((t) => t <= landed);
+    if (!ends.length) continue;
+    const finished = Math.max(...ends), started = Math.min(...agents.map((r) => Date.parse(r.started)));
+    if (inWindow(finished)) implement.push((finished - started) / 1000);
+    if (inWindow(landed)) land.push((landed - finished) / 1000);
+  }
+  return { intake: stat(intake), implement: stat(implement), land: stat(land) };
+}
+
 export function speed(window: Window, now = new Date(), fit: Fit | null = null): Speed {
   const n = COUNT[window];
   const daily = window === "week" || window === "month";
@@ -247,6 +307,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     window,
     done: lands.reduce((a, b) => a + b, 0),
     kinds: Object.fromEntries(KINDS.map((k) => [k, stat(times[k])])) as Speed["kinds"],
+    phases: phases(all, filed(), since.getTime(), now.getTime()),
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
     buckets: Array.from({ length: n }, (_, i) => {
       const d = startOf(i);

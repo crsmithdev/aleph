@@ -17,22 +17,20 @@ export function dur(s) {
 }
 const hours = (h) => `${h.toFixed(h < 10 ? 1 : 0)} h`;
 const pctText = (w) => `${Math.round((w || 0) * 100)}%`;
-/** The p50 of a check by name, or null. */
-export const checkP50 = (d, name) => d?.checks?.find((c) => c.name === name || c.name === `${name}s`)?.p50 ?? null;
+const PHASES = [
+  ["intake", "Intake", "An issue is created, then its first goal is queued. Counted when the goal is queued."],
+  ["implement", "Implement", "A job's first agent run starts, then its last agent run finishes with work to land. Counted when it finishes."],
+  ["land", "Land", "A job finishes, then it lands. This includes any wait for a review or for Chris. Counted when it lands."],
+];
 
-/** A p50 and a p90 as "p50 / p90": p50 in the text color, p90 a little smaller and quiet. `f` formats a value. */
-export const p5090 = (p50, p90, f = dur) => `<span class="pp" title="median / p90"><span class="v">${esc(f(p50))}</span><span class="p90">/ ${esc(f(p90))}</span></span>`;
+/** One phase card: the title and count, the p50, the p90. A phase with no count has no times. */
+const phaseCard = ([key, title, text], c) => {
+  const f = (v) => (c.count ? dur(v) : dur(null));
+  return `<div class="med" title="${esc(text)}"><span class="k">${esc(title)} (${c.count})</span><span class="v">${esc(f(c.p50))} p50</span><span class="p90">${esc(f(c.p90))} p90</span></div>`;
+};
 
-const med = (k, c) => `<div class="med"><span class="k">${esc(k)}</span>${p5090(c.p50, c.p90)}<span class="runs">${c.count}</span></div>`;
-
-/** The medians row: build, land, triage, plan, test. Each has the p50, the p90 and the run count. Build is the worker run of every goal, code or not, plus rechecks. */
-export function renderMedians(d) {
-  const tests = d.checks.find((c) => c.name === "tests" || c.name === "test") ?? { count: 0, p50: null, p90: null };
-  return `<div class="meds">` +
-    med("Build", d.kinds.agent) +
-    ["land", "triage", "plan"].map((n) => med(n.charAt(0).toUpperCase() + n.slice(1), d.kinds[n])).join("") +
-    med("Test", tests) + `</div>`;
-}
+/** The phase cards: intake, implement, land. */
+export const renderPhases = (d) => `<div class="meds phases">${PHASES.map((p) => phaseCard(p, d.phases[p[0]])).join("")}</div>`;
 
 const BAR_PX = 760;
 const weekText = (v) => `${v.toFixed(1)}%`;
@@ -75,11 +73,11 @@ export const renderCharts = (d) => `<div class="charts3">` +
 
 const loading = (what, d) => (!d ? `<p class="quiet loading" role="status">Loading ${what}…</p>` : `<div class="empty"><p class="hint">${esc(d.error)}</p></div>`);
 
-/** The Performance block: the medians and the three charts. `d` is null while loading, `{error}` on a failed load. */
+/** The Performance block: the phase cards and the three charts. `d` is null while loading, `{error}` on a failed load. */
 export function renderSpeedTop(d) {
   const head = `<div class="sh sub"><h2 id="h-speed">Performance</h2></div>`;
   if (!d || d.error) return head + loading("performance", d);
-  return head + renderMedians(d) + renderCharts(d);
+  return head + renderPhases(d) + renderCharts(d);
 }
 
 // Duplicated from ui/api/speed.ts: keep the texts identical.
@@ -140,15 +138,32 @@ export function renderEffCards(d) {
     card("Lost time", hours(lost.hours), `${Math.round(lost.share * 100)}% of agent hours on runs whose work did not reach main`) + `</div>`;
 }
 
-/** The bar-chart option of one chart: one value per bucket (null leaves a gap), `unit` for the tooltip. */
-export function barOption(buckets, key, { unit, color, fmt = String }) {
+/** The nearest-rank percentile `p` (0..1) of `xs`. Same rule as `pct` in ui/api/speed.ts. */
+const rank = (xs, p) => [...xs].sort((a, b) => a - b)[Math.max(0, Math.ceil(p * xs.length) - 1)];
+
+/** The dotted threshold lines of a chart. Equal thresholds share one line; a threshold of 0 lies on the axis and has none. */
+function thresholdLines({ p50, p90 }, color, fmt) {
+  const lines = p50 === p90 ? [[p50, "p50, p90"]] : [[p50, "p50"], [p90, "p90"]];
+  return {
+    silent: true, symbol: "none",
+    lineStyle: { type: "dotted", color, width: 1 },
+    label: { position: "end", color, fontSize: 10 },
+    data: lines.filter(([v]) => v > 0).map(([yAxis, name]) => ({ yAxis, label: { formatter: `${name} ${fmt(yAxis)}` } })),
+  };
+}
+
+/** The bar-chart option of one chart: one value per bucket (null leaves a gap), `unit` for the tooltip, `lines` the p50 and the p90 to mark. */
+export function barOption(buckets, key, { unit, color, fmt = String, lines = null, lineColor = "#888" }) {
+  const n = buckets.length;
+  // Two axis marks and no split lines: the threshold lines are the chart's only rules. A mark line does not grow the axis, so the top has to reach the p90.
+  const top = Math.max(...buckets.map((b) => b[key] ?? 0), lines?.p90 ?? 0) || 1;
   return {
     color: [color],
-    grid: { left: 40, right: 8, top: 8, bottom: 22 },
+    grid: { left: 48, right: lines ? 68 : 8, top: 8, bottom: 20 },
     tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${q.value == null ? "none" : esc(fmt(q.value)) + (unit ? " " + unit : "")}`; } },
-    xAxis: { type: "category", data: buckets.map((b) => b.label), axisLabel: { interval: "auto", hideOverlap: true } },
-    yAxis: { type: "value", min: 0, minInterval: unit === "lands" ? 1 : undefined, axisLabel: { formatter: (v) => (unit === "lands" ? String(v) : dur(v)) } },
-    series: [{ type: "bar", data: buckets.map((b) => b[key]) }],
+    xAxis: { type: "category", data: buckets.map((b) => b.label), axisTick: { show: false }, axisLabel: { interval: Math.max(0, Math.ceil(n / 4) - 1), hideOverlap: true } },
+    yAxis: { type: "value", min: 0, max: top, interval: top, splitLine: { show: false }, axisTick: { show: false }, axisLabel: { formatter: (v) => (unit === "lands" ? String(v) : dur(v)) } },
+    series: [{ type: "bar", data: buckets.map((b) => b[key]), ...(lines ? { markLine: thresholdLines(lines, lineColor, fmt) } : {}) }],
   };
 }
 
@@ -177,10 +192,15 @@ function draw(box, d) {
   clear();
   if (!globalThis.echarts) return;
   const t = readTokens();
-  const specs = { agent: ["agent", { color: t.run, fmt: dur }], tests: ["tests", { color: t.need, fmt: dur }], lands: ["lands", { unit: "lands", color: t.done }] };
+  const counts = d.buckets.map((b) => b.lands);
+  const specs = {
+    agent: ["agent", { color: t.run, fmt: dur, lines: d.kinds.agent.count ? d.kinds.agent : null }],
+    tests: ["tests", { color: t.need, fmt: dur, lines: d.checks.find((c) => c.name === "tests" || c.name === "test") ?? null }],
+    lands: ["lands", { unit: "lands", color: t.done, lines: { p50: rank(counts, 0.5), p90: rank(counts, 0.9) } }],
+  };
   for (const el of box.querySelectorAll(".speedchart[data-chart]")) {
     const [key, o] = specs[el.dataset.chart];
-    try { drawn.push(chart(el, barOption(d.buckets, key, o))); } catch (e) { console.error("speed chart failed", e); }
+    try { drawn.push(chart(el, barOption(d.buckets, key, { ...o, lineColor: t.ink }))); } catch (e) { console.error("speed chart failed", e); }
   }
 }
 

@@ -2,9 +2,9 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CLASSES, classify, clearCache, pct, routes, speed } from "./api/speed.ts";
+import { CLASSES, classify, clearCache, filed, pct, phases, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { barOption, dur, renderCharts, renderEfficiency, renderPicker, renderSpeedTop, windowOf } from "./views/speed.js";
+import { barOption, dur, renderCharts, renderEfficiency, renderPhases, renderPicker, renderSpeedTop, windowOf } from "./views/speed.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -98,17 +98,16 @@ test("GET /api/speed takes a window (default week) and answers JSON", async () =
   expect((await get("?window=year")).status).toBe(400);
 });
 
-test("the view: medians with p50, p90 and runs; charts; efficiency with reruns and the wasted share", () => {
+test("the view: three phase cards; charts; efficiency with reruns and the wasted share", () => {
   const d = speed("day", now);
   const h = renderSpeedTop(d);
   expect(h).toContain('data-chart="lands"');
-  expect(h.indexOf('class="meds"')).toBeLessThan(h.indexOf('class="charts3"'));
-  expect(h.match(/class="med"/g)?.length).toBe(5);
-  expect(h).not.toContain("p90 30m");
-  expect(h).toContain('<span class="runs">3</span>');
-  for (const t of ["Build", "Land", "Triage", "Plan", "Test"]) expect(h).toContain(`<span class="k">${t}</span>`);
-  for (const t of ["Tests", "Agent"]) expect(h).not.toContain(`<span class="k">${t}</span>`);
-  expect(h).toContain('<span class="pp" title="median / p90"><span class="v">20m 00s</span><span class="p90">/ 30m 00s</span></span>');
+  expect(h.indexOf('class="meds phases"')).toBeLessThan(h.indexOf('class="charts3"'));
+  expect(h.match(/class="med"/g)?.length).toBe(3);
+  const one = renderPhases({ phases: { intake: { count: 0, p50: 0, p90: 0 }, implement: { count: 3, p50: 1200, p90: 1800 }, land: { count: 1, p50: 43, p90: 43 } } });
+  expect(one).toContain('<span class="k">Intake (0)</span><span class="v">– p50</span><span class="p90">– p90</span>');
+  expect(one).toContain('<span class="k">Implement (3)</span><span class="v">20m 00s p50</span><span class="p90">30m 00s p90</span>');
+  expect(one).toContain('<span class="k">Land (1)</span><span class="v">43s p50</span><span class="p90">43s p90</span>');
   for (const t of ["Tests check", "Flaky", "24–27 s", "Today", "7 days"]) expect(h).not.toContain(t);
   const e = renderEfficiency(d);
   expect(e).toContain("Reruns");
@@ -123,11 +122,69 @@ test("the view: medians with p50, p90 and runs; charts; efficiency with reruns a
   const o = barOption(d.buckets, "agent", { color: "#000" });
   expect(o.series[0].type).toBe("bar");
   expect(o.series[0].data.length).toBe(24);
+  expect(o.series[0].markLine).toBeUndefined();
+  const marked = barOption(d.buckets, "agent", { color: "#000", fmt: dur, lines: { p50: 60, p90: 120 } });
+  expect(marked.series[0].markLine.lineStyle.type).toBe("dotted");
+  expect(marked.series[0].markLine.data.map((l: any) => [l.yAxis, l.label.formatter])).toEqual([[60, "p50 1m 00s"], [120, "p90 2m 00s"]]);
+  expect(marked.yAxis).toMatchObject({ max: 1200, interval: 1200, splitLine: { show: false } });
+  expect(barOption([{ label: "a", agent: 90 }], "agent", { color: "#000", lines: { p50: 60, p90: 120 } }).yAxis.max).toBe(120);
+  expect(marked.xAxis.axisTick.show).toBe(false);
+  expect(barOption(d.buckets, "agent", { color: "#000", lines: { p50: 60, p90: 60 } }).series[0].markLine.data.map((l: any) => l.label.formatter)).toEqual(["p50, p90 60"]);
+  expect(barOption(d.buckets, "lands", { color: "#000", lines: { p50: 0, p90: 2 } }).series[0].markLine.data.map((l: any) => l.yAxis)).toEqual([2]);
   expect(renderPicker("hour")).toMatch(/aria-pressed="true">Hour<[^]*aria-pressed="false">Day/);
   expect(windowOf(new URLSearchParams("window=day"))).toBe("day");
   expect(windowOf(new URLSearchParams("window=x"))).toBe("week");
   expect(dur(43)).toBe("43s");
   expect(dur(245)).toBe("4m 05s");
+});
+
+test("phases: implement spans a job's fix rounds, land starts at the last finish, and each counts where it ends", () => {
+  const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
+  const r = (job: string, kind: string, state: string, a: string, b: string) => ({ kind, job, name: job, state, started: a, ended: b }) as any;
+  const since = new Date(2026, 9, 28, 5).getTime(), end = new Date(2026, 9, 28, 15).getTime();
+  const none = { issue: new Map(), goal: new Map() };
+  const p = phases([
+    // A fix round: 1 hour from the first start to the last finish, then 10 minutes to the land, then a run after the land.
+    r("a", "build", "stuck", t(6), t(6, 10)), r("a", "build", "passed", t(6, 30), t(7)), r("a", "land", "landed", t(7, 5), t(7, 10)), r("a", "build", "passed", t(8), t(8, 5)),
+    // A held run that a land took 30 minutes later.
+    r("b", "build", "awaiting", t(9), t(9, 20)), r("b", "land", "landed", t(9, 45), t(9, 50)),
+    // Finished and not landed: implement only.
+    r("c", "build", "passed", t(10), t(10, 40)),
+    // Never finished: neither.
+    r("d", "build", "dropped", t(10), t(10, 40)),
+    // Finished before the window, landed in it: land only.
+    r("e", "build", "passed", t(4), t(4, 30)), r("e", "land", "landed", t(5, 25), t(5, 30)),
+  ], none, since, end);
+  expect(p.implement).toEqual({ count: 3, p50: 2400, p90: 3600 }); // 3600 (a), 1200 (b), 2400 (c)
+  expect(p.land).toEqual({ count: 3, p50: 1800, p90: 3600 }); // 600 (a), 1800 (b), 3600 (e)
+});
+
+test("phases: intake runs from the issue to its first goal, and a bulk commit's times do not count", () => {
+  const store = join(base, "store");
+  mkdirSync(join(store, "fx/backlog/tasks"), { recursive: true });
+  const git = (...a: string[]) => Bun.spawnSync(["git", "-C", store, ...a], { stderr: "ignore", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
+  const add = (when: number, msg: string, ...ids: string[]) => {
+    for (const id of ids) writeFileSync(join(store, `fx/backlog/tasks/fx-${id}.md`), id);
+    git("add", ".");
+    const stamp = `@${when} +0000`;
+    Bun.spawnSync(["git", "-C", store, "commit", "-qm", msg], { env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", GIT_AUTHOR_DATE: stamp, GIT_COMMITTER_DATE: stamp } });
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+  };
+  git("init", "-q");
+  add(1000, "fx: add", "1", "2", "3");
+  add(1600, "fx: goal", "1.1");
+  add(1900, "fx: plan", "1.2", "2.1");
+  add(2000, "migrate: work model, 3 items", "3.1");
+  add(2100, "migrate: work model, 3 items", "4");
+  add(2200, "fx: goal", "4.1");
+  const f = filed(store);
+  expect([f.issue.get("fx-1"), f.goal.get("fx-1"), f.goal.get("fx-2"), f.goal.get("fx-3"), f.goal.get("fx-4")]).toEqual([1000_000, 1600_000, 1900_000, null, 2200_000]);
+  expect(phases([], f, 0, 9_999_000).intake).toEqual({ count: 2, p50: 600, p90: 900 }); // fx-3 and fx-4 have a bulk time
+  expect(phases([], f, 1700_000, 9_999_000).intake.count).toBe(1);
+  // A new commit reads only what it adds.
+  add(3000, "fx: add", "5");
+  add(3060, "fx: goal", "5.1");
+  expect(phases([], filed(store), 0, 9_999_000).intake.count).toBe(3);
 });
 
 test("classify: one run of each class, with its cause", () => {
