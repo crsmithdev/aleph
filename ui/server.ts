@@ -104,8 +104,10 @@ export async function serve(port: number, { warm = true }: { warm?: boolean } = 
   // One background call per slow route, so the first visit finds its cache filled.
   // The weekly plan usage is polled every 10 minutes while the server runs.
   if (warm) startPoller();
-  if (warm) for (const w of warmers) w.warm().catch((e) => console.error(`ui/api/${w.file}: warm-up failed: ${e instanceof Error ? e.message : e}`));
-  return server;
+  // `warmed[file]` settles when that route's warm-up ends, failed or not: a test waits on it instead of on the clock.
+  const warmed: Record<string, Promise<void>> = {};
+  if (warm) for (const w of warmers) warmed[w.file] = w.warm().catch((e) => console.error(`ui/api/${w.file}: warm-up failed: ${e instanceof Error ? e.message : e}`));
+  return Object.assign(server, { warmed });
 }
 
 if (import.meta.main) {

@@ -294,10 +294,11 @@ test("pages are fetched concurrently, and serve() warms the cache so the first r
     port: 0,
     async fetch(req) {
       const u = new URL(req.url);
-      calls++; active[u.pathname] = (active[u.pathname] ?? 0) + 1;
-      peak[u.pathname] = Math.max(peak[u.pathname] ?? 0, active[u.pathname]);
+      // Other warm-ups (memory's `vault misses` subprocess) reach this mock too: only the skills lists count.
+      const mine = u.pathname === "/api/public/traces" || ["AGENT", "TOOL"].includes(u.searchParams.get("type") ?? "");
+      if (mine) { calls++; active[u.pathname] = (active[u.pathname] ?? 0) + 1; peak[u.pathname] = Math.max(peak[u.pathname] ?? 0, active[u.pathname]); }
       await Bun.sleep(40);
-      active[u.pathname]--;
+      if (mine) active[u.pathname]--;
       const page = Number(u.searchParams.get("page") ?? 1);
       const data = u.pathname === "/api/public/observations" && page === 1 ? observations.filter((o) => Date.parse(o.startTime) >= Date.now() - 30 * 86400_000) : [];
       return Response.json({ data: u.pathname === "/api/public/traces" && page === 1 ? traces : data, meta: { totalPages: 4 } });
@@ -308,8 +309,8 @@ test("pages are fetched concurrently, and serve() warms the cache so the first r
   clearCache();
   const warmed = await serve(0);
   try {
-    for (let i = 0; i < 100 && calls < 12; i++) await Bun.sleep(20); // 3 lists x 4 pages
-    await Bun.sleep(200);
+    await warmed.warmed["skills.ts"]; // the end of the skills warm-up, not a clock
+    expect(calls).toBe(12); // 3 lists x 4 pages
     expect(peak["/api/public/traces"]).toBeGreaterThan(1);
     expect(peak["/api/public/observations"]).toBeGreaterThan(1);
     const seen = calls;
