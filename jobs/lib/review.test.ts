@@ -47,8 +47,8 @@ Bun.serve({ hostname: "127.0.0.1", port, fetch: () => Response.json({ pid: proce
   sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
   sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(join(base, "items"), "git", "push", "-q", "origin", "main");
-  uiTodo = writeList({ key: "demo" }, "add", (doc) => issues.addLegacy(doc, "a view", { labels: ["goal", "ui"], body: "b" }).id, true)!.value;
-  plainTodo = writeList({ key: "demo" }, "add", (doc) => issues.addLegacy(doc, "a fix", { labels: ["goal"], body: "b" }).id, true)!.value;
+  uiTodo = writeList({ key: "demo" }, "add", (doc) => { const i = issues.add(doc, "a view", { labels: ["ui"], body: "b" }); i.fm.kind = "goal"; return i.id; }, true)!.value;
+  plainTodo = writeList({ key: "demo" }, "add", (doc) => { const i = issues.add(doc, "a fix", { body: "b" }); i.fm.kind = "goal"; return i.id; }, true)!.value;
   process.env.TEST_SERVER_MARK = join(base, "server-mark");
   process.env.ALEPH_REVIEW_SETTLE_MS = "0";
   // The stand-in for srt: the clean environment, as cli.test.ts has it.

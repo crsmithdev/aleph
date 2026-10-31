@@ -59,7 +59,7 @@ describe("propose", () => {
 
   test("files a proposal once, and an item with the same title is reused, not filed again", () => {
     const repo = { key: "dp1" } as Repo;
-    writeList(repo, "start", (doc) => { issues.addLegacy(doc, "Update left-pad 1.0.0 to 1.2.0", {}); return true; }, true);
+    writeList(repo, "start", (doc) => { issues.add(doc, "Update left-pad 1.0.0 to 1.2.0", {}); return true; }, true);
     const found = [{ name: "left-pad", current: "1.0.0", latest: "1.2.0" }, { name: "a", current: "1.9.0", latest: "1.10.0" }];
     expect(propose(repo, found)).toEqual(["dp1-1 Update left-pad 1.0.0 to 1.2.0", "dp1-2 Update a 1.9.0 to 1.10.0"]);
     expect(readList(repo)!.items.map((i) => i.title)).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update a 1.9.0 to 1.10.0"]);
@@ -113,7 +113,7 @@ describe("sweep", () => {
 
   test("two sweeps at once for one repo do not remove each other's deps folder", async () => {
     const repo = { key: "sw1", path: join(base, "repo"), main: "main", setup: [] } as unknown as Repo;
-    writeList(repo, "start", (doc) => { issues.addLegacy(doc, "seed", {}); return true; }, true);
+    writeList(repo, "start", (doc) => { issues.add(doc, "seed", {}); return true; }, true);
     const errors: string[] = [];
     const [a, b] = await Promise.all([sweep([repo], (l) => errors.push(l)), sweep([repo], (l) => errors.push(l))]);
     expect(errors).toEqual([]);

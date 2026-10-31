@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, w
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { areasOf, clearAsk, isSorted, readList, writeList } from "../../todo/lib/store.ts";
+import { areasOf, clearAsk, isSorted, readList, setAsk, writeList } from "../../todo/lib/store.ts";
 import { askOf } from "../../todo/lib/store.ts";
 import { countsLine, parseRoute, prompt, triageOpen } from "./triage.ts";
 import { lock, readRun, stamp, writeRun, type Repo } from "./ledger.ts";
@@ -39,10 +39,17 @@ esac
 
 // Each test gets its own list: the store keeps an item's file until something replaces it.
 let lists = 0;
-function reset(items: { title: string; body?: string; labels?: string[]; waitingOn?: string }[]): void {
+// A seeded item: `route` sorts it, `ask` gives it an Ask, `after` makes it wait, `goal` files a goal under it.
+type Seed = { title: string; body?: string; route?: string; ask?: boolean; after?: string[]; goal?: { title: string; body: string } };
+function reset(items: Seed[]): void {
   repo.key = `tri${++lists}`;
   writeList(repo, "reset", (doc) => {
-    for (const i of items) issues.addLegacy(doc, i.title, { body: i.body, labels: i.labels, waitingOn: i.waitingOn });
+    for (const i of items) {
+      const item = issues.add(doc, i.title, { body: i.body, route: i.route });
+      if (i.ask) setAsk(item, { kind: "input", reason: "question", question: "Which plan, A or B?", options: [], why: [] });
+      if (i.after) item.fm.after = i.after;
+      if (i.goal) issues.addGoal(doc, item, { ...i.goal, repo: repo.key });
+    }
     return true;
   }, true);
 }
@@ -146,8 +153,8 @@ test("an option's after is kept on the Ask", async () => {
 
 test("sorted issues are not triaged; an issue that waits is", async () => {
   reset([
-    { title: "a", labels: ["needs-chris"] }, { title: "b", labels: ["triaged"] }, { title: "c", labels: ["proposal"] },
-    { title: "d", labels: ["goal"] }, { title: "e", waitingOn: "tri-9", body: "VERDICT:close" }, { title: "f", body: "VERDICT:chris" },
+    { title: "a", ask: true }, { title: "b", route: "triaged" }, { title: "c", route: "proposal" },
+    { title: "parent of d", goal: { title: "d", body: "## Goal\nd" } }, { title: "e", after: ["tri-9"], body: "VERDICT:close" }, { title: "f", body: "VERDICT:chris" },
   ]);
   const t = await run();
   expect(calls()).toBe(2);
@@ -331,10 +338,15 @@ test("a lost triage run whose item's lock is held is left running", async () => 
 describe("triage at once", () => {
   beforeAll(() => { process.env.ALEPH_FACTORY_DIR = factoryHome; });
   test("a non-goal issue is triaged with no tick; a goal is not", async () => {
-    reset([{ title: "a", body: "VERDICT:close" }, { title: "g", body: "VERDICT:close", labels: ["goal"] }]);
+    reset([
+      { title: "a", body: "VERDICT:close" },
+      { title: "parent", body: "VERDICT:close", goal: { title: "g", body: "## Goal\ng" } },
+    ]);
     const { triageNow } = await import("./factory.ts");
+    expect(issues.find(readList(repo)!, "2.1")).toMatchObject({ title: "g", fm: { kind: "goal", issue: `${repo.key}-2` } });
     expect((await triageNow(repo, 1)).triaged).toEqual({ close: 1 });
     expect(issues.status(item(1))).toBe("done");
+    // Item 2 is sorted by its goal 2.1: triageNow on it triages nothing.
     expect((await triageNow(repo, 2)).triaged).toEqual({});
     expect(calls()).toBe(1);
   });

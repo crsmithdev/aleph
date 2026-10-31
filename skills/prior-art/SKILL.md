@@ -165,4 +165,4 @@ Give the artifact a title naming the comparison, not the topic.
 - **A project's own numbers are evidence about the mechanism**, not about the
   anchor. Never restate them as a prediction.
 - Do not soften a take because it implies rework, and do not inflate one
-  because the project is popular. Stars measure attention.
+  because the project is popular. Stars measure popularity.

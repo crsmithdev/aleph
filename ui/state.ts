@@ -8,7 +8,7 @@ import { judgeChoice } from "../hooks/lib/jev.ts";
 import { DAY_CAP, LIVE_CAP, liveRuns, AWAITING_CAP, baselines, doneChecker, firefighterLines, gates, health, hold, lastProbe, paused, redLine, runsToday, waitReason, type WaitReason } from "../jobs/lib/factory.ts";
 import { allRuns, askOf as runAsk, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
-import { readDecision, type Decision } from "../jobs/lib/decision.ts";
+import { readAsk, type Ask } from "../jobs/lib/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { readAlways } from "../jobs/lib/always.ts";
 import { afterOf, askOf, goalsOf, issueOf, kindOf, labels, reader } from "../todo/lib/store.ts";
@@ -57,7 +57,7 @@ export interface NewIssue { id: string; title: string; status: string; href: str
   /** An issue or goal that awaits you: what Chris is asked. */
   question?: string;
   /** Its Ask with options: the fields. */
-  decision?: Decision;
+  decision?: Ask;
   /** The Ask's reason (`fm.reason`); none on an old item. */
   reason?: string;
   /** The Ask's kind: `input` or `approval`. */
@@ -351,7 +351,7 @@ export function state(now = new Date()): State {
         const c = card();
         const q = ask.question || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
         if (q) c.question = q;
-        const d = readDecision(item);
+        const d = readAsk(item);
         if (d) c.decision = d;
         c.reason = ask.reason;
         c.askKind = ask.kind;

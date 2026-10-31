@@ -3,7 +3,7 @@
  * the page only renders. One entry per run, issue or goal that waits for Chris, and per proposal.
  */
 import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/corrections.ts";
-import type { Decision } from "../jobs/lib/decision.ts";
+import type { Ask } from "../jobs/lib/ask.ts";
 import { ASK_REASONS, type Granted } from "../jobs/lib/always.ts";
 // @ts-ignore plain JS, shared with the page
 import { oneSentence } from "./views/now.js";
@@ -23,7 +23,7 @@ export interface AskItem {
 }
 export interface Details {
   note?: string; stat?: string; review?: { call: string; reason?: string };
-  ask?: Decision; signals?: { source: string; at: string; quote: string; link: string }[];
+  ask?: Ask; signals?: { source: string; at: string; quote: string; link: string }[];
 }
 export type Always = Record<string, Granted>;
 

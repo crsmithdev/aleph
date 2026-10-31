@@ -150,7 +150,6 @@ test("a goal rated opus starts a planner run and no worker; the goals are filed 
   expect(item(`${id}.3`).fm.after).toEqual([`fac-${id}.1`, `fac-${id}.2`]);
   expect(item(id).fm.goals).toEqual(refs);
   expect(itemLabels(item(id))).not.toContain("planned");
-  expect(item(id).fm.waiting_on).toBeUndefined();
   expect(item(id).notes.at(-1)).toContain(`planner: split into fac-${id}.1 (one), fac-${id}.2 (two), fac-${id}.3 (three)`);
 });
 

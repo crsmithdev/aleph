@@ -10,7 +10,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { BROWSER, browserStep, changedViews, startUiServer } from "./review-browser.ts";
-import { hasLabel, reader } from "../../todo/lib/store.ts";
+import { areasOf, reader } from "../../todo/lib/store.ts";
 import { git, gitWith } from "./git.ts";
 import { outcome } from "./gate.ts";
 import { askOf, CALL_FILE, isAwaiting, loadRegistry, onOf, parseVerdict, readCall, readEnvFile, readRun, updateRun, type Repo, type Run } from "./ledger.ts";
@@ -72,7 +72,7 @@ function isUi(repo: Repo, run: Run): boolean {
   const on = onOf(run);
   if (on === undefined) return false;
   const item = reader().item(repo.key, on);
-  return !!item && hasLabel(item, "ui");
+  return !!item && areasOf(item).includes("ui");
 }
 
 /** Whether a review process is alive for `folder`: its review.pid names a process whose command line holds the folder. */

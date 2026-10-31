@@ -104,13 +104,13 @@ something, or get corrected, write the page before the turn ends
 ## Issues
 
 Every repo in the registry keeps its list in the work store at
-`~/.aleph/items`, and `aleph issue` owns it. Every issue goes there, whoever names it: an ask from Chris, a
+`~/.aleph/issues`, and `aleph issue` owns it. Every issue goes there, whoever names it: an ask from Chris, a
 follow-up you name in a summary, a `TODO` you meet in the code. File it in the
 same turn you name it, and quote the issue number after that.
 
 Write through the command, never by hand:
-`aleph issue <add|list|show|note|edit|done|drop> <repo> ...`. `add` takes
-`"<title>" [--body -] [--priority high] [--labels a,b]`, `list` takes
+`aleph issue <add|list|show|note|edit|done|drop|lint> <repo> ...`. `add` takes
+`"<title>" [--body -] [--priority high] [--labels a,b] [--goal -]`, `list` takes
 `[--status open|done|dropped] [--label x]`, and `--body -` reads stdin.
 Each write is a commit on `origin/main`, so it reaches main at once, not with
 your branch. Measurements and write-ups go in a findings file or the spec, and

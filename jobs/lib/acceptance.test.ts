@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { askOf, hasLabel, readList, writeList } from "../../todo/lib/store.ts";
+import { askOf, readList, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { accept, oracleCommands, readRecord, resultLine, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { acceptanceStep, dispatchGoals, reacceptReopened } from "./factory.ts";
@@ -55,7 +55,7 @@ const notes = (id: number) => item(id).notes.join("\n");
 
 /** A goal whose land is on origin/main (a commit with the Item trailer), with the store saying done. */
 function doneGoal(oracle: string): number {
-  const id = writeList({ key: "fac" }, "add a goal", (doc) => issues.addLegacy(doc, "thing", { labels: ["goal"], body: `## Goal\nx\n## Edit surface\na.ts\n## Oracle\n${oracle}\n## Time box\n40 minutes` }).id, true)!.value;
+  const id = writeList({ key: "fac" }, "add a goal", (doc) => { const i = issues.add(doc, "thing", { body: `## Goal\nx\n## Edit surface\na.ts\n## Oracle\n${oracle}\n## Time box\n40 minutes` }); i.fm.kind = "goal"; return i.id; }, true)!.value;
   land(id);
   writeList({ key: "fac" }, "close", (doc) => { issues.setStatus(issues.find(doc, id)!, "done"); return true; });
   return id;
@@ -144,7 +144,7 @@ test("a failing command reopens the goal with the last 40 lines and it is dispat
   expect(specs).toHaveLength(1);
   expect(specs[0]).toContain("acceptance: fail at");
   expect(specs[0]).toContain("line 60");
-  expect(hasLabel(item(id), "needs-chris")).toBe(false);
+  expect(askOf(item(id))).toBeNull();
   // The goal is not done again until a later commit names it.
   expect(await acceptanceStep(runner(0))).toEqual([]);
 });
@@ -156,7 +156,6 @@ test("a second failure sets an Ask, names the command, and dispatches nothing", 
   closeAgain(id);
   const lines = await acceptanceStep(runner(3, "boom again"));
   expect(lines[0]).toContain("asks Chris");
-  expect(hasLabel(item(id), "needs-chris")).toBe(false);
   expect(askOf(item(id))).toMatchObject({ kind: "input", reason: "acceptance-failed" });
   expect(notes(id)).toMatch(/the Oracle command `bun run bad` still fails/);
   expect(issues.status(item(id))).toBe("done");
@@ -208,7 +207,7 @@ test("a done goal whose only command names a missing test file is skipped and ru
 });
 
 test("a goal closed with no landing on main is not accepted", async () => {
-  const id = writeList({ key: "fac" }, "add", (doc) => issues.addLegacy(doc, "by hand", { labels: ["goal"], body: "## Oracle\n`bun run ok`" }).id, true)!.value;
+  const id = writeList({ key: "fac" }, "add", (doc) => { const i = issues.add(doc, "by hand", { body: "## Oracle\n`bun run ok`" }); i.fm.kind = "goal"; return i.id; }, true)!.value;
   closeAgain(id);
   expect(await acceptanceStep(runner(0))).toEqual([]);
 });
@@ -254,7 +253,7 @@ test("an infra result after one real failure does not label needs-chris or chang
   closeAgain(id);
   const lines = await acceptanceStep(infra("bundle failed: x"));
   expect(lines[0]).toContain("acceptance not run");
-  expect(hasLabel(item(id), "needs-chris")).toBe(false);
+  expect(askOf(item(id))).toBeNull();
   expect(issues.status(item(id))).toBe("done");
   expect(readRecord("fac", id)).toEqual(before);
 });
@@ -297,7 +296,7 @@ test("accept through sandboxRunner with a failing setup leaves the goal done, wr
   expect(issues.status(item(id))).toBe("done");
   expect(readRecord("fac", id)).toBeNull();
   expect(notes(id)).not.toContain("acceptance: fail");
-  expect(hasLabel(item(id), "needs-chris")).toBe(false);
+  expect(askOf(item(id))).toBeNull();
 });
 
 test("sandboxRunner: a passing setup and a command that exits nonzero is not infra and keeps the exit code", async () => {
@@ -341,8 +340,8 @@ test("reacceptReopened leaves the goal open after an infra error, notes the tail
 });
 
 test("reacceptReopened skips goals not landed, not reopened by acceptance, or outside the window", async () => {
-  const unlanded = writeList({ key: "fac" }, "add", (doc) => { const i = issues.addLegacy(doc, "t", { labels: ["goal"], body: "## Oracle\n`bun test x`" }); issues.note(i, "acceptance: fail at abc1234: x"); return i.id; }, true)!.value;
-  const plain = writeList({ key: "fac" }, "add", (doc) => issues.addLegacy(doc, "t", { labels: ["goal"], body: "## Oracle\n`bun test x`" }).id)!.value;
+  const unlanded = writeList({ key: "fac" }, "add", (doc) => { const i = issues.add(doc, "t", { body: "## Oracle\n`bun test x`" }); i.fm.kind = "goal"; issues.note(i, "acceptance: fail at abc1234: x"); return i.id; }, true)!.value;
+  const plain = writeList({ key: "fac" }, "add", (doc) => { const i = issues.add(doc, "t", { body: "## Oracle\n`bun test x`" }); i.fm.kind = "goal"; return i.id; })!.value;
   land(plain);
   const old = reopened("`bun test x`");
   expect(await reacceptReopened("fac", { run: runner(0), since: "2999-01-01T00:00" })).toEqual([]);

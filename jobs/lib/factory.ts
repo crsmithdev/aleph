@@ -202,7 +202,7 @@ export type WaitReason =
   | { kind: "ready"; text: string }
   | { kind: "waits_on"; ids: string[]; text: string }
   | { kind: "due"; text: string }
-  | { kind: "needs-chris"; reason: string; text: string }
+  | { kind: "ask"; reason: string; text: string }
   | { kind: "planning"; text: string }
   | { kind: "red"; text: string }
   | { kind: "gate"; gate: Gate; text: string };
@@ -219,9 +219,9 @@ export function waitReason(_repo: Repo, item: issues.Issue, ctx: WaitContext): W
   if (ids.length) return { kind: "waits_on", ids, text: `Waits on ${ids.join(", ")}` };
   const ask = askOf(item);
   if (ask) {
-    const last = item.notes.at(-1)?.replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, "").replace(/^(asks Chris|needs-chris): /, "");
+    const last = item.notes.at(-1)?.replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, "").replace(/^asks Chris: /, "");
     const reason = ask.question || last || ask.reason || "the factory stopped starting it";
-    return { kind: "needs-chris", reason, text: `Waits for you: ${reason}` };
+    return { kind: "ask", reason, text: `Waits for you: ${reason}` };
   }
   if (ctx.planning) return { kind: "planning", text: "A planner run is splitting it" };
   const g = ctx.gated;
@@ -1075,7 +1075,7 @@ function runLines(now: number): string[] {
 }
 
 /**
- * Triage one issue at once, as `aleph issue add`, a note that answers `needs-chris`, and a
+ * Triage one issue at once, as `aleph issue add`, a note that answers an Ask, and a
  * worker's follow-ups do. The gates are the dispatch's: paused, the hold, a failed probe, the
  * day cap. A gated issue is left for the tick.
  */

@@ -2,13 +2,13 @@
 name: goal
 description: >
   Turn a goal of one or two sentences into a goal issue for the factory: a
-  short product-level grill, then one issue in the work store labelled `goal`.
+  short product-level grill, then one issue and its goal in the work store.
   Use when Chris runs /aleph:goal or asks the factory to build something.
   NOT for: a design tree (use /aleph:grill-me), a spec (use /aleph:to-spec).
 ---
 
 The factory (`docs/specs/2026-10-26-seed-factory.md`) runs one sandboxed
-worker per open `goal` issue, with no plan stage and nobody to ask. The issue
+worker per open goal, with no plan stage and nobody to ask. The issue
 is all the worker gets, so it must say what done is and how to check it.
 
 ## 1. Read before you ask
@@ -67,17 +67,16 @@ The body has these sections, each non-empty:
 A new goal:
 
 ```
-aleph issue add <repo> "<title>" --labels goal --priority high --body - <<'BODY'
+aleph issue add <repo> "<title>" --goal - --priority high <<'BODY'
 ...
 BODY
 ```
 
-An existing issue keeps its labels and gains `goal`:
+The text on stdin is the goal; the command files the issue and its goal `.1`
+in one commit, and no triage run starts. When the goal runs after another, add
+`--after <goal id>`. An existing issue stays as it is: file the goal as a new
+issue with the command above and put a note on the old one.
 
-```
-aleph issue edit <repo> <n> --labels <its labels>,goal --body - <<'BODY'
-```
-
-Then say the issue number and that the next timer tick (every 30 minutes)
+Then say the goal number (`<repo>-<n>.1`) and that the next timer tick (every 30 minutes)
 starts the run. `aleph report` at the next session start shows the result,
 and the worker's `DEFAULT:` lines show the questions it answered itself.

@@ -14,7 +14,7 @@ export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
 import { factoryDir, gates } from "./factory.ts";
 import { git } from "./git.ts";
 import { always, logAlways } from "./always.ts";
-/** Triage runs that end with no verdict, for one item, before it is labelled `needs-chris`; `ALEPH_TRIAGE_TRIES` changes it. */
+/** Triage runs that end with no verdict, for one item, before it gets an Ask (reason `triage-failed`); `ALEPH_TRIAGE_TRIES` changes it. */
 export const TRIAGE_TRIES = () => Number(process.env.ALEPH_TRIAGE_TRIES ?? 2);
 const TIME_BOX_MS = () => Number(process.env.ALEPH_TRIAGE_TIMEOUT ?? 600) * 1000;
 
@@ -217,7 +217,7 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
 
 /**
  * After a run with no verdict: when the item's triages with none reach the
- * limit, label it `needs-chris` so later ticks skip it. The line to report, or null.
+ * limit, give it an Ask (reason `triage-failed`) so later ticks skip it. The line to report, or null.
  */
 function giveUp(repo: Repo, id: number, reason: string): string | null {
   // After a standing retry, only the runs since it count.

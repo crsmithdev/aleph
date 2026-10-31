@@ -31,14 +31,6 @@ test("setAsk and clearAsk write and remove every ask field and keep the rest", (
   clearAsk(i);
 });
 
-test("store.clearAsk also takes the old needs-chris label off", () => {
-  const i = item({ labels: ["needs-chris", "ui"] });
-  expect(store.askOf(i)).not.toBeNull();
-  store.clearAsk(i);
-  expect(store.askOf(i)).toBeNull();
-  expect(i.fm.labels).toEqual(["ui"]);
-});
-
 test("normalizeAsk takes after or waiting_on, 2 to 4 options and a recommended label that is one of them", () => {
   const raw = { question: "Q?", options: [{ label: "A", line: "a", waiting_on: "fac-4" }, { label: "B", line: "b", after: "fac-5.1" }], recommended: "A", why: ["w"] };
   expect(normalizeAsk(raw)).toEqual({ kind: "input", reason: "question", question: "Q?", options: [{ label: "A", line: "a", after: "fac-4" }, { label: "B", line: "b", after: "fac-5.1" }], recommended: "A", why: ["w"] });

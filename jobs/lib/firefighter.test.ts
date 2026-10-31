@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { areasOf, askOf, labels as storeLabels, readList, setAsk, writeList } from "../../todo/lib/store.ts";
+import { areasOf, askOf, readList, setAsk, writeList } from "../../todo/lib/store.ts";
 import type { Ask } from "./ask.ts";
 import { firefighterStep } from "./factory.ts";
 import { applyActions, defaultPorts, parseReply, prompt, snapshot, type Ports } from "./firefighter.ts";
@@ -32,14 +32,15 @@ let key = "";
 const repoPath = () => join(base, "repo");
 
 /** A new repo key, ledger and factory directory, with these items in its list. */
-function fresh(items: { title: string; body?: string; labels?: string[]; notes?: string[]; ask?: Ask }[] = []): void {
+function fresh(items: { title: string; body?: string; goal?: boolean; notes?: string[]; ask?: Ask }[] = []): void {
   key = `ff${++n}`;
   writeFileSync(join(base, "repos.json"), JSON.stringify({ [key]: { path: repoPath(), sandbox: true, autoland: false } }));
   process.env.ALEPH_JOBS_DIR = join(base, `jobs${n}`);
   process.env.ALEPH_FACTORY_DIR = join(base, `factory${n}`);
   writeList({ key }, "reset", (doc) => {
     for (const i of items) {
-      const it = issues.addLegacy(doc, i.title, { labels: i.labels, body: i.body });
+      const it = issues.add(doc, i.title, { body: i.body });
+      if (i.goal) it.fm.kind = "goal";
       for (const note of i.notes ?? []) issues.note(it, note);
       if (i.ask) setAsk(it, i.ask);
     }
@@ -130,7 +131,7 @@ test("a tick with no new events starts no firefighter run", async () => {
 });
 
 test("a new held run whose reviews both say land, off the security paths, is landed", async () => {
-  fresh([{ title: "held", labels: ["goal"] }]);
+  fresh([{ title: "held", goal: true }]);
   branch(`b${n}`, "ui/views/x.js");
   held(`b${n}`);
   reply([{ do: "land", job: `${key}-1` }]);
@@ -147,7 +148,7 @@ test("a new held run whose reviews both say land, off the security paths, is lan
 });
 
 test("a land by the firefighter writes Held-by: firefighter, not Held-by: Chris", async () => {
-  fresh([{ title: "held", labels: ["goal"] }]);
+  fresh([{ title: "held", goal: true }]);
   // A real remote for the land to push to, and a stand-in for srt; the land unit runs in the foreground.
   writeFileSync(join(base, "repos.json"), JSON.stringify({ [key]: { path: repoPath(), sandbox: true, autoland: false, checks: [] } }));
   writeFileSync(join(base, "pass"), "#!/bin/bash\nshift\nexec env -i \"$@\"\n", { mode: 0o755 });
@@ -173,7 +174,7 @@ test("a land by the firefighter writes Held-by: firefighter, not Held-by: Chris"
 });
 
 test("the same run with a diff in jobs/lib/sandbox.ts is not landed: an Ask of approval and one tell", async () => {
-  fresh([{ title: "held", labels: ["goal"] }]);
+  fresh([{ title: "held", goal: true }]);
   branch(`b${n}`, "jobs/lib/sandbox.ts");
   const folder = held(`b${n}`);
   reply([{ do: "land", job: `${key}-1` }]);
@@ -188,7 +189,7 @@ test("the same run with a diff in jobs/lib/sandbox.ts is not landed: an Ask of a
 });
 
 test("a diff that changes REVIEW_SANDBOX in jobs/lib/review.ts is not landed", async () => {
-  fresh([{ title: "held", labels: ["goal"] }]);
+  fresh([{ title: "held", goal: true }]);
   branch(`b${n}`, "jobs/lib/review.ts", "export const REVIEW_SANDBOX = {};\n");
   held(`b${n}`);
   reply([{ do: "land", job: `${key}-1` }]);
@@ -198,7 +199,7 @@ test("a diff that changes REVIEW_SANDBOX in jobs/lib/review.ts is not landed", a
 });
 
 test("a land before the review has a verdict is refused", async () => {
-  fresh([{ title: "held", labels: ["goal"] }]);
+  fresh([{ title: "held", goal: true }]);
   branch(`b${n}`, "ui/views/y.js");
   held(`b${n}`, "PENDING\n");
   reply([{ do: "land", job: `${key}-1` }]);
@@ -210,7 +211,7 @@ test("a land before the review has a verdict is refused", async () => {
 });
 
 test("a goal with 4 runs in 30 minutes is an event, and a drop from the reply is applied", async () => {
-  fresh([{ title: "loops", labels: ["goal"] }]);
+  fresh([{ title: "loops", goal: true }]);
   const name = `${key}-1`;
   for (const m of [25, 18, 10]) run({ name, state: "dropped", reason: "no commit", on: `${key}-1` }, {}, m);
   run({ name, state: "stuck", reason: "no commit", on: `${key}-1` }, {}, 2);
@@ -225,7 +226,7 @@ test("a goal with 4 runs in 30 minutes is an event, and a drop from the reply is
 });
 
 test("a close reply drops the stuck job, writes no rerun file, and marks the issue done with the note", async () => {
-  fresh([{ title: "met", labels: ["goal"] }]);
+  fresh([{ title: "met", goal: true }]);
   const name = `${key}-1`;
   run({ name, state: "stuck", reason: "no commit", on: `${key}-1` }, {}, 2);
   reply([{ do: "close", repo: key, n: 1, note: "the goal is already met on main" }]);
@@ -264,7 +265,6 @@ test("answer is refused on a product choice and applied on a how-to-build one", 
   expect(f?.refused).toEqual([expect.stringContaining("product choice")]);
   expect(asked(1)).not.toBeNull();
   expect(asked(2)).toBeNull();
-  expect(storeLabels(item(2))).not.toContain("goal");
 });
 
 test("a paused factory takes no snapshot and starts no run", async () => {
@@ -334,7 +334,7 @@ test("without a handed reason a product choice is still refused, and the prompt 
 });
 
 test("a firefighter land standing lets the firefighter land a held run on a security path, and logs it", async () => {
-  fresh([{ title: "held", labels: ["goal"] }]);
+  fresh([{ title: "held", goal: true }]);
   branch(`b${n}`, "hooks/x.ts");
   const folder = held(`b${n}`);
   alwaysFile({ firefighter: { action: "land", at: "2026-10-28T00:00:00.000Z" } });
@@ -348,7 +348,7 @@ test("a firefighter land standing lets the firefighter land a held run on a secu
 });
 
 test("the same held hooks/ run without a land standing goes to Chris", async () => {
-  fresh([{ title: "held", labels: ["goal"] }]);
+  fresh([{ title: "held", goal: true }]);
   branch(`b${n}`, "hooks/x.ts");
   const folder = held(`b${n}`);
   reply([{ do: "land", job: `${key}-1` }]);
@@ -395,7 +395,7 @@ test("answer is applied on a plain question even when its reason is not handed",
 });
 
 test("a drop with after drops the job, and the goal waits after that goal, with the note saying so", async () => {
-  fresh([{ title: "waiter", labels: ["goal"] }, { title: "blocker" }]);
+  fresh([{ title: "waiter", goal: true }, { title: "blocker" }]);
   addGoal(2);
   run({ name: `${key}-1`, state: "stuck", reason: "time box", on: `${key}-1` });
   reply([{ do: "drop", job: `${key}-1`, reason: "needs the blocker", after: [`${key}-2.1`] }]);
@@ -407,7 +407,7 @@ test("a drop with after drops the job, and the goal waits after that goal, with 
 });
 
 test("an edit-goal with only after sets it and leaves the body unchanged", async () => {
-  fresh([{ title: "goal", body: "Ship the thing.\n", labels: ["goal"] }, { title: "blocker" }]);
+  fresh([{ title: "goal", body: "Ship the thing.\n", goal: true }, { title: "blocker" }]);
   addGoal(2);
   const r = await applyActions([{ do: "edit-goal", repo: key, n: 1, after: [`${key}-2.1`] }], ports());
   expect(r.refused).toEqual([]);
@@ -416,7 +416,7 @@ test("an edit-goal with only after sets it and leaves the body unchanged", async
 });
 
 test("an after naming no goal is refused", async () => {
-  fresh([{ title: "goal", labels: ["goal"] }]);
+  fresh([{ title: "goal", goal: true }]);
   const r = await applyActions([{ do: "edit-goal", repo: key, n: 1, after: [`${key}-9.1`] }], ports());
   expect(r.refused).toEqual([expect.stringContaining("names no goal")]);
 });

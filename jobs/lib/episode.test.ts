@@ -60,10 +60,10 @@ afterEach(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-const add = (title: string, o: { labels?: string[]; done?: boolean; waitingOn?: string } = {}): number =>
+const add = (title: string, o: { done?: boolean } = {}): number =>
   writeList({ key: "fac" }, "add", (doc) => {
-    const item = issues.addLegacy(doc, title, { labels: o.labels ?? ["goal"], body: "## Goal\nShip it." });
-    if (o.waitingOn) issues.edit(item, { waitingOn: o.waitingOn });
+    const item = issues.add(doc, title, { body: "## Goal\nShip it." });
+    item.fm.kind = "goal";
     if (o.done) issues.setStatus(item, "done");
     return item.id;
   }, true)!.value;
@@ -93,8 +93,6 @@ test("a done goal gets one page built from git, the ledger and Langfuse", async 
   run(dropped, { state: "dropped", reason: "the last run made no commit", on: `fac-${one}`, cost: 1.5 });
   writeFileSync(join(base, "jobs", dropped, "result.md"), "also fixed the login bug\n");
   run(landed, { state: "landed", commit: sha, on: `fac-${one}`, cost: 2, started: "2026-10-28T10:30:00Z", ended: "2026-10-28T10:50:00Z" });
-  const planned = add("the parent", { labels: ["goal", "planned"], done: true, waitingOn: `fac-${one}` });
-  run("20261028-090000-fac-2-plan", { kind: "plan", state: "done", on: `fac-${planned}`, name: "fac-2", started: "2026-10-28T09:00:00Z", ended: "2026-10-28T09:05:00Z" });
 
   const repo = loadRegistry().fac;
   const r = await writeEpisodes([repo]);
@@ -109,8 +107,6 @@ test("a done goal gets one page built from git, the ledger and Langfuse", async 
   expect(text).toContain("written_by: factory");
   expect(text).not.toContain("login bug");
 
-  const parent = readFileSync(join(base, "vault", "wiki", "episodes", pages().find((f) => f.startsWith("fac-2 "))!), "utf8");
-  expect(section(parent, "What landed")).toContain(sha.slice(0, 7));
 
   const again = await writeEpisodes([repo]);
   expect(again.written).toEqual([]);

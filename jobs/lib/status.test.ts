@@ -134,7 +134,7 @@ test("a touched item the store closed is done without a fresh trailer commit, un
 test("facts carry what stage() needs: status, kind, after, goals, ask kind and each job's last run", () => {
   const doc: Doc = { head: "", items: [
     { ...item(21, "open"), fm: { status: "open", kind: "goal", after: ["demo-22"], ask: "approval", reason: "review" } },
-    { ...item(22, "open"), fm: { status: "open", labels: ["planned"], waiting_on: "demo-21" } },
+    { ...item(22, "open"), fm: { status: "open", kind: "issue", goals: ["demo-21"] } },
   ] };
   const folder = join(base, "jobs", "20261028-000021-demo-21-build");
   mkdirSync(folder, { recursive: true });

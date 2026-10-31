@@ -460,7 +460,7 @@ test("a held row shows the call verdict and its reason in Details", () => {
 });
 
 test("an asking issue with fields shows the question, the options, the recommended mark, the context and the buttons in the row", () => {
-  const decision = { question: "Haiku or Sonnet for the `digest`?", options: [{ label: "Haiku", line: "Cheaper, `fast`" }, { label: "Sonnet", line: "Better summaries" }], recommended: "Sonnet", kind: "product" as const, why: ["Digests run daily", "Quality matters more"] };
+  const decision = { question: "Haiku or Sonnet for the `digest`?", options: [{ label: "Haiku", line: "Cheaper, `fast`" }, { label: "Sonnet", line: "Better summaries" }], recommended: "Sonnet", kind: "input" as const, reason: "question", why: ["Digests run daily", "Quality matters more"] };
   const s = { ...state, needs: [], stuck: [], issues: [], factory: { ...state.factory, health: [] }, needsIssues: [{ ...issue(152), title: "Which tier?", question: "prose", decision }] };
   const [row] = rows(r.renderJobs(s));
   expect(row).toContain('<p class="dq">Haiku or Sonnet for the <code>digest</code>?</p>');
@@ -651,7 +651,7 @@ const sample = (reason: string) => {
     "triage-failed": { reason: "triage-failed", question: "triage: no verdict in 2 runs: failed: x" },
     "part-dropped": { reason: "part-dropped", question: "A goal was dropped." },
     "acceptance-failed": { reason: "acceptance-failed", question: "acceptance: fail again" },
-    rescue: { reason: "rescue", question: "Which one?", decision: { question: "Which?", options: [{ label: "A", line: "a" }], recommended: "A", kind: "product" as const, why: [] } },
+    rescue: { reason: "rescue", question: "Which one?", decision: { question: "Which?", options: [{ label: "A", line: "a" }], recommended: "A", kind: "input" as const, reason: "question", why: [] } },
     firefighter: { reason: "firefighter", question: "x changes y.ts, a held security path" },
   };
   return iss(q[reason]);

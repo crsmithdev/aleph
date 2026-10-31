@@ -168,7 +168,7 @@ function context(e: Event, jobs: Job[]): string {
   }
   if (e.item !== undefined) {
     const item = store.reader().item(e.repo, e.item);
-    if (item) parts.push(`### Issue ${e.repo}-${item.id}: ${item.title} [${store.labels(item).join(", ")}]\n${item.body.trim() || "(no body)"}${item.notes.length ? `\n\nNotes:\n${item.notes.join("\n")}` : ""}`);
+    if (item) parts.push(`### Issue ${e.repo}-${item.id}: ${item.title} [${store.areasOf(item).join(", ")}]\n${item.body.trim() || "(no body)"}${item.notes.length ? `\n\nNotes:\n${item.notes.join("\n")}` : ""}`);
   }
   return parts.join("\n\n");
 }
