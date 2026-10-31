@@ -330,7 +330,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
     // Members that failed in an earlier attempt keep their verdict and are not tried again.
     const failedBefore = new Map<Member, Outcome & { after?: () => void }>();
     for (let attempt = 0; ; attempt++) {
-      if (!logged("fetch", fetchOrigin(repo.path)).ok) return fail("fetch failed");
+      { const f = logged("fetch", fetchOrigin(repo.path)); if (!f.ok) return fail(`fetch failed: ${f.out}`); }
       const base0 = git(repo.path, "rev-parse", `origin/${main}`).out;
       const done = new Map<Member, Outcome & { after?: () => void }>(failedBefore);
       const finish = (m: Member, o: Outcome & { after?: () => void }) => { done.set(m, o); if (o.verdict.state === "failed") m.log(`failed: ${o.verdict.reason}`); };
@@ -462,7 +462,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
           followCheckout(repo, log);
           return conclude(leader, done, checksOf);
         }
-        if (!logged("fetch", fetchOrigin(repo.path)).ok) return fail("fetch failed");
+        { const f = logged("fetch", fetchOrigin(repo.path)); if (!f.ok) return fail(`fetch failed: ${f.out}`); }
         const refused = git(repo.path, "rev-parse", `origin/${main}`).out === base0;
         if (refused || attempt >= RELANDS) {
           for (const { m } of ok) done.set(m, failed(refused ? "push refused" : MOVED));
@@ -826,7 +826,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     const fetched = fetchOrigin(repo.path);
     if (!fetched.ok) {
       appendFileSync(join(folder, "setup.log"), `## fetch: failed\n${fetched.out}\n`);
-      return fail("fetch failed");
+      return fail(`fetch failed: ${fetched.out}`);
     }
     git(repo.path, "worktree", "remove", "--force", wt);
     git(repo.path, "worktree", "prune");
@@ -874,7 +874,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   const refetched = fetchOrigin(wt);
   if (!refetched.ok) {
     appendFileSync(join(folder, "setup.log"), `## fetch: failed\n${refetched.out}\n`);
-    return fail("fetch failed");
+    return fail(`fetch failed: ${refetched.out}`);
   }
   const base = git(wt, "merge-base", `origin/${repo.main}`, "HEAD").out;
   if (git(wt, "rev-list", "--count", `${base}..HEAD`).out === "0") {
@@ -904,7 +904,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
   const phase = (p: string) => updateRun(folder, { phase: p });
   const stuck = (reason: string, extra: Partial<Verdict> = {}) => ({ verdict: { state: "stuck" as const, reason, ...extra }, code: 1 });
   phase("setup");
-  if (!fetchOrigin(repo.path).ok) return stuck("fetch failed");
+  { const f = fetchOrigin(repo.path); if (!f.ok) return stuck(`fetch failed: ${f.out}`); }
   const prev = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok;
   const dir = makeRunFolder(id);
   try {
@@ -1057,7 +1057,7 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
   const phase = (p: string) => updateRun(folder, { phase: p });
   const stuck = (reason: string, extra: Partial<Verdict> = {}) => ({ verdict: { state: "stuck" as const, reason, ...extra }, code: 1 });
   phase("setup");
-  if (!fetchOrigin(repo.path).ok) return stuck("fetch failed");
+  { const f = fetchOrigin(repo.path); if (!f.ok) return stuck(`fetch failed: ${f.out}`); }
   const tip = git(repo.path, "rev-parse", "--verify", "-q", ref);
   if (!tip.ok) return stuck(`branch gone: ${branch}`);
   const upstream = git(repo.path, "rev-parse", main).out;
