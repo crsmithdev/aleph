@@ -14,7 +14,7 @@ describe("a factory run", () => {
     const started = () => (existsSync(startLog) ? readFileSync(startLog, "utf8").trim().split("\n").filter(Boolean) : []);
     const gate = (n: string) => join(base, `gate-${n}`);
     const goal = async (n: string) =>
-      seedItem("fac", `dispatch ${n}`, { labels: ["goal"] }, `ACTION: hold ${gate(n)}\n`.trim()) as number;
+      seedItem("fac", `dispatch ${n}`, { kind: "goal" }, `ACTION: hold ${gate(n)}\n`.trim()) as number;
     const until = async (f: () => boolean) => { for (let i = 0; i < 300 && !f(); i++) await Bun.sleep(100); expect(f()).toBe(true); };
     const settled = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`)).every((r) => stateNow(r).state === "passed");
     const ids: number[] = [];

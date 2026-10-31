@@ -28,9 +28,9 @@ describe("a factory run", () => {
     // Its ticks run the nightly probe unless a fresh passing one is on file; alone, none is.
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
-    const stuckId = seedItem("fac", "the stuck one", { labels: ["goal"] }, "ACTION: error\n".trim());
+    const stuckId = seedItem("fac", "the stuck one", { kind: "goal" }, "ACTION: error\n".trim());
     expect((await aleph(["tick"])).json.started).toEqual([`fac-${stuckId}`]);
-    const id = seedItem("fac", "behind the hold", { labels: ["goal"] }, "ACTION: commit behind.txt\n".trim());
+    const id = seedItem("fac", "behind the hold", { kind: "goal" }, "ACTION: commit behind.txt\n".trim());
     const d = await aleph(["dispatch"]);
     expect(d.json.started).toEqual([]);
     expect(d.json.held).toContain(`Held: fac-${stuckId} is stuck`);

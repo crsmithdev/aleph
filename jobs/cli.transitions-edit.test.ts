@@ -18,7 +18,7 @@ describe("every transition dispatches at once", () => {
   // with its run-end dispatch, has exited.
   const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).state !== "running" && !unitAlive(join(jobsDir, r)));
   // An old-shape goal, seeded: no verb of `aleph issue` writes one. `aleph dispatch` starts it; the transitions below are what these tests check.
-  const add = async (title: string, action: string, fm: Record<string, unknown> = { labels: ["goal"] }, env: Record<string, string> = {}) => {
+  const add = async (title: string, action: string, fm: Record<string, unknown> = { kind: "goal" }, env: Record<string, string> = {}) => {
     const id = seedItem("fac", title, fm, `ACTION: ${action}`);
     await aleph(["dispatch"], on(env));
     return id;
@@ -57,10 +57,10 @@ describe("every transition dispatches at once", () => {
   }, 120_000);
 
   test("a land that lands starts the goal that waits on that job", async () => {
-    const a = track(await add("lands first", "commit tr/a.txt", { labels: ["goal"] }));
+    const a = track(await add("lands first", "commit tr/a.txt", { kind: "goal" }));
     await until(() => started().includes(`fac-${a}`));
     await until(() => settled(a) && runs(a).some((r) => state(r).state === "passed"));
-    const b = track(await add("waits on the first", open("land"), { labels: ["goal"], waiting_on: `fac-${a}` }));
+    const b = track(await add("waits on the first", open("land"), { kind: "goal", after: [`fac-${a}`] }));
     await Bun.sleep(1000);
     expect(started()).not.toContain(`fac-${b}`);
     const l = await aleph(["land", `fac-${a}`], on());
@@ -71,7 +71,7 @@ describe("every transition dispatches at once", () => {
   test("an edit that sets the status back to open starts the goal", async () => {
     // A dispatch left by an earlier test's run may still be alive. It starts any open goal it sees, so the
     // goal is seeded already dropped.
-    const x = track(await add("dropped, then reopened", open("reopen"), { labels: ["goal"], status: "dropped" }, { ALEPH_DISPATCH: "off" }));
+    const x = track(await add("dropped, then reopened", open("reopen"), { kind: "goal", status: "dropped" }, { ALEPH_DISPATCH: "off" }));
     await Bun.sleep(300);
     expect(started()).toEqual([]);
     expect((await aleph(["issue", "edit", "fac", String(x), "--status", "open"], on())).code).toBe(0);

@@ -54,7 +54,7 @@ describe("every transition dispatches at once", () => {
     await until(() => started().includes(`fac-${blocker}`));
     const a = track(await add("starts first", open("waiter"), ["--labels", "goal"]));
     await until(() => started().includes(`fac-${a}`));
-    patchItem("fac", a, { waiting_on: `fac-${blocker}` });
+    patchItem("fac", a, { after: [`fac-${blocker}`] });
     expect((await aleph(["drop", `fac-${a}`, "waits now"], on())).code).toBe(0);
     await Bun.sleep(2000);
     expect(started().filter((n) => n === `fac-${a}`)).toEqual([`fac-${a}`]);

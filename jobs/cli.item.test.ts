@@ -142,7 +142,7 @@ describe("prospective memory", () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
   });
-  // Old-shape items, seeded: no verb of `aleph issue` sets `goal` or `waiting_on` now. The tick below does the dispatching.
+  // Old-shape items, seeded: no verb of `aleph issue` sets `goal` or `after` on an old-shape item now. The tick below does the dispatching.
   const add = (title: string, ...more: string[]) => addOld(title, "", more, { ALEPH_DISPATCH: "off" });
 
   test("a tick skips a goal due tomorrow, and one that waits on an open item, until it is ready", async () => {
@@ -180,7 +180,7 @@ describe("prospective memory", () => {
 
   test("a goal waiting on several items comes due once every one is done", async () => {
     const a = await add("wait a"), b = await add("wait b");
-    const w = await add("waits on two", "--waiting-on", `fac-${a},fac-${b}`);
+    const w = await add("waits on two", "--after", `fac-${a},fac-${b}`);
     await aleph(["issue", "done", "fac", String(a)]);
     expect((await aleph(["report"])).stdout).not.toContain(`fac-${w} waits on two`);
     await aleph(["issue", "done", "fac", String(b)]);

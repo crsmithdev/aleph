@@ -32,7 +32,7 @@ describe("a factory run", () => {
     const env = { ALEPH_AWAITING_CAP: "2" };
     await fjob("fwait1", "commit held/w1.txt");
     await fjob("fwait2", "commit held/w2.txt");
-    const id = seedItem("fac", "behind the cap", { labels: ["goal"] }, "ACTION: commit capped.txt\n".trim());
+    const id = seedItem("fac", "behind the cap", { kind: "goal" }, "ACTION: commit capped.txt\n".trim());
     const t = await aleph(["tick"], env);
     expect(t.json.started).toEqual([]);
     expect(t.json.skipped).toContain(`fac-${id}: 2 runs wait for Chris`);
@@ -46,7 +46,7 @@ describe("a factory run", () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     expect((await aleph(["pause"])).json).toEqual({ paused: true });
-    const id = seedItem("fac", "while paused", { labels: ["goal"] }, "ACTION: commit paused.txt\n".trim());
+    const id = seedItem("fac", "while paused", { kind: "goal" }, "ACTION: commit paused.txt\n".trim());
     expect((await aleph(["tick"])).json).toMatchObject({ started: [], paused: true });
     expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("paused");
     const r = await fjob("fpaused", "commit fpaused.txt", {}, ["--land"]);

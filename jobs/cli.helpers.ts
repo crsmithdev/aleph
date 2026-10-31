@@ -352,7 +352,7 @@ export function seedItem(repoKey: string, title: string, fm: Record<string, unkn
   mkdirSync(dir, { recursive: true });
   if (!existsSync(join(items, repoKey, "backlog", "config.yml"))) writeFileSync(join(items, repoKey, "backlog", "config.yml"), storeConfig(repoKey));
   const id = Math.max(0, ...readdirSync(dir).map((f) => Number(/^.+-(\d+)\.md$/.exec(f)?.[1] ?? 0))) + 1;
-  const item = { id, title, fm: { id: String(id), status: "open", created: "2026-10-30", updated: "2026-10-30", priority: "medium", labels: [], ...fm }, body, notes: [], legacy: false };
+  const item = { id, title, fm: { id: String(id), status: "open", created: "2026-10-30", updated: "2026-10-30", priority: "medium", ...fm }, body, notes: [], legacy: false };
   writeFileSync(join(dir, `${repoKey}-${id}.md`), renderItem(repoKey, item as any));
   sh(items, "git", "add", "-A");
   sh(items, "git", "commit", "-qm", `seed ${repoKey}-${id}`);
@@ -387,18 +387,19 @@ export function seedRun(repoKey: string, run: Partial<Run> & Pick<Run, "kind" | 
 
 /**
  * Files an old-shape item the way `aleph issue add <repo> <title> <flags> --body -` did before the store wrote only the new
- * shape: `--labels a,b` becomes `labels`, `--due` and `--waiting-on` their fields, `action` the body. No verb of `aleph issue`
+ * shape: `--labels` with `goal` becomes `kind: "goal"`, the other labels `areas`, `--after a,b` becomes `after: ["a", "b"]`, `--due` its field, `action` the body. No verb of `aleph issue`
  * writes that shape now, so the item is seeded; an open goal then gets the dispatch that `add` ran, with `env` (which may turn it off).
  */
 export async function addOld(title: string, action: string, extra: string[] = [], env: Record<string, string> = {}): Promise<number> {
   const flag = (n: string) => { const i = extra.indexOf(`--${n}`); return i >= 0 ? extra[i + 1] : undefined; };
   const labels = (flag("labels") ?? "").split(",").filter(Boolean);
-  const id = seedItem("fac", title, { labels, ...(flag("due") ? { due: flag("due") } : {}), ...(flag("waiting-on") ? { waiting_on: flag("waiting-on") } : {}) }, action ? `ACTION: ${action}` : "");
-  if (labels.includes("goal") && env.ALEPH_DISPATCH !== "off") await aleph(["dispatch"], env);
+  const isGoal = labels.includes("goal"), areas = labels.filter((l) => l !== "goal");
+  const id = seedItem("fac", title, { ...(isGoal ? { kind: "goal" } : {}), ...(areas.length ? { areas } : {}), ...(flag("due") ? { due: flag("due") } : {}), ...(flag("after") ? { after: flag("after")!.split(",").filter(Boolean) } : {}) }, action ? `ACTION: ${action}` : "");
+  if (isGoal && env.ALEPH_DISPATCH !== "off") await aleph(["dispatch"], env);
   return id;
 }
 
-/** Sets frontmatter fields of an item of the test store in one commit (a value of `undefined` removes the field): the edits no verb of `aleph issue` makes now, such as `waiting_on`. */
+/** Sets frontmatter fields of an item of the test store in one commit (a value of `undefined` removes the field): the edits no verb of `aleph issue` makes now, such as `after`. */
 export function patchItem(repoKey: string, id: number | string, fm: Record<string, unknown>): void {
   pullItems();
   const path = join(items, repoKey, "backlog", "tasks", `${repoKey}-${id}.md`);

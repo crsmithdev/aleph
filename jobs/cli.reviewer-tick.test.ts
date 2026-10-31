@@ -23,7 +23,7 @@ describe("a factory run", () => {
   test("a tick starts one run per open goal, lands it, and then has nothing to start", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
-    const id =seedItem("fac", "ship the goal", { labels: ["goal"] }, "ACTION: commit goal.txt\n".trim());
+    const id =seedItem("fac", "ship the goal", { kind: "goal" }, "ACTION: commit goal.txt\n".trim());
     const t = await aleph(["tick"]);
     expect(t.json.skipped).toEqual([]);
     expect(t.json.started).toEqual([`fac-${id}`]);
@@ -41,7 +41,7 @@ describe("a factory run", () => {
       await (async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
-    const id =seedItem("fac", "a stuck goal", { labels: ["goal"] }, "ACTION: error\n".trim());
+    const id =seedItem("fac", "a stuck goal", { kind: "goal" }, "ACTION: error\n".trim());
     expect((await aleph(["tick"])).json.started).toEqual([`fac-${id}`]);
     const again = await aleph(["tick"]);
     expect(again.json.started).toEqual([]);
@@ -62,7 +62,7 @@ describe("a factory run", () => {
     const own = { ALEPH_JOBS_DIR: join(base, "caps-jobs") };
     mkdirSync(own.ALEPH_JOBS_DIR);
     const ids: number[] = [];
-    for (const n of [1, 2, 3]) ids.push(seedItem("fac", `caps goal ${n}`, { labels: ["goal"] }, "ACTION: error\n".trim()));
+    for (const n of [1, 2, 3]) ids.push(seedItem("fac", `caps goal ${n}`, { kind: "goal" }, "ACTION: error\n".trim()));
     mkdirSync(join(base, "factory"), { recursive: true });
     // A fresh passing probe, so the tick does not run the sandbox probe when this test runs alone.
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));

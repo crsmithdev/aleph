@@ -16,7 +16,7 @@ describe("a factory run", () => {
     writeFileSync(join(other, "FAIL"), "red\n");
     sh(other, "git", "add", "FAIL"); sh(other, "git", "commit", "-qm", "break main"); sh(other, "git", "push", "-q", "origin", "main");
     const sha7 = remoteGit("rev-parse", "main").slice(0, 7);
-    const id = seedItem("fac", "wait for green", { labels: ["goal"] }, "ACTION: commit green.txt\n".trim());
+    const id = seedItem("fac", "wait for green", { kind: "goal" }, "ACTION: commit green.txt\n".trim());
     const before = trees();
     const t = await aleph(["tick"]);
     expect(t.json.started).toEqual([]);
@@ -38,7 +38,7 @@ describe("a factory run", () => {
     sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
     writeFileSync(join(other, "new.txt"), `${Math.random()}\n`);
     sh(other, "git", "add", "new.txt"); sh(other, "git", "commit", "-qm", "new commit"); sh(other, "git", "push", "-q", "origin", "main");
-    const id = seedItem("fac", "baseline once", { labels: ["goal"] }, "ACTION: commit once.txt\n".trim());
+    const id = seedItem("fac", "baseline once", { kind: "goal" }, "ACTION: commit once.txt\n".trim());
     const before = trees();
     writeFileSync(join(base, "slowbase"), "");
     const first = aleph(["tick"]);
@@ -58,12 +58,12 @@ describe("a factory run", () => {
     sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
     writeFileSync(join(other, "late.txt"), `${Math.random()}\n`);
     sh(other, "git", "add", "late.txt"); sh(other, "git", "commit", "-qm", "late commit"); sh(other, "git", "push", "-q", "origin", "main");
-    const early = seedItem("fac", "first late goal", { labels: ["goal"] }, "ACTION: commit late1.txt\n".trim());
+    const early = seedItem("fac", "first late goal", { kind: "goal" }, "ACTION: commit late1.txt\n".trim());
     const before = trees();
     writeFileSync(join(base, "slowbase"), "");
     const tick = aleph(["tick"]);
     for (let i = 0; i < 300 && trees() === before; i++) await Bun.sleep(100);
-    const late = seedItem("fac", "second late goal", { labels: ["goal"] }, "ACTION: commit late2.txt\n".trim());
+    const late = seedItem("fac", "second late goal", { kind: "goal" }, "ACTION: commit late2.txt\n".trim());
     const second = await aleph(["tick"]);
     expect(second.json.started).toEqual([]);
     expect(second.json.skipped).toContain(`fac-${late}: main baseline running`);
@@ -79,7 +79,7 @@ describe("a factory run", () => {
     sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
     writeFileSync(join(other, "new.txt"), `${Math.random()}\n`);
     sh(other, "git", "add", "new.txt"); sh(other, "git", "commit", "-qm", "another commit"); sh(other, "git", "push", "-q", "origin", "main");
-    const id = seedItem("fac", "baseline retried", { labels: ["goal"] }, "ACTION: commit retried.txt\n".trim());
+    const id = seedItem("fac", "baseline retried", { kind: "goal" }, "ACTION: commit retried.txt\n".trim());
     const broken = join(base, "broken-sandbox");
     // Only the baseline's script fails to start; the probe and the runs go through.
     writeFileSync(broken, `#!/bin/bash\ncase "\${@: -1}" in *base.bundle*) exit 3 ;; esac\nexec ${join(base, "pass")} "$@"\n`, { mode: 0o755 });
