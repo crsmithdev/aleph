@@ -175,6 +175,62 @@ describe("the writes", () => {
   });
 });
 
+describe("the flake tracker", () => {
+  test("the first noteFlake adds the tracker with the note, in one commit", () => {
+    const r = repo([{ title: "one" }]);
+    const before = commits();
+    expect(issues.noteFlake(r, "flaky A")).toEqual({ id: 2 });
+    expect(commits()).toBe(before + 1);
+    const t = item(r, 2);
+    expect(t.title).toBe("Flaky tests seen by runs");
+    expect(issues.labels(t)).toEqual([issues.FLAKES, "triaged"]);
+    expect(todos.status(t)).toBe("open");
+    expect(t.fm.priority).toBe("low");
+    expect(t.fm.goal).toBeUndefined();
+    expect(t.body).toContain("Chris picks");
+    expect(t.notes.at(-1)).toEndWith(": flaky A");
+  });
+
+  test("a second noteFlake adds a note to the same item and no new item", () => {
+    const r = repo();
+    const first = issues.noteFlake(r, "flaky A");
+    const second = issues.noteFlake(r, "flaky B");
+    expect(first).toEqual({ id: 1 });
+    expect(second).toEqual({ id: 1 });
+    expect(issues.readList(r)!.items.length).toBe(1);
+    expect(item(r, 1).notes.length).toBe(2);
+    expect(item(r, 1).notes.at(-1)).toEndWith(": flaky B");
+  });
+
+  test("a closed tracker is not reused, a new one is made", () => {
+    const r = repo();
+    issues.noteFlake(r, "flaky A");
+    issues.close(r, 1, "done");
+    expect(issues.noteFlake(r, "flaky B")).toEqual({ id: 2 });
+    expect(todos.status(item(r, 2))).toBe("open");
+    expect(issues.flakeTracker(issues.readList(r)!)?.id).toBe(2);
+  });
+
+  test("the tracker is sorted, so triage skips it", () => {
+    const r = repo();
+    issues.noteFlake(r, "flaky A");
+    expect(issues.isSorted(item(r, 1))).toBe(true);
+    expect(issues.isGoal(item(r, 1))).toBe(false);
+  });
+
+  test("flakeTracker picks the lowest open id", () => {
+    const r = repo([{ title: "a", labels: ["flakes"] }, { title: "b", labels: ["flakes"] }]);
+    expect(issues.flakeTracker(issues.readList(r)!)?.id).toBe(1);
+    issues.close(r, 1, "x");
+    expect(issues.flakeTracker(issues.readList(r)!)?.id).toBe(2);
+  });
+
+  test("noteFlake on a repo with no list starts one", () => {
+    const r = { key: `st${++n}` };
+    expect(issues.noteFlake(r, "flaky A")).toEqual({ id: 1 });
+  });
+});
+
 describe("the work store file", () => {
   const file = (created: string, updated = "updated: 2026-10-30") => `---\nid: st1-4\ntitle: Old\nstatus: open\n${created}\n${updated}\npriority: medium\nlabels: []\nrepo: st1\n---\n\nBody.\n`;
   const withItem = (text: string): todos.Item => ({ ...todos.parseItem(text), fm: todos.parseItem(text).fm });

@@ -441,3 +441,36 @@ export function closeAndFile(repo: Place, message: string, id: number | undefine
 /** File new issues as one commit, starting the list when the store has none; their numbers. A write that fails files none. */
 export const file = (repo: Place, message: string, filed: Filing[]): number[] =>
   filed.length ? closeAndFile(repo, message, undefined, "", filed).ids : [];
+
+/** The label of the one issue that collects the flakes runs meet. */
+export const FLAKES = "flakes";
+
+/** The open item labelled `flakes`, the lowest id when there are several; undefined when there is none. */
+export function flakeTracker(doc: Doc): Item | undefined {
+  return doc.items
+    .filter((i) => i.sub === undefined && status(i) === "open" && hasLabel(i, FLAKES))
+    .sort((a, b) => a.id - b.id)[0];
+}
+
+/**
+ * A note on the flake tracker, adding the tracker first when there is none, as
+ * one commit. Chris picks from the tracker's notes which flakes get a goal, so
+ * a run that meets an unrelated flake notes it here and files no issue.
+ * Returns the tracker's id, or why the write did not happen.
+ */
+export function noteFlake(repo: Place, text: string): { id: number } | string {
+  try {
+    const w = writeList(repo, `todo: flake: ${text}`, (doc) => {
+      const tracker = flakeTracker(doc) ?? todos.add(doc, "Flaky tests seen by runs", {
+        priority: "low",
+        labels: [FLAKES, "triaged"],
+        body: "Flaky tests that runs met and did not cause. Each note is one flake a run saw. Chris picks from these notes which flakes get a goal.",
+      });
+      todos.note(tracker, text);
+      return { id: tracker.id };
+    }, true);
+    return w ? w.value : "no flake tracker written";
+  } catch (e) {
+    return why(e);
+  }
+}
