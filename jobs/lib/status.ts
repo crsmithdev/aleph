@@ -126,14 +126,14 @@ export function itemOnMain(repo: { path: string; key: string; main: string } | u
 }
 
 /** The items of `ns` that the facts hold, with the stage() context for them: one `landedIndex` for all. */
-export function stages(cwd: string, main: string, f: Facts, ns: number[], landed: Map<number, string[]> = landedIndex(cwd, main, f.repo)): Stage[] {
-  const num = (ref: string) => (ref.startsWith(`${f.repo}-`) && /^\d+$/.test(ref.slice(f.repo.length + 1)) ? ref.slice(f.repo.length + 1) : undefined);
+export function stages(cwd: string, main: string, f: Facts, refs: (number | string)[], landed: Map<number, string[]> = landedIndex(cwd, main, f.repo)): Stage[] {
+  const num = (ref: string) => (ref.startsWith(`${f.repo}-`) && /^\d+(\.\d+)?$/.test(ref.slice(f.repo.length + 1)) ? ref.slice(f.repo.length + 1) : undefined);
   const ctx: Ctx = {
     main, landed, reverted: revertedIn(landed),
     item: (ref) => f.items[num(ref) ?? ""],
     runs: (ref) => f.runs[num(ref) ?? ""] ?? [],
   };
-  return ns.filter((n) => f.items[n] !== undefined).map((n) => stage(f.items[n], ctx));
+  return refs.map(String).filter((n) => f.items[n] !== undefined).map((n) => stage(f.items[n], ctx));
 }
 
 /**
@@ -142,10 +142,10 @@ export function stages(cwd: string, main: string, f: Facts, ns: number[], landed
  * list when the caller has read it already. Items the store lacks are left
  * out. It throws when the store cannot be read.
  */
-export function repoStages(repo: Repo, opts: { fetch: boolean; doc?: todos.Doc | null; items?: number[] }): Stage[] {
+export function repoStages(repo: Repo, opts: { fetch: boolean; doc?: todos.Doc | null; items?: (number | string)[] }): Stage[] {
   if (opts.fetch) fetchOrigin(repo.path);
   const f = facts(repo, opts.doc);
-  return stages(repo.path, `refs/remotes/origin/${f.main}`, f, opts.items ?? Object.keys(f.items).map(Number));
+  return stages(repo.path, `refs/remotes/origin/${f.main}`, f, opts.items ?? Object.keys(f.items).filter((k) => !k.includes(".")).map(Number));
 }
 
 const DAY_MS = 24 * 3600_000;

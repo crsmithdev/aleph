@@ -145,6 +145,40 @@ test("facts carry what stage() needs: status, kind, after, goals, ask kind and e
   expect(f.runs[21]).toEqual([{ kind: "build", state: "awaiting", open: true, ask: { kind: "input", reason: "question" } }]);
 });
 
+test("a dotted ref in after, goals and on resolves to the goal, its runs and its status", () => {
+  const goal = (sub: number, fm: Record<string, unknown>) => ({ id: 5, sub, title: `g${sub}`, fm: { kind: "goal", status: "open", ...fm }, body: "", notes: [], legacy: false });
+  const mk = (g1: string): Doc => ({
+    head: "",
+    items: [
+      { ...item(5, "open"), fm: { status: "open", goals: ["demo-5.1", "demo-5.2"] } },
+      goal(1, { status: g1 }),
+      goal(2, { after: ["demo-5.1"] }),
+    ],
+  });
+  const folder = join(base, "jobs", "20261030-000001-demo-5.1-build");
+  mkdirSync(folder, { recursive: true });
+  writeRun(folder, { kind: "build", job: "dotted-build", name: "dotted-build", repo: "demo", on: "demo-5.1", state: "running", told: true, shown: true, started: new Date().toISOString() } as Run);
+
+  const open = mk("open");
+  const f = facts(repo, open);
+  expect(f.items["5.1"]).toBeDefined();
+  expect(f.runs["5.1"]).toBeDefined();
+  const st = (items: (number | string)[], doc = open) => repoStages(repo, { fetch: false, doc, items });
+  expect(st(["5.1"]).map((s) => ({ id: s.id, stage: s.stage }))).toEqual([{ id: "demo-5.1", stage: "building" }]);
+  const blocked = st(["5.2"])[0];
+  expect(blocked.stage).toBe("blocked");
+  expect(blocked.why).toContain("demo-5.1");
+  const issue = st([5])[0];
+  expect(issue.stage).toBe("building");
+  expect(issue.of).toEqual({ n: 0, m: 2 });
+  // the default lists plain items only
+  expect(repoStages(repo, { fetch: false, doc: open }).map((s) => s.id)).toEqual(["demo-5"]);
+
+  const done = mk("done");
+  expect(st(["5.2"], done)[0].stage).toBe("queued");
+  expect(st([5], done)[0].of).toEqual({ n: 1, m: 2 });
+});
+
 test("a commit with Issue and Goal trailers resolves for its goal", () => {
   const other = join(base, "other");
   sh(other, "git", "pull", "-q", "origin", "main");
