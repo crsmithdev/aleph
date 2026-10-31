@@ -79,11 +79,12 @@ describe("a factory run", () => {
     await aleph(["drop", "fback"]);
   }, 60_000);
 
-  test("DEFAULT lines and the cost reach the report once; FOLLOWUP lines become items", async () => {
+  test("DEFAULT lines and the cost reach the report once; FOLLOWUP lines go to the log and file nothing", async () => {
     const r = await fjob("fdefault", "defaults");
     expect(state(r.json.run)).toMatchObject({ state: "passed", cost: 0.25, defaults: ["which colour? -> blue"] });
     const items = (await aleph(["todo", "list", "fac", "--label", "followup", "--json"])).json;
-    expect(items.map((i: any) => i.title)).toContain("paint the fence");
+    expect(items.map((i: any) => i.title)).not.toContain("paint the fence");
+    expect(readFileSync(join(base, "factory", "followups.log"), "utf8")).toContain("paint the fence");
     const rep = await aleph(["report"]);
     expect(rep.stdout).toContain("fac/fdefault passed");
     expect(rep.stdout).toContain("DEFAULT: which colour? -> blue");

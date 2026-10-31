@@ -289,10 +289,8 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   if (a.do === "tell") return { applied: describe(a) };
   const repo = repoOf(a.repo);
   if (!repo) return { refused: `${describe(a)}: ${a.repo} is not a factory repo` };
-  if (a.do === "add") {
-    const ids = store.file(repo, `todo: firefighter files ${a.title}`, [{ title: a.title, labels: [], body: a.body }]);
-    return ids.length ? { applied: `${describe(a)} as ${repo.key}-${ids[0]}` } : { refused: `${describe(a)}: not filed` };
-  }
+  // Chris turned this off until the inbox of aleph-826: the firefighter files no issue.
+  if (a.do === "add") return { refused: `${describe(a)}: the firefighter files no issues; use tell` };
   const item = store.reader().item(repo.key, a.n);
   if (!item || todos.status(item) !== "open") return { refused: `${describe(a)}: no open issue ${repo.key}-${a.n}` };
   if (a.do === "close") {

@@ -6,7 +6,7 @@
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { closeAndFile, file, readHidden } from "../../todo/lib/store.ts";
+import { closeAndFile, readHidden } from "../../todo/lib/store.ts";
 import { addWorktree, fetchOrigin, followMain, git } from "./git.ts";
 import { ALREADY_MET, heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { checkSlot, readReview2, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
@@ -14,7 +14,7 @@ import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./j
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
-import { dispatchOn, gates, triageDetached, recordFlake, waitingToLand } from "./factory.ts";
+import { dispatchOn, factoryDir, gates, recordFlake, waitingToLand } from "./factory.ts";
 import { startReview2 } from "./review2.ts";
 import { postTrace } from "./trace.ts";
 import { runLogged, startUnit } from "./launch.ts";
@@ -1157,9 +1157,8 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
   }
 }
 
-/** A worker's `FOLLOWUP:` lines become issues in the repo's list, filed by aleph. */
+/** A worker's `FOLLOWUP:` lines go to a log and file nothing: Chris chose this until the inbox of aleph-826. */
 function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
-  if (!titles.length) return;
-  const body = `From job ${run.name}${run.todo !== undefined ? ` on issue ${run.todo}` : ""}.`;
-  for (const id of file(repo, `todo: follow-ups from job ${run.name}`, titles.map((title) => ({ title, labels: ["followup"], body })))) triageDetached(repo, id);
+  if (titles.length) mkdirSync(factoryDir(), { recursive: true });
+  for (const title of titles) appendFileSync(join(factoryDir(), "followups.log"), `${new Date().toISOString()}\t${repo.key}\t${run.name}\t${title}\n`);
 }

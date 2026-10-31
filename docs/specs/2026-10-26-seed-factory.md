@@ -329,7 +329,7 @@ Where the code departs from the sections above:
 - **The report shows runs made after the report existed.** New runs carry `shown: false`; the 78 older runs have no `shown` and never appear.
 - **`~/.aleph` inside the sandbox** shows the empty mount points `srt` makes for the run's own paths (`runs/<id>/`, `tools/lib`). No file under it can be read; the probe reads `secrets/`, `jobs/`, `items/` and `vault/`.
 - **The tailnet probe uses port 80**, which answers the host; port 3010 does not, so it proved nothing.
-- **`FOLLOWUP: <title>`** lines in a result become items labelled `followup`.
+- **`FOLLOWUP: <title>`** lines in a result go to `factory/followups.log` and file no issue, until the inbox of aleph-826.
 - **Milestone 2's queue has no drainer process.** Each land is still its own run in its own unit. It waits, under the repo's land lock, until no older live land of the repo is left, where older means an earlier `made`: the time in milliseconds at which the run was made, under the dispatch lock. Folder names sort by name within a second, so they could not order it. A crash after the push is safe because the land first looks on `origin/main` for its own `Job:` trailer.
 - **`aleph status <repo>-<n>`** derives the state. Inside a sandbox there is no store and no ledger, so a factory run's bundle carries a snapshot of both for its repo, a commit at `refs/aleph/facts`, and `aleph status` reads it there when the registry does not have the repo.
 
