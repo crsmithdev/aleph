@@ -406,11 +406,11 @@ export const close = (repo: Place, id: number | string, text: string): string | 
  * Change item `id` with `change` as one commit, while it is still open and not
  * sorted: triage's write. False when the item is gone, closed or sorted.
  */
-export function sort(repo: Place, id: number | string, message: string, change: (item: Item) => void): boolean {
+export function sort(repo: Place, id: number | string, message: string, change: (item: Item, doc: Doc) => void): boolean {
   const w = writeList(repo, message, (doc) => {
     const item = todos.find(doc, id);
     if (!item || status(item) !== "open" || isSorted(item)) return null;
-    change(item);
+    change(item, doc);
     return true;
   });
   return w?.value === true;

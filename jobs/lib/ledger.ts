@@ -27,6 +27,8 @@ export interface Run {
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
   state: State; needs?: "manual" | "question" | "held" | "review"; phase?: string;
   reason?: string; question?: string; say?: string;
+  /** A triage run: the route it applied to its issue. */
+  route?: "goal" | "close" | "done" | "ask";
   /** The run ended with no commit. A drop replaces `reason`, so this keeps the fact for the dispatch's streak. */
   noCommit?: true;
   session?: string; model?: string; commit?: string;

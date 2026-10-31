@@ -6,12 +6,12 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { GOAL, NEEDS_CHRIS, isSorted, label, noteFlake, reader, sort } from "../../todo/lib/store.ts";
-import { decisionNote, normalizeDecision, writeDecision, type Decision } from "./decision.ts";
-import { allRuns, jobsDir, lock, readRun, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
+import { isSorted, noteFlake, reader, setAsk, sort } from "../../todo/lib/store.ts";
+import { askNote, normalizeAsk, type Ask } from "./ask.ts";
+import { allRuns, jobsDir, onOf, lock, readRun, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
-import { factoryDir, gates, pendingWaits, waitsOf } from "./factory.ts";
+import { factoryDir, gates } from "./factory.ts";
 import { git } from "./git.ts";
 import { always, logAlways } from "./always.ts";
 /** Triage runs that end with no verdict, for one item, before it is labelled `needs-chris`; `ALEPH_TRIAGE_TRIES` changes it. */
@@ -21,45 +21,57 @@ const TIME_BOX_MS = () => Number(process.env.ALEPH_TRIAGE_TIMEOUT ?? 600) * 1000
 /** The longest title an issue gets. */
 export const TITLE_MAX = 60;
 
-export type Verdict =
-  | { verdict: "goal"; title: string; body: string; waitingOn?: string }
-  | { verdict: "close"; reason: string }
-  | { verdict: "done"; commit: string; reason: string }
-  | { verdict: "chris"; question: string; decision?: Decision }
-  | { verdict: "live"; note: string }
-  | { verdict: "flake"; note: string };
+export type Route =
+  | { route: "goal"; title: string; body: string; after: string[] }
+  | { route: "close"; reason: string }
+  | { route: "done"; commit: string; reason: string }
+  | { route: "ask"; ask: Ask }
+  | { route: "live"; note: string }
+  | { route: "flake"; note: string };
 
-export type Counts = Partial<Record<Verdict["verdict"], number>>;
+/** The routes as recorded on the run and counted: `live` is applied as `ask`, `flake` as `close`. */
+export type Applied = "goal" | "close" | "done" | "ask";
+export type Counts = Partial<Record<Applied, number>>;
 
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+const REF = /^[a-z0-9-]+-\d+(\.\d+)?$/;
 
-/** The verdict in the command's output (the whole output, or its outermost braces), or why there is none. */
-export function parseVerdict(output: string): Verdict | string {
+/** The body without a `## Request` section (the issue keeps its own text); the goal's sections stay. */
+const withoutRequest = (body: string): string =>
+  body.replace(/^## Request[ \t]*\n[\s\S]*?(?=^## |(?![\s\S]))/m, "").trim();
+
+/** The route in the command's output (the whole output, or its outermost braces), or why there is none. */
+export function parseRoute(output: string): Route | string {
   let raw: any;
   for (const s of [output.trim(), output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1)]) {
     try { raw = JSON.parse(s); break; } catch {}
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no JSON";
   const field = (key: string) => text(raw[key]);
-  switch (raw.verdict) {
+  switch (raw.route) {
     case "goal": {
-      const body = field("body"), title = field("title")?.replace(/\s+/g, " ") ?? null, wait = field("waiting_on") ?? "";
+      const body = field("body") && withoutRequest(field("body")!), title = field("title")?.replace(/\s+/g, " ") ?? null;
       if (!body) return "goal without a body";
       if (!title) return "goal without a title";
       if (title.length > TITLE_MAX) return `goal title over ${TITLE_MAX} characters`;
-      if (!/^## Request[ \t]*$/m.test(body)) return "goal body without a ## Request section";
-      return /^[a-z0-9-]+-\d+$/.test(wait) ? { verdict: "goal", title, body, waitingOn: wait } : { verdict: "goal", title, body };
+      const after = (Array.isArray(raw.after) ? raw.after : typeof raw.after === "string" ? raw.after.split(",") : []).map((x: unknown) => String(x).trim()).filter((x: string) => REF.test(x));
+      return { route: "goal", title, body, after };
     }
-    case "close": { const reason = field("reason"); return reason ? { verdict: "close", reason } : "close without a reason"; }
-    case "chris": { const question = field("question"); if (!question) return "chris without a question"; const decision = normalizeDecision(raw); return decision ? { verdict: "chris", question: decision.question, decision } : { verdict: "chris", question }; }
+    case "close": { const reason = field("reason"); return reason ? { route: "close", reason } : "close without a reason"; }
+    case "ask": {
+      const question = field("question");
+      if (!question) return "ask without a question";
+      const ask = normalizeAsk(raw, { kind: "input", reason: "question" });
+      return { route: "ask", ask: ask ? { ...ask, kind: "input", reason: "question" } : { kind: "input", reason: "question", question, options: [], why: [] } };
+    }
     case "done": {
       const commit = field("commit"), reason = field("reason");
       if (!commit || !/^[0-9a-f]{7,40}$/i.test(commit)) return "done without a commit";
-      return reason ? { verdict: "done", commit, reason } : "done without a reason";
+      return reason ? { route: "done", commit, reason } : "done without a reason";
     }
-    case "live": { const note = field("note"); return note ? { verdict: "live", note } : "live without a note"; }
-    case "flake": { const note = field("note"); return note ? { verdict: "flake", note } : "flake without a note"; }
-    default: return `unknown verdict ${JSON.stringify(raw.verdict)}`;
+    case "live": { const note = field("note"); return note ? { route: "live", note } : "live without a note"; }
+    case "flake": { const note = field("note"); return note ? { route: "flake", note } : "flake without a note"; }
+    default: return `unknown route ${JSON.stringify(raw.route)}`;
   }
 }
 
@@ -110,25 +122,24 @@ ${openIssues(repo, item)}
 
 ${mainSince(repo, item)}
 
-Reply with one JSON object and nothing else, with one of these verdicts:
+Reply with one JSON object and nothing else, with one of these routes:
 
-- {"verdict": "goal", "title": "<short title>", "body": "<goal body>", "waiting_on": "<optional <repo>-<n>>"}: the issue is work a factory run can do alone. "title" replaces the issue's title: a short, descriptive noun phrase of at most ${TITLE_MAX} characters, in the style of the good titles ("Status layout C: metrics left, lanes in a rail", not a sentence). "body" replaces the issue's body: it starts with the input text under a "## Request" heading, then the goal format:
-  ## Request (the issue's own text above, as Markdown, word for word: change only spelling and grammar, never the content, and never edit it again in later sections)
+- {"route": "goal", "title": "<short title>", "body": "<goal body>", "after": ["<optional <repo>-<n>.<k>>"]}: the issue is work a factory run can do alone. The issue keeps its own title and text (its "## Request"); the run files a goal under it. "title" is the goal's title: a short, descriptive noun phrase of at most ${TITLE_MAX} characters, in the style of the good titles ("Status layout C: metrics left, lanes in a rail", not a sentence). "body" is the goal's body, in the goal format, with these four sections and no "## Request":
   ## Goal (what and why, short)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)
   ## Time box (default: 45 minutes, one run)
 
-  The "## Request" text is the issue's title and body as written, kept for the reader; the sections after it are yours. The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`), or a new test that asserts the end state. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one.
-- {"verdict": "close", "reason": "<why>"}: it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
-- {"verdict": "done", "commit": "<sha>", "reason": "<what the commit holds>"}: main already holds the work. Before a "goal" verdict, check this: read the commits listed above, and grep main for the names the issue gives (files, functions, test names). When a commit on main already makes the change, return "done" with that commit's sha and say what it holds; no worker runs. When you are unsure, return "goal" as usual.
-- {"verdict": "chris", "question": "<one plain sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>", "waiting_on": "<optional <repo>-<n>: set only when choosing this option means waiting for that issue first>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first. Write the question and the options in plain words a user of the product reads: no file paths, function names, line numbers or code. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
+  The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`), or a new test that asserts the end state. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one. "after" names the goals or issues that must be done before this goal starts; leave it out when none.
+- {"route": "close", "reason": "<why>"}: it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
+- {"route": "done", "commit": "<sha>", "reason": "<what the commit holds>"}: main already holds the work. Before a "goal" route, check this: read the commits listed above, and grep main for the names the issue gives (files, functions, test names). When a commit on main already makes the change, return "done" with that commit's sha and say what it holds; no worker runs. When you are unsure, return "goal" as usual.
+- {"route": "ask", "question": "<one plain sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>", "after": "<optional <repo>-<n>: set only when choosing this option means waiting for that issue first>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first. Write the question and the options in plain words a user of the product reads: no file paths, function names, line numbers or code. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
 
-Duplicates: when the issue asks for the same work as an open issue listed above, return "close" with the reason "duplicate of <repo>-<n>", naming that issue. When it only waits for that open issue, return "goal" with "waiting_on" set to it.
+Duplicates: when the issue asks for the same work as an open issue listed above, return "close" with the reason "duplicate of <repo>-<n>", naming that issue. When it only waits for that open issue, return "goal" with "after" set to it.
 
-Never ask Chris about how to build it: code structure, which module or helper, naming, test shape, whether to wait for another open issue, or whether a refactor is worth it. Decide those yourself: pick the best option and return "goal" (with "waiting_on" when the work must wait for an open issue), or "close" when it is not worth doing or is already done.
-- {"verdict": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.
-- {"verdict": "flake", "note": "<test file> > <test name>: <what was seen>"}: the issue reports a test that fails or times out now and then, or under load, and asks for no change to the product. Name the test file, the test name and what was seen. Do not return "goal" for it: Chris picks from the tracker which flakes get a goal, and files those himself. An issue that asks to fix a named test's own bug, with a cause, is still a "goal".
+Never ask Chris about how to build it: code structure, which module or helper, naming, test shape, whether to wait for another open issue, or whether a refactor is worth it. Decide those yourself: pick the best option and return "goal" (with "after" when the work must wait for an open issue), or "close" when it is not worth doing or is already done.
+- {"route": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.
+- {"route": "flake", "note": "<test file> > <test name>: <what was seen>"}: the issue reports a test that fails or times out now and then, or under load, and asks for no change to the product. Name the test file, the test name and what was seen. Do not return "goal" for it: Chris picks from the tracker which flakes get a goal, and files those himself. An issue that asks to fix a named test's own bug, with a cause, is still a "goal".
 `;
 }
 
@@ -140,7 +151,7 @@ function makeRun(repo: Repo, item: todos.Item): string {
     const folder = join(jobsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-triage`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
     // `shown`: the tick's own line reports a triage, so the report has no line for the run.
-    writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name, repo: repo.key, todo: item.id, state: "running", phase: "triage", told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
+    writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name, repo: repo.key, on: `${repo.key}-${item.id}`, state: "running", phase: "triage", told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
     writeFileSync(join(folder, "command.txt"), `triage ${repo.key}-${item.id}: ${item.title}\n`);
     return folder;
   }
@@ -162,46 +173,46 @@ async function ask(repo: Repo, item: todos.Item, folder: string): Promise<string
   }
 }
 
-/** Apply a verdict to the item through the work store; false when the item changed under the run. */
-function apply(repo: Repo, id: number, v: Verdict): boolean {
+/** Apply a route to the item through the work store; the route applied, or null when the item changed under the run. */
+function apply(repo: Repo, id: number, v: Route): Applied | null {
+  const ref = `${repo.key}-${id}`;
   // The tracker first, then the close: a failed note leaves the issue open for the next triage.
   let tracker = 0;
-  if (v.verdict === "flake") {
-    const noted = noteFlake(repo, `triage of ${repo.key}-${id}: ${v.note}`);
+  if (v.route === "flake") {
+    const noted = noteFlake(repo, `triage of ${ref}: ${v.note}`);
     if (typeof noted === "string") throw new Error(`flake not noted: ${noted}`);
     tracker = noted.id;
   }
-  return sort(repo, id, `triage ${repo.key}-${id}: ${v.verdict}`, (item) => {
-    if (v.verdict === "goal") {
-      todos.edit(item, { title: v.title, body: v.body, ...(v.waitingOn ? { waitingOn: v.waitingOn } : {}) });
-      label(item, [GOAL]);
-      todos.note(item, v.waitingOn ? `triage: rewritten as a goal; waits on ${v.waitingOn}` : "triage: rewritten as a goal");
-    } else if (v.verdict === "done") {
+  const applied: Applied = v.route === "live" ? "ask" : v.route === "flake" ? "close" : v.route;
+  let standing = false;
+  const ok = sort(repo, id, `triage ${ref}: ${applied}`, (item, doc) => {
+    if (v.route === "goal") {
+      const goal = todos.addGoal(doc, item, { title: v.title, body: v.body, after: v.after, repo: repo.key });
+      todos.note(item, `triage: filed goal ${repo.key}-${todos.refOf(goal)}${v.after.length ? `, after ${v.after.join(", ")}` : ""}`);
+    } else if (v.route === "done") {
       todos.setStatus(item, "done");
       todos.note(item, `triage: already on main in ${v.commit}: ${v.reason}`);
-    } else if (v.verdict === "flake") {
+    } else if (v.route === "flake") {
       todos.setStatus(item, "done");
       todos.note(item, `triage: a flake, noted on ${repo.key}-${tracker}`);
-    } else if (v.verdict === "close") {
+    } else if (v.route === "close") {
       todos.setStatus(item, "done");
       todos.note(item, `triage: closed: ${v.reason}`);
-    } else if (v.verdict === "chris" && v.decision && always("question")?.action === "recommended") {
-      const o = v.decision.options.find((x) => x.label === v.decision!.recommended) ?? v.decision.options[0]!;
-      todos.note(item, `standing: took the recommendation ${o.label}: ${o.line}`);
-      label(item, [GOAL]);
-      todos.edit(item, { waitingOn: o.waiting_on });
-      logAlways("question", "recommended", `${repo.key}-${id}`);
-    } else if (v.verdict === "chris") {
-      label(item, [NEEDS_CHRIS]);
-      item.fm.reason = "decision";
-      // Triage only asks Chris product questions, whatever kind the model named.
-      if (v.decision) writeDecision(item, { ...v.decision, kind: "product" });
-      todos.note(item, `triage: for Chris: ${v.decision ? decisionNote(v.decision) : v.question}`);
+    } else if (v.route === "ask" && v.ask.recommended && always("question")?.action === "recommended") {
+      // The issue stays unsorted: the next triage reads this note and routes goal.
+      const o = v.ask.options.find((x) => x.label === v.ask.recommended) ?? v.ask.options[0]!;
+      todos.note(item, `always: took the recommendation ${o.label}: ${o.line}${o.after ? ` (after ${o.after})` : ""}`);
+      standing = true;
+    } else if (v.route === "ask") {
+      setAsk(item, v.ask);
+      todos.note(item, `triage: for Chris: ${askNote(v.ask)}`);
     } else {
-      label(item, ["live-check", "triaged"]);
+      setAsk(item, { kind: "input", reason: "host-check", question: v.note, options: [], why: [] });
       todos.note(item, `triage: a live check: ${v.note}`);
     }
   });
+  if (ok && standing) logAlways("question", "recommended", ref);
+  return ok ? applied : null;
 }
 
 /**
@@ -213,7 +224,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   const mark = join(factoryDir(), "standing-retry", `${repo.key}-${id}`);
   let since = 0;
   try { since = Number(readFileSync(mark, "utf8")) || 0; } catch {}
-  const n = allRuns().filter((e) => e.run.kind === "triage" && e.run.repo === repo.key && e.run.todo === id
+  const n = allRuns().filter((e) => e.run.kind === "triage" && e.run.repo === repo.key && onOf(e.run) === id
     && (e.run.made ?? 0) > since
     && /^(malformed verdict|failed):/.test(e.run.reason ?? "")).length;
   if (n < TRIAGE_TRIES()) return null;
@@ -234,11 +245,10 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
     return closed ? `${ref}: no verdict in ${n} triages; standing: closed` : null;
   }
   const written = sort(repo, id, `triage ${repo.key}-${id}: no verdict`, (item) => {
-    label(item, [NEEDS_CHRIS]);
-    item.fm.reason = "triage-no-verdict";
+    setAsk(item, { kind: "input", reason: "triage-failed", question: `Triage gave no route in ${n} runs: ${reason}`, options: [], why: [] });
     todos.note(item, `triage: no verdict in ${n} runs: ${reason}`);
   });
-  return written ? `${repo.key}-${id}: no verdict in ${n} triages; labelled needs-chris` : null;
+  return written ? `${repo.key}-${id}: no verdict in ${n} triages; asked Chris` : null;
 }
 
 /** One triage run of one item and its verdict applied; counts and skipped lines are added to. */
@@ -250,16 +260,16 @@ async function triageItem(repo: Repo, item: todos.Item, triaged: Counts, skipped
   try {
     const folder = makeRun(repo, item);
     // A triage that gives no verdict is still done: it is not a job to land or drop, and the item is unchanged.
-    const end = (reason: string) => updateRun(folder, { state: "done", reason, phase: undefined, ended: new Date().toISOString() });
+    const end = (reason: string, route?: Applied) => updateRun(folder, { state: "done", reason, ...(route ? { route } : {}), phase: undefined, ended: new Date().toISOString() });
     try {
-      const v = parseVerdict(await ask(repo, item, folder));
+      const v = parseRoute(await ask(repo, item, folder));
       if (typeof v === "string") {
         const reason = `malformed verdict: ${v}`;
         end(reason);
         skipped.push(giveUp(repo, item.id, reason) ?? `${name}: triage gave a malformed verdict: ${v}`);
         return;
       }
-      if (v.verdict === "done") {
+      if (v.route === "done") {
         const sha = commitOnMain(repo, v.commit);
         if (!sha) {
           const reason = `malformed verdict: done names ${v.commit}, not a commit on main`;
@@ -269,9 +279,10 @@ async function triageItem(repo: Repo, item: todos.Item, triaged: Counts, skipped
         }
         v.commit = sha.slice(0, 12);
       }
-      if (apply(repo, item.id, v)) {
-        triaged[v.verdict] = (triaged[v.verdict] ?? 0) + 1;
-        end(v.verdict);
+      const applied = apply(repo, item.id, v);
+      if (applied) {
+        triaged[applied] = (triaged[applied] ?? 0) + 1;
+        end(v.route, applied);
       } else {
         end("the item changed during the run");
         skipped.push(`${name}: changed during the triage`);
@@ -293,8 +304,8 @@ async function triageItem(repo: Repo, item: todos.Item, triaged: Counts, skipped
  */
 async function endLost(): Promise<void> {
   for (const { folder, run } of allRuns()) {
-    if (run.kind !== "triage" || run.state !== "running" || !run.repo || run.todo === undefined) continue;
-    const release = await lock(`triage-${run.repo}-${run.todo}`, 0);
+    if (run.kind !== "triage" || run.state !== "running" || !run.repo || onOf(run) === undefined) continue;
+    const release = await lock(`triage-${run.repo}-${onOf(run)}`, 0);
     if (!release) continue;
     try {
       // Read again under the lock: the run may have ended since the list was read.
@@ -307,14 +318,12 @@ async function endLost(): Promise<void> {
 }
 
 /** Triage one open issue now, if it is one the tick would triage. */
-export async function triageIssue(repo: Repo, id: number, done: (ref: string) => boolean): Promise<{ triaged: Counts; skipped: string[] }> {
+export async function triageIssue(repo: Repo, id: number, _done: (ref: string) => boolean): Promise<{ triaged: Counts; skipped: string[] }> {
   const triaged: Counts = {};
   const skipped: string[] = [];
   await endLost();
   const item = reader().item(repo.key, id);
   if (!item || todos.status(item) !== "open" || isSorted(item)) return { triaged, skipped };
-  const waits = waitsOf(item);
-  if (pendingWaits(waits, done).length) return { triaged, skipped };
   const blocked = gates({ only: ["live", "day"] });
   if (blocked) { skipped.push(`triage: ${blocked.why}`); return { triaged, skipped }; }
   await triageItem(repo, item, triaged, skipped);
@@ -325,7 +334,7 @@ export async function triageIssue(repo: Repo, id: number, done: (ref: string) =>
  * Triage the open issues that are not goals, oldest first, at most
  * `ALEPH_TRIAGE_CAP`, while the live and day gates allow.
  */
-export async function triageOpen(repos: Repo[], done: (ref: string) => boolean): Promise<{ triaged: Counts; skipped: string[] }> {
+export async function triageOpen(repos: Repo[], _done: (ref: string) => boolean): Promise<{ triaged: Counts; skipped: string[] }> {
   const triaged: Counts = {};
   const skipped: string[] = [];
   await endLost();
@@ -334,8 +343,6 @@ export async function triageOpen(repos: Repo[], done: (ref: string) => boolean):
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
       if (todos.status(item) !== "open" || isSorted(item)) continue;
-      const waits = waitsOf(item);
-      if (pendingWaits(waits, done).length) continue;
       queue.push({ repo, item });
     }
   }

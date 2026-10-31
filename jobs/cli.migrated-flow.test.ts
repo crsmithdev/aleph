@@ -32,7 +32,7 @@ describe("the flow on migrated items", () => {
     // The stock start command with `--land`, as the production start passes it: a passed run lands.
     startScript(startCmd, jobs);
     writeFileSync(startCmd, readFileSync(startCmd, "utf8").replace('--todo "$3"', '--todo "$3" --land'), { mode: 0o755 });
-    writeFileSync(join(base, "fake-triage"), `#!/bin/bash\ncat > /dev/null\necho triaged >> ${triageLog}\necho '{"verdict":"close","reason":"test"}'\n`, { mode: 0o755 });
+    writeFileSync(join(base, "fake-triage"), `#!/bin/bash\ncat > /dev/null\necho triaged >> ${triageLog}\necho '{"route":"close","reason":"test"}'\n`, { mode: 0o755 });
     const on = {
       ALEPH_ISSUES: dir("issues"), ALEPH_JOBS_DIR: jobs, ALEPH_SANDBOX_DIR: dir("sandbox"), ALEPH_DISPATCH: "on", ALEPH_START_CMD: startCmd, START_LOG: startLog,
       ALEPH_TRIAGE_CAP: "5", ALEPH_TRIAGE_CMD: join(base, "fake-triage"),

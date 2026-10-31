@@ -11,18 +11,18 @@ describe("a factory run", () => {
     aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), ...more], extra);
   test("a tick triages an open issue that is not a goal, and its line counts the verdicts", async () => {
     const cmd = join(base, "triage-fake");
-    writeFileSync(cmd, `#!/bin/bash\ncat > /dev/null\necho '{"verdict":"live","note":"check the live site"}'\n`, { mode: 0o755 });
+    writeFileSync(cmd, `#!/bin/bash\ncat > /dev/null\necho '{"route":"live","note":"check the live site"}'\n`, { mode: 0o755 });
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     const id = (await aleph(["issue", "add", "fac", "needs a live look"])).json.added;
     const first = (await aleph(["issue", "list", "fac", "--json"])).json.filter((i: any) => i.status === "open" && i.kind === "issue" && !i.ask && i.goals.length === 0)[0];
     const t = await aleph(["tick"], { ALEPH_TRIAGE_CAP: "1", ALEPH_TRIAGE_CMD: cmd });
-    expect(t.json.triaged).toEqual({ live: 1 });
+    expect(t.json.triaged).toEqual({ ask: 1 });
     const stored = readFileSync(join(items, "fac", "backlog", "tasks", `fac-${first.id}.md`), "utf8");
-    expect(stored).toContain("live-check");
-    expect(stored).toContain("triaged");
+    expect(stored).toContain("ask: input");
+    expect(stored).toContain("reason: host-check");
     expect(readdirSync(jobsDir).filter((d) => d.endsWith("-triage")).map((d) => state(d).kind)).toContain("triage");
-    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("triaged live 1");
+    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("triaged ask 1");
     expect(id).toBeGreaterThan(0);
   }, 30_000);
 
