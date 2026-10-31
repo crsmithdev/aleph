@@ -97,6 +97,19 @@ describe("a factory run's checks", () => {
       expect((await aleph(["report"])).stdout).toContain(`health: fac-${id} holds 2 flake notes in 7 days, 2 test files`);
     });
 
+    test("the report names the test that flaked most in acceptance", async () => {
+      const was = process.env.ALEPH_ISSUES;
+      process.env.ALEPH_ISSUES = items;
+      try {
+        noteFlake({ key: "fac" }, "acceptance fac-1: c.test.ts > twice: failed under load, passed on the quiet rerun at abc1234");
+        noteFlake({ key: "fac" }, "acceptance fac-2: c.test.ts > twice: failed twice, in a test the goal did not touch, at abc1234");
+        noteFlake({ key: "fac" }, "acceptance fac-3: d.test.ts > once: failed under load, passed on the quiet rerun at abc1234");
+      } finally {
+        if (was === undefined) delete process.env.ALEPH_ISSUES; else process.env.ALEPH_ISSUES = was;
+      }
+      expect((await aleph(["report"])).stdout).toContain("health: most flaked in acceptance in 7 days: c.test.ts > twice (2 times)");
+    });
+
     test("a check that always fails is still stuck, with one rerun in its log", async () => {
       const r = await fjob("flk3", "fail-always", { ALEPH_FIX_ROUNDS: "0" });
       expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "tests failed" });

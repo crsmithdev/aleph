@@ -127,6 +127,29 @@ test("a done goal whose Oracle command passes gets the pass note and stays done"
   expect(ran.length).toBe(1);
 });
 
+test("a command that passed on a commit does not run again for another goal; a new commit runs it", async () => {
+  const a = doneGoal("`bun test jobs/lib/acceptance.test.ts`");
+  const b = doneGoal("`bun test jobs/lib/acceptance.test.ts`");
+  const sha = sh(repoDir(), "git", "rev-parse", "--short=7", "origin/main");
+  const lines = await acceptanceStep(runner(0));
+  expect(ran).toEqual(["bun test jobs/lib/acceptance.test.ts"]);
+  expect(lines).toEqual([`fac-${a}: acceptance passed at ${sha}`, `fac-${b}: acceptance passed at ${sha}`]);
+  const c = doneGoal("`bun test jobs/lib/acceptance.test.ts`");
+  sh(repoDir(), "git", "commit", "-q", "--allow-empty", "-m", "next");
+  sh(repoDir(), "git", "push", "-q", "origin", "main");
+  await acceptanceStep(runner(0));
+  expect(ran.length).toBe(2);
+  expect(issues.status(item(c))).toBe("done");
+});
+
+test("a failure is not reused: a second goal runs the command itself", async () => {
+  doneGoal("`bun test jobs/lib/acceptance.test.ts`");
+  doneGoal("`bun test jobs/lib/acceptance.test.ts`");
+  process.env.ALEPH_QUIET_LOAD = "-1";
+  await acceptanceStep(runner(3, "boom"));
+  expect(ran.length).toBe(2);
+});
+
 test("a failing command reopens the goal with the last 40 lines and it is dispatched once", async () => {
   const id = doneGoal("`bun run bad`");
   const output = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join("\n");

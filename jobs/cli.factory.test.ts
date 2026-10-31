@@ -91,6 +91,19 @@ describe("a factory run", () => {
 });
 
 describe("a worker's FOLLOWUP line (criterion 15)", () => {
+  test("a line on the topic of an open issue is a note on it, and files no issue", async () => {
+    const titles = async () => (await aleph(["issue", "list", "fac", "--json"])).json as any[];
+    await aleph(["issue", "add", "fac", "paint the fence"]);
+    const open = (await titles()).find((i) => i.title === "paint the fence");
+    const count = (await titles()).length;
+    const r = await aleph(["job", "fac", "fsame", "--spec", specFile("Goal: fsame\nACTION: defaults\n")]);
+    expect(r.code, r.stderr).toBe(0);
+    expect((await titles()).length).toBe(count);
+    expect(JSON.stringify((await aleph(["issue", "show", "fac", String(open.id), "--json"])).json)).toContain("also met in run fsame: paint the fence");
+    await aleph(["issue", "done", "fac", String(open.id), "test over"]);
+    await aleph(["drop", "fsame"]);
+  });
+
   test("files an issue with source worker that status calls new; FLAKE adds a tracker note and no issue", async () => {
     const titles = async () => (await aleph(["issue", "list", "fac", "--json"])).json as any[];
     const before = (await titles()).map((i) => i.id);

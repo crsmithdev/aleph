@@ -1010,6 +1010,7 @@ export function health(now = Date.now()): string[] {
     const tracker = doc && flakeTracker(doc);
     if (!tracker) continue;
     const files = new Set<string>();
+    const tests = new Map<string, number>();
     let k = 0;
     for (const line of tracker.notes) {
       const m = /^- (\d{4}-\d\d-\d\d) (\d\d:\d\d): (.*)$/.exec(line);
@@ -1020,8 +1021,12 @@ export function health(now = Date.now()): string[] {
       const cut = m[3].indexOf(" > ");
       // The caller's prefix ("job x: ", "firefighter: ") is not part of the file name.
       if (cut >= 0) files.add(m[3].slice(0, cut).split(": ").at(-1)!.trim());
+      const a = /^acceptance \S+: (.+?): failed/.exec(m[3]);
+      if (a) tests.set(a[1], (tests.get(a[1]) ?? 0) + 1);
     }
     if (k) lines.push(`health: ${repo.key}-${tracker.id} holds ${k} flake notes in 7 days, ${files.size} test files`);
+    const top = [...tests].sort((x, y) => y[1] - x[1])[0];
+    if (top) lines.push(`health: most flaked in acceptance in 7 days: ${top[0]} (${top[1]} times)`);
   }
   return lines;
 }

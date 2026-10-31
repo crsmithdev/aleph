@@ -199,6 +199,24 @@ function reopen(repo: Repo, id: number | string, text: string): string | null {
   }
 }
 
+/** The commands that passed on each repo's latest accepted commit. The file has no `.json` name, so `unshown` does not read it as a result. */
+const passesFile = () => join(dir(), "passes");
+function readPasses(): Record<string, { commit: string; commands: string[] }> {
+  try { return JSON.parse(readFileSync(passesFile(), "utf8")); } catch { return {}; }
+}
+/** A command that passed on this commit, for any goal: the sandbox gives it the same tree, so it does not run again. A failure is never reused. */
+const passedOn = (key: string, commit: string, command: string): boolean => {
+  const p = readPasses()[key];
+  return p?.commit === commit && p.commands.includes(command);
+};
+function markPassed(key: string, commit: string, command: string): void {
+  const all = readPasses();
+  const p = all[key]?.commit === commit ? all[key] : { commit, commands: [] };
+  all[key] = { commit, commands: [...new Set([...p.commands, command])] };
+  mkdirSync(dir(), { recursive: true });
+  writeFileSync(passesFile(), JSON.stringify(all));
+}
+
 /**
  * Run the Oracle of the done goal `item` on origin/<main>, and record what came of it.
  * Returns a line for the log. The caller has fetched and holds the goal's lock.
@@ -228,9 +246,10 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandb
   for (const command of waiting ? commands.slice(Math.max(0, commands.indexOf(waiting.command))) : commands) {
     let failed = waiting?.command === command ? waiting : undefined;
     if (!failed) {
+      if (passedOn(repo.key, full, command)) continue;
       const r = await run(repo, full, command);
       if (r.infra) return `${name}: acceptance not run: ${lastLines(r.output)}`;
-      if (!failing(r)) continue;
+      if (!failing(r)) { markPassed(repo.key, full, command); continue; }
       const tests = failedTests(r.output);
       failed = { commit: full, command, rerun: rerunOf(command, tests), tests };
       writeRecord(repo.key, ref, { result: "fail", sha, command, fails: prev?.fails ?? 0, ...(prev?.since ? { since: prev.since } : {}), retest: failed });

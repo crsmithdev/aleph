@@ -6,7 +6,8 @@
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { closeAndFile, file as fileIssues, issueOf, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
+import * as issues from "../../todo/lib/todo.ts";
+import { closeAndFile, file as fileIssues, issueOf, note, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
 import { addWorktree, fetchOrigin, followMain, git } from "./git.ts";
 import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { askOf, checkSlot, isAwaiting, isBuild, needsOf, onOf, readCall, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type Ask, type CheckResult, type Repo, type Run } from "./ledger.ts";
@@ -1225,11 +1226,37 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
 
 /**
  * A worker's `FOLLOWUP:` lines each become an issue with `source: worker` (the line as the title, the run in a `## Request` line),
- * filed in one store commit. This reverses the aleph-826 choice (a log and no issue), which the spec supersedes.
+ * filed in one store commit. An empty line such as "none" files nothing, and a line on the topic of an open issue is a note on that issue. This reverses the aleph-826 choice (a log and no issue), which the spec supersedes.
  */
 function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
-  if (!titles.length) return;
-  fileIssues(repo, `followups from ${run.name}`, titles.map((title) => ({ title, source: "worker" as const, body: `## Request\n\nA follow-up the worker met in run ${run.name}.\n` })));
+  const open = (reader().list(repo.key)?.items ?? []).filter((i) => issues.status(i) === "open");
+  const fresh: string[] = [];
+  for (const title of titles) {
+    if (/^(none|n\/a|nothing)\.?$/i.test(title.trim())) continue;
+    if (fresh.some((t) => sameTopic(t, title))) continue;
+    const same = open.find((i) => sameTopic(i.title, title));
+    if (same) note(repo, issues.refOf(same), `also met in run ${run.name}: ${title}`);
+    else fresh.push(title);
+  }
+  if (!fresh.length) return;
+  fileIssues(repo, `followups from ${run.name}`, fresh.map((title) => ({ title, source: "worker" as const, body: `## Request\n\nA follow-up the worker met in run ${run.name}.\n` })));
+}
+
+const PATH = /[\w.-]+(?:\/[\w.-]+)+|[\w-]+\.(?:ts|js|md|json)\b/g;
+const COMMON = new Set(["the", "and", "for", "from", "with", "that", "this", "not", "but", "are", "was", "its", "into"]);
+/**
+ * Two titles say the same thing: most of the shorter title's words are in the other, half with a
+ * shared file path, 70% without. A shared path alone is not enough: busy files have unrelated issues.
+ */
+export function sameTopic(a: string, b: string): boolean {
+  const paths = (t: string) => new Set(t.match(PATH) ?? []);
+  const words = (t: string) => new Set((t.replace(PATH, " ").toLowerCase().match(/[a-z0-9][a-z0-9_-]{2,}/g) ?? []).filter((w) => !COMMON.has(w)));
+  const [wa, wb] = [words(a), words(b)];
+  const [short, long] = wa.size <= wb.size ? [wa, wb] : [wb, wa];
+  if (!short.size) return false;
+  const pb = paths(b);
+  const shared = [...paths(a)].some((p) => pb.has(p));
+  return [...short].filter((w) => long.has(w)).length / short.size >= (shared ? 0.5 : 0.7);
 }
 
 /** A worker's `FLAKE:` lines become notes on the repo's flake tracker; they file no issue and start no triage. */
