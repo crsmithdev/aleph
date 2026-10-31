@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { factoryDir } from "../../jobs/lib/factory.ts";
 import { git } from "../../jobs/lib/git.ts";
-import { loadRegistry, type Entry, type Repo } from "../../jobs/lib/ledger.ts";
+import { loadRegistry, onOf, type Entry, type Repo } from "../../jobs/lib/ledger.ts";
 import { allJobs, lastReal } from "../../jobs/lib/job.ts";
 import { isGoal, labels, readFetched } from "../../todo/lib/store.ts";
 import { status, type Item } from "../../todo/lib/todo.ts";
@@ -51,6 +51,12 @@ function baselineOf(repo: Repo): Card["baseline"] {
 export const loaders = { vault: () => vaultNotes(vaultDir()), jobs: allJobs };
 
 const scoped = (repo: Repo, notes: Note[]) => notes.filter((n) => !n.archived && [n.fm.scope ?? []].flat().includes(repo.key));
+
+/** A job's item: the `onOf` of its last run that has one (old runs only have `todo`), else null. */
+const itemOf = (j: Entry[]): number | string | null => {
+  const e = j.findLast((x) => onOf(x.run) !== undefined);
+  return e ? onOf(e.run)! : null;
+};
 
 const jobsOf = (repo: Repo, jobs: Entry[][]): Entry[][] => jobs.filter((j) => j.at(-1)!.run.repo === repo.key);
 
@@ -100,7 +106,7 @@ export async function project(key: string): Promise<Detail | null> {
     items: issues.map((i) => ({ id: i.id, title: i.title, labels: labels(i), priority: String(i.fm.priority ?? "medium") })),
     jobs: jobs.slice(-10).reverse().map((j) => {
       const r = lastReal(j).run;
-      return { name: r.name, state: r.state, started: j[0].run.started, ...(r.ended ? { ended: r.ended } : {}), item: j.findLast((e) => e.run.todo !== undefined)?.run.todo ?? null };
+      return { name: r.name, state: r.state, started: j[0].run.started, ...(r.ended ? { ended: r.ended } : {}), item: itemOf(j) };
     }),
     vault: notes.map((n) => ({ title: n.title, kind: String(n.fm.kind ?? ""), updated: String(n.fm.updated ?? "") }))
       .sort((a, b) => b.updated.localeCompare(a.updated) || a.title.localeCompare(b.title)),

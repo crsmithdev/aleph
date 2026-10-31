@@ -92,6 +92,28 @@ test("/api/projects/<key> adds commits with their Issue, Goal or Item trailer, i
   expect((await at("/api/projects/nope")).status).toBe(404);
 });
 
+test("/api/projects/<key> gives a job's item from its on (a dotted on stays a string), else its todo", async () => {
+  const runs: [string, object][] = [
+    ["20261001-100000-b", { job: "plain-on", name: "plain-on", repo: "plain", state: "running", on: "plain-7" }],
+    ["20261001-110000-b", { job: "plain-goal", name: "plain-goal", repo: "plain", state: "running", on: "plain-8.1" }],
+    ["20261001-120000-b", { job: "plain-todo", name: "plain-todo", repo: "plain", state: "running", todo: 9 }],
+  ];
+  for (const [id, o] of runs) {
+    mkdirSync(join(base, "jobs", id));
+    writeFileSync(join(base, "jobs", id, "state.json"), JSON.stringify({ kind: "agent", told: true, started: "2026-10-01T10:00:00Z", ...o }));
+  }
+  try {
+    const d: any = await (await at("/api/projects/plain")).json();
+    const item = (name: string) => d.jobs.find((j: any) => j.name === name).item;
+    expect(item("plain-on")).toBe(7);
+    expect(item("plain-goal")).toBe("8.1");
+    expect(item("plain-todo")).toBe(9);
+    expect(item("plain-1")).toBeNull();
+  } finally {
+    for (const [id] of runs) rmSync(join(base, "jobs", id), { recursive: true, force: true });
+  }
+});
+
 test("?project= narrows every route", async () => {
   const one: any[] = await (await at("/api/projects?project=fac")).json();
   expect(one.map((p) => p.key)).toEqual(["fac"]);
