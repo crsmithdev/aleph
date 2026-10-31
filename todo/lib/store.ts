@@ -12,7 +12,7 @@
  * (`note`, `close`, `label`, `closeAndFile`, `file`). Callers do not read
  * `fm.labels` or name a task's path.
  */
-import { fetchOrigin, followMain, git, treeWithFiles } from "../../jobs/lib/git.ts";
+import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../jobs/lib/git.ts";
 import { expand } from "../../jobs/lib/ledger.ts";
 import { readDecision, writeDecision, type Decision } from "../../jobs/lib/decision.ts";
 import * as todos from "./todo.ts";
@@ -85,7 +85,7 @@ function fetchNow(dir: string): void {
 /** The contents of each `rev:path`, in one `git cat-file --batch`. */
 function readFiles(dir: string, specs: string[]): string[] {
   if (!specs.length) return [];
-  const p = Bun.spawnSync(["git", "cat-file", "--batch"], { cwd: dir, stdin: new Blob([specs.join("\n") + "\n"]), stdout: "pipe", stderr: "pipe" });
+  const p = spawnGit(["git", "cat-file", "--batch"], { cwd: dir, stdin: new Blob([specs.join("\n") + "\n"]), stdout: "pipe", stderr: "pipe" });
   if (p.exitCode !== 0) throw new Error(`cat-file: ${p.stderr.toString()}`);
   const buf = p.stdout;
   const out: string[] = [];
@@ -217,7 +217,7 @@ export function itemTimes(): Map<string, { added: number; changed: number }> {
   const head = git(dir, "rev-parse", `origin/${MAIN}`);
   if (head.ok && timesAt?.dir === dir && timesAt.rev === head.out) return timesAt.times;
   const out = new Map<string, { added: number; changed: number }>();
-  const p = Bun.spawnSync(["git", "-C", dir, "log", head.ok ? head.out : `origin/${MAIN}`, "--format=%ct", "--name-only"], { stdout: "pipe", stderr: "ignore" });
+  const p = spawnGit(["git", "-C", dir, "log", head.ok ? head.out : `origin/${MAIN}`, "--format=%ct", "--name-only"], { cwd: dir, stdout: "pipe", stderr: "ignore" });
   if (p.exitCode !== 0) return out;
   let ct = 0;
   for (const line of p.stdout.toString().split("\n")) {

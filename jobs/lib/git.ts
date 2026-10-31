@@ -3,7 +3,7 @@
  * checkout following origin. Every write to main goes through a push that
  * git refuses when main moved, so the push is the compare-and-swap.
  */
-import { rmSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -15,12 +15,33 @@ const baseEnv = (): Record<string, string | undefined> => {
   return env;
 };
 
+/** `Bun.spawnSync` for git. A spawn that throws is rethrown with the original as `cause` and a one-line message that says where and with which PATH it ran. */
+export function spawnGit(cmd: string[], opts: { cwd?: string; env?: Record<string, string | undefined>; stdin?: "ignore" | Blob; stdout: "pipe"; stderr: "pipe" | "ignore" }): { exitCode: number | null; stdout: Buffer; stderr: Buffer } {
+  try {
+    return Bun.spawnSync(cmd, opts) as { exitCode: number | null; stdout: Buffer; stderr: Buffer };
+  } catch (e) {
+    const cwd = opts.cwd;
+    let here: string;
+    try { here = process.cwd(); } catch (err) { here = `unreadable (${(err as Error).message})`; }
+    const PATH = (opts.env ?? process.env).PATH;
+    const found = Bun.which("git", { PATH: PATH ?? "" });
+    const text = (e as Error).message.replace(/\s+/g, " ");
+    throw new Error(
+      `git could not start (${text}). The cwd passed is ${cwd === undefined ? "none" : JSON.stringify(cwd)}` +
+      `${cwd === undefined ? "" : ` and ${existsSync(cwd) ? "exists" : "does not exist"} (existsSync ${existsSync(cwd)})`}. ` +
+      `process.cwd() is ${here}. The PATH passed is ${JSON.stringify(PATH)}. Bun.which finds git at ${JSON.stringify(found)}. ` +
+      `TMPDIR is ${JSON.stringify(process.env.TMPDIR)} and tmpdir() ${existsSync(tmpdir()) ? "exists" : "does not exist"} (existsSync ${existsSync(tmpdir())}).`,
+      { cause: e },
+    );
+  }
+}
+
 export function git(cwd: string, ...args: string[]): { ok: boolean; out: string } {
   return gitWith({}, cwd, ...args);
 }
 
 export function gitWith(o: { env?: Record<string, string>; stdin?: string }, cwd: string, ...args: string[]): { ok: boolean; out: string } {
-  const p = Bun.spawnSync(["git", ...args], {
+  const p = spawnGit(["git", ...args], {
     cwd, env: { ...baseEnv(), ...o.env }, stdin: o.stdin === undefined ? "ignore" : new Blob([o.stdin]), stdout: "pipe", stderr: "pipe",
   });
   return { ok: p.exitCode === 0, out: (p.stdout.toString() + (p.exitCode === 0 ? "" : p.stderr.toString())).trimEnd() };
