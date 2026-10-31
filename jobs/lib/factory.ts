@@ -14,7 +14,7 @@ import { itemOnMain, repoStages } from "./status.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
-import { allRuns, expand, isLive, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, expand, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { accept, final, readRecord, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
@@ -237,8 +237,8 @@ export function waitReason(_repo: Repo, item: todos.Item, ctx: WaitContext): Wai
 /** The job name for a goal item: its store id, as `aleph-28`. */
 export const goalJob = (repo: Repo, id: number) => `${repo.key}-${id}`;
 
-/** Agent runs live now. */
-export const liveEntries = (): Entry[] => allRuns().filter((e) => e.run.kind === "agent" && isLive(e.folder));
+/** Agent runs live now, and those started whose unit has not written `pid` yet. */
+export const liveEntries = (): Entry[] => allRuns().filter((e) => e.run.kind === "agent" && (isLive(e.folder) || isStarting(e)));
 export const liveRuns = (): number => liveEntries().length;
 
 /** The gates, in the order `gates` checks them. */
@@ -1025,7 +1025,7 @@ function cameDue(): string[] {
 
 /** The runs the report has not shown, oldest first; each is then marked shown, and the last line counts the day's runs. */
 function runLines(now: number): string[] {
-  const fresh = allRuns().filter((e) => e.run.shown === false && e.run.kind !== "plain" && e.run.state !== "running" && !isLive(e.folder));
+  const fresh = allRuns().filter((e) => e.run.shown === false && e.run.kind !== "plain" && e.run.state !== "running" && !(isLive(e.folder) || isStarting(e)));
   const lines = fresh.map(entry);
   for (const e of fresh) updateRun(e.folder, { shown: true });
   const today = runsToday(now);

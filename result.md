@@ -1,3 +1,44 @@
+# aleph-743: why `guards > six starts at once` can hang
+
+## Cause: not reproduced, the hypothesis is a real race
+The hang did not reproduce: `bun run test` ran 6 times under the same parallel load (nproc workers) and the
+test never hung (it passed each time). `bun test jobs/cli.basic.test.ts` alone also passed (22/22).
+No log of the two original hangs was found, so the cause is **not proven**.
+
+The hypothesis holds on the code. `dispatch` (jobs/lib/transitions.ts) waits `pidWaitMs()` for `pid`, warns
+`wrote no pid`, and releases the lock. `isLive` does not count a run with no `pid`, so a later start could see
+fewer than 5 live runs and pass the cap. With all six started, the held runs never end and no start returns.
+
+## Changes
+- Fix: `isStarting` (jobs/lib/ledger.ts) counts a running agent run with no `pid` and no `exit`, made less than
+  120 s ago, and `liveEntries` (jobs/lib/factory.ts) includes it, so the live cap and gates count it.
+- New test jobs/live-cap-pid.test.ts: a started run with no pid counts against the live cap; ended, exited and
+  long-silent starts do not.
+- Diagnostics: the test bounds `Promise.race` at 150 s. On a hang it fails with name, state, phase, pid and exit
+  of each run, drops every running run, awaits the starts and prints each start's stderr (look for `wrote no pid`).
+  No timeout was raised and no retry added. `aleph job` exit codes are unchanged.
+
+## Observed pass rate
+`bun run test`, 6 runs: 4 fully green (runs 2-5), run 1 had 2 failures (jobs/lib fetch-cache tests, which pass
+alone), run 6 had 2 failures (`check slots`, load-sensitive). `six starts at once` passed in all 6 and never hung:
+6/6. Fully green: 4/6; the other failures are in unrelated tests and were not investigated.
+
+# aleph-710: git spawn errors name cwd and PATH
+
+## Scratch check (bun 1.4.2)
+- `Bun.spawnSync(["git","--version"], { cwd: "/nonexistent" })` throws `ENOENT: no such file or directory, posix_spawn 'git'`.
+- `Bun.spawnSync(["git","--version"], { env: { PATH: "/nonexistent" } })` throws `Executable not found in $PATH: "git"`.
+
+So the text `posix_spawn 'git'` comes from a missing cwd, not from a bad PATH.
+
+## Reproduction
+`bun test jobs/lib/plan.test.ts` was run 40 times, one after another, after the edit. All 40 runs passed. No failing run was seen, so this run has no enriched message, stack or failing git call to record, and no cause is guessed here.
+
+The earlier run (commit 865c0eb9e, no longer in this repo) saw ENOENT in runs 23 and 27 of 40. It put the cause down to afterEach removing the store directory while a test that had timed out at 5000 ms was still running. That is consistent with the missing-cwd result above, but this run did not reproduce it.
+
+## Change
+`spawnGit` in `jobs/lib/git.ts` wraps `gitWith`, `readFiles` and `itemTimes`. A thrown spawn error is rethrown with the original as `cause`. The one-line message names the cwd, `existsSync(cwd)`, `process.cwd()`, the PATH passed, `Bun.which("git", { PATH })`, TMPDIR and `existsSync(tmpdir())`.
+
 # aleph-758: fetch-ttl tests settle before every fetch count
 
 ## Changes (ui/fetch-ttl.test.ts)

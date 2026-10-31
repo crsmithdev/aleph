@@ -237,6 +237,15 @@ export function isLive(folder: string): boolean {
   return cmdline(pid)?.includes(folder) ?? false;
 }
 
+/**
+ * A run that was started and has not written `pid` yet: its unit is still coming up, or `dispatch` gave up waiting
+ * for it. It counts against the live cap for STARTING_MS after it was made, so a later start cannot slip past the gate.
+ */
+export const STARTING_MS = 120_000;
+export function isStarting(e: Entry): boolean {
+  return e.run.state === "running" && !existsSync(join(e.folder, "pid")) && !existsSync(join(e.folder, "exit")) && Date.now() - (e.run.made ?? 0) < STARTING_MS;
+}
+
 /** `pid`, no `exit`, and the process is gone: the run died without an end. */
 export function isLost(folder: string): boolean {
   return existsSync(join(folder, "pid")) && !existsSync(join(folder, "exit")) && !isLive(folder);

@@ -180,7 +180,20 @@ describe("guards", () => {
       // Five hold on a gate file nobody creates, so none ends before the drops; the sixth comes back refused.
       // No wall-clock window: the starts queue on the dispatch lock, which bounds each wait itself.
       // The held runs never end, so the first start to come back is the sixth, whatever it says.
-      const refused = await Promise.race(started);
+      // Bounded: if all six start, nothing returns, so fail with what each run shows instead of waiting out the test.
+      const none = Symbol("no start returned");
+      const first = await Promise.race([...started, Bun.sleep(150_000).then(() => none)]);
+      if (first === none) {
+        const seen = (await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name)).map((j: any) => {
+          const at = (f: string) => existsSync(join(jobsDir, j.run, f)) ? readFileSync(join(jobsDir, j.run, f), "utf8").trim() : null;
+          return { name: j.name, state: j.state, phase: j.phase, pid: at("pid"), exit: at("exit") };
+        });
+        for (const j of await mine()) if (j.state === "running") await aleph(["drop", j.name]);
+        const late = await Promise.allSettled(started);
+        const stderr = late.map((l, i) => `${names[i]}: ${l.status === "fulfilled" ? l.value.stderr : String(l.reason)}`);
+        throw new Error(`no start returned in 150 s\n${JSON.stringify(seen, null, 1)}\nstderr (after drop; look for "wrote no pid"):\n${stderr.join("\n")}`);
+      }
+      const refused = first as Awaited<(typeof started)[number]>;
       expect(refused.code, refused.stdout + refused.stderr).toBe(1);
       expect(refused.stderr).toContain("5 agent runs are live");
       // The refusal comes as soon as the fifth unit wrote `pid`; on a loaded machine some are still in phase setup.
