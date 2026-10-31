@@ -182,6 +182,7 @@ case $action in
   commit\\ *) f=\${action#commit }; mkdir -p "$(dirname "$f")"; echo "$RANDOM" > "$f"; git add "$f"; git commit -qm "add $f" ;;
   commit-big\\ *) f=\${action#commit-big }; for i in $(seq 1 60); do echo "line $i of the big file"; done > "$f"; git add "$f"; git commit -qm "add $f" ;;
   commit-fixed\\ *) f=\${action#commit-fixed }; echo same > "$f"; git add "$f"; git commit -qm "add $f" ;;
+  commit-result-and\\ *) f=\${action#commit-result-and }; echo "$RANDOM" > result.md; echo "$RANDOM" > "$f"; git add result.md "$f"; git commit -qm "result and $f" ;;
   resolve-later\\ *) f=\${action#resolve-later }
     if printf '%s' "$prompt" | grep -q 'The land conflicted'; then git fetch -q origin && git rebase -q -X theirs origin/main
     else echo mine > "$f"; git add "$f"; git commit -qm "add $f"; fi ;;

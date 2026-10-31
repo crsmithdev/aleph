@@ -95,8 +95,9 @@ you find but do not do, print a line \`FOLLOWUP: <title>\`. A test that fails or
 facts about the repo or its tools that you learned and checked. If the goal already
 holds on your branch and no edit is needed, make no commit, run the repo's tests,
 and print exactly one line \`${ALREADY_MET}: <evidence>\`, the evidence being the
-files, the lines and the commit on \`${main}\` that show it. Run the repo's
-tests before you end. Chrome cannot start in the sandbox. For a screenshot of a page
+files, the lines and the commit on \`${main}\` that show it. A worker that
+cannot do the goal makes no commit and gives the reason in its final text; it does not commit a note.
+Run the repo's tests before you end. Chrome cannot start in the sandbox. For a screenshot of a page
 served by your own server on 127.0.0.1, run \`aleph-shot <url> <out.png> [--width 1440] [--height 900] [--scheme light|dark] [--click <css selector>] [--wait <ms>]\`:
 the factory takes the shot outside the sandbox and writes the PNG at the path, which must be inside the repo, and you commit it.
 Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. ${FOREGROUND} End with a short summary of what you did and what you ran.`;
@@ -1003,6 +1004,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     const done = earlier.length;
     if (done) facts.round = done;
     const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
+    if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no commit", facts);
     const failed = await checksInSandbox(folder, dir, "out/out.bundle", `refs/heads/${branch}`, repo, changed, phase, recorder(folder), hiddenOf(repo, run));
     if (failed) {
       // A check that failed goes back to the worker, at most FIX_ROUNDS times a job.
@@ -1110,6 +1112,7 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
     const base = git(repo.path, "merge-base", main, ref).out;
     if (git(repo.path, "rev-list", "--count", `${main}..${ref}`).out === "0") return stuck("no commit");
     const changed = git(repo.path, "diff", "--name-only", base, ref).out.split("\n").filter(Boolean);
+    if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no commit");
     const failed = await checksInSandbox(folder, dir, "out/out.bundle", ref, repo, changed, phase, recorder(folder), hiddenOf(repo, run));
     if (failed) return stuck(failed);
     return await heldAndReview(id, folder, run, repo, dir, base, branch, { checkedBase: base, checkedTip: git(repo.path, "rev-parse", ref).out });
