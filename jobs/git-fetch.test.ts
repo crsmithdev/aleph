@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fetchOrigin, git } from "./lib/git.ts";
+import { addWorktree, fetchOrigin, git } from "./lib/git.ts";
 
 function setup() {
   const d = mkdtempSync(join(tmpdir(), "fetch-"));
@@ -31,4 +31,24 @@ test("fetchOrigin gives up when the lock stays", () => {
   const r = fetchOrigin(clone);
   expect(r.ok).toBe(false);
   expect(r.out).toContain("cannot lock ref");
+});
+
+test("addWorktree waits out a config lock that goes away", () => {
+  const { clone } = setup();
+  const cfg = join(clone, ".git/config.lock");
+  writeFileSync(cfg, "");
+  Bun.spawn(["sh", "-c", `sleep 0.2; rm ${cfg}`], { stdio: ["ignore", "ignore", "ignore"] });
+  const wt = join(clone, "..", "wt");
+  const r = addWorktree(clone, wt, "job", "origin/main");
+  expect(r.ok).toBe(true);
+  expect(git(clone, "rev-parse", "--verify", "job").ok).toBe(true);
+  expect(git(wt, "rev-parse", "--abbrev-ref", "HEAD").out).toBe("job");
+});
+
+test("addWorktree gives up when the config lock stays", () => {
+  const { clone } = setup();
+  writeFileSync(join(clone, ".git/config.lock"), "");
+  const r = addWorktree(clone, join(clone, "..", "wt"), "job", "origin/main");
+  expect(r.ok).toBe(false);
+  expect(r.out).toContain("could not lock config file");
 });

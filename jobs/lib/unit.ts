@@ -7,7 +7,7 @@ import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSyn
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { closeAndFile, file, readHidden } from "../../todo/lib/store.ts";
-import { fetchOrigin, followMain, git } from "./git.ts";
+import { addWorktree, fetchOrigin, followMain, git } from "./git.ts";
 import { ALREADY_MET, heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { checkSlot, readReview2, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
@@ -833,10 +833,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
         appendFileSync(join(folder, "setup.log"), `## fetch: failed\n${fetched.out}\n`);
         return fail(`fetch failed: ${fetched.out}`);
       }
-      git(repo.path, "worktree", "remove", "--force", wt);
-      git(repo.path, "worktree", "prune");
-      git(repo.path, "branch", "-D", branch);
-      const add = git(repo.path, "worktree", "add", "-q", "-b", branch, wt, `origin/${repo.main}`);
+      const add = addWorktree(repo.path, wt, branch, `origin/${repo.main}`);
       if (!add.ok) return fail(`worktree add failed: ${add.out}`);
     } finally {
       release();
