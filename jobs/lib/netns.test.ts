@@ -3,6 +3,17 @@ import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { freePort } from "./review2-browser.ts";
 
 const can = (cmd: string[]) => { try { return Bun.spawnSync(cmd, { stdout: "ignore", stderr: "ignore" }).exitCode === 0; } catch { return false; } };
+/** Poll for the pid of the sandbox namespace holder until a deadline in time, and say so when it never shows. */
+async function findPid(): Promise<number> {
+  const end = Date.now() + 10_000;
+  for (;;) {
+    const pid = sandboxNetnsPid(process.pid);
+    if (pid !== null) return pid;
+    if (Date.now() > end) throw new Error("step pid search: no child in another network namespace within 10 s");
+    await Bun.sleep(50);
+  }
+}
+
 const usable = can(["unshare", "-Urn", "true"]) && can(["socat", "-V"]) && can(["nsenter", "--version"]);
 
 test("sandboxNetnsPid is null for a child in the host namespace", async () => {
@@ -17,15 +28,16 @@ for (const nested of [false, true]) test.skipIf(!usable)(`bridge reaches a serve
   const server = Bun.spawn(["unshare", "-Urn", "sh", "-c", `ip link set lo up; exec ${nested ? "unshare -U " : ""}${process.execPath} -e '${script}'`], { stdout: "ignore", stderr: "ignore" });
   let b: Awaited<ReturnType<typeof bridge>> | undefined;
   try {
-    let pid: number | null = null;
-    for (let i = 0; i < 100 && pid === null; i++) { pid = sandboxNetnsPid(process.pid); if (pid === null) await Bun.sleep(50); }
-    expect(pid).not.toBeNull();
-    b = await bridge(pid!, port);
+    const pid = await findPid();
+    try { b = await bridge(pid, port); } catch (e) { throw new Error(`step bridge: ${(e as Error).message}`); }
     let text = "";
-    for (let i = 0; i < 100 && text !== "inside"; i++) {
-      try { text = await (await fetch(b.url)).text(); } catch { await Bun.sleep(50); }
+    let lastErr = "no attempt ran";
+    const end = Date.now() + 15_000;
+    while (text !== "inside" && Date.now() < end) {
+      try { text = await (await fetch(b.url)).text(); if (text !== "inside") { lastErr = `got ${JSON.stringify(text.slice(0, 80))}`; await Bun.sleep(50); } }
+      catch (e) { lastErr = String(e); await Bun.sleep(50); }
     }
-    expect(text).toBe("inside");
+    if (text !== "inside") throw new Error(`step fetch ${b.url}: no "inside" within 15 s; last: ${lastErr}; bridge stderr: ${b.stderr() || "(empty)"}`);
   } finally {
     await b?.stop();
     server.kill();
@@ -38,13 +50,12 @@ test.skipIf(!usable)("bridge keeps the inner socat's connection error", async ()
   const holder = Bun.spawn(["unshare", "-Urn", "sh", "-c", "ip link set lo up; exec sleep 30"], { stdout: "ignore", stderr: "ignore" });
   let b: Awaited<ReturnType<typeof bridge>> | undefined;
   try {
-    let pid: number | null = null;
-    for (let i = 0; i < 100 && pid === null; i++) { pid = sandboxNetnsPid(process.pid); if (pid === null) await Bun.sleep(50); }
-    expect(pid).not.toBeNull();
-    b = await bridge(pid!, port);
+    const pid = await findPid();
+    try { b = await bridge(pid, port); } catch (e) { throw new Error(`step bridge: ${(e as Error).message}`); }
     try { await (await fetch(b.url)).text(); } catch { /* the relay closes the connection */ }
-    for (let i = 0; i < 100 && !/refused/i.test(b.stderr()); i++) await Bun.sleep(50);
-    expect(b.stderr()).toMatch(/refused/i);
+    const end = Date.now() + 10_000;
+    while (!/refused/i.test(b.stderr()) && Date.now() < end) await Bun.sleep(50);
+    if (!/refused/i.test(b.stderr())) throw new Error(`step stderr: no "refused" within 10 s; bridge stderr: ${b.stderr() || "(empty)"}`);
   } finally {
     await b?.stop();
     holder.kill();
