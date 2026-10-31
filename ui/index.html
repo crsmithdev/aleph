@@ -713,6 +713,10 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap:
 @media (max-width: 720px) {
   .wf { grid-template-columns: minmax(0, 1fr); }
   .wf-detail { position: static; max-height: none; }
+  .wf-grid { max-height: 36vh; overflow: auto; scroll-padding-top: 24px; }
+  .wf-axis { z-index: 2; }
+  .wf-axis .wf-l { visibility: hidden; }
+  .wf-axis .wf-r span:nth-child(2), .wf-axis .wf-r span:nth-child(4) { display: none; }
   .wf-axis, .wf-row { grid-template-columns: minmax(100px, 40%) minmax(0, 1fr); }
 }
 </style>

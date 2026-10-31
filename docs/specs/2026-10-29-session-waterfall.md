@@ -1,6 +1,6 @@
 # Session waterfall: screenshots
 
-Part of aleph-539.1. The Waterfall view (aleph-537, commits fd3b7512, 9a171ef1) is `#/sessions/<id>?view=waterfall`. This note records the fixture and the shots; the shots showed no defect in the view, so no code changed.
+Part of aleph-539.1. The Waterfall view (aleph-537, commits fd3b7512, 9a171ef1) is `#/sessions/<id>?view=waterfall`. This note records the fixture and the shots; the 1440 px shots showed no defect. The first 390 px shot did (below), fixed in `ui/index.html`.
 
 ## Screenshots
 
@@ -19,8 +19,10 @@ Each shot shows: one row per call, indented under `Turn 1`; bars placed by start
 | --- | --- | --- | --- |
 | [`waterfall-1440-light.png`](2026-10-29-session-waterfall/waterfall-1440-light.png) | 1440 | light | error row `Edit src/f8.ts` selected |
 | [`waterfall-1440-dark.png`](2026-10-29-session-waterfall/waterfall-1440-dark.png) | 1440 | dark | error row `Edit src/f8.ts` selected |
-| `waterfall-390-light.png` | 390 | light | pending |
-| `waterfall-390-dark.png` | 390 | dark | pending |
+| [`waterfall-390-light.png`](2026-10-29-session-waterfall/waterfall-390-light.png) | 390 | light | grid scrolls in a short box, error row `Edit src/f8.ts` selected, detail pane under it with input, error and output |
+| [`waterfall-390-dark.png`](2026-10-29-session-waterfall/waterfall-390-dark.png) | 390 | dark | same state as the light shot |
+
+Defect fixed at 390 px: the detail pane stacked under the grid already, but under 100 rows, so it was off screen. In the `max-width: 720px` block the grid now scrolls inside `max-height: 36vh` (tall enough that Turn 1 and the selected error row show without scrolling, with `scroll-padding-top` so a scrolled row never lands under the axis), the axis stays on top (`z-index`), and the middle axis ticks and the axis caption are hidden because they overlapped. Covered by the test "the waterfall at 390 px" in `ui/sessions.test.ts`. The 390 px shots use the same `--width 390 --height 844 ... --click '.wf-row.err'`.
 
 ## Fixture
 
@@ -34,3 +36,5 @@ A stub `Bun.serve({ port: 0 })` that answers `GET /api/public/traces` (filtered 
 - Subagent, emitted right after call 30: `AGENT` `wf-sub`, name `Explore`, `metadata {agent_id:"1", agent_type:"Explore"}`, parent `wf-turn`, start = call 30's start + 500 ms, end = call 30's start + 7000 ms. Five `TOOL` children `wf-s0` to `wf-s4`, parent `wf-sub`, name `NAMES[(2*k) mod 5]`, input `sub input <k>`, output `sub output <k>`, start = call 30's start + 1000 + 1000*k ms, duration 800 ms.
 
 Resulting header line: wall 3 min 30 s, tool time 6 min 50 s, longest `Grep(src/f32.ts)` 8.0 s, `Glob(src/f64.ts)` 7.9 s, `Grep(src/f17.ts)` 7.8 s, 1 error.
+
+The fixture rules above were complete; no rule had to be added.
