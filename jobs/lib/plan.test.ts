@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
+import type { FSWatcher } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { labels as itemLabels, readList, writeList } from "../../todo/lib/store.ts";
@@ -83,6 +84,24 @@ const addGoal = (marker: string, surface?: string): number =>
 const item = (id: number) => todos.find(readList({ key: "fac" })!, id)!;
 const planCalls = () => readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean);
 const planRuns = () => readdirSync(join(base, "jobs")).filter((d) => d.endsWith("-plan")).map((d) => readRun(join(base, "jobs", d))!);
+
+/** Resolves once the fake planner has logged its call. Fails at once if every plan ends with no call logged. */
+async function plannerLogsCall(plans: Promise<unknown>[]): Promise<void> {
+  let watcher: FSWatcher | undefined;
+  // The watch starts before the check below, so a call logged before it is not missed.
+  const logged = new Promise<void>((resolve, reject) => {
+    watcher = watch(join(base, "calls"), () => { if (planCalls().length) resolve(); });
+    watcher.on("error", reject);
+  });
+  const ended = Promise.allSettled(plans).then(() => {
+    if (!planCalls().length) throw new Error("a plan ended before the fake planner logged its call");
+  });
+  try {
+    if (!planCalls().length) await Promise.race([logged, ended]);
+  } finally {
+    watcher?.close();
+  }
+}
 
 /** One dispatch with the router's rating fixed; the names and tiers of the worker starts. The plans it starts run in-process, and are waited for. */
 async function dispatch(tier: Tier | null) {
@@ -210,8 +229,8 @@ test("a dispatch returns before a slow planner replies; the small goal starts, a
       async (spec) => (spec.includes("PLAN:slow") ? "opus" : "sonnet"), (repo, id) => { plans.push(planNow(repo, id)); });
     expect(starts).toEqual([`fac-${small}`]);
     expect(out.planned).toEqual([`fac-${big}`]);
-    // A bounded wait, of at most about 3 seconds, for the fake planner to log its call while the plan runs.
-    for (let i = 0; planCalls().length < 1 && i < 150; i++) await Bun.sleep(20);
+    // Waits for the fake planner to log its call while the plan runs; the test timeout is the only limit.
+    await plannerLogsCall(plans);
     expect(planRuns()).toEqual([expect.objectContaining({ kind: "plan", todo: big, state: "running" })]);
 
     // A second pass starts no second plan and no worker for the large goal.
@@ -234,7 +253,7 @@ test("a dispatch returns before a slow planner replies; the small goal starts, a
     writeFileSync(join(base, "release"), "");
     await Promise.allSettled(plans);
   }
-});
+}, 30000);
 
 test("a plan job left running by a dead process is ended as failed, and the goal is planned again", async () => {
   const id = addGoal("three");
