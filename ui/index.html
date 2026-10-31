@@ -414,6 +414,7 @@ table.tbl tbody tr:hover { background: var(--sunk); }
 table.tbl td.wide { width: 100%; max-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* A chip column is at least about three chips wide, so its labels sit on one line and the title takes the rest. */
 table.tbl td:has(> .chips) { min-width: 30ch; }
+@media (max-width: 720px) { table.tbl td:has(> .chips) { min-width: 0; } table.tbl td.wide { min-width: 16ch; } }
 table.tbl .num { text-align: right; font-family: var(--num); font-variant-numeric: tabular-nums; font-weight: 500; }
 table.tbl td.time { color: var(--ink-2); font-variant-numeric: tabular-nums; }
 table.tbl .badge { margin-right: 2px; }
@@ -589,7 +590,7 @@ pre.stat b { color: var(--need); }
 .sh.sub .mpick { margin-left: auto; }
 .brk { margin: 12px 0 0; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
 .brk .two { gap: 16px; }
-.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap: 10px; align-items: center; font-size: var(--fs-sm); padding: 2px 0; }
+div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap: 10px; align-items: center; font-size: var(--fs-sm); padding: 2px 0; }
 .cbar { height: 6px; border-radius: 3px; background: var(--rule-2); overflow: hidden; }
 .cbar i { display: block; height: 100%; background: var(--run); }
 .brk h3 .sw { margin-right: 6px; }
