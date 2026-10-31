@@ -5,6 +5,7 @@ import { empty, error, esc, filterBar, numCell, pageHead, pager, sectionHead, wh
 export const view = {
   path: "/activity",
   title: "Tools",
+  icon: "wrench",
   group: "claude",
   order: 2,
   api: (_params, q = new URLSearchParams()) => {

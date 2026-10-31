@@ -6,6 +6,7 @@ import { chart, empty, esc, filterBar, idLink, nameLink, numCell, pageHead, sect
 export const view = {
   path: "/skills",
   title: "Skills",
+  icon: "wand-magic-sparkles",
   group: "claude",
   order: 20,
   api: (_params, q = new URLSearchParams()) => {

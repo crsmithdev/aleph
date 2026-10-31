@@ -6,6 +6,7 @@ import { empty, error, esc, filterBar, localId, md, pageHead, when } from "../li
 export const view = {
   path: "/memory",
   title: "Memory",
+  icon: "brain",
   group: "memory",
   order: 0,
   api: "/api/memory",

@@ -10,8 +10,10 @@ export const view = {
   title: "Status",
   group: "factory",
   order: 0,
+  icon: "gauge-high",
   api: "/api/state",
-  refresh: 15,
+  refresh: 60,
+  live: true,
   render: (s, _params, query) => {
     setWindow(query);
     return `<div class="page">${renderStatusLine(s)}${renderNeeds(s)}${renderFlow(s, speedData())}` +

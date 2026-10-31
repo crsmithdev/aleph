@@ -33,6 +33,7 @@ export async function confirmCancel(btn, msg, target, done) {
 export const view = {
   path: "/inventory",
   title: "Inventory",
+  icon: "boxes-stacked",
   group: "factory",
   order: 1,
   api: "/api/contents",

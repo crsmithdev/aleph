@@ -324,7 +324,7 @@ export function renderTurn(d) {
     (d.observations.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Kind</th><th>Name</th><th>Detail</th><th class="num">Duration</th></tr></thead><tbody>${d.observations.map((o) => obsRows(o, 0)).join("")}</tbody></table></div>` : empty("No observation in this turn.")) + `</div>`;
 }
 
-export const view = { path: "/sessions", title: "Sessions", group: "claude", order: 0, api: (_params, q = new URLSearchParams()) => {
+export const view = { path: "/sessions", title: "Sessions", icon: "comments", group: "claude", order: 0, api: (_params, q = new URLSearchParams()) => {
     const out = new URLSearchParams();
     for (const k of ["days", "project"]) if (q.get(k)) out.set(k, q.get(k));
     return out.toString() ? `/api/sessions?${out}` : "/api/sessions";

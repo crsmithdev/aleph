@@ -196,7 +196,7 @@ test("the shell reloads on 401 and offers a Log out link only behind the gate", 
   const script = html;
   const fn = script.match(/async function api\(url\) \{[\s\S]*?\n  \}/)![0];
   expect(fn).toMatch(/if \(res\.status === 401\) \{[^}]*location\.reload\(\)/);
-  expect(html).toMatch(/<a id="logout"[^>]*\bhidden\b[^>]*>Log out<\/a>/);
+  expect(html).toMatch(/<a id="logout"[^>]*\bhidden\b[^>]*>.*Log out<\/span><\/a>/);
   expect(fn).toContain('res.headers.get("x-aleph-login")');
   expect(fn).toContain('$("logout").hidden = false');
   expect(script).toMatch(/\$\("logout"\)\.addEventListener\("click"[\s\S]*?"\/api\/logout", \{ method: "POST", headers: \{ "X-Aleph-UI": "1" \}[\s\S]*?location\.reload\(\)/);
@@ -215,4 +215,13 @@ test("index.html declares an empty icon in its head", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   const head = html.slice(html.indexOf("<head>"), html.indexOf("</head>"));
   expect(head).toContain('<link rel="icon" href="data:,">');
+});
+
+test("every sidebar view has an icon, and a collapsed sidebar keeps the links and hides their labels", async () => {
+  const shown = [];
+  for (const f of ["now", "contents", "sessions", "activity", "skills", "memory"]) shown.push((await import(`./views/${f}.js`)).view);
+  for (const v of shown) expect(v.icon).toMatch(/^[a-z-]+$/);
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  expect(html).not.toContain(".shell.collapsed #nav, .shell.collapsed #logout { display: none; }");
+  expect(html).toMatch(/\.shell\.collapsed #nav \.lbl/);
 });

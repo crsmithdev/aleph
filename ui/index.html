@@ -595,22 +595,24 @@ pre.stat b { color: var(--need); }
 .side .mark { padding: 2px 8px 0; }
 #nav ul { list-style: none; margin: 0; padding: 0; }
 #nav a {
-  display: block; padding: 5px 8px; border-radius: 4px; text-decoration: none;
+  display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 4px; text-decoration: none;
   color: var(--ink-2); font-size: var(--fs-sm); transition: background-color .15s ease-out;
 }
 #nav a:hover { background: var(--sunk); color: var(--ink); }
-#logout { display: block; margin-top: 14px; padding: 5px 8px; border-radius: 6px; font-size: var(--fs-sm); color: var(--muted); text-decoration: none; }
+#nav wa-icon, #logout wa-icon { flex: none; width: 1.25em; font-size: var(--fs-sm); }
+#logout { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 5px 8px; border-radius: 6px; font-size: var(--fs-sm); color: var(--muted); text-decoration: none; }
 #logout[hidden] { display: none; }
 #logout:hover { background: var(--sunk); color: var(--ink); }
 #nav a[aria-current="page"] { background: var(--sunk); color: var(--ink); font-weight: 600; box-shadow: inset 2px 0 0 var(--ink); }
 #collapse { margin-top: auto; align-self: flex-start; padding: 5px 8px; border: 0; border-radius: 6px; background: none; color: var(--muted); font: 400 var(--fs-sm)/1.2 var(--mono); cursor: pointer; }
 #collapse:hover { background: var(--sunk); color: var(--ink); }
-/* The sidebar links have no icons, so a collapsed sidebar shows only the mark and the expand button. */
+/* A collapsed sidebar shows the mark, each link's icon and the expand button. */
 @media (min-width: 721px) {
   .shell.collapsed { grid-template-columns: 48px minmax(0, 1fr); }
   .shell.collapsed .side { padding-left: 6px; padding-right: 6px; align-items: center; overflow: hidden; }
   .shell.collapsed .mark { padding: 2px 0 0; margin: 0; font-size: 0; gap: 0; }
-  .shell.collapsed #nav, .shell.collapsed #logout { display: none; }
+  .shell.collapsed #nav a, .shell.collapsed #logout { justify-content: center; padding: 7px 0; width: 36px; }
+  .shell.collapsed #nav .lbl, .shell.collapsed #logout .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .shell.collapsed #collapse { align-self: center; }
 }
 .error p { margin: 0; color: var(--stuck); }
@@ -754,7 +756,7 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 64px auto; gap: 
         <circle cx="35.5" cy="64.5" r="20" fill="currentColor"/>
       </svg>aleph</a>
     <div id="nav"></div>
-    <a id="logout" href="#" hidden>Log out</a>
+    <a id="logout" href="#" title="Log out" hidden><wa-icon name="right-from-bracket" aria-hidden="true"></wa-icon><span class="lbl">Log out</span></a>
     <button id="collapse" type="button" aria-label="Collapse the sidebar" aria-expanded="true">&lt;&lt;</button>
   </nav>
   <main>
@@ -787,10 +789,11 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 64px auto; gap: 
   import { actMessages, denyReasons, diffHtml, empty, error, esc, failMessage, loading, mountView, openDiffs, recordState, restoreState } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
-  // view = { path, title, group, order, render(data, params), mount?(root, data), api?, refresh? }, and
+  // view = { path, title, group, order, icon?, render(data, params), mount?(root, data), api?, refresh?, live? }, and
   // may export redirect(hash) -> new hash | null for an address it took over:
   // `api` is the URL its data comes from (":params" filled in from the route),
-  // `refresh` the seconds between reloads. The page builds the sidebar from
+  // `refresh` the seconds between reloads, `live` that /api/events also reloads it,
+  // `icon` its sidebar glyph, a Font Awesome name. The page builds the sidebar from
   // them, one flat list in GROUPS order, and routes by hash (#/jobs/aleph-52).
   const GROUPS = ["factory", "work", "claude", "memory"];
   const $ = (id) => document.getElementById(id);
@@ -841,7 +844,7 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 64px auto; gap: 
     }
     const items = views.filter((v) => GROUPS.includes(v.group) && !v.path.includes(":") && v.nav !== false).sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
     $("nav").innerHTML = `<ul>${items.map((v) =>
-      `<li><a href="#${esc(v.path)}"${v === active ? ' aria-current="page"' : ""}>${esc(v.title)}</a></li>`).join("")}</ul>`;
+      `<li><a href="#${esc(v.path)}" title="${esc(v.title)}"${v === active ? ' aria-current="page"' : ""}><wa-icon name="${esc(v.icon)}" aria-hidden="true"></wa-icon><span class="lbl">${esc(v.title)}</span></a></li>`).join("")}</ul>`;
   }
 
   async function load(route, first) {
@@ -876,6 +879,31 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 64px auto; gap: 
     catch (e) { console.error(view.title, "mount failed", e); }
   }
 
+  // One reload at a time; events that come during it make one more. A push does not re-render while the reader types or has a button armed: `refresh` catches up.
+  let reloading = false, again = false;
+  async function reload() {
+    if (reloading) { again = true; return; }
+    if (!shown?.view?.live || document.activeElement?.matches("input, textarea, select") || $("view").querySelector("button.act.ask")) return;
+    reloading = true;
+    await load(shown, false);
+    reloading = false;
+    if (again) { again = false; reload(); }
+  }
+
+  // The stream is open only for a live view in a visible tab: a browser allows few connections to one host.
+  let events = null;
+  function follow() {
+    events?.close();
+    events = null;
+    if (!shown?.view?.live || document.hidden) return;
+    let lost = false;
+    events = new EventSource("/api/events");
+    events.addEventListener("change", reload);
+    events.onerror = () => { lost = true; };
+    events.onopen = () => { if (lost) reload(); };
+  }
+  document.addEventListener("visibilitychange", () => { follow(); if (!document.hidden) reload(); });
+
   function route() {
     // A view may take over an old address (a view exports `redirect(hash)`).
     for (const r of redirects) {
@@ -887,6 +915,7 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 64px auto; gap: 
     clearInterval(timer);
     const m = match(path, query);
     shown = m ?? { view: null };
+    follow();
     if (!m) {
       document.title = "Not found · aleph";
       $("view").innerHTML = `<div class="page nf"><h1>Nothing at ${esc(path)}</h1>${empty("No view has this address.", `Go to <a href="#/">Now</a> or pick a view from the list.`)}</div>`;
