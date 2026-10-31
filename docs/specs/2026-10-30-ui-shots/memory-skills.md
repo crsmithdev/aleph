@@ -1,6 +1,6 @@
 # UI shots C: Memory and Skills
 
-Part of aleph-669. Shots of `main` at 050811e plus the fix in 61a6aa1.
+Part of aleph-669. Shots of `main` at ba08b7c plus the fix in 4bc411d.
 
 ## Setup
 
@@ -23,10 +23,10 @@ Checked by eye on each PNG: no horizontal scroll of the page, no clipped or over
 
 ## Findings
 
-- memory-1440-light.png: the `+` fold marker sat on its own line above each type heading (the `.sh` block inside `<summary>`); fixed in 61a6aa1
-- memory-1440-dark.png: the `+` fold marker sat on its own line above each type heading (the `.sh` block inside `<summary>`); fixed in 61a6aa1
-- memory-390-light.png: the `+` fold marker sat on its own line above each type heading (the `.sh` block inside `<summary>`); fixed in 61a6aa1
-- memory-390-dark.png: the `+` fold marker sat on its own line above each type heading (the `.sh` block inside `<summary>`); fixed in 61a6aa1
+- memory-1440-light.png: the `+` fold marker sat on its own line above each type heading (the `.sh` block inside `<summary>`); fixed in 4bc411d
+- memory-1440-dark.png: the `+` fold marker sat on its own line above each type heading (the `.sh` block inside `<summary>`); fixed in 4bc411d
+- memory-390-light.png: the `+` fold marker sat on its own line above each type heading (the `.sh` block inside `<summary>`); fixed in 4bc411d
+- memory-390-dark.png: the `+` fold marker sat on its own line above each type heading (the `.sh` block inside `<summary>`); fixed in 4bc411d
 - skills-1440-light.png: no defect
 - skills-1440-dark.png: no defect
 - skills-390-light.png: no defect
