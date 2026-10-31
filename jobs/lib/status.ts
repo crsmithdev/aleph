@@ -109,10 +109,15 @@ export function landedIndex(cwd: string, main: string, key: string): Map<number,
   return out;
 }
 
+/** The commits on `main` whose `Goal:` (or legacy `Item:`) trailer names `ref` (`<repo>-<n>[.<m>]`), reverted ones too. */
+export function commitsNaming(cwd: string, main: string, ref: string): string[] {
+  const rows = git(cwd, "log", main, TRAILERS).out.split("\n").filter(Boolean);
+  return rows.map((r) => r.split("\t")).filter(([, item, , goal]) => [...values(item), ...values(goal)].includes(ref)).map(([h]) => h);
+}
+
 /** The short sha of a commit on `main` whose `Goal:` (or legacy `Item:`) trailer names the goal `ref` (`<repo>-<n>.<m>`) and that no later commit reverts, or null. */
 function dottedOnMain(cwd: string, main: string, ref: string): string | null {
-  const rows = git(cwd, "log", main, TRAILERS).out.split("\n").filter(Boolean);
-  const hits = rows.map((r) => r.split("\t")).filter(([, item, , goal]) => [...values(item), ...values(goal)].includes(ref)).map(([h]) => h);
+  const hits = commitsNaming(cwd, main, ref);
   if (!hits.length) return null;
   const reverted = new Set([...git(cwd, "log", main, "-E", "--grep=^This reverts commit [0-9a-f]{40}", "--format=%B").out.matchAll(/This reverts commit ([0-9a-f]{40})/g)].map((m) => m[1]));
   const hit = hits.find((h) => !reverted.has(h));

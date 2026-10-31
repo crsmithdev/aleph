@@ -2,17 +2,21 @@
  * The acceptance run: a done goal's own Oracle, run again on origin/<main> under srt.
  * See "Acceptance run" in docs/specs/2026-10-26-seed-factory.md.
  *
- * The result of each goal is kept in <factory>/acceptance/<repo>-<n>.json. A first failure
- * reopens the goal for one more worker run; a second sets an Ask (input, acceptance-failed) on it.
+ * The result of each goal is kept in <factory>/acceptance/<repo>-<n>.json. A failure is not yet a
+ * result: only the failed tests run again, on the same commit, when the machine is quiet. Tests that
+ * pass then, and tests the goal did not touch, go to the flake list. A repeat in a test the goal
+ * touched reopens the goal for one more worker run; a second sets an Ask (input, acceptance-failed).
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { availableParallelism, loadavg } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { note, writeList } from "../../todo/lib/store.ts";
+import { note, noteFlake, writeList } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { expand, type Repo } from "./ledger.ts";
 import { section } from "./plan.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
+import { commitsNaming } from "./status.ts";
 
 const dir = () => join(expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory"), "acceptance");
 const file = (key: string, id: number | string) => join(dir(), `${key}-${id}.json`);
@@ -30,7 +34,15 @@ export interface Accepted {
   since?: string;
   /** The report has listed this result. */
   shown?: boolean;
+  /** A failure that waits for its rerun on a quiet machine. */
+  retest?: Retest;
 }
+
+/** One failed test of a `bun test` run. `file` is unset when the output names no file above it. */
+export interface FailedTest { file?: string; name: string }
+
+/** What a failure runs again: `rerun`, on the commit that failed. */
+export interface Retest { commit: string; command: string; rerun: string; tests: FailedTest[] }
 
 export function readRecord(key: string, id: number | string): Accepted | null {
   try { return JSON.parse(readFileSync(file(key, id), "utf8")); } catch { return null; }
@@ -47,6 +59,7 @@ export function resultLine(key: string, id: number | string): string | null {
   if (!r) return null;
   if (r.result === "pass") return `acceptance: pass at ${r.sha}`;
   if (r.result === "skipped") return "acceptance: skipped, no runnable command";
+  if (r.retest) return `acceptance: fail, waits for a rerun: ${r.command}`;
   return `acceptance: fail${r.fails >= 2 ? " twice" : ", rerun"}: ${r.command}`;
 }
 
@@ -78,6 +91,50 @@ function namesMissingTestFile(repo: Repo, sha: string, command: string): boolean
     return TEST_FILE.test(path) && !git(repo.path, "cat-file", "-e", `${sha}:${path}`).ok;
   });
 }
+
+/** A file's header in `bun test` output, and a failure under it. A failing `beforeAll` shows as the name `(unnamed)`. */
+const TEST_HEADER = /^(\S+\.(?:test|spec)\.[jt]sx?):$/;
+const FAIL_LINE = /^\(fail\) (.*?)(?: \[[\d.]+m?s\])?$/;
+
+/** The failed tests that a `bun test` output names. */
+export function failedTests(output: string): FailedTest[] {
+  const tests: FailedTest[] = [];
+  let file: string | undefined;
+  for (const line of output.split("\n")) {
+    file = TEST_HEADER.exec(line)?.[1] ?? file;
+    const name = FAIL_LINE.exec(line)?.[1];
+    if (name) tests.push({ file, name });
+  }
+  return tests;
+}
+
+const regexEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&");
+
+/**
+ * The command that runs only `tests` again. `-t` matches the name with spaces between its parts, where the
+ * output has ` > `. An `(unnamed)` failure is a whole file's hook, so its files run whole. With no test
+ * or no file to name, as for `bunx tsc`, the command itself runs again.
+ */
+export function rerunOf(command: string, tests: FailedTest[]): string {
+  if (!tests.length || tests.some((t) => !t.file)) return command;
+  const files = [...new Set(tests.map((t) => `./${t.file}`))].join(" ");
+  const named = !tests.some((t) => t.name === "(unnamed)");
+  const pattern = tests.map((t) => `^${t.name.split(" > ").map(regexEscape).join("( > | )")}$`).join("|");
+  return `bun test --timeout=30000 ${files}${named ? ` -t ${q(pattern)}` : ""}`;
+}
+
+/** The machine is quiet when the 1-minute load is under half the cores; `ALEPH_QUIET_LOAD` changes the limit. */
+const quiet = () => loadavg()[0] < (Number(process.env.ALEPH_QUIET_LOAD) || availableParallelism() / 2);
+
+/** The files of the commits on origin/<main> that name the goal. */
+function goalFiles(repo: Repo, name: string): Set<string> {
+  const commits = commitsNaming(repo.path, `origin/${repo.main}`, name);
+  if (!commits.length) return new Set();
+  return new Set(git(repo.path, "log", "--no-walk", "--name-only", "--format=", ...commits).out.split("\n").filter(Boolean));
+}
+
+const testLabel = (t: FailedTest) => `${t.file ?? "(no file)"} > ${t.name}`;
+const failing = (r: Ran) => r.code !== 0 || FAIL_SUMMARY.test(r.output);
 
 /** The commands in backticks in the issue's `## Oracle` section that start with a command the repo's checks use. */
 export function oracleCommands(body: string): string[] {
@@ -147,36 +204,67 @@ function reopen(repo: Repo, id: number | string, text: string): string | null {
  * Returns a line for the log. The caller has fetched and holds the goal's lock.
  */
 export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandboxRunner): Promise<string> {
-  const name = `${repo.key}-${issues.refOf(item)}`;
-  const prev = readRecord(repo.key, issues.refOf(item));
-  const sha = git(repo.path, "rev-parse", "--short=7", `origin/${repo.main}`).out;
+  const ref = issues.refOf(item);
+  const name = `${repo.key}-${ref}`;
+  const prev = readRecord(repo.key, ref);
+  const waiting = prev?.retest;
+  if (waiting && !quiet()) return `${name}: acceptance rerun waits for a quiet machine (${waiting.command})`;
+  const sha = git(repo.path, "rev-parse", "--short=7", waiting?.commit ?? `origin/${repo.main}`).out;
   if (!sha) return `${name}: acceptance not run: no origin/${repo.main}`;
-  const full = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
+  const full = waiting?.commit ?? git(repo.path, "rev-parse", `origin/${repo.main}`).out;
   const commands = oracleCommands(item.body).filter((c) => !namesMissingTestFile(repo, full, c));
   if (!commands.length) {
-    writeRecord(repo.key, issues.refOf(item), { result: "skipped", fails: prev?.fails ?? 0 });
+    writeRecord(repo.key, ref, { result: "skipped", fails: prev?.fails ?? 0 });
     return `${name}: acceptance skipped: the Oracle has no command that starts with bun test, bun run or bunx tsc, or loops over one, or that names a test file missing on ${repo.main}`;
   }
-  for (const command of commands) {
-    const r = await run(repo, full, command);
+  const flaked: string[] = [];
+  const flake = (t: FailedTest | string, how: string) => {
+    const label = typeof t === "string" ? t : testLabel(t);
+    flaked.push(label);
+    const bad = noteFlake(repo, `acceptance ${name}: ${label}: ${how} at ${sha}`);
+    if (typeof bad === "string") flaked.push(`(no flake note: ${bad})`);
+  };
+  // A waiting rerun takes up at its command: the commands before it passed.
+  for (const command of waiting ? commands.slice(Math.max(0, commands.indexOf(waiting.command))) : commands) {
+    let failed = waiting?.command === command ? waiting : undefined;
+    if (!failed) {
+      const r = await run(repo, full, command);
+      if (r.infra) return `${name}: acceptance not run: ${lastLines(r.output)}`;
+      if (!failing(r)) continue;
+      const tests = failedTests(r.output);
+      failed = { commit: full, command, rerun: rerunOf(command, tests), tests };
+      writeRecord(repo.key, ref, { result: "fail", sha, command, fails: prev?.fails ?? 0, ...(prev?.since ? { since: prev.since } : {}), retest: failed });
+      if (!quiet()) return `${name}: acceptance failed at ${sha} (${command}); the rerun waits for a quiet machine`;
+    }
+    const r = await run(repo, full, failed.rerun);
+    // The record keeps the retest, so the next step tries the rerun again.
     if (r.infra) return `${name}: acceptance not run: ${lastLines(r.output)}`;
-    const failedTests = r.code === 0 && FAIL_SUMMARY.test(r.output);
-    if (r.code === 0 && !failedTests) continue;
+    if (!failing(r)) {
+      if (failed.tests.length) for (const t of failed.tests) flake(t, "failed under load, passed on the quiet rerun");
+      else flake(`\`${command}\``, "failed under load, passed on the quiet rerun");
+      continue;
+    }
+    const tests = failedTests(r.output);
+    const touched = goalFiles(repo, name);
+    const others = tests.filter((t) => t.file && touched.size && !touched.has(t.file));
+    for (const t of others) flake(t, "failed twice, in a test the goal did not touch,");
+    if (tests.length && others.length === tests.length) continue;
     const fails = (prev?.fails ?? 0) + 1;
-    const out = `\`${command}\` exited ${r.code}${failedTests ? " with failing tests" : ""}: ${lastLines(r.output)}`;
+    const out = `\`${command}\` exited ${r.code}${r.code === 0 ? " with failing tests" : ""}, and the quiet rerun failed too: ${tests.length ? `${tests.slice(0, 40).map((t) => `(fail) ${testLabel(t).slice(0, 200)}`).join(" ⏎ ")} ⏎ ` : ""}${lastLines(r.output)}`;
     if (fails < 2) {
-      const bad = reopen(repo, issues.refOf(item), `acceptance: fail at ${sha}: ${out}`);
+      const bad = reopen(repo, ref, `acceptance: fail at ${sha}: ${out}`);
       if (bad) return `${name}: acceptance failed but the issue was not reopened: ${bad}`;
-      writeRecord(repo.key, issues.refOf(item), { result: "fail", sha, command, fails, since: full });
+      writeRecord(repo.key, ref, { result: "fail", sha, command, fails, since: full });
       return `${name}: acceptance failed at ${sha} (${command}); reopened for one more run`;
     }
-    const bad = note(repo, issues.refOf(item), `acceptance: fail again at ${sha}: ${out} | the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, { ask: { kind: "input", reason: "acceptance-failed", question: `The Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, options: [], why: [out] } });
-    writeRecord(repo.key, issues.refOf(item), { result: "fail", sha, command, fails, since: full });
+    const bad = note(repo, ref, `acceptance: fail again at ${sha}: ${out} | the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, { ask: { kind: "input", reason: "acceptance-failed", question: `The Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, options: [], why: [out] } });
+    writeRecord(repo.key, ref, { result: "fail", sha, command, fails, since: full });
     return `${name}: acceptance failed again at ${sha} (${command}); asks Chris${bad ? ` (no issue note: ${bad})` : ""}`;
   }
-  const bad = note(repo, issues.refOf(item), `acceptance: pass at ${sha}`);
-  writeRecord(repo.key, issues.refOf(item), { result: "pass", sha, fails: prev?.fails ?? 0 });
-  return `${name}: acceptance passed at ${sha}${bad ? ` (no issue note: ${bad})` : ""}`;
+  const seen = flaked.length ? `; on the flake list: ${flaked.join(", ")}` : "";
+  const bad = note(repo, ref, `acceptance: pass at ${sha}${seen}`);
+  writeRecord(repo.key, ref, { result: "pass", sha, fails: prev?.fails ?? 0 });
+  return `${name}: acceptance passed at ${sha}${seen}${bad ? ` (no issue note: ${bad})` : ""}`;
 }
 
 /** The results the report has not listed, oldest file first; each is then marked shown. */

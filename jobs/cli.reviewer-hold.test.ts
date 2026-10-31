@@ -96,7 +96,8 @@ describe("a factory run", () => {
     const live = run("fstuck", { state: "stuck", reason: "tests" });
     const unit = Bun.spawn(["sh", "-c", "sleep 60; :", live], { stdout: "ignore", stderr: "ignore" });
     writeFileSync(join(live, "pid"), String(unit.pid));
-    expect(unitAlive(live)).toBe(true);
+    // Straight after the spawn, /proc/<pid>/cmdline can be empty: the child has not reached exec.
+    await until(() => unitAlive(live));
     const d3 = await aleph(["dispatch"]);
     // the hold line names only the oldest holder, so the live run must not be counted in "and N more"
     expect(d3.json.held, await seen(`line 83: ${d3.stdout}`)).toContain("Held: fheldland is failed");

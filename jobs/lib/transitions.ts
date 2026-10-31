@@ -7,7 +7,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { askOf, CALL_FILE, isAwaiting, isBuild, isLive, runsDir, loadRegistry, lock, needsOf, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
+import { askOf, CALL_FILE, isAwaiting, isBuild, isLive, isStarting, runsDir, loadRegistry, lock, needsOf, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
 import { baselineChecks, git, removeBranch } from "./unit.ts";
 import { fetchOrigin } from "./git.ts";
@@ -206,7 +206,8 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
   if (!release) refuse(`${name}: another land is starting`);
   try {
     const runs = openJob(name) ?? refuse(`no open job named ${name}`);
-    const live = runs.find((e) => isLive(e.folder));
+    // A unit that has not written `pid` in the dispatch's wait still counts: a second land here would land the job twice.
+    const live = runs.find((e) => isLive(e.folder) || isStarting(e));
     if (live) refuse(`${name} is running as ${live.id}`);
     const agent = runs.filter((e) => isBuild(e.run.kind) || e.run.kind === "recheck").at(-1)!.run;
     const needs = isAwaiting(agent.state) ? needsOf(askOf(agent)) : undefined;

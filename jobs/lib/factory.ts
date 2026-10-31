@@ -500,8 +500,9 @@ const ACCEPTANCE_DAYS = 2;
 /**
  * The acceptance run: every done goal (one whose land is on origin/<main>, or a `planned` parent
  * closed as done) whose Oracle has not been run since it was done gets it run on origin/<main>,
- * under srt. Pass: a note; first failure: the goal reopens with the output as a note and the
- * dispatch starts it again; second: an Ask (input, acceptance-failed). See acceptance.ts.
+ * under srt. Pass: a note. A failure reruns the failed tests on that commit once the machine is
+ * quiet, and only a repeat in a test the goal touched counts. First repeat: the goal reopens with the
+ * output as a note and the dispatch starts it again; second: an Ask (input, acceptance-failed). See acceptance.ts.
  */
 export async function acceptanceStep(run: Runner = sandboxRunner, now = issues.clock()): Promise<string[]> {
   const lines: string[] = [];

@@ -2,9 +2,9 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { askOf, readList, writeList } from "../../todo/lib/store.ts";
+import { askOf, flakeTracker, readList, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { accept, oracleCommands, readRecord, resultLine, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
+import { accept, failedTests, oracleCommands, readRecord, rerunOf, resultLine, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { acceptanceStep, dispatchGoals, reacceptReopened } from "./factory.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -14,7 +14,7 @@ function sh(cwd: string, ...args: string[]): string {
   return p.stdout.toString().trim();
 }
 
-const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_SANDBOX_DIR", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_DISPATCH", "ALEPH_SANDBOX_CMD"];
+const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_SANDBOX_DIR", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_DISPATCH", "ALEPH_SANDBOX_CMD", "ALEPH_QUIET_LOAD"];
 let base: string;
 let saved: Record<string, string | undefined>;
 
@@ -24,7 +24,7 @@ beforeEach(() => {
   Object.assign(process.env, {
     ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_SANDBOX_DIR: join(base, "runs"),
     ALEPH_FACTORY_DIR: join(base, "factory"), XDG_RUNTIME_DIR: join(base, "run"), ALEPH_DAY_CAP: "100", ALEPH_LIVE_CAP: "5",
-    SIDETONE_TELL_URL: "http://127.0.0.1:1/tell", ALEPH_DISPATCH: "off",
+    SIDETONE_TELL_URL: "http://127.0.0.1:1/tell", ALEPH_DISPATCH: "off", ALEPH_QUIET_LOAD: "100000",
   });
   sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "repo.git"));
   sh(base, "git", "clone", "-q", join(base, "repo.git"), join(base, "repo"));
@@ -352,4 +352,107 @@ test("reacceptReopened skips goals not landed, not reopened by acceptance, or ou
   expect(issues.status(item(old))).toBe("done");
   expect(issues.status(item(unlanded))).toBe("open");
   expect(issues.status(item(plain))).toBe("open");
+});
+
+const FAILED = "jobs/lib/acceptance.test.ts:\n(fail) outer (x) > one [1.00ms]\n\nb.test.ts:\n(fail) two\n 2 fail\n";
+const flakeNotes = () => flakeTracker(readList({ key: "fac" })!)?.notes.join("\n") ?? "";
+/** Each call answers with the next result; the last repeats. */
+const answers = (...rs: { code: number; output: string; infra?: boolean }[]): Runner => async (_repo, sha, command) => { ran.push(command); shas.push(sha); return rs.length > 1 ? rs.shift()! : rs[0]; };
+const shas: string[] = [];
+beforeEach(() => { shas.length = 0; });
+/** A commit of the goal that changes `path`. */
+function landFile(id: number, path: string): void {
+  writeFileSync(join(repoDir(), path), `${Date.now()}`);
+  sh(repoDir(), "git", "add", ".");
+  sh(repoDir(), "git", "commit", "-q", "-m", `work\n\nItem: fac-${id}`);
+  sh(repoDir(), "git", "push", "-q", "origin", "main");
+}
+
+test("failedTests takes each failure with the file above it, and rerunOf names only those", () => {
+  const tests = failedTests(FAILED);
+  expect(tests).toEqual([{ file: "jobs/lib/acceptance.test.ts", name: "outer (x) > one" }, { file: "b.test.ts", name: "two" }]);
+  expect(rerunOf("bun run test", tests)).toBe(`bun test --timeout=30000 ./jobs/lib/acceptance.test.ts ./b.test.ts -t '^outer \\(x\\)( > | )one$|^two$'`);
+  expect(rerunOf("bun run test", [{ file: "b.test.ts", name: "(unnamed)" }])).toBe("bun test --timeout=30000 ./b.test.ts");
+  expect(rerunOf("bunx tsc", [])).toBe("bunx tsc");
+  expect(rerunOf("bun run test", [{ name: "no file" }])).toBe("bun run test");
+});
+
+test("rerunOf's command runs only the named test under real bun test", () => {
+  writeFileSync(join(base, "n.test.ts"), `import { describe, test } from "bun:test";\ndescribe("outer (x)", () => { test("one", () => {}); test("one more", () => {}); });\ntest("other", () => {});\n`);
+  const p = Bun.spawnSync(["bash", "-c", rerunOf("x", [{ file: "n.test.ts", name: "outer (x) > one" }])], { cwd: base, stdout: "pipe", stderr: "pipe" });
+  const out = p.stderr.toString() + p.stdout.toString();
+  expect(out).toContain("1 pass");
+  expect(out).toContain("2 filtered out");
+});
+
+test("a failure that passes on the rerun keeps the goal done, passes it, and notes the flake", async () => {
+  const id = doneGoal("`bun run test`");
+  landFile(id, "jobs/lib/acceptance.test.ts");
+  const lines = await acceptanceStep(answers({ code: 1, output: FAILED }, { code: 0, output: " 2 pass\n 0 fail\n" }));
+  expect(ran[1]).toContain("bun test --timeout=30000 ./jobs/lib/acceptance.test.ts ./b.test.ts -t");
+  expect(lines[0]).toContain("acceptance passed");
+  expect(issues.status(item(id))).toBe("done");
+  expect(readRecord("fac", id)?.result).toBe("pass");
+  expect(flakeNotes()).toContain("b.test.ts > two: failed under load, passed on the quiet rerun");
+});
+
+test("on a busy machine the rerun waits, and then runs on the commit that failed even if main moved", async () => {
+  const id = doneGoal("`bun run test` `bun run ok`");
+  const failedAt = sh(repoDir(), "git", "rev-parse", "origin/main");
+  process.env.ALEPH_QUIET_LOAD = "-1";
+  const lines = await acceptanceStep(answers({ code: 1, output: FAILED }));
+  expect(lines[0]).toContain("the rerun waits for a quiet machine");
+  expect(issues.status(item(id))).toBe("done");
+  expect(notes(id)).not.toContain("acceptance: fail");
+  expect(resultLine("fac", id)).toBe("acceptance: fail, waits for a rerun: bun run test");
+  ran.length = 0;
+  expect((await acceptanceStep(runner(0)))[0]).toContain("waits for a quiet machine");
+  expect(ran).toEqual([]);
+  sh(repoDir(), "git", "commit", "-q", "--allow-empty", "-m", "later");
+  sh(repoDir(), "git", "push", "-q", "origin", "main");
+  process.env.ALEPH_QUIET_LOAD = "100000";
+  await acceptanceStep(answers({ code: 0, output: "" }));
+  // The rerun and the Oracle command after it, and not the command that came before.
+  expect(ran[0]).toContain("-t");
+  expect(ran[1]).toBe("bun run ok");
+  expect(new Set(shas)).toEqual(new Set([failedAt]));
+  expect(readRecord("fac", id)?.result).toBe("pass");
+});
+
+test("a repeat in a test the goal touched reopens; a repeat only in others goes to the flake list", async () => {
+  const mine = doneGoal("`bun run test`");
+  landFile(mine, "jobs/lib/acceptance.test.ts");
+  await acceptanceStep(runner(1, FAILED));
+  expect(issues.status(item(mine))).toBe("open");
+  expect(notes(mine)).toContain("acceptance: fail at");
+  expect(notes(mine)).toContain("(fail) jobs/lib/acceptance.test.ts > outer (x) > one");
+  // The other failure of that run did not touch this goal's files.
+  expect(flakeNotes()).toContain("b.test.ts > two: failed twice");
+  const other = doneGoal("`bun run test`");
+  landFile(other, "c.ts");
+  const lines = await acceptanceStep(runner(1, FAILED));
+  expect(lines.find((l) => l.startsWith(`fac-${other}:`))).toContain("acceptance passed");
+  expect(issues.status(item(other))).toBe("done");
+  expect(notes(other)).toContain("on the flake list");
+});
+
+test("a failure that names no test reopens only if the command fails again", async () => {
+  const id = doneGoal("`bunx tsc`");
+  await acceptanceStep(answers({ code: 2, output: "a.ts(1,1): error" }, { code: 0, output: "" }));
+  expect(ran).toEqual(["bunx tsc", "bunx tsc"]);
+  expect(issues.status(item(id))).toBe("done");
+  expect(flakeNotes()).toContain("`bunx tsc`: failed under load");
+  const id2 = doneGoal("`bunx tsc`");
+  await acceptanceStep(runner(2, "a.ts(1,1): error"));
+  expect(issues.status(item(id2))).toBe("open");
+});
+
+test("an infra error on the rerun keeps the failure waiting and reopens nothing", async () => {
+  const id = doneGoal("`bun run test`");
+  const lines = await acceptanceStep(answers({ code: 1, output: FAILED }, { code: 1, output: "bun install: ConnectionRefused", infra: true }));
+  expect(lines[0]).toContain("acceptance not run");
+  expect(issues.status(item(id))).toBe("done");
+  expect(readRecord("fac", id)?.retest?.command).toBe("bun run test");
+  await acceptanceStep(answers({ code: 0, output: "" }));
+  expect(readRecord("fac", id)?.result).toBe("pass");
 });
