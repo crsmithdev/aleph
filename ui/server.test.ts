@@ -106,9 +106,9 @@ test("other paths are 404 and writes are refused", async () => {
 });
 
 test("every API answer carries the server's version; the page and its modules are revalidated on each load", async () => {
-  const { VERSION } = await import("./server.ts");
+  const { version } = await import("./server.ts");
   const a = await at("/api/_test/x");
-  expect(a.headers.get("x-aleph-version")).toBe(VERSION);
+  expect(a.headers.get("x-aleph-version")).toBe(version());
   for (const p of ["/", "/lib.js", "/views/_test.js"]) expect((await at(p)).headers.get("cache-control")).toBe("no-cache");
 });
 
@@ -124,5 +124,29 @@ test("x-aleph-login is on every API answer behind the gate, and absent without a
   } finally {
     gated.stop(true);
     delete process.env.ALEPH_UI_PASSWORD;
+  }
+});
+
+test("x-aleph-version changes when a page file changes, is added or is removed", async () => {
+  const pages = mkdtempSync(join(tmpdir(), "aleph-ui-pages-"));
+  mkdirSync(join(pages, "views"));
+  for (const f of ["index.html", "lib.js", "decision.js", "views/a.js"]) writeFileSync(join(pages, f), "one");
+  const s = await serve(0, { warm: false, pageDir: pages });
+  const v = async () => (await fetch(`http://127.0.0.1:${s.port}/api/_test/x`)).headers.get("x-aleph-version");
+  try {
+    const first = await v();
+    expect(first).toBeTruthy();
+    expect(await v()).toBe(first);
+    writeFileSync(join(pages, "views", "a.js"), "changed content");
+    const edited = await v();
+    expect(edited).not.toBe(first);
+    writeFileSync(join(pages, "views", "b.js"), "x");
+    const added = await v();
+    expect(added).not.toBe(edited);
+    rmSync(join(pages, "views", "b.js"));
+    expect(await v()).not.toBe(added);
+  } finally {
+    s.stop(true);
+    rmSync(pages, { recursive: true, force: true });
   }
 });

@@ -811,7 +811,7 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap:
     }
     return null;
   }
-  // The page imports each view once; when the server restarts with new code, reload to load it, unless the reader is typing.
+  // The page imports each view once; when the server restarts or a land changes a page file (the version header changes), reload to load it, unless the reader is typing.
   let version = null;
   async function api(url) {
     const res = await fetch(url, { cache: "no-store" });

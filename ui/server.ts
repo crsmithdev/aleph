@@ -3,7 +3,7 @@
  * each `ui/views/*.js`, and the routes of every `ui/api/*.ts`, loaded at start.
  * A route file exports `routes`: `"GET /api/x/:id"` → `(req, params, url) => Response`.
  */
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { cacheFetches, uiFetchTtl } from "../todo/lib/store.ts";
 import { loadDotenv } from "../hooks/lib/env.ts";
@@ -17,8 +17,8 @@ interface Route { method: string; pattern: RegExp; names: string[]; handler: Han
 
 /** The page and its modules are revalidated on every load, so a reload after a land gets the new code. */
 const JS = { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" };
-/** This process's start time. Every API answer carries it, so an open page sees that the server restarted and reloads its modules. */
-export const VERSION = String(Date.now());
+/** This process's start time: part of the version, so a restart changes it. */
+const START = String(Date.now());
 const VIEW_FILE = /^[\w-]+\.js$/;
 /** The modules in ui/ that views import (`from "../lib.js"`), served at the root. */
 const SHARED = new Set(["/lib.js", "/decision.js"]);
@@ -56,11 +56,27 @@ export function views(dir = join(import.meta.dir, "views")): string[] {
   return existsSync(dir) ? readdirSync(dir).filter((f) => VIEW_FILE.test(f)).sort() : [];
 }
 
+/**
+ * The value of `x-aleph-version`, computed per answer: the start time plus a fingerprint of the name, mtime and size
+ * of index.html, the SHARED modules and each view. A restart, an edit, an added or a removed file changes it,
+ * so an open page sees that its code changed and reloads its modules.
+ */
+export function version(dir = import.meta.dir): string {
+  const files = ["index.html", ...[...SHARED].map((p) => p.slice(1)), ...views(join(dir, "views")).map((f) => `views/${f}`)];
+  const parts = files.map((f) => {
+    try {
+      const st = statSync(join(dir, f));
+      return `${f}:${st.mtimeMs}:${st.size}`;
+    } catch { return `${f}:missing`; }
+  });
+  return `${START}-${Bun.hash(parts.join("\n")).toString(36)}`;
+}
+
 /** `warm: false` skips the warm-ups: a test that does not test them keeps Langfuse and the vault out of its process. */
-export async function serve(port: number, { warm = true }: { warm?: boolean } = {}) {
-  const dir = import.meta.dir;
+export async function serve(port: number, { warm = true, pageDir }: { warm?: boolean; pageDir?: string } = {}) {
+  const dir = pageDir ?? import.meta.dir;
   warmers.length = 0;
-  const routes = await loadRoutes(join(dir, "api"));
+  const routes = await loadRoutes(join(import.meta.dir, "api"));
   for (const [key, handler] of Object.entries(authRoutes)) {
     const [method, path] = key.split(" ");
     routes.push({ method, ...compile(path), handler });
@@ -83,7 +99,7 @@ export async function serve(port: number, { warm = true }: { warm?: boolean } = 
         const params: Record<string, string> = {};
         r.names.forEach((n, i) => { params[n] = decodeURIComponent(m[i + 1]); });
         const res = await r.handler(req, params, url);
-        res.headers.set("x-aleph-version", VERSION);
+        res.headers.set("x-aleph-version", version(dir));
         if (gateOn()) res.headers.set("x-aleph-login", "1");
         return res;
       }
