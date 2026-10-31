@@ -22,6 +22,7 @@
   --ink-2: #4A4F6A;
   --muted: #62688A;
   --rule: #DCD9EC;
+  --lift: 0 1px 3px rgb(40 36 80 / .12), 0 2px 8px rgb(40 36 80 / .06);  /* the top Status card's shadow */
   --rule-2: #E8E6F3;
   --need: #8A5A00;        /* needs you: yellow */
   --need-bg: #F3EEE6;
@@ -89,6 +90,7 @@
     --ink-2: #BFC7D5;       /* editor.foreground */
     --muted: #8E96BA;
     --rule: #3A3F58;
+    --lift: 0 1px 3px rgb(0 0 0 / .45), 0 2px 8px rgb(0 0 0 / .3);
     --rule-2: #2E3245;      /* editorGroup.border */
     --need: #FFCB6B;
     --need-bg: #474344;
@@ -111,6 +113,7 @@
     --ink-2: #BFC7D5;       /* editor.foreground */
     --muted: #8E96BA;
     --rule: #3A3F58;
+    --lift: 0 1px 3px rgb(0 0 0 / .45), 0 2px 8px rgb(0 0 0 / .3);
     --rule-2: #2E3245;      /* editorGroup.border */
     --need: #FFCB6B;
     --need-bg: #474344;
@@ -144,7 +147,7 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .mark svg { width: 22px; height: 22px; flex: none; }
 
 /* ---------- Now: flow strip and lanes ---------- */
-.flow { display: flex; align-items: stretch; gap: 8px; margin: 0 0 24px; padding: 16px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+.flow { display: flex; align-items: stretch; gap: 8px; margin: 0 0 24px; padding: 16px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); box-shadow: var(--lift); }
 .stage { flex: 1 1 0; min-width: 0; display: grid; gap: 10px; align-content: start; }
 .stage-main { display: grid; gap: 6px; color: var(--ink); text-decoration: none; }
 .stage-main:hover .v { text-decoration: underline; }
@@ -481,10 +484,11 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
 
 
 /* ---------- Status: Speed ---------- */
-.meds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 12px 0 8px; }
-.med { display: grid; gap: 4px; padding: 12px 10px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); min-width: 0; }
+.meds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px 0; margin: 12px 0 8px; }
+.med { display: grid; gap: 4px; align-content: start; padding: 2px 0 2px 16px; border-left: 1px solid var(--rule); min-width: 0; }
+.meds > .med:nth-child(5n+1) { border-left: 0; padding-left: 0; }
 .med .k { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
-.med .v { font: 600 20px/1.2 var(--metric); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); }
+.med .v { font: 600 20px/1.2 var(--sans); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); }
 .med .pp { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .med .quiet { font-size: var(--fs-xs); color: var(--muted); }
 .med .p90 { font: 600 18px/1.2 var(--metric); color: var(--muted); font-variant-numeric: lining-nums tabular-nums; }
@@ -516,7 +520,7 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
 .chartbox { margin: 0; min-width: 0; }
 .chartbox figcaption { font-size: var(--fs-xs); color: var(--muted); font-weight: 600; margin-bottom: 4px; }
 .speedchart { height: 160px; width: 100%; }
-@media (max-width: 1020px) { .meds { grid-template-columns: repeat(3, minmax(0, 1fr)); } .charts3 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1020px) { .meds { grid-template-columns: repeat(3, minmax(0, 1fr)); } .meds > .med:nth-child(n) { border-left: 1px solid var(--rule); padding-left: 16px; } .meds > .med:nth-child(3n+1) { border-left: 0; padding-left: 0; } .charts3 { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 1020px) { .meds.eff { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
 /* ---------- narrow ---------- */
@@ -529,6 +533,7 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
   .flow { flex-direction: column; }
   .lanes { grid-template-columns: minmax(0, 1fr); }
   .meds, .meds.eff { grid-template-columns: minmax(0, 1fr); }
+  .meds > .med:nth-child(n) { border-left: 0; padding-left: 0; }
   .lede { flex-wrap: wrap; }
   .lede .say { flex-basis: 100%; }
   .lede .wpick { order: 3; margin-left: 0; }
