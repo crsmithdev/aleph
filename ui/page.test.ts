@@ -184,3 +184,11 @@ test("the font picker is hidden at 720px and below, and keeps its top-level rule
   expect(html).toMatch(/@media \(max-width: 720px\) \{\s*\.fontpick \{\s*display: none;?\s*\}\s*\}/);
   expect(html).toMatch(/\.fontpick \{ position: fixed; right: 16px; bottom: 16px;/);
 });
+
+test("at 720px and below the shell's nav row is only as tall as the nav, and main takes the rest", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const css = html.match(/<style>([\s\S]*?)<\/style>/)![1].replace(/\/\*[\s\S]*?\*\//g, "");
+  const m = css.match(/@media \(max-width: 720px\) \{([\s\S]*?)\n\}/g)?.find((b) => b.includes(".side {"));
+  expect(m).toBeDefined();
+  expect(m!).toMatch(/\.shell \{[^}]*grid-template-rows: auto minmax\(0, 1fr\)/);
+});

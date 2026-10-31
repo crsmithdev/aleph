@@ -577,7 +577,7 @@ pre.stat b { color: var(--need); }
 .md h1 { font-size: var(--fs-lg); }
 .md pre { background: var(--sunk); padding: 8px 10px; border-radius: 4px; overflow-x: auto; font: var(--fs-xs)/1.55 var(--mono); }
 @media (max-width: 720px) {
-  .shell { grid-template-columns: minmax(0, 1fr); }
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .side {
     position: sticky; z-index: 2; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 10px;
     border-right: 0; border-bottom: 1px solid var(--rule); padding: 8px 16px; overflow: visible;
