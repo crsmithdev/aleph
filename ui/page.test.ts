@@ -59,13 +59,12 @@ test("at 720px and below the top nav wraps its links and does not scroll sideway
   const side = m!.slice(m!.indexOf(".side {"), m!.indexOf("}", m!.indexOf(".side {")));
   expect(side).not.toMatch(/overflow-x:\s*auto/);
   expect(side).toMatch(/flex-wrap:\s*wrap/);
-  expect(m!).toMatch(/#nav \{[^}]*flex-wrap: wrap/);
-  expect(m!).toMatch(/\.nav-group ul \{[^}]*flex-wrap: wrap/);
+  expect(m!).toMatch(/#nav ul \{[^}]*flex-wrap: wrap/);
 });
 
 test("the page builds the sidebar from /api/views and has no project selector", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
-  for (const s of ["/api/views", 'aria-current="page"', '"factory", "Factory"', '"memory", "Memory"']) expect(html).toContain(s);
+  for (const s of ["/api/views", 'aria-current="page"', 'const GROUPS = ["factory", "work", "claude", "memory"]']) expect(html).toContain(s);
   for (const s of ['id="project"', 'class="proj"', "All projects", "/api/projects/keys"]) expect(html).not.toContain(s);
   expect(html).not.toContain("/render.js");
 });
@@ -128,7 +127,6 @@ test("the sidebar lists Status, Inventory (/inventory), then the rest, with Tool
   const claude = shown.filter((v) => v.group === "claude").sort((a, b) => a.order - b.order).map((v) => v.title);
   expect(claude).toEqual(["Sessions", "Tools", "Skills"]);
   expect(factory.some((v) => v.path === "/sessions")).toBe(false);
-  expect(readFileSync(new URL("./index.html", import.meta.url), "utf8")).toContain('["claude", "Claude"]');
   expect(shown.find((v) => v.path === "/activity")?.title).toBe("Tools");
   expect(shown.some((v) => v.path === "/jobs" || v.path === "/projects")).toBe(false);
   expect(all.some((v) => v.path === "/jobs")).toBe(true);
@@ -202,4 +200,13 @@ test("the shell reloads on 401 and offers a Log out link only behind the gate", 
   expect(fn).toContain('res.headers.get("x-aleph-login")');
   expect(fn).toContain('$("logout").hidden = false');
   expect(script).toMatch(/\$\("logout"\)\.addEventListener\("click"[\s\S]*?"\/api\/logout", \{ method: "POST", headers: \{ "X-Aleph-UI": "1" \}[\s\S]*?location\.reload\(\)/);
+});
+
+test("the sidebar has no category headings, and a button at its bottom collapses it and remembers the choice", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  expect(html).not.toContain("nav-group");
+  expect(html).toMatch(/<button id="collapse"[^>]*>&lt;&lt;<\/button>\s*<\/nav>/);
+  expect(html).toContain('collapsed ? ">>" : "<<"');
+  expect(html).toContain('localStorage.setItem(KEY, collapsed ? "1" : "0")');
+  expect(html).toMatch(/#collapse \{ margin-top: auto;/);
 });

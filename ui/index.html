@@ -591,18 +591,26 @@ pre.stat b { color: var(--need); }
   display: flex; flex-direction: column; gap: 14px;
 }
 .side .mark { padding: 2px 8px 0; }
-.nav-group h2 { font: 600 var(--fs-xs)/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; padding: 0 8px; }
-.nav-group ul { list-style: none; margin: 0; padding: 0; }
-.nav-group + .nav-group { margin-top: 14px; }
-.nav-group a {
+#nav ul { list-style: none; margin: 0; padding: 0; }
+#nav a {
   display: block; padding: 5px 8px; border-radius: 4px; text-decoration: none;
   color: var(--ink-2); font-size: var(--fs-sm); transition: background-color .15s ease-out;
 }
-.nav-group a:hover { background: var(--sunk); color: var(--ink); }
+#nav a:hover { background: var(--sunk); color: var(--ink); }
 #logout { display: block; margin-top: 14px; padding: 5px 8px; border-radius: 6px; font-size: var(--fs-sm); color: var(--muted); text-decoration: none; }
 #logout[hidden] { display: none; }
 #logout:hover { background: var(--sunk); color: var(--ink); }
-.nav-group a[aria-current="page"] { background: var(--sunk); color: var(--ink); font-weight: 600; box-shadow: inset 2px 0 0 var(--ink); }
+#nav a[aria-current="page"] { background: var(--sunk); color: var(--ink); font-weight: 600; box-shadow: inset 2px 0 0 var(--ink); }
+#collapse { margin-top: auto; align-self: flex-start; padding: 5px 8px; border: 0; border-radius: 6px; background: none; color: var(--muted); font: 400 var(--fs-sm)/1.2 var(--mono); cursor: pointer; }
+#collapse:hover { background: var(--sunk); color: var(--ink); }
+/* The sidebar links have no icons, so a collapsed sidebar shows only the mark and the expand button. */
+@media (min-width: 721px) {
+  .shell.collapsed { grid-template-columns: 48px minmax(0, 1fr); }
+  .shell.collapsed .side { padding-left: 6px; padding-right: 6px; align-items: center; overflow: hidden; }
+  .shell.collapsed .mark { padding: 2px 0 0; margin: 0; font-size: 0; gap: 0; }
+  .shell.collapsed #nav, .shell.collapsed #logout { display: none; }
+  .shell.collapsed #collapse { align-self: center; }
+}
 .error p { margin: 0; color: var(--stuck); }
 .error .hint { color: var(--muted); font-size: var(--fs-sm); margin-top: 2px; }
 .page h1 { font-family: var(--display); font-weight: 400; }
@@ -617,14 +625,12 @@ pre.stat b { color: var(--need); }
     border-right: 0; border-bottom: 1px solid var(--rule); padding: 8px 16px; overflow: visible;
   }
   .side .mark { padding: 0; flex: none; }
-  #nav { display: flex; flex-wrap: wrap; gap: 2px; flex: 1 1 0; min-width: 0; }
+  #nav { flex: 1 1 0; min-width: 0; }
+  #collapse { display: none; }
   #logout { margin: 0; padding: 4px 8px; }
-  .nav-group { flex: 0 1 auto; min-width: 0; }
-  .nav-group + .nav-group { margin-top: 0; }
-  .nav-group h2 { display: none; }
-  .nav-group ul { display: flex; flex-wrap: wrap; gap: 2px; }
-  .nav-group a { white-space: nowrap; padding: 4px 8px; }
-  .nav-group a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--ink); }
+  #nav ul { display: flex; flex-wrap: wrap; gap: 2px; }
+  #nav a { white-space: nowrap; padding: 4px 8px; }
+  #nav a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--ink); }
 }
 .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .brk { margin: 12px 0 0; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
@@ -747,12 +753,32 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap:
       </svg>aleph</a>
     <div id="nav"></div>
     <a id="logout" href="#" hidden>Log out</a>
+    <button id="collapse" type="button" aria-label="Collapse the sidebar" aria-expanded="true">&lt;&lt;</button>
   </nav>
   <main>
     <p id="offline" role="alert" hidden>The server is unreachable. Showing the last data.</p>
     <div id="view"></div>
   </main>
 </div>
+<script>
+  // A classic script, so that a collapsed sidebar is collapsed before the first paint.
+  {
+    const KEY = "aleph-sidebar-collapsed";
+    const shell = document.querySelector(".shell"), button = document.getElementById("collapse");
+    const show = (collapsed) => {
+      shell.classList.toggle("collapsed", collapsed);
+      button.textContent = collapsed ? ">>" : "<<";
+      button.setAttribute("aria-label", collapsed ? "Expand the sidebar" : "Collapse the sidebar");
+      button.setAttribute("aria-expanded", String(!collapsed));
+    };
+    try { show(localStorage.getItem(KEY) === "1"); } catch {}
+    button.addEventListener("click", () => {
+      const collapsed = !shell.classList.contains("collapsed");
+      show(collapsed);
+      try { localStorage.setItem(KEY, collapsed ? "1" : "0"); } catch {}
+    });
+  }
+</script>
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
@@ -763,8 +789,8 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap:
   // may export redirect(hash) -> new hash | null for an address it took over:
   // `api` is the URL its data comes from (":params" filled in from the route),
   // `refresh` the seconds between reloads. The page builds the sidebar from
-  // them, and routes by hash (#/jobs/aleph-52).
-  const GROUPS = [["factory", "Factory"], ["work", "Work"], ["claude", "Claude"], ["memory", "Memory"]];
+  // them, one flat list in GROUPS order, and routes by hash (#/jobs/aleph-52).
+  const GROUPS = ["factory", "work", "claude", "memory"];
   const $ = (id) => document.getElementById(id);
   let views = [], redirects = [], timer = 0, shown = null;
 
@@ -811,12 +837,9 @@ div.crow { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap:
       const hit = v.path === "/" ? path === "/" : path === v.path || path.startsWith(v.path + "/");
       if (hit && (!active || v.path.length > active.path.length)) active = v;
     }
-    $("nav").innerHTML = GROUPS.map(([key, label]) => {
-      const items = views.filter((v) => v.group === key && !v.path.includes(":") && v.nav !== false).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
-      if (!items.length) return "";
-      return `<div class="nav-group"><h2>${esc(label)}</h2><ul>${items.map((v) =>
-        `<li><a href="#${esc(v.path)}"${v === active ? ' aria-current="page"' : ""}>${esc(v.title)}</a></li>`).join("")}</ul></div>`;
-    }).join("");
+    const items = views.filter((v) => GROUPS.includes(v.group) && !v.path.includes(":") && v.nav !== false).sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
+    $("nav").innerHTML = `<ul>${items.map((v) =>
+      `<li><a href="#${esc(v.path)}"${v === active ? ' aria-current="page"' : ""}>${esc(v.title)}</a></li>`).join("")}</ul>`;
   }
 
   async function load(route, first) {
