@@ -7,7 +7,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { isLive, jobsDir, loadRegistry, lock, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
+import { askOf, CALL_FILE, isAwaiting, isBuild, isLive, jobsDir, loadRegistry, lock, needsOf, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
 import { baselineChecks, git, removeBranch } from "./unit.ts";
 import { fetchOrigin } from "./git.ts";
@@ -61,7 +61,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
   let child: ReturnType<typeof Bun.spawn> | undefined;
   let id: string;
   try {
-    if (run.kind === "agent") {
+    if (isBuild(run.kind)) {
       const full = gates({ only: ["live"] });
       if (full) refuse(`${full.why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
     }
@@ -82,7 +82,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
     writeRun(folder, { ...run, job: run.job ?? id, made: Date.now() } as Run);
 
     // A factory run's unit is the backstop for its time box: systemd stops the whole cgroup.
-    const factory = run.kind === "agent" && run.repo && loadRegistry()[run.repo]?.sandbox;
+    const factory = isBuild(run.kind) && run.repo && loadRegistry()[run.repo]?.sandbox;
     const max = factory ? [`--property=RuntimeMaxSec=${Number(process.env.ALEPH_JOB_TIMEOUT ?? 2400) + 3600}`] : [];
     try {
       child = startUnit(["unit", folder], { unit: `aleph-${id}`, cwd, props: max, output, attach: true });
@@ -110,14 +110,15 @@ export interface JobArgs {
   name: string;
   /** The spec of a new job, or the note of a follow-up. */
   spec: string;
-  todo?: number | string;
+  /** The issue or goal the run is on: its number (`7`, or `7.1` for a goal). */
+  on?: number | string;
   model?: string;
   land?: boolean;
 }
 
 /** The argv of `aleph job` for these arguments. */
 export const jobCommand = (a: JobArgs): string[] =>
-  ["job", a.repo, a.name, "--spec", "-", ...(a.todo !== undefined ? ["--todo", String(a.todo)] : []), ...(a.land ? ["--land"] : []), ...(a.model ? ["--model", a.model] : [])];
+  ["job", a.repo, a.name, "--spec", "-", ...(a.on !== undefined ? ["--on", String(a.on)] : []), ...(a.land ? ["--land"] : []), ...(a.model ? ["--model", a.model] : [])];
 
 /** The registry's repo for a key as typed: case and spaces do not count. */
 export function repoOf(key: string | undefined): Repo {
@@ -129,13 +130,13 @@ export function repoOf(key: string | undefined): Repo {
 export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
   const repo = repoOf(a.repo);
   const name = checkName(a.name);
-  let todo = a.todo;
-  if (todo !== undefined) {
-    if (!/^\d+(\.\d+)?$/.test(String(todo))) refuse("--todo takes an issue number");
+  let on = a.on;
+  if (on !== undefined) {
+    if (!/^\d+(\.\d+)?$/.test(String(on))) refuse("--on takes an issue number");
     let doc: todos.Doc | null = null;
     try { doc = store.readList(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
     if (!doc) refuse(`the work store has no list for ${repo.key}`);
-    if (!todos.find(doc!, todo)) refuse(`${repo.key} has no issue ${todo}`);
+    if (!todos.find(doc!, on)) refuse(`${repo.key} has no issue ${on}`);
   }
 
   const release = await lock(`job-${repo.key}-${name}`);
@@ -146,18 +147,18 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     if (last && last.run.repo !== repo.key) refuse(last.run.repo ? `${name} is open in ${last.run.repo}` : `${name} is running as ${last.id}`);
     if (last && isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
     const first = open?.[0];
-    const item = todo ?? (open && issueOf(open));
+    const item = on ?? (open && issueOf(open));
     if (first && item !== undefined) fetchOrigin(repo.path);
     const landedAs = first ? itemOnMain(repo, item) : null;
     if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
     // A factory run has no worktree: its branch comes and goes as a bundle.
     const worktree = repo.sandbox ? undefined : first?.run.worktree ?? join(repo.path, ".worktrees", `job-${name}`);
-    // A follow-up without --todo keeps the item the job started with.
-    todo ??= (open && issueOf(open));
+    // A follow-up without --on keeps the item the job started with.
+    on ??= (open && issueOf(open));
     return await dispatch({
-      kind: "agent", job: first?.id, name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, ...(worktree ? { worktree } : {}),
+      kind: "build", job: first?.id, name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, ...(worktree ? { worktree } : {}),
       state: "running", phase: "starting", session: crypto.randomUUID(), ...(a.model ? { model: a.model } : {}),
-      ...(todo !== undefined ? { todo } : {}), ...(a.land ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
+      ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(a.land ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
     }, `${repo.key}-${name}`, repo.path, o.command ?? jobCommand(a), o.output, (folder) => {
       if (!first) return writeFileSync(join(folder, "spec.md"), a.spec);
       addNote(open!, a.spec);
@@ -206,14 +207,15 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
     const runs = openJob(name) ?? refuse(`no open job named ${name}`);
     const live = runs.find((e) => isLive(e.folder));
     if (live) refuse(`${name} is running as ${live.id}`);
-    const agent = runs.filter((e) => e.run.kind === "agent" || e.run.kind === "recheck").at(-1)!.run;
-    const manual = (agent.state === "needs-you" && agent.needs === "manual") || (agent.state === "passed" && agent.say !== undefined);
+    const agent = runs.filter((e) => isBuild(e.run.kind) || e.run.kind === "recheck").at(-1)!.run;
+    const needs = isAwaiting(agent.state) ? needsOf(askOf(agent)) : undefined;
+    const manual = needs === "manual" || (agent.state === "passed" && agent.say !== undefined);
     const unchecked = manual && !a.checked;
-    const held = agent.state === "needs-you" && (agent.needs === "held" || agent.needs === "review");
-    if (agent.state !== "passed" && !manual && !held) refuse(`${name} is ${agent.state}${agent.needs ? ` (${agent.needs})` : ""}, not passed`);
+    const held = needs === "held" || needs === "review";
+    if (agent.state !== "passed" && !manual && !held) refuse(`${name} is ${agent.state}${needs ? ` (${needs})` : ""}, not passed`);
     const repo = loadRegistry()[agent.repo!];
-    if (agent.todo !== undefined) fetchOrigin(repo.path);
-    const landedAs = itemOnMain(repo, agent.todo);
+    if (onOf(agent) !== undefined) fetchOrigin(repo.path);
+    const landedAs = itemOnMain(repo, onOf(agent));
     if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
     return await dispatch({
       kind: "land", job: agent.job, name, repo: agent.repo, branch: agent.branch, worktree: agent.worktree,
@@ -222,7 +224,7 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
       ...(held ? { held: true, lander: a.lander ?? "Chris" } : {}),
       ...(agent.checkedBase ? { checkedBase: agent.checkedBase } : {}),
       ...(agent.checkedTip ? { checkedTip: agent.checkedTip } : {}),
-      ...(agent.todo !== undefined ? { todo: agent.todo } : {}),
+      ...(agent.on !== undefined ? { on: agent.on } : agent.todo !== undefined ? { on: `${repo.key}-${agent.todo}` } : {}),
     }, `${repo.key}-${name}`, repo.path, o.command ?? ["land", name, ...(a.checked ? ["--checked"] : [])], o.output, () => {});
   } finally {
     release!();
@@ -260,15 +262,15 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
     const last = runs.at(-1)!;
     if (isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
     const r = last.run;
-    if (r.kind !== "agent" && r.kind !== "recheck") refuse(`${name}: the last run is a ${r.kind} run, not an agent run`);
+    if (!isBuild(r.kind) && r.kind !== "recheck") refuse(`${name}: the last run is a ${r.kind} run, not an agent run`);
     if (r.state !== "stuck" && r.state !== "failed") refuse(`${name} is ${r.state}, not stuck or failed`);
     const repo = loadRegistry()[r.repo ?? ""];
     if (!repo?.sandbox) refuse(`${name} is not a factory job`);
     if (!r.branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok) refuse(`${name} has no branch: drop it`);
-    const todo = issueOf(runs);
+    const on = issueOf(runs);
     s = await dispatch({
       kind: "recheck", job: runs[0].id, name, repo: repo.key, branch: r.branch, state: "running", phase: "starting",
-      ...(todo !== undefined ? { todo } : {}), ...(runs.some((e) => e.run.land) ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
+      ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(runs.some((e) => e.run.land) ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
     }, `${repo.key}-${name}`, repo.path, o.command ?? ["recheck", name], o.output, () => {});
   } finally {
     release!();
@@ -299,9 +301,10 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean }
       const deadline = Date.now() + 35_000;
       while (isLive(e.folder) && Date.now() < deadline) await Bun.sleep(50);
     }
-    // A held run's review2 is its own unit: stop it too, and take its scratch clone.
+    // A held run's review is its own unit: stop it too, and take its scratch clone.
     for (const e of runs) {
-      Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}-review2`], { stdout: "ignore", stderr: "ignore" });
+      Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}-review`, `aleph-${e.id}-review2`], { stdout: "ignore", stderr: "ignore" });
+      if (existsSync(join(e.folder, CALL_FILE))) rmSync(join(e.folder, "review"), { recursive: true, force: true });
       if (existsSync(join(e.folder, "review2.md"))) rmSync(join(e.folder, "review2"), { recursive: true, force: true });
     }
     if (repo) removeBranch(repo, last.run);
@@ -309,7 +312,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean }
     for (const e of new Set([...live, last])) {
       if (!existsSync(join(e.folder, "exit"))) writeFileSync(join(e.folder, "exit"), "143");
       const noCommit = e.run.reason === "no commit" || e.run.noCommit ? { noCommit: true as const } : {};
-      updateRun(e.folder, { ...noCommit, state: "dropped", reason, needs: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
+      updateRun(e.folder, { ...noCommit, state: "dropped", reason, needs: undefined, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     }
     const todo = issueOf(runs);
     const why = repo && todo !== undefined && !a.quiet ? store.note(repo, todo, `job ${name} dropped: ${reason}`) : null;
@@ -333,7 +336,7 @@ export async function startGoal(repo: Repo, name: string, id: number | string, s
     const code = await p.exited;
     return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
   }
-  return refusal(async () => { await (await startJob({ repo: repo.key, name, spec, todo: id, land: true, ...(model ? { model } : {}) }, { output: "ignore" })).child?.exited; });
+  return refusal(async () => { await (await startJob({ repo: repo.key, name, spec, on: id, land: true, ...(model ? { model } : {}) }, { output: "ignore" })).child?.exited; });
 }
 
 /** The factory's ports onto the transitions, each in-process; each returns the refusal, or null. */

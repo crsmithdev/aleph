@@ -218,10 +218,10 @@ export function needsOf(ask: Ask | undefined): Run["needs"] {
   return (Object.keys(OLD_NEEDS) as NonNullable<Run["needs"]>[]).find((n) => OLD_NEEDS[n].reason === ask.reason);
 }
 
-/** The run's review: `review`, else its folder's review2.md with `chris` read as `ask`. */
+/** The run's review: `review`, else its folder's call.md, else the legacy review2.md, with `chris` read as `ask`. */
 export function reviewOf(e: Entry): (Review | { call: "pending" | "error"; reason?: string }) | undefined {
   if (e.run.review) return e.run.review;
-  const r = readReview2(e.folder);
+  const r = readCall(e.folder) ?? readReview2(e.folder);
   if (!r) return undefined;
   const out: { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string } = { call: r.verdict === "chris" ? "ask" : r.verdict };
   if (r.reason !== undefined) out.reason = r.reason;
@@ -298,7 +298,7 @@ export function stamp(d = new Date()): string {
 export function newsLine(run: Run, note?: string): string {
   if (run.kind === "plain") return `${run.name} ${run.state === "done" ? "finished" : "failed"}`;
   let line = `${run.repo}/${run.name} ${oldState(run.state)}`;
-  const needs = run.needs ?? needsOf(run.ask);
+  const needs = needsOf(askOf(run));
   if (isAwaiting(run.state) && needs) line += ` ${needs}`;
   // Only a check's reason ends in "failed"; see the state rule in unit.ts.
   const check = run.state === "failed" && run.reason?.match(/^(.+) failed$/);
@@ -341,14 +341,23 @@ export function parseVerdict(result: string): Review2 | null {
   return m ? { verdict: m[1] as "back" | "chris", reason: m[2] } : null;
 }
 
+/** The file in a run folder where the reviewer writes: the run's call. */
+export const CALL_FILE = "call.md";
+
 /**
- * The review2 of the run in `folder`, derived from its review2.md: a lone
+ * The review of the run in `folder`, derived from its call.md: a lone
  * `PENDING` line, a last line `ERROR: <reason>`, or the review ending in a
- * `VERDICT:` line. Undefined when there is no review2.md.
+ * `VERDICT:` line. Undefined when there is no call.md.
  */
-export function readReview2(folder: string): Review2 | undefined {
+export const readCall = (folder: string): Review2 | undefined => readVerdictFile(join(folder, CALL_FILE));
+
+/** The legacy reader: the same for the review2.md of a run from before the rename. */
+export const readReview2 = (folder: string): Review2 | undefined => readVerdictFile(join(folder, "review2.md"));
+
+/** The review a verdict file holds, as `Review2` shows it, or undefined when the file is not there. */
+function readVerdictFile(file: string): Review2 | undefined {
   let text: string;
-  try { text = readFileSync(join(folder, "review2.md"), "utf8"); } catch { return undefined; }
+  try { text = readFileSync(file, "utf8"); } catch { return undefined; }
   const last = text.trim().split("\n").at(-1)?.trim() ?? "";
   if (last === "PENDING") return { verdict: "pending" };
   if (last.startsWith("ERROR:")) return { verdict: "error", reason: last.slice(6).trim() };

@@ -11,7 +11,7 @@ describe("an item that is already on main", () => {
   const runsOf = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-demo-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));
   const add = async (title: string) => (await aleph(["issue", "add", "demo", title])).json.added as number;
   const withItem = (name: string, action: string, id: number) =>
-    aleph(["job", "demo", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), "--todo", String(id)]);
+    aleph(["job", "demo", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), "--on", String(id)]);
   function handLand(message: string, f: string): void {
     sh(other, "git", "fetch", "-q", "origin");
     sh(other, "git", "reset", "-q", "--hard", "origin/main");
@@ -81,7 +81,7 @@ describe("an item that is already on main", () => {
     handLand("theirs", "dropconf.txt");
     const r = await aleph(["land", "dropconf"]);
     expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "merge conflict" });
-    expect(runsOf("dropconf").map((x) => x.kind)).toEqual(["agent", "agent", "land"]);
+    expect(runsOf("dropconf").map((x) => x.kind)).toEqual(["agent", "build", "land"]);
     expect(state(r.json.run).next).toBeUndefined();
     expect(file(r.json.run, "next.log")).toContain("dropped: no worker started");
     rmSync(old, { recursive: true });
@@ -95,7 +95,7 @@ describe("an item that is already on main", () => {
     try {
       const r = await aleph(["land", "lateitem"]);
       expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "merge conflict" });
-      expect(runsOf("lateitem").map((x) => x.kind)).toEqual(["agent", "land"]);
+      expect(runsOf("lateitem").map((x) => x.kind)).toEqual(["build", "land"]);
       expect(state(r.json.run).next).toBeUndefined();
       expect(file(r.json.run, "next.log")).toContain("item landed as");
     } finally {

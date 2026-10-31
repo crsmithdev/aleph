@@ -17,7 +17,7 @@ describe("a factory run", () => {
   test("the worker's branch comes back as a bundle; the run passes and its run folder is gone", async () => {
     const r = await fjob("fpass", "commit fpass.txt");
     const s = state(r.json.run);
-    expect(s).toMatchObject({ kind: "agent", state: "passed", branch: "factory/fpass", cost: 0.01, defaults: [] });
+    expect(s).toMatchObject({ kind: "build", state: "passed", branch: "factory/fpass", cost: 0.01, defaults: [] });
     expect(s.worktree).toBeUndefined();
     expect(factoryBranch("fpass")).toBe(true);
     expect(sh(repo, "git", "log", "-1", "--format=%s", "factory/fpass")).toBe("add fpass.txt");
@@ -34,19 +34,35 @@ describe("a factory run", () => {
     expect(env).not.toMatch(/^(ALEPH_(?!TEST_PARALLEL=)[A-Z_]+|SIDETONE_[A-Z_]+|GIT_AUTHOR_NAME|XDG_RUNTIME_DIR)=/m);
   });
 
-  test("the land pushes the tested tree with Item and Job trailers, and the clean main checkout follows", async () => {
+  test("the land pushes the tested tree with Issue and Job trailers, and the clean main checkout follows", async () => {
     const id = (await aleph(["issue", "add", "fac", "a factory item"])).json.added;
-    const j = await fjob("fitem", "commit fitem.txt", {}, ["--todo", String(id)]);
+    const j = await fjob("fitem", "commit fitem.txt", {}, ["--on", String(id)]);
     const r = await aleph(["land", "fitem"]);
     const s = state(r.json.run);
     expect(s).toMatchObject({ kind: "land", state: "landed" });
-    expect(remoteGit("log", "-1", "--format=%B", "main").trim()).toBe(`add fitem.txt\n\nItem: fac-${id}\nJob: ${j.json.job}`);
-    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main").trim()).toBe(`Item: fac-${id}\nJob: ${j.json.job}`);
+    expect(remoteGit("log", "-1", "--format=%B", "main").trim()).toBe(`add fitem.txt\n\nIssue: fac-${id}\nJob: ${j.json.job}`);
+    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main").trim()).toBe(`Issue: fac-${id}\nJob: ${j.json.job}`);
     expect(readFileSync(join(base, "trees"), "utf8").trim().split("\n").at(-1)).toBe(remoteGit("rev-parse", "main^{tree}"));
     expect([sh(repo, "git", "rev-parse", "HEAD"), sh(repo, "git", "status", "--porcelain")]).toEqual([remoteGit("rev-parse", "main"), ""]);
     expect(factoryBranch("fitem")).toBe(false);
     expect((await aleph(["issue", "show", "fac", String(id), "--json"])).json.status).toBe("done");
     expect(runsLeft()).toEqual([]);
+  });
+
+  test("a goal .1 lands with Issue, Goal and Job trailers; its run is a build run on the goal, and the issue is done", async () => {
+    const GOAL = "## Goal\n\nAdd a file.\n\n## Oracle\n\n`bun test`\n\n## Time box\n\n10 minutes\n";
+    const added = (await aleph(["issue", "add", "fac", "t", "--goal", "-"], { ALEPH_DISPATCH: "off" }, GOAL)).json;
+    const id = added.added as number;
+    const j = await fjob("fgoal", "commit fgoal.txt", {}, ["--on", `${id}.1`]);
+    const s0 = state(j.json.run);
+    expect(s0).toMatchObject({ kind: "build", on: `fac-${id}.1`, state: "passed" });
+    expect(s0.todo).toBeUndefined();
+    expect(j.json.run).toEndWith("-build");
+    const r = await aleph(["land", "fgoal"]);
+    expect(state(r.json.run)).toMatchObject({ kind: "land", state: "landed", on: `fac-${id}.1` });
+    expect(remoteGit("log", "-1", "--format=%B", "main").trim()).toBe(`add fgoal.txt\n\nIssue: fac-${id}\nGoal: fac-${id}.1\nJob: ${j.json.job}`);
+    const st = await aleph(["status", `fac-${id}`]);
+    expect(st.stdout).toContain("done");
   });
 
   test("an error result, no result, a line after the result, or no commit ends stuck", async () => {
@@ -60,7 +76,7 @@ describe("a factory run", () => {
 
   test("a worker that says the goal is already met, with the checks green on main, closes the item", async () => {
     const id = (await aleph(["issue", "add", "fac", "timeline already uses itemTimes"])).json.added;
-    const r = await fjob("fmet", "already-met", {}, ["--todo", String(id)]);
+    const r = await fjob("fmet", "already-met", {}, ["--on", String(id)]);
     expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "no commit" });
     // A tick's probe runs the sandbox; a passing probe is written as the other tick tests do.
     mkdirSync(join(base, "factory"), { recursive: true });

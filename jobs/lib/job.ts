@@ -15,7 +15,7 @@ export { allJobs, isOpen };
 export type Job = Entry[];
 
 /** The files a run folder may hold that a reader of the job asks for. */
-export type RunFile = "spec.md" | "command.txt" | "result.md" | "review.md" | "review2.md" | "checks.log" | "land.log" | "stderr.log" | "asked" | "needs-chris" | "rescued" | "batch.json";
+export type RunFile = "spec.md" | "command.txt" | "result.md" | "review.md" | "review2.md" | "call.md" | "checks.log" | "land.log" | "stderr.log" | "asked" | "needs-chris" | "rescued" | "batch.json";
 
 /** A facts run belongs to the landed job but is not its state: names and states look past it. */
 const notFacts = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts") ?? j.at(-1)!;
@@ -109,7 +109,9 @@ export interface JobView {
   checks?: CheckResult[];
   /** The hidden check's test counts, when the job's item has hidden checks. */
   hidden?: { passed: number; total: number };
-  /** The review2 of the last run. */
+  /** The review of the last run: its call and reason. */
+  review?: { call: string; reason?: string };
+  /** The review of the last run in its old shape, for ui/ until step 5. */
   review2?: Review2;
   /** A landed job's manual check. */
   check?: "open" | "done";
@@ -144,6 +146,7 @@ export function view(j: Job): JobView {
   const hid = j.findLast((e) => e.run.checks?.some((c) => c.name === "hidden" && c.total))?.run.checks?.find((c) => c.name === "hidden");
   if (hid?.total) v.hidden = { passed: hid.passed ?? 0, total: hid.total };
   const review = reviewOf(last);
+  if (review) v.review = { call: review.call, ...(review.reason !== undefined && { reason: review.reason }) };
   if (review) v.review2 = { verdict: review.call === "ask" ? "chris" : review.call, ...(review.reason !== undefined && { reason: review.reason }) };
   if (r.state === "landed" && r.check) v.check = r.check;
   if (isLost(last.folder)) v.lost = true;

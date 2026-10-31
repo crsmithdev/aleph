@@ -29,7 +29,7 @@ joberr="$START_LOG.err.$$"
 trap 'rm -f "$busy" "$joberr"' EXIT
 echo "$2" >> "$START_LOG"
 before=$(ls -d ${jobsDir}/*-fac-"$2"-* 2>/dev/null)
-ALEPH_JOB_FOREGROUND=1 bun ${CLI} job "$1" "$2" --spec - --todo "$3" > /dev/null 2> "$joberr" < /dev/stdin &
+ALEPH_JOB_FOREGROUND=1 bun ${CLI} job "$1" "$2" --spec - --on "$3" > /dev/null 2> "$joberr" < /dev/stdin &
 job=$!
 for ((;;)); do
   for d in $(ls -d ${jobsDir}/*-fac-"$2"-* 2>/dev/null); do
@@ -330,7 +330,7 @@ export function resetLf(): void { lfPosts = []; lfStatus = 200; }
 export function setLfStatus(n: number): void { lfStatus = n; }
 export function setOnTell(f: ((text: string) => void) | undefined): void { onTell = f; }
 export async function fjobFor(name: string, action: string, id: number) {
-  return aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), "--todo", String(id)]);
+  return aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), "--on", String(id)]);
 }
 
 /** Brings the test store's checkout up to origin/main. A detached dispatch or triage writing the store at the same moment can make one fetch find no ref, so it retries. */

@@ -1,11 +1,11 @@
 /**
- * review2: the review a held run gets before it reaches Chris. One `claude -p`
+ * The review a held run gets before it reaches Chris. One `claude -p`
  * under srt in a scratch clone of the repo, which merges the run branch onto origin/main,
  * runs the checks, reads the test diff, lists the changes outside the goal's
  * edit surface, and for a `ui` goal the harness starts the ui server on the merge
- * result and loads the changed views in Chrome (review2-browser.ts), both outside the sandbox, before the reviewer starts. It writes review2.md in the run folder, and only that: state.json belongs to the
+ * result and loads the changed views in Chrome (review2-browser.ts), both outside the sandbox, before the reviewer starts. It writes call.md in the run folder, and only that: state.json belongs to the
  * run's owner. The verdict, a `PENDING` line or a last `ERROR: <reason>` line
- * are read back from review2.md (`readReview2`). Nothing lands: Land stays a click.
+ * are read back from call.md (`readCall`), and `recordReview` puts the call on the run's state.json. Nothing lands: Land stays a click.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -13,17 +13,17 @@ import { BROWSER, browserStep, changedViews, startUiServer } from "./review2-bro
 import { hasLabel, reader } from "../../todo/lib/store.ts";
 import { git, gitWith } from "./git.ts";
 import { outcome } from "./gate.ts";
-import { loadRegistry, parseVerdict, readEnvFile, readRun, type Repo, type Run } from "./ledger.ts";
+import { askOf, CALL_FILE, isAwaiting, loadRegistry, onOf, parseVerdict, readCall, readEnvFile, readRun, updateRun, type Repo, type Run } from "./ledger.ts";
 import { startUnit } from "./launch.ts";
 import { linkBins, runPath, sandboxed, workerToken, writeHome } from "./sandbox.ts";
 
 /**
- * The reviewer's profile: it reads the run folder, writes only in review2/ (its
+ * The reviewer's profile: it reads the run folder, writes only in review/ (its
  * clone and home) and tmp/, and reaches the Anthropic API and localhost, with
  * local binding. No Unix sockets: the ui server and Chrome run in the harness (review2-browser.ts).
  */
-export const REVIEW2_SANDBOX = {
-  read: ["."], write: ["review2", "tmp"], net: { domains: ["api.anthropic.com", "localhost"], localBinding: true },
+export const REVIEW_SANDBOX = {
+  read: ["."], write: ["review", "tmp"], net: { domains: ["api.anthropic.com", "localhost"], localBinding: true },
 };
 
 export { parseVerdict };
@@ -69,24 +69,25 @@ function fixtureEnv(work: string, dest: string): Record<string, string> | string
 
 /** Whether the run's goal carries the `ui` label. */
 function isUi(repo: Repo, run: Run): boolean {
-  if (run.todo === undefined) return false;
-  const item = reader().item(repo.key, run.todo);
+  const on = onOf(run);
+  if (on === undefined) return false;
+  const item = reader().item(repo.key, on);
   return !!item && hasLabel(item, "ui");
 }
 
-/** Whether a review2 process is alive for `folder`: its review2.pid names a process whose command line holds the folder. */
+/** Whether a review process is alive for `folder`: its review.pid names a process whose command line holds the folder. */
 function reviewing(folder: string): boolean {
   try {
-    const pid = Number(readFileSync(join(folder, "review2.pid"), "utf8").trim());
+    const pid = Number(readFileSync(join(folder, "review.pid"), "utf8").trim());
     if (pid === process.pid) return true;
     return Number.isInteger(pid) && pid > 0 && readFileSync(`/proc/${pid}/cmdline`, "utf8").includes(folder);
   } catch { return false; }
 }
 
 /** Run the review of the run in `folder`, to the end. Records the verdict, or `error`, and never throws; refuses, with a thrown error, when one is already running. */
-export async function runReview2(folder: string): Promise<void> {
-  const pidFile = join(folder, "review2.pid");
-  if (reviewing(folder)) throw new Error(`review2 is already running for ${folder}`);
+export async function runReview(folder: string): Promise<void> {
+  const pidFile = join(folder, "review.pid");
+  if (reviewing(folder)) throw new Error(`review is already running for ${folder}`);
   writeFileSync(pidFile, String(process.pid));
   try {
     await review(folder);
@@ -102,7 +103,7 @@ export async function runReview2(folder: string): Promise<void> {
  */
 async function uiBrowser(folder: string, work: string, branch: string): Promise<void> {
   const out = join(folder, BROWSER);
-  const merged = join(folder, "review2", "merged");
+  const merged = join(folder, "review", "merged");
   const note = (msg: string) => writeFileSync(join(out, "report.md"), `# Browser\n\nERROR: ${msg.replace(/\s+/g, " ").slice(0, 400)}\n`);
   let server: Awaited<ReturnType<typeof startUiServer>> | null = null;
   try {
@@ -116,9 +117,9 @@ async function uiBrowser(folder: string, work: string, branch: string): Promise<
     const files = git(merged, "diff", "--name-only", "origin-main...HEAD").out.split("\n").filter(Boolean);
     try {
       // Not process.env: the real ALEPH_* stores and tokens stay out. The server runs on the made-up set of ui/fixtures/review.
-      const fx = fixtureEnv(merged, join(folder, "review2", "fixture"));
+      const fx = fixtureEnv(merged, join(folder, "review", "fixture"));
       if (typeof fx === "string") return note(fx);
-      server = await startUiServer(merged, join(out, "server.log"), { PATH: runPath(), HOME: join(folder, "review2", "home"), ...fx });
+      server = await startUiServer(merged, join(out, "server.log"), { PATH: runPath(), HOME: join(folder, "review", "home"), ...fx });
     } catch (e: any) {
       return note(String(e?.message ?? e));
     }
@@ -135,8 +136,8 @@ async function uiBrowser(folder: string, work: string, branch: string): Promise<
 async function review(folder: string): Promise<void> {
   const run = readRun(folder)!;
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
-  const scratch = join(folder, "review2");
-  const md = join(folder, "review2.md");
+  const scratch = join(folder, "review");
+  const md = join(folder, CALL_FILE);
   const fail = (reason: string) => {
     try {
       const prior = existsSync(md) ? readFileSync(md, "utf8").trimEnd() : "";
@@ -164,7 +165,7 @@ async function review(folder: string): Promise<void> {
       name: run.name, branch: run.branch, main: repo.main, checks: repo.checks.map((c) => c.run),
       tsc: existsSync(join(work, "tsconfig.json")) && existsSync(join(work, "node_modules", "typescript")), ui, folder, spec,
     });
-    writeFileSync(join(folder, "review2-prompt.md"), text);
+    writeFileSync(join(folder, "review-prompt.md"), text);
     // The reviewer's home is in the scratch folder, so its settings and git identity are writable there.
     // The reviewer's tmp/ sits in the run folder, as a worker's does in its own.
     const home = join(scratch, "home");
@@ -181,9 +182,9 @@ async function review(folder: string): Promise<void> {
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
     const argv = [process.env.ALEPH_REVIEW2_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
-    const log = join(folder, "review2.log");
+    const log = join(folder, "review.log");
     const r = await sandboxed(folder, `exec ${argv.map(q).join(" ")}`, {
-      ...REVIEW2_SANDBOX, cwd: "review2/work", env, stdin: text, stdout: log, stderr: log,
+      ...REVIEW_SANDBOX, cwd: "review/work", env, stdin: text, stdout: log, stderr: log,
       limit: Number(process.env.ALEPH_REVIEW2_TIMEOUT ?? 1500),
     });
     const o = outcome(existsSync(log) ? readFileSync(log, "utf8") : "");
@@ -199,21 +200,35 @@ async function review(folder: string): Promise<void> {
 }
 
 /**
- * When a run is held, start `aleph review2 <folder>` detached, once: review2.md is written (PENDING) before the spawn, so a second pass finds it taken.
+ * When a run is held, start `aleph review <folder>` detached, once: call.md is written (PENDING) before the spawn, so a second pass finds it taken.
  * Returns whether it started one.
  */
-export function startReview2(folder: string): boolean {
+export function startReview(folder: string): boolean {
   const run = readRun(folder);
-  if (!run || existsSync(join(folder, "review2.md")) || run.state !== "needs-you" || (run.needs !== "held" && run.needs !== "review")) return false;
-  writeFileSync(join(folder, "review2.md"), "PENDING\n");
+  if (!run || existsSync(join(folder, CALL_FILE)) || !isAwaiting(run.state) || !["held-path", "review"].includes(askOf(run)?.reason ?? "")) return false;
+  writeFileSync(join(folder, CALL_FILE), "PENDING\n");
   try {
     // Its own transient unit: the run's unit stops its whole cgroup when the run ends.
-    const err = join(folder, "review2.err");
-    startUnit(["review2", folder], { unit: `aleph-${basename(folder)}-review2`, cwd: folder, output: { file: err },
+    const err = join(folder, "review.err");
+    startUnit(["review", folder], { unit: `aleph-${basename(folder)}-review`, cwd: folder, output: { file: err },
       props: [`--property=StandardOutput=append:${err}`, `--property=StandardError=append:${err}`] });
   } catch (e: any) {
-    writeFileSync(join(folder, "review2.md"), `ERROR: could not start: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
+    writeFileSync(join(folder, CALL_FILE), `ERROR: could not start: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
     return false;
   }
   return true;
+}
+
+/**
+ * When the review has ended, put its call on the run's state.json: `review: { call, reason }`, beside call.md.
+ * `chris` in the VERDICT line reads as `ask`. A review that ended in an error, or is still pending, records nothing.
+ * Never throws: a dropped run's folder is gone.
+ */
+export function recordReview(folder: string): void {
+  try {
+    const r = readCall(folder);
+    if (!r || (r.verdict !== "land" && r.verdict !== "back" && r.verdict !== "chris")) return;
+    if (!readRun(folder)) return;
+    updateRun(folder, { review: { call: r.verdict === "chris" ? "ask" : r.verdict, ...(r.reason !== undefined && { reason: r.reason }) } });
+  } catch { /* the run folder is gone */ }
 }

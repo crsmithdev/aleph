@@ -28,9 +28,9 @@ describe("a factory run", () => {
     expect(t.json.skipped).toEqual([]);
     expect(t.json.started).toEqual([`fac-${id}`]);
     const runs = readdirSync(jobsDir).filter((d) => d.includes(`-fac-fac-${id}-`)).sort();
-    expect(runs.map((d) => [state(d).kind, state(d).state])).toEqual([["agent", "passed"], ["land", "landed"]]);
+    expect(runs.map((d) => [state(d).kind, state(d).state])).toEqual([["build", "passed"], ["land", "landed"]]);
     expect((await aleph(["issue", "show", "fac", String(id), "--json"])).json.status).toBe("done");
-    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain(`Item: fac-${id}`);
+    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain(`Issue: fac-${id}`);
     expect((await aleph(["tick"])).json.started).toEqual([]);
   }, 30_000);
 

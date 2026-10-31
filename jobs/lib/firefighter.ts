@@ -11,7 +11,7 @@ import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/issues.ts";
-import { allRuns, askOf, isAwaiting, isLost, jobsDir, loadRegistry, lock, readReview2, readRun, stamp, tell, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, askOf, isAwaiting, isBuild, isLost, jobsDir, loadRegistry, lock, onOf, readRun, reviewOf, stamp, tell, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, openJob, readFile, type Job } from "./job.ts";
 import { verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
@@ -62,14 +62,14 @@ export function snapshot(now = Date.now()): Event[] {
   }
   const byGoal = new Map<string, Entry[]>();
   for (const e of allRuns()) {
-    if (e.run.kind !== "agent" || !e.run.repo || !keys.has(e.run.repo) || now - Date.parse(e.run.started) > LOOP_MS) continue;
+    if (!isBuild(e.run.kind) || !e.run.repo || !keys.has(e.run.repo) || now - Date.parse(e.run.started) > LOOP_MS) continue;
     const k = `${e.run.repo}/${e.run.name}`;
     byGoal.set(k, [...(byGoal.get(k) ?? []), e]);
   }
   for (const [k, runs] of byGoal) {
     if (runs.length <= LOOP_RUNS) continue;
     const r = runs.at(-1)!.run;
-    events.push({ key: `loop:${k}:${runs.at(-1)!.id}`, kind: "loop", repo: r.repo!, job: r.name, ...(r.todo !== undefined ? { item: r.todo } : {}),
+    events.push({ key: `loop:${k}:${runs.at(-1)!.id}`, kind: "loop", repo: r.repo!, job: r.name, ...(onOf(r) !== undefined ? { item: onOf(r)! } : {}),
       line: `${r.name} started ${runs.length} runs in 30 minutes: ${runs.map((e) => e.run.reason ?? e.run.state).join("; ")}` });
   }
   for (const b of redBaselines()) if (keys.has(b.repo)) events.push({ key: `red:${b.repo}:${b.commit}`, kind: "red", repo: b.repo, line: `${b.repo} main is red at ${b.commit.slice(0, 7)}: ${b.failed}` });
@@ -150,7 +150,7 @@ export const describe = (a: Action): string =>
 
 const MAX_FILE = 4000;
 const clip = (s: string) => (s.length > MAX_FILE ? `…${s.slice(-MAX_FILE)}` : s);
-const RUN_FILES = ["review.md", "review2.md", "browser/report.md", "result.md"];
+const RUN_FILES = ["review.md", "call.md", "review2.md", "browser/report.md", "result.md"];
 
 /** The run folders and issue bodies an event needs, as prompt text. */
 function context(e: Event, jobs: Job[]): string {
@@ -158,7 +158,7 @@ function context(e: Event, jobs: Job[]): string {
   const j = e.job ? jobs.findLast((x) => x[0].run.repo === e.repo && x[0].run.name === e.job) : undefined;
   if (j) {
     const last = lastReal(j);
-    const agent = j.findLast((x) => x.run.kind === "agent" || x.run.kind === "recheck") ?? last;
+    const agent = j.findLast((x) => isBuild(x.run.kind) || x.run.kind === "recheck") ?? last;
     parts.push(`Run folder: ${last.folder}${agent !== last ? ` (agent run: ${agent.folder})` : ""}`);
     if (last.run.stat) parts.push(`Diff stat:\n${last.run.stat}`);
     for (const f of RUN_FILES) {
@@ -182,7 +182,7 @@ export function prompt(events: Event[], jobs = allJobs()): string {
 
 # The rules
 
-- Land a held run once both reviews have a verdict and say land, unless its diff changes a held security path (${SECURITY_PATHS.join(", ")}, or REVIEW2_SANDBOX in jobs/lib/review2.ts). The code refuses those and sends them to Chris${always("firefighter")?.action === "land" ? ", except that Chris has let you land them" : ""}.
+- Land a held run once both reviews have a verdict and say land, unless its diff changes a held security path (${SECURITY_PATHS.join(", ")}, or REVIEW_SANDBOX in jobs/lib/review.ts). The code refuses those and sends them to Chris${always("firefighter")?.action === "land" ? ", except that Chris has let you land them" : ""}.
 - Drop a run a reviewer sent back, with the reviewer's reason as the drop's reason: it becomes the next run's note.
 - A land with a merge conflict, a run that loops with no commit, or a goal that is already met on main is fixed without Chris: drop the first two; for a goal already met on main use close (it drops the open job and marks the issue done), never sent to Chris.
 - A how-to-build question (code structure, which module, naming, test shape, whether to wait for an issue) is yours to decide: answer with the decision. A product choice (what the product does for Chris, what he sees, what it costs, what comes first) stays with Chris, unless Chris has handed its reason to you.
@@ -214,7 +214,7 @@ function changedPaths(repo: Repo, branch: string | undefined): { paths: string[]
   const base = git(repo.path, "rev-parse", "--verify", "-q", `origin/${repo.main}`).ok ? `origin/${repo.main}` : repo.main;
   const d = git(repo.path, "diff", "--name-only", `${base}...${branch}`);
   if (!d.ok) return null;
-  const sandbox = git(repo.path, "diff", `${base}...${branch}`, "--", "jobs/lib/review2.ts").out.split("\n").some((l) => /^[+-](?![+-])/.test(l) && l.includes("REVIEW2_SANDBOX"));
+  const sandbox = git(repo.path, "diff", `${base}...${branch}`, "--", "jobs/lib/review.ts", "jobs/lib/review2.ts").out.split("\n").some((l) => /^[+-](?![+-])/.test(l) && /REVIEW2?_SANDBOX/.test(l));
   return { paths: d.out.split("\n").filter(Boolean), review2Sandbox: sandbox };
 }
 
@@ -223,7 +223,7 @@ export function securityPath(repo: Repo, branch: string | undefined): string | n
   const c = changedPaths(repo, branch);
   if (!c) return "unknown";
   const hit = c.paths.find((p) => SECURITY_PATHS.some((s) => (s.endsWith("/") ? p.startsWith(s) : p === s)));
-  return hit ?? (c.review2Sandbox ? "REVIEW2_SANDBOX in jobs/lib/review2.ts" : null);
+  return hit ?? (c.review2Sandbox ? "REVIEW_SANDBOX in jobs/lib/review.ts" : null);
 }
 
 /** Whether an item's Ask is a product choice: it offers options to pick from (triage's `chris` verdict and the rescue write them). A plain question has none. */
@@ -268,11 +268,11 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
       if (issue !== undefined) store.note(repo, issue, `firefighter: dropped ${a.job}: ${a.reason}${a.after ? `; after ${a.after.join(", ")}` : ""}`);
       return waits ? { refused: `${describe(a)}: dropped, but after not set: ${waits}` } : { applied: describe(a) };
     }
-    const agent = runs.findLast((e) => e.run.kind === "agent" || e.run.kind === "recheck") ?? last;
+    const agent = runs.findLast((e) => isBuild(e.run.kind) || e.run.kind === "recheck") ?? last;
     if (!reviewVerdict(readFile(agent, "review.md") ?? "")) return { refused: `${describe(a)}: the reviewer has no verdict yet` };
-    const r2 = readReview2(agent.folder);
-    if (!r2 || r2.verdict === "pending" || r2.verdict === "error") return { refused: `${describe(a)}: review2 has no verdict yet` };
-    if (r2.verdict !== "land") return { refused: `${describe(a)}: review2 says ${r2.verdict}${r2.reason ? ` (${r2.reason})` : ""}` };
+    const r2 = reviewOf(agent);
+    if (!r2 || r2.call === "pending" || r2.call === "error") return { refused: `${describe(a)}: review2 has no verdict yet` };
+    if (r2.call !== "land") return { refused: `${describe(a)}: review2 says ${r2.call === "ask" ? "chris" : r2.call}${r2.reason ? ` (${r2.reason})` : ""}` };
     const held = securityPath(repo, agent.run.branch);
     // Chris let the firefighter land held security paths: the check is skipped, and the land is logged. An unknown branch still goes to Chris.
     const granted = held !== null && held !== "unknown" && always("firefighter")?.action === "land";

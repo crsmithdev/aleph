@@ -18,7 +18,7 @@ describe("job", () => {
     const r = await aleph(["job", "De mo", "alpha", "--spec", "-"], {}, "Goal: alpha\nACTION: commit a.txt\n");
     expect(r.code).toBe(0);
     const s = state(r.json.run);
-    expect(s).toMatchObject({ kind: "agent", name: "alpha", repo: "demo", state: "passed", told: true, branch: "job/alpha", worktree: worktree("alpha") });
+    expect(s).toMatchObject({ kind: "build", name: "alpha", repo: "demo", state: "passed", told: true, branch: "job/alpha", worktree: worktree("alpha") });
     expect(s.session).toMatch(/^[0-9a-f-]{36}$/);
     expect(s.phase).toBeUndefined();
     expect(file(r.json.run, "exit")).toBe("0");
@@ -41,7 +41,7 @@ describe("job", () => {
   test("a follow-up runs in the same worktree with the spec, notes and previous result", async () => {
     const r = await job("alpha", "commit b.txt");
     expect(r.code).toBe(0);
-    const first = readdirSync(jobsDir).sort().find((d) => d.endsWith("-demo-alpha-agent"))!;
+    const first = readdirSync(jobsDir).sort().find((d) => d.endsWith("-demo-alpha-build"))!;
     expect(r.json.job).toBe(first);
     expect(r.json.run).not.toBe(first);
     expect(state(r.json.run).state).toBe("passed");
@@ -50,7 +50,7 @@ describe("job", () => {
     expect(prompt).toContain("You are a worker on job `alpha`");
     expect(prompt).toContain("## Spec\n\nGoal: alpha\nACTION: commit a.txt");
     expect(prompt).toContain("## Note 001\n\nGoal: alpha\nACTION: commit b.txt");
-    expect(prompt).toContain("## Previous run: agent, passed");
+    expect(prompt).toContain("## Previous run: build, passed");
     expect(prompt).toContain("did commit a.txt");
     expect(readFileSync(setupLog, "utf8")).toBe("ran\n");
     expect(sh(worktree("alpha"), "git", "log", "--format=%s")).toBe("add b.txt\nadd a.txt\ninit");
@@ -119,7 +119,7 @@ describe("the state rule", () => {
 
   test("a question needs Chris", async () => {
     const r = await job("asks", "question");
-    expect(state(r.json.run)).toMatchObject({ state: "needs-you", needs: "question", question: "which colour?" });
+    expect(state(r.json.run)).toMatchObject({ state: "awaiting", ask: expect.objectContaining({ kind: "input", reason: "question" }), question: "which colour?" });
     expect(told).toContain("demo/asks needs-you question");
   });
 

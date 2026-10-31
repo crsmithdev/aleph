@@ -72,7 +72,7 @@ function held(id: string, extra: object = {}): string {
   mkdirSync(folder, { recursive: true });
   writeFileSync(join(folder, "spec.md"), "Goal: g\n");
   writeFileSync(join(folder, "state.json"), JSON.stringify({
-    kind: "agent", job: id, name: id, repo: "demo", branch: "job/x", state: "needs-you", needs: "held", reason: "held path a.txt", told: false, started: "2026-10-27T10:00:00Z", ...extra,
+    kind: "build", job: id, name: id, repo: "demo", branch: "job/x", state: "awaiting", ask: { kind: "approval", reason: "held-path", question: "held path a.txt", options: [], why: [] }, reason: "held path a.txt", told: false, started: "2026-10-27T10:00:00Z", ...extra,
   }));
   return folder;
 }
@@ -82,9 +82,9 @@ const fakeClaude = (result: string) => {
   return f;
 };
 const state = (folder: string) => JSON.parse(readFileSync(join(folder, "state.json"), "utf8"));
-const review2 = async (folder: string) => (await import("./ledger.ts")).readReview2(folder);
+const reviewAt = async (folder: string) => (await import("./ledger.ts")).readCall(folder);
 
-describe("review2", () => {
+describe("review", () => {
   const cases: [string, string, Review2][] = [
     ["VERDICT: land", "land", { verdict: "land" }],
     ["Looked.\nVERDICT: back a test lost an assertion", "back", { verdict: "back", reason: "a test lost an assertion" }],
@@ -92,131 +92,148 @@ describe("review2", () => {
   ];
   for (const [text, name, want] of cases) {
     test(`a ${name} verdict is written and recorded`, async () => {
-      const { runReview2 } = await import("./review2.ts");
+      const { runReview } = await import("./review.ts");
       const folder = held(`v-${name}`);
       process.env.ALEPH_REVIEW2_CMD = fakeClaude(text);
-      await runReview2(folder);
-      expect(readFileSync(join(folder, "review2.md"), "utf8")).toContain(text);
-      expect(await review2(folder)).toEqual(want);
-      expect(state(folder).review2).toBeUndefined();
-      expect(state(folder)).toMatchObject({ state: "needs-you", needs: "held" });
-      expect(existsSync(join(folder, "review2"))).toBe(false);
+      await runReview(folder);
+      expect(readFileSync(join(folder, "call.md"), "utf8")).toContain(text);
+      expect(await reviewAt(folder)).toEqual(want);
+      expect(state(folder).review).toBeUndefined();
+      expect(state(folder)).toMatchObject({ state: "awaiting", ask: { kind: "approval", reason: "held-path" } });
+      expect(existsSync(join(folder, "review"))).toBe(false);
     });
   }
 
+  test("recordReview puts the call on state.json: chris reads as ask, a pending or malformed review records none", async () => {
+    const { runReview, recordReview } = await import("./review.ts");
+    for (const [name, text, want] of [["land", "VERDICT: land", { call: "land" }], ["back", "VERDICT: back fix it", { call: "back", reason: "fix it" }], ["chris", "VERDICT: chris sure?", { call: "ask", reason: "sure?" }]] as const) {
+      const folder = held(`rec-${name}`);
+      process.env.ALEPH_REVIEW2_CMD = fakeClaude(text);
+      await runReview(folder);
+      recordReview(folder);
+      expect(state(folder).review).toEqual(want);
+      expect((await import("./ledger.ts")).reviewOf({ id: "x", folder, run: state(folder) })).toEqual(want);
+    }
+    const bad = held("rec-bad");
+    process.env.ALEPH_REVIEW2_CMD = fakeClaude("VERDICT: maybe");
+    await runReview(bad);
+    recordReview(bad);
+    expect(state(bad).review).toBeUndefined();
+  });
+
   test("a malformed verdict records error and leaves the run held", async () => {
-    const { runReview2 } = await import("./review2.ts");
+    const { runReview } = await import("./review.ts");
     const folder = held("bad");
     process.env.ALEPH_REVIEW2_CMD = fakeClaude("VERDICT: maybe");
-    await runReview2(folder);
-    expect((await review2(folder))?.verdict).toBe("error");
-    expect(state(folder)).toMatchObject({ state: "needs-you", needs: "held" });
+    await runReview(folder);
+    expect((await reviewAt(folder))?.verdict).toBe("error");
+    expect(state(folder)).toMatchObject({ state: "awaiting", ask: { kind: "approval", reason: "held-path" } });
   });
 
   test("a held run starts one review, a second pass none", async () => {
-    const { startReview2 } = await import("./review2.ts");
+    const { startReview } = await import("./review.ts");
     process.env.ALEPH_REVIEW2_CMD = fakeClaude("VERDICT: land");
     const folder = held("once");
-    expect([startReview2(folder), existsSync(join(folder, "review2.md")) ? readFileSync(join(folder, "review2.md"), "utf8") : ""]).toEqual([true, "PENDING\n"]);
-    expect(startReview2(folder)).toBe(false);
-    for (let i = 0; i < 100 && (await review2(folder))?.verdict === "pending"; i++) await Bun.sleep(100);
-    expect(await review2(folder)).toEqual({ verdict: "land" });
+    expect([startReview(folder), existsSync(join(folder, "call.md")) ? readFileSync(join(folder, "call.md"), "utf8") : ""]).toEqual([true, "PENDING\n"]);
+    expect(startReview(folder)).toBe(false);
+    for (let i = 0; i < 100 && (await reviewAt(folder))?.verdict === "pending"; i++) await Bun.sleep(100);
+    expect(await reviewAt(folder)).toEqual({ verdict: "land" });
   });
 
-  test("a drop that writes state.json while review2 runs loses no field", async () => {
-    const { runReview2 } = await import("./review2.ts");
+  test("a drop that writes state.json while review runs loses no field", async () => {
+    const { runReview } = await import("./review.ts");
     const { updateRun } = await import("./ledger.ts");
     const folder = held("race");
     const slow = join(base, "claude-slow");
     writeFileSync(slow, `#!/bin/bash\ncat > /dev/null\nsleep 1\nprintf '%s\\n' '${JSON.stringify({ type: "result", is_error: false, result: "VERDICT: land" })}'\n`, { mode: 0o755 });
     process.env.ALEPH_REVIEW2_CMD = slow;
-    const running = runReview2(folder);
+    const running = runReview(folder);
     await Bun.sleep(300);
     updateRun(folder, { state: "dropped", reason: "dropped by Chris" });
     await running;
-    expect(state(folder)).toMatchObject({ state: "dropped", reason: "dropped by Chris", needs: "held", branch: "job/x" });
-    expect(await review2(folder)).toEqual({ verdict: "land" });
+    expect(state(folder)).toMatchObject({ state: "dropped", reason: "dropped by Chris", ask: expect.objectContaining({ reason: "held-path" }), branch: "job/x" });
+    expect(await reviewAt(folder)).toEqual({ verdict: "land" });
   });
 
-  test("a second review2 on a folder refuses while one runs", async () => {
-    const { runReview2 } = await import("./review2.ts");
+  test("a second review on a folder refuses while one runs", async () => {
+    const { runReview } = await import("./review.ts");
     const folder = held("twice");
     const slow = join(base, "claude-slow2");
     writeFileSync(slow, `#!/bin/bash\ncat > /dev/null\nsleep 1\nprintf '%s\\n' '${JSON.stringify({ type: "result", is_error: false, result: "VERDICT: land" })}'\n`, { mode: 0o755 });
     process.env.ALEPH_REVIEW2_CMD = slow;
-    const first = runReview2(folder);
+    const first = runReview(folder);
     await Bun.sleep(300);
-    await expect(runReview2(folder)).rejects.toThrow("already running");
+    await expect(runReview(folder)).rejects.toThrow("already running");
     await first;
-    expect(await review2(folder)).toEqual({ verdict: "land" });
+    expect(await reviewAt(folder)).toEqual({ verdict: "land" });
   });
 
-  test("a drop that removes the run folder does not throw from review2", async () => {
-    const { runReview2 } = await import("./review2.ts");
+  test("a drop that removes the run folder does not throw from review", async () => {
+    const { runReview } = await import("./review.ts");
     const folder = held("gone");
     const slow = join(base, "claude-slow3");
     writeFileSync(slow, `#!/bin/bash\ncat > /dev/null\nsleep 1\necho nothing\n`, { mode: 0o755 });
     process.env.ALEPH_REVIEW2_CMD = slow;
-    const running = runReview2(folder);
+    const running = runReview(folder);
     await Bun.sleep(300);
     rmSync(folder, { recursive: true, force: true });
     await running;
   });
 
   test("a run that is not held starts none", async () => {
-    const { startReview2 } = await import("./review2.ts");
-    expect(startReview2(held("passed", { state: "passed", needs: undefined }))).toBe(false);
-    expect(startReview2(held("manual", { needs: "manual" }))).toBe(false);
+    const { startReview } = await import("./review.ts");
+    expect(startReview(held("passed", { state: "passed", ask: undefined }))).toBe(false);
+    expect(startReview(held("manual", { ask: { kind: "input", reason: "manual", question: "check", options: [], why: [] } }))).toBe(false);
   });
 });
 
-describe("review2 under srt", () => {
-  test("the profile reads the run folder, writes review2/ and tmp/, and reaches the API and localhost", async () => {
+describe("review under srt", () => {
+  test("the profile reads the run folder, writes review/ and tmp/, and reaches the API and localhost", async () => {
     const { profile } = await import("./sandbox.ts");
-    const { REVIEW2_SANDBOX } = await import("./review2.ts");
+    const { REVIEW_SANDBOX } = await import("./review.ts");
     const folder = held("profile");
-    const s = JSON.parse(readFileSync(profile(folder, REVIEW2_SANDBOX), "utf8"));
+    const s = JSON.parse(readFileSync(profile(folder, REVIEW_SANDBOX), "utf8"));
     expect(s.network).toEqual({ allowedDomains: ["api.anthropic.com", "localhost"], allowLocalBinding: true, deniedDomains: [] });
     expect(s.filesystem.allowRead).not.toContain(folder);
     expect(s.filesystem.allowRead).toContain(join(folder, "state.json"));
-    expect(s.filesystem.allowRead).not.toContain(join(folder, "review2"));
+    expect(s.filesystem.allowRead).not.toContain(join(folder, "review"));
     expect(s.filesystem.allowRead).not.toContain(join(folder, "tmp"));
     expect(s.filesystem.allowRead).not.toContain(join(base));
-    expect(s.filesystem.allowWrite).toEqual([join(folder, "review2"), join(folder, "tmp")]);
+    expect(s.filesystem.allowWrite).toEqual([join(folder, "review"), join(folder, "tmp")]);
   });
 
   test("the reviewer runs with its own home and the run folder as its only read", async () => {
-    const { runReview2 } = await import("./review2.ts");
+    const { runReview } = await import("./review.ts");
     const folder = held("home");
     const seen = join(base, "seen");
     writeFileSync(join(base, "claude-home"), `#!/bin/bash\ncat > /dev/null\necho "$HOME|$PWD" > "${seen}"\necho '{"type":"result","is_error":false,"result":"VERDICT: land"}'\n`, { mode: 0o755 });
     process.env.ALEPH_REVIEW2_CMD = join(base, "claude-home");
-    await runReview2(folder);
+    await runReview(folder);
     const [home, cwd] = readFileSync(seen, "utf8").trim().split("|");
-    expect(home).toBe(join(folder, "review2", "home"));
-    expect(cwd).toBe(join(folder, "review2", "work"));
-    expect(await review2(folder)).toEqual({ verdict: "land" });
+    expect(home).toBe(join(folder, "review", "home"));
+    expect(cwd).toBe(join(folder, "review", "work"));
+    expect(await reviewAt(folder)).toEqual({ verdict: "land" });
   });
 });
 
 describe("parseVerdict", () => {
   test("takes the last VERDICT line and needs a reason for back and chris", async () => {
-    const { parseVerdict } = await import("./review2.ts");
+    const { parseVerdict } = await import("./review.ts");
     expect(parseVerdict("VERDICT: back x\nVERDICT: land")).toEqual({ verdict: "land" });
     expect(parseVerdict("VERDICT: back")).toBeNull();
     expect(parseVerdict("nothing")).toBeNull();
   });
 });
 
-describe("review2 unit", () => {
-  test("the systemd-run argv of review2 has CPUWeight=20 and --nice=10", () => {
+describe("review unit", () => {
+  test("the systemd-run argv of review has CPUWeight=20 and --nice=10", () => {
     const folder = held("unit-argv");
-    const log = join(base, "review2-argv");
+    const log = join(base, "review-argv");
     mkdirSync(join(base, "bin"), { recursive: true });
     writeFileSync(join(base, "bin", "systemd-run"), `#!/bin/bash\necho "$@" > ${log}\n`, { mode: 0o755 });
     // A child process: Bun looks a command up in the PATH it started with.
     const env = { ...process.env, PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_JOB_FOREGROUND: "" };
-    const p = Bun.spawnSync(["bun", "-e", `import { startReview2 } from "${join(import.meta.dir, "review2.ts")}"; process.exit(startReview2(${JSON.stringify(folder)}) ? 0 : 1);`], { env, stdout: "pipe", stderr: "pipe" });
+    const p = Bun.spawnSync(["bun", "-e", `import { startReview } from "${join(import.meta.dir, "review.ts")}"; process.exit(startReview(${JSON.stringify(folder)}) ? 0 : 1);`], { env, stdout: "pipe", stderr: "pipe" });
     expect(p.exitCode).toBe(0);
     const argv = readFileSync(log, "utf8");
     expect(argv).toContain("--property=CPUWeight=20");
@@ -284,10 +301,10 @@ exit ${code}
 
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
-describe("review2 browser step", () => {
+describe("review browser step", () => {
   for (const code of [0, 3]) {
     test(`a ui goal: the harness starts the server, Chrome loads the changed view from it, the server is gone after (reviewer exit ${code})`, async () => {
-      const { runReview2 } = await import("./review2.ts");
+      const { runReview } = await import("./review.ts");
       const tag = `ui-${code}`;
       const argvFile = join(base, `argv-${tag}`), answers = join(base, `answers-${tag}`), seen = join(base, `seen-${tag}`);
       rmSync(process.env.TEST_SERVER_MARK!, { force: true });
@@ -297,7 +314,7 @@ describe("review2 browser step", () => {
       process.env.ALEPH_REVIEW2_CHROME = join(base, `chrome-${tag}`);
       process.env.ALEPH_REVIEW2_CMD = reviewer(seen, code);
       const folder = held(tag, { todo: uiTodo });
-      await runReview2(folder);
+      await runReview(folder);
 
       // The server answered on its port while Chrome ran, from the harness's process tree, on the merge result, with git on its PATH.
       const got = readFileSync(answers, "utf8").trim().split("\n").map((l) => JSON.parse(l));
@@ -327,11 +344,11 @@ describe("review2 browser step", () => {
       expect(argv).toContain("--remote-debugging-pipe");
       expect(argv).not.toContain("--no-sandbox");
 
-      // The server is gone, the scratch worktree too, and the reviewer's exit is what review2.md says.
+      // The server is gone, the scratch worktree too, and the reviewer's exit is what call.md says.
       expect(alive(pid)).toBe(false);
       expect(await fetch(`http://127.0.0.1:${port}/`).then(() => true, () => false)).toBe(false);
-      expect(existsSync(join(folder, "review2"))).toBe(false);
-      expect(await review2(folder)).toEqual(code === 0 ? { verdict: "land" } : { verdict: "error", reason: expect.any(String) } as any);
+      expect(existsSync(join(folder, "review"))).toBe(false);
+      expect(await reviewAt(folder)).toEqual(code === 0 ? { verdict: "land" } : { verdict: "error", reason: expect.any(String) } as any);
     }, 30_000);
   }
 
@@ -359,21 +376,21 @@ describe("review2 browser step", () => {
   }, 30_000);
 
   test("the prompt of a ui goal sends the reviewer to the report and does not tell it to start a server or Chrome", async () => {
-    const { runReview2, REVIEW2_SANDBOX } = await import("./review2.ts");
+    const { runReview, REVIEW_SANDBOX } = await import("./review.ts");
     process.env.ALEPH_REVIEW2_CHROME = join(base, "chrome-ui-0");
     process.env.ALEPH_REVIEW2_CMD = reviewer(join(base, "seen-prompt"), 0);
     const folder = held("ui-prompt", { todo: uiTodo });
-    await runReview2(folder);
-    const prompt = readFileSync(join(folder, "review2-prompt.md"), "utf8");
+    await runReview(folder);
+    const prompt = readFileSync(join(folder, "review-prompt.md"), "utf8");
     expect(prompt).not.toContain("bun ui/server.ts");
     expect(prompt).not.toContain("Start `bun");
     expect(prompt).toContain(join(folder, "browser/report.md"));
     expect(prompt).toContain("horizontal scroll");
-    expect(REVIEW2_SANDBOX).toEqual({ read: ["."], write: ["review2", "tmp"], net: { domains: ["api.anthropic.com", "localhost"], localBinding: true } });
+    expect(REVIEW_SANDBOX).toEqual({ read: ["."], write: ["review", "tmp"], net: { domains: ["api.anthropic.com", "localhost"], localBinding: true } });
   }, 30_000);
 
   test("a goal that is not ui starts no server and no Chrome", async () => {
-    const { runReview2 } = await import("./review2.ts");
+    const { runReview } = await import("./review.ts");
     rmSync(process.env.TEST_SERVER_MARK!, { force: true });
     const argvFile = join(base, "argv-plain");
     rmSync(argvFile, { force: true });
@@ -381,31 +398,31 @@ describe("review2 browser step", () => {
     process.env.ALEPH_REVIEW2_CHROME = join(base, "chrome-plain");
     process.env.ALEPH_REVIEW2_CMD = reviewer(join(base, "seen-plain"), 0);
     const folder = held("plain", { todo: plainTodo });
-    await runReview2(folder);
+    await runReview(folder);
     expect(existsSync(process.env.TEST_SERVER_MARK!)).toBe(false);
     expect(existsSync(argvFile)).toBe(false);
     expect(readdirSync(join(folder, "browser"))).toEqual([]);
     expect(readFileSync(join(base, "seen-plain"), "utf8").trim()).toBe("none");
-    expect(readFileSync(join(folder, "review2-prompt.md"), "utf8")).not.toContain("browser/report.md");
-    expect(await review2(folder)).toEqual({ verdict: "land" });
+    expect(readFileSync(join(folder, "review-prompt.md"), "utf8")).not.toContain("browser/report.md");
+    expect(await reviewAt(folder)).toEqual({ verdict: "land" });
   }, 30_000);
 
   test("when Chrome's sandbox cannot start, the report says so with the log tail, the server is gone, and the review goes on", async () => {
-    const { runReview2 } = await import("./review2.ts");
+    const { runReview } = await import("./review.ts");
     const { SANDBOX_ERROR } = await import("./review2-browser.ts");
     rmSync(process.env.TEST_SERVER_MARK!, { force: true });
     writeFileSync(join(base, "chrome-nosandbox"), `#!/bin/bash\necho "[1:1:FATAL:zygote_host_impl_linux.cc(127)] No usable sandbox! Update your kernel" >&2\nexit 1\n`, { mode: 0o755 });
     process.env.ALEPH_REVIEW2_CHROME = join(base, "chrome-nosandbox");
     process.env.ALEPH_REVIEW2_CMD = reviewer(join(base, "seen-nosandbox"), 0);
     const folder = held("ui-nosandbox", { todo: uiTodo });
-    await runReview2(folder);
+    await runReview(folder);
     const report = readFileSync(join(folder, "browser/report.md"), "utf8");
     expect(report).toContain(SANDBOX_ERROR);
     expect(report).toContain("No usable sandbox!");
     expect(readdirSync(join(folder, "browser")).some((f) => f.endsWith(".png"))).toBe(false);
     const port = Number(readFileSync(process.env.TEST_SERVER_MARK!, "utf8").trim());
     expect(await fetch(`http://127.0.0.1:${port}/`).then(() => true, () => false)).toBe(false);
-    expect(await review2(folder)).toEqual({ verdict: "land" });
+    expect(await reviewAt(folder)).toEqual({ verdict: "land" });
   }, 30_000);
 
   test("the changed views are the routes of the views a diff touches", async () => {

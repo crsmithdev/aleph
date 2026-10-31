@@ -12,7 +12,7 @@ import { goalsOf, kindOf, readList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { fetchOrigin, git } from "./git.ts";
-import { allRuns, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, onOf, type Entry, type Repo } from "./ledger.ts";
 import { section } from "./plan.ts";
 import { itemOnMain, landedCommits, repoStages } from "./status.ts";
 
@@ -21,7 +21,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const epoch = (t?: string) => Date.parse(t ?? "") || 0;
 
 const runsOf = (repo: Repo, id: number): Entry[] =>
-  allRuns().filter((e) => e.run.repo === repo.key && e.run.todo === id).sort((a, b) => epoch(a.run.started) - epoch(b.run.started));
+  allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) === id).sort((a, b) => epoch(a.run.started) - epoch(b.run.started));
 
 /** The repo's done goals with a ledger run and no episode page yet. */
 export function doneGoals(repo: Repo): todos.Item[] {
@@ -32,7 +32,7 @@ export function doneGoals(repo: Repo): todos.Item[] {
   const done = new Set(repoStages(repo, { fetch: true, doc, items: goals.map((i) => i.id) }).filter((s) => s.stage === "done").map((s) => s.id));
   const dir = join(vaultDir(), "wiki", "episodes");
   const pages = existsSync(dir) ? readdirSync(dir) : [];
-  const ran = new Set(allRuns().filter((e) => e.run.repo === repo.key && e.run.todo !== undefined).map((e) => e.run.todo));
+  const ran = new Set(allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) !== undefined).map((e) => onOf(e.run)));
   return goals.filter((i) => done.has(`${repo.key}-${i.id}`) && ran.has(i.id) && !pages.some((f) => f.startsWith(`${repo.key}-${i.id} `)));
 }
 

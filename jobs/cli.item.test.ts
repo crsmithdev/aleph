@@ -17,18 +17,18 @@ describe("a job tied to a to-do item", () => {
 
   test("an id the list does not have is refused, and nothing starts", async () => {
     const before = readdirSync(jobsDir).length;
-    const r = await aleph(["job", "demo", "badlink", "--spec", specFile("x"), "--todo", "99"]);
+    const r = await aleph(["job", "demo", "badlink", "--spec", specFile("x"), "--on", "99"]);
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("demo has no issue 99");
     expect(readdirSync(jobsDir).length).toBe(before);
   });
 
   test("land marks the item done, naming the job and the landing commit", async () => {
-    const j = await aleph(["job", "demo", "widget", "--spec", specFile("Goal: widget\nACTION: commit widget.txt\n"), "--todo", String(landId)]);
-    expect(state(j.json.run)).toMatchObject({ state: "passed", todo: landId });
+    const j = await aleph(["job", "demo", "widget", "--spec", specFile("Goal: widget\nACTION: commit widget.txt\n"), "--on", String(landId)]);
+    expect(state(j.json.run)).toMatchObject({ state: "passed", on: `demo-${landId}` });
     const r = await aleph(["land", "widget"]);
     const s = state(r.json.run);
-    expect(s).toMatchObject({ kind: "land", state: "landed", todo: landId });
+    expect(s).toMatchObject({ kind: "land", state: "landed", on: `demo-${landId}` });
     expect(s.reason).toBeUndefined();
     const item = await show(landId);
     expect(item.status).toBe("done");
@@ -41,20 +41,20 @@ describe("a job tied to a to-do item", () => {
   });
 
   test("drop adds a note with the reason and leaves the item open", async () => {
-    await aleph(["job", "demo", "shed", "--spec", specFile("Goal: shed\nACTION: commit shed.txt\n"), "--todo", String(dropId)]);
+    await aleph(["job", "demo", "shed", "--spec", specFile("Goal: shed\nACTION: commit shed.txt\n"), "--on", String(dropId)]);
     expect((await aleph(["drop", "shed", "wrong", "colour"])).code).toBe(0);
     const item = await show(dropId);
     expect(item.status).toBe("open");
     expect(item.notes.at(-1)).toContain("job shed dropped: wrong colour");
   });
 
-  test("a job without --todo records none and leaves the list alone", async () => {
+  test("a job without --on records none and leaves the list alone", async () => {
     const before = list();
     const j = await job("plainjob", "commit plainjob.txt");
-    expect(state(j.json.run).todo).toBeUndefined();
+    expect(state(j.json.run).on).toBeUndefined();
     const r = await aleph(["land", "plainjob"]);
     expect(state(r.json.run)).toMatchObject({ state: "landed" });
-    expect(state(r.json.run).todo).toBeUndefined();
+    expect(state(r.json.run).on).toBeUndefined();
     expect(list()).toBe(before);
   });
 });
@@ -71,7 +71,7 @@ describe("fate from git", () => {
 
   test("work ported to main by hand reads as landed, and its to-do item closes", async () => {
     const id = (await aleph(["issue", "add", "demo", "port by hand"])).json.added;
-    const j = await aleph(["job", "demo", "ported", "--spec", specFile("Goal: ported\nACTION: commit ported.txt\n"), "--todo", String(id)]);
+    const j = await aleph(["job", "demo", "ported", "--spec", specFile("Goal: ported\nACTION: commit ported.txt\n"), "--on", String(id)]);
     const tip = sh(repo, "git", "rev-parse", "job/ported");
     sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
     sh(other, "git", "fetch", "-q", repo, "job/ported");

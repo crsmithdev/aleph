@@ -31,7 +31,7 @@ describe("the flow on migrated items", () => {
     const jobs = dir("runs");
     // The stock start command with `--land`, as the production start passes it: a passed run lands.
     startScript(startCmd, jobs);
-    writeFileSync(startCmd, readFileSync(startCmd, "utf8").replace('--todo "$3"', '--todo "$3" --land'), { mode: 0o755 });
+    writeFileSync(startCmd, readFileSync(startCmd, "utf8").replace('--on "$3"', '--on "$3" --land'), { mode: 0o755 });
     writeFileSync(join(base, "fake-triage"), `#!/bin/bash\ncat > /dev/null\necho triaged >> ${triageLog}\necho '{"route":"close","reason":"test"}'\n`, { mode: 0o755 });
     const on = {
       ALEPH_ISSUES: dir("issues"), ALEPH_JOBS_DIR: jobs, ALEPH_SANDBOX_DIR: dir("sandbox"), ALEPH_DISPATCH: "on", ALEPH_START_CMD: startCmd, START_LOG: startLog,
@@ -49,7 +49,7 @@ describe("the flow on migrated items", () => {
     // The run lands by itself and its issue closes.
     await until(() => readdirSync(jobs).some((r) => r.includes(`-fac-fac-${goal}.1-`) && stateOf(r) === "landed"));
     expect(sh(itemsRemote, "git", "log", "-1", "--format=%B", "main").length).toBeGreaterThan(0);
-    expect(sh(base, "git", "--git-dir", join(base, "remote.git"), "log", "-1", "--format=%B", "main")).toContain(`Item: fac-${goal}.1`);
+    expect(sh(base, "git", "--git-dir", join(base, "remote.git"), "log", "-1", "--format=%B", "main")).toContain(`Goal: fac-${goal}.1`);
     await until(() => readFileSync(join(dir("issues"), "fac", "backlog", "tasks", `fac-${goal}.1.md`), "utf8").includes("status: done"));
 
     // The proposal started no run, and the tick's triage does not touch it.

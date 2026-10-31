@@ -54,10 +54,10 @@ async function refused(f: () => unknown): Promise<string> {
 const runs = () => (existsSync(join(base, "jobs")) ? readdirSync(join(base, "jobs")) : []);
 
 describe("startJob", () => {
-  test("refuses an unknown repo, a bad name and a --todo that is no number, before any run", async () => {
+  test("refuses an unknown repo, a bad name and an --on that is no number, before any run", async () => {
     expect(await refused(() => startJob({ repo: "nope", name: "x", spec: "s" }))).toBe('unknown repo "nope"; known: fac, plain');
     expect(await refused(() => startJob({ repo: "fac", name: "a b", spec: "s" }))).toBe("the name must be letters, digits and hyphens");
-    expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s", todo: NaN }))).toBe("--todo takes an issue number");
+    expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s", on: NaN }))).toBe("--on takes an issue number");
     expect(runs()).toEqual([]);
   });
 

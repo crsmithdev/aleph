@@ -14,7 +14,7 @@ import { itemOnMain, repoStages } from "./status.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
-import { allRuns, expand, isAwaiting, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, askOf as runAskOf, expand, isAwaiting, isBuild, needsOf, oldState, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, jobsNamed, asked, lastReal, markAsked, markRescued, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { accept, final, readRecord, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
@@ -78,7 +78,7 @@ export const factoryRepos = sandboxRepos;
 /** Factory agent and triage runs started in the last 24 hours. */
 export function runsToday(now = Date.now()): Entry[] {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  return allRuns().filter((e) => (e.run.kind === "agent" || e.run.kind === "triage" || e.run.kind === "plan") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
+  return allRuns().filter((e) => (isBuild(e.run.kind) || e.run.kind === "triage" || e.run.kind === "plan") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
 }
 
 /** Open jobs in factory repos whose last run awaits Chris (a stuck run needs no answer). */
@@ -125,7 +125,7 @@ export function waitingToLand(jobs = allJobs()): string[] {
   return jobs.filter((j) => {
     const last = lastReal(j);
     const r = last.run;
-    return isOpen(j) && (r.kind === "agent" || r.kind === "recheck") && r.state === "passed" && !isLive(last.folder) && (r.land || (r.repo && repos[r.repo]?.autoland));
+    return isOpen(j) && (isBuild(r.kind) || r.kind === "recheck") && r.state === "passed" && !isLive(last.folder) && (r.land || (r.repo && repos[r.repo]?.autoland));
   }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started)).map((j) => j.at(-1)!.run.name);
 }
 
@@ -247,7 +247,7 @@ const issueNumber = (repo: Repo, item: todos.Item): number | null => {
 export const goalJob = (repo: Repo, id: number | string) => `${repo.key}-${id}`;
 
 /** Agent runs live now, and those started whose unit has not written `pid` yet. */
-export const liveEntries = (): Entry[] => allRuns().filter((e) => e.run.kind === "agent" && (isLive(e.folder) || isStarting(e)));
+export const liveEntries = (): Entry[] => allRuns().filter((e) => isBuild(e.run.kind) && (isLive(e.folder) || isStarting(e)));
 export const liveRuns = (): number => liveEntries().length;
 
 /** The gates, in the order `gates` checks them. */
@@ -548,7 +548,7 @@ const writeStreakMark = (name: string) => {
 /** How many of the goal's newest agent runs since the streak's last Ask, in a row, ended with no commit. */
 function noCommitStreak(repoKey: string, name: string): number {
   const mark = streakMark(name) ?? -Infinity;
-  const runs = allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && e.run.kind === "agent" && e.run.state !== "running" && Date.parse(e.run.started) > mark)
+  const runs = allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.state !== "running" && Date.parse(e.run.started) > mark)
     .sort((a, b) => Date.parse(a.run.started) - Date.parse(b.run.started));
   let n = 0;
   for (const e of runs.reverse()) { if (e.run.reason !== "no commit" && !e.run.noCommit) break; n++; }
@@ -568,7 +568,7 @@ const writeCapMark = (name: string) => {
 
 /** How many agent runs of the goal started in the last 60 minutes. */
 function agentStartsInHour(repoKey: string, name: string, now = Date.now()): number {
-  return allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && e.run.kind === "agent" && now - Date.parse(e.run.started) < 3600_000).length;
+  return allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && now - Date.parse(e.run.started) < 3600_000).length;
 }
 
 const rerunFile = (name: string) => join(factoryDir(), "rerun", `${name}.md`);
@@ -972,10 +972,11 @@ function noteSource(title: string): string | undefined {
 /** One run as the report gives it. */
 function entry(e: Entry): string {
   const r = e.run;
-  const head = `${r.repo}/${r.name} ${r.state}${r.needs ? ` (${r.needs})` : ""}${r.round && r.state !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
+  const needs = isAwaiting(r.state) ? needsOf(runAskOf(r)) : undefined;
+  const head = `${r.repo}/${r.name} ${oldState(r.state)}${needs ? ` (${needs})` : ""}${r.round && r.state !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
   if (r.state === "landed" && r.commit) lines.push(`  commit ${r.commit.slice(0, 7)}`);
-  if (r.state === "needs-you" && (r.needs === "held" || r.needs === "review")) {
+  if (needs === "held" || needs === "review") {
     if (r.stat) lines.push(...r.stat.split("\n").map((l) => `  ${l}`));
     lines.push(`  aleph land ${r.name}   (lands it, with Held-by: Chris)`, `  aleph drop ${r.name}   (drops it; the item stays open)`);
   }

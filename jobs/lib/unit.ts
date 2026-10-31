@@ -6,16 +6,16 @@
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { closeAndFile, file as fileIssues, noteFlake, readHidden } from "../../todo/lib/store.ts";
+import { closeAndFile, file as fileIssues, issueOf, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
 import { addWorktree, fetchOrigin, followMain, git } from "./git.ts";
 import { ALREADY_MET, heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
-import { checkSlot, readReview2, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { askOf, checkSlot, isAwaiting, isBuild, needsOf, onOf, readCall, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type Ask, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
 import { dispatchOn, gates, recordFlake, waitingToLand } from "./factory.ts";
-import { startReview2 } from "./review2.ts";
+import { startReview } from "./review.ts";
 import { postTrace } from "./trace.ts";
 import { runLogged, startUnit } from "./launch.ts";
 import { land as startLand, startJob } from "./transitions.ts";
@@ -109,7 +109,7 @@ export function prompt(id: string, folder: string, run: Run, repo: Repo): string
   const prev = runs[runs.findIndex((e) => e.id === id) - 1];
   if (prev) {
     const p = prev.run;
-    parts.push(`## Previous run: ${p.kind}, ${p.state}${p.needs ? ` (${p.needs})` : ""}${p.reason ? `: ${p.reason}` : ""}`);
+    parts.push(`## Previous run: ${p.kind}, ${p.state}${needsOf(askOf(p)) ? ` (${needsOf(askOf(p))})` : ""}${p.reason ? `: ${p.reason}` : ""}`);
     for (const f of ["result.md", "checks.log", "land.log"] as const) {
       const text = readFile(prev, f);
       if (text !== undefined) parts.push(`### ${f}\n\n${text.trim()}`);
@@ -193,8 +193,9 @@ export function onMain(repo: Repo, run: Run): { commit: string; how: string } | 
  */
 function closeItems(repo: Repo, run: Run): { todo?: string; checkItem?: number } {
   const open = run.check === "open";
-  if (run.todo === undefined && !open) return {};
-  const w = closeAndFile(repo, `todo: job ${run.name} landed`, run.todo, `job ${run.name} landed`, open ? [{ title: `Check ${run.name}: ${run.say}`, labels: ["check"] }] : []);
+  const on = onOf(run);
+  if (on === undefined && !open) return {};
+  const w = closeAndFile(repo, `todo: job ${run.name} landed`, on, `job ${run.name} landed`, open ? [{ title: `Check ${run.name}: ${run.say}`, areas: ["check"] }] : []);
   return { todo: w.todo, checkItem: w.ids[0] };
 }
 
@@ -221,10 +222,24 @@ async function landTurn(repo: Repo, id: string, made: number): Promise<() => voi
   }
 }
 
+/** The issue a goal belongs to, from the store, or undefined when the store does not say. */
+function readItemIssue(repo: Repo, on: number | string): string | undefined {
+  try {
+    const item = reader().item(repo.key, on);
+    return (item && issueOf(item)) || undefined;
+  } catch { return undefined; }
+}
+
 /** The squash commit's message: the worker's subjects, then the trailer block. */
 function landMessage(subjects: string[], run: Run, repo: Repo): string {
+  const on = onOf(run);
+  const ref = on === undefined ? undefined : `${repo.key}-${on}`;
+  // A goal's issue is the store's; a run on an issue with no goal names only the issue.
+  const goal = typeof on === "string" ? ref : undefined;
+  const issue = goal ? readItemIssue(repo, on!) : ref;
   const trailers = [
-    ...(run.todo !== undefined ? [`Item: ${repo.key}-${run.todo}`] : []),
+    ...(issue ? [`Issue: ${issue}`] : []),
+    ...(goal ? [`Goal: ${goal}`] : []),
     `Job: ${run.job}`,
     ...(run.held ? [`Held-by: ${run.lander ?? "Chris"}`] : []),
   ];
@@ -243,7 +258,7 @@ const landBatch = () => Math.max(1, Math.floor(Number(process.env.ALEPH_LAND_BAT
 
 /** A run `aleph land` accepts: passed, or needing Chris only for a manual check, a held path or the reviewer. */
 function landable(agent: Run | undefined): boolean {
-  return !!agent && (agent.state === "passed" || (agent.state === "needs-you" && (agent.needs === "manual" || agent.needs === "held" || agent.needs === "review")));
+  return !!agent && (agent.state === "passed" || (isAwaiting(agent.state) && ["manual", "held", "review"].includes(needsOf(askOf(agent)) ?? "")));
 }
 
 /** The land runs queued behind this one in the repo, oldest first, that `aleph land` would still accept. */
@@ -255,7 +270,7 @@ function queuedLands(repo: Repo, id: string, run: Run, cap: number): Member[] {
   for (const e of queued) {
     if (out.length >= cap || seen.has(e.run.job)) continue;
     const runs = jobById(e.run.job);
-    if (!runs || !isOpen(runs) || !landable(runs.filter((x) => x.run.kind === "agent" || x.run.kind === "recheck").at(-1)?.run)) continue;
+    if (!runs || !isOpen(runs) || !landable(runs.filter((x) => isBuild(x.run.kind) || x.run.kind === "recheck").at(-1)?.run)) continue;
     seen.add(e.run.job);
     out.push({ id: e.id, folder: e.folder, run: e.run, log: (step, o = "") => appendFileSync(join(e.folder, "land.log"), `## ${step}\n${o ? o + "\n" : ""}\n`) });
   }
@@ -348,7 +363,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
           finish(m, { verdict: { state: "landed", commit: pushed }, code: 0, after: () => {
             // The land that pushed may have died before it closed the item.
             const { todo, checkItem } = closeItems(repo, m.run);
-            if (todo) m.log(todo === "done" ? `todo ${m.run.todo} done` : `todo ${m.run.todo} not closed: ${todo}`);
+            if (todo) m.log(todo === "done" ? `todo ${onOf(m.run)} done` : `todo ${onOf(m.run)} not closed: ${todo}`);
             if (checkItem !== undefined) m.log(`todo ${checkItem} holds the manual check`);
             removeBranch(repo, m.run);
             followCheckout(repo, log);
@@ -356,7 +371,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
           continue;
         }
         // A commit by hand, or by another job, that names the item: this land must not add a second one.
-        const there = itemOnMain(repo, m.run.todo);
+        const there = itemOnMain(repo, onOf(m.run));
         if (there) {
           m.log(`item landed as ${there}`);
           finish(m, { verdict: { state: "done", reason: `item landed as ${there}` }, code: 0, after: () => { closeItems(repo, { ...m.run, check: undefined }); removeBranch(repo, m.run); } });
@@ -417,7 +432,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         let why: string | null;
         if (repo.sandbox) {
           const hidden: Record<string, string> = {};
-          for (const i of items) for (const [name, text] of Object.entries(hiddenOf(repo, i.m.run))) hidden[name in hidden ? `${i.m.run.on ?? i.m.run.todo}-${name}` : name] = text;
+          for (const i of items) for (const [name, text] of Object.entries(hiddenOf(repo, i.m.run))) hidden[name in hidden ? `${i.m.run.on ?? onOf(i.m.run)}-${name}` : name] = text;
           why = await sandboxChecks(id, folder, repo, tip, changed, phase, hidden);
         } else {
           const owner = items.map((i) => i.m.run).find((r) => r.worktree && existsSync(r.worktree)) ?? first;
@@ -453,7 +468,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         if (step("push", "push", "-q", "origin", `${result.tip}:refs/heads/${main}`).ok) {
           for (const { m, commit } of ok) {
             const { todo, checkItem } = closeItems(repo, m.run);
-            if (todo) m.log(todo === "done" ? `todo ${m.run.todo} done` : `todo ${m.run.todo} not closed: ${todo}`);
+            if (todo) m.log(todo === "done" ? `todo ${onOf(m.run)} done` : `todo ${onOf(m.run)} not closed: ${todo}`);
             if (checkItem !== undefined) m.log(`todo ${checkItem} holds the manual check`);
             removeBranch(repo, m.run);
             if (m !== leader) m.log(`landed as ${commit} with ${run.name}; the checks ran in ${id}`);
@@ -603,7 +618,7 @@ async function checksInSandbox(folder: string, dir: string, bundle: string, ref:
 
 /** The hidden files of the run's item, or none: a read of the work store that fails gives none, as a repo without an item has none. */
 function hiddenOf(repo: Repo, run: Run): Record<string, string> {
-  const id = run.on ?? run.todo;
+  const id = onOf(run);
   if (id === undefined) return {};
   try { return readHidden(repo, id); } catch { return {}; }
 }
@@ -665,7 +680,11 @@ export function removeBranch(repo: Repo, run: Run): void {
   if (run.branch) git(repo.path, "branch", "-D", run.branch);
 }
 
-type Verdict = Pick<Run, "state" | "needs" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat" | "checkedBase" | "checkedTip">;
+type Verdict = Pick<Run, "state" | "ask" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat" | "checkedBase" | "checkedTip">;
+
+/** A verdict that waits for Chris: the state `awaiting` and the Ask. */
+const awaiting = (kind: Ask["kind"], reason: string, question: string, why: string[] = []): Pick<Verdict, "state" | "ask"> =>
+  ({ state: "awaiting", ask: { kind, reason, question, options: [], why: why.filter(Boolean) } });
 
 export async function unit(folder: string): Promise<void> {
   // drop sends SIGTERM when no systemd unit is there to stop the cgroup.
@@ -718,8 +737,8 @@ export async function unit(folder: string): Promise<void> {
   if (next) ended = updateRun(folder, { next });
   writeFileSync(join(folder, "exit"), String(code));
   process.exitCode = code;
-  if (run.kind === "agent" || run.kind === "recheck") startReview2(folder);
-  if ((run.kind === "agent" || run.kind === "recheck") && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
+  if (isBuild(run.kind) || run.kind === "recheck") startReview(folder);
+  if ((isBuild(run.kind) || run.kind === "recheck") && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
   if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });
   if (next) await start(folder, ended, next);
   if (run.kind !== "plain" && dispatchOn()) await dispatchFree(folder);
@@ -742,8 +761,8 @@ const RELANDS = 3;
  * or its repo lands by itself.
  */
 function nextStep(run: Run, repo: Repo | undefined): Run["next"] {
-  if (run.kind === "agent" && run.failed) return "worker";
-  if (run.kind === "agent" || run.kind === "recheck") return run.state === "passed" && (run.land || repo?.autoland) ? "land" : undefined;
+  if (isBuild(run.kind) && run.failed) return "worker";
+  if (isBuild(run.kind) || run.kind === "recheck") return run.state === "passed" && (run.land || repo?.autoland) ? "land" : undefined;
   if (run.kind !== "land" || run.state !== "failed") return undefined;
   const lands = (jobById(run.job) ?? []).filter((e) => e.run.kind === "land").map((e) => e.run);
   if (run.conflicts?.length) return lands.filter((r) => r.conflicts?.length).length <= BOUNCES ? "worker" : undefined;
@@ -779,8 +798,8 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   }
   const dropped = (jobById(run.job) ?? []).some((e) => e.run.state === "dropped");
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
-  if (repo && !dropped && run.todo !== undefined) fetchOrigin(repo.path);
-  const there = dropped ? null : itemOnMain(repo, run.todo);
+  if (repo && !dropped && onOf(run) !== undefined) fetchOrigin(repo.path);
+  const there = dropped ? null : itemOnMain(repo, onOf(run));
   if (dropped || there) {
     appendFileSync(join(folder, "next.log"), dropped ? `dropped: no ${next} started\n` : `item landed as ${there}: no ${next} started\n`);
     updateRun(folder, { next: undefined });
@@ -873,7 +892,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   if (w.timedOut) return fail("timed out: worker");
   if (w.code !== 0) return { verdict: { state: "failed", reason: `worker exited ${w.code}` }, code: w.code };
   const question = result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("QUESTION:")).at(-1);
-  if (question) return { verdict: { state: "needs-you", needs: "question", question: question.slice("QUESTION:".length).trim() }, code: 0 };
+  if (question) return { verdict: { ...awaiting("input", "question", question.slice("QUESTION:".length).trim()), question: question.slice("QUESTION:".length).trim() }, code: 0 };
   const dirty = git(wt, "status", "--porcelain").out;
   if (dirty) return fail(`uncommitted: ${dirty.split("\n")[0].slice(3)}`);
   const refetched = fetchOrigin(wt);
@@ -974,7 +993,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (git(repo.path, "rev-list", "--count", `${main}..refs/heads/${branch}`).out === "0") return stuck("no commit", facts);
 
     // Each earlier run of the job that a failed check sent back is a fix round.
-    const earlier = (jobById(run.job) ?? []).filter((e) => e.id !== id && e.run.kind === "agent" && e.run.failed).map((e) => e.run);
+    const earlier = (jobById(run.job) ?? []).filter((e) => e.id !== id && isBuild(e.run.kind) && e.run.failed).map((e) => e.run);
     const done = earlier.length;
     if (done) facts.round = done;
     const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
@@ -1006,8 +1025,8 @@ const times = (n: number) => n === 1 ? "once" : n === 2 ? "twice" : `${n} times`
 async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, facts: Partial<Verdict>, earlier?: Run[]): Promise<{ verdict: Verdict; code: number }> {
   const phase = (p: string) => updateRun(folder, { phase: p });
   const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
-  if (rule) return { verdict: { state: "needs-you", needs: "held", reason: rule, stat: git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out, ...facts }, code: 0 };
   const stat = git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out;
+  if (rule) return { verdict: { ...awaiting("approval", "held-path", rule, [stat]), reason: rule, stat, ...facts }, code: 0 };
   phase("review");
   const findings = testFindings(repo.path, base, `refs/heads/${branch}`);
   let rv = await review(id, folder, run, repo, dir, base, branch, findings);
@@ -1019,31 +1038,31 @@ async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, d
     if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
   }
   if (!rv.reason) return { verdict: { state: "passed", ...facts }, code: 0 };
-  if (rv.none) return { verdict: { state: "needs-you", needs: "review", reason: rv.reason, stat, ...facts }, code: 0 };
+  if (rv.none) return { verdict: { ...awaiting("approval", "review", rv.reason, [stat]), reason: rv.reason, stat, ...facts }, code: 0 };
   if (earlier) {
     if (earlier.length < fixRounds()) return { verdict: { state: "stuck", reason: rv.reason, stat, ...facts, failed: "review", round: earlier.length }, code: 1 };
     const back = earlier.filter((r) => r.failed === "review").length;
-    if (back) return { verdict: { state: "needs-you", needs: "review", reason: sentBack(back, rv.reason), stat, ...facts }, code: 0 };
+    if (back) return { verdict: { ...awaiting("approval", "review", sentBack(back, rv.reason), [stat]), reason: sentBack(back, rv.reason), stat, ...facts }, code: 0 };
   }
-  return { verdict: { state: "needs-you", needs: "review", reason: rv.reason, stat, ...facts }, code: 0 };
+  return { verdict: { ...awaiting("approval", "review", rv.reason, [stat]), reason: rv.reason, stat, ...facts }, code: 0 };
 }
 
 /** The reason of a run that came back from the reviewer after the last fix round. */
 const sentBack = (n: number, reason: string) => `the reviewer sent it back ${times(n)}: ${reason.replace(/^reviewer:\s*/, "")}`;
 
 /**
- * A held run whose review2 says `back` goes to the worker as a fix round, while
+ * A held run whose review says `back` goes to the worker as a fix round, while
  * rounds are left; after the last round it stays with Chris, its reason saying so.
- * Called by `aleph review2` when the review ends.
+ * Called by `aleph review` when the review ends.
  */
 export async function reviewBack(folder: string): Promise<void> {
   const run = readRun(folder);
-  const r2 = readReview2(folder);
-  if (!run || run.kind !== "agent" || run.state !== "needs-you" || r2?.verdict !== "back") return;
-  const earlier = (jobById(run.job) ?? []).filter((e) => e.id !== basename(folder) && e.run.kind === "agent" && e.run.failed).map((e) => e.run);
+  const r2 = readCall(folder);
+  if (!run || !isBuild(run.kind) || !isAwaiting(run.state) || r2?.verdict !== "back") return;
+  const earlier = (jobById(run.job) ?? []).filter((e) => e.id !== basename(folder) && isBuild(e.run.kind) && e.run.failed).map((e) => e.run);
   const reason = r2.reason ?? "no reason given";
   if (earlier.length < fixRounds()) {
-    const ended = updateRun(folder, { state: "stuck", needs: undefined, reason, failed: "review", round: earlier.length, next: "worker" });
+    const ended = updateRun(folder, { state: "stuck", ask: undefined, needs: undefined, reason, failed: "review", round: earlier.length, next: "worker" });
     await start(folder, ended, "worker");
     return;
   }

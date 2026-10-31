@@ -69,7 +69,7 @@ describe("land", () => {
     const r = await job("selfland", "commit selfland.txt", {}, "auto");
     expect(state(r.json.run)).toMatchObject({ state: "passed", next: "land" });
     const runs = readdirSync(jobsDir).filter((d) => d.includes("-auto-selfland-")).sort();
-    expect(runs.map((d) => state(d).kind)).toEqual(["agent", "land"]);
+    expect(runs.map((d) => state(d).kind)).toEqual(["build", "land"]);
     expect(state(runs[1])).toMatchObject({ state: "landed" });
     expect(remoteHead()).toBe(state(runs[1]).commit);
     expect(told).toContain("auto/selfland passed; landing");
@@ -85,7 +85,7 @@ describe("land", () => {
     expect(state(r.json.run)).toMatchObject({ state: "landed" });
     expect(state(r.json.run).next).toBeUndefined();
     expect(file(r.json.run, "land.log")).toContain("## main moved; merging again");
-    expect(runsOf("racer").map((x) => x.kind)).toEqual(["agent", "land"]);
+    expect(runsOf("racer").map((x) => x.kind)).toEqual(["build", "land"]);
     expect(sh(base, "git", "--git-dir", remote, "log", "-2", "--format=%s", "main")).toBe("add race/x.txt\nrace");
   });
 

@@ -6,7 +6,7 @@ import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
 import { attrs, nano, postSpans, spanId, traceIdFor, truncate, type Span } from "../../hooks/lib/otlp.ts";
-import type { Run } from "./ledger.ts";
+import { onOf, type Run } from "./ledger.ts";
 
 export interface TraceInput {
   runId: string; run: Run; repoKey: string;
@@ -95,7 +95,7 @@ export function spansFor(t: TraceInput): Span[] {
     "langfuse.trace.metadata.reason": t.run.reason,
     "langfuse.trace.metadata.model": model,
     "langfuse.trace.metadata.cost": cost,
-    "langfuse.trace.metadata.item": t.run.todo !== undefined ? `${t.repoKey}-${t.run.todo}` : undefined,
+    "langfuse.trace.metadata.item": onOf(t.run) !== undefined ? `${t.repoKey}-${onOf(t.run)}` : undefined,
   };
   const top = {
     "langfuse.session.id": t.run.job,

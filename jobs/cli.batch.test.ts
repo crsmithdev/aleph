@@ -52,7 +52,7 @@ describe("a batch of lands", () => {
     const items = [] as number[];
     for (const t of ["x1", "x2", "x3"]) items.push((await aleph(["issue", "add", "demo", t])).json.added);
     const ids: string[] = [];
-    for (const [i, n] of ["t1", "t2", "t3"].entries()) ids.push((await aleph(["job", "demo", n, "--spec", specFile(`Goal: ${n}\nACTION: commit batch/t${i}.txt\n`), "--todo", String(items[i])])).json.job);
+    for (const [i, n] of ["t1", "t2", "t3"].entries()) ids.push((await aleph(["job", "demo", n, "--spec", specFile(`Goal: ${n}\nACTION: commit batch/t${i}.txt\n`), "--on", String(items[i])])).json.job);
     const before = calls();
     mkdirSync(join(base, "run", "aleph"), { recursive: true });
     mkdirSync(lockDir());
@@ -69,7 +69,7 @@ describe("a batch of lands", () => {
     const log = remoteGit("log", "-3", "--format=%B%x00", "main").split("\0").map((m) => m.trim()).filter(Boolean).reverse();
     expect(log.length).toBe(3);
     for (const [i, n] of ["t1", "t2", "t3"].entries()) {
-      expect(log[i]).toContain(`Item: demo-${items[i]}`);
+      expect(log[i]).toContain(`Issue: demo-${items[i]}`);
       expect(log[i]).toContain(`Job: ${ids[i]}`);
       const s = state(landRuns(n)[0].id);
       expect(s).toMatchObject({ state: "landed" });

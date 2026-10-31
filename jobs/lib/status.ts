@@ -1,5 +1,5 @@
 /**
- * Item stage (seed milestone 2): stage() over the `Item:` trailers on
+ * Item stage (seed milestone 2): stage() over the `Issue:` and `Goal:` trailers (and the legacy `Item:`) on
  * origin/<main>, the work store and the ledger. Nothing writes it back to the store.
  *
  * A factory run's bundle carries the store and ledger facts as a snapshot
@@ -65,9 +65,9 @@ export function readFacts(cwd: string): Facts | null {
 }
 
 /**
- * The commits on `main` whose trailer block holds `Item: <key>-<n>` and that
+ * The commits on `main` whose trailer block holds `Issue: <key>-<n>` (or the legacy `Item:`) and that
  * no later commit reverts. Only trailer lines count: a subject or a body line
- * that says `Item:` does not.
+ * that says `Issue:` does not. A commit that also names a goal (`Goal:`) lands that goal, not the whole issue.
  */
 export function landedCommits(cwd: string, main: string, key: string, n: number): string[] {
   return landedIndex(cwd, main, key).get(n) ?? [];
@@ -77,13 +77,18 @@ export function landedCommits(cwd: string, main: string, key: string, n: number)
 const revertedOnly = new WeakMap<Map<number, string[]>, Set<number>>();
 export const revertedIn = (index: Map<number, string[]>): Set<number> => revertedOnly.get(index) ?? new Set();
 
-/** Each of the repo's items that a commit on `main` names in an `Item:` trailer, to those commits, less the reverted ones: two git calls for every item. */
+/** The log format that gives each commit's hash and its `Item`, `Issue` and `Goal` trailer values, tab-separated: the one trailer reader (`Item:` is the legacy key). */
+const TRAILERS = "--format=%H%x09%(trailers:key=Item,valueonly,separator=%x2C)%x09%(trailers:key=Issue,valueonly,separator=%x2C)%x09%(trailers:key=Goal,valueonly,separator=%x2C)";
+const values = (v: string | undefined): string[] => (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+
+/** Each of the repo's items that a commit on `main` names in an `Issue:` or `Item:` trailer (`Goal:` names a goal), to those commits, less the reverted ones: two git calls for every item. */
 export function landedIndex(cwd: string, main: string, key: string): Map<number, string[]> {
   const out = new Map<number, string[]>();
-  const rows = git(cwd, "log", main, "--format=%H%x09%(trailers:key=Item,valueonly,separator=%x2C)").out.split("\n").filter(Boolean);
+  const rows = git(cwd, "log", main, TRAILERS).out.split("\n").filter(Boolean);
   const hits: [string, number][] = [];
-  for (const [h, v] of rows.map((r) => r.split("\t"))) {
-    for (const s of new Set((v ?? "").split(",").map((s) => s.trim()))) {
+  for (const [h, item, issue, goal] of rows.map((r) => r.split("\t"))) {
+    // The commit of a goal names its issue too: it lands the goal, and the issue is done when its goals are.
+    for (const s of new Set([...values(item), ...(values(goal).length ? [] : values(issue))])) {
       const m = s.startsWith(`${key}-`) ? /^\d+$/.exec(s.slice(key.length + 1)) : null;
       if (m) hits.push([h, Number(m[0])]);
     }
@@ -102,10 +107,10 @@ export function landedIndex(cwd: string, main: string, key: string): Map<number,
   return out;
 }
 
-/** The short sha of a commit on `main` whose `Item:` trailer names the goal `ref` (`<repo>-<n>.<m>`) and that no later commit reverts, or null. */
+/** The short sha of a commit on `main` whose `Goal:` (or legacy `Item:`) trailer names the goal `ref` (`<repo>-<n>.<m>`) and that no later commit reverts, or null. */
 function dottedOnMain(cwd: string, main: string, ref: string): string | null {
-  const rows = git(cwd, "log", main, "--format=%H%x09%(trailers:key=Item,valueonly,separator=%x2C)").out.split("\n").filter(Boolean);
-  const hits = rows.map((r) => r.split("\t")).filter(([, v]) => (v ?? "").split(",").some((s) => s.trim() === ref)).map(([h]) => h);
+  const rows = git(cwd, "log", main, TRAILERS).out.split("\n").filter(Boolean);
+  const hits = rows.map((r) => r.split("\t")).filter(([, item, , goal]) => [...values(item), ...values(goal)].includes(ref)).map(([h]) => h);
   if (!hits.length) return null;
   const reverted = new Set([...git(cwd, "log", main, "-E", "--grep=^This reverts commit [0-9a-f]{40}", "--format=%B").out.matchAll(/This reverts commit ([0-9a-f]{40})/g)].map((m) => m[1]));
   const hit = hits.find((h) => !reverted.has(h));

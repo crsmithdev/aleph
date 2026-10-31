@@ -7,7 +7,7 @@ beforeAll(setup);
 afterAll(teardown);
 
 // One fixture item per stage, in the old shape and the new shape, each built through the CLI seam of cli.helpers:
-// seeded old-shape items, `aleph job --todo`, `aleph drop`, and seeded new-shape item and run files.
+// seeded old-shape items, `aleph job --on`, `aleph drop`, and seeded new-shape item and run files.
 interface Row { name: string; stage: string; of?: { n: number; m: number }; why?: RegExp; build: () => Promise<number> }
 
 const ref = (n: number) => `fac-${n}`;

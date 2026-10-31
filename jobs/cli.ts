@@ -24,7 +24,7 @@ import { checkName, checked, drop, land, recheck, refuse, Refusal, repoOf, runDi
 import { probe } from "./lib/probe.ts";
 import * as doctor from "./lib/doctor.ts";
 import { sweep } from "./lib/deps.ts";
-import { runReview2 } from "./lib/review2.ts";
+import { recordReview, runReview } from "./lib/review.ts";
 import * as migrate from "./lib/migrate.ts";
 import { facts, FACTS_REF, readFacts, repoStages, stages } from "./lib/status.ts";
 import type { Stage } from "./lib/stage.ts";
@@ -41,7 +41,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--spec", "--model", "--todo", "--priority", "--labels", "--goal", "--status", "--label", "--body", "--title", "--due", "--after", "--reopened-since", "--before", "--undo"];
+const VALUED = ["--spec", "--model", "--on", "--priority", "--labels", "--goal", "--status", "--label", "--body", "--title", "--due", "--after", "--reopened-since", "--before", "--undo"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
 const command = process.argv.slice(2);
@@ -59,8 +59,8 @@ async function job(): Promise<void> {
   const specArg = flag("spec") ?? refuse("--spec <file|-> is required");
   const [repo, name] = positional;
   const spec = specArg === "-" ? await Bun.stdin.text() : readFileSync(specArg, "utf8");
-  const todoArg = flag("todo");
-  await started(await startJob({ repo, name, spec, todo: todoArg === undefined ? undefined : /^\d+\.\d+$/.test(todoArg) ? todoArg : Number(todoArg), model: flag("model"), land: rest.includes("--land") }, { command }));
+  const onArg = flag("on");
+  await started(await startJob({ repo, name, spec, on: onArg === undefined ? undefined : /^\d+\.\d+$/.test(onArg) ? onArg : Number(onArg), model: flag("model"), land: rest.includes("--land") }, { command }));
 }
 
 async function plain(): Promise<void> {
@@ -89,7 +89,7 @@ function reconcile(all: Entry[][]): Map<string, string> {
     }
     const found = onMain(repo, last.run);
     if (found) {
-      updateRun(last.folder, { state: "landed", commit: found.commit, reason: `found on main (${found.how})`, needs: undefined, told: true });
+      updateRun(last.folder, { state: "landed", commit: found.commit, reason: `found on main (${found.how})`, needs: undefined, ask: undefined, told: true });
       removeBranch(repo, last.run);
       const todo = issueOf(runs);
       const why = todo === undefined ? null : store.close(repo, todo, `job ${last.run.name} found on main as ${found.commit.slice(0, 7)}`);
@@ -106,7 +106,7 @@ function summary(runs: Job, fates = new Map<string, string>()) {
   const v = view(runs);
   return {
     name: v.name, repo: v.repo, kind: v.run.kind, job: v.job, run: v.run.id, goal: goal(runs), state: v.state, needs: v.needs, phase: v.phase,
-    reason: v.reason, say: v.say, review2: v.review2, ...(v.check ? { check: v.check } : {}), fate: fates.get(v.job), session: v.session, started: v.started, ended: v.ended,
+    reason: v.reason, say: v.say, review2: v.review2, review: v.review, ...(v.check ? { check: v.check } : {}), fate: fates.get(v.job), session: v.session, started: v.started, ended: v.ended,
     ...(v.lost ? { lost: true } : {}),
   };
 }
@@ -520,9 +520,10 @@ try {
     case "run": await plain(); break;
     case "jobs": jobs(); break;
     case "recheck": await started(await recheck(positional[0], { command })); break;
-    case "review2": {
-      const folder = resolve(positional[0] ?? refuse("usage: aleph review2 <run-folder>"));
-      try { await runReview2(folder); } catch (e: any) { refuse(e.message); }
+    case "review": {
+      const folder = resolve(positional[0] ?? refuse("usage: aleph review <run-folder>"));
+      try { await runReview(folder); } catch (e: any) { refuse(e.message); }
+      recordReview(folder);
       await reviewBack(folder);
       break;
     }

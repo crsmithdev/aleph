@@ -161,7 +161,7 @@ systemctl --user enable --now ~/aleph/jobs/systemd/aleph-tick.timer
 aleph sandbox probe          # criterion 11, from inside the profile
 aleph doctor [--fix] [--json]  # after an outage: clocks, git objects, units, aleph.home, last probe, lost runs; --fix removes an empty object behind refs/aleph/facts and starts the tick
 aleph report                 # runs not yet shown, behind count, health
-aleph status aleph-28        # done from an Item: trailer on origin/main, else the store, the job, open
+aleph status aleph-28        # done from an Issue: or Goal: trailer on origin/main, else the store, the job, open
 aleph status                 # the same for each open item in the recent repos
 aleph jobs                   # open jobs, then the jobs that ended in the last 24 hours
 aleph pause | aleph resume

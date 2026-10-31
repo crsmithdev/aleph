@@ -3,7 +3,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { tagged } from "./gate.ts";
 import { readFile, allJobs } from "./job.ts";
-import { jobsDir, stamp, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
+import { isBuild, jobsDir, stamp, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
 
 export interface Fact { fact: string; source: string }
 
@@ -76,7 +76,7 @@ function makeRun(repo: Repo, landed: Entry): string {
   for (let n = 0; ; n++) {
     const folder = join(jobsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-facts`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
-    writeRun(folder, { kind: "facts", job: landed.run.job, name, repo: repo.key, todo: landed.run.todo, state: "running", phase: "facts", model: FACTS_MODEL, told: true, shown: false, started: new Date().toISOString(), made: Date.now() });
+    writeRun(folder, { kind: "facts", job: landed.run.job, name, repo: repo.key, ...(landed.run.on !== undefined ? { on: landed.run.on } : landed.run.todo !== undefined ? { todo: landed.run.todo } : {}), state: "running", phase: "facts", model: FACTS_MODEL, told: true, shown: false, started: new Date().toISOString(), made: Date.now() });
     writeFileSync(join(folder, "command.txt"), `facts ${landed.run.name}\n`);
     return folder;
   }
@@ -181,7 +181,7 @@ ${v.source}
 export async function factsGate(repo: Repo, landed: Entry, commit: string, log: (line: string) => void): Promise<{ kept: string[]; rejected: { fact: string; reason: string }[] } | null> {
   const name = landed.run.name;
   const job = allJobs().find((j) => j[0].run.job === landed.run.job) ?? [landed];
-  const worker = job.findLast((e) => e.run.kind === "agent" || e.run.kind === "recheck");
+  const worker = job.findLast((e) => isBuild(e.run.kind) || e.run.kind === "recheck");
   const result = (worker && readFile(worker, "result.md")) ?? "";
   const { facts, unsourced } = parseFacts(result);
   for (const line of unsourced) log(`${name}: fact dropped, no source: ${line}`);

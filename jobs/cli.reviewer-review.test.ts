@@ -61,8 +61,8 @@ describe("a factory run", () => {
     test("a finding after the last fix round needs Chris, and the row says why in one sentence", async () => {
       await rjob("rhold", "REVIEW:hold");
       const rs = runsOf("rhold");
-      expect(rs.map((x) => x.state)).toEqual(["stuck", "stuck", "needs-you"]);
-      expect(rs.at(-1)).toMatchObject({ needs: "review", reason: "the reviewer sent it back twice: tests do not cover the new flag" });
+      expect(rs.map((x) => x.state)).toEqual(["stuck", "stuck", "awaiting"]);
+      expect(rs.at(-1)).toMatchObject({ ask: expect.objectContaining({ kind: "approval", reason: "review" }), reason: "the reviewer sent it back twice: tests do not cover the new flag" });
       expect(rs.at(-1).stat).toContain("rhold.txt");
       const before = remoteGit("rev-parse", "main");
       expect(before).toBe(remoteGit("rev-parse", "main"));
@@ -84,9 +84,9 @@ describe("a factory run", () => {
     test("a second miss is a finding: with no fix rounds, no verdict line or an error result holds the run", async () => {
       const none = { ALEPH_FIX_ROUNDS: "0" };
       const n = calls();
-      expect(state((await rjob("rnone", "REVIEW:none", "commit rnone.txt", none)).json.run)).toMatchObject({ state: "needs-you", needs: "review", reason: expect.stringMatching(/^reviewer: no verdict/) });
+      expect(state((await rjob("rnone", "REVIEW:none", "commit rnone.txt", none)).json.run)).toMatchObject({ state: "awaiting", ask: expect.objectContaining({ kind: "approval", reason: "review" }), reason: expect.stringMatching(/^reviewer: no verdict/) });
       expect(calls() - n).toBe(2);
-      expect(state((await rjob("rerr", "REVIEW:error", "commit rerr.txt", none)).json.run)).toMatchObject({ state: "needs-you", reason: "reviewer: no verdict (API Error: 529)" });
+      expect(state((await rjob("rerr", "REVIEW:error", "commit rerr.txt", none)).json.run)).toMatchObject({ state: "awaiting", reason: "reviewer: no verdict (API Error: 529)" });
       for (const n of ["rnone", "rerr"]) await aleph(["drop", n]);
     });
 
@@ -94,7 +94,7 @@ describe("a factory run", () => {
       const slow = join(base, "slow-reviewer");
       writeFileSync(slow, "#!/bin/bash\nsleep 60\n", { mode: 0o755 });
       const t = await aleph(["job", "fac", "rslow2", "--spec", specFile("Goal: g\nACTION: commit rslow2.txt\n")], { ALEPH_REVIEWER_CMD: slow, ALEPH_REVIEW_TIMEOUT: "1", ALEPH_FIX_ROUNDS: "0" });
-      expect(state(t.json.run)).toMatchObject({ state: "needs-you", reason: "reviewer: no verdict (time box)" });
+      expect(state(t.json.run)).toMatchObject({ state: "awaiting", reason: "reviewer: no verdict (time box)" });
       await aleph(["drop", "rslow2"]);
     });
 
@@ -102,20 +102,20 @@ describe("a factory run", () => {
       const slow = join(base, "slow-reviewer");
       writeFileSync(slow, "#!/bin/bash\nsleep 60\n", { mode: 0o755 });
       const t = await aleph(["job", "fac", "rslow3", "--spec", specFile("Goal: g\nACTION: commit rslow3.txt\n")], { ALEPH_REVIEWER_CMD: slow, ALEPH_REVIEW_TIMEOUT: "1" });
-      expect(state(t.json.run)).toMatchObject({ state: "needs-you", needs: "review", reason: "reviewer: no verdict (time box)" });
+      expect(state(t.json.run)).toMatchObject({ state: "awaiting", ask: expect.objectContaining({ kind: "approval", reason: "review" }), reason: "reviewer: no verdict (time box)" });
       expect(runsOf("rslow3").length).toBe(1);
       await aleph(["drop", "rslow3"]);
       await rjob("rnone2", "REVIEW:none");
       const rs = runsOf("rnone2");
       expect(rs.length).toBe(1);
-      expect(rs[0]).toMatchObject({ state: "needs-you", needs: "review", reason: expect.stringMatching(/^reviewer: no verdict/) });
+      expect(rs[0]).toMatchObject({ state: "awaiting", ask: expect.objectContaining({ kind: "approval", reason: "review" }), reason: expect.stringMatching(/^reviewer: no verdict/) });
       await aleph(["drop", "rnone2"]);
     }, 30_000);
 
     test("a held path holds without a review", async () => {
       const n = calls();
       const r = await rjob("rheld", "REVIEW:pass", "commit held/r.txt");
-      expect(state(r.json.run)).toMatchObject({ needs: "held" });
+      expect(state(r.json.run)).toMatchObject({ ask: expect.objectContaining({ kind: "approval", reason: "held-path" }) });
       expect(calls()).toBe(n);
       await aleph(["drop", "rheld"]);
     });

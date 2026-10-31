@@ -24,7 +24,7 @@ describe("a factory run's checks", () => {
 
     test("a run whose code fails the hidden test is stuck with the count, and no source reaches the note", async () => {
       const id = await hiddenItem();
-      const r = await fjob("hidbad", "commit hidbad.txt", { ALEPH_FIX_ROUNDS: "0" }, ["--todo", String(id)]);
+      const r = await fjob("hidbad", "commit hidbad.txt", { ALEPH_FIX_ROUNDS: "0" }, ["--on", String(id)]);
       expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "hidden check failed: 1 of 1 tests" });
       expect(state(r.json.run).checks.map((c: any) => c.name)).toEqual(["tests", "tree", "hidden"]);
       expect(file(r.json.run, "hidden.log")).toContain("SECRET-HIDDEN-LINE");
@@ -37,9 +37,9 @@ describe("a factory run's checks", () => {
 
     test("the fix round's note has the line and the failing test names, and the job lands once it passes", async () => {
       const id = await hiddenItem();
-      await fjob("hidfix", "hidden-fix", {}, ["--todo", String(id)]);
+      await fjob("hidfix", "hidden-fix", {}, ["--on", String(id)]);
       const rs = runs("hidfix");
-      expect(rs.map((x) => [x.kind, x.state])).toEqual([["agent", "stuck"], ["agent", "passed"], ["land", "landed"]]);
+      expect(rs.map((x) => [x.kind, x.state])).toEqual([["build", "stuck"], ["build", "passed"], ["land", "landed"]]);
       expect(rs[0]).toMatchObject({ reason: "hidden check failed: 1 of 1 tests", failed: "hidden", next: "worker" });
       const p = readFileSync(join(fakeLog, "prompt"), "utf8");
       expect(p).toContain("hidden check failed: 1 of 1 tests");
@@ -55,7 +55,7 @@ describe("a factory run's checks", () => {
 
     test("an item with no hidden files runs the same checks as before", async () => {
       const id = (await aleph(["issue", "add", "fac", "no hidden"])).json.added;
-      const r = await fjob("hidnone", "commit hidnone.txt", {}, ["--todo", String(id)]);
+      const r = await fjob("hidnone", "commit hidnone.txt", {}, ["--on", String(id)]);
       expect(state(r.json.run).checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
       expect(existsSync(join(jobsDir, r.json.run, "hidden.log"))).toBe(false);
       await aleph(["drop", "hidnone"]);
@@ -113,7 +113,7 @@ describe("a factory run's checks", () => {
     test("a failed check goes back to the worker, whose note names it with the log; the job passes after 1 fix round", async () => {
       const r = await fjob("fix1", "fail-then-fix");
       const rs = runs("fix1");
-      expect(rs.map((x) => [x.kind, x.state])).toEqual([["agent", "stuck"], ["agent", "passed"], ["land", "landed"]]);
+      expect(rs.map((x) => [x.kind, x.state])).toEqual([["build", "stuck"], ["build", "passed"], ["land", "landed"]]);
       expect(rs[0]).toMatchObject({ reason: "tests failed", failed: "tests", next: "worker" });
       expect(rs[1].round).toBe(1);
       const p = readFileSync(join(fakeLog, "prompt"), "utf8");
