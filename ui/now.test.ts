@@ -480,6 +480,15 @@ test("the status line is not 'All is well.' when the Issues section has an item"
   }
 });
 
+test("a held run that waits for the firefighter is still one job needs you, never a fine line", () => {
+  const held = { ...state, stuck: [], needsIssues: [], factory: { ...state.factory, health: [] } };
+  const attention = attend({ needs: held.needs, needsIssues: [] }, { held: { action: "firefighter", at: "2026-10-28T00:00:00.000Z" } }, []).items;
+  const h = r.renderLede({ ...held, attention });
+  expect(h).toContain("1 job needs you");
+  expect(h).toContain('class="say warning"');
+  for (const v of r.FINE) expect(h).not.toContain(v);
+});
+
 test("Status times use the state's own now for the year check", () => {
   const run = (started: string) => withAttn({ ...state, now: "2027-01-05T12:00:00Z", running: [job({ name: "a", started, run: { kind: "land", started } })] });
   expect(run("2026-10-27T16:50:00Z")).toContain(">2026-10-27</span>");
