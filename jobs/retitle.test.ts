@@ -93,8 +93,66 @@ test("dry run lists open items, asks once, refuses bad titles, changes nothing",
   expect(bad.out).toContain("open issue\tsame");
 });
 
-test("--apply is refused", () => {
-  const p = Bun.spawnSync(["bun", join(import.meta.dir, "retitle.ts"), "--apply"], { env: process.env, stdout: "pipe", stderr: "pipe" });
-  expect(p.exitCode).not.toBe(0);
-  expect(p.stderr.toString()).toContain("--apply comes later");
+test("--apply writes changed titles once, refuses bad ones, and a rerun writes nothing", () => {
+  store.writeList({ key: "rc" }, "seed", (doc) => {
+    const open = issues.add(doc, "open issue");
+    issues.addGoal(doc, open, { title: "first goal", body: "x" });
+    const dropped = issues.addGoal(doc, open, { title: "dropped goal", body: "x" });
+    dropped.fm.status = "dropped";
+    const done = issues.add(doc, "done issue");
+    done.fm.status = "done";
+    return true;
+  }, true);
+  sh(clone, "git", "fetch", "-q", "origin");
+  const fake = join(base, "fake2.sh");
+  const reply = join(base, "reply2.json");
+  writeFileSync(fake, `#!/bin/sh\ncat > /dev/null\ncat "$FAKE_REPLY"\n`);
+  chmodSync(fake, 0o755);
+  const run = (r: unknown) => {
+    writeFileSync(reply, JSON.stringify(r));
+    const p = Bun.spawnSync(["bun", join(import.meta.dir, "retitle.ts"), "--apply"], { env: { ...process.env, ALEPH_RETITLE_CMD: fake, FAKE_REPLY: reply }, stdout: "pipe", stderr: "pipe" });
+    return { code: p.exitCode, out: p.stdout.toString(), err: p.stderr.toString() };
+  };
+  const head = () => { sh(clone, "git", "fetch", "-q", "origin"); return sh(clone, "git", "rev-parse", "origin/main"); };
+  const titles = () => Object.fromEntries(store.readList({ key: "rc" })!.items.map((i) => [issues.refOf(i), i.title]));
+
+  const h00 = head();
+  const bad = run({ titles: [
+    { id: "rc-1", title: "x".repeat(61) },
+    { id: "rc-1.1", title: "" },
+    { id: "zz-9", title: "Unknown" },
+  ] });
+  expect(bad.code).toBe(0);
+  for (const id of ["rc-1:", "rc-1.1:", "zz-9:"]) expect(bad.err.split("\n").some((l) => l.startsWith(id))).toBe(true);
+  expect(bad.out).not.toContain("edited");
+  const h0 = head();
+  expect(h0).toBe(h00);
+
+  const before = store.readList({ key: "rc" })!.items.map((i) => ({ ...i.fm, title: i.title, body: i.body }));
+  const good = run({ titles: [
+    { id: "rc-1", title: "Retitled issue" },
+    { id: "rc-1.1", title: "[Group] First" },
+  ] });
+  expect(good.code).toBe(0);
+  expect(good.err).not.toContain("rc-");
+  expect(good.out).toContain("rc-1: edited");
+  expect(good.out).toContain("rc-1.1: edited");
+  const after = store.readList({ key: "rc" })!.items;
+  expect(titles()).toEqual({ "1": "Retitled issue", "1.1": "[Group] First", "1.2": "dropped goal", "2": "done issue" });
+  after.forEach((i, n) => {
+    const { updated: _a, ...a } = i.fm as any;
+    const { updated: _b, ...b } = before[n] as any;
+    const { title: _t, ...b2 } = b;
+    expect({ ...a, body: i.body }).toEqual(b2);
+  });
+  expect(head()).not.toBe(h0);
+  const h1 = head();
+
+  const again = run({ titles: [
+    { id: "rc-1", title: "Retitled issue" },
+    { id: "rc-1.1", title: "[Group] First" },
+  ] });
+  expect(again.code).toBe(0);
+  expect(again.out).not.toContain("edited");
+  expect(head()).toBe(h1);
 });

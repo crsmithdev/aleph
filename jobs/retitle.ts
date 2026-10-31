@@ -1,9 +1,10 @@
 /**
  * One-time host script of aleph-908: new titles for every open issue and goal in the work store.
- * The dry run asks a read-only model call for titles and prints id, old title, new title. `--apply` comes later.
+ * The dry run asks a read-only model call for titles and prints id, old title, new title. `--apply` then writes each changed title with the edit verb.
  */
 import { git, fetchOrigin } from "./lib/git.ts";
 import { replyOf } from "./lib/gate.ts";
+import { edit } from "../todo/lib/issues.ts";
 import * as store from "../todo/lib/store.ts";
 import { refOf, status, type Issue } from "../todo/lib/todo.ts";
 
@@ -11,7 +12,7 @@ export const MODEL = "claude-opus-5-5";
 const BATCH = 40;
 const MAX = 60;
 
-export interface Item { id: string; title: string; kind: "issue" | "goal"; parent?: { id: string; title: string }; siblings: string[] }
+export interface Item { id: string; title: string; kind: "issue" | "goal"; key?: string; ref?: string; parent?: { id: string; title: string }; siblings: string[] }
 
 /** The outermost JSON object of a reply, or null. */
 function parseObject(output: string): any {
@@ -101,13 +102,13 @@ export function openItems(): Item[] {
     const byId = new Map(doc.items.map((it) => [id(it), it]));
     for (const it of doc.items) {
       if (status(it) !== "open") continue;
-      if (store.kindOf(it) !== "goal") { items.push({ id: id(it), title: it.title, kind: "issue", siblings: [] }); continue; }
+      if (store.kindOf(it) !== "goal") { items.push({ id: id(it), title: it.title, kind: "issue", key, ref: refOf(it), siblings: [] }); continue; }
       const pid = store.issueOf(it);
       const parent = pid ? byId.get(pid) : undefined;
       const siblings = parent
         ? store.goalsOf(parent).map((g) => byId.get(g)).filter((g): g is Issue => !!g && g !== it && status(g) === "open").map((g) => g.title)
         : [];
-      items.push({ id: id(it), title: it.title, kind: "goal", ...(pid ? { parent: { id: pid, title: parent?.title ?? "" } } : {}), siblings });
+      items.push({ id: id(it), title: it.title, kind: "goal", key, ref: refOf(it), ...(pid ? { parent: { id: pid, title: parent?.title ?? "" } } : {}), siblings });
     }
   });
   return items;
@@ -115,17 +116,29 @@ export function openItems(): Item[] {
 
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
-  if (args.includes("--apply")) { console.error("--apply comes later"); return 1; }
+  const apply = args.includes("--apply");
   const items = openItems();
   const rows: string[][] = [["id", "old title", "new title"]];
+  const changes: { item: Item; title: string }[] = [];
   for (const batch of batches(items)) {
     const got = await retitle(batch, (id, why) => console.error(`${id}: ${why}`));
     for (const i of batch) {
       const t = got.get(i.id);
+      if (t !== undefined && t !== i.title) changes.push({ item: i, title: t });
       rows.push([i.id, i.title, t === undefined || t === i.title ? "same" : t]);
     }
   }
   for (const r of rows) console.log(r.join("\t"));
+  if (apply) {
+    for (const { item, title } of changes) {
+      try {
+        edit({ key: item.key! }, String(item.ref), { title });
+        console.log(`${item.id}: edited`);
+      } catch (e: any) {
+        console.error(`${item.id}: ${e?.message ?? e}`);
+      }
+    }
+  }
   return 0;
 }
 
