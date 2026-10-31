@@ -372,13 +372,14 @@ export function apply(r: Roots = roots()): { backup: string; commit: string; ite
   return { backup, commit: commit.out, items: p.items.length, runs: changed };
 }
 
-export function undo(time: string, r: Roots = roots()): { backup: string } {
+export function undo(time: string, r: Roots = roots(), discardLater = false): { backup: string } {
   const backup = join(r.backups, time.endsWith("-migrate") ? time : `${time}-migrate`);
   if (!existsSync(join(backup, "meta.json"))) refuse(`no backup at ${backup}`);
   const meta = JSON.parse(readFileSync(join(backup, "meta.json"), "utf8")) as { roots: Roots; had: string[]; hadSandbox: boolean; preCommit: string; applyCommit: string };
   const o = meta.roots;
 
-  // Origin first, before anything changes: undo only goes on when origin's main is the commit apply pushed.
+  // Origin first, before anything changes: undo only goes on when origin's main is the commit apply pushed,
+  // or with discardLater, which drops the commits after it from the tree. Their history stays on main.
   const live = existsSync(o.issues) ? o.issues : o.store;
   const url = git(live, "remote", "get-url", "origin");
   if (!url.ok) refuse(`the store has no origin: ${url.out}`);
@@ -386,7 +387,7 @@ export function undo(time: string, r: Roots = roots()): { backup: string } {
   const head = git(live, "ls-remote", "origin", "refs/heads/main");
   if (!head.ok) refuse(`cannot read origin: ${head.out}`);
   const tip = head.out.split(/\s/)[0];
-  if (tip !== meta.applyCommit) {
+  if (tip !== meta.applyCommit && !discardLater) {
     // Fetch into a scratch repo, so a refusal leaves the store as it was.
     const scratch = mkdtempSync(join(tmpdir(), "aleph-undo-"));
     try {
@@ -405,10 +406,10 @@ export function undo(time: string, r: Roots = roots()): { backup: string } {
   if (meta.hadSandbox && existsSync(o.sandbox) && !existsSync(o.sandboxOld)) renameSync(o.sandbox, o.sandboxOld);
   rmSync(o.store, { recursive: true, force: true });
   cpDir(join(backup, "store"), o.store);
-  // Origin: one new commit on the apply commit, with the pre-apply tree. A plain push, so a push made since is refused.
+  // Origin: one new commit on origin's tip, with the pre-apply tree. A plain push, so a push made since is refused.
   const fetched = fetchOrigin(o.store, "main");
   if (!fetched.ok) throw new Error(`store fetch failed: ${fetched.out}`);
-  const back = git(o.store, "commit-tree", `${meta.preCommit}^{tree}`, "-p", meta.applyCommit, "-m", `migrate: undo, back to ${meta.preCommit.slice(0, 7)}`);
+  const back = git(o.store, "commit-tree", `${meta.preCommit}^{tree}`, "-p", tip, "-m", `migrate: undo, back to ${meta.preCommit.slice(0, 7)}`);
   if (!back.ok) throw new Error(`commit-tree failed: ${back.out}`);
   const push = git(o.store, "push", "-q", "origin", `${back.out}:refs/heads/main`);
   if (!push.ok) throw new Error(`push refused: ${push.out}`);

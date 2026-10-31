@@ -292,6 +292,14 @@ describe("aleph migrate", () => {
     expect(sh(dir("items.git"), "git", "rev-parse", "main")).toBe(tip);
     expect({ issues: snapshot(dir("issues")), runs: snapshot(dir("runs")), factory: snapshot(dir("factory")), sandbox: snapshot(dir("sandbox")) }).toEqual(state);
     expect(existsSync(dir("items"))).toBe(false);
+
+    // --discard-later goes on: a plain push on the later commit, with the pre-apply tree.
+    const f = await aleph(["migrate", "--undo", "20261031-090000", "--discard-later"]);
+    expect(f.code).toBe(0);
+    expect(existsSync(dir("items"))).toBe(true);
+    expect(existsSync(dir("issues"))).toBe(false);
+    expect(sh(dir("items.git"), "git", "rev-parse", "main~1")).toBe(tip);
+    expect(sh(dir("items.git"), "git", "ls-tree", "--name-only", "main")).not.toContain("later.txt");
   });
 
   test("with no mode, or two, it refuses", async () => {

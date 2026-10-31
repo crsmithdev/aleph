@@ -412,12 +412,12 @@ function statusRecent(): void {
 
 /** `aleph migrate --dry-run | --apply | --undo <time>`: the work-model migration, see jobs/lib/migrate.ts. */
 function migrateCmd(): void {
-  const usage = "usage: aleph migrate --dry-run | --apply | --undo <time>";
+  const usage = "usage: aleph migrate --dry-run | --apply | --undo <time> [--discard-later]";
   const undoing = flag("undo");
   const modes = [rest.includes("--dry-run"), rest.includes("--apply"), undoing !== undefined].filter(Boolean).length;
   if (modes !== 1) refuse(usage);
   try {
-    if (undoing !== undefined) return out(migrate.undo(undoing));
+    if (undoing !== undefined) return out(migrate.undo(undoing, undefined, rest.includes("--discard-later")));
     if (rest.includes("--apply")) return out(migrate.apply());
     const d = migrate.dryRun();
     for (const row of d.rows) console.log(`${row.id}\t${row.old}\t${row.stage}${row.ok ? "" : "\tOUTSIDE THE MAPPING TABLE"}`);
