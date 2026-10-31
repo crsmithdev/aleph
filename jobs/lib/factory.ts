@@ -81,6 +81,13 @@ export function runsToday(now = Date.now()): Entry[] {
   return allRuns().filter((e) => (isBuild(e.run.kind) || e.run.kind === "triage" || e.run.kind === "plan") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
 }
 
+/** The dollars of the runs started in the last 24 hours: `runsToday`, and the facts and firefighter runs, which the day cap does not count. */
+export function spentToday(now = Date.now()): number {
+  const keys = new Set(sandboxRepos().map((r) => r.key));
+  const others = allRuns().filter((e) => (e.run.kind === "firefighter" || (e.run.kind === "facts" && e.run.repo && keys.has(e.run.repo))) && now - Date.parse(e.run.started) < DAY);
+  return [...runsToday(now), ...others].reduce((a, e) => a + (e.run.cost ?? 0), 0);
+}
+
 /** Open jobs in factory repos whose last run awaits Chris (a stuck run needs no answer). */
 export function waiting(jobs = allJobs()): number {
   const keys = new Set(sandboxRepos().map((r) => r.key));
@@ -1069,8 +1076,7 @@ function runLines(now: number): string[] {
   const lines = fresh.map(entry);
   for (const e of fresh) updateRun(e.folder, { shown: true });
   const today = runsToday(now);
-  const cost = today.reduce((a, e) => a + (e.run.cost ?? 0), 0);
-  if (lines.length) lines.push(`runs in the last 24 hours: ${today.length} of ${DAY_CAP()}, ${money(cost)} at the API price${paused() ? "; the factory is paused" : ""}`);
+  if (lines.length) lines.push(`runs in the last 24 hours: ${today.length} of ${DAY_CAP()}, ${money(spentToday(now))} at the API price${paused() ? "; the factory is paused" : ""}`);
   return lines;
 }
 

@@ -26,6 +26,15 @@ export function outcome(stdout: string): Outcome {
   return { ok, line: ok ? "" : (result || line).slice(0, 300), result, cost };
 }
 
+/**
+ * The reply text and the cost of a read-only run. A stdout with no `result`
+ * event, as a test's fake prints, is the text itself.
+ */
+export function replyOf(stdout: string): { text: string; cost?: number } {
+  const o = outcome(stdout);
+  return o.result || o.cost !== undefined ? { text: o.result, cost: o.cost } : { text: stdout };
+}
+
 /** The text after `<tag>:` on each line of the result that starts with it. */
 export const tagged = (result: string, tag: string): string[] =>
   result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith(`${tag}:`)).map((l) => l.slice(tag.length + 1).trim()).filter(Boolean);

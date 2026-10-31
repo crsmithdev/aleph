@@ -13,7 +13,7 @@ import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
 import { allRuns, askOf, isAwaiting, isBuild, isLost, runsDir, loadRegistry, lock, onOf, readRun, reviewOf, stamp, tell, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, openJob, readFile, type Job } from "./job.ts";
-import { verdict as reviewVerdict } from "./gate.ts";
+import { replyOf, verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
 import { factoryDir, factoryLog, factoryRepos, redBaselines, writeRerun } from "./factory.ts";
 import { ciLine, redCi } from "./ci.ts";
@@ -360,14 +360,16 @@ const READ_ONLY = ["Read", "Grep", "Glob", "Bash(aleph jobs:*)", "Bash(aleph iss
 async function ask(input: string, folder: string): Promise<string> {
   writeFileSync(join(folder, "prompt.md"), input);
   const dirs = factoryRepos().flatMap((r) => ["--add-dir", r.path]);
-  const argv = [process.env.ALEPH_FIREFIGHTER_CMD ?? "claude", "-p", "--model", FIREFIGHTER_MODEL, "--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", ...READ_ONLY, ...dirs];
+  const argv = [process.env.ALEPH_FIREFIGHTER_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--model", FIREFIGHTER_MODEL, "--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", ...READ_ONLY, ...dirs];
   const p = Bun.spawn(argv, { cwd: runsDir(), env: process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
   const timer = setTimeout(() => p.kill(), TIME_BOX_MS());
   try {
     const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
     writeFileSync(join(folder, "output.log"), out + err);
+    const { text, cost } = replyOf(out);
+    if (cost !== undefined) updateRun(folder, { cost });
     if (code !== 0) throw new Error(`firefighter exited ${code}`);
-    return out;
+    return text;
   } finally {
     clearTimeout(timer);
   }

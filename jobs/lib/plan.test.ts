@@ -33,6 +33,7 @@ Here is the plan. ${THREE}
 J
   ;;
   *PLAN:slow*) for _ in $(seq 600); do { [ -e "${join(base, "release")}" ] || [ ! -d "${base}" ]; } && break; sleep 0.05; done; echo '${THREE}' ;;
+  *PLAN:costed*) printf '%s\\n' '${JSON.stringify({ type: "result", is_error: false, total_cost_usd: 1.5, result: THREE })}' ;;
   *PLAN:one*) echo '${ONE}' ;;
   *PLAN:nooracle*) echo '${NO_ORACLE}' ;;
   *PLAN:badthengood*) if [ -e "${join(base, "once")}" ]; then echo '${THREE}'; else touch "${join(base, "once")}"; echo '${ONE}'; fi ;;
@@ -199,6 +200,13 @@ test("a bad reply then a good one plans the goal", async () => {
   expect(planCalls().length).toBe(2);
   expect(starts).toEqual([]);
   expect(item(id).fm.goals).toHaveLength(3);
+});
+
+test("a planner run records the cost of its result event", async () => {
+  const id = addGoal("costed");
+  await dispatch("opus");
+  expect(item(id).fm.goals).toHaveLength(3);
+  expect(planRuns()[0]).toMatchObject({ kind: "plan", cost: 1.5 });
 });
 
 test("a goal that has had a run is not planned", async () => {

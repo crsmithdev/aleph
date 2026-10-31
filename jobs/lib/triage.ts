@@ -9,6 +9,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { isSorted, noteFlake, reader, setAsk, sort } from "../../todo/lib/store.ts";
 import { askNote, normalizeAsk, type Ask } from "./ask.ts";
 import { allRuns, runsDir, onOf, lock, readRun, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
+import { replyOf } from "./gate.ts";
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
 import { factoryDir, gates } from "./factory.ts";
@@ -160,14 +161,16 @@ function makeRun(repo: Repo, item: issues.Issue): string {
 async function ask(repo: Repo, item: issues.Issue, folder: string): Promise<string> {
   const input = prompt(repo, item);
   writeFileSync(join(folder, "prompt.md"), input);
-  const argv = [process.env.ALEPH_TRIAGE_CMD ?? "claude", "-p", "--tools", "Read", "Grep", "Glob"];
+  const argv = [process.env.ALEPH_TRIAGE_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--tools", "Read", "Grep", "Glob"];
   const p = Bun.spawn(argv, { cwd: repo.path, env: process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
   const timer = setTimeout(() => p.kill(), TIME_BOX_MS());
   try {
     const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
     writeFileSync(join(folder, "output.log"), out + err);
+    const { text, cost } = replyOf(out);
+    if (cost !== undefined) updateRun(folder, { cost });
     if (code !== 0) throw new Error(`triage exited ${code}`);
-    return out;
+    return text;
   } finally {
     clearTimeout(timer);
   }

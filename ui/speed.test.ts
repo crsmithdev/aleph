@@ -190,6 +190,22 @@ test("a build run counts as an agent run", () => {
   expect(out.classes.find((c) => c.key === "landed")!.causes.map((c) => c.name)).toEqual(["After fix rounds"]);
 });
 
+test("classify: a held run that later landed is landed, its earlier held rounds are fixed", () => {
+  const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
+  const r = (o: Record<string, unknown>) => ({ kind: "build", job: "h", name: "h", repo: "fx", on: "fx-1", state: "awaiting", reason: "held path package.json", ...o }) as any;
+  const land = (job: string, state: string, h: number) => ({ kind: "land", job, name: job, repo: "fx", on: "fx-1", state, started: t(h, 20), ended: t(h, 25) }) as any;
+  const out = classify([
+    r({ started: t(2), ended: t(2, 10) }),
+    land("h", "failed", 2),
+    r({ started: t(3), ended: t(3, 10) }),
+    land("h", "landed", 3),
+    // A run of another job that waits at the same time did not land.
+    r({ job: "other", started: t(3, 1), ended: t(3, 5) }),
+  ], () => "dropped", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
+  const runs = (k: string) => out.classes.find((c) => c.key === k)!.runs;
+  expect([runs("landed"), runs("fixed"), runs("dropped")]).toEqual([1, 1, 1]);
+});
+
 test("runs read their issue from on: a goal run counts under its issue, an issue run under its number", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const a = (job: string, o: Record<string, unknown>) => ({ kind: "build", job, name: job, repo: "ox", state: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;

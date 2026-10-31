@@ -109,7 +109,8 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
     for (const l of lands) {
       const end = Date.parse(l.ended ?? "");
       if (Number.isFinite(end)) lastLand.set(g, Math.max(lastLand.get(g) ?? -Infinity, end));
-      const cand = (agentsOf.get(g) ?? []).filter((a) => passedState(a.state) && t0(a) < end).sort((a, b) => t0(b) - t0(a))[0];
+      // A held run lands from `awaiting`, so it counts for the land of its own job.
+      const cand = (agentsOf.get(g) ?? []).filter((a) => (passedState(a.state) || (a.state === "awaiting" && a.job === l.job)) && t0(a) < end).sort((a, b) => t0(b) - t0(a))[0];
       if (cand) { if (!landing.has(g)) landing.set(g, new Set()); landing.get(g)!.add(cand); }
     }
   }

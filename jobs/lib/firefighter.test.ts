@@ -130,6 +130,14 @@ test("a tick with no new events starts no firefighter run", async () => {
   expect(readRun(join(process.env.ALEPH_JOBS_DIR!, firefighterRuns()[0]))).toMatchObject({ kind: "firefighter", state: "done", model: "claude-opus-5-5" });
 });
 
+test("a firefighter run records the cost of its result event", async () => {
+  fresh();
+  writeFileSync(join(base, "reply.json"), JSON.stringify({ type: "result", is_error: false, total_cost_usd: 0.4, result: JSON.stringify({ actions: [] }) }));
+  run({ name: `${key}-1`, state: "stuck", reason: "time box", on: `${key}-1` });
+  await firefighterStep(ports());
+  expect(readRun(join(process.env.ALEPH_JOBS_DIR!, firefighterRuns()[0]))).toMatchObject({ kind: "firefighter", reason: "0 applied, 0 refused, 0 to Chris", cost: 0.4 });
+});
+
 test("a new held run whose reviews both say land, off the security paths, is landed", async () => {
   fresh([{ title: "held", goal: true }]);
   branch(`b${n}`, "ui/views/x.js");

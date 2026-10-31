@@ -65,6 +65,13 @@ test("a reply with no JSON fails the run and rejects every fact", async () => {
   expect(r.verdicts.map((v) => v.verdict)).toEqual(["reject", "reject"]);
 });
 
+test("a facts run records the cost of its result event", async () => {
+  const reply = JSON.stringify({ verdicts: FACTS.map((f) => ({ fact: f.fact, verdict: "keep", reason: "ok", scope: "demo", title: "T" })) });
+  const { r, state } = await review(`echo '${JSON.stringify({ type: "result", is_error: false, total_cost_usd: 0.75, result: reply })}'`);
+  expect(state).toMatchObject({ kind: "facts", cost: 0.75, reason: "kept 2, rejected 0" });
+  expect(r.verdicts.map((v) => v.verdict)).toEqual(["keep", "keep"]);
+});
+
 test("a wrong count is malformed", async () => {
   const { state } = await review(`echo '{"verdicts":[{"fact":"alpha holds","verdict":"keep","reason":"ok"}]}'`);
   expect(state.reason).toStartWith("failed: malformed verdicts");

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { tagged } from "./gate.ts";
+import { replyOf, tagged } from "./gate.ts";
 import { readFile, allJobs } from "./job.ts";
 import { isBuild, runsDir, stamp, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
 
@@ -90,7 +90,7 @@ export async function reviewFacts(repo: Repo, landed: Entry, facts: Fact[], comm
   try {
     const input = factsPrompt(facts, commit);
     writeFileSync(join(folder, "prompt.md"), input);
-    const argv = [process.env.ALEPH_FACTS_CMD ?? "claude", "-p", "--model", FACTS_MODEL, "--tools", "Read,Grep,Glob,Bash", "--allowedTools", "Read,Grep,Glob,Bash(git show:*)"];
+    const argv = [process.env.ALEPH_FACTS_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--model", FACTS_MODEL, "--tools", "Read,Grep,Glob,Bash", "--allowedTools", "Read,Grep,Glob,Bash(git show:*)"];
     const p = Bun.spawn(argv, { cwd: existsSync(repo.path) ? repo.path : undefined, env: process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; p.kill(); }, TIME_BOX_MS());
@@ -98,9 +98,11 @@ export async function reviewFacts(repo: Repo, landed: Entry, facts: Fact[], comm
     try {
       const [o, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
       writeFileSync(join(folder, "output.log"), o + err);
+      const { text, cost } = replyOf(o);
+      if (cost !== undefined) updateRun(folder, { cost });
       if (timedOut) throw new Error("the facts reviewer timed out");
       if (code !== 0) throw new Error(`the facts reviewer exited ${code}`);
-      out = o;
+      out = text;
     } finally {
       clearTimeout(timer);
     }

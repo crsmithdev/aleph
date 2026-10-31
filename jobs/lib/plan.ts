@@ -11,6 +11,7 @@ import { vaultDir } from "../../vault/lib/vault.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { goalsOf, issueOf, kindOf, readList, note, writeList } from "../../todo/lib/store.ts";
 import { allRuns, runsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
+import { replyOf } from "./gate.ts";
 import { jobsNamed } from "./job.ts";
 import type { Tier } from "./route.ts";
 
@@ -158,14 +159,16 @@ function makeRun(repo: Repo, item: issues.Issue): string {
 async function ask(repo: Repo, item: issues.Issue, folder: string): Promise<string> {
   const input = prompt(repo, item, await recallEpisodes(`${item.title}\n${section(item.body, "Goal")}`));
   writeFileSync(join(folder, "prompt.md"), input);
-  const argv = [process.env.ALEPH_PLAN_CMD ?? "claude", "-p", "--model", PLAN_MODEL, "--tools", "Read", "Grep", "Glob"];
+  const argv = [process.env.ALEPH_PLAN_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--model", PLAN_MODEL, "--tools", "Read", "Grep", "Glob"];
   const p = Bun.spawn(argv, { cwd: existsSync(repo.path) ? repo.path : undefined, env: process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
   const timer = setTimeout(() => p.kill(), TIME_BOX_MS());
   try {
     const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
     writeFileSync(join(folder, "output.log"), out + err);
+    const { text, cost } = replyOf(out);
+    if (cost !== undefined) updateRun(folder, { cost });
     if (code !== 0) throw new Error(`the planner exited ${code}`);
-    return out;
+    return text;
   } finally {
     clearTimeout(timer);
   }

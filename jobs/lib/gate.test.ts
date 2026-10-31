@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reviewPrompt } from "./unit.ts";
-import { heldRule, testFindings, verdict, outcome, tagged, alreadyMet } from "./gate.ts";
+import { heldRule, testFindings, verdict, outcome, replyOf, tagged, alreadyMet } from "./gate.ts";
 
 let dir: string;
 const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -99,4 +99,12 @@ test("the reviewer's verdict is its last VERDICT line", () => {
   expect(verdict("VERDICT: maybe")).toBeNull();
   expect(verdict("VERDICT: holdup")).toBeNull();
   expect(verdict("")).toBeNull();
+});
+
+test("replyOf reads the text and the cost of a result event; other stdout is the text", () => {
+  const stream = '{"type":"system","subtype":"init"}\n{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"{\\"route\\":\\"close\\"}"}\n';
+  expect(replyOf(stream)).toEqual({ text: '{"route":"close"}', cost: 0.25 });
+  expect(replyOf('{"type":"result","is_error":true,"total_cost_usd":0.1,"result":""}')).toEqual({ text: "", cost: 0.1 });
+  expect(replyOf('Looked at it. {"route":"close"}\n')).toEqual({ text: 'Looked at it. {"route":"close"}\n' });
+  expect(replyOf('{"route":"close"}\n')).toEqual({ text: '{"route":"close"}\n' });
 });

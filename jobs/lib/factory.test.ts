@@ -6,7 +6,7 @@ import { askOf, clearAsk, readList, writeList } from "../../todo/lib/store.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { AWAITING_CAP, correctionsDue, dispatchGoals, episodeStep, report, gates, notReady, waitReason, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
+import { AWAITING_CAP, correctionsDue, dispatchGoals, episodeStep, report, gates, notReady, spentToday, waitReason, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
 import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -986,4 +986,9 @@ test("a dispatch with checks, three factory repos and no open goals fetches the 
   const n = readFileSync(log, "utf8").split("\n").filter(Boolean).length;
   console.log(`store fetches: ${n}`);
   expect(n).toBeLessThanOrEqual(2);
+});
+
+test("the day's spend counts every kind that records a cost", () => {
+  for (const [name, kind, cost] of [["fac-1", "build", 1], ["fac-2", "triage", 2], ["fac-3", "plan", 4], ["fac-4", "facts", 8], ["fac-5", "firefighter", 16]] as const) mk(name, kind, "done", { cost });
+  expect(spentToday()).toBe(31);
 });
