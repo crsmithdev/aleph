@@ -6,6 +6,8 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { cacheFetches, uiFetchTtl } from "../todo/lib/store.ts";
+import { loadDotenv } from "../hooks/lib/env.ts";
+import { gate, routes as authRoutes } from "./auth.ts";
 import { startPoller } from "./usage.ts";
 
 export type Handler = (req: Request, params: Record<string, string>, url: URL) => Response | Promise<Response>;
@@ -59,12 +61,18 @@ export async function serve(port: number, { warm = true }: { warm?: boolean } = 
   const dir = import.meta.dir;
   warmers.length = 0;
   const routes = await loadRoutes(join(dir, "api"));
+  for (const [key, handler] of Object.entries(authRoutes)) {
+    const [method, path] = key.split(" ");
+    routes.push({ method, ...compile(path), handler });
+  }
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port,
     // Bun closes a request after 10 s by default; /api/memory and /api/activity take longer.
     idleTimeout: 120,
     async fetch(req) {
+      const refused = gate(req);
+      if (refused) return refused;
       const url = new URL(req.url);
       const path = url.pathname;
       let allowed = false;
@@ -81,7 +89,7 @@ export async function serve(port: number, { warm = true }: { warm?: boolean } = 
       if (allowed) return new Response("method not allowed", { status: 405 });
       if (req.method !== "GET") return new Response("method not allowed", { status: 405 });
       if (path === "/api/views") return Response.json(views(join(dir, "views")));
-      if (path === "/") {
+      if (path === "/" || path === "/index.html") {
         const page = join(dir, "index.html");
         return new Response(Bun.file(page), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       }
@@ -100,6 +108,7 @@ export async function serve(port: number, { warm = true }: { warm?: boolean } = 
 }
 
 if (import.meta.main) {
+  loadDotenv(undefined, ["ALEPH_UI_PASSWORD"]);
   const i = process.argv.indexOf("--port");
   const port = Number(i >= 0 ? process.argv[i + 1] : process.env.ALEPH_UI_PORT ?? 3020);
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
