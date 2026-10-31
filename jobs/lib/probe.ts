@@ -10,6 +10,7 @@ import { fetchOrigin, git } from "./git.ts";
 import { type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
 import { saveProbe, type Probe } from "./factory.ts";
+import { clockStart, SKEW_LIMIT_MS, STEP_LIMIT_MS, wallStepSince, windowsSkew } from "./clock.ts";
 
 function tailnet(): string {
   const p = Bun.spawnSync(["tailscale", "ip", "-4"], { stdout: "pipe", stderr: "ignore" });
@@ -39,6 +40,25 @@ function denied(): [string, string][] {
 
 export interface ProbeResult extends Probe { results: { name: string; ok: boolean }[] }
 
+/**
+ * The probe's failed list. A suite run under a stepped clock fails for the clock, so when the clock
+ * fault is set a failed `bun test` is reported as that fault and not as a test failure.
+ */
+export function failedChecks(results: { name: string; ok: boolean }[], expected: number, clockFault: string | null): string[] {
+  const failed = results.filter((r) => !r.ok).map((r) => clockFault && r.name === "bun test" ? clockFault : r.name);
+  if (results.length < expected) failed.push(`${expected - results.length} checks gave no answer`);
+  return failed;
+}
+
+/** What the clocks did during the probe: a wall clock step against the monotonic clock, or Windows time apart from WSL. */
+function clockFault(start: { wall: number; mono: number }): string | null {
+  const step = wallStepSince(start);
+  if (Math.abs(step) > STEP_LIMIT_MS) return `clock stepped ${Math.round(step)} ms during the probe`;
+  const skew = windowsSkew();
+  if (skew !== null && Math.abs(skew) > SKEW_LIMIT_MS) return `clock ${Math.round(skew / 1000)} s from Windows time`;
+  return null;
+}
+
 export async function probe(repo: Repo, log: string): Promise<ProbeResult> {
   // Test hook: ALEPH_PROBE_FAKE=pass|fail records that result without running the sandbox.
   const fake = process.env.ALEPH_PROBE_FAKE;
@@ -49,6 +69,7 @@ export async function probe(repo: Repo, log: string): Promise<ProbeResult> {
     return { ...p, results: [] };
   }
   const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
+  const started = clockStart();
   const dir = makeRunFolder(`probe-${Date.now()}`);
   try {
     fetchOrigin(repo.path);
@@ -69,8 +90,7 @@ export async function probe(repo: Repo, log: string): Promise<ProbeResult> {
     const results = readFileSync(log, "utf8").split("\n").filter((l) => /^(PASS|FAIL) /.test(l))
       .map((l) => ({ name: l.slice(5, l.lastIndexOf(": ")), ok: l.startsWith("PASS") }));
     const expected = denied().length + 2;
-    const failed = results.filter((r) => !r.ok).map((r) => r.name);
-    if (results.length < expected) failed.push(`${expected - results.length} checks gave no answer`);
+    const failed = failedChecks(results, expected, clockFault(started));
     const p = { at: new Date().toISOString(), ok: !failed.length, failed };
     saveProbe(p);
     return { ...p, results };

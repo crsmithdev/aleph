@@ -21,6 +21,7 @@ import { ciStep } from "./lib/ci.ts";
 import { behind, correctionsStep, dispatchDetached, factoryDir, factoryLog, factoryRepos, firefighterStep, health, hold, paused, planNow, probeDue, report, setPaused, triageDetached, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
 import { checkName, checked, drop, land, recheck, refuse, Refusal, repoOf, runDispatch, startJob, startPlain, type Start } from "./lib/transitions.ts";
 import { probe } from "./lib/probe.ts";
+import * as doctor from "./lib/doctor.ts";
 import { sweep } from "./lib/deps.ts";
 import { runReview2 } from "./lib/review2.ts";
 import * as migrate from "./lib/migrate.ts";
@@ -430,8 +431,21 @@ function migrateCmd(): void {
   }
 }
 
+/** `aleph doctor [--fix] [--json]`: pass or fail for each part of the machine; exit 1 if any fails. */
+async function doctorCmd(): Promise<void> {
+  const checks = await doctor.doctor();
+  const fixed = rest.includes("--fix") ? doctor.fix() : [];
+  if (rest.includes("--json")) out({ checks, fixed });
+  else {
+    for (const c of checks) console.log(`${c.ok ? "PASS" : "FAIL"} ${c.name}: ${c.detail}`);
+    for (const f of fixed) console.log(`FIX ${f}`);
+  }
+  if (checks.some((c) => !c.ok)) process.exit(1);
+}
+
 try {
   switch (cmd) {
+    case "doctor": await doctorCmd(); break;
     case "migrate": migrateCmd(); break;
     case "job": await job(); break;
     case "run": await plain(); break;
@@ -485,7 +499,7 @@ try {
       if (!p.ok) process.exit(1);
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|report|pause|resume|sandbox|status|judge|dispatch> ...");
+    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|report|pause|resume|sandbox|status|judge|dispatch|doctor> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;
