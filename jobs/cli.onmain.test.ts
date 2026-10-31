@@ -9,7 +9,7 @@ afterAll(teardown);
 describe("an item that is already on main", () => {
   const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
   const runsOf = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-demo-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));
-  const add = async (title: string) => (await aleph(["todo", "add", "demo", title])).json.added as number;
+  const add = async (title: string) => (await aleph(["issue", "add", "demo", title])).json.added as number;
   const withItem = (name: string, action: string, id: number) =>
     aleph(["job", "demo", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), "--todo", String(id)]);
   function handLand(message: string, f: string): void {
@@ -41,7 +41,7 @@ describe("an item that is already on main", () => {
     handLand(`pushedbefore\n\nJob: ${agent.job}`, "pushed-before.txt");
     const r = await aleph(["land", "pushedbefore"]);
     expect(state(r.json.run)).toMatchObject({ kind: "land", state: "landed" });
-    const item = (await aleph(["todo", "show", "demo", String(id), "--json"])).json;
+    const item = (await aleph(["issue", "show", "demo", String(id), "--json"])).json;
     expect(item.status).toBe("done");
   }, 30_000);
 

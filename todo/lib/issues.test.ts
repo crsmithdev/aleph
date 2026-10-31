@@ -19,7 +19,7 @@ let n = 0;
 function repo(items: { title: string; labels?: string[] }[] = []): store.Place {
   const r = { key: `is${++n}` };
   store.writeList(r, "start", (doc) => {
-    for (const i of items) todos.add(doc, i.title, { labels: i.labels });
+    for (const i of items) todos.addLegacy(doc, i.title, { labels: i.labels });
     return true;
   }, true);
   return r;
@@ -71,12 +71,22 @@ describe("issue verbs without argv", () => {
     expect(todos.status(item(r, 1))).toBe("open");
   });
 
-  test("decide needs a needs-chris issue", () => {
+  test("decide needs an issue with an Ask or a needs-chris label, clears it and makes no goal", () => {
     const r = repo([{ title: "a" }, { title: "b", labels: [store.NEEDS_CHRIS] }]);
-    expect(refusal(() => issues.decide(r, 1, "yes"))).toContain("not waiting for a decision");
+    store.writeList(r, "ask", (doc) => { store.setAsk(todos.find(doc, 1)!, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
+    store.writeList(r, "ask", (doc) => { const i = todos.addLegacy(doc, "c"); store.setAsk(i, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
+    expect(refusal(() => issues.decide(r, 99, "yes"))).toContain("has no issue");
     const d = issues.decide(r, 2, "yes");
-    expect(store.hasLabel(d.item, store.GOAL)).toBe(true);
+    expect(store.hasLabel(d.item, store.GOAL)).toBe(false);
     expect(store.needsChris(item(r, 2))).toBe(false);
+    issues.decide(r, 1, "yes");
+    expect(store.askOf(item(r, 1))).toBeNull();
+    expect(item(r, 1).fm.ask).toBeUndefined();
+    expect(item(r, 1).notes.at(-1)).toContain("yes");
+    store.writeList(r, "x", (doc) => { todos.addLegacy(doc, "plain"); return true; });
+    expect(refusal(() => issues.decide(r, 4, "yes"))).toContain("not waiting for a decision");
+    issues.decide(r, 3, "wait", { waitingOn: "x-1" });
+    expect(item(r, 3).fm.waiting_on).toBe("x-1");
   });
 
   test("edit needs a field, a good --due and a good --waiting-on", () => {

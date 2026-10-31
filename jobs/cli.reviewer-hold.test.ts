@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, diagnose, dispatching, file, jobsDir, specFile, state, stateNow, setup, teardown, unitAlive, until } from "./cli.helpers";
+import { aleph, base, diagnose, dispatching, file, jobsDir, specFile, state, stateNow, setup, teardown, unitAlive, until, seedItem } from "./cli.helpers";
 
 // setup spawns openssl and git, so it can outlast the 5 s bun default; bun run test uses 30 s.
 beforeAll(setup, 30_000);
@@ -18,9 +18,9 @@ describe("a factory run", () => {
     // Its ticks run the nightly probe unless a fresh passing one is on file; alone, none is.
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
-    const stuckId = (await aleph(["todo", "add", "fac", "the stuck one", "--labels", "goal", "--body", "-"], {}, "ACTION: error\n")).json.added;
+    const stuckId = seedItem("fac", "the stuck one", { labels: ["goal"] }, "ACTION: error\n".trim());
     expect((await aleph(["tick"])).json.started).toEqual([`fac-${stuckId}`]);
-    const id = (await aleph(["todo", "add", "fac", "behind the hold", "--labels", "goal", "--body", "-"], {}, "ACTION: commit behind.txt\n")).json.added;
+    const id = seedItem("fac", "behind the hold", { labels: ["goal"] }, "ACTION: commit behind.txt\n".trim());
     const d = await aleph(["dispatch"]);
     expect(d.json.started).toEqual([]);
     expect(d.json.held).toContain(`Held: fac-${stuckId} is stuck`);
@@ -42,7 +42,7 @@ describe("a factory run", () => {
     expect(state((await aleph(["land", "fheld2"])).json.run).state).toBe("landed");
     expect(other2.code).toBe(0);
     await aleph(["drop", `fac-${stuckId}`]);
-    await aleph(["todo", "drop", "fac", String(stuckId), "test over"]);
+    await aleph(["issue", "drop", "fac", String(stuckId), "test over"]);
     await aleph(["pause"]);
     expect((await aleph(["dispatch"])).json).toMatchObject({ paused: true });
     await aleph(["resume"]);
@@ -51,7 +51,7 @@ describe("a factory run", () => {
     expect(free.json.landed).toEqual(["fheld"]);
     expect(free.json.started).toEqual([`fac-${id}`]);
     await aleph(["drop", `fac-${id}`]);
-    await aleph(["todo", "drop", "fac", String(id), "test over"]);
+    await aleph(["issue", "drop", "fac", String(id), "test over"]);
       })();
     } finally {
       delete process.env.ALEPH_RESCUE;

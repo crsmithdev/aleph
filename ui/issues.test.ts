@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isGoal, readList, writeList } from "../todo/lib/store.ts";
-import { add } from "../todo/lib/todo.ts";
+import { readList, writeList } from "../todo/lib/store.ts";
+import { addLegacy as add } from "../todo/lib/todo.ts";
 import * as todos from "../todo/lib/todo.ts";
 import { readDecision, writeDecision } from "../jobs/lib/decision.ts";
 import { serve } from "./server.ts";
@@ -298,12 +298,28 @@ describe("views", () => {
 });
 
 describe("POST /api/issues", () => {
-  test("passes title, labels, --waiting-on and the body on stdin to the CLI", async () => {
-    const res = await post({ repo: "fac", title: "new one", body: "## Goal\n\ndo it", labels: ["goal", "x"], waitingOn: "fac-1", due: "2026-12-01" });
+  test("turns the goal label into --goal -, and passes title, labels, due and the text on stdin to `aleph issue add`", async () => {
+    const res = await post({ repo: "fac", title: "new one", body: "## Goal\n\ndo it", labels: ["goal", "x"], due: "2026-12-01" });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ added: 7 });
-    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["todo", "add", "fac", "new one", "--body", "-", "--labels", "goal,x", "--waiting-on", "fac-1", "--due", "2026-12-01"]);
+    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "add", "fac", "new one", "--goal", "-", "--labels", "x", "--due", "2026-12-01"]);
     expect(readFileSync(stdinFile, "utf8")).toBe("## Goal\n\ndo it");
+  });
+
+  test("without the goal label the text is the body", async () => {
+    const res = await post({ repo: "fac", title: "plain one", body: "just words", labels: ["x"] });
+    expect(res.status).toBe(200);
+    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "add", "fac", "plain one", "--body", "-", "--labels", "x"]);
+  });
+
+  test("a waitingOn is refused with a 400 and runs nothing", async () => {
+    rmSync(argvFile, { force: true });
+    for (const body of [{ waitingOn: "fac-1" }, { waiting_on: "fac-1" }]) {
+      const res = await post({ repo: "fac", title: "waits", body: "x", labels: ["goal"], ...body });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as any).error).toContain("wait");
+    }
+    expect(await Bun.file(argvFile).exists()).toBe(false);
   });
 
   test("without the header it is 403, and with a foreign Origin too", async () => {
@@ -362,7 +378,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
     return i.id;
   })!.value;
 
-  test("approving an option writes the note, swaps needs-chris for goal and clears the fields", async () => {
+  test("approving an option writes the note, clears the Ask and its fields, and makes no goal", async () => {
     const n = ask(true);
     await withRealCli(async () => {
       expect((await at(`/api/issues/fac/${n}/decide`, { method: "POST", body: "{}" })).status).toBe(403);
@@ -371,20 +387,21 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
       expect(r.status).toBe(200);
       const i = item(n);
       expect(i.notes.at(-1)).toContain("Chris decided: A: do a");
-      expect(i.fm.labels).toEqual(["goal"]);
+      expect(i.fm.labels).toEqual([]);
       expect(i.fm.question).toBeUndefined();
       expect((await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) })).status).toBe(409);
     });
   });
 
-  test("an option that waits sets waiting_on in the same write as the goal label", async () => {
+  test("an option that waits sets waiting_on in the same write as the Ask clears", async () => {
     const n = ask(true, "fac-1");
     expect(readDecision(item(n))!.options[0].waiting_on).toBe("fac-1");
     await withRealCli(async () => {
       const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) });
       expect(r.status).toBe(200);
-      expect(item(n).fm.labels).toEqual(["goal"]);
+      expect(item(n).fm.labels).toEqual([]);
       expect(item(n).fm.waiting_on).toBe("fac-1");
+      expect(item(n).fm.question).toBeUndefined();
     });
   });
 
@@ -394,7 +411,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
       const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ recommendation: true }) });
       expect(r.status).toBe(200);
       expect(item(n).notes.at(-1)).toContain("Chris decided: My recommendation is B, it is smaller.");
-      expect(item(n).fm.labels).toEqual(["goal"]);
+      expect(item(n).fm.labels).toEqual([]);
     });
   });
 
@@ -404,14 +421,13 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
     return i.id;
   })!.value;
 
-  test("approving a migrated proposal makes it a goal and clears the Ask", async () => {
+  test("approving a migrated proposal clears the Ask and leaves the issue to triage", async () => {
     const n = migrated("proposal", "approval");
     await withRealCli(async () => {
       const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ approve: true }) });
       expect(r.status).toBe(200);
       const i = item(n);
       expect(i.notes.at(-1)).toContain("Chris approved it");
-      expect(isGoal(i)).toBe(true);
       for (const k of ["ask", "reason", "question"]) expect(i.fm[k]).toBeUndefined();
     });
   });

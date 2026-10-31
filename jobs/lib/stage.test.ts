@@ -7,16 +7,16 @@ beforeAll(setup);
 afterAll(teardown);
 
 // One fixture item per stage, in the old shape and the new shape, each built through the CLI seam of cli.helpers:
-// `aleph issue add`, `aleph job --todo`, `aleph drop`, and seeded new-shape item and run files.
+// seeded old-shape items, `aleph job --todo`, `aleph drop`, and seeded new-shape item and run files.
 interface Row { name: string; stage: string; of?: { n: number; m: number }; why?: RegExp; build: () => Promise<number> }
 
 const ref = (n: number) => `fac-${n}`;
 let jobs = 0;
 const name = (what: string) => `st${what}${++jobs}`;
+/** An old-shape item, seeded from the flags `aleph issue add` took before it wrote only the new shape: `--labels` and `--waiting-on`. */
 const add = async (...args: string[]): Promise<number> => {
-  const r = await aleph(["issue", "add", "fac", `fixture ${++jobs}`, ...args]);
-  expect(r.code, r.stderr).toBe(0);
-  return r.json.added;
+  const flag = (n: string) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : undefined; };
+  return seedItem("fac", `fixture ${++jobs}`, { labels: (flag("labels") ?? "").split(",").filter(Boolean), ...(flag("waiting-on") ? { waiting_on: flag("waiting-on") } : {}) });
 };
 const close = async (id: number, verb: "done" | "drop") => { expect((await aleph(["issue", verb, "fac", String(id), "closed"])).code).toBe(0); return id; };
 const job = async (action: string, id: number) => { const r = await fjobFor(name("job"), action, id); expect(r.code, r.stderr).toBe(action === "error" ? 1 : 0); return id; };

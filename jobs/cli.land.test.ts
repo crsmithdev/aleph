@@ -49,8 +49,8 @@ describe("land", () => {
     const s = state(r.json.run);
     expect(s).toMatchObject({ kind: "land", state: "landed", check: "open", say: "run it on the phone" });
     expect(remoteHead()).toBe(s.commit);
-    const item = (await aleph(["todo", "show", "demo", String(s.checkItem), "--json"])).json;
-    expect(item).toMatchObject({ title: "Check phonelater: run it on the phone", status: "open", labels: ["check"] });
+    const item = (await aleph(["issue", "show", "demo", String(s.checkItem), "--json"])).json;
+    expect(item).toMatchObject({ title: "Check phonelater: run it on the phone", status: "open", areas: ["check"] });
     expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${s.commit}~1`, s.commit)).toBe("android/later.txt");
     expect(told).toContain("demo/phonelater landed; check open");
     expect((await aleph(["jobs"])).json.find((j: any) => j.name === "phonelater")).toMatchObject({ check: "open" });
@@ -59,7 +59,7 @@ describe("land", () => {
     expect(c.code).toBe(0);
     expect((await aleph(["jobs", "phonelater"])).json).toMatchObject({ state: "landed", check: "done" });
     expect((await aleph(["jobs"])).json.find((j: any) => j.name === "phonelater")).toMatchObject({ state: "landed", check: "done" });
-    expect((await aleph(["todo", "show", "demo", String(s.checkItem), "--json"])).json.status).toBe("done");
+    expect((await aleph(["issue", "show", "demo", String(s.checkItem), "--json"])).json.status).toBe("done");
     const again = await aleph(["checked", "phonelater"]);
     expect(again.code).toBe(1);
     expect(again.stderr).toContain("phonelater has no open check");

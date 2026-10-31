@@ -62,7 +62,7 @@ afterEach(() => {
 
 const add = (title: string, o: { labels?: string[]; done?: boolean; waitingOn?: string } = {}): number =>
   writeList({ key: "fac" }, "add", (doc) => {
-    const item = todos.add(doc, title, { labels: o.labels ?? ["goal"], body: "## Goal\nShip it." });
+    const item = todos.addLegacy(doc, title, { labels: o.labels ?? ["goal"], body: "## Goal\nShip it." });
     if (o.waitingOn) todos.edit(item, { waitingOn: o.waitingOn });
     if (o.done) todos.setStatus(item, "done");
     return item.id;

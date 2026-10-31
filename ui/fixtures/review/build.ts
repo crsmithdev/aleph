@@ -7,7 +7,7 @@
 import { copyFileSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { writeList } from "../../../todo/lib/store.ts";
-import { add, note, setStatus } from "../../../todo/lib/todo.ts";
+import { addLegacy as add, note, setStatus } from "../../../todo/lib/todo.ts";
 
 const ANCHOR = Date.parse("2026-10-28T12:00:00Z");
 const IDENT = { GIT_AUTHOR_NAME: "fixture", GIT_AUTHOR_EMAIL: "fixture@example.com", GIT_COMMITTER_NAME: "fixture", GIT_COMMITTER_EMAIL: "fixture@example.com" };

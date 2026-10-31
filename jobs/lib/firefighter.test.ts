@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { labels as storeLabels, readList, writeList } from "../../todo/lib/store.ts";
+import { areasOf, labels as storeLabels, readList, writeList } from "../../todo/lib/store.ts";
 import { writeDecision, type Decision } from "./decision.ts";
 import { firefighterStep } from "./factory.ts";
 import { applyActions, defaultPorts, parseReply, prompt, snapshot, type Ports } from "./firefighter.ts";
@@ -39,7 +39,7 @@ function fresh(items: { title: string; body?: string; labels?: string[]; notes?:
   process.env.ALEPH_FACTORY_DIR = join(base, `factory${n}`);
   writeList({ key }, "reset", (doc) => {
     for (const i of items) {
-      const it = todos.add(doc, i.title, { labels: i.labels, body: i.body });
+      const it = todos.addLegacy(doc, i.title, { labels: i.labels, body: i.body });
       for (const note of i.notes ?? []) todos.note(it, note);
       if (i.reason) it.fm.reason = i.reason;
       if (i.decision) writeDecision(it, i.decision);
@@ -261,7 +261,7 @@ test("clear-needs-chris is refused on a product choice and applied on a how-to-b
   expect(f?.refused).toEqual([expect.stringContaining("product choice")]);
   expect(storeLabels(item(1))).toContain("needs-chris");
   expect(storeLabels(item(2))).not.toContain("needs-chris");
-  expect(storeLabels(item(2))).toContain("goal");
+  expect(storeLabels(item(2))).not.toContain("goal");
 });
 
 test("a paused factory takes no snapshot and starts no run", async () => {
@@ -292,7 +292,7 @@ test("a decision handed to the firefighter: its product choice is cleared, its e
   const f = await firefighterStep(ports());
   expect(f?.refused).toEqual([]);
   expect(f?.applied).toEqual([`clear-needs-chris ${key}-1: page A`]);
-  expect(storeLabels(item(1))).toContain("goal");
+  expect(storeLabels(item(1))).not.toContain("goal");
   expect(storeLabels(item(1))).not.toContain("needs-chris");
 });
 
@@ -380,7 +380,7 @@ test("clear-needs-chris is applied on a build decision or no decision, even with
   expect(f?.refused).toEqual([]);
   for (const id of [1, 2]) {
     expect(storeLabels(item(id))).not.toContain("needs-chris");
-    expect(storeLabels(item(id))).toContain("goal");
+    expect(storeLabels(item(id))).not.toContain("goal");
   }
 });
 
@@ -445,7 +445,7 @@ test("a flake action notes the repo's flake tracker, makes it when missing, file
   const f = await applyActions([{ do: "flake", repo: key, text: "a.test.ts > t: timed out" }, { do: "flake", repo: key, text: "b.test.ts > u: slow" }], ports());
   const items = readList({ key })!.items;
   expect(items.length).toBe(2);
-  const tracker = items.find((i) => storeLabels(i).includes("flakes"))!;
+  const tracker = items.find((i) => areasOf(i).includes("flakes"))!;
   expect(tracker.notes.filter((x) => x.includes("firefighter: ")).length).toBe(2);
   expect(tracker.notes.join("\n")).toContain("firefighter: a.test.ts > t: timed out");
   expect(f.applied.length).toBe(2);

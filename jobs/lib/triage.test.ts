@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, w
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { labels as storeLabels, readList, writeList } from "../../todo/lib/store.ts";
+import { areasOf, isSorted, labels as storeLabels, readList, writeList } from "../../todo/lib/store.ts";
 import { readDecision } from "./decision.ts";
 import { countsLine, parseVerdict, prompt, triageOpen } from "./triage.ts";
 import { lock, readRun, stamp, writeRun, type Repo } from "./ledger.ts";
@@ -42,7 +42,7 @@ let lists = 0;
 function reset(items: { title: string; body?: string; labels?: string[]; waitingOn?: string }[]): void {
   repo.key = `tri${++lists}`;
   writeList(repo, "reset", (doc) => {
-    for (const i of items) todos.add(doc, i.title, { body: i.body, labels: i.labels, waitingOn: i.waitingOn });
+    for (const i of items) todos.addLegacy(doc, i.title, { body: i.body, labels: i.labels, waitingOn: i.waitingOn });
     return true;
   }, true);
 }
@@ -493,7 +493,7 @@ describe("the flake verdict", () => {
     expect(t.triaged).toEqual({ flake: 1 });
     expect(countsLine(t.triaged)).toBe("flake 1");
     const list = readList(repo)!;
-    const tracker = list.items.find((i) => storeLabels(i).includes("flakes"))!;
+    const tracker = list.items.find((i) => areasOf(i).includes("flakes"))!;
     expect(tracker).toBeDefined();
     expect(tracker.notes.at(-1)).toContain(`triage of ${repo.key}-1: a.test.ts > does x: timed out under load`);
     expect(todos.status(item(1))).toBe("done");
@@ -508,7 +508,7 @@ describe("the flake verdict", () => {
     const t = await run();
     expect(t.triaged).toEqual({});
     expect(calls()).toBe(before);
-    const tracker = readList(repo)!.items.find((i) => storeLabels(i).includes("flakes"))!;
-    expect(storeLabels(tracker)).toContain("triaged");
+    const tracker = readList(repo)!.items.find((i) => areasOf(i).includes("flakes"))!;
+    expect(isSorted(tracker)).toBe(true);
   });
 });

@@ -55,7 +55,7 @@ const notes = (id: number) => item(id).notes.join("\n");
 
 /** A goal whose land is on origin/main (a commit with the Item trailer), with the store saying done. */
 function doneGoal(oracle: string): number {
-  const id = writeList({ key: "fac" }, "add a goal", (doc) => todos.add(doc, "thing", { labels: ["goal"], body: `## Goal\nx\n## Edit surface\na.ts\n## Oracle\n${oracle}\n## Time box\n40 minutes` }).id, true)!.value;
+  const id = writeList({ key: "fac" }, "add a goal", (doc) => todos.addLegacy(doc, "thing", { labels: ["goal"], body: `## Goal\nx\n## Edit surface\na.ts\n## Oracle\n${oracle}\n## Time box\n40 minutes` }).id, true)!.value;
   land(id);
   writeList({ key: "fac" }, "close", (doc) => { todos.setStatus(todos.find(doc, id)!, "done"); return true; });
   return id;
@@ -207,7 +207,7 @@ test("a done goal whose only command names a missing test file is skipped and ru
 });
 
 test("a goal closed with no landing on main is not accepted", async () => {
-  const id = writeList({ key: "fac" }, "add", (doc) => todos.add(doc, "by hand", { labels: ["goal"], body: "## Oracle\n`bun run ok`" }).id, true)!.value;
+  const id = writeList({ key: "fac" }, "add", (doc) => todos.addLegacy(doc, "by hand", { labels: ["goal"], body: "## Oracle\n`bun run ok`" }).id, true)!.value;
   closeAgain(id);
   expect(await acceptanceStep(runner(0))).toEqual([]);
 });
@@ -340,8 +340,8 @@ test("reacceptReopened leaves the goal open after an infra error, notes the tail
 });
 
 test("reacceptReopened skips goals not landed, not reopened by acceptance, or outside the window", async () => {
-  const unlanded = writeList({ key: "fac" }, "add", (doc) => { const i = todos.add(doc, "t", { labels: ["goal"], body: "## Oracle\n`bun test x`" }); todos.note(i, "acceptance: fail at abc1234: x"); return i.id; }, true)!.value;
-  const plain = writeList({ key: "fac" }, "add", (doc) => todos.add(doc, "t", { labels: ["goal"], body: "## Oracle\n`bun test x`" }).id)!.value;
+  const unlanded = writeList({ key: "fac" }, "add", (doc) => { const i = todos.addLegacy(doc, "t", { labels: ["goal"], body: "## Oracle\n`bun test x`" }); todos.note(i, "acceptance: fail at abc1234: x"); return i.id; }, true)!.value;
+  const plain = writeList({ key: "fac" }, "add", (doc) => todos.addLegacy(doc, "t", { labels: ["goal"], body: "## Oracle\n`bun test x`" }).id)!.value;
   land(plain);
   const old = reopened("`bun test x`");
   expect(await reacceptReopened("fac", { run: runner(0), since: "2999-01-01T00:00" })).toEqual([]);

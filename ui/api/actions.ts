@@ -9,6 +9,8 @@
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import { latestJob } from "../../jobs/lib/job.ts";
 import { runCli } from "../../jobs/lib/launch.ts";
+import { Refusal } from "../../jobs/lib/transitions.ts";
+import * as issues from "../../todo/lib/issues.ts";
 import type { Handler, Routes } from "../server.ts";
 
 const text = (body: string, status: number) => new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
@@ -80,8 +82,13 @@ const wait: Handler = async (req, { name }) => {
   const m = /^(.+)-(\d+)$/.exec(on);
   const repo = last.run.repo, todo = last.run.todo;
   if (!m || !repo || todo === undefined) return text("on must name a <repo>-<n> issue and the job an item", 400);
-  const set = await runCli(["issue", "edit", repo, String(todo), "--waiting-on", on]);
-  if (set.code !== 0) return Response.json({ error: (set.stderr || set.stdout).trim() || `aleph exited ${set.code}` }, { status: 422 });
+  // In process, as the firefighter does: `aleph issue edit` no longer takes `--waiting-on`.
+  const place = loadRegistry()[repo];
+  if (!place) return text(`no repo named ${repo}`, 400);
+  try { issues.edit(place, Number(todo), { waitingOn: on }); } catch (e: any) {
+    if (!(e instanceof Refusal)) throw e;
+    return Response.json({ error: e.message }, { status: 422 });
+  }
   return Response.json(await runCli(["drop", name, `Chris chose to wait for ${on}: this job cannot succeed until it lands.`]));
 };
 

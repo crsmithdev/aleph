@@ -22,7 +22,7 @@ let n = 0;
 function repo(items: { title: string; labels?: string[] }[] = []): issues.Place {
   const r = { key: `st${++n}` };
   issues.writeList(r, "start", (doc) => {
-    for (const i of items) todos.add(doc, i.title, { labels: i.labels });
+    for (const i of items) todos.addLegacy(doc, i.title, { labels: i.labels });
     return true;
   }, true);
   return r;
@@ -156,7 +156,9 @@ describe("the writes", () => {
     expect(w).toEqual({ todo: "done", ids: [2] });
     expect(commits()).toBe(before + 1);
     expect(todos.status(item(r, 1))).toBe("done");
-    expect(issues.labels(item(r, 2))).toEqual(["check"]);
+    expect(issues.areasOf(item(r, 2))).toEqual(["check"]);
+    expect(item(r, 2).fm).toMatchObject({ kind: "issue", source: "chris" });
+    expect(item(r, 2).fm.labels).toBeUndefined();
   });
 
   test("closeAndFile starts a list the store has none for, and names an item it lacks", () => {
@@ -195,7 +197,9 @@ describe("the flake tracker", () => {
     expect(commits()).toBe(before + 1);
     const t = item(r, 2);
     expect(t.title).toBe("Flaky tests seen by runs");
-    expect(issues.labels(t)).toEqual([issues.FLAKES, "triaged"]);
+    expect(issues.areasOf(t)).toEqual([issues.FLAKES]);
+    expect(t.fm.route).toBe("triaged");
+    expect(issues.isSorted(t)).toBe(true);
     expect(todos.status(t)).toBe("open");
     expect(t.fm.priority).toBe("low");
     expect(t.fm.goal).toBeUndefined();
@@ -377,5 +381,47 @@ describe("store fetches", () => {
     const before = fetches();
     expect(issues.goals(rs).length).toBe(3);
     expect(fetches() - before).toBe(1);
+  });
+});
+
+describe("the writers of the new shape", () => {
+  test("add writes kind, source and areas, and never labels, waiting_on or a retired label", () => {
+    const r = repo();
+    issues.writeList(r, "x", (doc) => {
+      todos.add(doc, "plain", { labels: ["audio", "goal", "needs-chris", "triaged", "planned", "proposal", "live-check"] });
+      todos.add(doc, "from a worker", { labels: ["followup", "ui"] });
+      todos.add(doc, "from deps", { source: "deps" });
+      return true;
+    });
+    const [a, b, c] = [item(r, 1), item(r, 2), item(r, 3)];
+    expect(a.fm).toMatchObject({ kind: "issue", source: "chris", areas: ["audio"], status: "open", priority: "medium" });
+    for (const i of [a, b, c]) for (const k of ["labels", "waiting_on"]) expect(k in i.fm).toBe(false);
+    expect(b.fm).toMatchObject({ source: "worker", areas: ["ui"] });
+    expect(c.fm.source).toBe("deps");
+    expect(issues.isSorted(a)).toBe(false);
+  });
+
+  test("addGoal allocates <n>.<k> under the issue, with the issue's priority, after and goals, in one commit", () => {
+    const r = repo();
+    const before = commits();
+    issues.writeList(r, "x", (doc) => {
+      const issue = todos.add(doc, "big", { priority: "high" });
+      const g1 = todos.addGoal(doc, issue, { title: "part one", body: "Do one." });
+      const g2 = todos.addGoal(doc, issue, { title: "part two", body: "Do two.", after: [`${r.key}-1.1`] });
+      todos.add(doc, "another issue");
+      return [g1.sub, g2.sub];
+    });
+    expect(commits()).toBe(before + 1);
+    const doc = issues.readList(r)!;
+    expect(todos.find(doc, 1)!.fm.goals).toEqual([`${r.key}-1.1`, `${r.key}-1.2`]);
+    expect(item(r, "1.1" as any).fm).toMatchObject({ kind: "goal", issue: `${r.key}-1`, after: [], priority: "high", status: "open" });
+    expect(item(r, "1.2" as any).fm.after).toEqual([`${r.key}-1.1`]);
+    expect(item(r, "1.2" as any).body).toBe("Do two.");
+    // The next issue number ignores goals.
+    expect(doc.items.find((i) => i.title === "another issue")!.id).toBe(2);
+    expect(issues.isGoal(item(r, "1.1" as any))).toBe(true);
+    expect(issues.isSorted(item(r, 1))).toBe(true);
+    expect(issues.goalsOf(item(r, 1))).toEqual([`${r.key}-1.1`, `${r.key}-1.2`]);
+    expect(issues.afterOf(item(r, "1.2" as any))).toEqual([`${r.key}-1.1`]);
   });
 });

@@ -35,7 +35,7 @@ describe("a factory run", () => {
   });
 
   test("the land pushes the tested tree with Item and Job trailers, and the clean main checkout follows", async () => {
-    const id = (await aleph(["todo", "add", "fac", "a factory item"])).json.added;
+    const id = (await aleph(["issue", "add", "fac", "a factory item"])).json.added;
     const j = await fjob("fitem", "commit fitem.txt", {}, ["--todo", String(id)]);
     const r = await aleph(["land", "fitem"]);
     const s = state(r.json.run);
@@ -45,7 +45,7 @@ describe("a factory run", () => {
     expect(readFileSync(join(base, "trees"), "utf8").trim().split("\n").at(-1)).toBe(remoteGit("rev-parse", "main^{tree}"));
     expect([sh(repo, "git", "rev-parse", "HEAD"), sh(repo, "git", "status", "--porcelain")]).toEqual([remoteGit("rev-parse", "main"), ""]);
     expect(factoryBranch("fitem")).toBe(false);
-    expect((await aleph(["todo", "show", "fac", String(id), "--json"])).json.status).toBe("done");
+    expect((await aleph(["issue", "show", "fac", String(id), "--json"])).json.status).toBe("done");
     expect(runsLeft()).toEqual([]);
   });
 
@@ -59,7 +59,7 @@ describe("a factory run", () => {
   });
 
   test("a worker that says the goal is already met, with the checks green on main, closes the item", async () => {
-    const id = (await aleph(["todo", "add", "fac", "timeline already uses itemTimes"])).json.added;
+    const id = (await aleph(["issue", "add", "fac", "timeline already uses itemTimes"])).json.added;
     const r = await fjob("fmet", "already-met", {}, ["--todo", String(id)]);
     expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "no commit" });
     // A tick's probe runs the sandbox; a passing probe is written as the other tick tests do.
@@ -68,7 +68,7 @@ describe("a factory run", () => {
     const tick = await aleph(["tick"]);
     expect(tick.json.episodes).toEqual(expect.any(Array));
     expect(state(r.json.run)).toMatchObject({ state: "dropped", reason: expect.stringContaining("the item is done") });
-    expect((await aleph(["todo", "show", "fac", String(id), "--json"])).json.status).toBe("done");
+    expect((await aleph(["issue", "show", "fac", String(id), "--json"])).json.status).toBe("done");
     expect(runsLeft()).toEqual([]);
   }, 60_000);
 

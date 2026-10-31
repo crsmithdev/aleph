@@ -1,18 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, file, itemsRemote, job, jobsDir, other, remote, repo, sh, specFile, state, worktree, setup, teardown } from "./cli.helpers";
+import { aleph, base, file, itemsRemote, job, jobsDir, other, remote, repo, sh, specFile, state, worktree, setup, teardown, addOld } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
 
 describe("a job tied to a to-do item", () => {
   const list = () => sh(base, "git", "--git-dir", itemsRemote, "rev-parse", "main");
-  const show = async (id: number) => (await aleph(["todo", "show", "demo", String(id), "--json"])).json;
+  const show = async (id: number) => (await aleph(["issue", "show", "demo", String(id), "--json"])).json;
   let landId: number, dropId: number;
   beforeAll(async () => {
-    landId = (await aleph(["todo", "add", "demo", "ship the widget"])).json.added;
-    dropId = (await aleph(["todo", "add", "demo", "paint the shed"])).json.added;
+    landId = (await aleph(["issue", "add", "demo", "ship the widget"])).json.added;
+    dropId = (await aleph(["issue", "add", "demo", "paint the shed"])).json.added;
   });
 
   test("an id the list does not have is refused, and nothing starts", async () => {
@@ -70,7 +70,7 @@ describe("fate from git", () => {
   });
 
   test("work ported to main by hand reads as landed, and its to-do item closes", async () => {
-    const id = (await aleph(["todo", "add", "demo", "port by hand"])).json.added;
+    const id = (await aleph(["issue", "add", "demo", "port by hand"])).json.added;
     const j = await aleph(["job", "demo", "ported", "--spec", specFile("Goal: ported\nACTION: commit ported.txt\n"), "--todo", String(id)]);
     const tip = sh(repo, "git", "rev-parse", "job/ported");
     sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
@@ -81,7 +81,7 @@ describe("fate from git", () => {
     expect(await listed("ported")).toMatchObject({ state: "landed" });
     expect(state(j.json.run)).toMatchObject({ state: "landed", reason: "found on main (Job trailer)", commit: picked });
     expect(existsSync(worktree("ported"))).toBe(false);
-    expect((await aleph(["todo", "show", "demo", String(id), "--json"])).json.status).toBe("done");
+    expect((await aleph(["issue", "show", "demo", String(id), "--json"])).json.status).toBe("done");
   });
 
   test("a branch whose change main already has, under another message, reads as landed", async () => {
@@ -119,7 +119,8 @@ describe("prospective memory", () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
   });
-  const add = async (title: string, ...more: string[]) => (await aleph(["todo", "add", "fac", title, ...more])).json.added as number;
+  // Old-shape items, seeded: no verb of `aleph issue` sets `goal` or `waiting_on` now. The tick below does the dispatching.
+  const add = (title: string, ...more: string[]) => addOld(title, "", more, { ALEPH_DISPATCH: "off" });
 
   test("a tick skips a goal due tomorrow, and one that waits on an open item, until it is ready", async () => {
     const later = await add("due tomorrow", "--labels", "goal", "--due", "2026-10-28");
@@ -130,14 +131,14 @@ describe("prospective memory", () => {
     expect(t.json.skipped).toContain(`fac-${second}: waiting on fac-${first}`);
     expect(t.json.started).not.toContain(`fac-${later}`);
     expect(t.json.started).not.toContain(`fac-${second}`);
-    await aleph(["todo", "done", "fac", String(first)]);
+    await aleph(["issue", "done", "fac", String(first)]);
     expect((await aleph(["tick"], NOW)).json.started).toContain(`fac-${second}`);
     // The second goal's run may end stuck, which holds the factory: clear it.
     await aleph(["drop", `fac-${second}`]);
-    await aleph(["todo", "drop", "fac", String(second), "test over"]);
+    await aleph(["issue", "drop", "fac", String(second), "test over"]);
     // The day after, the dated goal starts.
     expect((await aleph(["tick"], { ALEPH_NOW: "2026-10-28T08:00:00" })).json.started).toContain(`fac-${later}`);
-    for (const id of [later, first, second]) await aleph(["todo", "drop", "fac", String(id), "test over"]);
+    for (const id of [later, first, second]) await aleph(["issue", "drop", "fac", String(id), "test over"]);
   }, 60_000);
 
   test("one report after a gap lists every item that fell due under 'came due', and the next lists none", async () => {
@@ -151,16 +152,16 @@ describe("prospective memory", () => {
     expect(second.stdout).not.toContain("came due");
     for (const id of ids) expect(second.stdout).not.toContain(`fac-${id} `);
     expect(readFileSync(join(base, "factory", "seen"), "utf8")).toContain(`fac-${ids[0]}`);
-    for (const id of [...ids, future]) await aleph(["todo", "drop", "fac", String(id), "test over"]);
+    for (const id of [...ids, future]) await aleph(["issue", "drop", "fac", String(id), "test over"]);
   }, 60_000);
 
   test("a goal waiting on several items comes due once every one is done", async () => {
     const a = await add("wait a"), b = await add("wait b");
     const w = await add("waits on two", "--waiting-on", `fac-${a},fac-${b}`);
-    await aleph(["todo", "done", "fac", String(a)]);
+    await aleph(["issue", "done", "fac", String(a)]);
     expect((await aleph(["report"])).stdout).not.toContain(`fac-${w} waits on two`);
-    await aleph(["todo", "done", "fac", String(b)]);
+    await aleph(["issue", "done", "fac", String(b)]);
     expect((await aleph(["report"])).stdout).toContain(`fac-${w} waits on two`);
-    await aleph(["todo", "drop", "fac", String(w), "test over"]);
+    await aleph(["issue", "drop", "fac", String(w), "test over"]);
   }, 60_000);
 });

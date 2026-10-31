@@ -80,7 +80,7 @@ afterEach(() => {
 
 const body = (marker: string, surface = "jobs/lib/a.ts") => `## Goal\nA big thing. PLAN:${marker}\n## Edit surface\n${surface}\n## Oracle\n\`bun test\`\n## Time box\n40 minutes`;
 const addGoal = (marker: string, surface?: string): number =>
-  writeList({ key: "fac" }, "add a goal", (doc) => todos.add(doc, "big", { labels: ["goal", "ui"], body: body(marker, surface) }).id, true)!.value;
+  writeList({ key: "fac" }, "add a goal", (doc) => todos.addLegacy(doc, "big", { labels: ["goal", "ui"], body: body(marker, surface) }).id, true)!.value;
 const item = (id: number) => todos.find(readList({ key: "fac" })!, id)!;
 const planCalls = () => readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean);
 const planRuns = () => readdirSync(join(base, "jobs")).filter((d) => d.endsWith("-plan")).map((d) => readRun(join(base, "jobs", d))!);
@@ -221,7 +221,7 @@ test("the check: sections, the oracle, the waits and the count", () => {
 
 test("a dispatch returns before a slow planner replies; the small goal starts, and the large goal is planning", async () => {
   const big = addGoal("slow");
-  const small = writeList({ key: "fac" }, "add", (doc) => todos.add(doc, "small", { labels: ["goal"], body: body("small") }).id, true)!.value;
+  const small = writeList({ key: "fac" }, "add", (doc) => todos.addLegacy(doc, "small", { labels: ["goal"], body: body("small") }).id, true)!.value;
   const starts: string[] = [];
   const plans: Promise<unknown>[] = [];
   try {
@@ -273,7 +273,7 @@ describe("the planner prompt's similar episodes", () => {
   afterEach(() => { if (vaultSaved === undefined) delete process.env.ALEPH_VAULT; else process.env.ALEPH_VAULT = vaultSaved; });
 
   const bigGoal = (): number => writeList({ key: "fac" }, "add a goal", (doc) =>
-    todos.add(doc, "Add a second report line", { labels: ["goal"], body: body("three").replace("A big thing.", "Add a second line to the report.") }).id, true)!.value;
+    todos.addLegacy(doc, "Add a second report line", { labels: ["goal"], body: body("three").replace("A big thing.", "Add a second line to the report.") }).id, true)!.value;
   const lastPrompt = () => {
     const d = readdirSync(join(base, "jobs")).filter((x) => x.endsWith("-plan")).sort().at(-1)!;
     return readFileSync(join(base, "jobs", d, "prompt.md"), "utf8");

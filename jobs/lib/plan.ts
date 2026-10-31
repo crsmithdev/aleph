@@ -184,13 +184,13 @@ export function fileChildren(repo: Repo, id: number | string, children: Child[])
     const refs: string[] = [];
     for (const c of children) {
       const waits = c.waits.map((w) => refs[w - 1]).join(",");
-      const child = todos.add(doc, c.title, {
+      const child = todos.addLegacy(doc, c.title, {
         labels: [GOAL, ...own], body: `Part of ${repo.key}-${id}.\n\n${c.body}`, priority: typeof parent.fm.priority === "string" ? parent.fm.priority : undefined,
         ...(waits ? { waitingOn: waits } : {}),
       });
       refs.push(`${repo.key}-${child.id}`);
     }
-    todos.edit(parent, { waitingOn: refs.join(",") });
+    todos.setWaitingOn(parent, refs.join(","));
     label(parent, [PLANNED]);
     todos.note(parent, `planner: split into ${refs.map((r, i) => `${r} (${children[i].title})`).join(", ")}; this goal closes when they are all done`);
     return refs;

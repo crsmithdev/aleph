@@ -28,10 +28,16 @@ export interface Item {
   legacy: boolean;
 }
 
+/** An issue (`kind: issue`) and a goal (`kind: goal`) are both stored as an `Item`; the names say which one a signature means. */
+export type Issue = Item;
+export type Goal = Item;
+
 export interface Doc {
   /** Everything above the first issue, verbatim. */
   head: string;
   items: Item[];
+  /** The registry key the store read the list for; absent on a list parsed from docs/todo.md. */
+  repo?: string;
 }
 
 // Local time, not UTC. `toISOString` stamps the UTC date, so west of Greenwich
@@ -204,7 +210,64 @@ export const find = (doc: Doc, id: number | string): Item | undefined => doc.ite
 // The max of `id` ignores `sub` on purpose: a goal's id is its parent's number, so a goal never takes a new issue number.
 export const nextId = (doc: Doc): number => doc.items.reduce((m, i) => Math.max(m, i.id), 0) + 1;
 
-export function add(doc: Doc, title: string, o: { priority?: string; labels?: string[]; body?: string; due?: string; waitingOn?: string; now?: Date } = {}): Item {
+/** Labels the new shape holds as fields (or not at all): `add` never writes them, whatever the caller names. */
+const RETIRED_LABELS: readonly string[] = ["goal", "needs-chris", "triaged", "followup", "planned", "proposal", "live-check"];
+const SOURCES = ["chris", "worker", "deps", "memory"] as const;
+export type Source = (typeof SOURCES)[number];
+
+/** The next free `k` for a goal `<n>.<k>` under issue `n`: Backlog.md does not number children, so the store does. */
+export const nextSub = (doc: Doc, n: number): number => doc.items.reduce((m, i) => (i.id === n && i.sub !== undefined ? Math.max(m, i.sub) : m), 0) + 1;
+
+/**
+ * Add an issue in the new shape: `kind: issue`, `source` (chris unless the caller says worker, deps or memory)
+ * and `areas`, the labels that remain. It never writes `labels`, `waiting_on` or a label of RETIRED_LABELS.
+ * `route: "triaged"` marks the issue sorted, for the one the factory files for itself.
+ */
+export function add(doc: Doc, title: string, o: { priority?: string; labels?: string[]; body?: string; due?: string; source?: Source; route?: string; now?: Date } = {}): Item {
+  const day = today(o.now);
+  const given = o.labels ?? [];
+  const source = o.source ?? (given.includes("followup") ? "worker" : given.includes("deps") ? "deps" : given.includes("memory") ? "memory" : "chris");
+  const areas = given.filter((l) => !RETIRED_LABELS.includes(l) && !(SOURCES as readonly string[]).includes(l) && l !== "deps" && l !== "memory");
+  const item: Item = {
+    id: nextId(doc),
+    title,
+    fm: { id: String(nextId(doc)), status: "open", created: day, updated: day, priority: o.priority ?? "medium", kind: "issue", source, areas, ...(o.route ? { route: o.route } : {}) },
+    body: o.body ?? "",
+    notes: [],
+    legacy: false,
+  };
+  setReadiness(item, o);
+  doc.items.push(item);
+  return item;
+}
+
+/**
+ * Add goal `<n>.<k>` under issue `issue` (`k` the next free number): `kind: goal`, `issue: <repo>-<n>`, `after`, and the
+ * issue's priority. The issue's `goals` gains it. The refs carry the doc's repo key (`doc.repo`, set by the store), or `o.repo`.
+ */
+export function addGoal(doc: Doc, issue: Item, o: { title: string; body: string; after?: string[]; repo?: string; now?: Date }): Item {
+  const day = today(o.now);
+  const repo = o.repo ?? doc.repo ?? (() => { throw new Error("addGoal: the doc names no repo"); })();
+  const sub = nextSub(doc, issue.id);
+  const ref = `${repo}-${issue.id}.${sub}`;
+  const goal: Item = {
+    id: issue.id,
+    sub,
+    title: o.title,
+    fm: { id: `${issue.id}.${sub}`, status: "open", created: day, updated: day, priority: (issue.fm.priority as string) ?? "medium", kind: "goal", issue: `${repo}-${issue.id}`, after: o.after ?? [] },
+    body: o.body,
+    notes: [],
+    legacy: false,
+  };
+  const goals = Array.isArray(issue.fm.goals) ? issue.fm.goals.map(String) : [];
+  issue.fm.goals = [...goals, ref];
+  issue.fm.updated = day;
+  doc.items.push(goal);
+  return goal;
+}
+
+/** The old `add`, for the code that still writes the old shape (the planner, the UI's wait route) until aleph-849 and aleph-628: labels, `waiting_on`, no `kind`. */
+export function addLegacy(doc: Doc, title: string, o: { priority?: string; labels?: string[]; body?: string; due?: string; waitingOn?: string; now?: Date } = {}): Item {
   const day = today(o.now);
   const item: Item = {
     id: nextId(doc),
@@ -217,6 +280,11 @@ export function add(doc: Doc, title: string, o: { priority?: string; labels?: st
   setReadiness(item, o);
   doc.items.push(item);
   return item;
+}
+
+/** Set `waiting_on` on an item, or remove it with `none`: the old shape's only writer of the field. */
+export function setWaitingOn(item: Item, waitingOn: string, now = new Date()): void {
+  edit(item, { waitingOn }, now);
 }
 
 /** Set `due` and `waiting_on` from the values given; `none` removes the field. */
@@ -238,12 +306,13 @@ export function note(item: Item, text: string, now = new Date()): string {
 }
 
 /** Replace the fields given. Notes are never edited: they stay append-only. */
-export function edit(item: Item, change: { title?: string; body?: string; priority?: string; labels?: string[]; due?: string; waitingOn?: string }, now = new Date()): void {
+export function edit(item: Item, change: { title?: string; body?: string; priority?: string; labels?: string[]; areas?: string[]; due?: string; waitingOn?: string }, now = new Date()): void {
   if (item.legacy) adopt(item, now);
   if (change.title !== undefined) item.title = change.title;
   if (change.body !== undefined) item.body = change.body;
   if (change.priority !== undefined) item.fm.priority = change.priority;
   if (change.labels !== undefined) item.fm.labels = change.labels;
+  if (change.areas !== undefined) item.fm.areas = change.areas;
   setReadiness(item, change);
   item.fm.updated = today(now);
 }

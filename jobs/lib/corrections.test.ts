@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { labels as itemLabels, readList } from "../../todo/lib/store.ts";
+import { readList } from "../../todo/lib/store.ts";
 import { approve, decline, mine, proposals } from "./corrections.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -222,10 +222,14 @@ test("approve files one goal issue quoting all signals", async () => {
   const ref = approve(id, repo);
   expect(ref).toBe("fac-1");
   const items = readList(repo)!.items;
-  expect(items.length).toBe(1);
-  expect(itemLabels(items[0])).toEqual(["goal", "memory"]);
+  // The issue and its goal `.1`, in the new shape.
+  expect(items.map((i) => i.fm.id)).toEqual(["1", "1.1"]);
+  expect(items[0].fm).toMatchObject({ kind: "issue", source: "memory", goals: ["fac-1.1"] });
+  expect(items[1].fm).toMatchObject({ kind: "goal", issue: "fac-1" });
+  expect(items[0].fm.labels).toBeUndefined();
   expect(items[0].title).toBe(stored().lessons[0].title);
-  expect(items[0].body).toContain("Add a check");
+  expect(items[0].body).toStartWith("## Request");
+  expect(items[1].body).toContain("Add a check");
   expect(items[0].body).toContain("Target: fac checks");
   for (const s of stored().lessons[0].signals) expect(items[0].body).toContain(`- ${s.at} ${s.source}: "${s.quote}" (${s.link})`);
   expect(stored().lessons[0]).toMatchObject({ state: "approved", issue: "fac-1" });
@@ -261,7 +265,7 @@ describe("standing proposals", () => {
     pickFirst = true;
     await mine(NOW);
     expect(stored().lessons[0]).toMatchObject({ state: "approved", issue: "fac-1" });
-    expect(readList(repo)!.items.length).toBe(1);
+    expect(readList(repo)!.items.length).toBe(2);
     expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("standing: proposal-check:fac: approve on fac-1");
   });
 

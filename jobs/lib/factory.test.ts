@@ -49,7 +49,7 @@ afterEach(() => {
 
 /** A new open item in the store's factory list `fac`, with the given labels; returns its id. */
 const goal = (labels = ["goal"], key = "fac"): number =>
-  writeList({ key }, "add a goal", (doc) => todos.add(doc, "ship it", { labels, body: "Do the thing." }).id, true)!.value;
+  writeList({ key }, "add a goal", (doc) => todos.addLegacy(doc, "ship it", { labels, body: "Do the thing." }).id, true)!.value;
 
 /** Change item `id` in the store, as Chris would while the baseline runs. */
 const change = (id: number, f: (item: todos.Item) => void) =>
@@ -85,7 +85,7 @@ test("a goal closed during the baseline is not started", async () => {
 test("a goal given a waiting_on while an earlier goal starts is not started", async () => {
   const first = goal();
   const second = goal();
-  const other = writeList({ key: "fac" }, "add an open item", (doc) => todos.add(doc, "not a goal", { labels: [] }).id, true)!.value;
+  const other = writeList({ key: "fac" }, "add an open item", (doc) => todos.addLegacy(doc, "not a goal", { labels: [] }).id, true)!.value;
   const calls: string[] = [];
   const out = await dispatchGoals(async (_repo, name) => {
     calls.push(name);
@@ -99,7 +99,7 @@ test("a goal given a waiting_on while an earlier goal starts is not started", as
 
 // An "already met" drop closes a factory item with no commit that names it; the goals that wait on it still start.
 test("a goal waiting on a factory item the store says done, with no commit naming it, starts", async () => {
-  const blocker = writeList({ key: "fac" }, "add the blocker", (doc) => todos.add(doc, "met elsewhere", { labels: [] }).id, true)!.value;
+  const blocker = writeList({ key: "fac" }, "add the blocker", (doc) => todos.addLegacy(doc, "met elsewhere", { labels: [] }).id, true)!.value;
   mk(`fac-${blocker}`, "agent", "dropped", { reason: "the goal is already met" });
   await change(blocker, (item) => todos.setStatus(item, "done"));
   const waiter = goal();
@@ -914,7 +914,7 @@ test("episodeStep writes the page of a done goal and logs its title", async () =
   const v = withVault();
   try {
     const id = writeList({ key: "fac" }, "add", (doc) => {
-      const item = todos.add(doc, "ship it", { labels: ["goal"], body: "## Goal\nShip it." });
+      const item = todos.addLegacy(doc, "ship it", { labels: ["goal"], body: "## Goal\nShip it." });
       todos.setStatus(item, "done");
       return item.id;
     }, true)!.value;

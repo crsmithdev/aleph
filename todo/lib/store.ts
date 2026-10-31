@@ -14,7 +14,8 @@
  */
 import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../jobs/lib/git.ts";
 import { layout } from "../../jobs/lib/layout.ts";
-import { readDecision, writeDecision, type Decision } from "../../jobs/lib/decision.ts";
+import { clearAsk as clearAskFields, readAsk, writeAsk, type Ask } from "../../jobs/lib/ask.ts";
+import { writeDecision, type Decision } from "../../jobs/lib/decision.ts";
 import * as todos from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Item } from "./todo.ts";
 
@@ -106,7 +107,7 @@ function load(dir: string, rev: string, key: string): Doc | null {
   if (!paths.includes(configPath(key))) return null;
   const names = paths.filter((p) => p.startsWith(`${tasksDir(key)}/`) && p.endsWith(".md") && !p.slice(tasksDir(key).length + 1).includes("/"));
   const items = readFiles(dir, names.map((p) => `${rev}:${p}`)).map(parseItem);
-  return { head: "", items: items.sort((a, b) => a.id - b.id || (a.sub ?? -1) - (b.sub ?? -1)) };
+  return { head: "", repo: key, items: items.sort((a, b) => a.id - b.id || (a.sub ?? -1) - (b.sub ?? -1)) };
 }
 
 /** The repo's list on the store's origin/main, or null when the store has none. */
@@ -141,7 +142,7 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
     const base = git(dir, "rev-parse", `origin/${MAIN}`).out;
     const found = load(dir, base, repo.key);
     if (found === null && !create) throw new Error(`the work store has no list for ${repo.key}`);
-    const doc = found ?? { head: "", items: [] };
+    const doc = found ?? { head: "", repo: repo.key, items: [] };
     const before = new Map(doc.items.map((i) => [todos.refOf(i), renderItem(repo.key, i)]));
     const value = change(doc);
     if (value === null) return null;
@@ -248,6 +249,15 @@ export const SORTED: readonly string[] = [GOAL, NEEDS_CHRIS, "triaged", "live-ch
 export const hasLabel = (item: Item, label: string): boolean => labels(item).includes(label);
 /** An open item labelled `goal`: a factory run's work. */
 export const isGoal = (item: Item): boolean => status(item) === "open" && !hasAsk(item) && kindOf(item) === "goal";
+/** Put `ask` on the item, as `askOf` reads it. */
+export const setAsk = (item: Item, ask: Ask): void => writeAsk(item, ask);
+
+/** Take the item's Ask off: the `ask` fields, and the old shape's `needs-chris` label if it has one. */
+export function clearAsk(item: Item): void {
+  clearAskFields(item);
+  label(item, [], [NEEDS_CHRIS]);
+}
+
 /** An item with an `ask` (new shape): it waits for Chris, so it is never dispatched and never triaged. */
 const hasAsk = (item: Item): boolean => item.fm.ask !== undefined;
 /** Labels that map to a spec field of their own, so `areasOf` leaves them out. */
@@ -273,14 +283,7 @@ export const afterOf = (item: Item): string[] => (item.fm.after !== undefined ? 
 /** The item's areas: its `areas`, else its labels less the mapped ones. */
 export const areasOf = (item: Item): string[] => (item.fm.areas !== undefined ? list(item.fm.areas) : labels(item).filter((l) => !MAPPED.includes(l)));
 
-export interface Ask {
-  kind: "input" | "approval";
-  reason: string;
-  question: string;
-  options: { label: string; line: string; after?: string }[];
-  recommended?: string;
-  why: string[];
-}
+export type { Ask };
 
 /** The reason code of an old item's ask, from `reason`, else from the question as `issueReason` in ui/attention.ts reads it. */
 function oldReason(reason: string, question: string): string {
@@ -298,10 +301,10 @@ export function askOf(item: Item): Ask | null {
   const kind = item.fm.ask;
   const approval = kind === "approval";
   if (!approval && kind !== "input" && !needsChris(item)) return null;
-  const d = readDecision(item);
+  const d = readAsk(item);
   const question = d?.question ?? text(item.fm.question) ?? "";
   const reason = text(item.fm.reason);
-  const options = (d?.options ?? []).map((o) => ({ label: o.label, line: o.line, ...(o.waiting_on ? { after: o.waiting_on } : {}) }));
+  const options = d?.options ?? [];
   const recommended = d?.recommended || undefined;
   return {
     kind: approval ? "approval" : "input",
@@ -412,8 +415,8 @@ export function sort(repo: Place, id: number | string, message: string, change: 
   return w?.value === true;
 }
 
-/** A new issue for `file` and `closeAndFile`. */
-export interface Filing { title: string; labels: string[]; body?: string; priority?: string }
+/** A new issue for `file` and `closeAndFile`; `goal` files the body as goal `.1` too. */
+export interface Filing { title: string; labels?: string[]; body?: string; priority?: string; source?: "chris" | "worker" | "deps" | "memory"; ask?: Ask; goal?: boolean }
 
 /**
  * Item `id` done with the note `text` (when `id` is given), and `filed` added,
@@ -433,7 +436,13 @@ export function closeAndFile(repo: Place, message: string, id: number | string |
         }
         todo = item ? "done" : `no issue ${id}`;
       }
-      ids = filed.map((f) => todos.add(doc, f.title, { labels: f.labels, body: f.body, priority: f.priority }).id);
+      ids = filed.map((f) => {
+        // `goal`: the body is goal-format, so the issue holds it as its Request and files goal `.1` beside it, as `aleph issue add --goal -` does.
+        const item = todos.add(doc, f.title, { labels: f.labels, body: f.goal ? `## Request\n\n${f.body ?? ""}` : f.body, priority: f.priority, source: f.source });
+        if (f.goal) todos.addGoal(doc, item, { title: f.title, body: f.body ?? "" });
+        if (f.ask) setAsk(item, f.ask);
+        return item.id;
+      });
       return true;
     }, true);
   } catch (e) {
@@ -453,7 +462,7 @@ export const FLAKES = "flakes";
 /** The open item labelled `flakes`, the lowest id when there are several; undefined when there is none. */
 export function flakeTracker(doc: Doc): Item | undefined {
   return doc.items
-    .filter((i) => i.sub === undefined && status(i) === "open" && hasLabel(i, FLAKES))
+    .filter((i) => i.sub === undefined && status(i) === "open" && areasOf(i).includes(FLAKES))
     .sort((a, b) => a.id - b.id)[0];
 }
 
@@ -468,7 +477,8 @@ export function noteFlake(repo: Place, text: string): { id: number } | string {
     const w = writeList(repo, `todo: flake: ${text}`, (doc) => {
       const tracker = flakeTracker(doc) ?? todos.add(doc, "Flaky tests seen by runs", {
         priority: "low",
-        labels: [FLAKES, "triaged"],
+        labels: [FLAKES],
+        route: "triaged",
         body: "Flaky tests that runs met and did not cause. Each note is one flake a run saw. Chris picks from these notes which flakes get a goal.",
       });
       todos.note(tracker, text);

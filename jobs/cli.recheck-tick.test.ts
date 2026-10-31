@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, file, jobsDir, specFile, state, setup, teardown } from "./cli.helpers";
+import { aleph, base, file, jobsDir, specFile, state, setup, teardown, items, seedItem } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -14,11 +14,13 @@ describe("a factory run", () => {
     writeFileSync(cmd, `#!/bin/bash\ncat > /dev/null\necho '{"verdict":"live","note":"check the live site"}'\n`, { mode: 0o755 });
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
-    const id = (await aleph(["todo", "add", "fac", "needs a live look"])).json.added;
-    const first = (await aleph(["todo", "list", "fac", "--json"])).json.filter((i: any) => i.status === "open" && !i.labels.some((l: string) => ["goal", "needs-chris", "triaged", "proposal"].includes(l)))[0];
+    const id = (await aleph(["issue", "add", "fac", "needs a live look"])).json.added;
+    const first = (await aleph(["issue", "list", "fac", "--json"])).json.filter((i: any) => i.status === "open" && i.kind === "issue" && !i.ask && i.goals.length === 0)[0];
     const t = await aleph(["tick"], { ALEPH_TRIAGE_CAP: "1", ALEPH_TRIAGE_CMD: cmd });
     expect(t.json.triaged).toEqual({ live: 1 });
-    expect((await aleph(["todo", "show", "fac", String(first.id), "--json"])).json.labels).toEqual(expect.arrayContaining(["live-check", "triaged"]));
+    const stored = readFileSync(join(items, "fac", "backlog", "tasks", `fac-${first.id}.md`), "utf8");
+    expect(stored).toContain("live-check");
+    expect(stored).toContain("triaged");
     expect(readdirSync(jobsDir).filter((d) => d.endsWith("-triage")).map((d) => state(d).kind)).toContain("triage");
     expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("triaged live 1");
     expect(id).toBeGreaterThan(0);
@@ -30,7 +32,7 @@ describe("a factory run", () => {
     const env = { ALEPH_WAITING_CAP: "2" };
     await fjob("fwait1", "commit held/w1.txt");
     await fjob("fwait2", "commit held/w2.txt");
-    const id = (await aleph(["todo", "add", "fac", "behind the cap", "--labels", "goal", "--body", "-"], {}, "ACTION: commit capped.txt\n")).json.added;
+    const id = seedItem("fac", "behind the cap", { labels: ["goal"] }, "ACTION: commit capped.txt\n".trim());
     const t = await aleph(["tick"], env);
     expect(t.json.started).toEqual([]);
     expect(t.json.skipped).toContain(`fac-${id}: 2 runs wait for Chris`);
@@ -44,7 +46,7 @@ describe("a factory run", () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     expect((await aleph(["pause"])).json).toEqual({ paused: true });
-    const id = (await aleph(["todo", "add", "fac", "while paused", "--labels", "goal", "--body", "-"], {}, "ACTION: commit paused.txt\n")).json.added;
+    const id = seedItem("fac", "while paused", { labels: ["goal"] }, "ACTION: commit paused.txt\n".trim());
     expect((await aleph(["tick"])).json).toMatchObject({ started: [], paused: true });
     expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("paused");
     const r = await fjob("fpaused", "commit fpaused.txt", {}, ["--land"]);

@@ -40,7 +40,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--spec", "--model", "--todo", "--priority", "--labels", "--status", "--label", "--body", "--title", "--due", "--waiting-on", "--reopened-since", "--before", "--undo"];
+const VALUED = ["--spec", "--model", "--todo", "--priority", "--labels", "--goal", "--status", "--label", "--body", "--title", "--due", "--after", "--reopened-since", "--before", "--undo"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
 const command = process.argv.slice(2);
@@ -161,14 +161,20 @@ async function todoCmd(): Promise<void> {
   // `--body -` reads the body from stdin: it is prose of several lines.
   const bodyArg = flag("body");
   const labelsArg = flag("labels");
+  if (rest.includes("--waiting-on")) refuse("--waiting-on is gone: a goal waits with --after <goal id>");
+  // `--goal -` reads the goal-format text from stdin and files it as goal `.1`.
+  const goalArg = flag("goal");
+  if (rest.includes("--goal") && goalArg !== "-") refuse("--goal takes - (the goal text on stdin)");
+  const afterArg = flag("after");
   const fields: issues.Fields = {
     title: flag("title"),
     body: bodyArg === undefined ? undefined : (bodyArg === "-" ? await Bun.stdin.text() : bodyArg).trim(),
     priority: flag("priority"),
     labels: labelsArg === undefined ? undefined : labelsArg.split(",").map((s) => s.trim()).filter(Boolean),
     due: flag("due"),
-    waitingOn: flag("waiting-on"),
     status: stat,
+    ...(goalArg === "-" ? { goal: await Bun.stdin.text() } : {}),
+    ...(afterArg === undefined ? {} : { after: afterArg.split(",").map((s) => s.trim()).filter(Boolean) }),
   };
   const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|hidden|lint> <repo> ...");
   const registry = loadRegistry();
@@ -185,7 +191,7 @@ async function todoCmd(): Promise<void> {
       warn(a.follow);
       for (const m of a.result.maybeSame ?? []) console.error(`aleph-${m.id} may be the same task: ${m.title}`);
       out(a.result);
-      dispatchAfterGoal(repo, a.item);
+      if (a.goal) dispatchAfterGoal(repo, a.goal);
       if (!store.isSorted(a.item)) triageDetached(repo, a.item.id);
       return;
     }
@@ -200,8 +206,10 @@ async function todoCmd(): Promise<void> {
       const { item: i, hidden } = issues.show(repo, id);
       if (json) { out({ ...issues.brief(i), body: i.body, notes: i.notes, hidden }); return; }
       console.log(`## ${i.id}. ${i.title}`);
-      console.log(`status ${todos.status(i)}   priority ${i.fm.priority ?? "-"}   labels ${store.labels(i).join(", ") || "-"}   updated ${i.fm.updated ?? "-"}`);
-      console.log(`due ${i.fm.due ?? "-"}   waiting_on ${i.fm.waiting_on ?? "-"}`);
+      const ask = store.askOf(i);
+      console.log(`status ${todos.status(i)}   kind ${store.kindOf(i)}   source ${store.sourceOf(i)}   priority ${i.fm.priority ?? "-"}   updated ${i.fm.updated ?? "-"}`);
+      console.log(`goals ${store.goalsOf(i).join(", ") || "-"}   after ${store.afterOf(i).join(", ") || "-"}   areas ${store.areasOf(i).join(", ") || "-"}   due ${i.fm.due ?? "-"}`);
+      console.log(`ask ${ask ? `${ask.kind} (${ask.reason}): ${ask.question}` : "-"}`);
       console.log(`hidden checks: ${hidden}`);
       if (i.body.trim()) console.log(`\n${i.body}`);
       if (i.notes.length) console.log(`\n### Notes\n${i.notes.join("\n")}`);
@@ -239,7 +247,8 @@ async function todoCmd(): Promise<void> {
       const d = issues.decide(repo, id, text, fields);
       warn(d.follow);
       out(d.result);
-      dispatchAfterGoal(repo, d.item);
+      // The note is Chris's answer: the triage that follows a note takes the issue from here.
+      triageDetached(repo, d.item.id);
       return;
     }
     case "edit": {
@@ -269,11 +278,11 @@ async function todoCmd(): Promise<void> {
       for (const f of l.findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${l.findings.length} problem${l.findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
     }
-    default: refuse("usage: aleph issue <add|list|show|note|edit|done|drop|hidden|lint> <repo> ...");
+    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|hidden|lint> <repo> ...");
   }
 }
 
-const ready = (i: todos.Item) => [i.fm.due ? `due ${i.fm.due}` : "", i.fm.waiting_on ? `waits ${i.fm.waiting_on}` : ""].filter(Boolean).join("  ");
+const ready = (i: todos.Item) => [i.fm.due ? `due ${i.fm.due}` : "", store.afterOf(i).length ? `after ${store.afterOf(i).join(",")}` : ""].filter(Boolean).join("  ");
 
 function printRows(rows: todos.Item[], indent = ""): void {
   const w = String(Math.max(...rows.map((i) => i.id))).length;
@@ -461,7 +470,7 @@ try {
     case "unit": await unit(resolve(positional[0])); break;
     case "land": await started(await land(positional[0], { checked: rest.includes("--checked") }, { command })); break;
     case "checked": out(checked(positional[0])); break;
-    case "issue": case "todo": await todoCmd(); break;
+    case "issue": await todoCmd(); break;
     case "accept": {
       const lines = await reacceptReopened(positional[0] ?? refuse("usage: aleph accept <repo> [--reopened-since <iso>] [--before <iso>]"), { since: flag("reopened-since"), before: flag("before") });
       console.log(lines.join("\n") || "nothing to re-accept");

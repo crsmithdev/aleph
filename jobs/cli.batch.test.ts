@@ -50,7 +50,7 @@ describe("a batch of lands", () => {
 
   test("a batch of three: one check call, one push, three commits, each run landed with its own Item and Job trailers", async () => {
     const items = [] as number[];
-    for (const t of ["x1", "x2", "x3"]) items.push((await aleph(["todo", "add", "demo", t])).json.added);
+    for (const t of ["x1", "x2", "x3"]) items.push((await aleph(["issue", "add", "demo", t])).json.added);
     const ids: string[] = [];
     for (const [i, n] of ["t1", "t2", "t3"].entries()) ids.push((await aleph(["job", "demo", n, "--spec", specFile(`Goal: ${n}\nACTION: commit batch/t${i}.txt\n`), "--todo", String(items[i])])).json.job);
     const before = calls();

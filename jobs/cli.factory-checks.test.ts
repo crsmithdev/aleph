@@ -15,9 +15,9 @@ describe("a factory run's checks", () => {
   describe("hidden checks", () => {
     const SOURCE = `import { expect, test } from "bun:test";\nimport { existsSync } from "node:fs";\n// SECRET-HIDDEN-LINE\ntest("hid file exists", () => { expect(existsSync("hid.txt")).toBe(true); });\n`;
     const hiddenItem = async () => {
-      const id = (await aleph(["todo", "add", "fac", "an item with a hidden check"])).json.added;
+      const id = (await aleph(["issue", "add", "fac", "an item with a hidden check"])).json.added;
       writeFileSync(join(base, "a.test.ts"), SOURCE);
-      expect((await aleph(["todo", "hidden", "fac", String(id), join(base, "a.test.ts")])).code).toBe(0);
+      expect((await aleph(["issue", "hidden", "fac", String(id), join(base, "a.test.ts")])).code).toBe(0);
       return id;
     };
     const runs = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-fac-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));
@@ -54,7 +54,7 @@ describe("a factory run's checks", () => {
     }, 60_000);
 
     test("an item with no hidden files runs the same checks as before", async () => {
-      const id = (await aleph(["todo", "add", "fac", "no hidden"])).json.added;
+      const id = (await aleph(["issue", "add", "fac", "no hidden"])).json.added;
       const r = await fjob("hidnone", "commit hidnone.txt", {}, ["--todo", String(id)]);
       expect(state(r.json.run).checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
       expect(existsSync(join(jobsDir, r.json.run, "hidden.log"))).toBe(false);

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { goalsOf, kindOf, readList, writeList } from "../todo/lib/store.ts";
 import { buildReviewFixture } from "./fixtures/review/build.ts";
-import { add } from "../todo/lib/todo.ts";
+import { addLegacy as add } from "../todo/lib/todo.ts";
 import { state } from "./state.ts";
 import { loadRegistry } from "../jobs/lib/ledger.ts";
 import { spawn } from "node:child_process";

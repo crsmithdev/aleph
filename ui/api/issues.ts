@@ -2,7 +2,7 @@
  * `GET /api/issues`, `GET /api/issues/:repo/:n` and `POST /api/issues`: the
  * Issues and Issue views' data. `?all=1` lists every repo, not only the recent ones. Every route takes `?project=<key>` and shows
  * only that project. A read is the work store's origin/main; a write runs
- * `aleph todo add`, so the CLI stays the one writer. A POST must carry `X-Aleph-UI: 1` and, when it has
+ * `aleph issue add`, so the CLI stays the one writer. A POST must carry `X-Aleph-UI: 1` and, when it has
  * an Origin, the server's own. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
 import { runCli } from "../../jobs/lib/launch.ts";
@@ -10,7 +10,9 @@ import { allJobs, lastReal } from "../../jobs/lib/job.ts";
 import { loadRegistry, type Repo } from "../../jobs/lib/ledger.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { landedCommits, recentRepos, repoStages } from "../../jobs/lib/status.ts";
-import { readDecision } from "../../jobs/lib/decision.ts";
+import { readAsk } from "../../jobs/lib/ask.ts";
+import { Refusal } from "../../jobs/lib/transitions.ts";
+import * as issues from "../../todo/lib/issues.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
 import { awaitsChris, labels, readList, readLists } from "../../todo/lib/store.ts";
@@ -121,11 +123,12 @@ async function create(req: Request, url: URL): Promise<Response> {
   if (!title) return Response.json({ error: "give the issue a title" }, { status: 400 });
   if (!loadRegistry()[repo]) return Response.json({ error: repo ? `no repo named ${repo}` : "name a project" }, { status: 400 });
   if (project && project !== repo) return Response.json({ error: `this view is filtered to ${project}` }, { status: 400 });
-  const labels = (Array.isArray(b.labels) ? b.labels : String(b.labels ?? "").split(",")).map((s: unknown) => String(s).trim()).filter(Boolean);
-  const args = ["todo", "add", repo, title, "--body", "-"];
+  const given = (Array.isArray(b.labels) ? b.labels : String(b.labels ?? "").split(",")).map((s: unknown) => String(s).trim()).filter(Boolean);
+  // The `goal` label is a goal now: the text is filed as goal `.1` beside the issue.
+  const labels = given.filter((l: string) => l !== "goal");
+  const args = ["issue", "add", repo, title, given.includes("goal") ? "--goal" : "--body", "-"];
   if (labels.length) args.push("--labels", labels.join(","));
-  const waits = str(b.waitingOn ?? b.waiting_on)?.trim();
-  if (waits) args.push("--waiting-on", waits);
+  if (str(b.waitingOn ?? b.waiting_on)?.trim()) return Response.json({ error: "an issue does not wait on another: file a goal and name the goal it follows with --after" }, { status: 400 });
   const due = str(b.due)?.trim();
   if (due) args.push("--due", due);
   const { stdout: out, stderr: err, code } = await runCli(args, { stdin: String(b.body ?? "") });
@@ -169,14 +172,14 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
   if (!item) return Response.json({ error: "no such issue" }, { status: 404 });
   if (todos.status(item) !== "open" || !awaitsChris(item)) return Response.json({ error: "this issue is not waiting for a decision" }, { status: 409 });
   const body: any = await req.json().catch(() => ({}));
-  const d = readDecision(item);
+  const d = readAsk(item);
   let note: string;
   let waitingOn: string | undefined;
   if (d) {
     const o = d.options.find((x) => x.label === body?.label);
     if (!o) return Response.json({ error: `no option named ${JSON.stringify(body?.label ?? null)}` }, { status: 400 });
     note = `Chris decided: ${o.label}: ${o.line}`;
-    waitingOn = o.waiting_on;
+    waitingOn = o.after;
   } else if (body?.approve === true) {
     note = "Chris approved it";
   } else {
@@ -184,9 +187,14 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
     if (!rec) return Response.json({ error: "this issue has no recommendation to approve" }, { status: 400 });
     note = `Chris decided: ${rec}`;
   }
-  const { stdout: out, stderr: err, code } = await runCli(["issue", "decide", repo.key, String(n), ...(waitingOn ? ["--waiting-on", waitingOn] : []), note]);
-  if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
-  try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }
+  // In process, as the firefighter does: `aleph issue decide` no longer takes `--waiting-on`, and an option's dependency still sets it.
+  try {
+    const r = issues.decide(repo, n, note, waitingOn ? { waitingOn } : {});
+    return Response.json(r.result);
+  } catch (e: any) {
+    if (!(e instanceof Refusal)) throw e;
+    return Response.json({ error: e.message }, { status: 422 });
+  }
 }
 
 /**

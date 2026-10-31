@@ -519,7 +519,7 @@ test("a land shows the acceptance result of its goal, escaped, and nothing witho
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readList, labels as itemLabels } from "../todo/lib/store.ts";
+import { readList } from "../todo/lib/store.ts";
 import { routes as proposalRoutes } from "./api/proposals.ts";
 
 const prop = { id: "l-1234abcd", kind: "check", title: "No db mocks", target: "aleph checks", sentence: "Do not mock the db.", count: 3, signals: [
@@ -588,8 +588,9 @@ test("approve and decline handlers", async () => {
     expect(body.code).toBe(0);
     expect(stored()[0].state).toBe("approved");
     const items = readList({ key: "fac" })!.items;
-    expect(items.length).toBe(1);
-    expect(itemLabels(items[0])).toEqual(["goal", "memory"]);
+    // The issue and its goal `.1`.
+    expect(items.map((i) => i.fm.id)).toEqual(["1", "1.1"]);
+    expect(items[0].fm).toMatchObject({ kind: "issue", source: "memory" });
     const again = await call("POST /api/approve/:id", "approve/l-a", "l-a");
     expect(again.status).toBe(422);
     expect((await again.json()).code).toBe(1);

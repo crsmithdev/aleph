@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, itemsRemote, sh, startScript, until } from "./cli.helpers";
+import { aleph, base, itemsRemote, seedItem, sh, startScript, until } from "./cli.helpers";
 import { setup, teardown } from "./cli.helpers";
 
 // The factory on the new store shape: `aleph migrate --apply` on one open goal, one standalone goal and one
@@ -15,13 +15,12 @@ describe("the flow on migrated items", () => {
     const dir = (n: string) => join(base, n);
     mkdirSync(dir("runs"), { recursive: true });
     mkdirSync(dir("factory"), { recursive: true });
-    const add = async (title: string, ...args: string[]) => (await aleph(["todo", "add", "fac", title, ...args])).json.added as number;
-    const goal = await add("migrated goal", "--labels", "goal", "--body", "-");
-    const standalone = await add("standalone goal", "--labels", "goal", "--due", "2999-01-01");
-    const proposal = await add("bump left-pad", "--labels", "proposal,deps");
-    const plain = await add("an untriaged issue");
+    // Old-shape items, seeded: `aleph migrate --apply` is what turns them into the new shape.
     // The goal's body tells the fake worker what to commit.
-    await aleph(["todo", "edit", "fac", String(goal), "--body", "ACTION: commit migrated.txt"]);
+    const goal = seedItem("fac", "migrated goal", { labels: ["goal"] }, "ACTION: commit migrated.txt");
+    const standalone = seedItem("fac", "standalone goal", { labels: ["goal"], due: "2999-01-01" });
+    const proposal = seedItem("fac", "bump left-pad", { labels: ["proposal", "deps"] });
+    const plain = seedItem("fac", "an untriaged issue", {}, "");
 
     writeFileSync(join(dir("factory"), "paused"), "now\n");
     const mig = await aleph(["migrate", "--apply"], { ALEPH_BACKUPS_DIR: dir("backups") });

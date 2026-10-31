@@ -2,6 +2,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readList, writeList } from "../todo/lib/store.ts";
+import { addLegacy } from "../todo/lib/todo.ts";
 import { serve } from "./server.ts";
 
 let base: string, server: Awaited<ReturnType<typeof serve>>, calls: string;
@@ -28,20 +30,29 @@ beforeAll(async () => {
   writeFileSync(join(repo, "b.txt"), "main moved\n");
   sh(repo, "add", "."); sh(repo, "commit", "-qm", "main moves on");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ r: { path: repo } }));
-  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { needs: "question", question: "which colour?" }], ["stuckjob", { state: "stuck" }], ["wt", { todo: 7 }]] as const) {
+  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { needs: "question", question: "which colour?" }], ["stuckjob", { state: "stuck" }], ["wt", { todo: 7 }], ["wtgone", { todo: 99 }]] as const) {
     const folder = join(base, "jobs", `20261027-100000-r-${name}-agent`);
     mkdirSync(folder, { recursive: true });
     writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "agent", state: "needs-you", started: new Date().toISOString(), name, job: name, repo: "r", ...extra }));
   }
+  // The work store, with issue 7 of `r` for the Wait button to set `waiting_on` on.
+  const itemsRemote = join(base, "items.git"), items = join(base, "items");
+  sh(base, "init", "-q", "--bare", "-b", "main", itemsRemote);
+  sh(base, "clone", "-q", itemsRemote, items);
+  sh(items, "config", "user.email", "t@t"); sh(items, "config", "user.name", "t");
+  sh(items, "commit", "-q", "--allow-empty", "-m", "start");
+  sh(items, "push", "-q", "origin", "main");
   calls = join(base, "calls");
   const fake = join(base, "fake-aleph");
   writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\nif [ "$4" = "--spec" ]; then cat >> ${calls}.stdin; fi\nif [ "$1 $2" = "issue edit" ] && [ -e ${base}/fail-edit ]; then echo "edit refused" >&2; exit 1; fi\necho out\nexit 0\n`);
   chmodSync(fake, 0o755);
+  Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
   for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ITEMS: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake })) {
     saved[k] = process.env[k];
     process.env[k] = v;
   }
   server = await serve(0, { warm: false });
+  writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 7; i++) addLegacy(doc, `issue ${i}`, { labels: i === 7 ? ["goal"] : [] }); return true; }, true);
 });
 afterAll(() => {
   server.stop(true);
@@ -67,26 +78,26 @@ test("POST /api/wait 400s without a blocker or an item", async () => {
   expect((await post("/api/wait/x", undefined, {})).status).toBe(400);
 });
 
-test("POST /api/wait sets the item to wait on the issue, then drops the job", async () => {
+const waiting = (n: number) => readList({ key: "r" })!.items.find((i) => i.id === n)!.fm.waiting_on;
+
+test("POST /api/wait sets the item's waiting_on in process, then drops the job", async () => {
   const before = recorded().length;
   const res = await post("/api/wait/wt", { "X-Aleph-UI": "1" }, { on: "r-9" });
   expect(res.status).toBe(200);
-  expect(recorded().slice(before, before + 1)).toEqual(["issue edit r 7 --waiting-on r-9"]);
-  const tail = recorded().slice(-2);
-  expect(tail[0]).toBe("issue edit r 7 --waiting-on r-9");
-  expect(tail[1].startsWith("drop wt Chris chose to wait for r-9")).toBe(true);
+  expect(waiting(7)).toBe("r-9");
+  // The CLI refuses `issue edit --waiting-on`, so only the drop goes through it.
+  const calledNow = recorded().slice(before);
+  expect(calledNow).toHaveLength(1);
+  expect(calledNow[0].startsWith("drop wt Chris chose to wait for r-9")).toBe(true);
 });
 
-test("POST /api/wait is 422 when the issue edit fails, and drops nothing", async () => {
+test("POST /api/wait is 422 when the edit is refused, and drops nothing", async () => {
   const before = recorded().length;
-  writeFileSync(join(base, "fail-edit"), "");
-  try {
-    const res = await post("/api/wait/wt", { "X-Aleph-UI": "1" }, { on: "r-9" });
-    expect(res.status).toBe(422);
-    expect(recorded().slice(before)).toEqual(["issue edit r 7 --waiting-on r-9"]);
-  } finally {
-    rmSync(join(base, "fail-edit"), { force: true });
-  }
+  // Issue 99 is not in the store: the in-process edit refuses it.
+  const res = await post("/api/wait/wtgone", { "X-Aleph-UI": "1" }, { on: "r-9" });
+  expect(res.status).toBe(422);
+  expect(((await res.json()) as any).error).toContain("no issue 99");
+  expect(recorded().slice(before)).toEqual([]);
 });
 
 test("a POST without the header, or from another origin, is 403 and runs nothing", async () => {

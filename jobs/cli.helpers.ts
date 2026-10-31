@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeRun, type Run } from "./lib/ledger.ts";
 import { config as storeConfig } from "../todo/lib/store.ts";
-import { renderItem } from "../todo/lib/todo.ts";
+import { parseItem, renderItem } from "../todo/lib/todo.ts";
 
 export const CLI = join(import.meta.dir, "cli.ts");
 export let base: string, remote: string, repo: string, other: string, items: string, itemsRemote: string, jobsDir: string, fake: string, reviewer: string, fakeLog: string, setupLog: string;
@@ -282,7 +282,7 @@ echo '{"type":"result","is_error":false,"result":"Checked.\\n'"$v"'"}'
     { name: "pause", run: "sleep 1", when: ["pair/**"] },
     // Pushes to the remote from another clone once, so the land's own push loses the race.
     // Writes a to-do note to main once, during the land's checks.
-    { name: "todo race", run: `if [ -f ${join(base, "todo-once")} ]; then rm ${join(base, "todo-once")}; bun ${CLI} todo note demo 1 "during the land"; fi`, when: ["todo-race/**"] },
+    { name: "todo race", run: `if [ -f ${join(base, "todo-once")} ]; then rm ${join(base, "todo-once")}; bun ${CLI} issue note demo 1 "during the land"; fi`, when: ["todo-race/**"] },
     // Pushes a commit that names an item (its trailer is in item-once) from another clone once, during the land's checks.
     { name: "item race", run: `if [ -f ${join(base, "item-once")} ]; then m=$(cat ${join(base, "item-once")}); rm ${join(base, "item-once")}; cd ${join(base, "other")} && git fetch -q origin && git reset -q --hard origin/main && echo $RANDOM > item-hand && git add item-hand && git -c user.name=t -c user.email=t@t commit -qm hand -m "$m" && git push -q origin main; fi`, when: ["item-race/**"] },
     // The batch tests: one line per call; the second fails once the first run's file is there with it.
@@ -333,13 +333,20 @@ export async function fjobFor(name: string, action: string, id: number) {
   return aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), "--todo", String(id)]);
 }
 
+/** Brings the test store's checkout up to origin/main. A detached dispatch or triage writing the store at the same moment can make one fetch find no ref, so it retries. */
+function pullItems(): void {
+  for (let attempt = 1; ; attempt++) {
+    try { sh(items, "git", "pull", "-q", "--rebase", "origin", "main"); return; } catch (e) { if (attempt === 5) throw e; Bun.sleepSync(200 * attempt); }
+  }
+}
+
 /**
  * Files an item in the test store as one commit, with the given frontmatter fields (`kind`, `goals`, `after`, `ask`,
  * `labels` ...) beside the ones every item has, and returns its number. This is how a test seeds a new-shape item,
  * which no verb of `aleph issue` writes yet, or an old-shape one with a field the verbs do not set.
  */
 export function seedItem(repoKey: string, title: string, fm: Record<string, unknown> = {}, body = "Body."): number {
-  sh(items, "git", "pull", "-q", "--rebase", "origin", "main");
+  pullItems();
   const dir = join(items, repoKey, "backlog", "tasks");
   mkdirSync(dir, { recursive: true });
   if (!existsSync(join(items, repoKey, "backlog", "config.yml"))) writeFileSync(join(items, repoKey, "backlog", "config.yml"), storeConfig(repoKey));
@@ -360,4 +367,29 @@ export function seedRun(repoKey: string, run: Partial<Run> & Pick<Run, "kind" | 
   mkdirSync(folder, { recursive: true });
   writeRun(folder, { job: id, name: id, repo: repoKey, told: true, shown: true, started: new Date().toISOString(), ...run } as Run);
   return id;
+}
+
+/**
+ * Files an old-shape item the way `aleph issue add <repo> <title> <flags> --body -` did before the store wrote only the new
+ * shape: `--labels a,b` becomes `labels`, `--due` and `--waiting-on` their fields, `action` the body. No verb of `aleph issue`
+ * writes that shape now, so the item is seeded; an open goal then gets the dispatch that `add` ran, with `env` (which may turn it off).
+ */
+export async function addOld(title: string, action: string, extra: string[] = [], env: Record<string, string> = {}): Promise<number> {
+  const flag = (n: string) => { const i = extra.indexOf(`--${n}`); return i >= 0 ? extra[i + 1] : undefined; };
+  const labels = (flag("labels") ?? "").split(",").filter(Boolean);
+  const id = seedItem("fac", title, { labels, ...(flag("due") ? { due: flag("due") } : {}), ...(flag("waiting-on") ? { waiting_on: flag("waiting-on") } : {}) }, action ? `ACTION: ${action}` : "");
+  if (labels.includes("goal") && env.ALEPH_DISPATCH !== "off") await aleph(["dispatch"], env);
+  return id;
+}
+
+/** Sets frontmatter fields of an item of the test store in one commit (a value of `undefined` removes the field): the edits no verb of `aleph issue` makes now, such as `waiting_on`. */
+export function patchItem(repoKey: string, id: number | string, fm: Record<string, unknown>): void {
+  pullItems();
+  const path = join(items, repoKey, "backlog", "tasks", `${repoKey}-${id}.md`);
+  const item = parseItem(readFileSync(path, "utf8"));
+  for (const [k, v] of Object.entries(fm)) { if (v === undefined) delete item.fm[k]; else item.fm[k] = v as any; }
+  writeFileSync(path, renderItem(repoKey, item));
+  sh(items, "git", "add", "-A");
+  sh(items, "git", "commit", "-qm", `patch ${repoKey}-${id}`);
+  sh(items, "git", "push", "-q", "origin", "main");
 }

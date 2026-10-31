@@ -38,7 +38,7 @@ describe("milestone 2", () => {
   });
 
   test("an item is done while a commit on main names it in its trailers, and not once that commit is reverted", async () => {
-    const id = (await aleph(["todo", "add", "fac", "derive me"])).json.added;
+    const id = (await aleph(["issue", "add", "fac", "derive me"])).json.added;
     expect(await status(`fac-${id}`)).toMatchObject({ stage: "new" });
     await fjobFor("fderive", "commit derive.txt", id);
     expect(await status(`fac-${id}`)).toMatchObject({ stage: "building", why: "its job is passed" });
@@ -53,20 +53,20 @@ describe("milestone 2", () => {
   }, 30_000);
 
   test("only the trailer block counts; a hand-done item keeps the store's done; dropped wins", async () => {
-    const id = (await aleph(["todo", "add", "fac", "named in prose"])).json.added;
+    const id = (await aleph(["issue", "add", "fac", "named in prose"])).json.added;
     pushFromOther(`prose\n\nItem: fac-${id} is named here\n\nbut not as a trailer.`, "prose.txt");
     expect(await status(`fac-${id}`)).toMatchObject({ stage: "new" });
     pushFromOther(`real\n\nItem: fac-${id}`, "real.txt");
     expect(await status(`fac-${id}`)).toMatchObject({ stage: "done" });
-    const hand = (await aleph(["todo", "add", "fac", "done by hand"])).json.added;
-    await aleph(["todo", "done", "fac", String(hand)]);
+    const hand = (await aleph(["issue", "add", "fac", "done by hand"])).json.added;
+    await aleph(["issue", "done", "fac", String(hand)]);
     expect(await status(`fac-${hand}`)).toMatchObject({ stage: "done", why: "the store says done" });
-    await aleph(["todo", "drop", "fac", String(id), "no longer wanted"]);
+    await aleph(["issue", "drop", "fac", String(id), "no longer wanted"]);
     expect(await status(`fac-${id}`)).toMatchObject({ stage: "dropped" });
-    const stuck = (await aleph(["todo", "add", "fac", "a stuck one"])).json.added;
+    const stuck = (await aleph(["issue", "add", "fac", "a stuck one"])).json.added;
     await fjobFor("fstuckitem", "error", stuck);
     expect(await status(`fac-${stuck}`)).toMatchObject({ stage: "stuck" });
-    const held = (await aleph(["todo", "add", "fac", "a held one"])).json.added;
+    const held = (await aleph(["issue", "add", "fac", "a held one"])).json.added;
     await fjobFor("fhelditem", "commit held/y.txt", held);
     expect(await status(`fac-${held}`)).toMatchObject({ stage: "awaiting" });
     for (const n of ["fstuckitem", "fhelditem"]) await aleph(["drop", n]);
@@ -74,18 +74,18 @@ describe("milestone 2", () => {
   }, 30_000);
 
   test("aleph status with no item gives the stage of each open item in the recent repos", async () => {
-    const id = (await aleph(["todo", "add", "fac", "listed by status"])).json.added;
+    const id = (await aleph(["issue", "add", "fac", "listed by status"])).json.added;
     const r = await aleph(["status", "--json"]);
     expect(r.code).toBe(0);
     expect(r.json.find((s: any) => s.id === `fac-${id}`)).toMatchObject({ stage: "new" });
-    await aleph(["todo", "done", "fac", String(id)]);
+    await aleph(["issue", "done", "fac", String(id)]);
     expect((await aleph(["status", "--json"])).json.find((s: any) => s.id === `fac-${id}`)).toBeUndefined();
   }, 30_000);
 
   test("aleph status inside the sandbox, from the bundle, says what it says outside", async () => {
-    const done = (await aleph(["todo", "add", "fac", "landed one"])).json.added;
+    const done = (await aleph(["issue", "add", "fac", "landed one"])).json.added;
     pushFromOther(`landed\n\nItem: fac-${done}`, "landed-one.txt");
-    const open = (await aleph(["todo", "add", "fac", "open one"])).json.added;
+    const open = (await aleph(["issue", "add", "fac", "open one"])).json.added;
     const items = [`fac-${done}`, `fac-${open}`];
     const r = await aleph(["job", "fac", "finside", "--spec", specFile(`Goal: inside\nACTION: status ${CLI} ${items.join(" ")}\n`)]);
     expect(state(r.json.run).state).toBe("passed");

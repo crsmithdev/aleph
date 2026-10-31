@@ -1,8 +1,8 @@
 /**
  * The nightly dependency sweep: `bun outdated` in a fresh clone of each
  * factory repo's origin/main, inside the sandbox. Each package whose latest
- * version is newer than the lockfile's becomes one item labelled
- * `proposal,deps` and never `goal`, so no run starts until Chris relabels it.
+ * version is newer than the lockfile's becomes one issue with source `deps`
+ * and an approval Ask (reason `proposal`) and no goal, so no run starts until Chris answers it.
  * deps.json in the factory directory records what was proposed, and what the
  * report has not yet told. See docs/specs/2026-10-25-goal-to-shipped.md.
  */
@@ -86,7 +86,8 @@ export function propose(repo: Repo, found: Proposal[]): string[] {
   const had = new Map(list.items.map((i) => [i.title, i.id]));
   const missing = fresh.filter((p) => !had.has(titleOf(p)));
   const made = file(repo, "dependency proposals", missing.map((p) => ({
-    title: titleOf(p), priority: "low", labels: ["proposal", "deps"],
+    title: titleOf(p), priority: "low", source: "deps",
+    ask: { kind: "approval", reason: "proposal", question: `Update ${p.name} from ${p.current} to ${p.latest}?`, options: [], why: [] },
     body: `Proposed by the nightly dependency sweep: \`bun outdated\` shows ${p.name} at ${p.current} in the lockfile and ${p.latest} as the latest.\nRelabel it \`goal\` to have the factory update it.\n`,
   })));
   if (made.length !== missing.length || made.some((id) => !id)) return [];

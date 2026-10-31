@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, jobsDir, startScript, stateNow as state, setup, teardown, dispatching, starting, unitAlive, until } from "./cli.helpers";
+import { aleph, base, jobsDir, startScript, stateNow as state, setup, teardown, dispatching, starting, unitAlive, until, addOld } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -17,8 +17,7 @@ describe("every transition dispatches at once", () => {
   // Settled: no start is in flight (its run folder may not be there yet), and every run has ended and its unit,
   // with its run-end dispatch, has exited.
   const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).state !== "running" && !unitAlive(join(jobsDir, r)));
-  const add = async (title: string, action: string, extra: string[] = [], env: Record<string, string> = {}) =>
-    (await aleph(["todo", "add", "fac", title, ...extra, "--body", "-"], on(env), `ACTION: ${action}\n`)).json.added as number;
+  const add = (title: string, action: string, extra: string[] = [], env: Record<string, string> = {}) => addOld(title, action, extra, on(env));
   const gates = new Set<string>();
   const open = (name: string) => { gates.add(name); return `hold ${gate(name)}`; };
   const ids: number[] = [];
@@ -37,7 +36,7 @@ describe("every transition dispatches at once", () => {
     for (const id of ids.splice(0)) {
       await until(() => settled(id));
       // The issue goes first: while it is open and has no live job, a detached dispatch can rerun it.
-      expect((await aleph(["todo", "drop", "fac", String(id), "test over"])).code).toBe(0);
+      expect((await aleph(["issue", "drop", "fac", String(id), "test over"])).code).toBe(0);
       // A job that passed, landed or was dropped has no open job to drop. Any other refusal leaves it open,
       // and a stuck or failed one holds every later dispatch.
       const d = await aleph(["drop", `fac-${id}`]);
@@ -57,7 +56,7 @@ describe("every transition dispatches at once", () => {
     await Bun.sleep(1500);
     expect(started()).toEqual([`fac-${a}`]);
     // Drop the issue first: an open goal whose run is dropped starts again, and would keep the slot.
-    await aleph(["todo", "drop", "fac", String(a), "slot test"]);
+    await aleph(["issue", "drop", "fac", String(a), "slot test"]);
     expect((await aleph(["drop", `fac-${a}`], on({ ALEPH_LIVE_CAP: "1" }))).code).toBe(0);
     await until(() => started().includes(`fac-${b}`));
   }, 60_000);

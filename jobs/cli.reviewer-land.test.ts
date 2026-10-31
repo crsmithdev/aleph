@@ -12,12 +12,12 @@ describe("a factory run", () => {
     aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), ...more], extra);
   const factoryBranch = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `factory/${name}`]).exitCode === 0;
   test("a change to an existing test goes to the reviewer; its hold needs a review; drop leaves the item open", async () => {
-    const id = (await aleph(["todo", "add", "fac", "tests"])).json.added;
+    const id = (await aleph(["issue", "add", "fac", "tests"])).json.added;
     const r = await aleph(["job", "fac", "ftest", "--spec", specFile("Goal: ftest REVIEW:hold\nACTION: commit old.test.ts\n"), "--todo", String(id)], { ALEPH_FIX_ROUNDS: "0" });
     expect(state(r.json.run)).toMatchObject({ state: "needs-you", needs: "review", reason: expect.stringMatching(/^reviewer: hold|^reviewer: tests do not/) });
     expect(readFileSync(join(fakeLog, "review-prompt"), "utf8")).toContain("The diff changes the test old.test.ts");
     expect((await aleph(["drop", "ftest"])).code).toBe(0);
-    expect((await aleph(["todo", "show", "fac", String(id), "--json"])).json.status).toBe("open");
+    expect((await aleph(["issue", "show", "fac", String(id), "--json"])).json.status).toBe("open");
     expect(factoryBranch("ftest")).toBe(false);
   });
 
@@ -82,7 +82,7 @@ describe("a factory run", () => {
   test("DEFAULT lines and the cost reach the report once; FOLLOWUP lines go to the log and file nothing", async () => {
     const r = await fjob("fdefault", "defaults");
     expect(state(r.json.run)).toMatchObject({ state: "passed", cost: 0.25, defaults: ["which colour? -> blue"] });
-    const items = (await aleph(["todo", "list", "fac", "--label", "followup", "--json"])).json;
+    const items = (await aleph(["issue", "list", "fac", "--label", "followup", "--json"])).json;
     expect(items.map((i: any) => i.title)).not.toContain("paint the fence");
     expect(readFileSync(join(base, "factory", "followups.log"), "utf8")).toContain("paint the fence");
     const rep = await aleph(["report"]);
@@ -98,18 +98,18 @@ describe("a factory run", () => {
   });
 
   test("FLAKE lines become notes on the flake tracker; FOLLOWUP lines still go to the log", async () => {
-    const before = (await aleph(["todo", "list", "fac", "--json"])).json.length;
+    const before = (await aleph(["issue", "list", "fac", "--json"])).json.length;
     const r = await fjob("fflake", "flake");
     expect(state(r.json.run)).toMatchObject({ state: "passed" });
-    const items = (await aleph(["todo", "list", "fac", "--json"])).json;
+    const items = (await aleph(["issue", "list", "fac", "--json"])).json;
     expect(items.length).toBe(before + 1);
-    expect((await aleph(["todo", "list", "fac", "--label", "followup", "--json"])).json.map((i: any) => i.title)).not.toContain("paint the fence");
-    const tracker = (await aleph(["todo", "list", "fac", "--label", "flakes", "--json"])).json;
+    expect((await aleph(["issue", "list", "fac", "--label", "followup", "--json"])).json.map((i: any) => i.title)).not.toContain("paint the fence");
+    const tracker = (await aleph(["issue", "list", "fac", "--label", "flakes", "--json"])).json;
     expect(tracker).toHaveLength(1);
-    const full = (await aleph(["todo", "show", "fac", String(tracker[0].id), "--json"])).json;
+    const full = (await aleph(["issue", "show", "fac", String(tracker[0].id), "--json"])).json;
     expect(JSON.stringify(full)).toContain("job fflake: a.test.ts > slow one: timed out, passed alone");
     // An open tracker with fresh notes is a health line, so close it before the hook test wants silence.
-    await aleph(["todo", "done", "fac", String(tracker[0].id), "test over"]);
+    await aleph(["issue", "done", "fac", String(tracker[0].id), "test over"]);
     expect(readFileSync(join(base, "factory", "followups.log"), "utf8")).toContain("paint the fence");
     await aleph(["drop", "fflake"]);
   });

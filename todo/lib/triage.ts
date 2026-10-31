@@ -4,7 +4,8 @@
  * `aleph judge haiku`, gives an empty triage.
  */
 import { decide, judgeChoice, type Question } from "../../hooks/lib/jev.ts";
-import { labels, status, type Doc } from "./todo.ts";
+import { areasOf } from "./store.ts";
+import { status, type Doc } from "./todo.ts";
 
 export const CUT = 0.7;
 export const MAX_QUESTIONS = 50;
@@ -14,7 +15,7 @@ export interface Triage { labels: string[]; maybeSame: { id: number; title: stri
 export async function triage(doc: Doc | null, title: string, body = ""): Promise<Triage> {
   const none: Triage = { labels: [], maybeSame: [] };
   if (!doc || judgeChoice() !== "jev") return none;
-  const known = [...new Set(doc.items.flatMap(labels))].slice(0, MAX_QUESTIONS);
+  const known = [...new Set(doc.items.flatMap(areasOf))].slice(0, MAX_QUESTIONS);
   const open = doc.items.filter((i) => status(i) === "open").sort((a, b) => b.id - a.id).slice(0, MAX_QUESTIONS - known.length);
   if (!known.length && !open.length) return none;
 

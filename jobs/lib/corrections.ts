@@ -382,7 +382,7 @@ export function approve(id: string, repo: Place): string {
   ].join("\n");
   let ids: number[];
   try {
-    ids = fileIssues(repo, `memory: ${KIND_TITLE[kind]}`, [{ title: l.title ?? `${KIND_TITLE[kind]}: ${l.sentence}`, labels: ["goal", "memory"], body }]);
+    ids = fileIssues(repo, `memory: ${KIND_TITLE[kind]}`, [{ title: l.title ?? `${KIND_TITLE[kind]}: ${l.sentence}`, source: "memory", goal: true, body }]);
   } catch (e) {
     return `the work store refused: ${(e as Error).message}`;
   }

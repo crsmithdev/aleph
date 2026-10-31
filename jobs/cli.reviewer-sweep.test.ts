@@ -18,9 +18,9 @@ describe("a factory run", () => {
     // The probe runs with the tick; the hook makes it pass without the sandbox.
     const give = (latest: string) => writeFileSync(cmd, `#!/bin/bash\ncat <<'EOF'\n${table(latest)}\nEOF\n`, { mode: 0o755 });
     const stale = () => rmSync(join(base, "factory", "probe.json"), { force: true });
-    const proposals = async () => ((await aleph(["todo", "list", "fac", "--json"])).json as any[]).filter((r) => r.title.startsWith("Update "));
+    const proposals = async () => ((await aleph(["issue", "list", "fac", "--json"])).json as any[]).filter((r) => r.title.startsWith("Update "));
     // The sweep files into the fac list, and the store has no list until an item is added to it.
-    await aleph(["todo", "add", "fac", "the list the nightly sweep files into", "--body", "Added so that fac has a list on main."]);
+    await aleph(["issue", "add", "fac", "the list the nightly sweep files into", "--body", "Added so that fac has a list on main."]);
     give("5.9.2");
     stale();
     await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "fail" });
@@ -30,8 +30,8 @@ describe("a factory run", () => {
     const first = await proposals();
     expect(first.map((r) => r.title).sort()).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update typescript 5.8.3 to 5.9.2"]);
     for (const r of first) {
-      const item = (await aleph(["todo", "show", "fac", String(r.id), "--json"])).json;
-      expect(item.labels).toEqual(["proposal", "deps"]);
+      const item = (await aleph(["issue", "show", "fac", String(r.id), "--json"])).json;
+      expect(item).toMatchObject({ source: "deps", kind: "issue", areas: [], ask: { kind: "approval", reason: "proposal" } });
     }
     const rep = (await aleph(["report"])).stdout;
     expect(rep).toContain("Update left-pad 1.0.0 to 1.2.0");
@@ -44,7 +44,7 @@ describe("a factory run", () => {
     await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "pass" });
     expect((await proposals()).map((r) => r.title)).toContain("Update typescript 5.8.3 to 5.9.3");
     expect(await proposals()).toHaveLength(3);
-    for (const r of await proposals()) await aleph(["todo", "drop", "fac", String(r.id), "test over"]);
+    for (const r of await proposals()) await aleph(["issue", "drop", "fac", String(r.id), "test over"]);
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
   }, 120_000);
 
@@ -58,9 +58,9 @@ describe("a factory run", () => {
       rmSync(join(base, "factory", "probe.json"), { force: true });
       await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "pass" });
       expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toMatch(/deps nolist: .*no list/);
-      const rows = ((await aleph(["todo", "list", "fac", "--json"])).json as any[]).filter((r) => r.title.startsWith("Update "));
+      const rows = ((await aleph(["issue", "list", "fac", "--json"])).json as any[]).filter((r) => r.title.startsWith("Update "));
       expect(rows.map((r) => r.title)).toContain("Update left-pad 1.0.0 to 1.2.0");
-      for (const r of rows) await aleph(["todo", "drop", "fac", String(r.id), "test over"]);
+      for (const r of rows) await aleph(["issue", "drop", "fac", String(r.id), "test over"]);
     } finally {
       writeFileSync(join(base, "repos.json"), reg);
       writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
