@@ -591,7 +591,7 @@ const RERUN_OPTIONS = [
   { label: "Another way", line: "Start the goal again, taking a different route than the run that failed" },
 ];
 
-type Case = "duplicate" | "no-commit" | "claimed" | "time-box" | "infra" | "land-checks" | "land-conflict";
+type Case = "killed" | "duplicate" | "no-commit" | "claimed" | "time-box" | "infra" | "land-checks" | "land-conflict";
 const INFRA = /^(job lock busy|fetch failed|systemd-run failed|worktree gone|bundle failed)/;
 /** A baseline that has not answered yet (see `baseline`): the claim is waited on, not decided. */
 const UNCHECKED = /^main (is unchecked|baseline running)/;
@@ -607,6 +607,25 @@ function caseOf(r: Entry["run"], onMainOrDone: () => boolean, claim: string | nu
   return null;
 }
 
+/** When this host booted, in ms. */
+const bootedAt = (): number => Number(readFileSync("/proc/stat", "utf8").match(/^btime (\d+)$/m)![1]) * 1000;
+
+/**
+ * The open jobs whose last run a host restart killed: a build, recheck or land still `running`, started before
+ * this boot, with its process gone. isLive asks that the pid's process names the run's folder, so a process
+ * that got the same pid after the restart does not count as the run. No mark is kept: a run stays here until it ends.
+ */
+const killed = (jobs: Job[]): Job[] => {
+  const keys = new Set(sandboxRepos().map((r) => r.key));
+  const booted = bootedAt();
+  return jobs.filter((j) => {
+    const last = lastReal(j);
+    const r = last.run;
+    return isOpen(j) && !!r.repo && keys.has(r.repo) && r.state === "running" && (isBuild(r.kind) || r.kind === "recheck" || r.kind === "land")
+      && Date.parse(r.started) < booted && !isLive(last.folder) && !isStarting(last);
+  });
+};
+
 /** How long a dispatch waits for a run's rescue lock before it skips the run. */
 const RESCUE_WAIT_MS = () => Number(process.env.ALEPH_RESCUE_WAIT_MS ?? 60_000);
 
@@ -616,10 +635,11 @@ const RESCUE_WAIT_MS = () => Number(process.env.ALEPH_RESCUE_WAIT_MS ?? 60_000);
  * the checks pass there; no commit, a time box and checks that fail after a land merge and a land that hits a merge conflict drop the run for one rerun
  * of the goal, with a note; an infrastructure failure is rechecked or landed again, once. Each action
  * writes its reason to the run, the issue note and the news. Anything else, or the second time one
- * case hits one goal, sets an Ask (input, rescue) on the issue; such a run holds nothing.
+ * case hits one goal, sets an Ask (input, rescue) on the issue; such a run holds nothing. A run that a host
+ * restart killed comes first: it is dropped for a new run of the goal, or landed again, and uses up no rerun.
  */
 async function rescueStuck(act: Rescue, land?: Land, checks?: Checks): Promise<void> {
-  const pending = (jobs: Job[]) => holders(jobs);
+  const pending = (jobs: Job[]) => [...killed(jobs), ...holders(jobs)];
   for (const first of pending(allJobs())) {
     const name = first[0].run.name;
     // Wait: the dispatch that holds it may have read the job before this run ended, and would not act on it.
@@ -677,8 +697,8 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
     return !!item && issues.status(item) !== "open";
   };
   const claim = r.reason === "no commit" ? alreadyMet(readFile(last, "result.md") ?? "") : null;
-  const key = caseOf(r, onMainOrDone, claim);
-  const reason = r.reason ?? r.state;
+  const key = killed([runs]).length ? "killed" : caseOf(r, onMainOrDone, claim);
+  const reason = key === "killed" ? "host restart" : r.reason ?? r.state;
   const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.state}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
   if (!key) return chris(`${name} is ${r.state} (${reason}); drop it, recheck it, or edit the goal?`, choice(`${name} is ${r.state} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
 
@@ -686,6 +706,23 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
     if (why) { rmSync(rerunFile(name), { force: true }); await chris(`${name}: ${what} failed (${why}); ${reason}. What now?`, choice(`${name}: ${what} failed: how should the factory go on?`, [`Failure: ${why}`])); return false; }
     return true;
   };
+  // The goal did not cause this: no rescue mark, so the goal keeps its rerun.
+  if (key === "killed") {
+    const text = `a host restart killed ${r.kind} run ${last.id}`;
+    if (r.kind === "land") {
+      // The branch passed, and the land may have pushed: a new land finds that, and a new goal run would do the work twice.
+      writeFileSync(join(last.folder, "exit"), "143");
+      updateRun(last.folder, { state: "failed", reason, phase: undefined, told: true, ended: new Date().toISOString() });
+      if (!await tryDo(land ? await land(name) : "no land", "land again")) return;
+      record(`${text}: landed again`);
+      await say(`${text}: landing again`);
+      return;
+    }
+    if (!await tryDo(await act.drop(name, `${text}. The goal did not cause this. Run the goal again from the start.`), "drop")) return;
+    record(`${text}: dropped, and the goal starts again`);
+    await say(`${text}: the goal starts again`);
+    return;
+  }
   const rerun = (note: string) => writeRerun(name, note);
   const quoted = (file: "checks.log" | "result.md") => `\`\`\`\n${tailOf(last, file, 20) || "(empty)"}\n\`\`\``;
   const earlier = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key);

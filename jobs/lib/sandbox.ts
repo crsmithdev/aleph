@@ -106,6 +106,14 @@ export function profile(dir: string, o: { read: string[]; write: string[]; net?:
 
 export interface Step { code: number; timedOut: boolean; stalled: boolean }
 
+/** How long an agent step may print nothing before the stall watch stops it. */
+export const stallSeconds = (): number => Number(process.env.ALEPH_STALL_SECONDS ?? 600);
+/** The reason of a step that the stall watch stopped. */
+export const stallReason = (): string => {
+  const s = stallSeconds();
+  return `stalled: no output for ${s % 60 === 0 ? `${s / 60} minutes` : `${s} seconds`}`;
+};
+
 /**
  * Run `script` with bash under srt, in `dir/<cwd>`. The environment is built
  * here from nothing: none of Chris's variables reach the sandbox. stdout and stderr go to the named files. With
@@ -139,10 +147,10 @@ export async function sandboxed(dir: string, script: string, o: {
   o.onSpawn?.(p);
   // Stall watch: when stdout has not grown for `stall` seconds, stop the step the way the time box does.
   let stalled = false;
-  let size = statSync(o.stdout).size;
+  let size: number | undefined = statSync(o.stdout).size;
   let last = performance.now();
   const watch = o.stall ? setInterval(() => {
-    const now = statSync(o.stdout).size;
+    const now = statSync(o.stdout, { throwIfNoEntry: false })?.size;
     if (now !== size) { size = now; last = performance.now(); return; }
     if (performance.now() - last < o.stall! * 1000) return;
     stalled = true;

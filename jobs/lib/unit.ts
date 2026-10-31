@@ -14,7 +14,7 @@ import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./j
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
 import { serverGraph } from "./ui-graph.ts";
-import { makeRunFolder, removeRunFolder, runPath, sandboxed, workerToken } from "./sandbox.ts";
+import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
 import { dispatchOn, gates, recordFlake, waitingToLand } from "./factory.ts";
 import { startReview } from "./review.ts";
 import { postTrace } from "./trace.ts";
@@ -970,7 +970,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
         read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
         env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
         stdout: join(folder, "output.log"), stderr: join(folder, "stderr.log"), limit: limit("ALEPH_JOB_TIMEOUT", 2400),
-        stall: limit("ALEPH_STALL_SECONDS", 600),
+        stall: stallSeconds(),
         onSpawn: (p) => { child = p; },
       });
     } finally { await shots.stop(); }
@@ -980,10 +980,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     const facts: Partial<Outcome> = { ...(o.cost !== undefined ? { cost: o.cost } : {}), defaults: tagged(o.result, "DEFAULT") };
     fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
     noteFlakes(repo, run, tagged(o.result, "FLAKE"));
-    if (w.stalled) {
-      const s = limit("ALEPH_STALL_SECONDS", 600);
-      return stuck(`stalled: no output for ${s % 60 === 0 ? `${s / 60} minutes` : `${s} seconds`}`, facts);
-    }
+    if (w.stalled) return stuck(stallReason(), facts);
     if (w.timedOut) return stuck("time box", facts);
     if (!o.ok) return stuck(o.line, facts);
 
@@ -1168,7 +1165,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     const w = await sandboxed(rdir, script, {
       read: ["out/out.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
       env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
-      stdout: log, stderr: join(folder, "review.err"), limit: limit("ALEPH_REVIEW_TIMEOUT", 600),
+      stdout: log, stderr: join(folder, "review.err"), limit: limit("ALEPH_REVIEW_TIMEOUT", 600), stall: stallSeconds(),
       onSpawn: (p) => { child = p; },
     });
     child = null;
@@ -1176,6 +1173,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     writeFileSync(join(folder, "review.md"), o.result);
     const cost = o.cost;
     const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true });
+    if (w.stalled) return none(stallReason());
     if (w.timedOut) return none("time box");
     if (!o.ok) return none(o.line || `exit ${w.code}`);
     const v = reviewVerdict(o.result);

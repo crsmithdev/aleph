@@ -278,6 +278,96 @@ function fakes() {
 }
 const dispatch = (f: ReturnType<typeof fakes>) => dispatchGoals(f.start, async () => null, f.land, f.rescue);
 
+// A run that a host restart killed: `running`, started before this boot, its process gone.
+const BEFORE_BOOT = "2020-01-01T00:00:00.000Z";
+const killedRun = (name: string, kind: Run["kind"] = "build", files: Record<string, string> = { pid: "999999999" }) => mk(name, kind, "running", { started: BEFORE_BOOT }, files);
+
+test("a run killed by a host restart is dropped, its goal starts at once, and no Ask or rescue mark is left", async () => {
+  const id = goal();
+  const r = killedRun(`fac-${id}`);
+  const f = fakes();
+  const out = await dispatch(f);
+  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
+  expect(out.started).toEqual([`fac-${id}`]);
+  expect(f.specs[0]).toContain("a host restart killed build run");
+  expect(notes(id)).toContain("a host restart killed build run");
+  expect(ask(id)).toBeNull();
+  expect(existsSync(join(r.folder, "rescued"))).toBe(false);
+});
+
+test("a goal whose run a host restart killed keeps its rerun: the next no commit reruns it with no Ask", async () => {
+  const id = goal();
+  killedRun(`fac-${id}`);
+  const f = fakes();
+  f.start = async () => null;
+  await dispatchGoals(f.start, async () => null, f.land, f.rescue);
+  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" });
+  await dispatchGoals(f.start, async () => null, f.land, f.rescue);
+  expect(f.calls).toEqual([`drop fac-${id}`, `drop fac-${id}`]);
+  expect(ask(id)).toBeNull();
+});
+
+test("a killed run with a pid that another process now holds is still killed", async () => {
+  const id = goal();
+  killedRun(`fac-${id}`, "build", { pid: String(process.pid) });
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls[0]).toBe(`drop fac-${id}`);
+});
+
+test("a killed run that wrote no pid yet is killed too", async () => {
+  const id = goal();
+  killedRun(`fac-${id}`, "build", {});
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls[0]).toBe(`drop fac-${id}`);
+});
+
+test("a run from before this boot whose pid's process names its folder is live and stays", async () => {
+  const id = goal();
+  const r = killedRun(`fac-${id}`, "build", {});
+  // The sleep comes first: bash execs a last command, and its cmdline would lose the folder.
+  const p = Bun.spawn(["bash", "-c", `sleep 20; : ${r.folder}`], { stdout: "ignore", stderr: "ignore" });
+  try {
+    writeFileSync(join(r.folder, "pid"), String(p.pid));
+    const f = fakes();
+    await dispatch(f);
+    expect(f.calls).toEqual([]);
+    expect(readRun(r.folder)!.state).toBe("running");
+  } finally { p.kill(); }
+});
+
+test("a run started in this boot whose process is gone is left alone", async () => {
+  const id = goal();
+  const r = mk(`fac-${id}`, "build", "running", {}, { pid: "999999999" });
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls).toEqual([]);
+  expect(readRun(r.folder)!.state).toBe("running");
+});
+
+test("a land killed by a host restart fails and lands again, and the goal does not start over", async () => {
+  const id = goal();
+  const first = mk(`fac-${id}`, "build", "passed", { branch: "b", started: BEFORE_BOOT });
+  const l = mk(`fac-${id}`, "land", "running", { job: first.job, branch: "b", started: BEFORE_BOOT }, { pid: "999999999" });
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls[0]).toBe(`land fac-${id}`);
+  expect(f.calls).not.toContain(`drop fac-${id}`);
+  expect(readRun(l.folder)).toMatchObject({ state: "failed", reason: "host restart" });
+  expect(existsSync(join(l.folder, "exit"))).toBe(true);
+});
+
+test("a paused factory leaves a killed run alone", async () => {
+  const id = goal();
+  const r = killedRun(`fac-${id}`);
+  setPaused(true);
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls).toEqual([]);
+  expect(readRun(r.folder)!.state).toBe("running");
+});
+
 test("no commit, the item already done: the run is dropped as a duplicate, once, and the factory is not held", async () => {
   const id = goal();
   await change(id, (item) => issues.setStatus(item, "done"));

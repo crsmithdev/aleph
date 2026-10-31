@@ -15,7 +15,7 @@ import { git, gitWith } from "./git.ts";
 import { outcome } from "./gate.ts";
 import { askOf, CALL_FILE, isAwaiting, loadRegistry, onOf, parseVerdict, readCall, readEnvFile, readRun, updateRun, type Repo, type Run } from "./ledger.ts";
 import { startUnit } from "./launch.ts";
-import { linkBins, runPath, sandboxed, workerToken, writeHome } from "./sandbox.ts";
+import { linkBins, runPath, sandboxed, stallReason, stallSeconds, workerToken, writeHome } from "./sandbox.ts";
 
 /**
  * The reviewer's profile: it reads the run folder, writes only in review/ (its
@@ -185,10 +185,11 @@ async function review(folder: string): Promise<void> {
     const log = join(folder, "review.log");
     const r = await sandboxed(folder, `exec ${argv.map(q).join(" ")}`, {
       ...REVIEW_SANDBOX, cwd: "review/work", env, stdin: text, stdout: log, stderr: log,
-      limit: Number(process.env.ALEPH_REVIEW_CALL_TIMEOUT ?? 1500),
+      limit: Number(process.env.ALEPH_REVIEW_CALL_TIMEOUT ?? 1500), stall: stallSeconds(),
     });
     const o = outcome(existsSync(log) ? readFileSync(log, "utf8") : "");
     writeFileSync(md, o.result.trimEnd() + "\n");
+    if (r.stalled) return void fail(stallReason());
     if (r.timedOut) return void fail("time box");
     if (!o.ok) return void fail(o.line || `exit ${r.code}`);
     if (!parseVerdict(o.result)) return void fail("no VERDICT line");

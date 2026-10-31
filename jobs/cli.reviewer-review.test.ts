@@ -112,6 +112,15 @@ describe("a factory run", () => {
       await aleph(["drop", "rnone2"]);
     }, 30_000);
 
+    test("a silent reviewer is stopped at ALEPH_STALL_SECONDS and holds the run with no worker rerun", async () => {
+      const silent = join(base, "silent-reviewer");
+      writeFileSync(silent, "#!/bin/bash\nexec sleep 60\n", { mode: 0o755 });
+      const t = await aleph(["job", "fac", "rstall", "--spec", specFile("Goal: g\nACTION: commit rstall.txt\n")], { ALEPH_REVIEWER_CMD: silent, ALEPH_STALL_SECONDS: "2" });
+      expect(state(t.json.run)).toMatchObject({ state: "awaiting", reason: "reviewer: no verdict (stalled: no output for 2 seconds)" });
+      expect(runsOf("rstall").length).toBe(1);
+      await aleph(["drop", "rstall"]);
+    }, 30_000);
+
     test("the held review's end records review.call on state.json, and aleph jobs shows it (criterion 17)", async () => {
       const stub = (name: string, line: string) => {
         const f = join(base, `stub-${name}`);
