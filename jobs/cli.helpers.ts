@@ -203,6 +203,8 @@ case $action in
   already-met) echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"result":"Looked.\\nGoal: Already met — main has the change"}'; echo '{"type":"command_lifecycle","phase":"end"}'; exit 0 ;;
   defaults) echo d > d.txt; git add d.txt; git commit -qm "add d.txt"
     echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"Done.\\nDEFAULT: which colour? -> blue\\nFOLLOWUP: paint the fence"}'; exit 0 ;;
+  flake) echo f > fl.txt; git add fl.txt; git commit -qm "add fl.txt"
+    echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"Done.\\nFLAKE: a.test.ts > slow one: timed out, passed alone\\nFOLLOWUP: paint the fence"}'; exit 0 ;;
   fail-then-fix) echo "$RANDOM" > f.txt; git add f.txt
     if printf '%s' "$prompt" | grep -q 'The check \`tests\` failed'; then git rm -q FAIL; else echo x > FAIL; git add FAIL; fi
     git commit -qm "work" ;;

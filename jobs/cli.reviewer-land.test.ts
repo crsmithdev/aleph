@@ -97,6 +97,21 @@ describe("a factory run", () => {
     await aleph(["drop", "fdefault"]);
   });
 
+  test("FLAKE lines become notes on the flake tracker; FOLLOWUP lines still go to the log", async () => {
+    const before = (await aleph(["todo", "list", "fac", "--json"])).json.length;
+    const r = await fjob("fflake", "flake");
+    expect(state(r.json.run)).toMatchObject({ state: "passed" });
+    const items = (await aleph(["todo", "list", "fac", "--json"])).json;
+    expect(items.length).toBe(before + 1);
+    expect((await aleph(["todo", "list", "fac", "--label", "followup", "--json"])).json.map((i: any) => i.title)).not.toContain("paint the fence");
+    const tracker = (await aleph(["todo", "list", "fac", "--label", "flakes", "--json"])).json;
+    expect(tracker).toHaveLength(1);
+    const full = (await aleph(["todo", "show", "fac", String(tracker[0].id), "--json"])).json;
+    expect(JSON.stringify(full)).toContain("job fflake: a.test.ts > slow one: timed out, passed alone");
+    expect(readFileSync(join(base, "factory", "followups.log"), "utf8")).toContain("paint the fence");
+    await aleph(["drop", "fflake"]);
+  });
+
   test("the report hook prints JSON for SessionStart, and nothing when nothing is new", async () => {
     // Lands move the main checkout now; put it back before the commit that added held/x.txt.
     sh(repo, "git", "reset", "-q", "--hard", `${sh(repo, "git", "log", "-1", "--format=%H", "--diff-filter=A", "origin/main", "--", "held/x.txt")}~1`);

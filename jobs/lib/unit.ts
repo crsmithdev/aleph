@@ -6,7 +6,7 @@
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { closeAndFile, readHidden } from "../../todo/lib/store.ts";
+import { closeAndFile, noteFlake, readHidden } from "../../todo/lib/store.ts";
 import { addWorktree, fetchOrigin, followMain, git } from "./git.ts";
 import { ALREADY_MET, heldRule, testFindings, outcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { checkSlot, readReview2, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
@@ -89,7 +89,7 @@ and never push. If the previous run's land conflicted, merge \`origin/${main}\`
 into the branch and resolve the conflicts so that both changes survive. Nobody
 answers questions during the run: when you must choose, take the answer you
 would recommend and print a line \`DEFAULT: <question> -> <answer>\`. For work
-you find but do not do, print a line \`FOLLOWUP: <title>\`. End the result with zero or more lines
+you find but do not do, print a line \`FOLLOWUP: <title>\`. A test that fails or times out and is not the goal's own, and passes again alone or on a rerun, is a flake: print one line \`FLAKE: <test file> > <test name>: <what you saw>\` and no \`FOLLOWUP:\` for it. End the result with zero or more lines
 \`FACT: <one sentence> [source: <file:line | commit sha | https URL>]\`, for durable
 facts about the repo or its tools that you learned and checked. If the goal already
 holds on your branch and no edit is needed, make no commit, run the repo's tests,
@@ -953,6 +953,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     writeFileSync(join(folder, "result.md"), o.result);
     const facts: Partial<Verdict> = { ...(o.cost !== undefined ? { cost: o.cost } : {}), defaults: tagged(o.result, "DEFAULT") };
     fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
+    noteFlakes(repo, run, tagged(o.result, "FLAKE"));
     if (w.stalled) {
       const s = limit("ALEPH_STALL_SECONDS", 600);
       return stuck(`stalled: no output for ${s % 60 === 0 ? `${s / 60} minutes` : `${s} seconds`}`, facts);
@@ -1161,4 +1162,9 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
 function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
   if (titles.length) mkdirSync(factoryDir(), { recursive: true });
   for (const title of titles) appendFileSync(join(factoryDir(), "followups.log"), `${new Date().toISOString()}\t${repo.key}\t${run.name}\t${title}\n`);
+}
+
+/** A worker's `FLAKE:` lines become notes on the repo's flake tracker; they file no issue and start no triage. */
+function noteFlakes(repo: Repo, run: Run, lines: string[]): void {
+  for (const line of lines) noteFlake(repo, `job ${run.name}: ${line}`);
 }
