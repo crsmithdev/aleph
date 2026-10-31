@@ -155,6 +155,28 @@ describe("state", () => {
     expect(s.openIssues).toBeGreaterThan(s.newIssues);
   });
 
+  test("factory.liveRuns counts live agent runs only; land and plan runs stay in running", () => {
+    const before = state(now);
+    const kids: ReturnType<typeof spawn>[] = [];
+    const ids = [["20261027-000050-a", "agent", "fac-8"], ["20261027-000051-a", "land", "fac-9"], ["20261027-000052-a", "plan", "plan-fac-2"]] as const;
+    try {
+      for (const [id, kind, name] of ids) {
+        const dir = join(jobsDir, id);
+        run(id, { kind, job: name, name, state: "running" });
+        const child = spawn("bash", ["-c", "sleep 30; true", "_", dir], { stdio: "ignore" });
+        kids.push(child);
+        writeFileSync(join(dir, "pid"), String(child.pid));
+      }
+      const s = state(now);
+      expect(s.factory.liveRuns).toBe(before.factory.liveRuns + 1);
+      expect(s.running.some((j) => j.run?.kind === "land")).toBe(true);
+      expect(s.running.some((j) => j.run?.kind === "plan")).toBe(true);
+    } finally {
+      for (const k of kids) k.kill();
+      for (const [id] of ids) rmSync(join(jobsDir, id), { recursive: true });
+    }
+  });
+
   test("a running job's run is its last run; started stays the first run's", () => {
     run("20261027-000010-a", { job: "fac-9", name: "fac-9", state: "done", started: ago(2) });
     run("20261027-000011-a", { kind: "land", job: "fac-9", name: "fac-9", state: "running", started: ago(1) });

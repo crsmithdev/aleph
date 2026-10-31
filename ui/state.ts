@@ -5,7 +5,7 @@
  */
 import { resultLine } from "../jobs/lib/acceptance.ts";
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { DAY_CAP, LIVE_CAP, WAITING_CAP, baselines, doneChecker, firefighterLines, gates, health, hold, lastProbe, paused, redLine, runsToday, waitReason, type WaitReason } from "../jobs/lib/factory.ts";
+import { DAY_CAP, LIVE_CAP, liveRuns, WAITING_CAP, baselines, doneChecker, firefighterLines, gates, health, hold, lastProbe, paused, redLine, runsToday, waitReason, type WaitReason } from "../jobs/lib/factory.ts";
 import { allRuns, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { readDecision, type Decision } from "../jobs/lib/decision.ts";
@@ -65,7 +65,7 @@ export interface IncomingItem { id: string; title: string; href: string; created
 export interface State {
   now: string;
   factory: {
-    paused: boolean; judge: "jev" | "haiku"; dayCap: number; liveCap: number; waitingCap: number; runsToday: number; costToday: number;
+    paused: boolean; judge: "jev" | "haiku"; dayCap: number; liveCap: number; /** Live agent runs, the count the live cap checks. */ liveRuns: number; waitingCap: number; runsToday: number; costToday: number;
     nextTick: string | null;
     probe: { at: string; ok: boolean; failed: string[] } | null;
     health: string[];
@@ -340,7 +340,7 @@ export function state(now = new Date()): State {
   return {
     now: now.toISOString(),
     factory: {
-      paused: paused(), judge: judgeChoice(), dayCap: DAY_CAP(), liveCap: LIVE_CAP(), waitingCap: WAITING_CAP(), runsToday: today.length,
+      paused: paused(), judge: judgeChoice(), dayCap: DAY_CAP(), liveCap: LIVE_CAP(), liveRuns: liveRuns(), waitingCap: WAITING_CAP(), runsToday: today.length,
       costToday: today.reduce((a, e) => a + (e.run.cost ?? 0), 0),
       nextTick: nextTick(), probe, health: health(now.getTime()), hold: hold(jobs)?.line ?? null,
       firefighter: firefighterLines(now.getTime()),

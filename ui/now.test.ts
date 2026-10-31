@@ -91,7 +91,7 @@ test("the status line: am/pm time, the sentence, the Hour/Day/Week/Month picker 
 
 test("the flow strip: Incoming, Queued, Running of cap, Done, then the Context card; no agent lines", () => {
   const stuck = [job({ name: "aleph-30", state: "stuck", reason: "x" }), job({ name: "aleph-31", state: "failed", reason: "y" }), job({ name: "aleph-32", state: "failed", reason: "z" })];
-  const s = { ...att({ ...full, stuck }), usage: { now: { seven_day: 41.2, five_hour: 7, seven_day_resets_at: "2026-10-30T09:00:00Z" }, series: [] }, issues: [issue(1)], newIssues: 1, factory: { ...full.factory, liveCap: 3, waitingCap: 5, firefighter: [] } };
+  const s = { ...att({ ...full, stuck }), usage: { now: { seven_day: 41.2, five_hour: 7, seven_day_resets_at: "2026-10-30T09:00:00Z" }, series: [] }, issues: [issue(1)], newIssues: 1, factory: { ...full.factory, liveCap: 3, liveRuns: 1, waitingCap: 5, firefighter: [] } };
   const h = r.renderFlow(s, { done: 4 });
   const stages = [...h.matchAll(/<a class="stage-main" href="#lane-(\w+)"><span class="k">([^<]+)<\/span><span class="v"[^>]*>(\d+)(?:<span class="of"> of (\d+)<\/span>)?<\/span><\/a>/g)].map((m) => m.slice(1));
   expect(stages).toEqual([["incoming", "Incoming", "1", undefined], ["queued", "Queued", "1", undefined], ["running", "Running", "1", "3"], ["done", "Done", "4", undefined]]);
@@ -106,6 +106,14 @@ test("the flow strip: Incoming, Queued, Running of cap, Done, then the Context c
   expect(r.renderContext({ ...s, usage: { ...s.usage, last5h: 0 } }).replace(/<[^>]+>/g, "")).toContain("41% weekly (+0%)");
   expect(r.renderFlow({ ...s, usage: undefined })).toContain("usage unknown");
   expect(r.renderFlow(s, null)).toContain('id="done-n">\u2013');
+});
+
+test("the Running stage counts the live agent runs the cap checks; the lane still lists every open run", () => {
+  const mk = (n: number, kind: string) => job({ name: `${kind}-${n}`, run: { kind, started: "2026-10-30T09:00:00Z" } });
+  const running = [...Array.from({ length: 12 }, (_, i) => mk(i, "agent")), mk(1, "land"), mk(2, "land")];
+  const s = { ...full, running, factory: { ...full.factory, liveCap: 12, liveRuns: 12 } };
+  expect(r.renderFlow(s)).toMatch(/Running<\/span><span class="v">12<span class="of"> of 12</);
+  expect((r.renderLanes(s).match(/class="[^"]*run-row/g) ?? []).length).toBe(14);
 });
 
 test("Speed is one section under the flow strip, with Efficiency directly below it", () => {

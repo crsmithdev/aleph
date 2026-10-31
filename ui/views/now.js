@@ -41,6 +41,7 @@ function statLines(stat) {
 }
 
 /** How many cards the running group holds: the running jobs. */
+/** The Running lane's rows: planner, land and agent runs. The flow card counts only the live agent runs, as the cap does. */
 const runningCount = (s) => (s.running ?? []).length;
 /** Land runs live now, not the landed ones the Lands list also shows. */
 const liveLands = (s) => s.delivered.filter((j) => j.state === "landing").length;
@@ -203,7 +204,7 @@ export function renderFlow(s, sp = null) {
   return `<div class="flow" id="flow">` +
     stage("incoming", "Incoming", incomingCount(s), 0) +
     stage("queued", "Queued", (s.waiting ?? []).length, 0) +
-    stage("running", "Running", runningCount(s), s.factory.liveCap > 0 ? s.factory.liveCap : 0) +
+    stage("running", "Running", s.factory.liveRuns ?? 0, s.factory.liveCap > 0 ? s.factory.liveCap : 0) +
     stage("done", "Done", sp && !sp.error ? sp.done : "\u2013", 0, "done-n") + renderContext(s) + `</div>`;
 }
 
