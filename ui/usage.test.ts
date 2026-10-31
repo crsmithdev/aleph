@@ -2,16 +2,30 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fit, gainSince, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
+import { fit, fetchUsage, gainSince, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { costHtml, wkText } from "./lib.js";
 // @ts-ignore plain JS view
 import { renderUsage } from "./views/now.js";
 
 let dir: string, server: ReturnType<typeof Bun.serve>;
+/** What the test server answers; a test swaps it to make the endpoint fail. */
+let reply: (req: Request) => Response;
+const OK = (req: Request) => {
+  if (req.headers.get("authorization") !== `Bearer ${TOKEN}` || req.headers.get("anthropic-beta") !== "oauth-2025-04-20") return new Response("no", { status: 401 });
+  return Response.json({ five_hour: { utilization: 0, resets_at: "2026-10-28T20:00:00Z" }, seven_day: { utilization: 25, resets_at: "2026-11-02T00:00:00Z" } });
+};
 const TOKEN = "sk-ant-oat-secret-token";
 const H = 3600_000;
 const T0 = Date.parse("2026-10-26T00:00:00Z");
+/** The lines written to console.error while `fn` runs. */
+async function errors(fn: () => Promise<unknown>): Promise<string[]> {
+  const orig = console.error, lines: string[] = [];
+  console.error = (...a: unknown[]) => { lines.push(a.map(String).join(" ")); };
+  try { await fn(); } finally { console.error = orig; }
+  return lines;
+}
+
 const snap = (h: number, seven: number, reset = "2026-11-02T00:00:00Z"): Snapshot => ({ at: new Date(T0 + h * H).toISOString(), five_hour: 0, seven_day: seven, seven_day_resets_at: reset });
 
 beforeEach(() => {
@@ -19,10 +33,8 @@ beforeEach(() => {
   process.env.ALEPH_USAGE_FILE = join(dir, "usage.jsonl");
   process.env.ALEPH_CLAUDE_CREDENTIALS = join(dir, "cred.json");
   writeFileSync(process.env.ALEPH_CLAUDE_CREDENTIALS, JSON.stringify({ claudeAiOauth: { accessToken: TOKEN } }));
-  server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch(req) {
-    if (req.headers.get("authorization") !== `Bearer ${TOKEN}` || req.headers.get("anthropic-beta") !== "oauth-2025-04-20") return new Response("no", { status: 401 });
-    return Response.json({ five_hour: { utilization: 0, resets_at: "2026-10-28T20:00:00Z" }, seven_day: { utilization: 25, resets_at: "2026-11-02T00:00:00Z" } });
-  } });
+  reply = OK;
+  server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (req) => reply(req) });
   process.env.ALEPH_USAGE_URL = `http://127.0.0.1:${server.port}/`;
 });
 afterEach(() => { server.stop(true); rmSync(dir, { recursive: true }); delete process.env.ALEPH_USAGE_URL; });
@@ -94,4 +106,82 @@ test("gainSince: the latest weekly percent minus the snapshot nearest to 5 hours
   expect(gainSince([snap(1, 20), snap(0, 30)], 5 * 3600_000)).toBeNull();
   expect(gainSince([snap(0, 30)], 5 * 3600_000)).toBeNull();
   expect(gainSince([], 5 * 3600_000)).toBeNull();
+});
+
+test("a 429 logs one line with the status and the Retry-After value, and the poll returns null", async () => {
+  reply = () => new Response("slow down", { status: 429, headers: { "retry-after": "540" } });
+  let result: unknown;
+  const lines = await errors(async () => { result = await pollOnce(); });
+  expect(result).toBeNull();
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain("429");
+  expect(lines[0]).toContain("540");
+  expect(lines[0]).not.toContain(TOKEN);
+});
+
+test("a 429 without Retry-After logs the status alone", async () => {
+  reply = () => new Response("slow down", { status: 429 });
+  const lines = await errors(() => pollOnce());
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain("429");
+  expect(lines[0]).not.toContain("Retry-After");
+});
+
+test("a 401 logs one line with the status", async () => {
+  writeFileSync(process.env.ALEPH_CLAUDE_CREDENTIALS!, JSON.stringify({ claudeAiOauth: { accessToken: "bad" } }));
+  const lines = await errors(() => pollOnce());
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain("401");
+});
+
+test("a missing credentials file logs one line that names the credentials file", async () => {
+  rmSync(process.env.ALEPH_CLAUDE_CREDENTIALS!);
+  const lines = await errors(() => pollOnce());
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain("credentials file");
+});
+
+test("a credentials file that is invalid JSON logs one line without the token", async () => {
+  writeFileSync(process.env.ALEPH_CLAUDE_CREDENTIALS!, `{"claudeAiOauth": {"accessToken": "${TOKEN}"`);
+  const lines = await errors(() => pollOnce());
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain("credentials file");
+  expect(lines[0]).not.toContain(TOKEN);
+});
+
+test("a credentials file with no token logs one line", async () => {
+  writeFileSync(process.env.ALEPH_CLAUDE_CREDENTIALS!, JSON.stringify({ claudeAiOauth: {} }));
+  const lines = await errors(() => pollOnce());
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain("no token");
+});
+
+test("a body that is not JSON logs one line and not the body", async () => {
+  reply = () => new Response("<html>secret-page-text</html>", { status: 200 });
+  const lines = await errors(() => pollOnce());
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain("not valid JSON");
+  expect(lines[0]).not.toContain("secret-page-text");
+});
+
+test("a JSON body with no usage numbers logs one line", async () => {
+  reply = () => Response.json({ five_hour: null });
+  const lines = await errors(() => pollOnce());
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain("no usage numbers");
+});
+
+test("a network failure logs one line", async () => {
+  const port = server.port;
+  server.stop(true);
+  process.env.ALEPH_USAGE_URL = `http://127.0.0.1:${port}/`;
+  const lines = await errors(() => pollOnce());
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain("network failure");
+  expect(lines[0]).not.toContain(TOKEN);
+});
+
+test("a successful poll writes no line", async () => {
+  const lines = await errors(async () => { expect((await fetchUsage())?.seven_day).toBe(25); });
+  expect(lines).toHaveLength(0);
 });

@@ -31,21 +31,48 @@ const usageUrl = () => process.env.ALEPH_USAGE_URL ?? "https://api.anthropic.com
 let lastFailed = false;
 export const pollFailed = () => lastFailed;
 
-/** One call to the endpoint: a snapshot, or null on any error. The token stays inside this function. */
+/** Logs why a poll failed, on one stderr line. Never the token, the credentials file or the response body. */
+function failed(reason: string): null {
+  console.error(`ui/usage: poll failed: ${reason}`);
+  return null;
+}
+
+const errName = (e: unknown) => (e instanceof Error ? e.name : "error");
+
+/**
+ * One call to the endpoint: a snapshot, or null on any error, with the reason on stderr. The token stays inside this function.
+ * A failed read or parse of the credentials file logs fixed text, because a JSON parse error can quote the file.
+ */
 export async function fetchUsage(now = new Date()): Promise<Snapshot | null> {
+  let token: unknown;
   try {
-    const token = JSON.parse(readFileSync(credentialsFile(), "utf8"))?.claudeAiOauth?.accessToken;
-    if (typeof token !== "string" || !token) return null;
-    const res = await fetch(usageUrl(), {
+    token = JSON.parse(readFileSync(credentialsFile(), "utf8"))?.claudeAiOauth?.accessToken;
+  } catch {
+    return failed("credentials file cannot be read or parsed");
+  }
+  if (typeof token !== "string" || !token) return failed("no token in credentials file");
+  let res: Response;
+  try {
+    res = await fetch(usageUrl(), {
       headers: { authorization: `Bearer ${token}`, "anthropic-beta": "oauth-2025-04-20" }, signal: AbortSignal.timeout(15_000),
     });
-    if (!res.ok) return null;
-    const b: any = await res.json();
-    const five = b?.five_hour?.utilization, seven = b?.seven_day?.utilization;
-    if (typeof five !== "number" || typeof seven !== "number") return null;
-    const resets = b.seven_day.resets_at;
-    return { at: now.toISOString(), five_hour: five, seven_day: seven, seven_day_resets_at: typeof resets === "string" ? resets : null };
-  } catch { return null; }
+  } catch (e) {
+    return failed(`network failure or timeout (${errName(e)})`);
+  }
+  if (!res.ok) {
+    const retry = res.headers.get("retry-after");
+    return failed(`HTTP ${res.status}${retry !== null ? `, Retry-After: ${retry}` : ""}`);
+  }
+  let b: any;
+  try {
+    b = await res.json();
+  } catch (e) {
+    return failed(e instanceof SyntaxError ? "response body is not valid JSON" : `network failure or timeout (${errName(e)})`);
+  }
+  const five = b?.five_hour?.utilization, seven = b?.seven_day?.utilization;
+  if (typeof five !== "number" || typeof seven !== "number") return failed("response body has no usage numbers");
+  const resets = b.seven_day.resets_at;
+  return { at: now.toISOString(), five_hour: five, seven_day: seven, seven_day_resets_at: typeof resets === "string" ? resets : null };
 }
 
 /** Polls once: appends the snapshot to the file; on any error records nothing. */
