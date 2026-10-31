@@ -66,7 +66,7 @@ describe("every transition dispatches at once", () => {
     const slow = join(base, "slowbase");
     writeFileSync(slow, "");
     try {
-      expect((await aleph(["recheck", `fac-${s}`], on())).code).toBe(0);
+      expect((await aleph(["recheck", `fac-${s}`], on())).code).toBe(1);
       await until(() => started().includes(`fac-${b}`));
     } finally {
       rmSync(slow, { force: true });

@@ -717,6 +717,7 @@ export async function unit(folder: string): Promise<void> {
   const next = nextStep(ended, repo);
   if (next) ended = updateRun(folder, { next });
   writeFileSync(join(folder, "exit"), String(code));
+  process.exitCode = code;
   if (run.kind === "agent" || run.kind === "recheck") startReview2(folder);
   if ((run.kind === "agent" || run.kind === "recheck") && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
   if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });

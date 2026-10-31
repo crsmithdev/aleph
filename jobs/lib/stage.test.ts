@@ -19,7 +19,7 @@ const add = async (...args: string[]): Promise<number> => {
   return r.json.added;
 };
 const close = async (id: number, verb: "done" | "drop") => { expect((await aleph(["issue", verb, "fac", String(id), "closed"])).code).toBe(0); return id; };
-const job = async (action: string, id: number) => { const r = await fjobFor(name("job"), action, id); expect(r.code, r.stderr).toBe(0); return id; };
+const job = async (action: string, id: number) => { const r = await fjobFor(name("job"), action, id); expect(r.code, r.stderr).toBe(action === "error" ? 1 : 0); return id; };
 /** An old-shape run: its item is `todo`. */
 const oldRun = (id: number, run: Parameters<typeof seedRun>[1]) => { seedRun("fac", { todo: id, ...run }); return id; };
 /** A new-shape run: its item is `on`. */

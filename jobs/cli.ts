@@ -3,7 +3,7 @@
  * aleph <migrate|job|run|land|checked|recheck|drop|jobs|issue|unit|tick|report|pause|resume|sandbox|status|judge>
  * — detached agent jobs, plain runs, each repo's issues, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/jobs. Registry: $ALEPH_REPOS or
- * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal.
+ * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal, and the foreground unit's exit code when it fails.
  * See docs/specs/2026-09-24-agent-jobs.md.
  */
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
@@ -47,7 +47,8 @@ const command = process.argv.slice(2);
 /** Print the started run, then wait for a foreground unit: the transition has dropped its locks. */
 async function started(s: Start): Promise<void> {
   out(s.started);
-  await s.child?.exited;
+  const code = await s.child?.exited;
+  if (code) process.exitCode = code;
 }
 
 async function job(): Promise<void> {

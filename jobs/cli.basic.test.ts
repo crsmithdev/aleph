@@ -101,6 +101,7 @@ describe("job", () => {
     sh(repo, "git", "branch", "job/alpha", "origin/main");
     const r = await job("alpha", "commit d.txt");
     expect(r.json.job).toBe(r.json.run);
+    expect(r.code).toBe(0);
     expect(state(r.json.run).state).toBe("passed");
     expect(sh(worktree("alpha"), "git", "log", "--format=%s")).toBe("add d.txt\ninit");
     await aleph(["drop", "alpha"]);
@@ -110,6 +111,7 @@ describe("job", () => {
 describe("the state rule", () => {
   test("a non-zero exit fails", async () => {
     const r = await job("exits", "exit3");
+    expect(r.code).not.toBe(0);
     expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "worker exited 3" });
     expect(told).toContain("demo/exits failed");
   });
@@ -203,7 +205,7 @@ describe("guards", () => {
       expect(live.every((j: any) => j.state === "running" && j.phase === "worker")).toBe(true);
       for (const j of live) expect((await aleph(["drop", j.name])).code).toBe(0);
       const ends = await Promise.all(started);
-      expect(ends.filter((r) => r.code === 0).length).toBe(5);
+      expect(ends.filter((r) => r.code === 143).length).toBe(5);
       for (const j of live) expect(state(j.run).state).toBe("dropped");
       expect((await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name)).map((j: any) => j.state)).toEqual(live.map(() => "dropped"));
     } finally {
@@ -244,6 +246,7 @@ describe("run", () => {
 
   test("a failing plain command says it failed", async () => {
     const r = await aleph(["run", "build", "--", "false"]);
+    expect(r.code).toBe(1);
     expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "exited 1" });
     expect(told).toContain("build failed");
   });
