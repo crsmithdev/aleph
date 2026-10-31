@@ -32,6 +32,8 @@ beforeAll(async () => {
   sh(fac, "git", "remote", "add", "origin", "git@github.com:chris/fac.git");
   sh(fac, "git", "commit", "-q", "--allow-empty", "-m", "first");
   sh(fac, "git", "commit", "-q", "--allow-empty", "-m", "second\n\nItem: fac-2");
+  sh(fac, "git", "commit", "-q", "--allow-empty", "-m", "third\n\nIssue: fac-3\nGoal: fac-3.1\nJob: x");
+  sh(fac, "git", "commit", "-q", "--allow-empty", "-m", "fourth\n\nGoal: fac-4.1");
   sh(fac, "git", "update-ref", "refs/remotes/origin/main", "HEAD");
   sh(fac, "git", "reset", "-q", "--hard", "HEAD~1");
   sh(base, "git", "init", "-q", "-b", "main", plain);
@@ -80,9 +82,9 @@ test("/api/projects counts, behind, baseline and notes", async () => {
   expect(plain).toMatchObject({ factory: false, openItems: 0, openGoals: 0, behind: null, baseline: null, notes: 1 });
 });
 
-test("/api/projects/<key> adds commits with their Item trailer, issues, jobs and notes", async () => {
+test("/api/projects/<key> adds commits with their Issue, Goal or Item trailer, issues, jobs and notes", async () => {
   const d: any = await (await at("/api/projects/fac")).json();
-  expect(d.commits.map((c: any) => [c.subject, c.item])).toEqual([["second", "fac-2"], ["first", null]]);
+  expect(d.commits.map((c: any) => [c.subject, c.item])).toEqual([["fourth", "fac-4.1"], ["third", "fac-3"], ["second", "fac-2"], ["first", null]]);
   expect(d.commits[0].commitUrl).toBe(`https://github.com/chris/fac/commit/${d.commits[0].hash}`);
   expect(d.items.map((i: any) => i.title)).toEqual(["a goal", "plain issue"]);
   expect(d.jobs.map((j: any) => j.name)).toEqual(["fac-2", "fac-1"]);

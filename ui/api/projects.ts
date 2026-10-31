@@ -71,11 +71,14 @@ function card(repo: Repo, issues: Item[], jobs: Entry[][], notes: number): Card 
 
 function commits(repo: Repo): Detail["commits"] {
   const base = githubBase(git(repo.path, "remote", "get-url", "origin").out);
-  const r = git(repo.path, "log", "-20", `--format=%H%x1f%s%x1f%aI%x1f%(trailers:key=Item,valueonly,separator=%x2C )%x1e`, `origin/${repo.main}`);
+  const trailer = (key: string) => `%(trailers:key=${key},valueonly,separator=%x2C )`;
+  const r = git(repo.path, "log", "-20", `--format=%H%x1f%s%x1f%aI%x1f${trailer("Issue")}%x1f${trailer("Goal")}%x1f${trailer("Item")}%x1e`, `origin/${repo.main}`);
   if (!r.ok) return [];
   return r.out.split("\x1e").map((s) => s.trim()).filter(Boolean).map((rec) => {
-    const [hash, subject, date, item] = rec.split("\x1f");
-    return { hash, subject, date, item: item?.trim() || null, ...(base ? { commitUrl: `${base}/commit/${hash}` } : {}) };
+    const [hash, subject, date, issue, goal, legacy] = rec.split("\x1f");
+    // A land writes Issue and Goal; a commit that only has Item: (history) still gives its item.
+    const item = [issue, goal, legacy].map((v) => v?.trim()).find((v) => !!v) || null;
+    return { hash, subject, date, item, ...(base ? { commitUrl: `${base}/commit/${hash}` } : {}) };
   });
 }
 
