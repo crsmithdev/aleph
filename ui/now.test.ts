@@ -608,6 +608,7 @@ const sample = (reason: string) => {
   if (reason.startsWith("proposal-")) return { needs: [], needsIssues: [] as any[], lessons: [{ ...prop, kind: reason.slice(9), target: { check: "aleph checks", "claude-md": "aleph/CLAUDE.md", skill: "skills/aleph/SKILL.md" }[reason.slice(9)] }] };
   const q: Record<string, object> = {
     "no-commit": { reason: "no-commit", question: "needs-chris: ended with no commit, so the factory stopped" },
+    "run-cap": { reason: "run-cap", question: "needs-chris: the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it." },
     "triage-no-verdict": { reason: "triage-no-verdict", question: "needs-chris: triage: no verdict in 2 runs: failed: x" },
     "acceptance-failed": { reason: "acceptance-failed", question: "needs-chris: acceptance: fail again" },
     decision: { reason: "decision", question: "needs-chris: Which one?" },

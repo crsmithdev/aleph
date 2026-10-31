@@ -12,12 +12,14 @@ const issue = (extra: Partial<NewIssue> = {}): NewIssue => ({ id: "aleph-387", t
 const TARGET = { check: "aleph checks", "claude-md": "identity/CLAUDE.md", skill: "skills/tdd/SKILL.md" } as const;
 const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", title: "Format first", target: TARGET[kind!], sentence: "Run the formatter before landing", state: "proposed", kind, count: 3, signals: [{ id: "s", source: "chris", at: "2026-10-27", quote: "format it", link: "" }] });
 const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", kind: "product" as const, why: ["w"] };
+const RUN_CAP = "needs-chris: the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it.";
 
 const CASES: Record<string, () => ReturnType<typeof attention>> = {
   held: () => attention({ needs: [run("held", { reason: "changes hooks/x.ts" })], needsIssues: [] }, {}, []),
   review: () => attention({ needs: [run("review", { review2: { verdict: "back", reason: "tests are missing" } })], needsIssues: [] }, {}, []),
   question: () => attention({ needs: [run("question", { question: "Which port?" })], needsIssues: [] }, {}, []),
   "no-commit": () => attention({ needs: [], needsIssues: [issue({ reason: "no-commit", question: "needs-chris: the last 3 runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal." })] }, {}, []),
+  "run-cap": () => attention({ needs: [], needsIssues: [issue({ reason: "run-cap", question: RUN_CAP })] }, {}, []),
   "triage-no-verdict": () => attention({ needs: [], needsIssues: [issue({ reason: "triage-no-verdict", question: "triage: no verdict in 2 runs: failed: its process ended before a verdict" })] }, {}, []),
   "acceptance-failed": () => attention({ needs: [], needsIssues: [issue({ reason: "acceptance-failed", question: "acceptance: fail again at abc: x | needs-chris: the Oracle command `bun test` still fails" })] }, {}, []),
   decision: () => attention({ needs: [], needsIssues: [issue({ reason: "decision", decision, question: "triage: for Chris: Should it be A or B?" })] }, {}, []),
@@ -55,6 +57,8 @@ describe("attention", () => {
     expect(CASES.question()[0].actions.map((a) => a.label)).toEqual(["Answer and rerun", "Drop the job"]);
     expect(CASES["no-commit"]()[0].problem).toBe("The last 3 runs of aleph-387 ended with no commit, so the factory stopped starting it.");
     expect(CASES["no-commit"]()[0].actions.map((a) => a.label)).toEqual(["Run it again", "Close the issue"]);
+    expect(CASES["run-cap"]()[0].problem).toBe("The factory started aleph-387 3 times in one hour, so it stopped starting it until you run it again.");
+    expect(CASES["run-cap"]()[0].actions.map((a) => a.label)).toEqual(["Run it again", "Close the issue"]);
     expect(CASES["triage-no-verdict"]()[0].problem).toBe("Triage of aleph-387 failed twice: its process ended before a verdict, so no one has decided what to do with this issue.");
     expect(CASES["triage-no-verdict"]()[0].actions.map((a) => a.label)).toEqual(["Run triage again", "Close the issue"]);
     expect(CASES["acceptance-failed"]()[0].problem).toBe("The Oracle of aleph-387 still fails on main after a rerun.");
@@ -89,6 +93,8 @@ describe("attention", () => {
     expect(r("triage: no verdict in 2 runs: x")).toBe("triage-no-verdict");
     expect(r("acceptance: fail again at abc: x")).toBe("acceptance-failed");
     expect(r("needs-chris: the last 3 runs of this goal ended with no commit, so the factory stopped starting it")).toBe("no-commit");
+    expect(r(RUN_CAP)).toBe("run-cap");
+    expect(issueReason({ reason: "run-cap", question: RUN_CAP })).toBe("run-cap");
     expect(r("triage: for Chris: pick one", decision)).toBe("decision");
     expect(r("needs-chris: x changes hooks/a.ts, a held security path, so it needs you")).toBe("firefighter");
     expect(r("needs-chris: what now?", decision)).toBe("rescue");

@@ -33,6 +33,7 @@ export function issueReason(i: Pick<NewIssue, "reason" | "question" | "decision"
   if (/^triage: no verdict in/.test(n)) return "triage-no-verdict";
   if (/^acceptance: fail again/.test(n)) return "acceptance-failed";
   if (/ended with no commit, so the factory stopped/.test(n)) return "no-commit";
+  if (/times in the last hour; it stops starting it/.test(n)) return "run-cap";
   if (/^triage: for Chris:/.test(n)) return "decision";
   if (/a held security path/.test(n)) return "firefighter";
   return i.decision ? "rescue" : "decision";
@@ -69,6 +70,7 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
   },
   question: (c) => `The worker on ${c.id} asked: ${clean(c.run?.question) || "it needs an answer"}`,
   "no-commit": (c) => `The last 3 runs of ${c.id} ended with no commit, so the factory stopped starting it.`,
+  "run-cap": (c) => `The factory started ${c.id} 3 times in one hour, so it stopped starting it until you run it again.`,
   "triage-no-verdict": (c) => `Triage of ${c.id} failed twice: ${failure(c.issue?.question ?? "")}, so no one has decided what to do with this issue.`,
   "acceptance-failed": (c) => `The Oracle of ${c.id} still fails on main after a rerun.`,
   decision: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your decision is needed"),
