@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { aleph, fjobFor, seedItem, seedRun, setup, teardown } from "../cli.helpers";
+import { aleph, fjobFor, seedGoal, seedItem, seedRun, setup, teardown } from "../cli.helpers";
 import * as todos from "../../todo/lib/todo.ts";
 import { subjectOf } from "./stage.ts";
 
@@ -8,9 +8,9 @@ afterAll(teardown);
 
 // One fixture item per stage, in the old shape and the new shape, each built through the CLI seam of cli.helpers:
 // seeded old-shape items, `aleph job --on`, `aleph drop`, and seeded new-shape item and run files.
-interface Row { name: string; stage: string; of?: { n: number; m: number }; why?: RegExp; build: () => Promise<number> }
+interface Row { name: string; stage: string; of?: { n: number; m: number }; why?: RegExp; build: () => Promise<number | string> }
 
-const ref = (n: number) => `fac-${n}`;
+const ref = (n: number | string) => `fac-${n}`;
 let jobs = 0;
 const name = (what: string) => `st${what}${++jobs}`;
 /** An old-shape item, seeded from the flags `aleph issue add` took before it wrote only the new shape: `--labels` and `--waiting-on`. */
@@ -98,12 +98,33 @@ const GOALS_NEW: Row[] = [
   { name: "new goal: dropped", stage: "dropped", build: async () => goal({ status: "dropped" }) },
 ];
 
-const built = new Map<string, Promise<number>>();
+// Dotted goals: the goal `.k` of an issue, seeded through seedGoal.
+const GOALS_DOTTED: Row[] = [
+  { name: "dotted goal: blocked while its after goal is open", stage: "blocked", why: /after fac-/, build: async () => {
+    const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
+    const a = seedGoal("fac", n, 1); return seedGoal("fac", n, 2, { after: [ref(a)] });
+  } },
+  { name: "dotted goal: queued once its after goal is done", stage: "queued", build: async () => {
+    const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
+    const a = seedGoal("fac", n, 1, { status: "done" }); return seedGoal("fac", n, 2, { after: [ref(a)] });
+  } },
+  { name: "dotted issue: building 1 of 2", stage: "building", of: { n: 1, m: 2 }, build: async () => {
+    const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
+    const a = seedGoal("fac", n, 1, { status: "done" }), b = seedGoal("fac", n, 2);
+    return seedItem("fac", `issue ${++jobs}`, { kind: "issue", source: "chris", goals: [ref(a), ref(b)] });
+  } },
+  { name: "dotted goal: building under a run on it", stage: "building", build: async () => {
+    const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
+    const a = seedGoal("fac", n, 1); seedRun("fac", { on: ref(a), kind: "build", state: "running" }); return a;
+  } },
+];
+
+const built = new Map<string, Promise<number | string>>();
 const idOf = (row: Row) => { if (!built.has(row.name)) built.set(row.name, row.build()); return built.get(row.name)!; };
 const statusOf = async (row: Row) => { const r = await aleph(["status", ref(await idOf(row)), "--json"]); expect(r.code, r.stderr).toBe(0); return r.json; };
 
 // The rows run one after another: each writes to the one store.
-for (const [title, rows] of [["issues, old shape", ISSUES_OLD], ["issues, new shape", ISSUES_NEW], ["goals, old shape", GOALS_OLD], ["goals, new shape", GOALS_NEW]] as const) {
+for (const [title, rows] of [["issues, old shape", ISSUES_OLD], ["issues, new shape", ISSUES_NEW], ["goals, old shape", GOALS_OLD], ["goals, new shape", GOALS_NEW], ["goals, dotted", GOALS_DOTTED]] as const) {
   describe(title, () => {
     for (const row of rows) {
       test(row.name, async () => {

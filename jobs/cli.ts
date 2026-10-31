@@ -439,23 +439,24 @@ function reportCmd(): void {
 }
 
 /**
- * `aleph status <repo>-<n>`: the issue's stage; with no issue, see statusRecent. In Chris's session the
+ * `aleph status <repo>-<n>[.<k>]`: the item's stage; with no issue, see statusRecent. In Chris's session the
  * facts come from the store and the ledger; in a sandbox, where neither is,
  * they come from the bundle's snapshot at refs/aleph/facts in the current repo.
  */
 function statusCmd(): void {
   if (!positional[0]) return statusRecent();
-  const m = (positional[0] ?? "").match(/^(.+)-(\d+)$/) ?? refuse("usage: aleph status [<repo>-<n>] [--json]");
+  const m = (positional[0] ?? "").match(/^(.+)-(\d+(?:\.\d+)?)$/) ?? refuse("usage: aleph status [<repo>-<n>[.<k>]] [--json]");
   const [, key, n] = m!;
+  const itemRef: number | string = n.includes(".") ? n : Number(n);
   const repo = loadRegistry()[key];
   let s: Stage | undefined;
   if (repo) {
-    try { s = repoStages(repo, { fetch: true, items: [Number(n)] })[0]; } catch (e: any) { refuse(e?.message ?? String(e)); }
+    try { s = repoStages(repo, { fetch: true, items: [itemRef] })[0]; } catch (e: any) { refuse(e?.message ?? String(e)); }
   } else {
     const cwd = process.cwd();
     const snap = readFacts(cwd);
     if (!snap || snap.repo !== key) refuse(`no repo named ${key} in the registry, and no ${FACTS_REF} for it here`);
-    s = stages(cwd, `refs/remotes/origin/${snap!.main}`, snap!, [Number(n)])[0];
+    s = stages(cwd, `refs/remotes/origin/${snap!.main}`, snap!, [itemRef])[0];
   }
   if (!s) refuse(`${key} has no issue ${n}`);
   if (rest.includes("--json")) return out(s);
@@ -472,7 +473,7 @@ function statusRecent(): void {
       fetchOrigin(repo.path);
       const f = facts(repo, doc);
       const main = `refs/remotes/origin/${f.main}`;
-      states.push(...stages(repo.path, main, f, open.map((i) => i.id)));
+      states.push(...stages(repo.path, main, f, open.map((i) => todos.refOf(i))));
     }
     catch (e: any) { console.error(`warn: ${repo.key}: ${e?.message ?? e}`); }
   }
