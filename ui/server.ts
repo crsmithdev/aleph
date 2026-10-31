@@ -1,5 +1,5 @@
 /**
- * The factory UI's server, on 127.0.0.1 only. It serves the page, `ui/lib.js`,
+ * The factory UI's server. It binds 127.0.0.1 and home-proxy serves it on the LAN behind the login in `ui/auth.ts`. It serves the page, `ui/lib.js`,
  * each `ui/views/*.js`, and the routes of every `ui/api/*.ts`, loaded at start.
  * A route file exports `routes`: `"GET /api/x/:id"` → `(req, params, url) => Response`.
  */

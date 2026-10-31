@@ -184,7 +184,9 @@ To undo, run `.\start-wsl-at-boot.ps1 -Remove` in an elevated PowerShell. The pa
 
 ## UI
 
-`aleph-ui [--port <n>]` serves the factory UI on `127.0.0.1` only (default `ALEPH_UI_PORT` or 3020) and prints the URL. `GET /` is `ui/index.html`: a sidebar in four groups (Factory, Work, Activity, Memory), hash routes (`#/jobs/aleph-52`). The views carry no project in the hash and send no `?project=` to the API; each `/api` route still takes `?project=<key>` as its own filter. `GET /api/state` is the JSON of `docs/specs/2026-10-27-ui.md`, read from the ledger, the factory directory and the work store, narrowed by `?project=`; it writes nothing. `GET /api/projects/keys` lists the registry's repos, `GET /api/views` the files under `ui/views/`.
+`aleph-ui [--port <n>]` serves the factory UI, bound to `127.0.0.1` (home-proxy serves it on the LAN as aleph.home, behind the login below; default `ALEPH_UI_PORT` or 3020) and prints the URL. `GET /` is `ui/index.html`: a sidebar in four groups (Factory, Work, Activity, Memory), hash routes (`#/jobs/aleph-52`). The views carry no project in the hash and send no `?project=` to the API; each `/api` route still takes `?project=<key>` as its own filter. `GET /api/state` is the JSON of `docs/specs/2026-10-27-ui.md`, read from the ledger, the factory directory and the work store, narrowed by `?project=`; it writes nothing. `GET /api/projects/keys` lists the registry's repos, `GET /api/views` the files under `ui/views/`.
+
+Login: `ALEPH_UI_PASSWORD` in `~/.aleph/.env` turns the password gate on; unset, the UI has no login (the state for tests and a private machine). With the gate on, `/` shows a login form, and a right password sets the `aleph_session` cookie, which remembers the device for a year. The sessions live in `~/.aleph/factory/ui-sessions.json`, so a restart keeps every device logged in. The `Log out` link ends the current device's session; removing the file logs out every device. After a password change, run `systemctl --user restart aleph-ui`.
 
 To add a view, add two files and touch no shared one:
 

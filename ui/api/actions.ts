@@ -4,7 +4,7 @@
  * `job <repo> <name> --spec -` follow-up) and `POST /api/answer/:name` (`{ answer }`, "Answer and rerun" on a
  * question run: the answer becomes the reason of `aleph drop`, so the next dispatch carries it in the spec). Each action is the `aleph` command of that
  * name, run as a subprocess by the launcher; the page offers nothing the CLI does not. A POST must carry `X-Aleph-UI: 1` and, when it has
- * an Origin, the server's own, so a web page in the browser cannot post here.
+ * an Origin, the server's own, so a web page in the browser cannot post here. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import { latestJob } from "../../jobs/lib/job.ts";

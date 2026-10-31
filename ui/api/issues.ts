@@ -2,7 +2,8 @@
  * `GET /api/issues`, `GET /api/issues/:repo/:n` and `POST /api/issues`: the
  * Issues and Issue views' data. `?all=1` lists every repo, not only the recent ones. Every route takes `?project=<key>` and shows
  * only that project. A read is the work store's origin/main; a write runs
- * `aleph todo add`, so the CLI stays the one writer.
+ * `aleph todo add`, so the CLI stays the one writer. A POST must carry `X-Aleph-UI: 1` and, when it has
+ * an Origin, the server's own. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
 import { runCli } from "../../jobs/lib/launch.ts";
 import { allJobs, lastReal } from "../../jobs/lib/job.ts";

@@ -1,7 +1,7 @@
 /**
  * `POST /api/pause`, `POST /api/resume` and `POST /api/judge` (`{ "judge": "jev" | "haiku" }`).
  * Each is the `aleph` command of that name, run as a subprocess by the launcher, under the same
- * header and Origin rule as the job actions.
+ * header and Origin rule as the job actions. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
 import { runCli } from "../../jobs/lib/launch.ts";
 import type { Handler, Routes } from "../server.ts";

@@ -1,6 +1,6 @@
 /**
  * `POST /api/approve/:id` and `POST /api/decline/:id`: Chris's Yes or No on a correction-memory
- * proposal. Under the same header and Origin rule as ui/api/controls.ts. The answer is the
+ * proposal. Under the same header and Origin rule as ui/api/controls.ts. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages. The answer is the
  * `{ code, stdout, stderr }` the page's click handler shows.
  */
 import { approve, decline } from "../../jobs/lib/corrections.ts";

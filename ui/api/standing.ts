@@ -1,6 +1,6 @@
 /**
  * `POST /api/standing/:reason` (`{ "action": "<action>" }`) and `POST /api/standing/:reason/revoke`:
- * `aleph standing grant` and `aleph standing revoke`, run as subprocesses, under the same header and Origin rule as controls.ts.
+ * `aleph standing grant` and `aleph standing revoke`, run as subprocesses, under the same header and Origin rule as controls.ts. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
 import { runCli } from "../../jobs/lib/launch.ts";
 import type { Handler, Routes } from "../server.ts";
