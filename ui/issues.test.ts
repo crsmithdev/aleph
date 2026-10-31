@@ -128,6 +128,18 @@ describe("POST /api/issues/:repo/:id/drop", () => {
 });
 
 describe("GET /api/issues/:repo/:n", () => {
+  test("lists runs by on, goals included, and by todo for old runs", async () => {
+    run("20261027-000010-a", { job: "on-4", name: "on-4", repo: "fac", state: "running", on: "fac-4" });
+    run("20261027-000011-a", { job: "goal-4-1", name: "goal-4-1", repo: "fac", state: "running", on: "fac-4.1" });
+    run("20261027-000012-a", { job: "on-2", name: "on-2", repo: "fac", state: "running", on: "fac-2" });
+    run("20261027-000013-a", { job: "todo-4", name: "todo-4", repo: "fac", state: "running", todo: 4 });
+    run("20261027-000014-a", { job: "other-4", name: "other-4", repo: "oth", state: "running", on: "oth-4" });
+    const d = await getJson("/api/issues/fac/4");
+    expect(d.jobs.map((j: any) => j.name).sort()).toEqual(["goal-4-1", "on-4", "todo-4"]);
+    const g = await getJson("/api/issues/fac/2");
+    expect(g.jobs.map((j: any) => j.name)).toEqual(["on-2"]);
+  });
+
   test("lists the job and the trailer commit, not the prose one", async () => {
     const d = await getJson("/api/issues/fac/1");
     expect(d.title).toBe("first goal");

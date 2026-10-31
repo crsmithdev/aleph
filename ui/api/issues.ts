@@ -7,7 +7,7 @@
  */
 import { runCli } from "../../jobs/lib/launch.ts";
 import { allJobs, lastReal } from "../../jobs/lib/job.ts";
-import { loadRegistry, type Repo } from "../../jobs/lib/ledger.ts";
+import { loadRegistry, onOf, type Repo } from "../../jobs/lib/ledger.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { landedCommits, recentRepos, repoStages } from "../../jobs/lib/status.ts";
 import { readAsk } from "../../jobs/lib/ask.ts";
@@ -78,6 +78,10 @@ function list(url: URL): Response {
   return Response.json(out);
 }
 
+/** Whether an `onOf` value names issue `n`: the number itself, or a goal `<n>.<k>` of it. */
+const isOfIssue = (on: number | string | undefined, n: number): boolean =>
+  typeof on === "number" ? on === n : typeof on === "string" && Number(on.split(".")[0]) === n;
+
 function detail(params: Record<string, string>, url: URL): Response {
   const project = url.searchParams.get("project");
   const repo = loadRegistry()[params.repo];
@@ -96,7 +100,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   } catch {}
 
   const jobs = allJobs()
-    .filter((runs) => runs[0].run.repo === repo.key && runs.some((e) => e.run.todo === n))
+    .filter((runs) => runs[0].run.repo === repo.key && runs.some((e) => isOfIssue(onOf(e.run), n)))
     .map((runs) => {
       const r = lastReal(runs).run;
       const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
