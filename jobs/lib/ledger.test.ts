@@ -72,12 +72,18 @@ describe("accessors", () => {
     expect(isBuild("build") && isBuild("agent") && !isBuild("land")).toBe(true);
   });
 
-  test("onOf: the number for the run's repo; a dotted or foreign on gives none", () => {
+  test("onOf: the number for the run's repo; a dotted on of the run's repo is its goal; a foreign one gives none", () => {
     const r = { repo: "fac", todo: 4 } as Run;
     expect(onOf({ ...r, on: "fac-7" })).toBe(7);
+    expect(onOf({ ...r, on: "fac-5.1" })).toBe("5.1");
     expect(onOf({ ...r, on: "aleph-577.1" })).toBeUndefined();
     expect(onOf({ ...r, on: "oth-7" })).toBeUndefined();
     expect(onOf(r)).toBe(4);
+  });
+
+  test("a run with a dotted on is found under its goal", () => {
+    write("20261030-000003-goal", { kind: "build", state: "awaiting", ask, on: "fac-5.1" });
+    expect(issue(allJobs()[0])).toBe("5.1");
   });
 
   test("askOf builds approval for held and review, input for question and manual", () => {

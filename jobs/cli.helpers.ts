@@ -359,6 +359,21 @@ export function seedItem(repoKey: string, title: string, fm: Record<string, unkn
   return id;
 }
 
+/** Files the goal `<repo>-<n>.<k>` of issue `<repo>-<n>` in one commit on the test store's origin/main; returns `"<n>.<k>"`. */
+export function seedGoal(repoKey: string, n: number, k: number, fm: Record<string, unknown> = {}, title = "Goal", body = "Body."): string {
+  pullItems();
+  const dir = join(items, repoKey, "backlog", "tasks");
+  mkdirSync(dir, { recursive: true });
+  if (!existsSync(join(items, repoKey, "backlog", "config.yml"))) writeFileSync(join(items, repoKey, "backlog", "config.yml"), storeConfig(repoKey));
+  const ref = `${n}.${k}`;
+  const item = { id: n, sub: k, title, fm: { id: ref, status: "open", created: "2026-10-30", updated: "2026-10-30", priority: "medium", kind: "goal", issue: `${repoKey}-${n}`, ...fm }, body, notes: [], legacy: false };
+  writeFileSync(join(dir, `${repoKey}-${ref}.md`), renderItem(repoKey, item as any));
+  sh(items, "git", "add", "-A");
+  sh(items, "git", "commit", "-qm", `seed ${repoKey}-${ref}`);
+  sh(items, "git", "push", "-q", "origin", "main");
+  return ref;
+}
+
 /** Writes a run folder into the test ledger: `run` holds the fields the test cares about. */
 let seeded = 0;
 export function seedRun(repoKey: string, run: Partial<Run> & Pick<Run, "kind" | "state">): string {
