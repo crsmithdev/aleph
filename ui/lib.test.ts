@@ -198,7 +198,7 @@ test("when gives month, day and time this year, the date for another year, on on
 
 test("badge tones a state with the state-tone map", () => {
   expect(badge("running")).toBe('<span class="badge run">running</span>');
-  expect(badge("needs-you")).toBe('<span class="badge need">needs-you</span>');
+  expect(badge("awaiting")).toBe('<span class="badge need">awaiting</span>');
   expect(badge("failed")).toBe('<span class="badge stuck">failed</span>');
   expect(badge("landed")).toBe('<span class="badge done">landed</span>');
   expect(badge("<odd>")).toBe('<span class="badge quiet">&lt;odd&gt;</span>');

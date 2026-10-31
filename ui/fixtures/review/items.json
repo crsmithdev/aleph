@@ -2,18 +2,16 @@
   "demo": [
     {
       "title": "Show the build time on the status page",
-      "labels": [
-        "goal"
-      ],
+      "kind": "goal",
+      "source": "chris",
       "priority": "high",
       "body": "The status page lists builds without how long each took.\n\n## Goal\nAdd a duration column.",
       "status": "done"
     },
     {
       "title": "Retry flaky uploads",
-      "labels": [
-        "goal"
-      ],
+      "kind": "goal",
+      "source": "chris",
       "status": "dropped",
       "notes": [
         "Dropped: the upload is gone."
@@ -21,59 +19,68 @@
     },
     {
       "title": "Rename the config keys",
-      "labels": [
-        "goal"
-      ],
+      "kind": "goal",
+      "source": "chris",
       "priority": "low",
       "body": "Held: touches a protected path."
     },
     {
       "title": "Cache the index page",
-      "labels": [
-        "goal"
-      ],
-      "waitingOn": "demo-3",
-      "due": "2026-11-15"
+      "kind": "goal",
+      "source": "chris",
+      "due": "2026-11-15",
+      "after": [
+        "demo-3"
+      ]
     },
     {
       "title": "Which license should the repo carry?",
-      "labels": [
-        "needs-chris"
-      ],
-      "body": "MIT or Apache-2.0.",
+      "kind": "issue",
+      "ask": "input",
+      "reason": "question",
+      "question": "MIT or Apache-2.0.",
+      "source": "chris",
       "notes": [
         "Triage: only Chris can decide."
       ]
     },
     {
       "title": "Crash on an empty config",
+      "kind": "issue",
+      "source": "chris",
+      "areas": [
+        "bug"
+      ],
       "labels": [
-        "bug",
         "triaged"
       ],
       "priority": "high"
     },
     {
       "title": "Check the dark theme on the phone",
+      "kind": "issue",
+      "source": "chris",
       "labels": [
         "live-check"
       ]
     },
     {
       "title": "Add a dry-run flag",
+      "kind": "issue",
+      "source": "chris",
       "labels": [
         "proposal"
       ]
     },
     {
       "title": "Typo in the README",
-      "labels": []
+      "kind": "issue",
+      "source": "chris"
     },
     {
       "title": "Speed up the import",
-      "labels": [
-        "goal"
-      ],
+      "kind": "goal",
+      "source": "chris",
       "status": "dropped",
       "notes": [
         "Dropped: not worth it."
@@ -81,25 +88,24 @@
     },
     {
       "title": "Resize the avatar upload",
-      "labels": [
-        "goal"
-      ]
+      "kind": "goal",
+      "source": "chris"
     },
     {
       "title": "Land the CSV export",
-      "labels": [
-        "goal"
-      ]
+      "kind": "goal",
+      "source": "chris"
     },
     {
       "title": "Show the build log tail",
-      "labels": [
-        "goal"
-      ]
+      "kind": "goal",
+      "source": "chris"
     },
     {
       "title": "Plan the settings page",
-      "labels": [
+      "kind": "issue",
+      "source": "chris",
+      "areas": [
         "bug"
       ]
     },
@@ -181,7 +187,7 @@
     {
       "title": "Show a spinner on slow pages",
       "kind": "issue",
-      "source": "worker",
+      "source": "chris",
       "labels": [
         "triaged"
       ]
@@ -200,27 +206,29 @@
   "tools": [
     {
       "title": "Parse dates in the import command",
-      "labels": [
-        "goal"
-      ],
+      "kind": "goal",
+      "source": "chris",
       "body": "Dates in the CSV come through as text."
     },
     {
       "title": "Flaky test in the parser suite",
-      "labels": [
-        "goal"
-      ],
+      "kind": "goal",
+      "source": "chris",
       "priority": "high"
     },
     {
       "title": "Old export format",
-      "labels": [
+      "kind": "issue",
+      "source": "chris",
+      "areas": [
         "bug"
       ],
       "status": "done"
     },
     {
       "title": "Support a second input file",
+      "kind": "issue",
+      "source": "chris",
       "labels": [
         "proposal"
       ]

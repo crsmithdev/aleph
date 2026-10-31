@@ -15,7 +15,7 @@ import { Refusal } from "../../jobs/lib/transitions.ts";
 import * as issues from "../../todo/lib/issues.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { awaitsChris, goalsOf, issueOf, kindOf, labels, readList, readLists } from "../../todo/lib/store.ts";
+import { afterOf, awaitsChris, goalsOf, issueOf, kindOf, labels, readList, readLists } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { githubBase } from "../state.ts";
@@ -25,7 +25,7 @@ const str = (v: unknown): string | null => (v === undefined || v === null || v =
 
 export interface Row {
   id: number; repo: string; title: string; status: string; priority: string | null; labels: string[];
-  due: string | null; waiting_on: string | null; updated: string | null; notes: number;
+  due: string | null; after: string[]; updated: string | null; notes: number;
   /** Only on an issue labelled `goal`. */
   stage?: string; state?: string; why?: string;
 }
@@ -33,12 +33,12 @@ export interface Row {
 function row(repo: string, i: todos.Issue): Row {
   return {
     id: i.id, repo, title: i.title, status: todos.status(i), priority: str(i.fm.priority), labels: labels(i),
-    due: str(i.fm.due), waiting_on: str(i.fm.waiting_on), updated: str(i.fm.updated), notes: i.notes.length,
+    due: str(i.fm.due), after: afterOf(i), updated: str(i.fm.updated), notes: i.notes.length,
   };
 }
 
 /** The old state words, beside `stage` until the Issues page moves to stages. */
-const OLD: Record<string, string> = { dropped: "dropped", done: "done", awaiting: "needs-you", stuck: "stuck", building: "running", landing: "running" };
+const OLD: Record<string, string> = { dropped: "dropped", done: "done", awaiting: "awaiting", stuck: "stuck", building: "running", landing: "running" };
 const oldState = (stage: string): string => OLD[stage] ?? "open";
 
 /** Each goal's stage, from the list already read and one pass over main's trailers. */
@@ -150,7 +150,8 @@ async function create(req: Request, url: URL): Promise<Response> {
   const labels = given.filter((l: string) => l !== "goal");
   const args = ["issue", "add", repo, title, given.includes("goal") ? "--goal" : "--body", "-"];
   if (labels.length) args.push("--labels", labels.join(","));
-  if (str(b.waitingOn ?? b.waiting_on)?.trim()) return Response.json({ error: "an issue does not wait on another: file a goal and name the goal it follows with --after" }, { status: 400 });
+  const after = str(b.after)?.trim();
+  if (after) { if (!given.includes("goal")) return Response.json({ error: "an issue does not wait on another: file a goal and name the goal it follows with --after" }, { status: 400 }); args.push("--after", after); }
   const due = str(b.due)?.trim();
   if (due) args.push("--due", due);
   const { stdout: out, stderr: err, code } = await runCli(args, { stdin: String(b.body ?? "") });
@@ -179,7 +180,7 @@ async function drop(req: Request, params: Record<string, string>, url: URL): Pro
 }
 
 /**
- * `aleph issue decide <repo> <id> <note>`: Chris's answer to a needs-chris issue. The body names an option's
+ * `aleph issue decide <repo> <id> <note>`: Chris's answer to an issue that asks. The body names an option's
  * `label`, or `recommendation: true` for an issue whose question is prose; the note is built here from the issue's own text.
  */
 async function decide(req: Request, params: Record<string, string>, url: URL): Promise<Response> {
@@ -196,12 +197,12 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
   const body: any = await req.json().catch(() => ({}));
   const d = readAsk(item);
   let note: string;
-  let waitingOn: string | undefined;
+  let after: string[] | undefined;
   if (d) {
     const o = d.options.find((x) => x.label === body?.label);
     if (!o) return Response.json({ error: `no option named ${JSON.stringify(body?.label ?? null)}` }, { status: 400 });
     note = `Chris decided: ${o.label}: ${o.line}`;
-    waitingOn = o.after;
+    after = o.after ? [o.after] : undefined;
   } else if (body?.approve === true) {
     note = "Chris approved it";
   } else {
@@ -209,9 +210,9 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
     if (!rec) return Response.json({ error: "this issue has no recommendation to approve" }, { status: 400 });
     note = `Chris decided: ${rec}`;
   }
-  // In process, as the firefighter does: `aleph issue decide` no longer takes `--waiting-on`, and an option's dependency still sets it.
+  // In process, as the firefighter does: an option's dependency sets `after`.
   try {
-    const r = issues.decide(repo, n, note, waitingOn ? { waitingOn } : {});
+    const r = issues.decide(repo, n, note, after ? { after } : {});
     return Response.json(r.result);
   } catch (e: any) {
     if (!(e instanceof Refusal)) throw e;
@@ -220,7 +221,7 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
 }
 
 /**
- * A needs-chris issue's one-line answer, run as the CLI: `retriage` is `aleph issue note` (the label leaves; the tick triages it),
+ * An asking issue's one-line answer, run as the CLI: `retriage` is `aleph issue note` (the label leaves; the tick triages it),
  * `rerun` is `aleph issue decide`. `aleph issue note` takes the answer as its text, not as a flag.
  */
 function answer(verb: "note" | "decide" | "done", text: string) {

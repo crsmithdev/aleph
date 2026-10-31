@@ -117,7 +117,7 @@ export function renderJob(j) {
     (checks ? `<div class="sh"><h2>Checks</h2></div><ul class="checks">${checks}</ul>` : "") +
     log("Diff stat", j.stat) + log("checks.log, last 80 lines", j.checksLog) + log("Worker stderr, last 80 lines", j.stderr) +
     `<div class="sh"><h2>Diff</h2></div><button class="cmd" type="button" data-diff="${esc(j.name)}"><span>Load the diff</span></button><pre class="diff" id="diff" hidden></pre>` +
-    (j.state === "needs-you" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") + `</div>`;
+    (j.state === "awaiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") + `</div>`;
 }
 
 /** Colour a unified diff's lines. */

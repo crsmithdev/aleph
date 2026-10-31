@@ -2,10 +2,10 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readList, writeList } from "../todo/lib/store.ts";
-import { addLegacy as add } from "../todo/lib/todo.ts";
+import { readList, setAsk, writeList } from "../todo/lib/store.ts";
+import { addGoal, addLegacy as add } from "../todo/lib/todo.ts";
 import * as todos from "../todo/lib/todo.ts";
-import { readDecision, writeDecision } from "../jobs/lib/decision.ts";
+import { readAsk } from "../jobs/lib/ask.ts";
 import { serve } from "./server.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/contents.js";
@@ -64,7 +64,7 @@ beforeAll(async () => {
   writeList({ key: "fac" }, "seed", (doc) => {
     add(doc, "first goal", { labels: ["goal"], body: "# Heading\n\n- one\n\n<script>alert(1)</script>" });
     add(doc, "plain task", { labels: ["bug"] });
-    add(doc, "second goal", { labels: ["goal"], waitingOn: "fac-4" });
+    add(doc, "second goal", { labels: ["goal"] }).fm.after = ["fac-1.1"];
     add(doc, "third goal", { labels: ["goal"] });
     doc.items[1].fm.status = "done";
     return true;
@@ -86,7 +86,7 @@ describe("GET /api/issues", () => {
     expect((await getJson("/api/issues?repo=fac&status=done")).map((r: any) => r.id)).toEqual([2]);
     expect((await getJson("/api/issues?repo=fac&label=goal")).map((r: any) => r.id)).toEqual([1, 3, 4]);
     const [r] = await getJson("/api/issues?repo=fac&label=goal");
-    expect(r).toMatchObject({ repo: "fac", title: "first goal", status: "open", priority: "medium", labels: ["goal"], due: null, waiting_on: null, notes: 0 });
+    expect(r).toMatchObject({ repo: "fac", title: "first goal", status: "open", priority: "medium", labels: ["goal"], due: null, after: [], notes: 0 });
     expect(r.updated).toBeTruthy();
     expect((await at("/api/issues?status=bogus")).status).toBe(400);
   });
@@ -323,10 +323,10 @@ describe("POST /api/issues", () => {
     expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "add", "fac", "plain one", "--body", "-", "--labels", "x"]);
   });
 
-  test("a waitingOn is refused with a 400 and runs nothing", async () => {
+  test("an after on an issue that is not a goal is refused with a 400 and runs nothing", async () => {
     rmSync(argvFile, { force: true });
-    for (const body of [{ waitingOn: "fac-1" }, { waiting_on: "fac-1" }]) {
-      const res = await post({ repo: "fac", title: "waits", body: "x", labels: ["goal"], ...body });
+    for (const body of [{ after: "fac-1.1" }]) {
+      const res = await post({ repo: "fac", title: "waits", body: "x", labels: [], ...body });
       expect(res.status).toBe(400);
       expect(((await res.json()) as any).error).toContain("wait");
     }
@@ -383,9 +383,10 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
     try { await fn(); } finally { if (real === undefined) delete process.env.ALEPH_CLI; else process.env.ALEPH_CLI = real; }
   }
   const ask = (decision: boolean, wait?: string) => writeList({ key: "fac" }, "seed", (doc) => {
-    const i = add(doc, "which way", { labels: ["needs-chris"], body: "x" });
-    if (decision) writeDecision(i, { question: "A or B?", options: [{ label: "A", line: "do a", ...(wait ? { waiting_on: wait } : {}) }, { label: "B", line: "do b" }], recommended: "B", kind: "product" as const, why: ["w"] });
-    else todos.note(i, "triage: for Chris: Should it be A or B? My recommendation is B, it is smaller.");
+    const i = add(doc, "which way", { body: "x" });
+    if (wait && !doc.items.some((x) => x.id === 1 && x.sub === 1)) addGoal(doc, doc.items.find((x) => x.id === 1 && x.sub === undefined)!, { title: "g", body: "x", repo: "fac" });
+    if (decision) setAsk(i, { kind: "input", reason: "question", question: "A or B?", options: [{ label: "A", line: "do a", ...(wait ? { after: wait } : {}) }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] });
+    else { setAsk(i, { kind: "input", reason: "question", question: "Should it be A or B?", options: [], why: [] }); todos.note(i, "triage: for Chris: Should it be A or B? My recommendation is B, it is smaller."); }
     return i.id;
   })!.value;
 
@@ -404,14 +405,14 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
     });
   });
 
-  test("an option that waits sets waiting_on in the same write as the Ask clears", async () => {
-    const n = ask(true, "fac-1");
-    expect(readDecision(item(n))!.options[0].waiting_on).toBe("fac-1");
+  test("an option that waits sets after in the same write as the Ask clears", async () => {
+    const n = ask(true, "fac-1.1");
+    expect(readAsk(item(n))!.options[0].after).toBe("fac-1.1");
     await withRealCli(async () => {
       const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) });
       expect(r.status).toBe(200);
       expect(item(n).fm.labels).toEqual([]);
-      expect(item(n).fm.waiting_on).toBe("fac-1");
+      expect(item(n).fm.after).toEqual(["fac-1.1"]);
       expect(item(n).fm.question).toBeUndefined();
     });
   });
@@ -466,10 +467,10 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
 
 describe("POST /api/issues/:repo/:id/retriage and rerun", () => {
   const h = { "x-aleph-ui": "1", "content-type": "application/json" };
-  const ask = () => writeList({ key: "fac" }, "seed", (doc) => add(doc, "stuck triage", { labels: ["needs-chris"], body: "x" }).id, true)!.value;
+  const ask = () => writeList({ key: "fac" }, "seed", (doc) => (() => { const i = add(doc, "stuck triage", { body: "x" }); setAsk(i, { kind: "input", reason: "triage-failed", question: "triage failed", options: [], why: [] }); return i.id; })(), true)!.value;
 
   for (const [verb, argv] of [["retriage", ["issue", "note", "fac", "N", "Chris: run triage again"]], ["rerun", ["issue", "decide", "fac", "N", "Chris: run it again"]]] as const) {
-    test(`${verb} refuses without the header, 404s an unknown issue and runs the CLI on a needs-chris item`, async () => {
+    test(`${verb} refuses without the header, 404s an unknown issue and runs the CLI on an item with an ask`, async () => {
       const n = ask();
       rmSync(argvFile, { force: true });
       expect((await at(`/api/issues/fac/${n}/${verb}`, { method: "POST" })).status).toBe(403);

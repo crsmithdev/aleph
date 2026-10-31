@@ -44,7 +44,7 @@ export interface Job {
   hidden?: { passed: number; total: number };
   /** Lands: the trailers of the land commit. Needs-you: the trailers the land will write. */
   trailers?: { key: string; value: string }[];
-  /** A triage run: its verdict as `goal`, `closed`, `needs-chris` or `live-check`; none while it runs or when it gave no verdict. */
+  /** A triage run: its verdict as `goal`, `close`, `done` or `ask`; none while it runs or when it gave no verdict. */
   outcome?: string;
   /** Lands: the acceptance run's result for the job's goal, as `acceptance: pass at <sha>`. */
   acceptance?: string;
@@ -191,7 +191,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
     const found = todo !== undefined && v.repo ? lists.item(v.repo, todo) : undefined;
     const job: Job = {
       name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title } : todo !== undefined ? { id: todo, title: "" } : null,
-      state: v.state === "awaiting" ? "needs-you" : v.state, started: v.started, run: { kind: v.run.kind, started: v.run.started },
+      state: v.state, started: v.started, run: { kind: v.run.kind, started: v.run.started },
       defaults: v.defaults, followups: v.followups,
     };
     for (const k of ["phase", "reason", "question", "ended", "cost", "model"] as const) if (v[k] !== undefined) (job as any)[k] = v[k];

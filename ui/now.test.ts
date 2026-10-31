@@ -6,13 +6,13 @@ import { attend } from "./asks.ts";
 import { actMessages, openDiffs } from "./lib.js";
 
 // The server derives `asks` from the awaiting runs, the issues and goals with an Ask, and the proposals. The fixtures below are written as
-// runs (`needs`: the held, review or question run, with the old `review2` call) and as issues (`needsIssues`); this maps them to the server's input.
+// runs (`needs`: the held, review or question run, with the reviewer's `call`) and as issues (`needsIssues`); this maps them to the server's input.
 const REASON: Record<string, string> = { held: "held-path", "triage-no-verdict": "triage-failed", decision: "question" };
 const asked = (j: any) => {
   if (!j.needs) return j;
-  const { needs, review2, ...rest } = j;
+  const { needs, call, ...rest } = j;
   const reason = REASON[needs] ?? needs;
-  return { ...rest, ask: { kind: reason === "held-path" || reason === "review" ? "approval" : "input", reason }, ...(review2 ? { reviewCall: { call: review2.verdict === "chris" ? "ask" : review2.verdict, reason: review2.reason } } : {}) };
+  return { ...rest, ask: { kind: reason === "held-path" || reason === "review" ? "approval" : "input", reason }, ...(call ? { reviewCall: { call: call.verdict === "chris" ? "ask" : call.verdict, reason: call.reason } } : {}) };
 };
 const att = (s: any) => {
   if (s.asks) return s;
@@ -31,7 +31,7 @@ const job = (o: object) => ({ repo: "aleph", item: null, state: "running", start
 const state: any = {
   now: "2026-10-27T17:00:00Z",
   factory: { paused: false, dayCap: 12, runsToday: 5, costToday: 0.25, nextTick: "2026-10-27T17:12:00Z", probe: { at: "2026-10-27T14:35:00Z", ok: true, failed: [] }, health: ["judge is down"] },
-  needs: [job({ name: "aleph-27", state: "needs-you", needs: "held", reason: "Held path: hooks/lib/digest.ts", stat: " a.ts | 2 +-", defaults: ["Haiku tier per request"], item: { id: 27, title: "Digest head and tail" } })],
+  needs: [job({ name: "aleph-27", state: "awaiting", needs: "held", reason: "Held path: hooks/lib/digest.ts", stat: " a.ts | 2 +-", defaults: ["Haiku tier per request"], item: { id: 27, title: "Digest head and tail" } })],
   stuck: [job({ name: "aleph-30", state: "stuck", reason: "types failed" })],
   running: [job({ name: "aleph-36", phase: "worker", item: { id: 36, title: "Route tiers" } })],
   delivered: [job({ name: "aleph-28", state: "landed", ended: "2026-10-27T16:30:00Z", commit: "50f301fabc", commitUrl: "https://github.com/o/r/commit/50f301fabc" })],
@@ -58,7 +58,7 @@ test("a commitUrl becomes a link", () => {
 });
 
 test("an empty lane shows one quiet line; the Needs-you section is absent when nothing is wrong", () => {
-  const calm = { ...state, needs: [], stuck: [], running: [], queued: [], issues: [], done: [], attention: [], factory: { ...state.factory, health: [] } };
+  const calm = { ...state, needs: [], stuck: [], running: [], queued: [], issues: [], done: [], factory: { ...state.factory, health: [] } };
   const lanes = r.renderLanes(calm);
   for (const t of ["Nothing is queued.", "No untriaged issues.", "Nothing is done yet.", "Nothing is running."]) expect(lanes).toContain(t);
   expect(lanes.match(/<p/g)?.length).toBe(4);
@@ -85,7 +85,7 @@ test("the Needs-you section sits between the status line and the flow strip, onl
   const page = r.view.render(full);
   expect(page.indexOf('class="lede"')).toBeLessThan(page.indexOf('id="needs"'));
   expect(page.indexOf('id="needs"')).toBeLessThan(page.indexOf('id="flow"'));
-  const calm = r.view.render({ ...full, needs: [], stuck: [], attention: [], factory: { ...full.factory, health: [] } });
+  const calm = r.view.render({ ...full, needs: [], stuck: [], factory: { ...full.factory, health: [] } });
   expect(calm).not.toContain('id="needs"');
 });
 
@@ -163,9 +163,9 @@ test("Needs you groups needs you, then stuck or failed; the lanes hold running a
 const rows = (h: string) => h.split('<article class="job-card small issue-row ').slice(1);
 const problem = (row: string) => row.match(/<p class="problem">([^<]*)<\/p>/)![1];
 
-test("a held run, a stuck run, a needs-chris issue and a red main are one row each, with the id, title, Problem and buttons", () => {
-  const needsIssues = [{ ...issue(7), labels: ["needs-chris"], title: "Which tier?", question: "Haiku or Sonnet for the digest?" }];
-  const s = { ...full, needs: [{ ...state.needs[0], review2: { verdict: "chris", reason: "touches hooks" } }], stuck: [job({ name: "aleph-30", state: "stuck", reason: "no commit", item: { id: 30, title: "Fix it" } })], needsIssues, issues: [], factory: { ...full.factory, health: ["health: aleph main is red at abc1234: tests"], hold: "Held: aleph-30 is stuck (no commit). No run starts or lands until it is cleared." } };
+test("a held run, a stuck run, an asking issue and a red main are one row each, with the id, title, Problem and buttons", () => {
+  const needsIssues = [{ ...issue(7), title: "Which tier?", question: "Haiku or Sonnet for the digest?" }];
+  const s = { ...full, needs: [{ ...state.needs[0], call: { verdict: "chris", reason: "touches hooks" } }], stuck: [job({ name: "aleph-30", state: "stuck", reason: "no commit", item: { id: 30, title: "Fix it" } })], needsIssues, issues: [], factory: { ...full.factory, health: ["health: aleph main is red at abc1234: tests"], hold: "Held: aleph-30 is stuck (no commit). No run starts or lands until it is cleared." } };
   const page = r.view.render(s);
   const top = section(page, "needs");
   const rs = rows(top);
@@ -194,7 +194,7 @@ test("a held run, a stuck run, a needs-chris issue and a red main are one row ea
 });
 
 test("a held run's details carry the hold note and the reviewer's verdict", () => {
-  const why = (review2: any) => rows(r.renderJobs({ ...state, stuck: [], factory: { ...state.factory, health: [] }, needs: [{ ...state.needs[0], review2 }] }))[0];
+  const why = (call: any) => rows(r.renderJobs({ ...state, stuck: [], factory: { ...state.factory, health: [] }, needs: [{ ...state.needs[0], call }] }))[0];
   expect(why({ verdict: "back", reason: "lost an assertion" })).toContain("Reviewer: back: lost an assertion");
   expect(why({ verdict: "error" })).toContain("Reviewer: error");
   expect(why(undefined)).not.toContain("Reviewer:");
@@ -204,7 +204,7 @@ test("a held run's details carry the hold note and the reviewer's verdict", () =
 test("issues that wait for triage are not rows and not in the status line: triage is the factory's", () => {
   const s = { ...full, needs: [], stuck: [], needsIssues: [], factory: { ...full.factory, health: [], hold: undefined, paused: false } };
   expect(rows(r.renderJobs(s)).length).toBe(0);
-  expect(r.renderLede(s)).not.toContain("attention");
+  expect(r.renderLede(s)).not.toContain("Awaiting");
   expect(r.renderLede(s)).not.toContain("triage");
 });
 
@@ -230,14 +230,14 @@ test("Issues holds the held runs before the stuck and failed ones, and none says
 });
 
 test("text from the state is escaped", () => {
-  const bad = { ...state, needs: [job({ name: "x", state: "needs-you", needs: "held", item: { id: 1, title: "<script>alert(1)</script>" } })], queued: [{ repo: "a", id: 1, title: "<script>w</script>" }] };
+  const bad = { ...state, needs: [job({ name: "x", state: "awaiting", needs: "held", item: { id: 1, title: "<script>alert(1)</script>" } })], queued: [{ repo: "a", id: 1, title: "<script>w</script>" }] };
   for (const h of [withAttn(bad), withAttn(bad)]) {
     expect(h).not.toContain("<script>");
     expect(h).toContain("&lt;script&gt;");
   }
 });
 
-test("a needs-you entry has Diff, Land and Drop buttons; a landed one with an open check has Checked", () => {
+test("an awaiting entry has Diff, Land and Drop buttons; a landed one with an open check has Checked", () => {
   const h = withAttn(state);
   for (const v of ["diff", "land", "drop"]) expect(h).toContain(`data-act="${v}" data-name="aleph-27"`);
   expect(h).toContain("diff-panel");
@@ -261,8 +261,8 @@ test("a stuck job shows its reason, the failed check and its seconds, and Re-che
   expect(h).not.toContain("data-cmd");
 });
 
-test("many needs-you jobs all render as rows, each with its details folded and its buttons", () => {
-  const needs = [1, 2, 3, 4].map((i) => job({ name: `aleph-${i}`, state: "needs-you", needs: "held", reason: "Held path", item: { id: i, title: `t${i}` } }));
+test("many awaiting jobs all render as rows, each with its details folded and its buttons", () => {
+  const needs = [1, 2, 3, 4].map((i) => job({ name: `aleph-${i}`, state: "awaiting", needs: "held", reason: "Held path", item: { id: i, title: `t${i}` } }));
   const h = withAttn({ ...state, needs });
   expect(h.match(/class="job-card small issue-row held-path"/g)?.length).toBe(4);
   expect(h.match(/<details class="more" data-keep="more:[^"]*">/g)?.length).toBe(4 + 1);
@@ -273,7 +273,7 @@ test("the lede leads with a count and the items, colored; the page has no banner
   const h = r.renderLede(withFactory({}));
   expect(h).toContain("1 ask needs your approval</a> and ");
   expect(h).toContain("1 job is stuck</a>.");
-  expect(h).not.toContain("attention");
+  expect(h).not.toContain("Awaiting");
   expect(h).toContain('class="say error"');
   expect(h.indexOf("needs your")).toBeLessThan(h.indexOf("stuck"));
   const cases: [object, string][] = [
@@ -303,7 +303,7 @@ test("with nothing wrong the lede is one of the fine variants, with no count", (
     const text = h.replace(/<[^>]*>/g, "");
     expect(r.FINE).toContain(text);
     expect(h).toContain('class="say fine"');
-    expect(h).not.toMatch(/\d|attention/);
+    expect(h).not.toMatch(/\d|asks you/);
   }
 });
 
@@ -320,7 +320,7 @@ test("a flake line is not shown on the Status page", () => {
   const calm = { ...withFactory({ health: ["health: aleph check tests passed on rerun 4 times in 7 days"] }), needs: [], stuck: [] };
   const h = r.renderLede(calm);
   expect(h).toContain('class="say fine"');
-  expect(h).not.toContain("attention");
+  expect(h).not.toContain("Awaiting");
   expect(h).not.toContain("rerun");
   expect(r.view.render(calm)).not.toContain("rerun");
   expect(r.renderJobs(calm)).not.toContain("rerun");
@@ -360,7 +360,7 @@ test("a build run is a worker and is past the time box after 40 minutes", () => 
 
 test("a 30-file stat shows 12 lines and +18 more files", () => {
   const stat = Array.from({ length: 30 }, (_, i) => ` f${i}.ts | 2 +-`).join("\n") + "\n 30 files changed, 30 insertions(+), 30 deletions(-)";
-  const h = withAttn({ ...state, needs: [job({ name: "x", state: "needs-you", needs: "held", stat })] });
+  const h = withAttn({ ...state, needs: [job({ name: "x", state: "awaiting", needs: "held", stat })] });
   expect(h.match(/ f\d+\.ts \| 2/g)?.length).toBe(12);
   expect(h).toContain("+18 more files");
 });
@@ -416,7 +416,7 @@ test("a land card has no origin/main aside; a running land comes before landed o
   expect(h).toMatch(/class="job-card big[ "]/);
 });
 
-const two: any = { ...state, needs: [job({ name: "job-a", state: "needs-you", needs: "held", defaults: [] }), job({ name: "job-b", state: "needs-you", needs: "held", defaults: [] })] };
+const two: any = { ...state, needs: [job({ name: "job-a", state: "awaiting", needs: "held", defaults: [] }), job({ name: "job-b", state: "awaiting", needs: "held", defaults: [] })] };
 const panel = (h: string, n: string) => h.match(new RegExp(`<div class="diff-panel" data-diff-for="${n}"[^>]*>`))![0];
 
 test("an open diff survives a render; other panels stay hidden", () => {
@@ -451,17 +451,17 @@ test("message and diff text are escaped", () => {
   } finally { actMessages.clear(); openDiffs.clear(); }
 });
 
-test("a held row shows the review2 verdict and its reason in Details", () => {
-  const withReview = (review2: object) => ({ ...state, needs: [{ ...state.needs[0], review2 }] });
+test("a held row shows the call verdict and its reason in Details", () => {
+  const withReview = (call: object) => ({ ...state, needs: [{ ...state.needs[0], call }] });
   const h = withAttn(withReview({ verdict: "back", reason: "a test lost <an> assertion" }));
   expect(h).toContain("Reviewer: back: a test lost &lt;an&gt; assertion");
   expect(h.indexOf("Reviewer: back")).toBeGreaterThan(h.indexOf("<details"));
   expect(withAttn(state)).not.toContain("Reviewer:");
 });
 
-test("a needs-chris issue with fields shows the question, the options, the recommended mark, the context and the buttons in the row", () => {
+test("an asking issue with fields shows the question, the options, the recommended mark, the context and the buttons in the row", () => {
   const decision = { question: "Haiku or Sonnet for the `digest`?", options: [{ label: "Haiku", line: "Cheaper, `fast`" }, { label: "Sonnet", line: "Better summaries" }], recommended: "Sonnet", kind: "product" as const, why: ["Digests run daily", "Quality matters more"] };
-  const s = { ...state, needs: [], stuck: [], issues: [], factory: { ...state.factory, health: [] }, needsIssues: [{ ...issue(152), labels: ["needs-chris"], title: "Which tier?", question: "prose", decision }] };
+  const s = { ...state, needs: [], stuck: [], issues: [], factory: { ...state.factory, health: [] }, needsIssues: [{ ...issue(152), title: "Which tier?", question: "prose", decision }] };
   const [row] = rows(r.renderJobs(s));
   expect(row).toContain('<p class="dq">Haiku or Sonnet for the <code>digest</code>?</p>');
   expect(row).toContain("<code>fast</code>");
@@ -477,9 +477,9 @@ test("a needs-chris issue with fields shows the question, the options, the recom
   expect(row).toContain('data-option="Sonnet"');
 });
 
-test("an old prose needs-chris note gets a Problem with no tag or lead, Approve recommendation and Deny", () => {
+test("an old prose note gets a Problem with no tag or lead, Approve recommendation and Deny", () => {
   const note = "triage: for Chris: Should `ui/x.ts` use A or B?\nA is simpler. My recommendation is A, because it is simpler. Then more words.";
-  const s = { ...state, needs: [], stuck: [], issues: [], factory: { ...state.factory, health: [] }, needsIssues: [{ ...issue(152), labels: ["needs-chris"], title: "Which?", question: note }] };
+  const s = { ...state, needs: [], stuck: [], issues: [], factory: { ...state.factory, health: [] }, needsIssues: [{ ...issue(152), title: "Which?", question: note }] };
   const [row] = rows(r.renderJobs(s));
   expect(problem(row)).not.toContain("triage: for Chris");
   expect(row).toContain('data-label="Approve recommendation"');
@@ -491,11 +491,11 @@ test("an old prose needs-chris note gets a Problem with no tag or lead, Approve 
 
 test("the status line is not 'All is well.' when the Issues section has an item", () => {
   const calm = { ...state, needs: [], stuck: [], issues: [], needsIssues: [], factory: { ...state.factory, health: [], hold: undefined, paused: false } };
-  for (const o of [{ needsIssues: [{ ...issue(7), labels: ["needs-chris"], question: "q" }] }]) {
+  for (const o of [{ needsIssues: [{ ...issue(7), question: "q" }] }]) {
     const h = r.renderLede({ ...calm, ...o });
     for (const v of r.FINE) expect(h).not.toContain(v);
     expect(h).toContain("1 ask needs your input");
-    expect(h).not.toContain("attention");
+    expect(h).not.toContain("Awaiting");
   }
 });
 
@@ -512,17 +512,17 @@ test("Status times use the state's own now for the year check", () => {
   const run = (started: string) => withAttn({ ...state, now: "2027-01-05T12:00:00Z", running: [job({ name: "a", started, run: { kind: "land", started } })] });
   expect(run("2026-10-27T16:50:00Z")).toContain(">2026-10-27</span>");
   expect(run("2027-01-05T11:00:00Z")).toMatch(/>[A-Z][a-z]{2} \d\d \d\d:\d\d<\/span>/);
-  const held = withAttn({ ...state, now: "2027-01-05T12:00:00Z", needs: [job({ name: "aleph-27", state: "needs-you", needs: "held", started: "2026-10-27T16:50:00Z", trailers: [{ key: "Job", value: "20261028-042822-aleph-aleph-240-agent" }] })] });
+  const held = withAttn({ ...state, now: "2027-01-05T12:00:00Z", needs: [job({ name: "aleph-27", state: "awaiting", needs: "held", started: "2026-10-27T16:50:00Z", trailers: [{ key: "Job", value: "20261028-042822-aleph-aleph-240-agent" }] })] });
   expect(held).toContain("Started</dt><dd>2026-10-27");
   expect(held).not.toMatch(/\d\d? ?[AP]M/i);
 });
 
-test("a planner run is shown like a triage: Planning while it runs, Split once it filed children, planner as a running kind", async () => {
+test("a planner run is shown like a triage: Planning while it runs, Done once it filed its verdict, planner as a running kind", async () => {
   // @ts-ignore plain JS, shared with the page
   const { triageCard } = await import("./views/cards.js");
   const plan = { name: "plan-aleph-5", item: { title: "Big" }, state: "running", run: { kind: "plan", started: "2026-10-27T16:50:00Z" }, started: "2026-10-27T16:50:00Z" };
   expect(triageCard(plan, "full", state.now)).toContain('<span class="badge run">Planning</span>');
-  expect(triageCard({ ...plan, state: "done", outcome: "planned" }, "full", state.now)).toContain('<span class="badge done">Split</span>');
+  expect(triageCard({ ...plan, state: "done", outcome: "done" }, "full", state.now)).toContain('<span class="badge done">Done</span>');
   expect(triageCard({ ...plan, state: "done", reason: "malformed plan: x" }, "compact", state.now)).toContain(">No plan<");
   expect(r.renderJobs({ ...state, running: [job({ name: "plan-aleph-5", run: plan.run })] })).toContain('<span class="badge run">planner');
 });
@@ -562,7 +562,7 @@ test("a proposal is a row with Yes-like buttons and its signals folded", () => {
   expect(row).toContain("&lt;script&gt;");
 });
 
-test("rows are ordered held, then needs-chris, then proposal, then error; the group is a list", () => {
+test("rows are ordered held, then asking, then proposal, then error; the group is a list", () => {
   const s = { ...state, proposals: [prop], needsIssues: [{ id: "aleph-5", title: "T", href: "#/x", question: "Pick one?" }], factory: { ...state.factory, health: ["main is red"] } };
   const h = r.renderJobs(s);
   expect(h).toContain('<div class="list">');
@@ -630,29 +630,29 @@ test("a running firefighter run shows its role as the kind", () => {
 });
 
 test("a held job card has no badge or agent line", () => {
-  const h = r.renderJobs({ ...state, stuck: [], needs: [{ ...state.needs[0], agent: true, review2: { verdict: "back", reason: "x" } }] });
+  const h = r.renderJobs({ ...state, stuck: [], needs: [{ ...state.needs[0], agent: true, call: { verdict: "back", reason: "x" } }] });
   expect(rows(h)[0]).not.toContain("badge");
 });
 
-// ---- the attention rows ----
+// ---- the ask rows ----
 import { ASK_REASONS } from "../jobs/lib/always.ts";
 
 const sample = (reason: string) => {
-  const run = (needs: string, o: object = {}) => ({ needs: [job({ name: "aleph-27", state: "needs-you", needs, reason: "<task-notification>x</task-notification> needs-chris: y", item: { id: 27, title: "T" }, ...o })], needsIssues: [] as any[], lessons: [] as any[] });
-  const iss = (o: object) => ({ needs: [], needsIssues: [{ ...issue(7), labels: ["needs-chris"], title: "T", ...o }], lessons: [] as any[] });
-  if (["held-path", "review", "manual"].includes(reason)) return run(reason, reason === "review" ? { review2: { verdict: "chris", reason: "r" } } : {});
+  const run = (needs: string, o: object = {}) => ({ needs: [job({ name: "aleph-27", state: "awaiting", needs, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], needsIssues: [] as any[], lessons: [] as any[] });
+  const iss = (o: object) => ({ needs: [], needsIssues: [{ ...issue(7), title: "T", ...o }], lessons: [] as any[] });
+  if (["held-path", "review", "manual"].includes(reason)) return run(reason, reason === "review" ? { call: { verdict: "chris", reason: "r" } } : {});
   if (reason === "question") return run("question", { question: "<agent-message>q</agent-message> Which?" });
   if (reason.startsWith("proposal-")) return { needs: [], needsIssues: [] as any[], lessons: [{ ...prop, kind: reason.slice(9), target: { check: "aleph checks", "claude-md": "aleph/CLAUDE.md", skill: "skills/aleph/SKILL.md" }[reason.slice(9)] }] };
   const q: Record<string, object> = {
     proposal: { reason: "proposal", question: "T" },
     "host-check": { reason: "host-check", question: "triage: a live check: run it" },
-    "no-commit": { reason: "no-commit", question: "needs-chris: ended with no commit, so the factory stopped" },
-    "run-cap": { reason: "run-cap", question: "needs-chris: the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it." },
+    "no-commit": { reason: "no-commit", question: "ended with no commit, so the factory stopped" },
+    "run-cap": { reason: "run-cap", question: "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it." },
     "triage-failed": { reason: "triage-failed", question: "triage: no verdict in 2 runs: failed: x" },
     "part-dropped": { reason: "part-dropped", question: "A goal was dropped." },
-    "acceptance-failed": { reason: "acceptance-failed", question: "needs-chris: acceptance: fail again" },
-    rescue: { reason: "rescue", question: "needs-chris: Which one?", decision: { question: "Which?", options: [{ label: "A", line: "a" }], recommended: "A", kind: "product" as const, why: [] } },
-    firefighter: { reason: "firefighter", question: "needs-chris: x changes y.ts, a held security path" },
+    "acceptance-failed": { reason: "acceptance-failed", question: "acceptance: fail again" },
+    rescue: { reason: "rescue", question: "Which one?", decision: { question: "Which?", options: [{ label: "A", line: "a" }], recommended: "A", kind: "product" as const, why: [] } },
+    firefighter: { reason: "firefighter", question: "x changes y.ts, a held security path" },
   };
   return iss(q[reason]);
 };
@@ -667,7 +667,7 @@ for (const reason of Object.keys(ASK_REASONS)) {
     expect(row).toContain(`data-reason="${reason}"`);
     const p = problem(row);
     expect(p.length).toBeGreaterThan(5);
-    for (const t of ["<task-notification", "<agent-message", "needs-chris:"]) expect(p).not.toContain(t);
+    for (const t of ["<task-notification", "<agent-message", "ask:"]) expect(p).not.toContain(t);
     const buttons = [...row.split("<details")[0].matchAll(/<button class="act( primary)?" [^>]*data-label="([^"]*)"/g)].map((m) => m[2]);
     expect(buttons).toEqual(items[0].actions.map((a) => a.label));
     for (const b of buttons) expect(["Yes", "No", "Open"]).not.toContain(b);

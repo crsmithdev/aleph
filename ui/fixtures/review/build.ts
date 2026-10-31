@@ -33,7 +33,7 @@ function copyPlain(from: string, to: string): void {
   }
 }
 
-interface FixtureItem { title: string; labels?: string[]; priority?: string; body?: string; status?: string; waitingOn?: string; due?: string; notes?: string[];
+interface FixtureItem { title: string; labels?: string[]; priority?: string; body?: string; status?: string; due?: string; notes?: string[];
   /** The new-shape fields, written as the item's own: `kind`, `source`, `issue`, `goals`, `after`, `areas`, `ask` and the ask's `reason` and `question`. */
   kind?: string; source?: string; issue?: string; goals?: string[]; after?: string[]; areas?: string[]; ask?: string; reason?: string; question?: string }
 
@@ -82,7 +82,7 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
     for (const [key, rows] of Object.entries(lists)) {
       writeList({ key }, "fixture", (doc) => {
         for (const r of rows) {
-          const item = add(doc, r.title, { labels: r.labels, priority: r.priority, body: r.body, waitingOn: r.waitingOn, due: r.due });
+          const item = add(doc, r.title, { labels: r.labels, priority: r.priority, body: r.body, due: r.due });
           for (const k of NEW_SHAPE) if (r[k] !== undefined) item.fm[k] = r[k];
           for (const n of r.notes ?? []) note(item, n);
           if (r.status && r.status !== "open") setStatus(item, r.status as "done" | "dropped");

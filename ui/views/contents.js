@@ -251,7 +251,7 @@ export function renderForm(rows, o = {}) {
     `<label>Body <textarea name="body" rows="12">${esc(BODY_TEMPLATE)}</textarea></label>` +
     `<label>Labels <input name="labels" placeholder="comma separated"></label>` +
     `<label><input type="checkbox" name="goal"> Build in the factory (adds the <code>factory</code> label)</label>` +
-    `<label>Waits on <input name="waitingOn" placeholder="repo-n"></label>` +
+    `<label>After <input name="after" placeholder="repo-n.k, repo-n.k"></label>` +
     `<label>Due <input name="due" type="date"></label>` +
     `<button type="submit" class="cmd primary">File issue</button> <span class="form-msg" role="status"></span></form></details>`;
 }
@@ -348,7 +348,7 @@ if (typeof document !== "undefined") {
     try {
       const res = await fetch("/api/issues", {
         method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" },
-        body: JSON.stringify({ repo: v("repo"), title: v("title"), body: form.elements.body.value, labels, waitingOn: v("waitingOn"), due: v("due") }),
+        body: JSON.stringify({ repo: v("repo"), title: v("title"), body: form.elements.body.value, labels, after: v("after"), due: v("due") }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `answered ${res.status}`);

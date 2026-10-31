@@ -79,13 +79,13 @@ const wait: Handler = async (req, { name }) => {
   if (!last) return text(`no job named ${name}`, 404);
   const body: any = await req.json().catch(() => ({}));
   const on = typeof body?.on === "string" ? body.on.trim() : "";
-  const m = /^(.+)-(\d+)$/.exec(on);
+  const m = /^(.+)-(\d+\.\d+)$/.exec(on);
   const repo = last.run.repo, issue = onOf(last.run);
-  if (!m || !repo || issue === undefined) return text("on must name a <repo>-<n> issue and the job an item", 400);
-  // In process, as the firefighter does: `aleph issue edit` no longer takes `--waiting-on`.
+  if (!m || !repo || issue === undefined) return text("on must name a <repo>-<n>.<k> goal and the job an item", 400);
+  // In process, as the firefighter does. The goal waits for the goal `on` names: `after` takes goal ids only.
   const place = loadRegistry()[repo];
   if (!place) return text(`no repo named ${repo}`, 400);
-  try { issues.edit(place, typeof issue === "string" ? Number(issue.split(".")[0]) : issue, { waitingOn: on }); } catch (e: any) {
+  try { if (typeof issue === "string") issues.goalEdit(place, issue, { after: [on] }); else issues.edit(place, issue, { after: [on] }); } catch (e: any) {
     if (!(e instanceof Refusal)) throw e;
     return Response.json({ error: e.message }, { status: 422 });
   }

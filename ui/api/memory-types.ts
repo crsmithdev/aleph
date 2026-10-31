@@ -5,7 +5,7 @@ import { basename, join } from "node:path";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
 import { readStore } from "../../jobs/lib/corrections.ts";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
-import { readLists } from "../../todo/lib/store.ts";
+import { afterOf, readLists } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import type { Note } from "../../vault/lib/vault.ts";
 import { activity } from "./activity.ts";
@@ -123,17 +123,17 @@ function retrieval(misses: any) {
   return { stats: m && "recalls" in m ? m : null, missed: Array.isArray(m?.missed) ? m.missed.slice(0, 10) : [], last: newest([m?.missed?.[0]?.at]) };
 }
 
-/** Open issues with a due date or a waiting_on, soonest due first. */
+/** Open issues with a due date or an after, soonest due first. */
 function prospective() {
   const registry = Object.values(loadRegistry());
   let docs: (todos.Doc | null)[] = [];
   try { docs = readLists(registry); } catch {}
-  const open: { repo: string; id: number; title: string; due: string | null; waiting_on: string | null }[] = [];
+  const open: { repo: string; id: number; title: string; due: string | null; after: string[] }[] = [];
   registry.forEach((r, n) => {
     for (const i of docs[n]?.items ?? []) {
       if (todos.status(i) !== "open") continue;
-      const due = i.fm.due ? String(i.fm.due) : null, waiting = i.fm.waiting_on ? String(i.fm.waiting_on) : null;
-      if (due || waiting) open.push({ repo: r.key, id: i.id, title: i.title, due, waiting_on: waiting });
+      const due = i.fm.due ? String(i.fm.due) : null, after = afterOf(i);
+      if (due || after.length) open.push({ repo: r.key, id: i.id, title: i.title, due, after });
     }
   });
   open.sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999") || a.repo.localeCompare(b.repo) || a.id - b.id);

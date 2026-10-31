@@ -138,8 +138,8 @@ function renderRetrieval(r) {
 
 function renderProspective(p) {
   const issues = p.issues.length
-    ? fold(p.issues, (i) => `<a href="#/issues/${encodeURIComponent(i.repo)}/${i.id}">${esc(i.repo)}-${i.id}</a> ${esc(i.title)} ${q(esc([i.due && `due ${i.due}`, i.waiting_on && `waiting on ${i.waiting_on}`].filter(Boolean).join(" · ")))}`)
-    : none("No open issue has a due date or a waiting_on.", "<code>aleph todo add --due</code> or <code>--waiting-on</code> fills this.");
+    ? fold(p.issues, (i) => `<a href="#/issues/${encodeURIComponent(i.repo)}/${i.id}">${esc(i.repo)}-${i.id}</a> ${esc(i.title)} ${q(esc([i.due && `due ${i.due}`, i.after?.length && `after ${i.after.join(", ")}`].filter(Boolean).join(" · ")))}`)
+    : none("No open issue has a due date or an after.", "<code>aleph todo add --due</code> or <code>--after</code> fills this.");
   const trig = p.triggers.length ? fold(p.triggers, (t) => esc(JSON.stringify(t))) : none("No scheduled trigger.", "The aleph-tick sweep reads them once they exist.");
   return `<div class="kinds">${sub("Open issues with a date or a wait", p.issues.length, issues)}${sub("Scheduled triggers", p.triggers.length, trig)}</div>`;
 }

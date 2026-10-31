@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../todo/lib/store.ts";
-import { addLegacy } from "../todo/lib/todo.ts";
+import { addGoal, addLegacy } from "../todo/lib/todo.ts";
 import { serve } from "./server.ts";
 
 let base: string, server: Awaited<ReturnType<typeof serve>>, calls: string;
@@ -35,7 +35,7 @@ beforeAll(async () => {
     mkdirSync(folder, { recursive: true });
     writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", state: "awaiting", started: new Date().toISOString(), name, job: name, repo: "r", ...extra }));
   }
-  // The work store, with issue 7 of `r` for the Wait button to set `waiting_on` on.
+  // The work store, with issue 7 of `r` for the Wait button to set `after` on.
   const itemsRemote = join(base, "items.git"), items = join(base, "items");
   sh(base, "init", "-q", "--bare", "-b", "main", itemsRemote);
   sh(base, "clone", "-q", itemsRemote, items);
@@ -52,7 +52,7 @@ beforeAll(async () => {
     process.env[k] = v;
   }
   server = await serve(0, { warm: false });
-  writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 7; i++) addLegacy(doc, `issue ${i}`, { labels: i === 7 ? ["goal"] : [] }); return true; }, true);
+  writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 9; i++) addLegacy(doc, `issue ${i}`, { labels: i === 7 ? ["goal"] : [] }); for (const n of [6, 9]) addGoal(doc, doc.items.find((x) => x.id === n && x.sub === undefined)!, { title: `goal ${n}`, body: "x", repo: "r" }); return true; }, true);
 });
 afterAll(() => {
   server.stop(true);
@@ -78,35 +78,35 @@ test("POST /api/wait 400s without a blocker or an item", async () => {
   expect((await post("/api/wait/x", undefined, {})).status).toBe(400);
 });
 
-const waiting = (n: number) => readList({ key: "r" })!.items.find((i) => i.id === n)!.fm.waiting_on;
+const waiting = (n: number) => readList({ key: "r" })!.items.find((i) => i.id === n && (n === 6 ? i.sub === 1 : i.sub === undefined))!.fm.after;
 
-test("POST /api/wait sets the item's waiting_on in process, then drops the job", async () => {
+test("POST /api/wait sets the item's after in process, then drops the job", async () => {
   const before = recorded().length;
-  const res = await post("/api/wait/wt", { "X-Aleph-UI": "1" }, { on: "r-9" });
+  const res = await post("/api/wait/wt", { "X-Aleph-UI": "1" }, { on: "r-9.1" });
   expect(res.status).toBe(200);
-  expect(waiting(7)).toBe("r-9");
-  // The CLI refuses `issue edit --waiting-on`, so only the drop goes through it.
+  expect(waiting(7)).toEqual(["r-9.1"]);
+  // The CLI does not edit issues, so only the drop goes through it.
   const calledNow = recorded().slice(before);
   expect(calledNow).toHaveLength(1);
-  expect(calledNow[0].startsWith("drop wt Chris chose to wait for r-9")).toBe(true);
+  expect(calledNow[0].startsWith("drop wt Chris chose to wait for r-9.1")).toBe(true);
 });
 
 test("POST /api/wait reads the issue from `on`, and the integer part of a goal's dotted `on`", async () => {
   for (const [job, n] of [["won", 5], ["wgoal", 6]] as const) {
     const before = recorded().length;
-    const res = await post(`/api/wait/${job}`, { "X-Aleph-UI": "1" }, { on: "r-9" });
+    const res = await post(`/api/wait/${job}`, { "X-Aleph-UI": "1" }, { on: "r-9.1" });
     expect(res.status).toBe(200);
-    expect(waiting(n)).toBe("r-9");
+    expect(waiting(n)).toEqual(["r-9.1"]);
     const calledNow = recorded().slice(before);
     expect(calledNow).toHaveLength(1);
-    expect(calledNow[0].startsWith(`drop ${job} Chris chose to wait for r-9`)).toBe(true);
+    expect(calledNow[0].startsWith(`drop ${job} Chris chose to wait for r-9.1`)).toBe(true);
   }
 });
 
 test("POST /api/wait is 422 when the edit is refused, and drops nothing", async () => {
   const before = recorded().length;
   // Issue 99 is not in the store: the in-process edit refuses it.
-  const res = await post("/api/wait/wtgone", { "X-Aleph-UI": "1" }, { on: "r-9" });
+  const res = await post("/api/wait/wtgone", { "X-Aleph-UI": "1" }, { on: "r-9.1" });
   expect(res.status).toBe(422);
   expect(((await res.json()) as any).error).toContain("no issue 99");
   expect(recorded().slice(before)).toEqual([]);

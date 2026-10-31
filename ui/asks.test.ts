@@ -133,22 +133,22 @@ describe("asks", () => {
     expect(issueReason({ reason: "triage-no-verdict" })).toBe("triage-failed");
     expect(issueReason({ reason: "held" })).toBe("held-path");
     expect(r("acceptance: fail again at abc: x")).toBe("acceptance-failed");
-    expect(r("needs-chris: the last 3 runs of this goal ended with no commit, so the factory stopped starting it")).toBe("no-commit");
+    expect(r("the last 3 runs of this goal ended with no commit, so the factory stopped starting it")).toBe("no-commit");
     expect(r(RUN_CAP)).toBe("run-cap");
     expect(issueReason({ reason: "run-cap", question: RUN_CAP })).toBe("run-cap");
     expect(r("triage: for Chris: pick one", decision)).toBe("question");
-    expect(r("needs-chris: x changes hooks/a.ts, a held security path, so it needs you")).toBe("firefighter");
+    expect(r("x changes hooks/a.ts, a held security path, so it needs you")).toBe("firefighter");
     expect(r("triage: a live check: run it")).toBe("host-check");
-    expect(r("needs-chris: what now?")).toBe("question");
+    expect(r("what now?")).toBe("question");
   });
 
   test("an old note's timestamp is not part of the reason, the detail or the Problem", () => {
-    expect(clean("- 2026-10-27 12:34: needs-chris: which helper?")).toBe("which helper?");
+    expect(clean("- 2026-10-27 12:34: which helper?")).toBe("which helper?");
     expect(clean("- 2026-10-27 12:34:56: triage: for Chris: pick one")).toBe("pick one");
-    expect(issueReason({ question: "- 2026-10-27 12:34: needs-chris: triage: no verdict in 2 runs: failed: x" })).toBe("triage-failed");
-    const [f] = ofIssues(issue({ id: "aleph-30", reason: "firefighter", question: "- 2026-10-27 12:34: needs-chris: aleph-30 changes hooks/x.ts, a held security path, so it needs your review." }));
+    expect(issueReason({ question: "- 2026-10-27 12:34: triage: no verdict in 2 runs: failed: x" })).toBe("triage-failed");
+    const [f] = ofIssues(issue({ id: "aleph-30", reason: "firefighter", question: "- 2026-10-27 12:34: aleph-30 changes hooks/x.ts, a held security path, so it needs your review." }));
     expect(f.problem).toBe("The firefighter would land aleph-30, but it changes hooks/x.ts, a held security path, so it needs your review.");
-    const [t] = ofIssues(issue({ reason: "triage-failed", question: "- 2026-10-27 12:34: needs-chris: triage: no verdict in 2 runs: failed: its process ended before a verdict" }));
+    const [t] = ofIssues(issue({ reason: "triage-failed", question: "- 2026-10-27 12:34: triage: no verdict in 2 runs: failed: its process ended before a verdict" }));
     expect(t.problem).toBe("Triage of aleph-387 failed twice: its process ended before a verdict, so no one has decided what to do with this issue.");
   });
 

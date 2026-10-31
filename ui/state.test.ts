@@ -355,7 +355,7 @@ describe("the review fixture", () => {
 describe("waiting entries", () => {
   test("carry why, kind, and the links the Queued lane shows", async () => {
     writeList({ key: "fac" }, "waiting fixtures", (doc) => {
-      add(doc, "waits goal", { labels: ["goal"], waitingOn: "fac-2" });
+      add(doc, "waits goal", { labels: ["goal"] }).fm.after = ["fac-2"];
       return true;
     }, true);
     // The stuck fac-3 would hold every start: set it aside, so only the reasons under test remain.

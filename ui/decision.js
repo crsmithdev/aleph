@@ -1,8 +1,8 @@
-// A needs-chris note written as prose (no fields on the issue): its paragraphs and the recommendation
+// A note written as prose (no fields on the issue): its paragraphs and the recommendation
 // sentence. Plain JS, shared by the page and the server.
 
 /** The note without its timestamp and its "triage: for Chris:" lead. */
-const body = (note) => String(note ?? "").replace(/^\s*-\s*/, "").replace(/^\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\s*/, "").replace(/^(?:triage|needs-chris):\s*(?:for Chris:\s*)?/i, "").trim();
+const body = (note) => String(note ?? "").replace(/^\s*-\s*/, "").replace(/^\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\s*/, "").replace(/^triage:\s*(?:for Chris:\s*)?/i, "").trim();
 
 const RECOMMENDATION = /(^|[.!?]["')\]`]*\s+)(My recommendation\b[^]*?(?:[.!?](?=\s|$)|$))/i;
 

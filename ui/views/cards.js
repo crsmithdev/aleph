@@ -77,13 +77,13 @@ export function landCard(j, size = "full", now = new Date().toISOString()) {
     (j.check === "open" || actMessages.has(j.name) ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${actMsg(j.name)}</div>` : ""));
 }
 
-const TRIAGE = { goal: ["To factory", "done"], closed: ["Closed", "done"], "needs-chris": ["Needs Chris", "need"], "live-check": ["Live check", "done"], planned: ["Split", "done"] };
+const TRIAGE = { goal: ["To factory", "done"], close: ["Closed", "done"], done: ["Done", "done"], ask: ["Asks you", "need"] };
 /** A planner run's job name, `plan-<repo>-<n>`, or its kind when the state gives it. */
 const isPlan = (j) => j.run?.kind === "plan" || /^plan-/.test(j.name ?? "");
 
 /**
  * A triage or planner run: a job `j` as the state gives it, kind triage or plan, with `outcome`
- * (goal, closed, needs-chris, live-check; planned) once it has a verdict. Same style as the land card.
+ * (goal, close, done, ask) once it has a verdict. Same style as the land card.
  */
 export function triageCard(j, size = "full", now = new Date().toISOString()) {
   const running = j.state === "running";

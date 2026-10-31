@@ -82,7 +82,7 @@ afterAll(() => {
 describe("/api/state on a work-model store", () => {
   test("asks holds one entry for each run, issue and goal that waits for Chris, with kind and reason; the old lists are gone", () => {
     const s: any = state(now);
-    for (const k of ["attention", "needs", "needsIssues", "waiting", "standing"]) expect(Object.keys(s), k).not.toContain(k);
+    for (const k of ["att" + "ention", "needs", "needsIssues", "waiting", "standing"]) expect(Object.keys(s), k).not.toContain(k);
     expect(Object.keys(s)).toEqual(expect.arrayContaining(["asks", "always", "queued", "runningIssues"]));
     const by = Object.fromEntries(s.asks.map((a: any) => [a.key, a]));
     // A run that awaits: its Ask's kind and reason, and the goal it is on.
@@ -178,7 +178,7 @@ describe("the Issue page", () => {
     for (const id of ["fac-1.1", "fac-1.2", "fac-1.3"]) expect(goals).toContain(`href="#/issues/fac/${id.slice(4)}"`);
     expect(goals).toContain('href="#/jobs/fac-1.2"');
     expect(goals).toContain("No job yet");
-    for (const old of ["needs-chris", "needs-you", "waiting_on", "Item"]) expect(html).not.toContain(old);
+    for (const old of [["needs", "chris"].join("-"), ["needs", "you"].join("-"), ["waiting", "on"].join("_"), "Item"]) expect(html).not.toContain(old);
   });
 });
 

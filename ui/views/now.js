@@ -69,7 +69,7 @@ export function usageLine(series) {
 
 export const FINE = ["Everything is fine.", "All is well.", "Everything is running smoothly.", "The factory is humming along."];
 
-/** The status sentence: all fine, or one sentence that lists what needs attention, each part a link. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
+/** The status sentence: all fine, or one sentence that lists what asks for you, each part a link. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
 /** Health lines that are counts for later, not problems: they stay off the headline and the cards. */
 const QUIET_HEALTH = /passed on rerun|holds \d+ flake notes?/;
 

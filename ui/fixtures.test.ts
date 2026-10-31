@@ -24,15 +24,15 @@ test("the review fixture gives the one-off server jobs, issues, projects and not
   const count = (state: string) => jobs.filter((j: any) => j.state === state).length;
   // The old-shape runs and the new-shape ones: every state the fixture shows, and the review runs' needs.
   expect(jobs.length).toBe(16);
-  expect(["dropped", "landed", "needs-you", "running", "stuck"].map(count)).toEqual([3, 1, 3, 6, 3]);
-  expect(jobs.filter((j: any) => j.state === "needs-you").map((j: any) => j.ask?.reason ?? null).sort()).toEqual(["held-path", "held-path", "review"]);
+  expect(["dropped", "landed", "awaiting", "running", "stuck"].map(count)).toEqual([3, 1, 3, 6, 3]);
+  expect(jobs.filter((j: any) => j.state === "awaiting").map((j: any) => j.ask?.reason ?? null).sort()).toEqual(["held-path", "held-path", "review"]);
   // Every stage has an item, in both shapes, and Incoming says the stage.
   const { incoming } = await get("/api/state");
   expect(incoming.every((i: any) => typeof i.stage === "string" && i.stage !== "open")).toBe(true);
   const issues = await get("/api/issues?all=1");
   expect(new Set(issues.map((i: any) => i.repo))).toEqual(new Set(["demo", "tools"]));
   expect(new Set(issues.map((i: any) => i.status))).toEqual(new Set(["open", "done", "dropped"]));
-  for (const l of ["goal", "needs-chris", "triaged", "live-check", "proposal"]) expect(issues.some((i: any) => i.labels.includes(l))).toBe(true);
+  for (const l of ["triaged", "live-check", "proposal"]) expect(issues.some((i: any) => i.labels.includes(l))).toBe(true);
   expect((await get("/api/memory")).total).toBe(4);
   expect(JSON.stringify(await get("/api/projects"))).toContain("tools");
 });

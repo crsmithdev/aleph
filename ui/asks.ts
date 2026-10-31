@@ -37,8 +37,8 @@ export function kindOf(reason: string, given?: string): "input" | "approval" {
 }
 
 const STAMP = /^\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?:\s*/;
-/** A note without its optional leading timestamp and its `needs-chris:` lead. */
-const unlead = (s: string): string => s.replace(/^\s*-\s*/, "").replace(STAMP, "").replace(/^\s*needs-chris:\s*/i, "");
+/** A note without its optional leading timestamp. */
+const unlead = (s: string): string => s.replace(/^\s*-\s*/, "").replace(STAMP, "");
 
 /** The Ask reason of an issue or goal: its own `reason`, else read from the last note of an old item. */
 export function issueReason(i: Pick<NewIssue, "reason" | "question" | "decision">): string {
@@ -60,7 +60,7 @@ export function clean(text: unknown): string {
   const t = String(text ?? "")
     .replace(/<(task-notification|agent-message)\b[\s\S]*?(<\/\1>|$)/g, " ")
     .replace(/<[^>]*>/g, " ").replace(/[<>]/g, " ")
-    .replace(/^\s*-\s*/, "").replace(STAMP, "").replace(/^\s*needs-chris:\s*/i, "").replace(/^\s*triage: (for Chris|a live check):\s*/i, "")
+    .replace(/^\s*-\s*/, "").replace(STAMP, "").replace(/^\s*triage: (for Chris|a live check):\s*/i, "")
     .replace(/\s+/g, " ").trim();
   return oneSentence(t);
 }
@@ -235,12 +235,12 @@ export function attend(s: { runs: Job[]; issues: NewIssue[] }, always: Always = 
 /** The asks alone. */
 export const asks = (s: { runs: Job[]; issues: NewIssue[] }, always: Always = {}, lessons?: Lesson[]): AskItem[] => attend(s, always, lessons).items;
 
-/** The open issue a stuck job cannot succeed before: the item's own waiting_on, else one its last run's reason names. */
+/** The open issue a stuck job cannot succeed before: the goal's own first `after`, else one its last run's reason names. */
 export interface Blocker { id: string; title: string; href: string }
-export function stuckBlocker(j: Pick<Job, "repo" | "item" | "reason">, waitingOn: string | null | undefined, open: ReadonlyMap<string, { title: string; href: string }>): Blocker | null {
+export function stuckBlocker(j: Pick<Job, "repo" | "item" | "reason">, after: string | null | undefined, open: ReadonlyMap<string, { title: string; href: string }>): Blocker | null {
   const own = j.item ? `${j.repo}-${j.item.id}` : "";
   const hit = (id: string): Blocker | null => (id !== own && open.has(id) ? { id, ...open.get(id)! } : null);
-  const w = waitingOn?.trim();
+  const w = after?.trim();
   if (w && hit(w)) return hit(w);
   for (const m of (j.reason ?? "").matchAll(/\b([A-Za-z][\w.]*-\d+)\b/g)) if (hit(m[1])) return hit(m[1]);
   return null;
