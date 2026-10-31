@@ -2,7 +2,7 @@
  * The launcher: every place that starts `aleph <verb>` as a process of its
  * own goes through here. A run's unit and a held run's review get a transient
  * systemd unit (or, with `ALEPH_JOB_FOREGROUND=1`, a plain child); a dispatch
- * or triage after a transition is a detached process; the UI runs a verb and
+ * or triage after a transition is a unit of its own too; the UI runs a verb and
  * reads its output. The transitions themselves run in-process: see transitions.ts.
  */
 import { closeSync, mkdirSync, openSync } from "node:fs";
@@ -63,7 +63,7 @@ export function startUnit(args: string[], o: UnitOpts): ReturnType<typeof Bun.sp
     }
   }
   const p = Bun.spawnSync(["systemd-run", "--user", "--collect", "--quiet", ...LOW, `--unit=${o.unit}`, `--working-directory=${o.cwd}`, ...(o.props ?? []),
-    `--setenv=PATH=${runPath()}`, ...passEnv(), process.execPath, CLI, ...args], { stdout: "pipe", stderr: "pipe" });
+    `--setenv=PATH=${runPath()}`, ...passEnv(), process.execPath, CLI, ...args], { stdout: "pipe", stderr: "pipe", env: process.env });
   if (p.exitCode !== 0) throw new Error(`systemd-run failed: ${p.stderr.toString().trim()}`);
   return undefined;
 }
@@ -71,12 +71,11 @@ export function startUnit(args: string[], o: UnitOpts): ReturnType<typeof Bun.sp
 /** Start `aleph <args>` detached, its output appended to `log`; the caller never waits and never sees it fail. */
 export function detached(args: string[], log: string): void {
   try {
-    const out = open({ file: log });
-    try {
-      Bun.spawn([process.execPath, CLI, ...args], { env: process.env, stdin: "ignore", stdout: out.fd, stderr: out.fd, detached: true }).unref();
-    } finally {
-      out.close();
-    }
+    mkdirSync(dirname(log), { recursive: true });
+    // Its own transient unit: the caller's cgroup (a run's unit, or aleph-ui) stops its whole cgroup when it ends.
+    const unit = `aleph-${args.join("-")}-${Date.now()}-${process.pid}`.replace(/[^A-Za-z0-9:_.-]/g, "-");
+    startUnit(args, { unit, cwd: dirname(log), output: { file: log },
+      props: [`--property=StandardOutput=append:${log}`, `--property=StandardError=append:${log}`] });
   } catch {}
 }
 
