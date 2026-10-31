@@ -85,7 +85,8 @@ describe("job", () => {
     const names = (await aleph(["jobs"])).json.map((j: any) => j.name).filter((n: string) => ["older", "newer", "stale", "open"].includes(n));
     expect(names).toEqual(["open", "newer", "older"]);
     await aleph(["drop", "open"]);
-  });
+    // About ten CLI calls, so it needs more than the 5 s default under parallel load. Matches the 30 s the test script uses.
+  }, 30_000);
 
   test("drop removes the worktree and branch and ends the job", async () => {
     const r = await aleph(["drop", "alpha", "not", "needed"]);
