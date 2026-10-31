@@ -59,16 +59,17 @@ export function runViewOf(job: Job): RunView {
   return { kind: run.kind, state: run.state, open: isOpen(job), ...(isAwaiting(run.state) ? { ask: a ? { kind: a.kind, reason: a.reason } : { kind: "input", reason: "question" } } : {}) };
 }
 
-const numberOf = (ref: string): number | undefined => { const m = /-(\d+)$/.exec(ref); return m ? Number(m[1]) : undefined; };
+/** The ref's part after `<repo>-`, as `landedIndex` and `reverted` key it: `"910"` for an issue, `"910.1"` for a goal. */
+const partOf = (ref: string): string | undefined => /-(\d+(?:\.\d+)?)$/.exec(ref)?.[1];
 const SORTING: Run["kind"][] = ["triage", "plan", "facts"];
 
 /** The item is done: the store says so, or a not-reverted trailer commit on main names it. Returns the reason. */
 function doneWhy(item: Subject, ctx: Ctx): string | null {
-  const n = numberOf(item.id);
-  const hit = n === undefined ? undefined : ctx.landed.get(String(n))?.[0];
+  const part = partOf(item.id);
+  const hit = part === undefined ? undefined : ctx.landed.get(part)?.[0];
   if (hit) return `commit ${hit.slice(0, 7)} on ${ctx.main.replace(/^refs\/remotes\//, "")}`;
   // The store's done stands, unless a revert undid the item's only trailer commits.
-  if (item.status === "done" && !(n !== undefined && ctx.reverted.has(String(n)))) return "the store says done";
+  if (item.status === "done" && !(part !== undefined && ctx.reverted.has(part))) return "the store says done";
   return null;
 }
 
@@ -95,9 +96,9 @@ function goalStage(item: Subject, ctx: Ctx, out: Out, live: RunView[], work: Run
   if (last?.kind === "land") return out("landing", `its job is ${last.state}`);
   if (last) return out("building", `its job is ${last.state}`);
   // A job that landed leaves the goal landing until the store or main says done; a revert of its commit undoes that.
-  const n = numberOf(item.id);
+  const part = partOf(item.id);
   const lastJob = ctx.runs(item.id).at(-1);
-  if (lastJob?.state === "landed" && !(n !== undefined && ctx.reverted.has(String(n)))) return out("landing", "its job landed and the goal is not closed");
+  if (lastJob?.state === "landed" && !(part !== undefined && ctx.reverted.has(part))) return out("landing", "its job landed and the goal is not closed");
   if (live.some((r) => r.kind === "plan")) return out("planning", "a plan run is open");
   const blockers = item.after.filter((ref) => {
     const s = ctx.item(ref);

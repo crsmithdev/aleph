@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { aleph, seedGoal, seedItem, seedRun, setup, teardown } from "../cli.helpers";
+import { aleph, repo, seedGoal, seedItem, seedRun, setup, sh, teardown } from "../cli.helpers";
 import * as issues from "../../todo/lib/todo.ts";
 import { subjectOf } from "./stage.ts";
 
@@ -52,8 +52,37 @@ const GOALS_NEW: Row[] = [
   { name: "new goal: dropped", stage: "dropped", build: async () => goal({ status: "dropped" }) },
 ];
 
+// A commit on origin/main that names goal `goalRef` (`<n>.<k>`) and its issue `n`, as the land of a goal does; returns its sha.
+const landGoal = (n: number, goalRef: string): string => {
+  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `work\n\nIssue: ${ref(n)}\nGoal: ${ref(goalRef)}`);
+  sh(repo, "git", "push", "-q", "origin", "main");
+  return sh(repo, "git", "rev-parse", "HEAD");
+};
+// The revert of commit `sha`, pushed to origin/main. `git revert` refuses an empty commit ("nothing to commit"), so
+// this writes the commit it would write: the same subject and `This reverts commit <sha>.` body that landedIndex reads.
+const revertOnMain = (sha: string): void => {
+  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `Revert "work"\n\nThis reverts commit ${sha}.`);
+  sh(repo, "git", "push", "-q", "origin", "main");
+};
+
 // Dotted goals: the goal `.k` of an issue, seeded through seedGoal.
 const GOALS_DOTTED: Row[] = [
+  { name: "dotted goal: done by its trailer commit while the store holds it open", stage: "done", why: /^commit [0-9a-f]{7} on /, build: async () => {
+    const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
+    const a = seedGoal("fac", n, 1); landGoal(n, `${n}.1`); return a;
+  } },
+  { name: "dotted goal: not done when the store holds it done and its only commit is reverted", stage: "queued", build: async () => {
+    const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
+    const a = seedGoal("fac", n, 1, { status: "done" }); revertOnMain(landGoal(n, `${n}.1`)); return a;
+  } },
+  { name: "dotted goal: not landing when its job landed and its commit is reverted", stage: "queued", build: async () => {
+    const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
+    const a = seedGoal("fac", n, 1); seedRun("fac", { on: ref(a), kind: "build", state: "landed" }); revertOnMain(landGoal(n, `${n}.1`)); return a;
+  } },
+  { name: "dotted goal: not blocked by an after goal that a trailer commit landed", stage: "queued", build: async () => {
+    const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
+    const a = seedGoal("fac", n, 1); landGoal(n, `${n}.1`); return seedGoal("fac", n, 2, { after: [ref(a)] });
+  } },
   { name: "dotted goal: blocked while its after goal is open", stage: "blocked", why: /after fac-/, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedGoal("fac", n, 1); return seedGoal("fac", n, 2, { after: [ref(a)] });
