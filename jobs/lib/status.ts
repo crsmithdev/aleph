@@ -69,13 +69,13 @@ export function readFacts(cwd: string): Facts | null {
  * no later commit reverts. Only trailer lines count: a subject or a body line
  * that says `Issue:` does not. A commit that also names a goal (`Goal:`) lands that goal, not the whole issue.
  */
-export function landedCommits(cwd: string, main: string, key: string, n: number): string[] {
-  return landedIndex(cwd, main, key).get(n) ?? [];
+export function landedCommits(cwd: string, main: string, key: string, n: number | string): string[] {
+  return landedIndex(cwd, main, key).get(String(n)) ?? [];
 }
 
 /** For a `landedIndex` result, the items with a trailer commit on main that a later commit reverts and none that is not reverted. */
-const revertedOnly = new WeakMap<Map<number, string[]>, Set<number>>();
-export const revertedIn = (index: Map<number, string[]>): Set<number> => revertedOnly.get(index) ?? new Set();
+const revertedOnly = new WeakMap<Map<string, string[]>, Set<string>>();
+export const revertedIn = (index: Map<string, string[]>): Set<string> => revertedOnly.get(index) ?? new Set();
 
 // The legacy trailer key, spelled in two parts: the old name is gone from the code, and only the legacy reader here still names it.
 const LEGACY = "Ite" + "m";
@@ -84,15 +84,15 @@ const TRAILERS = `--format=%H%x09%(trailers:key=${LEGACY},valueonly,separator=%x
 const values = (v: string | undefined): string[] => (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
 /** Each of the repo's items that a commit on `main` names in an `Issue:` or `Item:` trailer (`Goal:` names a goal), to those commits, less the reverted ones: two git calls for every item. */
-export function landedIndex(cwd: string, main: string, key: string): Map<number, string[]> {
-  const out = new Map<number, string[]>();
+export function landedIndex(cwd: string, main: string, key: string): Map<string, string[]> {
+  const out = new Map<string, string[]>();
   const rows = git(cwd, "log", main, TRAILERS).out.split("\n").filter(Boolean);
-  const hits: [string, number][] = [];
+  const hits: [string, string][] = [];
   for (const [h, item, issue, goal] of rows.map((r) => r.split("\t"))) {
     // The commit of a goal names its issue too: it lands the goal, and the issue is done when its goals are.
     for (const s of new Set([...values(item), ...values(goal), ...(values(goal).length ? [] : values(issue))])) {
-      const m = s.startsWith(`${key}-`) ? /^\d+$/.exec(s.slice(key.length + 1)) : null;
-      if (m) hits.push([h, Number(m[0])]);
+      const m = s.startsWith(`${key}-`) ? /^\d+(?:\.\d+)?$/.exec(s.slice(key.length + 1)) : null;
+      if (m) hits.push([h, m[0]]);
     }
   }
   if (!hits.length) return out;
@@ -133,7 +133,7 @@ export function itemOnMain(repo: { path: string; key: string; main: string } | u
 }
 
 /** The items of `ns` that the facts hold, with the stage() context for them: one `landedIndex` for all. */
-export function stages(cwd: string, main: string, f: Facts, refs: (number | string)[], landed: Map<number, string[]> = landedIndex(cwd, main, f.repo)): Stage[] {
+export function stages(cwd: string, main: string, f: Facts, refs: (number | string)[], landed: Map<string, string[]> = landedIndex(cwd, main, f.repo)): Stage[] {
   const num = (ref: string) => (ref.startsWith(`${f.repo}-`) && /^\d+(\.\d+)?$/.test(ref.slice(f.repo.length + 1)) ? ref.slice(f.repo.length + 1) : undefined);
   const ctx: Ctx = {
     main, landed, reverted: revertedIn(landed),

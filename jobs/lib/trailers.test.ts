@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { itemOnMain, landedIndex } from "./status.ts";
+import { itemOnMain, landedIndex, revertedIn } from "./status.ts";
 
 // The trailer reader: `Issue:` and `Goal:` as well as the legacy `Item:`.
 let dir: string;
@@ -26,7 +26,22 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 test("landedIndex reads Item: and Issue:; a commit that names a goal lands the goal, not its issue", () => {
   const index = landedIndex(dir, "main", "k");
-  expect([...index.keys()].sort()).toEqual([1, 2]);
+  expect([...index.keys()].sort()).toEqual(["1", "2", "3.1"]);
+  expect(index.has("3")).toBe(false);
+});
+
+test("k-3.1 and k-3.2 are separate entries; a reverted goal is in revertedIn and its sibling is not", () => {
+  commit("goal two\n\nIssue: k-4\nGoal: k-4.1\nJob: j4");
+  const first = git("rev-parse", "HEAD");
+  commit("goal two b\n\nIssue: k-4\nGoal: k-4.2\nJob: j5");
+  commit(`Revert\n\nThis reverts commit ${first}.`);
+  const index = landedIndex(dir, "main", "k");
+  expect(index.get("4.2")?.length).toBe(1);
+  expect(index.has("4.1")).toBe(false);
+  expect(revertedIn(index).has("4.1")).toBe(true);
+  expect(revertedIn(index).has("4.2")).toBe(false);
+  expect(index.get("4.1")).toBeUndefined();
+  expect(index.get("3.1")).not.toEqual(index.get("4.2"));
 });
 
 test("itemOnMain finds an issue by Issue:, and a goal by Goal:", () => {
