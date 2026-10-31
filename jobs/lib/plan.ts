@@ -1,20 +1,19 @@
 /**
  * The planner: before a large goal's first worker run, one read-only
- * `claude -p` run on the planner tier splits it into 2 to 6 child goals, each
- * with its own oracle. The children are filed in the work store, the parent
- * waits on them and is labelled `planned`. Each run is a job in the ledger,
- * kind `plan`. See docs/specs/2026-10-26-seed-factory.md, "Planner".
+ * `claude -p` run on the planner tier splits the issue into 2 to 6 goals
+ * `<repo>-<n>.1 .. .k`, each with its own oracle. The goals are filed in the
+ * work store with the issue's `goals`, in one commit. Each run is a job in the
+ * ledger, kind `plan`, `on` the issue. See docs/specs/2026-10-26-seed-factory.md, "Planner".
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import * as todos from "../../todo/lib/todo.ts";
-import { GOAL, NEEDS_CHRIS, readList, hasLabel, isGoal, label, labels as labelsOf, note, writeList } from "../../todo/lib/store.ts";
+import { goalsOf, issueOf, kindOf, readList, note, writeList } from "../../todo/lib/store.ts";
 import { allRuns, jobsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 import { jobsNamed } from "./job.ts";
 import type { Tier } from "./route.ts";
 
-export const PLANNED = "planned";
 export const PLAN_MODEL = "claude-fable-5-1";
 /** Planner replies that fail the check, for one goal, before it runs as one worker run. */
 export const PLAN_TRIES = 2;
@@ -145,11 +144,12 @@ The factory runs this repo's checks itself, so the Oracle names only real comman
 function makeRun(repo: Repo, item: todos.Item): string {
   mkdirSync(jobsDir(), { recursive: true });
   const name = `plan-${repo.key}-${todos.refOf(item)}`;
+  const on = `${repo.key}-${todos.refOf(item)}`;
   for (let n = 0; ; n++) {
     const folder = join(jobsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-plan`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
     // `shown`: the dispatch's line reports a plan, so the report has no line for the run.
-    writeRun(folder, { kind: "plan", job: folder.split("/").at(-1)!, name, repo: repo.key, todo: todos.idOf(item), state: "running", phase: "plan", model: PLAN_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
+    writeRun(folder, { kind: "plan", job: folder.split("/").at(-1)!, name, repo: repo.key, on, state: "running", phase: "plan", model: PLAN_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
     writeFileSync(join(folder, "command.txt"), `plan ${repo.key}-${todos.refOf(item)}: ${item.title}\n`);
     return folder;
   }
@@ -171,52 +171,71 @@ async function ask(repo: Repo, item: todos.Item, folder: string): Promise<string
   }
 }
 
+const firstGoal = (repo: Repo, id: number | string) => `${repo.key}-${id}.1`;
+
 /**
- * File the children and mark the parent `planned`, waiting on them all, as one
- * commit. The children's refs, or null when the parent is no longer an open,
- * unplanned goal.
+ * The goal `.1` of an issue when it is the issue's only goal, open, with no run; `null` for an issue with no goal; a
+ * string, why the issue cannot be planned, for any other shape.
+ */
+function planTarget(repo: Repo, doc: todos.Doc, issue: todos.Item): todos.Item | null | string {
+  if (kindOf(issue) !== "issue" || todos.status(issue) !== "open") return "not an open issue";
+  const goals = goalsOf(issue);
+  if (!goals.length) return section(issue.body, "Goal") ? null : "no goal, and the issue's body is not in goal format";
+  const g = goals.length === 1 && goals[0] === firstGoal(repo, issue.id) ? todos.find(doc, `${issue.id}.1`) : undefined;
+  if (!g || todos.status(g) !== "open") return "already planned";
+  if (jobsNamed(goals[0]).length) return "the goal has had a run";
+  return g;
+}
+
+/**
+ * File the goals `<repo>-<id>.1 .. .k` and the issue's `goals` as one commit; goal `.1` of an issue that has one with no
+ * run is rewritten as the first. The goals' ids, or null when the issue is no longer one to plan.
  */
 export function fileChildren(repo: Repo, id: number | string, children: Child[]): string[] | null {
-  const w = writeList(repo, `plan ${repo.key}-${id}: ${children.length} children`, (doc) => {
-    const parent = todos.find(doc, id);
-    if (!parent || !isGoal(parent) || hasLabel(parent, PLANNED)) return null;
-    const own = labelsOf(parent).filter((l) => l !== GOAL && l !== NEEDS_CHRIS && l !== PLANNED);
+  const w = writeList(repo, `plan ${repo.key}-${id}: ${children.length} goals`, (doc) => {
+    const issue = todos.find(doc, id);
+    if (!issue) return null;
+    const first = planTarget(repo, doc, issue);
+    if (typeof first === "string") return null;
     const refs: string[] = [];
-    for (const c of children) {
-      const waits = c.waits.map((w) => refs[w - 1]).join(",");
-      const child = todos.addLegacy(doc, c.title, {
-        labels: [GOAL, ...own], body: `Part of ${repo.key}-${id}.\n\n${c.body}`, priority: typeof parent.fm.priority === "string" ? parent.fm.priority : undefined,
-        ...(waits ? { waitingOn: waits } : {}),
-      });
-      refs.push(`${repo.key}-${child.id}`);
+    for (const [i, c] of children.entries()) {
+      const after = c.waits.map((w) => refs[w - 1]);
+      let g: todos.Item;
+      if (i === 0 && first) {
+        g = first;
+        todos.edit(g, { title: c.title, body: c.body });
+        g.fm.after = after;
+      } else {
+        g = todos.addGoal(doc, issue, { title: c.title, body: c.body, after });
+      }
+      refs.push(`${repo.key}-${todos.refOf(g)}`);
     }
-    todos.setWaitingOn(parent, refs.join(","));
-    label(parent, [PLANNED]);
-    todos.note(parent, `planner: split into ${refs.map((r, i) => `${r} (${children[i].title})`).join(", ")}; this goal closes when they are all done`);
+    todos.note(issue, `planner: split into ${refs.map((r, i) => `${r} (${children[i].title})`).join(", ")}; this issue closes when they are all done`);
     return refs;
   });
   return w?.value ?? null;
 }
 
-/** A child a planner filed: its body starts with "Part of <repo>-<n>.". It is never planned again. */
-export const isChild = (item: todos.Item): boolean => /^Part of [a-z0-9-]+-\d+(?:\.\d+)?\./.test(item.body.trim());
-
-/** Planner runs of a goal that ended with no children. */
+/** Planner runs of an issue that ended with no children. */
 const badPlans = (repo: Repo, id: number | string) =>
-  allRuns().filter((e) => e.run.kind === "plan" && e.run.repo === repo.key && e.run.todo === id && /^(malformed plan|failed):/.test(e.run.reason ?? "")).length;
+  allRuns().filter((e) => e.run.kind === "plan" && e.run.on === `${repo.key}-${id}` && /^(malformed plan|failed):/.test(e.run.reason ?? "")).length;
 
 export type Plan = { plan: true } | { tier: Tier | null };
 
 /**
  * The decision before a goal's worker run, for a caller that holds the goal's
- * lock: a goal that has had no run, is not a planner's child, is not planned
- * and is large, and has had fewer than PLAN_TRIES failed planner runs, is
- * planned (`plan`); any other gets a worker run at the rated tier.
+ * lock: a goal that has had no run, whose issue has only that goal, and that is
+ * large, and whose issue has had fewer than PLAN_TRIES failed planner runs, is
+ * planned (`plan`, on its issue); any other gets a worker run at the rated tier.
  */
 export async function needsPlan(repo: Repo, item: todos.Item, spec: string, rate: Rate): Promise<Plan> {
   const tier = await rate(spec);
-  if (jobsNamed(`${repo.key}-${todos.refOf(item)}`).length || isChild(item) || hasLabel(item, PLANNED) || !isLarge(tier, item.body)) return { tier };
-  return badPlans(repo, todos.idOf(item)) >= PLAN_TRIES ? { tier } : { plan: true };
+  if (jobsNamed(`${repo.key}-${todos.refOf(item)}`).length || !isLarge(tier, item.body)) return { tier };
+  const issue = /^(.+)-(\d+)$/.exec(issueOf(item) ?? "");
+  if (!issue || issue[1] !== repo.key) return { tier };
+  const parent = todos.find(readList(repo)!, Number(issue[2]));
+  if (!parent || goalsOf(parent).length !== 1 || goalsOf(parent)[0] !== `${repo.key}-${todos.refOf(item)}`) return { tier };
+  return badPlans(repo, parent.id) >= PLAN_TRIES ? { tier } : { plan: true };
 }
 
 const planLock = (repo: Repo, id: number | string) => lock(`plan-${repo.key}-${id}`, 0);
@@ -232,7 +251,7 @@ export async function planning(repo: Repo, id: number | string): Promise<boolean
   if (!release) return true;
   try {
     for (const e of allRuns()) {
-      if (e.run.kind === "plan" && e.run.repo === repo.key && e.run.todo === id && e.run.state === "running") {
+      if (e.run.kind === "plan" && e.run.on === `${repo.key}-${id}` && e.run.state === "running") {
         updateRun(e.folder, { state: "done", phase: undefined, reason: "failed: its process ended before a reply", ended: new Date().toISOString() });
       }
     }
@@ -249,14 +268,18 @@ export type Planned = { planned: string[] } | { why: string };
  * the check, at most PLAN_TRIES. It returns the children filed, or why it filed
  * none (then the goal runs as one worker run).
  */
-export async function runPlan(repo: Repo, id: number | string): Promise<Planned> {
+export async function runPlan(repo: Repo, id: number): Promise<Planned> {
   const release = await planLock(repo, id);
   if (!release) return { why: "another plan run holds the goal" };
   try {
-    const item = todos.find(readList(repo)!, id);
-    if (!item || !isGoal(item) || todos.status(item) !== "open") return { why: "not an open goal" };
-    if (hasLabel(item, PLANNED)) return { why: "already planned" };
+    const doc = readList(repo);
+    const issue = doc && todos.find(doc, id);
+    if (!issue) return { why: "not an open issue" };
+    const target = planTarget(repo, doc, issue);
+    if (typeof target === "string") return { why: target };
     if (badPlans(repo, id) >= PLAN_TRIES) return { why: `${PLAN_TRIES} plan runs failed already` };
+    // The planner reads the goal's body, or the issue's own when it has no goal.
+    const item: todos.Item = { ...issue, title: target?.title ?? issue.title, body: target?.body ?? issue.body };
     let why = "";
     while (badPlans(repo, id) < PLAN_TRIES) {
       const folder = makeRun(repo, item);
@@ -265,7 +288,7 @@ export async function runPlan(repo: Repo, id: number | string): Promise<Planned>
         const plan = parsePlan(await ask(repo, item, folder));
         if (typeof plan === "string") { why = `malformed plan: ${plan}`; end(why); continue; }
         const refs = fileChildren(repo, id, plan);
-        if (!refs) { end("the goal changed during the run"); return { why: "the goal changed during the planner run" }; }
+        if (!refs) { end("the issue changed during the run"); return { why: "the issue changed during the planner run" }; }
         end("planned");
         return { planned: refs };
       } catch (e: any) {

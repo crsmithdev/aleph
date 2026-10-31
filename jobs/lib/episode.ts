@@ -8,13 +8,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
 import { fetchTrace, traceIdFor } from "../../hooks/lib/otlp.ts";
-import { hasLabel, kindOf, readList } from "../../todo/lib/store.ts";
+import { goalsOf, kindOf, readList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { allRuns, type Entry, type Repo } from "./ledger.ts";
-import { PLANNED, section } from "./plan.ts";
-import { landedCommits, repoStages } from "./status.ts";
+import { section } from "./plan.ts";
+import { itemOnMain, landedCommits, repoStages } from "./status.ts";
 
 const VAULT_CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
 const today = () => new Date().toISOString().slice(0, 10);
@@ -68,10 +68,8 @@ export type Langfuse = { error: string } | { traces: { id: string; tokens: numbe
 function commitsOf(repo: Repo, item: todos.Item): Commit[] {
   fetchOrigin(repo.path);
   const main = `origin/${repo.main}`;
-  const ids = hasLabel(item, PLANNED)
-    ? todos.waitParts(String(item.fm.waiting_on ?? "")).map(todos.parseRef).filter((r) => r?.repo === repo.key).map((r) => r!.id)
-    : [item.id];
-  const shas = [...new Set(ids.flatMap((n) => landedCommits(repo.path, main, repo.key, n)))];
+  const refs = goalsOf(item).length ? goalsOf(item).map(todos.parseGoalRef).filter((r) => r?.repo === repo.key).map((r) => r!.id) : [item.id];
+  const shas = [...new Set(refs.flatMap((n) => (typeof n === "string" ? [itemOnMain(repo, n) ?? ""].filter(Boolean) : landedCommits(repo.path, main, repo.key, n))))];
   return shas.map((sha) => ({
     sha,
     subject: git(repo.path, "show", "--no-patch", "--format=%s", sha).out.trim(),

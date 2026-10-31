@@ -377,9 +377,9 @@ async function triageCmd(): Promise<void> {
   out(await triageNow(repo, ref.id));
 }
 
-/** `aleph plan <repo>-<n>`: plan one goal now, under the dispatch's gates. */
+/** `aleph plan <repo>-<n>`: plan one issue now, under the dispatch's gates. */
 async function planCmd(): Promise<void> {
-  const ref = todos.parseGoalRef(rest[0] ?? "") ?? refuse("usage: aleph plan <repo>-<n>");
+  const ref = todos.parseRef(rest[0] ?? "") ?? refuse("usage: aleph plan <repo>-<n> (an issue)");
   const repo = loadRegistry()[ref.repo] ?? refuse(`no repo ${ref.repo}`);
   out(await planNow(repo, ref.id));
 }

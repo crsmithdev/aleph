@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, file, itemsRemote, job, jobsDir, other, remote, repo, sh, specFile, state, worktree, setup, teardown, addOld } from "./cli.helpers";
+import { aleph, base, file, itemsRemote, job, jobsDir, other, remote, repo, sh, specFile, state, worktree, setup, teardown, addOld, patchItem } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -124,17 +124,17 @@ describe("prospective memory", () => {
 
   test("a tick skips a goal due tomorrow, and one that waits on an open item, until it is ready", async () => {
     const later = await add("due tomorrow", "--labels", "goal", "--due", "2026-10-28");
-    const first = await add("the first thing");
-    const second = await add("waits on the first", "--labels", "goal", "--waiting-on", `fac-${first}`);
-    const t = await aleph(["tick"], NOW);
+    const first = (await aleph(["issue", "add", "fac", "the first thing", "--goal", "-"], { ALEPH_DISPATCH: "off" }, "ACTION: commit first.txt")).json.added as number;
+    const second = (await aleph(["issue", "add", "fac", "waits on the first", "--goal", "-", "--after", `fac-${first}.1`], { ALEPH_DISPATCH: "off" }, "ACTION: commit second.txt")).json.added as number;
+    const t = await aleph(["tick"], { ...NOW, ALEPH_LIVE_CAP: "0" });
     expect(t.json.skipped).toContain(`fac-${later}: due 2026-10-28`);
-    expect(t.json.skipped).toContain(`fac-${second}: waiting on fac-${first}`);
+    expect(t.json.skipped).toContain(`fac-${second}.1: blocked: after fac-${first}.1`);
     expect(t.json.started).not.toContain(`fac-${later}`);
-    expect(t.json.started).not.toContain(`fac-${second}`);
-    await aleph(["issue", "done", "fac", String(first)]);
-    expect((await aleph(["tick"], NOW)).json.started).toContain(`fac-${second}`);
+    expect(t.json.started).not.toContain(`fac-${second}.1`);
+    patchItem("fac", `${first}.1`, { status: "done" });
+    expect((await aleph(["tick"], NOW)).json.started).toContain(`fac-${second}.1`);
     // The second goal's run may end stuck, which holds the factory: clear it.
-    await aleph(["drop", `fac-${second}`]);
+    await aleph(["drop", `fac-${second}.1`]);
     await aleph(["issue", "drop", "fac", String(second), "test over"]);
     // The day after, the dated goal starts.
     expect((await aleph(["tick"], { ALEPH_NOW: "2026-10-28T08:00:00" })).json.started).toContain(`fac-${later}`);

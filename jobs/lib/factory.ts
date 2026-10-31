@@ -6,7 +6,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { askOf, flakeTracker, goal, goals, hasLabel, kindOf, note, readList, readLists, reader } from "../../todo/lib/store.ts";
+import { afterOf, askOf, flakeTracker, goal, goals, goalsOf, issueOf as issueRefOf, kindOf, note, readList, readLists, reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
 import { normalizeAsk, type Ask } from "./ask.ts";
@@ -25,7 +25,7 @@ import { readdirSync } from "node:fs";
 import { alreadyMet } from "./gate.ts";
 import { always, logAlways } from "./always.ts";
 import { detached } from "./launch.ts";
-import { PLANNED, needsPlan, planning, runPlan, type Rate } from "./plan.ts";
+import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import type { Tier } from "./route.ts";
 
 export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
@@ -156,7 +156,7 @@ async function factsStep(): Promise<void> {
 }
 
 /** The open items labelled `goal` in each factory repo. */
-export const openGoals = (): { repo: Repo; item: todos.Item }[] => goals(sandboxRepos());
+export const openGoals = (): { repo: Repo; item: todos.Item }[] => goals(sandboxRepos()).filter(({ item }) => kindOf(item) === "goal");
 
 /**
  * Whether `<repo>-<n>` is done: the store says done, or the derived state
@@ -175,7 +175,7 @@ export function doneChecker(): (ref: string) => boolean {
       const done = new Set<string>();
       try {
         const doc = readList(repo);
-        for (const i of doc?.items ?? []) if (todos.status(i) === "done") done.add(`${r.repo}-${i.id}`);
+        for (const i of doc?.items ?? []) if (todos.status(i) === "done") done.add(`${r.repo}-${todos.refOf(i)}`);
         for (const s of repoStages(repo, { fetch: true, doc })) if (s.stage === "done") done.add(s.id);
       } catch {}
       known.set(r.repo, done);
@@ -184,22 +184,18 @@ export function doneChecker(): (ref: string) => boolean {
   };
 }
 
-/** Why an item is not ready to start today, or null: its `due` is after today, or what it waits on is not done. */
+/** Why an item is not ready to start today, or null: its `due` is after today, or a goal it is `after` is not done. */
 export function notReady(item: todos.Item, done: (ref: string) => boolean, now = todos.clock()): string | null {
   const due = item.fm.due;
   if (typeof due === "string" && todos.validDate(due) && due > todos.today(now)) return `due ${due}`;
-  const open = pendingWaits(waitsOf(item), done);
-  if (open.length) return `waiting on ${open.join(",")}`;
+  const open = pendingWaits(afterOf(item), done);
+  if (open.length) return `blocked: after ${open.join(",")}`;
   return null;
 }
 
-/** What an item waits on, as a comma list: an old item's `waiting_on`, a migrated goal's `after`. */
-export const waitsOf = (item: todos.Item): unknown =>
-  Array.isArray(item.fm.after) ? item.fm.after.join(",") : item.fm.waiting_on;
-
-/** The parts of a `waiting_on` (a ref or a comma list of refs) that are not done; none for an absent one. */
-export function pendingWaits(waits: unknown, done: (ref: string) => boolean): string[] {
-  return typeof waits === "string" ? todos.waitParts(waits).filter((w) => !done(w)) : [];
+/** The goals of `after` (a list of ids) that are not done. */
+export function pendingWaits(after: string[], done: (ref: string) => boolean): string[] {
+  return after.filter((w) => !done(w));
 }
 
 export type WaitReason =
@@ -219,7 +215,7 @@ export function waitReason(_repo: Repo, item: todos.Item, ctx: WaitContext): Wai
   if (ctx.red) return { kind: "red", text: ctx.red };
   const due = item.fm.due;
   if (typeof due === "string" && todos.validDate(due) && due > todos.today(ctx.now ?? todos.clock())) return { kind: "due", text: `Due ${due}` };
-  const ids = pendingWaits(waitsOf(item), ctx.done);
+  const ids = pendingWaits(afterOf(item), ctx.done);
   if (ids.length) return { kind: "waits_on", ids, text: `Waits on ${ids.join(", ")}` };
   const ask = askOf(item);
   if (ask) {
@@ -241,7 +237,13 @@ export function waitReason(_repo: Repo, item: todos.Item, ctx: WaitContext): Wai
   return { kind: "ready", text: "Starts at the next dispatch" };
 }
 
-/** The job name for a goal item: its store id, as `aleph-28`, or `aleph-28.1` for a goal under an issue. */
+/** The job name for a goal: its id, `aleph-28.1` for a goal under an issue, `aleph-28` for an old goal. */
+/** The number of the issue a goal belongs to in this repo, or null. */
+const issueNumber = (repo: Repo, item: todos.Item): number | null => {
+  const m = /^(.+)-(\d+)$/.exec(issueRefOf(item) ?? "");
+  return m && m[1] === repo.key ? Number(m[2]) : null;
+};
+
 export const goalJob = (repo: Repo, id: number | string) => `${repo.key}-${id}`;
 
 /** Agent runs live now, and those started whose unit has not written `pid` yet. */
@@ -304,11 +306,11 @@ export interface Rescue {
  * fallback. Each start holds a lock on its goal and re-reads the jobs under it,
  * so two dispatches at once start a goal once. `start` dispatches the run; it
  * is `aleph job`, in-process (transitions.ts). With `rate`, a large goal's
- * first run is a planner run instead (plan.ts), and a goal labelled `planned`
- * is never started: it is closed once its children are all done. `plan`
- * starts a large goal's planner detached; the dispatch does not wait for it.
+ * first run is a planner run on its issue instead (plan.ts). It starts goals
+ * only: an issue is closed as done once its goals are all done (`closeIssues`).
+ * `plan` starts an issue's planner detached; the dispatch does not wait for it.
  */
-export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number | string) => void = planDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[]; planned?: string[] }> {
+export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[]; planned?: string[] }> {
   if (gates({ only: ["pause"] })) {
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
@@ -346,12 +348,12 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       goals = openGoals();
     }
   }
+  for (const repo of sandboxRepos()) if (!reds.get(repo.key)) for (const l of await closeIssues(repo, done)) skipped.push(l);
   for (const { repo, item: listed } of goals) {
     const ref = todos.idOf(listed);
     const name = goalJob(repo, ref);
     const red = reds.get(repo.key);
     if (red) { skipped.push(`${name}: ${red}`); continue; }
-    if (hasLabel(listed, PLANNED)) { skipped.push(`${name}: ${await closePlanned(repo, ref, done)}`); continue; }
     if (done(`${repo.key}-${ref}`)) { skipped.push(`${name}: the item is already done`); continue; }
     const wait = notReady(listed, done);
     if (wait) { skipped.push(`${name}: ${wait}`); continue; }
@@ -366,11 +368,12 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       // Read after the jobs: a note added before the last run's drop is in the rerun's spec.
       const item = goal(repo, ref);
       if (!item) { skipped.push(`${name}: not a goal`); continue; }
-      // The item may have gained a waiting_on or a due date since it was read, while the baseline ran or an earlier goal started.
+      // The item may have gained an after or a due date since it was read, while the baseline ran or an earlier goal started.
       const waitNow = notReady(item, done);
       if (waitNow) { skipped.push(`${name}: ${waitNow}`); continue; }
       // A plan job runs detached: the goal gets no second planner and no worker while it does.
-      if (await planning(repo, ref)) { skipped.push(`${name}: planning`); continue; }
+      const parent = issueNumber(repo, item);
+      if (parent !== null && await planning(repo, parent)) { skipped.push(`${name}: planning`); continue; }
       const gated = gates({ only: ["live", "day", "awaiting"], jobs });
       if (gated) { skipped.push(`${name}: ${gated.why}`); continue; }
       // Read again just before the start: an item done or dropped since it was read starts no run, whatever the trigger.
@@ -405,7 +408,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       let tier: Tier | null | undefined;
       if (rate) {
         const p = await needsPlan(repo, item, spec, rate);
-        if ("plan" in p) { plan(repo, ref); planned.push(name); continue; }
+        if ("plan" in p) { plan(repo, issueNumber(repo, item)!); planned.push(name); continue; }
         tier = p.tier;
       }
       const why = await start(repo, name, ref, spec, tier);
@@ -420,30 +423,33 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
 }
 
 /**
- * A goal labelled `planned` is never started. Once every child it waits on is
- * done, it is closed as done with a note naming the children's commits.
- * Returns the line for the dispatch's skipped list.
+ * An open issue whose goals are all done is closed as done, with a note naming the goals' commits. An issue whose goals
+ * hold a dropped one and no open one is left alone: the drop set its Ask. Returns the lines for the dispatch's skipped list.
  */
-async function closePlanned(repo: Repo, id: number | string, done: (ref: string) => boolean): Promise<string> {
-  const release = await lock(`goal-${goalJob(repo, id)}`, 0);
-  if (!release) return "planned; another dispatch holds it";
-  try {
-    const item = goal(repo, id);
-    if (!item || !hasLabel(item, PLANNED)) return "planned; no longer an open goal";
-    const waits = typeof item.fm.waiting_on === "string" ? todos.waitParts(item.fm.waiting_on) : [];
-    const open = waits.filter((w) => !done(w));
-    if (open.length) return `planned; waiting on ${open.join(",")}`;
-    const reg = loadRegistry();
-    const commits = waits.map((w) => {
-      const r = todos.parseRef(w);
-      const sha = r ? itemOnMain(reg[r.repo] ?? (r.repo === repo.key ? repo : undefined), r.id) : null;
-      return `${w} (${sha ?? "no commit"})`;
-    });
-    const bad = note(repo, id, `planned: its children are all done: ${commits.join(", ") || "none"}`, { done: true });
-    return bad ? `planned; not closed: ${bad}` : "planned; closed as done";
-  } finally {
-    release();
+async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<string[]> {
+  const lines: string[] = [];
+  const doc = reader({ fetch: false }).list(repo.key);
+  for (const listed of doc?.items ?? []) {
+    const goalIds = goalsOf(listed);
+    if (kindOf(listed) !== "issue" || todos.status(listed) !== "open" || !goalIds.length) continue;
+    if (!goalIds.every((g) => done(g))) continue;
+    const name = `${repo.key}-${listed.id}`;
+    const release = await lock(`issue-${name}`, 0);
+    if (!release) { lines.push(`${name}: another dispatch holds it`); continue; }
+    try {
+      const item = reader().item(repo.key, listed.id);
+      if (!item || todos.status(item) !== "open" || kindOf(item) !== "issue" || !goalsOf(item).length || !goalsOf(item).every((g) => done(g))) continue;
+      const commits = goalsOf(item).map((g) => {
+        const r = todos.parseGoalRef(g);
+        return `${g} (${(r && itemOnMain(r.repo === repo.key ? repo : undefined, r.id)) ?? "no commit"})`;
+      });
+      const bad = note(repo, item.id, `its goals are all done: ${commits.join(", ")}`, { done: true });
+      lines.push(bad ? `${name}: not closed: ${bad}` : `${name}: closed as done`);
+    } finally {
+      release();
+    }
   }
+  return lines;
 }
 
 /** Done goals older than this many days are not accepted: the step starts with the goals closed lately. */
@@ -470,7 +476,7 @@ export async function acceptanceStep(run: Runner = sandboxRunner, now = todos.cl
       try {
         const item = reader().item(repo.key, todos.refOf(listed));
         if (!item || todos.status(item) !== "done" || final(readRecord(repo.key, todos.refOf(item)))) continue;
-        if (!hasLabel(item, PLANNED) && !itemOnMain(repo, todos.idOf(item))) continue;
+        if (kindOf(item) !== "issue" && !itemOnMain(repo, todos.idOf(item))) continue;
         lines.push(await accept(repo, item, run));
       } finally {
         release();
@@ -1040,8 +1046,8 @@ function cameDue(): string[] {
       const id = `${repo.key}-${item.id}`;
       if (todos.status(item) !== "open" || seen.has(id)) continue;
       const due = item.fm.due;
-      const waits = waitsOf(item);
-      if ((typeof due === "string" && todos.validDate(due) && due <= day) || (typeof waits === "string" && todos.waitParts(waits).length > 0 && !pendingWaits(waits, done).length)) {
+      const waits = afterOf(item);
+      if ((typeof due === "string" && todos.validDate(due) && due <= day) || (waits.length > 0 && !pendingWaits(waits, done).length)) {
         ids.push(id);
         lines.push(`${id} ${item.title}`);
       }
@@ -1095,7 +1101,7 @@ export function triageDetached(repo: Repo, id: number): void {
 }
 
 /** Start `aleph plan <repo>-<id>` detached, for a large goal; it never fails the caller. */
-export function planDetached(repo: Repo, id: number | string): void {
+export function planDetached(repo: Repo, id: number): void {
   if (!dispatchOn() || !repo.sandbox) return;
   detached(["plan", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
 }
@@ -1105,7 +1111,7 @@ export function planDetached(repo: Repo, id: number | string): void {
  * no failed probe, a factory repo. When it ends, the children or the fallback worker start from
  * a dispatch of their own.
  */
-export async function planNow(repo: Repo, id: number | string): Promise<{ planned: string[] } | { why: string }> {
+export async function planNow(repo: Repo, id: number): Promise<{ planned: string[] } | { why: string }> {
   const gated = gates({ only: ["pause", "hold", "probe"] });
   if (gated) return { why: gated.why };
   if (!repo.sandbox) return { why: `${repo.key} is not a factory repo` };

@@ -83,19 +83,19 @@ test("a goal closed during the baseline is not started", async () => {
 
 // The baselines all run before the goals are read again, so the gap that matters is between that read and a goal's lock:
 // an earlier goal's start is where it opens.
-test("a goal given a waiting_on while an earlier goal starts is not started", async () => {
+test("a goal given an after while an earlier goal starts is not started", async () => {
   const first = goal();
   const second = goal();
-  const other = writeList({ key: "fac" }, "add an open item", (doc) => todos.addLegacy(doc, "not a goal", { labels: [] }).id, true)!.value;
+  const other = writeList({ key: "fac" }, "add an open item", (doc) => { const i = todos.add(doc, "not a goal"); todos.setStatus(todos.addGoal(doc, i, { title: "g", body: "b" }), "dropped"); return i.id; }, true)!.value;
   const calls: string[] = [];
   const out = await dispatchGoals(async (_repo, name) => {
     calls.push(name);
-    if (name === `fac-${first}`) await change(second, (item) => todos.edit(item, { waitingOn: `fac-${other}` }));
+    if (name === `fac-${first}`) await change(second, (item) => { item.fm.after = [`fac-${other}.1`]; });
     return null;
   }, async () => null);
   expect(calls).toEqual([`fac-${first}`]);
   expect(out.started).toEqual([`fac-${first}`]);
-  expect(out.skipped).toEqual([`fac-${second}: waiting on fac-${other}`]);
+  expect(out.skipped).toEqual([`fac-${second}: blocked: after fac-${other}.1`]);
 });
 
 // An "already met" drop closes a factory item with no commit that names it; the goals that wait on it still start.
@@ -842,16 +842,16 @@ test("a rescue whose lock wait runs out skips the job and does not throw", async
   } finally { delete process.env.ALEPH_RESCUE_WAIT_MS; release(); }
 });
 
-test("notReady: a waiting_on list is ready when every part is done, and names only the parts not done", () => {
+test("notReady: an old item's waiting_on list is read as its after, and names only the parts not done", () => {
   const item = { fm: { waiting_on: "fac-1, fac-2" } } as unknown as todos.Item;
   expect(notReady(item, () => true)).toBeNull();
-  expect(notReady(item, (r) => r === "fac-1")).toBe("waiting on fac-2");
+  expect(notReady(item, (r) => r === "fac-1")).toBe("blocked: after fac-2");
 });
 
 test("notReady: a migrated goal waits on its after list, dotted ids included", () => {
   const item = { fm: { after: ["fac-1", "fac-2.1"] } } as unknown as todos.Item;
   expect(notReady(item, () => true)).toBeNull();
-  expect(notReady(item, (r) => r === "fac-1")).toBe("waiting on fac-2.1");
+  expect(notReady(item, (r) => r === "fac-1")).toBe("blocked: after fac-2.1");
 });
 
 const repoX = { key: "fac" } as never;
