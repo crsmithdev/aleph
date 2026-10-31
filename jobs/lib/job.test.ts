@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addNote, allJobs, batch, findJob, goal, hasFile, issue, jobById, lastReal, latestFile, jobsNamed, latestJob, markNeedsChris, markRescued, needsChris, notes, openJob, readFile, rescued, stateOf, tailOf, view } from "./job.ts";
+import { addNote, allJobs, batch, findJob, goal, hasFile, issue, jobById, lastReal, latestFile, jobsNamed, latestJob, markAsked, markRescued, asked, notes, openJob, readFile, rescued, stateOf, tailOf, view } from "./job.ts";
 import { isOpen, writeRun, type Run } from "./ledger.ts";
 
 let base: string;
@@ -104,10 +104,15 @@ describe("run-folder files", () => {
     expect(hasFile(last, "batch.json")).toBe(true);
     expect(goal(j)).toBe("Do it");
 
-    expect(needsChris(first)).toBe(false);
-    markNeedsChris(first, "drop it?");
-    expect(needsChris(first)).toBe(true);
-    expect(readFileSync(join(first.folder, "needs-chris"), "utf8")).toBe("drop it?\n");
+    expect(asked(first)).toBe(false);
+    markAsked(first, "drop it?");
+    expect(asked(first)).toBe(true);
+    expect(readFileSync(join(first.folder, "asked"), "utf8")).toBe("drop it?\n");
+    // The old file name is still read.
+    const old = first;
+    rmSync(join(old.folder, "asked"));
+    writeFileSync(join(old.folder, "needs-chris"), "old\n");
+    expect(asked(first)).toBe(true);
     expect(rescued(first)).toBe("");
     markRescued(first, "infra");
     expect(rescued(first)).toBe("infra");

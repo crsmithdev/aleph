@@ -16,7 +16,8 @@ import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as todos from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import * as issues from "../todo/lib/issues.ts";
-import { grant, readStanding, revoke } from "./lib/standing.ts";
+import { grant, readAlways, revoke } from "./lib/always.ts";
+import { OLD_REASON, readStanding } from "./lib/standing.ts";
 import { ciStep } from "./lib/ci.ts";
 import { behind, correctionsStep, dispatchDetached, factoryDir, factoryLog, factoryRepos, firefighterStep, health, hold, paused, planNow, probeDue, report, setPaused, triageDetached, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
 import { checkName, checked, drop, land, recheck, refuse, Refusal, repoOf, runDispatch, startJob, startPlain, type Start } from "./lib/transitions.ts";
@@ -544,12 +545,17 @@ try {
     case "report": reportCmd(); break;
     case "pause": setPaused(true); out({ paused: true }); break;
     case "resume": setPaused(false); out({ paused: false }); dispatchDetached(); break;
+    case "always":
     case "standing": {
-      const [sub, reason, action] = positional;
-      if (sub === "list" || sub === undefined) out(readStanding());
-      else if (sub === "grant") { const bad = grant(reason ?? refuse("usage: aleph standing grant <reason> <action>"), action ?? refuse("usage: aleph standing grant <reason> <action>")); if (bad) refuse(bad); out(readStanding()); }
-      else if (sub === "revoke") { revoke(reason ?? refuse("usage: aleph standing revoke <reason>")); out(readStanding()); }
-      else refuse("usage: aleph standing <list|grant <reason> <action>|revoke <reason>>");
+      // `standing` is the old name; the UI's hints still say it until step 5.
+      const [sub, given, action] = positional;
+      // The old name also takes the old reason names the UI sends.
+      const reason = cmd === "standing" && given !== undefined ? OLD_REASON[given] ?? given : given;
+      const rules = () => (cmd === "standing" ? readStanding() : readAlways());
+      if (sub === "list" || sub === undefined) out(rules());
+      else if (sub === "grant") { const bad = grant(reason ?? refuse("usage: aleph always grant <reason> <action>"), action ?? refuse("usage: aleph always grant <reason> <action>")); if (bad) refuse(bad); out(rules()); }
+      else if (sub === "revoke") { revoke(reason ?? refuse("usage: aleph always revoke <reason>")); out(rules()); }
+      else refuse("usage: aleph always <list|grant <reason> <action>|revoke <reason>>");
       break;
     }
     case "judge": {

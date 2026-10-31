@@ -1,6 +1,6 @@
 /**
  * The firefighter: on each tick, code takes a snapshot of what needs watching (held, stuck and
- * failed runs, a goal that loops, a red main, `needs-chris` issues, runs whose process is gone),
+ * failed runs, a goal that loops, a red main, issues with an Ask, runs whose process is gone),
  * and only when it has an event the last snapshot lacked does one read-only `claude -p` run
  * judge them. It returns typed actions; code checks each against the rules below and applies it
  * through the existing transitions and the work store, in order. Each run is a job in the
@@ -11,15 +11,14 @@ import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/issues.ts";
-import { allRuns, isLost, jobsDir, loadRegistry, lock, readReview2, readRun, stamp, tell, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
-import { allJobs, isOpen, issue as issueOf, lastReal, markNeedsChris, openJob, readFile, type Job } from "./job.ts";
+import { allRuns, askOf, isAwaiting, isLost, jobsDir, loadRegistry, lock, readReview2, readRun, stamp, tell, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
+import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, openJob, readFile, type Job } from "./job.ts";
 import { verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
 import { factoryDir, factoryLog, factoryRepos, redBaselines, writeRerun } from "./factory.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { drop as dropJob, land as landJob, refusal } from "./transitions.ts";
-import { readDecision } from "./decision.ts";
-import { handed, logStanding, readStanding, standing } from "./standing.ts";
+import { always, handed, logAlways, readAlways } from "./always.ts";
 
 export const FIREFIGHTER_MODEL = "claude-opus-5-5";
 /** The most actions one run may take; the rest are refused. */
@@ -33,10 +32,10 @@ const stateFile = () => join(factoryDir(), "firefighter.json");
 /** Paths a firefighter never lands: a diff that touches one goes to Chris. */
 export const SECURITY_PATHS = ["hooks/", "jobs/lib/sandbox.ts", "jobs/lib/gate.ts", "jobs/lib/review2-browser.ts"];
 
-export type EventKind = "needs-you" | "stuck" | "failed" | "loop" | "red" | "needs-chris" | "lost";
+export type EventKind = "needs-you" | "stuck" | "failed" | "loop" | "red" | "ask" | "lost";
 /**
  * One thing the snapshot found. `key` is what makes it new: it changes when the thing does.
- * `reason` is the reason code it waits for; `handed` marks one whose reason Chris handed to the firefighter (standing.json).
+ * `reason` is the reason code it waits for; `handed` marks one whose reason Chris handed to the firefighter (always.json).
  */
 export interface Event { key: string; kind: EventKind; repo: string; job?: string; item?: number | string; line: string; reason?: string; handed?: boolean }
 
@@ -54,9 +53,9 @@ export function snapshot(now = Date.now()): Event[] {
     if (!r.repo || !keys.has(r.repo) || !isOpen(j)) continue;
     const item = issueOf(j);
     const at = { repo: r.repo, job: r.name, ...(item !== undefined ? { item } : {}) };
-    if (r.state === "needs-you" || r.state === "stuck" || r.state === "failed") {
-      const reason = r.state === "needs-you" ? r.needs : undefined;
-      events.push(hand({ key: `${r.state}:${r.repo}/${last.id}`, kind: r.state, ...at, ...(reason ? { reason } : {}), line: `${r.name} is ${r.state}${r.needs ? ` (${r.needs})` : ""}${r.reason ? `: ${r.reason}` : ""}` }));
+    if (isAwaiting(r.state) || r.state === "stuck" || r.state === "failed") {
+      const reason = isAwaiting(r.state) ? askOf(r)?.reason : undefined;
+      events.push(hand({ key: `${r.state}:${r.repo}/${last.id}`, kind: isAwaiting(r.state) ? "needs-you" : r.state as "stuck" | "failed", ...at, ...(reason ? { reason } : {}), line: `${r.name} is ${r.state}${reason ? ` (${reason})` : ""}${r.reason ? `: ${r.reason}` : ""}` }));
     } else if (r.state === "running" && isLost(last.folder)) {
       events.push({ key: `lost:${r.repo}/${last.id}`, kind: "lost", ...at, line: `${r.name}: its ${r.kind} run ${last.id} is running, but its process is gone` });
     }
@@ -79,9 +78,9 @@ export function snapshot(now = Date.now()): Event[] {
   const lists = store.reader();
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
-      if (todos.status(item) !== "open" || !store.needsChris(item)) continue;
-      const reason = reasonOf(item);
-      events.push(hand({ key: `needs-chris:${repo.key}-${item.id}:${item.notes.length}`, kind: "needs-chris", repo: repo.key, item: item.id, ...(reason ? { reason } : {}), line: `${repo.key}-${item.id} ${item.title} waits for Chris: ${item.notes.at(-1) ?? ""}` }));
+      const ask = store.askOf(item);
+      if (todos.status(item) !== "open" || !ask) continue;
+      events.push(hand({ key: `ask:${repo.key}-${item.id}:${item.notes.length}`, kind: "ask", repo: repo.key, item: item.id, reason: ask.reason, line: `${repo.key}-${item.id} ${item.title} waits for Chris (${ask.reason}): ${ask.question || item.notes.at(-1) || ""}` }));
     }
   }
   return events;
@@ -96,21 +95,22 @@ function saveSnapshot(events: Event[]): void {
 
 export type Action =
   | { do: "land"; job: string }
-  | { do: "drop"; job: string; reason: string; waiting_on?: string }
+  | { do: "drop"; job: string; reason: string; after?: string[] }
   | { do: "close"; repo: string; n: number; note: string }
   | { do: "note"; repo: string; n: number; text: string }
   | { do: "add"; repo: string; title: string; body: string }
   | { do: "flake"; repo: string; text: string }
-  | { do: "clear-needs-chris"; repo: string; n: number; note: string; waitingOn?: string }
-  | { do: "edit-goal"; repo: string; n: number; body?: string; waiting_on?: string }
+  | { do: "answer"; repo: string; n: number; note: string; after?: string[] }
+  | { do: "edit-goal"; repo: string; n: number; body?: string; after?: string[] }
   | { do: "tell"; text: string };
 
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 const num = (v: unknown): number | null => (Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : null);
-/** A `<repo>-<n>` ref, or undefined: any other value is ignored, as triage's verdict ignores it. */
-const ref = (v: unknown): string | undefined => {
-  const t = text(v);
-  return t && /^[a-z0-9-]+-\d+$/.test(t) ? t : undefined;
+/** The goal ids (`<repo>-<n>.<k>`) in a string, a comma list or an array: any other value is ignored, as triage's verdict ignores it. */
+const refs = (v: unknown): string[] | undefined => {
+  const all = (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).map((x) => text(x)).filter((x): x is string => !!x);
+  const ok = all.filter((x) => /^[a-z0-9-]+-\d+\.\d+$/.test(x));
+  return ok.length ? ok : undefined;
 };
 
 /** One action from the reply's JSON, or why it is none. */
@@ -118,16 +118,16 @@ function parseAction(raw: any): Action | string {
   if (!raw || typeof raw !== "object") return "not an object";
   const f = (k: string) => text(raw[k]);
   const n = num(raw.n);
-  const wait = ref(raw.waiting_on);
+  const after = refs(raw.after);
   switch (raw.do) {
     case "land": return f("job") ? { do: "land", job: f("job")! } : "land without a job";
-    case "drop": return f("job") && f("reason") ? { do: "drop", job: f("job")!, reason: f("reason")!, ...(wait ? { waiting_on: wait } : {}) } : "drop without a job and a reason";
+    case "drop": return f("job") && f("reason") ? { do: "drop", job: f("job")!, reason: f("reason")!, ...(after ? { after } : {}) } : "drop without a job and a reason";
     case "close": return f("repo") && n && f("note") ? { do: "close", repo: f("repo")!, n, note: f("note")! } : "close without a repo, n and note";
     case "note": return f("repo") && n && f("text") ? { do: "note", repo: f("repo")!, n, text: f("text")! } : "note without a repo, n and text";
     case "add": return f("repo") && f("title") ? { do: "add", repo: f("repo")!, title: f("title")!, body: f("body") ?? "" } : "add without a repo and a title";
     case "flake": return f("repo") && f("text") ? { do: "flake", repo: f("repo")!, text: f("text")! } : "flake without a repo and text";
-    case "clear-needs-chris": return f("repo") && n && f("note") ? { do: "clear-needs-chris", repo: f("repo")!, n, note: f("note")!, ...(f("waiting_on") ? { waitingOn: f("waiting_on")! } : {}) } : "clear-needs-chris without a repo, n and note";
-    case "edit-goal": return f("repo") && n && (f("body") || wait) ? { do: "edit-goal", repo: f("repo")!, n, ...(f("body") ? { body: f("body")! } : {}), ...(wait ? { waiting_on: wait } : {}) } : "edit-goal without a repo, n, and a body or waiting_on";
+    case "answer": return f("repo") && n && f("note") ? { do: "answer", repo: f("repo")!, n, note: f("note")!, ...(after ? { after } : {}) } : "answer without a repo, n and note";
+    case "edit-goal": return f("repo") && n && (f("body") || after) ? { do: "edit-goal", repo: f("repo")!, n, ...(f("body") ? { body: f("body")! } : {}), ...(after ? { after } : {}) } : "edit-goal without a repo, n, and a body or after";
     case "tell": return f("text") ? { do: "tell", text: f("text")! } : "tell without text";
     default: return `unknown action ${JSON.stringify(raw.do)}`;
   }
@@ -144,9 +144,9 @@ export function parseReply(output: string): (Action | string)[] | string {
 }
 
 export const describe = (a: Action): string =>
-  a.do === "land" ? `land ${a.job}` : a.do === "drop" ? `drop ${a.job}: ${a.reason}${a.waiting_on ? ` (waits on ${a.waiting_on})` : ""}` : a.do === "close" ? `close ${a.repo}-${a.n}: ${a.note}` : a.do === "note" ? `note ${a.repo}-${a.n}: ${a.text}`
-  : a.do === "add" ? `add ${a.repo}: ${a.title}` : a.do === "flake" ? `flake ${a.repo}: ${a.text}` : a.do === "clear-needs-chris" ? `clear-needs-chris ${a.repo}-${a.n}: ${a.note}${a.waitingOn ? ` (waits on ${a.waitingOn})` : ""}`
-  : a.do === "edit-goal" ? `edit-goal ${a.repo}-${a.n}${a.waiting_on ? ` (waits on ${a.waiting_on})` : ""}` : `tell: ${a.text}`;
+  a.do === "land" ? `land ${a.job}` : a.do === "drop" ? `drop ${a.job}: ${a.reason}${a.after ? ` (after ${a.after.join(", ")})` : ""}` : a.do === "close" ? `close ${a.repo}-${a.n}: ${a.note}` : a.do === "note" ? `note ${a.repo}-${a.n}: ${a.text}`
+  : a.do === "add" ? `add ${a.repo}: ${a.title}` : a.do === "flake" ? `flake ${a.repo}: ${a.text}` : a.do === "answer" ? `answer ${a.repo}-${a.n}: ${a.note}${a.after ? ` (after ${a.after.join(", ")})` : ""}`
+  : a.do === "edit-goal" ? `edit-goal ${a.repo}-${a.n}${a.after ? ` (after ${a.after.join(", ")})` : ""}` : `tell: ${a.text}`;
 
 const MAX_FILE = 4000;
 const clip = (s: string) => (s.length > MAX_FILE ? `…${s.slice(-MAX_FILE)}` : s);
@@ -174,21 +174,21 @@ function context(e: Event, jobs: Job[]): string {
 }
 
 export function prompt(events: Event[], jobs = allJobs()): string {
-  const handedReasons = Object.keys(readStanding()).filter((r) => handed(r));
+  const handedReasons = Object.keys(readAlways()).filter((r) => handed(r));
   const handedRule = handedReasons.length
-    ? `\n- Chris has handed these reasons to you: ${handedReasons.join(", ")}. Decide every event marked handed yourself: land, drop, clear-needs-chris, edit-goal or close, by the rules above; do not send it back to Chris.`
+    ? `\n- Chris has handed these reasons to you: ${handedReasons.join(", ")}. Decide every event marked handed yourself: land, drop, answer, edit-goal or close, by the rules above; do not send it back to Chris.`
     : "";
   return `You are the factory's firefighter. You read what went wrong and say what to do; the code does it. You have read-only tools (Read, Grep, Glob, and Bash for \`aleph jobs\`, \`aleph issue show|list\`, \`aleph report\`, \`git log|show|diff\`). Change nothing yourself.
 
 # The rules
 
-- Land a held run once both reviews have a verdict and say land, unless its diff changes a held security path (${SECURITY_PATHS.join(", ")}, or REVIEW2_SANDBOX in jobs/lib/review2.ts). The code refuses those and sends them to Chris${standing("firefighter")?.action === "land" ? ", except that Chris has let you land them" : ""}.
+- Land a held run once both reviews have a verdict and say land, unless its diff changes a held security path (${SECURITY_PATHS.join(", ")}, or REVIEW2_SANDBOX in jobs/lib/review2.ts). The code refuses those and sends them to Chris${always("firefighter")?.action === "land" ? ", except that Chris has let you land them" : ""}.
 - Drop a run a reviewer sent back, with the reviewer's reason as the drop's reason: it becomes the next run's note.
 - A land with a merge conflict, a run that loops with no commit, or a goal that is already met on main is fixed without Chris: drop the first two; for a goal already met on main use close (it drops the open job and marks the issue done), never sent to Chris.
-- A how-to-build question (code structure, which module, naming, test shape, whether to wait for an issue) is yours to decide: clear-needs-chris with the decision. A product choice (what the product does for Chris, what he sees, what it costs, what comes first) stays with Chris, unless Chris has handed its reason to you.
+- A how-to-build question (code structure, which module, naming, test shape, whether to wait for an issue) is yours to decide: answer with the decision. A product choice (what the product does for Chris, what he sees, what it costs, what comes first) stays with Chris, unless Chris has handed its reason to you.
 - File a follow-up as an issue with add, except a flaky, slow or timing-out test that is not the run's own goal: that is a \`flake\` action, never an \`add\`. The code adds it as a note on the repo's flake tracker; Chris picks from that issue which flakes get a goal.
-- When a run cannot pass until another open issue lands, drop it with \`waiting_on\` set to that issue, or use edit-goal with \`waiting_on\`. A note or a drop reason alone does not stop a rerun.
-- When you clear a mark on an item whose waiting_on is done or wrong, set waiting_on to the open issue that really blocks it.
+- When a run cannot pass until another open goal lands, drop it with \`after\` set to that goal, or use edit-goal with \`after\`. A note or a drop reason alone does not stop a rerun.
+- When you answer an Ask on an item whose \`after\` is done or wrong, set \`after\` to the open goals that really block it.
 - At most ${MAX_ACTIONS} actions. No action is a fine answer when nothing needs doing.${handedRule}
 
 # What is new since the last look
@@ -197,13 +197,13 @@ ${events.map((e) => `## ${e.kind}: ${e.line}\n\n${context(e, jobs)}`).join("\n\n
 
 Reply with one JSON object and nothing else: {"actions": [ ... ]}, each action one of
 - {"do": "land", "job": "<job name>"}
-- {"do": "drop", "job": "<job name>", "reason": "<why; the next run reads it>", "waiting_on": "<repo>-<n>, optional: the open issue this waits for>"}
+- {"do": "drop", "job": "<job name>", "reason": "<why; the next run reads it>", "after": ["<repo>-<n>.<k>", "optional: the open goals this waits for"]}
 - {"do": "close", "repo": "<repo>", "n": <issue number>, "note": "<why the goal is already met>"}
 - {"do": "note", "repo": "<repo>", "n": <issue number>, "text": "<note>"}
 - {"do": "add", "repo": "<repo>", "title": "<title>", "body": "<body>"}
 - {"do": "flake", "repo": "<repo>", "text": "<test file> > <test name>: <what was seen>"}
-- {"do": "clear-needs-chris", "repo": "<repo>", "n": <issue number>, "note": "<the decision>", "waiting_on": "<optional <repo>-<n>: the open issue it really waits for>"}
-- {"do": "edit-goal", "repo": "<repo>", "n": <issue number>, "body": "<the new goal body, optional>", "waiting_on": "<repo>-<n>, optional: the open issue this waits for>"}
+- {"do": "answer", "repo": "<repo>", "n": <issue number>, "note": "<the decision>", "after": ["<optional <repo>-<n>.<k>: the open goals it really waits for>"]}
+- {"do": "edit-goal", "repo": "<repo>", "n": <issue number>, "body": "<the new goal body, optional>", "after": ["<repo>-<n>.<k>", "optional: the open goals this waits for"]}
 - {"do": "tell", "text": "<one sentence for Chris>"}
 `;
 }
@@ -226,11 +226,11 @@ export function securityPath(repo: Repo, branch: string | undefined): string | n
   return hit ?? (c.review2Sandbox ? "REVIEW2_SANDBOX in jobs/lib/review2.ts" : null);
 }
 
-/** Whether a `needs-chris` item's question is a product choice: its decision's kind is `product` (triage's `chris` verdict writes that kind). An item with no decision is not one. */
-export const isProductChoice = (item: todos.Item): boolean => readDecision(item)?.kind === "product";
+/** Whether an item's Ask is a product choice: it offers options to pick from (triage's `chris` verdict and the rescue write them). A plain question has none. */
+export const isProductChoice = (item: todos.Item): boolean => (store.askOf(item)?.options.length ?? 0) > 0;
 
-/** The reason code a `needs-chris` item waits for: its `fm.reason`, or `decision` for a triage question with none. */
-export const reasonOf = (item: todos.Item): string | null => (typeof item.fm.reason === "string" ? item.fm.reason : isProductChoice(item) ? "decision" : null);
+/** The reason code an item's Ask waits for, or null when it has none. */
+export const reasonOf = (item: todos.Item): string | null => store.askOf(item)?.reason ?? null;
 
 /** How actions reach the factory; each returns the refusal, or null. Tests replace land and drop. */
 export interface Ports {
@@ -244,7 +244,7 @@ export const defaultPorts: Ports = {
   tell,
 };
 
-/** The result of one action: applied, refused (a line for Chris), or sent to Chris as needs-chris. */
+/** The result of one action: applied, refused (a line for Chris), or sent to Chris as an Ask. */
 type Outcome = { applied: string } | { refused: string } | { chris: string };
 
 const log = (line: string) => factoryLog(`firefighter: ${line}`);
@@ -263,10 +263,10 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
       const why = await ports.drop(a.job, a.reason);
       if (why) return { refused: `${describe(a)}: ${why}` };
       writeRerun(a.job, `The last run was dropped by the firefighter: ${a.reason}`);
-      // A run that cannot pass until another issue lands waits on it: the dispatch reads waiting_on and starts nothing until it is done.
-      const waits = a.waiting_on && typeof issue === "number" ? await refusal(async () => issues.edit(repo, issue, { waitingOn: a.waiting_on })) : null;
-      if (issue !== undefined) store.note(repo, issue, `firefighter: dropped ${a.job}: ${a.reason}${a.waiting_on ? `; waits on ${a.waiting_on}` : ""}`);
-      return waits ? { refused: `${describe(a)}: dropped, but waiting_on not set: ${waits}` } : { applied: describe(a) };
+      // A run that cannot pass until another goal lands waits on it: the dispatch reads the goal's after and starts nothing until it is done.
+      const waits = a.after && typeof issue === "number" ? await refusal(async () => issues.edit(repo, issue, { after: a.after })) : null;
+      if (issue !== undefined) store.note(repo, issue, `firefighter: dropped ${a.job}: ${a.reason}${a.after ? `; after ${a.after.join(", ")}` : ""}`);
+      return waits ? { refused: `${describe(a)}: dropped, but after not set: ${waits}` } : { applied: describe(a) };
     }
     const agent = runs.findLast((e) => e.run.kind === "agent" || e.run.kind === "recheck") ?? last;
     if (!reviewVerdict(readFile(agent, "review.md") ?? "")) return { refused: `${describe(a)}: the reviewer has no verdict yet` };
@@ -275,15 +275,15 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     if (r2.verdict !== "land") return { refused: `${describe(a)}: review2 says ${r2.verdict}${r2.reason ? ` (${r2.reason})` : ""}` };
     const held = securityPath(repo, agent.run.branch);
     // Chris let the firefighter land held security paths: the check is skipped, and the land is logged. An unknown branch still goes to Chris.
-    const granted = held !== null && held !== "unknown" && standing("firefighter")?.action === "land";
-    if (held && granted) logStanding("firefighter", "land", a.job);
+    const granted = held !== null && held !== "unknown" && always("firefighter")?.action === "land";
+    if (held && granted) logAlways("firefighter", "land", a.job);
     if (held && !granted) {
       const sentence = held === "unknown"
         ? `${a.job} cannot be checked for held security paths, as its branch is gone, so it needs you to land or drop it.`
         : `${a.job} changes ${held}, a held security path, so it needs your review before it lands.`;
-      markNeedsChris(last, sentence);
-      if (issue !== undefined) store.note(repo, issue, `needs-chris: ${sentence}`, { label: store.NEEDS_CHRIS, reason: "firefighter" });
-      await ports.tell(`${repo.key}/${a.job}: needs-chris: ${sentence}`);
+      markAsked(last, sentence);
+      if (issue !== undefined) store.note(repo, issue, `asks Chris: ${sentence}`, { ask: { kind: "approval", reason: "held-path", question: sentence, options: [], why: [] } });
+      await ports.tell(`${repo.key}/${a.job}: asks Chris: ${sentence}`);
       return { chris: sentence };
     }
     const why = await ports.land(a.job);
@@ -313,17 +313,16 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     const why = store.note(repo, a.n, `firefighter: ${a.text}`);
     return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
   }
-  if (a.do === "clear-needs-chris") {
-    if (!store.needsChris(item)) return { refused: `${describe(a)}: it is not labelled needs-chris` };
-    // The current mark's reason decides: a `decision` mark, or a triage question on a mark with another reason that Chris has not handed, is Chris's.
-    const reason = reasonOf(item);
-    const productChoice = reason === "decision" || (isProductChoice(item) && !(reason !== null && handed(reason)));
-    if (productChoice && !handed("decision")) return { refused: `${describe(a)}: its question is a product choice, which is Chris's` };
-    const why = await refusal(async () => issues.decide(repo, a.n, `firefighter decided: ${a.note}`, a.waitingOn ? { waitingOn: a.waitingOn } : {}));
+  if (a.do === "answer") {
+    const ask = store.askOf(item);
+    if (!ask) return { refused: `${describe(a)}: it has no Ask` };
+    // A question that offers options is a product choice: it is Chris's unless he handed its reason to the firefighter.
+    if (isProductChoice(item) && !handed(ask.reason)) return { refused: `${describe(a)}: its question is a product choice, which is Chris's` };
+    const why = await refusal(async () => issues.decide(repo, a.n, `firefighter decided: ${a.note}`, a.after ? { after: a.after } : {}));
     return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
   }
   if (store.kindOf(item) !== "goal") return { refused: `${describe(a)}: it is not a goal` };
-  const why = await refusal(async () => issues.edit(repo, a.n, { ...(a.body !== undefined ? { body: a.body } : {}), ...(a.waiting_on ? { waitingOn: a.waiting_on } : {}) }));
+  const why = await refusal(async () => issues.edit(repo, a.n, { ...(a.body !== undefined ? { body: a.body } : {}), ...(a.after ? { after: a.after } : {}) }));
   return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
 }
 
@@ -338,7 +337,7 @@ export async function applyActions(actions: (Action | string)[], ports: Ports = 
       try { o = await applyOne(a, ports); } catch (e: any) { o = { refused: `${describe(a)}: ${e?.message ?? e}` }; }
     }
     if ("applied" in o) { out.applied.push(o.applied); log(o.applied.startsWith("tell: ") ? o.applied : `did ${o.applied}`); }
-    else if ("chris" in o) { out.chris.push(o.chris); log(`needs-chris: ${o.chris}`); }
+    else if ("chris" in o) { out.chris.push(o.chris); log(`asks Chris: ${o.chris}`); }
     else { out.refused.push(o.refused); log(`tell: refused ${o.refused}`); }
   }
   return out;

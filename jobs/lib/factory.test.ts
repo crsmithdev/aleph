@@ -2,10 +2,11 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { labels as itemLabels, readList, writeList } from "../../todo/lib/store.ts";
+import { askOf, clearAsk, labels as itemLabels, readList, writeList } from "../../todo/lib/store.ts";
+import * as store from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/issues.ts";
 import * as todos from "../../todo/lib/todo.ts";
-import { correctionsDue, dispatchGoals, episodeStep, report, gates, notReady, waitReason, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
+import { AWAITING_CAP, correctionsDue, dispatchGoals, episodeStep, report, gates, notReady, waitReason, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
 import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -197,7 +198,7 @@ const entry = (kind: string, state: string, reason?: string): any =>
 test("gates returns the first reason, in the order pause, hold, probe, live cap, day cap, waiting", () => {
   const stuck = [[entry("agent", "stuck")]];
   const order = () => gates({ jobs: stuck as any })?.gate;
-  Object.assign(process.env, { ALEPH_LIVE_CAP: "0", ALEPH_DAY_CAP: "0", ALEPH_WAITING_CAP: "0" });
+  Object.assign(process.env, { ALEPH_LIVE_CAP: "0", ALEPH_DAY_CAP: "0", ALEPH_AWAITING_CAP: "0" });
   try {
     setPaused(true);
     saveProbe({ at: "2026-10-28T00:00:00Z", ok: false, failed: ["x"] });
@@ -210,14 +211,14 @@ test("gates returns the first reason, in the order pause, hold, probe, live cap,
     process.env.ALEPH_LIVE_CAP = "5";
     expect(gates({ jobs: [] })?.gate).toBe("day");
     process.env.ALEPH_DAY_CAP = "100";
-    expect(gates({ jobs: [] })?.gate).toBe("waiting");
-    process.env.ALEPH_WAITING_CAP = "5";
+    expect(gates({ jobs: [] })?.gate).toBe("awaiting");
+    process.env.ALEPH_AWAITING_CAP = "5";
     expect(gates({ jobs: [] })).toBeNull();
     // `only` leaves the others out.
     process.env.ALEPH_DAY_CAP = "0";
     expect(gates({ jobs: stuck as any, only: ["day"] })?.gate).toBe("day");
   } finally {
-    delete process.env.ALEPH_WAITING_CAP;
+    delete process.env.ALEPH_AWAITING_CAP;
   }
 });
 
@@ -250,6 +251,7 @@ function mk(name: string, kind: Run["kind"], state: Run["state"], extra: Partial
 }
 const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join("\n") + "\n";
 const notes = (id: number) => readList({ key: "fac" })!.items.find((i) => i.id === id)!.notes.join("\n");
+const ask = (id: number) => askOf(readList({ key: "fac" })!.items.find((i) => i.id === id)!);
 const labels = (id: number) => itemLabels(readList({ key: "fac" })!.items.find((i) => i.id === id)!);
 
 /** Fake actions that log their calls: a drop marks the run dropped, a recheck starts a passed recheck run. */
@@ -335,7 +337,7 @@ test("a fourth no-commit run in a row is not dispatched; the item is labelled ne
   const out = await dispatch(f);
   expect(out.started).toEqual([]);
   expect(out.skipped.join()).toContain("3 runs in a row with no commit");
-  expect(labels(id)).toContain("needs-chris");
+  expect(ask(id)).not.toBeNull();
   expect(notes(id)).toContain("ended with no commit");
   expect(readList({ key: "fac" })!.items.find((i) => i.id === id)!.fm.reason).toBe("no-commit");
   await dispatch(f);
@@ -345,8 +347,8 @@ test("a fourth no-commit run in a row is not dispatched; the item is labelled ne
 const noCommitRuns = (id: number, n: number, ago: number) => {
   for (let i = 0; i < n; i++) mk(`fac-${id}`, "agent", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: new Date(Date.now() - (ago - i) * 1000).toISOString() });
 };
-const unlabel = (id: number) => change(id, (item) => todos.edit(item, { labels: itemLabels(item).filter((l) => l !== "needs-chris") }));
-const chrisNotes = (id: number) => notes(id).split("needs-chris:").length - 1;
+const unlabel = (id: number) => change(id, (item) => clearAsk(item));
+const chrisNotes = (id: number) => notes(id).split("asks Chris:").length - 1;
 
 test("removing needs-chris restarts the no-commit streak; three more no-commit runs label it again", async () => {
   const id = goal();
@@ -354,7 +356,7 @@ test("removing needs-chris restarts the no-commit streak; three more no-commit r
   noCommitRuns(id, 3, 7200);
   const f = fakes();
   expect((await dispatch(f)).started).toEqual([]);
-  expect(labels(id)).toContain("needs-chris");
+  expect(ask(id)).not.toBeNull();
   await new Promise((r) => setTimeout(r, 20));
   await unlabel(id);
   expect((await dispatch(f)).started).toEqual([`fac-${id}`]);
@@ -364,7 +366,7 @@ test("removing needs-chris restarts the no-commit streak; three more no-commit r
   const g = fakes();
   expect((await dispatch(g)).started).toEqual([]);
   expect(g.specs).toEqual([]);
-  expect(labels(id)).toContain("needs-chris");
+  expect(ask(id)).not.toBeNull();
   expect(chrisNotes(id)).toBe(2);
 });
 
@@ -375,7 +377,7 @@ test("while needs-chris stays on the item, dispatches start nothing and write on
   await dispatch(f);
   await dispatch(f);
   expect(f.specs).toEqual([]);
-  expect(labels(id)).toContain("needs-chris");
+  expect(ask(id)).not.toBeNull();
   expect(chrisNotes(id)).toBe(1);
 });
 
@@ -408,7 +410,7 @@ test("a done item gets no run and no run-cap note, even with three recent runs",
   const f = fakes();
   await dispatch(f);
   expect(f.specs).toEqual([]);
-  expect(labels(id)).not.toContain("needs-chris");
+  expect(ask(id)).toBeNull();
 });
 
 // The run cap: a fourth agent run of a goal in 60 minutes is not started; one needs-chris note says so.
@@ -421,12 +423,12 @@ test("a fourth start in an hour is skipped with one needs-chris note, and the go
   expect(out.started).toEqual([]);
   expect(out.skipped.join()).toContain("3 runs in the last hour");
   expect(f.specs).toEqual([]);
-  expect(labels(id)).toContain("needs-chris");
+  expect(ask(id)).not.toBeNull();
   expect(notes(id)).toContain(RUN_CAP_NOTE);
   await dispatch(f);
   await dispatch(f);
   expect(f.specs).toEqual([]);
-  expect(notes(id).split("needs-chris:").length - 1).toBe(1);
+  expect(notes(id).split("asks Chris:").length - 1).toBe(1);
 });
 
 const recent = (id: number, n: number) => {
@@ -440,20 +442,20 @@ test("a cap mark with the label holds the goal below the hour count; once Chris 
   const f = fakes();
   await dispatch(f);
   expect(existsSync(capPath(id))).toBe(true);
-  expect(notes(id).split("needs-chris:").length - 1).toBe(1);
+  expect(notes(id).split("asks Chris:").length - 1).toBe(1);
   // Old starts leave the window: one start 60 seconds ago.
   const g = goal();
   mk(`fac-${g}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - 60_000).toISOString() });
   mkdirSync(join(base, "factory", "cap"), { recursive: true });
   writeFileSync(capPath(g), "x\n");
-  await change(g, (item) => todos.edit(item, { labels: ["goal", "needs-chris"] }));
+  await change(g, (item) => { todos.edit(item, { labels: ["goal"] }); store.setAsk(item, { kind: "input", reason: "run-cap", question: "q", options: [], why: [] }); });
   const out = await dispatch(fakes());
   expect(out.started).not.toContain(`fac-${g}`);
-  expect(out.skipped.join()).toContain("run cap holds");
-  expect(notes(g)).not.toContain("needs-chris:");
+  // An item with an Ask is no goal: the dispatch lists nothing to skip.
+  expect(notes(g)).not.toContain("asks Chris:");
   // Chris reruns: the label is removed while 3 starts are in the hour.
   recent(g, 2);
-  await change(g, (item) => todos.edit(item, { labels: ["goal"] }));
+  await change(g, (item) => store.clearAsk(item));
   const f2 = fakes();
   const out2 = await dispatch(f2);
   expect(out2.started).toEqual([`fac-${g}`]);
@@ -463,9 +465,9 @@ test("a cap mark with the label holds the goal below the hour count; once Chris 
   const out3 = await dispatch(f2);
   expect(out3.started).toEqual([]);
   expect(existsSync(capPath(g))).toBe(true);
-  expect(notes(g).split("needs-chris:").length - 1).toBe(1);
+  expect(notes(g).split("asks Chris:").length - 1).toBe(1);
   expect(notes(g)).toContain("until Chris reruns it");
-  expect(labels(g)).toContain("needs-chris");
+  expect(ask(g)).not.toBeNull();
 });
 
 test("a failed run-cap note leaves no cap mark", async () => {
@@ -477,7 +479,7 @@ test("a failed run-cap note leaves no cap mark", async () => {
   const f = fakes();
   const out = await dispatch(f).finally(() => sh(base, "chmod", "-R", "u+w", objects));
   expect(out.started).toEqual([]);
-  expect(labels(id)).not.toContain("needs-chris");
+  expect(ask(id)).toBeNull();
   expect(existsSync(capPath(id))).toBe(false);
 });
 
@@ -488,12 +490,38 @@ test("a run that is three runs old, or three runs of other goals, does not hold 
   const f = fakes();
   const out = await dispatch(f);
   expect(out.started).toEqual([`fac-${id}`]);
-  expect(labels(id)).not.toContain("needs-chris");
+  expect(ask(id)).toBeNull();
+});
+
+test("ALEPH_AWAITING_CAP=1 with one awaiting run skips the next start with the awaiting gate's line", async () => {
+  const waiter = goal();
+  const next = goal();
+  mk(`fac-${waiter}`, "agent", "awaiting", { ask: { kind: "input", reason: "question", question: "q?", options: [], why: [] } });
+  process.env.ALEPH_AWAITING_CAP = "1";
+  try {
+    const f = fakes();
+    const out = await dispatch(f);
+    expect(out.started).toEqual([]);
+    expect(out.skipped).toContain(`fac-${next}: 1 runs wait for Chris`);
+    expect(f.specs).toEqual([]);
+  } finally {
+    delete process.env.ALEPH_AWAITING_CAP;
+  }
+});
+
+test("caps.json awaiting sets the cap, and the old waiting key still does", () => {
+  mkdirSync(join(base, "factory"), { recursive: true });
+  writeFileSync(join(base, "factory", "caps.json"), JSON.stringify({ awaiting: 2 }));
+  expect(AWAITING_CAP()).toBe(2);
+  writeFileSync(join(base, "factory", "caps.json"), JSON.stringify({ waiting: 3 }));
+  expect(AWAITING_CAP()).toBe(3);
+  rmSync(join(base, "factory", "caps.json"));
+  expect(AWAITING_CAP()).toBe(5);
 });
 
 test("the run cap holds with a standing Rerun: the rerun of the third run is the fourth start and gets the note", async () => {
   mkdirSync(join(base, "factory"), { recursive: true });
-  writeFileSync(join(base, "factory", "standing.json"), JSON.stringify({ rescue: { action: "recommended", at: new Date().toISOString() } }));
+  writeFileSync(join(base, "factory", "always.json"), JSON.stringify({ rescue: { action: "recommended", at: new Date().toISOString() } }));
   const id = goal();
   mk(`fac-${id}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - 120_000).toISOString() });
   mk(`fac-${id}`, "agent", "dropped", { reason: "time box", started: new Date(Date.now() - 60_000).toISOString() });
@@ -503,9 +531,9 @@ test("the run cap holds with a standing Rerun: the rerun of the third run is the
   expect(f.calls).toContain(`drop fac-${id}`);
   expect(f.calls.filter((c) => c.startsWith("start"))).toEqual([]);
   expect(out.skipped.join()).toContain("3 runs in the last hour");
-  expect(labels(id)).toContain("needs-chris");
+  expect(ask(id)).not.toBeNull();
   expect(notes(id)).toContain(RUN_CAP_NOTE);
-  expect(notes(id)).toContain("standing: Rerun");
+  expect(notes(id)).toContain("always: Rerun");
 });
 
 // A claim that the goal is met is checked on origin/main: a new commit there, so the baseline is run again.
@@ -527,7 +555,7 @@ test("no commit and the worker says the goal is already met, the checks pass on 
   expect(out.held).toBeUndefined();
   expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
   expect(notes(id)).toContain("says the goal is already met (timeline.ts uses itemTimes), and the checks pass on origin/main");
-  expect(labels(id)).not.toContain("needs-chris");
+  expect(ask(id)).toBeNull();
   expect(allRuns()[0].run.reason).toContain("the item is done");
 });
 
@@ -540,7 +568,7 @@ test("no commit and the worker says the goal is already met, but main is red: dr
   expect(f.calls).toEqual([`drop fac-${id}`]);
   expect(notes(id)).toContain("but main is red at");
   expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
-  expect(labels(id)).not.toContain("needs-chris");
+  expect(ask(id)).toBeNull();
   sh(join(base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", "fix main");
   sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
   await withChecks(f, async () => null);
@@ -567,7 +595,7 @@ test("a met goal: the claim waits on an unchecked main, then the next dispatch o
   await withChecks(f, async () => null);
   expect(f.calls).toEqual([`drop fac-${id}`]);
   expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
-  expect(labels(id)).not.toContain("needs-chris");
+  expect(ask(id)).toBeNull();
 });
 
 for (const red of [false, true]) {
@@ -579,7 +607,7 @@ for (const red of [false, true]) {
     const f = fakes();
     await withChecks(f, async () => (red ? "tests failed" : null));
     expect(f.calls).toEqual([`drop fac-${id}`]);
-    expect(labels(id)).not.toContain("needs-chris");
+    expect(ask(id)).toBeNull();
     if (red) {
       expect(labels(id)).not.toContain("goal");
       expect(todos.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
@@ -614,7 +642,7 @@ test("the second no-commit run with no claim goes back to triage: the goal label
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`, `drop fac-${id}`]);
   expect(out.held).toBeUndefined();
   expect(labels(id)).not.toContain("goal");
-  expect(labels(id)).not.toContain("needs-chris");
+  expect(ask(id)).toBeNull();
   expect(notes(id)).toContain("went back to triage");
   expect(notes(id)).toContain("line 11 | line 12");
   expect(notes(id)).toContain("line 30");
@@ -633,7 +661,7 @@ test("a repeated no-commit run on an issue already sent back to triage once gets
   await change(id, (item) => todos.edit(item, { labels: ["goal"] }));
   mk(`fac-${id}`, "agent", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
   await dispatch(f);
-  expect(labels(id)).toContain("needs-chris");
+  expect(ask(id)).not.toBeNull();
   expect(labels(id)).toContain("goal");
 });
 
@@ -660,12 +688,12 @@ test("the second time-box stuck run on one goal gets needs-chris and no third ru
   mk(`fac-${id}`, "agent", "stuck", { reason: "time box" });
   const out = await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(labels(id)).toContain("needs-chris");
-  expect(notes(id)).toContain("needs-chris: fac-");
+  expect(ask(id)).not.toBeNull();
+  expect(notes(id)).toContain("asks Chris: fac-");
   expect(out.held).toBeUndefined();
   await dispatch(f);
   expect(f.calls).toHaveLength(2);
-  expect(notes(id).match(/needs-chris:/g)).toHaveLength(1);
+  expect(notes(id).match(/asks Chris:/g)).toHaveLength(1);
 });
 
 test("an infrastructure failure of an agent run is rechecked once; of a land, landed again once", async () => {
@@ -699,7 +727,7 @@ test("a second infrastructure failure of one goal gets needs-chris", async () =>
   mk(`fac-${id}`, "land", "failed", { reason: "fetch failed", job: b[0].run.job });
   await dispatch(f);
   expect(f.calls).toEqual([`land fac-${id}`]);
-  expect(labels(id)).toContain("needs-chris");
+  expect(ask(id)).not.toBeNull();
 });
 
 test("failed checks after a land merge, first time: dropped and the goal reruns once on the new main", async () => {
@@ -725,25 +753,27 @@ test("a land that failed with a merge conflict is dropped and the goal reruns; t
   expect(out.held).toBeUndefined();
   expect(f.specs[0]).toContain("merge conflict in a.ts, b.ts");
   expect(notes(id)).toContain("merge conflict in a.ts, b.ts");
-  expect(labels(id)).not.toContain("needs-chris");
+  expect(ask(id)).toBeNull();
 
   const b = mk(`fac-${id}`, "agent", "passed", { land: true });
   mk(`fac-${id}`, "land", "failed", { reason: "merge conflict", conflicts: ["a.ts"], job: b.job });
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(labels(id)).toContain("needs-chris");
+  expect(ask(id)).not.toBeNull();
 });
 
-test("a run that is not safe is labelled needs-chris with a question and does not hold the factory; another goal starts", async () => {
+test("a run that is not safe gets an Ask with a question and does not hold the factory; another goal starts", async () => {
   const id = goal();
   const other = goal();
   mk(`fac-${id}`, "agent", "stuck", { reason: "tests failed after 2 fix rounds" });
   const f = fakes();
   const out = await dispatch(f);
-  expect(labels(id)).toContain("needs-chris");
-  expect(notes(id)).toContain("needs-chris: fac-");
+  expect(ask(id)).not.toBeNull();
+  expect(notes(id)).toContain("asks Chris: fac-");
   const stored = () => readList({ key: "fac" })!.items.find((i) => i.id === id)!;
-  expect(stored().fm.reason).toBe("rescue");
+  expect(stored().fm).toMatchObject({ ask: "input", reason: "rescue", recommended: "Rerun" });
+  expect(askOf(stored())!.options.map((o) => o.label)).toEqual(["Rerun", "Another way"]);
+  expect(existsSync(join(readdirSync(join(base, "jobs")).map((d) => join(base, "jobs", d))[0], "asked"))).toBe(true);
   issues.decide({ key: "fac" }, id, "drop it");
   expect("reason" in stored().fm).toBe(false);
   expect(out.held).toBeUndefined();
@@ -752,17 +782,17 @@ test("a run that is not safe is labelled needs-chris with a question and does no
   expect(readRun(allRuns()[0].folder)!.state).toBe("stuck");
 });
 
-test("a standing rescue: recommended drops the unsafe stuck run, no needs-chris, a standing: Rerun note", async () => {
+test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an always: Rerun note", async () => {
   mkdirSync(join(base, "factory"), { recursive: true });
-  writeFileSync(join(base, "factory", "standing.json"), JSON.stringify({ rescue: { action: "recommended", at: new Date().toISOString() } }));
+  writeFileSync(join(base, "factory", "always.json"), JSON.stringify({ rescue: { action: "recommended", at: new Date().toISOString() } }));
   const id = goal();
   mk(`fac-${id}`, "agent", "stuck", { reason: "tests failed after 2 fix rounds" });
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toContain(`drop fac-${id}`);
-  expect(labels(id)).not.toContain("needs-chris");
-  expect(notes(id)).toContain("standing: Rerun");
-  expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain(`standing: rescue: recommended on fac-${id}`);
+  expect(ask(id)).toBeNull();
+  expect(notes(id)).toContain("always: Rerun");
+  expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain(`always: rescue: recommended on fac-${id}`);
 });
 
 test("without rescue actions a stuck run still holds the factory", async () => {
@@ -832,7 +862,9 @@ test("waitReason: waits_on names only the open refs", () => {
   expect(r).toEqual({ kind: "waits_on", ids: ["fac-2"], text: "Waits on fac-2" });
 });
 
-test("waitReason: needs-chris takes the last note's reason", () => {
+test("waitReason: an Ask gives its question; an old needs-chris label gives the last note's reason", () => {
+  const asked = mkItem({ ask: "input", reason: "no-commit", question: "q?" });
+  expect(waitReason(repoX, asked, { done: () => true })).toEqual({ kind: "needs-chris", reason: "q?", text: "Waits for you: q?" });
   const item = mkItem({ labels: ["needs-chris"] }, ["- 2026-10-30 10:00: needs-chris: the last 3 runs ended with no commit"]);
   const r = waitReason(repoX, item, { done: () => true });
   expect(r).toEqual({ kind: "needs-chris", reason: "the last 3 runs ended with no commit", text: "Waits for you: the last 3 runs ended with no commit" });

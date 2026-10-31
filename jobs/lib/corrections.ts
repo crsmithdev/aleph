@@ -12,7 +12,7 @@ import { decide } from "../../hooks/lib/jev.ts";
 import { fetchObservations } from "../../hooks/lib/otlp.ts";
 import { factoryLog, factoryDir } from "./factory.ts";
 import { allRuns, loadRegistry, type Repo } from "./ledger.ts";
-import { logStanding, standing } from "./standing.ts";
+import { always, logAlways } from "./always.ts";
 import { file as fileIssues, type Place } from "../../todo/lib/store.ts";
 
 export const CORRECTION_AT = 0.7;
@@ -334,18 +334,18 @@ export const standingKey = (l: Lesson): string => `proposal-${l.kind ?? "skill"}
 function standingProposals(made: Lesson[]): void {
   for (const l of made) {
     const reason = standingKey(l);
-    const action = standing(reason)?.action;
+    const action = always(reason)?.action;
     if (action === "approve") {
       // The lesson is about aleph itself: the first registry repo that runs in the sandbox.
       const repo = Object.values(loadRegistry()).find((r) => r.sandbox);
       if (!repo) { factoryLog(`standing: ${reason}: approve on ${l.id} failed: no sandboxed repo in the registry`); continue; }
       const ref = approve(l.id, repo);
-      if (ref.startsWith(`${repo.key}-`)) logStanding(reason, "approve", ref);
+      if (ref.startsWith(`${repo.key}-`)) logAlways(reason, "approve", ref);
       else factoryLog(`standing: ${reason}: approve on ${l.id} failed: ${ref}`);
     } else if (action === "decline") {
       const refusal = decline(l.id);
       if (refusal) factoryLog(`standing: ${reason}: decline on ${l.id} failed: ${refusal}`);
-      else logStanding(reason, "decline", l.id);
+      else logAlways(reason, "decline", l.id);
     }
   }
 }

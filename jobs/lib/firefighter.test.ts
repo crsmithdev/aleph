@@ -3,8 +3,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { areasOf, labels as storeLabels, readList, writeList } from "../../todo/lib/store.ts";
-import { writeDecision, type Decision } from "./decision.ts";
+import { areasOf, askOf, labels as storeLabels, readList, setAsk, writeList } from "../../todo/lib/store.ts";
+import type { Ask } from "./ask.ts";
 import { firefighterStep } from "./factory.ts";
 import { applyActions, defaultPorts, parseReply, prompt, snapshot, type Ports } from "./firefighter.ts";
 import { readRun, stamp, writeRun, type Run } from "./ledger.ts";
@@ -32,7 +32,7 @@ let key = "";
 const repoPath = () => join(base, "repo");
 
 /** A new repo key, ledger and factory directory, with these items in its list. */
-function fresh(items: { title: string; body?: string; labels?: string[]; notes?: string[]; reason?: string; decision?: Decision }[] = []): void {
+function fresh(items: { title: string; body?: string; labels?: string[]; notes?: string[]; ask?: Ask }[] = []): void {
   key = `ff${++n}`;
   writeFileSync(join(base, "repos.json"), JSON.stringify({ [key]: { path: repoPath(), sandbox: true, autoland: false } }));
   process.env.ALEPH_JOBS_DIR = join(base, `jobs${n}`);
@@ -41,13 +41,16 @@ function fresh(items: { title: string; body?: string; labels?: string[]; notes?:
     for (const i of items) {
       const it = todos.addLegacy(doc, i.title, { labels: i.labels, body: i.body });
       for (const note of i.notes ?? []) todos.note(it, note);
-      if (i.reason) it.fm.reason = i.reason;
-      if (i.decision) writeDecision(it, i.decision);
+      if (i.ask) setAsk(it, i.ask);
     }
     return true;
   }, true);
 }
-const decision = (kind: Decision["kind"]): Decision => ({ question: "Which page?", options: [{ label: "A", line: "page A" }, { label: "B", line: "page B" }], recommended: "A", why: [], kind });
+/** An Ask that offers options: a product choice. */
+const choice = (reason = "question"): Ask => ({ kind: "input", reason, question: "Which page?", options: [{ label: "A", line: "page A" }, { label: "B", line: "page B" }], recommended: "A", why: [] });
+/** A plain question with no options: a how-to-build one. */
+const plain = (question = "which module?"): Ask => ({ kind: "input", reason: "question", question, options: [], why: [] });
+const asked = (id: number) => askOf(item(id));
 const item = (id: number) => todos.find(readList({ key })!, id)!;
 const reply = (actions: object[]) => writeFileSync(join(base, "reply.json"), JSON.stringify({ actions }));
 const calls = () => (existsSync(join(base, "calls")) ? readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean).length : 0);
@@ -169,7 +172,7 @@ test("a land by the firefighter writes Held-by: firefighter, not Held-by: Chris"
   expect(trailers).not.toContain("Held-by: Chris");
 });
 
-test("the same run with a diff in jobs/lib/sandbox.ts is not landed: needs-chris and one tell", async () => {
+test("the same run with a diff in jobs/lib/sandbox.ts is not landed: an Ask of approval and one tell", async () => {
   fresh([{ title: "held", labels: ["goal"] }]);
   branch(`b${n}`, "jobs/lib/sandbox.ts");
   const folder = held(`b${n}`);
@@ -177,9 +180,9 @@ test("the same run with a diff in jobs/lib/sandbox.ts is not landed: needs-chris
   const f = await firefighterStep(ports());
   expect(landed).toEqual([]);
   expect(f?.chris.length).toBe(1);
-  expect(storeLabels(item(1))).toContain("needs-chris");
+  expect(asked(1)).toMatchObject({ kind: "approval", reason: "held-path" });
   expect(item(1).notes.at(-1)).toContain("jobs/lib/sandbox.ts");
-  expect(existsSync(join(folder, "needs-chris"))).toBe(true);
+  expect(existsSync(join(folder, "asked"))).toBe(true);
   expect(told.length).toBe(1);
   expect(JSON.parse(told[0]).text).toContain("needs your review");
 });
@@ -241,7 +244,7 @@ test("three runs in 30 minutes are no loop", () => {
 });
 
 test("an 11th action in one reply is not applied", async () => {
-  fresh([{ title: "q", labels: ["needs-chris"], notes: ["needs-chris: which helper?"] }]);
+  fresh([{ title: "q", ask: plain("which helper?") }]);
   reply(Array.from({ length: 11 }, (_, i) => ({ do: "note", repo: key, n: 1, text: `note ${i + 1}` })));
   const f = await firefighterStep(ports());
   expect(f?.applied.length).toBe(10);
@@ -251,16 +254,16 @@ test("an 11th action in one reply is not applied", async () => {
   expect(notes.some((x) => x.includes("note 11"))).toBe(false);
 });
 
-test("clear-needs-chris is refused on a product choice and applied on a how-to-build one", async () => {
+test("answer is refused on a product choice and applied on a how-to-build one", async () => {
   fresh([
-    { title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], decision: decision("product") },
-    { title: "build", labels: ["needs-chris"], notes: ["needs-chris: which module?"] },
+    { title: "product", ask: choice() },
+    { title: "build", ask: plain() },
   ]);
-  reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }, { do: "clear-needs-chris", repo: key, n: 2, note: "put it in x.ts" }]);
+  reply([{ do: "answer", repo: key, n: 1, note: "page A" }, { do: "answer", repo: key, n: 2, note: "put it in x.ts" }]);
   const f = await firefighterStep(ports());
   expect(f?.refused).toEqual([expect.stringContaining("product choice")]);
-  expect(storeLabels(item(1))).toContain("needs-chris");
-  expect(storeLabels(item(2))).not.toContain("needs-chris");
+  expect(asked(1)).not.toBeNull();
+  expect(asked(2)).toBeNull();
   expect(storeLabels(item(2))).not.toContain("goal");
 });
 
@@ -274,58 +277,57 @@ test("a paused factory takes no snapshot and starts no run", async () => {
 });
 
 /** Chris's standing permissions for this test's factory directory. */
-const standingFile = (s: object) => {
+const alwaysFile = (s: object) => {
   mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
-  writeFileSync(join(process.env.ALEPH_FACTORY_DIR!, "standing.json"), JSON.stringify(s));
+  writeFileSync(join(process.env.ALEPH_FACTORY_DIR!, "always.json"), JSON.stringify(s));
 };
 const FIREFIGHTER = { action: "firefighter", at: "2026-10-28T00:00:00.000Z" };
 
-test("a decision handed to the firefighter: its product choice is cleared, its event is marked handed and named in the prompt", async () => {
-  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], decision: decision("product") }]);
-  standingFile({ decision: FIREFIGHTER });
-  const e = snapshot().find((x) => x.kind === "needs-chris");
-  expect(e).toMatchObject({ handed: true, reason: "decision" });
+test("a question handed to the firefighter: its product choice is cleared, its event is marked handed and named in the prompt", async () => {
+  fresh([{ title: "product", ask: choice() }]);
+  alwaysFile({ question: FIREFIGHTER });
+  const e = snapshot().find((x) => x.kind === "ask");
+  expect(e).toMatchObject({ handed: true, reason: "question" });
   expect(e?.line.endsWith("(handed to you by Chris)")).toBe(true);
-  expect(prompt([e!])).toContain("Chris has handed these reasons to you: decision.");
+  expect(prompt([e!])).toContain("Chris has handed these reasons to you: question.");
   expect(prompt([e!])).toContain("Decide every event marked handed yourself");
-  reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }]);
+  reply([{ do: "answer", repo: key, n: 1, note: "page A" }]);
   const f = await firefighterStep(ports());
   expect(f?.refused).toEqual([]);
-  expect(f?.applied).toEqual([`clear-needs-chris ${key}-1: page A`]);
-  expect(storeLabels(item(1))).not.toContain("goal");
-  expect(storeLabels(item(1))).not.toContain("needs-chris");
+  expect(f?.applied).toEqual([`answer ${key}-1: page A`]);
+  expect(asked(1)).toBeNull();
 });
 
 test("a triage question on a mark whose reason Chris handed is cleared; without the handed reason it is refused", async () => {
-  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], decision: decision("product"), reason: "acceptance-failed" }]);
-  standingFile({ "acceptance-failed": { action: "firefighter", at: "2026-10-28T00:00:00.000Z" } });
-  reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }]);
+  fresh([{ title: "product", ask: choice("acceptance-failed") }]);
+  alwaysFile({ "acceptance-failed": { action: "firefighter", at: "2026-10-28T00:00:00.000Z" } });
+  reply([{ do: "answer", repo: key, n: 1, note: "page A" }]);
   const f = await firefighterStep(ports());
   expect(f?.refused).toEqual([]);
-  expect(f?.applied).toEqual([`clear-needs-chris ${key}-1: page A`]);
-  expect(storeLabels(item(1))).not.toContain("needs-chris");
+  expect(f?.applied).toEqual([`answer ${key}-1: page A`]);
+  expect(asked(1)).toBeNull();
 });
 
 test("the same triage question with no standing for its reason is refused", async () => {
-  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], decision: decision("product"), reason: "acceptance-failed" }]);
-  reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }]);
+  fresh([{ title: "product", ask: choice("acceptance-failed") }]);
+  reply([{ do: "answer", repo: key, n: 1, note: "page A" }]);
   const f = await firefighterStep(ports());
   expect(f?.refused).toEqual([expect.stringContaining("product choice")]);
-  expect(storeLabels(item(1))).toContain("needs-chris");
+  expect(asked(1)).not.toBeNull();
 });
 
-test("a decision mark is refused as a product choice without a decision standing", async () => {
-  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], decision: decision("product"), reason: "decision" }]);
-  standingFile({ "acceptance-failed": { action: "firefighter", at: "2026-10-28T00:00:00.000Z" } });
-  reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }]);
+test("a question Ask with options is refused as a product choice when only another reason is handed", async () => {
+  fresh([{ title: "product", ask: choice("question") }]);
+  alwaysFile({ "acceptance-failed": { action: "firefighter", at: "2026-10-28T00:00:00.000Z" } });
+  reply([{ do: "answer", repo: key, n: 1, note: "page A" }]);
   const f = await firefighterStep(ports());
   expect(f?.refused).toEqual([expect.stringContaining("product choice")]);
-  expect(storeLabels(item(1))).toContain("needs-chris");
+  expect(asked(1)).not.toBeNull();
 });
 
 test("without a handed reason a product choice is still refused, and the prompt has no handed rule", () => {
-  fresh([{ title: "product", labels: ["needs-chris"], notes: ["triage: for Chris: Which page shows it?"], decision: decision("product") }]);
-  const e = snapshot().find((x) => x.kind === "needs-chris");
+  fresh([{ title: "product", ask: choice() }]);
+  const e = snapshot().find((x) => x.kind === "ask");
   expect(e?.handed).toBeUndefined();
   expect(e?.line.endsWith("(handed to you by Chris)")).toBe(false);
   expect(prompt([e!])).not.toContain("Chris has handed these reasons");
@@ -335,14 +337,14 @@ test("a firefighter land standing lets the firefighter land a held run on a secu
   fresh([{ title: "held", labels: ["goal"] }]);
   branch(`b${n}`, "hooks/x.ts");
   const folder = held(`b${n}`);
-  standingFile({ firefighter: { action: "land", at: "2026-10-28T00:00:00.000Z" } });
+  alwaysFile({ firefighter: { action: "land", at: "2026-10-28T00:00:00.000Z" } });
   reply([{ do: "land", job: `${key}-1` }]);
   const f = await firefighterStep(ports());
   expect(landed).toEqual([`${key}-1`]);
   expect(f?.chris).toEqual([]);
-  expect(existsSync(join(folder, "needs-chris"))).toBe(false);
+  expect(existsSync(join(folder, "asked"))).toBe(false);
   expect(told).toEqual([]);
-  expect(log()).toContain("standing: firefighter: land");
+  expect(log()).toContain("always: firefighter: land");
 });
 
 test("the same held hooks/ run without a land standing goes to Chris", async () => {
@@ -353,8 +355,8 @@ test("the same held hooks/ run without a land standing goes to Chris", async () 
   const f = await firefighterStep(ports());
   expect(landed).toEqual([]);
   expect(f?.chris.length).toBe(1);
-  expect(existsSync(join(folder, "needs-chris"))).toBe(true);
-  expect(log()).not.toContain("standing: firefighter: land");
+  expect(existsSync(join(folder, "asked"))).toBe(true);
+  expect(log()).not.toContain("always: firefighter: land");
 });
 
 test("parseReply reads each action, and names a malformed one", () => {
@@ -362,77 +364,96 @@ test("parseReply reads each action, and names a malformed one", () => {
   expect(parseReply("nothing")).toBe("no JSON object with an actions list");
 });
 
-test("clear-needs-chris is refused on a product decision whose notes have no triage text", async () => {
-  fresh([{ title: "product", labels: ["needs-chris"], notes: ["needs-chris: pick a page"], decision: decision("product") }]);
-  reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "page A" }]);
-  const f = await firefighterStep(ports());
-  expect(f?.refused).toEqual([expect.stringContaining("product choice")]);
-  expect(storeLabels(item(1))).toContain("needs-chris");
-});
+/** Goal `.1` under issue `id`, as `fresh` files none: the goal a drop or an answer can wait for. */
+const addGoal = (id: number) => writeList({ key }, "a goal", (doc) => { todos.addGoal(doc, todos.find(doc, id)!, { title: "blocker goal", body: "Do it.", repo: key }); return true; });
 
-test("clear-needs-chris is applied on a build decision or no decision, even with a triage: for Chris: note", async () => {
-  fresh([
-    { title: "build", labels: ["needs-chris"], notes: ["triage: for Chris: which module?"], decision: decision("build") },
-    { title: "none", labels: ["needs-chris"], notes: ["triage: for Chris: which module?"] },
-  ]);
-  reply([{ do: "clear-needs-chris", repo: key, n: 1, note: "x.ts" }, { do: "clear-needs-chris", repo: key, n: 2, note: "y.ts" }]);
+test("an Ask of reason question is an event, and answer clears it", async () => {
+  fresh([{ title: "q", ask: plain("which helper?") }]);
+  const e = snapshot().find((x) => x.kind === "ask");
+  expect(e).toMatchObject({ repo: key, item: 1, reason: "question" });
+  expect(e?.handed).toBeUndefined();
+  reply([{ do: "answer", repo: key, n: 1, note: "use helper A" }]);
   const f = await firefighterStep(ports());
   expect(f?.refused).toEqual([]);
-  for (const id of [1, 2]) {
-    expect(storeLabels(item(id))).not.toContain("needs-chris");
-    expect(storeLabels(item(id))).not.toContain("goal");
-  }
+  expect(f?.applied).toEqual([`answer ${key}-1: use helper A`]);
+  expect(asked(1)).toBeNull();
+  expect(item(1).notes.at(-1)).toContain("firefighter decided: use helper A");
 });
 
-test("a drop with waiting_on drops the job, and the issue waits on that ref, with the note saying so", async () => {
-  fresh([{ title: "waiter", labels: ["goal"] }, { title: "blocker", labels: ["goal"] }]);
+test("answer is refused on an issue with no Ask", async () => {
+  fresh([{ title: "q" }]);
+  const r = await applyActions([{ do: "answer", repo: key, n: 1, note: "x" }], ports());
+  expect(r.refused).toEqual([expect.stringContaining("no Ask")]);
+});
+
+test("answer is applied on a plain question even when its reason is not handed", async () => {
+  fresh([{ title: "build", ask: { ...plain(), reason: "no-commit" } }, { title: "none", ask: plain() }]);
+  reply([{ do: "answer", repo: key, n: 1, note: "x.ts" }, { do: "answer", repo: key, n: 2, note: "y.ts" }]);
+  const f = await firefighterStep(ports());
+  expect(f?.refused).toEqual([]);
+  for (const id of [1, 2]) expect(asked(id)).toBeNull();
+});
+
+test("a drop with after drops the job, and the goal waits after that goal, with the note saying so", async () => {
+  fresh([{ title: "waiter", labels: ["goal"] }, { title: "blocker" }]);
+  addGoal(2);
   run({ name: `${key}-1`, state: "stuck", reason: "time box", todo: 1 });
-  reply([{ do: "drop", job: `${key}-1`, reason: "needs the blocker", waiting_on: `${key}-2` }]);
+  reply([{ do: "drop", job: `${key}-1`, reason: "needs the blocker", after: [`${key}-2.1`] }]);
   const f = await firefighterStep(ports());
   expect(f?.refused).toEqual([]);
   expect(dropped.map((d) => d.name)).toEqual([`${key}-1`]);
-  expect(item(1).fm.waiting_on).toBe(`${key}-2`);
-  expect(item(1).notes.at(-1)).toContain(`waits on ${key}-2`);
+  expect(item(1).fm.after).toEqual([`${key}-2.1`]);
+  expect(item(1).notes.at(-1)).toContain(`after ${key}-2.1`);
 });
 
-test("an edit-goal with only waiting_on sets it and leaves the body unchanged", async () => {
-  fresh([{ title: "goal", body: "Ship the thing.\n", labels: ["goal"] }]);
-  const r = await applyActions([{ do: "edit-goal", repo: key, n: 1, waiting_on: `${key}-2` }], ports());
+test("an edit-goal with only after sets it and leaves the body unchanged", async () => {
+  fresh([{ title: "goal", body: "Ship the thing.\n", labels: ["goal"] }, { title: "blocker" }]);
+  addGoal(2);
+  const r = await applyActions([{ do: "edit-goal", repo: key, n: 1, after: [`${key}-2.1`] }], ports());
   expect(r.refused).toEqual([]);
-  expect(item(1).fm.waiting_on).toBe(`${key}-2`);
+  expect(item(1).fm.after).toEqual([`${key}-2.1`]);
   expect(item(1).body.trim()).toBe("Ship the thing.");
 });
 
-test("parse keeps a well-formed waiting_on, ignores a malformed one, and refuses an edit-goal with neither body nor waiting_on", () => {
-  expect(parseReply(JSON.stringify({ actions: [{ do: "drop", job: "x-1", reason: "r", waiting_on: "Not A Ref" }] }))).toEqual([{ do: "drop", job: "x-1", reason: "r" }]);
-  expect(parseReply(JSON.stringify({ actions: [{ do: "drop", job: "x-1", reason: "r", waiting_on: "ff-2" }] }))).toEqual([{ do: "drop", job: "x-1", reason: "r", waiting_on: "ff-2" }]);
-  expect(parseReply(JSON.stringify({ actions: [{ do: "edit-goal", repo: "ff", n: 1 }] }))).toEqual(["edit-goal without a repo, n, and a body or waiting_on"]);
+test("an after naming no goal is refused", async () => {
+  fresh([{ title: "goal", labels: ["goal"] }]);
+  const r = await applyActions([{ do: "edit-goal", repo: key, n: 1, after: [`${key}-9.1`] }], ports());
+  expect(r.refused).toEqual([expect.stringContaining("names no goal")]);
 });
 
-test("prompt lists waiting_on in the drop and edit-goal lines, and says a note alone does not stop a rerun", () => {
+test("parse keeps well-formed goal ids in after, ignores malformed ones, and refuses an edit-goal with neither body nor after", () => {
+  expect(parseReply(JSON.stringify({ actions: [{ do: "drop", job: "x-1", reason: "r", after: ["Not A Ref", "ff-2"] }] }))).toEqual([{ do: "drop", job: "x-1", reason: "r" }]);
+  expect(parseReply(JSON.stringify({ actions: [{ do: "drop", job: "x-1", reason: "r", after: ["ff-2.1"] }] }))).toEqual([{ do: "drop", job: "x-1", reason: "r", after: ["ff-2.1"] }]);
+  expect(parseReply(JSON.stringify({ actions: [{ do: "edit-goal", repo: "ff", n: 1 }] }))).toEqual(["edit-goal without a repo, n, and a body or after"]);
+});
+
+test("prompt lists after in the drop and edit-goal lines, and says a note alone does not stop a rerun", () => {
   const p = prompt([]);
   const lines = p.split("\n");
-  expect(lines.find((l) => l.startsWith('- {"do": "drop"'))).toContain('"waiting_on"');
-  expect(lines.find((l) => l.startsWith('- {"do": "edit-goal"'))).toContain('"waiting_on"');
+  expect(lines.find((l) => l.startsWith('- {"do": "drop"'))).toContain('"after"');
+  expect(lines.find((l) => l.startsWith('- {"do": "edit-goal"'))).toContain('"after"');
+  expect(lines.find((l) => l.startsWith('- {"do": "answer"'))).toContain('"after"');
   expect(p).toContain("A note or a drop reason alone does not stop a rerun.");
+  expect(p).not.toContain("clear-needs-chris");
 });
 
-test("clear-needs-chris keeps waiting_on in parse, and leaves it out when absent", () => {
-  const a = { do: "clear-needs-chris" as const, repo: "ff", n: 1, note: "x" };
-  expect(parseReply(JSON.stringify({ actions: [{ ...a, waiting_on: "ff-2" }] }))).toEqual([{ ...a, waitingOn: "ff-2" }]);
+test("answer keeps after in parse, and leaves it out when absent", () => {
+  const a = { do: "answer" as const, repo: "ff", n: 1, note: "x" };
+  expect(parseReply(JSON.stringify({ actions: [{ ...a, after: ["ff-2.1"] }] }))).toEqual([{ ...a, after: ["ff-2.1"] }]);
   expect(parseReply(JSON.stringify({ actions: [a] }))).toEqual([a]);
 });
 
-test("clear-needs-chris with waiting_on clears the mark and sets it; a malformed ref is refused and keeps the mark", async () => {
-  fresh([{ title: "a", labels: ["needs-chris"], notes: ["needs-chris: which module?"] }, { title: "b" }]);
-  const r = await applyActions([{ do: "clear-needs-chris", repo: key, n: 1, note: "wait", waitingOn: `${key}-2` }], ports());
+test("answer with after clears the Ask and sets it; a malformed ref is ignored in parse, a missing goal is refused and keeps the Ask", async () => {
+  fresh([{ title: "a", ask: plain() }, { title: "b" }]);
+  addGoal(2);
+  const r = await applyActions([{ do: "answer", repo: key, n: 1, note: "wait", after: [`${key}-2.1`] }], ports());
   expect(r.refused).toEqual([]);
-  expect(storeLabels(item(1))).not.toContain("needs-chris");
-  expect(item(1).fm.waiting_on).toBe(`${key}-2`);
-  fresh([{ title: "a", labels: ["needs-chris"], notes: ["needs-chris: which module?"] }]);
-  const bad = await applyActions([{ do: "clear-needs-chris", repo: key, n: 1, note: "wait", waitingOn: "nope" }], ports());
+  expect(asked(1)).toBeNull();
+  expect(item(1).fm.after).toEqual([`${key}-2.1`]);
+  fresh([{ title: "a", ask: plain() }]);
+  const bad = await applyActions([{ do: "answer", repo: key, n: 1, note: "wait", after: [`${key}-7.1`] }], ports());
   expect(bad.refused.length).toBe(1);
-  expect(storeLabels(item(1))).toContain("needs-chris");
+  expect(asked(1)).not.toBeNull();
 });
 
 test("parseReply reads a flake action and refuses one with no text", () => {

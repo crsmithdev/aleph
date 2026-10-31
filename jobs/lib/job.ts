@@ -15,7 +15,7 @@ export { allJobs, isOpen };
 export type Job = Entry[];
 
 /** The files a run folder may hold that a reader of the job asks for. */
-export type RunFile = "spec.md" | "command.txt" | "result.md" | "review.md" | "review2.md" | "checks.log" | "land.log" | "stderr.log" | "needs-chris" | "rescued" | "batch.json";
+export type RunFile = "spec.md" | "command.txt" | "result.md" | "review.md" | "review2.md" | "checks.log" | "land.log" | "stderr.log" | "asked" | "needs-chris" | "rescued" | "batch.json";
 
 /** A facts run belongs to the landed job but is not its state: names and states look past it. */
 const notFacts = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts") ?? j.at(-1)!;
@@ -66,9 +66,9 @@ export function latestFile(j: Job, file: RunFile, only: (e: Entry) => boolean = 
 /** The last `n` lines of a file in a run's folder; empty when it is not there. */
 export const tailOf = (e: Entry, file: RunFile, n: number): string => (readFile(e, file) ?? "").trimEnd().split("\n").slice(-n).join("\n");
 
-/** The factory labelled the run's issue `needs-chris`, with this question: the run no longer holds the factory. */
-export const needsChris = (e: Entry): boolean => hasFile(e, "needs-chris");
-export const markNeedsChris = (e: Entry, question: string): void => writeFileSync(join(e.folder, "needs-chris"), question + "\n");
+/** The factory set an Ask on the run's issue, with this question: the run no longer holds the factory. The old `needs-chris` file counts too. */
+export const asked = (e: Entry): boolean => hasFile(e, "asked") || hasFile(e, "needs-chris");
+export const markAsked = (e: Entry, question: string): void => writeFileSync(join(e.folder, "asked"), question + "\n");
 
 /** The case of the safe default action taken on the run, or "" when none was. */
 export const rescued = (e: Entry): string => tailOf(e, "rescued", 1);

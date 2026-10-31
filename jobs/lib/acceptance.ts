@@ -3,7 +3,7 @@
  * See "Acceptance run" in docs/specs/2026-10-26-seed-factory.md.
  *
  * The result of each goal is kept in <factory>/acceptance/<repo>-<n>.json. A first failure
- * reopens the goal for one more worker run; a second labels it `needs-chris`.
+ * reopens the goal for one more worker run; a second sets an Ask (input, acceptance-failed) on it.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -170,9 +170,9 @@ export async function accept(repo: Repo, item: todos.Item, run: Runner = sandbox
       writeRecord(repo.key, todos.refOf(item), { result: "fail", sha, command, fails, since: full });
       return `${name}: acceptance failed at ${sha} (${command}); reopened for one more run`;
     }
-    const bad = note(repo, todos.refOf(item), `acceptance: fail again at ${sha}: ${out} | needs-chris: the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, { label: "needs-chris", reason: "acceptance-failed" });
+    const bad = note(repo, todos.refOf(item), `acceptance: fail again at ${sha}: ${out} | the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, { ask: { kind: "input", reason: "acceptance-failed", question: `The Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, options: [], why: [out] } });
     writeRecord(repo.key, todos.refOf(item), { result: "fail", sha, command, fails, since: full });
-    return `${name}: acceptance failed again at ${sha} (${command}); needs-chris${bad ? ` (no issue note: ${bad})` : ""}`;
+    return `${name}: acceptance failed again at ${sha} (${command}); asks Chris${bad ? ` (no issue note: ${bad})` : ""}`;
   }
   const bad = note(repo, todos.refOf(item), `acceptance: pass at ${sha}`);
   writeRecord(repo.key, todos.refOf(item), { result: "pass", sha, fails: prev?.fails ?? 0 });

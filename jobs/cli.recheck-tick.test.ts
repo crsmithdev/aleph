@@ -29,7 +29,7 @@ describe("a factory run", () => {
   test("a tick starts no run while the waiting cap binds, and a drop frees a place", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
-    const env = { ALEPH_WAITING_CAP: "2" };
+    const env = { ALEPH_AWAITING_CAP: "2" };
     await fjob("fwait1", "commit held/w1.txt");
     await fjob("fwait2", "commit held/w2.txt");
     const id = seedItem("fac", "behind the cap", { labels: ["goal"] }, "ACTION: commit capped.txt\n".trim());

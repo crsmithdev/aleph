@@ -256,7 +256,7 @@ test("decline is for good; a fourth signal joins but makes no proposal; approve 
 describe("standing proposals", () => {
   const grant = (action: string, key = "proposal-check:fac") => {
     mkdirSync(join(base, "factory"), { recursive: true });
-    writeFileSync(join(base, "factory", "standing.json"), JSON.stringify({ [key]: { action, at: new Date().toISOString() } }));
+    writeFileSync(join(base, "factory", "always.json"), JSON.stringify({ [key]: { action, at: new Date().toISOString() } }));
     writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: base, sandbox: true } }));
   };
 
@@ -266,7 +266,7 @@ describe("standing proposals", () => {
     await mine(NOW);
     expect(stored().lessons[0]).toMatchObject({ state: "approved", issue: "fac-1" });
     expect(readList(repo)!.items.length).toBe(2);
-    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("standing: proposal-check:fac: approve on fac-1");
+    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("always: proposal-check:fac: approve on fac-1");
   });
 
   test("the bare kind key no longer answers", async () => {
@@ -281,7 +281,7 @@ describe("standing proposals", () => {
     pickFirst = true;
     await mine(NOW);
     expect(stored().lessons[0].state).toBe("declined");
-    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("standing: proposal-check:fac: decline on");
+    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("always: proposal-check:fac: decline on");
   });
 });
 

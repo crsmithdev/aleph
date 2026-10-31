@@ -188,8 +188,8 @@ describe("state", () => {
   });
 
   test("caps.json gives the caps when the environment does not, and a bad file gives the defaults", () => {
-    const keep = { d: process.env.ALEPH_DAY_CAP, l: process.env.ALEPH_LIVE_CAP, w: process.env.ALEPH_WAITING_CAP };
-    delete process.env.ALEPH_DAY_CAP; delete process.env.ALEPH_LIVE_CAP; delete process.env.ALEPH_WAITING_CAP;
+    const keep = { d: process.env.ALEPH_DAY_CAP, l: process.env.ALEPH_LIVE_CAP, w: process.env.ALEPH_AWAITING_CAP };
+    delete process.env.ALEPH_DAY_CAP; delete process.env.ALEPH_LIVE_CAP; delete process.env.ALEPH_AWAITING_CAP;
     const file = join(factory, "caps.json");
     try {
       let f = state(now).factory;
@@ -202,7 +202,7 @@ describe("state", () => {
       expect([f.dayCap, f.liveCap, f.waitingCap]).toEqual([12, 10, 5]);
     } finally {
       rmSync(file, { force: true });
-      for (const [k, v] of [["ALEPH_DAY_CAP", keep.d], ["ALEPH_LIVE_CAP", keep.l], ["ALEPH_WAITING_CAP", keep.w]] as const) if (v !== undefined) process.env[k] = v;
+      for (const [k, v] of [["ALEPH_DAY_CAP", keep.d], ["ALEPH_LIVE_CAP", keep.l], ["ALEPH_AWAITING_CAP", keep.w]] as const) if (v !== undefined) process.env[k] = v;
     }
   });
 

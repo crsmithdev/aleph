@@ -335,7 +335,7 @@ export function state(now = new Date()): State {
   const today = runsToday(now.getTime());
   const probe = lastProbe();
   const granted = readStanding();
-  const isDone = doneChecker(), gated = gates({ only: ["pause", "hold", "probe", "live", "day", "waiting"], jobs });
+  const isDone = doneChecker(), gated = gates({ only: ["pause", "hold", "probe", "live", "day", "awaiting"], jobs });
   const att = attend({ needs, needsIssues: waitingOnChris }, granted);
   return {
     now: now.toISOString(),

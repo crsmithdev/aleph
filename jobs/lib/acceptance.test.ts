@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { hasLabel, readList, writeList } from "../../todo/lib/store.ts";
+import { askOf, hasLabel, readList, writeList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import { accept, oracleCommands, readRecord, resultLine, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { acceptanceStep, dispatchGoals, reacceptReopened } from "./factory.ts";
@@ -149,15 +149,16 @@ test("a failing command reopens the goal with the last 40 lines and it is dispat
   expect(await acceptanceStep(runner(0))).toEqual([]);
 });
 
-test("a second failure labels it needs-chris, names the command, and dispatches nothing", async () => {
+test("a second failure sets an Ask, names the command, and dispatches nothing", async () => {
   const id = doneGoal("`bun run bad` `bun run ok`");
   await acceptanceStep(runner(3, "boom"));
   land(id);
   closeAgain(id);
   const lines = await acceptanceStep(runner(3, "boom again"));
-  expect(lines[0]).toContain("needs-chris");
-  expect(hasLabel(item(id), "needs-chris")).toBe(true);
-  expect(notes(id)).toMatch(/needs-chris: the Oracle command `bun run bad` still fails/);
+  expect(lines[0]).toContain("asks Chris");
+  expect(hasLabel(item(id), "needs-chris")).toBe(false);
+  expect(askOf(item(id))).toMatchObject({ kind: "input", reason: "acceptance-failed" });
+  expect(notes(id)).toMatch(/the Oracle command `bun run bad` still fails/);
   expect(todos.status(item(id))).toBe("done");
   expect(readRecord("fac", id)?.fails).toBe(2);
   const started: string[] = [];

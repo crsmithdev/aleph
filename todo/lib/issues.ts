@@ -38,6 +38,16 @@ export function checkFields(f: Fields): void {
   if (f.waitingOn !== undefined && f.waitingOn !== "none" && !(todos.waitParts(f.waitingOn).length && todos.waitParts(f.waitingOn).every((p) => todos.parseRef(p)))) refuse("--waiting-on takes <repo>-<n>[,<repo>-<n>...] or none");
 }
 
+/** Set the goals a goal waits for (`after`), checked for form and, in this repo, for existence; an old `waiting_on` goes. */
+function setAfter(repo: store.Place, doc: todos.Doc, i: todos.Issue, after: string[]): void {
+  checkAfter(after);
+  for (const r of after) if (r.startsWith(`${repo.key}-`) && !todos.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no goal`);
+  if (i.legacy) todos.adopt(i);
+  i.fm.after = after;
+  delete i.fm.waiting_on;
+  i.fm.updated = todos.today();
+}
+
 /** The repo's list in the work store; a refusal when the store has none or the fetch fails. */
 export function readIssues(repo: store.Place): todos.Doc {
   let doc: todos.Doc | null = null;
@@ -222,6 +232,7 @@ export function decide(repo: store.Place, id: number, text: string, fields: Fiel
     // The old shape stored the decision's own kind (product or build) in `kind`.
     if (i.fm.kind === "product" || i.fm.kind === "build") delete i.fm.kind;
     if (fields.waitingOn !== undefined) todos.setWaitingOn(i, fields.waitingOn);
+    if (fields.after !== undefined) setAfter(repo, doc, i, fields.after);
     return i;
   })!;
   return { result: { repo: repo.key, ...brief(w.value), commit: w.commit }, item: w.value, follow: w.follow };
@@ -230,13 +241,14 @@ export function decide(repo: store.Place, id: number, text: string, fields: Fiel
 export function edit(repo: store.Place, id: number, fields: Fields) {
   checkFields(fields);
   const title = fields.title?.trim();
-  const { body, priority, labels, due, waitingOn, status } = fields;
-  if (title === undefined && body === undefined && priority === undefined && labels === undefined && due === undefined && waitingOn === undefined && status === undefined) refuse("give --title, --body, --priority, --labels, --due (or --status)");
+  const { body, priority, labels, due, waitingOn, status, after } = fields;
+  if (title === undefined && body === undefined && priority === undefined && labels === undefined && due === undefined && waitingOn === undefined && status === undefined && after === undefined) refuse("give --title, --body, --priority, --labels, --due (or --status)");
   if (title === "") refuse("the title cannot be empty");
   const w = write(repo, `todo: edit item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
     todos.edit(i, { title, body, priority, areas: labels, due, waitingOn });
     if (status !== undefined) todos.setStatus(i, status as todos.Status);
+    if (after !== undefined) setAfter(repo, doc, i, after);
     return i;
   })!;
   return { result: { repo: repo.key, ...brief(w.value), commit: w.commit }, item: w.value, follow: w.follow };

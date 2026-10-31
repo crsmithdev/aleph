@@ -6,16 +6,16 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as todos from "../../todo/lib/todo.ts";
-import { flakeTracker, goal, goals, hasLabel, kindOf, note, readList, readLists, reader } from "../../todo/lib/store.ts";
+import { askOf, flakeTracker, goal, goals, hasLabel, kindOf, note, readList, readLists, reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { takeFresh } from "./deps.ts";
-import { normalizeDecision, type Decision } from "./decision.ts";
+import { normalizeAsk, type Ask } from "./ask.ts";
 import { itemOnMain, repoStages } from "./status.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
-import { allRuns, expand, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
-import { allJobs, isOpen, issue as issueOf, jobsNamed, lastReal, markNeedsChris, markRescued, needsChris, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
+import { allRuns, expand, isAwaiting, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allJobs, isOpen, issue as issueOf, jobsNamed, asked, lastReal, markAsked, markRescued, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { accept, final, readRecord, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
 import { factsGate } from "./facts.ts";
@@ -23,7 +23,7 @@ import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
 import { alreadyMet } from "./gate.ts";
-import { logStanding, standing } from "./standing.ts";
+import { always, logAlways } from "./always.ts";
 import { detached } from "./launch.ts";
 import { PLANNED, needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import type { Tier } from "./route.ts";
@@ -32,7 +32,7 @@ export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.alep
 const pauseFile = () => join(factoryDir(), "paused");
 const probeFile = () => join(factoryDir(), "probe.json");
 
-/** `caps.json` in the factory directory: `{ "day", "live", "waiting" }`. A missing or bad file is empty. */
+/** `caps.json` in the factory directory: `{ "day", "live", "awaiting" }`. A missing or bad file is empty. */
 function capsFile(): Record<string, unknown> {
   try {
     const c = JSON.parse(readFileSync(join(factoryDir(), "caps.json"), "utf8"));
@@ -43,7 +43,7 @@ function capsFile(): Record<string, unknown> {
 function cap(envName: string, key: string, dflt: number): number {
   const e = process.env[envName];
   if (e !== undefined && e !== "") return Number(e);
-  const f = capsFile()[key];
+  const f = capsFile()[key] ?? (key === "awaiting" ? capsFile().waiting : undefined);
   return typeof f === "number" && Number.isFinite(f) ? f : dflt;
 }
 
@@ -66,7 +66,10 @@ export function factoryLog(line: string): void {
   appendFileSync(join(factoryDir(), "tick.log"), `${new Date().toISOString()} ${line}\n`);
 }
 
-export const WAITING_CAP = () => cap("ALEPH_WAITING_CAP", "waiting", 5);
+/** The most open jobs awaiting Chris before no new run starts. */
+export const AWAITING_CAP = () => cap("ALEPH_AWAITING_CAP", "awaiting", 5);
+/** The old name, for ui/state.ts until step 5. */
+export const WAITING_CAP = AWAITING_CAP;
 
 const sandboxRepos = () => Object.values(loadRegistry()).filter((r) => r.sandbox);
 /** The registry's factory repos: those whose runs are sandboxed. */
@@ -78,20 +81,20 @@ export function runsToday(now = Date.now()): Entry[] {
   return allRuns().filter((e) => (e.run.kind === "agent" || e.run.kind === "triage" || e.run.kind === "plan") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
 }
 
-/** Open jobs in factory repos waiting for Chris (`needs-you`; a stuck run needs no answer). */
+/** Open jobs in factory repos whose last run awaits Chris (a stuck run needs no answer). */
 export function waiting(jobs = allJobs()): number {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  return jobs.filter((j) => isOpen(j) && j.at(-1)!.run.repo && keys.has(j.at(-1)!.run.repo!) && j.at(-1)!.run.state === "needs-you").length;
+  return jobs.filter((j) => isOpen(j) && j.at(-1)!.run.repo && keys.has(j.at(-1)!.run.repo!) && isAwaiting(j.at(-1)!.run.state)).length;
 }
 
 export interface Hold { name: string; state: string; reason?: string; line: string }
 
-/** Whether an open job holds the factory: its last real run is stuck or failed, with no next run pending and no `needs-chris` label. */
+/** Whether an open job holds the factory: its last real run is stuck or failed, with no next run pending and no Ask on its run. */
 function holds(j: Job, keys: Set<string>, except?: string): boolean {
   const last = lastReal(j);
   const r = last.run;
   return isOpen(j) && !!r.repo && keys.has(r.repo) && (r.state === "stuck" || r.state === "failed") && r.job !== except
-    && !r.next && !isLive(last.folder) && !needsChris(last);
+    && !r.next && !isLive(last.folder) && !asked(last);
 }
 
 /** The open jobs that hold the factory, in the order given: hold's filter, which rescueStuck uses too. */
@@ -106,7 +109,7 @@ const holders = (jobs: Job[], except?: string): Job[] => {
  * that does not count (the run asking is that job's own). Separate from the pause.
  * A run with a next run pending (`next` set, or its unit still live) does not count:
  * a conflicted land goes back to its worker by itself, and the hold waits for that.
- * A run the factory labelled `needs-chris` does not count: Chris answers it when he can.
+ * A run the factory set an Ask on does not count: Chris answers it when he can.
  */
 export function hold(jobs = allJobs(), except?: string): Hold | null {
   const bad = holders(jobs, except).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started));
@@ -218,9 +221,10 @@ export function waitReason(_repo: Repo, item: todos.Item, ctx: WaitContext): Wai
   if (typeof due === "string" && todos.validDate(due) && due > todos.today(ctx.now ?? todos.clock())) return { kind: "due", text: `Due ${due}` };
   const ids = pendingWaits(waitsOf(item), ctx.done);
   if (ids.length) return { kind: "waits_on", ids, text: `Waits on ${ids.join(", ")}` };
-  if (hasLabel(item, "needs-chris")) {
-    const last = item.notes.at(-1)?.replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, "").replace(/^needs-chris: /, "");
-    const reason = last || (typeof item.fm.reason === "string" && item.fm.reason) || "the factory stopped starting it";
+  const ask = askOf(item);
+  if (ask) {
+    const last = item.notes.at(-1)?.replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, "").replace(/^(asks Chris|needs-chris): /, "");
+    const reason = ask.question || last || ask.reason || "the factory stopped starting it";
     return { kind: "needs-chris", reason, text: `Waits for you: ${reason}` };
   }
   if (ctx.planning) return { kind: "planning", text: "A planner run is splitting it" };
@@ -230,7 +234,7 @@ export function waitReason(_repo: Repo, item: todos.Item, ctx: WaitContext): Wai
     const text = g.gate === "live" ? `Waiting for a slot (${n ?? liveRuns()} of ${LIVE_CAP()} running)`
       : g.gate === "day" ? `Day cap reached (${runsToday().length} of ${DAY_CAP()} runs in 24 hours)`
       : g.gate === "pause" ? "The factory is paused"
-      : g.gate === "waiting" ? `${n ?? ""} runs wait for Chris (cap ${WAITING_CAP()})`
+      : g.gate === "awaiting" ? `${n ?? ""} runs wait for Chris (cap ${AWAITING_CAP()})`
       : g.why;
     return { kind: "gate", gate: g.gate, text };
   }
@@ -245,7 +249,7 @@ export const liveEntries = (): Entry[] => allRuns().filter((e) => e.run.kind ===
 export const liveRuns = (): number => liveEntries().length;
 
 /** The gates, in the order `gates` checks them. */
-export const GATES = ["pause", "hold", "probe", "live", "day", "waiting"] as const;
+export const GATES = ["pause", "hold", "probe", "live", "day", "awaiting"] as const;
 export type Gate = (typeof GATES)[number];
 
 /**
@@ -271,9 +275,9 @@ export function gates(opts: { only?: readonly Gate[]; jobs?: Job[]; except?: str
     if (live >= LIVE_CAP()) return { gate: "live", why: `${live} agent runs are live` };
   }
   if (on("day") && runsToday().length >= DAY_CAP()) return { gate: "day", why: `cap of ${DAY_CAP()} runs in 24 hours` };
-  if (on("waiting")) {
+  if (on("awaiting")) {
     const waits = waiting(opts.jobs);
-    if (waits >= WAITING_CAP()) return { gate: "waiting", why: `${waits} runs wait for Chris` };
+    if (waits >= AWAITING_CAP()) return { gate: "awaiting", why: `${waits} runs wait for Chris` };
   }
   return null;
 }
@@ -367,17 +371,17 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       if (waitNow) { skipped.push(`${name}: ${waitNow}`); continue; }
       // A plan job runs detached: the goal gets no second planner and no worker while it does.
       if (await planning(repo, ref)) { skipped.push(`${name}: planning`); continue; }
-      const gated = gates({ only: ["live", "day", "waiting"], jobs });
+      const gated = gates({ only: ["live", "day", "awaiting"], jobs });
       if (gated) { skipped.push(`${name}: ${gated.why}`); continue; }
       // Read again just before the start: an item done or dropped since it was read starts no run, whatever the trigger.
       const latest = reader().item(repo.key, ref);
       if (!latest || todos.status(latest) === "done" || todos.status(latest) === "dropped") { skipped.push(`${name}: the item is ${latest ? todos.status(latest) : "gone"}`); continue; }
       const marked = streakMark(name) !== null;
-      if ((marked && hasLabel(item, "needs-chris")) || noCommitStreak(repo.key, name) >= NO_COMMIT_LIMIT) {
-        if (!hasLabel(item, "needs-chris")) {
+      if ((marked && askOf(item)) || noCommitStreak(repo.key, name) >= NO_COMMIT_LIMIT) {
+        if (!askOf(item)) {
           writeStreakMark(name);
-          const text = `needs-chris: the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
-          const bad = note(repo, ref, text, { label: "needs-chris", reason: "no-commit" });
+          const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
+          const bad = note(repo, ref, `asks Chris: ${text}`, { ask: plainAsk("no-commit", text) });
           if (bad) factoryLog(`${name}: no issue note: ${bad}`);
         }
         skipped.push(`${name}: ${NO_COMMIT_LIMIT} runs in a row with no commit`);
@@ -385,11 +389,11 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       }
       // A cap mark with the label still on holds the goal until Chris reruns it; with the label gone he has, and the hour count is not applied.
       const capHeld = capMarked(name);
-      if (capHeld && hasLabel(item, "needs-chris")) { skipped.push(`${name}: the run cap holds it until Chris reruns it`); continue; }
+      if (capHeld && askOf(item)) { skipped.push(`${name}: the run cap holds it until Chris reruns it`); continue; }
       const started60 = capHeld ? 0 : agentStartsInHour(repo.key, name);
       if (started60 >= MAX_RUNS_PER_HOUR) {
-        const text = `needs-chris: the factory started this goal ${started60} times in the last hour; it stops starting it until Chris reruns it.`;
-        const bad = note(repo, ref, text, { label: "needs-chris", reason: "run-cap" });
+        const text = `the factory started this goal ${started60} times in the last hour; it stops starting it until Chris reruns it.`;
+        const bad = note(repo, ref, `asks Chris: ${text}`, { ask: plainAsk("run-cap", text) });
         if (bad) factoryLog(`${name}: no issue note: ${bad}`);
         else writeCapMark(name);
         skipped.push(`${name}: ${started60} runs in the last hour`);
@@ -449,7 +453,7 @@ const ACCEPTANCE_DAYS = 2;
  * The acceptance run: every done goal (one whose land is on origin/<main>, or a `planned` parent
  * closed as done) whose Oracle has not been run since it was done gets it run on origin/<main>,
  * under srt. Pass: a note; first failure: the goal reopens with the output as a note and the
- * dispatch starts it again; second: `needs-chris`. See acceptance.ts.
+ * dispatch starts it again; second: an Ask (input, acceptance-failed). See acceptance.ts.
  */
 export async function acceptanceStep(run: Runner = sandboxRunner, now = todos.clock()): Promise<string[]> {
   const lines: string[] = [];
@@ -515,11 +519,14 @@ export async function reacceptReopened(repoKey: string, o: { since?: string; bef
   return lines;
 }
 
+/** An Ask of input with no options: the factory's own stop on a goal, with the sentence Chris reads. */
+export const plainAsk = (reason: string, question: string): Ask => ({ kind: "input", reason, question, options: [], why: [] });
+
 /** Runs of one goal in a row, newest last, that may end with no commit before dispatch stops starting it. */
 const NO_COMMIT_LIMIT = 3;
 
 const streakFile = (name: string) => join(factoryDir(), "streak", `${name}.txt`);
-/** When the streak last labelled the goal's item `needs-chris` (ms), or null. Runs before it no longer count. */
+/** When the streak last set an Ask on the goal's item (ms), or null. Runs before it no longer count. */
 const streakMark = (name: string): number | null => {
   if (!existsSync(streakFile(name))) return null;
   const t = Date.parse(readFileSync(streakFile(name), "utf8").trim());
@@ -530,7 +537,7 @@ const writeStreakMark = (name: string) => {
   writeFileSync(streakFile(name), new Date().toISOString() + "\n");
 };
 
-/** How many of the goal's newest agent runs since the streak's last needs-chris mark, in a row, ended with no commit. */
+/** How many of the goal's newest agent runs since the streak's last Ask, in a row, ended with no commit. */
 function noCommitStreak(repoKey: string, name: string): number {
   const mark = streakMark(name) ?? -Infinity;
   const runs = allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && e.run.kind === "agent" && e.run.state !== "running" && Date.parse(e.run.started) > mark)
@@ -544,7 +551,7 @@ function noCommitStreak(repoKey: string, name: string): number {
 export const MAX_RUNS_PER_HOUR = 3;
 
 const capFile = (name: string) => join(factoryDir(), "cap", `${name}.txt`);
-/** Whether the cap's needs-chris note is written for the goal's current streak of skipped starts. */
+/** Whether the cap's Ask is set for the goal's current streak of skipped starts. */
 const capMarked = (name: string): boolean => existsSync(capFile(name));
 const writeCapMark = (name: string) => {
   mkdirSync(dirname(capFile(name)), { recursive: true });
@@ -594,7 +601,7 @@ const RESCUE_WAIT_MS = () => Number(process.env.ALEPH_RESCUE_WAIT_MS ?? 60_000);
  * the checks pass there; no commit, a time box and checks that fail after a land merge and a land that hits a merge conflict drop the run for one rerun
  * of the goal, with a note; an infrastructure failure is rechecked or landed again, once. Each action
  * writes its reason to the run, the issue note and the news. Anything else, or the second time one
- * case hits one goal, labels the issue `needs-chris` with a one-line question; such a run holds nothing.
+ * case hits one goal, sets an Ask (input, rescue) on the issue; such a run holds nothing.
  */
 async function rescueStuck(act: Rescue, land?: Land, checks?: Checks): Promise<void> {
   const pending = (jobs: Job[]) => holders(jobs);
@@ -623,25 +630,25 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
   const todo = issueOf(runs) ?? Number(name.match(/-(\d+)$/)?.[1]);
   const issue = Number.isInteger(todo) ? todo : undefined;
   const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${repo.key}/${name}: ${line}`); };
-  const record = (text: string, opts: { done?: boolean; label?: string; unlabel?: string; decision?: Decision; reason?: string } = {}) => {
+  const record = (text: string, opts: { done?: boolean; label?: string; unlabel?: string; ask?: Ask } = {}) => {
     const why = issue === undefined ? "no issue" : note(repo, issue, text, opts);
     if (why) factoryLog(`${name}: no issue note: ${why}`);
   };
-  const chris = async (question: string, decision?: Decision) => {
-    // A standing permission to take the recommendation: Rerun drops the run, and the goal reruns.
-    if (decision && decision.recommended === "Rerun" && standing("rescue")?.action === "recommended") {
+  const chris = async (question: string, ask: Ask) => {
+    // An Always rule to take the recommendation: Rerun drops the run, and the goal reruns.
+    if (ask.recommended === "Rerun" && always("rescue")?.action === "recommended") {
       const why = await act.drop(name, question);
       if (!why) {
-        logStanding("rescue", "recommended", `${repo.key}-${issue ?? name}`);
-        record("standing: Rerun");
-        await say(`standing: Rerun; dropped, and the goal reruns`);
+        logAlways("rescue", "recommended", `${repo.key}-${issue ?? name}`);
+        record("always: Rerun");
+        await say(`always: Rerun; dropped, and the goal reruns`);
         return;
       }
-      factoryLog(`${name}: standing Rerun failed (${why})`);
+      factoryLog(`${name}: always Rerun failed (${why})`);
     }
-    markNeedsChris(last, question);
-    record(`needs-chris: ${question}`, { label: "needs-chris", decision, reason: "rescue" });
-    await say(`needs-chris: ${question}`);
+    markAsked(last, question);
+    record(`asks Chris: ${question}`, { ask });
+    await say(`asks Chris: ${question}`);
   };
 
   let onMain: string | null = null;
@@ -657,7 +664,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
   const claim = r.reason === "no commit" ? alreadyMet(readFile(last, "result.md") ?? "") : null;
   const key = caseOf(r, onMainOrDone, claim);
   const reason = r.reason ?? r.state;
-  const choice = (question: string, why: string[]) => normalizeDecision({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.state}`, `Reason: ${reason}`, ...why] })!;
+  const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.state}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
   if (!key) return chris(`${name} is ${r.state} (${reason}); drop it, recheck it, or edit the goal?`, choice(`${name} is ${r.state} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
 
   const tryDo = async (why: string | null, what: string) => {
@@ -903,7 +910,7 @@ export function health(now = Date.now()): string[] {
   const goals = openGoals();
   if (goals.length && !paused() && !runsToday(now).length) lines.push(`health: no factory run started in 24 hours, with ${goals.length} open goal${goals.length > 1 ? "s" : ""}`);
   const w = waiting();
-  if (w >= WAITING_CAP()) lines.push(`health: ${w} runs wait for Chris; no new run starts`);
+  if (w >= AWAITING_CAP()) lines.push(`health: ${w} runs wait for Chris; no new run starts`);
   const p = lastProbe();
   if (p && !p.ok) lines.push(`health: the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`);
   for (const b of Object.values(baselines())) if (!b.ok) lines.push(`health: ${b.repo} ${redLine(b)}`);

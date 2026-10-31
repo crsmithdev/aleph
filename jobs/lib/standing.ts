@@ -1,17 +1,16 @@
 /**
- * Standing permissions: for each reason the factory asks Chris, the action it may take
- * without asking. `standing.json` in the factory dir maps a reason to `{ action, at }`.
+ * Shim until step 5 (the UI): the old names of always.ts. `REASONS` keeps the old reason keys the UI reads.
  */
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { factoryDir, factoryLog } from "./factory.ts";
+import { readAlways, type Granted, type Reason } from "./always.ts";
 
-export interface Reason { actions: string[]; always: string }
-export interface Granted { action: string; at: string }
+export type { Granted } from "./always.ts";
+/** The old reason names of the ones always.json renamed (`decision` became `question` with no old name of its own to go back to). */
+export const OLD_REASON: Record<string, string> = { "held": "held-path", "triage-no-verdict": "triage-failed", "decision": "question" };
+const NEW_TO_OLD: Record<string, string> = { "held-path": "held", "triage-failed": "triage-no-verdict" };
+/** The Always rules under the old reason names, as the UI reads them. */
+export const readStanding = (): Record<string, Granted> => Object.fromEntries(Object.entries(readAlways()).map(([k, v]) => [NEW_TO_OLD[k] ?? k, v]));
 
 const proposal: Reason = { actions: ["approve", "decline"], always: "approve" };
-
-/** Every reason the factory asks Chris, the actions it understands, and the one the Always button takes. */
 export const REASONS: Record<string, Reason> = {
   "held": { actions: ["land", "drop"], always: "firefighter" },
   "review": { actions: ["land", "drop"], always: "firefighter" },
@@ -22,7 +21,6 @@ export const REASONS: Record<string, Reason> = {
   "acceptance-failed": { actions: ["rerun", "close"], always: "firefighter" },
   "decision": { actions: ["decide", "deny"], always: "recommended" },
   "rescue": { actions: ["decide", "drop"], always: "recommended" },
-  // An empty `always`: the factory has no rule that acts on these, so the card offers no auto-yes.
   "proposal": { actions: ["start", "deny"], always: "" },
   "host-check": { actions: ["checked", "deny"], always: "" },
   "proposal-check": proposal,
@@ -30,45 +28,3 @@ export const REASONS: Record<string, Reason> = {
   "proposal-skill": proposal,
   "firefighter": { actions: ["land", "drop"], always: "land" },
 };
-
-const file = () => join(factoryDir(), "standing.json");
-
-/** A missing or bad file is empty. */
-export function readStanding(): Record<string, Granted> {
-  try {
-    const s = JSON.parse(readFileSync(file(), "utf8"));
-    if (s && typeof s === "object" && !Array.isArray(s)) return s;
-  } catch {}
-  return {};
-}
-
-function write(s: Record<string, Granted>): void {
-  mkdirSync(factoryDir(), { recursive: true });
-  const tmp = `${file()}.tmp`;
-  writeFileSync(tmp, JSON.stringify(s, null, 2) + "\n");
-  renameSync(tmp, file());
-}
-
-/** The standing permission for `reason`, or null. */
-export const standing = (reason: string): Granted | null => readStanding()[reason] ?? null;
-
-/** Let the factory take `action` for `reason` without asking. Returns why it could not, or null. */
-export function grant(reason: string, action: string): string | null {
-  const r = REASONS[reason.startsWith("proposal-") ? reason.replace(/:[^:]*$/, "") : reason];
-  if (!r) return `unknown reason ${reason}; known: ${Object.keys(REASONS).join(", ")}`;
-  if (!r.actions.includes(action) && action !== r.always) return `${reason} has no action ${action}; actions: ${[...new Set([...r.actions, r.always])].join(", ")}`;
-  write({ ...readStanding(), [reason]: { action, at: new Date().toISOString() } });
-  return null;
-}
-
-export function revoke(reason: string): void {
-  const s = readStanding();
-  if (!(reason in s)) return;
-  delete s[reason];
-  write(s);
-}
-
-/** Whether Chris handed `reason` to the firefighter. */
-export const handed = (reason: string): boolean => standing(reason)?.action === "firefighter";
-
-export const logStanding = (reason: string, action: string, ref: string): void => factoryLog(`standing: ${reason}: ${action} on ${ref}`);

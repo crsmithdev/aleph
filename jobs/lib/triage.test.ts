@@ -189,7 +189,7 @@ test("an item with no verdict twice is labelled needs-chris and not triaged agai
 const factory = () => process.env.ALEPH_FACTORY_DIR!;
 const grant = (reason: string, action: string) => {
   mkdirSync(factory(), { recursive: true });
-  writeFileSync(join(factory(), "standing.json"), JSON.stringify({ [reason]: { action, at: new Date().toISOString() } }));
+  writeFileSync(join(factory(), "always.json"), JSON.stringify({ [reason]: { action, at: new Date().toISOString() } }));
 };
 const tickLog = () => readFileSync(join(factory(), "tick.log"), "utf8");
 
@@ -198,7 +198,7 @@ describe("standing permissions", () => {
   afterAll(() => { process.env.ALEPH_FACTORY_DIR = factoryHome; });
 
   test("retry: no label, the count starts again, and a third triage runs the command", async () => {
-    grant("triage-no-verdict", "retry");
+    grant("triage-failed", "retry");
     reset([{ title: "a", body: "nothing" }]);
     await run();
     const t = await run();
@@ -208,21 +208,21 @@ describe("standing permissions", () => {
     const t3 = await run();
     expect(calls()).toBe(n + 1);
     expect(t3.skipped[0]).toContain("malformed verdict");
-    expect(tickLog()).toContain("standing: triage-no-verdict: retry");
+    expect(tickLog()).toContain("always: triage-failed: retry");
   });
 
   test("close: the item is done with the note", async () => {
-    grant("triage-no-verdict", "close");
+    grant("triage-failed", "close");
     reset([{ title: "a", body: "nothing" }]);
     await run();
     await run();
     expect(todos.status(item(1))).toBe("done");
     expect(item(1).notes.at(-1)).toEndWith("triage: no verdict in 2 runs; standing: closed");
-    expect(tickLog()).toContain("standing: triage-no-verdict: close");
+    expect(tickLog()).toContain("always: triage-failed: close");
   });
 
   test("recommended: a structured decision becomes a goal; a prose question is labelled as today", async () => {
-    grant("decision", "recommended");
+    grant("question", "recommended");
     reset([{ title: "a", body: "VERDICT:structured" }, { title: "b", body: "VERDICT:chris" }]);
     await run();
     expect(labels(1)).toContain("goal");
@@ -230,7 +230,7 @@ describe("standing permissions", () => {
     expect(item(1).notes.at(-1)).toEndWith("standing: took the recommendation B: do b");
     expect(readDecision(item(1))).toBeNull();
     expect(labels(2)).toContain("needs-chris");
-    expect(tickLog()).toContain(`standing: decision: recommended on ${repo.key}-1`);
+    expect(tickLog()).toContain(`always: question: recommended on ${repo.key}-1`);
   });
 });
 
