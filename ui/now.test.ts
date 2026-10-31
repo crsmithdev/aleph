@@ -317,6 +317,12 @@ test("the fine sentence is stable within a 10-minute window and varies across wi
   for (const v of r.FINE) expect(v).not.toMatch(/\bnot\b|\bno |nothing|never/i);
 });
 
+test("the most flaked line stays in the report and off the status sentence and the error rows", () => {
+  const line = "health: most flaked in acceptance in 7 days: a.test.ts > twice (1 times)";
+  const page = r.view.render({ ...withFactory({ health: [line] }), needs: [], stuck: [] });
+  expect(page).not.toContain("most flaked");
+});
+
 test("a flake line is not shown on the Status page", () => {
   const calm = { ...withFactory({ health: ["health: aleph check tests passed on rerun 4 times in 7 days"] }), needs: [], stuck: [] };
   const h = r.renderLede(calm);
