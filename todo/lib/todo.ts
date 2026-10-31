@@ -16,6 +16,8 @@ const REQUIRED = ["id", "status", "created", "updated"] as const;
 
 export interface Item {
   id: number;
+  /** The goal's number under item `id`: `proj-5.1` is id 5, sub 1. Absent on a plain item. */
+  sub?: number;
   title: string;
   fm: Frontmatter;
   /** Prose under the heading, frontmatter and Notes removed. Verbatim. */
@@ -139,7 +141,7 @@ export function renderItem(repo: string, item: Item): string {
   // Backlog.md reads the creation and update dates only from `created_date` and `updated_date`, so the store writes those keys.
   const dateKey: Record<string, string> = { created: "created_date", updated: "updated_date" };
   const written = Object.fromEntries(Object.entries(fields).map(([k, v]) => [dateKey[k] ?? k, v]));
-  const fm = serializeFrontmatter({ id: `${repo}-${item.id}`, title: item.title, ...written, repo });
+  const fm = serializeFrontmatter({ id: `${repo}-${refOf(item)}`, title: item.title, ...written, repo });
   const block: string[] = [];
   if (item.body.trim()) block.push(item.body.replace(/\n+$/, ""));
   if (item.notes.length) block.push(["### Notes", "", ...item.notes].join("\n"));
@@ -157,12 +159,15 @@ export function parseItem(text: string): Item {
       .filter(([k]) => !(k === "created" && raw.created_date !== undefined) && !(k === "updated" && raw.updated_date !== undefined))
       .map(([k, v]) => [dateKey[k] ?? k, v]),
   );
-  const id = Number(/-(\d+)$/.exec(String(full))?.[1]);
+  const m = /-(\d+)(?:\.(\d+))?$/.exec(String(full));
+  const id = Number(m?.[1]);
+  const sub = m?.[2] === undefined ? undefined : Number(m[2]);
   const { body, notes } = splitNotes(rest);
   return {
     id,
+    ...(sub === undefined ? {} : { sub }),
     title: String(title ?? ""),
-    fm: { id: String(id), ...fields },
+    fm: { id: sub === undefined ? String(id) : `${id}.${sub}`, ...fields },
     body: body.replace(/^\n+/, "").replace(/\n+$/, ""),
     notes,
     legacy: false,
@@ -184,7 +189,11 @@ export function blank(repo: string): Doc {
   return { head: `# To do\n\nThings to build or look at in ${repo}. \`aleph issue\` owns this file.\nItem numbers never change: commits, the spec and the vault quote them.`, items: [] };
 }
 
-export const find = (doc: Doc, id: number): Item | undefined => doc.items.find((i) => i.id === id);
+/** `"5"` for a plain item, `"5.1"` for a goal. */
+export const refOf = (item: Item): string => (item.sub === undefined ? String(item.id) : `${item.id}.${item.sub}`);
+/** A number resolves to the plain item, never to a goal under it. */
+export const find = (doc: Doc, id: number): Item | undefined => doc.items.find((i) => i.id === id && i.sub === undefined);
+// The max of `id` ignores `sub` on purpose: a goal's id is its parent's number, so a goal never takes a new issue number.
 export const nextId = (doc: Doc): number => doc.items.reduce((m, i) => Math.max(m, i.id), 0) + 1;
 
 export function add(doc: Doc, title: string, o: { priority?: string; labels?: string[]; body?: string; due?: string; waitingOn?: string; now?: Date } = {}): Item {
@@ -262,9 +271,9 @@ export interface Finding {
 /** `exists` says whether `<repo>-<n>` names an item; without it a `waiting_on` is only checked for form. */
 export function lint(doc: Doc, exists?: (repo: string, id: number) => boolean): Finding[] {
   const findings: Finding[] = [];
-  const seen = new Map<number, number>();
+  const seen = new Map<string, number>();
   for (const item of doc.items) {
-    seen.set(item.id, (seen.get(item.id) ?? 0) + 1);
+    seen.set(refOf(item), (seen.get(refOf(item)) ?? 0) + 1);
     if (item.legacy) continue;
     for (const key of REQUIRED) {
       if (item.fm[key] === undefined || item.fm[key] === "") {
@@ -299,9 +308,9 @@ export function lint(doc: Doc, exists?: (repo: string, id: number) => boolean): 
       if (v !== undefined && !ok.includes(v as string)) findings.push({ id: item.id, problem: `${key} "${v}" is not one of ${ok.join(", ")}`, fixable: false });
     }
     if (item.fm.labels !== undefined && !Array.isArray(item.fm.labels)) findings.push({ id: item.id, problem: "labels must be a list", fixable: true });
-    if (item.fm.id !== undefined && Number(item.fm.id) !== item.id) findings.push({ id: item.id, problem: `id says ${item.fm.id} but the heading says ${item.id}`, fixable: true });
+    if (item.fm.id !== undefined && String(item.fm.id) !== refOf(item)) findings.push({ id: item.id, problem: `id says ${item.fm.id} but the heading says ${refOf(item)}`, fixable: true });
   }
-  for (const [id, count] of seen) if (count > 1) findings.push({ id, problem: `${count} items share id ${id}`, fixable: false });
+  for (const [ref, count] of seen) if (count > 1) findings.push({ id: Number.parseInt(ref), problem: `${count} items share id ${ref}`, fixable: false });
   return findings.sort((a, b) => a.id - b.id);
 }
 

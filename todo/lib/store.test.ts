@@ -223,3 +223,58 @@ describe("the work store file", () => {
     expect(commits()).toBe(before);
   });
 });
+
+describe("dotted goal files", () => {
+  const dotted = () => {
+    const r = { key: `st${++n}` };
+    const dir = join(base, "items");
+    const tasks = join(dir, r.key, "backlog", "tasks");
+    sh(dir, "mkdir", "-p", tasks);
+    Bun.write(join(dir, r.key, "backlog", "config.yml"), issues.config(r.key));
+    for (const ref of ["5", "5.1", "5.2"]) {
+      const text = `---\nid: ${r.key}-${ref}\ntitle: t${ref}\nstatus: open\ncreated_date: 2026-10-30\nupdated_date: 2026-10-30\n---\n\nbody ${ref}\n`;
+      require("node:fs").writeFileSync(join(tasks, `${r.key}-${ref}.md`), text);
+    }
+    require("node:fs").writeFileSync(join(dir, r.key, "backlog", "config.yml"), issues.config(r.key));
+    sh(dir, "git", "add", "-A");
+    sh(dir, "git", "commit", "-q", "-m", "hand-written");
+    sh(dir, "git", "push", "-q", "origin", "main");
+    return r;
+  };
+
+  test("readList gives the three items in order, all with id 5", () => {
+    const r = dotted();
+    const items = issues.readList(r)!.items;
+    expect(items.map(todos.refOf)).toEqual(["5", "5.1", "5.2"]);
+    expect(items.map((i) => i.id)).toEqual([5, 5, 5]);
+    expect(items.some((i) => Number.isNaN(i.id))).toBe(false);
+  });
+
+  test("a number resolves to the plain item", () => {
+    const r = dotted();
+    expect(todos.find(issues.readList(r)!, 5)!.sub).toBeUndefined();
+    expect(issues.reader().item(r.key, 5)!.sub).toBeUndefined();
+  });
+
+  test("a note on item 5 changes only proj-5.md", () => {
+    const r = dotted();
+    issues.note(r, 5, "hello");
+    const dir = join(base, "items");
+    sh(dir, "git", "fetch", "-q", "origin");
+    const changed = sh(dir, "git", "diff", "--name-only", "origin/main~1", "origin/main").split("\n");
+    expect(changed).toEqual([`${r.key}/backlog/tasks/${r.key}-5.md`]);
+    expect(sh(dir, "git", "ls-tree", "-r", "--name-only", "origin/main")).not.toContain("NaN");
+  });
+
+  test("file gives issue number 6", () => {
+    const r = dotted();
+    expect(issues.file(r, "new", [{ title: "x", labels: [] }])).toEqual([6]);
+  });
+
+  test("itemTimes has a key for the goal", () => {
+    const r = dotted();
+    issues.readList(r);
+    sh(join(base, "items"), "git", "fetch", "-q", "origin");
+    expect(issues.itemTimes().has(`${r.key}-5.1`)).toBe(true);
+  });
+});

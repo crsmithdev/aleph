@@ -28,7 +28,7 @@ const ATTEMPTS = 5;
 export const storeDir = (): string => expand(process.env.ALEPH_ITEMS ?? "~/.aleph/items");
 const tasksDir = (key: string): string => `${key}/backlog/tasks`;
 const configPath = (key: string): string => `${key}/backlog/config.yml`;
-const itemPath = (key: string, id: number): string => `${tasksDir(key)}/${key}-${id}.md`;
+const itemPath = (key: string, item: todos.Item | string): string => `${tasksDir(key)}/${key}-${typeof item === "string" ? item : todos.refOf(item)}.md`;
 
 /**
  * The Backlog.md project file for a repo: its statuses are aleph's, and
@@ -104,9 +104,9 @@ function load(dir: string, rev: string, key: string): Doc | null {
   const ls = git(dir, "ls-tree", "-r", "-z", "--name-only", rev, "--", configPath(key), `${tasksDir(key)}/`);
   const paths = ls.ok ? ls.out.split("\0") : [];
   if (!paths.includes(configPath(key))) return null;
-  const names = paths.filter((p) => p.startsWith(`${tasksDir(key)}/`) && p.endsWith(".md") && !p.slice(tasksDir(key).length + 1).includes("/") && !/-\d+\.\d+\.md$/.test(p));
+  const names = paths.filter((p) => p.startsWith(`${tasksDir(key)}/`) && p.endsWith(".md") && !p.slice(tasksDir(key).length + 1).includes("/"));
   const items = readFiles(dir, names.map((p) => `${rev}:${p}`)).map(parseItem);
-  return { head: "", items: items.sort((a, b) => a.id - b.id) };
+  return { head: "", items: items.sort((a, b) => a.id - b.id || (a.sub ?? -1) - (b.sub ?? -1)) };
 }
 
 /** The repo's list on the store's origin/main, or null when the store has none. */
@@ -142,13 +142,13 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
     const found = load(dir, base, repo.key);
     if (found === null && !create) throw new Error(`the work store has no list for ${repo.key}`);
     const doc = found ?? { head: "", items: [] };
-    const before = new Map(doc.items.map((i) => [i.id, renderItem(repo.key, i)]));
+    const before = new Map(doc.items.map((i) => [todos.refOf(i), renderItem(repo.key, i)]));
     const value = change(doc);
     if (value === null) return null;
     const files: Record<string, string> = found === null ? { [configPath(repo.key)]: config(repo.key) } : {};
     for (const item of doc.items) {
       const text = renderItem(repo.key, item);
-      if (before.get(item.id) !== text) files[itemPath(repo.key, item.id)] = text;
+      if (before.get(todos.refOf(item)) !== text) files[itemPath(repo.key, item)] = text;
     }
     // Nothing changed: no commit, so the store's history holds only real writes.
     if (Object.keys(files).length === 0) return { value, commit: base, follow: null };
@@ -223,7 +223,7 @@ export function itemTimes(): Map<string, { added: number; changed: number }> {
   for (const line of p.stdout.toString().split("\n")) {
     if (!line) continue;
     if (/^\d+$/.test(line)) { ct = Number(line) * 1000; continue; }
-    const m = /^([^/]+)\/backlog\/tasks\/\1-(\d+)\.md$/.exec(line);
+    const m = /^([^/]+)\/backlog\/tasks\/\1-(\d+(?:\.\d+)?)\.md$/.exec(line);
     if (!m) continue;
     const ref = `${m[1]}-${m[2]}`;
     const t = out.get(ref);
@@ -341,7 +341,7 @@ export function reader(o: { fetch?: boolean } = {}): Reader {
     }
     return lists.get(key)!;
   };
-  return { list, item: (key, id) => list(key)?.items.find((i) => i.id === id) };
+  return { list, item: (key, id) => list(key)?.items.find((i) => i.id === id && i.sub === undefined) };
 }
 
 /** The open goals of each repo, in repo then number order. A repo whose list cannot be read has none. */
