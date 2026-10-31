@@ -6,7 +6,7 @@
  * name, run as a subprocess by the launcher; the page offers nothing the CLI does not. A POST must carry `X-Aleph-UI: 1` and, when it has
  * an Origin, the server's own, so a web page in the browser cannot post here. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
-import { askOf, isAwaiting, loadRegistry } from "../../jobs/lib/ledger.ts";
+import { askOf, isAwaiting, loadRegistry, onOf } from "../../jobs/lib/ledger.ts";
 import { latestJob } from "../../jobs/lib/job.ts";
 import { runCli } from "../../jobs/lib/launch.ts";
 import { Refusal } from "../../jobs/lib/transitions.ts";
@@ -72,7 +72,7 @@ const answerAndRerun: Handler = async (req, { name }) => {
   return Response.json(await runCli(["drop", name, `Chris answered the worker's question "${last.run.question ?? ""}": ${said}`]));
 };
 
-/** "Wait for <repo>-<n>": set the stuck job's item to wait on that open issue, then drop the job. */
+/** "Wait for <repo>-<n>": set the stuck job's issue (a goal run's dotted `on` names the issue holding the goal) to wait on that open issue, then drop the job. */
 const wait: Handler = async (req, { name }) => {
   if (!sameSite(req)) return text("forbidden", 403);
   const last = find(name);
@@ -80,12 +80,12 @@ const wait: Handler = async (req, { name }) => {
   const body: any = await req.json().catch(() => ({}));
   const on = typeof body?.on === "string" ? body.on.trim() : "";
   const m = /^(.+)-(\d+)$/.exec(on);
-  const repo = last.run.repo, todo = last.run.todo;
-  if (!m || !repo || todo === undefined) return text("on must name a <repo>-<n> issue and the job an item", 400);
+  const repo = last.run.repo, issue = onOf(last.run);
+  if (!m || !repo || issue === undefined) return text("on must name a <repo>-<n> issue and the job an item", 400);
   // In process, as the firefighter does: `aleph issue edit` no longer takes `--waiting-on`.
   const place = loadRegistry()[repo];
   if (!place) return text(`no repo named ${repo}`, 400);
-  try { issues.edit(place, Number(todo), { waitingOn: on }); } catch (e: any) {
+  try { issues.edit(place, typeof issue === "string" ? Number(issue.split(".")[0]) : issue, { waitingOn: on }); } catch (e: any) {
     if (!(e instanceof Refusal)) throw e;
     return Response.json({ error: e.message }, { status: 422 });
   }

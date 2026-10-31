@@ -30,7 +30,7 @@ beforeAll(async () => {
   writeFileSync(join(repo, "b.txt"), "main moved\n");
   sh(repo, "add", "."); sh(repo, "commit", "-qm", "main moves on");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ r: { path: repo } }));
-  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { needs: "question", question: "which colour?" }], ["stuckjob", { state: "stuck" }], ["wt", { todo: 7 }], ["wtgone", { todo: 99 }]] as const) {
+  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { needs: "question", question: "which colour?" }], ["stuckjob", { state: "stuck" }], ["wt", { todo: 7 }], ["wtgone", { todo: 99 }], ["won", { on: "r-5" }], ["wgoal", { on: "r-6.1" }]] as const) {
     const folder = join(base, "jobs", `20261027-100000-r-${name}-agent`);
     mkdirSync(folder, { recursive: true });
     writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "agent", state: "needs-you", started: new Date().toISOString(), name, job: name, repo: "r", ...extra }));
@@ -89,6 +89,18 @@ test("POST /api/wait sets the item's waiting_on in process, then drops the job",
   const calledNow = recorded().slice(before);
   expect(calledNow).toHaveLength(1);
   expect(calledNow[0].startsWith("drop wt Chris chose to wait for r-9")).toBe(true);
+});
+
+test("POST /api/wait reads the issue from `on`, and the integer part of a goal's dotted `on`", async () => {
+  for (const [job, n] of [["won", 5], ["wgoal", 6]] as const) {
+    const before = recorded().length;
+    const res = await post(`/api/wait/${job}`, { "X-Aleph-UI": "1" }, { on: "r-9" });
+    expect(res.status).toBe(200);
+    expect(waiting(n)).toBe("r-9");
+    const calledNow = recorded().slice(before);
+    expect(calledNow).toHaveLength(1);
+    expect(calledNow[0].startsWith(`drop ${job} Chris chose to wait for r-9`)).toBe(true);
+  }
 });
 
 test("POST /api/wait is 422 when the edit is refused, and drops nothing", async () => {
