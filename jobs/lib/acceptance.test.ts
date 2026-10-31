@@ -436,9 +436,9 @@ test("on a busy machine the rerun waits, and then runs on the commit that failed
   sh(repoDir(), "git", "push", "-q", "origin", "main");
   process.env.ALEPH_QUIET_LOAD = "100000";
   await acceptanceStep(answers({ code: 0, output: "" }));
-  // The rerun and the Oracle command after it, and not the command that came before.
-  expect(ran[0]).toContain("-t");
-  expect(ran[1]).toBe("bun run ok");
+  // The rerun (three times: the goal touches every test) and the Oracle command after it, and not the command that came before.
+  expect(ran.slice(0, 3).every((c) => c.includes("-t"))).toBe(true);
+  expect(ran[3]).toBe("bun run ok");
   expect(new Set(shas)).toEqual(new Set([failedAt]));
   expect(readRecord("fac", id)?.result).toBe("pass");
 });
@@ -458,6 +458,95 @@ test("a repeat in a test the goal touched reopens; a repeat only in others goes 
   expect(lines.find((l) => l.startsWith(`fac-${other}:`))).toContain("acceptance passed");
   expect(issues.status(item(other))).toBe("done");
   expect(notes(other)).toContain("on the flake list");
+});
+
+const parentOf = (id: number) => sh(repoDir(), "git", "rev-parse", `${sh(repoDir(), "git", "log", "origin/main", "--reverse", "--format=%H", `--grep=Item: fac-${id}`).split("\n")[0]}^`);
+const RERUN_FAIL = { code: 1, output: "jobs/lib/acceptance.test.ts:\n(fail) one\n 1 fail\n" };
+
+test("a repeat in an untouched file that passes at the goal's parent and fails at its newest commit reopens the goal", async () => {
+  const id = doneGoal("`bun run test`");
+  landFile(id, "c.ts");
+  const parent = parentOf(id);
+  const at: string[] = [];
+  const r: Runner = async (_repo, sha, command) => { ran.push(command); at.push(sha); return command === "bun run test" || sha !== parent ? RERUN_FAIL : { code: 0, output: "" }; };
+  await acceptanceStep(r);
+  expect(at).toContain(parent);
+  expect(issues.status(item(id))).toBe("open");
+  expect(notes(id)).toContain("acceptance: fail at");
+});
+
+test("a repeat in an untouched file that also fails at the parent goes to the flake list, and the goal passes", async () => {
+  const id = doneGoal("`bun run test`");
+  landFile(id, "c.ts");
+  const lines = await acceptanceStep(runner(1, RERUN_FAIL.output));
+  expect(lines[0]).toContain("acceptance passed");
+  expect(issues.status(item(id))).toBe("done");
+  expect(flakeNotes()).toContain("jobs/lib/acceptance.test.ts > one: failed twice, in a test the goal did not touch, and also at the goal's parent");
+});
+
+test("a repeat in an untouched file that passes at the goal's newest commit goes to the flake list, and the goal passes", async () => {
+  const id = doneGoal("`bun run test`");
+  landFile(id, "c.ts");
+  const newest = sh(repoDir(), "git", "rev-parse", "origin/main");
+  sh(repoDir(), "git", "commit", "-q", "--allow-empty", "-m", "later");
+  sh(repoDir(), "git", "push", "-q", "origin", "main");
+  const r: Runner = async (_repo, sha, command) => { ran.push(command); return sha === newest ? { code: 0, output: "" } : RERUN_FAIL; };
+  const lines = await acceptanceStep(r);
+  expect(lines[0]).toContain("acceptance passed");
+  expect(issues.status(item(id))).toBe("done");
+  expect(flakeNotes()).toContain("and passed at the goal's newest commit");
+});
+
+test("a touched test that fails on the second rerun is a repeat; one that passes every rerun is a flake", async () => {
+  const pass = { code: 0, output: " 1 pass\n 0 fail\n" };
+  const a = doneGoal("`bun run test`");
+  landFile(a, "jobs/lib/acceptance.test.ts");
+  await acceptanceStep(answers(RERUN_FAIL, pass, RERUN_FAIL));
+  expect(ran.length).toBe(3);
+  expect(issues.status(item(a))).toBe("open");
+  ran.length = 0;
+  const b = doneGoal("`bun run test`");
+  landFile(b, "jobs/lib/acceptance.test.ts");
+  const lines = await acceptanceStep(answers(RERUN_FAIL, pass));
+  expect(ran.length).toBe(4);
+  expect(lines.find((l) => l.startsWith(`fac-${b}:`))).toContain("acceptance passed");
+  expect(issues.status(item(b))).toBe("done");
+  expect(flakeNotes()).toContain("jobs/lib/acceptance.test.ts > one: failed under load");
+});
+
+test("a retest older than 24 hours runs on a busy machine, also when the goal is older than ACCEPTANCE_DAYS", async () => {
+  const id = doneGoal("`bun run test`");
+  process.env.ALEPH_QUIET_LOAD = "-1";
+  const t0 = new Date();
+  await acceptanceStep(answers(RERUN_FAIL), t0);
+  expect(readRecord("fac", id)?.retest?.since).toBeTruthy();
+  ran.length = 0;
+  const soon = new Date(t0.getTime() + 3_600_000);
+  expect((await acceptanceStep(runner(0), soon))[0]).toContain("waits for a quiet machine");
+  expect(ran).toEqual([]);
+  const later = new Date(t0.getTime() + 3 * 86_400_000);
+  const lines = await acceptanceStep(runner(0), later);
+  expect(lines[0]).toContain("acceptance passed");
+  expect(readRecord("fac", id)?.result).toBe("pass");
+});
+
+test("a failure pinned to the wrong file does not reopen the goal when the original command passes", async () => {
+  const id = doneGoal("`bun run test`");
+  landFile(id, "jobs/lib/acceptance.test.ts");
+  const none = { code: 1, output: 'bun test\nerror: regex "^one$" matched 0 tests. Searched 1 file\n' };
+  await acceptanceStep(answers(RERUN_FAIL, none, { code: 0, output: " 1 pass\n 0 fail\n" }));
+  expect(ran[1]).toContain("-t");
+  expect(ran[2]).toBe("bun run test");
+  expect(issues.status(item(id))).toBe("done");
+  expect(readRecord("fac", id)?.result).toBe("pass");
+  expect(notes(id)).not.toContain("acceptance: fail");
+});
+
+test("real bun test reports a filter that matches nothing as 'matched 0 tests'", () => {
+  writeFileSync(join(base, "n.test.ts"), `import { test } from "bun:test";\ntest("one", () => {});\n`);
+  const p = Bun.spawnSync(["bash", "-c", rerunOf("x", [{ file: "n.test.ts", name: "missing" }])], { cwd: base, stdout: "pipe", stderr: "pipe" });
+  expect(p.exitCode).not.toBe(0);
+  expect(p.stderr.toString() + p.stdout.toString()).toContain("matched 0 tests");
 });
 
 test("a failure that names no test reopens only if the command fails again", async () => {

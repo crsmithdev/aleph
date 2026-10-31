@@ -516,7 +516,7 @@ export async function acceptanceStep(run: Runner = sandboxRunner, now = issues.c
   const lists = reader();
   for (const repo of sandboxRepos()) {
     const list = lists.list(repo.key)?.items ?? [];
-    const due = list.filter((i) => kindOf(i) === "goal" && issues.status(i) === "done" && String(i.fm.updated ?? "") >= since && !final(readRecord(repo.key, issues.refOf(i))));
+    const due = list.filter((i) => kindOf(i) === "goal" && issues.status(i) === "done" && (String(i.fm.updated ?? "") >= since || !!readRecord(repo.key, issues.refOf(i))?.retest) && !final(readRecord(repo.key, issues.refOf(i))));
     if (!due.length) continue;
     if (!fetchOrigin(repo.path).ok) { lines.push(`${repo.key}: acceptance not run: fetch failed`); continue; }
     for (const listed of due) {
@@ -526,7 +526,7 @@ export async function acceptanceStep(run: Runner = sandboxRunner, now = issues.c
         const item = reader().item(repo.key, issues.refOf(listed));
         if (!item || issues.status(item) !== "done" || final(readRecord(repo.key, issues.refOf(item)))) continue;
         if (kindOf(item) !== "issue" && !itemOnMain(repo, issues.idOf(item))) continue;
-        lines.push(await accept(repo, item, run));
+        lines.push(await accept(repo, item, run, now));
       } finally {
         release();
       }

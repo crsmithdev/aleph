@@ -42,7 +42,12 @@ export interface Accepted {
 export interface FailedTest { file?: string; name: string }
 
 /** What a failure runs again: `rerun`, on the commit that failed. */
-export interface Retest { commit: string; command: string; rerun: string; tests: FailedTest[] }
+export interface Retest { commit: string; command: string; rerun: string; tests: FailedTest[]; /** When the wait for a quiet machine began (ISO time). After `MAX_WAIT_MS` the rerun runs whatever the load. */ since?: string }
+
+/** The longest a rerun waits for a quiet machine. */
+export const MAX_WAIT_MS = 24 * 3_600_000;
+/** Reruns of a touched test that passed once, before it counts as a flake. */
+const EXTRA_RERUNS = 2;
 
 export function readRecord(key: string, id: number | string): Accepted | null {
   try { return JSON.parse(readFileSync(file(key, id), "utf8")); } catch { return null; }
@@ -134,6 +139,8 @@ function goalFiles(repo: Repo, name: string): Set<string> {
 }
 
 const testLabel = (t: FailedTest) => `${t.file ?? "(no file)"} > ${t.name}`;
+/** How `bun test -t` reports a filter that matches no test: `error: regex "..." matched 0 tests`, exit 1. */
+const NO_MATCH = /matched 0 tests/;
 const failing = (r: Ran) => r.code !== 0 || FAIL_SUMMARY.test(r.output);
 
 /** The commands in backticks in the issue's `## Oracle` section that start with a command the repo's checks use. */
@@ -228,12 +235,14 @@ function markPassed(key: string, commit: string, command: string): void {
  * Run the Oracle of the done goal `item` on origin/<main>, and record what came of it.
  * Returns a line for the log. The caller has fetched and holds the goal's lock.
  */
-export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandboxRunner): Promise<string> {
+export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandboxRunner, now: Date = issues.clock()): Promise<string> {
   const ref = issues.refOf(item);
   const name = `${repo.key}-${ref}`;
   const prev = readRecord(repo.key, ref);
   const waiting = prev?.retest;
-  if (waiting && !quiet()) return `${name}: acceptance rerun waits for a quiet machine (${waiting.command})`;
+  const began = Date.parse(waiting?.since ?? "");
+  const overdue = Number.isFinite(began) && now.getTime() - began >= MAX_WAIT_MS;
+  if (waiting && !quiet() && !overdue) return `${name}: acceptance rerun waits for a quiet machine (${waiting.command})`;
   const sha = git(repo.path, "rev-parse", "--short=7", waiting?.commit ?? `origin/${repo.main}`).out;
   if (!sha) return `${name}: acceptance not run: no origin/${repo.main}`;
   const full = waiting?.commit ?? git(repo.path, "rev-parse", `origin/${repo.main}`).out;
@@ -258,23 +267,55 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandb
       if (r.infra) return `${name}: acceptance not run: ${lastLines(r.output)}`;
       if (!failing(r)) { markPassed(repo.key, full, command); continue; }
       const tests = failedTests(r.output);
-      failed = { commit: full, command, rerun: rerunOf(command, tests), tests };
+      failed = { commit: full, command, rerun: rerunOf(command, tests), tests, since: now.toISOString() };
       writeRecord(repo.key, ref, { result: "fail", sha, command, fails: prev?.fails ?? 0, ...(prev?.since ? { since: prev.since } : {}), retest: failed });
       if (!quiet()) return `${name}: acceptance failed at ${sha} (${command}); the rerun waits for a quiet machine`;
     }
-    const r = await run(repo, full, failed.rerun);
+    let r = await run(repo, full, failed.rerun);
     // The record keeps the retest, so the next step tries the rerun again.
     if (r.infra) return `${name}: acceptance not run: ${lastLines(r.output)}`;
+    const touched = goalFiles(repo, name);
+    const isTouched = (t: FailedTest) => !t.file || !touched.size || touched.has(t.file);
+    // A filter that matches no test names the wrong file: the Oracle's own command is the rerun.
+    let pinned = failed.tests.length > 0 && failed.rerun !== command;
+    if (pinned && NO_MATCH.test(r.output)) {
+      pinned = false;
+      r = await run(repo, full, command);
+      if (r.infra) return `${name}: acceptance not run: ${lastLines(r.output)}`;
+    }
+    // A touched test that passes once runs again before it is called a flake: any failure is a repeat.
+    if (!failing(r) && pinned && failed.tests.some(isTouched)) {
+      for (let i = 0; i < EXTRA_RERUNS && !failing(r); i++) {
+        r = await run(repo, full, failed.rerun);
+        if (r.infra) return `${name}: acceptance not run: ${lastLines(r.output)}`;
+      }
+    }
     if (!failing(r)) {
-      if (failed.tests.length) for (const t of failed.tests) flake(t, "failed under load, passed on the quiet rerun");
+      if (pinned) for (const t of failed.tests) flake(t, "failed under load, passed on the quiet rerun");
       else flake(`\`${command}\``, "failed under load, passed on the quiet rerun");
       continue;
     }
     const tests = failedTests(r.output);
-    const touched = goalFiles(repo, name);
     const others = tests.filter((t) => t.file && touched.size && !touched.has(t.file));
-    for (const t of others) flake(t, "failed twice, in a test the goal did not touch,");
-    if (tests.length && others.length === tests.length) continue;
+    if (tests.length && others.length === tests.length) {
+      // Only untouched files fail: a regression of the goal if they fail at its newest commit and passed before it.
+      const hits = commitsNaming(repo.path, `origin/${repo.main}`, name);
+      const parent = hits.length ? git(repo.path, "rev-parse", "--verify", "-q", `${hits.at(-1)}^`).out : "";
+      let why = "failed twice, in a test the goal did not touch,";
+      if (!parent) why += " and the goal has no parent commit to compare with,";
+      else {
+        const at = await run(repo, hits[0], failed.rerun);
+        if (at.infra) return `${name}: acceptance not run: ${lastLines(at.output)}`;
+        if (!failing(at)) why += " and passed at the goal's newest commit,";
+        else {
+          const before = await run(repo, parent, failed.rerun);
+          if (before.infra) return `${name}: acceptance not run: ${lastLines(before.output)}`;
+          if (failing(before)) why += " and also at the goal's parent,";
+          else why = "";
+        }
+      }
+      if (why) { for (const t of others) flake(t, why); continue; }
+    } else for (const t of others) flake(t, "failed twice, in a test the goal did not touch,");
     const fails = (prev?.fails ?? 0) + 1;
     const out = `\`${command}\` exited ${r.code}${r.code === 0 ? " with failing tests" : ""}, and the quiet rerun failed too: ${tests.length ? `${tests.slice(0, 40).map((t) => `(fail) ${testLabel(t).slice(0, 200)}`).join(" ⏎ ")} ⏎ ` : ""}${lastLines(r.output)}`;
     if (fails < 2) {
