@@ -4,6 +4,7 @@ Description=aleph factory tick, every 30 minutes
 
 [Timer]
 OnBootSec=10min
+OnStartupSec=2min
 OnUnitActiveSec=30min
 AccuracySec=1min
 
