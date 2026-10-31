@@ -6,7 +6,7 @@ import { askOf, clearAsk, readList, writeList } from "../../todo/lib/store.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { AWAITING_CAP, correctionsDue, dispatchGoals, episodeStep, report, gates, notReady, spentToday, waitReason, hold, saveProbe, setPaused, waitingToLand, type Rescue } from "./factory.ts";
+import { AWAITING_CAP, correctionsDue, dispatchGoals, episodeStep, report, gates, notReady, spentToday, waitReason, hold, saveProbe, setPaused, waitingToLand, type Rescue , factoryDir } from "./factory.ts";
 import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -717,6 +717,35 @@ test("no commit, the item open, first time: dropped and the goal reruns once, wi
   expect(f.specs[0]).toContain("line 30");
   expect(f.specs[0]).not.toContain("line 10\n");
   expect(notes(id)).toContain("made no commit");
+});
+
+const dottedGoal = (): string => writeList({ key: "fac" }, "add a dotted goal", (doc) => issues.refOf(issues.addGoal(doc, issues.add(doc, "parent"), { title: "g", body: "Do the thing." })), true)!.value;
+const dotted = (ref: string) => readList({ key: "fac" })!.items.find((i) => issues.refOf(i) === ref)!;
+
+test("a dotted goal's rescue note reaches the goal, and a second no-commit run asks Chris on it", async () => {
+  const ref = dottedGoal();
+  mk(`fac-${ref}`, "build", "stuck", { reason: "no commit" });
+  const f = fakes();
+  await dispatch(f);
+  expect(dotted(ref).notes.join("\n")).toContain("the last run made no commit");
+  mk(`fac-${ref}`, "build", "stuck", { reason: "no commit" });
+  await dispatch(f);
+  expect(store.kindOf(dotted(ref))).toBe("goal");
+  expect(askOf(dotted(ref))).not.toBeNull();
+});
+
+test("a pass that began before a pause starts nothing after it", async () => {
+  const first = goal();
+  goal();
+  const calls: string[] = [];
+  const out = await dispatchGoals(async (_repo, name) => {
+    calls.push(name);
+    mkdirSync(factoryDir(), { recursive: true });
+    writeFileSync(join(factoryDir(), "paused"), "");
+    return null;
+  }, async () => null);
+  expect(calls).toEqual([`fac-${first}`]);
+  expect(out.skipped.at(-1)).toEndWith(": paused");
 });
 
 test("the second no-commit run with no claim goes back to triage: its kind is issue, no Ask, the note quotes result.md", async () => {

@@ -414,7 +414,8 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       // A plan job runs detached: the goal gets no second planner and no worker while it does.
       const parent = issueNumber(repo, item);
       if (parent !== null && await planning(repo, parent)) { skipped.push(`${name}: planning`); continue; }
-      const gated = gates({ only: ["live", "day", "awaiting"], jobs });
+      // A pass that began before a pause must not start a run after it.
+      const gated = gates({ only: ["pause", "live", "day", "awaiting"], jobs });
       if (gated) { skipped.push(`${name}: ${gated.why}`); continue; }
       // Read again just before the start: an item done or dropped since it was read starts no run, whatever the trigger.
       const latest = reader().item(repo.key, ref);
@@ -450,6 +451,7 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
       let tier: Tier | null | undefined;
       if (rate) {
         const p = await needsPlan(repo, item, spec, rate);
+        if (paused()) { skipped.push(`${name}: paused`); continue; }
         if ("plan" in p) { plan(repo, issueNumber(repo, item)!); planned.push(name); continue; }
         tier = p.tier;
       }
@@ -696,8 +698,10 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
   const r = last.run;
   const repo = loadRegistry()[r.repo!];
   const name = r.name;
-  const todo = issueOf(runs) ?? Number(name.match(/-(\d+)$/)?.[1]);
-  const issue = Number.isInteger(todo) ? todo : undefined;
+  const fromName = name.match(/-(\d+(?:\.\d+)?)$/)?.[1];
+  // A dotted goal's id is a string; only an issue's plain number can go back to triage.
+  const issue = issueOf(runs) ?? (fromName === undefined ? undefined : fromName.includes(".") ? fromName : Number(fromName));
+  const plain = typeof issue === "number";
   const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${repo.key}/${name}: ${line}`); };
   const record = (text: string, opts: { done?: boolean; kind?: "issue"; ask?: Ask } = {}) => {
     const why = issue === undefined ? "no issue" : note(repo, issue, text, opts);
@@ -764,7 +768,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
     const before = allRuns().filter((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key).length;
     // A no-commit run with no claim, twice: the goal is the likely fault, so the issue goes back to triage, once.
     const sentBack = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === "triaged");
-    if (before && key === "no-commit" && !sentBack && issue !== undefined) {
+    if (before && key === "no-commit" && !sentBack && plain) {
       markRescued(last, "triaged");
       const text = `${r.kind} run ${last.id} ended with no commit again, and the worker did not say the goal is already met: dropped, and the issue went back to triage to rewrite the goal, close the issue, or ask Chris. The last 20 lines of its result.md (a note is one line, so lines are joined with " | "): ${tailOf(last, "result.md", 20).split("\n").map((l) => l.trim()).filter(Boolean).join(" | ") || "(empty)"}`;
       if (!await tryDo(await act.drop(name, text), "drop")) return;
@@ -787,6 +791,8 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
       if (!await tryDo(await act.drop(name, text), "drop")) return;
       record(text, { done: true });
       await say(text);
+    } else if (earlier && !plain) {
+      return chris(`${name} says the goal is already met again (${claim}), but ${red}. Drop it, or change the goal?`, choice(`${name} says the goal is already met again, but ${red}: how should the factory go on?`, [`Claim: ${claim}`]));
     } else if (earlier && issue !== undefined) {
       const text = `${r.kind} run ${last.id} says the goal is already met again (${claim}), but ${red}: dropped, and the issue went back to triage`;
       if (!await tryDo(await act.drop(name, text), "drop")) return;
