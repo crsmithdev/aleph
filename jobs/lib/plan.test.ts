@@ -205,29 +205,35 @@ test("a dispatch returns before a slow planner replies; the small goal starts, a
   const small = writeList({ key: "fac" }, "add", (doc) => todos.add(doc, "small", { labels: ["goal"], body: body("small") }).id, true)!.value;
   const starts: string[] = [];
   const plans: Promise<unknown>[] = [];
-  const out = await dispatchGoals(async (_r, name) => { starts.push(name); return null; }, undefined, undefined, undefined,
-    async (spec) => (spec.includes("PLAN:slow") ? "opus" : "sonnet"), (repo, id) => { plans.push(planNow(repo, id)); });
-  expect(starts).toEqual([`fac-${small}`]);
-  expect(out.planned).toEqual([`fac-${big}`]);
-  // A bounded wait, of at most about 3 seconds, for the fake planner to log its call while the plan runs.
-  for (let i = 0; planCalls().length < 1 && i < 150; i++) await Bun.sleep(20);
-  expect(planRuns()).toEqual([expect.objectContaining({ kind: "plan", todo: big, state: "running" })]);
+  try {
+    const out = await dispatchGoals(async (_r, name) => { starts.push(name); return null; }, undefined, undefined, undefined,
+      async (spec) => (spec.includes("PLAN:slow") ? "opus" : "sonnet"), (repo, id) => { plans.push(planNow(repo, id)); });
+    expect(starts).toEqual([`fac-${small}`]);
+    expect(out.planned).toEqual([`fac-${big}`]);
+    // A bounded wait, of at most about 3 seconds, for the fake planner to log its call while the plan runs.
+    for (let i = 0; planCalls().length < 1 && i < 150; i++) await Bun.sleep(20);
+    expect(planRuns()).toEqual([expect.objectContaining({ kind: "plan", todo: big, state: "running" })]);
 
-  // A second pass starts no second plan and no worker for the large goal.
-  const again: string[] = [];
-  const out2 = await dispatchGoals(async (_r, name) => { again.push(name); return null; }, undefined, undefined, undefined,
-    async (spec) => (spec.includes("PLAN:slow") ? "opus" : "sonnet"), (repo, id) => { plans.push(planNow(repo, id)); });
-  expect(again).not.toContain(`fac-${big}`);
-  expect(out2.skipped).toContain(`fac-${big}: planning`);
-  expect(plans.length).toBe(1);
-  expect(planCalls().length).toBe(1);
+    // A second pass starts no second plan and no worker for the large goal.
+    const again: string[] = [];
+    const out2 = await dispatchGoals(async (_r, name) => { again.push(name); return null; }, undefined, undefined, undefined,
+      async (spec) => (spec.includes("PLAN:slow") ? "opus" : "sonnet"), (repo, id) => { plans.push(planNow(repo, id)); });
+    expect(again).not.toContain(`fac-${big}`);
+    expect(out2.skipped).toContain(`fac-${big}: planning`);
+    expect(plans.length).toBe(1);
+    expect(planCalls().length).toBe(1);
 
-  // The planner waits for this file, so the dispatch returned while it was still running, whatever the load.
-  writeFileSync(join(base, "release"), "");
-  await Promise.all(plans);
-  expect(item(big).fm.waiting_on).toBe(`fac-${big + 2},fac-${big + 3},fac-${big + 4}`);
-  expect(itemLabels(item(big))).toContain("planned");
-  expect(planRuns()).toEqual([expect.objectContaining({ state: "done", reason: "planned" })]);
+    // The planner waits for this file, so the dispatch returned while it was still running, whatever the load.
+    writeFileSync(join(base, "release"), "");
+    await Promise.all(plans);
+    expect(item(big).fm.waiting_on).toBe(`fac-${big + 2},fac-${big + 3},fac-${big + 4}`);
+    expect(itemLabels(item(big))).toContain("planned");
+    expect(planRuns()).toEqual([expect.objectContaining({ state: "done", reason: "planned" })]);
+  } finally {
+    // Runs even when an assertion throws: release the planner and let every started plan finish before afterEach removes the folder.
+    writeFileSync(join(base, "release"), "");
+    await Promise.allSettled(plans);
+  }
 });
 
 test("a plan job left running by a dead process is ended as failed, and the goal is planned again", async () => {
