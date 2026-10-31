@@ -210,3 +210,9 @@ test("the sidebar has no category headings, and a button at its bottom collapses
   expect(html).toContain('localStorage.setItem(KEY, collapsed ? "1" : "0")');
   expect(html).toMatch(/#collapse \{ margin-top: auto;/);
 });
+
+test("index.html declares an empty icon in its head", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const head = html.slice(html.indexOf("<head>"), html.indexOf("</head>"));
+  expect(head).toContain('<link rel="icon" href="data:,">');
+});

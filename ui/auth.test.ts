@@ -69,3 +69,10 @@ test("gate off without ALEPH_UI_PASSWORD", async () => {
   expect((await at("/api/state")).status).toBe(200);
   expect((await login(at, "x")).status).toBe(404);
 });
+
+test("loginPage declares an empty icon in its head", async () => {
+  const { loginPage } = await import("./auth.ts");
+  const html = loginPage();
+  const head = html.slice(html.indexOf("<head>"), html.indexOf("</head>"));
+  expect(head).toContain('<link rel="icon" href="data:,">');
+});

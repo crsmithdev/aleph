@@ -46,7 +46,7 @@ const hasSession = (req: Request) => {
 
 export function loginPage(): string {
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Aleph — sign in</title>
 <style>
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f1115;color:#e6e8ec;font:16px system-ui,sans-serif}
