@@ -253,6 +253,20 @@ describe("aleph migrate", () => {
     expect(r.code).toBe(1);
   });
 
+  test("a migrated store is refused by the dry run and by apply, writing nothing", async () => {
+    const over = { ALEPH_ITEMS: dir("issues"), ALEPH_ISSUES: dir("nowhere"), ALEPH_JOBS_DIR: dir("runs") };
+    const tip = sh(dir("items.git"), "git", "rev-parse", "main");
+    const backups = readdirSync(dir("backups")).sort();
+    for (const mode of ["--dry-run", "--apply"]) {
+      const r = await aleph(["migrate", mode], over);
+      expect(r.code, r.stdout + r.stderr).toBe(1);
+      expect(r.stdout + r.stderr).toContain(dir("issues"));
+      expect(sh(dir("items.git"), "git", "rev-parse", "main")).toBe(tip);
+      expect(readdirSync(dir("backups")).sort()).toEqual(backups);
+      expect(existsSync(dir("nowhere"))).toBe(false);
+    }
+  });
+
   test("undo pushes a commit with the pre-apply tree on top of the apply commit, and the store follows it", async () => {
     const applyCommit = sh(dir("items.git"), "git", "rev-parse", "main");
     expect(JSON.parse(readFileSync(join(dir("backups"), "20261030-141516-migrate", "meta.json"), "utf8"))).toMatchObject({ preCommit, applyCommit });

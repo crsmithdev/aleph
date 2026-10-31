@@ -267,10 +267,27 @@ function convertRun(run: Run, split: Set<string>): Run {
   return r;
 }
 
+/** A ref on origin/main that has the new shape (a dotted id, or `kind: issue`), if any; `kind: goal` alone is not the signal. */
+function migratedRef(dir: string): string | undefined {
+  const g = git(dir, "grep", "-I", "-E", "^(id|kind):", "origin/main", "--", "*.md");
+  if (!g.ok) return undefined;
+  for (const line of g.out.split("\n")) {
+    const m = /^origin\/main:(.+?):(?:\d+:)?(id|kind):\s*["']?([^"'\s]*)["']?\s*$/.exec(line);
+    if (!m) continue;
+    const [, path, key, val] = m;
+    if (key === "id" && /\d\.\d/.test(val)) return val;
+    // An old item can say `kind: issue` too, but its id is the bare number: the new shape names the repo.
+    if (key === "kind" && val === "issue" && !/^\d+$/.test(basename(path, ".md").replace(/^.*-/, ""))) return basename(path, ".md");
+  }
+  return undefined;
+}
+
 export function plan(r: Roots = roots()): Plan {
   if (!existsSync(r.store)) refuse(`no store at ${r.store}`);
   const fetched = fetchOrigin(r.store, "main");
   if (!fetched.ok) refuse(`store fetch failed: ${fetched.out}`);
+  const done = migratedRef(r.store);
+  if (done) refuse(`${r.store} is already migrated: ${done} has the new shape`);
   const repos = repoKeys(r.store);
   const runs = oldRuns(r.ledger);
   // The old status reads open jobs: a run in the old state `needs-you` is open as `awaiting` is.
@@ -346,8 +363,8 @@ export function apply(r: Roots = roots()): { backup: string; commit: string; ite
   if (!existsSync(join(r.factory, "paused"))) refuse("the factory is not paused: run `aleph pause` first");
   const live = liveRun(r.ledger);
   if (live) refuse(`a run is live: ${live}`);
-  if (existsSync(r.issues) || existsSync(r.sandbox)) refuse(`${existsSync(r.issues) ? r.issues : r.sandbox} already exists: has the migration run?`);
   const p = plan(r);
+  if (existsSync(r.issues) || existsSync(r.sandbox)) refuse(`${existsSync(r.issues) ? r.issues : r.sandbox} already exists: has the migration run?`);
   const bad = p.rows.filter((x) => !x.ok);
   if (bad.length) refuse(`${bad.length} item(s) have a status/stage pair outside the mapping table; run --dry-run`);
 
