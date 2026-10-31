@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { goalsOf, kindOf, readList, writeList } from "../todo/lib/store.ts";
 import { buildReviewFixture } from "./fixtures/review/build.ts";
-import { addLegacy as add } from "../todo/lib/todo.ts";
+import { addGoal, addLegacy as add } from "../todo/lib/todo.ts";
 import { state } from "./state.ts";
 import { loadRegistry } from "../jobs/lib/ledger.ts";
 import { spawn } from "node:child_process";
@@ -213,7 +213,17 @@ describe("state", () => {
     run("20261027-000007-a", { job: "fac-7", name: "fac-7", state: "landed", todo: 1, commit, ended: ago(1), started: ago(2) });
     const s = state(now);
     expect(s.delivered.find((j) => j.name === "fac-7")!.trailers).toEqual([{ key: "Item", value: "fac-1" }, { key: "Job", value: "fac-7" }]);
-    expect(s.needs[0].trailers).toEqual([{ key: "Item", value: "fac-1" }, { key: "Job", value: "fac-1" }, { key: "Held-by", value: "Chris" }]);
+    expect(s.needs[0].trailers).toEqual([{ key: "Issue", value: "fac-1" }, { key: "Job", value: "fac-1" }, { key: "Held-by", value: "Chris" }]);
+  });
+
+  test("trailers: a needs-you run on a goal previews its issue, then the goal, then its job", () => {
+    writeList({ key: "fac" }, "goal of fac-1", (doc) => {
+      addGoal(doc, doc.items.find((i) => i.id === 1)!, { title: "a goal", body: "" });
+      return true;
+    });
+    run("20261027-000040-a", { job: "fac-g1", name: "fac-g1", state: "needs-you", todo: "1.1", ended: ago(1), started: ago(2) });
+    const j = state(now).needs.find((x) => x.name === "fac-g1")!;
+    expect(j.trailers).toEqual([{ key: "Issue", value: "fac-1" }, { key: "Goal", value: "fac-1.1" }, { key: "Job", value: "fac-g1" }]);
   });
 
   test("delivered holds the 10 latest lands, newest first", () => {

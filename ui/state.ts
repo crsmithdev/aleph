@@ -11,7 +11,7 @@ import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from 
 import { readDecision, type Decision } from "../jobs/lib/decision.ts";
 import { attend, stuckBlocker, type AttentionItem, type Blocker } from "./attention.ts";
 import { readStanding } from "../jobs/lib/standing.ts";
-import { askOf, labels, reader } from "../todo/lib/store.ts";
+import { askOf, issueOf, labels, reader } from "../todo/lib/store.ts";
 import { parseRef, status } from "../todo/lib/todo.ts";
 import { facts, landedIndex, stages } from "../jobs/lib/status.ts";
 import type { Stage } from "../jobs/lib/stage.ts";
@@ -163,6 +163,15 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
   const lists = reader();
   const bases = new Map<string, string | null>();
 
+  // The trailers the land writes: `Issue` for the run's issue; for a goal, the goal's issue (when the store knows it), then `Goal`.
+  const needsYouIssue = (key: string | undefined, todo: number | string | undefined): { key: string; value: string }[] => {
+    if (todo === undefined || key === undefined) return [];
+    if (typeof todo === "number") return [{ key: "Issue", value: `${key}-${todo}` }];
+    const goal = lists.item(key, todo);
+    const issue = goal ? issueOf(goal) : null;
+    return [...(issue ? [{ key: "Issue", value: issue }] : []), { key: "Goal", value: `${key}-${todo}` }];
+  };
+
   const toJob = (runs: Runs, v: JobView = view(runs)): Job => {
     const repo = v.repo ? registry[v.repo] : undefined;
     const todo = v.item;
@@ -187,7 +196,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
     if (accepted) job.acceptance = accepted;
     const trailers = v.state === "landed" ? landedTrailers(repo, v.commit)
       : v.state === "needs-you" ? [
-        ...(todo !== undefined ? [{ key: "Item", value: `${v.repo}-${todo}` }] : []),
+        ...needsYouIssue(v.repo, todo),
         { key: "Job", value: v.job },
         ...(v.needs === "held" || v.needs === "review" ? [{ key: "Held-by", value: "Chris" }] : []),
       ] : [];
