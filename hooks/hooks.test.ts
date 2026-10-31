@@ -42,6 +42,24 @@ describe("dotenv", () => {
     expect(env.LANGFUSE_SECRET_KEY).toBe("sk-shell");
     rmSync(join(file, ".."), { recursive: true, force: true });
   });
+
+  test("langfuseConfig does not export ALEPH_UI_PASSWORD from ~/.aleph/.env", () => {
+    const home = mkdtempSync(join(tmpdir(), "aleph-home-"));
+    mkdirSync(join(home, ".aleph"));
+    writeFileSync(join(home, ".aleph", ".env"), "ALEPH_UI_PASSWORD=secret\nLANGFUSE_PUBLIC_KEY=pk-file\nLANGFUSE_SECRET_KEY=sk-file\n");
+    // a child process: langfuseConfig() reads the default path and writes process.env
+    const env: Record<string, string | undefined> = { ...process.env, HOME: home };
+    for (const key of ["ALEPH_UI_PASSWORD", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"]) delete env[key];
+    const script = `import { langfuseConfig } from ${JSON.stringify(join(HOOKS, "lib", "env.ts"))};
+const config = langfuseConfig();
+console.log(JSON.stringify({ config, password: process.env.ALEPH_UI_PASSWORD ?? null }));`;
+    const run = Bun.spawnSync([process.execPath, "-e", script], { env, stdout: "pipe", stderr: "pipe" });
+    rmSync(home, { recursive: true, force: true });
+    expect(run.stderr.toString()).toBe("");
+    const out = JSON.parse(run.stdout.toString().trim());
+    expect(out.config.publicKey).toBe("pk-file");
+    expect(out.password).toBeNull();
+  });
 });
 
 describe("environment", () => {
