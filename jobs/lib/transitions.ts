@@ -132,7 +132,9 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
   const name = checkName(a.name);
   let on = a.on;
   if (on !== undefined) {
-    if (!/^\d+(\.\d+)?$/.test(String(on))) refuse("--on takes an issue number");
+    const ref = String(on).startsWith(`${repo.key}-`) ? String(on).slice(repo.key.length + 1) : String(on);
+    if (!/^\d+(\.\d+)?$/.test(ref)) refuse("--on takes an issue number");
+    on = ref.includes(".") ? ref : Number(ref);
     let doc: todos.Doc | null = null;
     try { doc = store.readList(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
     if (!doc) refuse(`the work store has no list for ${repo.key}`);

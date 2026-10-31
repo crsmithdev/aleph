@@ -10,6 +10,16 @@ afterAll(teardown);
 describe("a factory run", () => {
   const fjob = (name: string, action: string, extra: Record<string, string> = {}, more: string[] = []) =>
     aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), ...more], extra);
+  test("a run held for a held path is awaiting, with an approval ask and no needs; aleph jobs still lists it as needs-you held", async () => {
+    // No background review2: it would rewrite the run's reason.
+    const r = await aleph(["job", "fac", "rheldpath", "--spec", specFile("Goal: rheldpath\nACTION: commit held/rp.txt\n")], { ALEPH_REVIEW2_CMD: "/bin/false" });
+    const s = state(r.json.run);
+    expect(s).toMatchObject({ kind: "build", state: "awaiting", ask: { kind: "approval", reason: "held-path" } });
+    expect(s.needs).toBeUndefined();
+    const listed = (await aleph(["jobs"])).json.find((j: any) => j.name === "rheldpath");
+    expect(listed).toMatchObject({ state: "needs-you", needs: "held" });
+    await aleph(["drop", "rheldpath"]);
+  });
   test("a stuck job holds the factory: no start, no land by itself; Chris's land works; pause is separate; a drop clears it", async () => {
     // The hold is what this test is about: the safe default actions would clear or release the run.
     process.env.ALEPH_RESCUE = "off";

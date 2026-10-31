@@ -6,7 +6,7 @@
  * name, run as a subprocess by the launcher; the page offers nothing the CLI does not. A POST must carry `X-Aleph-UI: 1` and, when it has
  * an Origin, the server's own, so a web page in the browser cannot post here. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
-import { loadRegistry } from "../../jobs/lib/ledger.ts";
+import { askOf, isAwaiting, loadRegistry } from "../../jobs/lib/ledger.ts";
 import { latestJob } from "../../jobs/lib/job.ts";
 import { runCli } from "../../jobs/lib/launch.ts";
 import { Refusal } from "../../jobs/lib/transitions.ts";
@@ -57,7 +57,7 @@ const answer: Handler = async (req, { name }) => {
   const body: any = await req.json().catch(() => ({}));
   const said = typeof body?.answer === "string" ? body.answer.trim() : "";
   if (!said) return text("answer is required", 400);
-  if (last.run.state !== "needs-you" || last.run.needs !== "question") return text(`${name} is not waiting on a question`, 409);
+  if (!isAwaiting(last.run.state) || askOf(last.run)?.reason !== "question") return text(`${name} is not waiting on a question`, 409);
   return Response.json(await runCli(["job", last.run.repo ?? "", name, "--spec", "-"], { stdin: `Chris: ${said}` }));
 };
 
@@ -65,7 +65,7 @@ const answerAndRerun: Handler = async (req, { name }) => {
   if (!sameSite(req)) return text("forbidden", 403);
   const last = find(name);
   if (!last) return text(`no job named ${name}`, 404);
-  if (last.run.state !== "needs-you" || last.run.needs !== "question") return text("this run is not waiting for an answer", 409);
+  if (!isAwaiting(last.run.state) || askOf(last.run)?.reason !== "question") return text("this run is not waiting for an answer", 409);
   const body: any = await req.json().catch(() => ({}));
   const said = typeof body?.answer === "string" ? body.answer.trim() : "";
   if (!said) return text("answer is required", 400);

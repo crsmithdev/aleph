@@ -32,7 +32,7 @@ const stateFile = () => join(factoryDir(), "firefighter.json");
 /** Paths a firefighter never lands: a diff that touches one goes to Chris. */
 export const SECURITY_PATHS = ["hooks/", "jobs/lib/sandbox.ts", "jobs/lib/gate.ts", "jobs/lib/review2-browser.ts"];
 
-export type EventKind = "needs-you" | "stuck" | "failed" | "loop" | "red" | "ask" | "lost";
+export type EventKind = "awaiting" | "stuck" | "failed" | "loop" | "red" | "ask" | "lost";
 /**
  * One thing the snapshot found. `key` is what makes it new: it changes when the thing does.
  * `reason` is the reason code it waits for; `handed` marks one whose reason Chris handed to the firefighter (always.json).
@@ -55,7 +55,7 @@ export function snapshot(now = Date.now()): Event[] {
     const at = { repo: r.repo, job: r.name, ...(item !== undefined ? { item } : {}) };
     if (isAwaiting(r.state) || r.state === "stuck" || r.state === "failed") {
       const reason = isAwaiting(r.state) ? askOf(r)?.reason : undefined;
-      events.push(hand({ key: `${r.state}:${r.repo}/${last.id}`, kind: isAwaiting(r.state) ? "needs-you" : r.state as "stuck" | "failed", ...at, ...(reason ? { reason } : {}), line: `${r.name} is ${r.state}${reason ? ` (${reason})` : ""}${r.reason ? `: ${r.reason}` : ""}` }));
+      events.push(hand({ key: `${r.state}:${r.repo}/${last.id}`, kind: isAwaiting(r.state) ? "awaiting" : r.state as "stuck" | "failed", ...at, ...(reason ? { reason } : {}), line: `${r.name} is ${r.state}${reason ? ` (${reason})` : ""}${r.reason ? `: ${r.reason}` : ""}` }));
     } else if (r.state === "running" && isLost(last.folder)) {
       events.push({ key: `lost:${r.repo}/${last.id}`, kind: "lost", ...at, line: `${r.name}: its ${r.kind} run ${last.id} is running, but its process is gone` });
     }

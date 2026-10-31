@@ -23,6 +23,29 @@ describe("a job tied to a to-do item", () => {
     expect(readdirSync(jobsDir).length).toBe(before);
   });
 
+  test("a run writes kind build and on, never todo; --todo is refused and starts nothing", async () => {
+    const id = (await aleph(["issue", "add", "demo", "shape check", "--goal", "-"], { ALEPH_DISPATCH: "off" }, "ACTION: commit shape.txt")).json.added;
+    const j = await aleph(["job", "demo", "shape", "--spec", specFile("Goal: shape\nACTION: commit shape.txt\n"), "--on", `demo-${id}.1`]);
+    const s = state(j.json.run);
+    expect(s).toMatchObject({ kind: "build", on: `demo-${id}.1` });
+    expect(s.todo).toBeUndefined();
+    await aleph(["drop", "shape"]);
+    const before = readdirSync(jobsDir).length;
+    const r = await aleph(["job", "demo", "shape2", "--spec", specFile("x"), "--todo", String(id)]);
+    expect(r.code).toBe(1);
+    expect(readdirSync(jobsDir).length).toBe(before);
+  });
+
+  test("--on takes the repo-prefixed form, and refuses another repo's prefix", async () => {
+    const id = (await aleph(["issue", "add", "demo", "prefixed"])).json.added;
+    const j = await aleph(["job", "demo", "prefixed", "--spec", specFile("Goal: prefixed\nACTION: commit prefixed.txt\n"), "--on", `demo-${id}`]);
+    expect(j.code).toBe(0);
+    expect(state(j.json.run).on).toBe(`demo-${id}`);
+    const bad = await aleph(["job", "demo", "otherrepo", "--spec", specFile("x"), "--on", `other-${id}`]);
+    expect(bad.code).toBe(1);
+    expect(bad.stderr).toContain("--on takes an issue number");
+  });
+
   test("land marks the item done, naming the job and the landing commit", async () => {
     const j = await aleph(["job", "demo", "widget", "--spec", specFile("Goal: widget\nACTION: commit widget.txt\n"), "--on", String(landId)]);
     expect(state(j.json.run)).toMatchObject({ state: "passed", on: `demo-${landId}` });

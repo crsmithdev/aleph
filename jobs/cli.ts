@@ -41,7 +41,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--spec", "--model", "--on", "--priority", "--labels", "--goal", "--status", "--label", "--body", "--title", "--due", "--after", "--reopened-since", "--before", "--undo"];
+const VALUED = ["--spec", "--model", "--todo", "--on", "--priority", "--labels", "--goal", "--status", "--label", "--body", "--title", "--due", "--after", "--reopened-since", "--before", "--undo"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
 const command = process.argv.slice(2);
@@ -59,8 +59,9 @@ async function job(): Promise<void> {
   const specArg = flag("spec") ?? refuse("--spec <file|-> is required");
   const [repo, name] = positional;
   const spec = specArg === "-" ? await Bun.stdin.text() : readFileSync(specArg, "utf8");
+  if (rest.includes("--todo")) refuse("--todo is gone: use --on <n>|<n>.<k>|<repo>-<n>[.<k>]");
   const onArg = flag("on");
-  await started(await startJob({ repo, name, spec, on: onArg === undefined ? undefined : /^\d+\.\d+$/.test(onArg) ? onArg : Number(onArg), model: flag("model"), land: rest.includes("--land") }, { command }));
+  await started(await startJob({ repo, name, spec, on: onArg, model: flag("model"), land: rest.includes("--land") }, { command }));
 }
 
 async function plain(): Promise<void> {
