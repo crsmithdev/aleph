@@ -453,10 +453,13 @@ table.tbl th .arr { display: inline-block; width: 1em; margin-left: 2px; font-si
 .crumb { margin: 0 0 8px; font: var(--fs-sm) var(--mono); color: var(--muted); }
 .crumb a { color: var(--muted); text-decoration: none; }
 .crumb a:hover, .crumb a:focus-visible { color: var(--ink); text-decoration: underline; }
-form[data-ui="issue-note"], form[data-ui="issue-edit"] { margin-top: 8px; }
-form[data-ui="issue-note"] label, form[data-ui="issue-edit"] label { display: block; margin-bottom: 8px; }
-form[data-ui="issue-note"] textarea, form[data-ui="issue-edit"] textarea, form[data-ui="issue-edit"] input { display: block; width: 100%; margin-top: 4px; font: inherit; }
-form[data-ui="issue-edit"] select { display: block; margin-top: 4px; font: inherit; }
+form[data-ui="issue-note"] { margin-top: 8px; }
+form[data-ui="issue-note"] label { display: block; margin-bottom: 8px; }
+form[data-ui="issue-note"] textarea { display: block; width: 100%; margin-top: 4px; font: inherit; }
+.issue-page:not(.editing) .edit-only, .issue-page.editing .view-only { display: none; }
+.issue-page input.edit-only, .issue-page textarea.edit-only, .issue-page .edit-only input, .issue-page .edit-only select { font: inherit; padding: 3px 6px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: inherit; }
+.issue-page .title-edit { flex: 1 1 auto; min-width: 0; font: inherit; font-size: var(--fs-lg); }
+.issue-page .body-edit { display: block; width: 100%; }
 .status-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; }
 .idp { white-space: nowrap; font: var(--fs-xs) var(--mono); color: var(--muted); }
 a.idl { white-space: nowrap; font: 500 var(--fs-xs) var(--mono); color: var(--muted); text-decoration: none; }

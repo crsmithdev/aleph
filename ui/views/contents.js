@@ -280,19 +280,17 @@ export const description = (body) => String(body ?? "").replace(/^\s*## Request[
 export const linkSpecs = (html, repo, files = []) => html.replace(/docs\/specs\/([\w.-]+\.md)/g, (m, f) => (files.includes(f) ? `<a href="#/specs/${encodeURIComponent(repo)}/${encodeURIComponent(f)}">${m}</a>` : m));
 
 const PRIORITIES = ["high", "medium", "low"], SOURCES = ["chris", "worker", "deps", "memory"];
-const choose = (name, all, cur) => `<select name="${name}">${(all.includes(cur) || !cur ? all : [cur, ...all]).map((o) => `<option${o === cur ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+const choose = (name, all, cur) => `<select name="${name}" ${FORM} aria-label="${name}">${(all.includes(cur) || !cur ? all : [cur, ...all]).map((o) => `<option${o === cur ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
 
-/** The form that edits what Chris can change on an issue or goal. */
-function renderEdit(d, ref) {
-  const fm = d.frontmatter ?? {};
-  return `<details class="new"><summary>Edit</summary><form data-ui="issue-edit" class="stack" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}">` +
-    `<label>Title <input name="title" required value="${esc(d.title)}"></label>` +
-    `<label>Priority ${choose("priority", PRIORITIES, d.priority ?? "medium")}</label>` +
-    `<label>Source ${choose("source", SOURCES, fm.source ?? "chris")}</label>` +
-    `<label>Areas <input name="areas" placeholder="comma separated" value="${esc((d.labels ?? []).join(", "))}"></label>` +
-    `<label>${d.kind === "goal" ? "Goal" : "Description"} <textarea name="body" rows="14">${esc(description(d.body))}</textarea></label>` +
-    `<button type="submit" class="cmd primary">Save</button> <span class="form-msg" role="status"></span></form></details>`;
-}
+/** One value and its editor in one place: edit mode shows the editor. The controls join the form in the head by `form=`. */
+const editable = (shown, editor) => `<span class="view-only">${shown}</span><span class="edit-only">${editor}</span>`;
+const FORM = 'form="issue-edit"';
+
+/** The head of the Issue page: the title and the Edit button, or the title's input and Save and Cancel. */
+const issueHead = (d, ref) => `<header class="ph"><h1 class="view-only">${esc(d.title)}</h1>` +
+  `<input class="edit-only title-edit" name="title" ${FORM} required aria-label="Title" value="${esc(d.title)}">` +
+  `<div class="aside"><button type="button" class="cmd view-only" data-edit="start">Edit</button>` +
+  `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="form-msg" role="status"></span> <button type="button" class="cmd" data-edit="cancel">Cancel</button> <button type="submit" class="cmd primary">Save</button></form></div></header>`;
 
 /** The form that appends a note. */
 const renderNoteForm = (d, ref) => `<form data-ui="issue-note" class="stack" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}">` +
@@ -303,7 +301,11 @@ const renderNoteForm = (d, ref) => `<form data-ui="issue-note" class="stack" dat
 export function renderIssue(d) {
   const fm = d.frontmatter ?? {};
   const HIDE = ["labels", "id", "status", "kind", "goals", "issue", "after", "created", "updated", "repo", "title"];
-  const facts = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => `<div><dt>${esc(k[0].toUpperCase() + k.slice(1))}</dt><dd>${esc(Array.isArray(v) ? v.map(labelName).join(", ") : v)}</dd></div>`).join("");
+  const fact = (name, dd) => `<div><dt>${esc(name)}</dt><dd>${dd}</dd></div>`;
+  const areas = d.labels ?? [], priority = d.priority ?? "medium", source = fm.source ?? "chris";
+  const facts = fact("Priority", editable(esc(priority), choose("priority", PRIORITIES, priority))) + fact("Source", editable(esc(source), choose("source", SOURCES, source))) +
+    fact("Areas", editable(esc(areas.map(labelName).join(", ") || "-"), `<input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}">`)) +
+    Object.entries(fm).filter(([k]) => !HIDE.includes(k) && !["priority", "source", "areas"].includes(k)).map(([k, v]) => fact(k[0].toUpperCase() + k.slice(1), esc(Array.isArray(v) ? v.map(labelName).join(", ") : v))).join("");
   const notes = d.notes.length ? `<ul class="notes">${d.notes.map((n) => `<li>${esc(n.replace(/^- /, ""))}</li>`).join("")}</ul>` : empty("No notes.");
   const goals = d.goals ?? [];
   const goalTable = goals.length
@@ -325,10 +327,10 @@ export function renderIssue(d) {
   const place = isIssue ? [project, ["issues", inventory], [ref]]
     : d.issue ? [project, ["issues", inventory], [localId(d.issue.id, d.repo), d.issue.href], ["goals"], [ref]]
     : [project, ["goals"], [ref]];
-  return `<div class="page">${crumb(inventory, place)}` + pageHead(d.title) +
+  return `<div class="page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) +
     `<div class="status-row">${d.derived ? stateBadge(d.derived.stage) : badge(d.status)}${chips(fm.labels)}</div>` +
-    (facts ? `<dl class="facts">${facts}</dl>` : "") +
-    `<div class="sh"><h2 id="h-request">${isIssue ? "Description" : "Goal"}</h2></div><div class="md" id="request">${linkSpecs(md(request), d.repo, d.specs)}</div>${renderEdit(d, ref)}` +
+    `<dl class="facts">${facts}</dl>` +
+    `<div class="sh"><h2 id="h-request">${isIssue ? "Description" : "Goal"}</h2></div><div class="md view-only" id="request">${linkSpecs(md(request), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="body" ${FORM} rows="16" aria-label="${isIssue ? "Description" : "Goal"}">${esc(description(d.body))}</textarea>` +
     (isIssue ? `<div class="sh"><h2 id="h-goals">Goals</h2><span class="count">${goals.length}</span></div>${goalTable}` : "") +
     `<div class="sh"><h2>Notes</h2></div>${notes}${renderNoteForm(d, ref)}<div class="sh"><h2>Runs</h2></div>${jobs}<div class="sh"><h2>Commits</h2></div>${commits}</div>`;
 }
@@ -363,6 +365,15 @@ if (typeof document !== "undefined") {
     if (b) return setQuery(b.closest(".seg").dataset.name, b.dataset.value);
     const more = e.target.closest && e.target.closest("#issues-table button[data-more]");
     if (more) setQuery("limit", String(hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? "")).limit + Number(more.dataset.more)));
+  });
+  // Edit mode: the page shows the editors in place of the values; Cancel puts the saved values back.
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-edit]");
+    if (!b) return;
+    const page = b.closest(".issue-page"), start = b.dataset.edit === "start";
+    if (!start) page.querySelector("#issue-edit").reset();
+    page.classList.toggle("editing", start);
+    if (start) page.querySelector(".title-edit").focus();
   });
   document.addEventListener("submit", async (e) => {
     const form = e.target.closest && e.target.closest('form[data-ui="issue-edit"], form[data-ui="issue-note"]');
