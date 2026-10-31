@@ -1,3 +1,36 @@
+# aleph-702: why a held start in `six starts at once` ends early
+
+## Cause
+
+Not confirmed from a recorded run. `bun run test` did not reproduce the failure here: 3 runs before the fix passed (1162 pass, 0 fail), so I have no recorded state and reason of an early-ended run from the test. The state and reason are therefore not named here.
+
+What I reproduced is the race in the hypothesis, outside the test. Five shells ran the setup block of `jobs/lib/unit.ts` (`git fetch`, `worktree remove`, `worktree prune`, `branch -D`, `worktree add -b ... origin/main`) at once on one repo, 40 rounds. Failures seen:
+
+- `worktree add`: `error: could not lock config file .git/config: File exists` and `unable to write upstream branch configuration` (9 times); the add exits non-zero, which the unit records as `failed`, reason `worktree add failed: ...`.
+- `worktree add`: `fatal: bad object worktrees/wt4/HEAD`, from `worktree prune` in another unit.
+- `git fetch`: `did not send all necessary objects` (1 time), which the unit records as `failed`, reason `fetch failed`. `fetchOrigin` retries only on "cannot lock ref".
+
+A unit that fails there returns `code: 1` in `agent()`, and `started()` in `jobs/cli.ts` ignores the exit code, so the start prints its JSON and exits 0. That matches the logged symptom. These are the likely reasons, not a recorded one.
+
+## Changes
+
+- `jobs/cli.basic.test.ts`: the assertion on the first returned start prints the `state` and `reason` of the run when stdout holds a run (`endedRun`). The next failure records the reason. Committed first.
+- `jobs/lib/unit.ts`: the fetch / remove / prune / branch -D / worktree add block runs under `lock("setup-<repo key>")`, so one unit of a repo runs it at a time. The lock waits up to 300 s; if it is busy the run fails with `setup lock busy`. No timeout raised, no test retry, no exit code change.
+
+## Verification
+
+`bun run test` (`bun test --timeout=30000 --parallel=$(nproc)`, 24 cores), in the foreground, one after another, after the last edit:
+
+- Run 1: 1159 pass, 1 fail, exit 1. The failure was `(unnamed)` in `jobs/cli.slots-check.test.ts`, a beforeEach/afterEach hook timeout at 31 s, in a run that took 347 s against 82-218 s for the others. `guards > six starts at once` passed. The file passes alone (3 pass). I take it to be load, not this change, but did not prove that.
+- Runs 2-6: 1162 pass, 0 fail, exit 0 each.
+- `guards > six starts at once`: passed in 6 of 6 runs.
+- `bun test jobs/cli.basic.test.ts`: 22 pass, 0 fail (before the lock change; it is in the full runs after).
+
+## Limits
+
+The failure did not reproduce under `bun run test`, before or after the fix, so a pass rate of 6 of 6 does not show the fix works. The fix rests on the git reproduction above. Running 8 copies of the guards test at once gave one 300 s timeout, not an early exit; I take that to be the 5-run live cap shared across copies, not this bug.
+
+---
 # aleph-743: why `guards > six starts at once` can hang
 
 ## Cause: not reproduced, the hypothesis is a real race
@@ -65,3 +98,9 @@ Not determined. The sandbox has only this repo, and nothing in it names aleph-74
 ## Limits
 
 - The failure reported in aleph-743 run 1 did not reproduce in this sandbox. The five runs show no failure, but they do not show that the load-sensitive failure is gone under the original load of that job. The stated oracle is met, but that is not a reproduction.
+
+---
+
+# aleph-702: land merge with origin/main
+
+Merged `origin/main` (40241a2). Conflicts in `jobs/cli.basic.test.ts` (kept main's version of the guards test and added `endedRun` to its assertion message), `jobs/lib/unit.ts` (setup lock kept; main's `setup.log` entry and fetch error text in the reason kept inside it) and `result.md` (both sections kept). After the merge: `bun test jobs/cli.basic.test.ts` 22 pass; one `bun run test` run: 1172 pass, 0 fail (`six starts at once` passed). Only one full run was made after the merge, so the 5-run pass-rate above is from before it.

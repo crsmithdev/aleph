@@ -823,16 +823,24 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   // A new job starts from origin/<main>, after it clears what an ended job of that name left.
   if (run.job === id || !existsSync(wt)) {
     phase("setup");
-    const fetched = fetchOrigin(repo.path);
-    if (!fetched.ok) {
-      appendFileSync(join(folder, "setup.log"), `## fetch: failed\n${fetched.out}\n`);
-      return fail(`fetch failed: ${fetched.out}`);
+    // Units of one repo share its .git: a concurrent worktree add fails on the config lock, prune removes another's
+    // half-made worktree entry, and fetch can fail on shared files. One unit at a time runs these git writes.
+    const release = await lock(`setup-${repo.key}`, 300_000);
+    if (!release) return fail("setup lock busy");
+    try {
+      const fetched = fetchOrigin(repo.path);
+      if (!fetched.ok) {
+        appendFileSync(join(folder, "setup.log"), `## fetch: failed\n${fetched.out}\n`);
+        return fail(`fetch failed: ${fetched.out}`);
+      }
+      git(repo.path, "worktree", "remove", "--force", wt);
+      git(repo.path, "worktree", "prune");
+      git(repo.path, "branch", "-D", branch);
+      const add = git(repo.path, "worktree", "add", "-q", "-b", branch, wt, `origin/${repo.main}`);
+      if (!add.ok) return fail(`worktree add failed: ${add.out}`);
+    } finally {
+      release();
     }
-    git(repo.path, "worktree", "remove", "--force", wt);
-    git(repo.path, "worktree", "prune");
-    git(repo.path, "branch", "-D", branch);
-    const add = git(repo.path, "worktree", "add", "-q", "-b", branch, wt, `origin/${repo.main}`);
-    if (!add.ok) return fail(`worktree add failed: ${add.out}`);
   }
 
   const marker = join(git(wt, "rev-parse", "--absolute-git-dir").out, "aleph-setup");

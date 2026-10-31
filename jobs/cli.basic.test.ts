@@ -166,6 +166,16 @@ describe("the state rule", () => {
   });
 });
 
+/** The recorded state and reason of the run a start printed, for an assertion message. */
+function endedRun(r: { stdout: string }): string {
+  try {
+    const run = JSON.parse(r.stdout).run;
+    return run ? `\nrun ${run}: ${JSON.stringify(state(run))}` : "";
+  } catch {
+    return "";
+  }
+}
+
 describe("guards", () => {
   test("a worker's push goes to aleph-no-push and gh has no credentials", async () => {
     await job("pusher", "push");
@@ -197,7 +207,7 @@ describe("guards", () => {
         throw new Error(`no start returned in 150 s\n${JSON.stringify(seen, null, 1)}\nstderr (after drop; look for "wrote no pid"):\n${stderr.join("\n")}`);
       }
       const refused = first as Awaited<(typeof started)[number]>;
-      expect(refused.code, refused.stdout + refused.stderr).toBe(1);
+      expect(refused.code, refused.stdout + refused.stderr + endedRun(refused)).toBe(1);
       expect(refused.stderr).toContain("5 agent runs are live");
       // The refusal comes as soon as the fifth unit wrote `pid`; on a loaded machine some are still in phase setup.
       let live = await mine();
