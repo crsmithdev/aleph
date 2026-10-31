@@ -9,7 +9,7 @@ Everything runs on [Bun](https://bun.sh). Langfuse is optional and self-hosted.
 | Path | Holds |
 |---|---|
 | `skills/` | the skills, invoked as `/aleph:<name>` |
-| `jobs/` | `aleph`: agent jobs, the land, the issue CLI and the factory (`jobs/lib/sandbox.ts`, `gate.ts`, `factory.ts`; the job transitions in `transitions.ts`, which `jobs/cli.ts` and the factory call, and every `aleph` process start in `launch.ts`); the tick's systemd units |
+| `jobs/` | `aleph`: agent jobs, the land, the issue CLI and the factory (`jobs/lib/sandbox.ts`, `gate.ts`, `factory.ts`; the job transitions in `transitions.ts`, which `jobs/cli.ts` and the factory call, and every `aleph` process start in `launch.ts`); the tick's systemd units; `jobs/windows/`: the Windows startup task script |
 | `hooks/` | the hook scripts and `hooks.json`, against the 2.1.x hook API |
 | `vault/cli.ts` | the memory vault's mechanics (each write op commits and pushes): `init`, `write`, `adopt`, `recall`, `lint [--fix]`, `consolidate`, `rename-scope`, `archive`, `compile`, `misses [--days N]` (read-only: recall misses from Langfuse) |
 | `identity/CLAUDE.md` | the global `CLAUDE.md` the hooks assume: the worktree rule, the verification rule, the voice |
@@ -165,6 +165,22 @@ aleph status                 # the same for each open item in the recent repos
 aleph jobs                   # open jobs, then the jobs that ended in the last 24 hours
 aleph pause | aleph resume
 ```
+
+### Start at boot
+
+WSL starts from a Startup shortcut only after a Windows logon, so after a power loss `aleph.home` and the tick stay down until someone logs on. Inside WSL the units are enabled and linger is on, so the distro boot is the only missing step. The fix is a Windows scheduled task that starts the distro at startup. Registering it needs one elevated run of the script.
+
+Open PowerShell as administrator:
+
+```powershell
+pushd \\wsl$\<distro>\home\crsmi\aleph\jobs\windows   # the UNC path may need pushd; or copy the file to C:\Users\crsmi\tmp\
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start-wsl-at-boot.ps1
+# enter the Windows password once at the prompt
+```
+
+Check the task with `.\start-wsl-at-boot.ps1 -Status`, which shows the task state, last run, last result and running distros. The real test is a restart of Windows without a logon, then a later logon: `http://aleph.home/` should answer, and `systemctl --user list-timers aleph-tick.timer` in WSL should show the timer.
+
+To undo, run `.\start-wsl-at-boot.ps1 -Remove` in an elevated PowerShell. The password is asked for interactively and is stored only by the Windows task scheduler, never in a file. The Startup shortcut can stay.
 
 ## UI
 
