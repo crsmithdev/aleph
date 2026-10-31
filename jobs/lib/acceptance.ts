@@ -113,6 +113,24 @@ export function failedTests(output: string): FailedTest[] {
   return tests;
 }
 
+/**
+ * Clears the `file` of a failure whose file, at `sha`, does not hold the last ` > ` part of its name as literal
+ * text (or is missing there): the header above a `(fail)` line is only a guess. `(unnamed)` keeps its file.
+ */
+export function checkPins(repo: Repo, sha: string, tests: FailedTest[]): FailedTest[] {
+  const texts = new Map<string, string | null>();
+  return tests.map((t) => {
+    if (!t.file || t.name === "(unnamed)") return t;
+    if (!texts.has(t.file)) {
+      const r = git(repo.path, "show", `${sha}:${t.file}`);
+      texts.set(t.file, r.ok ? r.out : null);
+    }
+    const text = texts.get(t.file);
+    if (text != null && text.includes(t.name.split(" > ").at(-1)!)) return t;
+    return { ...t, file: undefined };
+  });
+}
+
 const regexEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&");
 
 /**
@@ -266,7 +284,7 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandb
       const r = await run(repo, full, command);
       if (r.infra) return `${name}: acceptance not run: ${lastLines(r.output)}`;
       if (!failing(r)) { markPassed(repo.key, full, command); continue; }
-      const tests = failedTests(r.output);
+      const tests = checkPins(repo, full, failedTests(r.output));
       failed = { commit: full, command, rerun: rerunOf(command, tests), tests, since: now.toISOString() };
       writeRecord(repo.key, ref, { result: "fail", sha, command, fails: prev?.fails ?? 0, ...(prev?.since ? { since: prev.since } : {}), retest: failed });
       if (!quiet()) return `${name}: acceptance failed at ${sha} (${command}); the rerun waits for a quiet machine`;
@@ -291,11 +309,11 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandb
       }
     }
     if (!failing(r)) {
-      if (pinned) for (const t of failed.tests) flake(t, "failed under load, passed on the quiet rerun");
+      if (pinned || (failed.tests.length && failed.rerun === command)) for (const t of failed.tests) flake(t, "failed under load, passed on the quiet rerun");
       else flake(`\`${command}\``, "failed under load, passed on the quiet rerun");
       continue;
     }
-    const tests = failedTests(r.output);
+    const tests = checkPins(repo, full, failedTests(r.output));
     const others = tests.filter((t) => t.file && touched.size && !touched.has(t.file));
     if (tests.length && others.length === tests.length) {
       // Only untouched files fail: a regression of the goal if they fail at its newest commit and passed before it.

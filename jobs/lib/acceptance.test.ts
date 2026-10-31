@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { askOf, flakeTracker, readList, writeList } from "../../todo/lib/store.ts";
@@ -31,7 +31,8 @@ beforeEach(() => {
   sh(base, "git", "clone", "-q", join(base, "repo.git"), join(base, "repo"));
   writeFileSync(join(base, "repo", "package.json"), JSON.stringify({ scripts: { ok: "true", bad: "echo boom; exit 3" } }));
   mkdirSync(join(base, "repo", "jobs", "lib"), { recursive: true });
-  writeFileSync(join(base, "repo", "jobs", "lib", "acceptance.test.ts"), "");
+  writeFileSync(join(base, "repo", "jobs", "lib", "acceptance.test.ts"), 'test("one", () => {});\n');
+  writeFileSync(join(base, "repo", "b.test.ts"), 'test("two", () => {});\n');
   sh(join(base, "repo"), "git", "add", ".");
   sh(join(base, "repo"), "git", "commit", "-q", "-m", "init");
   sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
@@ -386,7 +387,7 @@ const shas: string[] = [];
 beforeEach(() => { shas.length = 0; });
 /** A commit of the goal that changes `path`. */
 function landFile(id: number, path: string): void {
-  writeFileSync(join(repoDir(), path), `${Date.now()}`);
+  appendFileSync(join(repoDir(), path), `\n// ${Date.now()}\n`);
   sh(repoDir(), "git", "add", ".");
   sh(repoDir(), "git", "commit", "-q", "-m", `work\n\nItem: fac-${id}`);
   sh(repoDir(), "git", "push", "-q", "origin", "main");
@@ -594,4 +595,41 @@ test("sandboxRunner: frees the slot after a normal run and after an infra result
   const r = await sandboxRunner(withSetup(["false"]), sha, "bun run ok");
   expect(r.infra).toBe(true);
   (await checkSlot())();
+});
+
+const pinTest = async (output: string, setup?: () => void) => {
+  const id = doneGoal("`bun run test`");
+  setup?.();
+  landFile(id, "c.ts");
+  await acceptanceStep(answers({ code: 1, output }, { code: 0, output: " 1 pass\n" }));
+  return id;
+};
+
+test("a failure pinned to a file that lacks the test name reruns the Oracle's command and loses the pin", async () => {
+  await pinTest("jobs/lib/acceptance.test.ts:\n(fail) two\n 1 fail\n");
+  expect(ran[1]).toBe("bun run test");
+  expect(flakeNotes()).toContain("(no file) > two");
+  expect(flakeNotes()).not.toContain("jobs/lib/acceptance.test.ts");
+});
+
+test("a failure pinned to the file that holds the test name reruns only that test", async () => {
+  await pinTest("jobs/lib/acceptance.test.ts:\n(fail) one\n 1 fail\n");
+  expect(ran[1]).toStartWith("bun test --timeout=30000 ./jobs/lib/acceptance.test.ts");
+  expect(ran[1]).toContain(" -t ");
+});
+
+test("an (unnamed) failure keeps its file and reruns the whole file", async () => {
+  await pinTest("jobs/lib/acceptance.test.ts:\n(fail) (unnamed)\n 1 fail\n");
+  expect(ran[1]).toStartWith("bun test --timeout=30000 ./jobs/lib/acceptance.test.ts");
+  expect(ran[1]).not.toContain(" -t ");
+});
+
+test("a generated test name that is not literal in the file is cleared like a wrong pin", async () => {
+  await pinTest("jobs/lib/acceptance.test.ts:\n(fail) case 3\n 1 fail\n", () => {
+    appendFileSync(join(repoDir(), "jobs/lib/acceptance.test.ts"), "for (const i of [1]) test(`case ${i}`, () => {});\n");
+    sh(repoDir(), "git", "commit", "-qam", "gen");
+    sh(repoDir(), "git", "push", "-q", "origin", "main");
+  });
+  expect(ran[1]).toBe("bun run test");
+  expect(flakeNotes()).toContain("(no file) > case 3");
 });
