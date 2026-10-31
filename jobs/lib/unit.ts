@@ -822,7 +822,11 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   // A new job starts from origin/<main>, after it clears what an ended job of that name left.
   if (run.job === id || !existsSync(wt)) {
     phase("setup");
-    if (!fetchOrigin(repo.path).ok) return fail("fetch failed");
+    const fetched = fetchOrigin(repo.path);
+    if (!fetched.ok) {
+      appendFileSync(join(folder, "setup.log"), `## fetch: failed\n${fetched.out}\n`);
+      return fail("fetch failed");
+    }
     git(repo.path, "worktree", "remove", "--force", wt);
     git(repo.path, "worktree", "prune");
     git(repo.path, "branch", "-D", branch);
@@ -866,7 +870,11 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   if (question) return { verdict: { state: "needs-you", needs: "question", question: question.slice("QUESTION:".length).trim() }, code: 0 };
   const dirty = git(wt, "status", "--porcelain").out;
   if (dirty) return fail(`uncommitted: ${dirty.split("\n")[0].slice(3)}`);
-  if (!fetchOrigin(wt).ok) return fail("fetch failed");
+  const refetched = fetchOrigin(wt);
+  if (!refetched.ok) {
+    appendFileSync(join(folder, "setup.log"), `## fetch: failed\n${refetched.out}\n`);
+    return fail("fetch failed");
+  }
   const base = git(wt, "merge-base", `origin/${repo.main}`, "HEAD").out;
   if (git(wt, "rev-list", "--count", `${base}..HEAD`).out === "0") {
     removeBranch(repo, run);

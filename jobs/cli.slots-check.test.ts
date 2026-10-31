@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
-import { base, job, repo, setup, state, teardown } from "./cli.helpers";
+import { base, job, jobsDir, repo, setup, state, teardown } from "./cli.helpers";
 
 beforeAll(() => {
   setup();
@@ -30,9 +30,13 @@ describe("check slots", () => {
         return "(no state.json)";
       }
     };
+    const setupLog = (run: string) => {
+      const f = join(jobsDir, run, "setup.log");
+      return existsSync(f) ? `\n--- ${run}/setup.log\n${readFileSync(f, "utf8")}` : "";
+    };
     return [
       `--- slots.log\n${existsSync(slotsLog()) ? readFileSync(slotsLog(), "utf8") : "(none)"}`,
-      ...runs.map((r) => `--- ${r.json.run}\n${st(r.json.run)}`),
+      ...runs.map((r) => `--- ${r.json.run}\n${st(r.json.run)}${setupLog(r.json.run)}`),
     ].join("\n");
   };
   /** Both runs passed and the log has the four lines the test reads: a failure here throws with `cause`. */
