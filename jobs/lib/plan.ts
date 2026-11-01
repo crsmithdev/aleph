@@ -174,11 +174,14 @@ async function ask(repo: Repo, item: issues.Issue, folder: string, parts: issues
   }
 }
 
+/** Whether the issue's spec has no `## Goal` section: such an issue is never planned, and builds from its spec as one worker run. */
+const noGoal = (item: issues.Issue): boolean => !section(item.spec, "Goal");
+
 /** Why the issue cannot be planned, or null. A parent can only when `plan` asks for the rest. */
 function planRefusal(repo: Repo, doc: issues.Doc, issue: issues.Issue): string | null {
   if (issue.sub !== undefined || issues.status(issue) !== "open") return "not an open issue";
   if (partsOf(doc, issue).length) return issue.fm.plan === "true" ? null : "already planned";
-  if (!section(issue.spec, "Goal")) return "no spec";
+  if (noGoal(issue)) return "no spec";
   if (jobsNamed(`${repo.key}-${issue.id}`).length) return "the issue has had a run";
   return null;
 }
@@ -228,12 +231,12 @@ export type Plan = { plan: true } | { tier: Tier | null };
 /**
  * The decision before an issue's worker run, for a caller that holds its lock: a
  * top-level issue that has had no run, that is large, and that has had fewer than
- * PLAN_TRIES failed planner runs, is planned; any other gets a worker run at the rated tier.
+ * PLAN_TRIES failed planner runs, and whose spec has a `## Goal`, is planned; any other gets a worker run at the rated tier.
  */
 export async function needsPlan(repo: Repo, item: issues.Issue, spec: string, rate: Rate): Promise<Plan> {
   const tier = await rate(spec);
   // Parts are one level: a part is never planned.
-  if (item.sub !== undefined || jobsNamed(`${repo.key}-${issues.refOf(item)}`).length || !isLarge(tier, item.spec)) return { tier };
+  if (item.sub !== undefined || noGoal(item) || jobsNamed(`${repo.key}-${issues.refOf(item)}`).length || !isLarge(tier, item.spec)) return { tier };
   return badPlans(repo, item.id) >= PLAN_TRIES ? { tier } : { plan: true };
 }
 

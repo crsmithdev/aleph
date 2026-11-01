@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import type { FSWatcher } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -129,6 +129,17 @@ test("a goal rated sonnet with one top-level folder starts a worker and no plann
   expect(starts).toEqual([[`fac-${id}`, "sonnet"]]);
   expect(planCalls()).toEqual([]);
   expect(itemLabels(item(id))).not.toContain("planned");
+});
+
+test("a large goal whose spec has no Goal section starts one worker run at the rated tier and no planner run", async () => {
+  const id = writeList({ key: "fac" }, "add a goal", (doc) => {
+    return issues.add(doc, "big", { labels: ["ui"], spec: "## Edit surface\njobs/lib/a.ts\n## Oracle\n`bun test`\n## Time box\n40 minutes" }).id;
+  }, true)!.value;
+  const { starts, out } = await dispatch("opus");
+  expect(starts).toEqual([[`fac-${id}`, "opus"]]);
+  expect(out.planned).toBeUndefined();
+  expect(planCalls()).toEqual([]);
+  expect(existsSync(join(base, "jobs")) ? planRuns() : []).toEqual([]);
 });
 
 test("a goal rated opus starts a planner run and no worker; the goals are filed under the issue, the first rewritten in place", async () => {
