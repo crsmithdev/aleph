@@ -31,8 +31,6 @@ case $prompt in
   *VERDICT:build*) echo '{"route":"ask","question":"Ship it?","options":[{"label":"A","line":"ship"},{"label":"B","line":"wait"}],"recommended":"A","kind":"build"}' ;;
   *VERDICT:live*) echo '{"route":"live","note":"check the prod dashboard"}' ;;
   *VERDICT:flake*) echo '{"route":"flake","note":"a.test.ts > does x: timed out under load"}' ;;
-  *VERDICT:costed*) echo '{"type":"system"}'; echo '{"type":"result","is_error":false,"total_cost_usd":0.5,"result":"{\\"route\\":\\"close\\",\\"reason\\":\\"dup\\"}"}' ;;
-  *VERDICT:spentfail*) echo '{"type":"result","is_error":true,"total_cost_usd":0.25,"result":"out of turns"}'; exit 1 ;;
   *VERDICT:fail*) exit 3 ;;
   *VERDICT:bad*) echo '{"route":"maybe"}' ;;
   *) echo 'no json here' ;;
@@ -123,15 +121,6 @@ test("a triage run records its model and runs the command with it", async () => 
   const dir = readdirSync(join(base, "jobs")).find((d) => d.includes(`-triage-${repo.key}-`))!;
   expect(readRun(join(base, "jobs", dir))).toMatchObject({ model: TRIAGE_MODEL });
   expect(readFileSync(join(base, "calls"), "utf8")).toContain(`--model ${TRIAGE_MODEL} --tools Read Grep Glob`);
-});
-
-test("a triage run records the cost of its result event, also when the command fails", async () => {
-  reset([{ title: "a", body: "VERDICT:costed" }, { title: "b", body: "VERDICT:spentfail" }, { title: "c", body: "VERDICT:close" }]);
-  await run();
-  const runs = Object.fromEntries(readdirSync(join(base, "jobs")).filter((d) => d.includes(`-triage-${repo.key}-`)).map((d) => readRun(join(base, "jobs", d))!).map((r) => [r.name, r]));
-  expect(runs[`triage-${repo.key}-1`]).toMatchObject({ route: "close", cost: 0.5 });
-  expect(runs[`triage-${repo.key}-2`]).toMatchObject({ reason: "failed: triage exited 1", cost: 0.25 });
-  expect(runs[`triage-${repo.key}-3`]!.cost).toBeUndefined();
 });
 
 test("the prompt says the factory runs the checks, and names no aleph check command", () => {

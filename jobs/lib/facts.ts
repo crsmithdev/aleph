@@ -1,9 +1,10 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { replyOf, tagged } from "./gate.ts";
+import { openRun } from "./agent-run.ts";
+import { tagged } from "./gate.ts";
 import { readFile, allJobs } from "./job.ts";
-import { isBuild, runsDir, stamp, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
+import { isBuild, updateRun, type Entry, type Repo } from "./ledger.ts";
 
 export interface Fact { fact: string; source: string }
 
@@ -28,7 +29,6 @@ export function parseFacts(result: string): { facts: Fact[]; unsourced: string[]
 }
 
 export const FACTS_MODEL = "claude-opus-5-5";
-const TIME_BOX_MS = () => Number(process.env.ALEPH_FACTS_TIMEOUT ?? 600) * 1000;
 
 export interface FactCheck { fact: string; source: string; verdict: "keep" | "reject"; reason: string; scope: string; title: string; kind?: "gotcha" | "concept" }
 
@@ -70,42 +70,13 @@ Give exactly one entry per fact, in the order above.
 `;
 }
 
-function makeRun(repo: Repo, landed: Entry): string {
-  mkdirSync(runsDir(), { recursive: true });
-  const name = `facts-${landed.run.name}`;
-  for (let n = 0; ; n++) {
-    const folder = join(runsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-facts`);
-    try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
-    writeRun(folder, { kind: "facts", job: landed.run.job, name, repo: repo.key, ...(landed.run.on !== undefined ? { on: landed.run.on } : {}), condition: "running", phase: "facts", model: FACTS_MODEL, told: true, shown: false, started: new Date().toISOString(), made: Date.now() });
-    writeFileSync(join(folder, "command.txt"), `facts ${landed.run.name}\n`);
-    return folder;
-  }
-}
-
 /** One fresh read-only Opus run judges each fact against its source. A failed run rejects every fact. */
 export async function reviewFacts(repo: Repo, landed: Entry, facts: Fact[], commit: string): Promise<{ folder: string; verdicts: FactCheck[] }> {
-  const folder = makeRun(repo, landed);
-  const end = (reason: string) => updateRun(folder, { condition: "done", reason, phase: undefined, ended: new Date().toISOString() });
+  const run = openRun({ role: "facts", who: "the facts reviewer", model: FACTS_MODEL, seconds: 600, flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", "Read,Grep,Glob,Bash(git show:*)"], cwd: existsSync(repo.path) ? repo.path : undefined, name: `facts-${landed.run.name}`, command: `facts ${landed.run.name}`, shown: false, job: landed.run.job, repo: repo.key, on: landed.run.on });
+  const { folder, end } = run;
   const rejectAll = (why: string): FactCheck[] => facts.map((f) => ({ ...f, verdict: "reject", reason: why, scope: repo.key, title: "" }));
   try {
-    const input = factsPrompt(facts, commit);
-    writeFileSync(join(folder, "prompt.md"), input);
-    const argv = [process.env.ALEPH_FACTS_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--model", FACTS_MODEL, "--tools", "Read,Grep,Glob,Bash", "--allowedTools", "Read,Grep,Glob,Bash(git show:*)"];
-    const p = Bun.spawn(argv, { cwd: existsSync(repo.path) ? repo.path : undefined, env: process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
-    let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; p.kill(); }, TIME_BOX_MS());
-    let out: string;
-    try {
-      const [o, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
-      writeFileSync(join(folder, "output.log"), o + err);
-      const { text, cost } = replyOf(o);
-      if (cost !== undefined) updateRun(folder, { cost });
-      if (timedOut) throw new Error("the facts reviewer timed out");
-      if (code !== 0) throw new Error(`the facts reviewer exited ${code}`);
-      out = text;
-    } finally {
-      clearTimeout(timer);
-    }
+    const out = await run.ask(factsPrompt(facts, commit));
     const parsed = parseFactChecks(out);
     const bad = typeof parsed === "string" ? parsed : parsed.length !== facts.length ? `${parsed.length} verdicts for ${facts.length} facts` : "";
     if (bad || typeof parsed === "string") {

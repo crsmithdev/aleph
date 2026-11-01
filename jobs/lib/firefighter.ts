@@ -11,9 +11,10 @@ import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
-import { allRuns, askOf, isAwaiting, isBuild, isLost, runsDir, loadRegistry, lock, onOf, readRun, reviewOf, stamp, tell, updateRun, writeRun, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, askOf, isAwaiting, isBuild, isLost, runsDir, loadRegistry, lock, onOf, reviewOf, tell, type Entry, type Repo } from "./ledger.ts";
+import { endLost, openRun } from "./agent-run.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, openJob, readFile, type Job } from "./job.ts";
-import { replyOf, SECURITY_PATHS, securityChange, verdict as reviewVerdict } from "./gate.ts";
+import { SECURITY_PATHS, securityChange, verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
 import { factoryDir, factoryLog, factoryRepos, redBaselines, writeRerun } from "./factory.ts";
 import { ciLine, redCi } from "./ci.ts";
@@ -26,7 +27,6 @@ export const MAX_ACTIONS = 10;
 /** A goal with more than LOOP_RUNS agent runs started in LOOP_MS loops. */
 const LOOP_RUNS = 3;
 const LOOP_MS = 30 * 60_000;
-const TIME_BOX_MS = () => Number(process.env.ALEPH_FIREFIGHTER_TIMEOUT ?? 900) * 1000;
 const stateFile = () => join(factoryDir(), "firefighter.json");
 
 export type EventKind = "awaiting" | "stuck" | "failed" | "loop" | "red" | "ask" | "lost";
@@ -329,37 +329,7 @@ export async function applyActions(actions: (Action | string)[], ports: Ports = 
   return out;
 }
 
-/** Make the run folder of a firefighter run: its own job in the ledger. */
-function makeRun(events: Event[]): string {
-  mkdirSync(runsDir(), { recursive: true });
-  for (let n = 0; ; n++) {
-    const folder = join(runsDir(), `${stamp()}-firefighter${n ? `-${n}` : ""}-firefighter`);
-    try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
-    writeRun(folder, { kind: "firefighter", job: folder.split("/").at(-1)!, name: "firefighter", condition: "running", phase: "firefighter", model: FIREFIGHTER_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
-    writeFileSync(join(folder, "command.txt"), `firefighter: ${events.length} new event${events.length > 1 ? "s" : ""}\n`);
-    return folder;
-  }
-}
-
 const READ_ONLY = ["Read", "Grep", "Glob", "Bash(aleph jobs:*)", "Bash(aleph issue show:*)", "Bash(aleph issue list:*)", "Bash(aleph report:*)", "Bash(git log:*)", "Bash(git show:*)", "Bash(git diff:*)"];
-
-async function ask(input: string, folder: string): Promise<string> {
-  writeFileSync(join(folder, "prompt.md"), input);
-  const dirs = factoryRepos().flatMap((r) => ["--add-dir", r.path]);
-  const argv = [process.env.ALEPH_FIREFIGHTER_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--model", FIREFIGHTER_MODEL, "--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", ...READ_ONLY, ...dirs];
-  const p = Bun.spawn(argv, { cwd: runsDir(), env: process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
-  const timer = setTimeout(() => p.kill(), TIME_BOX_MS());
-  try {
-    const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
-    writeFileSync(join(folder, "output.log"), out + err);
-    const { text, cost } = replyOf(out);
-    if (cost !== undefined) updateRun(folder, { cost });
-    if (code !== 0) throw new Error(`firefighter exited ${code}`);
-    return text;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 export interface Fired { events: string[]; run?: string; applied: string[]; refused: string[]; chris: string[]; skipped?: string }
 
@@ -368,20 +338,21 @@ export interface Fired { events: string[]; run?: string; applied: string[]; refu
  * The snapshot is saved either way, so an event is judged once; one that clears and comes back is new again.
  */
 export async function firefight(ports: Ports = defaultPorts, now = Date.now()): Promise<Fired> {
+  await endLost("firefighter", () => "firefighter");
   const release = await lock("firefighter", 0);
   if (!release) return { events: [], applied: [], refused: [], chris: [], skipped: "another firefighter is running" };
   try {
-    endLost();
     const events = snapshot(now);
     const seen = new Set(lastSnapshot()?.keys ?? []);
     const fresh = events.filter((e) => !seen.has(e.key));
     saveSnapshot(events);
     if (!fresh.length) return { events: [], applied: [], refused: [], chris: [] };
-    const folder = makeRun(fresh);
-    const end = (reason: string) => updateRun(folder, { condition: "done", reason, phase: undefined, ended: new Date().toISOString() });
-    const base = { events: fresh.map((e) => e.line), run: folder.split("/").at(-1)! };
+    const dirs = factoryRepos().flatMap((r) => ["--add-dir", r.path]);
+    const run = openRun({ role: "firefighter", who: "firefighter", model: FIREFIGHTER_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", ...READ_ONLY, ...dirs], cwd: runsDir(), name: "firefighter", command: `firefighter: ${fresh.length} new event${fresh.length > 1 ? "s" : ""}`, shown: true });
+    const end = (reason: string) => run.end(reason);
+    const base = { events: fresh.map((e) => e.line), run: run.folder.split("/").at(-1)! };
     let reply: (Action | string)[] | string;
-    try { reply = parseReply(await ask(prompt(fresh), folder)); } catch (e: any) {
+    try { reply = parseReply(await run.ask(prompt(fresh))); } catch (e: any) {
       end(`failed: ${e?.message ?? e}`);
       log(`failed: ${e?.message ?? e}`);
       return { ...base, applied: [], refused: [], chris: [] };
@@ -392,13 +363,5 @@ export async function firefight(ports: Ports = defaultPorts, now = Date.now()): 
     return { ...base, ...r };
   } finally {
     release();
-  }
-}
-
-/** End the firefighter runs left `running` by a process that died: the caller holds the firefighter lock, so none is live. */
-function endLost(): void {
-  for (const { folder, run } of allRuns()) {
-    if (run.kind !== "firefighter" || run.condition !== "running") continue;
-    if (readRun(folder)?.condition === "running") updateRun(folder, { condition: "done", phase: undefined, reason: "failed: its process ended before a reply", ended: new Date().toISOString() });
   }
 }

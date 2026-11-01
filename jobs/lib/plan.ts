@@ -5,20 +5,19 @@
  * work store with the issue's `goals`, in one commit. Each run is a job in the
  * ledger, kind `plan`, `on` the issue. See docs/specs/2026-10-26-seed-factory.md, "Planner".
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { askPartDropped, note, partsOf, readList, writeList } from "../../todo/lib/store.ts";
-import { allRuns, runsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
-import { replyOf } from "./gate.ts";
+import { allRuns, lock, type Repo } from "./ledger.ts";
+import { endLost, openRun } from "./agent-run.ts";
 import { jobsNamed } from "./job.ts";
 import type { Tier } from "./route.ts";
 
 export const PLAN_MODEL = "claude-fable-5-1";
 /** Planner replies that fail the check, for one goal, before it runs as one worker run. */
 export const PLAN_TRIES = 2;
-const TIME_BOX_MS = () => Number(process.env.ALEPH_PLAN_TIMEOUT ?? 900) * 1000;
 const SECTIONS = ["Goal", "Edit surface", "Oracle", "Time box"] as const;
 
 export type Rate = (spec: string) => Promise<Tier | null>;
@@ -141,39 +140,6 @@ The factory runs this repo's checks itself, so the Oracle names only real comman
 `;
 }
 
-/** Make the run folder of a planner run: its own job in the ledger. */
-function makeRun(repo: Repo, item: issues.Issue): string {
-  mkdirSync(runsDir(), { recursive: true });
-  const name = `plan-${repo.key}-${issues.refOf(item)}`;
-  const on = `${repo.key}-${issues.refOf(item)}`;
-  for (let n = 0; ; n++) {
-    const folder = join(runsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-plan`);
-    try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
-    // `shown`: the dispatch's line reports a plan, so the report has no line for the run.
-    writeRun(folder, { kind: "plan", job: folder.split("/").at(-1)!, name, repo: repo.key, on, condition: "running", phase: "plan", model: PLAN_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
-    writeFileSync(join(folder, "command.txt"), `plan ${repo.key}-${issues.refOf(item)}: ${item.title}\n`);
-    return folder;
-  }
-}
-
-async function ask(repo: Repo, item: issues.Issue, folder: string, parts: issues.Issue[]): Promise<string> {
-  const input = prompt(repo, item, await recallEpisodes(`${item.title}\n${section(item.spec, "Goal")}`), parts);
-  writeFileSync(join(folder, "prompt.md"), input);
-  const argv = [process.env.ALEPH_PLAN_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--model", PLAN_MODEL, "--tools", "Read", "Grep", "Glob"];
-  const p = Bun.spawn(argv, { cwd: existsSync(repo.path) ? repo.path : undefined, env: process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
-  const timer = setTimeout(() => p.kill(), TIME_BOX_MS());
-  try {
-    const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
-    writeFileSync(join(folder, "output.log"), out + err);
-    const { text, cost } = replyOf(out);
-    if (cost !== undefined) updateRun(folder, { cost });
-    if (code !== 0) throw new Error(`the planner exited ${code}`);
-    return text;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /** Whether the issue's spec has no `## Goal` section: such an issue is never planned, and builds from its spec as one worker run. */
 const noGoal = (item: issues.Issue): boolean => !section(item.spec, "Goal");
 
@@ -251,16 +217,9 @@ const planLock = (repo: Repo, id: number | string) => lock(`plan-${repo.key}-${i
 export async function planning(repo: Repo, id: number | string): Promise<boolean> {
   const release = await planLock(repo, id);
   if (!release) return true;
-  try {
-    for (const e of allRuns()) {
-      if (e.run.kind === "plan" && e.run.on === `${repo.key}-${id}` && e.run.condition === "running") {
-        updateRun(e.folder, { condition: "done", phase: undefined, reason: "failed: its process ended before a reply", ended: new Date().toISOString() });
-      }
-    }
-    return false;
-  } finally {
-    release();
-  }
+  release();
+  await endLost("plan", (run) => (run.on === `${repo.key}-${id}` ? `plan-${run.on}` : null));
+  return false;
 }
 
 export type Planned = { planned: string[] } | { why: string };
@@ -299,10 +258,13 @@ async function plan(repo: Repo, id: number): Promise<Planned> {
     const item = issue;
     let why = "";
     while (badPlans(repo, id) - earlier < PLAN_TRIES) {
-      const folder = makeRun(repo, item);
-      const end = (reason: string) => updateRun(folder, { condition: "done", reason, phase: undefined, ended: new Date().toISOString() });
+      const on = `${repo.key}-${issues.refOf(item)}`;
+      // `shown`: the dispatch's line reports a plan, so the report has no line for the run.
+      const run = openRun({ role: "plan", who: "the planner", model: PLAN_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], cwd: existsSync(repo.path) ? repo.path : undefined, name: `plan-${on}`, command: `plan ${on}: ${item.title}`, shown: true, repo: repo.key, on });
+      const end = (reason: string) => run.end(reason);
       try {
-        const plan = parsePlan(await ask(repo, item, folder, parts), parts.length ? 1 : 2);
+        const input = prompt(repo, item, await recallEpisodes(`${item.title}\n${section(item.spec, "Goal")}`), parts);
+        const plan = parsePlan(await run.ask(input), parts.length ? 1 : 2);
         if (typeof plan === "string") { why = `malformed plan: ${plan}`; end(why); continue; }
         const refs = fileChildren(repo, id, plan);
         if (!refs) { end("the issue changed during the run"); return { why: "the issue changed during the planner run" }; }

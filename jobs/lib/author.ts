@@ -9,13 +9,12 @@ import { existsSync } from "node:fs";
 import { note, reader, writeHidden } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { sandboxRunner, type Ran, type Runner } from "./acceptance.ts";
-import { replyOf } from "./gate.ts";
+import { callAgent } from "./agent-run.ts";
 import { git } from "./git.ts";
 import type { Repo } from "./ledger.ts";
 import { section } from "./plan.ts";
 
 export const AUTHOR_MODEL = "claude-opus-5-5";
-const TIME_BOX_MS = () => Number(process.env.ALEPH_AUTHOR_TIMEOUT ?? 600) * 1000;
 const MAX_FILES = 3;
 const FILE_NAME = /^[\w-]+\.test\.ts$/;
 /** The note that marks the attempt; the UI reads it as a machine note. */
@@ -73,19 +72,11 @@ export function whyRejected(r: Ran): string | null {
   return fails > 0 ? null : "no test fails on main, so they prove nothing";
 }
 
-async function ask(repo: Repo, input: string): Promise<{ text: string; cost?: number }> {
-  const argv = [process.env.ALEPH_AUTHOR_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--model", AUTHOR_MODEL, "--tools", "Read", "Grep", "Glob"];
-  const env = { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined };
-  const p = Bun.spawn(argv, { cwd: existsSync(repo.path) ? repo.path : undefined, env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
-  const timer = setTimeout(() => p.kill(), TIME_BOX_MS());
-  try {
-    const [out, , code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
-    if (code !== 0) throw new Error(`the author exited ${code}`);
-    return replyOf(out);
-  } finally {
-    clearTimeout(timer);
-  }
-}
+const ask = (repo: Repo, input: string) => callAgent({
+  role: "author", who: "the author", model: AUTHOR_MODEL, seconds: 600, flags: ["--tools", "Read", "Grep", "Glob"],
+  cwd: existsSync(repo.path) ? repo.path : undefined,
+  env: { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined },
+}, input);
 
 /**
  * Give the goal `id` sealed checks if it has had no attempt. Returns the author's cost.

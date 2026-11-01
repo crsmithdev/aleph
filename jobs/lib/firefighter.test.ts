@@ -1,3 +1,4 @@
+import { openRun } from "./agent-run.ts";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -129,12 +130,11 @@ test("a tick with no new events starts no firefighter run", async () => {
   expect(readRun(join(process.env.ALEPH_JOBS_DIR!, firefighterRuns()[0]))).toMatchObject({ kind: "firefighter", condition: "done", model: "claude-opus-5-5" });
 });
 
-test("a firefighter run records the cost of its result event", async () => {
+test("a firefighter run that a dead process left running is ended as failed by the next look", async () => {
   fresh();
-  writeFileSync(join(base, "reply.json"), JSON.stringify({ type: "result", is_error: false, total_cost_usd: 0.4, result: JSON.stringify({ actions: [] }) }));
-  run({ name: `${key}-1`, condition: "stuck", reason: "time box", on: `${key}-1` });
+  const left = openRun({ role: "firefighter", who: "firefighter", model: "m", seconds: 60, flags: [], name: "firefighter", command: "firefighter", shown: true });
   await firefighterStep(ports());
-  expect(readRun(join(process.env.ALEPH_JOBS_DIR!, firefighterRuns()[0]))).toMatchObject({ kind: "firefighter", reason: "0 applied, 0 refused, 0 to Chris", cost: 0.4 });
+  expect(readRun(left.folder)).toMatchObject({ condition: "done", reason: "failed: its process ended before a reply" });
 });
 
 test("a new held run whose reviews both say land, off the security paths, is landed", async () => {

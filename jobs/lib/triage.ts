@@ -8,8 +8,8 @@ import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { isSorted, noteFlake, reader, setAsk, sort } from "../../todo/lib/store.ts";
 import { askNote, normalizeAsk, type Ask } from "./ask.ts";
-import { allRuns, runsDir, onOf, lock, readRun, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
-import { replyOf } from "./gate.ts";
+import { allRuns, onOf, lock, type Repo, type Run } from "./ledger.ts";
+import { endLost, openRun } from "./agent-run.ts";
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
 import { factoryDir, gates } from "./factory.ts";
@@ -17,7 +17,6 @@ import { git } from "./git.ts";
 import { always, logAlways } from "./always.ts";
 /** Triage runs that end with no verdict, for one item, before it gets an Ask (reason `triage-failed`); `ALEPH_TRIAGE_TRIES` changes it. */
 export const TRIAGE_TRIES = () => Number(process.env.ALEPH_TRIAGE_TRIES ?? 2);
-const TIME_BOX_MS = () => Number(process.env.ALEPH_TRIAGE_TIMEOUT ?? 600) * 1000;
 
 
 /** The model a triage run asks for; `ui/usage.ts` books its cost under this name. */
@@ -146,38 +145,6 @@ Never ask Chris about how to build it: code structure, which module or helper, n
 `;
 }
 
-/** Make the run folder of a triage: its own job in the ledger. */
-function makeRun(repo: Repo, item: issues.Issue): string {
-  mkdirSync(runsDir(), { recursive: true });
-  const name = `triage-${repo.key}-${item.id}`;
-  for (let n = 0; ; n++) {
-    const folder = join(runsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-triage`);
-    try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
-    // `shown`: the tick's own line reports a triage, so the report has no line for the run.
-    writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name, repo: repo.key, on: `${repo.key}-${item.id}`, condition: "running", phase: "triage", model: TRIAGE_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
-    writeFileSync(join(folder, "command.txt"), `triage ${repo.key}-${item.id}: ${item.title}\n`);
-    return folder;
-  }
-}
-
-async function ask(repo: Repo, item: issues.Issue, folder: string): Promise<string> {
-  const input = prompt(repo, item);
-  writeFileSync(join(folder, "prompt.md"), input);
-  const argv = [process.env.ALEPH_TRIAGE_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--model", TRIAGE_MODEL, "--tools", "Read", "Grep", "Glob"];
-  const p = Bun.spawn(argv, { cwd: repo.path, env: process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
-  const timer = setTimeout(() => p.kill(), TIME_BOX_MS());
-  try {
-    const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
-    writeFileSync(join(folder, "output.log"), out + err);
-    const { text, cost } = replyOf(out);
-    if (cost !== undefined) updateRun(folder, { cost });
-    if (code !== 0) throw new Error(`triage exited ${code}`);
-    return text;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /** Apply a route to the item through the work store; the route applied, or null when the item changed under the run. */
 function apply(repo: Repo, id: number, v: Route): Applied | null {
   const ref = `${repo.key}-${id}`;
@@ -265,11 +232,12 @@ async function triageItem(repo: Repo, item: issues.Issue, triaged: Counts, skipp
   const release = await lock(`triage-${name}`, 0);
   if (!release) { skipped.push(`${name}: another triage is running`); return; }
   try {
-    const folder = makeRun(repo, item);
+    // `shown`: the tick's own line reports a triage, so the report has no line for the run.
+    const run = openRun({ role: "triage", who: "triage", model: TRIAGE_MODEL, seconds: 600, flags: ["--tools", "Read", "Grep", "Glob"], cwd: repo.path, name: `triage-${name}`, command: `triage ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
     // A triage that gives no verdict is still done: it is not a job to land or drop, and the item is unchanged.
-    const end = (reason: string, route?: Applied) => updateRun(folder, { condition: "done", reason, ...(route ? { route } : {}), phase: undefined, ended: new Date().toISOString() });
+    const end = (reason: string, route?: Applied) => run.end(reason, route ? { route } : {});
     try {
-      const v = parseRoute(await ask(repo, item, folder));
+      const v = parseRoute(await run.ask(prompt(repo, item)));
       if (typeof v === "string") {
         const reason = `malformed verdict: ${v}`;
         end(reason);
@@ -304,31 +272,14 @@ async function triageItem(repo: Repo, item: issues.Issue, triaged: Counts, skipp
   }
 }
 
-/**
- * End the triage runs left `running` by a process that died before its `end()`.
- * A triage holds its item's lock for the whole run, so a lock taken with no wait
- * means no process is running that triage. A run whose lock is held is left alone.
- */
-async function endLost(): Promise<void> {
-  for (const { folder, run } of allRuns()) {
-    if (run.kind !== "triage" || run.condition !== "running" || !run.repo || onOf(run) === undefined) continue;
-    const release = await lock(`triage-${run.repo}-${onOf(run)}`, 0);
-    if (!release) continue;
-    try {
-      // Read again under the lock: the run may have ended since the list was read.
-      if (readRun(folder)?.condition !== "running") continue;
-      updateRun(folder, { condition: "done", phase: undefined, reason: "failed: its process ended before a verdict", ended: new Date().toISOString() });
-    } finally {
-      release();
-    }
-  }
-}
+const lockOf = (run: Run): string | null => (run.repo && onOf(run) !== undefined ? `triage-${run.repo}-${onOf(run)}` : null);
+const endLostTriages = () => endLost("triage", lockOf, "a verdict");
 
 /** Triage one open issue now, if it is one the tick would triage. */
 export async function triageIssue(repo: Repo, id: number, _done: (ref: string) => boolean): Promise<{ triaged: Counts; skipped: string[] }> {
   const triaged: Counts = {};
   const skipped: string[] = [];
-  await endLost();
+  await endLostTriages();
   const doc = reader().list(repo.key);
   const item = doc ? issues.find(doc, id) : undefined;
   if (!doc || !item || issues.status(item) !== "open" || isSorted(doc, item)) return { triaged, skipped };
@@ -345,7 +296,7 @@ export async function triageIssue(repo: Repo, id: number, _done: (ref: string) =
 export async function triageOpen(repos: Repo[], _done: (ref: string) => boolean): Promise<{ triaged: Counts; skipped: string[] }> {
   const triaged: Counts = {};
   const skipped: string[] = [];
-  await endLost();
+  await endLostTriages();
   const queue: { repo: Repo; item: issues.Issue }[] = [];
   const lists = reader();
   for (const repo of repos) {

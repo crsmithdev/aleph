@@ -20,6 +20,7 @@ import { smokeLine } from "./smoke.ts";
 import { accept, final, readRecord, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { startReview } from "./review.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
+import { endRun } from "./agent-run.ts";
 import { factsGate } from "./facts.ts";
 import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
@@ -704,7 +705,7 @@ const endKilledFacts = (): void => {
   for (const e of allRuns()) {
     const r = e.run;
     if (r.kind !== "facts" || r.condition !== "running" || !r.repo || !keys.has(r.repo) || Date.parse(r.started) >= booted) continue;
-    updateRun(e.folder, { condition: "done", reason: "host restart", phase: undefined, ended: new Date().toISOString() });
+    endRun(e.folder, "host restart");
     factoryLog(`${r.name}: a host restart killed its facts run; its facts are lost`);
   }
 };
