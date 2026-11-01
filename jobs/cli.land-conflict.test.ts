@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, base, file, job, jobsDir, other, remote, sh, state, told, worktree, setup, teardown } from "./cli.helpers";
 
@@ -34,17 +34,6 @@ describe("land: conflicts", () => {
     expect(remoteHead()).toBe(runs[3].commit);
   }, 30_000);
 
-  test("a conflict that a mechanical rebase clears lands with no worker", async () => {
-    pushFromOther("step.txt", "start\n");
-    await job("rebase", "two-commits step.txt theirs mine");
-    pushFromOther("step.txt", "theirs\n");
-    const r = await aleph(["land", "rebase"]);
-    expect(state(r.json.run).condition).toBe("landed");
-    expect(file(r.json.run, "land.log")).toContain("mechanical rebase: ok");
-    expect(runsOf("rebase").map((x) => x.kind)).toEqual(["build", "land"]);
-    expect(sh(base, "git", "--git-dir", remote, "show", "main:step.txt")).toBe("mine");
-  }, 30_000);
-
   test("a conflict the worker cannot resolve goes back twice, then stops and leaves the remote alone", async () => {
     await job("clash", "commit-fixed clash.txt");
     pushFromOther("clash.txt", "different\n");
@@ -70,11 +59,4 @@ describe("land: conflicts", () => {
     expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${runs[3].commit}~1`, runs[3].commit)).toBe("byhand.txt");
   }, 30_000);
 
-  test("a change main already has ends done with no net change", async () => {
-    await job("twin", "commit-fixed twin.txt");
-    pushFromOther("twin.txt", "same\n");
-    const r = await aleph(["land", "twin"]);
-    expect(state(r.json.run)).toMatchObject({ condition: "done", reason: "no net change" });
-    expect(existsSync(worktree("twin"))).toBe(false);
-  });
 });

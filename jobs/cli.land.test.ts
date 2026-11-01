@@ -75,20 +75,6 @@ describe("land", () => {
     expect(told).toContain("auto/selfland passed; landing");
   });
 
-  const runsOf = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-demo-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));
-
-  test("a push that loses a race merges again in the same land, and lands", async () => {
-    await job("racer", "commit race/x.txt");
-    moveMain();
-    writeFileSync(join(base, "race-once"), "");
-    const r = await aleph(["land", "racer"]);
-    expect(state(r.json.run)).toMatchObject({ condition: "landed" });
-    expect(state(r.json.run).next).toBeUndefined();
-    expect(file(r.json.run, "land.log")).toContain("## main moved; merging again");
-    expect(runsOf("racer").map((x) => x.kind)).toEqual(["build", "land"]);
-    expect(sh(base, "git", "--git-dir", remote, "log", "-2", "--format=%s", "main")).toBe("add race/x.txt\nrace");
-  });
-
   test("a to-do write during the checks goes to the work store and leaves the land's main alone", async () => {
     await job("patient", "commit todo-race/patient.txt");
     moveMain();

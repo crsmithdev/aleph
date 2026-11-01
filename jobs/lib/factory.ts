@@ -30,6 +30,7 @@ import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
 import { alreadyMet } from "./gate.ts";
 import { flakes } from "./checks.ts";
+import { waitingToLand } from "./landing.ts";
 import { detached } from "./launch.ts";
 import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, section, type Rate } from "./plan.ts";
@@ -127,16 +128,6 @@ export function hold(jobs = allJobs(), except?: string): Hold | null {
   const r = lastReal(bad[0]).run;
   const more = bad.length > 1 ? ` and ${bad.length - 1} more` : "";
   return { name: r.name, condition: r.condition, reason: r.reason, line: `Held: ${r.name}${more} ${bad.length > 1 ? "are" : "is"} ${r.condition}${r.reason ? ` (${r.reason})` : ""}. No run starts or lands until ${bad.length > 1 ? "they are" : "it is"} cleared.` };
-}
-
-/** Passed agent runs waiting to land by themselves (`--land` or an autoland repo), oldest first. */
-export function waitingToLand(jobs = allJobs()): string[] {
-  const repos = loadRegistry();
-  return jobs.filter((j) => {
-    const last = lastReal(j);
-    const r = last.run;
-    return isOpen(j) && (isBuild(r.kind) || r.kind === "recheck") && r.condition === "passed" && !isLive(last.folder) && (r.land || (r.repo && repos[r.repo]?.autoland));
-  }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started)).map((j) => j.at(-1)!.run.name);
 }
 
 /**

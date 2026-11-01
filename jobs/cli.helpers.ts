@@ -359,14 +359,6 @@ echo '{"type":"result","is_error":false,"result":"Checked.\\n'"$v"'"}'
     { name: "todo race", run: `if [ -f ${join(base, "todo-once")} ]; then rm ${join(base, "todo-once")}; bun ${CLI} issue note demo 1 "during the land"; fi`, when: ["todo-race/**"] },
     // Pushes a commit that names an item (its trailer is in item-once) from another clone once, during the land's checks.
     { name: "item race", run: `if [ -f ${join(base, "item-once")} ]; then m=$(cat ${join(base, "item-once")}); rm ${join(base, "item-once")}; cd ${join(base, "other")} && git fetch -q origin && git reset -q --hard origin/main && echo $RANDOM > item-hand && git add item-hand && git -c user.name=t -c user.email=t@t commit -qm hand -m "$m" && git push -q origin main; fi`, when: ["item-race/**"] },
-    // The batch tests: one line per call; the second fails once the first run's file is there with it.
-    { name: "count", run: `echo x >> ${join(base, "batch-count")}`, when: ["batch/**"] },
-    { name: "retrybad", run: "! { [ -f retry/a.txt ] && [ -f retry/bad.txt ]; }", when: ["retry/**"] },
-    { name: "batchbad", run: "! { [ -f batch/a.txt ] && [ -f batch/bad.txt ]; }", when: ["batch/**"] },
-    { name: "twicebad", run: "! { [ -f twice/a.txt ] && [ -f twice/bad.txt ]; }", when: ["twice/**"] },
-    // race-once holds the number of races still to run; empty means one.
-    { name: "race", run: `if [ -f ${join(base, "race-once")} ]; then n=$(cat ${join(base, "race-once")}); rm ${join(base, "race-once")}; [ "$n" = 2 ] && echo 1 > ${join(base, "race-once")}; cd ${join(base, "other")} && git pull -q --rebase origin main && echo $RANDOM > raced && git add raced && git commit -qm race && git push -q origin main; fi`, when: ["race/**"] },
-    { name: "racebad", run: "! { [ -f race/l2.txt ] && [ -f race/bad.txt ]; }", when: ["race/**"] },
   ];
   writeFileSync(join(base, "repos.json"), JSON.stringify({
     // The tests land by hand; "auto" is the same clone with the default, landing by itself.

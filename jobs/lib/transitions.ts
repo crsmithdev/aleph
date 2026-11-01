@@ -11,7 +11,8 @@ import { needsOf } from "./ask.ts";
 import { askOf, CALL_FILE, isAwaiting, isBuild, isLive, isStarting, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
 import { causeOf, failedCheckOf } from "./outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
-import { baselineChecks, git, removeBranch } from "./unit.ts";
+import { baselineChecks, git } from "./unit.ts";
+import { agentOf, landTerms, removeBranch } from "./landing.ts";
 import { fetchOrigin } from "./git.ts";
 import { itemOnMain } from "./status.ts";
 import { dispatchDetached, dispatchIssues, gates, liveEntries } from "./factory.ts";
@@ -212,16 +213,18 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
     // A unit that has not written `pid` in the dispatch's wait still counts: a second land here would land the job twice.
     const live = runs.find((e) => isLive(e.folder) || isStarting(e));
     if (live) refuse(`${name} is running as ${live.id}`);
-    const agent = runs.filter((e) => isBuild(e.run.kind) || e.run.kind === "recheck").at(-1)!.run;
-    const needs = isAwaiting(agent.condition) ? needsOf(askOf(agent)) : undefined;
-    const manual = needs === "manual" || (agent.condition === "passed" && agent.say !== undefined);
+    const agent = agentOf(runs)!.run;
+    const terms = landTerms(agent);
+    if (!terms) {
+      const needs = isAwaiting(agent.condition) ? needsOf(askOf(agent)) : undefined;
+      refuse(`${name} is ${agent.condition}${needs ? ` (${needs})` : ""}, not passed`);
+    }
+    const { manual, held } = terms!;
     const unchecked = manual && !a.checked;
-    const held = needs === "held" || needs === "review";
-    if (agent.condition !== "passed" && !manual && !held) refuse(`${name} is ${agent.condition}${needs ? ` (${needs})` : ""}, not passed`);
     const repo = loadRegistry()[agent.repo!];
     const item = onOf(agent);
     if (item !== undefined) fetchOrigin(repo.path);
-    // A land that pushed and died before it closed the item: its own `Job:` commit on main is that land, so the land unit finishes it (unit.ts). Another job's commit, or a commit by hand, that names the item still refuses.
+    // A land that pushed and died before it closed the item: its own `Job:` commit on main is that land, so the land unit finishes it (landing.ts). Another job's commit, or a commit by hand, that names the item still refuses.
     const ownPush = item !== undefined && agent.job !== undefined && git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${agent.job}$`).out !== "";
     const landedAs = ownPush ? null : itemOnMain(repo, item);
     if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
