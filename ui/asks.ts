@@ -57,7 +57,7 @@ const noteOf = (c: Ctx): string => {
 };
 
 const failure = (note: string): string => {
-  const m = /^triage: no verdict in \d+ runs?:\s*(.*)$/.exec(unlead(note));
+  const m = /^(?:triage: no verdict|Triage gave no route) in \d+ runs?:\s*(.*)$/.exec(unlead(note));
   const why = (m?.[1] ?? "").trim();
   if (/^malformed verdict/.test(why)) return "it gave a verdict that could not be read";
   return clean(why.replace(/^failed:\s*/, "")).replace(/\.$/, "") || "it gave no verdict";

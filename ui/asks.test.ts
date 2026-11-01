@@ -173,6 +173,8 @@ describe("asks", () => {
     expect(f.problem).toBe("The firefighter would land aleph-30, but it changes hooks/x.ts, a held security path, so it needs your review.");
     const [t] = ofIssues(issue({ reason: "triage-failed", question: "- 2026-10-27 12:34: triage: no verdict in 2 runs: failed: its process ended before a verdict" }));
     expect(t.problem).toBe("Triage of aleph-387 failed twice: its process ended before a verdict, so no one has decided what to do with this issue.");
+    const [q] = ofIssues(issue({ reason: "triage-failed", question: "Triage gave no route in 2 runs: failed: its process ended before a verdict" }));
+    expect(q.problem).toBe(t.problem);
   });
 
   test("a raw task-notification note leaves a problem with no tag", () => {

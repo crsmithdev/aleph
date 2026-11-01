@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Repo } from "./ledger.ts";
+import { checksInSandbox } from "./checks.ts";
 import { baselineChecks } from "./unit.ts";
 
 // The check path through checksInSandbox: the check's environment must hold TZ=UTC, even when the parent process runs in another zone.
@@ -50,3 +51,25 @@ test("a check run through baselineChecks sees TZ=UTC and date +%Z prints UTC", a
   } as unknown as Repo;
   expect(await baselineChecks(repo, commit, join(base, "logs"))).toBeNull();
 });
+
+test("checksInSandbox hands each step's process to onSpawn, so a drop can kill a running check", async () => {
+  const path = join(base, "repo");
+  sh(base, "git", "init", "-q", "-b", "main", path);
+  writeFileSync(join(path, "f.txt"), "x\n");
+  sh(path, "git", "add", ".");
+  sh(path, "git", "commit", "-q", "-m", "init");
+  const dir = join(base, "sb");
+  for (const d of ["check", "checklog", "home", "tmp", "out"]) mkdirSync(join(dir, d), { recursive: true });
+  sh(path, "git", "bundle", "create", join(dir, "out", "in.bundle"), "main");
+  const repo = { key: "r", path, setup: [], checks: [{ name: "slow", run: "sleep 60" }] } as unknown as Repo;
+  const spawned: ReturnType<typeof Bun.spawn>[] = [];
+  const started = Date.now();
+  const why = await checksInSandbox({
+    folder: base, repo, changed: [], phase: () => {},
+    onSpawn: (p) => { spawned.push(p); if (spawned.length > 1) setTimeout(() => p.kill("SIGKILL"), 200); },
+  }, dir, "out/in.bundle", "refs/heads/main");
+  // The setup step, the check, and the check's rerun after the failure.
+  expect(spawned).toHaveLength(3);
+  expect(why).not.toBeNull();
+  expect(Date.now() - started).toBeLessThan(15_000);
+}, 20_000);

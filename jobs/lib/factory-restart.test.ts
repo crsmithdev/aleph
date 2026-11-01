@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dispatchIssues, setPaused } from "./factory.ts";
-import { readRun } from "./ledger.ts";
+import { lock, readRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
 import { goal, mk, notes, ask, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
 
@@ -106,11 +106,19 @@ test("a facts run a host restart killed ends done, with the reason, and stays un
   expect(run.phase).toBeUndefined();
 });
 
-test("a facts run started after this boot is still running", async () => {
+test("a facts run started after this boot, with its lock held, is still running", async () => {
   const id = goal();
   const fr = factsOf(id, new Date().toISOString());
+  const release = (await lock(`fac-${id}`, 0))!;
   await dispatch(fakes());
   expect(readRun(fr.folder)!.condition).toBe("running");
+  release();
+});
+
+test("a facts run whose process died with no restart ends: nothing holds its lock", async () => {
+  const fr = factsOf(goal(), new Date().toISOString());
+  await dispatch(fakes());
+  expect(readRun(fr.folder)).toMatchObject({ condition: "done", reason: "failed: its process ended before its verdicts" });
 });
 
 // A review that a host restart killed: the run is awaiting a held-path ask, call.md says PENDING.

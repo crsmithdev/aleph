@@ -18,7 +18,7 @@ const SENTENCES: [RegExp, Cause][] = [
   [/^no commit$/, "no-commit"],
   [/^time box$/, "time-box"],
   [/^job lock busy$/, "lock-busy"],
-  [/^(fetch failed|systemd-run failed|worktree gone|bundle failed|hidden checks unreadable)/, "infra"],
+  [/^(fetch failed|systemd-run failed|worktree gone|checkout failed|bundle failed|hidden checks unreadable)/, "infra"],
   [/^merge conflict/, "conflict"],
   [/^main moved during the land; land again$/, "moved"],
   [/^the branch changes docs\/todo\.md;/, "own-list"],

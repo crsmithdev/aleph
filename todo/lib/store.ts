@@ -321,17 +321,16 @@ const why = (e: any): string => e?.message ?? String(e);
 
 /**
  * A note on item `id`, as one commit; with `done` the item is done too, with
- * `label` it gains that label, with `reason` it carries the reason code (`fm.reason`), with `ask` it waits for Chris (`setAsk`).
+ * `label` it gains that label, with `ask` it waits for Chris (`setAsk`).
  * Returns why it could not, or null.
  */
-export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean; label?: string; unlabel?: string; reason?: string; ask?: Ask } = {}): string | null {
+export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean; label?: string; unlabel?: string; ask?: Ask } = {}): string | null {
   try {
     const w = writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
       const item = issues.find(doc, id);
       if (!item) return null;
       if (opts.done) issues.setStatus(item, "done");
       if (opts.label || opts.unlabel) label(item, opts.label ? [opts.label] : [], opts.unlabel ? [opts.unlabel] : []);
-      if (opts.reason) item.fm.reason = opts.reason;
       if (opts.ask) setAsk(item, opts.ask);
       return issues.note(item, text);
     });

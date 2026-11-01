@@ -10,7 +10,7 @@ import { checkSlot, lock, type Check, type CheckResult, type Repo } from "./ledg
 import { sandboxed } from "./sandbox.ts";
 
 /** One run of checks. `folder` gets checks.log. `record` gets each check that ran. */
-export interface CheckTask { folder: string; repo: Repo; changed: string[]; phase: (p: string) => void; record?: (c: CheckResult) => void }
+export interface CheckTask { folder: string; repo: Repo; changed: string[]; phase: (p: string) => void; onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void; record?: (c: CheckResult) => void }
 
 /** Runs one check with its output appended to `out`. `timedOut` comes from a clock: a command can return 124 by itself. */
 export type CheckExec = (check: Check, out: string, limit: number) => Promise<{ code: number; timedOut: boolean }>;
@@ -121,7 +121,7 @@ export async function checksInSandbox(t: CheckTask, dir: string, bundle: string,
     `{ ${t.repo.setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1; echo $? > ../checklog/setup.code`,
   ].join("\n");
   const noise = join(t.folder, "check.out");
-  const step = { cwd: "check", env: { TZ: "UTC" }, hideCiMissing: true };
+  const step = { cwd: "check", env: { TZ: "UTC" }, hideCiMissing: true, onSpawn: t.onSpawn };
   t.phase("check setup");
   const r = await withSlot(() => sandboxed(dir, script, { ...step, read: [bundle], write: ["check", "checklog", "home", "tmp"], stdout: noise, stderr: noise }));
   const code = join(dir, "checklog", "setup.code");

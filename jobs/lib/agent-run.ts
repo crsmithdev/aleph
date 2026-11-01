@@ -18,13 +18,12 @@ export interface Call {
   /** The arguments after the model: the role's tools and what they may do. */
   flags: string[];
   cwd?: string;
-  env?: Record<string, string | undefined>;
 }
 
 async function spawn(c: Call, input: string): Promise<{ output: string; text: string; cost?: number; failure?: string }> {
   const role = c.role.toUpperCase();
   const argv = [process.env[`ALEPH_${role}_CMD`] ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--model", c.model, ...c.flags];
-  const p = Bun.spawn(argv, { cwd: c.cwd, env: c.env ?? process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawn(argv, { cwd: c.cwd, env: { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined }, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
   let timedOut = false;
   const timer = setTimeout(() => { timedOut = true; p.kill(); }, Number(process.env[`ALEPH_${role}_TIMEOUT`] ?? c.seconds) * 1000);
   try {

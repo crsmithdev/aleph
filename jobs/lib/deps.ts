@@ -10,7 +10,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { clearAsk, file, readList, sourceOf, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { always, logAlways, plainAsk } from "./ask.ts";
+import { always, logAlways, plainAsk, readAsk } from "./ask.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { factoryDir } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
@@ -138,7 +138,8 @@ const majorOf = (v: string): number | null => { const m = /^[^\d]*(\d+)\./.exec(
 /** Whether `item` is an open dependency proposal waiting for a yes, (an approval Ask of reason `proposal`, raised by deps). */
 function waitingProposal(item: issues.Issue): boolean {
   if (issues.status(item) !== "open") return false;
-  return item.fm.ask === "approval" && item.fm.reason === "proposal" && sourceOf(item) === "deps";
+  const ask = readAsk(item);
+  return ask?.kind === "approval" && ask.reason === "proposal" && sourceOf(item) === "deps";
 }
 
 /**

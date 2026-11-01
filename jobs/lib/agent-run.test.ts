@@ -91,3 +91,12 @@ test("endLost ends a run when its lock is free, and leaves one whose lock is hel
   expect(readRun(other.folder)?.condition).toBe("running");
   expect(readRun(done.folder)?.reason).toBe("kept");
 });
+
+test("an agent gets no API key and no CLAUDECODE, so it bills the subscription", async () => {
+  process.env.ANTHROPIC_API_KEY = "secret";
+  process.env.CLAUDECODE = "1";
+  fake('echo "key=[$ANTHROPIC_API_KEY] code=[$CLAUDECODE] path=[${PATH:+set}]"');
+  expect((await callAgent(opening, "x")).text).toBe("key=[] code=[] path=[set]\n");
+  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.CLAUDECODE;
+});

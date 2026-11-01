@@ -20,7 +20,7 @@ import { allJobs, checkedBy, lookMinutes, isOpen, issue as issueOf, jobsNamed, l
 import { accept, final, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { startReview } from "./review.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
-import { endRun } from "./agent-run.ts";
+import { endLost, endRun } from "./agent-run.ts";
 import { factsGate } from "./facts.ts";
 import { explainStep } from "./explain.ts";
 import { writeEpisodes } from "./episode.ts";
@@ -50,6 +50,7 @@ export function setPaused(on: boolean): void {
  */
 async function factsStep(): Promise<void> {
   endKilledFacts();
+  await endLost("facts", (run) => run.name, "its verdicts");
   const keys = new Map(sandboxRepos().map((r) => [r.key, r]));
   for (const j of allJobs()) {
     const last = lastReal(j);

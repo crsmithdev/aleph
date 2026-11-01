@@ -202,7 +202,7 @@ function landPorts({ id, folder, run }: Entry, repo: Repo, env: Record<string, s
 
 /** The checks on the tree in `wt`, with the given environment. */
 const inWorktree = (folder: string, wt: string, repo: Repo, env: Record<string, string | undefined>, changed: string[], phase: (p: string) => void) =>
-  runChecks({ folder, repo, changed, phase, record: recorder(folder) }, (check, out, limit) => exec(["bash", "-c", check.run], { cwd: wt, env, out, limit }));
+  runChecks({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, (check, out, limit) => exec(["bash", "-c", check.run], { cwd: wt, env, out, limit }));
 
 /** The checks on `commit`, in the job's worktree, which is back on its branch after. */
 async function worktreeChecks(folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>, commit: string, changed: string[], phase: (p: string) => void): Promise<string | null> {
@@ -233,7 +233,7 @@ async function sandboxChecks(id: string, folder: string, repo: Repo, commit: str
     git(repo.path, "update-ref", ref, commit);
     const b = git(repo.path, "bundle", "create", join(dir, "out", "land.bundle"), ref);
     if (!b.ok) return `bundle failed: ${b.out}`;
-    return await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder) }, dir, "out/land.bundle", ref, hidden);
+    return await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, dir, "out/land.bundle", ref, hidden);
   } finally {
     git(repo.path, "update-ref", "-d", ref);
     removeRunFolder(dir);
@@ -591,7 +591,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit", facts);
     const hidden = hiddenOf(repo, run);
     if (!hidden) return stuck("infra", HIDDEN_UNREADABLE, facts);
-    const failed = await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder) }, dir, "out/out.bundle", `refs/heads/${branch}`, hidden);
+    const failed = await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", `refs/heads/${branch}`, hidden);
     if (failed) {
       // A check that failed goes back to the worker, at most FIX_ROUNDS times a job.
       const check = readRun(folder)?.checks?.findLast((c) => !c.ok)?.name;
@@ -784,7 +784,7 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
     if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit");
     const hidden = hiddenOf(repo, run);
     if (!hidden) return stuck("infra", HIDDEN_UNREADABLE);
-    const failed = await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder) }, dir, "out/out.bundle", ref, hidden);
+    const failed = await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", ref, hidden);
     if (failed) return stoppedByChecks(failed);
     return await heldAndReview(id, folder, run, repo, dir, base, branch, { checkedBase: base, checkedTip: git(repo.path, "rev-parse", ref).out });
   } finally {

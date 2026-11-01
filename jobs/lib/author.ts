@@ -75,7 +75,6 @@ export function whyRejected(r: Ran): string | null {
 const ask = (repo: Repo, input: string) => callAgent({
   role: "author", who: "the author", model: AUTHOR_MODEL, seconds: 600, flags: ["--tools", "Read", "Grep", "Glob"],
   cwd: existsSync(repo.path) ? repo.path : undefined,
-  env: { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined },
 }, input);
 
 /**

@@ -34,6 +34,7 @@ test("an old dropped run keeps its no-commit mark, and free prose states no caus
 
 test("the check runners' sentences become causes, and an unknown one is other", () => {
   expect(checksStopped("tests failed")).toEqual({ cause: "check", checkName: "tests", reason: "tests failed" });
+  expect(checksStopped("checkout failed")).toEqual({ cause: "infra", reason: "checkout failed" });
   expect(checksStopped("checks did not start (exit 1)")).toEqual({ cause: "other", reason: "checks did not start (exit 1)" });
 });
 
