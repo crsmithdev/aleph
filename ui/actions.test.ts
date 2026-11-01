@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -44,7 +44,7 @@ beforeAll(async () => {
   sh(items, "push", "-q", "origin", "main");
   calls = join(base, "calls");
   const fake = join(base, "fake-aleph");
-  writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\nif [ "$4" = "--spec" ]; then cat >> ${calls}.stdin; fi\nif [ "$1 $2" = "issue edit" ] && [ -e ${base}/fail-edit ]; then echo "edit refused" >&2; exit 1; fi\necho out\nexit 0\n`);
+  writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\nif [ "$4" = "--spec" ]; then cat >> ${calls}.stdin; fi\nif [ "$1 $2" = "issue edit" ] && [ -e ${base}/fail-edit ]; then echo "edit refused" >&2; exit 1; fi\nif [ "$3" = "no-such-reason" ]; then echo "no such reason" >&2; exit 1; fi\necho out\nexit 0\n`);
   chmodSync(fake, 0o755);
   Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
   for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake })) {
@@ -208,4 +208,25 @@ test("POST /api/answer/:name drops the question run with the answer as its reaso
   expect(last.startsWith("drop asks ")).toBe(true);
   expect(last).toContain("which colour?");
   expect(last).toContain("blue");
+});
+
+describe("POST /api/standing/:reason", () => {
+  const body = { action: "land" };
+  test("refuses a request from another page or with no header, and runs nothing", async () => {
+    const before = recorded().length;
+    expect((await post("/api/standing/held-path", {}, body)).status).toBe(403);
+    expect((await post("/api/standing/held-path", { "X-Aleph-UI": "1", Origin: "https://evil.example" }, body)).status).toBe(403);
+    expect((await post("/api/standing/held-path", { "X-Aleph-UI": "1" }, {})).status).toBe(400);
+    expect(recorded().length).toBe(before);
+  });
+  test("grants through the CLI", async () => {
+    const r = await post("/api/standing/held-path", { "X-Aleph-UI": "1" }, body);
+    expect(r.status).toBe(200);
+    expect(recorded().at(-1)).toBe("always grant held-path land");
+  });
+  test("a CLI refusal is a 422 with its reason", async () => {
+    const r = await post("/api/standing/no-such-reason", { "X-Aleph-UI": "1" }, body);
+    expect(r.status).toBe(422);
+    expect((await r.json()).error).toBe("no such reason");
+  });
 });

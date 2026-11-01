@@ -895,10 +895,12 @@ a.itl-dot:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; 
     const q = h.indexOf("?");
     return { path: q < 0 ? h : h.slice(0, q), query: new URLSearchParams(q < 0 ? "" : h.slice(q + 1)) };
   }
+  // A hand-typed `%zz` is no encoding: it stands for itself, and the view says it found nothing.
+  const decodeParam = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
   function match(path, query) {
     for (const v of views) {
       const m = path.match(v._route.re);
-      if (m) return { view: v, query, params: Object.fromEntries(v._route.names.map((n, i) => [n, decodeURIComponent(m[i + 1])])) };
+      if (m) return { view: v, query, params: Object.fromEntries(v._route.names.map((n, i) => [n, decodeParam(m[i + 1])])) };
     }
     return null;
   }
@@ -980,14 +982,13 @@ a.itl-dot:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; 
     if (view.outOfDate) view.outOfDate($("view"), false);
   }
 
-  // One reload at a time; events that come during it make one more. A push does not re-render while the reader types or has a button armed: `refresh` catches up.
+  // One reload at a time; events that come during it make one more. A push does not re-render while the reader types or has a button armed; `refresh` catches up, except over an armed button, which stands for five seconds at most.
   let reloading = false, again = false;
   async function reload() {
     if (reloading) { again = true; return; }
     if (!shown?.view?.live || document.activeElement?.matches("input, textarea, select") || $("view").querySelector("button.act.ask")) return;
     reloading = true;
-    await load(shown, false);
-    reloading = false;
+    try { await load(shown, false); } finally { reloading = false; }
     if (again) { again = false; reload(); }
   }
 
@@ -1029,7 +1030,7 @@ a.itl-dot:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; 
     $("view").innerHTML = loading(m.view.title);
     goodAt = Date.now(); failed = false; wasOut = false;
     load(shown, true);
-    if (m.view.refresh) timer = setInterval(() => load(m, false), m.view.refresh * 1000);
+    if (m.view.refresh) timer = setInterval(() => { if (!$("view").querySelector("button.act.ask")) load(m, false); }, m.view.refresh * 1000);
   }
 
   // Elapsed times tick every second between refreshes: m:ss since the element's data-since.
@@ -1109,20 +1110,18 @@ a.itl-dot:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; 
     }
     clearTimeout(b._t);
     const post = (url, body) => fetch(url, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body) });
-    if (act === "always" || act === "revoke") {
-      // Always: grant the standing permission, then click the row's first action (its second-click confirm applies). Revoke: take it back.
+    if (act === "always") {
+      // Grant the standing permission, then click the row's first action (its second-click confirm applies).
       const { reason, action, first } = b.dataset;
       b.disabled = true;
       try {
-        const res = await post(`/api/standing/${encodeURIComponent(reason)}${act === "revoke" ? "/revoke" : ""}`, act === "always" ? { action } : {});
+        const res = await post(`/api/standing/${encodeURIComponent(reason)}`, { action });
         const r = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(r.error || res.statusText);
       } catch (err) { b.disabled = false; note(`${act} failed: ${err.message}`); return; }
-      if (act === "always") {
-        const next = [...b.closest("article").querySelectorAll("button.act:not(.always)")].find((x) => x.dataset.act === first);
-        b.disabled = false;
-        if (next) { next.click(); return; }
-      }
+      const next = [...b.closest("article").querySelectorAll("button.act:not(.always)")].find((x) => x.dataset.act === first);
+      b.disabled = false;
+      if (next) { next.click(); return; }
       if (shown) load(shown, false);
       return;
     }
@@ -1158,7 +1157,7 @@ a.itl-dot:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; 
     try {
       const res = await fetch(name ? `/api/${act}/${encodeURIComponent(name)}` : `/api/${act}`, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(act === "judge" ? { judge: b.dataset.value } : act === "answer" ? { answer: answerText } : act === "wait" ? { on: b.dataset.on } : {}) });
       const r = await res.json().catch(() => ({ code: res.status, stderr: res.statusText }));
-      if (r.code !== 0) { b.disabled = false; b.classList.remove("ask"); b.textContent = label; note(`${act} failed: ${(r.stderr || r.stdout || `code ${r.code}`).trim().split("\n").pop()}`); return; }
+      if (r.code !== 0) { b.disabled = false; b.classList.remove("ask"); b.textContent = label; note(`${act} failed: ${(r.error || r.stderr || r.stdout || `code ${r.code}`).trim().split("\n").pop()}`); return; }
     } catch (err) { b.disabled = false; note(err.message); return; }
     if (shown) load(shown, false);
   });

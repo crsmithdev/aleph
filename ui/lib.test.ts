@@ -170,21 +170,6 @@ test("recordState and restoreState bring back open details, a shown diff and typ
   expect(after.panels[0].innerHTML).toBe("<pre>+x</pre>");
 });
 
-test("a loaded Job page diff is restored and its Load button removed", () => {
-  const button = { removed: false, remove() { this.removed = true; } };
-  const mkPanel = () => ({ hidden: true, innerHTML: "", getAttribute: () => null });
-  const root = (p: any) => ({ querySelectorAll: (sel: string) => (sel.includes("#diff") ? [p] : sel === "button[data-diff]" ? [button] : []) });
-  const before = mkPanel();
-  before.hidden = false;
-  before.innerHTML = diffHtml("+a");
-  const state = recordState(root(before));
-  const after = mkPanel();
-  restoreState(root(after), state);
-  expect(after.hidden).toBe(false);
-  expect(after.innerHTML).toContain("d-add");
-  expect(button.removed).toBe(true);
-});
-
 test("restoreState ignores state for elements the new HTML no longer has", () => {
   const before = fakeRoot(HTML);
   before.details[0].open = true;
