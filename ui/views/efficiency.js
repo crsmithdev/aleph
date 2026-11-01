@@ -4,7 +4,7 @@ import { firstPassTile, hours, loadSpeed, lostClasses, lostTile, mergeCauses, pc
 
 const TOP_ISSUES = 5;
 const REPO = "aleph";
-const ALL = "all", FLAKES = "flakes";
+const ALL = "all", FLAKES = "flakes", USAGE = "usage";
 
 /** What the cards show for a selection: a class, the reruns, or all the lost classes together. */
 export function selection(d, key) {
@@ -12,6 +12,7 @@ export function selection(d, key) {
     const rows = d.flakes ?? [];
     return { title: "Reruns", text: "Checks that failed, then passed on a rerun of the same tree.", size: `${plural(d.flaky, "rerun")}.`, causes: rows.map((f) => ({ name: f.name, runs: f.count })), top: [] };
   }
+  if (key === USAGE) return { title: "Usage per issue", text: "Landed issues by the share of the weekly limit their agent runs took.", size: `${plural((d.issues?.usage ?? []).length, "issue")}.`, causes: [], top: d.issues?.usage ?? [] };
   const c = key !== ALL && (d.classes ?? []).find((x) => x.key === key);
   if (c) return { title: c.name, text: c.text, size: `${plural(c.runs, "run")} on ${plural(c.issues, "issue")}.`, causes: [...(c.causes ?? [])].sort((a, b) => b.hours - a.hours), top: (c.top ?? []).slice(0, TOP_ISSUES) };
   const causes = mergeCauses(d), lost = lostClasses(d), first = causes[0], sum = causes.reduce((a, x) => a + x.hours, 0);
@@ -30,7 +31,7 @@ function scorecard(d, day, key) {
   return lostTile(d, day, { key: ALL, on: key === ALL }) + firstPassTile(d, day, { key: "landed", on: key === "landed" }) +
     tile({ k: "Reruns", v: String(d.flaky), body: small("checks passed on rerun") + (day ? small(`${day.flaky} in the last 24 h`) : ""), key: FLAKES, on: key === FLAKES }) +
     tile({ k: "Fix rounds", v: String(fixed?.runs ?? 0), body: small(`${hours(fixed?.hours ?? 0)} on ${plural(fixed?.issues ?? 0, "issue")}`), key: "fixed", on: key === "fixed" }) +
-    tile({ k: "Usage per issue", v: d.issues.week === null ? "–" : weekText(d.issues.week), body: small(d.issues.week === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median") });
+    tile({ k: "Usage per issue", v: d.issues.week === null ? "–" : weekText(d.issues.week), body: small(d.issues.week === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median"), ...(d.issues.week === null ? {} : { key: USAGE, on: key === USAGE }) });
 }
 
 function bar(d, key) {
@@ -64,8 +65,20 @@ export async function fileIssue(d, key, fetcher = fetch) {
   return out;
 }
 
+const usageTable = (rows) => dataTable(heads(["Issue", "Usage", "Runs"], ["Usage", "Runs"]), rows.map((x) =>
+  `<tr><td${x.title ? ` title="${esc(x.title)}"` : ""}>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="num">${esc(weekText(x.week))}</td><td class="num">${x.runs}</td></tr>`).join(""));
+
+function usagePage(d, day, key) {
+  const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted, s = selection(d, key);
+  const scope = filterBar([{ name: "window", value: d.window ?? "week", options: WINDOWS }]);
+  return `<div class="page sp" id="eff">${pageHead("Efficiency", { aside: scope })}${tiles("Quality", scorecard(d, day, key))}` +
+    card("Agent time by outcome", bar(d, key), { aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "run"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
+    card("Usage per issue, largest first", s.top.length ? usageTable(s.top) : "<p>No issue to show.</p>") + `</div>`;
+}
+
 /** The page body for a selection. `day` is /api/speed for the last 24 h, or null. */
 export function renderEfficiency(d, day, key = ALL) {
+  if (key === USAGE) return usagePage(d, day, key);
   const s = selection(d, key), total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted;
   const file = issueFor(d, key);
   const scope = filterBar([{ name: "window", value: d.window ?? "week", options: WINDOWS }]);

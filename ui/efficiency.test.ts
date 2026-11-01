@@ -46,7 +46,7 @@ test("goal stats: first-pass share, median fix rounds", () => {
 
 const cls = (key: string, name: string, h: number, causes: any[], top: any[] = []) => ({ key, name, text: `${name} text.`, hours: h, week: 0, runs: causes.reduce((a, x) => a + x.runs, 0), issues: 2, causes, top });
 const D: any = {
-  window: "week", flaky: 4, issues: { landed: 2, firstPass: 0.5, fixRounds: 1, week: 0.02 }, lost: { hours: 6, share: 0.3 }, notCounted: { runs: 11, issues: 4, hours: 0.4 },
+  window: "week", flaky: 4, issues: { landed: 2, firstPass: 0.5, fixRounds: 1, week: 0.02, usage: [{ goal: "fx-1", href: "#/issues/fx/1", title: "One", week: 0.5, runs: 3 }, { goal: "fx-2", week: 0.1, runs: 1 }] }, lost: { hours: 6, share: 0.3 }, notCounted: { runs: 11, issues: 4, hours: 0.4 },
   classes: [
     cls("landed", "Landed", 10, [{ name: "First run", hours: 10, runs: 5 }]),
     cls("fixed", "Fixed", 4, [{ name: "Checks failed", hours: 4, runs: 3 }]),
@@ -110,4 +110,21 @@ test("File an issue posts the first cause as the title, with the runs and reason
   expect(b.body).toContain("fx-1: 2.0 h, 6 runs. already met");
   expect(issueFor({ ...D, classes: [] }, "all")).toBeNull();
   await expect(fileIssue(D, "nothing", async () => ({ ok: false, status: 422, json: async () => ({ error: "no" }) }) as any)).rejects.toThrow("no");
+});
+
+test("the Usage per issue tile drills to the issues list", () => {
+  expect(renderEfficiency(D, DAY, "all")).toMatch(/data-tile="usage"[^>]*aria-pressed="false"|aria-pressed="false"[^>]*data-tile="usage"/);
+  expect(renderEfficiency(D, null, "usage")).toContain('data-tile="usage" aria-pressed="true"');
+  expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, null, "all")).not.toContain('data-tile="usage"');
+  const h = renderEfficiency(D, null, "usage");
+  expect(h).toContain("<h2>Usage per issue, largest first</h2>");
+  expect(h).toContain("#/issues/fx/1");
+  expect(h).toContain("fx-2");
+  expect(h).not.toContain("#/issues/fx/2");
+  expect(h).toContain("0.5%");
+  expect(h).toContain("0.1%");
+  expect(h).not.toContain("File an issue");
+  expect(h).not.toContain("undefined");
+  expect(issueFor(D, "usage")).toBeNull();
+  expect(renderEfficiency({ ...D, issues: { ...D.issues, usage: undefined } }, null, "usage")).toContain("No issue to show.");
 });
