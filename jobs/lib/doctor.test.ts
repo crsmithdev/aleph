@@ -78,6 +78,19 @@ describe("git", () => {
     expect(said.join("\n")).toContain("left");
     expect(emptyObjects(repo).length).toBe(1);
   });
+  test("a 0-byte git lock in objects is not an empty object", () => {
+    const lock = join(repo, ".git/objects/maintenance.lock");
+    sh(repo, `: > ${lock}`);
+    expect(emptyObjects(repo)).toEqual([]);
+    expect(gitChecks().find((c) => c.name === "empty objects")?.ok).toBe(true);
+    fakeCtl("exit 0");
+    expect(fix().join("\n")).not.toContain("left");
+  });
+  test("a 0-byte pack in objects/pack is an empty object", () => {
+    const pack = join(repo, ".git/objects/pack/pack-0000000000000000000000000000000000000000.pack");
+    sh(repo, `mkdir -p .git/objects/pack && : > ${pack}`);
+    expect(emptyObjects(repo)).toEqual([pack]);
+  });
 });
 
 describe("git blobs", () => {

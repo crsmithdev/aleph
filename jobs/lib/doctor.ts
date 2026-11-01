@@ -36,7 +36,10 @@ function objectsDir(path: string): string | null {
   return r.ok ? resolve(path, r.out) : null;
 }
 
-/** Zero-length loose objects and packs under .git/objects: the files a power loss leaves. */
+/**
+ * Zero-length loose objects and packs under .git/objects: the files a power loss leaves.
+ * Other files there, such as git's *.lock files, are not objects and are not counted.
+ */
 export function emptyObjects(path: string): string[] {
   const dir = objectsDir(path);
   if (!dir) return [];
@@ -46,11 +49,16 @@ export function emptyObjects(path: string): string[] {
       const p = join(d, name);
       const s = statSync(p);
       if (s.isDirectory()) { if (depth < 2) walk(p, depth + 1); }
-      else if (s.size === 0) found.push(p);
+      else if (s.size === 0 && (looseId(p) !== null || isPack(p))) found.push(p);
     }
   };
   walk(dir, 0);
   return found;
+}
+
+/** A `pack-*` file directly in objects/pack. */
+function isPack(file: string): boolean {
+  return basename(file).startsWith("pack-") && basename(dirname(file)) === "pack" && basename(dirname(dirname(file))) === "objects";
 }
 
 /** The object id a loose object file holds, or null for a pack or anything else. */
