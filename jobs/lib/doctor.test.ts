@@ -111,6 +111,10 @@ describe("units", () => {
     const c = unitChecks();
     expect(c.map((x) => [x.name, x.ok])).toEqual([["unit aleph-ui", true], ["unit home-proxy", false], ["unit aleph-tick.timer", true], ["timer next run", true]]);
   });
+  test("a timer whose triggers a drop-in cleared (empty TimersMonotonic, no next run) fails", () => {
+    fakeCtl(`case "$2" in is-active) [ "$3" = aleph-tick.service ] && { echo inactive; exit 3; }; echo active;; show) echo TimersMonotonic=; echo NextElapseUSecRealtime=; echo NextElapseUSecMonotonic=0;; esac`);
+    expect(unitChecks().at(-1)).toMatchObject({ name: "timer next run", ok: false });
+  });
   test("a timer with no next run fails", () => {
     fakeCtl(`case "$2" in is-active) [ "$3" = aleph-tick.service ] && { echo inactive; exit 3; }; echo active;; show) echo NextElapseUSecRealtime=; echo NextElapseUSecMonotonic=0;; esac`);
     expect(unitChecks().at(-1)).toMatchObject({ ok: false });
