@@ -695,3 +695,30 @@ describe("obs hook text blocks", () => {
     rmSync(spool, { recursive: true, force: true });
   });
 });
+
+describe("a guard that cannot run denies", () => {
+  async function run(script: string, stdin: string) {
+    const proc = Bun.spawn(["bun", script], { stdin: new TextEncoder().encode(stdin), stdout: "pipe", stderr: "pipe" });
+    const code = await proc.exited;
+    return { code, stderr: await new Response(proc.stderr).text() };
+  }
+  for (const name of ["git-guard", "secret-scan"]) {
+    test(`${name}: fails at import -> exit 2, named on stderr`, async () => {
+      // A launcher alone in a directory has no lib/ beside it, so its import fails.
+      const dir = mkdtempSync(join(tmpdir(), "aleph-launcher-"));
+      try {
+        writeFileSync(join(dir, `${name}.ts`), readFileSync(join(HOOKS, `${name}.ts`)));
+        const r = await run(join(dir, `${name}.ts`), "{}");
+        expect(r.code).toBe(2);
+        expect(r.stderr).toContain(name);
+        expect(r.stderr).toContain("Cannot find module");
+      } finally { rmSync(dir, { recursive: true, force: true }); }
+    });
+    test(`${name}: throws after load -> exit 2, named on stderr`, async () => {
+      const r = await run(join(HOOKS, `${name}.ts`), "not json");
+      expect(r.code).toBe(2);
+      expect(r.stderr).toContain(name);
+      expect(r.stderr).toContain("JSON");
+    });
+  }
+});
