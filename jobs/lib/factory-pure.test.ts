@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { correctionsDue, dispatchIssues, episodeStep, report, spentToday, setPaused, health, stalled, stallStep } from "./factory.ts";
+import { correctionsDue, dispatchIssues, episodeStep, report, spentToday, runsToday, setPaused, health, stalled, stallStep } from "./factory.ts";
 import { readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, setup, teardown } from "./factory.helpers.ts";
@@ -136,6 +136,14 @@ test("a dispatch with checks, three factory repos and no open goals fetches the 
 test("the day's spend counts every kind that records a cost", () => {
   for (const [name, kind, cost] of [["fac-1", "build", 1], ["fac-2", "triage", 2], ["fac-3", "plan", 4], ["fac-4", "facts", 8], ["fac-5", "firefighter", 16]] as const) mk(name, kind, "done", { cost });
   expect(spentToday()).toBe(31);
+});
+
+test("an explain run has no repo; its cost counts in the day's spend, not in runsToday, and an old one adds nothing", () => {
+  const old = new Date(Date.now() - 25 * 3600_000).toISOString();
+  mk("fac-6", "explain", "done", { cost: 3, repo: undefined, on: "fac-6" });
+  mk("fac-7", "explain", "done", { cost: 5, repo: undefined, on: "20261028-000001-fac-fac-1-build", started: old });
+  expect(spentToday()).toBe(3);
+  expect(runsToday().filter((e) => e.run.kind === "explain")).toEqual([]);
 });
 
 test("a goal that names a busy file an open job also names waits; a job waiting for Chris does not count", async () => {

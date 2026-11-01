@@ -85,10 +85,10 @@ export function runsToday(now = Date.now(), runs: Entry[] = allRuns()): Entry[] 
   return runs.filter((e) => (isBuild(e.run.kind) || e.run.kind === "triage" || e.run.kind === "plan") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
 }
 
-/** The dollars of the runs started in the last 24 hours: `runsToday`, and the facts and firefighter runs, which the day cap does not count. */
+/** The dollars of the runs started in the last 24 hours: `runsToday`, and the facts, firefighter and explain runs, which the day cap does not count. An explain run has no repo (its `on` is an item ref or a run folder), so it is not filtered by one, as a firefighter run is not. */
 export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  const others = runs.filter((e) => (e.run.kind === "firefighter" || (e.run.kind === "facts" && e.run.repo && keys.has(e.run.repo))) && now - Date.parse(e.run.started) < DAY);
+  const others = runs.filter((e) => (e.run.kind === "firefighter" || e.run.kind === "explain" || (e.run.kind === "facts" && e.run.repo && keys.has(e.run.repo))) && now - Date.parse(e.run.started) < DAY);
   return [...runsToday(now, runs), ...others].reduce((a, e) => a + (e.run.cost ?? 0), 0);
 }
 

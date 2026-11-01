@@ -2,7 +2,7 @@
 // Plain JS with no DOM, so the page and the tests both import it.
 import { esc, when } from "./lib.js";
 
-const KINDS = { triage: "Triage", build: "Build", plan: "Plan", land: "Land", facts: "Facts review", recheck: "Recheck", plain: "Run", firefighter: "Firefighter" };
+const KINDS = { triage: "Triage", build: "Build", plan: "Plan", land: "Land", facts: "Facts review", recheck: "Recheck", plain: "Run", firefighter: "Firefighter", explain: "Explain" };
 const GAP = 60_000;
 
 /** "42 s", "12 min", "3 h 5 min", "4 d 2 h". */

@@ -157,6 +157,12 @@ describe("GET /api/jobs/:name", () => {
     expect(j.result).toBe("built it\n");
     expect(j.review).toContain("VERDICT: pass");
   });
+  test("an explain run is listed with its own kind, not as a worker", async () => {
+    run("20261027-000007-a", { job: "oth-3", name: "oth-3", kind: "explain", repo: "oth", condition: "passed", started: ago(1), ended: ago(0.5) });
+    const j = await (await get("/api/jobs/oth-3")).json();
+    rmSync(join(jobsDir, "20261027-000007-a"), { recursive: true, force: true });
+    expect(j.runs.map((r: any) => r.kind)).toEqual(["explain"]);
+  });
   test("returns runs in order, the review and the log tails", async () => {
     const j = await (await get("/api/jobs/fac-9")).json();
     expect(j.runs.map((r: any) => r.kind)).toEqual(["worker", "worker", "review", "land"]);
