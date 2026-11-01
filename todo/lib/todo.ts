@@ -138,13 +138,13 @@ export const find = (doc: Doc, id: number | string): Issue | undefined => doc.it
 // The max of `id` ignores `sub` on purpose: a part's id is its parent's number, so a part never takes a new issue number.
 export const nextId = (doc: Doc): number => Math.max(doc.items.reduce((m, i) => Math.max(m, i.id), 0), (doc.floor?.next ?? 1) - 1) + 1;
 
-const SOURCES = ["chris", "worker", "deps", "memory"] as const;
+const SOURCES = ["chris", "worker", "deps", "memory", "agent"] as const;
 export type Source = (typeof SOURCES)[number];
 
 /** The next free `k` for a part `<n>.<k>` under issue `n`, above any part of closed work. */
 export const nextSub = (doc: Doc, n: number): number => Math.max(doc.items.reduce((m, i) => (i.id === n && i.sub !== undefined ? Math.max(m, i.sub) : m), 0), doc.floor?.parts[String(n)] ?? 0) + 1;
 
-/** Add an issue: `source` (chris unless the caller says otherwise) and `areas`, with its request and, when given, its spec. */
+/** Add an issue: `source` (chris unless the caller or a label says otherwise; this reads no environment) and `areas`, with its request and, when given, its spec. */
 /** Labels that say a source or an old state, never an area. */
 const NOT_AREAS = ["deps", "memory", "followup", "goal", "needs-chris", "triaged", "planned", "proposal", "live-check"];
 
@@ -251,7 +251,7 @@ export function lint(doc: Doc): Finding[] {
     }
     for (const key of ["source", "ask"] as const) {
       const v = item.fm[key];
-      const ok = { source: ["chris", "worker", "deps", "memory"], ask: ["input", "approval"] }[key];
+      const ok: string[] = { source: [...SOURCES], ask: ["input", "approval"] }[key];
       if (v !== undefined && !ok.includes(v as string)) findings.push({ id: refOf(item), problem: `${key} "${v}" is not one of ${ok.join(", ")}`, fixable: false });
     }
     for (const key of RETIRED) if (item.fm[key] !== undefined) findings.push({ id: refOf(item), problem: `${key} is retired`, fixable: false });

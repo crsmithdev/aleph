@@ -21,7 +21,7 @@ function sh(cwd: string, ...args: string[]): string {
 }
 
 function env(extra: Record<string, string> = {}): Record<string, string> {
-  return { ...(process.env as Record<string, string>), ...gitEnv, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ...extra };
+  return { ...(process.env as Record<string, string>), CLAUDECODE: "", ...gitEnv, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ...extra };
 }
 
 function aleph(...args: string[]): { code: number; out: string; err: string } {
@@ -135,6 +135,21 @@ test("add allocates the next id and list shows it", () => {
   expect(rows.map((r: any) => r.id)).toEqual([3, 4]);
   expect(rows[1]).toMatchObject({ status: "open", priority: "medium", source: "chris", areas: [] })
   expect(rows[1]).not.toHaveProperty("labels");
+});
+
+test("add gives source agent under CLAUDECODE, chris without it, and worker for a followup label", () => {
+  const src = (title: string) => JSON.parse(aleph("issue", "list", "proj", "--json").out).find((r: any) => r.title === title).source;
+  expect(alephWith({ CLAUDECODE: "1" }, "issue", "add", "proj", "From agent").code).toBe(0);
+  expect(aleph("issue", "add", "proj", "From human").code).toBe(0);
+  expect(alephWith({ CLAUDECODE: "1" }, "issue", "add", "proj", "From worker", "--labels", "followup").code).toBe(0);
+  expect(src("From agent")).toBe("agent");
+  expect(src("From human")).toBe("chris");
+  expect(src("From worker")).toBe("worker");
+  const id = JSON.parse(aleph("issue", "list", "proj", "--json").out).find((r: any) => r.title === "From human").id;
+  expect(aleph("issue", "edit", "proj", String(id), "--source", "agent").code).toBe(0);
+  expect(src("From human")).toBe("agent");
+  const lint = aleph("issue", "lint", "proj");
+  expect(lint.code, lint.out + lint.err).toBe(0);
 });
 
 test("a write leaves the files of other items byte for byte", () => {

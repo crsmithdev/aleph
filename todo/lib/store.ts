@@ -256,9 +256,9 @@ const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeo
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /** Who raised the item: its `source`, else chris. */
-export function sourceOf(item: Issue): "chris" | "worker" | "deps" | "memory" {
+export function sourceOf(item: Issue): "chris" | "worker" | "deps" | "memory" | "agent" {
   const s = text(item.fm.source);
-  return s === "worker" || s === "deps" || s === "memory" ? s : "chris";
+  return s === "worker" || s === "deps" || s === "memory" || s === "agent" ? s : "chris";
 }
 /** The parts of an issue, in number order. */
 export const partsOf = (doc: Doc, item: Issue): Issue[] => (item.sub === undefined ? doc.items.filter((i) => i.id === item.id && i.sub !== undefined) : []);
@@ -435,7 +435,7 @@ export function askPartDropped(issue: Issue, question: string): void {
 }
 
 /** A new issue for `file` and `closeAndFile`; `spec` makes it buildable. */
-export interface Filing { title: string; labels?: string[]; areas?: string[]; request?: string; spec?: string; priority?: string; source?: "chris" | "worker" | "deps" | "memory"; ask?: Ask }
+export interface Filing { title: string; labels?: string[]; areas?: string[]; request?: string; spec?: string; priority?: string; source?: "chris" | "worker" | "deps" | "memory" | "agent"; ask?: Ask }
 
 /**
  * Item `id` done with the note `text` (when `id` is given), and `filed` added,

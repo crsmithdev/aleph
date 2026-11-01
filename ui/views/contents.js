@@ -285,7 +285,7 @@ export const description = (body) => String(body ?? "").replace(/^\s*## Request[
 /** Each `docs/specs/<file>.md` that this project has becomes a link to its Spec page. */
 export const linkSpecs = (html, repo, files = []) => html.replace(/docs\/specs\/([\w.-]+\.md)/g, (m, f) => (files.includes(f) ? `<a href="#/specs/${encodeURIComponent(repo)}/${encodeURIComponent(f)}">${m}</a>` : m));
 
-const PRIORITIES = ["high", "medium", "low"], SOURCES = ["chris", "worker", "deps", "memory"];
+const PRIORITIES = ["high", "medium", "low"], SOURCES = ["chris", "worker", "deps", "memory", "agent"];
 const choose = (name, all, cur) => `<select name="${name}" ${FORM} aria-label="${name}">${(all.includes(cur) || !cur ? all : [cur, ...all]).map((o) => `<option${o === cur ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
 
 /** One value and its editor in one place: edit mode shows the editor. The controls join the form in the head by `form=`. */

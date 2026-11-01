@@ -108,7 +108,10 @@ export async function add(repo: store.Place, title: string, fields: Fields = {})
   checkAfter(fields.after ?? []);
   const t = await triage(store.reader().list(repo.key), title, fields.request ?? spec ?? "");
   const w = write(repo, "todo: add an item", (doc) => {
-    const issue = issues.add(doc, title, { priority: fields.priority, labels: fields.labels ?? t.labels, request: fields.request, spec });
+    const labels = fields.labels ?? t.labels;
+    // Claude Code sets CLAUDECODE in its shells; a label that implies a source still wins over it.
+    const implied = labels.some((l) => ["followup", "deps", "memory"].includes(l));
+    const issue = issues.add(doc, title, { priority: fields.priority, labels, request: fields.request, spec, source: process.env.CLAUDECODE && !implied ? "agent" : undefined });
     if (fields.after?.length) setAfter(repo, doc, issue, fields.after);
     return { issue };
   }, true)!;
@@ -179,7 +182,7 @@ export function edit(repo: store.Place, id: number | string, fields: Fields) {
   checkFields(fields);
   const title = fields.title?.trim();
   const { request, spec, priority, labels, source, status, after } = fields;
-  if (source !== undefined && !["chris", "worker", "deps", "memory"].includes(source)) refuse("--source takes chris, worker, deps, memory");
+  if (source !== undefined && !["chris", "worker", "deps", "memory", "agent"].includes(source)) refuse("--source takes chris, worker, deps, memory, agent");
   if (title === undefined && request === undefined && spec === undefined && priority === undefined && labels === undefined && source === undefined && status === undefined && after === undefined) refuse("give --title, --request, --spec, --priority, --labels, --after (or --status)");
   if (title === "") refuse("the title cannot be empty");
   const kept = after?.filter((r) => r !== "none");

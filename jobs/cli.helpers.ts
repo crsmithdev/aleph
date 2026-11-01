@@ -105,7 +105,7 @@ export function sh(cwd: string, ...args: string[]): string {
 
 export function env(extra: Record<string, string> = {}): Record<string, string> {
   return {
-    ...(process.env as Record<string, string>), ...gitEnv,
+    ...(process.env as Record<string, string>), CLAUDECODE: "", ...gitEnv,
     ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_JOB_FOREGROUND: "1",
     ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, ALEPH_REVIEW_CMD: join(base, "fake-review"), ALEPH_FIREFIGHTER_CMD: join(base, "fake-firefighter"), XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
     ALEPH_SANDBOX_CMD: join(base, "pass"), ALEPH_SANDBOX_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_WORKER_TOKEN: join(base, "token"),
