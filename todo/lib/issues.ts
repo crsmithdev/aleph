@@ -6,7 +6,7 @@
  * detached dispatch and triage that follow a write. A store `follow` warning
  * comes back in the result for the caller to print.
  */
-import { Refusal, refuse } from "../../jobs/lib/transitions.ts";
+import { Refusal, refuse } from "../../jobs/lib/refusal.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import { recentRepos } from "../../jobs/lib/status.ts";

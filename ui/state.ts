@@ -3,9 +3,8 @@
  * the ledger, the factory directory and the work store. It marks no run
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
-import { resultLine } from "../jobs/lib/acceptance.ts";
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { DAY_CAP, LIVE_CAP, liveRuns, AWAITING_CAP, baselines, firefighterLines, gates, health, hold, lastProbe, paused, redLine, runsToday, spentToday, goalFacts } from "../jobs/lib/factory.ts";
+import { factorySnapshot, goalFacts, redLine } from "../jobs/lib/factory-status.ts";
 import { goalDecision, pendingWaits, refDone, type GoalDecision } from "../jobs/lib/goal-decision.ts";
 import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
@@ -13,7 +12,7 @@ import { plainAsk, readAlways, waitOf, type Ask } from "../jobs/lib/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, areasOf, askOf, partsOf, reader, isTracker } from "../todo/lib/store.ts";
 import { idOf, parseGoalRef, refOf, status } from "../todo/lib/todo.ts";
-import { facts, landedIndex, stages } from "../jobs/lib/status.ts";
+import { facts, landedIndex, resultLine, stages } from "../jobs/lib/status.ts";
 import type { Stage } from "../jobs/lib/stage.ts";
 import type { Wk } from "./usage.ts";
 
@@ -435,10 +434,8 @@ export function state(now = new Date()): State {
   const planner = jobs.filter((r) => r.at(-1)!.run.kind === "plan").sort((a, b) => planAt(b) - planAt(a)).slice(0, TRIAGED).map((r) => toJob(r));
 
   fresh.sort((a, b) => b.created.localeCompare(a.created));
-  const today = runsToday(now.getTime(), runs);
-  const probe = lastProbe();
   const granted = readAlways();
-  const gated = gates({ only: ["pause", "hold", "probe", "live", "day", "awaiting"], jobs });
+  const { gated, baselines: base, ...factory } = factorySnapshot(now.getTime(), jobs, lists);
   const att = attend({ runs: needs, issues: awaitingItems }, granted);
   // The run behind an ask: its live-run mark, its trailers and its notes.
   for (const a of att.items) {
@@ -449,7 +446,7 @@ export function state(now = new Date()): State {
     if (j.trailers) a.trailers = j.trailers;
   }
   // A red baseline counts while origin/<main> is still the red commit: one rev-parse per repo, not per queued goal.
-  const base = baselines(), reds = new Map<string, string | null>();
+  const reds = new Map<string, string | null>();
   const redOf = (repo: Repo): string | null => {
     if (!reds.has(repo.key)) {
       let red: string | null = null;
@@ -464,12 +461,7 @@ export function state(now = new Date()): State {
   };
   return {
     now: now.toISOString(),
-    factory: {
-      paused: paused(), judge: judgeChoice(), dayCap: DAY_CAP(), liveCap: LIVE_CAP(), liveRuns: liveRuns(runs), awaitingCap: AWAITING_CAP(), runsToday: today.length,
-      costToday: spentToday(now.getTime(), runs),
-      ...tickTimer(), probe, health: health(now.getTime(), { jobs, lists }), hold: hold(jobs)?.line ?? null,
-      firefighter: firefighterLines(now.getTime()),
-    },
+    factory: { ...factory, judge: judgeChoice(), ...tickTimer() },
     asks: att.items, done, incoming: everyone.slice(0, NEW_ISSUES).map((e) => e.card), planner,
     always: Object.entries(granted).map(([reason, g]) => ({ reason, action: g.action, at: g.at, handed: att.handed[reason] ?? 0 })),
     stuck, running, runningIssues, landing, newIssues: fresh.length, openIssues, issues: fresh.slice(0, NEW_ISSUES),

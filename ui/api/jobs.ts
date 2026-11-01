@@ -2,7 +2,7 @@
 import { git } from "../../jobs/lib/git.ts";
 import { isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
-import { changedLinesOf } from "../../jobs/lib/factory.ts";
+import { changedLinesOf } from "../../jobs/lib/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";

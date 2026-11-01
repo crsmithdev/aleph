@@ -12,7 +12,7 @@ import { clearAsk, file, readList, sourceOf, writeList } from "../../todo/lib/st
 import * as issues from "../../todo/lib/todo.ts";
 import { always, logAlways, plainAsk } from "./ask.ts";
 import { fetchOrigin, git } from "./git.ts";
-import { factoryDir } from "./factory.ts";
+import { factoryDir } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import { type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";

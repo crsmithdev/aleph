@@ -5,7 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { factoryDir } from "../../jobs/lib/factory.ts";
+import { factoryDir } from "../../jobs/lib/factory-status.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { loadRegistry, onOf, type Entry, type Repo } from "../../jobs/lib/ledger.ts";
 import { allJobs, lastReal } from "../../jobs/lib/job.ts";

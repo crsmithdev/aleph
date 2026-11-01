@@ -7,7 +7,8 @@ import { askOf, awaitsChris, readList, setAsk, writeList } from "../../todo/lib/
 import { plainAsk, type Ask } from "./ask.ts";
 import { allRuns, readRun, stamp, writeRun, type Repo } from "./ledger.ts";
 import { explainPrompt, explainStep, parseExplain, pendingCases } from "./explain.ts";
-import { liveEntries, runsToday, triageStep } from "./factory.ts";
+import { liveEntries, runsToday } from "./factory-status.ts";
+import { triageStep } from "./factory.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;

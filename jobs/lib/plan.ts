@@ -9,6 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import * as issues from "../../todo/lib/todo.ts";
+import { section } from "../../todo/lib/todo.ts";
 import { askPartDropped, note, partsOf, readList, writeList } from "../../todo/lib/store.ts";
 import { allRuns, lock, type Repo } from "./ledger.ts";
 import { endLost, openRun } from "./agent-run.ts";
@@ -22,13 +23,6 @@ const SECTIONS = ["Goal", "Edit surface", "Oracle", "Time box"] as const;
 
 export type Rate = (spec: string) => Promise<Tier | null>;
 export interface Child { title: string; spec: string; waits: number[] }
-
-/** The text under `## <name>` in a goal body, up to the next `##` heading; empty when there is none. */
-export function section(body: string, name: string): string {
-  const parts = body.split(/^##[ \t]+(.+?)[ \t]*$/m);
-  for (let i = 1; i < parts.length; i += 2) if (parts[i].toLowerCase().startsWith(name.toLowerCase())) return parts[i + 1].trim();
-  return "";
-}
 
 /** The top-level folders the paths of a goal's Edit surface name. A file at the repo's root names none. */
 export function topFolders(body: string): string[] {

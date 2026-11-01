@@ -5,7 +5,7 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { factoryDir } from "./factory.ts";
+import { factoryDir, flakes, flakyFile, type Flake } from "./factory-status.ts";
 import { checkSlot, lock, type Check, type CheckResult, type Repo } from "./ledger.ts";
 import { sandboxed } from "./sandbox.ts";
 
@@ -14,12 +14,6 @@ export interface CheckTask { folder: string; repo: Repo; changed: string[]; phas
 
 /** Runs one check with its output appended to `out`. `timedOut` comes from a clock: a command can return 124 by itself. */
 export type CheckExec = (check: Check, out: string, limit: number) => Promise<{ code: number; timedOut: boolean }>;
-
-export interface Flake { repo: string; check: string; run: string; at: string; tests?: string[] }
-const flakyFile = () => join(factoryDir(), "flaky.json");
-export const flakes = (): Flake[] => {
-  try { return JSON.parse(readFileSync(flakyFile(), "utf8")); } catch { return []; }
-};
 
 /** The names on bun's `(fail)` lines, each one once: its summary repeats them. */
 const failedTests = (log: string): string[] => [...new Set(log.matchAll(/^\(fail\) (.+?)(?: \[[\d.]+m?s\])?$/gm).map((m) => m[1]))];

@@ -7,8 +7,8 @@
  */
 import { askOf, isAwaiting, loadRegistry, onOf } from "../../jobs/lib/ledger.ts";
 import { latestJob } from "../../jobs/lib/job.ts";
-import { runCli } from "../../jobs/lib/launch.ts";
-import { Refusal } from "../../jobs/lib/transitions.ts";
+import { runCli } from "../cli.ts";
+import { Refusal } from "../../jobs/lib/refusal.ts";
 import * as issues from "../../todo/lib/issues.ts";
 import type { Handler, Routes } from "../server.ts";
 

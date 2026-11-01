@@ -6,13 +6,13 @@
  * an Origin, the server's own. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
 import { specs } from "./specs.ts";
-import { runCli } from "../../jobs/lib/launch.ts";
+import { runCli } from "../cli.ts";
 import { allJobs, lastReal } from "../../jobs/lib/job.ts";
 import { loadRegistry, onOf, type Repo } from "../../jobs/lib/ledger.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { landedCommits, recentRepos, repoStages } from "../../jobs/lib/status.ts";
 import { readAsk } from "../../jobs/lib/ask.ts";
-import { Refusal } from "../../jobs/lib/transitions.ts";
+import { Refusal } from "../../jobs/lib/refusal.ts";
 import * as issues from "../../todo/lib/issues.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";

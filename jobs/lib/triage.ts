@@ -12,7 +12,7 @@ import { allRuns, onOf, lock, type Repo, type Run } from "./ledger.ts";
 import { endLost, openRun } from "./agent-run.ts";
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
-import { factoryDir, gates } from "./factory.ts";
+import { factoryDir, gates } from "./factory-status.ts";
 import { git } from "./git.ts";
 /** Triage runs that end with no verdict, for one item, before it gets an Ask (reason `triage-failed`); `ALEPH_TRIAGE_TRIES` changes it. */
 export const TRIAGE_TRIES = () => Number(process.env.ALEPH_TRIAGE_TRIES ?? 2);

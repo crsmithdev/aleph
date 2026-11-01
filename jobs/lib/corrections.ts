@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
 import { decide } from "../../hooks/lib/jev.ts";
 import { fetchObservations } from "../../hooks/lib/otlp.ts";
-import { factoryDir } from "./factory.ts";
+import { factoryDir } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import { allRuns, loadRegistry, type Repo } from "./ledger.ts";
 import { always, logAlways, type Ask } from "./ask.ts";

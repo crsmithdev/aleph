@@ -2,8 +2,7 @@
  * The launcher: every place that starts `aleph <verb>` as a process of its
  * own goes through here. A run's unit and a held run's review get a transient
  * systemd unit (or, with `ALEPH_JOB_FOREGROUND=1`, a plain child); a dispatch
- * or triage after a transition is a unit of its own too; the UI runs a verb and
- * reads its output. The transitions themselves run in-process: see transitions.ts.
+ * or triage after a transition is a unit of its own too. The transitions themselves run in-process: see transitions.ts.
  */
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -12,9 +11,6 @@ import { runPath } from "./sandbox.ts";
 
 /** jobs/cli.ts, the `aleph` command. */
 export const CLI = join(import.meta.dir, "..", "cli.ts");
-
-/** The argv that runs the CLI: `$ALEPH_CLI` when set (the UI tests' fake), else bun on jobs/cli.ts. */
-export const cliArgv = (): string[] => (process.env.ALEPH_CLI ? [process.env.ALEPH_CLI] : [process.execPath, CLI]);
 
 /** Units run in the foreground, as children: the tests, which have no systemd. */
 export const foreground = (): boolean => process.env.ALEPH_JOB_FOREGROUND === "1";
@@ -95,11 +91,4 @@ export async function runLogged(args: string[], log: string): Promise<number | n
   } catch {
     return null;
   }
-}
-
-/** Run `aleph <args>` (`$ALEPH_CLI` when set) and read what it says: for the UI, whose actions are the CLI's commands. */
-export async function runCli(args: string[], o: { stdin?: string } = {}): Promise<{ code: number; stdout: string; stderr: string }> {
-  const p = Bun.spawn([...cliArgv(), ...args], { stdin: o.stdin === undefined ? "ignore" : new Blob([o.stdin]), stdout: "pipe", stderr: "pipe", env: process.env });
-  const [stdout, stderr, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
-  return { code, stdout, stderr };
 }

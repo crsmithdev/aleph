@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ciState, ciStep, redCi, type GhRun } from "./ci.ts";
-import { health } from "./factory.ts";
+import { health } from "./factory-status.ts";
 import { snapshot } from "./firefighter.ts";
 import type { Repo } from "./ledger.ts";
 

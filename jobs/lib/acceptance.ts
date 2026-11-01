@@ -11,72 +11,26 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { availableParallelism, loadavg } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
+import { section } from "../../todo/lib/todo.ts";
 import { plainAsk } from "./ask.ts";
 import { note, noteFlake, reopen as storeReopen, setAsk, writeList, type Ask } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
-import { checkSlot, expand, type Repo } from "./ledger.ts";
-import { section } from "./plan.ts";
+import { checkSlot, type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
-import { commitsNaming } from "./status.ts";
-
-const dir = () => join(expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory"), "acceptance");
-const file = (key: string, id: number | string) => join(dir(), `${key}-${id}.json`);
-
-export interface Accepted {
-  /** `pass`, `skipped` (no runnable command), or `fail`. */
-  result: "pass" | "skipped" | "fail";
-  /** The short sha of origin/<main> the Oracle ran on. */
-  sha?: string;
-  /** The command that failed. */
-  command?: string;
-  /** How many runs of the Oracle failed. */
-  fails: number;
-  /** After a failure: the origin/<main> commit the reopened goal's earlier landings are at or before. */
-  since?: string;
-  /** The report has listed this result. */
-  shown?: boolean;
-  /** A failure that waits for its rerun on a quiet machine. */
-  retest?: Retest;
-}
-
-/** One failed test of a `bun test` run. `file` is unset when the output names no file above it. */
-export interface FailedTest { file?: string; name: string }
-
-/** What a failure runs again: `rerun`, on the commit that failed. */
-export interface Retest { commit: string; command: string; rerun: string; tests: FailedTest[]; /** When the wait for a quiet machine began (ISO time). After `MAX_WAIT_MS` the rerun runs whatever the load. */ since?: string }
+import { acceptanceDir, acceptanceFile, commitsNaming, readRecord, resultLine, type Accepted, type FailedTest } from "./status.ts";
 
 /** The longest a rerun waits for a quiet machine. */
 export const MAX_WAIT_MS = 24 * 3_600_000;
 /** Reruns of a touched test that passed once, before it counts as a flake. */
 const EXTRA_RERUNS = 2;
 
-export function readRecord(key: string, id: number | string): Accepted | null {
-  try { return JSON.parse(readFileSync(file(key, id), "utf8")); } catch { return null; }
-}
-
 function writeRecord(key: string, id: number | string, r: Accepted): void {
-  mkdirSync(dir(), { recursive: true });
-  writeFileSync(file(key, id), JSON.stringify(r, null, 2) + "\n");
-}
-
-/** The result as one line for the report and the Lands card, or null when the goal has none. */
-export function resultLine(key: string, id: number | string): string | null {
-  const r = readRecord(key, id);
-  if (!r) return null;
-  if (r.result === "pass") return `acceptance: pass at ${r.sha}`;
-  if (r.result === "skipped") return "acceptance: skipped, no runnable command: only the checks at the land covered it";
-  if (r.retest) return `acceptance: fail, waits for a rerun: ${r.command}`;
-  return `acceptance: fail${r.fails >= 2 ? " twice" : ", rerun"}: ${r.command}`;
+  mkdirSync(acceptanceDir(), { recursive: true });
+  writeFileSync(acceptanceFile(key, id), JSON.stringify(r, null, 2) + "\n");
 }
 
 /** A record that ends the goal's acceptance: nothing runs again for it. */
 export const final = (r: Accepted | null): boolean => !!r && (r.result !== "fail" || r.fails >= 2);
-
-/** The commits of `hits` the goal's reopening has not already counted: those that are not at or before its `since`. */
-export function afterReopen(cwd: string, key: string, id: number | string, hits: string[]): string[] {
-  const since = readRecord(key, id)?.since;
-  return since ? hits.filter((h) => !git(cwd, "merge-base", "--is-ancestor", h, since).ok) : hits;
-}
 
 const CHECK = "(?:bun test|bun run|bunx tsc)";
 /** A plain check command, or a shell `for` loop whose body runs one. */
@@ -239,7 +193,7 @@ function reopen(repo: Repo, id: number | string, text: string, ask?: Ask): strin
 }
 
 /** The commands that passed on each repo's latest accepted commit. The file has no `.json` name, so `unshown` does not read it as a result. */
-const passesFile = () => join(dir(), "passes");
+const passesFile = () => join(acceptanceDir(), "passes");
 function readPasses(): Record<string, { commit: string; commands: string[] }> {
   try { return JSON.parse(readFileSync(passesFile(), "utf8")); } catch { return {}; }
 }
@@ -252,7 +206,7 @@ function markPassed(key: string, commit: string, command: string): void {
   const all = readPasses();
   const p = all[key]?.commit === commit ? all[key] : { commit, commands: [] };
   all[key] = { commit, commands: [...new Set([...p.commands, command])] };
-  mkdirSync(dir(), { recursive: true });
+  mkdirSync(acceptanceDir(), { recursive: true });
   writeFileSync(passesFile(), JSON.stringify(all));
 }
 
@@ -361,9 +315,9 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandb
 
 /** The results the report has not listed, oldest file first; each is then marked shown. */
 export function unshown(): string[] {
-  if (!existsSync(dir())) return [];
+  if (!existsSync(acceptanceDir())) return [];
   const lines: string[] = [];
-  for (const f of readdirSync(dir()).filter((f) => f.endsWith(".json")).sort()) {
+  for (const f of readdirSync(acceptanceDir()).filter((f) => f.endsWith(".json")).sort()) {
     const m = /^(.+)-(\d+)\.json$/.exec(f);
     const r = m && readRecord(m[1], Number(m[2]));
     if (!m || !r || r.shown) continue;

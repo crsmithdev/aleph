@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { clearAsk, readList } from "../../todo/lib/store.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { AWAITING_CAP, dispatchIssues } from "./factory.ts";
+import { dispatchIssues } from "./factory.ts";
+import { AWAITING_CAP } from "./factory-status.ts";
 import { allRuns } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, notes, ask, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
 

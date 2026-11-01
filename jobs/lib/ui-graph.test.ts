@@ -35,3 +35,9 @@ test("this repo", () => {
   expect(g.has("ui/lib.test.ts")).toBe(false);
   expect([...g].filter((f) => f.endsWith(".test.ts"))).toEqual([]);
 });
+
+test("the server of this repo loads none of the factory's actions", () => {
+  const g = serverGraph(join(import.meta.dir, "..", ".."));
+  expect(g.has("jobs/lib/factory-status.ts")).toBe(true);
+  for (const f of ["factory", "transitions", "unit", "triage", "firefighter", "plan", "acceptance", "launch", "sandbox", "review"]) expect(g.has(`jobs/lib/${f}.ts`)).toBe(false);
+});

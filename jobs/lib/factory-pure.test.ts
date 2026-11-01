@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { correctionsDue, dispatchIssues, episodeStep, report, spentToday, runsToday, setPaused, health, stalled, stallStep } from "./factory.ts";
+import { correctionsDue, dispatchIssues, episodeStep, report, setPaused, stalled, stallStep } from "./factory.ts";
+import { spentToday, runsToday, health } from "./factory-status.ts";
 import { readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, setup, teardown } from "./factory.helpers.ts";

@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readRun, writeRun, type Run } from "./ledger.ts";
-import { checked, drop, land, recheck, Refusal, refusal, startJob, startPlain } from "./transitions.ts";
+import { checked, drop, land, recheck, refusal, startJob, startPlain } from "./transitions.ts";
+import { Refusal } from "./refusal.ts";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};

@@ -5,7 +5,7 @@
  */
 import { afterOf } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import type { Gate } from "./factory.ts";
+import type { Gate } from "./factory-status.ts";
 
 /** Runs of one goal in a row that may end with no commit before the dispatch stops starting it. */
 export const NO_COMMIT_LIMIT = 3;

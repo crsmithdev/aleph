@@ -10,10 +10,10 @@ import { langfuseConfig } from "../../hooks/lib/env.ts";
 import { fetchTrace, traceIdFor } from "../../hooks/lib/otlp.ts";
 import { partsOf, readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
+import { section } from "../../todo/lib/todo.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { allRuns, onOf, type Entry, type Repo } from "./ledger.ts";
-import { section } from "./plan.ts";
 import { landedCommits, repoStages } from "./status.ts";
 
 const VAULT_CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");

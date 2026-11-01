@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { flakes, runChecks, type CheckExec } from "./checks.ts";
+import { runChecks, type CheckExec } from "./checks.ts";
+import { flakes } from "./factory-status.ts";
 import type { CheckResult, Repo } from "./ledger.ts";
 
 const KEYS = ["ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_CHECK_SLOTS", "ALEPH_CHECK_TIMEOUT"];

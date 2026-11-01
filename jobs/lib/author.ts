@@ -8,11 +8,11 @@
 import { existsSync } from "node:fs";
 import { note, reader, writeHidden } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
+import { section } from "../../todo/lib/todo.ts";
 import { sandboxRunner, type Ran, type Runner } from "./acceptance.ts";
 import { callAgent } from "./agent-run.ts";
 import { git } from "./git.ts";
 import type { Repo } from "./ledger.ts";
-import { section } from "./plan.ts";
 
 export const AUTHOR_MODEL = "claude-opus-5-5";
 const MAX_FILES = 3;

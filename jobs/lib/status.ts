@@ -6,13 +6,60 @@
  * commit at refs/aleph/facts, so `aleph status` inside the sandbox gives the
  * same answer as Chris's session from the same bundle.
  */
-import { afterReopen } from "./acceptance.ts";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { readFetched, readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { fetchOrigin, git, gitWith } from "./git.ts";
-import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
+import { allRuns, expand, type Entry, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";
 import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type Subject } from "./stage.ts";
+
+export const acceptanceDir = () => join(expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory"), "acceptance");
+export const acceptanceFile = (key: string, id: number | string) => join(acceptanceDir(), `${key}-${id}.json`);
+
+export interface Accepted {
+  /** `pass`, `skipped` (no runnable command), or `fail`. */
+  result: "pass" | "skipped" | "fail";
+  /** The short sha of origin/<main> the Oracle ran on. */
+  sha?: string;
+  /** The command that failed. */
+  command?: string;
+  /** How many runs of the Oracle failed. */
+  fails: number;
+  /** After a failure: the origin/<main> commit the reopened goal's earlier landings are at or before. */
+  since?: string;
+  /** The report has listed this result. */
+  shown?: boolean;
+  /** A failure that waits for its rerun on a quiet machine. */
+  retest?: Retest;
+}
+
+/** One failed test of a `bun test` run. `file` is unset when the output names no file above it. */
+export interface FailedTest { file?: string; name: string }
+
+/** What a failure runs again: `rerun`, on the commit that failed. */
+export interface Retest { commit: string; command: string; rerun: string; tests: FailedTest[]; /** When the wait for a quiet machine began (ISO time). After `MAX_WAIT_MS` the rerun runs whatever the load. */ since?: string }
+
+export function readRecord(key: string, id: number | string): Accepted | null {
+  try { return JSON.parse(readFileSync(acceptanceFile(key, id), "utf8")); } catch { return null; }
+}
+
+/** The result as one line for the report and the Lands card, or null when the goal has none. */
+export function resultLine(key: string, id: number | string): string | null {
+  const r = readRecord(key, id);
+  if (!r) return null;
+  if (r.result === "pass") return `acceptance: pass at ${r.sha}`;
+  if (r.result === "skipped") return "acceptance: skipped, no runnable command: only the checks at the land covered it";
+  if (r.retest) return `acceptance: fail, waits for a rerun: ${r.command}`;
+  return `acceptance: fail${r.fails >= 2 ? " twice" : ", rerun"}: ${r.command}`;
+}
+
+/** The commits of `hits` the goal's reopening has not already counted: those that are not at or before its `since`. */
+export function afterReopen(cwd: string, key: string, id: number | string, hits: string[]): string[] {
+  const since = readRecord(key, id)?.since;
+  return since ? hits.filter((h) => !git(cwd, "merge-base", "--is-ancestor", h, since).ok) : hits;
+}
 
 export const FACTS_REF = "refs/aleph/facts";
 

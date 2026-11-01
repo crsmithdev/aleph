@@ -6,7 +6,7 @@ import { existsSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { git } from "./git.ts";
 import { allRuns, isLost, loadRegistry } from "./ledger.ts";
-import { lastProbe } from "./factory.ts";
+import { lastProbe } from "./factory-status.ts";
 import { SKEW_LIMIT_MS, STEP_LIMIT_MS, watchWall, windowsSkew } from "./clock.ts";
 import { FACTS_REF, writeFacts } from "./status.ts";
 

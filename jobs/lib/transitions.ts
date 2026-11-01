@@ -15,16 +15,14 @@ import { baselineChecks, git } from "./unit.ts";
 import { agentOf, landTerms, removeBranch } from "./landing.ts";
 import { fetchOrigin } from "./git.ts";
 import { itemOnMain } from "./status.ts";
-import { dispatchDetached, dispatchIssues, gates, liveEntries } from "./factory.ts";
+import { refuse } from "./refusal.ts";
+import { dispatchDetached, dispatchIssues } from "./factory.ts";
+import { gates, liveEntries } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import { route, type Tier } from "./route.ts";
 import { startUnit, type Output } from "./launch.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
-
-/** A transition said no: the message is what `aleph` prints on stderr before it exits 1. */
-export class Refusal extends Error {}
-export const refuse = (msg: string): never => { throw new Refusal(msg); };
 
 /** The message of a transition that refused or threw, or null when it went through: the factory's ports answer this. */
 export async function refusal(f: () => Promise<unknown>): Promise<string | null> {

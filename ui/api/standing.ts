@@ -2,7 +2,7 @@
  * `POST /api/standing/:reason` (`{ "action": "<action>" }`):
  * `aleph always grant`, run as a subprocess, under the same header and Origin rule as controls.ts. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
-import { runCli } from "../../jobs/lib/launch.ts";
+import { runCli } from "../cli.ts";
 import type { Handler, Routes } from "../server.ts";
 
 const text = (body: string, status: number) => new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });

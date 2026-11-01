@@ -3,7 +3,7 @@
  * Each is the `aleph` command of that name, run as a subprocess by the launcher, under the same
  * header and Origin rule as the job actions. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
-import { runCli } from "../../jobs/lib/launch.ts";
+import { runCli } from "../cli.ts";
 import type { Handler, Routes } from "../server.ts";
 
 const text = (body: string, status: number) => new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });

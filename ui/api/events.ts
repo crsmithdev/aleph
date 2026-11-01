@@ -4,7 +4,7 @@
  */
 import { existsSync, watch, type FSWatcher, type WatchOptions } from "node:fs";
 import { join } from "node:path";
-import { factoryDir } from "../../jobs/lib/factory.ts";
+import { factoryDir } from "../../jobs/lib/factory-status.ts";
 import { layout } from "../../jobs/lib/layout.ts";
 import type { Routes } from "../server.ts";
 
