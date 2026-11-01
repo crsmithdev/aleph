@@ -19,6 +19,8 @@ export const FACTS_REF = "refs/aleph/facts";
 /** What the store and the ledger say about a repo's items: what stage() needs of each. */
 export interface Facts {
   repo: string; main: string;
+  /** The repo has `sandbox: true`. Absent in a snapshot written before this field: then it is a sandbox, as before. */
+  sandbox?: boolean;
   /** Item number to its status, kind, after, goals and ask kind. */
   items: Record<string, Subject>;
   /** Item number to its jobs, each as its last run: the open run state is in there. */
@@ -45,7 +47,7 @@ export function facts(repo: Repo, doc: issues.Doc | null = readList(repo), jobs:
     (runs[item] ??= []).push(runViewOf(job));
     if (isOpen(job)) open[item] = stateOf(job);
   }
-  return { repo: repo.key, main: repo.main, items, runs, open, touched: [...touched].sort((a, b) => a - b) };
+  return { repo: repo.key, main: repo.main, sandbox: !!repo.sandbox, items, runs, open, touched: [...touched].sort((a, b) => a - b) };
 }
 
 /** A commit with no parent whose tree holds facts.json, at refs/aleph/facts. Returns the ref. */
@@ -146,7 +148,7 @@ export function itemOnMain(repo: { path: string; key: string; main: string } | u
 export function stages(cwd: string, main: string, f: Facts, refs: (number | string)[], landed: Map<string, string[]> = landedIndex(cwd, main, f.repo, (n) => f.items[n]?.since)): Stage[] {
   const num = (ref: string) => (ref.startsWith(`${f.repo}-`) && /^\d+(\.\d+)?$/.test(ref.slice(f.repo.length + 1)) ? ref.slice(f.repo.length + 1) : undefined);
   const ctx: Ctx = {
-    main, landed, reverted: revertedIn(landed),
+    main, landed, reverted: revertedIn(landed), sandbox: f.sandbox !== false,
     item: (ref) => f.items[num(ref) ?? ""],
     runs: (ref) => f.runs[num(ref) ?? ""] ?? [],
   };

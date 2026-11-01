@@ -127,6 +127,24 @@ for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["goals, new sha
   });
 }
 
+// The open issue with no spec: triage sorts it in a sandbox repo only. `demo` has no `sandbox`; `fac` has it.
+describe("an open issue with no spec, by repo", () => {
+  test("in a repo without sandbox, the text says the factory does not run for it", async () => {
+    const n = seedItem("demo", `plain ${++jobs}`, { kind: "issue", source: "chris" });
+    const s = await aleph(["status", `demo-${n}`, "--json"]);
+    expect(s.code, s.stderr).toBe(0);
+    expect(s.json).toMatchObject({ id: `demo-${n}`, stage: "new" });
+    expect(s.json.why).toMatch(/the factory does not run for this repo/);
+    expect(s.json.why).not.toMatch(/triage has not sorted it/);
+  }, 90_000);
+  test("in a sandbox repo, the text stays triage has not sorted it", async () => {
+    const n = issue();
+    const s = await aleph(["status", ref(n), "--json"]);
+    expect(s.code, s.stderr).toBe(0);
+    expect(s.json).toMatchObject({ id: ref(n), stage: "new", why: "triage has not sorted it" });
+  }, 90_000);
+});
+
 describe("subjectOf", () => {
   const item = (id: number, sub?: number): issues.Issue => ({ id, ...(sub === undefined ? {} : { sub }), title: "t", fm: {}, request: "", spec: "", notes: [] });
   const doc: issues.Doc = { items: [] };

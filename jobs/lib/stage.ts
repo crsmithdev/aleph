@@ -38,6 +38,8 @@ export interface RunView { kind: Run["kind"]; condition: State; open: boolean; a
 export interface Ctx {
   /** The ref's name on the page, for `why`. */
   main: string;
+  /** The repo is a factory repo (`sandbox: true`): triage reads it, so an issue with no spec gets sorted. */
+  sandbox: boolean;
   /** The not-reverted `Item:` trailer commits on origin/<main>, by item number: `landedIndex`. */
   landed: Map<string, string[]>;
   /** Items whose trailer commits are all reverted. */
@@ -115,5 +117,6 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   if (item.plan || live.some((r) => r.kind === "plan")) return out("planning", "a plan run is needed or open");
   if (item.tracker) return out("new", "the flake tracker: a note log");
   if (item.spec) return out("queued", "no job has started it");
-  return out("new", live.some((r) => r.kind === "triage") ? "a triage run is open" : "triage has not sorted it");
+  if (live.some((r) => r.kind === "triage")) return out("new", "a triage run is open");
+  return out("new", ctx.sandbox ? "triage has not sorted it" : "the factory does not run for this repo, so nothing sorts it");
 }
