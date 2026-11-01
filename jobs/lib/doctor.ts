@@ -101,8 +101,16 @@ export function unitChecks(): Check[] {
   }
   const t = systemctl("show", "aleph-tick.timer", "-p", "NextElapseUSecRealtime", "-p", "NextElapseUSecMonotonic");
   const next = t.out.split("\n").map((l) => l.split("=")[1]?.trim()).filter((v) => v && v !== "0" && v !== "n/a" && v !== "infinity");
-  checks.push(t.ok && next.length ? ok("timer next run", next[0]!) : bad("timer next run", "aleph-tick.timer has no next run"));
+  if (t.ok && next.length) checks.push(ok("timer next run", next[0]!));
+  else if (t.ok && tickInProgress()) checks.push(ok("timer next run", "aleph-tick.service is running; a tick is in progress"));
+  else checks.push(bad("timer next run", "aleph-tick.timer has no next run"));
   return checks;
+}
+
+/** A oneshot service reports `activating` while it runs (exit 3), so read the state word and ignore the exit code. */
+function tickInProgress(): boolean {
+  const state = systemctl("is-active", "aleph-tick.service").out.split("\n")[0]?.trim();
+  return state === "activating" || state === "active";
 }
 
 export async function homeCheck(): Promise<Check> {

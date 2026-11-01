@@ -99,8 +99,30 @@ describe("units", () => {
     expect(c.map((x) => [x.name, x.ok])).toEqual([["unit aleph-ui", true], ["unit home-proxy", false], ["unit aleph-tick.timer", true], ["timer next run", true]]);
   });
   test("a timer with no next run fails", () => {
-    fakeCtl(`case "$2" in is-active) echo active;; show) echo NextElapseUSecRealtime=; echo NextElapseUSecMonotonic=0;; esac`);
+    fakeCtl(`case "$2" in is-active) [ "$3" = aleph-tick.service ] && { echo inactive; exit 3; }; echo active;; show) echo NextElapseUSecRealtime=; echo NextElapseUSecMonotonic=0;; esac`);
     expect(unitChecks().at(-1)).toMatchObject({ ok: false });
+  });
+  const noNextRun = (svc: string, exit: number) =>
+    fakeCtl(`case "$2" in is-active) [ "$3" = aleph-tick.service ] && { echo ${svc}; exit ${exit}; }; echo active;; show) echo NextElapseUSecRealtime=; echo NextElapseUSecMonotonic=0;; esac`);
+  test("no next run while the tick service is activating (exit 3) passes", () => {
+    noNextRun("activating", 3);
+    expect(unitChecks().at(-1)).toMatchObject({ name: "timer next run", ok: true, detail: expect.stringContaining("tick is in progress") });
+  });
+  test("no next run while the tick service is active passes", () => {
+    noNextRun("active", 0);
+    expect(unitChecks().at(-1)).toMatchObject({ name: "timer next run", ok: true });
+  });
+  test("no next run while the tick service is inactive (exit 3) fails", () => {
+    noNextRun("inactive", 3);
+    expect(unitChecks().at(-1)).toMatchObject({ name: "timer next run", ok: false });
+  });
+  test("no next run while the tick service is failed (exit 3) fails", () => {
+    noNextRun("failed", 3);
+    expect(unitChecks().at(-1)).toMatchObject({ name: "timer next run", ok: false });
+  });
+  test("a next run present passes with it as the detail", () => {
+    fakeCtl(`case "$2" in is-active) echo active;; show) echo NextElapseUSecRealtime=Fri 2026-10-30 18:00:00 UTC; echo NextElapseUSecMonotonic=0;; esac`);
+    expect(unitChecks().at(-1)).toMatchObject({ name: "timer next run", ok: true, detail: "Fri 2026-10-30 18:00:00 UTC" });
   });
 });
 
