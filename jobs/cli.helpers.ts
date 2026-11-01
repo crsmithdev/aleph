@@ -327,11 +327,14 @@ echo '{"type":"result","is_error":false,"result":"Checked.\\n'"$v"'"}'
   sh(base, "git", "clone", "-q", remote, repo);
   sh(base, "git", "clone", "-q", remote, other);
 
+  // Says it started, then waits while the hold file is there, so a test can kill the land at this check.
+  const gate = { name: "gate", run: `touch ${join(base, "gate-reached")}; while [ -f ${join(base, "gate-hold")} ]; do sleep 0.05; done`, when: ["gate/**"] };
   const checks = [
     { name: "tests", run: "test ! -f FAIL" },
     { name: "no job variables", run: 'test -z "$ALEPH_JOB_ID$ALEPH_JOB_RUN"' },
     { name: "android build", run: `echo built >> ${join(base, "android.log")}`, when: ["android/**"] },
     { name: "slow", run: "sleep 60", when: ["slow/**"] },
+    // Says it started, then waits while the hold file is there, so a test can kill the land at this check.
     // Holds two lands between their fetch and their push at the same time.
     { name: "pause", run: "sleep 1", when: ["pair/**"] },
     // Pushes to the remote from another clone once, so the land's own push loses the race.
@@ -356,7 +359,7 @@ echo '{"type":"result","is_error":false,"result":"Checked.\\n'"$v"'"}'
     // The factory: the same clone, its runs under the stand-in sandbox.
     fac: {
       path: repo, sandbox: true, held: ["held/**"], autoland: false,
-      checks: [{ name: "tests", run: 'if [ -f FAIL ]; then for i in 1 2 3; do echo "FAIL is present $i"; done; exit 1; fi' }, { name: "flaky", run: `for f in flaky/*; do m=${join(base, "flakym-")}$(basename $f); if [ ! -f $m ]; then touch $m; exit 1; fi; done`, when: ["flaky/**"] }, { name: "tree", run: `git rev-parse 'HEAD^{tree}' >> ${join(base, "trees")}; while [ -f ${join(base, "slowbase")} ]; do sleep 0.1; done` }],
+      checks: [gate, { name: "tests", run: 'if [ -f FAIL ]; then for i in 1 2 3; do echo "FAIL is present $i"; done; exit 1; fi' }, { name: "flaky", run: `for f in flaky/*; do m=${join(base, "flakym-")}$(basename $f); if [ ! -f $m ]; then touch $m; exit 1; fi; done`, when: ["flaky/**"] }, { name: "tree", run: `git rev-parse 'HEAD^{tree}' >> ${join(base, "trees")}; while [ -f ${join(base, "slowbase")} ]; do sleep 0.1; done` }],
     },
     // Last, so the unknown-repo listing keeps its order up to fac.
     aleph: { path: repo, checks: [], autoland: false },
