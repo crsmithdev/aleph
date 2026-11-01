@@ -233,7 +233,9 @@ test("pages are fetched concurrently, and serve() warms the cache so the first r
     async fetch(req) {
       const u = new URL(req.url);
       // Other warm-ups (memory's `vault misses` subprocess) reach this mock too: only the skills lists count.
-      const mine = u.pathname === "/api/public/traces" || ["AGENT", "TOOL"].includes(u.searchParams.get("type") ?? "");
+      // The Agents warm-up reads the 7-day window through the same lists: only the 30-day reads count.
+      const from = Date.parse(u.searchParams.get("fromStartTime") ?? u.searchParams.get("fromTimestamp") ?? "");
+      const mine = (u.pathname === "/api/public/traces" || ["AGENT", "TOOL"].includes(u.searchParams.get("type") ?? "")) && from < Date.now() - 10 * 86400_000;
       if (mine) { calls++; active[u.pathname] = (active[u.pathname] ?? 0) + 1; peak[u.pathname] = Math.max(peak[u.pathname] ?? 0, active[u.pathname]); }
       await Bun.sleep(40);
       if (mine) active[u.pathname]--;
