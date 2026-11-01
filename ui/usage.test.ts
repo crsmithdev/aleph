@@ -10,9 +10,11 @@ import { costHtml, wkText } from "./lib.js";
 let dir: string, server: ReturnType<typeof Bun.serve>;
 /** What the test server answers; a test swaps it to make the endpoint fail. */
 let reply: (req: Request) => Response;
+/** A reset in the future of the real clock: a poll takes the time of the real clock, and a past reset drops its snapshot. */
+const nextWeek = () => new Date(Date.now() + 7 * 24 * 3600_000).toISOString();
 const OK = (req: Request) => {
   if (req.headers.get("authorization") !== `Bearer ${TOKEN}` || req.headers.get("anthropic-beta") !== "oauth-2025-04-20") return new Response("no", { status: 401 });
-  return Response.json({ five_hour: { utilization: 0, resets_at: "2026-10-28T20:00:00Z" }, seven_day: { utilization: 25, resets_at: "2026-11-02T00:00:00Z" } });
+  return Response.json({ five_hour: { utilization: 0, resets_at: "2026-10-28T20:00:00Z" }, seven_day: { utilization: 25, resets_at: nextWeek() } });
 };
 const TOKEN = "sk-ant-oat-secret-token";
 const H = 3600_000;
@@ -184,7 +186,7 @@ test("a JSON body with no usage numbers logs one line", async () => {
   expect(lines[0]).toContain("no usage numbers");
 });
 
-const noFive = (extra: object) => Response.json({ ...extra, seven_day: { utilization: 25, resets_at: "2026-11-02T00:00:00Z" } });
+const noFive = (extra: object) => Response.json({ ...extra, seven_day: { utilization: 25, resets_at: nextWeek() } });
 for (const [name, body] of [["null", { five_hour: null }], ["missing", {}], ["non-numeric", { five_hour: { utilization: "x" } }]] as const) {
   test(`a reply with ${name} five_hour gives a null five_hour snapshot`, async () => {
     reply = () => noFive(body);
