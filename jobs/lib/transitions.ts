@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join } from "node:path";
 import { needsOf } from "./ask.ts";
 import { askOf, CALL_FILE, isAwaiting, isBuild, isLive, isStarting, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
+import { causeOf, failedCheckOf } from "./outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
 import { baselineChecks, git, removeBranch } from "./unit.ts";
 import { fetchOrigin } from "./git.ts";
@@ -317,8 +318,8 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean }
     // Chris asked for the drop, so it is not news.
     for (const e of new Set([...live, last])) {
       if (!existsSync(join(e.folder, "exit"))) writeFileSync(join(e.folder, "exit"), "143");
-      const noCommit = e.run.reason === "no commit" || e.run.noCommit ? { noCommit: true as const } : {};
-      updateRun(e.folder, { ...noCommit, condition: "dropped", reason, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
+      // The drop replaces the sentence, so a run that has only the sentence gets its cause now.
+      updateRun(e.folder, { cause: causeOf(e.run), checkName: failedCheckOf(e.run), condition: "dropped", reason, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     }
     const todo = issueOf(runs);
     const why = repo && todo !== undefined && !a.quiet ? store.note(repo, todo, `job ${name} dropped: ${reason}`) : null;

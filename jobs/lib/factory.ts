@@ -16,6 +16,7 @@ import { ciLine, redCi } from "./ci.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, isBuild, onOf, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { causeOf } from "./outcome.ts";
 import { allJobs, checkedBy, lookMinutes, isOpen, issue as issueOf, jobsNamed, asked, lastReal, markAsked, markRescued, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { smokeLine } from "./smoke.ts";
 import { accept, final, readRecord, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
@@ -599,7 +600,7 @@ function noCommitStreak(repoKey: string, name: string): number {
   const runs = allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.condition !== "running" && Date.parse(e.run.started) > mark)
     .sort((a, b) => Date.parse(a.run.started) - Date.parse(b.run.started));
   let n = 0;
-  for (const e of runs.reverse()) { if (e.run.reason !== "no commit" && !e.run.noCommit) break; n++; }
+  for (const e of runs.reverse()) { if (causeOf(e.run) !== "no-commit") break; n++; }
   return n;
 }
 
@@ -633,18 +634,17 @@ const RERUN_OPTIONS = [
 ];
 
 type Case = "killed" | "duplicate" | "no-commit" | "claimed" | "time-box" | "infra" | "land-checks" | "land-conflict";
-const INFRA = /^(job lock busy|fetch failed|systemd-run failed|worktree gone|bundle failed|hidden checks unreadable)/;
 /** A baseline that has not answered yet (see `baseline`): the claim is waited on, not decided. */
 const UNCHECKED = /^main (is unchecked|baseline running)/;
 
 /** Which safe case a stuck or failed run is in, or null: not safe. `claim` is the worker's "already met" reason, if it made one. */
 function caseOf(r: Entry["run"], onMainOrDone: () => boolean, claim: string | null): Case | null {
-  const why = r.reason ?? "";
-  if (why === "no commit") return onMainOrDone() ? "duplicate" : claim !== null ? "claimed" : "no-commit";
-  if (why === "time box" && r.kind !== "land") return "time-box";
-  if (INFRA.test(why)) return "infra";
-  if (r.kind === "land" && /^merge conflict/.test(why)) return "land-conflict";
-  if (r.kind === "land" && !r.conflicts?.length && /^timed out: check |^[\w-]+ failed$/.test(why)) return "land-checks";
+  const cause = causeOf(r);
+  if (cause === "no-commit") return onMainOrDone() ? "duplicate" : claim !== null ? "claimed" : "no-commit";
+  if (cause === "time-box" && r.kind !== "land") return "time-box";
+  if (cause === "infra" || cause === "lock-busy") return "infra";
+  if (r.kind === "land" && cause === "conflict") return "land-conflict";
+  if (r.kind === "land" && !r.conflicts?.length && cause === "check") return "land-checks";
   return null;
 }
 
@@ -788,7 +788,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
     const item = issue === undefined ? undefined : reader().item(repo.key, issue);
     return !!item && issues.status(item) !== "open";
   };
-  const claim = r.reason === "no commit" ? alreadyMet(readFile(last, "result.md") ?? "") : null;
+  const claim = causeOf(r) === "no-commit" ? alreadyMet(readFile(last, "result.md") ?? "") : null;
   const key = killed([runs]).length ? "killed" : caseOf(r, onMainOrDone, claim);
   const reason = key === "killed" ? "host restart" : r.reason ?? r.condition;
   const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.condition}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
@@ -804,7 +804,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
     if (r.kind === "land") {
       // The branch passed, and the land may have pushed: a new land finds that, and a new goal run would do the work twice.
       writeFileSync(join(last.folder, "exit"), "143");
-      updateRun(last.folder, { condition: "failed", reason, phase: undefined, told: true, ended: new Date().toISOString() });
+      updateRun(last.folder, { condition: "failed", reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
       if (!await tryDo(land ? await land(name) : "no land", "land again")) return;
       record(`${text}: landed again`);
       await say(`${text}: landing again`);

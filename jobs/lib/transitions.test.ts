@@ -109,7 +109,7 @@ describe("drop", () => {
     const folder = run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined, reason: "no commit" });
     expect(await drop("x", { reason: "not needed", quiet: true })).toEqual({ job: "20261028-000001-x-agent", name: "x", condition: "dropped", reason: "not needed" });
     const r = readRun(folder)!;
-    expect([r.condition, r.reason, r.told, r.noCommit]).toEqual(["dropped", "not needed", true, true]);
+    expect([r.condition, r.reason, r.told, r.cause]).toEqual(["dropped", "not needed", true, "no-commit"]);
     expect(await refused(() => drop("x"))).toBe("no open job named x");
   });
 

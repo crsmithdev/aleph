@@ -7,6 +7,7 @@ import { availableParallelism, homedir } from "node:os";
 import { join } from "node:path";
 import { needsOf, type Ask } from "./ask.ts";
 import { layout } from "./layout.ts";
+import { failedCheckOf, type Cause } from "./outcome.ts";
 
 export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
@@ -23,7 +24,11 @@ export interface Run {
   reason?: string; question?: string; say?: string;
   /** A triage run: the route it applied to its issue. */
   route?: "build" | "plan" | "close" | "done" | "ask";
-  /** The run ended with no commit. A drop replaces `reason`, so this keeps the fact for the dispatch's streak. */
+  /** Why the run stopped: read it with `causeOf`. A drop replaces `reason` and keeps this. */
+  cause?: Cause;
+  /** The cause `check`: the check's name. */
+  checkName?: string;
+  /** A run from before `cause`: a drop set this when the run had ended with no commit. */
   noCommit?: true;
   session?: string; model?: string; commit?: string;
   /** A land run of a job with a manual check: "open" until `aleph checked` makes it "done". */
@@ -304,9 +309,8 @@ export function newsLine(run: Run, note?: string): string {
   let line = `${run.repo}/${run.name} ${run.condition}`;
   const needs = needsOf(askOf(run));
   if (isAwaiting(run.condition) && needs) line += ` ${needs}`;
-  // Only a check's reason ends in "failed"; see the state rule in unit.ts.
-  const check = run.condition === "failed" && run.reason?.match(/^(.+) failed$/);
-  if (check) line += ` ${check[1]}`;
+  const check = run.condition === "failed" && failedCheckOf(run);
+  if (check) line += ` ${check}`;
   if (run.condition === "landed" && run.check === "open") line += "; check open";
   if (run.condition === "landed" && run.reason) line += `; ${run.reason}`;
   if (run.condition === "landed" && note) line += `; ${note}`;
@@ -364,7 +368,6 @@ function readVerdictFile(file: string): Review | undefined {
 }
 
 /** The reason of a land that found the job lock taken: it did nothing to the job. */
-export const LOCK_BUSY = "job lock busy";
 
 /** How many check runs of the test suite may run at once across the factory: ALEPH_CHECK_SLOTS, default 2. */
 export const checkSlots = () => Math.max(1, Math.floor(Number(process.env.ALEPH_CHECK_SLOTS)) || 2);

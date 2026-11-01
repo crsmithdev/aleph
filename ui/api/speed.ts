@@ -10,6 +10,7 @@ import { flakes } from "../../jobs/lib/checks.ts";
 import { LIVE_CAP } from "../../jobs/lib/factory.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { allRuns, isBuild, isLive, isStarting, onOf, type Entry, type Run } from "../../jobs/lib/ledger.ts";
+import { causeOf, type Cause } from "../../jobs/lib/outcome.ts";
 import type { Routes } from "../server.ts";
 import { staleSync } from "../stale.ts";
 import { reader, storeDir, uiFetchTtl } from "../../todo/lib/store.ts";
@@ -86,6 +87,13 @@ export const CLASS_TEXT: Record<Class, string> = {
   restarted: "A run that a later start replaced: another job of the same issue landed, or the issue started 4 or more times inside an hour.",
   dropped: "A run of an issue that was then dropped or closed without landing.",
 };
+/** The breakdown's name of each stated cause that has one. */
+const CAUSE_NAME: Partial<Record<Cause, string>> = {
+  reviewer: "Reviewer sent back", check: "Checks failed", "hidden-check": "Checks failed",
+  "time-box": "Stalled or timed out", stalled: "Stalled or timed out",
+  "no-commit": "No commit", conflict: "Passed, not landed",
+};
+
 /** What each cause in the breakdown means. */
 const CAUSE_TEXT: Record<string, string> = {
   "First run of the job": "The job's first run landed, with no fix round.",
@@ -182,14 +190,19 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
     else if (startsBefore >= 3 || [...lands].some((l) => l.job !== r.job && (firstStart.get(l.job) ?? Infinity) > (firstStart.get(r.job) ?? Infinity))) cls = "restarted";
     else if (["done", "dropped", GONE].includes(statusOf(g) ?? "")) cls = "dropped";
     if (!cls) { skipped.push(row); continue; }
+    const stated = CAUSE_NAME[causeOf(r) ?? "other"];
     if (cls === "landed") row.cause = mine.some((o) => o.job === r.job && t0(o) < a) ? "After fix rounds" : "First run of the job";
     else if (cls === "nothing") row.cause = afterLand ? "Issue had landed" : "Work on main from another issue";
     else if (cls === "restarted" && startsBefore >= 3) row.cause = "Restart loop";
     else if (r.condition === "awaiting") row.cause = "Needed Chris";
-    else if (r.failed === "review" || /reviewer/i.test(reason)) row.cause = "Reviewer sent back";
-    else if (r.failed || / failed$|^timed out: check /.test(reason)) row.cause = "Checks failed";
+    else if (r.failed === "review") row.cause = "Reviewer sent back";
+    else if (r.failed) row.cause = "Checks failed";
+    else if (stated) row.cause = stated;
+    // A drop with no stated cause has only its free prose, so this guess stays for the page's breakdown.
+    else if (/reviewer/i.test(reason)) row.cause = "Reviewer sent back";
+    else if (/ failed$/.test(reason)) row.cause = "Checks failed";
     else if (/time box|stalled|timed out|lost/i.test(reason)) row.cause = "Stalled or timed out";
-    else if (r.noCommit || /no commit/i.test(reason)) row.cause = "No commit";
+    else if (/no commit/i.test(reason)) row.cause = "No commit";
     else if (/by hand|aleph drop/i.test(reason)) row.cause = "Needed Chris";
     else if (passedState(r.condition) || /conflict/i.test(reason)) row.cause = "Passed, not landed";
     else row.cause = "Other";

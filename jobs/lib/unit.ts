@@ -12,7 +12,8 @@ import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader }
 import { addWorktree, fetchOrigin, followMain, git } from "./git.ts";
 import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk } from "./ask.ts";
-import { askOf, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { askOf, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, isLive, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { causeOf, checksStopped, LOCK_BUSY, type Cause } from "./outcome.ts";
 import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
@@ -284,11 +285,11 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
   const logged = (name: string, r: { ok: boolean; out: string }) => { log(`${name}: ${r.ok ? "ok" : "failed"}`, r.out); return r; };
   const step = (name: string, ...args: string[]) => logged(name, git(repo.path, ...args));
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const failed = (reason: string, extra: Partial<Outcome> = {}): Landing => ({ outcome: { condition: "failed", reason, ...extra }, code: 1 });
-  const fail = (reason: string, extra: Partial<Outcome> = {}) => { log(`failed: ${reason}`); return failed(reason, extra); };
+  const failed = (cause: Cause, reason: string, extra: Partial<Outcome> = {}): Landing => ({ outcome: { condition: "failed", cause, reason, ...extra }, code: 1 });
+  const fail = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => { log(`failed: ${reason}`); return failed(cause, reason, extra); };
 
   const release = await lock(`job-${repo.key}-${run.name}`, 60_000);
-  if (!release) return fail(LOCK_BUSY);
+  if (!release) return fail("lock-busy", LOCK_BUSY);
   let releaseRepo: (() => void) | null = null;
   try {
     phase("queued");
@@ -311,7 +312,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
     // Members that failed in an earlier attempt keep their verdict and are not tried again.
     const failedBefore = new Map<Member, Landing & { after?: () => void }>();
     for (let attempt = 0; ; attempt++) {
-      { const f = logged("fetch", fetchOrigin(repo.path)); if (!f.ok) return fail(`fetch failed: ${f.out}`); }
+      { const f = logged("fetch", fetchOrigin(repo.path)); if (!f.ok) return fail("infra", `fetch failed: ${f.out}`); }
       const base0 = git(repo.path, "rev-parse", `origin/${main}`).out;
       const done = new Map<Member, Landing & { after?: () => void }>(failedBefore);
       const finish = (m: Member, o: Landing & { after?: () => void }) => { done.set(m, o); if (o.outcome.condition === "failed") m.log(`failed: ${o.outcome.reason}`); };
@@ -344,7 +345,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
           continue;
         }
         const tip = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${m.run.branch}`);
-        if (!tip.ok) { finish(m, failed(`branch gone: ${m.run.branch}`)); continue; }
+        if (!tip.ok) { finish(m, failed("other", `branch gone: ${m.run.branch}`)); continue; }
         tips.set(m, tip.out);
         open.push(m);
       }
@@ -369,7 +370,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
             const lines = merged.out.split("\n");
             const conflicts = lines.slice(1, lines.indexOf("") < 0 ? undefined : lines.indexOf("")).filter(Boolean);
             m.log("conflicts", conflicts.join("\n"));
-            finish(m, failed("merge conflict", { conflicts }));
+            finish(m, failed("conflict", "merge conflict", { conflicts }));
             continue;
           }
           const tree = merged.out.split("\n")[0];
@@ -379,12 +380,12 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
             continue;
           }
           // Only aleph issue writes the list. A worker can go past git-guard with a script, so the land refuses it.
-          if (git(repo.path, "diff", "--name-only", cur, tree).out.split("\n").includes(TODO_PATH)) { finish(m, failed(OWN_LIST, { conflicts: [TODO_PATH] })); continue; }
+          if (git(repo.path, "diff", "--name-only", cur, tree).out.split("\n").includes(TODO_PATH)) { finish(m, failed("own-list", OWN_LIST, { conflicts: [TODO_PATH] })); continue; }
           const fork = git(repo.path, "merge-base", cur, tip).out;
           const subjects = git(repo.path, "log", "--reverse", "--no-merges", "--format=%s", `${fork}..${tip}`).out.split("\n").filter(Boolean);
           const c = git(repo.path, "commit-tree", tree, "-p", cur, "-m", landMessage(subjects, m.run, repo));
           m.log(`commit-tree: ${c.ok ? "ok" : "failed"}`, c.out);
-          if (!c.ok) { finish(m, failed("commit-tree failed")); continue; }
+          if (!c.ok) { finish(m, failed("other", "commit-tree failed")); continue; }
           items.push({ m, commit: c.out });
           cur = c.out;
         }
@@ -429,7 +430,7 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         if (!items.length) return { ok: [], tip: base };
         const why = known ?? await check(items, base);
         if (!why) return { ok: items, tip: items.at(-1)!.commit };
-        if (items.length === 1) { finish(items[0].m, failed(why)); return { ok: [], tip: base }; }
+        if (items.length === 1) { finish(items[0].m, { outcome: { condition: "failed", ...checksStopped(why) }, code: 1 }); return { ok: [], tip: base }; }
         log(`split ${items.length} runs: ${why}`);
         const h = Math.floor(items.length / 2);
         const a = await settle(items.slice(0, h), base, null);
@@ -457,10 +458,10 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
           followCheckout(repo, log);
           return conclude(leader, done, checksOf);
         }
-        { const f = logged("fetch", fetchOrigin(repo.path)); if (!f.ok) return fail(`fetch failed: ${f.out}`); }
+        { const f = logged("fetch", fetchOrigin(repo.path)); if (!f.ok) return fail("infra", `fetch failed: ${f.out}`); }
         const refused = git(repo.path, "rev-parse", `origin/${main}`).out === base0;
         if (refused || attempt >= RELANDS) {
-          for (const { m } of ok) done.set(m, failed(refused ? "push refused" : MOVED));
+          for (const { m } of ok) done.set(m, refused ? failed("other", "push refused") : failed("moved", MOVED));
           for (const { m } of ok) m.log(`failed: ${refused ? "push refused" : MOVED}`);
           return conclude(leader, done, checksOf);
         }
@@ -491,7 +492,7 @@ function conclude(leader: Member, done: Map<Member, Landing & { after?: () => vo
   }
   const own = checksOf.get(leader);
   if (own) updateRun(leader.folder, { checks: own });
-  return done.get(leader) ?? { outcome: { condition: "failed", reason: "not landed" }, code: 1 };
+  return done.get(leader) ?? { outcome: { condition: "failed", cause: "other", reason: "not landed" }, code: 1 };
 }
 
 /**
@@ -601,9 +602,11 @@ export function removeBranch(repo: Repo, run: Run): void {
   if (run.branch) git(repo.path, "branch", "-D", run.branch);
 }
 
-type Outcome = Pick<Run, "condition" | "ask" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat" | "checkedBase" | "checkedTip">;
+type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat" | "checkedBase" | "checkedTip">;
 
 /** A verdict that waits for Chris: the condition `awaiting` and the Ask. */
+/** The outcome of a factory run that the check runners stopped. */
+const stoppedByChecks = (why: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, ...checksStopped(why), ...extra }, code: 1 });
 const awaiting = (reason: string, question: string, why: string[] = []): Pick<Outcome, "condition" | "ask"> =>
   ({ condition: "awaiting", ask: plainAsk(reason, question, why.filter(Boolean)) });
 
@@ -638,7 +641,7 @@ export async function unit(folder: string): Promise<void> {
     if (run.kind === "plain") {
       const r = await exec(["bash", "-c", readFileSync(join(folder, "command.txt"), "utf8")], { cwd: process.cwd(), env, out: join(folder, "output.log") });
       code = r.code;
-      outcome = code === 0 ? { condition: "done" } : { condition: "failed", reason: `exited ${code}` };
+      outcome = code === 0 ? { condition: "done" } : { condition: "failed", cause: "other", reason: `exited ${code}` };
     } else if (run.kind === "land") {
       ({ outcome, code } = await land(id, folder, run, repo!, checkEnv));
     } else if (run.kind === "recheck") {
@@ -651,7 +654,7 @@ export async function unit(folder: string): Promise<void> {
       ({ outcome, code } = await agent(id, folder, run, repo!, env, checkEnv));
     }
   } catch (e: any) {
-    outcome = { condition: "failed", reason: `error: ${e?.message ?? e}` };
+    outcome = { condition: "failed", cause: "other", reason: `error: ${e?.message ?? e}` };
     code = 1;
   }
 
@@ -689,7 +692,7 @@ function nextStep(run: Run, repo: Repo | undefined): Run["next"] {
   if (run.kind !== "land" || run.condition !== "failed") return undefined;
   const lands = (jobById(run.job) ?? []).filter((e) => e.run.kind === "land").map((e) => e.run);
   if (run.conflicts?.length) return lands.filter((r) => r.conflicts?.length).length <= BOUNCES ? "worker" : undefined;
-  if (run.reason === MOVED) return lands.filter((r) => r.reason === MOVED).length <= RELANDS ? "land" : undefined;
+  if (causeOf(run) === "moved") return lands.filter((r) => causeOf(r) === "moved").length <= RELANDS ? "land" : undefined;
   return undefined;
 }
 
@@ -740,7 +743,7 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
     ? `The reviewer sent this branch back: ${run.reason}\n\nFix what it names, run the tests, and commit.`
     : run.failed
     ? `The check \`${run.failed}\` failed on this branch. The last 80 lines of its log:\n\n${checkLog(folder, run.failed)}\n\nFix the cause, run the tests, and commit.`
-    : run.reason === OWN_LIST
+    : causeOf(run) === "own-list"
     ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph issue writes the list. The lists live in the work store now. Remove ${TODO_PATH} from the branch, commit, and make each change to the list with aleph issue.`
     : `The land conflicted with origin/main in: ${(run.conflicts ?? []).join(", ")}. Merge origin/main into this branch, resolve each conflict so that the change on main and this job's change both survive, run the tests, and commit.`;
   const log = join(folder, "next.log");
@@ -760,7 +763,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   const wt = run.worktree!;
   const branch = run.branch!;
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const fail = (reason: string) => ({ outcome: { condition: "failed" as const, reason }, code: 1 });
+  const fail = (cause: Cause, reason: string) => ({ outcome: { condition: "failed" as const, cause, reason }, code: 1 });
 
   // A new job starts from origin/<main>, after it clears what an ended job of that name left.
   if (run.job === id || !existsSync(wt)) {
@@ -768,15 +771,15 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     // Units of one repo share its .git: a concurrent worktree add fails on the config lock, prune removes another's
     // half-made worktree entry, and fetch can fail on shared files. One unit at a time runs these git writes.
     const release = await lock(`setup-${repo.key}`, 300_000);
-    if (!release) return fail("setup lock busy");
+    if (!release) return fail("other", "setup lock busy");
     try {
       const fetched = fetchOrigin(repo.path);
       if (!fetched.ok) {
         appendFileSync(join(folder, "setup.log"), `## fetch: failed\n${fetched.out}\n`);
-        return fail(`fetch failed: ${fetched.out}`);
+        return fail("infra", `fetch failed: ${fetched.out}`);
       }
       const add = addWorktree(repo.path, wt, branch, `origin/${repo.main}`);
-      if (!add.ok) return fail(`worktree add failed: ${add.out}`);
+      if (!add.ok) return fail("other", `worktree add failed: ${add.out}`);
     } finally {
       release();
     }
@@ -788,8 +791,8 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     for (const cmd of repo.setup) {
       appendFileSync(join(folder, "setup.log"), `## ${cmd}\n`);
       const r = await exec(["bash", "-c", cmd], { cwd: wt, env: checkEnv, out: join(folder, "setup.log"), limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
-      if (r.timedOut) return fail(`timed out: setup ${cmd}`);
-      if (r.code !== 0) return fail(`setup failed: ${cmd}`);
+      if (r.timedOut) return fail("stalled", `timed out: setup ${cmd}`);
+      if (r.code !== 0) return fail("other", `setup failed: ${cmd}`);
     }
     writeFileSync(marker, "");
   }
@@ -812,16 +815,16 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   writeFileSync(join(folder, "result.md"), result);
 
   // The state rule: the first match wins.
-  if (w.timedOut) return fail("timed out: worker");
-  if (w.code !== 0) return { outcome: { condition: "failed", reason: `worker exited ${w.code}` }, code: w.code };
+  if (w.timedOut) return fail("stalled", "timed out: worker");
+  if (w.code !== 0) return { outcome: { condition: "failed", cause: "other", reason: `worker exited ${w.code}` }, code: w.code };
   const question = result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("QUESTION:")).at(-1);
   if (question) return { outcome: { ...awaiting("question", question.slice("QUESTION:".length).trim()), question: question.slice("QUESTION:".length).trim() }, code: 0 };
   const dirty = git(wt, "status", "--porcelain").out;
-  if (dirty) return fail(`uncommitted: ${dirty.split("\n")[0].slice(3)}`);
+  if (dirty) return fail("other", `uncommitted: ${dirty.split("\n")[0].slice(3)}`);
   const refetched = fetchOrigin(wt);
   if (!refetched.ok) {
     appendFileSync(join(folder, "setup.log"), `## fetch: failed\n${refetched.out}\n`);
-    return fail(`fetch failed: ${refetched.out}`);
+    return fail("infra", `fetch failed: ${refetched.out}`);
   }
   const base = git(wt, "merge-base", `origin/${repo.main}`, "HEAD").out;
   if (git(wt, "rev-list", "--count", `${base}..HEAD`).out === "0") {
@@ -831,7 +834,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   stampJob(wt, base, run.job);
   const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
   const failed = await inWorktree(folder, wt, repo, checkEnv, changed, phase);
-  if (failed) return fail(failed);
+  if (failed) return { outcome: { condition: "failed", ...checksStopped(failed) }, code: 1 };
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
   // A manual check does not hold the run: it lands with the check open (see land).
   const manual = repo.manual.find((m) => matches(m.when));
@@ -849,15 +852,15 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
   const branch = run.branch!;
   const main = `refs/remotes/origin/${repo.main}`;
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const stuck = (reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, reason, ...extra }, code: 1 });
+  const stuck = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, cause, reason, ...extra }, code: 1 });
   phase("setup");
-  { const f = fetchOrigin(repo.path); if (!f.ok) return stuck(`fetch failed: ${f.out}`); }
+  { const f = fetchOrigin(repo.path); if (!f.ok) return stuck("infra", `fetch failed: ${f.out}`); }
   const prev = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok;
   const dir = makeRunFolder(id);
   try {
     // The store and ledger facts ride along, so `aleph status` inside answers as it does outside.
     const b = git(repo.path, "bundle", "create", join(dir, "in.bundle"), main, writeFacts(repo), ...(prev ? [`refs/heads/${branch}`] : []));
-    if (!b.ok) return stuck(`bundle failed: ${b.out}`);
+    if (!b.ok) return stuck("infra", `bundle failed: ${b.out}`);
     const text = prompt(id, folder, run, repo);
     writeFileSync(join(folder, "prompt.md"), text);
     const goalId = onOf(run);
@@ -903,38 +906,38 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     const facts: Partial<Outcome> = { ...(o.cost !== undefined || authorCost !== undefined ? { cost: spent } : {}), defaults: tagged(o.result, "DEFAULT") };
     fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
     noteFlakes(repo, run, tagged(o.result, "FLAKE"));
-    if (w.stalled) return stuck(stallReason(), facts);
-    if (w.timedOut) return stuck("time box", facts);
-    if (!o.ok) return stuck(o.line, facts);
+    if (w.stalled) return stuck("stalled", stallReason(), facts);
+    if (w.timedOut) return stuck("time-box", "time box", facts);
+    if (!o.ok) return stuck("other", o.line, facts);
 
     // The worker's processes are gone with its sandbox. Only this step reads work/.
     phase("bundle");
     const out = await sandboxed(dir, `git bundle create -q ../out/out.bundle ${q(`refs/heads/${branch}`)}`, {
       read: ["work"], write: ["out"], cwd: "work", stdout: join(folder, "stderr.log"), stderr: join(folder, "stderr.log"),
     });
-    if (out.code !== 0) return stuck(`no branch ${branch} to hand back`, facts);
+    if (out.code !== 0) return stuck("other", `no branch ${branch} to hand back`, facts);
     // The one operation on the worker's data: a fetch of its branch from the bundle.
     const f = git(repo.path, "fetch", "-q", join(dir, "out", "out.bundle"), `+refs/heads/${branch}:refs/heads/${branch}`);
-    if (!f.ok) return stuck(`fetch of the bundle failed: ${f.out}`, facts);
+    if (!f.ok) return stuck("other", `fetch of the bundle failed: ${f.out}`, facts);
     const base = git(repo.path, "merge-base", main, `refs/heads/${branch}`).out;
-    if (git(repo.path, "rev-list", "--count", `${main}..refs/heads/${branch}`).out === "0") return stuck("no commit", facts);
+    if (git(repo.path, "rev-list", "--count", `${main}..refs/heads/${branch}`).out === "0") return stuck("no-commit", "no commit", facts);
 
     // Each earlier run of the job that a failed check sent back is a fix round.
     const earlier = (jobById(run.job) ?? []).filter((e) => e.id !== id && isBuild(e.run.kind) && e.run.failed).map((e) => e.run);
     const done = earlier.length;
     if (done) facts.round = done;
     const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
-    if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no commit", facts);
+    if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit", facts);
     const hidden = hiddenOf(repo, run);
-    if (!hidden) return stuck(HIDDEN_UNREADABLE, facts);
+    if (!hidden) return stuck("infra", HIDDEN_UNREADABLE, facts);
     const failed = await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder) }, dir, "out/out.bundle", `refs/heads/${branch}`, hidden);
     if (failed) {
       // A check that failed goes back to the worker, at most FIX_ROUNDS times a job.
       const check = readRun(folder)?.checks?.findLast((c) => !c.ok)?.name;
-      if (!check || (failed !== `${check} failed` && !(check === "hidden" && failed.startsWith("hidden check failed")))) return stuck(failed, facts);
+      if (!check || (failed !== `${check} failed` && !(check === "hidden" && failed.startsWith("hidden check failed")))) return stoppedByChecks(failed, facts);
       const rounds = fixRounds();
-      if (done < rounds) return stuck(failed, { ...facts, failed: check, round: done });
-      return stuck(rounds > 0 ? `${failed} after ${done} fix rounds` : failed, facts);
+      if (done < rounds) return stoppedByChecks(failed, { ...facts, failed: check, round: done });
+      return stoppedByChecks(failed, { ...facts, ...(rounds > 0 ? { reason: `${failed} after ${done} fix rounds` } : {}) });
     }
     facts.checkedBase = base;
     facts.checkedTip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
@@ -952,7 +955,7 @@ async function researchAgent(id: string, folder: string, run: Run, repo: Repo): 
   const phase = (p: string) => updateRun(folder, { phase: p });
   const on = onOf(run)!;
   const item = reader().item(repo.key, on);
-  if (!item) return { outcome: { condition: "stuck", reason: `no issue ${on}` }, code: 1 };
+  if (!item) return { outcome: { condition: "stuck", cause: "other", reason: `no issue ${on}` }, code: 1 };
   const dir = makeRunFolder(id);
   try {
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
@@ -984,12 +987,12 @@ async function researchAgent(id: string, folder: string, run: Run, repo: Repo): 
     const o = agentOutcome(readFileSync(log, "utf8"));
     writeFileSync(join(folder, "result.md"), o.result);
     const facts: Partial<Outcome> = o.cost !== undefined ? { cost: o.cost } : {};
-    const stuck = (reason: string) => ({ outcome: { condition: "stuck" as const, reason, ...facts }, code: 1 });
-    if (w.stalled) return stuck(stallReason());
-    if (w.timedOut) return stuck("time box");
-    if (!o.ok) return stuck(o.line);
+    const stuck = (cause: Cause, reason: string) => ({ outcome: { condition: "stuck" as const, cause, reason, ...facts }, code: 1 });
+    if (w.stalled) return stuck("stalled", stallReason());
+    if (w.timedOut) return stuck("time-box", "time box");
+    if (!o.ok) return stuck("other", o.line);
     const cites = citationFailure(o.result, pages);
-    if (cites) return stuck(cites);
+    if (cites) return stuck("other", cites);
 
     phase("judge");
     const judgeLog = join(folder, "judge.log");
@@ -1003,9 +1006,9 @@ async function researchAgent(id: string, folder: string, run: Run, repo: Repo): 
     child = null;
     const r = agentOutcome(readFileSync(judgeLog, "utf8"));
     if (r.cost !== undefined) facts.cost = (facts.cost ?? 0) + r.cost;
-    if (j.timedOut || j.stalled || !r.ok) return stuck(`the judge did not finish: ${r.line}`);
+    if (j.timedOut || j.stalled || !r.ok) return stuck("other", `the judge did not finish: ${r.line}`);
     const v = readVerdict(r.result);
-    if (!v.ok) return stuck(v.reason);
+    if (!v.ok) return stuck("other", v.reason);
 
     const path = deliver(item.title, `${repo.key}-${on}`, o.result);
     const closed = closeAndFile(repo, `todo: research ${run.name} delivered`, on, `report: ${path}; ${v.reason}, ${pages.size} pages read`, []);
@@ -1043,13 +1046,13 @@ async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, d
     if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
   }
   if (!rv.reason) return rule ? held(rule) : { outcome: { condition: "passed", ...facts }, code: 0 };
-  if (rv.none) return { outcome: { ...awaiting("review", rv.reason, [stat]), reason: rv.reason, stat, ...facts }, code: 0 };
+  if (rv.none) return { outcome: { ...awaiting("review", rv.reason, [stat]), cause: "reviewer", reason: rv.reason, stat, ...facts }, code: 0 };
   if (earlier) {
-    if (earlier.length < fixRounds()) return { outcome: { condition: "stuck", reason: rv.reason, stat, ...facts, failed: "review", round: earlier.length }, code: 1 };
+    if (earlier.length < fixRounds()) return { outcome: { condition: "stuck", cause: "reviewer", reason: rv.reason, stat, ...facts, failed: "review", round: earlier.length }, code: 1 };
     const back = earlier.filter((r) => r.failed === "review").length;
-    if (back) return { outcome: { ...awaiting("review", sentBack(back, rv.reason), [stat]), reason: sentBack(back, rv.reason), stat, ...facts }, code: 0 };
+    if (back) return { outcome: { ...awaiting("review", sentBack(back, rv.reason), [stat]), cause: "reviewer", reason: sentBack(back, rv.reason), stat, ...facts }, code: 0 };
   }
-  return { outcome: { ...awaiting("review", rv.reason, [stat]), reason: rv.reason, stat, ...facts }, code: 0 };
+  return { outcome: { ...awaiting("review", rv.reason, [stat]), cause: "reviewer", reason: rv.reason, stat, ...facts }, code: 0 };
 }
 
 /** The reason of a run that came back from the reviewer after the last fix round. */
@@ -1067,7 +1070,7 @@ export async function reviewBack(folder: string): Promise<void> {
   const r2 = readCall(folder);
   if (!run || (!isBuild(run.kind) && run.kind !== "recheck") || !isAwaiting(run.condition)) return;
   if (r2?.call === "land" && askOf(run)?.reason === "held-path" && existsSync(join(folder, "review.md")) && reviewVerdict(readFileSync(join(folder, "review.md"), "utf8"))?.pass) {
-    updateRun(folder, { condition: "passed", ask: undefined, reason: undefined });
+    updateRun(folder, { condition: "passed", ask: undefined, reason: undefined, cause: undefined });
     dispatchDetached();
     return;
   }
@@ -1075,12 +1078,12 @@ export async function reviewBack(folder: string): Promise<void> {
   const earlier = (jobById(run.job) ?? []).filter((e) => e.id !== basename(folder) && isBuild(e.run.kind) && e.run.failed).map((e) => e.run);
   const reason = r2.reason ?? "no reason given";
   if (earlier.length < fixRounds()) {
-    const ended = updateRun(folder, { condition: "stuck", ask: undefined, reason, failed: "review", round: earlier.length, next: "worker" });
+    const ended = updateRun(folder, { condition: "stuck", ask: undefined, cause: "reviewer", reason, failed: "review", round: earlier.length, next: "worker" });
     await start(folder, ended, "worker");
     return;
   }
   const back = earlier.filter((r) => r.failed === "review").length;
-  if (back) updateRun(folder, { reason: sentBack(back, reason) });
+  if (back) updateRun(folder, { cause: "reviewer", reason: sentBack(back, reason) });
 }
 
 /**
@@ -1093,11 +1096,11 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
   const ref = `refs/heads/${branch}`;
   const main = `refs/remotes/origin/${repo.main}`;
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const stuck = (reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, reason, ...extra }, code: 1 });
+  const stuck = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, cause, reason, ...extra }, code: 1 });
   phase("setup");
-  { const f = fetchOrigin(repo.path); if (!f.ok) return stuck(`fetch failed: ${f.out}`); }
+  { const f = fetchOrigin(repo.path); if (!f.ok) return stuck("infra", `fetch failed: ${f.out}`); }
   const tip = git(repo.path, "rev-parse", "--verify", "-q", ref);
-  if (!tip.ok) return stuck(`branch gone: ${branch}`);
+  if (!tip.ok) return stuck("other", `branch gone: ${branch}`);
   const upstream = git(repo.path, "rev-parse", main).out;
   phase("merge");
   if (!git(repo.path, "merge-base", "--is-ancestor", upstream, tip.out).ok) {
@@ -1105,23 +1108,23 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
     const lines = merged.out.split("\n");
     if (!merged.ok) {
       const conflicts = lines.slice(1, lines.indexOf("") < 0 ? undefined : lines.indexOf("")).filter(Boolean);
-      return stuck(`merge conflict: ${conflicts.join(", ")}`, { conflicts });
+      return stuck("conflict", `merge conflict: ${conflicts.join(", ")}`, { conflicts });
     }
     const c = git(repo.path, "commit-tree", lines[0], "-p", tip.out, "-p", upstream, "-m", `Merge ${repo.main} into ${branch}`);
-    if (!c.ok || !git(repo.path, "update-ref", ref, c.out, tip.out).ok) return stuck(`merge failed: ${c.out}`);
+    if (!c.ok || !git(repo.path, "update-ref", ref, c.out, tip.out).ok) return stuck("other", `merge failed: ${c.out}`);
   }
   const dir = makeRunFolder(id);
   try {
     const b = git(repo.path, "bundle", "create", join(dir, "out", "out.bundle"), ref);
-    if (!b.ok) return stuck(`bundle failed: ${b.out}`);
+    if (!b.ok) return stuck("infra", `bundle failed: ${b.out}`);
     const base = git(repo.path, "merge-base", main, ref).out;
-    if (git(repo.path, "rev-list", "--count", `${main}..${ref}`).out === "0") return stuck("no commit");
+    if (git(repo.path, "rev-list", "--count", `${main}..${ref}`).out === "0") return stuck("no-commit", "no commit");
     const changed = git(repo.path, "diff", "--name-only", base, ref).out.split("\n").filter(Boolean);
-    if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no commit");
+    if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit");
     const hidden = hiddenOf(repo, run);
-    if (!hidden) return stuck(HIDDEN_UNREADABLE);
+    if (!hidden) return stuck("infra", HIDDEN_UNREADABLE);
     const failed = await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder) }, dir, "out/out.bundle", ref, hidden);
-    if (failed) return stuck(failed);
+    if (failed) return stoppedByChecks(failed);
     return await heldAndReview(id, folder, run, repo, dir, base, branch, { checkedBase: base, checkedTip: git(repo.path, "rev-parse", ref).out });
   } finally {
     removeRunFolder(dir);

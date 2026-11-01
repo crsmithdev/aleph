@@ -14,6 +14,7 @@ import { factoryDir } from "./factory.ts";
 import { factoryLog } from "./layout.ts";
 import { allRuns, loadRegistry, type Repo } from "./ledger.ts";
 import { always, logAlways } from "./ask.ts";
+import { causeOf } from "./outcome.ts";
 import { file as fileIssues, type Place } from "../../todo/lib/store.ts";
 
 export const CORRECTION_AT = 0.7;
@@ -210,7 +211,7 @@ async function dropSignals(from: Date, seen: Set<string>): Promise<Signal[]> {
     const ended = Date.parse(run.ended ?? "");
     if (run.condition !== "dropped" || !run.reason || !(ended >= from.getTime()) || seen.has(e.id)) continue;
     // The run's own fact: it made no commit, so the drop is no fault in work that does not exist.
-    if (run.noCommit || run.reason === "no commit") continue;
+    if (causeOf(run) === "no-commit") continue;
     try {
       const d = await decide(
         { reason: run.reason },

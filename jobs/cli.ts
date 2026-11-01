@@ -90,7 +90,7 @@ function reconcile(all: Entry[][]): Map<string, string> {
     }
     const found = onMain(repo, last.run);
     if (found) {
-      updateRun(last.folder, { condition: "landed", commit: found.commit, reason: `found on main (${found.how})`, ask: undefined, told: true });
+      updateRun(last.folder, { condition: "landed", commit: found.commit, reason: `found on main (${found.how})`, cause: undefined, ask: undefined, told: true });
       removeBranch(repo, last.run);
       const todo = issueOf(runs);
       const why = todo === undefined ? null : store.close(repo, todo, `job ${last.run.name} found on main as ${found.commit.slice(0, 7)}`);

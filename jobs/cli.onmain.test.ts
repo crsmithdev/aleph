@@ -124,7 +124,7 @@ describe("an item that is already on main", () => {
     expect(r.code).toBe(0);
     const after = JSON.parse(readFileSync(f, "utf8"));
     expect(after.reason).toBe("dropped as a duplicate");
-    expect(after.noCommit).toBe(true);
+    expect(after.cause).toBe("no-commit");
   }, 60_000);
 
   test("drop stops every live run of the job and marks each dropped", async () => {

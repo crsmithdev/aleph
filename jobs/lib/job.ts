@@ -8,7 +8,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { basename, join } from "node:path";
 import { tagged } from "./gate.ts";
 import { needsOf } from "./ask.ts";
-import { allJobs, askOf, isBuild, isLost, isOpen, LOCK_BUSY, onOf, reviewOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
+import { allJobs, askOf, isBuild, isLost, isOpen, onOf, reviewOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
+import { causeOf } from "./outcome.ts";
 
 export { allJobs, isOpen };
 
@@ -42,7 +43,7 @@ export const jobById = (id: string, jobs = allJobs()): Job | undefined => jobs.f
 export const issue = (j: Job): number | string | undefined => j.map((e) => onOf(e.run)).findLast((n) => n !== undefined);
 
 /** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts; a facts run is not the job's state. */
-export const lastReal = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts" && !(e.run.kind === "land" && e.run.condition === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
+export const lastReal = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts" && !(e.run.kind === "land" && e.run.condition === "failed" && causeOf(e.run) === "lock-busy")) ?? j.at(-1)!;
 
 /** The job's state: that of the run that counts. */
 export const stateOf = (j: Job): State => lastReal(j).run.condition;
