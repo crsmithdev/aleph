@@ -814,3 +814,9 @@ test("at 720px and below Pause sorts after the picker, so the screen order match
   expect(order("wpick")).toBeGreaterThan(0);
   expect(order("act")).toBeGreaterThan(order("wpick"));
 });
+
+test("a long unbroken word in the status sentence (a URL) breaks: .lede .say sets overflow-wrap: anywhere", async () => {
+  const html = await Bun.file(new URL("./index.html", import.meta.url)).text();
+  const say = [...html.matchAll(/\.lede \.say[^{}]*\{([^}]*)\}/g)].map((m) => m[1]).join("\n");
+  expect(say).toContain("overflow-wrap: anywhere");
+});
