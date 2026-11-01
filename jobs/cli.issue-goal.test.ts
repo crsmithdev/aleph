@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, itemsRemote, jobsDir, patchItem, sh, startScript, setup, teardown, until } from "./cli.helpers";
+import { aleph, base, itemsRemote, jobsDir, sh, startScript, setup, teardown, until } from "./cli.helpers";
 
 // Acceptance criterion 14 at the CLI seam: `aleph issue add <repo> "<title>" --goal -` files the issue and its goal `.1`
 // in one store commit, with no triage, and starts the dispatch itself.
@@ -13,57 +13,33 @@ const commits = () => Number(sh(base, "git", "--git-dir", itemsRemote, "rev-list
 const file = (name: string) => sh(base, "git", "--git-dir", itemsRemote, "show", `main:fac/backlog/tasks/${name}.md`);
 const triageRuns = () => (existsSync(jobsDir) ? readdirSync(jobsDir).filter((d) => d.endsWith("-triage")) : []);
 
-describe("aleph issue add --goal -", () => {
-  test("files the issue and goal .1 in one commit, starts no triage, and show reports the goal", async () => {
+describe("aleph issue add --spec -", () => {
+  test("files one issue with its spec in one commit, starts no triage, and show reports the spec", async () => {
     const before = commits();
-    const r = await aleph(["issue", "add", "fac", "Add a line", "--goal", "-"], {}, GOAL);
+    const r = await aleph(["issue", "add", "fac", "Add a line", "--spec", "-"], {}, GOAL);
     expect(r.code, r.stderr).toBe(0);
     const n = r.json.added as number;
-    expect(r.json.goal).toBe(`fac-${n}.1`);
     expect(commits()).toBe(before + 1);
-
     const issue = file(`fac-${n}`);
-    expect(issue).toContain("kind: issue");
     expect(issue).toContain("source: chris");
-    expect(issue).toContain(`goals: [fac-${n}.1]`);
-    expect(issue).toContain(`## Request\n\n${GOAL.trim()}`);
-    expect(issue).not.toMatch(/^(labels|waiting_on):/m);
-    const goal = file(`fac-${n}.1`);
-    expect(goal).toContain("kind: goal");
-    expect(goal).toContain(`issue: fac-${n}`);
-    expect(goal).toContain("after: []");
-    expect(goal).toContain(GOAL.trim());
-    expect(goal).not.toContain("## Request");
-
+    expect(issue).toContain(`<!-- spec -->\n${GOAL.trim()}`);
+    expect(issue).not.toMatch(/^(labels|waiting_on|kind|goals|status):/m);
     await Bun.sleep(500);
     expect(triageRuns()).toEqual([]);
     const shown = await aleph(["issue", "show", "fac", String(n), "--json"]);
-    expect(shown.json).toMatchObject({ kind: "issue", source: "chris", goals: [`fac-${n}.1`], areas: [] });
-    expect(shown.json.body).toContain("## Request");
-    const text = (await aleph(["issue", "show", "fac", String(n)])).stdout;
-    expect(text).toContain(`goals ${n}.1`);
+    expect(shown.json).toMatchObject({ source: "chris", areas: [] });
+    expect(shown.json.spec).toContain("## Oracle");
   });
 
-  test("--after sets the goal's order; an issue id is refused and writes nothing", async () => {
-    const first = (await aleph(["issue", "add", "fac", "First", "--goal", "-"], {}, GOAL)).json;
+  test("--after takes a plain or a dotted ref; an absent id is refused and writes nothing", async () => {
+    const first = (await aleph(["issue", "add", "fac", "First", "--spec", "-"], {}, GOAL)).json.added;
     const before = commits();
-    const r = await aleph(["issue", "add", "fac", "Second", "--goal", "-", "--after", first.goal], {}, GOAL);
+    const r = await aleph(["issue", "add", "fac", "Second", "--spec", "-", "--after", `fac-${first}`], {}, GOAL);
     expect(r.code, r.stderr).toBe(0);
-    expect(file(`fac-${r.json.added}.1`)).toContain(`after: [${first.goal}]`);
+    expect(file(`fac-${r.json.added}`)).toContain(`after: [fac-${first}]`);
     expect(commits()).toBe(before + 1);
-
-    const bad = await aleph(["issue", "add", "fac", "Third", "--goal", "-", "--after", `fac-${first.added}`], {}, GOAL);
-    expect(bad.code).toBe(1);
-    expect(bad.stderr).toContain("is an issue");
+    expect((await aleph(["issue", "add", "fac", "Fourth", "--spec", "-", "--after", "fac-9999.1"], {}, GOAL)).code).toBe(1);
     expect(commits()).toBe(before + 1);
-    const none = await aleph(["issue", "add", "fac", "Fourth", "--goal", "-", "--after", "fac-9999.1"], {}, GOAL);
-    expect(none.code).toBe(1);
-    expect(commits()).toBe(before + 1);
-  });
-
-  test("a second goal gets the next number under its issue", async () => {
-    const r = await aleph(["issue", "add", "fac", "Numbered", "--goal", "-"], {}, GOAL);
-    expect(r.json.goal).toBe(`fac-${r.json.added}.1`);
   });
 
   test("it starts the dispatch itself: no explicit `aleph dispatch` follows", async () => {
@@ -73,14 +49,13 @@ describe("aleph issue add --goal -", () => {
     rmSync(startLog, { force: true });
     startScript(startCmd, jobsDir);
     const on = { ALEPH_DISPATCH: "on", ALEPH_START_CMD: startCmd, START_LOG: startLog };
-    const r = await aleph(["issue", "add", "fac", "Starts at once", "--goal", "-"], on, `ACTION: hold ${gate}\n`);
+    const r = await aleph(["issue", "add", "fac", "Starts at once", "--spec", "-"], on, `ACTION: hold ${gate}\n`);
     expect(r.code, r.stderr).toBe(0);
-    await until(() => existsSync(startLog) && readFileSync(startLog, "utf8").includes(`fac-${r.json.added}.1`));
-    expect(readFileSync(startLog, "utf8").trim().split("\n")).toContain(`fac-${r.json.added}.1`);
-    // Release the hold, and close the goal so later dispatches leave it alone.
+    await until(() => existsSync(startLog) && readFileSync(startLog, "utf8").includes(`fac-${r.json.added}`));
+    expect(readFileSync(startLog, "utf8").trim().split("\n")).toContain(`fac-${r.json.added}`);
+    // Release the hold, and close the issue so later dispatches leave it alone.
     writeFileSync(gate, "");
-    await until(() => readdirSync(jobsDir).filter((d) => d.includes(`-fac-fac-${r.json.added}.1-`)).every((d) => { try { return JSON.parse(readFileSync(join(jobsDir, d, "state.json"), "utf8")).state === "passed"; } catch { return false; } }));
-    patchItem("fac", `${r.json.added}.1`, { status: "dropped" });
+    await until(() => readdirSync(jobsDir).filter((d) => d.includes(`-fac-fac-${r.json.added}-`)).every((d) => { try { return JSON.parse(readFileSync(join(jobsDir, d, "state.json"), "utf8")).condition !== "running"; } catch { return false; } }));
     await aleph(["issue", "drop", "fac", String(r.json.added), "test over"]);
   }, 60_000);
 });

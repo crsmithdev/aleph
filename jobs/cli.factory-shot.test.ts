@@ -47,7 +47,7 @@ describe("a factory run", () => {
     const r = await aleph(["job", "fac", "fshot", "--spec", specFile(`Goal: fshot\nACTION: shot http://127.0.0.1:${srv.port}/\n`)], { ALEPH_REVIEW_CHROME: join(tmp, "chrome") });
     const log = (f: string) => { try { return readFileSync(join(fakeLog, f), "utf8"); } catch { return ""; } };
     expect(log("shot.out") + log("shot.code")).toContain("shot:");
-    expect(state(r.json.run).state).not.toBe("stuck");
+    expect(state(r.json.run).condition).not.toBe("stuck");
     const png = Buffer.from(Bun.spawnSync(["git", "-C", repo, "show", "factory/fshot:shot.png"]).stdout);
     expect(png.readUInt32BE(16)).toBe(1440);
     await aleph(["drop", "fshot"]);

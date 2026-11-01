@@ -18,7 +18,7 @@ describe("a factory reviewer runs in the foreground", () => {
     const reviewer = join(base, "env-reviewer");
     writeFileSync(reviewer, ENV_REVIEWER, { mode: 0o755 });
     const r = await aleph(["job", "fac", "rbg", "--spec", specFile("Goal: rbg REVIEW:pass\nACTION: commit rbg.txt\n")], { ALEPH_REVIEWER_CMD: reviewer, ALEPH_REVIEW_CMD: "/bin/false" });
-    expect(state(r.json.run).state).toBe("passed");
+    expect(state(r.json.run).condition).toBe("passed");
     const seen = file(r.json.run, "review.log").split("\n");
     expect(seen).toContain("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1");
     expect(file(r.json.run, "review-prompt.md")).toContain("Run every command in the foreground and wait for it: nothing wakes you after your turn ends.");

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CLI } from "../cli.helpers.ts";
@@ -33,19 +33,19 @@ beforeAll(() => {
   for (const k of [...VARS, "HOME"]) saved[k] = process.env[k];
   for (const k of VARS) delete process.env[k];
   process.env.HOME = home;
-  sh(home, "git", "init", "-q", "--bare", "-b", "main", join(a, "items.git"));
-  sh(home, "git", "clone", "-q", join(a, "items.git"), join(a, "items"));
-  const tasks = join(a, "items", "aleph", "backlog", "tasks");
+  sh(home, "git", "init", "-q", "--bare", "-b", "main", join(a, "issues.git"));
+  sh(home, "git", "clone", "-q", join(a, "issues.git"), join(a, "issues"));
+  const tasks = join(a, "issues", "aleph", "backlog", "tasks");
   mkdirSync(tasks, { recursive: true });
-  writeFileSync(join(a, "items", "aleph", "backlog", "config.yml"), config("aleph"));
-  const task = { id: 1, title: "the one issue", fm: { id: "1", status: "open", created: "2026-10-01", updated: "2026-10-02", priority: "medium", kind: "issue" }, body: "Body.", notes: [], legacy: false };
+  writeFileSync(join(a, "issues", "aleph", "backlog", "config.yml"), config("aleph"));
+  const task = { id: 1, title: "the one issue", fm: { id: "1", created: "2026-10-01", updated: "2026-10-02", priority: "medium" }, request: "x", spec: "", notes: [] };
   writeFileSync(join(tasks, "aleph-1.md"), renderItem("aleph", task as any));
-  sh(join(a, "items"), "git", "add", "-A");
-  sh(join(a, "items"), "git", "commit", "-q", "-m", "one");
-  sh(join(a, "items"), "git", "push", "-q", "origin", "main");
-  const run = join(a, "jobs", "20261030-100000-aleph-j1-agent");
+  sh(join(a, "issues"), "git", "add", "-A");
+  sh(join(a, "issues"), "git", "commit", "-q", "-m", "one");
+  sh(join(a, "issues"), "git", "push", "-q", "origin", "main");
+  const run = join(a, "runs", "20261030-100000-aleph-j1-agent");
   mkdirSync(run, { recursive: true });
-  writeFileSync(join(run, "state.json"), JSON.stringify({ job: "20261030-100000-aleph-j1-agent", name: "j1", repo: "aleph", kind: "build", state: "failed", told: true, started: "2026-10-30T10:00:00Z" }, null, 2) + "\n");
+  writeFileSync(join(run, "state.json"), JSON.stringify({ job: "20261030-100000-aleph-j1-agent", name: "j1", repo: "aleph", kind: "build", condition: "failed", told: true, started: "2026-10-30T10:00:00Z" }, null, 2) + "\n");
   mkdirSync(join(a, "runs", "sandbox-run"), { recursive: true });
   mkdirSync(join(a, "factory"), { recursive: true });
   writeFileSync(join(a, "factory", "paused"), "");
@@ -60,18 +60,10 @@ afterAll(() => {
   rmSync(home, { recursive: true, force: true });
 });
 
-test("layout() names the new layout only; the migration moves the old roots there and the CLI reads the migrated data", async () => {
+test("layout() names the new layout only, and the CLI reads the data there", async () => {
   const fresh = { store: join(a, "issues"), ledger: join(a, "runs"), sandbox: join(a, "sandbox") };
   expect(layout()).toEqual(fresh);
   expect([storeDir(), runsDir(), sandboxDir()]).toEqual([fresh.store, fresh.ledger, fresh.sandbox]);
-
-  const done = await aleph("migrate", "--apply");
-  if (done.code !== 0) console.log(done.stderr, done.stdout);
-  expect(done.code).toBe(0);
-  expect(existsSync(join(a, "issues"))).toBe(true);
-
-  expect(layout()).toEqual({ store: join(a, "issues"), ledger: join(a, "runs"), sandbox: join(a, "sandbox") });
-  expect([storeDir(), runsDir(), sandboxDir()]).toEqual([join(a, "issues"), join(a, "runs"), join(a, "sandbox")]);
 
   const list = await aleph("issue", "list", "aleph");
   expect(list.code).toBe(0);
@@ -89,19 +81,4 @@ test("the environment wins, variable by variable; ALEPH_RUNS_DIR is not read", (
     set({ ALEPH_ISSUES: "/x/issues", ALEPH_JOBS_DIR: "/x/jobs", ALEPH_SANDBOX_DIR: "/x/sandbox" });
     expect(layout()).toEqual({ store: "/x/issues", ledger: "/x/jobs", sandbox: "/x/sandbox" });
   } finally { for (const k of VARS) delete process.env[k]; }
-});
-
-test("migrate roots() takes the source store from ALEPH_ITEMS, not ALEPH_ISSUES, when both are set", async () => {
-  const keep = { i: process.env.ALEPH_ITEMS, s: process.env.ALEPH_ISSUES };
-  process.env.ALEPH_ITEMS = "/x/items";
-  process.env.ALEPH_ISSUES = "/x/issues";
-  try {
-    const { roots } = await import("./migrate.ts");
-    const r = roots();
-    expect(r.store).toBe("/x/items");
-    expect(r.issues).toBe("/x/issues");
-    expect(r.store).not.toBe(r.issues);
-  } finally {
-    for (const [k, v] of [["ALEPH_ITEMS", keep.i], ["ALEPH_ISSUES", keep.s]] as const) if (v === undefined) delete process.env[k]; else process.env[k] = v;
-  }
 });

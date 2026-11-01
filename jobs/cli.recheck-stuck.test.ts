@@ -27,24 +27,24 @@ describe("a factory run", () => {
     test("a job stuck on a failed check passes once main is fixed, keeps the worker's commit and starts no worker", async () => {
       red();
       const r = await fjob("rc1", "commit rc1.txt", NOFIX);
-      expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "tests failed" });
+      expect(state(r.json.run)).toMatchObject({ condition: "stuck", reason: "tests failed" });
       const worker = sh(repo, "git", "rev-parse", "factory/rc1");
       mend();
       const c = await aleph(["recheck", "rc1"], NOFIX);
       expect(c.code).toBe(0);
-      expect(state(c.json.run)).toMatchObject({ kind: "recheck", state: "passed", job: r.json.job });
+      expect(state(c.json.run)).toMatchObject({ kind: "recheck", condition: "passed", job: r.json.job });
       expect(kinds("rc1")).toEqual(["build", "recheck"]);
       expect(agentRuns("rc1")).toHaveLength(1);
       expect(sh(repo, "git", "merge-base", "--is-ancestor", worker, "factory/rc1")).toBe("");
       expect(sh(repo, "git", "log", "--format=%s", "factory/rc1")).toContain("add rc1.txt");
       expect(sh(repo, "git", "ls-tree", "--name-only", "factory/rc1")).not.toContain("FAIL");
       const l = await aleph(["land", "rc1"]);
-      expect(state(l.json.run).state).toBe("landed");
+      expect(state(l.json.run).condition).toBe("landed");
     }, 60_000);
 
     test("refuses a running, passed or landed job, and one whose branch is gone", async () => {
       const p = await fjob("rc2", "commit rc2.txt");
-      expect(state(p.json.run).state).toBe("passed");
+      expect(state(p.json.run).condition).toBe("passed");
       const refused = await aleph(["recheck", "rc2"]);
       expect(refused.code).toBe(1);
       expect(refused.stderr).toContain("rc2 is passed, not stuck or failed");
@@ -54,10 +54,10 @@ describe("a factory run", () => {
       expect(landed.stderr).toContain("no open job named rc2");
       red();
       const s = await fjob("rc3", "commit rc3.txt", NOFIX);
-      expect(state(s.json.run).state).toBe("stuck");
+      expect(state(s.json.run).condition).toBe("stuck");
       const file = join(jobsDir, s.json.run, "state.json");
       const saved = readFileSync(file, "utf8");
-      writeFileSync(file, JSON.stringify({ ...JSON.parse(saved), state: "running" }));
+      writeFileSync(file, JSON.stringify({ ...JSON.parse(saved), condition: "running" }));
       const running = await aleph(["recheck", "rc3"]);
       expect(running.code).toBe(1);
       expect(running.stderr).toMatch(/rc3 is running/);
@@ -73,10 +73,10 @@ describe("a factory run", () => {
     test("a merge of main that conflicts ends stuck and names the files", async () => {
       red();
       const r = await fjob("rc4", "commit-fixed rc4.txt", NOFIX);
-      expect(state(r.json.run).state).toBe("stuck");
+      expect(state(r.json.run).condition).toBe("stuck");
       mend(["rc4.txt", "different\n"]);
       const c = await aleph(["recheck", "rc4"], NOFIX);
-      expect(state(c.json.run)).toMatchObject({ kind: "recheck", state: "stuck", conflicts: ["rc4.txt"] });
+      expect(state(c.json.run)).toMatchObject({ kind: "recheck", condition: "stuck", conflicts: ["rc4.txt"] });
       expect(state(c.json.run).reason).toContain("rc4.txt");
       expect(kinds("rc4")).toEqual(["build", "recheck"]);
       await aleph(["drop", "rc4"]);

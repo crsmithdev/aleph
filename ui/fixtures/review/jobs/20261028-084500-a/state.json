@@ -4,7 +4,7 @@
   "name": "tools-3",
   "repo": "tools",
   "branch": "factory/tools-3",
-  "state": "stuck",
+  "condition": "stuck",
   "reason": "no output for 30 minutes",
   "told": true,
   "started": "2026-10-28T08:45:00.000Z",

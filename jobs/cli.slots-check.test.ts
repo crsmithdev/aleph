@@ -41,7 +41,7 @@ describe("check slots", () => {
   };
   /** Both runs passed and the log has the four lines the test reads: a failure here throws with `cause`. */
   const ready = () => {
-    const passed = runs.every((r) => { try { return state(r.json.run).state === "passed"; } catch { return false; } });
+    const passed = runs.every((r) => { try { return state(r.json.run).condition === "passed"; } catch { return false; } });
     const count = existsSync(slotsLog()) ? readFileSync(slotsLog(), "utf8").trim().split("\n").length : 0;
     if (!passed || count !== 4) throw new Error(`both runs must pass and slots.log must have 4 lines (it has ${count})\n${cause()}`);
   };
@@ -54,7 +54,7 @@ describe("check slots", () => {
 
   test("with one slot two checks started together run one after the other, and both pass", () => {
     ready();
-    for (const r of runs) expect(state(r.json.run)).toMatchObject({ state: "passed" });
+    for (const r of runs) expect(state(r.json.run)).toMatchObject({ condition: "passed" });
     const l = lines(slotsLog());
     expect(l.map((x) => x[1])).toEqual(["start", "end", "start", "end"]);
     expect(BigInt(l[2][0])).toBeGreaterThanOrEqual(BigInt(l[1][0]));

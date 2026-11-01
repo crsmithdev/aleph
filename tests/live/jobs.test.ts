@@ -54,7 +54,7 @@ describeLive("live job", () => {
     const deadline = Date.now() + 280_000;
     while (!existsSync(join(folder, "exit")) && Date.now() < deadline) await Bun.sleep(2000);
     const state = JSON.parse(readFileSync(join(folder, "state.json"), "utf8"));
-    expect(state.state).toBe("passed");
+    expect(state.condition).toBe("passed");
     expect(state.session).toMatch(/^[0-9a-f-]{36}$/);
     expect(readFileSync(join(folder, "output.log"), "utf8")).toContain(state.session);
     expect(sh(join(base, "repo", ".worktrees", "job-hello"), "git", "log", "-1", "--format=%s")).toBe("add hello");

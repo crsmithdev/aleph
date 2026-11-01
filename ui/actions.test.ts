@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../todo/lib/store.ts";
-import { add, addGoal } from "../todo/lib/todo.ts";
+import { add, addPart } from "../todo/lib/todo.ts";
 import { serve } from "./server.ts";
 
 let base: string, server: Awaited<ReturnType<typeof serve>>, calls: string;
@@ -30,10 +30,10 @@ beforeAll(async () => {
   writeFileSync(join(repo, "b.txt"), "main moved\n");
   sh(repo, "add", "."); sh(repo, "commit", "-qm", "main moves on");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ r: { path: repo } }));
-  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { ask: { kind: "input", reason: "question", question: "which colour?", options: [], why: [] } }], ["stuckjob", { state: "stuck" }], ["wt", { on: "r-7" }], ["wtgone", { on: "r-99" }], ["won", { on: "r-5" }], ["wgoal", { on: "r-6.1" }]] as const) {
+  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { ask: { kind: "input", reason: "question", question: "which colour?", options: [], why: [] } }], ["stuckjob", { condition: "stuck" }], ["wt", { on: "r-7" }], ["wtgone", { on: "r-99" }], ["won", { on: "r-5" }], ["wgoal", { on: "r-6.1" }]] as const) {
     const folder = join(base, "jobs", `20261027-100000-r-${name}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", state: "awaiting", started: new Date().toISOString(), name, job: name, repo: "r", ...extra }));
+    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", condition: "awaiting", started: new Date().toISOString(), name, job: name, repo: "r", ...extra }));
   }
   // The work store, with issue 7 of `r` for the Wait button to set `after` on.
   const itemsRemote = join(base, "items.git"), items = join(base, "items");
@@ -52,7 +52,7 @@ beforeAll(async () => {
     process.env[k] = v;
   }
   server = await serve(0, { warm: false });
-  writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 9; i++) { const item = add(doc, `issue ${i}`); if (i === 7) item.fm.kind = "goal"; } for (const n of [6, 9]) addGoal(doc, doc.items.find((x) => x.id === n && x.sub === undefined)!, { title: `goal ${n}`, body: "x", repo: "r" }); return true; }, true);
+  writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 9; i++) { add(doc, `issue ${i}`, i === 7 ? { spec: "Do it." } : {}); } for (const n of [6, 9]) addPart(doc, doc.items.find((x) => x.id === n && x.sub === undefined)!, { title: `goal ${n}`, spec: "x" }); return true; }, true);
 });
 afterAll(() => {
   server.stop(true);
@@ -147,10 +147,10 @@ test("GET /api/diff is the branch's diff from the merge base", async () => {
 });
 
 test("a name reused by a dropped job and its rerun acts on the newer job", async () => {
-  for (const [id, extra] of [["20261027-090000-r-dup-agent", { state: "dropped" }], ["20261027-110000-r-dup-agent", { state: "landed", branch: "job/x" }]] as const) {
+  for (const [id, extra] of [["20261027-090000-r-dup-agent", { condition: "dropped" }], ["20261027-110000-r-dup-agent", { condition: "landed", branch: "job/x" }]] as const) {
     const folder = join(base, "jobs", id);
     mkdirSync(folder, { recursive: true });
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", started: new Date().toISOString(), name: "dup", job: `dup-${extra.state}`, repo: "r", ...extra }));
+    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", started: new Date().toISOString(), name: "dup", job: `dup-${extra.condition}`, repo: "r", ...extra }));
   }
   const res = await at("/api/diff/dup");
   expect(res.status).toBe(200);

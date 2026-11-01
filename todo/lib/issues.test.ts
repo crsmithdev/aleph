@@ -19,7 +19,7 @@ let n = 0;
 function repo(items: { title: string; labels?: string[] }[] = []): store.Place {
   const r = { key: `is${++n}` };
   store.writeList(r, "start", (doc) => {
-    for (const i of items) { const it = issues.add(doc, i.title, { labels: i.labels }); if (i.labels?.includes("goal")) it.fm.kind = "goal"; }
+    for (const i of items) { issues.add(doc, i.title, { labels: i.labels, ...(i.labels?.includes("goal") ? { spec: "Do it." } : {}) }); }
     return true;
   }, true);
   return r;
@@ -77,7 +77,6 @@ describe("issue verbs without argv", () => {
     store.writeList(r, "ask", (doc) => { const i = issues.add(doc, "c"); store.setAsk(i, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
     expect(refusal(() => issueOps.decide(r, 99, "yes"))).toContain("has no issue");
     const d = issueOps.decide(r, 2, "yes");
-    expect(store.kindOf(d.item)).toBe("issue");
     expect(store.askOf(item(r, 2))).toBeNull();
     issueOps.decide(r, 1, "yes");
     expect(store.askOf(item(r, 1))).toBeNull();
@@ -92,7 +91,6 @@ describe("issue verbs without argv", () => {
   test("edit needs a field and a good --due", () => {
     const r = repo([{ title: "a" }]);
     expect(refusal(() => issueOps.edit(r, 1, {}))).toContain("give --title");
-    expect(refusal(() => issueOps.edit(r, 1, { due: "tomorrow" }))).toContain("--due takes");
     expect(item(r, 1).fm.due).toBeUndefined();
   });
 });

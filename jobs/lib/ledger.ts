@@ -25,10 +25,10 @@ export type Review = { call: "land" | "back" | "ask" | "pending" | "error"; reas
 export interface Run {
   kind: "build" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
-  state: State; phase?: string;
+  condition: State; phase?: string;
   reason?: string; question?: string; say?: string;
   /** A triage run: the route it applied to its issue. */
-  route?: "goal" | "close" | "done" | "ask";
+  route?: "build" | "plan" | "close" | "done" | "ask";
   /** The run ended with no commit. A drop replaces `reason`, so this keeps the fact for the dispatch's streak. */
   noCommit?: true;
   session?: string; model?: string; commit?: string;
@@ -178,7 +178,7 @@ export function isOpen(runs: Entry[]): boolean {
   const last = runs.findLast((e) => e.run.kind !== "facts");
   if (!last) return false;
   if (last.run.kind === "plain") return isLive(last.folder);
-  return OPEN.includes(last.run.state);
+  return OPEN.includes(last.run.condition);
 }
 
 /** A run waits for Chris. */
@@ -228,7 +228,7 @@ export function isLive(folder: string): boolean {
  */
 export const STARTING_MS = 120_000;
 export function isStarting(e: Entry): boolean {
-  return e.run.state === "running" && !existsSync(join(e.folder, "pid")) && !existsSync(join(e.folder, "exit")) && Date.now() - (e.run.made ?? 0) < STARTING_MS;
+  return e.run.condition === "running" && !existsSync(join(e.folder, "pid")) && !existsSync(join(e.folder, "exit")) && Date.now() - (e.run.made ?? 0) < STARTING_MS;
 }
 
 /** `pid`, no `exit`, and the process is gone: the run died without an end. */
@@ -278,16 +278,16 @@ export function stamp(d = new Date()): string {
 
 /** The one line of news for an ended run. */
 export function newsLine(run: Run, note?: string): string {
-  if (run.kind === "plain") return `${run.name} ${run.state === "done" ? "finished" : "failed"}`;
-  let line = `${run.repo}/${run.name} ${run.state}`;
+  if (run.kind === "plain") return `${run.name} ${run.condition === "done" ? "finished" : "failed"}`;
+  let line = `${run.repo}/${run.name} ${run.condition}`;
   const needs = needsOf(askOf(run));
-  if (isAwaiting(run.state) && needs) line += ` ${needs}`;
+  if (isAwaiting(run.condition) && needs) line += ` ${needs}`;
   // Only a check's reason ends in "failed"; see the state rule in unit.ts.
-  const check = run.state === "failed" && run.reason?.match(/^(.+) failed$/);
+  const check = run.condition === "failed" && run.reason?.match(/^(.+) failed$/);
   if (check) line += ` ${check[1]}`;
-  if (run.state === "landed" && run.check === "open") line += "; check open";
-  if (run.state === "landed" && run.reason) line += `; ${run.reason}`;
-  if (run.state === "landed" && note) line += `; ${note}`;
+  if (run.condition === "landed" && run.check === "open") line += "; check open";
+  if (run.condition === "landed" && run.reason) line += `; ${run.reason}`;
+  if (run.condition === "landed" && note) line += `; ${note}`;
   if (run.next === "worker") line += "; sent back to the worker";
   if (run.next === "land") line += run.kind === "land" ? "; landing again" : "; landing";
   return line;

@@ -22,7 +22,7 @@ let seq = 0;
 function writeRun(name: string): void {
   const folder = join(jobs, `20261031-1000${String(seq++).padStart(2, "0")}-demo-${name}-agent`);
   mkdirSync(folder, { recursive: true });
-  writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", state: "running", started: new Date().toISOString(), name, job: name, repo: "demo", on: name }));
+  writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", condition: "running", started: new Date().toISOString(), name, job: name, repo: "demo", on: name }));
 }
 
 beforeAll(async () => {
@@ -41,7 +41,7 @@ beforeAll(async () => {
     saved[k] = process.env[k];
     process.env[k] = v;
   }
-  writeList({ key: "demo" }, "fixture", (doc) => { add(doc, "a goal", { body: "## Goal\nx" }); return true; }, true);
+  writeList({ key: "demo" }, "fixture", (doc) => { add(doc, "a goal", { request: "## Goal\nx" }); return true; }, true);
   writeRun("demo-1");
   server = await serve(0, { warm: false });
 });

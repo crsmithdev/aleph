@@ -1,5 +1,5 @@
 /**
- * Item stage (seed milestone 2): stage() over the `Issue:` and `Goal:` trailers (and the legacy `Item:`) on
+ * Item stage (seed milestone 2): stage() over the `Issue:` trailers on
  * origin/<main>, the work store and the ledger. Nothing writes it back to the store.
  *
  * A factory run's bundle carries the store and ledger facts as a snapshot
@@ -7,7 +7,7 @@
  * same answer as Chris's session from the same bundle.
  */
 import { afterReopen } from "./acceptance.ts";
-import { readList } from "../../todo/lib/store.ts";
+import { readFetched, readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { fetchOrigin, git, gitWith } from "./git.ts";
 import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
@@ -32,7 +32,7 @@ export interface Facts {
 /** `doc` is the repo's list, and `jobs` every job, when the caller has read them already. */
 export function facts(repo: Repo, doc: issues.Doc | null = readList(repo), jobs: Entry[][] = allJobs()): Facts {
   const items: Record<string, Subject> = {};
-  for (const i of doc?.items ?? []) items[issues.refOf(i)] = subjectOf(i, repo.key);
+  for (const i of doc?.items ?? []) items[issues.refOf(i)] = subjectOf(i, repo.key, doc!);
   const runs: Record<string, RunView[]> = {};
   const open: Record<string, State> = {};
   const touched = new Set<number>();
@@ -65,9 +65,8 @@ export function readFacts(cwd: string): Facts | null {
 }
 
 /**
- * The commits on `main` whose trailer block holds `Issue: <key>-<n>` (or the legacy `Item:`) and that
- * no later commit reverts. Only trailer lines count: a subject or a body line
- * that says `Issue:` does not. A commit that also names a goal (`Goal:`) lands that goal, not the whole issue.
+ * The commits on `main` whose trailer block holds `Issue: <key>-<n>`, after the item's `since`, and that
+ * no later commit reverts. Only trailer lines count: a subject or a body line that says `Issue:` does not.
  */
 export function landedCommits(cwd: string, main: string, key: string, n: number | string): string[] {
   return landedIndex(cwd, main, key).get(String(n)) ?? [];
@@ -77,31 +76,44 @@ export function landedCommits(cwd: string, main: string, key: string, n: number 
 const revertedOnly = new WeakMap<Map<string, string[]>, Set<string>>();
 export const revertedIn = (index: Map<string, string[]>): Set<string> => revertedOnly.get(index) ?? new Set();
 
-// The legacy trailer key, spelled in two parts: the old name is gone from the code, and only the legacy reader here still names it.
-const LEGACY = "Ite" + "m";
-/** The log format that gives each commit's hash and its `Item`, `Issue` and `Goal` trailer values, tab-separated: the one trailer reader (`Item:` is the legacy key). */
-const TRAILERS = `--format=%H%x09%(trailers:key=${LEGACY},valueonly,separator=%x2C)%x09%(trailers:key=Issue,valueonly,separator=%x2C)%x09%(trailers:key=Goal,valueonly,separator=%x2C)`;
+/** The log format that gives each commit's hash and its `Issue` trailer values, tab-separated: the one trailer reader. */
+const TRAILERS = "--format=%H%x09%(trailers:key=Issue,valueonly,separator=%x2C)";
 const values = (v: string | undefined): string[] => (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+const revertedOn = (cwd: string, main: string): Set<string> =>
+  new Set([...git(cwd, "log", main, "-E", "--grep=^This reverts commit [0-9a-f]{40}", "--format=%B").out.matchAll(/This reverts commit ([0-9a-f]{40})/g)].map((m) => m[1]));
 
-/** Each of the repo's items that a commit on `main` names in an `Issue:` or `Item:` trailer (`Goal:` names a goal), to those commits, less the reverted ones: two git calls for every item. */
-export function landedIndex(cwd: string, main: string, key: string): Map<string, string[]> {
+/** Each item's `since` as the store last fetched it. A sandbox has no store, and its facts pass `since` to `landedIndex`. */
+function storedSince(key: string): (n: string) => string | undefined {
+  let doc: issues.Doc | null = null;
+  try { doc = readFetched({ key }); } catch {}
+  return (n) => {
+    const v = doc && issues.find(doc, n)?.fm.since;
+    return v ? String(v) : undefined;
+  };
+}
+
+/** Each of the repo's items that a commit on `main` names in an `Issue:` trailer, to those commits, after its `since`, less the reverted ones. */
+export function landedIndex(cwd: string, main: string, key: string, since: (n: string) => string | undefined = storedSince(key)): Map<string, string[]> {
   const out = new Map<string, string[]>();
-  const rows = git(cwd, "log", main, TRAILERS).out.split("\n").filter(Boolean);
+  const rows = git(cwd, "log", main, TRAILERS).out.split("\n").filter(Boolean).map((r) => r.split("\t"));
+  // The log is newest first, so a commit after `since` comes before it.
+  const place = new Map(rows.map(([h], i) => [h, i]));
   const hits: [string, string][] = [];
-  for (const [h, item, issue, goal] of rows.map((r) => r.split("\t"))) {
-    // The commit of a goal names its issue too: it lands the goal, and the issue is done when its goals are.
-    for (const s of new Set([...values(item), ...values(goal), ...(values(goal).length ? [] : values(issue))])) {
+  for (const [h, issue] of rows) {
+    for (const s of new Set(values(issue))) {
       const m = s.startsWith(`${key}-`) ? /^\d+(?:\.\d+)?$/.exec(s.slice(key.length + 1)) : null;
-      if (m) hits.push([h, m[0]]);
+      if (!m) continue;
+      const at = since(m[0]), from = at === undefined ? undefined : place.get(at);
+      if (from === undefined || place.get(h)! < from) hits.push([h, m[0]]);
     }
   }
   if (!hits.length) return out;
   revertedOnly.set(out, new Set());
-  const reverted = new Set([...git(cwd, "log", main, "-E", "--grep=^This reverts commit [0-9a-f]{40}", "--format=%B").out.matchAll(/This reverts commit ([0-9a-f]{40})/g)].map((m) => m[1]));
+  const reverted = revertedOn(cwd, main);
   for (const [h, n] of hits) if (!reverted.has(h)) out.set(n, [...(out.get(n) ?? []), h]);
   // An item whose trailer commits are all reverted: the store's done is stale for it.
   for (const [h, n] of hits) if (reverted.has(h) && !out.has(n)) revertedOnly.get(out)!.add(n);
-  // A goal the acceptance run reopened is done again only by a commit after the reopening.
+  // An issue the acceptance run reopened is done again only by a commit after the reopening.
   for (const [n, hs] of out) {
     const later = afterReopen(cwd, key, n, hs);
     if (later.length) out.set(n, later); else out.delete(n);
@@ -109,31 +121,29 @@ export function landedIndex(cwd: string, main: string, key: string): Map<string,
   return out;
 }
 
-/** The commits on `main` whose `Goal:` (or legacy `Item:`) trailer names `ref` (`<repo>-<n>[.<m>]`), reverted ones too. */
+/** The commits on `main` whose `Issue:` trailer names `ref` (`<repo>-<n>[.<m>]`), reverted ones and those before `since` too: acceptance reads an issue's earlier lands. */
 export function commitsNaming(cwd: string, main: string, ref: string): string[] {
   const rows = git(cwd, "log", main, TRAILERS).out.split("\n").filter(Boolean);
-  return rows.map((r) => r.split("\t")).filter(([, item, , goal]) => [...values(item), ...values(goal)].includes(ref)).map(([h]) => h);
+  return rows.map((r) => r.split("\t")).filter(([, issue]) => values(issue).includes(ref)).map(([h]) => h);
 }
 
-/** The short sha of a commit on `main` whose `Goal:` (or legacy `Item:`) trailer names the goal `ref` (`<repo>-<n>.<m>`) and that no later commit reverts, or null. */
-function dottedOnMain(cwd: string, main: string, ref: string): string | null {
-  const hits = commitsNaming(cwd, main, ref);
-  if (!hits.length) return null;
-  const reverted = new Set([...git(cwd, "log", main, "-E", "--grep=^This reverts commit [0-9a-f]{40}", "--format=%B").out.matchAll(/This reverts commit ([0-9a-f]{40})/g)].map((m) => m[1]));
-  const hit = hits.find((h) => !reverted.has(h));
-  return hit ? hit.slice(0, 7) : null;
-}
-
-/** The short sha of a commit on origin/<main> that names the item, or null. It reads the ref as it is: the caller fetches. */
-export function itemOnMain(repo: { path: string; key: string; main: string } | undefined, n: number | string | undefined): string | null {
+/**
+ * The short sha of a commit on origin/<main> that names the item, or null. It reads the ref as it is: the caller fetches.
+ * `anyTime` also counts a commit before `since`, for an item that acceptance reopened.
+ */
+export function itemOnMain(repo: { path: string; key: string; main: string } | undefined, n: number | string | undefined, o: { anyTime?: boolean } = {}): string | null {
   if (!repo || n === undefined) return null;
-  if (typeof n === "string") return dottedOnMain(repo.path, `origin/${repo.main}`, `${repo.key}-${n}`);
-  const hit = landedCommits(repo.path, `origin/${repo.main}`, repo.key, n)[0];
+  const main = `origin/${repo.main}`;
+  if (o.anyTime) {
+    const reverted = revertedOn(repo.path, main);
+    return commitsNaming(repo.path, main, `${repo.key}-${n}`).find((h) => !reverted.has(h))?.slice(0, 7) ?? null;
+  }
+  const hit = landedCommits(repo.path, main, repo.key, n)[0];
   return hit ? hit.slice(0, 7) : null;
 }
 
 /** The items of `ns` that the facts hold, with the stage() context for them: one `landedIndex` for all. */
-export function stages(cwd: string, main: string, f: Facts, refs: (number | string)[], landed: Map<string, string[]> = landedIndex(cwd, main, f.repo)): Stage[] {
+export function stages(cwd: string, main: string, f: Facts, refs: (number | string)[], landed: Map<string, string[]> = landedIndex(cwd, main, f.repo, (n) => f.items[n]?.since)): Stage[] {
   const num = (ref: string) => (ref.startsWith(`${f.repo}-`) && /^\d+(\.\d+)?$/.test(ref.slice(f.repo.length + 1)) ? ref.slice(f.repo.length + 1) : undefined);
   const ctx: Ctx = {
     main, landed, reverted: revertedIn(landed),
@@ -152,7 +162,7 @@ export function stages(cwd: string, main: string, f: Facts, refs: (number | stri
 export function repoStages(repo: Repo, opts: { fetch: boolean; doc?: issues.Doc | null; items?: (number | string)[] }): Stage[] {
   if (opts.fetch) fetchOrigin(repo.path);
   const f = facts(repo, opts.doc);
-  return stages(repo.path, `refs/remotes/origin/${f.main}`, f, opts.items ?? Object.keys(f.items).filter((k) => !k.includes(".")).map(Number));
+  return stages(repo.path, `refs/remotes/origin/${f.main}`, f, opts.items ?? Object.keys(f.items));
 }
 
 const DAY_MS = 24 * 3600_000;

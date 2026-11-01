@@ -13,20 +13,20 @@ describe("a factory run", () => {
     const t = performance.now();
     const r = await fjob("fstall", "quiet", { ALEPH_STALL_SECONDS: "2" });
     expect(performance.now() - t).toBeLessThan(10_000);
-    expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "stalled: no output for 2 seconds" });
+    expect(state(r.json.run)).toMatchObject({ condition: "stuck", reason: "stalled: no output for 2 seconds" });
     await aleph(["drop", "fstall"]);
   }, 30_000);
 
   test("a worker that keeps printing is not stalled", async () => {
     const r = await fjob("fchat", "chatty", { ALEPH_STALL_SECONDS: "2" });
-    expect(state(r.json.run).state).not.toBe("stuck");
+    expect(state(r.json.run).condition).not.toBe("stuck");
     await aleph(["drop", "fchat"]);
   }, 30_000);
 
   test("a worker that commits only result.md is stuck with no commit, and no check, review or land starts", async () => {
     const r = await fjob("fresult", "commit result.md", { ALEPH_FIX_ROUNDS: "0" });
     const s = state(r.json.run);
-    expect(s).toMatchObject({ state: "stuck", reason: "no commit" });
+    expect(s).toMatchObject({ condition: "stuck", reason: "no commit" });
     expect(s.checks ?? []).toEqual([]);
     expect(s.review).toBeUndefined();
     expect(readdirSync(jobsDir).filter((d) => d.includes("-fac-fresult-")).map((d) => state(d).kind)).not.toContain("land");

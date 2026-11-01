@@ -7,40 +7,36 @@
  * comes back in the result for the caller to print.
  */
 import { Refusal, refuse } from "../../jobs/lib/transitions.ts";
+import { git } from "../../jobs/lib/git.ts";
+import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import { recentRepos } from "../../jobs/lib/status.ts";
 import * as issues from "./todo.ts";
 import * as store from "./store.ts";
 import { triage } from "./triage.ts";
 
-/**
- * The fields `add` and `edit` take; `due` takes `none` to remove the field. `labels` are the issue's areas.
- * `goal` is the goal-format text that `add` files as goal `.1`, and `after` the goals that goal waits for.
- */
+/** The fields `add` and `edit` take. `labels` are the issue's areas. `spec` makes an issue buildable, and `after` is what it waits for. */
 export interface Fields {
   title?: string;
-  body?: string;
+  request?: string;
+  spec?: string;
   priority?: string;
   labels?: string[];
   source?: string;
-  due?: string;
   status?: string;
-  goal?: string;
   after?: string[];
 }
 
-export const brief = (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ? {} : { ref: issues.refOf(i) }), title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: i.fm.updated ?? null, due: i.fm.due ?? null, kind: store.kindOf(i), source: store.sourceOf(i), issue: store.issueOf(i), goals: store.goalsOf(i), after: store.afterOf(i), areas: store.areasOf(i), ask: store.askOf(i), notes: i.notes.length, legacy: i.legacy || undefined });
+export const brief = (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ? {} : { ref: issues.refOf(i) }), title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: i.fm.updated ?? null, source: store.sourceOf(i), after: store.afterOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: store.askOf(i), notes: i.notes.length });
 
 /** A bad value is refused before anything is written. */
 export function checkFields(f: Fields): void {
-  if (f.due !== undefined && f.due !== "none" && !issues.validDate(f.due)) refuse("--due takes YYYY-MM-DD or none");
   if (f.status !== undefined && !(issues.STATUSES as readonly string[]).includes(f.status)) refuse(`--status takes ${issues.STATUSES.join(", ")}`);
 }
 
-/** Set the goals a goal waits for (`after`), checked for form and, in this repo, for existence. */
+/** Set what an issue waits for (`after`), checked for form and, in this repo, for existence. */
 function setAfter(repo: store.Place, doc: issues.Doc, i: issues.Issue, after: string[]): void {
   checkAfter(after);
-  for (const r of after) if (r.startsWith(`${repo.key}-`) && !issues.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no goal`);
-  if (i.legacy) issues.adopt(i);
+  for (const r of after) if (r.startsWith(`${repo.key}-`) && !issues.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no issue`);
   i.fm.after = after;
   i.fm.updated = issues.today();
 }
@@ -57,40 +53,19 @@ function pick(repo: store.Place, doc: issues.Doc, id: number | string): issues.I
   return issues.find(doc, id) ?? refuse(`${repo.key} has no issue ${id}`);
 }
 
-/** A goal id as typed (`<n>.<k>`, or `<m>` for an old child goal that keeps its plain number); a refusal for anything else. */
-export function goalId(raw: string | undefined): string {
-  if (!raw || !/^\d+(\.\d+)?$/.test(raw)) refuse("name a goal by its id, <n>.<k>");
-  return raw as string;
-}
-
-function pickGoal(repo: store.Place, doc: issues.Doc, id: string): issues.Goal {
-  const g = pick(repo, doc, goalId(id));
-  if (store.kindOf(g) !== "goal") refuse(`${repo.key}-${id} is an issue, not a goal`);
-  return g;
-}
-
-/** The repo's goals (`kindOf` goal) that pass `status`. */
-export function goalList(repo: store.Place, o: { status?: string } = {}): issues.Goal[] {
-  return filterRows(readIssues(repo), o).filter((i) => store.kindOf(i) === "goal");
-}
-
-export function goalShow(repo: store.Place, id: string): { item: issues.Goal; hidden: number } {
-  const item = pickGoal(repo, readIssues(repo), id);
-  return { item, hidden: Object.keys(readHiddenOf(repo, item)).length };
-}
-
-const readHiddenOf = (repo: store.Place, g: issues.Goal): Record<string, string> => {
+/** An issue's hidden check files in the store. */
+const readHiddenOf = (repo: store.Place, g: issues.Issue): Record<string, string> => {
   try { return store.readHidden(repo, `${repo.key}-${issues.refOf(g)}`); } catch (e: any) { return refuse(e?.message ?? String(e)); }
 };
 
-/** The names of a goal's hidden check files. */
-export function goalHiddenList(repo: store.Place, id: string): string[] {
-  return Object.keys(readHiddenOf(repo, pickGoal(repo, readIssues(repo), id)));
+/** The names of an issue's hidden check files. */
+export function hiddenList(repo: store.Place, id: number | string): string[] {
+  return Object.keys(readHiddenOf(repo, pick(repo, readIssues(repo), id)));
 }
 
-/** Store `files` as the goal's hidden checks, in `<repo>/hidden/<repo>-<n>.<k>/`. */
-export function goalHiddenAdd(repo: store.Place, id: string, files: Record<string, string>) {
-  const g = pickGoal(repo, readIssues(repo), id);
+/** Store `files` as the issue's hidden checks, in `<repo>/hidden/<repo>-<id>/`. */
+export function hiddenAdd(repo: store.Place, id: number | string, files: Record<string, string>) {
+  const g = pick(repo, readIssues(repo), id);
   const ref = `${repo.key}-${issues.refOf(g)}`;
   try {
     const w = store.writeHidden(repo, ref, files);
@@ -99,37 +74,6 @@ export function goalHiddenAdd(repo: store.Place, id: string, files: Record<strin
     if (e instanceof Refusal) throw e;
     return refuse(e?.message ?? String(e));
   }
-}
-
-/** A note on a goal. */
-export function goalNote(repo: store.Place, id: string, text: string) {
-  text = text.trim() || refuse("give the note some text");
-  const w = write(repo, `todo: a note on goal ${id}`, (doc) => {
-    const g = pickGoal(repo, doc, id);
-    return { id: issues.refOf(g), line: issues.note(g, text) };
-  })!;
-  return { result: { repo: repo.key, id: `${repo.key}-${w.value.id}`, note: w.value.line, commit: w.commit }, follow: w.follow };
-}
-
-/** Edit a goal's title, body, priority or `after` (`none` clears it; issue ids are refused). */
-export function goalEdit(repo: store.Place, id: string, f: { title?: string; body?: string; priority?: string; after?: string[] }) {
-  goalId(id);
-  const title = f.title?.trim();
-  if (title === undefined && f.body === undefined && f.priority === undefined && f.after === undefined) refuse("give --title, --body, --priority or --after");
-  if (title === "") refuse("the title cannot be empty");
-  const after = f.after?.filter((r) => r !== "none");
-  if (after) checkAfter(after);
-  const w = write(repo, `todo: edit goal ${id}`, (doc) => {
-    const g = pickGoal(repo, doc, id);
-    for (const r of after ?? []) {
-      if (r.startsWith(`${repo.key}-`) && !issues.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no goal`);
-      if (r === `${repo.key}-${issues.refOf(g)}`) refuse("a goal cannot wait for itself");
-    }
-    issues.edit(g, { title, body: f.body, priority: f.priority });
-    if (f.after !== undefined) { g.fm.after = after ?? []; g.fm.updated = issues.today(); }
-    return g;
-  })!;
-  return { result: { repo: repo.key, ...brief(w.value), commit: w.commit }, item: w.value, follow: w.follow };
 }
 
 // Every verb but `add` needs a list on main; `add` starts one.
@@ -145,39 +89,32 @@ function write<T>(repo: store.Place, message: string, change: (doc: issues.Doc) 
 /** Chris's answer to an issue with an Ask: not a worker's note (a job id) and not the factory's own. */
 export const isAnswer = (text: string, jobId: string | undefined): boolean => !jobId && !/^(triage|job \S+ landed)\b/.test(text);
 
-export interface Added { repo: string; added: number; title: string; commit: string; goal?: string; maybeSame?: { id: number; title: string }[] }
+export interface Added { repo: string; added: number; title: string; commit: string; maybeSame?: { id: number; title: string }[] }
 
-/** A goal ref (`<repo>-<n>.<k>`) for `--after`; an issue's ref has no `.<k>` and is refused. */
+/** A ref for `--after`: `<repo>-<n>` or `<repo>-<n>.<k>`. */
 function checkAfter(after: string[]): void {
-  for (const r of after) {
-    if (!/^[^\s,]+-\d+\.\d+$/.test(r)) refuse(/^[^\s,]+-\d+$/.test(r) ? `--after takes goal ids: ${r} is an issue` : `--after takes goal ids like <repo>-<n>.<k>: ${r}`);
-  }
+  for (const r of after) if (!/^[^\s,]+-\d+(\.\d+)?$/.test(r)) refuse(`--after takes ids like <repo>-<n> or <repo>-<n>.<k>: ${r}`);
 }
 
 /**
- * Add an issue, with its areas from the triage unless `fields.labels` is given. With `fields.goal` (goal-format text) the
- * issue is filed with a `## Request` holding that text as written and with goal `.1`, in one commit; `fields.after` is the goal's order.
- * `item` is the stored issue, `goal` the goal beside it, `follow` a store warning.
+ * Add an issue, with its areas from the triage unless `fields.labels` is given. With `fields.spec` it is buildable as filed;
+ * `fields.after` is what it waits for. `item` is the stored issue, `follow` a store warning.
  */
-export async function add(repo: store.Place, title: string, fields: Fields = {}): Promise<{ result: Added; item: issues.Issue; goal?: issues.Goal; follow: string | null }> {
+export async function add(repo: store.Place, title: string, fields: Fields = {}): Promise<{ result: Added; item: issues.Issue; follow: string | null }> {
   checkFields(fields);
   title = title.trim() || refuse("give the item a title");
-  const text = fields.goal?.trim();
-  if (fields.goal !== undefined && !text) refuse("--goal - needs the goal text on stdin");
-  if (text && fields.body !== undefined) refuse("--goal - takes the text from stdin: leave --body off");
-  if (fields.after?.length && text === undefined) refuse("--after goes with --goal -");
+  const spec = fields.spec?.trim();
+  if (fields.spec !== undefined && !spec) refuse("--spec - needs the spec on stdin");
   checkAfter(fields.after ?? []);
-  const t = await triage(store.reader().list(repo.key), title, fields.body ?? text ?? "");
+  const t = await triage(store.reader().list(repo.key), title, fields.request ?? spec ?? "");
   const w = write(repo, "todo: add an item", (doc) => {
-    const issue = issues.add(doc, title, { priority: fields.priority, labels: fields.labels ?? t.labels, body: text ? `## Request\n\n${text}` : fields.body, due: fields.due });
-    if (!text) return { issue };
-    const own = (fields.after ?? []).filter((r) => r.startsWith(`${repo.key}-`));
-    for (const r of own) if (!issues.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no goal`);
-    return { issue, goal: issues.addGoal(doc, issue, { title, body: text, after: fields.after ?? [] }) };
+    const issue = issues.add(doc, title, { priority: fields.priority, labels: fields.labels ?? t.labels, request: fields.request, spec });
+    if (fields.after?.length) setAfter(repo, doc, issue, fields.after);
+    return { issue };
   }, true)!;
-  const { issue, goal } = w.value;
-  const result: Added = { repo: repo.key, added: issue.id, title: issue.title, commit: w.commit, ...(goal ? { goal: `${repo.key}-${issues.refOf(goal)}` } : {}), ...(t.maybeSame.length ? { maybeSame: t.maybeSame } : {}) };
-  return { result, item: issue, goal, follow: w.follow };
+  const { issue } = w.value;
+  const result: Added = { repo: repo.key, added: issue.id, title: issue.title, commit: w.commit, ...(t.maybeSame.length ? { maybeSame: t.maybeSame } : {}) };
+  return { result, item: issue, follow: w.follow };
 }
 
 /** The items of the repo's list that pass `status` and `label`. */
@@ -193,7 +130,7 @@ export function filterRows(doc: issues.Doc, o: { status?: string; label?: string
 }
 
 /** How many hidden check files an item has in the store. */
-export const hiddenCount = (repo: store.Place, id: number | string): number => Object.keys(store.readHidden(repo, id)).length;
+export const hiddenCount = (repo: store.Place, id: number | string): number => Object.keys(store.readHidden(repo, typeof id === "number" ? id : `${repo.key}-${id}`)).length;
 
 export function show(repo: store.Place, id: number | string): { item: issues.Issue; hidden: number } {
   const item = pick(repo, readIssues(repo), id);
@@ -215,7 +152,8 @@ export function note(repo: store.Place, id: number | string, text: string, answe
 
 /**
  * Chris's answer to an issue that asks him something, in one write: the decision note, and the Ask cleared. The issue is
- * left to the triage that follows a note. `fields.after` (the UI's option that waits for a goal) sets `after`.
+ * left to the triage that follows a note. `fields.after` (the UI's option that waits for an issue) sets `after`. On the
+ * part-dropped Ask, the plan option sets `plan` and the close option closes the issue.
  */
 export function decide(repo: store.Place, id: number | string, text: string, fields: Fields = {}) {
   checkFields(fields);
@@ -223,8 +161,14 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
   const w = write(repo, `todo: item ${id}: decided`, (doc) => {
     const i = pick(repo, doc, id);
     if (issues.status(i) !== "open" || !store.awaitsChris(i)) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
+    const ask = store.askOf(i);
     issues.note(i, text);
     store.clearAsk(i);
+    if (ask?.reason === "part-dropped") {
+      const planRest = ask.options.find((o) => o.label === store.PLAN_REST);
+      if (planRest && (text.includes(planRest.label) || text.includes(planRest.line))) i.fm.plan = "true";
+      else issues.setStatus(i, "done");
+    }
     if (fields.after !== undefined) setAfter(repo, doc, i, fields.after);
     return i;
   })!;
@@ -234,19 +178,30 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
 export function edit(repo: store.Place, id: number | string, fields: Fields) {
   checkFields(fields);
   const title = fields.title?.trim();
-  const { body, priority, labels, source, due, status, after } = fields;
+  const { request, spec, priority, labels, source, status, after } = fields;
   if (source !== undefined && !["chris", "worker", "deps", "memory"].includes(source)) refuse("--source takes chris, worker, deps, memory");
-  if (title === undefined && body === undefined && priority === undefined && labels === undefined && source === undefined && due === undefined && status === undefined && after === undefined) refuse("give --title, --body, --priority, --labels, --due (or --status)");
+  if (title === undefined && request === undefined && spec === undefined && priority === undefined && labels === undefined && source === undefined && status === undefined && after === undefined) refuse("give --title, --request, --spec, --priority, --labels, --after (or --status)");
   if (title === "") refuse("the title cannot be empty");
+  const kept = after?.filter((r) => r !== "none");
   const w = write(repo, `todo: edit item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
-    issues.edit(i, { title, body, priority, areas: labels, due });
+    for (const r of kept ?? []) if (r === `${repo.key}-${issues.refOf(i)}`) refuse("an issue cannot wait for itself");
+    issues.edit(i, { title, request, spec, priority, areas: labels });
     if (source !== undefined) i.fm.source = source;
-    if (status !== undefined) issues.setStatus(i, status as issues.Status);
-    if (after !== undefined) setAfter(repo, doc, i, after);
+    if (status === "open") store.reopen(doc, i, mainHead(repo));
+    else if (status !== undefined) issues.setStatus(i, status as issues.Status);
+    if (kept !== undefined) setAfter(repo, doc, i, kept);
     return i;
   })!;
   return { result: { repo: repo.key, ...brief(w.value), commit: w.commit }, item: w.value, follow: w.follow };
+}
+
+/** The commit at origin/<main> of a registry repo, for `since`; null when it cannot be read. */
+function mainHead(repo: store.Place): string | null {
+  const r = loadRegistry()[repo.key];
+  if (!r) return null;
+  const head = git(r.path, "rev-parse", "--verify", "-q", `origin/${r.main}^{commit}`);
+  return head.ok ? head.out.trim() : null;
 }
 
 /** Close an item as done, or as dropped (which needs a reason); `text` goes on it as a note. */
@@ -255,7 +210,7 @@ export function close(repo: store.Place, id: number | string, how: "done" | "dro
   if (how === "drop" && !text) refuse("say why it is dropped");
   const w = write(repo, `todo: item ${id} ${how === "done" ? "done" : "dropped"}`, (doc) => {
     const i = pick(repo, doc, id);
-    issues.setStatus(i, how === "done" ? "done" : "dropped");
+    issues.setStatus(i, how === "done" ? "done" : "dropped", undefined, text || undefined);
     if (text) issues.note(i, text);
     if (how === "drop") store.askIfPartDropped(doc, i, text);
     return i;

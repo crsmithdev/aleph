@@ -18,8 +18,8 @@ export function dur(s) {
 const hours = (h) => `${h.toFixed(h < 10 ? 1 : 0)} h`;
 const pctText = (w) => `${Math.round((w || 0) * 100)}%`;
 const PHASES = [
-  ["intake", "Intake", "An issue is created, then its first goal is queued. Counted when the goal is queued."],
-  ["queue", "Queue", "An issue's first goal is queued, then its first agent run starts. This includes any wait for a slot or for another goal. Counted when the run starts."],
+  ["intake", "Intake", "An issue is created, then its first triage ends. Counted when the triage ends."],
+  ["queue", "Queue", "An issue is sorted, then its first agent run starts. This includes any wait for a slot or for another issue. Counted when the run starts."],
   ["implement", "Implement", "A job's first agent run starts, then its last agent run finishes with work to land. Counted when it finishes."],
   ["land", "Land", "A job finishes, then it lands. This includes any wait for a review or for Chris. Counted when it lands."],
   ["lead", "Lead time", "An issue is created, then its last land. The whole span, including what the other phases leave out. Counted when it lands."],
@@ -42,7 +42,7 @@ export function renderBar(d, { pinned = null } = {}) {
   const cs = d.classes ?? [];
   const f = hours;
   const total = cs.reduce((a, c) => a + c.hours, 0);
-  if (!(total > 0)) return `<div class="empty"><p class="hint">No agent run of a goal ended in this period.</p></div>`;
+  if (!(total > 0)) return `<div class="empty"><p class="hint">No agent run of an issue ended in this period.</p></div>`;
   const sum = (xs) => xs.reduce((a, c) => a + c.hours, 0);
   const good = sum(cs.slice(0, 2)), lost = sum(cs.slice(2));
   const share = (v) => Math.round((v / total) * 100);
@@ -59,7 +59,7 @@ export function renderBar(d, { pinned = null } = {}) {
   const side = (group, hrs) => (hrs > 0 ? `<div class="abar-side" style="flex:${hrs / total}">${group.filter((c) => c.hours > 0).map((c) => seg(c, hrs)).join("")}</div>` : "");
   const bar = `<div class="abar" role="group" aria-label="Agent time by what each run's work came to">${side(cs.slice(0, 2), good)}${side(cs.slice(2), lost)}</div>`;
   const nc = d.notCounted;
-  const not = nc && nc.runs ? `<p class="quiet notcounted">Not counted: ${nc.runs} runs of ${nc.goals} open goals, ${hours(nc.hours)}</p>` : "";
+  const not = nc && nc.runs ? `<p class="quiet notcounted">Not counted: ${nc.runs} runs of ${nc.goals} open issues, ${hours(nc.hours)}</p>` : "";
   return brackets + bar + not;
 }
 
@@ -82,10 +82,10 @@ export function renderSpeedTop(d) {
 const CLASS_NAME = { landed: "Landed", fixed: "Fixed", nothing: "Late", restarted: "Restarted", dropped: "Dropped" };
 const CLASS_TEXT = {
   landed: "The run whose work landed on main.",
-  fixed: "A run of the landing job before the run that landed: a fix round the goal needed.",
-  nothing: "A run that started after its goal had landed, or found the work already on main.",
-  restarted: "A run that a later start replaced: another job of the same goal landed, or the goal started 4 or more times inside an hour.",
-  dropped: "A run of a goal that was then dropped or closed without landing.",
+  fixed: "A run of the landing job before the run that landed: a fix round the issue needed.",
+  nothing: "A run that started after its issue had landed, or found the work already on main.",
+  restarted: "A run that a later start replaced: another job of the same issue landed, or the issue started 4 or more times inside an hour.",
+  dropped: "A run of an issue that was then dropped or closed without landing.",
 };
 
 /** The class shown under the bar: the pinned one if it has a value, else the largest of the classes after the first two; null when all are 0. */
@@ -122,17 +122,17 @@ export function renderEfficiency(d, { pinned = null } = {}) {
 
 const card = (k, v, note) => `<div class="med"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span><span class="quiet">${esc(note)}</span></div>`;
 
-/** The efficiency cards: reruns, first-pass rate, fix rounds, week per landed goal, lost time. */
+/** The efficiency cards: reruns, first-pass rate, fix rounds, week per landed issue, lost time. */
 export function renderEffCards(d) {
   const g = d.goals ?? { landed: 0, firstPass: null, fixRounds: null, week: null };
-  const none = g.landed ? null : "no goal landed";
+  const none = g.landed ? null : "no issue landed";
   const w = WINDOW_TEXT[d.window];
   const week = g.week ?? null, lost = d.lost ?? { hours: 0, share: 0 };
   return `<div class="meds eff">` +
     card("Reruns", String(d.flaky), `passed on rerun, ${w}`) +
-    card("First pass", g.firstPass === null ? "–" : pctText(g.firstPass), none ?? "landed goals with 0 fix rounds") +
-    card("Fix rounds", g.fixRounds === null ? "–" : String(g.fixRounds), none ?? "median per landed goal") +
-    card("Week per goal", week === null ? "–" : `${week.toFixed(1)}%`, none ?? (week === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median per landed goal")) +
+    card("First pass", g.firstPass === null ? "–" : pctText(g.firstPass), none ?? "landed issues with 0 fix rounds") +
+    card("Fix rounds", g.fixRounds === null ? "–" : String(g.fixRounds), none ?? "median per landed issue") +
+    card("Week per issue", week === null ? "–" : `${week.toFixed(1)}%`, none ?? (week === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median per landed issue")) +
     card("Lost time", hours(lost.hours), `${Math.round(lost.share * 100)}% of agent hours on runs whose work did not reach main`) + `</div>`;
 }
 

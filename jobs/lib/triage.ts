@@ -26,7 +26,8 @@ export const TITLE_MAX = 60;
 export const TRIAGE_MODEL = "claude-opus-5-5";
 
 export type Route =
-  | { route: "goal"; title: string; body: string; after: string[] }
+  | { route: "build"; spec: string; after: string[] }
+  | { route: "plan"; spec: string; after: string[] }
   | { route: "close"; reason: string }
   | { route: "done"; commit: string; reason: string }
   | { route: "ask"; ask: Ask }
@@ -34,7 +35,7 @@ export type Route =
   | { route: "flake"; note: string };
 
 /** The routes as recorded on the run and counted: `live` is applied as `ask`, `flake` as `close`. */
-export type Applied = "goal" | "close" | "done" | "ask";
+export type Applied = "build" | "plan" | "close" | "done" | "ask";
 export type Counts = Partial<Record<Applied, number>>;
 
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -53,13 +54,12 @@ export function parseRoute(output: string): Route | string {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no JSON";
   const field = (key: string) => text(raw[key]);
   switch (raw.route) {
-    case "goal": {
-      const body = field("body") && withoutRequest(field("body")!), title = field("title")?.replace(/\s+/g, " ") ?? null;
-      if (!body) return "goal without a body";
-      if (!title) return "goal without a title";
-      if (title.length > TITLE_MAX) return `goal title over ${TITLE_MAX} characters`;
+    case "build":
+    case "plan": {
+      const body = field("spec") && withoutRequest(field("spec")!);
+      if (!body) return `${raw.route} without a spec`;
       const after = (Array.isArray(raw.after) ? raw.after : typeof raw.after === "string" ? raw.after.split(",") : []).map((x: unknown) => String(x).trim()).filter((x: string) => REF.test(x));
-      return { route: "goal", title, body, after };
+      return raw.route === "build" ? { route: "build", spec: body, after } : { route: "plan", spec: body, after };
     }
     case "close": { const reason = field("reason"); return reason ? { route: "close", reason } : "close without a reason"; }
     case "ask": {
@@ -116,7 +116,7 @@ export function prompt(repo: Repo, item: issues.Issue): string {
 
 # Issue ${repo.key}-${item.id}: ${item.title}
 
-${item.body.trim() || "(no body)"}
+${item.request.trim() || "(no text)"}
 ${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}
 # Open issues of ${repo.key}
 
@@ -128,22 +128,23 @@ ${mainSince(repo, item)}
 
 Reply with one JSON object and nothing else, with one of these routes:
 
-- {"route": "goal", "title": "<short title>", "body": "<goal body>", "after": ["<optional <repo>-<n>.<k>>"]}: the issue is work a factory run can do alone. The issue keeps its own title and text (its "## Request"); the run files a goal under it. "title" is the goal's title: a grammatically correct phrase or sentence of at most ${TITLE_MAX} characters. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"). "body" is the goal's body, in the goal format, with these four sections and no "## Request":
+- {"route": "build", "spec": "<spec>", "after": ["<optional <repo>-<n> or <repo>-<n>.<k>>"]}: the issue is work one factory run can do alone. The issue keeps its own title and text; "spec" is written on it. "spec" is in this format, with these four sections:
   ## Goal (what and why, short)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)
   ## Time box (default: 45 minutes, one run)
 
-  The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`), or a new test that asserts the end state. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one. "after" names the goals or issues that must be done before this goal starts; leave it out when none.
+  The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`), or a new test that asserts the end state. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one. "after" names the issues that must be done before this one starts; leave it out when none.
+- {"route": "plan", "spec": "<spec>", "after": [...]}: the issue is too large for one run. The fields are as for "build". A planner splits it into parts, and if it cannot, the issue builds from "spec".
 - {"route": "close", "reason": "<why>"}: it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
-- {"route": "done", "commit": "<sha>", "reason": "<what the commit holds>"}: main already holds the work. Before a "goal" route, check this: read the commits listed above, and grep main for the names the issue gives (files, functions, test names). When a commit on main already makes the change, return "done" with that commit's sha and say what it holds; no worker runs. When you are unsure, return "goal" as usual.
+- {"route": "done", "commit": "<sha>", "reason": "<what the commit holds>"}: main already holds the work. Before a "build" or "plan" route, check this: read the commits listed above, and grep main for the names the issue gives (files, functions, test names). When a commit on main already makes the change, return "done" with that commit's sha and say what it holds; no worker runs. When you are unsure, return "build" as usual.
 - {"route": "ask", "question": "<one plain sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>", "after": "<optional <repo>-<n>: set only when choosing this option means waiting for that issue first>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first. Write the question and the options in plain words a user of the product reads: no file paths, function names, line numbers or code. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
 
-Duplicates: when the issue asks for the same work as an open issue listed above, return "close" with the reason "duplicate of <repo>-<n>", naming that issue. When it only waits for that open issue, return "goal" with "after" set to it.
+Duplicates: when the issue asks for the same work as an open issue listed above, return "close" with the reason "duplicate of <repo>-<n>", naming that issue. When it only waits for that open issue, return "build" with "after" set to it.
 
-Never ask Chris about how to build it: code structure, which module or helper, naming, test shape, whether to wait for another open issue, or whether a refactor is worth it. Decide those yourself: pick the best option and return "goal" (with "after" when the work must wait for an open issue), or "close" when it is not worth doing or is already done.
+Never ask Chris about how to build it: code structure, which module or helper, naming, test shape, whether to wait for another open issue, or whether a refactor is worth it. Decide those yourself: pick the best option and return "build" (with "after" when the work must wait for an open issue), or "close" when it is not worth doing or is already done.
 - {"route": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.
-- {"route": "flake", "note": "<test file> > <test name>: <what was seen>"}: the issue reports a test that fails or times out now and then, or under load, and asks for no change to the product. Name the test file, the test name and what was seen. Do not return "goal" for it: Chris picks from the tracker which flakes get a goal, and files those himself. An issue that asks to fix a named test's own bug, with a cause, is still a "goal".
+- {"route": "flake", "note": "<test file> > <test name>: <what was seen>"}: the issue reports a test that fails or times out now and then, or under load, and asks for no change to the product. Name the test file, the test name and what was seen. Do not return "build" for it: Chris picks from the tracker which flakes to fix, and files those himself. An issue that asks to fix a named test's own bug, with a cause, is still a "build".
 `;
 }
 
@@ -155,7 +156,7 @@ function makeRun(repo: Repo, item: issues.Issue): string {
     const folder = join(runsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-triage`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
     // `shown`: the tick's own line reports a triage, so the report has no line for the run.
-    writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name, repo: repo.key, on: `${repo.key}-${item.id}`, state: "running", phase: "triage", model: TRIAGE_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
+    writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name, repo: repo.key, on: `${repo.key}-${item.id}`, condition: "running", phase: "triage", model: TRIAGE_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
     writeFileSync(join(folder, "command.txt"), `triage ${repo.key}-${item.id}: ${item.title}\n`);
     return folder;
   }
@@ -191,21 +192,23 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
   }
   const applied: Applied = v.route === "live" ? "ask" : v.route === "flake" ? "close" : v.route;
   let standing = false;
-  const ok = sort(repo, id, `triage ${ref}: ${applied}`, (item, doc) => {
-    if (v.route === "goal") {
-      const goal = issues.addGoal(doc, item, { title: v.title, body: v.body, after: v.after, repo: repo.key });
-      issues.note(item, `triage: filed goal ${repo.key}-${issues.refOf(goal)}${v.after.length ? `, after ${v.after.join(", ")}` : ""}`);
+  const ok = sort(repo, id, `triage ${ref}: ${applied}`, (item) => {
+    if (v.route === "build" || v.route === "plan") {
+      item.spec = v.spec;
+      if (v.after.length) item.fm.after = v.after;
+      if (v.route === "plan") item.fm.plan = "true";
+      issues.note(item, `triage: ${v.route}${v.after.length ? `, after ${v.after.join(", ")}` : ""}`);
     } else if (v.route === "done") {
-      issues.setStatus(item, "done");
+      issues.setStatus(item, "done", undefined, v.reason);
       issues.note(item, `triage: already on main in ${v.commit}: ${v.reason}`);
     } else if (v.route === "flake") {
       issues.setStatus(item, "done");
       issues.note(item, `triage: a flake, noted on ${repo.key}-${tracker}`);
     } else if (v.route === "close") {
-      issues.setStatus(item, "done");
+      issues.setStatus(item, "done", undefined, v.reason);
       issues.note(item, `triage: closed: ${v.reason}`);
     } else if (v.route === "ask" && v.ask.recommended && always("question")?.action === "recommended") {
-      // The issue stays unsorted: the next triage reads this note and routes goal.
+      // The issue stays unsorted: the next triage reads this note and routes it.
       const o = v.ask.options.find((x) => x.label === v.ask.recommended) ?? v.ask.options[0]!;
       issues.note(item, `always: took the recommendation ${o.label}: ${o.line}${o.after ? ` (after ${o.after})` : ""}`);
       standing = true;
@@ -266,7 +269,7 @@ async function triageItem(repo: Repo, item: issues.Issue, triaged: Counts, skipp
   try {
     const folder = makeRun(repo, item);
     // A triage that gives no verdict is still done: it is not a job to land or drop, and the item is unchanged.
-    const end = (reason: string, route?: Applied) => updateRun(folder, { state: "done", reason, ...(route ? { route } : {}), phase: undefined, ended: new Date().toISOString() });
+    const end = (reason: string, route?: Applied) => updateRun(folder, { condition: "done", reason, ...(route ? { route } : {}), phase: undefined, ended: new Date().toISOString() });
     try {
       const v = parseRoute(await ask(repo, item, folder));
       if (typeof v === "string") {
@@ -310,13 +313,13 @@ async function triageItem(repo: Repo, item: issues.Issue, triaged: Counts, skipp
  */
 async function endLost(): Promise<void> {
   for (const { folder, run } of allRuns()) {
-    if (run.kind !== "triage" || run.state !== "running" || !run.repo || onOf(run) === undefined) continue;
+    if (run.kind !== "triage" || run.condition !== "running" || !run.repo || onOf(run) === undefined) continue;
     const release = await lock(`triage-${run.repo}-${onOf(run)}`, 0);
     if (!release) continue;
     try {
       // Read again under the lock: the run may have ended since the list was read.
-      if (readRun(folder)?.state !== "running") continue;
-      updateRun(folder, { state: "done", phase: undefined, reason: "failed: its process ended before a verdict", ended: new Date().toISOString() });
+      if (readRun(folder)?.condition !== "running") continue;
+      updateRun(folder, { condition: "done", phase: undefined, reason: "failed: its process ended before a verdict", ended: new Date().toISOString() });
     } finally {
       release();
     }
@@ -328,8 +331,9 @@ export async function triageIssue(repo: Repo, id: number, _done: (ref: string) =
   const triaged: Counts = {};
   const skipped: string[] = [];
   await endLost();
-  const item = reader().item(repo.key, id);
-  if (!item || issues.status(item) !== "open" || isSorted(item)) return { triaged, skipped };
+  const doc = reader().list(repo.key);
+  const item = doc ? issues.find(doc, id) : undefined;
+  if (!doc || !item || issues.status(item) !== "open" || isSorted(doc, item)) return { triaged, skipped };
   const blocked = gates({ only: ["live", "day"] });
   if (blocked) { skipped.push(`triage: ${blocked.why}`); return { triaged, skipped }; }
   await triageItem(repo, item, triaged, skipped);
@@ -337,7 +341,7 @@ export async function triageIssue(repo: Repo, id: number, _done: (ref: string) =
 }
 
 /**
- * Triage the open issues that are not goals, oldest first, at most
+ * Triage the open issues with no spec, oldest first, at most
  * `ALEPH_TRIAGE_CAP`, while the live and day gates allow.
  */
 export async function triageOpen(repos: Repo[], _done: (ref: string) => boolean): Promise<{ triaged: Counts; skipped: string[] }> {
@@ -347,8 +351,9 @@ export async function triageOpen(repos: Repo[], _done: (ref: string) => boolean)
   const queue: { repo: Repo; item: issues.Issue }[] = [];
   const lists = reader();
   for (const repo of repos) {
-    for (const item of lists.list(repo.key)?.items ?? []) {
-      if (issues.status(item) !== "open" || isSorted(item)) continue;
+    const doc = lists.list(repo.key);
+    for (const item of doc?.items ?? []) {
+      if (issues.status(item) !== "open" || isSorted(doc!, item)) continue;
       queue.push({ repo, item });
     }
   }

@@ -9,7 +9,7 @@ import { factoryDir } from "../../jobs/lib/factory.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { loadRegistry, onOf, type Entry, type Repo } from "../../jobs/lib/ledger.ts";
 import { allJobs, lastReal } from "../../jobs/lib/job.ts";
-import { areasOf, isGoal, readFetched } from "../../todo/lib/store.ts";
+import { areasOf, isBuildable, readFetched } from "../../todo/lib/store.ts";
 import { status, type Issue } from "../../todo/lib/todo.ts";
 import { vaultDir, type Note } from "../../vault/lib/vault.ts";
 import { vaultNotes } from "./memory.ts";
@@ -30,7 +30,7 @@ export interface Card {
 export interface Detail extends Card {
   commits: { hash: string; subject: string; date: string; item: string | null; commitUrl?: string }[];
   items: { id: number; title: string; labels: string[]; priority: string }[];
-  jobs: { name: string; state: string; started: string; ended?: string; item: number | string | null }[];
+  jobs: { name: string; condition: string; started: string; ended?: string; item: number | string | null }[];
   vault: { title: string; kind: string; updated: string }[];
 }
 
@@ -61,14 +61,15 @@ const itemOf = (j: Entry[]): number | string | null => {
 const jobsOf = (repo: Repo, jobs: Entry[][]): Entry[][] => jobs.filter((j) => j.at(-1)!.run.repo === repo.key);
 
 function card(repo: Repo, issues: Issue[], jobs: Entry[][], notes: number): Card {
-  const landed = jobs.map((j) => j.at(-1)!.run).filter((r) => r.state === "landed" && r.ended)
+  const doc = readFetched({ key: repo.key });
+  const landed = jobs.map((j) => j.at(-1)!.run).filter((r) => r.condition === "landed" && r.ended)
     .sort((a, b) => Date.parse(b.ended!) - Date.parse(a.ended!))[0];
   const started = jobs.map((j) => j[0].run.started).sort().at(-1);
   const n = git(repo.path, "rev-list", "--count", `HEAD..origin/${repo.main}`);
   const activity = [landed?.ended, started].filter((x): x is string => !!x).sort().at(-1) ?? null;
   return {
     key: repo.key, path: repo.path, factory: repo.sandbox,
-    openItems: issues.length, openGoals: issues.filter(isGoal).length,
+    openItems: issues.length, openGoals: issues.filter((i) => doc !== null && isBuildable(doc, i)).length,
     lastLanded: landed ? { name: landed.name, at: landed.ended! } : null,
     behind: n.ok ? Number(n.out) : null,
     baseline: baselineOf(repo), notes, activity,
@@ -78,12 +79,11 @@ function card(repo: Repo, issues: Issue[], jobs: Entry[][], notes: number): Card
 function commits(repo: Repo): Detail["commits"] {
   const base = githubBase(git(repo.path, "remote", "get-url", "origin").out);
   const trailer = (key: string) => `%(trailers:key=${key},valueonly,separator=%x2C )`;
-  const r = git(repo.path, "log", "-20", `--format=%H%x1f%s%x1f%aI%x1f${trailer("Issue")}%x1f${trailer("Goal")}%x1f${trailer("Item")}%x1e`, `origin/${repo.main}`);
+  const r = git(repo.path, "log", "-20", `--format=%H%x1f%s%x1f%aI%x1f${trailer("Issue")}%x1e`, `origin/${repo.main}`);
   if (!r.ok) return [];
   return r.out.split("\x1e").map((s) => s.trim()).filter(Boolean).map((rec) => {
-    const [hash, subject, date, issue, goal, legacy] = rec.split("\x1f");
-    // A land writes Issue and Goal; a commit that only has Issue: (history) still gives its item.
-    const item = [issue, goal, legacy].map((v) => v?.trim()).find((v) => !!v) || null;
+    const [hash, subject, date, issue] = rec.split("\x1f");
+    const item = issue?.trim() || null;
     return { hash, subject, date, item, ...(base ? { commitUrl: `${base}/commit/${hash}` } : {}) };
   });
 }
@@ -106,7 +106,7 @@ export async function project(key: string): Promise<Detail | null> {
     items: issues.map((i) => ({ id: i.id, title: i.title, labels: areasOf(i), priority: String(i.fm.priority ?? "medium") })),
     jobs: jobs.slice(-10).reverse().map((j) => {
       const r = lastReal(j).run;
-      return { name: r.name, state: r.state, started: j[0].run.started, ...(r.ended ? { ended: r.ended } : {}), item: itemOf(j) };
+      return { name: r.name, condition: r.condition, started: j[0].run.started, ...(r.ended ? { ended: r.ended } : {}), item: itemOf(j) };
     }),
     vault: notes.map((n) => ({ title: n.title, kind: String(n.fm.kind ?? ""), updated: String(n.fm.updated ?? "") }))
       .sort((a, b) => b.updated.localeCompare(a.updated) || a.title.localeCompare(b.title)),

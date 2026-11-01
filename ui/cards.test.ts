@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { issueCard, jobCard, landCard, triageCard } from "./views/cards.js";
 
 const now = "2026-10-28T12:00:00.000Z";
-const job = { name: "aleph-9", item: { title: "Do <it>" }, state: "running", phase: "worker", model: "opus", started: "2026-10-28T10:00:00.000Z", cost: 1.5, href: "#/jobs/aleph-9" };
-const land = { name: "aleph-8", item: { title: "Landed one" }, state: "landed", commit: "abcdef1234", started: "2026-10-28T09:00:00.000Z", ended: "2026-10-28T09:30:00.000Z", cost: 2, checks: [{ name: "tests", seconds: 71, ok: true }] };
-const triage = { name: "triage-aleph-3", item: { title: "Sort <it>" }, state: "done", outcome: "ask", started: "2026-10-28T11:00:00.000Z", ended: "2026-10-28T11:04:00.000Z", cost: 0.2 };
+const job = { name: "aleph-9", item: { title: "Do <it>" }, condition: "running", phase: "worker", model: "opus", started: "2026-10-28T10:00:00.000Z", cost: 1.5, href: "#/jobs/aleph-9" };
+const land = { name: "aleph-8", item: { title: "Landed one" }, condition: "landed", commit: "abcdef1234", started: "2026-10-28T09:00:00.000Z", ended: "2026-10-28T09:30:00.000Z", cost: 2, checks: [{ name: "tests", seconds: 71, ok: true }] };
+const triage = { name: "triage-aleph-3", item: { title: "Sort <it>" }, condition: "done", outcome: "ask", started: "2026-10-28T11:00:00.000Z", ended: "2026-10-28T11:04:00.000Z", cost: 0.2 };
 const issue = { id: "aleph-3", title: "An issue", status: "open", href: "#/issues/aleph/3", labels: ["goal", "ui"], notes: 2, created: "2026-10-20", updated: "2026-10-25" };
 
 // The compact card is a wrapper with at most two block children.
@@ -51,13 +51,13 @@ describe("cards", () => {
     expect(triageCard({ ...triage, outcome: "goal" }, "full", now)).toContain('<span class="badge done">To factory</span>');
     expect(triageCard({ ...triage, outcome: "close" }, "full", now)).toContain(">Closed<");
     expect(triageCard({ ...triage, outcome: "done" }, "full", now)).toContain(">Done<");
-    expect(triageCard({ ...triage, state: "running", outcome: undefined, ended: undefined }, "full", now)).toContain('<span class="badge run">Triaging</span>');
+    expect(triageCard({ ...triage, condition: "running", outcome: undefined, ended: undefined }, "full", now)).toContain('<span class="badge run">Triaging</span>');
     expect(triageCard({ ...triage, outcome: undefined, reason: "failed: x" }, "full", now)).toContain(">No verdict<");
   });
 
   test("titles are escaped; ids link when there is an href", () => {
     expect(jobCard(job, "compact", now)).toContain("Do &lt;it&gt;");
     expect(jobCard(job, "compact", now)).toContain('<a class="idl" href="#/jobs/aleph-9">');
-    expect(issueCard(issue, "full")).toContain("<dt>Labels</dt><dd>factory, ui</dd>");
+    expect(issueCard(issue, "full")).toContain("<dt>Labels</dt><dd>goal, ui</dd>");
   });
 });

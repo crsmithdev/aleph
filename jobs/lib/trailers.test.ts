@@ -17,9 +17,9 @@ beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "trailers-"));
   git("init", "-q", "-b", "main");
   commit("start");
-  commit("legacy\n\nItem: k-1\nJob: j1");
+  commit("legacy\n\nIssue: k-1\nJob: j1");
   commit("an issue\n\nIssue: k-2\nJob: j2");
-  commit("a goal\n\nIssue: k-3\nGoal: k-3.1\nJob: j3");
+  commit("a goal\n\nIssue: k-3.1\nJob: j3");
   commit("prose\n\nIssue: k-9 is named here\n\nbut not as a trailer.");
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -31,9 +31,9 @@ test("landedIndex reads Item: and Issue:; a commit that names a goal lands the g
 });
 
 test("k-3.1 and k-3.2 are separate entries; a reverted goal is in revertedIn and its sibling is not", () => {
-  commit("goal two\n\nIssue: k-4\nGoal: k-4.1\nJob: j4");
+  commit("goal two\n\nIssue: k-4.1\nJob: j4");
   const first = git("rev-parse", "HEAD");
-  commit("goal two b\n\nIssue: k-4\nGoal: k-4.2\nJob: j5");
+  commit("goal two b\n\nIssue: k-4.2\nJob: j5");
   commit(`Revert\n\nThis reverts commit ${first}.`);
   const index = landedIndex(dir, "main", "k");
   expect(index.get("4.2")?.length).toBe(1);

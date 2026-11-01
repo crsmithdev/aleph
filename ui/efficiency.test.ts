@@ -22,15 +22,15 @@ beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-eff-"));
   for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0" })) { saved[k] = process.env[k]; process.env[k] = v; }
   // g1 landed first try; g2 landed after two fix rounds; g3 landed first try; g4 is not landed
-  run("g1", { kind: "build", state: "passed", cost: 1, ...span(8, 600) });
-  run("g1", { kind: "land", state: "landed", ...span(9, 30) });
-  run("g2", { kind: "build", state: "stuck", failed: "tests", cost: 2, ...span(8, 600) });
-  run("g2", { kind: "build", state: "stuck", failed: "review", round: 1, cost: 2, ...span(9, 600) });
-  run("g2", { kind: "build", state: "passed", round: 2, cost: 2, ...span(10, 600) });
-  run("g2", { kind: "land", state: "landed", ...span(11, 30) });
-  run("g3", { kind: "build", state: "passed", cost: 3, ...span(8, 600) });
-  run("g3", { kind: "land", state: "landed", ...span(12, 30) });
-  run("g4", { kind: "build", state: "stuck", failed: "tests", cost: 9, ...span(8, 600) });
+  run("g1", { kind: "build", condition: "passed", cost: 1, ...span(8, 600) });
+  run("g1", { kind: "land", condition: "landed", ...span(9, 30) });
+  run("g2", { kind: "build", condition: "stuck", failed: "tests", cost: 2, ...span(8, 600) });
+  run("g2", { kind: "build", condition: "stuck", failed: "review", round: 1, cost: 2, ...span(9, 600) });
+  run("g2", { kind: "build", condition: "passed", round: 2, cost: 2, ...span(10, 600) });
+  run("g2", { kind: "land", condition: "landed", ...span(11, 30) });
+  run("g3", { kind: "build", condition: "passed", cost: 3, ...span(8, 600) });
+  run("g3", { kind: "land", condition: "landed", ...span(12, 30) });
+  run("g4", { kind: "build", condition: "stuck", failed: "tests", cost: 9, ...span(8, 600) });
 });
 afterAll(() => {
   for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
@@ -46,19 +46,19 @@ test("goal stats: first-pass share, median fix rounds", () => {
 test("the efficiency cards say reruns, first pass, fix rounds, week per goal and lost time", () => {
   const d = speed("day", now);
   const h = renderEfficiency(d);
-  for (const k of ["Reruns", "First pass", "Fix rounds", "Week per goal", "Lost time"]) expect(h).toContain(`<span class="k">${k}</span>`);
-  expect([...h.matchAll(/<span class="k">([^<]*)<\/span>/g)].map((m) => m[1])).toEqual(["Reruns", "First pass", "Fix rounds", "Week per goal", "Lost time"]);
+  for (const k of ["Reruns", "First pass", "Fix rounds", "Week per issue", "Lost time"]) expect(h).toContain(`<span class="k">${k}</span>`);
+  expect([...h.matchAll(/<span class="k">([^<]*)<\/span>/g)].map((m) => m[1])).toEqual(["Reruns", "First pass", "Fix rounds", "Week per issue", "Lost time"]);
   const cards = renderEffCards(d);
   for (const t of ["Cost per goal", "Wasted", "$"]) expect(cards).not.toContain(t);
   expect(h.match(/class="med"/g)?.length).toBe(5);
-  expect(h).toContain('<span class="v">67%</span><span class="quiet">landed goals with 0 fix rounds</span>');
-  expect(h).toContain('<span class="v">0</span><span class="quiet">median per landed goal</span>');
+  expect(h).toContain('<span class="v">67%</span><span class="quiet">landed issues with 0 fix rounds</span>');
+  expect(h).toContain('<span class="v">0</span><span class="quiet">median per landed issue</span>');
 });
 
-test("Week per goal and Lost time show their values and notes", () => {
+test("Week per issue and Lost time show their values and notes", () => {
   const base = { window: "week", flaky: 0, goals: { landed: 2, firstPass: 1, fixRounds: 0, week: 2.5 }, lost: { hours: 1.5, share: 0.25 } };
   const h = renderEffCards(base);
-  expect(h).toContain('<span class="v">2.5%</span><span class="quiet">of the weekly limit, median per landed goal</span>');
+  expect(h).toContain('<span class="v">2.5%</span><span class="quiet">of the weekly limit, median per landed issue</span>');
   expect(h).toContain("1.5 h");
   expect(h).toContain("25% of agent hours on runs whose work did not reach main");
   const n = renderEffCards({ ...base, goals: { ...base.goals, week: null } });
@@ -67,7 +67,7 @@ test("Week per goal and Lost time show their values and notes", () => {
 
 test("with no landed goal the goal cards show a dash", () => {
   const h = renderEffCards({ window: "week", flaky: 0, wasted: 0, goals: { landed: 0, firstPass: null, fixRounds: null, week: null }, lost: { hours: 0, share: 0 } });
-  expect(h.match(/<span class="v">–<\/span><span class="quiet">no goal landed<\/span>/g)?.length).toBe(3);
+  expect(h.match(/<span class="v">–<\/span><span class="quiet">no issue landed<\/span>/g)?.length).toBe(3);
 });
 
 const C = (key: string, name: string, hours: number, week: number, text = `${name} text.`) => ({ key, name, text, hours, week, runs: 5, goals: 2, causes: [{ name: "First run of the job", hours, runs: 5 }], top: [] });
@@ -91,8 +91,8 @@ test("the agent-time bar: sentence, brackets, two sides of segments, not counted
   expect(bar).toContain('title="Landed text.\nFirst run of the job: 60 h · 5 runs"');
   expect(h).not.toContain("undefined");
   expect(h).not.toContain('class="narrow"');
-  expect(h).toContain("Not counted: 11 runs of 4 open goals, 0.4 h");
-  expect(renderBar({ ...d, classes: classes([0, 0, 0, 0, 0], [0, 0, 0, 0, 0]) })).toContain("No agent run of a goal ended in this period.");
+  expect(h).toContain("Not counted: 11 runs of 4 open issues, 0.4 h");
+  expect(renderBar({ ...d, classes: classes([0, 0, 0, 0, 0], [0, 0, 0, 0, 0]) })).toContain("No agent run of an issue ended in this period.");
 });
 
 test("the flex values share out each side, and the sides share out the total, also under 1 h", () => {

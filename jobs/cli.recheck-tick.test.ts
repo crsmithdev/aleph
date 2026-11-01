@@ -15,7 +15,7 @@ describe("a factory run", () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     const id = (await aleph(["issue", "add", "fac", "needs a live look"])).json.added;
-    const first = (await aleph(["issue", "list", "fac", "--json"])).json.filter((i: any) => i.status === "open" && i.kind === "issue" && !i.ask && i.goals.length === 0)[0];
+    const first = (await aleph(["issue", "list", "fac", "--json"])).json.filter((i: any) => i.status === "open" && !i.ask)[0];
     const t = await aleph(["tick"], { ALEPH_TRIAGE_CAP: "1", ALEPH_TRIAGE_CMD: cmd });
     expect(t.json.triaged).toEqual({ ask: 1 });
     const stored = readFileSync(join(items, "fac", "backlog", "tasks", `fac-${first.id}.md`), "utf8");
@@ -50,11 +50,11 @@ describe("a factory run", () => {
     expect((await aleph(["tick"])).json).toMatchObject({ started: [], paused: true });
     expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("paused");
     const r = await fjob("fpaused", "commit fpaused.txt", {}, ["--land"]);
-    expect(state(r.json.run).state).toBe("passed");
+    expect(state(r.json.run).condition).toBe("passed");
     expect(state(r.json.run).next).toBeUndefined();
     expect(file(r.json.run, "next.log")).toContain("paused");
     const l = await aleph(["land", "fpaused"]);
-    expect(state(l.json.run).state).toBe("landed");
+    expect(state(l.json.run).condition).toBe("landed");
     expect((await aleph(["resume"])).json).toEqual({ paused: false });
     expect((await aleph(["tick"])).json.started).toEqual([`fac-${id}`]);
   }, 30_000);

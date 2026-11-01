@@ -1,6 +1,6 @@
 /**
  * stage(): the one place that says where an issue or a goal stands, from the
- * work-model spec (docs/specs/2026-10-30-work-model.md, "stage()"). The CLI,
+ * work-model spec (docs/specs/2026-10-31-work-model.md). The CLI,
  * Incoming, the lanes and `aleph status` read it.
  *
  * It takes plain data, so the same call runs from the store and the ledger in
@@ -14,22 +14,26 @@ import { isOpen, lastReal } from "./job.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 
-export type GoalStage = "dropped" | "done" | "awaiting" | "stuck" | "landing" | "building" | "planning" | "blocked" | "queued";
-export type IssueStage = "dropped" | "done" | "awaiting" | "stuck" | "building" | "planning" | "triaged" | "new";
-export interface Stage { id: string; stage: GoalStage | IssueStage; why: string; of?: { n: number; m: number } }
+export type StageName = "dropped" | "done" | "awaiting" | "stuck" | "landing" | "building" | "blocked" | "planning" | "queued" | "new";
+export interface Stage { id: string; stage: StageName; why: string; of?: { n: number; m: number } }
 
 /** What stage() needs of an Ask. */
 export interface AskFact { kind: "input" | "approval"; reason: string }
 
 /** What stage() needs of an item. */
 export interface Subject {
-  id: string; status: string; kind: "goal" | "issue"; after: string[]; goals: string[]; ask?: AskFact;
-  /** Triage has routed it, or it asks: `store.isSorted`. */
-  sorted: boolean;
+  id: string; status: string; after: string[]; parts: string[]; ask?: AskFact;
+  /** It has a spec. */
+  spec: boolean;
+  /** `plan` is set. */
+  plan: boolean;
+  tracker: boolean;
+  /** Only trailers after this commit count: `landedIndex` applies it. */
+  since?: string;
 }
 
 /** What stage() needs of one job of an item: its last real run. */
-export interface RunView { kind: Run["kind"]; state: State; open: boolean; ask?: AskFact }
+export interface RunView { kind: Run["kind"]; condition: State; open: boolean; ask?: AskFact }
 
 export interface Ctx {
   /** The ref's name on the page, for `why`. */
@@ -44,22 +48,23 @@ export interface Ctx {
   runs(ref: string): RunView[];
 }
 
-export function subjectOf(item: issues.Issue, key: string): Subject {
+export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Subject {
   const a = store.askOf(item);
   return {
-    id: `${key}-${issues.refOf(item)}`, status: issues.status(item), kind: store.kindOf(item),
-    after: store.afterOf(item), goals: store.goalsOf(item),
-    ...(a ? { ask: { kind: a.kind, reason: a.reason } } : {}), sorted: store.isSorted(item),
+    id: `${key}-${issues.refOf(item)}`, status: issues.status(item),
+    after: store.afterOf(item), parts: store.partsOf(doc, item).map((p) => `${key}-${issues.refOf(p)}`),
+    ...(a ? { ask: { kind: a.kind, reason: a.reason } } : {}),
+    spec: !!item.spec.trim(), plan: store.planSet(item), tracker: store.isTracker(item), ...(item.fm.since ? { since: String(item.fm.since) } : {}),
   };
 }
 
 export function runViewOf(job: Job): RunView {
   const run = lastReal(job).run;
-  const a = isAwaiting(run.state) ? runAsk(run) : undefined;
-  return { kind: run.kind, state: run.state, open: isOpen(job), ...(isAwaiting(run.state) ? { ask: a ? { kind: a.kind, reason: a.reason } : { kind: "input", reason: "question" } } : {}) };
+  const a = isAwaiting(run.condition) ? runAsk(run) : undefined;
+  return { kind: run.kind, condition: run.condition, open: isOpen(job), ...(isAwaiting(run.condition) ? { ask: a ? { kind: a.kind, reason: a.reason } : { kind: "input", reason: "question" } } : {}) };
 }
 
-/** The ref's part after `<repo>-`, as `landedIndex` and `reverted` key it: `"910"` for an issue, `"910.1"` for a goal. */
+/** The ref's part after `<repo>-`, as `landedIndex` and `reverted` key it: `"910"` for an issue, `"910.1"` for a part. */
 const partOf = (ref: string): string | undefined => /-(\d+(?:\.\d+)?)$/.exec(ref)?.[1];
 const SORTING: Run["kind"][] = ["triage", "plan", "facts"];
 
@@ -77,55 +82,38 @@ const asks = (a: AskFact) => `asks for your ${a.kind}: ${a.reason}`;
 
 export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new Set()): Stage {
   const id = item.id;
-  const out = (s: Stage["stage"], why: string, of?: Stage["of"]): Stage => ({ id, stage: s, why, ...(of ? { of } : {}) });
+  const out = (s: StageName, why: string, of?: Stage["of"]): Stage => ({ id, stage: s, why, ...(of ? { of } : {}) });
   if (item.status === "dropped") return out("dropped", "the store says dropped");
-  // An open item that asks is awaiting, even when a trailer commit on main names it (acceptance can reopen a landed goal).
+  // An open item that asks is awaiting, even when a trailer commit on main names it (acceptance can reopen a landed issue).
   if (item.status === "open" && item.ask) return out("awaiting", asks(item.ask));
   const done = doneWhy(item, ctx);
   if (done) return out("done", done);
   const live = ctx.runs(id).filter((r) => r.open && r.kind !== "facts");
   const work = live.filter((r) => !SORTING.includes(r.kind));
-  return item.kind === "goal" ? goalStage(item, ctx, out, live, work) : issueStage(item, ctx, out, live, work, new Set([...seen, id]));
-}
-
-type Out = (s: Stage["stage"], why: string, of?: Stage["of"]) => Stage;
-
-function goalStage(item: Subject, ctx: Ctx, out: Out, live: RunView[], work: RunView[]): Stage {
-  const last = work.at(-1);
-  if (item.ask) return out("awaiting", asks(item.ask));
-  if (last && isAwaiting(last.state)) return out("awaiting", asks(last.ask!));
-  if (last && (last.state === "stuck" || last.state === "failed")) return out("stuck", `its job is ${last.state}`);
-  if (last?.kind === "land") return out("landing", `its job is ${last.state}`);
-  if (last) return out("building", `its job is ${last.state}`);
-  // A job that landed leaves the goal landing until the store or main says done; a revert of its commit undoes that.
-  const part = partOf(item.id);
-  const lastJob = ctx.runs(item.id).at(-1);
-  if (lastJob?.state === "landed" && !(part !== undefined && ctx.reverted.has(part))) return out("landing", "its job landed and the goal is not closed");
-  if (live.some((r) => r.kind === "plan")) return out("planning", "a plan run is open");
-  const blockers = item.after.filter((ref) => {
-    const s = ctx.item(ref);
-    return s !== undefined && s.status === "open" && !doneWhy(s, ctx);
-  });
-  if (blockers.length) return out("blocked", `after ${blockers.join(", ")}`);
-  return out("queued", "no job has started it");
-}
-
-function issueStage(item: Subject, ctx: Ctx, out: Out, live: RunView[], work: RunView[], seen: Set<string>): Stage {
-  const goals = item.goals.map((ref) => ctx.item(ref)).filter((g): g is Subject => g !== undefined && !seen.has(g.id)).map((g) => stage(g, ctx, seen));
+  const parts = item.parts.map((ref) => ctx.item(ref)).filter((p): p is Subject => p !== undefined && !seen.has(p.id)).map((p) => stage(p, ctx, new Set([...seen, id])));
   if (item.ask) return out("awaiting", asks(item.ask));
   const mine = live.at(-1);
-  if (mine && isAwaiting(mine.state)) return out("awaiting", asks(mine.ask!));
-  const waiting = goals.find((g) => g.stage === "awaiting");
+  if (mine && isAwaiting(mine.condition)) return out("awaiting", asks(mine.ask!));
+  const waiting = parts.find((p) => p.stage === "awaiting");
   if (waiting) return out("awaiting", `${waiting.id} ${waiting.why}`);
-  if (mine && (mine.state === "stuck" || mine.state === "failed")) return out("stuck", `its job is ${mine.state}`);
-  const stuck = goals.find((g) => g.stage === "stuck");
+  if (mine && (mine.condition === "stuck" || mine.condition === "failed")) return out("stuck", `its job is ${mine.condition}`);
+  const stuck = parts.find((p) => p.stage === "stuck");
   if (stuck) return out("stuck", `${stuck.id}: ${stuck.why}`);
-  if (item.goals.length) {
-    const n = goals.filter((g) => g.stage === "done").length;
-    return out("building", `${n} of ${item.goals.length} goals done`, { n, m: item.goals.length });
+  if (item.parts.length) {
+    if (item.plan || live.some((r) => r.kind === "plan")) return out("planning", "planning the rest");
+    const n = parts.filter((p) => p.stage === "done").length;
+    return out("building", `${n} of ${item.parts.length} parts done`, { n, m: item.parts.length });
   }
-  if (work.length) return out("building", `its job is ${work.at(-1)!.state}`);
-  if (live.some((r) => r.kind === "plan")) return out("planning", "a plan run is open");
-  if (item.sorted) return out("triaged", "triage sorted it and no goal is filed");
-  return out("new", "no commit on main names it");
+  const last = work.at(-1);
+  if (last?.kind === "land") return out("landing", `its job is ${last.condition}`);
+  if (last) return out("building", `its job is ${last.condition}`);
+  const blockers = item.after.filter((ref) => {
+    const s = ctx.item(ref);
+    return s !== undefined && (s.status === "dropped" || (s.status === "open" && !doneWhy(s, ctx)));
+  });
+  if (blockers.length) return out("blocked", `after ${blockers.join(", ")}`);
+  if (item.plan || live.some((r) => r.kind === "plan")) return out("planning", "a plan run is needed or open");
+  if (item.tracker) return out("new", "the flake tracker: a note log");
+  if (item.spec) return out("queued", "no job has started it");
+  return out("new", live.some((r) => r.kind === "triage") ? "a triage run is open" : "triage has not sorted it");
 }

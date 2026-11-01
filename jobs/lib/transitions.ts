@@ -87,7 +87,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
     try {
       child = startUnit(["unit", folder], { unit: `aleph-${id}`, cwd, props: max, output, attach: true });
     } catch (e: any) {
-      updateRun(folder, { state: "failed", reason: e.message, ended: new Date().toISOString() });
+      updateRun(folder, { condition: "failed", reason: e.message, ended: new Date().toISOString() });
       refuse(e.message);
     }
     // Wait for `pid`, but not for a unit that cannot write it: one that has exited, or whose folder is gone.
@@ -159,7 +159,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     on ??= (open && issueOf(open));
     return await dispatch({
       kind: "build", job: first?.id, name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, ...(worktree ? { worktree } : {}),
-      state: "running", phase: "starting", session: crypto.randomUUID(), ...(a.model ? { model: a.model } : {}),
+      condition: "running", phase: "starting", session: crypto.randomUUID(), ...(a.model ? { model: a.model } : {}),
       ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(a.land ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
     }, `${repo.key}-${name}`, repo.path, o.command ?? jobCommand(a), o.output, (folder) => {
       if (!first) return writeFileSync(join(folder, "spec.md"), a.spec);
@@ -182,7 +182,7 @@ export async function startPlain(a: { name: string; argv: string[]; cwd: string 
     // A command inside a registered repo gets that repo's env file, as scripts/job gave Sidetone's.
     const home = Object.values(loadRegistry()).find((r) => r.env && (a.cwd === r.path || a.cwd.startsWith(r.path + "/")));
     if (home?.env) process.env.ALEPH_RUN_ENV = home.env;
-    return await dispatch({ kind: "plain", name, state: "running", phase: "command", told: false, started: new Date().toISOString() }, name, a.cwd,
+    return await dispatch({ kind: "plain", name, condition: "running", phase: "command", told: false, started: new Date().toISOString() }, name, a.cwd,
       o.command ?? ["run", name, "--", ...a.argv], o.output, (folder) => {
         writeFileSync(join(folder, "command.txt"), quote(a.argv) + "\n");
       });
@@ -210,11 +210,11 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
     const live = runs.find((e) => isLive(e.folder) || isStarting(e));
     if (live) refuse(`${name} is running as ${live.id}`);
     const agent = runs.filter((e) => isBuild(e.run.kind) || e.run.kind === "recheck").at(-1)!.run;
-    const needs = isAwaiting(agent.state) ? needsOf(askOf(agent)) : undefined;
-    const manual = needs === "manual" || (agent.state === "passed" && agent.say !== undefined);
+    const needs = isAwaiting(agent.condition) ? needsOf(askOf(agent)) : undefined;
+    const manual = needs === "manual" || (agent.condition === "passed" && agent.say !== undefined);
     const unchecked = manual && !a.checked;
     const held = needs === "held" || needs === "review";
-    if (agent.state !== "passed" && !manual && !held) refuse(`${name} is ${agent.state}${needs ? ` (${needs})` : ""}, not passed`);
+    if (agent.condition !== "passed" && !manual && !held) refuse(`${name} is ${agent.condition}${needs ? ` (${needs})` : ""}, not passed`);
     const repo = loadRegistry()[agent.repo!];
     const item = onOf(agent);
     if (item !== undefined) fetchOrigin(repo.path);
@@ -224,7 +224,7 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
     if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
     return await dispatch({
       kind: "land", job: agent.job, name, repo: agent.repo, branch: agent.branch, worktree: agent.worktree,
-      state: "running", phase: "land", told: false, shown: false, started: new Date().toISOString(),
+      condition: "running", phase: "land", told: false, shown: false, started: new Date().toISOString(),
       ...(unchecked ? { check: "open" as const, say: agent.say } : {}),
       ...(held ? { held: true, lander: a.lander ?? "Chris" } : {}),
       ...(agent.checkedBase ? { checkedBase: agent.checkedBase } : {}),
@@ -237,18 +237,18 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
 }
 
 /** `aleph checked`: close the manual check of a job that landed with it open, and its issue. */
-export function checked(name: string): { job: string; name: string; state: "landed"; check: "done" } {
+export function checked(name: string): { job: string; name: string; condition: "landed"; check: "done" } {
   checkName(name);
   const found = latestJob(name);
   const last = found ? lastReal(found) : undefined;
-  if (!last || last.run.state !== "landed" || last.run.check !== "open") refuse(`${name} has no open check`);
+  if (!last || last.run.condition !== "landed" || last.run.check !== "open") refuse(`${name} has no open check`);
   updateRun(last!.folder, { check: "done" });
   const repo = last!.run.repo ? loadRegistry()[last!.run.repo] : undefined;
   const item = last!.run.checkItem;
   const why = repo && item !== undefined ? store.close(repo, item, "checked by Chris") : null;
   if (why) console.error(`warn: issue ${item} not closed: ${why}`);
   dispatchDetached();
-  return { job: last!.run.job, name, state: "landed", check: "done" };
+  return { job: last!.run.job, name, condition: "landed", check: "done" };
 }
 
 /**
@@ -268,13 +268,13 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
     if (isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
     const r = last.run;
     if (!isBuild(r.kind) && r.kind !== "recheck") refuse(`${name}: the last run is a ${r.kind} run, not an agent run`);
-    if (r.state !== "stuck" && r.state !== "failed") refuse(`${name} is ${r.state}, not stuck or failed`);
+    if (r.condition !== "stuck" && r.condition !== "failed") refuse(`${name} is ${r.condition}, not stuck or failed`);
     const repo = loadRegistry()[r.repo ?? ""];
     if (!repo?.sandbox) refuse(`${name} is not a factory job`);
     if (!r.branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok) refuse(`${name} has no branch: drop it`);
     const on = issueOf(runs);
     s = await dispatch({
-      kind: "recheck", job: runs[0].id, name, repo: repo.key, branch: r.branch, state: "running", phase: "starting",
+      kind: "recheck", job: runs[0].id, name, repo: repo.key, branch: r.branch, condition: "running", phase: "starting",
       ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(runs.some((e) => e.run.land) ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
     }, `${repo.key}-${name}`, repo.path, o.command ?? ["recheck", name], o.output, () => {});
   } finally {
@@ -289,7 +289,7 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
  * `aleph drop`: stop the job's live runs, take its branch, and mark it dropped. With `quiet`,
  * the factory's own drop: it writes the issue note and the news itself, and its dispatch goes on.
  */
-export async function drop(name: string, a: { reason?: string; quiet?: boolean } = {}): Promise<{ job: string; name: string; state: "dropped"; reason: string }> {
+export async function drop(name: string, a: { reason?: string; quiet?: boolean } = {}): Promise<{ job: string; name: string; condition: "dropped"; reason: string }> {
   checkName(name);
   const reason = a.reason || "dropped by Chris";
   const runs = openJob(name) ?? refuse(`no open job named ${name}`);
@@ -316,13 +316,13 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean }
     for (const e of new Set([...live, last])) {
       if (!existsSync(join(e.folder, "exit"))) writeFileSync(join(e.folder, "exit"), "143");
       const noCommit = e.run.reason === "no commit" || e.run.noCommit ? { noCommit: true as const } : {};
-      updateRun(e.folder, { ...noCommit, state: "dropped", reason, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
+      updateRun(e.folder, { ...noCommit, condition: "dropped", reason, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     }
     const todo = issueOf(runs);
     const why = repo && todo !== undefined && !a.quiet ? store.note(repo, todo, `job ${name} dropped: ${reason}`) : null;
     if (why) console.error(`warn: issue ${todo} has no note: ${why}`);
     if (!a.quiet) dispatchDetached();
-    return { job: last.run.job, name, state: "dropped", reason };
+    return { job: last.run.job, name, condition: "dropped", reason };
   } finally {
     release!();
   }

@@ -46,7 +46,7 @@ function statLines(stat) {
 /** The Running lane's rows: planner, land and agent runs. The flow card counts only the live agent runs, as the cap does. */
 const runningCount = (s) => (s.runningIssues ?? []).length + (s.running ?? []).filter((j) => !j.issue).length;
 /** Land runs live now, not the landed ones the Lands list also shows. */
-const liveLands = (s) => s.delivered.filter((j) => j.state === "landing").length;
+const liveLands = (s) => s.delivered.filter((j) => j.condition === "landing").length;
 
 /** The weekly and 5-hour usage as text with the weekly reset time; "usage unknown" when the endpoint gave nothing. */
 export function renderUsage(s) {
@@ -80,7 +80,7 @@ export function renderLede(s) {
   const problems = []; // [tone, text, href]
   const asks = s.asks ?? [];
   const input = asks.filter((i) => i.kind === "input").length, approval = asks.filter((i) => i.kind === "approval").length;
-  const failed = s.stuck.filter((j) => j.state === "failed").length, stuck = s.stuck.length - failed;
+  const failed = s.stuck.filter((j) => j.condition === "failed").length, stuck = s.stuck.length - failed;
   if (input) problems.push(["warning", `${input} ${input === 1 ? "ask needs" : "asks need"} your input`, "#awaiting"]);
   if (approval) problems.push(["warning", `${approval} ${approval === 1 ? "ask needs" : "asks need"} your approval`, "#awaiting"]);
   if (stuck) problems.push(["error", `${stuck} ${stuck === 1 ? "job is" : "jobs are"} stuck`, "#jobs-stuck"]);
@@ -178,7 +178,7 @@ function queuedLane(s) {
   return lane("queued", "Queued", (s.queued ?? []).length, rows, "Nothing is queued.");
 }
 
-/** An issue in Running: its title, "n of m goals", and its goals nested, each with its stage and its job. */
+/** An issue in Running: its title, "n of m parts", and its parts nested, each with its stage and its job. */
 function runningIssue(i) {
   const goals = i.goals.map((g) =>
     `<li class="goal-row">${idLink(localId(g.id, repoOf(i.id)), g.href)} ${statusBadge(g.stage)} <span class="t">${esc(g.title)}</span>${g.job ? ` <a class="job" href="${esc(g.job.href)}">${esc(g.job.kind === "agent" || g.job.kind === "build" ? "build" : g.job.kind)}</a>` : ""}</li>`).join("");
@@ -272,10 +272,10 @@ const jobHref = (j) => `#/jobs/${encodeURIComponent(j.name)}`;
 const stuckRow = (s) => (j) => {
   const b = j.blocker;
   const blocker = b && localId(b.id, j.repo);
-  const why = b ? `Waits on ${blocker}: ${b.title}.` : `${j.state === "failed" ? "Failed" : "Stuck"}${j.reason ? ` with ${oneSentence(j.reason).replace(/\.$/, "")}` : ""}.`;
+  const why = b ? `Waits on ${blocker}: ${b.title}.` : `${j.condition === "failed" ? "Failed" : "Stuck"}${j.reason ? ` with ${oneSentence(j.reason).replace(/\.$/, "")}` : ""}.`;
   const first = b ? act("wait", j.name, `Wait for ${blocker}`, true).replace('data-label=', `data-on="${esc(b.id)}" data-label=`) : act("recheck", j.name, "Re-check");
   return `<article class="job-card small issue-row stuck" data-kind="stuck">${needHead("stuck", j.name, jobHref(j), j.item?.title || "", why, j.repo)}${agentLine(j)}` +
-    `<div class="actions choices">${choice(first, b ? `Makes the goal run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${choice(act("drop", j.name, "Drop"), "Discards the run's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
+    `<div class="actions choices">${choice(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${choice(act("drop", j.name, "Drop"), "Discards the run's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
     (b ? `<p class="quiet q">Waits on <a href="${esc(b.href)}">${esc(b.id)}</a>: ${esc(b.title)}</p>` : "") + fold(s, j) + `</article>`;
 };
 /** Text with `inline code` as <code>, everything else escaped. */

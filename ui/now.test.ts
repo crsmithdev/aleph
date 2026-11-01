@@ -27,14 +27,14 @@ import { landCard } from "./views/cards.js";
 // The land cards of `delivered`: the Status page no longer lists them, Done links to them, but the card still renders.
 const landList = (s: any) => `<div class="cards one">${s.delivered.map((j: any) => landCard(j, "full", s.now)).join("")}</div>`;
 
-const job = (o: object) => ({ repo: "aleph", item: null, state: "running", started: "2026-10-27T16:00:00Z", defaults: [], followups: [], ...o });
+const job = (o: object) => ({ repo: "aleph", item: null, condition: "running", started: "2026-10-27T16:00:00Z", defaults: [], followups: [], ...o });
 const state: any = {
   now: "2026-10-27T17:00:00Z",
   factory: { paused: false, dayCap: 12, runsToday: 5, costToday: 0.25, nextTick: "2026-10-27T17:12:00Z", probe: { at: "2026-10-27T14:35:00Z", ok: true, failed: [] }, health: ["judge is down"] },
-  needs: [job({ name: "aleph-27", state: "awaiting", needs: "held", reason: "Held path: hooks/lib/digest.ts", stat: " a.ts | 2 +-", defaults: ["Haiku tier per request"], item: { id: 27, title: "Digest head and tail" } })],
-  stuck: [job({ name: "aleph-30", state: "stuck", reason: "types failed" })],
+  needs: [job({ name: "aleph-27", condition: "awaiting", needs: "held", reason: "Held path: hooks/lib/digest.ts", stat: " a.ts | 2 +-", defaults: ["Haiku tier per request"], item: { id: 27, title: "Digest head and tail" } })],
+  stuck: [job({ name: "aleph-30", condition: "stuck", reason: "types failed" })],
   running: [job({ name: "aleph-36", phase: "worker", item: { id: 36, title: "Route tiers" } })],
-  delivered: [job({ name: "aleph-28", state: "landed", ended: "2026-10-27T16:30:00Z", commit: "50f301fabc", commitUrl: "https://github.com/o/r/commit/50f301fabc" })],
+  delivered: [job({ name: "aleph-28", condition: "landed", ended: "2026-10-27T16:30:00Z", commit: "50f301fabc", commitUrl: "https://github.com/o/r/commit/50f301fabc" })],
   queued: [],
 };
 
@@ -112,7 +112,7 @@ test("a usage summary with a null five_hour renders the weekly figure only", () 
 });
 
 test("the flow strip: Incoming, Queued, Running of cap, Done, then the Context card; no agent lines", () => {
-  const stuck = [job({ name: "aleph-30", state: "stuck", reason: "x" }), job({ name: "aleph-31", state: "failed", reason: "y" }), job({ name: "aleph-32", state: "failed", reason: "z" })];
+  const stuck = [job({ name: "aleph-30", condition: "stuck", reason: "x" }), job({ name: "aleph-31", condition: "failed", reason: "y" }), job({ name: "aleph-32", condition: "failed", reason: "z" })];
   const s = { ...att({ ...full, stuck }), usage: { now: { seven_day: 41.2, five_hour: 7, seven_day_resets_at: "2026-10-30T09:00:00Z" }, series: [] }, issues: [issue(1)], newIssues: 1, factory: { ...full.factory, liveCap: 3, liveRuns: 1, waitingCap: 5, firefighter: [] } };
   const h = r.renderFlow(s, { done: 4 });
   const stages = [...h.matchAll(/<a class="stage-main" href="#lane-(\w+)"><span class="k">([^<]+)<\/span><span class="v"[^>]*>(\d+)(?:<span class="of"> of (\d+)<\/span>)?<\/span><\/a>/g)].map((m) => m.slice(1));
@@ -174,7 +174,7 @@ const problem = (row: string) => row.match(/<p class="problem">([^<]*)<\/p>/)![1
 
 test("a held run, a stuck run, an asking issue and a red main are one row each, with the id, title, Problem and buttons", () => {
   const needsIssues = [{ ...issue(7), title: "Which tier?", question: "Haiku or Sonnet for the digest?" }];
-  const s = { ...full, needs: [{ ...state.needs[0], call: { verdict: "chris", reason: "touches hooks" } }], stuck: [job({ name: "aleph-30", state: "stuck", reason: "no commit", item: { id: 30, title: "Fix it" } })], needsIssues, issues: [], factory: { ...full.factory, health: ["health: aleph main is red at abc1234: tests"], hold: "Held: aleph-30 is stuck (no commit). No run starts or lands until it is cleared." } };
+  const s = { ...full, needs: [{ ...state.needs[0], call: { verdict: "chris", reason: "touches hooks" } }], stuck: [job({ name: "aleph-30", condition: "stuck", reason: "no commit", item: { id: 30, title: "Fix it" } })], needsIssues, issues: [], factory: { ...full.factory, health: ["health: aleph main is red at abc1234: tests"], hold: "Held: aleph-30 is stuck (no commit). No run starts or lands until it is cleared." } };
   const page = r.view.render(s);
   const top = section(page, "needs");
   const rs = rows(top);
@@ -225,7 +225,7 @@ test("with no untriaged issue the Incoming lane says so; the page still has it",
 });
 
 test("Issues holds the held runs before the stuck and failed ones, and none says whether an agent works", () => {
-  const s = { ...state, running: [], stuck: [job({ name: "aleph-30", state: "failed", agent: true }), job({ name: "aleph-31", state: "stuck" })], needs: [{ ...state.needs[0], agent: false }] };
+  const s = { ...state, running: [], stuck: [job({ name: "aleph-30", condition: "failed", agent: true }), job({ name: "aleph-31", condition: "stuck" })], needs: [{ ...state.needs[0], agent: false }] };
   const h = withAttn(s);
   expect(h).toContain(">Awaiting you<");
   expect(h.indexOf("aleph-27")).toBeLessThan(h.indexOf("aleph-30"));
@@ -240,7 +240,7 @@ test("Issues holds the held runs before the stuck and failed ones, and none says
 });
 
 test("text from the state is escaped", () => {
-  const bad = { ...state, needs: [job({ name: "x", state: "awaiting", needs: "held", item: { id: 1, title: "<script>alert(1)</script>" } })], queued: [{ repo: "a", id: 1, title: "<script>w</script>" }] };
+  const bad = { ...state, needs: [job({ name: "x", condition: "awaiting", needs: "held", item: { id: 1, title: "<script>alert(1)</script>" } })], queued: [{ repo: "a", id: 1, title: "<script>w</script>" }] };
   for (const h of [withAttn(bad), withAttn(bad)]) {
     expect(h).not.toContain("<script>");
     expect(h).toContain("&lt;script&gt;");
@@ -266,13 +266,13 @@ test("a land from another day shows its date", () => {
 const withFactory = (o: object) => ({ ...state, factory: { ...state.factory, health: [], ...o } });
 
 test("a stuck job shows its reason, the failed check and its seconds, and Re-check and Drop buttons", () => {
-  const h = withAttn({ ...state, needs: [], stuck: [job({ name: "aleph-30", state: "stuck", reason: "types failed", checks: [{ name: "lint", ok: true, seconds: 3 }, { name: "tsc", ok: false, seconds: 41 }] })] });
+  const h = withAttn({ ...state, needs: [], stuck: [job({ name: "aleph-30", condition: "stuck", reason: "types failed", checks: [{ name: "lint", ok: true, seconds: 3 }, { name: "tsc", ok: false, seconds: 41 }] })] });
   for (const t of ["types failed", "tsc", "41 s", 'data-act="recheck" data-name="aleph-30"', 'data-act="drop" data-name="aleph-30"']) expect(h).toContain(t);
   expect(h).not.toContain("data-cmd");
 });
 
 test("many awaiting jobs all render as rows, each with its details folded and its buttons", () => {
-  const needs = [1, 2, 3, 4].map((i) => job({ name: `aleph-${i}`, state: "awaiting", needs: "held", reason: "Held path", item: { id: i, title: `t${i}` } }));
+  const needs = [1, 2, 3, 4].map((i) => job({ name: `aleph-${i}`, condition: "awaiting", needs: "held", reason: "Held path", item: { id: i, title: `t${i}` } }));
   const h = withAttn({ ...state, needs });
   expect(h.match(/class="job-card small issue-row held-path"/g)?.length).toBe(4);
   expect(h.match(/<details class="more" data-keep="more:[^"]*">/g)?.length).toBe(4 + 1);
@@ -376,7 +376,7 @@ test("a build run is a worker and is past the time box after 40 minutes", () => 
 
 test("a 30-file stat shows 12 lines and +18 more files", () => {
   const stat = Array.from({ length: 30 }, (_, i) => ` f${i}.ts | 2 +-`).join("\n") + "\n 30 files changed, 30 insertions(+), 30 deletions(-)";
-  const h = withAttn({ ...state, needs: [job({ name: "x", state: "awaiting", needs: "held", stat })] });
+  const h = withAttn({ ...state, needs: [job({ name: "x", condition: "awaiting", needs: "held", stat })] });
   expect(h.match(/ f\d+\.ts \| 2/g)?.length).toBe(12);
   expect(h).toContain("+18 more files");
 });
@@ -406,7 +406,7 @@ test("the Pause or Resume button sits in the page head beside the time; no Contr
 
 test("trailers show on one line joined by ' · ', escaped, and only when there are some", () => {
   const trailers = [{ key: "Item", value: "aleph-27" }, { key: "Job", value: "<script>x</script>" }, { key: "Held-by", value: "Chris" }];
-  const del = { ...state, delivered: [job({ name: "aleph-28", state: "landed", trailers })] };
+  const del = { ...state, delivered: [job({ name: "aleph-28", condition: "landed", trailers })] };
   const h = landList(del);
   expect(h).toContain("aleph-27 · Job &lt;script&gt;x&lt;/script&gt; · Held-by Chris");
   expect(h).not.toContain("Item aleph-27");
@@ -417,7 +417,7 @@ test("trailers show on one line joined by ' · ', escaped, and only when there a
 
 test("the Job trailer is parsed into run kind and start, linked to the job page with the raw id in the title", () => {
   const id = "20261028-042822-aleph-aleph-240-agent";
-  const del = { ...state, delivered: [job({ name: "aleph-240", state: "landed", trailers: [{ key: "Item", value: "aleph-240" }, { key: "Job", value: id }] })] };
+  const del = { ...state, delivered: [job({ name: "aleph-240", condition: "landed", trailers: [{ key: "Item", value: "aleph-240" }, { key: "Job", value: id }] })] };
   const h = landList(del);
   expect(h).toContain(`<p class="trailers-line">aleph-240 \u00b7 <a href="#/jobs/aleph-240" title="${id}">agent run, Oct 28 04:28</a></p>`);
   expect(h.replace(/title="[^"]*"/, "")).not.toContain(id);
@@ -425,14 +425,14 @@ test("the Job trailer is parsed into run kind and start, linked to the job page 
 });
 
 test("a land card has no origin/main aside; a running land comes before landed ones", () => {
-  const lands = { ...state, delivered: [job({ name: "land-1", state: "running" }), ...state.delivered] };
+  const lands = { ...state, delivered: [job({ name: "land-1", condition: "running" }), ...state.delivered] };
   const h = landList(lands);
   expect(h).not.toContain("origin/main");
   expect(h.indexOf("land-1")).toBeLessThan(h.indexOf("aleph-28"));
   expect(h).toMatch(/class="job-card big[ "]/);
 });
 
-const two: any = { ...state, needs: [job({ name: "job-a", state: "awaiting", needs: "held", defaults: [] }), job({ name: "job-b", state: "awaiting", needs: "held", defaults: [] })] };
+const two: any = { ...state, needs: [job({ name: "job-a", condition: "awaiting", needs: "held", defaults: [] }), job({ name: "job-b", condition: "awaiting", needs: "held", defaults: [] })] };
 const panel = (h: string, n: string) => h.match(new RegExp(`<div class="diff-panel" data-diff-for="${n}"[^>]*>`))![0];
 
 test("an open diff survives a render; other panels stay hidden", () => {
@@ -528,7 +528,7 @@ test("Status times use the state's own now for the year check", () => {
   const run = (started: string) => withAttn({ ...state, now: "2027-01-05T12:00:00Z", running: [job({ name: "a", started, run: { kind: "land", started } })] });
   expect(run("2026-10-27T16:50:00Z")).toContain(">2026-10-27</span>");
   expect(run("2027-01-05T11:00:00Z")).toMatch(/>[A-Z][a-z]{2} \d\d \d\d:\d\d<\/span>/);
-  const held = withAttn({ ...state, now: "2027-01-05T12:00:00Z", needs: [job({ name: "aleph-27", state: "awaiting", needs: "held", started: "2026-10-27T16:50:00Z", trailers: [{ key: "Job", value: "20261028-042822-aleph-aleph-240-agent" }] })] });
+  const held = withAttn({ ...state, now: "2027-01-05T12:00:00Z", needs: [job({ name: "aleph-27", condition: "awaiting", needs: "held", started: "2026-10-27T16:50:00Z", trailers: [{ key: "Job", value: "20261028-042822-aleph-aleph-240-agent" }] })] });
   expect(held).toContain("Started</dt><dd>2026-10-27");
   expect(held).not.toMatch(/\d\d? ?[AP]M/i);
 });
@@ -536,10 +536,10 @@ test("Status times use the state's own now for the year check", () => {
 test("a planner run is shown like a triage: Planning while it runs, Done once it filed its verdict, planner as a running kind", async () => {
   // @ts-ignore plain JS, shared with the page
   const { triageCard } = await import("./views/cards.js");
-  const plan = { name: "plan-aleph-5", item: { title: "Big" }, state: "running", run: { kind: "plan", started: "2026-10-27T16:50:00Z" }, started: "2026-10-27T16:50:00Z" };
+  const plan = { name: "plan-aleph-5", item: { title: "Big" }, condition: "running", run: { kind: "plan", started: "2026-10-27T16:50:00Z" }, started: "2026-10-27T16:50:00Z" };
   expect(triageCard(plan, "full", state.now)).toContain('<span class="badge run">Planning</span>');
-  expect(triageCard({ ...plan, state: "done", outcome: "done" }, "full", state.now)).toContain('<span class="badge done">Done</span>');
-  expect(triageCard({ ...plan, state: "done", reason: "malformed plan: x" }, "compact", state.now)).toContain(">No plan<");
+  expect(triageCard({ ...plan, condition: "done", outcome: "done" }, "full", state.now)).toContain('<span class="badge done">Done</span>');
+  expect(triageCard({ ...plan, condition: "done", reason: "malformed plan: x" }, "compact", state.now)).toContain(">No plan<");
   expect(r.renderJobs({ ...state, running: [job({ name: "plan-aleph-5", run: plan.run })] })).toContain('<span class="badge run">planner');
 });
 
@@ -625,8 +625,8 @@ test("approve and decline handlers", async () => {
     expect(stored()[0].state).toBe("approved");
     const items = readList({ key: "fac" })!.items;
     // The issue and its goal `.1`.
-    expect(items.map((i) => i.fm.id)).toEqual(["1", "1.1"]);
-    expect(items[0].fm).toMatchObject({ kind: "issue", source: "memory" });
+    expect(items.map((i) => i.fm.id)).toEqual(["1"]);
+    expect(items[0].fm).toMatchObject({ source: "memory" });
     const again = await call("POST /api/approve/:id", "approve/l-a", "l-a");
     expect(again.status).toBe(422);
     expect((await again.json()).code).toBe(1);
@@ -654,7 +654,7 @@ test("a held job card has no badge or agent line", () => {
 import { ASK_REASONS } from "../jobs/lib/always.ts";
 
 const sample = (reason: string) => {
-  const run = (needs: string, o: object = {}) => ({ needs: [job({ name: "aleph-27", state: "awaiting", needs, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], needsIssues: [] as any[], lessons: [] as any[] });
+  const run = (needs: string, o: object = {}) => ({ needs: [job({ name: "aleph-27", condition: "awaiting", needs, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], needsIssues: [] as any[], lessons: [] as any[] });
   const iss = (o: object) => ({ needs: [], needsIssues: [{ ...issue(7), title: "T", ...o }], lessons: [] as any[] });
   if (["held-path", "review", "manual"].includes(reason)) return run(reason, reason === "review" ? { call: { verdict: "chris", reason: "r" } } : {});
   if (reason === "question") return run("question", { question: "<agent-message>q</agent-message> Which?" });
@@ -726,8 +726,8 @@ test("Status has no Standing permissions section", () => {
 });
 
 const done = (n: number) => ({ id: `aleph-${n}`, title: `Done ${n}`, href: `#/issues/aleph/${n}`, finished: "2026-10-27T16:30:00Z",
-  jobs: [job({ name: `triage-aleph-${n}`, state: "done", outcome: "goal", run: { kind: "triage", started: "2026-10-27T10:00:00Z" } }),
-    job({ name: `aleph-${n}`, state: "landed", commit: "50f301fabc", commitUrl: "https://github.com/o/r/commit/50f301fabc", run: { kind: "land", started: "2026-10-27T15:00:00Z" } })] });
+  jobs: [job({ name: `triage-aleph-${n}`, condition: "done", outcome: "goal", run: { kind: "triage", started: "2026-10-27T10:00:00Z" } }),
+    job({ name: `aleph-${n}`, condition: "landed", commit: "50f301fabc", commitUrl: "https://github.com/o/r/commit/50f301fabc", run: { kind: "land", started: "2026-10-27T15:00:00Z" } })] });
 
 test("Done lists the issue as head with its triage, work and land jobs and commit as links", () => {
   const h = r.renderLanes({ ...state, done: [done(5), done(4)] }).match(/<section id="lane-done"[^]*?<\/section>/)![0];

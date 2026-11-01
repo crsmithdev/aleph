@@ -6,7 +6,7 @@ import { jobProjector, type Job } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
 
-export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan" | "facts" | "firefighter"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk }
+export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan" | "facts" | "firefighter"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk }
 export interface JobDetail extends Job {
   runs: RunInfo[]; result?: string; review?: string; stat?: string;
   checksLog?: string; stderr?: string; trace?: string;
@@ -24,7 +24,7 @@ function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
   const out: RunInfo[] = [];
   for (const e of runs) {
     const r = e.run;
-    const info: RunInfo = { id: e.id, kind: KIND[r.kind] ?? "worker", state: r.state, started: r.started };
+    const info: RunInfo = { id: e.id, kind: KIND[r.kind] ?? "worker", condition: r.condition, started: r.started };
     if (r.ended) info.ended = r.ended;
     if (r.cost !== undefined) info.cost = r.cost;
     if (r.model) info.model = r.model;
@@ -34,7 +34,7 @@ function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
     out.push(info);
     // The reviewer runs inside the worker's run folder and leaves review.md there.
     if ((isBuild(r.kind) || r.kind === "recheck") && hasFile(e, "review.md")) {
-      out.push({ id: `${e.id}-review`, kind: "review", state: r.state, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: "claude-opus-5-5" });
+      out.push({ id: `${e.id}-review`, kind: "review", condition: r.condition, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: "claude-opus-5-5" });
     }
   }
   return out;
@@ -80,7 +80,7 @@ export const routes: Routes = {
     const { toJob } = jobProjector();
     for (const runs of allJobs()) {
       const last = lastReal(runs).run;
-      if ((project && last.repo !== project) || (repo && last.repo !== repo) || (state && last.state !== state)) continue;
+      if ((project && last.repo !== project) || (repo && last.repo !== repo) || (state && last.condition !== state)) continue;
       const times = runs.flatMap((e) => [e.run.started, e.run.ended]).map((t) => Date.parse(t ?? "")).filter((t) => !Number.isNaN(t));
       const at = Math.max(...times);
       if (!(at >= since)) continue;

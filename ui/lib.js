@@ -18,8 +18,8 @@ export const clock12 = (iso) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? "" : `${d.getHours() % 12 || 12}:${pad(d.getMinutes())} ${d.getHours() < 12 ? "am" : "pm"}`;
 };
-/** A label as the page shows it: the factory's `goal` label reads "factory". */
-export const labelName = (l) => (l === "goal" ? "factory" : l);
+/** A label as the page shows it. */
+export const labelName = (l) => l;
 export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
 
 /** `≈1.4% wk` for a job's or session's estimated share of the weekly plan limit; "" without one. */

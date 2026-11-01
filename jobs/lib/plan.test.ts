@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, w
 import type { FSWatcher } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { labels as itemLabels, readList, writeList } from "../../todo/lib/store.ts";
+import { labels as itemLabels, readList, writeList, partsOf } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { dispatchGoals, planNow } from "./factory.ts";
 import { readRun, writeRun } from "./ledger.ts";
@@ -80,14 +80,13 @@ afterEach(() => {
 });
 
 const body = (marker: string, surface = "jobs/lib/a.ts") => `## Goal\nA big thing. PLAN:${marker}\n## Edit surface\n${surface}\n## Oracle\n\`bun test\`\n## Time box\n40 minutes`;
-/** Files an issue with its goal `.1`, as `aleph issue add --goal -` does; the issue's number. */
+/** Files an issue with a spec, as `aleph issue add --spec -` does; the issue's number. */
 const addGoal = (marker: string, surface?: string, title = "big"): number =>
   writeList({ key: "fac" }, "add a goal", (doc) => {
-    const issue = issues.add(doc, title, { labels: ["ui"], body: `## Request\n\n${body(marker, surface)}` });
-    issues.addGoal(doc, issue, { title, body: body(marker, surface) });
-    return issue.id;
+    return issues.add(doc, title, { labels: ["ui"], spec: body(marker, surface) }).id;
   }, true)!.value;
 const item = (id: number | string) => issues.find(readList({ key: "fac" })!, id)!;
+const partRefs = (id: number) => { const doc = readList({ key: "fac" })!; return partsOf(doc, issues.find(doc, id)!).map((p) => `fac-${issues.refOf(p)}`); };
 const planCalls = () => readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean);
 const planRuns = () => readdirSync(join(base, "jobs")).filter((d) => d.endsWith("-plan")).map((d) => readRun(join(base, "jobs", d))!);
 
@@ -127,7 +126,7 @@ async function dispatch(tier: Tier | null) {
 test("a goal rated sonnet with one top-level folder starts a worker and no planner run", async () => {
   const id = addGoal("three", "- jobs/lib/a.ts\n- jobs/lib/b.ts");
   const { starts } = await dispatch("sonnet");
-  expect(starts).toEqual([[`fac-${id}.1`, "sonnet"]]);
+  expect(starts).toEqual([[`fac-${id}`, "sonnet"]]);
   expect(planCalls()).toEqual([]);
   expect(itemLabels(item(id))).not.toContain("planned");
 });
@@ -137,19 +136,19 @@ test("a goal rated opus starts a planner run and no worker; the goals are filed 
   const { starts, out } = await dispatch("opus");
   expect(starts).toEqual([]);
   expect(planCalls()).toEqual([expect.stringContaining("--model claude-fable-5-1 --tools Read Grep Glob")]);
-  expect(planRuns()).toEqual([expect.objectContaining({ kind: "plan", name: `plan-fac-${id}`, on: `fac-${id}`, state: "done", reason: "planned" })]);
+  expect(planRuns()).toEqual([expect.objectContaining({ kind: "plan", name: `plan-fac-${id}`, on: `fac-${id}`, condition: "done", reason: "planned" })]);
   const refs = [1, 2, 3].map((k) => `fac-${id}.${k}`);
-  expect(out.planned).toEqual([`fac-${id}.1 into ${refs.join(",")}`]);
+  expect(out.planned).toEqual([`fac-${id} into ${refs.join(",")}`]);
   for (const k of [1, 2, 3]) {
-    expect(item(`${id}.${k}`).fm).toMatchObject({ kind: "goal", issue: `fac-${id}` });
-    expect(item(`${id}.${k}`).body).toContain("## Oracle");
-    expect(item(`${id}.${k}`).body).not.toContain("Part of");
+    expect(item(`${id}.${k}`).spec).toContain("## Oracle");
+    expect(item(`${id}.${k}`).spec).not.toContain("Part of");
   }
   expect(item(`${id}.1`).title).toBe("one");
   expect(item(`${id}.1`).fm.after).toEqual([]);
   expect(item(`${id}.2`).fm.after).toEqual([`fac-${id}.1`]);
   expect(item(`${id}.3`).fm.after).toEqual([`fac-${id}.1`, `fac-${id}.2`]);
-  expect(item(id).fm.goals).toEqual(refs);
+  expect(partRefs(id)).toEqual(refs);
+  expect(item(id).spec).toBe("");
   expect(itemLabels(item(id))).not.toContain("planned");
   expect(item(id).notes.at(-1)).toContain(`planner: split into fac-${id}.1 (one), fac-${id}.2 (two), fac-${id}.3 (three)`);
 });
@@ -158,7 +157,7 @@ test("an Edit surface in two top-level folders is large whatever the rating", as
   const id = addGoal("three", "jobs/lib/a.ts, `ui/views/now.js`");
   const { starts } = await dispatch("sonnet");
   expect(starts).toEqual([]);
-  expect(item(id).fm.goals).toHaveLength(3);
+  expect(partRefs(id)).toHaveLength(3);
 });
 
 test("an issue with goals is not dispatched, goals wait on their after, and the issue closes as done once all are done", async () => {
@@ -177,7 +176,7 @@ test("an issue with goals is not dispatched, goals wait on their after, and the 
   expect(starts).toEqual([]);
   expect(out.skipped).toContain(`fac-${id}: closed as done`);
   expect(issues.status(item(id))).toBe("done");
-  expect(item(id).notes.at(-1)).toEndWith(`its goals are all done: ${kids.map((k) => `fac-${k} (no commit)`).join(", ")}`);
+  expect(item(id).notes.at(-1)).toEndWith(`its parts are done: ${kids.map((k) => `fac-${k} (no commit)`).join(", ")}`);
 });
 
 for (const bad of ["one", "nooracle"]) {
@@ -186,11 +185,11 @@ for (const bad of ["one", "nooracle"]) {
     const { starts, then } = await dispatch("opus");
     expect(planCalls().length).toBe(2);
     expect(starts).toEqual([]);
-    expect(then).toEqual([[`fac-${id}.1`, "opus"]]);
+    expect(then).toEqual([[`fac-${id}`, "opus"]]);
     expect(planRuns().map((r) => r.reason)).toEqual([expect.stringMatching(/^malformed plan: /), expect.stringMatching(/^malformed plan: /)]);
     expect(item(id).notes.at(-1)).toContain("planner: no plan passed the check in 2 runs");
-    expect(item(id).fm.goals).toEqual([`fac-${id}.1`]);
-    expect(readList({ key: "fac" })!.items.length).toBe(2);
+    expect(partRefs(id)).toEqual([]);
+    expect(readList({ key: "fac" })!.items.length).toBe(1);
   });
 }
 
@@ -199,21 +198,21 @@ test("a bad reply then a good one plans the goal", async () => {
   const { starts } = await dispatch("opus");
   expect(planCalls().length).toBe(2);
   expect(starts).toEqual([]);
-  expect(item(id).fm.goals).toHaveLength(3);
+  expect(partRefs(id)).toHaveLength(3);
 });
 
 test("a planner run records the cost of its result event", async () => {
   const id = addGoal("costed");
   await dispatch("opus");
-  expect(item(id).fm.goals).toHaveLength(3);
+  expect(partRefs(id)).toHaveLength(3);
   expect(planRuns()[0]).toMatchObject({ kind: "plan", cost: 1.5 });
 });
 
 test("a goal that has had a run is not planned", async () => {
   const id = addGoal("three");
-  const folder = join(base, "jobs", `20261028-000000-fac-${id}.1-agent`);
+  const folder = join(base, "jobs", `20261028-000000-fac-${id}-agent`);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: "x", name: `fac-${id}.1`, repo: "fac", on: `fac-${id}.1`, state: "dropped", told: true, started: new Date().toISOString() });
+  writeRun(folder, { kind: "build", job: "x", name: `fac-${id}`, repo: "fac", on: `fac-${id}`, condition: "dropped", told: true, started: new Date().toISOString() });
   await dispatch("opus");
   expect(planCalls()).toEqual([]);
 });
@@ -239,26 +238,26 @@ test("a dispatch returns before a slow planner replies; the small goal starts, a
   try {
     const out = await dispatchGoals(async (_r, name) => { starts.push(name); return null; }, undefined, undefined, undefined,
       async (spec) => (spec.includes("PLAN:slow") ? "opus" : "sonnet"), (repo, id) => { plans.push(planNow(repo, id)); });
-    expect(starts).toEqual([`fac-${small}.1`]);
-    expect(out.planned).toEqual([`fac-${big}.1`]);
+    expect(starts).toEqual([`fac-${small}`]);
+    expect(out.planned).toEqual([`fac-${big}`]);
     // Waits for the fake planner to log its call while the plan runs; the test timeout is the only limit.
     await plannerLogsCall(plans);
-    expect(planRuns()).toEqual([expect.objectContaining({ kind: "plan", on: `fac-${big}`, state: "running" })]);
+    expect(planRuns()).toEqual([expect.objectContaining({ kind: "plan", on: `fac-${big}`, condition: "running" })]);
 
     // A second pass starts no second plan and no worker for the large goal.
     const again: string[] = [];
     const out2 = await dispatchGoals(async (_r, name) => { again.push(name); return null; }, undefined, undefined, undefined,
       async (spec) => (spec.includes("PLAN:slow") ? "opus" : "sonnet"), (repo, id) => { plans.push(planNow(repo, id)); });
-    expect(again).not.toContain(`fac-${big}.1`);
-    expect(out2.skipped).toContain(`fac-${big}.1: planning`);
+    expect(again).not.toContain(`fac-${big}`);
+    expect(out2.skipped).toContain(`fac-${big}: planning`);
     expect(plans.length).toBe(1);
     expect(planCalls().length).toBe(1);
 
     // The planner waits for this file, so the dispatch returned while it was still running, whatever the load.
     writeFileSync(join(base, "release"), "");
     await Promise.all(plans);
-    expect(item(big).fm.goals).toEqual([1, 2, 3].map((k) => `fac-${big}.${k}`));
-    expect(planRuns()).toEqual([expect.objectContaining({ state: "done", reason: "planned" })]);
+    expect(partRefs(big)).toEqual([1, 2, 3].map((k) => `fac-${big}.${k}`));
+    expect(planRuns()).toEqual([expect.objectContaining({ condition: "done", reason: "planned" })]);
   } finally {
     // Runs even when an assertion throws: release the planner and let every started plan finish before afterEach removes the folder.
     writeFileSync(join(base, "release"), "");
@@ -270,12 +269,12 @@ test("a plan job left running by a dead process is ended as failed, and the goal
   const id = addGoal("three");
   const folder = join(base, "jobs", `20261028-000000-plan-fac-${id}-plan`);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "plan", job: "x", name: `plan-fac-${id}`, repo: "fac", on: `fac-${id}`, state: "running", phase: "plan", told: true, started: new Date().toISOString() });
+  writeRun(folder, { kind: "plan", job: "x", name: `plan-fac-${id}`, repo: "fac", on: `fac-${id}`, condition: "running", phase: "plan", told: true, started: new Date().toISOString() });
   const { out } = await dispatch("opus");
-  expect(readRun(folder)).toEqual(expect.objectContaining({ state: "done", reason: "failed: its process ended before a reply" }));
+  expect(readRun(folder)).toEqual(expect.objectContaining({ condition: "done", reason: "failed: its process ended before a reply" }));
   expect(planCalls().length).toBe(1);
   expect(planRuns().filter((r) => r.reason === "planned").length).toBe(1);
-  expect(out.planned).toEqual([expect.stringContaining(`fac-${id}.1 into`)]);
+  expect(out.planned).toEqual([expect.stringContaining(`fac-${id} into`)]);
 });
 
 describe("the planner prompt's similar episodes", () => {
@@ -318,14 +317,14 @@ describe("the planner prompt's similar episodes", () => {
   });
 
   test("no episodes leaves the prompt as it was", () => {
-    const it = { id: 1, title: "t", body: "b", notes: ["n"] } as any;
+    const it = { id: 1, title: "t", fm: {}, request: "", spec: "b", notes: ["n"] } as any;
     expect(prompt({ key: "fac" } as any, it)).toBe(prompt({ key: "fac" } as any, it, []));
     expect(prompt({ key: "fac" } as any, it)).not.toContain("How similar goals went");
     expect(prompt({ key: "fac" } as any, it)).toContain("Notes:\nn\n\nSplit it into");
   });
 
   test("the prompt names bun run test for the full suite, not bun test", () => {
-    const p = prompt({ key: "fac" } as any, { id: 1, title: "t", body: "b", notes: [] } as any);
+    const p = prompt({ key: "fac" } as any, { id: 1, title: "t", fm: {}, request: "", spec: "b", notes: [] } as any);
     expect(p).toContain("bun run test");
     expect(p).toContain("There is no `aleph check` command");
     expect(p).not.toContain("such as `bun test`");
@@ -335,7 +334,7 @@ describe("the planner prompt's similar episodes", () => {
 test("a child title over 60 characters fails the check, and the prompt asks for a short one", () => {
   const long = child("x".repeat(61));
   expect(parsePlan(reply([child("one"), long]))).toBe("child 2's title is over 60 characters");
-  expect(prompt({ key: "fac" } as any, { id: 1, title: "t", body: "b", notes: [] } as any)).toContain("at most 60 characters");
+  expect(prompt({ key: "fac" } as any, { id: 1, title: "t", fm: {}, request: "", spec: "b", notes: [] } as any)).toContain("at most 60 characters");
 });
 
 const CLI = join(import.meta.dir, "..", "cli.ts");
@@ -347,8 +346,8 @@ async function cli(args: string[], stdin?: string) {
 const commitCount = () => Number(Bun.spawnSync(["git", "rev-list", "--count", "main"], { cwd: join(base, "items.git") }).stdout.toString().trim());
 const fileAt = (path: string) => Bun.spawnSync(["git", "show", `main:${path}`], { cwd: join(base, "items.git") }).stdout.toString();
 
-test("aleph plan on an issue filed with --goal - files goals .1 to .3 and the issue's goals in one commit (criterion 3)", async () => {
-  const added = await cli(["issue", "add", "fac", "t", "--goal", "-", "--labels", "ui"], body("three"));
+test("aleph plan on an issue filed with --spec - files parts .1 to .3 in one commit (criterion 3)", async () => {
+  const added = await cli(["issue", "add", "fac", "t", "--spec", "-", "--labels", "ui"], body("three"));
   expect(added.code).toBe(0);
   const n = JSON.parse(added.out).added as number;
   const before = commitCount();
@@ -359,11 +358,11 @@ test("aleph plan on an issue filed with --goal - files goals .1 to .3 and the is
   const tree = Bun.spawnSync(["git", "ls-tree", "-r", "--name-only", "main"], { cwd: join(base, "items.git") }).stdout.toString();
   for (const k of [1, 2, 3]) expect(tree).toContain(`fac-${n}.${k}.md`);
   const doc = readList({ key: "fac" })!;
-  for (const k of [1, 2, 3]) expect(issues.find(doc, `${n}.${k}`)!.fm).toMatchObject({ kind: "goal", issue: `fac-${n}` });
+  for (const k of [1, 2, 3]) expect(issues.find(doc, `${n}.${k}`)!.spec).toContain("## Oracle");
   expect(issues.find(doc, `${n}.3`)!.fm.after).toContain(`fac-${n}.1`);
-  expect(issues.find(doc, n)!.fm.goals).toEqual([`fac-${n}.1`, `fac-${n}.2`, `fac-${n}.3`]);
+  expect(partsOf(doc, issues.find(doc, n)!).map((p) => issues.refOf(p))).toEqual([`${n}.1`, `${n}.2`, `${n}.3`]);
   expect(fileAt(`fac/backlog/tasks/fac-${n}.md`)).toContain(`fac-${n}.3`);
-  expect(planRuns()).toEqual([expect.objectContaining({ kind: "plan", on: `fac-${n}`, state: "done", reason: "planned" })]);
+  expect(planRuns()).toEqual([expect.objectContaining({ kind: "plan", on: `fac-${n}`, condition: "done", reason: "planned" })]);
   const state = JSON.parse(readFileSync(join(base, "jobs", readdirSync(join(base, "jobs")).find((d) => d.endsWith("-plan"))!, "state.json"), "utf8"));
   expect(state).toMatchObject({ on: `fac-${n}`, kind: "plan" });
 });

@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { mkdirSync, renameSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { goalsOf, kindOf, readList, writeList } from "../todo/lib/store.ts";
+import { partsOf, readList, writeList } from "../todo/lib/store.ts";
 import { buildReviewFixture } from "./fixtures/review/build.ts";
-import { add, addGoal, refOf, type Issue } from "../todo/lib/todo.ts";
+import { add, addPart, refOf, type Issue } from "../todo/lib/todo.ts";
 import { state } from "./state.ts";
 import { loadRegistry } from "../jobs/lib/ledger.ts";
 import { spawn } from "node:child_process";
@@ -49,16 +49,16 @@ beforeAll(() => {
   }
   Object.assign(process.env, gitEnv);
   writeList({ key: "fac" }, "seed", (doc) => {
-    for (const t of ["needs item", "waiting goal", "stuck item", "running item", "landed item", "old item"]) { const item = add(doc, t); if (t === "waiting goal") item.fm.kind = "goal"; }
+    for (const t of ["needs item", "waiting goal", "stuck item", "running item", "landed item", "old item"]) add(doc, t, t === "waiting goal" ? { spec: "Do it." } : {});
     return true;
   }, true);
 
-  run("20261027-000001-a", { job: "fac-1", name: "fac-1", state: "awaiting", ask: HELD, on: "fac-1", stat: " held/x.ts | 2 +-", defaults: ["port? -> 3020"], shown: false, cost: 0.5 },
+  run("20261027-000001-a", { job: "fac-1", name: "fac-1", condition: "awaiting", ask: HELD, on: "fac-1", stat: " held/x.ts | 2 +-", defaults: ["port? -> 3020"], shown: false, cost: 0.5 },
     { "result.md": "done\nFOLLOWUP: tidy the logs\n" });
-  run("20261027-000002-a", { job: "fac-3", name: "fac-3", state: "stuck", reason: "a check failed", on: "fac-3" });
-  run("20261027-000003-a", { job: "fac-4", name: "fac-4", state: "running", on: "fac-4" });
-  run("20261027-000004-a", { job: "fac-5", name: "fac-5", state: "landed", on: "fac-5", commit: "abcdef1234567", ended: ago(2), started: ago(3) });
-  run("20261027-000005-a", { job: "fac-6", name: "fac-6", state: "landed", on: "fac-6", commit: "123456abcdef", ended: ago(30), started: ago(31) });
+  run("20261027-000002-a", { job: "fac-3", name: "fac-3", condition: "stuck", reason: "a check failed", on: "fac-3" });
+  run("20261027-000003-a", { job: "fac-4", name: "fac-4", condition: "running", on: "fac-4" });
+  run("20261027-000004-a", { job: "fac-5", name: "fac-5", condition: "landed", on: "fac-5", commit: "abcdef1234567", ended: ago(2), started: ago(3) });
+  run("20261027-000005-a", { job: "fac-6", name: "fac-6", condition: "landed", on: "fac-6", commit: "123456abcdef", ended: ago(30), started: ago(31) });
   writeFileSync(join(factory, "tick.log"), `${ago(30)} yesterday line\n${now.toISOString()} started none\n`);
 });
 afterAll(() => {
@@ -104,9 +104,9 @@ describe("state", () => {
   });
 
   test("velocity counts lands and done triage runs over 24 hours and 7 days; agent marks a job with a live run", () => {
-    run("20261027-000020-a", { kind: "triage", job: "fac-t1", name: "fac-t1", state: "done", started: ago(5), ended: ago(4) });
-    run("20261027-000021-a", { kind: "triage", job: "fac-t2", name: "fac-t2", state: "failed", started: ago(5), ended: ago(4) });
-    run("20261027-000022-a", { kind: "triage", job: "fac-t3", name: "fac-t3", state: "done", started: ago(49), ended: ago(48) });
+    run("20261027-000020-a", { kind: "triage", job: "fac-t1", name: "fac-t1", condition: "done", started: ago(5), ended: ago(4) });
+    run("20261027-000021-a", { kind: "triage", job: "fac-t2", name: "fac-t2", condition: "failed", started: ago(5), ended: ago(4) });
+    run("20261027-000022-a", { kind: "triage", job: "fac-t3", name: "fac-t3", condition: "done", started: ago(49), ended: ago(48) });
     const s = state(now);
     expect(s.velocity.triaged.day).toBe(1);
     expect(s.velocity.triaged.avg).toBeCloseTo(2 / 7);
@@ -114,15 +114,15 @@ describe("state", () => {
     expect(s.velocity.landed.avg).toBeCloseTo(2 / 7);
     // fac-4 runs on item 4; fac-1 and fac-3 have no live run.
     expect(runAsks(s)[0].agent).toBe(false);
-    run("20261027-000023-a", { job: "fac-1b", name: "fac-1b", state: "running", on: "fac-1" });
+    run("20261027-000023-a", { job: "fac-1b", name: "fac-1b", condition: "running", on: "fac-1" });
     expect(runAsks(state(now))[0].agent).toBe(true);
     for (const id of ["20261027-000020-a", "20261027-000021-a", "20261027-000022-a", "20261027-000023-a"]) rmSync(join(jobsDir, id), { recursive: true });
   });
 
   test("triage lists running runs first, then finished ones with their outcome, and keeps them out of the jobs lists; issues lists the new ones", () => {
-    run("20261027-000030-a", { kind: "triage", job: "fac-t1", name: "triage-fac-1", state: "done", reason: "close", on: "fac-1", started: ago(5), ended: ago(4) });
-    run("20261027-000031-a", { kind: "triage", job: "fac-t2", name: "triage-fac-2", state: "running", on: "fac-2", started: ago(0.1) });
-    run("20261027-000032-a", { kind: "triage", job: "fac-t3", name: "triage-fac-3", state: "done", reason: "malformed verdict: x", on: "fac-3", started: ago(7), ended: ago(6) });
+    run("20261027-000030-a", { kind: "triage", job: "fac-t1", name: "triage-fac-1", condition: "done", reason: "close", on: "fac-1", started: ago(5), ended: ago(4) });
+    run("20261027-000031-a", { kind: "triage", job: "fac-t2", name: "triage-fac-2", condition: "running", on: "fac-2", started: ago(0.1) });
+    run("20261027-000032-a", { kind: "triage", job: "fac-t3", name: "triage-fac-3", condition: "done", reason: "malformed verdict: x", on: "fac-3", started: ago(7), ended: ago(6) });
     const s = state(now);
     expect("triage" in s).toBe(false);
     expect(s.running.map((j) => j.name)).toEqual(["fac-4"]);
@@ -133,11 +133,11 @@ describe("state", () => {
 
   test("landing counts land runs in progress; New counts open unlabelled issues, not goals or labelled ones", () => {
     writeList({ key: "fac" }, "more", (doc) => {
-      add(doc, "labelled", { route: "triaged" });
+      add(doc, "labelled", { spec: "Do it." });
       add(doc, "bare");
       return true;
     }, true);
-    run("20261027-000009-a", { kind: "land", job: "fac-8", name: "fac-8", state: "running" });
+    run("20261027-000009-a", { kind: "land", job: "fac-8", name: "fac-8", condition: "running" });
     const s = state(now);
     expect(s.landing).toBe(1);
     // New is stage "new": the items with a job (fac-1, 3, 4), the goal and the triaged one are not.
@@ -148,7 +148,7 @@ describe("state", () => {
     const before = state(now);
     writeList({ key: "fac" }, "many", (doc) => {
       for (let i = 0; i < 12; i++) add(doc, `bulk ${i}`);
-      add(doc, "sorted", { route: "triaged" });
+      add(doc, "sorted", { spec: "Do it." });
       return true;
     }, true);
     const s = state(now);
@@ -166,7 +166,7 @@ describe("state", () => {
     try {
       for (const [id, kind, name] of ids) {
         const dir = join(jobsDir, id);
-        run(id, { kind, job: name, name, state: "running" });
+        run(id, { kind, job: name, name, condition: "running" });
         const child = spawn("bash", ["-c", "sleep 30; true", "_", dir], { stdio: "ignore" });
         kids.push(child);
         writeFileSync(join(dir, "pid"), String(child.pid));
@@ -182,8 +182,8 @@ describe("state", () => {
   });
 
   test("a running job's run is its last run; started stays the first run's", () => {
-    run("20261027-000010-a", { job: "fac-9", name: "fac-9", state: "done", started: ago(2) });
-    run("20261027-000011-a", { kind: "land", job: "fac-9", name: "fac-9", state: "running", started: ago(1) });
+    run("20261027-000010-a", { job: "fac-9", name: "fac-9", condition: "done", started: ago(2) });
+    run("20261027-000011-a", { kind: "land", job: "fac-9", name: "fac-9", condition: "running", started: ago(1) });
     const j = state(now).running.find((x) => x.name === "fac-9")!;
     expect(j.run).toEqual({ kind: "land", started: ago(1) });
     expect(j.started).toBe(ago(2));
@@ -211,30 +211,30 @@ describe("state", () => {
 
   test("trailers: a landed job's from its commit, an awaiting job's as the land will write them", () => {
     const repo = join(base, "repo");
-    sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "land\n\nItem: fac-1\nJob: fac-7");
+    sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "land\n\nIssue: fac-1\nJob: fac-7");
     const commit = sh(repo, "git", "rev-parse", "HEAD").trim();
-    run("20261027-000007-a", { job: "fac-7", name: "fac-7", state: "landed", on: "fac-1", commit, ended: ago(1), started: ago(2) });
+    run("20261027-000007-a", { job: "fac-7", name: "fac-7", condition: "landed", on: "fac-1", commit, ended: ago(1), started: ago(2) });
     const s = state(now);
-    expect(s.delivered.find((j) => j.name === "fac-7")!.trailers).toEqual([{ key: "Item", value: "fac-1" }, { key: "Job", value: "fac-7" }]);
+    expect(s.delivered.find((j) => j.name === "fac-7")!.trailers).toEqual([{ key: "Issue", value: "fac-1" }, { key: "Job", value: "fac-7" }]);
     expect(runAsks(s)[0].trailers).toEqual([{ key: "Issue", value: "fac-1" }, { key: "Job", value: "fac-1" }, { key: "Held-by", value: "Chris" }]);
   });
 
-  test("trailers: an awaiting run on a goal previews its issue, then the goal, then its job", () => {
+  test("trailers: an awaiting run on a part previews the part, then its job", () => {
     writeList({ key: "fac" }, "goal of fac-1", (doc) => {
-      addGoal(doc, doc.items.find((i) => i.id === 1)!, { title: "a goal", body: "" });
+      addPart(doc, doc.items.find((i) => i.id === 1)!, { title: "a goal", spec: "Do it." });
       return true;
     });
-    run("20261027-000040-a", { job: "fac-g1", name: "fac-g1", state: "awaiting", ask: { kind: "input", reason: "question", question: "q", options: [], why: [] }, on: "fac-1.1", ended: ago(1), started: ago(2) });
+    run("20261027-000040-a", { job: "fac-g1", name: "fac-g1", condition: "awaiting", ask: { kind: "input", reason: "question", question: "q", options: [], why: [] }, on: "fac-1.1", ended: ago(1), started: ago(2) });
     const j = state(now).asks.find((x) => x.id === "fac-g1")!;
-    expect(j.trailers).toEqual([{ key: "Issue", value: "fac-1" }, { key: "Goal", value: "fac-1.1" }, { key: "Job", value: "fac-g1" }]);
+    expect(j.trailers).toEqual([{ key: "Issue", value: "fac-1.1" }, { key: "Job", value: "fac-g1" }]);
   });
 
   test("delivered holds the 10 latest lands, newest first", () => {
-    for (let i = 0; i < 11; i++) run(`20261027-0001${String(i).padStart(2, "0")}-a`, { job: `fac-l${i}`, name: `fac-l${i}`, state: "landed", commit: "abcdef1234567", ended: ago(40 + i), started: ago(41 + i) });
+    for (let i = 0; i < 11; i++) run(`20261027-0001${String(i).padStart(2, "0")}-a`, { job: `fac-l${i}`, name: `fac-l${i}`, condition: "landed", commit: "abcdef1234567", ended: ago(40 + i), started: ago(41 + i) });
     const s = state(now);
     expect(s.delivered).toHaveLength(10);
     // The land in progress (fac-8) comes first, then the landed ones, newest first.
-    expect(s.delivered[0].state).not.toBe("landed");
+    expect(s.delivered[0].condition).not.toBe("landed");
     expect(s.delivered.slice(0, 4).map((j) => j.name)).toEqual(["fac-8", "fac-7", "fac-5", "fac-6"]);
     expect(s.delivered.map((j) => j.name)).not.toContain("fac-l10");
   });
@@ -244,13 +244,13 @@ describe("state", () => {
     for (let i = 0; i < 12; i++) {
       const id = `20261027-0002${String(i).padStart(2, "0")}-a`;
       ids.push(id);
-      run(id, { job: `fac-p${i}`, name: `fac-p${i}`, state: "landed", commit: `c0ffee${String(i).padStart(2, "0")}`, ended: ago(0.1 + i / 100), started: ago(1) });
+      run(id, { job: `fac-p${i}`, name: `fac-p${i}`, condition: "landed", commit: `c0ffee${String(i).padStart(2, "0")}`, ended: ago(0.1 + i / 100), started: ago(1) });
     }
     const spy = spyOn(Bun, "spawnSync");
     try {
       const s = state(now);
       const logged = spy.mock.calls.map((c) => (c[0] as string[]).join(" ")).filter((c) => c.includes(" log "));
-      const landRuns = s.delivered.filter((j) => j.state !== "landed").length;
+      const landRuns = s.delivered.filter((j) => j.condition !== "landed").length;
       const shown = 10 - landRuns;
       for (let i = 0; i < 12; i++) {
         const asked = logged.some((c) => c.includes(`c0ffee${String(i).padStart(2, "0")}`));
@@ -267,13 +267,13 @@ describe("state", () => {
 
 describe("a land that found the job lock busy", () => {
   test("does not make the job stuck, in the UI or in the facts", () => {
-    run("20261027-000040-a", { job: "fac-7", name: "fac-7", state: "passed", on: "fac-2", started: ago(3) });
-    run("20261027-000041-a", { kind: "land", job: "fac-7", name: "fac-7", state: "failed", reason: "job lock busy", on: "fac-2", started: ago(2) });
+    run("20261027-000040-a", { job: "fac-7", name: "fac-7", condition: "passed", on: "fac-2", started: ago(3) });
+    run("20261027-000041-a", { kind: "land", job: "fac-7", name: "fac-7", condition: "failed", reason: "job lock busy", on: "fac-2", started: ago(2) });
     const s = state(now);
     expect(s.stuck.map((j) => j.name)).not.toContain("fac-7");
     expect(s.stuck.map((j) => j.name)).toEqual(["fac-3"]);
     const card = s.running.find((j) => j.name === "fac-7")!;
-    expect(card.state).toBe("passed");
+    expect(card.condition).toBe("passed");
     expect(card.reason).not.toBe("job lock busy");
     expect(card.run.kind).toBe("build");
     expect(facts(loadRegistry().fac).open[2]).toBe("passed");
@@ -285,8 +285,8 @@ describe("a planner run", () => {
   test("counts as running and takes its goal out of waiting; triage does not; a done one does neither", () => {
     const landing = state(now).landing;
     const ids = ["20261027-000050-a", "20261027-000051-a"];
-    run(ids[0], { kind: "plan", job: "plan-fac-2", name: "plan-fac-2", state: "running", on: "fac-2", started: ago(1) });
-    run(ids[1], { kind: "triage", job: "triage-fac-2", name: "triage-fac-2", state: "running", on: "fac-2", started: ago(1) });
+    run(ids[0], { kind: "plan", job: "plan-fac-2", name: "plan-fac-2", condition: "running", on: "fac-2", started: ago(1) });
+    run(ids[1], { kind: "triage", job: "triage-fac-2", name: "triage-fac-2", condition: "running", on: "fac-2", started: ago(1) });
     let s = state(now);
     expect(s.running.map((j) => j.name)).toContain("plan-fac-2");
     expect(s.running.map((j) => j.name)).not.toContain("triage-fac-2");
@@ -294,7 +294,7 @@ describe("a planner run", () => {
     expect(runAsks(s).map((a) => a.id)).toEqual(["fac-1"]);
     expect(s.stuck.map((j) => j.name)).toEqual(["fac-3"]);
     expect(s.landing).toBe(landing);
-    run(ids[0], { kind: "plan", job: "plan-fac-2", name: "plan-fac-2", state: "done", on: "fac-2", started: ago(1), ended: ago(0.5) });
+    run(ids[0], { kind: "plan", job: "plan-fac-2", name: "plan-fac-2", condition: "done", on: "fac-2", started: ago(1), ended: ago(0.5) });
     s = state(now);
     expect(s.running.map((j) => j.name)).not.toContain("plan-fac-2");
     expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", stage: "queued", why: "Held: fac-3 is stuck (a check failed). No run starts or lands until it is cleared.", kind: "gate" }]);
@@ -307,7 +307,7 @@ describe("the review fixture", () => {
   /** The list that holds an item of this stage; none for the stages the lists do not name. */
   const LIST_OF: Record<string, (typeof LISTS)[number][]> = {
     new: ["issues"], queued: ["queued"], building: ["running"], landing: ["running"], awaiting: ["asks"], stuck: ["stuck"], done: ["done"],
-    blocked: ["queued"], triaged: [], planning: [], dropped: [],
+    blocked: ["queued"], planning: [], dropped: [],
   };
 
   test("every item's Incoming status is its `aleph status` stage, and its list is the list of that stage", () => {
@@ -338,7 +338,7 @@ describe("the review fixture", () => {
           const want = LIST_OF[stage];
           if (want.length === 0) expect(lists.filter((l) => l !== "running"), id).toEqual([]);
           // An issue that stands on its goals has no run of its own: its goals' runs are in the lists.
-          else if (!(kindOf(item) === "issue" && goalsOf(item).length)) expect(lists.some((l) => want.includes(l)), `${id} ${stage} in ${lists}`).toBe(true);
+          else if (!(item.sub === undefined && partsOf(doc, item).length)) expect(lists.some((l) => want.includes(l)), `${id} ${stage} in ${lists}`).toBe(true);
           for (const l of lists) if (l !== "running" && l !== "asks" && l !== "stuck") expect(want, `${id} ${stage} is in ${l}`).toContain(l);
         }
       }
@@ -356,7 +356,7 @@ describe("waiting entries", () => {
   test("carry why, kind, and the links the Queued lane shows", async () => {
     writeList({ key: "fac" }, "waiting fixtures", (doc) => {
       const goal = add(doc, "waits goal");
-      goal.fm.kind = "goal";
+
       goal.fm.after = ["fac-2"];
       return true;
     }, true);
@@ -372,7 +372,7 @@ describe("waiting entries", () => {
     expect(by(s, "waiting goal").why).toBe("Starts at the next dispatch");
 
     const dir = join(jobsDir, "20261027-000060-a");
-    run("20261027-000060-a", { job: "live-x", name: "live-x", state: "running" });
+    run("20261027-000060-a", { job: "live-x", name: "live-x", condition: "running" });
     const child = spawn("bash", ["-c", "sleep 30; true", "_", dir], { stdio: "ignore" });
     writeFileSync(join(dir, "pid"), String(child.pid));
     const keep = process.env.ALEPH_LIVE_CAP;
@@ -396,7 +396,7 @@ describe("a goal that acceptance failed twice", () => {
     let goalId = 0;
     writeList({ key: "fac" }, "goal that failed acceptance twice", (doc) => {
       const goal = add(doc, "acceptance goal");
-      goal.fm.kind = "goal";
+
       goal.fm.ask = "input";
       goal.fm.reason = "acceptance-failed";
       goal.notes.push("- Oracle: `bun test ui/state.test.ts` fails on the acceptance check.");
@@ -405,7 +405,7 @@ describe("a goal that acceptance failed twice", () => {
     });
     try {
       // The trailer commit on main names the goal; origin/main points at it, as a land would leave it.
-      sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `Reopen the goal\n\nItem: fac-${goalId}`);
+      sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `Reopen the goal\n\nIssue: fac-${goalId}`);
       sh(repo, "git", "update-ref", "refs/remotes/origin/main", sh(repo, "git", "rev-parse", "HEAD"));
       const s = state(now);
       expect(s.asks.some((a) => a.id === `fac-${goalId}` && a.reason === "acceptance-failed")).toBe(true);

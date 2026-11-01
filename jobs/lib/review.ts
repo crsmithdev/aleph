@@ -213,7 +213,7 @@ async function review(folder: string): Promise<void> {
  */
 export function startReview(folder: string): boolean {
   const run = readRun(folder);
-  if (!run || existsSync(join(folder, CALL_FILE)) || !isAwaiting(run.state) || !["held-path", "review"].includes(askOf(run)?.reason ?? "")) return false;
+  if (!run || existsSync(join(folder, CALL_FILE)) || !isAwaiting(run.condition) || !["held-path", "review"].includes(askOf(run)?.reason ?? "")) return false;
   writeFileSync(join(folder, CALL_FILE), "PENDING\n");
   try {
     // Its own transient unit: the run's unit stops its whole cgroup when the run ends.

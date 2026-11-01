@@ -12,7 +12,7 @@ afterEach(() => { delete process.env.ALEPH_JOBS_DIR; rmSync(base, { recursive: t
 function run(id: string, extra: Partial<Run>, files: string[] = []): void {
   const folder = join(base, id);
   mkdirSync(folder);
-  writeRun(folder, { kind: "build", job: id, name: id, repo: "demo", state: "running", told: true, started: "2026-10-30T00:00:00Z", made: Date.now(), ...extra } as Run);
+  writeRun(folder, { kind: "build", job: id, name: id, repo: "demo", condition: "running", told: true, started: "2026-10-30T00:00:00Z", made: Date.now(), ...extra } as Run);
   for (const f of files) writeFileSync(join(folder, f), "999999");
 }
 
@@ -23,7 +23,7 @@ test("a started run with no pid yet counts against the live cap", () => {
 
 test("a run with an exit, a run that ended, and a long-silent start do not count", () => {
   run("b", {}, ["exit"]);
-  run("c", { state: "failed" });
+  run("c", { condition: "failed" });
   run("d", { made: Date.now() - STARTING_MS - 1000 });
   expect(liveRuns()).toBe(0);
 });

@@ -204,8 +204,8 @@ test("badge tones a state with the state-tone map", () => {
   expect(badge("<odd>")).toBe('<span class="badge quiet">&lt;odd&gt;</span>');
 });
 
-test("chips gives labels as chips, the goal label as factory, nothing for none", () => {
-  expect(chips(["ui", "goal"])).toBe('<span class="chips"><span class="chip">ui</span><span class="chip">factory</span></span>');
+test("chips gives labels as chips, nothing for none", () => {
+  expect(chips(["ui", "goal"])).toBe('<span class="chips"><span class="chip">ui</span><span class="chip">goal</span></span>');
   expect(chips([])).toBe("");
   expect(chips(undefined)).toBe("");
   expect(chips(["<b>"])).toContain("&lt;b&gt;");

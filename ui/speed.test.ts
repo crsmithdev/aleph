@@ -22,18 +22,18 @@ beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-speed-"));
   for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0" })) { saved[k] = process.env[k]; process.env[k] = v; }
   // today: agents of 600 s (passed, tests 36), 1200 s (dropped), 1800 s (stuck, model unset), a 5 h broken clock
-  run({ kind: "build", state: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 36 }, { name: "types", ok: true, seconds: 8 }], ...secs(0, 9, 600) });
-  run({ kind: "build", state: "dropped", model: "claude-opus-5-5", cost: 2, ...secs(0, 10, 1200) });
-  run({ kind: "build", state: "stuck", cost: 3, ...secs(0, 10, 1800) });
-  run({ kind: "build", state: "passed", cost: 9, ...secs(0, 1, 5 * 3600) });
-  run({ kind: "land", state: "landed", ...secs(0, 9, 40) });
-  run({ kind: "land", state: "landed", ...secs(0, 9, 46) });
-  run({ kind: "land", state: "failed", ...secs(0, 9, 100) });
-  run({ kind: "triage", state: "done", ...secs(0, 11, 20) });
-  run({ kind: "build", state: "running", started: at(0, 14) });
+  run({ kind: "build", condition: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 36 }, { name: "types", ok: true, seconds: 8 }], ...secs(0, 9, 600) });
+  run({ kind: "build", condition: "dropped", model: "claude-opus-5-5", cost: 2, ...secs(0, 10, 1200) });
+  run({ kind: "build", condition: "stuck", cost: 3, ...secs(0, 10, 1800) });
+  run({ kind: "build", condition: "passed", cost: 9, ...secs(0, 1, 5 * 3600) });
+  run({ kind: "land", condition: "landed", ...secs(0, 9, 40) });
+  run({ kind: "land", condition: "landed", ...secs(0, 9, 46) });
+  run({ kind: "land", condition: "failed", ...secs(0, 9, 100) });
+  run({ kind: "triage", condition: "done", ...secs(0, 11, 20) });
+  run({ kind: "build", condition: "running", started: at(0, 14) });
   // three days ago and 20 days ago
-  run({ kind: "build", state: "passed", model: "claude-sonnet-5-5", cost: 0.5, checks: [{ name: "tests", ok: true, seconds: 40 }], ...secs(3, 9, 300) });
-  run({ kind: "plan", state: "done", ...secs(20, 9, 90) });
+  run({ kind: "build", condition: "passed", model: "claude-sonnet-5-5", cost: 0.5, checks: [{ name: "tests", ok: true, seconds: 40 }], ...secs(3, 9, 300) });
+  run({ kind: "plan", condition: "done", ...secs(20, 9, 90) });
 });
 afterAll(() => {
   for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
@@ -60,7 +60,7 @@ test("day: counts, medians, wasted share, buckets, slowest, models", () => {
   const b = (h: string) => d.buckets.find((x) => x.label === h)!;
   expect(b("09:00")).toMatchObject({ implement: 600, intake: null });
   expect(b("10:00")).toMatchObject({ implement: null });
-  expect(d.slowest.map((r) => [r.state, r.took])).toEqual([["stuck", 1800], ["dropped", 1200], ["passed", 600]]);
+  expect(d.slowest.map((r) => [r.condition, r.took])).toEqual([["stuck", 1800], ["dropped", 1200], ["passed", 600]]);
   expect(d.slowest[0].model).toBe("unset");
   expect(d.slowest[2]).toMatchObject({ tests: 36, cost: 1 });
   expect(d.models).toEqual([{ model: "claude-opus-5-5", count: 2, p50: 600 }, { model: "unset", count: 1, p50: 1800 }]);
@@ -142,7 +142,7 @@ test("the view: five phase cards; charts; efficiency with reruns and the wasted 
 
 test("phases: implement spans a job's fix rounds, land starts at the last finish, and each counts where it ends", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const r = (job: string, kind: string, state: string, a: string, b: string) => ({ kind, job, name: job, state, started: a, ended: b }) as any;
+  const r = (job: string, kind: string, state: string, a: string, b: string) => ({ kind, job, name: job, condition: state, started: a, ended: b }) as any;
   const since = new Date(2026, 9, 28, 5).getTime(), end = new Date(2026, 9, 28, 15).getTime();
   const none = { issue: new Map(), goal: new Map() };
   const p = phases([
@@ -161,7 +161,7 @@ test("phases: implement spans a job's fix rounds, land starts at the last finish
   expect(p.land).toEqual({ count: 3, p50: 1800, p90: 3600 }); // 600 (a), 1800 (b), 3600 (e)
 });
 
-test("phases: intake runs from the issue to its first goal, and a bulk commit's times do not count", () => {
+test("filed: an issue's file is its filing; a part's file and a bulk commit's time do not count", () => {
   const store = join(base, "store");
   mkdirSync(join(store, "fx/backlog/tasks"), { recursive: true });
   const git = (...a: string[]) => Bun.spawnSync(["git", "-C", store, ...a], { stderr: "ignore", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
@@ -173,37 +173,31 @@ test("phases: intake runs from the issue to its first goal, and a bulk commit's 
     git("update-ref", "refs/remotes/origin/main", "HEAD");
   };
   git("init", "-q");
-  add(1000, "fx: add", "1", "2", "3");
-  add(1600, "fx: goal", "1.1");
-  add(1900, "fx: plan", "1.2", "2.1");
-  add(2000, "migrate: work model, 3 items", "3.1");
-  add(2100, "migrate: work model, 3 items", "4");
-  add(2200, "fx: goal", "4.1");
+  add(1000, "fx: add", "1", "2");
+  add(1600, "fx: plan", "1.1");
+  add(2100, "migrate: work model, 3 items", "3");
   const f = filed(store);
-  expect([f.issue.get("fx-1"), f.goal.get("fx-1"), f.goal.get("fx-2"), f.goal.get("fx-3"), f.goal.get("fx-4")]).toEqual([1000_000, 1600_000, 1900_000, null, 2200_000]);
-  expect(phases([], f, 0, 9_999_000).intake).toEqual({ count: 2, p50: 600, p90: 900 }); // fx-3 and fx-4 have a bulk time
-  expect(phases([], f, 1700_000, 9_999_000).intake.count).toBe(1);
+  expect([f.issue.get("fx-1"), f.issue.get("fx-2"), f.issue.get("fx-3"), f.issue.size]).toEqual([1000_000, 1000_000, null, 3]);
   // A new commit reads only what it adds.
   add(3000, "fx: add", "5");
-  add(3060, "fx: goal", "5.1");
-  expect(phases([], filed(store), 0, 9_999_000).intake.count).toBe(3);
+  expect(filed(store).issue.get("fx-5")).toBe(3000_000);
 });
 
 test("classify: one run of each class, with its cause", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (job: string, todo: number, h: number, m: number, o: Record<string, unknown> = {}) =>
-    ({ kind: "build", job, name: job, repo: "fx", on: `fx-${todo}`, state: "passed", started: t(h, m), ended: t(h, m + 10), ...o }) as any;
+    ({ kind: "build", job, name: job, repo: "fx", on: `fx-${todo}`, condition: "passed", started: t(h, m), ended: t(h, m + 10), ...o }) as any;
   const runs = [
     // goal 1: a fix round and the landing run in job a, an earlier job z restarted, then a run after the land
-    r("z", 1, 1, 0, { state: "stuck", reason: "agent run z: stalled" }),
-    r("a", 1, 2, 0, { state: "failed", failed: "tests" }),
+    r("z", 1, 1, 0, { condition: "stuck", reason: "agent run z: stalled" }),
+    r("a", 1, 2, 0, { condition: "failed", failed: "tests" }),
     r("a", 1, 3, 0),
-    { kind: "land", job: "a", name: "a", repo: "fx", on: "fx-1", state: "landed", started: t(3, 20), ended: t(3, 25) },
+    { kind: "land", job: "a", name: "a", repo: "fx", on: "fx-1", condition: "landed", started: t(3, 20), ended: t(3, 25) },
     r("b", 1, 5, 0),
     // goal 2: four starts in an hour, the 4th is a loop; they have no landing, the first three are not counted
     r("l1", 2, 6, 0), r("l2", 2, 6, 10), r("l3", 2, 6, 20), r("l4", 2, 6, 30),
     // goal 3 is dropped
-    r("d", 3, 8, 0, { state: "stuck", noCommit: true }),
+    r("d", 3, 8, 0, { condition: "stuck", noCommit: true }),
     // goal 4 is open and unclassed
     r("o", 4, 9, 0),
   ];
@@ -214,7 +208,7 @@ test("classify: one run of each class, with its cause", () => {
   expect(by("landed").causes.map((c) => c.name)).toEqual(["After fix rounds"]);
   expect(by("fixed").causes.map((c) => c.name)).toEqual(["Checks failed"]);
   expect(by("restarted").causes.map((c) => c.name).sort()).toEqual(["Restart loop", "Stalled or timed out"]);
-  expect(by("nothing").causes.map((c) => c.name)).toEqual(["Goal had landed"]);
+  expect(by("nothing").causes.map((c) => c.name)).toEqual(["Issue had landed"]);
   expect(by("dropped").causes.map((c) => c.name)).toEqual(["No commit"]);
   expect(by("dropped").top[0]).toMatchObject({ goal: "fx-3", href: "#/issues/fx/3" });
   for (const c of out.classes) {
@@ -232,25 +226,25 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 test("a build run counts as an agent run", () => {
   const before = speed("week", now);
-  run({ kind: "build", state: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 20 }], ...secs(1, 11, 7000) });
+  run({ kind: "build", condition: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 20 }], ...secs(1, 11, 7000) });
   const d = speed("week", now);
   expect(d.kinds.agent.count).toBe(before.kinds.agent.count + 1);
-  expect(d.slowest[0]).toMatchObject({ state: "passed", took: 7000, tests: 20 });
+  expect(d.slowest[0]).toMatchObject({ condition: "passed", took: 7000, tests: 20 });
   expect(d.models.find((m) => m.model === "claude-opus-5-5")!.count).toBe(before.models.find((m) => m.model === "claude-opus-5-5")!.count + 1);
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const r = (o: Record<string, unknown>) => ({ job: "b", name: "b", repo: "fx", on: "fx-1", state: "passed", ...o }) as any;
+  const r = (o: Record<string, unknown>) => ({ job: "b", name: "b", repo: "fx", on: "fx-1", condition: "passed", ...o }) as any;
   const out = classify([
-    r({ kind: "build", state: "failed", failed: "tests", started: t(2), ended: t(2, 10) }),
+    r({ kind: "build", condition: "failed", failed: "tests", started: t(2), ended: t(2, 10) }),
     r({ kind: "build", started: t(3), ended: t(3, 10) }),
-    { kind: "land", job: "b", name: "b", repo: "fx", on: "fx-1", state: "landed", started: t(3, 20), ended: t(3, 25) },
+    { kind: "land", job: "b", name: "b", repo: "fx", on: "fx-1", condition: "landed", started: t(3, 20), ended: t(3, 25) },
   ], () => "open", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
   expect(out.classes.find((c) => c.key === "landed")!.causes.map((c) => c.name)).toEqual(["After fix rounds"]);
 });
 
 test("classify: a held run that later landed is landed, its earlier held rounds are fixed", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const r = (o: Record<string, unknown>) => ({ kind: "build", job: "h", name: "h", repo: "fx", on: "fx-1", state: "awaiting", reason: "held path package.json", ...o }) as any;
-  const land = (job: string, state: string, h: number) => ({ kind: "land", job, name: job, repo: "fx", on: "fx-1", state, started: t(h, 20), ended: t(h, 25) }) as any;
+  const r = (o: Record<string, unknown>) => ({ kind: "build", job: "h", name: "h", repo: "fx", on: "fx-1", condition: "awaiting", reason: "held path package.json", ...o }) as any;
+  const land = (job: string, state: string, h: number) => ({ kind: "land", job, name: job, repo: "fx", on: "fx-1", condition: state, started: t(h, 20), ended: t(h, 25) }) as any;
   const out = classify([
     r({ started: t(2), ended: t(2, 10) }),
     land("h", "failed", 2),
@@ -265,7 +259,7 @@ test("classify: a held run that later landed is landed, its earlier held rounds 
 
 test("runs read their issue from on: a goal run counts under its issue, an issue run under its number", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const a = (job: string, o: Record<string, unknown>) => ({ kind: "build", job, name: job, repo: "ox", state: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;
+  const a = (job: string, o: Record<string, unknown>) => ({ kind: "build", job, name: job, repo: "ox", condition: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;
   const runs = [
     a("p", { on: "ox-860" }), a("q", { on: "ox-860.1" }), a("r", { on: "ox-7" }),
   ];
@@ -273,7 +267,7 @@ test("runs read their issue from on: a goal run counts under its issue, an issue
   classify(runs, (g) => { seen.push(g); return "open"; }, new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
   expect(new Set(seen)).toEqual(new Set(["ox-860", "ox-7"]));
 
-  const land = (job: string, o: Record<string, unknown>) => ({ ...a(job, o), kind: "land", state: "landed" });
+  const land = (job: string, o: Record<string, unknown>) => ({ ...a(job, o), kind: "land", condition: "landed" });
   for (const r of [a("p", { on: "ox-860" }), a("q", { on: "ox-860.1" }), land("p", { on: "ox-860" }), land("q", { on: "ox-860.1" })]) run({ ...r, started: at(1, 9), ended: at(1, 10) });
   const fit = { pooled: 0.1, byModel: {} } as any;
   const w = speed("week", now, fit);
@@ -282,17 +276,19 @@ test("runs read their issue from on: a goal run counts under its issue, an issue
   expect(speed("week", now, fit).goals.week).toBe(0.1); // ox-7 counts too: median of 0.2 and 0.1
 });
 
-test("phases: queue runs from the first goal to the issue's first agent start, lead from the issue to its last land", () => {
-  const r = (n: number, kind: string, state: string, a: number, b: number, repo = "fx") => ({ kind, job: `${repo}-${n}-${a}`, name: "x", repo, on: `${repo}-${n}`, state, started: new Date(a).toISOString(), ended: new Date(b).toISOString() }) as any;
-  const f = { issue: new Map<string, number | null>([["fx-1", 1000_000], ["fx-2", null], ["fx-3", 1000_000]]), goal: new Map<string, number | null>([["fx-1", 1060_000], ["fx-2", 1060_000], ["fx-3", null]]) };
+test("phases: intake runs from the filing to the first triage end, queue from there to the first agent start, lead from the filing to the last land", () => {
+  const r = (n: number, kind: string, state: string, a: number, b: number, repo = "fx") => ({ kind, job: `${repo}-${n}-${a}`, name: "x", repo, on: `${repo}-${n}`, condition: state, started: new Date(a).toISOString(), ended: new Date(b).toISOString() }) as any;
+  const f = { issue: new Map<string, number | null>([["fx-1", 1000_000], ["fx-2", null], ["fx-3", 1000_000]]) };
   const p = phases([
+    r(1, "triage", "done", 1000_000, 1060_000),
     r(1, "build", "stuck", 1660_000, 1700_000), r(1, "build", "passed", 1800_000, 1900_000),
     r(1, "land", "landed", 2000_000, 2100_000), r(1, "land", "landed", 3000_000, 4600_000),
-    // fx-2 has a bulk issue time, so a queue and no lead; fx-3 has a bulk goal time, so a lead and no queue.
-    r(2, "build", "passed", 1120_000, 1200_000), r(2, "land", "landed", 1300_000, 1400_000),
+    // fx-2 has a bulk filing: a queue from its triage, and no intake or lead. fx-3 has no triage: it queues from its filing.
+    r(2, "triage", "done", 1000_000, 1060_000), r(2, "build", "passed", 1120_000, 1200_000), r(2, "land", "landed", 1300_000, 1400_000),
     r(3, "build", "passed", 1120_000, 1200_000), r(3, "land", "landed", 1300_000, 1400_000),
   ], f, 0, 9_999_000);
-  expect(p.queue).toEqual({ count: 2, p50: 60, p90: 600 }); // fx-1 600, fx-2 60
+  expect(p.intake.count).toBe(1);
+  expect(p.queue).toEqual({ count: 3, p50: 120, p90: 600 }); // fx-1 600, fx-2 60, fx-3 120
   expect(p.lead).toEqual({ count: 2, p50: 400, p90: 3600 }); // fx-1 3600, fx-3 400
   const later = phases([r(1, "build", "passed", 1660_000, 1700_000)], f, 2000_000, 9_999_000);
   expect(later.queue.count).toBe(0);

@@ -39,8 +39,7 @@ function fresh(items: { title: string; body?: string; goal?: boolean; notes?: st
   process.env.ALEPH_FACTORY_DIR = join(base, `factory${n}`);
   writeList({ key }, "reset", (doc) => {
     for (const i of items) {
-      const it = issues.add(doc, i.title, { body: i.body });
-      if (i.goal) it.fm.kind = "goal";
+      const it = issues.add(doc, i.title, i.goal ? { spec: i.body ?? "Ship the thing." } : { request: i.body });
       for (const note of i.notes ?? []) issues.note(it, note);
       if (i.ask) setAsk(it, i.ask);
     }
@@ -74,7 +73,7 @@ function run(o: Partial<Run> & { name: string }, files: Record<string, string> =
   const id = `${stamp(at)}-${key}-${o.name}-${++runs}-agent`;
   const folder = join(process.env.ALEPH_JOBS_DIR!, id);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: id, repo: key, state: "awaiting", told: true, shown: true, started: at.toISOString(), ...o } as Run);
+  writeRun(folder, { kind: "build", job: id, repo: key, condition: "awaiting", told: true, shown: true, started: at.toISOString(), ...o } as Run);
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
   return folder;
 }
@@ -121,19 +120,19 @@ test("a tick with no new events starts no firefighter run", async () => {
   expect(calls()).toBe(0);
   expect(firefighterRuns()).toEqual([]);
   // An event is judged once: the next tick with the same snapshot starts nothing.
-  run({ name: `${key}-1`, state: "stuck", reason: "time box", on: `${key}-1` });
+  run({ name: `${key}-1`, condition: "stuck", reason: "time box", on: `${key}-1` });
   await firefighterStep(ports());
   expect(calls()).toBe(1);
   await firefighterStep(ports());
   expect(calls()).toBe(1);
   expect(firefighterRuns().length).toBe(1);
-  expect(readRun(join(process.env.ALEPH_JOBS_DIR!, firefighterRuns()[0]))).toMatchObject({ kind: "firefighter", state: "done", model: "claude-opus-5-5" });
+  expect(readRun(join(process.env.ALEPH_JOBS_DIR!, firefighterRuns()[0]))).toMatchObject({ kind: "firefighter", condition: "done", model: "claude-opus-5-5" });
 });
 
 test("a firefighter run records the cost of its result event", async () => {
   fresh();
   writeFileSync(join(base, "reply.json"), JSON.stringify({ type: "result", is_error: false, total_cost_usd: 0.4, result: JSON.stringify({ actions: [] }) }));
-  run({ name: `${key}-1`, state: "stuck", reason: "time box", on: `${key}-1` });
+  run({ name: `${key}-1`, condition: "stuck", reason: "time box", on: `${key}-1` });
   await firefighterStep(ports());
   expect(readRun(join(process.env.ALEPH_JOBS_DIR!, firefighterRuns()[0]))).toMatchObject({ kind: "firefighter", reason: "0 applied, 0 refused, 0 to Chris", cost: 0.4 });
 });
@@ -221,8 +220,8 @@ test("a land before the review has a verdict is refused", async () => {
 test("a goal with 4 runs in 30 minutes is an event, and a drop from the reply is applied", async () => {
   fresh([{ title: "loops", goal: true }]);
   const name = `${key}-1`;
-  for (const m of [25, 18, 10]) run({ name, state: "dropped", reason: "no commit", on: `${key}-1` }, {}, m);
-  run({ name, state: "stuck", reason: "no commit", on: `${key}-1` }, {}, 2);
+  for (const m of [25, 18, 10]) run({ name, condition: "dropped", reason: "no commit", on: `${key}-1` }, {}, m);
+  run({ name, condition: "stuck", reason: "no commit", on: `${key}-1` }, {}, 2);
   const kinds = snapshot().map((e) => e.kind);
   expect(kinds).toContain("loop");
   reply([{ do: "drop", job: name, reason: "the goal is already met on main" }]);
@@ -236,7 +235,7 @@ test("a goal with 4 runs in 30 minutes is an event, and a drop from the reply is
 test("a close reply drops the stuck job, writes no rerun file, and marks the issue done with the note", async () => {
   fresh([{ title: "met", goal: true }]);
   const name = `${key}-1`;
-  run({ name, state: "stuck", reason: "no commit", on: `${key}-1` }, {}, 2);
+  run({ name, condition: "stuck", reason: "no commit", on: `${key}-1` }, {}, 2);
   reply([{ do: "close", repo: key, n: 1, note: "the goal is already met on main" }]);
   await firefighterStep(ports());
   expect(dropped.map((d) => d.name)).toEqual([name]);
@@ -247,8 +246,8 @@ test("a close reply drops the stuck job, writes no rerun file, and marks the iss
 
 test("three runs in 30 minutes are no loop", () => {
   fresh();
-  for (const m of [25, 18]) run({ name: `${key}-1`, state: "dropped", reason: "no commit" }, {}, m);
-  run({ name: `${key}-1`, state: "dropped", reason: "no commit" }, {}, 5);
+  for (const m of [25, 18]) run({ name: `${key}-1`, condition: "dropped", reason: "no commit" }, {}, m);
+  run({ name: `${key}-1`, condition: "dropped", reason: "no commit" }, {}, 5);
   expect(snapshot().map((e) => e.kind)).not.toContain("loop");
 });
 
@@ -277,7 +276,7 @@ test("answer is refused on a product choice and applied on a how-to-build one", 
 
 test("a paused factory takes no snapshot and starts no run", async () => {
   fresh();
-  run({ name: `${key}-1`, state: "stuck", reason: "time box" });
+  run({ name: `${key}-1`, condition: "stuck", reason: "time box" });
   mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
   writeFileSync(join(process.env.ALEPH_FACTORY_DIR!, "paused"), "x\n");
   expect(await firefighterStep(ports())).toBeNull();
@@ -373,7 +372,7 @@ test("parseReply reads each action, and names a malformed one", () => {
 });
 
 /** Goal `.1` under issue `id`, as `fresh` files none: the goal a drop or an answer can wait for. */
-const addGoal = (id: number) => writeList({ key }, "a goal", (doc) => { issues.addGoal(doc, issues.find(doc, id)!, { title: "blocker goal", body: "Do it.", repo: key }); return true; });
+const addGoal = (id: number) => writeList({ key }, "a goal", (doc) => { issues.addPart(doc, issues.find(doc, id)!, { title: "blocker goal", spec: "Do it." }); return true; });
 
 test("an Ask of reason question is an event, and answer clears it", async () => {
   fresh([{ title: "q", ask: plain("which helper?") }]);
@@ -405,7 +404,7 @@ test("answer is applied on a plain question even when its reason is not handed",
 test("a drop with after drops the job, and the goal waits after that goal, with the note saying so", async () => {
   fresh([{ title: "waiter", goal: true }, { title: "blocker" }]);
   addGoal(2);
-  run({ name: `${key}-1`, state: "stuck", reason: "time box", on: `${key}-1` });
+  run({ name: `${key}-1`, condition: "stuck", reason: "time box", on: `${key}-1` });
   reply([{ do: "drop", job: `${key}-1`, reason: "needs the blocker", after: [`${key}-2.1`] }]);
   const f = await firefighterStep(ports());
   expect(f?.refused).toEqual([]);
@@ -420,17 +419,17 @@ test("an edit-goal with only after sets it and leaves the body unchanged", async
   const r = await applyActions([{ do: "edit-goal", repo: key, n: 1, after: [`${key}-2.1`] }], ports());
   expect(r.refused).toEqual([]);
   expect(item(1).fm.after).toEqual([`${key}-2.1`]);
-  expect(item(1).body.trim()).toBe("Ship the thing.");
+  expect(item(1).spec.trim()).toBe("Ship the thing.");
 });
 
 test("an after naming no goal is refused", async () => {
   fresh([{ title: "goal", goal: true }]);
   const r = await applyActions([{ do: "edit-goal", repo: key, n: 1, after: [`${key}-9.1`] }], ports());
-  expect(r.refused).toEqual([expect.stringContaining("names no goal")]);
+  expect(r.refused).toEqual([expect.stringContaining("names no issue")]);
 });
 
 test("parse keeps well-formed goal ids in after, ignores malformed ones, and refuses an edit-goal with neither body nor after", () => {
-  expect(parseReply(JSON.stringify({ actions: [{ do: "drop", job: "x-1", reason: "r", after: ["Not A Ref", "ff-2"] }] }))).toEqual([{ do: "drop", job: "x-1", reason: "r" }]);
+  expect(parseReply(JSON.stringify({ actions: [{ do: "drop", job: "x-1", reason: "r", after: ["Not A Ref", "ff-2"] }] }))).toEqual([{ do: "drop", job: "x-1", reason: "r", after: ["ff-2"] }]);
   expect(parseReply(JSON.stringify({ actions: [{ do: "drop", job: "x-1", reason: "r", after: ["ff-2.1"] }] }))).toEqual([{ do: "drop", job: "x-1", reason: "r", after: ["ff-2.1"] }]);
   expect(parseReply(JSON.stringify({ actions: [{ do: "edit-goal", repo: "ff", n: 1 }] }))).toEqual(["edit-goal without a repo, n, and a body or after"]);
 });

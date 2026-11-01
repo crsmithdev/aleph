@@ -47,7 +47,7 @@ describe("a batch of lands", () => {
   test("a member that failed its checks in attempt 1 is not in the retry after main moved", async () => {
     const lands = await landTogether([["ra", "commit retry/a.txt"], ["rbad", "commit retry/bad.txt"], ["rr", "commit race/r.txt"]], () => writeFileSync(join(base, "race-once"), ""));
     const s = lands.map((l) => state(l.run));
-    expect(s.map((x) => x.state)).toEqual(["landed", "failed", "landed"]);
+    expect(s.map((x) => x.condition)).toEqual(["landed", "failed", "landed"]);
     const log = file(lands[0].run, "land.log");
     const retry = log.slice(log.indexOf("main moved; merging again"));
     expect(retry).toContain("checks on");
@@ -59,7 +59,7 @@ describe("a batch of lands", () => {
   test("a member that failed in attempt 1 does not take the leader out when main moves twice", async () => {
     const lands = await landTogether([["tla", "commit twice/a.txt"], ["tlbad", "commit twice/bad.txt"], ["tlr", "commit race/tl.txt"]], () => writeFileSync(join(base, "race-once"), "2\n"));
     const s = lands.map((l) => state(l.run));
-    expect(s.map((x) => x.state)).toEqual(["landed", "failed", "landed"]);
+    expect(s.map((x) => x.condition)).toEqual(["landed", "failed", "landed"]);
     expect(file(lands[0].run, "land.log").split("main moved; merging again").length - 1).toBe(2);
     expect(remoteGit("ls-tree", "--name-only", "main:twice").split("\n")).toEqual(["a.txt"]);
     await aleph(["drop", "tlbad"]);
@@ -68,7 +68,7 @@ describe("a batch of lands", () => {
   test("a two-member batch [L, B]: B fails in attempt 1, main moves twice, and the leader still lands", async () => {
     const lands = await landTogether([["tl2a", "commit race/l2.txt"], ["tl2bad", "commit race/bad.txt"]], () => writeFileSync(join(base, "race-once"), "2\n"));
     const s = lands.map((l) => state(l.run));
-    expect(s.map((x) => x.state)).toEqual(["landed", "failed"]);
+    expect(s.map((x) => x.condition)).toEqual(["landed", "failed"]);
     expect(file(lands[0].run, "land.log").split("main moved; merging again").length - 1).toBe(2);
     expect(remoteGit("ls-tree", "--name-only", "main:race").split("\n")).toContain("l2.txt");
     expect(remoteGit("ls-tree", "--name-only", "main:race").split("\n")).not.toContain("bad.txt");

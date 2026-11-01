@@ -24,7 +24,7 @@ const FAKE = `#!/bin/bash
 prompt=$(cat)
 echo "$PWD $*" >> "$FAKE_LOG"
 case $prompt in
-  *VERDICT:goal*) echo '{"route":"goal","title":"Do it","body":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}' ;;
+  *VERDICT:goal*) echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}' ;;
   *VERDICT:close*) echo 'Looked at it. {"route":"close","reason":"duplicate of tri-1"}' ;;
   *VERDICT:chris*) echo '{"route":"ask","question":"Which plan, A or B?"}' ;;
   *VERDICT:structured*) echo '{"route":"ask","question":"A or B?","options":[{"label":"A","line":"do a"},{"label":"B","line":"do b"}],"recommended":"B","why":["one","two"]}' ;;
@@ -41,16 +41,16 @@ esac
 
 // Each test gets its own list: the store keeps an item's file until something replaces it.
 let lists = 0;
-// A seeded item: `route` sorts it, `ask` gives it an Ask, `after` makes it wait, `goal` files a goal under it.
-type Seed = { title: string; body?: string; route?: string; ask?: boolean; after?: string[]; goal?: { title: string; body: string } };
+// A seeded item: `route` sorts it, `ask` gives it an Ask, `after` makes it wait, `goal` gives it a spec.
+type Seed = { title: string; body?: string; ask?: boolean; after?: string[]; goal?: { title: string; body: string } };
 function reset(items: Seed[]): void {
   repo.key = `tri${++lists}`;
   writeList(repo, "reset", (doc) => {
     for (const i of items) {
-      const item = issues.add(doc, i.title, { body: i.body, route: i.route });
+      const item = issues.add(doc, i.title, { request: i.body });
       if (i.ask) setAsk(item, { kind: "input", reason: "question", question: "Which plan, A or B?", options: [], why: [] });
       if (i.after) item.fm.after = i.after;
-      if (i.goal) issues.addGoal(doc, item, { ...i.goal, repo: repo.key });
+      if (i.goal) item.spec = i.goal.body;
     }
     return true;
   }, true);
@@ -87,17 +87,14 @@ test("each of the routes leaves the item in its state", async () => {
   process.env.ALEPH_TRIAGE_CAP = "9";
   const t = await run();
   expect(t.skipped).toEqual([]);
-  expect(t.triaged).toEqual({ goal: 1, close: 1, ask: 2 });
+  expect(t.triaged).toEqual({ build: 1, close: 1, ask: 2 });
 
-  // The issue keeps its text and gains the goal.
-  expect(item(1).body).toContain("VERDICT:goal");
-  expect(item(1).body).not.toContain("## Oracle");
-  expect(item(1).fm.goals).toEqual([`${repo.key}-1.1`]);
+  // The issue keeps its text and gains the spec.
+  expect(item(1).request).toContain("VERDICT:goal");
+  expect(item(1).request).not.toContain("## Oracle");
+  expect(item(1).spec).toContain("## Oracle");
   expect(issues.status(item(1))).toBe("open");
-  const goal = issues.find(readList(repo)!, "1.1")!;
-  expect(goal).toMatchObject({ title: "Do it", fm: { kind: "goal", issue: `${repo.key}-1` } });
-  expect(goal.body).toContain("## Oracle");
-  expect(goal.body).not.toContain("## Request");
+  expect(item(1).spec).not.toContain("## Request");
 
   expect(issues.status(item(2))).toBe("done");
   expect(item(2).notes.at(-1)).toContain("duplicate of tri-1");
@@ -114,7 +111,7 @@ test("a triage run records its route and the issue it is on", async () => {
   reset([{ title: "a", body: "VERDICT:goal" }, { title: "b", body: "VERDICT:live" }, { title: "c", body: "VERDICT:flake" }, { title: "d", body: "VERDICT:close" }]);
   await run();
   const runs = Object.fromEntries(readdirSync(join(base, "jobs")).filter((d) => d.includes(`-triage-${repo.key}-`)).map((d) => readRun(join(base, "jobs", d))!).map((r) => [r.name, r]));
-  expect(runs[`triage-${repo.key}-1`]).toMatchObject({ route: "goal", on: `${repo.key}-1`, reason: "goal" });
+  expect(runs[`triage-${repo.key}-1`]).toMatchObject({ route: "build", on: `${repo.key}-1`, reason: "build" });
   expect(runs[`triage-${repo.key}-2`]).toMatchObject({ route: "ask", reason: "live" });
   expect(runs[`triage-${repo.key}-3`]!.route).toBe("close");
   expect(runs[`triage-${repo.key}-4`]!.route).toBe("close");
@@ -138,7 +135,7 @@ test("a triage run records the cost of its result event, also when the command f
 });
 
 test("the prompt says the factory runs the checks, and names no aleph check command", () => {
-  const p = prompt(repo, { id: 1, title: "t", body: "", notes: [], fm: {} } as unknown as issues.Issue);
+  const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
   expect(p).toContain("The factory runs this repo's checks itself");
   expect(p).toContain("There is no `aleph check` command");
   expect(p).not.toMatch(/aleph check\s+\S/);
@@ -153,7 +150,7 @@ test("a triage is a job in the ledger, of kind triage", async () => {
   expect(folders.length).toBe(4);
   // The runs go one after another, but the folder order is not the item order.
   const first = folders.map((f) => readRun(join(base, "jobs", f))).find((r) => r?.name === `triage-${repo.key}-1`);
-  expect(first).toMatchObject({ kind: "triage", repo: repo.key, state: "done", name: `triage-${repo.key}-1`, on: `${repo.key}-1` });
+  expect(first).toMatchObject({ kind: "triage", repo: repo.key, condition: "done", name: `triage-${repo.key}-1`, on: `${repo.key}-1` });
 });
 
 test("an ask route with options is stored as an Ask next to the prose note; a malformed structure keeps the question", async () => {
@@ -172,7 +169,7 @@ test("an option's after is kept on the Ask", async () => {
 
 test("sorted issues are not triaged; an issue that waits is", async () => {
   reset([
-    { title: "a", ask: true }, { title: "b", route: "triaged" }, { title: "c", route: "proposal" },
+    { title: "a", ask: true }, { title: "b", goal: { title: "b", body: "## Goal\nb" } }, { title: "c", goal: { title: "c", body: "## Goal\nc" } },
     { title: "parent of d", goal: { title: "d", body: "## Goal\nd" } }, { title: "e", after: ["tri-9"], body: "VERDICT:close" }, { title: "f", body: "VERDICT:chris" },
   ]);
   const t = await run();
@@ -282,7 +279,7 @@ describe("standing permissions", () => {
     reset([{ title: "a", body: "VERDICT:structured" }, { title: "b", body: "VERDICT:chris" }]);
     await run();
     expect(item(1).fm.ask).toBeUndefined();
-    expect(isSorted(item(1))).toBe(false);
+    expect(isSorted(readList(repo)!, item(1))).toBe(false);
     expect(item(1).notes.at(-1)).toEndWith("always: took the recommendation B: do b");
     expect(askOf(item(2))).toMatchObject({ reason: "question" });
     expect(tickLog()).toContain(`always: question: recommended on ${repo.key}-1`);
@@ -317,9 +314,10 @@ test("a blocked day cap or live cap starts no triage", async () => {
 
 test("parseRoute wants the field its route needs", () => {
   expect(parseRoute('{"route":"close","reason":" stale "}')).toEqual({ route: "close", reason: "stale" });
-  expect(parseRoute('{"route":"goal"}')).toBe("goal without a body");
-  expect(parseRoute('{"route":"goal","title":"T","body":"## Goal\\nb","after":["aleph-265.1","soon"]}')).toEqual({ route: "goal", title: "T", body: "## Goal\nb", after: ["aleph-265.1"] });
-  expect(parseRoute('{"route":"goal","title":"T","body":"## Request\\nr\\n## Goal\\nb"}')).toEqual({ route: "goal", title: "T", body: "## Goal\nb", after: [] });
+  expect(parseRoute('{"route":"build"}')).toBe("build without a spec");
+  expect(parseRoute('{"route":"plan"}')).toBe("plan without a spec");
+  expect(parseRoute('{"route":"build","spec":"## Goal\\nb","after":["aleph-265.1","aleph-3","soon"]}')).toEqual({ route: "build", spec: "## Goal\nb", after: ["aleph-265.1", "aleph-3"] });
+  expect(parseRoute('{"route":"plan","spec":"## Request\\nr\\n## Goal\\nb"}')).toEqual({ route: "plan", spec: "## Goal\nb", after: [] });
   expect(parseRoute('{"verdict":"close","reason":"x"}')).toBe("unknown route undefined");
   expect(parseRoute("[]")).toBe("no JSON");
 });
@@ -328,7 +326,7 @@ test("parseRoute wants the field its route needs", () => {
 function lostRun(name: string): string {
   const folder = join(base, "jobs", `${stamp()}-${name}-triage`);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name, repo: repo.key, on: `${repo.key}-1`, state: "running", phase: "triage", told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
+  writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name, repo: repo.key, on: `${repo.key}-1`, condition: "running", phase: "triage", told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
   return folder;
 }
 
@@ -337,7 +335,7 @@ test("a triage run whose process ended before a verdict is ended as failed by th
   const folder = lostRun(`triage-${repo.key}-1`);
   await run();
   const r = readRun(folder)!;
-  expect(r).toMatchObject({ state: "done", reason: "failed: its process ended before a verdict" });
+  expect(r).toMatchObject({ condition: "done", reason: "failed: its process ended before a verdict" });
   expect(typeof r.ended).toBe("string");
 });
 
@@ -347,7 +345,7 @@ test("a lost triage run whose item's lock is held is left running", async () => 
   const release = (await lock(`triage-${repo.key}-1`, 0))!;
   try {
     await run();
-    expect(readRun(folder)?.state).toBe("running");
+    expect(readRun(folder)?.condition).toBe("running");
   } finally {
     release();
   }
@@ -362,10 +360,10 @@ describe("triage at once", () => {
       { title: "parent", body: "VERDICT:close", goal: { title: "g", body: "## Goal\ng" } },
     ]);
     const { triageNow } = await import("./factory.ts");
-    expect(issues.find(readList(repo)!, "2.1")).toMatchObject({ title: "g", fm: { kind: "goal", issue: `${repo.key}-2` } });
+    expect(item(2).spec).toContain("## Goal");
     expect((await triageNow(repo, 1)).triaged).toEqual({ close: 1 });
     expect(issues.status(item(1))).toBe("done");
-    // Item 2 is sorted by its goal 2.1: triageNow on it triages nothing.
+    // Item 2 is sorted by its spec: triageNow on it triages nothing.
     expect((await triageNow(repo, 2)).triaged).toEqual({});
     expect(calls()).toBe(1);
   });
@@ -398,10 +396,10 @@ describe("triage at once", () => {
 });
 
 test("the prompt keeps how-to-build questions away from Chris and asks him in plain words", () => {
-  const p = prompt(repo, { id: 1, title: "t", body: "", notes: [], fm: {} } as unknown as issues.Issue);
+  const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
   expect(p).toContain("Never ask Chris about how to build it");
   expect(p).toContain("no file paths, function names, line numbers or code");
-  expect(p).toContain('"after": ["<optional <repo>-<n>.<k>>"]');
+  expect(p).toContain('"after": ["<optional <repo>-<n> or <repo>-<n>.<k>>"]');
 });
 
 test("the prompt lists the open issues of the repo, one line each, without the one under triage or the done and dropped ones", () => {
@@ -417,18 +415,18 @@ test("the prompt lists the open issues of the repo, one line each, without the o
   expect(p).not.toContain("Done one");
   expect(p).not.toContain("Dropped one");
   expect(p).toContain('return "close" with the reason "duplicate of <repo>-<n>"');
-  expect(p).toContain('return "goal" with "after"');
+  expect(p).toContain('return "build" with "after"');
 });
 
 describe("a goal whose work is already on main", () => {
-  // The fake reads the commit list in the prompt: a line naming the file the issue asks for gives "done", else "goal".
+  // The fake reads the commit list in the prompt: a line naming the file the issue asks for gives "done", else "build".
   const SMART = `#!/bin/bash
 prompt=$(cat)
 echo "$PWD" >> "$FAKE_LOG"
 file=$(echo "$prompt" | grep -m1 '^# Issue' | grep -o '[a-z]*\.ts')
 sha=$(echo "$prompt" | sed -n '/^# Commits on main/,/^Reply/p' | grep -F "$file" | head -1 | cut -d' ' -f1)
 if [ -n "$sha" ]; then echo "{\\"route\\":\\"done\\",\\"commit\\":\\"$sha\\",\\"reason\\":\\"widget.ts exists\\"}"
-else echo '{"route":"goal","title":"Do it","body":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}'; fi
+else echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}'; fi
 `;
   let fixture: string;
   let saved: string | undefined;
@@ -464,7 +462,7 @@ else echo '{"route":"goal","title":"Do it","body":"## Goal\\nDo it.\\n## Edit su
     expect(t.skipped).toEqual([]);
     expect(t.triaged).toEqual({ done: 1 });
     expect(issues.status(item(1))).toBe("done");
-    expect(item(1).fm.goals).toBeUndefined();
+    expect(item(1).spec).toBe("");
     const sha = Bun.spawnSync(["git", "rev-parse", "--short=12", "HEAD"], { cwd: fixture }).stdout.toString().trim();
     expect(item(1).notes.join("\n")).toContain(`triage: already on main in ${sha}`);
   });
@@ -472,9 +470,9 @@ else echo '{"route":"goal","title":"Do it","body":"## Goal\\nDo it.\\n## Edit su
   test("a goal whose work is not on main still becomes a goal for a worker", async () => {
     reset([{ title: "Add gadget.ts", body: "Create gadget.ts exporting gadget." }]);
     const t = await run();
-    expect(t.triaged).toEqual({ goal: 1 });
+    expect(t.triaged).toEqual({ build: 1 });
     expect(issues.status(item(1))).toBe("open");
-    expect(item(1).fm.goals).toEqual([`${repo.key}-1.1`]);
+    expect(item(1).spec).toContain("## Oracle");
   });
 
   test("a done verdict naming a commit that is not on main is not applied", async () => {
@@ -498,25 +496,15 @@ describe("the issue keeps its text; the goal gets the four sections", () => {
 
   test("a long input keeps its title and ## Request; the goal has a short title", async () => {
     reset([{ title: LONG_TITLE, body: `## Request\n\n${INPUT}\n\nVERDICT:goal` }]);
-    expect((await run()).triaged).toEqual({ goal: 1 });
+    expect((await run()).triaged).toEqual({ build: 1 });
     const got = item(1);
     expect(got.title).toBe(LONG_TITLE);
-    expect(got.body).toBe(`## Request\n\n${INPUT}\n\nVERDICT:goal`);
-    const goal = issues.find(readList(repo)!, "1.1")!;
-    expect(goal.title.length).toBeLessThanOrEqual(60);
-    expect(goal.body.match(/^## .*/gm)).toEqual(["## Goal", "## Edit surface", "## Oracle", "## Time box"]);
-  });
-
-  test("a route with a long title or no title is malformed", () => {
-    const body = "## Goal\\ng";
-    expect(parseRoute(`{"route":"goal","title":"${"t".repeat(61)}","body":"${body}"}`)).toBe("goal title over 60 characters");
-    expect(parseRoute(`{"route":"goal","body":"${body}"}`)).toBe("goal without a title");
+    expect(got.request).toBe(`## Request\n\n${INPUT}\n\nVERDICT:goal`);
+    expect(got.spec.match(/^## .*/gm)).toEqual(["## Goal", "## Edit surface", "## Oracle", "## Time box"]);
   });
 
   test("the prompt states the title and request rules", () => {
     const p = prompt(repo, item(1));
-    expect(p).toContain("at most 60 characters");
-    expect(p).toContain('no "## Request"');
     expect(p).toContain("keeps its own title and text");
   });
 });
@@ -529,7 +517,7 @@ describe("the flake route", () => {
   });
 
   test("the prompt lists the flake verdict", () => {
-    expect(prompt(repo, { id: 1, title: "t", body: "", notes: [], fm: {} } as unknown as issues.Issue)).toContain('"route": "flake"');
+    expect(prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue)).toContain('"route": "flake"');
   });
 
   test("a flake is noted on the tracker and the issue closed", async () => {
@@ -554,8 +542,8 @@ describe("the flake route", () => {
     const t = await run();
     expect(t.triaged).toEqual({});
     expect(calls()).toBe(before);
-    const tracker = readList(repo)!.items.find((i) => areasOf(i).includes("flakes"))!;
-    expect(isSorted(tracker)).toBe(true);
+    const tracker = readList(repo)!.items.find((i) => i.fm.tracker === "true")!;
+    expect(isSorted(readList(repo)!, tracker)).toBe(true);
   });
 });
 
@@ -591,15 +579,12 @@ esac
     const text = "## Request\n\nMake the status page easier to scan.\n\nVERDICT:goal";
     reset([{ title: "The status page is hard to scan, a long title for an issue", body: text }]);
     const r = await triage(1);
-    expect(r.json).toMatchObject({ triaged: { goal: 1 }, skipped: [] });
-    const goal = issues.find(readList(repo)!, "1.1")!;
-    expect(goal).toMatchObject({ title: "Do it", fm: { kind: "goal", issue: `${repo.key}-1` } });
-    expect(goal.body).toContain("## Oracle");
-    expect(goal.body).not.toContain("## Request");
+    expect(r.json).toMatchObject({ triaged: { build: 1 }, skipped: [] });
+    expect(item(1).spec).not.toContain("## Request");
     expect(item(1).title).toBe("The status page is hard to scan, a long title for an issue");
-    expect(item(1).body).toBe(text);
-    expect(item(1).fm.goals).toEqual([`${repo.key}-1.1`]);
-    expect(runOf(1)).toMatchObject({ kind: "triage", route: "goal", on: `${repo.key}-1` });
+    expect(item(1).request).toBe(text);
+    expect(item(1).spec).toContain("## Oracle");
+    expect(runOf(1)).toMatchObject({ kind: "triage", route: "build", on: `${repo.key}-1` });
     expect(runOf(1).todo).toBeUndefined();
     expect(readdirSync(join(base, "jobs")).some((d) => readRun(join(base, "jobs", d))?.kind === "plan")).toBe(false);
   }, 30_000);

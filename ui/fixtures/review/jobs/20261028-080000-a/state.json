@@ -6,7 +6,7 @@
   "told": true,
   "model": "claude-sonnet-5-5",
   "branch": "factory/demo-10",
-  "state": "dropped",
+  "condition": "dropped",
   "failed": "test",
   "reason": "test failed",
   "started": "2026-10-28T08:00:00.000Z",

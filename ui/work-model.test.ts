@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../todo/lib/store.ts";
-import { add, addGoal, find, setStatus } from "../todo/lib/todo.ts";
+import { add, addPart, find, setStatus } from "../todo/lib/todo.ts";
 import { writeAsk } from "../jobs/lib/ask.ts";
 import { state } from "./state.ts";
 import { serve } from "./server.ts";
@@ -38,7 +38,7 @@ beforeAll(async () => {
   sh(base, "git", "init", "-q", "--bare", "-b", "main", prod);
   sh(base, "git", "clone", "-q", prod, repo);
   writeFileSync(join(repo, "a"), "1");
-  sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-q", "-m", "first goal\n\nIssue: fac-1\nGoal: fac-1.1\nJob: fac-1.1");
+  sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-q", "-m", "first goal\n\nIssue: fac-1.1\nJob: fac-1.1");
   sh(repo, "git", "push", "-q", "origin", "main");
   sh(repo, "git", "fetch", "-q", "origin");
   const remote = join(base, "store.git"), store = join(base, "store");
@@ -53,24 +53,24 @@ beforeAll(async () => {
   Object.assign(process.env, gitEnv);
   writeList({ key: "fac" }, "seed", (doc) => {
     // fac-1: three goals; .1 is done, .2 builds, .3 runs after .2.
-    const one = add(doc, "Three goals", { body: "## Request\n\nDo three things.\n" });
-    const g1 = addGoal(doc, one, { title: "first", body: "" });
-    addGoal(doc, one, { title: "second", body: "", after: [`fac-1.1`] });
-    addGoal(doc, one, { title: "third", body: "", after: [`fac-1.2`] });
+    const one = add(doc, "Three goals", { request: "Do three things.\n" });
+    const g1 = addPart(doc, one, { title: "first", spec: "Do it." });
+    addPart(doc, one, { title: "second", spec: "Do it.", after: [`fac-1.1`] });
+    addPart(doc, one, { title: "third", spec: "Do it.", after: [`fac-1.2`] });
     setStatus(g1, "done");
     // fac-2: one goal that waits for approval; fac-3: an issue that awaits input; fac-4: a new issue.
-    const two = add(doc, "Needs a go-ahead", { body: "## Request\n\nAsk first.\n" });
-    const g = addGoal(doc, two, { title: "gated", body: "" });
+    const two = add(doc, "Needs a go-ahead", { request: "Ask first.\n" });
+    const g = addPart(doc, two, { title: "gated", spec: "Do it." });
     writeAsk(g, { kind: "approval", reason: "proposal", question: "Update left-pad?", options: [], why: [] });
-    const three = add(doc, "A part was dropped", { body: "## Request\n\nPlan it.\n" });
+    const three = add(doc, "A part was dropped", { request: "Plan it.\n" });
     writeAsk(three, { kind: "input", reason: "part-dropped", question: "A goal was dropped.", options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed", why: [] });
-    add(doc, "Just filed", { body: "## Request\n\nNew.\n" });
+    add(doc, "Just filed", { request: "New.\n" });
     return true;
   }, true);
-  run("20261031-000001-fac-fac-1.2-build", { kind: "build", job: "fac-1.2", name: "fac-1.2", state: "running", on: "fac-1.2" });
-  run("20261031-000002-fac-fac-5-triage", { kind: "triage", job: "triage-fac-5", name: "triage-fac-5", state: "awaiting", on: "fac-5", ask: { kind: "input", reason: "triage-failed", question: "Triage gave no verdict.", options: [], why: [] } });
-  run("20261031-000003-fac-fac-2.1-build", { kind: "build", job: "fac-2.1-r", name: "fac-2.1-r", state: "awaiting", on: "fac-2.1", ask: { kind: "approval", reason: "review", question: "Land it?", options: [], why: [] }, review: { call: "ask", reason: "judgement" } });
-  run("20261031-000004-fac-fac-1.1-build", { kind: "build", job: "fac-1.1", name: "fac-1.1", state: "landed", on: "fac-1.1", commit: "abcdef1234567", ended: ago(1) });
+  run("20261031-000001-fac-fac-1.2-build", { kind: "build", job: "fac-1.2", name: "fac-1.2", condition: "running", on: "fac-1.2" });
+  run("20261031-000002-fac-fac-5-triage", { kind: "triage", job: "triage-fac-5", name: "triage-fac-5", condition: "awaiting", on: "fac-5", ask: { kind: "input", reason: "triage-failed", question: "Triage gave no verdict.", options: [], why: [] } });
+  run("20261031-000003-fac-fac-2.1-build", { kind: "build", job: "fac-2.1-r", name: "fac-2.1-r", condition: "awaiting", on: "fac-2.1", ask: { kind: "approval", reason: "review", question: "Land it?", options: [], why: [] }, review: { call: "ask", reason: "judgement" } });
+  run("20261031-000004-fac-fac-1.1-build", { kind: "build", job: "fac-1.1", name: "fac-1.1", condition: "landed", on: "fac-1.1", commit: "abcdef1234567", ended: ago(1) });
   server = await serve(0, { warm: false });
 });
 afterAll(() => {
@@ -151,18 +151,17 @@ describe("/api/state on a work-model store", () => {
 describe("the Issue page", () => {
   test("the API gives the ## Request as written, then the goals, each with its Job", async () => {
     const d = await getJson("/api/issues/fac/1");
-    expect(d.kind).toBe("issue");
     expect(d.request).toBe("Do three things.");
     expect(d.derived).toMatchObject({ item: "fac-1", stage: "building" });
     expect(d.goals.map((g: any) => [g.id, g.title, g.stage, g.jobs.map((j: any) => j.name)])).toEqual([
       ["fac-1.1", "first", "done", ["fac-1.1"]], ["fac-1.2", "second", "building", ["fac-1.2"]], ["fac-1.3", "third", "blocked", []],
     ]);
-    expect(d.goals[0].jobs[0]).toMatchObject({ state: "landed", kind: "build" });
+    expect(d.goals[0].jobs[0]).toMatchObject({ condition: "landed", kind: "build" });
   });
 
   test("a goal's page names its issue and has no goals of its own", async () => {
     const d = await getJson("/api/issues/fac/1.2");
-    expect(d).toMatchObject({ kind: "goal", ref: "1.2", request: null, goals: [], issue: { id: "fac-1", href: "#/issues/fac/1" } });
+    expect(d).toMatchObject({ ref: "1.2", goals: [], issue: { id: "fac-1", href: "#/issues/fac/1" } });
     expect(d.jobs.map((j: any) => j.name)).toEqual(["fac-1.2"]);
     expect((await fetch(`http://127.0.0.1:${server.port}/api/issues/fac/9.9`)).status).toBe(404);
   });
@@ -182,21 +181,21 @@ describe("the Issue page", () => {
     await post("edit", { title: before.title, priority: before.priority ?? "medium", source: before.frontmatter.source ?? "chris", areas: before.labels.join(","), description: before.request ?? before.body });
   }, 60_000);
 
-  test("the Issue page has a breadcrumb, the stage on the left, a State column, and links a spec it has", async () => {
+  test("the Issue page has a breadcrumb, the stage on the left, a Condition column, and links a spec it has", async () => {
     const base = await getJson("/api/issues/fac/1");
-    const html = renderIssue({ ...base, specs: ["2026-01-01-a.md"], body: "## Request\n\nSee docs/specs/2026-01-01-a.md and docs/specs/gone.md." , request: null });
+    const html = renderIssue({ ...base, specs: ["2026-01-01-a.md"], request: "See docs/specs/2026-01-01-a.md and docs/specs/gone.md." });
     expect(html).toContain('<nav class="crumb"');
     expect(html).toContain('<span>1</span></nav>');
     expect(html).toContain('<a href="#/specs/fac/2026-01-01-a.md">docs/specs/2026-01-01-a.md</a>');
     expect(html).not.toContain('">docs/specs/gone.md</a>');
-    expect(html).toContain('<div class="status-row"><span class="work-kind issue">Issue</span><span class="badge');
-    expect(html).toContain("<th>Stage</th><th>State</th><th>Job</th>");
+    expect(html).toContain('<div class="status-row"><span class="badge');
+    expect(html).toContain("<th>Stage</th><th>Condition</th><th>Job</th>");
     expect(html).toContain("<h2>Runs</h2>");
     expect(html).not.toContain(base.derived.why);
     expect(html).not.toContain("<h2>Request</h2>");
     // Edit mode: each value and its editor sit in one place, and the controls belong to the one form.
     expect(html).toContain('data-edit="start"');
-    for (const name of ["title", "priority", "source", "areas", "body"]) expect(html).toMatch(new RegExp(`name="${name}" form="issue-edit"`));
+    for (const name of ["title", "priority", "source", "areas", "request"]) expect(html).toMatch(new RegExp(`name="${name}" form="issue-edit"`));
     expect(html).not.toContain("<summary>Edit</summary>");
   });
 
@@ -205,7 +204,7 @@ describe("the Issue page", () => {
     const at = (t: string) => html.indexOf(t);
     expect(at('id="h-request">Description<')).toBeGreaterThan(-1);
     expect(at("Do three things.")).toBeGreaterThan(at('id="h-request"'));
-    expect(at('id="h-goals">Goals<')).toBeGreaterThan(at("Do three things."));
+    expect(at('id="h-goals">Parts<')).toBeGreaterThan(at("Do three things."));
     const goals = html.match(/<table class="tbl" id="goals">[^]*?<\/table>/)![0];
     expect(goals).toContain("<th>Job</th>");
     for (const id of ["fac-1.1", "fac-1.2", "fac-1.3"]) expect(goals).toContain(`href="#/issues/fac/${id.slice(4)}"`);

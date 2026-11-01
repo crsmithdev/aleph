@@ -45,7 +45,7 @@ export function renderFilters(jobs, f = {}) {
   const repos = [...new Set([...jobs.map((j) => j.repo), f.repo].filter(Boolean))].sort();
   return filterBar([
     { label: "Project", name: "repo", value: f.repo || "", options: [{ value: "", label: "All" }, ...repos] },
-    { label: "State", name: "state", value: f.state || "", options: [{ value: "", label: "All" }, ...STATES] },
+    { label: "Condition", name: "state", value: f.state || "", options: [{ value: "", label: "All" }, ...STATES] },
     { label: "Window", name: "days", value: f.days || "", options: [{ value: "", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }] },
   ]);
 }
@@ -54,7 +54,7 @@ export function renderJobs(jobs, f = {}) {
   // Columns: id, title, state, project, then started, took, cost, model. Rows past the first page are hidden until the pager shows them.
   const rows = jobs.map((j, i) =>
     `<tr${i >= PAGE ? " hidden" : ""}><td>${idLink(localId(j.name, j.repo), href(`/jobs/${encodeURIComponent(j.name)}`))}</td>` +
-    `<td class="wide" title="${esc(j.item?.title || j.name)}">${esc(j.item?.title || j.name)}</td><td>${badge(j.state)}</td><td>${esc(j.repo)}</td>` +
+    `<td class="wide" title="${esc(j.item?.title || j.name)}">${esc(j.item?.title || j.name)}</td><td>${badge(j.condition)}</td><td>${esc(j.repo)}</td>` +
     `<td class="time">${esc(when(j.started))}</td><td class="num">${j.ended ? esc(span(j.started, j.ended)) : ""}</td>` +
     `<td class="num">${j.cost !== undefined ? costHtml(j.cost, j.wk) : ""}</td><td>${esc(shortModel(j.model))}</td></tr>`).join("");
   return `<div class="page">${pageHead("Jobs", { count: jobs.length })}${renderFilters(jobs, f)}` + (rows
@@ -90,7 +90,7 @@ dl.facts.job-facts { margin: 8px 0 18px; }
 export function renderRuns(runs) {
   // Columns: kind (id), reason (title), state, model, then took, cost, started.
   const rows = runs.map((r) =>
-    `<tr class="run run-${esc(r.kind)}"><td>${esc(r.kind)}</td><td class="wide" title="${esc(r.reason ?? "")}">${esc(r.reason ?? "")}</td><td>${badge(r.state)}</td><td>${esc(shortModel(r.model))}</td>` +
+    `<tr class="run run-${esc(r.kind)}"><td>${esc(r.kind)}</td><td class="wide" title="${esc(r.reason ?? "")}">${esc(r.reason ?? "")}</td><td>${badge(r.condition)}</td><td>${esc(shortModel(r.model))}</td>` +
     `<td class="num">${r.ended ? esc(span(r.started, r.ended)) : ""}</td><td class="num">${r.cost !== undefined ? costHtml(r.cost, r.wk) : ""}</td>` +
     `<td class="time">${esc(when(r.started))}</td></tr>`).join("");
   return `<div class="sh"><h2>Runs</h2><span class="count">${runs.length}</span></div>` +
@@ -105,7 +105,7 @@ const log = (title, body) => body ? `<div class="sh"><h2>${esc(title)}</h2></div
 export function renderJob(j) {
   const checks = (j.checks ?? []).map((c) => `<li>${c.ok ? "✓" : "✗"} ${esc(c.name)} <span class="quiet">${esc(c.seconds)} s</span></li>`).join("");
   return `${JOB_STYLE}<div class="page">${crumb("#/jobs", [[j.repo, `#/jobs?repo=${encodeURIComponent(j.repo)}`], ["jobs", "#/jobs"], [localId(j.name, j.repo)]])}` +
-    pageHead(j.item?.title || j.name) + `<div class="status-row">${badge(j.state)}</div>` +
+    pageHead(j.item?.title || j.name) + `<div class="status-row">${badge(j.condition)}</div>` +
     `<dl class="facts job-facts">${fact("Repo", esc(j.repo))}${fact("Started", esc(when(j.started)))}${j.cost !== undefined ? fact("Cost", costHtml(j.cost, j.wk)) : ""}` +
     `${j.model ? fact("Model", esc(shortModel(j.model))) : ""}${j.commit ? fact("Commit", j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`) : ""}` +
     `${j.trace ? fact("Trace", `<a href="${esc(j.trace)}">Langfuse</a>`) : ""}</dl>` +
@@ -117,7 +117,7 @@ export function renderJob(j) {
     (checks ? `<div class="sh"><h2>Checks</h2></div><ul class="checks">${checks}</ul>` : "") +
     log("Diff stat", j.stat) + log("checks.log, last 80 lines", j.checksLog) + log("Worker stderr, last 80 lines", j.stderr) +
     `<div class="sh"><h2>Diff</h2></div><button class="cmd" type="button" data-diff="${esc(j.name)}"><span>Load the diff</span></button><pre class="diff" id="diff" hidden></pre>` +
-    (j.state === "awaiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") + `</div>`;
+    (j.condition === "awaiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") + `</div>`;
 }
 
 /** Colour a unified diff's lines. */

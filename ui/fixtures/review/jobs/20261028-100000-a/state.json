@@ -4,7 +4,7 @@
   "name": "demo-3",
   "repo": "demo",
   "branch": "factory/demo-3",
-  "state": "awaiting",
+  "condition": "awaiting",
   "reason": "changes a held path: config.yml",
   "stat": " config.yml | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)",
   "told": true,

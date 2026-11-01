@@ -91,7 +91,7 @@ export function spansFor(t: TraceInput): Span[] {
   const model = t.run.model ?? w.model;
   const cost = t.run.cost ?? w.cost;
   const meta = {
-    "langfuse.trace.metadata.state": t.run.state,
+    "langfuse.trace.metadata.state": t.run.condition,
     "langfuse.trace.metadata.reason": t.run.reason,
     "langfuse.trace.metadata.model": model,
     "langfuse.trace.metadata.cost": cost,

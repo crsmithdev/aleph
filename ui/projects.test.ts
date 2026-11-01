@@ -31,8 +31,8 @@ beforeAll(async () => {
   sh(base, "git", "init", "-q", "-b", "main", fac);
   sh(fac, "git", "remote", "add", "origin", "git@github.com:chris/fac.git");
   sh(fac, "git", "commit", "-q", "--allow-empty", "-m", "first");
-  sh(fac, "git", "commit", "-q", "--allow-empty", "-m", "second\n\nItem: fac-2");
-  sh(fac, "git", "commit", "-q", "--allow-empty", "-m", "third\n\nIssue: fac-3\nGoal: fac-3.1\nJob: x");
+  sh(fac, "git", "commit", "-q", "--allow-empty", "-m", "second\n\nIssue: fac-2");
+  sh(fac, "git", "commit", "-q", "--allow-empty", "-m", "third\n\nIssue: fac-3.1\nJob: x");
   sh(fac, "git", "commit", "-q", "--allow-empty", "-m", "fourth\n\nGoal: fac-4.1");
   sh(fac, "git", "update-ref", "refs/remotes/origin/main", "HEAD");
   sh(fac, "git", "reset", "-q", "--hard", "HEAD~1");
@@ -48,9 +48,9 @@ beforeAll(async () => {
     mkdirSync(join(jobs, id));
     writeFileSync(join(jobs, id, "state.json"), JSON.stringify({ kind: "build", told: true, started: "2026-10-27T10:00:00Z", ...o }));
   };
-  run("20261027-100000-a", { job: "fac-1", name: "fac-1", repo: "fac", state: "landed", on: "fac-1", ended: "2026-10-27T11:00:00Z" });
-  run("20261027-110000-a", { job: "fac-2", name: "fac-2", repo: "fac", state: "running" });
-  run("20261027-120000-a", { job: "plain-1", name: "plain-1", repo: "plain", state: "landed", ended: "2026-10-27T13:00:00Z" });
+  run("20261027-100000-a", { job: "fac-1", name: "fac-1", repo: "fac", condition: "landed", on: "fac-1", ended: "2026-10-27T11:00:00Z" });
+  run("20261027-110000-a", { job: "fac-2", name: "fac-2", repo: "fac", condition: "running" });
+  run("20261027-120000-a", { job: "plain-1", name: "plain-1", repo: "plain", condition: "landed", ended: "2026-10-27T13:00:00Z" });
   writeFileSync(join(vault, "wiki", "A fact.md"), note("concept", "fac", "2026-10-01"));
   writeFileSync(join(vault, "wiki", "B fact.md"), note("gotcha", "fac", "2026-10-20"));
   writeFileSync(join(vault, "wiki", "C fact.md"), note("concept", "plain", "2026-10-05"));
@@ -60,7 +60,7 @@ beforeAll(async () => {
   }
   Object.assign(process.env, gitEnv);
   writeList({ key: "fac" }, "seed", (doc) => {
-    add(doc, "a goal").fm.kind = "goal";
+    add(doc, "a goal", { spec: "Do it." });
     add(doc, "plain issue");
     return true;
   }, true);
@@ -82,9 +82,9 @@ test("/api/projects counts, behind, baseline and notes", async () => {
   expect(plain).toMatchObject({ factory: false, openItems: 0, openGoals: 0, behind: null, baseline: null, notes: 1 });
 });
 
-test("/api/projects/<key> adds commits with their Issue, Goal or Item trailer, issues, jobs and notes", async () => {
+test("/api/projects/<key> adds commits with their Issue trailer, issues, jobs and notes", async () => {
   const d: any = await (await at("/api/projects/fac")).json();
-  expect(d.commits.map((c: any) => [c.subject, c.item])).toEqual([["fourth", "fac-4.1"], ["third", "fac-3"], ["second", "fac-2"], ["first", null]]);
+  expect(d.commits.map((c: any) => [c.subject, c.item])).toEqual([["fourth", null], ["third", "fac-3.1"], ["second", "fac-2"], ["first", null]]);
   expect(d.commits[0].commitUrl).toBe(`https://github.com/chris/fac/commit/${d.commits[0].hash}`);
   expect(d.items.map((i: any) => i.title)).toEqual(["a goal", "plain issue"]);
   expect(d.jobs.map((j: any) => j.name)).toEqual(["fac-2", "fac-1"]);
@@ -94,9 +94,9 @@ test("/api/projects/<key> adds commits with their Issue, Goal or Item trailer, i
 
 test("/api/projects/<key> gives a job's item from its on (a dotted on stays a string), else its todo", async () => {
   const runs: [string, object][] = [
-    ["20261001-100000-b", { job: "plain-on", name: "plain-on", repo: "plain", state: "running", on: "plain-7" }],
-    ["20261001-110000-b", { job: "plain-goal", name: "plain-goal", repo: "plain", state: "running", on: "plain-8.1" }],
-    ["20261001-120000-b", { job: "plain-todo", name: "plain-todo", repo: "plain", state: "running", on: "plain-9" }],
+    ["20261001-100000-b", { job: "plain-on", name: "plain-on", repo: "plain", condition: "running", on: "plain-7" }],
+    ["20261001-110000-b", { job: "plain-goal", name: "plain-goal", repo: "plain", condition: "running", on: "plain-8.1" }],
+    ["20261001-120000-b", { job: "plain-todo", name: "plain-todo", repo: "plain", condition: "running", on: "plain-9" }],
   ];
   for (const [id, o] of runs) {
     mkdirSync(join(base, "jobs", id));

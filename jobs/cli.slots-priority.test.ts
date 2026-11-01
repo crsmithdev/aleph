@@ -23,7 +23,7 @@ describe("run units get a low priority", () => {
     expect(agent).toContain("--property=CPUWeight=20");
     expect(agent).toContain("--nice=10");
     const r = await job("landprio", "commit landprio.txt");
-    expect(state(r.json.run).state).toBe("passed");
+    expect(state(r.json.run).condition).toBe("passed");
     await aleph(["land", "landprio"], viaSystemd());
     const land = entries().find((e) => e.includes("-demo-landprio-land"))!;
     expect(land).toContain("--property=CPUWeight=20");

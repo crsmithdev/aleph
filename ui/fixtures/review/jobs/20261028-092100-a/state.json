@@ -4,7 +4,7 @@
   "name": "demo-1",
   "repo": "demo",
   "branch": "factory/demo-1",
-  "state": "landed",
+  "condition": "landed",
   "commit": "a1b2c3d",
   "told": true,
   "started": "2026-10-28T09:21:00.000Z",

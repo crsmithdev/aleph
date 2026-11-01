@@ -3,7 +3,7 @@
   "job": "plan-demo-14",
   "name": "plan-demo-14",
   "repo": "demo",
-  "state": "running",
+  "condition": "running",
   "told": false,
   "started": "2026-10-28T11:20:00.000Z",
   "on": "demo-14"

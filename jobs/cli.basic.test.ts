@@ -18,7 +18,7 @@ describe("job", () => {
     const r = await aleph(["job", "De mo", "alpha", "--spec", "-"], {}, "Goal: alpha\nACTION: commit a.txt\n");
     expect(r.code).toBe(0);
     const s = state(r.json.run);
-    expect(s).toMatchObject({ kind: "build", name: "alpha", repo: "demo", state: "passed", told: true, branch: "job/alpha", worktree: worktree("alpha") });
+    expect(s).toMatchObject({ kind: "build", name: "alpha", repo: "demo", condition: "passed", told: true, branch: "job/alpha", worktree: worktree("alpha") });
     expect(s.session).toMatch(/^[0-9a-f-]{36}$/);
     expect(s.phase).toBeUndefined();
     expect(file(r.json.run, "exit")).toBe("0");
@@ -44,7 +44,7 @@ describe("job", () => {
     const first = readdirSync(jobsDir).sort().find((d) => d.endsWith("-demo-alpha-build"))!;
     expect(r.json.job).toBe(first);
     expect(r.json.run).not.toBe(first);
-    expect(state(r.json.run).state).toBe("passed");
+    expect(state(r.json.run).condition).toBe("passed");
     expect(existsSync(join(jobsDir, first, "notes", "001.md"))).toBe(true);
     const prompt = readFileSync(join(fakeLog, "prompt"), "utf8");
     expect(prompt).toContain("You are a worker on job `alpha`");
@@ -59,7 +59,7 @@ describe("job", () => {
   test("jobs lists open jobs; jobs <name> adds the result", async () => {
     const list = await aleph(["jobs"]);
     const alpha = list.json.find((j: any) => j.name === "alpha");
-    expect(alpha).toMatchObject({ repo: "demo", goal: "Goal: alpha", state: "passed" });
+    expect(alpha).toMatchObject({ repo: "demo", goal: "Goal: alpha", condition: "passed" });
     const one = await aleph(["jobs", "alpha"]);
     expect(one.json.result).toBe("did commit b.txt");
     expect(one.json.checks).toContain("## tests: exit 0");
@@ -91,10 +91,10 @@ describe("job", () => {
   test("drop removes the worktree and branch and ends the job", async () => {
     const r = await aleph(["drop", "alpha", "not", "needed"]);
     expect(r.code).toBe(0);
-    expect(r.json).toMatchObject({ state: "dropped", reason: "not needed" });
+    expect(r.json).toMatchObject({ condition: "dropped", reason: "not needed" });
     expect(existsSync(worktree("alpha"))).toBe(false);
     expect(branchExists("alpha")).toBe(false);
-    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "alpha")).toMatchObject({ state: "dropped" });
+    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "alpha")).toMatchObject({ condition: "dropped" });
     expect((await aleph(["drop", "alpha"])).code).toBe(1);
   });
 
@@ -103,7 +103,7 @@ describe("job", () => {
     const r = await job("alpha", "commit d.txt");
     expect(r.json.job).toBe(r.json.run);
     expect(r.code).toBe(0);
-    expect(state(r.json.run).state).toBe("passed");
+    expect(state(r.json.run).condition).toBe("passed");
     expect(sh(worktree("alpha"), "git", "log", "--format=%s")).toBe("add d.txt\ninit");
     await aleph(["drop", "alpha"]);
   });
@@ -113,38 +113,38 @@ describe("the state rule", () => {
   test("a non-zero exit fails", async () => {
     const r = await job("exits", "exit3");
     expect(r.code).not.toBe(0);
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "worker exited 3" });
+    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "worker exited 3" });
     expect(told).toContain("demo/exits failed");
   });
 
   test("a question needs Chris", async () => {
     const r = await job("asks", "question");
-    expect(state(r.json.run)).toMatchObject({ state: "awaiting", ask: expect.objectContaining({ kind: "input", reason: "question" }), question: "which colour?" });
+    expect(state(r.json.run)).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ kind: "input", reason: "question" }), question: "which colour?" });
     expect(told).toContain("demo/asks awaiting question");
   });
 
   test("an untracked file fails", async () => {
     const r = await job("messy", "untracked");
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "uncommitted: stray.txt" });
+    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "uncommitted: stray.txt" });
   });
 
   test("no commits is done, and the worktree goes", async () => {
     const r = await job("idle", "none");
-    expect(state(r.json.run)).toMatchObject({ state: "done" });
+    expect(state(r.json.run)).toMatchObject({ condition: "done" });
     expect(existsSync(worktree("idle"))).toBe(false);
     expect(branchExists("idle")).toBe(false);
   });
 
   test("a failing check fails, with its name in the news", async () => {
     const r = await job("broken", "commit FAIL");
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "tests failed" });
+    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "tests failed" });
     expect(told).toContain("demo/broken failed tests");
     expect(file(r.json.run, "checks.log")).toContain("## tests: exit 1");
   });
 
   test("a change under a manual glob runs its checks and passes, keeping what to check", async () => {
     const r = await job("phone", "commit android/app.txt");
-    expect(state(r.json.run)).toMatchObject({ state: "passed", say: "run it on the phone" });
+    expect(state(r.json.run)).toMatchObject({ condition: "passed", say: "run it on the phone" });
     expect(state(r.json.run).needs).toBeUndefined();
     expect(readFileSync(join(base, "android.log"), "utf8")).toBe("built\n");
     await aleph(["drop", "phone"]);
@@ -157,12 +157,12 @@ describe("the state rule", () => {
     // cut it short. The bound was 10s and flaked under load: the assertion is
     // that the sleep did not run, not that the machine was idle.
     expect(Date.now() - start).toBeLessThan(30_000);
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "timed out: worker" });
+    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "timed out: worker" });
   });
 
   test("a check past its limit is stopped and fails as timed out", async () => {
     const r = await job("slowcheck", "commit slow/x.txt", { ALEPH_CHECK_TIMEOUT: "1" });
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "timed out: check slow" });
+    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "timed out: check slow" });
   });
 });
 
@@ -199,9 +199,9 @@ describe("guards", () => {
       if (first === none) {
         const seen = (await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name)).map((j: any) => {
           const at = (f: string) => existsSync(join(jobsDir, j.run, f)) ? readFileSync(join(jobsDir, j.run, f), "utf8").trim() : null;
-          return { name: j.name, state: j.state, phase: j.phase, pid: at("pid"), exit: at("exit") };
+          return { name: j.name, condition: j.condition, phase: j.phase, pid: at("pid"), exit: at("exit") };
         });
-        for (const j of await mine()) if (j.state === "running") await aleph(["drop", j.name]);
+        for (const j of await mine()) if (j.condition === "running") await aleph(["drop", j.name]);
         const late = await Promise.allSettled(started);
         const stderr = late.map((l, i) => `${names[i]}: ${l.status === "fulfilled" ? l.value.stderr : String(l.reason)}`);
         throw new Error(`no start returned in 150 s\n${JSON.stringify(seen, null, 1)}\nstderr (after drop; look for "wrote no pid"):\n${stderr.join("\n")}`);
@@ -211,17 +211,17 @@ describe("guards", () => {
       expect(refused.stderr).toContain("5 agent runs are live");
       // The refusal comes as soon as the fifth unit wrote `pid`; on a loaded machine some are still in phase setup.
       let live = await mine();
-      for (const end = Date.now() + 90_000; Date.now() < end && !(live.length === 5 && live.every((j: any) => j.state === "running" && j.phase === "worker")); live = await mine()) await Bun.sleep(100);
+      for (const end = Date.now() + 90_000; Date.now() < end && !(live.length === 5 && live.every((j: any) => j.condition === "running" && j.phase === "worker")); live = await mine()) await Bun.sleep(100);
       expect(live.length).toBe(5);
-      expect(live.every((j: any) => j.state === "running" && j.phase === "worker")).toBe(true);
+      expect(live.every((j: any) => j.condition === "running" && j.phase === "worker")).toBe(true);
       for (const j of live) expect((await aleph(["drop", j.name])).code).toBe(0);
       const ends = await Promise.all(started);
       expect(ends.filter((r) => r.code === 143).length).toBe(5);
-      for (const j of live) expect(state(j.run).state).toBe("dropped");
-      expect((await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name)).map((j: any) => j.state)).toEqual(live.map(() => "dropped"));
+      for (const j of live) expect(state(j.run).condition).toBe("dropped");
+      expect((await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name)).map((j: any) => j.condition)).toEqual(live.map(() => "dropped"));
     } finally {
       // Drop every run that started, so a failure here does not leave five held runs for the next test.
-      for (const j of await mine()) if (j.state === "running") await aleph(["drop", j.name]);
+      for (const j of await mine()) if (j.condition === "running") await aleph(["drop", j.name]);
       await Promise.allSettled(started);
     }
   }, 300_000);
@@ -239,9 +239,9 @@ describe("news", () => {
   test("a run whose process died shows as lost", async () => {
     const folder = join(jobsDir, "20200101-000000-demo-ghost-agent");
     mkdirSync(folder);
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", job: "20200101-000000-demo-ghost-agent", name: "ghost", repo: "demo", state: "running", told: false, started: "2020-01-01T00:00:00Z" }));
+    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", job: "20200101-000000-demo-ghost-agent", name: "ghost", repo: "demo", condition: "running", told: false, started: "2020-01-01T00:00:00Z" }));
     writeFileSync(join(folder, "pid"), "999999");
-    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "ghost")).toMatchObject({ state: "running", lost: true });
+    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "ghost")).toMatchObject({ condition: "running", lost: true });
     expect((await aleph(["drop", "ghost"])).code).toBe(0);
   });
 });
@@ -250,7 +250,7 @@ describe("run", () => {
   test("a plain command runs in the current directory and says it finished", async () => {
     const r = await aleph(["run", "build", "--", "bash", "-c", 'pwd; echo "it\'s done"']);
     expect(r.code).toBe(0);
-    expect(state(r.json.run)).toMatchObject({ kind: "plain", state: "done", told: true });
+    expect(state(r.json.run)).toMatchObject({ kind: "plain", condition: "done", told: true });
     expect(file(r.json.run, "output.log")).toBe(`${base}\nit's done\n`);
     expect(told).toContain("build finished");
   });
@@ -258,7 +258,7 @@ describe("run", () => {
   test("a failing plain command says it failed", async () => {
     const r = await aleph(["run", "build", "--", "false"]);
     expect(r.code).toBe(1);
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "exited 1" });
+    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "exited 1" });
     expect(told).toContain("build failed");
   });
 });

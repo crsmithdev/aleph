@@ -6,7 +6,7 @@ import { git } from "./git.ts";
 import { facts, itemOnMain, repoStages, recentRepos } from "./status.ts";
 import { writeRun } from "./ledger.ts";
 import type { Repo, Run } from "./ledger.ts";
-import type { Doc } from "../../todo/lib/todo.ts";
+import type { Doc, Issue } from "../../todo/lib/todo.ts";
 
 let base: string, remote: string, clone: string, repo: Repo;
 const env = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -15,8 +15,9 @@ const sh = (cwd: string, ...a: string[]) => {
   if (p.exitCode !== 0) throw new Error(`${a.join(" ")}: ${p.stderr}`);
   return p.stdout.toString().trim();
 };
-const item = (id: number, status: string) => ({ id, title: `t${id}`, fm: { status }, body: "", notes: [], legacy: false });
-const doc: Doc = { head: "", items: [item(1, "open"), item(2, "open"), item(3, "dropped"), item(4, "done")] };
+const closed = (status: string) => (status === "open" ? {} : { closed_as: status });
+const item = (id: number, status: string): Issue => ({ id, title: `t${id}`, fm: closed(status) as Issue["fm"], request: "", spec: "", notes: [] });
+const doc: Doc = { items: [item(1, "open"), item(2, "open"), item(3, "dropped"), item(4, "done")] };
 const commit = (cwd: string, msg: string) => { writeFileSync(join(cwd, msg.replace(/\W/g, "_")), msg); sh(cwd, "git", "add", "-A"); sh(cwd, "git", "commit", "-qm", msg); };
 
 beforeAll(() => {
@@ -36,7 +37,7 @@ afterAll(() => rmSync(base, { recursive: true, force: true }));
 test("without a fetch, the states read origin/main as it is; with one, they see what landed", () => {
   const other = join(base, "other");
   sh(base, "git", "clone", "-q", remote, other);
-  commit(other, "do it\n\nItem: demo-1");
+  commit(other, "do it\n\nIssue: demo-1");
   sh(other, "git", "push", "-q", "origin", "HEAD:main");
 
   const before = repoStages(repo, { fetch: false, doc });
@@ -65,11 +66,11 @@ test("a reverted commit does not make the item done", () => {
 
 test("a triage run does not make its item touched; an agent run does, and the store's done still stands", () => {
   const sandbox: Repo = { ...repo, sandbox: true };
-  const done: Doc = { head: "", items: [item(5, "done"), item(6, "done")] };
-  const run = (job: string, kind: Run["kind"], todo: number | undefined, state: Run["state"]) => {
+  const done: Doc = { items: [item(5, "done"), item(6, "done")] };
+  const run = (job: string, kind: Run["kind"], todo: number | undefined, state: Run["condition"]) => {
     const folder = join(base, "jobs", job);
     mkdirSync(folder, { recursive: true });
-    writeRun(folder, { kind, job, name: job, repo: "demo", ...(todo !== undefined ? { on: `demo-${todo}` } : {}), state, told: true, shown: true, started: new Date().toISOString() });
+    writeRun(folder, { kind, job, name: job, repo: "demo", ...(todo !== undefined ? { on: `demo-${todo}` } : {}), condition: state, told: true, shown: true, started: new Date().toISOString() });
   };
   run("20261028-000001-demo-5-triage", "triage", 5, "done");
   run("20261028-000002-demo-6-agent", "build", 6, "done");
@@ -84,14 +85,14 @@ test("a triage run does not make its item touched; an agent run does, and the st
 });
 
 test("a passed agent run whose later land found the job lock busy leaves the item running, not stuck", () => {
-  const open: Doc = { head: "", items: [item(7, "open")] };
+  const open: Doc = { items: [item(7, "open")] };
   const job = "20261028-000003-demo-7-agent";
   const write = (folder: string, run: Partial<Run>) => {
     mkdirSync(join(base, "jobs", folder), { recursive: true });
-    writeRun(join(base, "jobs", folder), { kind: "build", job, name: job, repo: "demo", on: "demo-7", state: "passed", told: true, shown: true, started: new Date().toISOString(), ...run } as Run);
+    writeRun(join(base, "jobs", folder), { kind: "build", job, name: job, repo: "demo", on: "demo-7", condition: "passed", told: true, shown: true, started: new Date().toISOString(), ...run } as Run);
   };
   write("20261028-000003-demo-7-agent", {});
-  write("20261028-000004-demo-7-land", { kind: "land", state: "failed", reason: "job lock busy" });
+  write("20261028-000004-demo-7-land", { kind: "land", condition: "failed", reason: "job lock busy" });
 
   expect(repoStages(repo, { fetch: false, doc: open, items: [7] }).map((s) => [s.id, s.stage, s.why])).toEqual([
     ["demo-7", "building", "its job is passed"],
@@ -100,26 +101,26 @@ test("a passed agent run whose later land found the job lock busy leaves the ite
 
 test("recentRepos keeps repos with an item updated in the last week, latest first", () => {
   const mk = (key: string): Repo => ({ ...repo, key });
-  const at = (days: number) => ({ ...doc, items: [{ ...item(1, "open"), fm: { status: "open", updated: new Date(Date.now() - days * 86400_000).toISOString() } }] });
+  const at = (days: number) => ({ ...doc, items: [{ ...item(1, "open"), fm: { updated: new Date(Date.now() - days * 86400_000).toISOString() } }] });
   expect(recentRepos([mk("a"), mk("b"), mk("c")], [at(3), at(30), at(1)])).toEqual([2, 0]);
   expect(recentRepos([mk("a")], [null])).toEqual([]);
 });
 
 test("a touched item the store closed is done without a fresh trailer commit, unless a revert undid its trailer", () => {
   const sandbox: Repo = { ...repo, sandbox: true };
-  const closed: Doc = { head: "", items: [item(11, "done"), item(12, "done"), item(13, "done")] };
+  const closed: Doc = { items: [item(11, "done"), item(12, "done"), item(13, "done")] };
   for (const n of [11, 12, 13]) {
     const folder = join(base, "jobs", `20261028-0001${n}-demo-${n}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeRun(folder, { kind: "build", job: `j${n}`, name: `j${n}`, repo: "demo", on: `demo-${n}`, state: "done", told: true, shown: true, started: new Date().toISOString() });
+    writeRun(folder, { kind: "build", job: `j${n}`, name: `j${n}`, repo: "demo", on: `demo-${n}`, condition: "done", told: true, shown: true, started: new Date().toISOString() });
   }
   // 12: its trailer commit is at or before the acceptance since.
   sh(clone, "git", "fetch", "-q");
   sh(clone, "git", "reset", "-q", "--hard", "origin/main");
-  commit(clone, "land 12\n\nItem: demo-12");
+  commit(clone, "land 12\n\nIssue: demo-12");
   const since = sh(clone, "git", "rev-parse", "HEAD");
   // 13: landed, then reverted.
-  commit(clone, "land 13\n\nItem: demo-13");
+  commit(clone, "land 13\n\nIssue: demo-13");
   sh(clone, "git", "revert", "--no-edit", "HEAD");
   sh(clone, "git", "push", "-q", "origin", "HEAD:main");
   process.env.ALEPH_FACTORY_DIR = join(base, "factory");
@@ -131,33 +132,33 @@ test("a touched item the store closed is done without a fresh trailer commit, un
   expect(states([13])).toEqual([["demo-13", "new"]]);
 });
 
-test("facts carry what stage() needs: status, kind, after, goals, ask kind and each job's last run", () => {
-  const doc: Doc = { head: "", items: [
-    { ...item(21, "open"), fm: { status: "open", kind: "goal", after: ["demo-22"], ask: "approval", reason: "review" } },
-    { ...item(22, "open"), fm: { status: "open", kind: "issue", goals: ["demo-21"] } },
+test("facts carry what stage() needs: status, spec, after, parts, ask kind and each job's last run", () => {
+  const doc: Doc = { items: [
+    { ...item(21, "open"), spec: "s", fm: { after: ["demo-22"], ask: "approval", reason: "review" } },
+    { ...item(22, "open"), fm: {} },
+    { id: 22, sub: 1, title: "p", fm: {}, request: "", spec: "s", notes: [] },
   ] };
   const folder = join(base, "jobs", "20261028-000021-demo-21-build");
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: "j21", name: "j21", repo: "demo", on: "demo-21", state: "awaiting", ask: { kind: "input", reason: "question", question: "?", options: [], why: [] }, told: true, shown: true, started: new Date().toISOString() });
+  writeRun(folder, { kind: "build", job: "j21", name: "j21", repo: "demo", on: "demo-21", condition: "awaiting", ask: { kind: "input", reason: "question", question: "?", options: [], why: [] }, told: true, shown: true, started: new Date().toISOString() });
   const f = facts(repo, doc);
-  expect(f.items[21]).toMatchObject({ id: "demo-21", status: "open", kind: "goal", after: ["demo-22"], goals: [], ask: { kind: "approval", reason: "review" } });
-  expect(f.items[22]).toMatchObject({ kind: "issue", goals: ["demo-21"], after: [] });
-  expect(f.runs[21]).toEqual([{ kind: "build", state: "awaiting", open: true, ask: { kind: "input", reason: "question" } }]);
+  expect(f.items[21]).toMatchObject({ id: "demo-21", status: "open", spec: true, after: ["demo-22"], parts: [], ask: { kind: "approval", reason: "review" } });
+  expect(f.items[22]).toMatchObject({ parts: ["demo-22.1"], after: [] });
+  expect(f.runs[21]).toEqual([{ kind: "build", condition: "awaiting", open: true, ask: { kind: "input", reason: "question" } }]);
 });
 
-test("a dotted ref in after, goals and on resolves to the goal, its runs and its status", () => {
-  const goal = (sub: number, fm: Record<string, unknown>) => ({ id: 5, sub, title: `g${sub}`, fm: { kind: "goal", status: "open", ...fm }, body: "", notes: [], legacy: false });
+test("a dotted ref in after, parts and on resolves to the goal, its runs and its status", () => {
+  const goal = (sub: number, fm: Record<string, unknown>) => ({ id: 5, sub, title: `g${sub}`, fm: { ...fm } as Issue["fm"], request: "", spec: "s", notes: [] });
   const mk = (g1: string): Doc => ({
-    head: "",
     items: [
-      { ...item(5, "open"), fm: { status: "open", goals: ["demo-5.1", "demo-5.2"] } },
-      goal(1, { status: g1 }),
+      { ...item(5, "open"), fm: {} },
+      goal(1, closed(g1)),
       goal(2, { after: ["demo-5.1"] }),
     ],
   });
   const folder = join(base, "jobs", "20261030-000001-demo-5.1-build");
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: "dotted-build", name: "dotted-build", repo: "demo", on: "demo-5.1", state: "running", told: true, shown: true, started: new Date().toISOString() } as Run);
+  writeRun(folder, { kind: "build", job: "dotted-build", name: "dotted-build", repo: "demo", on: "demo-5.1", condition: "running", told: true, shown: true, started: new Date().toISOString() } as Run);
 
   const open = mk("open");
   const f = facts(repo, open);
@@ -172,7 +173,7 @@ test("a dotted ref in after, goals and on resolves to the goal, its runs and its
   expect(issue.stage).toBe("building");
   expect(issue.of).toEqual({ n: 0, m: 2 });
   // the default lists plain items only
-  expect(repoStages(repo, { fetch: false, doc: open }).map((s) => s.id)).toEqual(["demo-5"]);
+  expect(repoStages(repo, { fetch: false, doc: open }).map((s) => s.id)).toEqual(["demo-5", "demo-5.1", "demo-5.2"]);
 
   const done = mk("done");
   expect(st(["5.2"], done)[0].stage).toBe("queued");
@@ -183,7 +184,7 @@ test("a commit with Issue and Goal trailers resolves for its goal", () => {
   const other = join(base, "other");
   sh(other, "git", "pull", "-q", "origin", "main");
   expect(itemOnMain(repo, "2.1")).toBeNull();
-  commit(other, "goal work\n\nIssue: demo-2\nGoal: demo-2.1\nJob: j-goal");
+  commit(other, "goal work\n\nIssue: demo-2.1\nJob: j-goal");
   sh(other, "git", "push", "-q", "origin", "HEAD:main");
   sh(clone, "git", "fetch", "-q");
   expect(itemOnMain(repo, "2.1")).toMatch(/^[0-9a-f]{7}$/);
@@ -194,7 +195,7 @@ test("a commit with Issue and a plain-number Goal trailer resolves for that old 
   const other = join(base, "other");
   sh(other, "git", "pull", "-q", "origin", "main");
   expect(itemOnMain(repo, 7)).toBeNull();
-  commit(other, "old goal work\n\nIssue: demo-2\nGoal: demo-7\nJob: j-old");
+  commit(other, "old goal work\n\nIssue: demo-7\nJob: j-old");
   sh(other, "git", "push", "-q", "origin", "HEAD:main");
   sh(clone, "git", "fetch", "-q");
   expect(itemOnMain(repo, 7)).toMatch(/^[0-9a-f]{7}$/);

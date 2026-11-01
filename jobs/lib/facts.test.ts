@@ -37,7 +37,7 @@ async function review(script: string) {
   const old = { j: process.env.ALEPH_JOBS_DIR, c: process.env.ALEPH_FACTS_CMD };
   process.env.ALEPH_JOBS_DIR = jobs; process.env.ALEPH_FACTS_CMD = bin;
   try {
-    const landed: any = { id: "x", folder: "x", run: { kind: "land", job: "job-1", name: "demo-7", repo: "demo", on: "demo-7", state: "landed", told: true, started: "" } };
+    const landed: any = { id: "x", folder: "x", run: { kind: "land", job: "job-1", name: "demo-7", repo: "demo", on: "demo-7", condition: "landed", told: true, started: "" } };
     const r = await reviewFacts({ key: "demo", path: repo, main: "main" } as any, landed, FACTS, "abc1234");
     const state = JSON.parse(readFileSync(join(r.folder, "state.json"), "utf8"));
     return { r, state, stdin: existsSync(seen) ? readFileSync(seen, "utf8") : "" };
@@ -55,12 +55,12 @@ test("reviewFacts keeps one fact and rejects one", async () => {
   const { r, state, stdin } = await review(`echo '${reply}'`);
   expect(r.verdicts.map((v) => [v.verdict, v.reason, v.source])).toEqual([["keep", "a.txt says so", "a.txt:1"], ["reject", "b.txt says otherwise", "b.txt"]]);
   for (const s of ["alpha holds", "a.txt:1", "beta holds", "b.txt", "abc1234"]) expect(stdin).toContain(s);
-  expect(state).toMatchObject({ kind: "facts", state: "done", shown: false, job: "job-1", reason: "kept 1, rejected 1", model: "claude-opus-5-5" });
+  expect(state).toMatchObject({ kind: "facts", condition: "done", shown: false, job: "job-1", reason: "kept 1, rejected 1", model: "claude-opus-5-5" });
 });
 
 test("a reply with no JSON fails the run and rejects every fact", async () => {
   const { r, state } = await review("echo nothing useful");
-  expect(state.state).toBe("done");
+  expect(state.condition).toBe("done");
   expect(state.reason).toStartWith("failed: malformed verdicts");
   expect(r.verdicts.map((v) => v.verdict)).toEqual(["reject", "reject"]);
 });
@@ -184,11 +184,11 @@ describe("factsGate through the dispatch", () => {
     const w = join(jobs, id);
     mkdirSync(w, { recursive: true });
     const base = { job: id, name, repo: "fac", told: true, shown: true };
-    writeFileSync(join(w, "state.json"), JSON.stringify({ ...base, kind: "build", state: "passed", started: "2026-10-28T00:00:00Z" }));
+    writeFileSync(join(w, "state.json"), JSON.stringify({ ...base, kind: "build", condition: "passed", started: "2026-10-28T00:00:00Z" }));
     writeFileSync(join(w, "result.md"), result);
     const l = join(jobs, `${id}-land`);
     mkdirSync(l, { recursive: true });
-    writeFileSync(join(l, "state.json"), JSON.stringify({ ...base, kind: "land", state: "landed", commit: "abc1234def", started: "2026-10-28T00:01:00Z" }));
+    writeFileSync(join(l, "state.json"), JSON.stringify({ ...base, kind: "land", condition: "landed", commit: "abc1234def", started: "2026-10-28T00:01:00Z" }));
   }
   const factsRuns = () => (existsSync(jobs) ? readdirSync(jobs).filter((f) => f.endsWith("-facts")) : []);
   const reviewer = (reply: object) => {
@@ -256,7 +256,7 @@ describe("factsGate through the dispatch", () => {
     expect(factsRuns()).toHaveLength(before);
     const land = JSON.parse(readFileSync(join(jobs, "20261028-000004-gate-04-land", "state.json"), "utf8"));
     expect(land.facts).toBe(true);
-    expect(land.state).toBe("landed");
+    expect(land.condition).toBe("landed");
   });
 
   test("a job with no FACT lines gets the marker; a sourced one gets one run over two dispatches", async () => {
@@ -270,7 +270,7 @@ describe("factsGate through the dispatch", () => {
     for (const n of ["000005-gate-05", "000006-gate-06"]) {
       const land = JSON.parse(readFileSync(join(jobs, `20261028-${n}-land`, "state.json"), "utf8"));
       expect(land.facts).toBe(true);
-      expect(land.state).toBe("landed");
+      expect(land.condition).toBe("landed");
     }
   });
 });

@@ -17,7 +17,7 @@ describe("a factory run", () => {
   test("the worker's branch comes back as a bundle; the run passes and its run folder is gone", async () => {
     const r = await fjob("fpass", "commit fpass.txt");
     const s = state(r.json.run);
-    expect(s).toMatchObject({ kind: "build", state: "passed", branch: "factory/fpass", cost: 0.01, defaults: [] });
+    expect(s).toMatchObject({ kind: "build", condition: "passed", branch: "factory/fpass", cost: 0.01, defaults: [] });
     expect(s.worktree).toBeUndefined();
     expect(factoryBranch("fpass")).toBe(true);
     expect(sh(repo, "git", "log", "-1", "--format=%s", "factory/fpass")).toBe("add fpass.txt");
@@ -39,7 +39,7 @@ describe("a factory run", () => {
     const j = await fjob("fitem", "commit fitem.txt", {}, ["--on", String(id)]);
     const r = await aleph(["land", "fitem"]);
     const s = state(r.json.run);
-    expect(s).toMatchObject({ kind: "land", state: "landed" });
+    expect(s).toMatchObject({ kind: "land", condition: "landed" });
     expect(remoteGit("log", "-1", "--format=%B", "main").trim()).toBe(`add fitem.txt\n\nIssue: fac-${id}\nJob: ${j.json.job}`);
     expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main").trim()).toBe(`Issue: fac-${id}\nJob: ${j.json.job}`);
     expect(readFileSync(join(base, "trees"), "utf8").trim().split("\n").at(-1)).toBe(remoteGit("rev-parse", "main^{tree}"));
@@ -49,27 +49,27 @@ describe("a factory run", () => {
     expect(runsLeft()).toEqual([]);
   });
 
-  test("a goal .1 lands with Issue, Goal and Job trailers; its run is a build run on the goal, and the issue is done", async () => {
+  test("an issue lands with Issue and Job trailers; its run is a build run on it, and the issue is done", async () => {
     const GOAL = "## Goal\n\nAdd a file.\n\n## Oracle\n\n`bun test`\n\n## Time box\n\n10 minutes\n";
-    const added = (await aleph(["issue", "add", "fac", "t", "--goal", "-"], { ALEPH_DISPATCH: "off" }, GOAL)).json;
+    const added = (await aleph(["issue", "add", "fac", "t", "--spec", "-"], { ALEPH_DISPATCH: "off" }, GOAL)).json;
     const id = added.added as number;
-    const j = await fjob("fgoal", "commit fgoal.txt", {}, ["--on", `${id}.1`]);
+    const j = await fjob("fgoal", "commit fgoal.txt", {}, ["--on", `${id}`]);
     const s0 = state(j.json.run);
-    expect(s0).toMatchObject({ kind: "build", on: `fac-${id}.1`, state: "passed" });
+    expect(s0).toMatchObject({ kind: "build", on: `fac-${id}`, condition: "passed" });
     expect(s0.todo).toBeUndefined();
     expect(j.json.run).toEndWith("-build");
     const r = await aleph(["land", "fgoal"]);
-    expect(state(r.json.run)).toMatchObject({ kind: "land", state: "landed", on: `fac-${id}.1` });
-    expect(remoteGit("log", "-1", "--format=%B", "main").trim()).toBe(`add fgoal.txt\n\nIssue: fac-${id}\nGoal: fac-${id}.1\nJob: ${j.json.job}`);
+    expect(state(r.json.run)).toMatchObject({ kind: "land", condition: "landed", on: `fac-${id}` });
+    expect(remoteGit("log", "-1", "--format=%B", "main").trim()).toBe(`add fgoal.txt\n\nIssue: fac-${id}\nJob: ${j.json.job}`);
     const st = await aleph(["status", `fac-${id}`]);
     expect(st.stdout).toContain("done");
   });
 
   test("an error result, no result, a line after the result, or no commit ends stuck", async () => {
-    expect(state((await fjob("ferr", "error")).json.run)).toMatchObject({ state: "stuck", reason: "API Error: 500" });
-    expect(state((await fjob("fnone", "noresult")).json.run)).toMatchObject({ state: "stuck", reason: expect.stringContaining('"type":"assistant"') });
-    expect(state((await fjob("ftrail", "trailing")).json.run)).toMatchObject({ state: "stuck", reason: "one more line" });
-    expect(state((await fjob("fidle", "none")).json.run)).toMatchObject({ state: "stuck", reason: "no commit" });
+    expect(state((await fjob("ferr", "error")).json.run)).toMatchObject({ condition: "stuck", reason: "API Error: 500" });
+    expect(state((await fjob("fnone", "noresult")).json.run)).toMatchObject({ condition: "stuck", reason: expect.stringContaining('"type":"assistant"') });
+    expect(state((await fjob("ftrail", "trailing")).json.run)).toMatchObject({ condition: "stuck", reason: "one more line" });
+    expect(state((await fjob("fidle", "none")).json.run)).toMatchObject({ condition: "stuck", reason: "no commit" });
     expect(told).toContain("fac/ferr stuck");
     for (const n of ["ferr", "fnone", "ftrail", "fidle"]) await aleph(["drop", n]);
   });
@@ -77,13 +77,13 @@ describe("a factory run", () => {
   test("a worker that says the goal is already met, with the checks green on main, closes the item", async () => {
     const id = (await aleph(["issue", "add", "fac", "timeline already uses itemTimes"])).json.added;
     const r = await fjob("fmet", "already-met", {}, ["--on", String(id)]);
-    expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "no commit" });
+    expect(state(r.json.run)).toMatchObject({ condition: "stuck", reason: "no commit" });
     // A tick's probe runs the sandbox; a passing probe is written as the other tick tests do.
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     const tick = await aleph(["tick"]);
     expect(tick.json.episodes).toEqual(expect.any(Array));
-    expect(state(r.json.run)).toMatchObject({ state: "dropped", reason: expect.stringContaining("the item is done") });
+    expect(state(r.json.run)).toMatchObject({ condition: "dropped", reason: expect.stringContaining("the item is done") });
     expect((await aleph(["issue", "show", "fac", String(id), "--json"])).json.status).toBe("done");
     expect(runsLeft()).toEqual([]);
   }, 60_000);
@@ -111,10 +111,9 @@ describe("a worker's FOLLOWUP line (criterion 15)", () => {
     expect(r.code, r.stderr).toBe(0);
     const added = (await titles()).filter((i) => !before.includes(i.id));
     expect(added).toHaveLength(1);
-    expect(added[0]).toMatchObject({ title: "paint the fence", source: "worker", kind: "issue" });
+    expect(added[0]).toMatchObject({ title: "paint the fence", source: "worker" });
     const full = (await aleph(["issue", "show", "fac", String(added[0].id), "--json"])).json;
-    expect(full.body).toContain("## Request");
-    expect(full.body).toContain("ffollow");
+    expect(full.request).toContain("ffollow");
     expect((await aleph(["status", `fac-${added[0].id}`])).stdout).toContain("new");
     expect(existsSync(join(base, "factory", "followups.log"))).toBe(false);
 

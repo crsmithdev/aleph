@@ -16,7 +16,7 @@ describe("a factory run", () => {
 
     test("one trace is posted, its session id the job id", async () => {
       const r = await fjob("ftrace", "commit ftrace.txt", langfuse());
-      expect(state(r.json.run).state).toBe("passed");
+      expect(state(r.json.run).condition).toBe("passed");
       const all = spans();
       expect(all.length).toBeGreaterThan(0);
       const root = all.find((s: any) => !s.parentSpanId);
@@ -31,7 +31,7 @@ describe("a factory run", () => {
     test("with Langfuse answering 500 the verdict is unchanged and one line is logged", async () => {
       setLfStatus(500);
       const r = await fjob("ftrace500", "commit ftrace500.txt", langfuse());
-      expect(state(r.json.run).state).toBe("passed");
+      expect(state(r.json.run).condition).toBe("passed");
       expect(file(r.json.run, "trace.log").trim().split("\n").length).toBe(1);
     });
 

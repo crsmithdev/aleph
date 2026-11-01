@@ -15,11 +15,11 @@ const noGoal = (html: string) => expect(visible(html)).not.toMatch(/goal/i);
 // Attributes the reader meets too: placeholders, titles and aria labels.
 const attrs = (html: string) => [...html.matchAll(/\b(?:title|placeholder|aria-label|data-label)="([^"]*)"/g)].map((m) => m[1]).join(" ");
 
-const issue = { id: "aleph-3", title: "An issue", status: "open", href: "#/issues/aleph/3", labels: ["goal", "ui"], notes: 2, created: "2026-10-20", updated: "2026-10-25" };
+const issue = { id: "aleph-3", title: "An issue", status: "open", href: "#/issues/aleph/3", labels: ["ui"], notes: 2, created: "2026-10-20", updated: "2026-10-25" };
 const project = {
   key: "aleph", path: "/x/aleph", factory: true, openItems: 2, openGoals: 1, behind: 0, notes: 1, activity: "2026-10-25T00:00:00Z",
   baseline: { commit: "abcdef1234", ok: true }, lastLanded: null,
-  items: [{ id: 3, title: "An issue", labels: ["goal"] }], commits: [], jobs: [], vault: [],
+  items: [{ id: 3, title: "An issue", labels: [] }], commits: [], jobs: [], vault: [],
 };
 
 // The Issue page, the Inventory page and the Status lanes use the work model's names, so they say goal (see state.test.ts and issues.test.ts); the pages below keep the old rule.
@@ -27,19 +27,18 @@ describe("the UI never says goal", () => {
   const pages: [string, string][] = [
     ["issueCard full", issueCard(issue, "full")],
     ["issueCard compact", issueCard(issue, "compact")],
-    ["triageCard full", triageCard({ name: "triage-aleph-3", state: "done", outcome: "goal", item: { title: "x" } }, "full")],
-    ["triageCard compact", triageCard({ name: "triage-aleph-3", state: "done", outcome: "goal", item: { title: "x" } }, "compact")],
+    ["triageCard full", triageCard({ name: "triage-aleph-3", condition: "done", outcome: "goal", item: { title: "x" } }, "full")],
+    ["triageCard compact", triageCard({ name: "triage-aleph-3", condition: "done", outcome: "goal", item: { title: "x" } }, "compact")],
     ["project card", renderCard(project)],
     ["project detail", renderDetail(project)],
     ["now issues", renderLanes({ stuck: [], issues: [{ id: 3, title: "x", repo: "aleph" }], factory: { health: [] } })],
   ];
   for (const [name, html] of pages) test(name, () => { noGoal(html); noGoal(attrs(html)); });
 
-  test("the goal label shows as factory, and the form still adds it", () => {
-    expect(issueCard(issue, "full")).toContain("factory, ui");
-    expect(triageCard({ name: "t", state: "done", outcome: "goal" }, "full")).toContain("To factory");
+  test("a triage to build says factory, and the form still files a spec", () => {
+    expect(triageCard({ name: "t", condition: "done", outcome: "build" }, "full")).toContain("To factory");
     const form = renderContents({ projects: [], issues: [] });
-    expect(form).toContain("Build in the factory");
+    expect(form).toContain("build it in the factory");
     expect(form).toContain('name="goal"');
   });
 });

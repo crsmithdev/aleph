@@ -16,7 +16,7 @@ describe("every transition dispatches at once", () => {
   const runs = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`));
   // Settled: no start is in flight (its run folder may not be there yet), and every run has ended and its unit,
   // with its run-end dispatch, has exited.
-  const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).state !== "running" && !unitAlive(join(jobsDir, r)));
+  const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).condition !== "running" && !unitAlive(join(jobsDir, r)));
   // An old-shape goal, seeded: no verb of `aleph issue` writes one. `aleph dispatch` starts it; the transitions below are what these tests check.
   const add = async (title: string, action: string, fm: Record<string, unknown> = { kind: "goal" }, env: Record<string, string> = {}) => {
     const id = seedItem("fac", title, fm, `ACTION: ${action}`);
@@ -59,7 +59,7 @@ describe("every transition dispatches at once", () => {
   test("a land that lands starts the goal that waits on that job", async () => {
     const a = track(await add("lands first", "commit tr/a.txt", { kind: "goal" }));
     await until(() => started().includes(`fac-${a}`));
-    await until(() => settled(a) && runs(a).some((r) => state(r).state === "passed"));
+    await until(() => settled(a) && runs(a).some((r) => state(r).condition === "passed"));
     const b = track(await add("waits on the first", open("land"), { kind: "goal", after: [`fac-${a}`] }));
     await Bun.sleep(1000);
     expect(started()).not.toContain(`fac-${b}`);

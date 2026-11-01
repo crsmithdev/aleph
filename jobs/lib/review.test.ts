@@ -47,8 +47,8 @@ Bun.serve({ hostname: "127.0.0.1", port, fetch: () => Response.json({ pid: proce
   sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
   sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(join(base, "items"), "git", "push", "-q", "origin", "main");
-  uiTodo = writeList({ key: "demo" }, "add", (doc) => { const i = issues.add(doc, "a view", { labels: ["ui"], body: "b" }); i.fm.kind = "goal"; return i.id; }, true)!.value;
-  plainTodo = writeList({ key: "demo" }, "add", (doc) => { const i = issues.add(doc, "a fix", { body: "b" }); i.fm.kind = "goal"; return i.id; }, true)!.value;
+  uiTodo = writeList({ key: "demo" }, "add", (doc) => { const i = issues.add(doc, "a view", { labels: ["ui"], spec: "b" }); return i.id; }, true)!.value;
+  plainTodo = writeList({ key: "demo" }, "add", (doc) => { const i = issues.add(doc, "a fix", { spec: "b" }); return i.id; }, true)!.value;
   process.env.TEST_SERVER_MARK = join(base, "server-mark");
   process.env.ALEPH_REVIEW_SETTLE_MS = "0";
   // The stand-in for srt: the clean environment, as cli.test.ts has it.
@@ -72,7 +72,7 @@ function held(id: string, extra: object = {}): string {
   mkdirSync(folder, { recursive: true });
   writeFileSync(join(folder, "spec.md"), "Goal: g\n");
   writeFileSync(join(folder, "state.json"), JSON.stringify({
-    kind: "build", job: id, name: id, repo: "demo", branch: "job/x", state: "awaiting", ask: { kind: "approval", reason: "held-path", question: "held path a.txt", options: [], why: [] }, reason: "held path a.txt", told: false, started: "2026-10-27T10:00:00Z", ...extra,
+    kind: "build", job: id, name: id, repo: "demo", branch: "job/x", condition: "awaiting", ask: { kind: "approval", reason: "held-path", question: "held path a.txt", options: [], why: [] }, reason: "held path a.txt", told: false, started: "2026-10-27T10:00:00Z", ...extra,
   }));
   return folder;
 }
@@ -99,7 +99,7 @@ describe("review", () => {
       expect(readFileSync(join(folder, "call.md"), "utf8")).toContain(text);
       expect(await reviewAt(folder)).toEqual(want);
       expect(state(folder).review).toBeUndefined();
-      expect(state(folder)).toMatchObject({ state: "awaiting", ask: { kind: "approval", reason: "held-path" } });
+      expect(state(folder)).toMatchObject({ condition: "awaiting", ask: { kind: "approval", reason: "held-path" } });
       expect(existsSync(join(folder, "review"))).toBe(false);
     });
   }
@@ -127,7 +127,7 @@ describe("review", () => {
     process.env.ALEPH_REVIEW_CMD = fakeClaude("VERDICT: maybe");
     await runReview(folder);
     expect((await reviewAt(folder))?.call).toBe("error");
-    expect(state(folder)).toMatchObject({ state: "awaiting", ask: { kind: "approval", reason: "held-path" } });
+    expect(state(folder)).toMatchObject({ condition: "awaiting", ask: { kind: "approval", reason: "held-path" } });
   });
 
   /** A reviewer that counts its runs in a file and runs `first` on its first run, `rest` on the others. */
@@ -199,9 +199,9 @@ describe("review", () => {
     process.env.ALEPH_REVIEW_CMD = slow;
     const running = runReview(folder);
     await Bun.sleep(300);
-    updateRun(folder, { state: "dropped", reason: "dropped by Chris" });
+    updateRun(folder, { condition: "dropped", reason: "dropped by Chris" });
     await running;
-    expect(state(folder)).toMatchObject({ state: "dropped", reason: "dropped by Chris", ask: expect.objectContaining({ reason: "held-path" }), branch: "job/x" });
+    expect(state(folder)).toMatchObject({ condition: "dropped", reason: "dropped by Chris", ask: expect.objectContaining({ reason: "held-path" }), branch: "job/x" });
     expect(await reviewAt(folder)).toEqual({ call: "land" });
   });
 
@@ -232,7 +232,7 @@ describe("review", () => {
 
   test("a run that is not held starts none", async () => {
     const { startReview } = await import("./review.ts");
-    expect(startReview(held("passed", { state: "passed", ask: undefined }))).toBe(false);
+    expect(startReview(held("passed", { condition: "passed", ask: undefined }))).toBe(false);
     expect(startReview(held("manual", { ask: { kind: "input", reason: "manual", question: "check", options: [], why: [] } }))).toBe(false);
   });
 });

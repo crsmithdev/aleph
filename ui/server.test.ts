@@ -10,7 +10,7 @@ const testView = join(import.meta.dir, "views", "_test.js");
 const testApi = join(import.meta.dir, "api", "_test.ts");
 const at = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${server.port}${p}`, init);
 
-const run = (o: object) => JSON.stringify({ kind: "build", state: "running", started: new Date().toISOString(), ...o });
+const run = (o: object) => JSON.stringify({ kind: "build", condition: "running", started: new Date().toISOString(), ...o });
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-server-"));

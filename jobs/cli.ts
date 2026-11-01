@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 /**
- * aleph <migrate|job|run|land|checked|recheck|drop|jobs|issue|unit|tick|report|pause|resume|sandbox|status|judge>
+ * aleph <job|run|land|checked|recheck|drop|jobs|issue|unit|tick|report|pause|resume|sandbox|status|judge>
  * — detached agent jobs, plain runs, each repo's issues, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/jobs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal, and the foreground unit's exit code when it fails.
  * See docs/specs/2026-09-24-agent-jobs.md.
  */
-import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { allRuns, isLive, loadRegistry, newsLine, updateRun, type Entry, type Repo } from "./lib/ledger.ts";
 import { allJobs, findJob, goal, isOpen, issue as issueOf, lastReal, readFile, view, type Job } from "./lib/job.ts";
@@ -24,7 +24,6 @@ import { probe } from "./lib/probe.ts";
 import * as doctor from "./lib/doctor.ts";
 import { sweep } from "./lib/deps.ts";
 import { recordReview, runReview } from "./lib/review.ts";
-import * as migrate from "./lib/migrate.ts";
 import { facts, FACTS_REF, readFacts, repoStages, stages } from "./lib/status.ts";
 import type { Stage } from "./lib/stage.ts";
 
@@ -40,7 +39,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--spec", "--model", "--todo", "--on", "--priority", "--labels", "--goal", "--status", "--label", "--body", "--title", "--due", "--after", "--reopened-since", "--before", "--undo"];
+const VALUED = ["--spec", "--model", "--todo", "--on", "--priority", "--labels", "--status", "--label", "--title", "--after", "--reopened-since", "--before", "--undo"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
 const command = process.argv.slice(2);
@@ -89,7 +88,7 @@ function reconcile(all: Entry[][]): Map<string, string> {
     }
     const found = onMain(repo, last.run);
     if (found) {
-      updateRun(last.folder, { state: "landed", commit: found.commit, reason: `found on main (${found.how})`, ask: undefined, told: true });
+      updateRun(last.folder, { condition: "landed", commit: found.commit, reason: `found on main (${found.how})`, ask: undefined, told: true });
       removeBranch(repo, last.run);
       const todo = issueOf(runs);
       const why = todo === undefined ? null : store.close(repo, todo, `job ${last.run.name} found on main as ${found.commit.slice(0, 7)}`);
@@ -105,7 +104,7 @@ function reconcile(all: Entry[][]): Map<string, string> {
 function summary(runs: Job, fates = new Map<string, string>()) {
   const v = view(runs);
   return {
-    name: v.name, repo: v.repo, kind: v.run.kind, job: v.job, run: v.run.id, goal: goal(runs), state: v.state, needs: v.needs, phase: v.phase,
+    name: v.name, repo: v.repo, kind: v.run.kind, job: v.job, run: v.run.id, goal: goal(runs), condition: v.condition, needs: v.needs, phase: v.phase,
     reason: v.reason, say: v.say, review: v.review, ...(v.check ? { check: v.check } : {}), fate: fates.get(v.job), session: v.session, started: v.started, ended: v.ended,
     ...(v.lost ? { lost: true } : {}),
   };
@@ -115,7 +114,7 @@ function jobs(): void {
   if (rest.includes("--news")) {
     const news: { run: string; line: string }[] = [];
     for (const e of allRuns()) {
-      if (e.run.state === "running" || e.run.told) continue;
+      if (e.run.condition === "running" || e.run.told) continue;
       news.push({ run: e.id, line: newsLine(e.run, e.run.repo ? loadRegistry()[e.run.repo]?.note : undefined) });
       updateRun(e.folder, { told: true });
     }
@@ -127,7 +126,7 @@ function jobs(): void {
   // A job that landed with its check open stays in the list until `aleph checked`.
   // A job that ended in the last 24 hours follows the open ones, the latest first.
   if (!name) {
-    const listed = (j: Entry[]) => isOpen(j) || (lastReal(j).run.state === "landed" && lastReal(j).run.check === "open");
+    const listed = (j: Entry[]) => isOpen(j) || (lastReal(j).run.condition === "landed" && lastReal(j).run.check === "open");
     const ended = (j: Entry[]) => Date.parse(lastReal(j).run.ended ?? "");
     const recent = all.filter((j) => !listed(j) && Date.now() - ended(j) < DAY_MS).sort((a, b) => ended(b) - ended(a));
     return out([...all.filter(listed), ...recent].map((j) => summary(j, fates)));
@@ -144,7 +143,7 @@ function jobs(): void {
 
 /** After `aleph issue add` or `edit` of an open goal in a factory repo: a dispatch, so the goal starts at once. It never fails the write. */
 function dispatchAfterGoal(repo: Repo, item: issues.Issue): void {
-  if (!repo.sandbox || !store.isGoal(item)) return;
+  if (!repo.sandbox || !store.goal(repo, issues.idOf(item))) return;
   dispatchDetached();
 }
 
@@ -159,26 +158,24 @@ async function todoCmd(): Promise<void> {
   const fixing = rest.includes("--fix");
   const stat = flag("status");
   const label = flag("label");
-  // `--body -` reads the body from stdin: it is prose of several lines.
-  const bodyArg = flag("body");
+  // `--request -` or `--spec -` reads that part from stdin: it is prose of several lines.
+  const requestArg = flag("request"), specArg = flag("spec");
+  if (rest.includes("--body")) refuse("--body is gone: name the part, --request or --spec");
+  if (rest.includes("--goal")) refuse("--goal is gone: --spec - files the spec on the issue");
   const labelsArg = flag("labels");
-  if (rest.includes("--waiting-on")) refuse("--waiting-on is gone: a goal waits with --after <goal id>");
-  // `--goal -` reads the goal-format text from stdin and files it as goal `.1`.
-  const goalArg = flag("goal");
-  if (rest.includes("--goal") && goalArg !== "-") refuse("--goal takes - (the goal text on stdin)");
+  if (rest.includes("--waiting-on")) refuse("--waiting-on is gone: an issue waits with --after <id>");
   const afterArg = flag("after");
   const fields: verbs.Fields = {
     title: flag("title"),
-    body: bodyArg === undefined ? undefined : (bodyArg === "-" ? await Bun.stdin.text() : bodyArg).trim(),
+    request: requestArg === undefined ? undefined : (requestArg === "-" ? await Bun.stdin.text() : requestArg).trim(),
+    spec: specArg === undefined ? undefined : (specArg === "-" ? await Bun.stdin.text() : specArg).trim(),
     priority: flag("priority"),
     labels: labelsArg === undefined ? undefined : labelsArg.split(",").map((s) => s.trim()).filter(Boolean),
     source: flag("source"),
-    due: flag("due"),
     status: stat,
-    ...(goalArg === "-" ? { goal: await Bun.stdin.text() } : {}),
     ...(afterArg === undefined ? {} : { after: afterArg.split(",").map((s) => s.trim()).filter(Boolean) }),
   };
-  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint> <repo> ...");
+  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|hidden> <repo> ...");
   const registry = loadRegistry();
   if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(sub, registry, { status: stat, label }, json);
   const repo = registry[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
@@ -193,8 +190,9 @@ async function todoCmd(): Promise<void> {
       warn(a.follow);
       for (const m of a.result.maybeSame ?? []) console.error(`aleph-${m.id} may be the same task: ${m.title}`);
       out(a.result);
-      if (a.goal) dispatchAfterGoal(repo, a.goal);
-      if (!store.isSorted(a.item)) triageDetached(repo, a.item.id);
+      dispatchAfterGoal(repo, a.item);
+      const list = store.reader().list(repo.key);
+      if (list && !store.isSorted(list, a.item)) triageDetached(repo, a.item.id);
       return;
     }
     case "list": {
@@ -206,14 +204,15 @@ async function todoCmd(): Promise<void> {
     }
     case "show": {
       const { item: i, hidden } = verbs.show(repo, id);
-      if (json) { out({ ...verbs.brief(i), body: i.body, notes: i.notes, hidden }); return; }
+      if (json) { out({ ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes, hidden }); return; }
       console.log(`## ${i.id}. ${i.title}`);
       const ask = store.askOf(i);
-      console.log(`status ${issues.status(i)}   kind ${store.kindOf(i)}   source ${store.sourceOf(i)}   priority ${i.fm.priority ?? "-"}   updated ${i.fm.updated ?? "-"}`);
-      console.log(`goals ${issues.localRefs(repo.key, store.goalsOf(i).join(", ")) || "-"}   after ${issues.localRefs(repo.key, store.afterOf(i).join(", ")) || "-"}   areas ${store.areasOf(i).join(", ") || "-"}   due ${i.fm.due ?? "-"}`);
+      console.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${i.fm.priority ?? "-"}   updated ${i.fm.updated ?? "-"}`);
+      console.log(`after ${issues.localRefs(repo.key, store.afterOf(i).join(", ")) || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
       console.log(`ask ${ask ? `${ask.kind} (${ask.reason}): ${ask.question}` : "-"}`);
       console.log(`hidden checks: ${hidden}`);
-      if (i.body.trim()) console.log(`\n${i.body}`);
+      if (i.request.trim()) console.log(`\n## Request\n\n${i.request}`);
+      if (i.spec.trim()) console.log(`\n${i.spec}`);
       if (i.notes.length) console.log(`\n### Notes\n${i.notes.join("\n")}`);
       return;
     }
@@ -247,6 +246,20 @@ async function todoCmd(): Promise<void> {
       out(c.result);
       return;
     }
+    case "hidden": {
+      if (!args.slice(1).length) {
+        const have = verbs.hiddenList(repo, id);
+        if (json) { out(have); return; }
+        if (!have.length) console.log("no hidden checks");
+        for (const n of have) console.log(n);
+        return;
+      }
+      const files = Object.fromEntries(args.slice(1).map((f) => [basename(f), readFileSync(f, "utf8")]));
+      const h = verbs.hiddenAdd(repo, id, files);
+      warn(h.follow);
+      out(h.result);
+      return;
+    }
     case "lint": {
       if (fixing) {
         const l = verbs.lintFix(repo);
@@ -260,94 +273,8 @@ async function todoCmd(): Promise<void> {
       for (const f of l.findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${l.findings.length} problem${l.findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
     }
-    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint> <repo> ...");
+    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|hidden> <repo> ...");
   }
-}
-
-/**
- * aleph goal <list|show|note|edit|drop|hidden> <repo> <n>.<k> ... — the verbs on a repo's goals (`kindOf` goal), over todo/lib/issues.ts.
- * A goal's id is `<n>.<k>`, or `<m>` for an old child goal that keeps its plain number.
- */
-async function goalCmd(): Promise<void> {
-  const usage = "usage: aleph goal <list|show|note|edit|drop|hidden> <repo> <n>.<k> ...";
-  const [verb, repoKey, id, ...args] = positional;
-  const json = rest.includes("--json");
-  const registry = loadRegistry();
-  const repo = registry[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
-  const warn = (follow: string | null | undefined) => { if (follow) console.error(`warn: ${follow}`); };
-  const text = args.join(" ").trim();
-  switch (verb) {
-    case "list": {
-      const rows = verbs.goalList(repo, { status: flag("status") });
-      if (json) { out(rows.map(verbs.brief)); return; }
-      if (!rows.length) { console.log("no goals"); return; }
-      for (const g of rows) console.log(`${issues.refOf(g)}  ${issues.status(g).padEnd(7)} ${g.title}${store.afterOf(g).length ? `  (after ${issues.localRefs(repo.key, store.afterOf(g).join(","))})` : ""}`);
-      return;
-    }
-    case "show": {
-      const { item: g, hidden } = verbs.goalShow(repo, verbs.goalId(id));
-      if (json) { out({ ...verbs.brief(g), body: g.body, notes: g.notes, hidden }); return; }
-      console.log(`## ${issues.refOf(g)}. ${g.title}`);
-      console.log(`status ${issues.status(g)}   issue ${issues.localRefs(repo.key, store.issueOf(g) ?? "-")}   after ${issues.localRefs(repo.key, store.afterOf(g).join(", ")) || "-"}   priority ${g.fm.priority ?? "-"}`);
-      console.log(`hidden checks: ${hidden}`);
-      if (g.body.trim()) console.log(`\n${g.body}`);
-      if (g.notes.length) console.log(`\n### Notes\n${g.notes.join("\n")}`);
-      return;
-    }
-    case "note": {
-      const n = verbs.goalNote(repo, verbs.goalId(id), text);
-      warn(n.follow);
-      out(n.result);
-      return;
-    }
-    case "edit": {
-      const bodyArg = flag("body");
-      const afterArg = flag("after");
-      const e = verbs.goalEdit(repo, verbs.goalId(id), {
-        title: flag("title"),
-        body: bodyArg === undefined ? undefined : (bodyArg === "-" ? await Bun.stdin.text() : bodyArg).trim(),
-        priority: flag("priority"),
-        after: afterArg === undefined ? undefined : afterArg.split(",").map((s) => s.trim()).filter(Boolean),
-      });
-      warn(e.follow);
-      out(e.result);
-      dispatchAfterGoal(repo, e.item);
-      return;
-    }
-    case "drop": {
-      const c = verbs.close(repo, verbs.goalId(id), "drop", text);
-      warn(c.follow);
-      out(c.result);
-      return;
-    }
-    case "hidden": {
-      verbs.goalId(id);
-      if (!args.length) {
-        const have = verbs.goalHiddenList(repo, id);
-        if (json) { out(have); return; }
-        if (!have.length) console.log("no hidden checks");
-        for (const n of have) console.log(n);
-        return;
-      }
-      const files: Record<string, string> = {};
-      for (const p of args) {
-        if (!existsSync(p) || !statSync(p).isFile()) refuse(`${p} is not a file`);
-        files[basename(p)] = readFileSync(p, "utf8");
-      }
-      const h = verbs.goalHiddenAdd(repo, id, files);
-      warn(h.follow);
-      out(h.result);
-      return;
-    }
-    default: refuse(usage);
-  }
-}
-
-const ready = (i: issues.Issue, key: string) => [i.fm.due ? `due ${i.fm.due}` : "", store.afterOf(i).length ? `after ${issues.localRefs(key, store.afterOf(i).join(","))}` : ""].filter(Boolean).join("  ");
-
-function printRows(rows: issues.Issue[], key: string, indent = ""): void {
-  const w = String(Math.max(...rows.map((i) => i.id))).length;
-  for (const i of rows) console.log(`${indent}${String(i.id).padStart(w)}  ${issues.status(i).padEnd(7)} ${i.title}${ready(i, key) ? `  (${ready(i, key)})` : ""}`);
 }
 
 /** The registry's repos with a ledger run or an item update in the last 7 days, the latest first, each with its list. */
@@ -484,24 +411,11 @@ function statusRecent(): void {
   for (const { key, rows } of ofRepo) { console.log(key); for (const s of rows) console.log(issues.localRefs(key, `  ${s.id} ${s.stage}: ${s.why}`)); }
 }
 
-/** `aleph migrate --dry-run | --apply | --undo <time>`: the work-model migration, see jobs/lib/migrate.ts. */
-function migrateCmd(): void {
-  const usage = "usage: aleph migrate --dry-run | --apply | --undo <time> [--discard-later]";
-  const undoing = flag("undo");
-  const modes = [rest.includes("--dry-run"), rest.includes("--apply"), undoing !== undefined].filter(Boolean).length;
-  if (modes !== 1) refuse(usage);
-  try {
-    if (undoing !== undefined) return out(migrate.undo(undoing, undefined, rest.includes("--discard-later")));
-    if (rest.includes("--apply")) return out(migrate.apply());
-    const d = migrate.dryRun();
-    for (const row of d.rows) console.log(`${row.id}\t${row.old}\t${row.stage}${row.ok ? "" : "\tOUTSIDE THE MAPPING TABLE"}`);
-    for (const m of d.moves) console.log(`move\t${m.from}\t${m.to}`);
-    out({ items: d.rows.length, counts: d.counts, moves: d.moves, violations: d.violations });
-    if (d.violations.length) refuse(`${d.violations.length} pair(s) outside the mapping table`);
-  } catch (e) {
-    if (e instanceof migrate.MigrateRefusal) refuse(e.message);
-    throw e;
-  }
+const ready = (i: issues.Issue, key: string) => (store.afterOf(i).length ? `after ${issues.localRefs(key, store.afterOf(i).join(","))}` : "");
+
+function printRows(rows: issues.Issue[], key: string, indent = ""): void {
+  const w = String(Math.max(...rows.map((i) => i.id))).length;
+  for (const i of rows) console.log(`${indent}${String(i.id).padStart(w)}  ${issues.status(i).padEnd(7)} ${i.title}${ready(i, key) ? `  (${ready(i, key)})` : ""}`);
 }
 
 /** `aleph doctor [--fix] [--json]`: pass or fail for each part of the machine; exit 1 if any fails. */
@@ -519,7 +433,6 @@ async function doctorCmd(): Promise<void> {
 try {
   switch (cmd) {
     case "doctor": await doctorCmd(); break;
-    case "migrate": migrateCmd(); break;
     case "job": await job(); break;
     case "run": await plain(); break;
     case "jobs": jobs(); break;
@@ -536,7 +449,6 @@ try {
     case "land": await started(await land(positional[0], { checked: rest.includes("--checked") }, { command })); break;
     case "checked": out(checked(positional[0])); break;
     case "issue": await todoCmd(); break;
-    case "goal": await goalCmd(); break;
     case "accept": {
       const lines = await reacceptReopened(positional[0] ?? refuse("usage: aleph accept <repo> [--reopened-since <iso>] [--before <iso>]"), { since: flag("reopened-since"), before: flag("before") });
       console.log(lines.join("\n") || "nothing to re-accept");

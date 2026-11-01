@@ -6,7 +6,7 @@
   "told": true,
   "model": "claude-sonnet-5-5",
   "branch": "factory/demo-10",
-  "state": "dropped",
+  "condition": "dropped",
   "noCommit": true,
   "reason": "no commit",
   "started": "2026-10-28T08:35:00.000Z",

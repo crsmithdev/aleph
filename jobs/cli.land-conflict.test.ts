@@ -23,11 +23,11 @@ describe("land: conflicts", () => {
     await job("mend", "resolve-later mend.txt");
     pushFromOther("mend.txt", "theirs\n");
     const r = await aleph(["land", "mend"]);
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "merge conflict", conflicts: ["mend.txt"], next: "worker" });
+    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "merge conflict", conflicts: ["mend.txt"], next: "worker" });
     expect(file(r.json.run, "land.log")).toContain("## conflicts\nmend.txt");
     expect(told).toContain("demo/mend failed; sent back to the worker");
     const runs = runsOf("mend");
-    expect(runs.map((x) => [x.kind, x.state])).toEqual([["build", "passed"], ["land", "failed"], ["build", "passed"], ["land", "landed"]]);
+    expect(runs.map((x) => [x.kind, x.condition])).toEqual([["build", "passed"], ["land", "failed"], ["build", "passed"], ["land", "landed"]]);
     expect(runs[2].land).toBe(true);
     expect(file(runs[1].id, "next.log")).not.toContain("held:");
     expect(sh(base, "git", "--git-dir", remote, "show", "main:mend.txt")).toBe("mine");
@@ -39,7 +39,7 @@ describe("land: conflicts", () => {
     await job("rebase", "two-commits step.txt theirs mine");
     pushFromOther("step.txt", "theirs\n");
     const r = await aleph(["land", "rebase"]);
-    expect(state(r.json.run).state).toBe("landed");
+    expect(state(r.json.run).condition).toBe("landed");
     expect(file(r.json.run, "land.log")).toContain("mechanical rebase: ok");
     expect(runsOf("rebase").map((x) => x.kind)).toEqual(["build", "land"]);
     expect(sh(base, "git", "--git-dir", remote, "show", "main:step.txt")).toBe("mine");
@@ -52,7 +52,7 @@ describe("land: conflicts", () => {
     await aleph(["land", "clash"]);
     const runs = runsOf("clash");
     expect(runs.filter((x) => x.kind === "land").map((x) => x.next ?? null)).toEqual(["worker", "worker", null]);
-    expect(runs.at(-1)).toMatchObject({ kind: "land", state: "failed", reason: "merge conflict" });
+    expect(runs.at(-1)).toMatchObject({ kind: "land", condition: "failed", reason: "merge conflict" });
     expect(remoteHead()).toBe(before);
     expect(told).toContain("demo/clash failed");
     expect(sh(worktree("clash"), "git", "status", "--porcelain")).toBe("");
@@ -62,9 +62,9 @@ describe("land: conflicts", () => {
   test("a branch that changes the list is refused, goes back to the worker, and lands without the change", async () => {
     await job("byhand", "own-list byhand.txt");
     const r = await aleph(["land", "byhand"]);
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "the branch changes docs/todo.md; change the list with aleph issue", conflicts: ["docs/todo.md"], next: "worker" });
+    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "the branch changes docs/todo.md; change the list with aleph issue", conflicts: ["docs/todo.md"], next: "worker" });
     const runs = runsOf("byhand");
-    expect(runs.map((x) => [x.kind, x.state])).toEqual([["build", "passed"], ["land", "failed"], ["build", "passed"], ["land", "landed"]]);
+    expect(runs.map((x) => [x.kind, x.condition])).toEqual([["build", "passed"], ["land", "failed"], ["build", "passed"], ["land", "landed"]]);
     expect(file(runs[2].id, "prompt.md")).toContain("Only aleph issue writes the list");
     expect(Bun.spawnSync(["git", "--git-dir", remote, "cat-file", "-e", "main:docs/todo.md"]).exitCode).not.toBe(0);
     expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${runs[3].commit}~1`, runs[3].commit)).toBe("byhand.txt");
@@ -74,7 +74,7 @@ describe("land: conflicts", () => {
     await job("twin", "commit-fixed twin.txt");
     pushFromOther("twin.txt", "same\n");
     const r = await aleph(["land", "twin"]);
-    expect(state(r.json.run)).toMatchObject({ state: "done", reason: "no net change" });
+    expect(state(r.json.run)).toMatchObject({ condition: "done", reason: "no net change" });
     expect(existsSync(worktree("twin"))).toBe(false);
   });
 });

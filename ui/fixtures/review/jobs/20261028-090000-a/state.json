@@ -4,7 +4,7 @@
   "name": "demo-1",
   "repo": "demo",
   "branch": "factory/demo-1",
-  "state": "passed",
+  "condition": "passed",
   "told": true,
   "started": "2026-10-28T09:00:00.000Z",
   "ended": "2026-10-28T09:20:00.000Z",

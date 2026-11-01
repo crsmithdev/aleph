@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, setAsk, writeList } from "../todo/lib/store.ts";
-import { add, addGoal, type Doc } from "../todo/lib/todo.ts";
+import { add, addPart, setStatus, type Doc } from "../todo/lib/todo.ts";
 import * as todos from "../todo/lib/todo.ts";
 import { readAsk } from "../jobs/lib/ask.ts";
 import { serve } from "./server.ts";
@@ -13,7 +13,7 @@ import * as v from "./views/contents.js";
 import { view as issueView } from "./views/issue.js";
 
 /** An item stored as a goal: `kind: goal` on a plain number. */
-const seedGoal = (doc: Doc, title: string, body = "") => { const i = add(doc, title, { body }); i.fm.kind = "goal"; return i; };
+const seedGoal = (doc: Doc, title: string, body = "") => { return add(doc, title, { spec: body || "Do it." }); };
 
 let base: string, server: Awaited<ReturnType<typeof serve>>, jobsDir: string, argvFile: string, stdinFile: string;
 const saved: Record<string, string | undefined> = {};
@@ -43,7 +43,7 @@ beforeAll(async () => {
   sh(base, "git", "init", "-q", "--bare", "-b", "main", remote);
   sh(base, "git", "clone", "-q", remote, repo);
   writeFileSync(join(repo, "a"), "1");
-  sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-q", "-m", "real work\n\nItem: fac-1\nJob: fac-1");
+  sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-q", "-m", "real work\n\nIssue: fac-1\nJob: fac-1");
   writeFileSync(join(repo, "b"), "2");
   sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-q", "-m", "prose only\n\nthis finishes Item: fac-1 in words.\n\nbut no trailer");
   sh(repo, "git", "push", "-q", "origin", "main");
@@ -67,14 +67,14 @@ beforeAll(async () => {
   writeList({ key: "fac" }, "seed", (doc) => {
     seedGoal(doc, "first goal", "# Heading\n\n- one\n\n<script>alert(1)</script>");
     add(doc, "plain task", { labels: ["bug"] });
-    seedGoal(doc, "second goal").fm.after = ["fac-1.1"];
+    seedGoal(doc, "second goal").fm.after = ["fac-4"];
     seedGoal(doc, "third goal");
-    doc.items[1].fm.status = "done";
+    setStatus(doc.items[1], "done");
     return true;
   }, true);
   writeList({ key: "oth" }, "seed", (doc) => { add(doc, "other thing"); return true; }, true);
-  run("20261027-000001-a", { job: "fac-1", name: "fac-1", repo: "fac", state: "landed", on: "fac-1" });
-  run("20261027-000002-a", { job: "oth-1", name: "oth-1", repo: "oth", state: "running", on: "oth-1" });
+  run("20261027-000001-a", { job: "fac-1", name: "fac-1", repo: "fac", condition: "landed", on: "fac-1" });
+  run("20261027-000002-a", { job: "oth-1", name: "oth-1", repo: "oth", condition: "running", on: "oth-1" });
   server = await serve(0, { warm: false });
 });
 afterAll(() => {
@@ -87,9 +87,8 @@ describe("GET /api/issues", () => {
   test("filters by status and label", async () => {
     expect((await getJson("/api/issues?repo=fac")).map((r: any) => r.id)).toEqual([1, 2, 3, 4]);
     expect((await getJson("/api/issues?repo=fac&status=done")).map((r: any) => r.id)).toEqual([2]);
-    expect((await getJson("/api/issues?repo=fac&label=goal")).map((r: any) => r.id)).toEqual([1, 3, 4]);
-    const [r] = await getJson("/api/issues?repo=fac&label=goal");
-    expect(r).toMatchObject({ repo: "fac", title: "first goal", status: "open", priority: "medium", kind: "goal", labels: [], due: null, after: [], notes: 0 });
+    const [r] = await getJson("/api/issues?repo=fac");
+    expect(r).toMatchObject({ repo: "fac", title: "first goal", status: "open", priority: "medium", labels: [], after: [], notes: 0 });
     expect(r.updated).toBeTruthy();
     expect((await at("/api/issues?status=bogus")).status).toBe(400);
   });
@@ -104,10 +103,10 @@ describe("GET /api/issues", () => {
     expect((await getJson("/api/issues?project=fac&repo=oth"))).toEqual([]);
   });
 
-  test("a goal carries its derived state", async () => {
-    const rows = await getJson("/api/issues?repo=fac&label=goal");
-    expect(rows[0].state).toBe("done");
-    expect(rows[1].state).toBe("open");
+  test("a row carries its stage", async () => {
+    const rows = await getJson("/api/issues?repo=fac");
+    expect(rows[0].stage).toBe("done");
+    expect(rows[2].stage).toBe("blocked");
   });
 });
 
@@ -132,11 +131,11 @@ describe("POST /api/issues/:repo/:id/drop", () => {
 
 describe("GET /api/issues/:repo/:n", () => {
   test("lists runs by on, goals included, and by todo for old runs", async () => {
-    run("20261027-000010-a", { job: "on-4", name: "on-4", repo: "fac", state: "running", on: "fac-4" });
-    run("20261027-000011-a", { job: "goal-4-1", name: "goal-4-1", repo: "fac", state: "running", on: "fac-4.1" });
-    run("20261027-000012-a", { job: "on-2", name: "on-2", repo: "fac", state: "running", on: "fac-2" });
-    run("20261027-000013-a", { job: "todo-4", name: "todo-4", repo: "fac", state: "running", on: "fac-4" });
-    run("20261027-000014-a", { job: "other-4", name: "other-4", repo: "oth", state: "running", on: "oth-4" });
+    run("20261027-000010-a", { job: "on-4", name: "on-4", repo: "fac", condition: "running", on: "fac-4" });
+    run("20261027-000011-a", { job: "goal-4-1", name: "goal-4-1", repo: "fac", condition: "running", on: "fac-4.1" });
+    run("20261027-000012-a", { job: "on-2", name: "on-2", repo: "fac", condition: "running", on: "fac-2" });
+    run("20261027-000013-a", { job: "todo-4", name: "todo-4", repo: "fac", condition: "running", on: "fac-4" });
+    run("20261027-000014-a", { job: "other-4", name: "other-4", repo: "oth", condition: "running", on: "oth-4" });
     const d = await getJson("/api/issues/fac/4");
     expect(d.jobs.map((j: any) => j.name).sort()).toEqual(["goal-4-1", "on-4", "todo-4"]);
     const g = await getJson("/api/issues/fac/2");
@@ -146,8 +145,8 @@ describe("GET /api/issues/:repo/:n", () => {
   test("lists the job and the trailer commit, not the prose one", async () => {
     const d = await getJson("/api/issues/fac/1");
     expect(d.title).toBe("first goal");
-    expect(d.body).toContain("# Heading");
-    expect(d.frontmatter.status).toBe("open");
+    expect(d.spec).toContain("# Heading");
+    expect(d.status).toBe("open");
     expect(d.derived.stage).toBe("done");
     expect(d.jobs.map((j: any) => j.name)).toEqual(["fac-1"]);
     expect(d.commits.map((c: any) => c.subject)).toEqual(["real work"]);
@@ -204,20 +203,23 @@ describe("views", () => {
     expect(h.indexOf("<h2>Projects")).toBeGreaterThan(h.indexOf("<h2>Issues"));
     const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
     expect(ths(section(h, "projects-table"))).toEqual(["title", "open", "updated"]);
-    expect(ths(section(h, "issues-table"))).toEqual(["id", "kind", "title", "status", "project", "labels", "updated", ""]);
+    expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "stage", "project", "labels", "updated", ""]);
     expect(h).not.toContain('data-name="type"');
     expect(h).toContain(`<div class="sh"><h2>Projects</h2><span class="count">${d.projects.length}</span></div>`);
-    expect(h).toContain(`<div class="sh"><h2>Issues and goals</h2><span class="count">${d.issues.length}</span></div>`);
+    expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
   });
 
-  test("issue rows: Id, Title, Status, Project, Labels, Updated and an X on an open issue only", async () => {
+  test("issue rows: Id, Title, Stage, Project, Labels, Updated and an X on an open issue only", async () => {
     const d = await getJson("/api/contents");
     const h = section(v.view.render(d, {}, new URLSearchParams("status=any")), "issues-table");
     expect(h).toContain('href="#/issues/fac/1"');
     expect(h).not.toContain('href="#/projects/');
-    const rows = h.split("<tr class=\"crow\"").slice(1);
-    for (const r of rows) expect(r.includes("data-cancel")).toBe(r.includes(">open</span>"));
-    expect(rows.some((r: string) => r.includes(">done</span>"))).toBe(true);
+    const rows = h.split("<tr class=\"crow").slice(1);
+    const closed = rows.filter((r: string) => r.includes("plain task"));
+    expect(closed).toHaveLength(1);
+    expect(closed[0]).not.toContain("data-cancel");
+    expect(rows.some((r: string) => r.includes("data-cancel"))).toBe(true);
+    expect(closed[0]).toContain(">done</span>");
     expect(v.view.render(d, {}, new URLSearchParams())).toContain("File an issue");
   });
 
@@ -258,8 +260,7 @@ describe("views", () => {
     expect(v.hashOptions(new URLSearchParams("status=done")).status).toBe("done");
     const def = v.view.render(d, {}, new URLSearchParams());
     const issues = section(def, "issues-table");
-    expect(issues).not.toContain(">done</span>");
-    expect(issues).toContain(">open</span>");
+    expect(issues).not.toContain("plain task");
     expect(def).toContain('data-value="open" aria-pressed="true"');
     expect(v.view.render(d, {}, new URLSearchParams("status=any"))).toContain(">done</span>");
     expect(v.view.render(d, {}, new URLSearchParams("status=any"))).toContain('data-value="any" aria-pressed="true"');
@@ -303,17 +304,15 @@ describe("views", () => {
     expect(more).toContain('data-more="20"');
   });
 
-  test("a goal row names its goal and says Goal; an issue row says Issue", () => {
+  test("a part row names its part and nests", () => {
     const rows = v.issueRows({ issues: [
-      { id: 910, ref: "910", kind: "issue", repo: "fac", title: "ask", status: "open", labels: [] },
-      { id: 910, ref: "910.1", kind: "goal", repo: "fac", title: "part", status: "open", labels: [] },
+      { id: 910, ref: "910", repo: "fac", title: "ask", status: "open", labels: [] },
+      { id: 910, ref: "910.1", repo: "fac", title: "part", status: "open", labels: [] },
     ] });
-    const [issue, goal] = rows;
-    expect(goal).toMatchObject({ id: "fac-910.1", href: "#/issues/fac/910.1", kind: "goal" });
+    const [, goal] = rows;
+    expect(goal).toMatchObject({ id: "fac-910.1", href: "#/issues/fac/910.1", part: true });
     expect(v.dropTarget(goal).url).toBe("/api/issues/fac/910.1/drop");
-    expect(v.renderRow(goal)).toContain(">Goal</span>");
-    expect(v.renderRow(issue)).toContain(">Issue</span>");
-    expect(v.filterRows(rows, { kind: "goal" })).toEqual([goal]);
+    expect(v.renderRow(goal)).toContain("part-row");
     expect(v.sortRows(rows, { key: "id", dir: -1 })[0]).toBe(goal);
   });
 
@@ -326,28 +325,24 @@ describe("views", () => {
 });
 
 describe("POST /api/issues", () => {
-  test("turns the goal label into --goal -, and passes title, labels, due and the text on stdin to `aleph issue add`", async () => {
-    const res = await post({ repo: "fac", title: "new one", body: "## Goal\n\ndo it", labels: ["goal", "x"], due: "2026-12-01" });
+  test("turns the goal label into --spec -, and passes title, labels and the text on stdin to `aleph issue add`", async () => {
+    const res = await post({ repo: "fac", title: "new one", body: "## Goal\n\ndo it", labels: ["goal", "x"] });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ added: 7 });
-    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "add", "fac", "new one", "--goal", "-", "--labels", "x", "--due", "2026-12-01"]);
+    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "add", "fac", "new one", "--spec", "-", "--labels", "x"]);
     expect(readFileSync(stdinFile, "utf8")).toBe("## Goal\n\ndo it");
   });
 
   test("without the goal label the text is the body", async () => {
     const res = await post({ repo: "fac", title: "plain one", body: "just words", labels: ["x"] });
     expect(res.status).toBe(200);
-    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "add", "fac", "plain one", "--body", "-", "--labels", "x"]);
+    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "add", "fac", "plain one", "--request", "-", "--labels", "x"]);
   });
 
-  test("an after on an issue that is not a goal is refused with a 400 and runs nothing", async () => {
-    rmSync(argvFile, { force: true });
-    for (const body of [{ after: "fac-1.1" }]) {
-      const res = await post({ repo: "fac", title: "waits", body: "x", labels: [], ...body });
-      expect(res.status).toBe(400);
-      expect(((await res.json()) as any).error).toContain("wait");
-    }
-    expect(await Bun.file(argvFile).exists()).toBe(false);
+  test("an after goes through to `aleph issue add`", async () => {
+    const res = await post({ repo: "fac", title: "waits", body: "x", labels: [], after: "fac-1" });
+    expect(res.status).toBe(200);
+    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toContain("--after");
   });
 
   test("without the header it is 403, and with a foreign Origin too", async () => {
@@ -400,8 +395,8 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
     try { await fn(); } finally { if (real === undefined) delete process.env.ALEPH_CLI; else process.env.ALEPH_CLI = real; }
   }
   const ask = (decision: boolean, wait?: string) => writeList({ key: "fac" }, "seed", (doc) => {
-    const i = add(doc, "which way", { body: "x" });
-    if (wait && !doc.items.some((x) => x.id === 1 && x.sub === 1)) addGoal(doc, doc.items.find((x) => x.id === 1 && x.sub === undefined)!, { title: "g", body: "x", repo: "fac" });
+    const i = add(doc, "which way", { request: "x" });
+    if (wait && !doc.items.some((x) => x.id === 1 && x.sub === 1)) addPart(doc, doc.items.find((x) => x.id === 1 && x.sub === undefined)!, { title: "g", spec: "x" });
     if (decision) setAsk(i, { kind: "input", reason: "question", question: "A or B?", options: [{ label: "A", line: "do a", ...(wait ? { after: wait } : {}) }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] });
     else { setAsk(i, { kind: "input", reason: "question", question: "Should it be A or B?", options: [], why: [] }); todos.note(i, "triage: for Chris: Should it be A or B? My recommendation is B, it is smaller."); }
     return i.id;
@@ -445,7 +440,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
   });
 
   const migrated = (reason: string, kind: "approval" | "input") => writeList({ key: "fac" }, "seed", (doc) => {
-    const i = add(doc, "a migrated ask", { body: "x" });
+    const i = add(doc, "a migrated ask", { request: "x" });
     Object.assign(i.fm, { kind: "issue", ask: kind, reason, question: "a migrated ask" });
     return i.id;
   })!.value;
@@ -463,7 +458,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
 
   test("the card routes take a goal's dotted id", async () => {
     const dotted = () => writeList({ key: "fac" }, "seed", (doc) => {
-      const i = add(doc, "a capped goal", { body: "x" });
+      const i = add(doc, "a capped goal", { request: "x" });
       Object.assign(i, { id: 9000 + i.id, sub: 1 });
       Object.assign(i.fm, { kind: "goal", ask: "input", reason: "run-cap", question: "stopped" });
       return `${i.id}.1`;
@@ -507,7 +502,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
 
 describe("POST /api/issues/:repo/:id/retriage and rerun", () => {
   const h = { "x-aleph-ui": "1", "content-type": "application/json" };
-  const ask = () => writeList({ key: "fac" }, "seed", (doc) => (() => { const i = add(doc, "stuck triage", { body: "x" }); setAsk(i, { kind: "input", reason: "triage-failed", question: "triage failed", options: [], why: [] }); return i.id; })(), true)!.value;
+  const ask = () => writeList({ key: "fac" }, "seed", (doc) => (() => { const i = add(doc, "stuck triage", { request: "x" }); setAsk(i, { kind: "input", reason: "triage-failed", question: "triage failed", options: [], why: [] }); return i.id; })(), true)!.value;
 
   for (const [verb, argv] of [["retriage", ["issue", "note", "fac", "N", "Chris: run triage again"]], ["rerun", ["issue", "decide", "fac", "N", "Chris: run it again"]]] as const) {
     test(`${verb} refuses without the header, 404s an unknown issue and runs the CLI on an item with an ask`, async () => {
@@ -525,7 +520,7 @@ describe("POST /api/issues/:repo/:id/retriage and rerun", () => {
   }
 
   test("an issue that is not waiting for you is a 409", async () => {
-    const n = writeList({ key: "fac" }, "seed", (doc) => add(doc, "plain", { body: "x" }).id, true)!.value;
+    const n = writeList({ key: "fac" }, "seed", (doc) => add(doc, "plain", { request: "x" }).id, true)!.value;
     expect((await at(`/api/issues/fac/${n}/retriage`, { method: "POST", headers: h })).status).toBe(409);
   });
 });

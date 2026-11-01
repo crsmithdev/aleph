@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
 import { isMachineNote, renderIssue } from "./views/contents.js";
 
-const page = (notes: string[], labels: string[] = []) =>
-  renderIssue({ repo: "r", id: 1, title: "t", labels, notes, goals: [], jobs: [], commits: [], runs: [], frontmatter: {} } as any) as string;
+const page = (notes: string[], fm: Record<string, string> = {}) =>
+  renderIssue({ repo: "r", id: 1, title: "t", labels: [], notes, goals: [], jobs: [], commits: [], runs: [], frontmatter: fm } as any) as string;
 const st = (t: string) => `- 2026-10-31 10:00: ${t}`;
 const fold = (h: string) => /<details[^>]*>[\s\S]*?<\/details>/.exec(h)?.[0] ?? "";
 
@@ -24,7 +24,7 @@ describe("issue notes fold", () => {
     for (const n of notes) expect(isMachineNote(n)).toBe(false);
   });
   test("flake tracker folds nothing", () => {
-    const h = page([st("triage: filed goal aleph-1.1")], ["flakes"]);
+    const h = page([st("triage: filed goal aleph-1.1")], { tracker: "true" });
     expect(h).not.toContain("<details");
     expect(h).toContain("filed goal");
   });

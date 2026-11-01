@@ -91,7 +91,7 @@ beforeEach(() => {
     { id: "t2", sessionId: "s", timestamp: ago(2), input: "No, that is wrong. Do not mock the db.", output: "ok" },
   ];
   observations = [{ id: "o1", traceId: "t1", name: "verify-gate", metadata: { verdict: "deny" }, output: "deny: no run backs tests pass", startTime: ago(1) }];
-  const run = (state: string, reason: string) => ({ kind: "build", job: "aleph-9", name: "aleph-9", state, reason, told: true, started: ago(1), ended: ago(1) });
+  const run = (state: string, reason: string) => ({ kind: "build", job: "aleph-9", name: "aleph-9", condition: state, reason, told: true, started: ago(1), ended: ago(1) });
   const dir = join(base, "jobs", "20261027-aleph-9");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "state.json"), JSON.stringify(run("dropped", "Drops the test it changed.")));
@@ -222,16 +222,15 @@ test("approve files one goal issue quoting all signals", async () => {
   const ref = approve(id, repo);
   expect(ref).toBe("fac-1");
   const items = readList(repo)!.items;
-  // The issue and its goal `.1`, in the new shape.
-  expect(items.map((i) => i.fm.id)).toEqual(["1", "1.1"]);
-  expect(items[0].fm).toMatchObject({ kind: "issue", source: "memory", goals: ["fac-1.1"] });
-  expect(items[1].fm).toMatchObject({ kind: "goal", issue: "fac-1" });
+  // One issue with its request and its spec.
+  expect(items.map((i) => i.fm.id)).toEqual(["1"]);
+  expect(items[0].fm).toMatchObject({ source: "memory" });
+  expect(items[0].spec).not.toBe("");
   expect(items[0].fm.labels).toBeUndefined();
   expect(items[0].title).toBe(stored().lessons[0].title);
-  expect(items[0].body).toStartWith("## Request");
-  expect(items[1].body).toContain("Add a check");
-  expect(items[0].body).toContain("Target: fac checks");
-  for (const s of stored().lessons[0].signals) expect(items[0].body).toContain(`- ${s.at} ${s.source}: "${s.quote}" (${s.link})`);
+  expect(items[0].spec).toContain("Add a check");
+  expect(items[0].spec).toContain("Target: fac checks");
+  for (const s of stored().lessons[0].signals) expect(items[0].spec).toContain(`- ${s.at} ${s.source}: "${s.quote}" (${s.link})`);
   expect(stored().lessons[0]).toMatchObject({ state: "approved", issue: "fac-1" });
   expect(proposals().length).toBe(0);
   expect(approve(id, repo)).toContain("approved");
@@ -265,7 +264,7 @@ describe("standing proposals", () => {
     pickFirst = true;
     await mine(NOW);
     expect(stored().lessons[0]).toMatchObject({ state: "approved", issue: "fac-1" });
-    expect(readList(repo)!.items.length).toBe(2);
+    expect(readList(repo)!.items.length).toBe(1);
     expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("always: proposal-check:fac: approve on fac-1");
   });
 
@@ -324,7 +323,7 @@ describe("noise", () => {
 
   test("a drop whose run made no commit is not a signal, whatever Jev says", async () => {
     const dir = join(base, "jobs", "20261027-aleph-9");
-    writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "build", job: "aleph-9", name: "aleph-9", state: "dropped", reason: "the work is on main; this run found nothing to commit", noCommit: true, told: true, started: ago(1), ended: ago(1) }));
+    writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "build", job: "aleph-9", name: "aleph-9", condition: "dropped", reason: "the work is on main; this run found nothing to commit", noCommit: true, told: true, started: ago(1), ended: ago(1) }));
     await mine(NOW);
     expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source)).sort()).toEqual(["chris", "gate"]);
   });

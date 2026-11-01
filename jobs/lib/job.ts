@@ -41,10 +41,10 @@ export const jobById = (id: string, jobs = allJobs()): Job | undefined => jobs.f
 export const issue = (j: Job): number | string | undefined => j.map((e) => onOf(e.run)).findLast((n) => n !== undefined);
 
 /** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts; a facts run is not the job's state. */
-export const lastReal = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts" && !(e.run.kind === "land" && e.run.state === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
+export const lastReal = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts" && !(e.run.kind === "land" && e.run.condition === "failed" && e.run.reason === LOCK_BUSY)) ?? j.at(-1)!;
 
 /** The job's state: that of the run that counts. */
-export const stateOf = (j: Job): State => lastReal(j).run.state;
+export const stateOf = (j: Job): State => lastReal(j).run.condition;
 
 /** A file in a run's folder, or undefined when it is not there. */
 export function readFile(e: Entry, file: RunFile): string | undefined {
@@ -102,7 +102,7 @@ export interface JobView {
   job: string; name: string; repo?: string;
   /** The last run: its folder, kind and start. `started` is the job's first. */
   run: { id: string; kind: Run["kind"]; started: string };
-  state: State; needs?: ReturnType<typeof needsOf>; phase?: string; reason?: string; question?: string; say?: string; session?: string;
+  condition: State; needs?: ReturnType<typeof needsOf>; phase?: string; reason?: string; question?: string; say?: string; session?: string;
   started: string; ended?: string;
   item?: number | string; cost?: number; model?: string; commit?: string; stat?: string;
   defaults: string[]; followups: string[];
@@ -122,7 +122,7 @@ export function view(j: Job): JobView {
   const r = last.run;
   const latest = <K extends keyof Run>(k: K): Run[K] | undefined => r[k] ?? j.findLast((e) => e.run[k])?.run[k];
   const v: JobView = {
-    job: r.job, name: r.name, run: { id: last.id, kind: r.kind, started: r.started }, state: r.state, started: j[0].run.started,
+    job: r.job, name: r.name, run: { id: last.id, kind: r.kind, started: r.started }, condition: r.condition, started: j[0].run.started,
     defaults: j.findLast((e) => e.run.defaults !== undefined)?.run.defaults ?? [],
     followups: tagged(latestFile(j, "result.md", (e) => isBuild(e.run.kind))?.text ?? "", "FOLLOWUP"),
   };
@@ -139,13 +139,13 @@ export function view(j: Job): JobView {
     if (val) v[k] = val;
   }
   // The latest checks that ran; a stuck or failed job shows its last run's, even none.
-  const checks = r.state === "stuck" || r.state === "failed" ? j.findLast((e) => e.run.checks)?.run.checks : j.findLast((e) => e.run.checks?.length)?.run.checks;
+  const checks = r.condition === "stuck" || r.condition === "failed" ? j.findLast((e) => e.run.checks)?.run.checks : j.findLast((e) => e.run.checks?.length)?.run.checks;
   if (Array.isArray(checks)) v.checks = checks;
   const hid = j.findLast((e) => e.run.checks?.some((c) => c.name === "hidden" && c.total))?.run.checks?.find((c) => c.name === "hidden");
   if (hid?.total) v.hidden = { passed: hid.passed ?? 0, total: hid.total };
   const review = reviewOf(last);
   if (review) v.review = { call: review.call, ...(review.reason !== undefined && { reason: review.reason }) };
-  if (r.state === "landed" && r.check) v.check = r.check;
+  if (r.condition === "landed" && r.check) v.check = r.check;
   if (isLost(last.folder)) v.lost = true;
   return v;
 }

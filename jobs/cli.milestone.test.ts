@@ -21,7 +21,7 @@ describe("milestone 2", () => {
     for (const n of ["qa", "qb", "qc"]) await job(n, `commit pair/${n}.txt`);
     const lands = await Promise.all(["qa", "qb", "qc"].map((n) => aleph(["land", n])));
     const order = lands.map((l) => state(l.json.run)).sort((a, b) => a.made - b.made).map((s) => s.name);
-    expect(lands.map((l) => state(l.json.run).state)).toEqual(["landed", "landed", "landed"]);
+    expect(lands.map((l) => state(l.json.run).condition)).toEqual(["landed", "landed", "landed"]);
     expect(remoteGit("log", "-3", "--reverse", "--format=%s", "main").split("\n")).toEqual(order.map((n) => `add pair/${n}.txt`));
     // Each is one squash commit on the one before: no merge commits.
     expect(remoteGit("rev-list", "--merges", "-3", "main")).toBe("");
@@ -32,7 +32,7 @@ describe("milestone 2", () => {
     pushFromOther(`add crashed.txt\n\nJob: ${j.json.job}`, "crashed.txt");
     const pushed = remoteGit("rev-parse", "main");
     const l = await aleph(["land", "crashed"]);
-    expect(state(l.json.run)).toMatchObject({ state: "landed", commit: pushed });
+    expect(state(l.json.run)).toMatchObject({ condition: "landed", commit: pushed });
     expect(remoteGit("rev-parse", "main")).toBe(pushed);
     expect(file(l.json.run, "land.log")).toContain(`## already on main as ${pushed}`);
   });
@@ -54,9 +54,9 @@ describe("milestone 2", () => {
 
   test("only the trailer block counts; a hand-done item keeps the store's done; dropped wins", async () => {
     const id = (await aleph(["issue", "add", "fac", "named in prose"])).json.added;
-    pushFromOther(`prose\n\nItem: fac-${id} is named here\n\nbut not as a trailer.`, "prose.txt");
+    pushFromOther(`prose\n\nIssue: fac-${id} is named here\n\nbut not as a trailer.`, "prose.txt");
     expect(await status(`fac-${id}`)).toMatchObject({ stage: "new" });
-    pushFromOther(`real\n\nItem: fac-${id}`, "real.txt");
+    pushFromOther(`real\n\nIssue: fac-${id}`, "real.txt");
     expect(await status(`fac-${id}`)).toMatchObject({ stage: "done" });
     const hand = (await aleph(["issue", "add", "fac", "done by hand"])).json.added;
     await aleph(["issue", "done", "fac", String(hand)]);
@@ -88,11 +88,11 @@ describe("milestone 2", () => {
 
   test("aleph status inside the sandbox, from the bundle, says what it says outside", async () => {
     const done = (await aleph(["issue", "add", "fac", "landed one"])).json.added;
-    pushFromOther(`landed\n\nItem: fac-${done}`, "landed-one.txt");
+    pushFromOther(`landed\n\nIssue: fac-${done}`, "landed-one.txt");
     const open = (await aleph(["issue", "add", "fac", "open one"])).json.added;
     const items = [`fac-${done}`, `fac-${open}`];
     const r = await aleph(["job", "fac", "finside", "--spec", specFile(`Goal: inside\nACTION: status ${CLI} ${items.join(" ")}\n`)]);
-    expect(state(r.json.run).state).toBe("passed");
+    expect(state(r.json.run).condition).toBe("passed");
     const inside = readFileSync(join(fakeLog, "status-inside"), "utf8").trim().split(/\n(?=\{)/).map((t) => JSON.parse(t));
     const outside = await Promise.all(items.map(status));
     expect(inside).toEqual(outside);

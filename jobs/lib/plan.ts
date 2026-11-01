@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { goalsOf, issueOf, kindOf, readList, note, writeList } from "../../todo/lib/store.ts";
+import { askPartDropped, note, partsOf, readList, writeList } from "../../todo/lib/store.ts";
 import { allRuns, runsDir, lock, stamp, updateRun, writeRun, type Repo } from "./ledger.ts";
 import { replyOf } from "./gate.ts";
 import { jobsNamed } from "./job.ts";
@@ -22,7 +22,7 @@ const TIME_BOX_MS = () => Number(process.env.ALEPH_PLAN_TIMEOUT ?? 900) * 1000;
 const SECTIONS = ["Goal", "Edit surface", "Oracle", "Time box"] as const;
 
 export type Rate = (spec: string) => Promise<Tier | null>;
-export interface Child { title: string; body: string; waits: number[] }
+export interface Child { title: string; spec: string; waits: number[] }
 
 /** The text under `## <name>` in a goal body, up to the next `##` heading; empty when there is none. */
 export function section(body: string, name: string): string {
@@ -59,7 +59,7 @@ export function realOracle(text: string): boolean {
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
 /** The children in the planner's output (the whole output, or its outermost braces), or why they fail the check. */
-export function parsePlan(output: string): Child[] | string {
+export function parsePlan(output: string, least = 2): Child[] | string {
   let raw: any;
   for (const s of [output.trim(), output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1)]) {
     try { raw = JSON.parse(s); break; } catch {}
@@ -67,7 +67,7 @@ export function parsePlan(output: string): Child[] | string {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no JSON";
   const list = raw.children;
   if (!Array.isArray(list)) return "no children list";
-  if (list.length < 2 || list.length > 6) return `${list.length} children, not 2 to 6`;
+  if (list.length < least || list.length > 6) return `${list.length} children, not ${least} to 6`;
   const children: Child[] = [];
   for (const [i, c] of list.entries()) {
     const n = i + 1;
@@ -79,7 +79,7 @@ export function parsePlan(output: string): Child[] | string {
     if (!realOracle(section(body, "Oracle"))) return `child ${n}'s Oracle names no command or test file`;
     const waits = c.waits_on ?? [];
     if (!Array.isArray(waits) || waits.some((w: unknown) => !Number.isInteger(w) || (w as number) < 1 || (w as number) >= n)) return `child ${n} waits on something that is not an earlier child`;
-    children.push({ title, body, waits: [...new Set(waits as number[])] });
+    children.push({ title, spec: body, waits: [...new Set(waits as number[])] });
   }
   return children;
 }
@@ -118,14 +118,14 @@ function episodeText(e: Episode): string {
   return `## ${e.title}\n${parts.map(([n, t]) => `\n### ${n}\n${t}\n`).join("")}`;
 }
 
-export function prompt(repo: Repo, item: issues.Issue, episodes: Episode[] = []): string {
+export function prompt(repo: Repo, item: issues.Issue, episodes: Episode[] = [], parts: issues.Issue[] = []): string {
   return `You plan one large goal of the repo ${repo.key}, which is your working directory. You have read-only tools: read the code to plan. Change nothing.
 
 # Goal ${repo.key}-${item.id}: ${item.title}
 
-${item.body.trim() || "(no body)"}
-${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}${episodes.length ? `\n# How similar goals went\n\n${episodes.map(episodeText).join("\n")}` : ""}
-Split it into 2 to 6 child goals. Each child is work one factory run can do alone, in one run of under an hour, and the children together do the whole goal. Reply with one JSON object and nothing else:
+${[item.request, item.spec].map((t) => t.trim()).filter(Boolean).join("\n\n") || "(no text)"}
+${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}${parts.length ? `\n# Its parts so far\n\n${parts.map((p) => `- ${repo.key}-${issues.refOf(p)} (${issues.status(p)}): ${p.title}`).join("\n")}\n` : ""}${episodes.length ? `\n# How similar goals went\n\n${episodes.map(episodeText).join("\n")}` : ""}
+${parts.length ? "Plan only what the parts that are done do not cover: 1 to 6 more child goals." : "Split it into 2 to 6 child goals."} Each child is work one factory run can do alone, in one run of under an hour, and the children together do the whole goal. Reply with one JSON object and nothing else:
 
 {"children": [{"title": "<title>", "body": "<child goal body>", "waits_on": [<optional numbers of earlier children, from 1>]}]}
 
@@ -150,14 +150,14 @@ function makeRun(repo: Repo, item: issues.Issue): string {
     const folder = join(runsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-plan`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
     // `shown`: the dispatch's line reports a plan, so the report has no line for the run.
-    writeRun(folder, { kind: "plan", job: folder.split("/").at(-1)!, name, repo: repo.key, on, state: "running", phase: "plan", model: PLAN_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
+    writeRun(folder, { kind: "plan", job: folder.split("/").at(-1)!, name, repo: repo.key, on, condition: "running", phase: "plan", model: PLAN_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
     writeFileSync(join(folder, "command.txt"), `plan ${repo.key}-${issues.refOf(item)}: ${item.title}\n`);
     return folder;
   }
 }
 
-async function ask(repo: Repo, item: issues.Issue, folder: string): Promise<string> {
-  const input = prompt(repo, item, await recallEpisodes(`${item.title}\n${section(item.body, "Goal")}`));
+async function ask(repo: Repo, item: issues.Issue, folder: string, parts: issues.Issue[]): Promise<string> {
+  const input = prompt(repo, item, await recallEpisodes(`${item.title}\n${section(item.spec, "Goal")}`), parts);
   writeFileSync(join(folder, "prompt.md"), input);
   const argv = [process.env.ALEPH_PLAN_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--model", PLAN_MODEL, "--tools", "Read", "Grep", "Glob"];
   const p = Bun.spawn(argv, { cwd: existsSync(repo.path) ? repo.path : undefined, env: process.env, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
@@ -174,49 +174,49 @@ async function ask(repo: Repo, item: issues.Issue, folder: string): Promise<stri
   }
 }
 
-const firstGoal = (repo: Repo, id: number | string) => `${repo.key}-${id}.1`;
-
-/**
- * The goal `.1` of an issue when it is the issue's only goal, open, with no run; `null` for an issue with no goal; a
- * string, why the issue cannot be planned, for any other shape.
- */
-function planTarget(repo: Repo, doc: issues.Doc, issue: issues.Issue): issues.Issue | null | string {
-  if (kindOf(issue) !== "issue" || issues.status(issue) !== "open") return "not an open issue";
-  const goals = goalsOf(issue);
-  if (!goals.length) return section(issue.body, "Goal") ? null : "no goal, and the issue's body is not in goal format";
-  const g = goals.length === 1 && goals[0] === firstGoal(repo, issue.id) ? issues.find(doc, `${issue.id}.1`) : undefined;
-  if (!g || issues.status(g) !== "open") return "already planned";
-  if (jobsNamed(goals[0]).length) return "the goal has had a run";
-  return g;
+/** Why the issue cannot be planned, or null. A parent can only when `plan` asks for the rest. */
+function planRefusal(repo: Repo, doc: issues.Doc, issue: issues.Issue): string | null {
+  if (issue.sub !== undefined || issues.status(issue) !== "open") return "not an open issue";
+  if (partsOf(doc, issue).length) return issue.fm.plan === "true" ? null : "already planned";
+  if (!section(issue.spec, "Goal")) return "no spec";
+  if (jobsNamed(`${repo.key}-${issue.id}`).length) return "the issue has had a run";
+  return null;
 }
 
-/**
- * File the goals `<repo>-<id>.1 .. .k` and the issue's `goals` as one commit; goal `.1` of an issue that has one with no
- * run is rewritten as the first. The goals' ids, or null when the issue is no longer one to plan.
- */
+/** File the parts `<repo>-<id>.k` as one commit, which clears `plan` and the issue's spec. The parts' ids, or null when the issue is no longer one to plan. */
 export function fileChildren(repo: Repo, id: number | string, children: Child[]): string[] | null {
-  const w = writeList(repo, `plan ${repo.key}-${id}: ${children.length} goals`, (doc) => {
+  const w = writeList(repo, `plan ${repo.key}-${id}: ${children.length} parts`, (doc) => {
     const issue = issues.find(doc, id);
-    if (!issue) return null;
-    const first = planTarget(repo, doc, issue);
-    if (typeof first === "string") return null;
+    if (!issue || planRefusal(repo, doc, issue)) return null;
     const refs: string[] = [];
-    for (const [i, c] of children.entries()) {
-      const after = c.waits.map((w) => refs[w - 1]);
-      let g: issues.Issue;
-      if (i === 0 && first) {
-        g = first;
-        issues.edit(g, { title: c.title, body: c.body });
-        g.fm.after = after;
-      } else {
-        g = issues.addGoal(doc, issue, { title: c.title, body: c.body, after });
-      }
-      refs.push(`${repo.key}-${issues.refOf(g)}`);
+    for (const c of children) {
+      const part = issues.addPart(doc, issue, { title: c.title, spec: c.spec, after: c.waits.map((w) => refs[w - 1]) });
+      refs.push(`${repo.key}-${issues.refOf(part)}`);
     }
-    issues.note(issue, `planner: split into ${refs.map((r, i) => `${r} (${children[i].title})`).join(", ")}; this issue closes when they are all done`);
+    delete issue.fm.plan;
+    issue.spec = "";
+    issues.note(issue, `planner: split into ${refs.map((r, i) => `${r} (${children[i].title})`).join(", ")}; this issue closes when they are done`);
     return refs;
   });
   return w?.value ?? null;
+}
+
+/** A plan that filed no parts clears `plan`, in its write, so the flag cannot stick: the issue builds from its spec, or goes back to triage. A parent asks Chris again. */
+function endPlan(repo: Repo, id: number | string, why: string): string | null {
+  try {
+    writeList(repo, `plan ${repo.key}-${id}: no parts`, (doc) => {
+      const issue = issues.find(doc, id);
+      if (!issue) return null;
+      if (issue.fm.plan === undefined) return null;
+      const parent = partsOf(doc, issue).length > 0;
+      delete issue.fm.plan;
+      if (parent) askPartDropped(issue, `Planning the rest of ${repo.key}-${id} failed: ${why}. What now?`);
+      return issues.note(issue, `planner: ${why}`);
+    });
+    return null;
+  } catch (e: any) {
+    return e?.message ?? String(e);
+  }
 }
 
 /** Planner runs of an issue that ended with no children. */
@@ -226,19 +226,15 @@ const badPlans = (repo: Repo, id: number | string) =>
 export type Plan = { plan: true } | { tier: Tier | null };
 
 /**
- * The decision before a goal's worker run, for a caller that holds the goal's
- * lock: a goal that has had no run, whose issue has only that goal, and that is
- * large, and whose issue has had fewer than PLAN_TRIES failed planner runs, is
- * planned (`plan`, on its issue); any other gets a worker run at the rated tier.
+ * The decision before an issue's worker run, for a caller that holds its lock: a
+ * top-level issue that has had no run, that is large, and that has had fewer than
+ * PLAN_TRIES failed planner runs, is planned; any other gets a worker run at the rated tier.
  */
 export async function needsPlan(repo: Repo, item: issues.Issue, spec: string, rate: Rate): Promise<Plan> {
   const tier = await rate(spec);
-  if (jobsNamed(`${repo.key}-${issues.refOf(item)}`).length || !isLarge(tier, item.body)) return { tier };
-  const issue = /^(.+)-(\d+)$/.exec(issueOf(item) ?? "");
-  if (!issue || issue[1] !== repo.key) return { tier };
-  const parent = issues.find(readList(repo)!, Number(issue[2]));
-  if (!parent || goalsOf(parent).length !== 1 || goalsOf(parent)[0] !== `${repo.key}-${issues.refOf(item)}`) return { tier };
-  return badPlans(repo, parent.id) >= PLAN_TRIES ? { tier } : { plan: true };
+  // Parts are one level: a part is never planned.
+  if (item.sub !== undefined || jobsNamed(`${repo.key}-${issues.refOf(item)}`).length || !isLarge(tier, item.spec)) return { tier };
+  return badPlans(repo, item.id) >= PLAN_TRIES ? { tier } : { plan: true };
 }
 
 const planLock = (repo: Repo, id: number | string) => lock(`plan-${repo.key}-${id}`, 0);
@@ -254,8 +250,8 @@ export async function planning(repo: Repo, id: number | string): Promise<boolean
   if (!release) return true;
   try {
     for (const e of allRuns()) {
-      if (e.run.kind === "plan" && e.run.on === `${repo.key}-${id}` && e.run.state === "running") {
-        updateRun(e.folder, { state: "done", phase: undefined, reason: "failed: its process ended before a reply", ended: new Date().toISOString() });
+      if (e.run.kind === "plan" && e.run.on === `${repo.key}-${id}` && e.run.condition === "running") {
+        updateRun(e.folder, { condition: "done", phase: undefined, reason: "failed: its process ended before a reply", ended: new Date().toISOString() });
       }
     }
     return false;
@@ -275,20 +271,35 @@ export async function runPlan(repo: Repo, id: number): Promise<Planned> {
   const release = await planLock(repo, id);
   if (!release) return { why: "another plan run holds the goal" };
   try {
+    const r = await plan(repo, id);
+    if ("why" in r) {
+      const bad = endPlan(repo, id, r.why);
+      if (bad) return { why: `${r.why}; plan not cleared: ${bad}` };
+    }
+    return r;
+  } finally {
+    release();
+  }
+}
+
+async function plan(repo: Repo, id: number): Promise<Planned> {
+  {
     const doc = readList(repo);
     const issue = doc && issues.find(doc, id);
-    if (!issue) return { why: "not an open issue" };
-    const target = planTarget(repo, doc, issue);
-    if (typeof target === "string") return { why: target };
-    if (badPlans(repo, id) >= PLAN_TRIES) return { why: `${PLAN_TRIES} plan runs failed already` };
-    // The planner reads the goal's body, or the issue's own when it has no goal.
-    const item: issues.Issue = { ...issue, title: target?.title ?? issue.title, body: target?.body ?? issue.body };
+    if (!doc || !issue) return { why: "not an open issue" };
+    const refused = planRefusal(repo, doc, issue);
+    if (refused) return { why: refused };
+    const parts = partsOf(doc, issue);
+    // Planning the rest counts only its own failures.
+    const earlier = parts.length ? badPlans(repo, id) : 0;
+    if (badPlans(repo, id) - earlier >= PLAN_TRIES) return { why: `${PLAN_TRIES} plan runs failed already` };
+    const item = issue;
     let why = "";
-    while (badPlans(repo, id) < PLAN_TRIES) {
+    while (badPlans(repo, id) - earlier < PLAN_TRIES) {
       const folder = makeRun(repo, item);
-      const end = (reason: string) => updateRun(folder, { state: "done", reason, phase: undefined, ended: new Date().toISOString() });
+      const end = (reason: string) => updateRun(folder, { condition: "done", reason, phase: undefined, ended: new Date().toISOString() });
       try {
-        const plan = parsePlan(await ask(repo, item, folder));
+        const plan = parsePlan(await ask(repo, item, folder, parts), parts.length ? 1 : 2);
         if (typeof plan === "string") { why = `malformed plan: ${plan}`; end(why); continue; }
         const refs = fileChildren(repo, id, plan);
         if (!refs) { end("the issue changed during the run"); return { why: "the issue changed during the planner run" }; }
@@ -302,7 +313,5 @@ export async function runPlan(repo: Repo, id: number): Promise<Planned> {
     const text = `planner: no plan passed the check in ${PLAN_TRIES} runs (last: ${why}); the goal runs as one worker run`;
     const bad = note(repo, id, text);
     return { why: bad ? `${text}; no issue note: ${bad}` : text };
-  } finally {
-    release();
   }
 }

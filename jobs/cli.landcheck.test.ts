@@ -14,7 +14,7 @@ describe("a batch of lands", () => {
     await job("fresh", "commit batch/fresh.txt");
     const base1 = calls();
     const r = await aleph(["land", "fresh"]);
-    expect(state(r.json.run).state).toBe("landed");
+    expect(state(r.json.run).condition).toBe("landed");
     expect(calls()).toBe(base1);
     expect(file(r.json.run, "land.log")).toContain("checks skipped: main unchanged since");
     expect(state(r.json.run).checks ?? []).toEqual([]);
@@ -23,7 +23,7 @@ describe("a batch of lands", () => {
     moveMain();
     const base2 = calls();
     const r2 = await aleph(["land", "stale"]);
-    expect(state(r2.json.run).state).toBe("landed");
+    expect(state(r2.json.run).condition).toBe("landed");
     expect(calls() - base2).toBe(1);
     expect(file(r2.json.run, "land.log")).not.toContain("checks skipped");
   }, 60_000);
@@ -35,7 +35,7 @@ describe("a batch of lands", () => {
     sh(worktree("tipped"), "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "late file");
     const before = calls();
     const r = await aleph(["land", "tipped"]);
-    expect(state(r.json.run).state).toBe("landed");
+    expect(state(r.json.run).condition).toBe("landed");
     expect(calls() - before).toBe(1);
     expect(file(r.json.run, "land.log")).not.toContain("checks skipped");
   }, 60_000);

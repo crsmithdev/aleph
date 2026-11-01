@@ -11,7 +11,7 @@ import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from 
 import { readAsk, type Ask } from "../jobs/lib/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { readAlways } from "../jobs/lib/always.ts";
-import { afterOf, areasOf, askOf, goalsOf, issueOf, kindOf, reader } from "../todo/lib/store.ts";
+import { afterOf, areasOf, askOf, partsOf, reader, isTracker } from "../todo/lib/store.ts";
 import { idOf, parseGoalRef, refOf, status } from "../todo/lib/todo.ts";
 import { facts, landedIndex, stages } from "../jobs/lib/status.ts";
 import type { Stage } from "../jobs/lib/stage.ts";
@@ -19,7 +19,7 @@ import type { Wk } from "./usage.ts";
 
 export interface Job {
   name: string; repo: string; item: { id: number | string; title: string } | null;
-  state: string; phase?: string; reason?: string; question?: string;
+  condition: string; phase?: string; reason?: string; question?: string;
   started: string;
   /** The current (last) run: its kind and start. `started` is the job's first. */
   run: { kind: string; started: string };
@@ -182,14 +182,9 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
   const lists = reader();
   const bases = new Map<string, string | null>();
 
-  // The trailers the land writes: `Issue` for the run's issue; for a goal, the goal's issue (when the store knows it), then `Goal`.
-  const needsYouIssue = (key: string | undefined, todo: number | string | undefined): { key: string; value: string }[] => {
-    if (todo === undefined || key === undefined) return [];
-    if (typeof todo === "number") return [{ key: "Issue", value: `${key}-${todo}` }];
-    const goal = lists.item(key, todo);
-    const issue = goal ? issueOf(goal) : null;
-    return [...(issue ? [{ key: "Issue", value: issue }] : []), { key: "Goal", value: `${key}-${todo}` }];
-  };
+  // The trailer the land writes.
+  const needsYouIssue = (key: string | undefined, todo: number | string | undefined): { key: string; value: string }[] =>
+    todo === undefined || key === undefined ? [] : [{ key: "Issue", value: `${key}-${todo}` }];
 
   const toJob = (runs: Runs, v: JobView = view(runs)): Job => {
     const repo = v.repo ? registry[v.repo] : undefined;
@@ -197,7 +192,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     const found = todo !== undefined && v.repo ? lists.item(v.repo, todo) : undefined;
     const job: Job = {
       name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title } : todo !== undefined ? { id: todo, title: "" } : null,
-      state: v.state, started: v.started, run: { kind: v.run.kind, started: v.run.started },
+      condition: v.condition, started: v.started, run: { kind: v.run.kind, started: v.run.started },
       defaults: v.defaults, followups: v.followups,
     };
     for (const k of ["phase", "reason", "question", "ended", "cost", "model"] as const) if (v[k] !== undefined) (job as any)[k] = v[k];
@@ -206,18 +201,18 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       const url = commitUrl(repo, v.commit, bases);
       if (url) job.commitUrl = url;
     }
-    if (v.state === "awaiting" && v.stat) job.stat = v.stat;
+    if (v.condition === "awaiting" && v.stat) job.stat = v.stat;
     // An awaiting run with no ask of its own asks a question, as stage() reads it.
-    const asked = isAwaiting(lastReal(runs).run.state) ? runAsk(lastReal(runs).run) ?? { kind: "input" as const, reason: "question" } : undefined;
+    const asked = isAwaiting(lastReal(runs).run.condition) ? runAsk(lastReal(runs).run) ?? { kind: "input" as const, reason: "question" } : undefined;
     if (asked) job.ask = { kind: asked.kind, reason: asked.reason };
     if (asked && v.review) job.reviewCall = v.review;
     if (v.checks) job.checks = v.checks;
     if (v.hidden) job.hidden = v.hidden;
     if (v.check === "open") job.check = "open";
-    const accepted = v.state === "landed" && todo !== undefined && v.repo ? resultLine(v.repo, todo) : null;
+    const accepted = v.condition === "landed" && todo !== undefined && v.repo ? resultLine(v.repo, todo) : null;
     if (accepted) job.acceptance = accepted;
-    const trailers = v.state === "landed" ? landedTrailers(repo, v.commit)
-      : v.state === "awaiting" ? [
+    const trailers = v.condition === "landed" ? landedTrailers(repo, v.commit)
+      : v.condition === "awaiting" ? [
         ...needsYouIssue(v.repo, todo),
         { key: "Job", value: v.job },
         ...(asked?.reason === "held-path" || asked?.reason === "review" ? [{ key: "Held-by", value: "Chris" }] : []),
@@ -259,19 +254,19 @@ export function state(now = new Date()): State {
   for (const runs of jobs) {
     const last = runs.at(-1)!.run;
     // A running planner counts as running; it is not a live agent.
-    if (last.kind === "plan" && last.state === "running") {
+    if (last.kind === "plan" && last.condition === "running") {
       running.push(toJob(runs));
       continue;
     }
     // A triage, planner or facts run sorts a goal and never lands; it shows only when it awaits you.
     if (last.kind === "triage" || last.kind === "plan" || last.kind === "facts") {
-      if (isOpen(runs) && isAwaiting(lastReal(runs).run.state)) needs.push(toJob(runs));
+      if (isOpen(runs) && isAwaiting(lastReal(runs).run.condition)) needs.push(toJob(runs));
       continue;
     }
     if (isOpen(runs)) {
       const real = lastReal(runs).run;
-      if (isAwaiting(real.state)) needs.push(toJob(runs));
-      else if (real.state === "stuck" || real.state === "failed") stuck.push(toJob(runs));
+      if (isAwaiting(real.condition)) needs.push(toJob(runs));
+      else if (real.condition === "stuck" || real.condition === "failed") stuck.push(toJob(runs));
       else {
         liveJobs.add(real.job);
         if (onOf(real) !== undefined) liveItems.add(`${real.repo}/${onOf(real)}`);
@@ -279,7 +274,7 @@ export function state(now = new Date()): State {
         running.push(job);
         if (real.kind === "land") { landing++; landRuns.push(job); }
       }
-    } else if (last.state === "landed" && last.ended) {
+    } else if (last.condition === "landed" && last.ended) {
       const at = Date.parse(last.ended);
       delivered.push({ at, runs });
     }
@@ -311,7 +306,7 @@ export function state(now = new Date()): State {
     avg: times.filter((t) => t0 - t < 7 * DAY_MS).length / 7,
   });
   const landedAt = delivered.map((d) => d.at).filter((t) => t <= t0);
-  const triagedAt = runs.filter((e) => e.run.kind === "triage" && e.run.state === "done").map((e) => Date.parse(e.run.ended ?? e.run.started)).filter((t) => t <= t0);
+  const triagedAt = runs.filter((e) => e.run.kind === "triage" && e.run.condition === "done").map((e) => Date.parse(e.run.ended ?? e.run.started)).filter((t) => t <= t0);
 
   // The jobs of each issue, by `repo-id`: the open ones give its status, all of them its Done package.
   const ofItem = new Map<string, Runs[]>();
@@ -338,16 +333,17 @@ export function state(now = new Date()): State {
   for (const repo of Object.values(registry)) {
     if (!repo.sandbox) continue;
     const stageById = stagesOf(repo);
-    for (const item of lists.list(repo.key)?.items ?? []) {
+    const doc = lists.list(repo.key);
+    for (const item of doc?.items ?? []) {
       const ref = refOf(item), id = `${repo.key}-${ref}`, href = hrefOf(repo, ref);
       const st = stageById.get(ref)?.stage ?? status(item);
       // Incoming and Done list issues; a goal with an issue shows under it.
-      const top = kindOf(item) === "issue" || !issueOf(item);
+      const top = item.sub === undefined;
       const card = (): NewIssue => ({ id, title: item.title, status: "open", href, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? ""), stage: st });
       const created = String(item.fm.created ?? "");
       if (top) everyone.push({ at: created, n: item.id, card: { id, title: item.title, href, created, stage: st } });
       if (st === "done" && top) {
-        const mine = [ref, ...goalsOf(item).map((g) => g.replace(`${repo.key}-`, ""))].flatMap((r) => ofItem.get(`${repo.key}-${r}`) ?? []);
+        const mine = [ref, ...partsOf(doc!, item).map(refOf)].flatMap((r) => ofItem.get(`${repo.key}-${r}`) ?? []);
         const ends = mine.map((r) => Date.parse(r.at(-1)!.run.ended ?? "")).filter((t) => t > 0);
         doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(String(item.fm.updated ?? "")) || 0, repo, item, runs: mine });
       }
@@ -365,14 +361,14 @@ export function state(now = new Date()): State {
         awaitingItems.push(c);
       }
       else if (st === "queued" || st === "blocked") queued.push({ repo, item, stage: st });
-      else if (st === "new") fresh.push({ ...card(), status: st });
-      if (st === "building" && kindOf(item) === "issue" && goalsOf(item).length) {
-        const of = stageById.get(ref)?.of ?? { n: 0, m: goalsOf(item).length };
-        const goals = goalsOf(item).map((g) => {
-          const gref = g.startsWith(`${repo.key}-`) ? g.slice(repo.key.length + 1) : g;
-          const gi = lists.item(repo.key, gref), j = liveOf.get(`${repo.key}-${gref}`);
+      else if (st === "new" && !isTracker(item)) fresh.push({ ...card(), status: st });
+      const parts = partsOf(doc!, item);
+      if (st === "building" && parts.length) {
+        const of = stageById.get(ref)?.of ?? { n: 0, m: parts.length };
+        const goals = parts.map((gi) => {
+          const gref = refOf(gi), g = `${repo.key}-${gref}`, j = liveOf.get(g);
           if (j) nested.add(j.name);
-          return { id: g, title: gi?.title ?? "", href: hrefOf(repo, gref), stage: stageById.get(gref)?.stage ?? (gi ? status(gi) : "queued"),
+          return { id: g, title: gi.title, href: hrefOf(repo, gref), stage: stageById.get(gref)?.stage ?? status(gi),
             ...(j ? { job: { name: j.name, href: `#/jobs/${encodeURIComponent(j.name)}`, kind: j.run.kind } } : {}) };
         });
         runningIssues.push({ id, title: item.title, href, stage: st, of, goals });
@@ -388,7 +384,7 @@ export function state(now = new Date()): State {
     finished: at ? new Date(at).toISOString() : "",
     jobs: runs.map((r: Runs) => toJob(r)),
   }));
-  const planAt = (r: Runs) => Date.parse(r.at(-1)!.run.state === "running" ? "9999-01-01" : r.at(-1)!.run.ended ?? r.at(-1)!.run.started);
+  const planAt = (r: Runs) => Date.parse(r.at(-1)!.run.condition === "running" ? "9999-01-01" : r.at(-1)!.run.ended ?? r.at(-1)!.run.started);
   const planner = jobs.filter((r) => r.at(-1)!.run.kind === "plan").sort((a, b) => planAt(b) - planAt(a)).slice(0, TRIAGED).map((r) => toJob(r));
 
   fresh.sort((a, b) => b.created.localeCompare(a.created));

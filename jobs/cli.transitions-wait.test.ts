@@ -16,7 +16,7 @@ describe("every transition dispatches at once", () => {
   const runs = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`));
   // Settled: no start is in flight (its run folder may not be there yet), and every run has ended and its unit,
   // with its run-end dispatch, has exited.
-  const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).state !== "running" && !unitAlive(join(jobsDir, r)));
+  const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).condition !== "running" && !unitAlive(join(jobsDir, r)));
   const add = (title: string, action: string, extra: string[] = [], env: Record<string, string> = {}) => addOld(title, action, extra, on(env));
   const gates = new Set<string>();
   const open = (name: string) => { gates.add(name); return `hold ${gate(name)}`; };
@@ -51,7 +51,7 @@ describe("every transition dispatches at once", () => {
 
   test("a drop that frees a waiting slot starts the next goal", async () => {
     const q = track(await add("asks Chris", "commit held/w.txt", ["--labels", "goal"], { ALEPH_AWAITING_CAP: "1" }));
-    await until(() => runs(q).some((r) => state(r).state === "awaiting"));
+    await until(() => runs(q).some((r) => state(r).condition === "awaiting"));
     const b = track(await add("needs the waiting slot", open("wait-b"), ["--labels", "goal"], { ALEPH_AWAITING_CAP: "1" }));
     await Bun.sleep(1500);
     expect(started()).toEqual([`fac-${q}`]);

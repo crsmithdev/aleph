@@ -5,7 +5,7 @@ import type { Lesson } from "../jobs/lib/corrections.ts";
 import type { Job, NewIssue } from "./state.ts";
 
 const run = (reason: string, extra: Partial<Job> = {}): Job => ({
-  name: "aleph-27", repo: "aleph", item: { id: 27, title: "a title" }, state: "awaiting", started: "2026-10-28T00:00:00Z",
+  name: "aleph-27", repo: "aleph", item: { id: 27, title: "a title" }, condition: "awaiting", started: "2026-10-28T00:00:00Z",
   ask: { kind: reason === "held-path" || reason === "review" ? "approval" : "input", reason },
   run: { kind: "build", started: "2026-10-28T00:00:00Z" }, defaults: [], followups: [], ...extra,
 } as Job);
@@ -174,7 +174,7 @@ describe("asks", () => {
 });
 
 describe("stuck rows", () => {
-  const stuck = run("held-path", { state: "stuck", reason: "no commit" });
+  const stuck = run("held-path", { condition: "stuck", reason: "no commit" });
   const open = new Map([["aleph-12", { title: "Land the base", href: "#/issues/aleph/12" }]]);
   test("an item waiting on an open issue gets its id, title and Wait, not Re-check", () => {
     const b = stuckBlocker(stuck, "aleph-12", open);

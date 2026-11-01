@@ -25,11 +25,11 @@ describe("an item that is already on main", () => {
     const id = await add("landed by hand mid-land");
     await withItem("handmid", "commit item-race/x.txt", id);
     moveMain();
-    writeFileSync(join(base, "item-once"), `Item: demo-${id}`);
+    writeFileSync(join(base, "item-once"), `Issue: demo-${id}`);
     const r = await aleph(["land", "handmid"]);
     const hand = remoteGit("rev-parse", "main");
     expect(remoteGit("log", "-1", "--format=%s", "main")).toBe("hand");
-    expect(state(r.json.run)).toMatchObject({ kind: "land", state: "done", reason: `item landed as ${hand.slice(0, 7)}` });
+    expect(state(r.json.run)).toMatchObject({ kind: "land", condition: "done", reason: `item landed as ${hand.slice(0, 7)}` });
     expect(remoteGit("log", "-5", "--format=%s", "main")).not.toContain("add item-race/x.txt");
     expect(branchExists("handmid")).toBe(false);
   }, 30_000);
@@ -40,7 +40,7 @@ describe("an item that is already on main", () => {
     const [agent] = runsOf("pushedbefore");
     handLand(`pushedbefore\n\nJob: ${agent.job}`, "pushed-before.txt");
     const r = await aleph(["land", "pushedbefore"]);
-    expect(state(r.json.run)).toMatchObject({ kind: "land", state: "landed" });
+    expect(state(r.json.run)).toMatchObject({ kind: "land", condition: "landed" });
     const item = (await aleph(["issue", "show", "demo", String(id), "--json"])).json;
     expect(item.status).toBe("done");
   }, 30_000);
@@ -51,7 +51,7 @@ describe("an item that is already on main", () => {
     const [agent] = runsOf("pushedwithitem");
     handLand(`pushedwithitem\n\nIssue: demo-${id}\nJob: ${agent.job}`, "pushed-with-item.txt");
     const r = await aleph(["land", "pushedwithitem"]);
-    expect(state(r.json.run)).toMatchObject({ kind: "land", state: "landed" });
+    expect(state(r.json.run)).toMatchObject({ kind: "land", condition: "landed" });
     const item = (await aleph(["issue", "show", "demo", String(id), "--json"])).json;
     expect(item.status).toBe("done");
   }, 30_000);
@@ -59,7 +59,7 @@ describe("an item that is already on main", () => {
   test("aleph land and a fix-round aleph job refuse when the item is on main", async () => {
     const id = await add("landed by hand first");
     await withItem("handfirst", "commit handfirst.txt", id);
-    handLand(`by hand\n\nItem: demo-${id}`, "by-hand.txt");
+    handLand(`by hand\n\nIssue: demo-${id}`, "by-hand.txt");
     const before = remoteGit("rev-parse", "main");
     const l = await aleph(["land", "handfirst"]);
     expect(l.code).toBe(1);
@@ -75,10 +75,10 @@ describe("an item that is already on main", () => {
   test("an item whose commit was reverted does not refuse the land", async () => {
     const id = await add("landed then reverted");
     await withItem("reverted", "commit reverted.txt", id);
-    handLand(`by hand\n\nItem: demo-${id}`, "to-revert.txt");
+    handLand(`by hand\n\nIssue: demo-${id}`, "to-revert.txt");
     sh(other, "git", "revert", "--no-edit", "HEAD");
     sh(other, "git", "push", "-q", "origin", "main");
-    expect(state((await aleph(["land", "reverted"])).json.run)).toMatchObject({ state: "landed" });
+    expect(state((await aleph(["land", "reverted"])).json.run)).toMatchObject({ condition: "landed" });
   }, 30_000);
 
   test("a conflicted land of a job with a dropped run starts no worker", async () => {
@@ -87,11 +87,11 @@ describe("an item that is already on main", () => {
     // A fix round that was queued and then dropped: an earlier run of the same job.
     const old = join(jobsDir, "20200101-000000-demo-dropconf-agent");
     mkdirSync(old);
-    writeFileSync(join(old, "state.json"), JSON.stringify({ kind: "build", job: old.split("/").pop(), name: "dropconf", repo: "demo", state: "dropped", told: true, started: "2020-01-01T00:00:00Z", ended: "2020-01-01T00:00:01Z" }));
+    writeFileSync(join(old, "state.json"), JSON.stringify({ kind: "build", job: old.split("/").pop(), name: "dropconf", repo: "demo", condition: "dropped", told: true, started: "2020-01-01T00:00:00Z", ended: "2020-01-01T00:00:01Z" }));
     writeFileSync(join(jobsDir, agent.id, "state.json"), JSON.stringify({ ...state(agent.id), job: old.split("/").pop() }));
     handLand("theirs", "dropconf.txt");
     const r = await aleph(["land", "dropconf"]);
-    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "merge conflict" });
+    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "merge conflict" });
     expect(runsOf("dropconf").map((x) => x.kind)).toEqual(["build", "build", "land"]);
     expect(state(r.json.run).next).toBeUndefined();
     expect(file(r.json.run, "next.log")).toContain("dropped: no worker started");
@@ -102,10 +102,10 @@ describe("an item that is already on main", () => {
     const id = await add("lands while the land fails");
     await withItem("lateitem", "resolve-later lateitem.txt", id);
     handLand("theirs", "lateitem.txt");
-    setOnTell((text) => { if (text.startsWith("demo/lateitem failed")) handLand(`by hand\n\nItem: demo-${id}`, "late-hand.txt"); });
+    setOnTell((text) => { if (text.startsWith("demo/lateitem failed")) handLand(`by hand\n\nIssue: demo-${id}`, "late-hand.txt"); });
     try {
       const r = await aleph(["land", "lateitem"]);
-      expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "merge conflict" });
+      expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "merge conflict" });
       expect(runsOf("lateitem").map((x) => x.kind)).toEqual(["build", "land"]);
       expect(state(r.json.run).next).toBeUndefined();
       expect(file(r.json.run, "next.log")).toContain("item landed as");
@@ -119,7 +119,7 @@ describe("an item that is already on main", () => {
     await job("nocom", "commit nocom.txt");
     const [agent] = runsOf("nocom");
     const f = join(jobsDir, agent.id, "state.json");
-    writeFileSync(f, JSON.stringify({ ...JSON.parse(readFileSync(f, "utf8")), state: "stuck", reason: "no commit" }));
+    writeFileSync(f, JSON.stringify({ ...JSON.parse(readFileSync(f, "utf8")), condition: "stuck", reason: "no commit" }));
     const r = await aleph(["drop", "nocom", "dropped as a duplicate", "--quiet"]);
     expect(r.code).toBe(0);
     const after = JSON.parse(readFileSync(f, "utf8"));
@@ -134,7 +134,7 @@ describe("an item that is already on main", () => {
     const folders = ["20261027-235958", "20261027-235959"].map((t) => {
       const folder = join(jobsDir, `${t}-demo-twolive-agent`);
       mkdirSync(folder);
-      writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", job: agent.id, name: "twolive", repo: "demo", branch: "job/twolive", worktree: worktree("twolive"), state: "running", told: false, started: new Date().toISOString() }));
+      writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", job: agent.id, name: "twolive", repo: "demo", branch: "job/twolive", worktree: worktree("twolive"), condition: "running", told: false, started: new Date().toISOString() }));
       const p = Bun.spawn(["bash", "-c", "sleep 60; :", folder], { stdout: "ignore", stderr: "ignore" });
       procs.push(p);
       writeFileSync(join(folder, "pid"), String(p.pid));
@@ -144,7 +144,7 @@ describe("an item that is already on main", () => {
 
     expect(r.code).toBe(0);
     for (const f of folders) {
-      expect(JSON.parse(readFileSync(join(f, "state.json"), "utf8")).state).toBe("dropped");
+      expect(JSON.parse(readFileSync(join(f, "state.json"), "utf8")).condition).toBe("dropped");
       expect(existsSync(join(f, "exit"))).toBe(true);
     }
     await Promise.all(procs.map((p) => p.exited));

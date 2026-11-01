@@ -57,7 +57,7 @@ const answer: Handler = async (req, { name }) => {
   const body: any = await req.json().catch(() => ({}));
   const said = typeof body?.answer === "string" ? body.answer.trim() : "";
   if (!said) return text("answer is required", 400);
-  if (!isAwaiting(last.run.state) || askOf(last.run)?.reason !== "question") return text(`${name} is not waiting on a question`, 409);
+  if (!isAwaiting(last.run.condition) || askOf(last.run)?.reason !== "question") return text(`${name} is not waiting on a question`, 409);
   return Response.json(await runCli(["job", last.run.repo ?? "", name, "--spec", "-"], { stdin: `Chris: ${said}` }));
 };
 
@@ -65,7 +65,7 @@ const answerAndRerun: Handler = async (req, { name }) => {
   if (!sameSite(req)) return text("forbidden", 403);
   const last = find(name);
   if (!last) return text(`no job named ${name}`, 404);
-  if (!isAwaiting(last.run.state) || askOf(last.run)?.reason !== "question") return text("this run is not waiting for an answer", 409);
+  if (!isAwaiting(last.run.condition) || askOf(last.run)?.reason !== "question") return text("this run is not waiting for an answer", 409);
   const body: any = await req.json().catch(() => ({}));
   const said = typeof body?.answer === "string" ? body.answer.trim() : "";
   if (!said) return text("answer is required", 400);
@@ -79,13 +79,13 @@ const wait: Handler = async (req, { name }) => {
   if (!last) return text(`no job named ${name}`, 404);
   const body: any = await req.json().catch(() => ({}));
   const on = typeof body?.on === "string" ? body.on.trim() : "";
-  const m = /^(.+)-(\d+\.\d+)$/.exec(on);
+  const m = /^(.+)-(\d+(?:\.\d+)?)$/.exec(on);
   const repo = last.run.repo, issue = onOf(last.run);
-  if (!m || !repo || issue === undefined) return text("on must name a <repo>-<n>.<k> goal and the job an item", 400);
-  // In process, as the firefighter does. The goal waits for the goal `on` names: `after` takes goal ids only.
+  if (!m || !repo || issue === undefined) return text("on must name an issue and the job an item", 400);
+  // In process, as the firefighter does.
   const place = loadRegistry()[repo];
   if (!place) return text(`no repo named ${repo}`, 400);
-  try { if (typeof issue === "string") issues.goalEdit(place, issue, { after: [on] }); else issues.edit(place, issue, { after: [on] }); } catch (e: any) {
+  try { issues.edit(place, issue, { after: [on] }); } catch (e: any) {
     if (!(e instanceof Refusal)) throw e;
     return Response.json({ error: e.message }, { status: 422 });
   }

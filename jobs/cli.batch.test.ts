@@ -72,7 +72,7 @@ describe("a batch of lands", () => {
       expect(log[i]).toContain(`Issue: demo-${items[i]}`);
       expect(log[i]).toContain(`Job: ${ids[i]}`);
       const s = state(landRuns(n)[0].id);
-      expect(s).toMatchObject({ state: "landed" });
+      expect(s).toMatchObject({ condition: "landed" });
       expect(remoteGit("log", "-1", "--format=%H", `--grep=^Job: ${ids[i]}$`, "main")).toBe(s.commit);
     }
     expect(readFileSync(join(jobsDir, landRuns("t1")[0].id, "land.log"), "utf8")).toContain("batch of 3");
@@ -81,7 +81,7 @@ describe("a batch of lands", () => {
   test("a run that breaks the check fails with the check's name; the others land; at most 1 + 2 + 2 checks", async () => {
     const lands = await landTogether([["a", "commit batch/a.txt"], ["bad", "commit batch/bad.txt"], ["c", "commit batch/c.txt"]]);
     const s = lands.map((l) => state(l.run));
-    expect(s.map((x) => x.state)).toEqual(["landed", "failed", "landed"]);
+    expect(s.map((x) => x.condition)).toEqual(["landed", "failed", "landed"]);
     expect(s[1].reason).toBe("batchbad failed");
     expect(s[1].checks).toContainEqual(expect.objectContaining({ name: "batchbad", ok: false }));
     for (const i of [0, 2]) {
@@ -98,7 +98,7 @@ describe("a batch of lands", () => {
   test("a conflict in one run takes only that run out", async () => {
     const lands = await landTogether([["k1", "commit-fixed batch/k.txt"], ["k2", "commit batch/k.txt"], ["k3", "commit batch/k3.txt"]]);
     const s = lands.map((l) => state(l.run));
-    expect(s.map((x) => x.state)).toEqual(["landed", "failed", "landed"]);
+    expect(s.map((x) => x.condition)).toEqual(["landed", "failed", "landed"]);
     expect(s[1]).toMatchObject({ reason: "merge conflict", conflicts: ["batch/k.txt"] });
     expect(readFileSync(join(jobsDir, lands[1].run, "land.log"), "utf8")).toContain("batch/k.txt");
     expect(remoteGit("ls-tree", "--name-only", "main:batch").split("\n")).toEqual(expect.arrayContaining(["k.txt", "k3.txt"]));

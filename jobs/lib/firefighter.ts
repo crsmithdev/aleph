@@ -50,10 +50,10 @@ export function snapshot(now = Date.now()): Event[] {
     if (!r.repo || !keys.has(r.repo) || !isOpen(j)) continue;
     const item = issueOf(j);
     const at = { repo: r.repo, job: r.name, ...(item !== undefined ? { item } : {}) };
-    if (isAwaiting(r.state) || r.state === "stuck" || r.state === "failed") {
-      const reason = isAwaiting(r.state) ? askOf(r)?.reason : undefined;
-      events.push(hand({ key: `${r.state}:${r.repo}/${last.id}`, kind: isAwaiting(r.state) ? "awaiting" : r.state as "stuck" | "failed", ...at, ...(reason ? { reason } : {}), line: `${r.name} is ${r.state}${reason ? ` (${reason})` : ""}${r.reason ? `: ${r.reason}` : ""}` }));
-    } else if (r.state === "running" && isLost(last.folder)) {
+    if (isAwaiting(r.condition) || r.condition === "stuck" || r.condition === "failed") {
+      const reason = isAwaiting(r.condition) ? askOf(r)?.reason : undefined;
+      events.push(hand({ key: `${r.condition}:${r.repo}/${last.id}`, kind: isAwaiting(r.condition) ? "awaiting" : r.condition as "stuck" | "failed", ...at, ...(reason ? { reason } : {}), line: `${r.name} is ${r.condition}${reason ? ` (${reason})` : ""}${r.reason ? `: ${r.reason}` : ""}` }));
+    } else if (r.condition === "running" && isLost(last.folder)) {
       events.push({ key: `lost:${r.repo}/${last.id}`, kind: "lost", ...at, line: `${r.name}: its ${r.kind} run ${last.id} is running, but its process is gone` });
     }
   }
@@ -67,7 +67,7 @@ export function snapshot(now = Date.now()): Event[] {
     if (runs.length <= LOOP_RUNS) continue;
     const r = runs.at(-1)!.run;
     events.push({ key: `loop:${k}:${runs.at(-1)!.id}`, kind: "loop", repo: r.repo!, job: r.name, ...(onOf(r) !== undefined ? { item: onOf(r)! } : {}),
-      line: `${r.name} started ${runs.length} runs in 30 minutes: ${runs.map((e) => e.run.reason ?? e.run.state).join("; ")}` });
+      line: `${r.name} started ${runs.length} runs in 30 minutes: ${runs.map((e) => e.run.reason ?? e.run.condition).join("; ")}` });
   }
   for (const b of redBaselines()) if (keys.has(b.repo)) events.push({ key: `red:${b.repo}:${b.commit}`, kind: "red", repo: b.repo, line: `${b.repo} main is red at ${b.commit.slice(0, 7)}: ${b.failed}` });
   // GitHub CI: one event per red streak, keyed by its first failed commit.
@@ -103,10 +103,10 @@ export type Action =
 
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 const num = (v: unknown): number | null => (Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : null);
-/** The goal ids (`<repo>-<n>.<k>`) in a string, a comma list or an array: any other value is ignored, as triage's verdict ignores it. */
+/** The issue ids (`<repo>-<n>` or `<repo>-<n>.<k>`) in a string, a comma list or an array: any other value is ignored, as triage's verdict ignores it. */
 const refs = (v: unknown): string[] | undefined => {
   const all = (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).map((x) => text(x)).filter((x): x is string => !!x);
-  const ok = all.filter((x) => /^[a-z0-9-]+-\d+\.\d+$/.test(x));
+  const ok = all.filter((x) => /^[a-z0-9-]+-\d+(\.\d+)?$/.test(x));
   return ok.length ? ok : undefined;
 };
 
@@ -165,7 +165,7 @@ function context(e: Event, jobs: Job[]): string {
   }
   if (e.item !== undefined) {
     const item = store.reader().item(e.repo, e.item);
-    if (item) parts.push(`### Issue ${e.repo}-${item.id}: ${item.title} [${store.areasOf(item).join(", ")}]\n${item.body.trim() || "(no body)"}${item.notes.length ? `\n\nNotes:\n${item.notes.join("\n")}` : ""}`);
+    if (item) parts.push(`### Issue ${e.repo}-${item.id}: ${item.title} [${store.areasOf(item).join(", ")}]\n${[item.request, item.spec].map((t) => t.trim()).filter(Boolean).join("\n\n") || "(no text)"}${item.notes.length ? `\n\nNotes:\n${item.notes.join("\n")}` : ""}`);
   }
   return parts.join("\n\n");
 }
@@ -308,8 +308,9 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     const why = await refusal(async () => verbs.decide(repo, a.n, `firefighter decided: ${a.note}`, a.after ? { after: a.after } : {}));
     return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
   }
-  if (store.kindOf(item) !== "goal") return { refused: `${describe(a)}: it is not a goal` };
-  const why = await refusal(async () => verbs.edit(repo, a.n, { ...(a.body !== undefined ? { body: a.body } : {}), ...(a.after ? { after: a.after } : {}) }));
+  const list = store.reader().list(repo.key);
+  if (list && store.partsOf(list, item).length) return { refused: `${describe(a)}: it has parts` };
+  const why = await refusal(async () => verbs.edit(repo, a.n, { ...(a.body !== undefined ? { spec: a.body } : {}), ...(a.after ? { after: a.after } : {}) }));
   return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
 }
 
@@ -336,7 +337,7 @@ function makeRun(events: Event[]): string {
   for (let n = 0; ; n++) {
     const folder = join(runsDir(), `${stamp()}-firefighter${n ? `-${n}` : ""}-firefighter`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
-    writeRun(folder, { kind: "firefighter", job: folder.split("/").at(-1)!, name: "firefighter", state: "running", phase: "firefighter", model: FIREFIGHTER_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
+    writeRun(folder, { kind: "firefighter", job: folder.split("/").at(-1)!, name: "firefighter", condition: "running", phase: "firefighter", model: FIREFIGHTER_MODEL, told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
     writeFileSync(join(folder, "command.txt"), `firefighter: ${events.length} new event${events.length > 1 ? "s" : ""}\n`);
     return folder;
   }
@@ -379,7 +380,7 @@ export async function firefight(ports: Ports = defaultPorts, now = Date.now()): 
     saveSnapshot(events);
     if (!fresh.length) return { events: [], applied: [], refused: [], chris: [] };
     const folder = makeRun(fresh);
-    const end = (reason: string) => updateRun(folder, { state: "done", reason, phase: undefined, ended: new Date().toISOString() });
+    const end = (reason: string) => updateRun(folder, { condition: "done", reason, phase: undefined, ended: new Date().toISOString() });
     const base = { events: fresh.map((e) => e.line), run: folder.split("/").at(-1)! };
     let reply: (Action | string)[] | string;
     try { reply = parseReply(await ask(prompt(fresh), folder)); } catch (e: any) {
@@ -399,7 +400,7 @@ export async function firefight(ports: Ports = defaultPorts, now = Date.now()): 
 /** End the firefighter runs left `running` by a process that died: the caller holds the firefighter lock, so none is live. */
 function endLost(): void {
   for (const { folder, run } of allRuns()) {
-    if (run.kind !== "firefighter" || run.state !== "running") continue;
-    if (readRun(folder)?.state === "running") updateRun(folder, { state: "done", phase: undefined, reason: "failed: its process ended before a reply", ended: new Date().toISOString() });
+    if (run.kind !== "firefighter" || run.condition !== "running") continue;
+    if (readRun(folder)?.condition === "running") updateRun(folder, { condition: "done", phase: undefined, reason: "failed: its process ended before a reply", ended: new Date().toISOString() });
   }
 }

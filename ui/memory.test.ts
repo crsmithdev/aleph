@@ -200,7 +200,7 @@ test("warm() fills the misses cache, so the first request runs vault misses zero
 function factsRun(id: string, repo: string, started: string, kept: string[], rejected: string[]) {
   const dir = join(base, "jobs", id);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "facts", job: `job-${id}`, name: id, repo, state: "done", told: true, started, ended: started, kept, rejected }));
+  writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "facts", job: `job-${id}`, name: id, repo, condition: "done", told: true, started, ended: started, kept, rejected }));
 }
 
 test("facts runs fill the gates section, newest first, scoped by project", async () => {
@@ -293,7 +293,7 @@ test("with about 1000 notes the warm call takes under 1 s", async () => {
   for (let i = 0; i < 1000; i++) {
     const d = join(base, "jobs", `20261003-${String(i).padStart(6, "0")}-g-facts`);
     mkdirSync(d, { recursive: true });
-    writeFileSync(join(d, "state.json"), JSON.stringify({ kind: "facts", job: `g${i}`, name: `g${i}`, repo: "aleph", state: "done", told: true, started: new Date().toISOString(), ended: new Date().toISOString(), kept: ["Gen 1"], rejected: ["F: r"] }));
+    writeFileSync(join(d, "state.json"), JSON.stringify({ kind: "facts", job: `g${i}`, name: `g${i}`, repo: "aleph", condition: "done", told: true, started: new Date().toISOString(), ended: new Date().toISOString(), kept: ["Gen 1"], rejected: ["F: r"] }));
   }
   const f = await failing("bin-fail-big", "300");
   try {

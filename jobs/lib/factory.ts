@@ -6,7 +6,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { afterOf, askOf, flakeTracker, goal, goals, goalsOf, issueOf as issueRefOf, kindOf, note, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
+import { afterOf, askOf, flakeTracker, goal, goals, note, partsOf, planSet, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { startProposals, takeFresh } from "./deps.ts";
 import { normalizeAsk, type Ask } from "./ask.ts";
@@ -93,16 +93,16 @@ export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number 
 /** Open jobs in factory repos whose last run awaits Chris (a stuck run needs no answer). */
 export function waiting(jobs = allJobs()): number {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  return jobs.filter((j) => isOpen(j) && j.at(-1)!.run.repo && keys.has(j.at(-1)!.run.repo!) && isAwaiting(j.at(-1)!.run.state)).length;
+  return jobs.filter((j) => isOpen(j) && j.at(-1)!.run.repo && keys.has(j.at(-1)!.run.repo!) && isAwaiting(j.at(-1)!.run.condition)).length;
 }
 
-export interface Hold { name: string; state: string; reason?: string; line: string }
+export interface Hold { name: string; condition: string; reason?: string; line: string }
 
 /** Whether an open job holds the factory: its last real run is stuck or failed, with no next run pending and no Ask on its run. */
 function holds(j: Job, keys: Set<string>, except?: string): boolean {
   const last = lastReal(j);
   const r = last.run;
-  return isOpen(j) && !!r.repo && keys.has(r.repo) && (r.state === "stuck" || r.state === "failed") && r.job !== except
+  return isOpen(j) && !!r.repo && keys.has(r.repo) && (r.condition === "stuck" || r.condition === "failed") && r.job !== except
     && !r.next && !isLive(last.folder) && !asked(last);
 }
 
@@ -125,7 +125,7 @@ export function hold(jobs = allJobs(), except?: string): Hold | null {
   if (!bad.length) return null;
   const r = lastReal(bad[0]).run;
   const more = bad.length > 1 ? ` and ${bad.length - 1} more` : "";
-  return { name: r.name, state: r.state, reason: r.reason, line: `Held: ${r.name}${more} ${bad.length > 1 ? "are" : "is"} ${r.state}${r.reason ? ` (${r.reason})` : ""}. No run starts or lands until ${bad.length > 1 ? "they are" : "it is"} cleared.` };
+  return { name: r.name, condition: r.condition, reason: r.reason, line: `Held: ${r.name}${more} ${bad.length > 1 ? "are" : "is"} ${r.condition}${r.reason ? ` (${r.reason})` : ""}. No run starts or lands until ${bad.length > 1 ? "they are" : "it is"} cleared.` };
 }
 
 /** Passed agent runs waiting to land by themselves (`--land` or an autoland repo), oldest first. */
@@ -134,7 +134,7 @@ export function waitingToLand(jobs = allJobs()): string[] {
   return jobs.filter((j) => {
     const last = lastReal(j);
     const r = last.run;
-    return isOpen(j) && (isBuild(r.kind) || r.kind === "recheck") && r.state === "passed" && !isLive(last.folder) && (r.land || (r.repo && repos[r.repo]?.autoland));
+    return isOpen(j) && (isBuild(r.kind) || r.kind === "recheck") && r.condition === "passed" && !isLive(last.folder) && (r.land || (r.repo && repos[r.repo]?.autoland));
   }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started)).map((j) => j.at(-1)!.run.name);
 }
 
@@ -148,7 +148,7 @@ async function factsStep(): Promise<void> {
   for (const j of allJobs()) {
     const last = lastReal(j);
     const repo = last.run.repo ? keys.get(last.run.repo) : undefined;
-    if (!repo || last.run.state !== "landed" || !last.run.commit || last.run.facts || j.some((e) => e.run.kind === "facts")) continue;
+    if (!repo || last.run.condition !== "landed" || !last.run.commit || last.run.facts || j.some((e) => e.run.kind === "facts")) continue;
     const name = last.run.name;
     const release = await lock(`facts-${name}`, 0);
     if (!release) continue;
@@ -165,39 +165,39 @@ async function factsStep(): Promise<void> {
   }
 }
 
-/** The open items labelled `goal` in each factory repo. */
-export const openGoals = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => goals(sandboxRepos(), lists).filter(({ item }) => kindOf(item) === "goal");
+/** The buildable issues of each factory repo. */
+export const openGoals = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => goals(sandboxRepos(), lists);
 
 /**
- * Whether `<repo>-<n>` is done: the store says done, or the derived state
- * `aleph status` gives is done. The store counts on its own because a goal
- * closed as already met has no commit that names it. A repo outside the
- * registry, or an item the store lacks, is not done.
+ * Whether `<repo>-<n>` is done: the store says done, or the stage is done, or the store's list was read and lacks it
+ * (closed work that was not copied). A list not read blocks: nothing there counts as done.
  */
 export function doneChecker(): (ref: string) => boolean {
   const reg = loadRegistry();
-  const known = new Map<string, Set<string>>();
+  const known = new Map<string, { done: Set<string>; items: Set<string> | null }>();
   return (ref) => {
     const r = issues.parseGoalRef(ref);
     const repo = r && reg[r.repo];
     if (!r || !repo) return false;
     if (!known.has(r.repo)) {
       const done = new Set<string>();
+      let items: Set<string> | null = null;
       try {
         const doc = readList(repo);
         for (const i of doc?.items ?? []) if (issues.status(i) === "done") done.add(`${r.repo}-${issues.refOf(i)}`);
         for (const s of repoStages(repo, { fetch: true, doc })) if (s.stage === "done") done.add(s.id);
+        if (doc) items = new Set(doc.items.map((i) => `${r.repo}-${issues.refOf(i)}`));
       } catch {}
-      known.set(r.repo, done);
+      known.set(r.repo, { done, items });
     }
-    return known.get(r.repo)!.has(`${r.repo}-${r.id}`);
+    const { done, items } = known.get(r.repo)!;
+    const id = `${r.repo}-${r.id}`;
+    return done.has(id) || (items !== null && !items.has(id));
   };
 }
 
-/** Why an item is not ready to start today, or null: its `due` is after today, or a goal it is `after` is not done. */
-export function notReady(item: issues.Issue, done: (ref: string) => boolean, now = issues.clock()): string | null {
-  const due = item.fm.due;
-  if (typeof due === "string" && issues.validDate(due) && due > issues.today(now)) return `due ${due}`;
+/** Why an item is not ready to start, or null: something it is `after` is not done. */
+export function notReady(item: issues.Issue, done: (ref: string) => boolean): string | null {
   const open = pendingWaits(afterOf(item), done);
   if (open.length) return `blocked: after ${open.join(",")}`;
   return null;
@@ -211,7 +211,6 @@ export function pendingWaits(after: string[], done: (ref: string) => boolean): s
 export type WaitReason =
   | { kind: "ready"; text: string }
   | { kind: "waits_on"; ids: string[]; text: string }
-  | { kind: "due"; text: string }
   | { kind: "ask"; reason: string; text: string }
   | { kind: "planning"; text: string }
   | { kind: "red"; text: string }
@@ -223,8 +222,6 @@ export interface WaitContext { done: (ref: string) => boolean; jobs?: Job[]; gat
 /** Why a queued goal does not start now, by the order and the texts `dispatchGoals` skips it with; `ready` when nothing stops it. */
 export function waitReason(_repo: Repo, item: issues.Issue, ctx: WaitContext): WaitReason {
   if (ctx.red) return { kind: "red", text: ctx.red };
-  const due = item.fm.due;
-  if (typeof due === "string" && issues.validDate(due) && due > issues.today(ctx.now ?? issues.clock())) return { kind: "due", text: `Due ${due}` };
   const ids = pendingWaits(afterOf(item), ctx.done);
   if (ids.length) return { kind: "waits_on", ids, text: `Waits on ${ids.join(", ")}` };
   const ask = askOf(item);
@@ -247,13 +244,7 @@ export function waitReason(_repo: Repo, item: issues.Issue, ctx: WaitContext): W
   return { kind: "ready", text: "Starts at the next dispatch" };
 }
 
-/** The job name for a goal: its id, `aleph-28.1` for a goal under an issue, `aleph-28` for an old goal. */
-/** The number of the issue a goal belongs to in this repo, or null. */
-const issueNumber = (repo: Repo, item: issues.Issue): number | null => {
-  const m = /^(.+)-(\d+)$/.exec(issueRefOf(item) ?? "");
-  return m && m[1] === repo.key ? Number(m[2]) : null;
-};
-
+/** The job name for an issue: its id, `aleph-28` or `aleph-28.1`. */
 export const goalJob = (repo: Repo, id: number | string) => `${repo.key}-${id}`;
 
 /** Agent runs live now, and those started whose unit has not written `pid` yet. */
@@ -330,15 +321,15 @@ export function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date
     if (run.kind !== "land" || run.repo !== repo.key || now - Date.parse(run.started) > BUSY_MS) continue;
     for (const f of run.conflicts ?? []) counts.set(f, (counts.get(f) ?? 0) + 1);
   }
-  const mine = surfaceOf(item.body).filter((f) => (counts.get(f) ?? 0) >= BUSY_CONFLICTS);
+  const mine = surfaceOf(item.spec).filter((f) => (counts.get(f) ?? 0) >= BUSY_CONFLICTS);
   if (!mine.length) return null;
   const lists = reader({ fetch: false });
   for (const j of jobs) {
     const last = lastReal(j).run;
     const on = onOf(last);
-    if (last.repo !== repo.key || on === undefined || !isOpen(j) || isAwaiting(last.state)) continue;
+    if (last.repo !== repo.key || on === undefined || !isOpen(j) || isAwaiting(last.condition)) continue;
     const theirs = lists.item(repo.key, on);
-    const shared = theirs && surfaceOf(theirs.body).find((f) => mine.includes(f));
+    const shared = theirs && surfaceOf(theirs.spec).find((f) => mine.includes(f));
     if (shared) return `waits for ${last.name}: both change the busy file ${shared}`;
   }
   return null;
@@ -396,6 +387,14 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
     }
   }
   for (const repo of sandboxRepos()) if (!reds.get(repo.key)) for (const l of await closeIssues(repo, done)) skipped.push(l);
+  for (const repo of sandboxRepos()) {
+    if (reds.get(repo.key)) continue;
+    for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) {
+      if (!planSet(item) || issues.status(item) !== "open" || askOf(item) || notReady(item, done) || await planning(repo, item.id)) continue;
+      plan(repo, item.id);
+      planned.push(goalJob(repo, item.id));
+    }
+  }
   for (const { repo, item: listed } of goals) {
     const ref = issues.idOf(listed);
     const name = goalJob(repo, ref);
@@ -411,16 +410,15 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
     try {
       const jobs = allJobs();
       const open = openJob(name, null, jobs);
-      if (open) { skipped.push(`${name}: ${open.at(-1)!.run.state}`); continue; }
+      if (open) { skipped.push(`${name}: ${open.at(-1)!.run.condition}`); continue; }
       // Read after the jobs: a note added before the last run's drop is in the rerun's spec.
       const item = goal(repo, ref);
       if (!item) { skipped.push(`${name}: not a goal`); continue; }
-      // The item may have gained an after or a due date since it was read, while the baseline ran or an earlier goal started.
+      // The item may have gained an after since it was read, while the baseline ran or an earlier goal started.
       const waitNow = notReady(item, done);
       if (waitNow) { skipped.push(`${name}: ${waitNow}`); continue; }
       // A plan job runs detached: the goal gets no second planner and no worker while it does.
-      const parent = issueNumber(repo, item);
-      if (parent !== null && await planning(repo, parent)) { skipped.push(`${name}: planning`); continue; }
+      if (await planning(repo, item.id)) { skipped.push(`${name}: planning`); continue; }
       // A pass that began before a pause must not start a run after it.
       const gated = gates({ only: ["pause", "live", "day", "awaiting"], jobs });
       if (gated) { skipped.push(`${name}: ${gated.why}`); continue; }
@@ -453,13 +451,13 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
         continue;
       }
       const again = rerunNote(name);
-      const drops = jobsNamed(name, null, jobs).filter((j) => j.at(-1)!.run.state === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
-      const spec = `# ${item.title}\n\n${item.body.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
+      const drops = jobsNamed(name, null, jobs).filter((j) => j.at(-1)!.run.condition === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
+      const spec = `# ${item.title}\n\n${item.spec.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
       let tier: Tier | null | undefined;
       if (rate) {
         const p = await needsPlan(repo, item, spec, rate);
         if (paused()) { skipped.push(`${name}: paused`); continue; }
-        if ("plan" in p) { plan(repo, issueNumber(repo, item)!); planned.push(name); continue; }
+        if ("plan" in p) { plan(repo, item.id); planned.push(name); continue; }
         tier = p.tier;
       }
       const why = await start(repo, name, ref, spec, tier);
@@ -473,28 +471,32 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
   return { started, skipped, ...(landed.length ? { landed } : {}), ...(planned.length ? { planned } : {}) };
 }
 
+/** Whether every part is done or dropped, at least one is done, and the parent is neither asking nor to plan: then it closes. */
+const finished = (doc: issues.Doc, item: issues.Issue, repo: Repo, done: (ref: string) => boolean): boolean => {
+  const parts = partsOf(doc, item);
+  if (issues.status(item) !== "open" || !parts.length || askOf(item) || planSet(item)) return false;
+  const isDone = (p: issues.Issue) => issues.status(p) !== "dropped" && done(`${repo.key}-${issues.refOf(p)}`);
+  return parts.some(isDone) && parts.every((p) => issues.status(p) === "dropped" || isDone(p));
+};
+
 /**
- * An open issue whose goals are all done is closed as done, with a note naming the goals' commits. An issue whose goals
- * hold a dropped one and no open one is left alone: the drop set its Ask. Returns the lines for the dispatch's skipped list.
+ * An open parent whose parts are all done or dropped, with at least one done and no Ask, is closed as done, with a note naming the
+ * parts' commits. The write that drops the last open part sets the Ask, so Chris decides first. Returns the lines for the dispatch's skipped list.
  */
 async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<string[]> {
   const lines: string[] = [];
   const doc = reader({ fetch: false }).list(repo.key);
   for (const listed of doc?.items ?? []) {
-    const goalIds = goalsOf(listed);
-    if (kindOf(listed) !== "issue" || issues.status(listed) !== "open" || !goalIds.length) continue;
-    if (!goalIds.every((g) => done(g))) continue;
+    if (!doc || !finished(doc, listed, repo, done)) continue;
     const name = `${repo.key}-${listed.id}`;
     const release = await lock(`issue-${name}`, 0);
     if (!release) { lines.push(`${name}: another dispatch holds it`); continue; }
     try {
-      const item = reader().item(repo.key, listed.id);
-      if (!item || issues.status(item) !== "open" || kindOf(item) !== "issue" || !goalsOf(item).length || !goalsOf(item).every((g) => done(g))) continue;
-      const commits = goalsOf(item).map((g) => {
-        const r = issues.parseGoalRef(g);
-        return `${g} (${(r && itemOnMain(r.repo === repo.key ? repo : undefined, r.id)) ?? "no commit"})`;
-      });
-      const bad = note(repo, item.id, `its goals are all done: ${commits.join(", ")}`, { done: true });
+      const now = reader().list(repo.key);
+      const item = now ? issues.find(now, listed.id) : undefined;
+      if (!now || !item || !finished(now, item, repo, done)) continue;
+      const commits = partsOf(now, item).filter((p) => issues.status(p) !== "dropped").map((p) => `${repo.key}-${issues.refOf(p)} (${itemOnMain(repo, issues.idOf(p)) ?? "no commit"})`);
+      const bad = note(repo, item.id, `its parts are done: ${commits.join(", ")}`, { done: true });
       lines.push(bad ? `${name}: not closed: ${bad}` : `${name}: closed as done`);
     } finally {
       release();
@@ -519,7 +521,7 @@ export async function acceptanceStep(run: Runner = sandboxRunner, now = issues.c
   const lists = reader();
   for (const repo of sandboxRepos()) {
     const list = lists.list(repo.key)?.items ?? [];
-    const due = list.filter((i) => kindOf(i) === "goal" && issues.status(i) === "done" && (String(i.fm.updated ?? "") >= since || !!readRecord(repo.key, issues.refOf(i))?.retest) && !final(readRecord(repo.key, issues.refOf(i))));
+    const due = list.filter((i) => !!i.spec.trim() && issues.status(i) === "done" && (String(i.fm.updated ?? "") >= since || !!readRecord(repo.key, issues.refOf(i))?.retest) && !final(readRecord(repo.key, issues.refOf(i))));
     if (!due.length) continue;
     if (!fetchOrigin(repo.path).ok) { lines.push(`${repo.key}: acceptance not run: fetch failed`); continue; }
     for (const listed of due) {
@@ -528,7 +530,7 @@ export async function acceptanceStep(run: Runner = sandboxRunner, now = issues.c
       try {
         const item = reader().item(repo.key, issues.refOf(listed));
         if (!item || issues.status(item) !== "done" || final(readRecord(repo.key, issues.refOf(item)))) continue;
-        if (kindOf(item) !== "issue" && !itemOnMain(repo, issues.idOf(item))) continue;
+        if (!itemOnMain(repo, issues.idOf(item))) continue;
         lines.push(await accept(repo, item, run, now));
       } finally {
         release();
@@ -562,12 +564,12 @@ export async function reacceptReopened(repoKey: string, o: { since?: string; bef
   const since = ms(o.since, "--reopened-since") ?? -Infinity;
   const lines: string[] = [];
   const list = reader().list(repo.key)?.items ?? [];
-  for (const listed of list.filter((i) => kindOf(i) === "goal" && reopenedByAcceptance(i, since, before))) {
+  for (const listed of list.filter((i) => !!i.spec.trim() && reopenedByAcceptance(i, since, before))) {
     const release = await lock(`acceptance-${repo.key}-${issues.refOf(listed)}`, 0);
     if (!release) continue;
     try {
       const item = reader().item(repo.key, issues.refOf(listed));
-      if (!item || !reopenedByAcceptance(item, since, before) || !itemOnMain(repo, issues.idOf(item))) continue;
+      if (!item || !reopenedByAcceptance(item, since, before) || !itemOnMain(repo, issues.idOf(item), { anyTime: true })) continue;
       lines.push(await reaccept(repo, item, o.run));
     } finally {
       release();
@@ -598,7 +600,7 @@ const writeStreakMark = (name: string) => {
 /** How many of the goal's newest agent runs since the streak's last Ask, in a row, ended with no commit. */
 function noCommitStreak(repoKey: string, name: string): number {
   const mark = streakMark(name) ?? -Infinity;
-  const runs = allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.state !== "running" && Date.parse(e.run.started) > mark)
+  const runs = allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.condition !== "running" && Date.parse(e.run.started) > mark)
     .sort((a, b) => Date.parse(a.run.started) - Date.parse(b.run.started));
   let n = 0;
   for (const e of runs.reverse()) { if (e.run.reason !== "no commit" && !e.run.noCommit) break; n++; }
@@ -664,7 +666,7 @@ const killed = (jobs: Job[]): Job[] => {
   return jobs.filter((j) => {
     const last = lastReal(j);
     const r = last.run;
-    return isOpen(j) && !!r.repo && keys.has(r.repo) && r.state === "running" && (isBuild(r.kind) || r.kind === "recheck" || r.kind === "land")
+    return isOpen(j) && !!r.repo && keys.has(r.repo) && r.condition === "running" && (isBuild(r.kind) || r.kind === "recheck" || r.kind === "land")
       && Date.parse(r.started) < booted && !isLive(last.folder) && !isStarting(last);
   });
 };
@@ -680,7 +682,7 @@ const killedReviews = (): string[] => {
   for (const j of allJobs()) {
     const last = lastReal(j);
     const r = last.run;
-    if (!isOpen(j) || !r.repo || !keys.has(r.repo) || !isAwaiting(r.state) || !["held-path", "review"].includes(runAskOf(r)?.reason ?? "")) continue;
+    if (!isOpen(j) || !r.repo || !keys.has(r.repo) || !isAwaiting(r.condition) || !["held-path", "review"].includes(runAskOf(r)?.reason ?? "")) continue;
     const call = join(last.folder, "call.md");
     try {
       if (readFileSync(call, "utf8").trim() === "PENDING" && statSync(call).mtimeMs < booted) out.push(last.folder);
@@ -700,8 +702,8 @@ const endKilledFacts = (): void => {
   const booted = bootedAt();
   for (const e of allRuns()) {
     const r = e.run;
-    if (r.kind !== "facts" || r.state !== "running" || !r.repo || !keys.has(r.repo) || Date.parse(r.started) >= booted) continue;
-    updateRun(e.folder, { state: "done", reason: "host restart", phase: undefined, ended: new Date().toISOString() });
+    if (r.kind !== "facts" || r.condition !== "running" || !r.repo || !keys.has(r.repo) || Date.parse(r.started) >= booted) continue;
+    updateRun(e.folder, { condition: "done", reason: "host restart", phase: undefined, ended: new Date().toISOString() });
     factoryLog(`${r.name}: a host restart killed its facts run; its facts are lost`);
   }
 };
@@ -757,11 +759,9 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
   const repo = loadRegistry()[r.repo!];
   const name = r.name;
   const fromName = name.match(/-(\d+(?:\.\d+)?)$/)?.[1];
-  // A dotted goal's id is a string; only an issue's plain number can go back to triage.
   const issue = issueOf(runs) ?? (fromName === undefined ? undefined : fromName.includes(".") ? fromName : Number(fromName));
-  const plain = typeof issue === "number";
   const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${repo.key}/${name}: ${line}`); };
-  const record = (text: string, opts: { done?: boolean; kind?: "issue"; ask?: Ask } = {}) => {
+  const record = (text: string, opts: { done?: boolean; ask?: Ask } = {}) => {
     const why = issue === undefined ? "no issue" : note(repo, issue, text, opts);
     if (why) factoryLog(`${name}: no issue note: ${why}`);
   };
@@ -794,9 +794,9 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
   };
   const claim = r.reason === "no commit" ? alreadyMet(readFile(last, "result.md") ?? "") : null;
   const key = killed([runs]).length ? "killed" : caseOf(r, onMainOrDone, claim);
-  const reason = key === "killed" ? "host restart" : r.reason ?? r.state;
-  const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.state}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
-  if (!key) return chris(`${name} is ${r.state} (${reason}); drop it, recheck it, or edit the goal?`, choice(`${name} is ${r.state} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
+  const reason = key === "killed" ? "host restart" : r.reason ?? r.condition;
+  const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.condition}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
+  if (!key) return chris(`${name} is ${r.condition} (${reason}); drop it, recheck it, or edit the goal?`, choice(`${name} is ${r.condition} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
 
   const tryDo = async (why: string | null, what: string) => {
     if (why) { rmSync(rerunFile(name), { force: true }); await chris(`${name}: ${what} failed (${why}); ${reason}. What now?`, choice(`${name}: ${what} failed: how should the factory go on?`, [`Failure: ${why}`])); return false; }
@@ -808,7 +808,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
     if (r.kind === "land") {
       // The branch passed, and the land may have pushed: a new land finds that, and a new goal run would do the work twice.
       writeFileSync(join(last.folder, "exit"), "143");
-      updateRun(last.folder, { state: "failed", reason, phase: undefined, told: true, ended: new Date().toISOString() });
+      updateRun(last.folder, { condition: "failed", reason, phase: undefined, told: true, ended: new Date().toISOString() });
       if (!await tryDo(land ? await land(name) : "no land", "land again")) return;
       record(`${text}: landed again`);
       await say(`${text}: landing again`);
@@ -824,16 +824,6 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
   const earlier = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key);
   if (key !== "duplicate" && key !== "claimed") {
     const before = allRuns().filter((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key).length;
-    // A no-commit run with no claim, twice: the goal is the likely fault, so the issue goes back to triage, once.
-    const sentBack = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === "triaged");
-    if (before && key === "no-commit" && !sentBack && plain) {
-      markRescued(last, "triaged");
-      const text = `${r.kind} run ${last.id} ended with no commit again, and the worker did not say the goal is already met: dropped, and the issue went back to triage to rewrite the goal, close the issue, or ask Chris. The last 20 lines of its result.md (a note is one line, so lines are joined with " | "): ${tailOf(last, "result.md", 20).split("\n").map((l) => l.trim()).filter(Boolean).join(" | ") || "(empty)"}`;
-      if (!await tryDo(await act.drop(name, text), "drop")) return;
-      record(text, { kind: "issue" });
-      await say(`no commit twice; the issue went back to triage`);
-      return;
-    }
     if (before) return chris(`${name} hit the same case again (${key}: ${reason}); a rerun did not clear it. Drop it, or change the goal?`, choice(`${name} hit the same case again (${key}): how should the factory go on?`, ["A rerun did not clear it"]));
   }
   if (key !== "claimed") markRescued(last, key);
@@ -849,13 +839,8 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): 
       if (!await tryDo(await act.drop(name, text), "drop")) return;
       record(text, { done: true });
       await say(text);
-    } else if (earlier && !plain) {
+    } else if (earlier) {
       return chris(`${name} says the goal is already met again (${claim}), but ${red}. Drop it, or change the goal?`, choice(`${name} says the goal is already met again, but ${red}: how should the factory go on?`, [`Claim: ${claim}`]));
-    } else if (earlier && issue !== undefined) {
-      const text = `${r.kind} run ${last.id} says the goal is already met again (${claim}), but ${red}: dropped, and the issue went back to triage`;
-      if (!await tryDo(await act.drop(name, text), "drop")) return;
-      record(text, { kind: "issue" });
-      await say(text);
     } else {
       rerun(`The last run said the goal is already met (${claim}), but the checks do not pass on origin/${repo.main} (${red}). Make the change the goal asks for.`);
       const text = `${r.kind} run ${last.id} says the goal is already met (${claim}), but ${red}; dropped, and the goal reruns once`;
@@ -938,7 +923,7 @@ export async function triageStep(): Promise<{ triaged: Counts; skipped: string[]
   if (gates({ only: ["pause", "hold", "probe"] })) return { triaged: {}, skipped: [] };
   const t = await triageOpen(sandboxRepos(), doneChecker());
   factoryLog(`triaged ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
-  if (t.triaged.goal) dispatchDetached();
+  if (t.triaged.build || t.triaged.plan) dispatchDetached();
   return t;
 }
 
@@ -1119,10 +1104,10 @@ function noteSource(title: string): string | undefined {
 /** One run as the report gives it. */
 function entry(e: Entry): string {
   const r = e.run;
-  const needs = isAwaiting(r.state) ? needsOf(runAskOf(r)) : undefined;
-  const head = `${r.repo}/${r.name} ${r.state}${needs ? ` (${needs})` : ""}${r.round && r.state !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
+  const needs = isAwaiting(r.condition) ? needsOf(runAskOf(r)) : undefined;
+  const head = `${r.repo}/${r.name} ${r.condition}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
-  if (r.state === "landed" && r.commit) lines.push(`  commit ${r.commit.slice(0, 7)}`);
+  if (r.condition === "landed" && r.commit) lines.push(`  commit ${r.commit.slice(0, 7)}`);
   if (needs === "held" || needs === "review") {
     if (r.stat) lines.push(...r.stat.split("\n").map((l) => `  ${l}`));
     lines.push(`  aleph land ${r.name}   (lands it, with Held-by: Chris)`, `  aleph drop ${r.name}   (drops it; the item stays open)`);
@@ -1178,13 +1163,11 @@ function newEpisodes(): string[] {
 const seenFile = () => join(factoryDir(), "seen");
 
 /**
- * The open items whose `due` is today or earlier, or whose waited-on item is
- * done, that no report has listed; each is then written to the seen file.
- * Comparing with today, not with yesterday, catches every item in a gap.
+ * The open items whose waited-on item is done, that no report has listed;
+ * each is then written to the seen file.
  */
 function cameDue(): string[] {
   const seen = new Set(existsSync(seenFile()) ? readFileSync(seenFile(), "utf8").split("\n").filter(Boolean) : []);
-  const day = issues.today(issues.clock());
   const done = doneChecker();
   const lines: string[] = [];
   const ids: string[] = [];
@@ -1195,9 +1178,8 @@ function cameDue(): string[] {
     for (const item of docs[n]?.items ?? []) {
       const id = `${repo.key}-${item.id}`;
       if (issues.status(item) !== "open" || seen.has(id)) continue;
-      const due = item.fm.due;
       const waits = afterOf(item);
-      if ((typeof due === "string" && issues.validDate(due) && due <= day) || (waits.length > 0 && !pendingWaits(waits, done).length)) {
+      if (waits.length > 0 && !pendingWaits(waits, done).length) {
         ids.push(id);
         lines.push(`${id} ${item.title}`);
       }
@@ -1212,7 +1194,7 @@ function cameDue(): string[] {
 
 /** The runs the report has not shown, oldest first; each is then marked shown, and the last line counts the day's runs. */
 function runLines(now: number): string[] {
-  const fresh = allRuns().filter((e) => e.run.shown === false && e.run.kind !== "plain" && e.run.state !== "running" && !(isLive(e.folder) || isStarting(e)));
+  const fresh = allRuns().filter((e) => e.run.shown === false && e.run.kind !== "plain" && e.run.condition !== "running" && !(isLive(e.folder) || isStarting(e)));
   const lines = fresh.map(entry);
   for (const e of fresh) updateRun(e.folder, { shown: true });
   const today = runsToday(now);
@@ -1229,7 +1211,7 @@ export async function triageNow(repo: Repo, id: number): Promise<{ triaged: Coun
   if (gates({ only: ["pause", "hold", "probe"] })) return { triaged: {}, skipped: [] };
   const t = await triageIssue(repo, id, doneChecker());
   factoryLog(`triaged ${repo.key}-${id}: ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
-  if (t.triaged.goal) dispatchDetached();
+  if (t.triaged.build || t.triaged.plan) dispatchDetached();
   return t;
 }
 

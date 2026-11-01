@@ -36,7 +36,7 @@ export function renderDetail(p) {
       `<td>${c.item ? esc(localId(c.item, p.key)) : ""}</td><td class="time">${esc(when(c.date))}</td></tr>`;
   });
   const items = p.items.map((i) => `<tr><td>${idLink(i.id, `#/issues/${encodeURIComponent(p.key)}/${i.id}`)}</td><td class="wide" title="${esc(i.title)}">${esc(i.title)}</td><td>${chips(i.labels)}</td></tr>`);
-  const jobs = p.jobs.map((j) => `<tr><td>${idLink(localId(j.name, p.key), `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${badge(j.state)}</td><td class="time">${esc(when(j.started))}</td></tr>`);
+  const jobs = p.jobs.map((j) => `<tr><td>${idLink(localId(j.name, p.key), `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${badge(j.condition)}</td><td class="time">${esc(when(j.started))}</td></tr>`);
   const notes = p.vault.map((n) => `<tr><td class="wide">${esc(n.title)}</td><td>${chips([n.kind])}</td><td class="time">${esc(when(n.updated))}</td></tr>`);
   return `<div class="page"><p class="quiet"><a href="#/inventory">← Projects</a></p>` +
     pageHead(p.key, { count: p.factory ? "Factory" : "Plain repo", aside: `<code>${esc(p.path)}</code>` }) + renderFacts(p) +

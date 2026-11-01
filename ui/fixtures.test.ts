@@ -21,11 +21,11 @@ afterAll(() => { proc.kill(); rmSync(base, { recursive: true, force: true }); })
 
 test("the review fixture gives the one-off server jobs, issues, projects and notes", async () => {
   const jobs = await get("/api/jobs");
-  const count = (state: string) => jobs.filter((j: any) => j.state === state).length;
+  const count = (state: string) => jobs.filter((j: any) => j.condition === state).length;
   // The old-shape runs and the new-shape ones: every state the fixture shows, and the review runs' needs.
   expect(jobs.length).toBe(16);
   expect(["dropped", "landed", "awaiting", "running", "stuck"].map(count)).toEqual([3, 1, 3, 6, 3]);
-  expect(jobs.filter((j: any) => j.state === "awaiting").map((j: any) => j.ask?.reason ?? null).sort()).toEqual(["held-path", "held-path", "review"]);
+  expect(jobs.filter((j: any) => j.condition === "awaiting").map((j: any) => j.ask?.reason ?? null).sort()).toEqual(["held-path", "held-path", "review"]);
   // Every stage has an item, and Incoming says the stage.
   const { incoming } = await get("/api/state");
   expect(incoming.every((i: any) => typeof i.stage === "string" && i.stage !== "open")).toBe(true);

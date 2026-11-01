@@ -22,7 +22,7 @@ describe("land follows main", () => {
     writeFileSync(join(repo, "README"), "edited\n");
     const head = sh(repo, "git", "rev-parse", "HEAD");
     const r = await land("follow2", "commit follow2.txt");
-    expect(state(r.json.run).state).toBe("landed");
+    expect(state(r.json.run).condition).toBe("landed");
     expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(head);
     expect(file(r.json.run, "land.log")).toContain("README");
     sh(repo, "git", "checkout", "README");
@@ -32,7 +32,7 @@ describe("land follows main", () => {
   test("a main checkout on another branch is not moved, and the log says which", async () => {
     sh(repo, "git", "checkout", "-q", "-b", "elsewhere");
     const r = await land("follow3", "commit follow3.txt");
-    expect(state(r.json.run).state).toBe("landed");
+    expect(state(r.json.run).condition).toBe("landed");
     expect(file(r.json.run, "land.log")).toContain("it is on elsewhere");
     sh(repo, "git", "checkout", "-q", "main");
     sh(repo, "git", "branch", "-q", "-D", "elsewhere");
@@ -102,7 +102,7 @@ describe("land follows main", () => {
     sh(repo, "git", "checkout", "-q", "main");
     writeFileSync(join(repo, "README"), "dirty\n");
     const a = await land("follow6", "commit hooks/lib/env.ts", "aleph", nopath);
-    expect(state(a.json.run).state).toBe("landed");
+    expect(state(a.json.run).condition).toBe("landed");
     sh(repo, "git", "checkout", "README");
     // The checkout was dirty, so it did not move; the next land moves it across hooks/lib/env.ts.
     writeFileSync(join(bin, "systemctl"), `#!/bin/sh\necho "$@" >> ${rec}\n`, { mode: 0o755 });

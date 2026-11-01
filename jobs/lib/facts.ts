@@ -76,7 +76,7 @@ function makeRun(repo: Repo, landed: Entry): string {
   for (let n = 0; ; n++) {
     const folder = join(runsDir(), `${stamp()}-${name}${n ? `-${n}` : ""}-facts`);
     try { mkdirSync(folder); } catch (e: any) { if (e.code === "EEXIST") continue; throw e; }
-    writeRun(folder, { kind: "facts", job: landed.run.job, name, repo: repo.key, ...(landed.run.on !== undefined ? { on: landed.run.on } : {}), state: "running", phase: "facts", model: FACTS_MODEL, told: true, shown: false, started: new Date().toISOString(), made: Date.now() });
+    writeRun(folder, { kind: "facts", job: landed.run.job, name, repo: repo.key, ...(landed.run.on !== undefined ? { on: landed.run.on } : {}), condition: "running", phase: "facts", model: FACTS_MODEL, told: true, shown: false, started: new Date().toISOString(), made: Date.now() });
     writeFileSync(join(folder, "command.txt"), `facts ${landed.run.name}\n`);
     return folder;
   }
@@ -85,7 +85,7 @@ function makeRun(repo: Repo, landed: Entry): string {
 /** One fresh read-only Opus run judges each fact against its source. A failed run rejects every fact. */
 export async function reviewFacts(repo: Repo, landed: Entry, facts: Fact[], commit: string): Promise<{ folder: string; verdicts: FactCheck[] }> {
   const folder = makeRun(repo, landed);
-  const end = (reason: string) => updateRun(folder, { state: "done", reason, phase: undefined, ended: new Date().toISOString() });
+  const end = (reason: string) => updateRun(folder, { condition: "done", reason, phase: undefined, ended: new Date().toISOString() });
   const rejectAll = (why: string): FactCheck[] => facts.map((f) => ({ ...f, verdict: "reject", reason: why, scope: repo.key, title: "" }));
   try {
     const input = factsPrompt(facts, commit);

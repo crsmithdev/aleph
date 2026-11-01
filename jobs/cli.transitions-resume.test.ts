@@ -16,7 +16,7 @@ describe("every transition dispatches at once", () => {
   const runs = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`));
   // Settled: no start is in flight (its run folder may not be there yet), and every run has ended and its unit,
   // with its run-end dispatch, has exited.
-  const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).state !== "running" && !unitAlive(join(jobsDir, r)));
+  const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).condition !== "running" && !unitAlive(join(jobsDir, r)));
   const add = (title: string, action: string, extra: string[] = [], env: Record<string, string> = {}) => addOld(title, action, extra, on(env));
   // A run's folder exists a moment before its state.json.
   const state = (r: string) => { try { return stateOf(r); } catch { return { state: "" }; } };
@@ -57,7 +57,7 @@ describe("every transition dispatches at once", () => {
     try {
       await (async () => {
     const s = track(await add("ends stuck", "commit FAIL", ["--labels", "goal"], { ALEPH_FIX_ROUNDS: "0" }));
-    await until(() => runs(s).some((r) => ["stuck", "failed"].includes(state(r).state)));
+    await until(() => runs(s).some((r) => ["stuck", "failed"].includes(state(r).condition)));
     const b = track(await add("held behind it", open("hold-b"), ["--labels", "goal"]));
     await Bun.sleep(1500);
     expect(started()).toEqual([`fac-${s}`]);
@@ -83,14 +83,5 @@ describe("every transition dispatches at once", () => {
     expect(started()).toEqual([]);
     await aleph(["resume"], on());
     await until(() => started().includes(`fac-${x}`));
-  }, 60_000);
-
-  test("a due date in the future starts nothing until a tick after that date", async () => {
-    const x = track(await add("due later", open("due"), ["--labels", "goal", "--due", "2026-12-01"], { ALEPH_NOW: "2026-10-27T12:00:00" }));
-    await aleph(["dispatch"], on({ ALEPH_NOW: "2026-10-27T12:00:00" }));
-    await Bun.sleep(1500);
-    expect(started()).toEqual([]);
-    expect((await aleph(["tick"], on({ ALEPH_NOW: "2026-11-30T12:00:00" }))).json.started).toEqual([]);
-    expect((await aleph(["tick"], on({ ALEPH_NOW: "2026-12-01T08:00:00" }))).json.started).toEqual([`fac-${x}`]);
   }, 60_000);
 });

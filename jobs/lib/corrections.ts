@@ -207,7 +207,7 @@ async function dropSignals(from: Date, seen: Set<string>): Promise<Signal[]> {
   for (const e of allRuns()) {
     const { run } = e;
     const ended = Date.parse(run.ended ?? "");
-    if (run.state !== "dropped" || !run.reason || !(ended >= from.getTime()) || seen.has(e.id)) continue;
+    if (run.condition !== "dropped" || !run.reason || !(ended >= from.getTime()) || seen.has(e.id)) continue;
     // The run's own fact: it made no commit, so the drop is no fault in work that does not exist.
     if (run.noCommit || run.reason === "no commit") continue;
     try {
@@ -382,7 +382,7 @@ export function approve(id: string, repo: Place): string {
   ].join("\n");
   let ids: number[];
   try {
-    ids = fileIssues(repo, `memory: ${KIND_TITLE[kind]}`, [{ title: l.title ?? `${KIND_TITLE[kind]}: ${l.sentence}`, source: "memory", goal: true, body }]);
+    ids = fileIssues(repo, `memory: ${KIND_TITLE[kind]}`, [{ title: l.title ?? `${KIND_TITLE[kind]}: ${l.sentence}`, source: "memory", spec: body }]);
   } catch (e) {
     return `the work store refused: ${(e as Error).message}`;
   }

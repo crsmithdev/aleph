@@ -34,7 +34,7 @@ afterEach(() => {
 function run(id: string, job: string, extra: Partial<Run> = {}): string {
   const folder = join(base, "jobs", id);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", state: "stuck", told: true, started: "2026-10-28T00:00:00Z", ...extra } as Run);
+  writeRun(folder, { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "stuck", told: true, started: "2026-10-28T00:00:00Z", ...extra } as Run);
   writeFileSync(join(folder, "exit"), "0");
   return folder;
 }
@@ -75,9 +75,9 @@ test("startPlain refuses a run with no command", async () => {
 describe("land", () => {
   test("refuses a name with no open job, and a job that has not passed", async () => {
     expect(await refused(() => land("x"))).toBe("no open job named x");
-    run("20261028-000001-fac-x-agent", "20261028-000001-fac-x-agent", { state: "stuck" });
+    run("20261028-000001-fac-x-agent", "20261028-000001-fac-x-agent", { condition: "stuck" });
     expect(await refused(() => land("x"))).toBe("x is stuck, not passed");
-    run("20261028-000002-fac-x-agent", "20261028-000001-fac-x-agent", { state: "awaiting", ask: { kind: "input", reason: "question", question: "q", options: [], why: [] } });
+    run("20261028-000002-fac-x-agent", "20261028-000001-fac-x-agent", { condition: "awaiting", ask: { kind: "input", reason: "question", question: "q", options: [], why: [] } });
     expect(await refused(() => land("x"))).toBe("x is awaiting (question), not passed");
     expect(runs()).toHaveLength(2);
   });
@@ -87,12 +87,12 @@ describe("recheck", () => {
   test("refuses each case that cannot be rechecked, in order", async () => {
     expect(await refused(() => recheck("x"))).toBe("no open job named x");
     const job = "20261028-000001-fac-x-agent";
-    const first = run(job, job, { state: "passed" });
+    const first = run(job, job, { condition: "passed" });
     expect(await refused(() => recheck("x"))).toBe("x is passed, not stuck or failed");
-    run("20261028-000002-fac-x-land", job, { kind: "land", state: "failed" });
+    run("20261028-000002-fac-x-land", job, { kind: "land", condition: "failed" });
     expect(await refused(() => recheck("x"))).toBe("x: the last run is a land run, not an agent run");
     rmSync(join(base, "jobs", "20261028-000002-fac-x-land"), { recursive: true });
-    writeRun(first, { ...readRun(first)!, state: "stuck", repo: "plain" });
+    writeRun(first, { ...readRun(first)!, condition: "stuck", repo: "plain" });
     expect(await refused(() => recheck("x"))).toBe("x is not a factory job");
     writeRun(first, { ...readRun(first)!, repo: "fac" });
     expect(await refused(() => recheck("x"))).toBe("x has no branch: drop it");
@@ -107,9 +107,9 @@ describe("drop", () => {
 
   test("marks the job's last run dropped, with the reason, and is not news", async () => {
     const folder = run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined, reason: "no commit" });
-    expect(await drop("x", { reason: "not needed", quiet: true })).toEqual({ job: "20261028-000001-x-agent", name: "x", state: "dropped", reason: "not needed" });
+    expect(await drop("x", { reason: "not needed", quiet: true })).toEqual({ job: "20261028-000001-x-agent", name: "x", condition: "dropped", reason: "not needed" });
     const r = readRun(folder)!;
-    expect([r.state, r.reason, r.told, r.noCommit]).toEqual(["dropped", "not needed", true, true]);
+    expect([r.condition, r.reason, r.told, r.noCommit]).toEqual(["dropped", "not needed", true, true]);
     expect(await refused(() => drop("x"))).toBe("no open job named x");
   });
 
@@ -121,22 +121,22 @@ describe("drop", () => {
 
 describe("checked", () => {
   test("a land run marked by the facts gate keeps its check and is still found", () => {
-    const folder = run("20261028-000002-y-agent", "20261028-000002-y-agent", { name: "y", repo: undefined, state: "landed", check: "open", facts: true });
-    expect(checked("y")).toEqual({ job: "20261028-000002-y-agent", name: "y", state: "landed", check: "done" });
-    expect(readRun(folder)).toMatchObject({ state: "landed", check: "done", facts: true });
+    const folder = run("20261028-000002-y-agent", "20261028-000002-y-agent", { name: "y", repo: undefined, condition: "landed", check: "open", facts: true });
+    expect(checked("y")).toEqual({ job: "20261028-000002-y-agent", name: "y", condition: "landed", check: "done" });
+    expect(readRun(folder)).toMatchObject({ condition: "landed", check: "done", facts: true });
   });
 
   test("refuses a job with no open check, and closes an open one once", () => {
     expect(() => checked("x")).toThrow("x has no open check");
-    const folder = run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined, state: "landed", check: "open" });
-    expect(checked("x")).toEqual({ job: "20261028-000001-x-agent", name: "x", state: "landed", check: "done" });
+    const folder = run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined, condition: "landed", check: "open" });
+    expect(checked("x")).toEqual({ job: "20261028-000001-x-agent", name: "x", condition: "landed", check: "done" });
     expect(readRun(folder)!.check).toBe("done");
     expect(() => checked("x")).toThrow("x has no open check");
   });
 
   test("works for a land followed by a facts run", () => {
-    const folder = run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined, state: "landed", check: "open" });
-    run("20261028-000002-x-facts", "20261028-000001-x-agent", { repo: undefined, name: "facts-x", kind: "facts", state: "done" });
+    const folder = run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined, condition: "landed", check: "open" });
+    run("20261028-000002-x-facts", "20261028-000001-x-agent", { repo: undefined, name: "facts-x", kind: "facts", condition: "done" });
     expect(checked("x").check).toBe("done");
     expect(readRun(folder)!.check).toBe("done");
   });

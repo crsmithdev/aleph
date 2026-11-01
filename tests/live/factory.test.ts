@@ -65,7 +65,7 @@ describeLive("live factory sandbox", () => {
 
   test("criteria 12 and 14: a real worker under srt passes; its home was empty, its env clean, and the run folder is gone", async () => {
     const { folder, state } = await run("hello");
-    expect(state).toMatchObject({ state: "passed", branch: "factory/hello" });
+    expect(state).toMatchObject({ condition: "passed", branch: "factory/hello" });
     expect(state.cost).toBeGreaterThan(0);
     const err = readFileSync(join(folder, "stderr.log"), "utf8");
     expect(err).toContain("HOME: .claude .gitconfig \n");
@@ -90,7 +90,7 @@ describeLive("live factory sandbox", () => {
       await Bun.sleep(1000);
     }
     expect(seen).toBe(true);
-    expect(JSON.parse(readFileSync(join(folder, "state.json"), "utf8"))).toMatchObject({ state: "stuck", reason: "time box" });
+    expect(JSON.parse(readFileSync(join(folder, "state.json"), "utf8"))).toMatchObject({ condition: "stuck", reason: "time box" });
     expect(Bun.spawnSync(["pgrep", "-f", "^factory-live-child"]).exitCode).toBe(1);
     expect(Bun.spawnSync(["systemctl", "--user", "is-active", `aleph-${id}`]).stdout.toString().trim()).not.toBe("active");
     expect(readdirSync(runs)).not.toContain(id);

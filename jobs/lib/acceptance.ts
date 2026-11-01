@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { availableParallelism, loadavg } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { note, noteFlake, setAsk, writeList, type Ask } from "../../todo/lib/store.ts";
+import { note, noteFlake, reopen as storeReopen, setAsk, writeList, type Ask } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { checkSlot, expand, type Repo } from "./ledger.ts";
 import { section } from "./plan.ts";
@@ -222,7 +222,7 @@ function reopen(repo: Repo, id: number | string, text: string, ask?: Ask): strin
     const w = writeList(repo, `todo: item ${id}: ${text.slice(0, 80)}`, (doc) => {
       const item = issues.find(doc, id);
       if (!item) return null;
-      issues.setStatus(item, "open");
+      storeReopen(doc, item, git(repo.path, "rev-parse", `origin/${repo.main}`).out || null);
       if (ask) setAsk(item, ask);
       return issues.note(item, text);
     });
@@ -265,7 +265,7 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandb
   const sha = git(repo.path, "rev-parse", "--short=7", waiting?.commit ?? `origin/${repo.main}`).out;
   if (!sha) return `${name}: acceptance not run: no origin/${repo.main}`;
   const full = waiting?.commit ?? git(repo.path, "rev-parse", `origin/${repo.main}`).out;
-  const commands = oracleCommands(item.body).filter((c) => !namesMissingTestFile(repo, full, c));
+  const commands = oracleCommands(item.spec).filter((c) => !namesMissingTestFile(repo, full, c));
   if (!commands.length) {
     writeRecord(repo.key, ref, { result: "skipped", fails: prev?.fails ?? 0 });
     return `${name}: acceptance skipped: the Oracle has no command that starts with bun test, bun run or bunx tsc, or loops over one, or that names a test file missing on ${repo.main}`;
@@ -400,7 +400,7 @@ export async function reaccept(repo: Repo, item: issues.Issue, run: Runner = san
   const sha = git(repo.path, "rev-parse", "--short=7", `origin/${repo.main}`).out;
   if (!sha) return `${name}: re-accept not run: no origin/${repo.main}`;
   const full = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
-  const commands = oracleCommands(item.body).filter((c) => !namesMissingTestFile(repo, full, c));
+  const commands = oracleCommands(item.spec).filter((c) => !namesMissingTestFile(repo, full, c));
   if (!commands.length) return `${name}: re-accept skipped: the Oracle has no runnable command`;
   const passed: string[] = [];
   for (const command of commands) {

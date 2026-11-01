@@ -1,13 +1,12 @@
 /**
  * The work store holds every registry repo's issues, one file each, in a
  * git repo of its own at $ALEPH_ISSUES or ~/.aleph/issues. A repo's items are
- * `<repo>/backlog/tasks/<repo>-<n>.md`, a Backlog.md project, so `backlog
- * browser` in `<repo>/` shows them as a board. A read fetches and reads
+ * `<repo>/backlog/tasks/<repo>-<n>.md`, in the layout `todo.ts` reads. A read fetches and reads
  * origin/main; a write is one commit on origin/main, made without a working
  * tree, and the store's checkout follows. No product repo's main moves when
  * an item changes, and no branch of a product repo can edit its own item.
  *
- * It is the Issues module: the predicates (`isGoal`, `isSorted`,
+ * It is the Issues module: the predicates (`isBuildable`, `isSorted`,
  * `awaitsChris`), one read of a repo's list (`reader`), and the named writes
  * (`note`, `close`, `label`, `closeAndFile`, `file`). Callers do not read
  * `fm.labels` or name a task's path.
@@ -16,7 +15,7 @@ import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../job
 import { layout } from "../../jobs/lib/layout.ts";
 import { clearAsk as clearAskFields, readAsk, writeAsk, type Ask } from "../../jobs/lib/ask.ts";
 import * as issues from "./todo.ts";
-import { labels, parseItem, renderItem, status, type Doc, type Issue } from "./todo.ts";
+import { labels, parseItem, renderItem, status, type Doc, type Floor, type Issue } from "./todo.ts";
 
 export { labels };
 
@@ -28,18 +27,11 @@ const ATTEMPTS = 5;
 export const storeDir = (): string => layout().store;
 const tasksDir = (key: string): string => `${key}/backlog/tasks`;
 const configPath = (key: string): string => `${key}/backlog/config.yml`;
+const floorPath = (key: string): string => `${key}/backlog/floor.json`;
 const itemPath = (key: string, item: issues.Issue | string): string => `${tasksDir(key)}/${key}-${typeof item === "string" ? item : issues.refOf(item)}.md`;
 
-/**
- * The Backlog.md project file for a repo: its statuses are aleph's, and
- * Backlog.md never commits. It is in the full form Backlog.md 1.55.3 writes
- * back when it loads a config, so opening the board leaves the checkout clean.
- */
-export const config = (key: string): string => [
-  `project_name: "${key}"`, `default_status: "open"`, `statuses: ["open", "done", "dropped"]`, `labels: []`, `date_format: yyyy-mm-dd`,
-  `max_column_width: 80`, `auto_open_browser: true`, `default_port: 6420`, `remote_operations: false`, `auto_commit: false`,
-  `bypass_git_hooks: false`, `check_active_branches: false`, `active_branch_days: 30`, `task_prefix: "${key}"`, "",
-].join("\n");
+/** The file that marks a repo as having a list in the store. */
+export const config = (key: string): string => `project_name: "${key}"\ntask_prefix: "${key}"\n`;
 
 const fetchedAt = new Map<string, number>();
 
@@ -105,7 +97,7 @@ function readFiles(dir: string, specs: string[]): string[] {
  * The item files of a repo's list at the commit last loaded, by store and repo key: a commit never changes, so a
  * later load of the same commit reads no blob. Only the latest commit is kept for each list.
  */
-const texts = new Map<string, { sha: string; files: string[] | null }>();
+const texts = new Map<string, { sha: string; files: string[] | null; floor?: Floor }>();
 
 /** A repo's items at `rev`, in number order, or null when the store has no list for it. One ls-tree finds the config and the items. */
 function load(dir: string, rev: string, key: string): Doc | null {
@@ -115,15 +107,16 @@ function load(dir: string, rev: string, key: string): Doc | null {
   const known = /^[0-9a-f]{40}$/.test(sha), at = known ? sha : rev;
   let hit = texts.get(id);
   if (!hit || hit.sha !== sha || !known) {
-    const ls = git(dir, "ls-tree", "-r", "-z", "--name-only", at, "--", configPath(key), `${tasksDir(key)}/`);
+    const ls = git(dir, "ls-tree", "-r", "-z", "--name-only", at, "--", configPath(key), floorPath(key), `${tasksDir(key)}/`);
     const paths = ls.ok ? ls.out.split("\0") : [];
     const names = paths.filter((p) => p.startsWith(`${tasksDir(key)}/`) && p.endsWith(".md") && !p.slice(tasksDir(key).length + 1).includes("/"));
-    hit = { sha, files: paths.includes(configPath(key)) ? readFiles(dir, names.map((p) => `${at}:${p}`)) : null };
+    const floor = paths.includes(floorPath(key)) ? JSON.parse(readFiles(dir, [`${at}:${floorPath(key)}`])[0]) as Floor : undefined;
+    hit = { sha, files: paths.includes(configPath(key)) ? readFiles(dir, names.map((p) => `${at}:${p}`)) : null, ...(floor ? { floor } : {}) };
     if (known) texts.set(id, hit);
   }
   if (!hit.files) return null;
   const items = hit.files.map(parseItem);
-  return { head: "", repo: key, items: items.sort((a, b) => a.id - b.id || (a.sub ?? -1) - (b.sub ?? -1)) };
+  return { repo: key, items: items.sort((a, b) => a.id - b.id || (a.sub ?? -1) - (b.sub ?? -1)), ...(hit.floor ? { floor: hit.floor } : {}) };
 }
 
 /** The repo's list on the store's origin/main, or null when the store has none. */
@@ -158,7 +151,7 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
     const base = git(dir, "rev-parse", `origin/${MAIN}`).out;
     const found = load(dir, base, repo.key);
     if (found === null && !create) throw new Error(`the work store has no list for ${repo.key}`);
-    const doc = found ?? { head: "", repo: repo.key, items: [] };
+    const doc = found ?? issues.blank(repo.key);
     const before = new Map(doc.items.map((i) => [issues.refOf(i), renderItem(repo.key, i)]));
     const value = change(doc);
     if (value === null) return null;
@@ -252,8 +245,6 @@ export function itemTimes(): Map<string, { added: number; changed: number }> {
 
 // The fields.
 
-/** An open goal with no Ask: a factory run's work. */
-export const isGoal = (item: Issue): boolean => status(item) === "open" && !awaitsChris(item) && kindOf(item) === "goal";
 /** Put `ask` on the item, as `askOf` reads it. */
 export const setAsk = (item: Issue, ask: Ask): void => writeAsk(item, ask);
 /** Take the item's Ask off. */
@@ -264,18 +255,23 @@ export const awaitsChris = (item: Issue): boolean => item.fm.ask !== undefined;
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
-/** The item's `kind`; `issue` when it has none. */
-export const kindOf = (item: Issue): "goal" | "issue" => (item.fm.kind === "goal" ? "goal" : "issue");
 /** Who raised the item: its `source`, else chris. */
 export function sourceOf(item: Issue): "chris" | "worker" | "deps" | "memory" {
   const s = text(item.fm.source);
   return s === "worker" || s === "deps" || s === "memory" ? s : "chris";
 }
-/** The issue a goal belongs to: its `issue`; null for none. */
-export const issueOf = (item: Issue): string | null => text(item.fm.issue) || null;
-/** The goals of an issue: its `goals`. */
-export const goalsOf = (item: Issue): string[] => list(item.fm.goals);
-/** The goals a goal waits for: its `after`. */
+/** The parts of an issue, in number order. */
+export const partsOf = (doc: Doc, item: Issue): Issue[] => (item.sub === undefined ? doc.items.filter((i) => i.id === item.id && i.sub !== undefined) : []);
+/** The parent of a part; undefined for a top-level issue. */
+export const parentOf = (doc: Doc, item: Issue): Issue | undefined => (item.sub === undefined ? undefined : issues.find(doc, item.id));
+/** Whether the issue needs a plan run, or "plan the rest" on a parent. */
+export const planSet = (item: Issue): boolean => item.fm.plan === "true";
+/** The flake tracker: a note log, never built. */
+export const isTracker = (item: Issue): boolean => item.fm.tracker === "true";
+/** An open issue a factory run can build: it has a spec, no parts and no Ask, and is neither to plan nor the tracker. */
+export const isBuildable = (doc: Doc, item: Issue): boolean =>
+  status(item) === "open" && !awaitsChris(item) && !!item.spec.trim() && !planSet(item) && !isTracker(item) && partsOf(doc, item).length === 0;
+/** The refs an issue waits for: its `after`. */
 export const afterOf = (item: Issue): string[] => list(item.fm.after);
 /** The item's areas: its `areas`. */
 export const areasOf = (item: Issue): string[] => list(item.fm.areas);
@@ -294,9 +290,9 @@ export function askOf(item: Issue): Ask | null {
   };
 }
 
-/** An item triage leaves alone: routed, asking, a goal, or an issue with goals. */
-export const isSorted = (item: Issue): boolean =>
-  item.fm.route !== undefined || awaitsChris(item) || kindOf(item) === "goal" || goalsOf(item).length > 0;
+/** An item triage leaves alone: asking, a part, the tracker, to plan, or with a spec or parts. */
+export const isSorted = (doc: Doc, item: Issue): boolean =>
+  awaitsChris(item) || item.sub !== undefined || isTracker(item) || planSet(item) || !!item.spec.trim() || partsOf(doc, item).length > 0;
 
 /** Add the labels `add` the item lacks and take out `remove`, as one edit; no edit when nothing changes. */
 export function label(item: Issue, add: string[], remove: string[] = []): void {
@@ -332,19 +328,24 @@ export function reader(o: { fetch?: boolean } = {}): Reader {
   return { list, item: (key, id) => { const doc = list(key); return doc ? issues.find(doc, id) : undefined; } };
 }
 
-/** The open goals of each repo, in repo then number order. A repo whose list cannot be read has none. */
+/** The buildable issues of each repo, in repo then number order. A repo whose list cannot be read has none. */
 export function goals<R extends Place>(repos: R[], lists: Reader = reader()): { repo: R; item: Issue }[] {
-  return repos.flatMap((repo) => (lists.list(repo.key)?.items ?? []).filter(isGoal).map((item) => ({ repo, item })));
+  return repos.flatMap((repo) => {
+    const doc = lists.list(repo.key);
+    return (doc?.items ?? []).filter((i) => isBuildable(doc!, i)).map((item) => ({ repo, item }));
+  });
 }
 
 /**
- * Item `id` as the store has it now, or null when it is not an open goal: it
- * may have been closed, gone back to `kind: issue`, or had a note added
- * since the list was read. A store that cannot be read counts as not a goal.
+ * Item `id` as the store has it now, or null when it is not buildable: it
+ * may have been closed or had a note added since the list was read. A store
+ * that cannot be read counts as not buildable.
  */
 export function goal(repo: Place, id: number | string): Issue | null {
-  const item = reader().item(repo.key, id);
-  return item && isGoal(item) ? item : null;
+  const r = reader();
+  const doc = r.list(repo.key);
+  const item = doc ? issues.find(doc, id) : undefined;
+  return doc && item && isBuildable(doc, item) ? item : null;
 }
 
 // The writes.
@@ -354,10 +355,10 @@ const why = (e: any): string => e?.message ?? String(e);
 
 /**
  * A note on item `id`, as one commit; with `done` the item is done too, with
- * `label` it gains that label, with `reason` it carries the reason code (`fm.reason`), with `ask` it waits for Chris (`setAsk`), with `kind: "issue"` a goal goes back to triage.
+ * `label` it gains that label, with `reason` it carries the reason code (`fm.reason`), with `ask` it waits for Chris (`setAsk`).
  * Returns why it could not, or null.
  */
-export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean; label?: string; unlabel?: string; reason?: string; ask?: Ask; kind?: "issue" } = {}): string | null {
+export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean; label?: string; unlabel?: string; reason?: string; ask?: Ask } = {}): string | null {
   try {
     const w = writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
       const item = issues.find(doc, id);
@@ -366,7 +367,6 @@ export function note(repo: Place, id: number | string, text: string, opts: { don
       if (opts.label || opts.unlabel) label(item, opts.label ? [opts.label] : [], opts.unlabel ? [opts.unlabel] : []);
       if (opts.reason) item.fm.reason = opts.reason;
       if (opts.ask) setAsk(item, opts.ask);
-      if (opts.kind) item.fm.kind = opts.kind;
       return issues.note(item, text);
     });
     return w ? null : `no issue ${id}`;
@@ -385,7 +385,7 @@ export const close = (repo: Place, id: number | string, text: string): string | 
 export function sort(repo: Place, id: number | string, message: string, change: (item: Issue, doc: Doc) => void): boolean {
   const w = writeList(repo, message, (doc) => {
     const item = issues.find(doc, id);
-    if (!item || status(item) !== "open" || isSorted(item)) return null;
+    if (!item || status(item) !== "open" || isSorted(doc, item)) return null;
     change(item, doc);
     return true;
   });
@@ -393,35 +393,49 @@ export function sort(repo: Place, id: number | string, message: string, change: 
 }
 
 /**
- * Called in the write that sets goal `goal` to dropped: when its issue is open, has no Ask and no other open goal,
- * the issue gets the part-dropped Ask, so the same commit that drops the goal asks Chris what now.
+ * Reopen item: the closure off, `since` set to main's head so that only later trailers count, and a closed parent
+ * reopened in the same write. Called in a write.
  */
-export function askIfPartDropped(doc: Doc, goal: Issue, reason: string): void {
-  if (kindOf(goal) !== "goal" || status(goal) !== "dropped") return;
-  const ref = issueOf(goal);
-  const issue = ref ? doc.items.find((i) => `${doc.repo}-${issues.refOf(i)}` === ref) : undefined;
-  if (!issue || kindOf(issue) !== "issue" || status(issue) !== "open" || awaitsChris(issue)) return;
-  const open = goalsOf(issue).some((r) => {
-    const g = doc.items.find((i) => `${doc.repo}-${issues.refOf(i)}` === r);
-    return g && g !== goal && status(g) === "open";
-  });
-  if (open) return;
-  const id = `${doc.repo}-${issues.refOf(goal)}`;
+export function reopen(doc: Doc, item: Issue, since: string | null): void {
+  for (const i of [item, parentOf(doc, item)]) {
+    if (!i || status(i) === "open") continue;
+    issues.setStatus(i, "open");
+    if (since) i.fm.since = since;
+  }
+  if (since) item.fm.since = since;
+}
+
+export const PLAN_REST = "Plan the missing part";
+
+/**
+ * Called in the write that sets part `part` to dropped: when its parent is open, has no Ask and no other open part,
+ * the parent gets the part-dropped Ask, so the same commit that drops the part asks Chris what now.
+ */
+export function askIfPartDropped(doc: Doc, part: Issue, reason: string): void {
+  if (status(part) !== "dropped") return;
+  const issue = parentOf(doc, part);
+  if (!issue || status(issue) !== "open" || awaitsChris(issue)) return;
+  if (partsOf(doc, issue).some((g) => g !== part && status(g) === "open")) return;
+  askPartDropped(issue, `Part ${doc.repo}-${issues.refOf(part)} was dropped: ${reason}. What now?`);
+}
+
+/** Put the part-dropped Ask on a parent. */
+export function askPartDropped(issue: Issue, question: string): void {
   setAsk(issue, {
     kind: "input",
     reason: "part-dropped",
-    question: `Goal ${id} was dropped: ${reason}. What now?`,
+    question,
     options: [
       { label: "Close with what landed", line: "Close the issue: the parts that landed are enough." },
-      { label: "Plan the missing part", line: "File a new goal for what the dropped goal was to do." },
+      { label: PLAN_REST, line: "Plan a new part for what the dropped part was to do." },
     ],
     why: [],
   });
   issue.fm.updated = issues.today();
 }
 
-/** A new issue for `file` and `closeAndFile`; `goal` files the body as goal `.1` too. */
-export interface Filing { title: string; labels?: string[]; areas?: string[]; body?: string; priority?: string; source?: "chris" | "worker" | "deps" | "memory"; ask?: Ask; goal?: boolean }
+/** A new issue for `file` and `closeAndFile`; `spec` makes it buildable. */
+export interface Filing { title: string; labels?: string[]; areas?: string[]; request?: string; spec?: string; priority?: string; source?: "chris" | "worker" | "deps" | "memory"; ask?: Ask }
 
 /**
  * Item `id` done with the note `text` (when `id` is given), and `filed` added,
@@ -442,10 +456,8 @@ export function closeAndFile(repo: Place, message: string, id: number | string |
         todo = item ? "done" : `no issue ${id}`;
       }
       ids = filed.map((f) => {
-        // `goal`: the body is goal-format, so the issue holds it as its Request and files goal `.1` beside it, as `aleph issue add --goal -` does.
-        const item = issues.add(doc, f.title, { labels: f.labels, body: f.goal ? `## Request\n\n${f.body ?? ""}` : f.body, priority: f.priority, source: f.source });
+        const item = issues.add(doc, f.title, { labels: f.labels, request: f.request, spec: f.spec, priority: f.priority, source: f.source });
         if (f.areas) item.fm.areas = f.areas;
-        if (f.goal) issues.addGoal(doc, item, { title: f.title, body: f.body ?? "" });
         if (f.ask) setAsk(item, f.ask);
         return item.id;
       });
@@ -468,13 +480,13 @@ export const FLAKES = "flakes";
 /** The open item labelled `flakes`, the lowest id when there are several; undefined when there is none. */
 export function flakeTracker(doc: Doc): Issue | undefined {
   return doc.items
-    .filter((i) => i.sub === undefined && status(i) === "open" && areasOf(i).includes(FLAKES))
+    .filter((i) => i.sub === undefined && status(i) === "open" && isTracker(i))
     .sort((a, b) => a.id - b.id)[0];
 }
 
 /**
  * A note on the flake tracker, adding the tracker first when there is none, as
- * one commit. Chris picks from the tracker's notes which flakes get a goal, so
+ * one commit. Chris picks from the tracker's notes which flakes get a spec, so
  * a run that meets an unrelated flake notes it here and files no issue.
  * Returns the tracker's id, or why the write did not happen.
  */
@@ -484,8 +496,8 @@ export function noteFlake(repo: Place, text: string): { id: number } | string {
       const tracker = flakeTracker(doc) ?? issues.add(doc, "Flaky tests seen by runs", {
         priority: "low",
         labels: [FLAKES],
-        route: "triaged",
-        body: "Flaky tests that runs met and did not cause. Each note is one flake a run saw. Chris picks from these notes which flakes get a goal.",
+        tracker: true,
+        request: "Flaky tests that runs met and did not cause. Each note is one flake a run saw. Chris picks from these notes which flakes to fix.",
       });
       issues.note(tracker, text);
       return { id: tracker.id };

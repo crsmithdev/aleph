@@ -31,7 +31,7 @@ const ask = { kind: "approval" as const, reason: "held-path", question: "", opti
 
 describe("the run shape", () => {
   test("a run answers from on, ask and review", () => {
-    write("20261030-000001-run", { kind: "build", state: "awaiting", ask, on: "fac-7" }, { "call.md": "VERDICT: chris sure?\n" });
+    write("20261030-000001-run", { kind: "build", condition: "awaiting", ask, on: "fac-7" }, { "call.md": "VERDICT: chris sure?\n" });
     const [j] = allJobs();
     expect(isOpen(j)).toBe(true);
     expect(stateOf(j)).toBe("awaiting");
@@ -40,14 +40,14 @@ describe("the run shape", () => {
     expect(askOf(j[0].run)).toMatchObject({ kind: "approval", reason: "held-path" });
     expect(reviewOf(j[0])).toEqual({ call: "ask", reason: "sure?" });
     const v = view(j);
-    expect(v.state).toBe("awaiting");
+    expect(v.condition).toBe("awaiting");
     expect(v.needs).toBe("held");
     expect(v.review).toEqual({ call: "ask", reason: "sure?" });
     expect(v.run.kind).toBe("build");
   });
 
   test("news line names the state and the wait", () => {
-    write("20261030-000001-run", { kind: "build", state: "awaiting", ask, on: "fac-7" });
+    write("20261030-000001-run", { kind: "build", condition: "awaiting", ask, on: "fac-7" });
     expect(newsLine(allJobs()[0][0].run)).toBe("fac/n awaiting held");
   });
 });
@@ -70,7 +70,7 @@ describe("accessors", () => {
   });
 
   test("a run with a dotted on is found under its goal", () => {
-    write("20261030-000003-goal", { kind: "build", state: "awaiting", ask, on: "fac-7.2" });
+    write("20261030-000003-goal", { kind: "build", condition: "awaiting", ask, on: "fac-7.2" });
     expect(issue(allJobs()[0])).toBe("7.2");
   });
 

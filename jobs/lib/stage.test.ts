@@ -13,25 +13,26 @@ interface Row { name: string; stage: string; of?: { n: number; m: number }; why?
 const ref = (n: number | string) => `fac-${n}`;
 let jobs = 0;
 /** A run on its item, as ref(). */
-const newRun = (id: number, run: Parameters<typeof seedRun>[1]) => { seedRun("fac", { on: ref(id), ...run }); return id; };
+const newRun = <T extends number | string>(id: T, run: Parameters<typeof seedRun>[1]) => { seedRun("fac", { on: ref(id), ...run }); return id; };
 const goal = (fm: Record<string, unknown> = {}) => seedItem("fac", `goal ${++jobs}`, { kind: "goal", ...fm });
 const issue = (fm: Record<string, unknown> = {}) => seedItem("fac", `issue ${++jobs}`, { kind: "issue", source: "chris", ...fm });
 
 const ISSUES_NEW: Row[] = [
   { name: "new issue: new", stage: "new", build: async () => issue() },
-  { name: "new issue: triaged", stage: "triaged", build: async () => issue({ route: "triaged" }) },
-  { name: "new issue: planning", stage: "planning", build: async () => newRun(issue(), { kind: "plan", state: "running" }) },
+  { name: "new issue: planning", stage: "planning", build: async () => newRun(issue(), { kind: "plan", condition: "running" }) },
   { name: "new issue: building 1 of 2", stage: "building", of: { n: 1, m: 2 }, build: async () => {
-    const a = goal({ status: "done" }), b = goal();
-    return issue({ goals: [ref(a), ref(b)] });
+    const n = issue();
+    seedGoal("fac", n, 1, { status: "done" }); seedGoal("fac", n, 2);
+    return n;
   } },
   { name: "new issue: awaiting", stage: "awaiting", why: /approval/, build: async () => issue({ ask: "approval", reason: "review" }) },
   { name: "new issue: awaiting from its goal", stage: "awaiting", why: /input/, build: async () => {
-    const g = newRun(goal(), { kind: "build", state: "awaiting", ask: { kind: "input", reason: "question", question: "Which?", options: [], why: [] } });
-    return issue({ goals: [ref(g)] });
+    const n = issue();
+    newRun(seedGoal("fac", n, 1), { kind: "build", condition: "awaiting", ask: { kind: "input", reason: "question", question: "Which?", options: [], why: [] } });
+    return n;
   } },
-  { name: "new issue: stuck", stage: "stuck", build: async () => newRun(issue(), { kind: "plan", state: "stuck" }) },
-  { name: "new issue: stuck from its goal", stage: "stuck", build: async () => issue({ goals: [ref(newRun(goal(), { kind: "build", state: "failed" }))] }) },
+  { name: "new issue: stuck", stage: "stuck", build: async () => newRun(issue(), { kind: "plan", condition: "stuck" }) },
+  { name: "new issue: stuck from its goal", stage: "stuck", build: async () => { const n = issue(); newRun(seedGoal("fac", n, 1), { kind: "build", condition: "failed" }); return n; } },
   { name: "new issue: done", stage: "done", build: async () => issue({ status: "done" }) },
   { name: "new issue: dropped", stage: "dropped", build: async () => issue({ status: "dropped" }) },
 ];
@@ -40,21 +41,21 @@ const GOALS_NEW: Row[] = [
   { name: "new goal: queued", stage: "queued", build: async () => goal() },
   { name: "new goal: blocked", stage: "blocked", why: /after fac-/, build: async () => goal({ after: [ref(goal())] }) },
   { name: "new goal: queued once its after goal is done", stage: "queued", build: async () => goal({ after: [ref(goal({ status: "done" }))] }) },
-  { name: "new goal: building", stage: "building", build: async () => newRun(goal(), { kind: "build", state: "running" }) },
-  { name: "new goal: planning", stage: "planning", build: async () => newRun(goal(), { kind: "plan", state: "running" }) },
-  { name: "new goal: queued once its plan run is done", stage: "queued", build: async () => newRun(goal(), { kind: "plan", state: "done" }) },
-  { name: "new goal: landing", stage: "landing", build: async () => newRun(goal(), { kind: "land", state: "running" }) },
+  { name: "new goal: building", stage: "building", build: async () => newRun(goal(), { kind: "build", condition: "running" }) },
+  { name: "new goal: planning", stage: "planning", build: async () => newRun(goal(), { kind: "plan", condition: "running" }) },
+  { name: "new goal: queued once its plan run is done", stage: "queued", build: async () => newRun(goal(), { kind: "plan", condition: "done" }) },
+  { name: "new goal: landing", stage: "landing", build: async () => newRun(goal(), { kind: "land", condition: "running" }) },
   { name: "new goal: awaiting (its ask)", stage: "awaiting", why: /approval: held-path/, build: async () => goal({ ask: "approval", reason: "held-path" }) },
   { name: "new goal: awaiting (its run)", stage: "awaiting", why: /approval: review/, build: async () =>
-    newRun(goal(), { kind: "build", state: "awaiting", ask: { kind: "approval", reason: "review", question: "Land it?", options: [], why: [] } }) },
-  { name: "new goal: stuck", stage: "stuck", build: async () => newRun(goal(), { kind: "build", state: "stuck" }) },
+    newRun(goal(), { kind: "build", condition: "awaiting", ask: { kind: "approval", reason: "review", question: "Land it?", options: [], why: [] } }) },
+  { name: "new goal: stuck", stage: "stuck", build: async () => newRun(goal(), { kind: "build", condition: "stuck" }) },
   { name: "new goal: done", stage: "done", build: async () => goal({ status: "done" }) },
   { name: "new goal: dropped", stage: "dropped", build: async () => goal({ status: "dropped" }) },
 ];
 
 // A commit on origin/main that names goal `goalRef` (`<n>.<k>`) and its issue `n`, as the land of a goal does; returns its sha.
-const landGoal = (n: number, goalRef: string): string => {
-  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `work\n\nIssue: ${ref(n)}\nGoal: ${ref(goalRef)}`);
+const landGoal = (_n: number, goalRef: string): string => {
+  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `work\n\nIssue: ${ref(goalRef)}`);
   sh(repo, "git", "push", "-q", "origin", "main");
   return sh(repo, "git", "rev-parse", "HEAD");
 };
@@ -81,7 +82,7 @@ const GOALS_DOTTED: Row[] = [
   } },
   { name: "dotted goal: not landing when its job landed and its commit is reverted", stage: "queued", build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
-    const a = seedGoal("fac", n, 1); seedRun("fac", { on: ref(a), kind: "build", state: "landed" }); revertOnMain(landGoal(n, `${n}.1`)); return a;
+    const a = seedGoal("fac", n, 1); seedRun("fac", { on: ref(a), kind: "build", condition: "landed" }); revertOnMain(landGoal(n, `${n}.1`)); return a;
   } },
   { name: "dotted goal: not blocked by an after goal that a trailer commit landed", stage: "queued", build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
@@ -97,12 +98,12 @@ const GOALS_DOTTED: Row[] = [
   } },
   { name: "dotted issue: building 1 of 2", stage: "building", of: { n: 1, m: 2 }, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
-    const a = seedGoal("fac", n, 1, { status: "done" }), b = seedGoal("fac", n, 2);
-    return seedItem("fac", `issue ${++jobs}`, { kind: "issue", source: "chris", goals: [ref(a), ref(b)] });
+    seedGoal("fac", n, 1, { status: "done" }); seedGoal("fac", n, 2);
+    return n;
   } },
   { name: "dotted goal: building under a run on it", stage: "building", build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
-    const a = seedGoal("fac", n, 1); seedRun("fac", { on: ref(a), kind: "build", state: "running" }); return a;
+    const a = seedGoal("fac", n, 1); seedRun("fac", { on: ref(a), kind: "build", condition: "running" }); return a;
   } },
 ];
 
@@ -127,9 +128,10 @@ for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["goals, new sha
 }
 
 describe("subjectOf", () => {
-  const item = (id: number, sub?: number): issues.Issue => ({ id, ...(sub === undefined ? {} : { sub }), title: "t", fm: {}, body: "", notes: [], legacy: false });
+  const item = (id: number, sub?: number): issues.Issue => ({ id, ...(sub === undefined ? {} : { sub }), title: "t", fm: {}, request: "", spec: "", notes: [] });
+  const doc: issues.Doc = { items: [] };
   test("a dotted goal is keyed by its dotted id, a plain item by its number", () => {
-    expect(subjectOf(item(5, 1), "proj").id).toBe("proj-5.1");
-    expect(subjectOf(item(5), "proj").id).toBe("proj-5");
+    expect(subjectOf(item(5, 1), "proj", doc).id).toBe("proj-5.1");
+    expect(subjectOf(item(5), "proj", doc).id).toBe("proj-5");
   });
 });

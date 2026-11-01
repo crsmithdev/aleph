@@ -8,13 +8,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
 import { fetchTrace, traceIdFor } from "../../hooks/lib/otlp.ts";
-import { goalsOf, kindOf, readList } from "../../todo/lib/store.ts";
+import { partsOf, readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { allRuns, onOf, type Entry, type Repo } from "./ledger.ts";
 import { section } from "./plan.ts";
-import { itemOnMain, landedCommits, repoStages } from "./status.ts";
+import { landedCommits, repoStages } from "./status.ts";
 
 const VAULT_CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
 const today = () => new Date().toISOString().slice(0, 10);
@@ -27,13 +27,13 @@ const runsOf = (repo: Repo, id: number): Entry[] =>
 export function doneGoals(repo: Repo): issues.Issue[] {
   const doc = readList(repo);
   if (!doc) return [];
-  const goals = doc.items.filter((i) => kindOf(i) === "goal");
+  const goals = doc.items.filter((i) => !!i.spec.trim());
   if (!goals.length) return [];
-  const done = new Set(repoStages(repo, { fetch: true, doc, items: goals.map((i) => i.id) }).filter((s) => s.stage === "done").map((s) => s.id));
+  const done = new Set(repoStages(repo, { fetch: true, doc, items: goals.map(issues.refOf) }).filter((s) => s.stage === "done").map((s) => s.id));
   const dir = join(vaultDir(), "wiki", "episodes");
   const pages = existsSync(dir) ? readdirSync(dir) : [];
   const ran = new Set(allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) !== undefined).map((e) => onOf(e.run)));
-  return goals.filter((i) => done.has(`${repo.key}-${i.id}`) && ran.has(i.id) && !pages.some((f) => f.startsWith(`${repo.key}-${i.id} `)));
+  return goals.filter((i) => done.has(`${repo.key}-${issues.refOf(i)}`) && ran.has(issues.idOf(i)) && !pages.some((f) => f.startsWith(`${repo.key}-${issues.refOf(i)} `)));
 }
 
 const NAME_MAX = 255; // bytes one file name may take
@@ -68,8 +68,10 @@ export type Langfuse = { error: string } | { traces: { id: string; tokens: numbe
 function commitsOf(repo: Repo, item: issues.Issue): Commit[] {
   fetchOrigin(repo.path);
   const main = `origin/${repo.main}`;
-  const refs = goalsOf(item).length ? goalsOf(item).map(issues.parseGoalRef).filter((r) => r?.repo === repo.key).map((r) => r!.id) : [item.id];
-  const shas = [...new Set(refs.flatMap((n) => (typeof n === "string" ? [itemOnMain(repo, n) ?? ""].filter(Boolean) : landedCommits(repo.path, main, repo.key, n))))];
+  const doc = readList(repo);
+  const parts = doc ? partsOf(doc, item) : [];
+  const refs = parts.length ? parts.map(issues.refOf) : [issues.refOf(item)];
+  const shas = [...new Set(refs.flatMap((n) => landedCommits(repo.path, main, repo.key, n)))];
   return shas.map((sha) => ({
     sha,
     subject: git(repo.path, "show", "--no-patch", "--format=%s", sha).out.trim(),
@@ -107,10 +109,10 @@ const minutes = (e: Entry) => Math.max(0, Math.round((epoch(e.run.ended) - epoch
 export function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commits: Commit[], langfuse: Langfuse): string {
   const id = `${repo.key}-${item.id}`;
   const sources = [id, ...commits.map((c) => `commit:${c.sha.slice(0, 7)}`), ...runs.map((e) => `run:${e.id}`)];
-  const goal = section(item.body, "Goal") || item.body.trim();
+  const goal = section(item.spec, "Goal") || item.spec.trim() || item.request.trim();
   const landed = commits.length ? commits.map((c) => `${c.sha.slice(0, 7)} ${c.subject}${c.stat ? `\n${c.stat}` : ""}`).join("\n") : "nothing landed";
   const went = runs.map(({ id: name, run }) => {
-    const parts = [`${run.kind} run ${name}: ${run.state}`];
+    const parts = [`${run.kind} run ${name}: ${run.condition}`];
     if (run.reason) parts.push(run.reason);
     if (run.round) parts.push(`after ${run.round} fix rounds`);
     return parts.join(", ") + `, ${minutes({ id: name, folder: "", run })} min`;
@@ -122,7 +124,7 @@ export function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commi
     : langfuse.traces.map((t) => (t.tokens === null ? `trace ${t.id}: no token total` : `trace ${t.id}: ${t.tokens} tokens`)).join("\n");
   const wrong: string[] = [];
   for (const { id: name, run } of runs) {
-    if (run.state === "dropped") wrong.push(`${run.kind} run ${name} dropped: ${run.reason ?? "no reason"}`);
+    if (run.condition === "dropped") wrong.push(`${run.kind} run ${name} dropped: ${run.reason ?? "no reason"}`);
     else if (run.failed === "review") wrong.push(`${run.kind} run ${name} failed review: ${run.reason ?? "no reason"}`);
     if (run.conflicts?.length) wrong.push(`${run.kind} run ${name} conflicted: ${run.conflicts.join(", ")}`);
   }

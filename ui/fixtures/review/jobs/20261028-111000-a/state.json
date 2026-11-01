@@ -4,7 +4,7 @@
   "name": "demo-11",
   "repo": "demo",
   "branch": "factory/demo-11",
-  "state": "stuck",
+  "condition": "stuck",
   "reason": "no output for 30 minutes",
   "told": true,
   "started": "2026-10-28T11:10:00.000Z",

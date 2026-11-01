@@ -21,7 +21,7 @@ let n = 0;
 function repo(items: { title: string; labels?: string[] }[] = []): store.Place {
   const r = { key: `st${++n}` };
   store.writeList(r, "start", (doc) => {
-    for (const i of items) { const it = issues.add(doc, i.title, { labels: i.labels }); if (i.labels?.includes("goal")) it.fm.kind = "goal"; }
+    for (const i of items) { issues.add(doc, i.title, { labels: i.labels, ...(i.labels?.includes("goal") ? { spec: "Do it." } : {}) }); }
     return true;
   }, true);
   return r;
@@ -44,7 +44,7 @@ afterAll(() => {
 });
 
 describe("labels", () => {
-  const it = (fm: Record<string, unknown>): issues.Item => ({ id: 1, title: "t", fm: { status: "open", ...fm }, body: "", notes: [], legacy: false });
+  const it = (fm: Record<string, unknown>): issues.Item => ({ id: 1, title: "t", fm, request: "", spec: "", notes: [], legacy: false });
 
   test("a list, a lone label, and none", () => {
     expect(store.labels(it({ labels: ["a", "b"] }))).toEqual(["a", "b"]);
@@ -53,14 +53,20 @@ describe("labels", () => {
   });
 
   test("the predicates", () => {
-    expect(store.isGoal(it({ kind: "goal" }))).toBe(true);
-    expect(store.isGoal(it({ kind: "goal", ask: "input" }))).toBe(false);
-    expect(store.isGoal(it({ kind: "goal", status: "done" }))).toBe(false);
-    expect(store.isGoal(it({ kind: "issue" }))).toBe(false);
-    expect(store.isSorted(it({ kind: "goal" }))).toBe(true);
-    expect(store.isSorted(it({ kind: "issue", goals: ["x-1.1"] }))).toBe(true);
-    expect(store.isSorted(it({ kind: "issue", ask: "approval" }))).toBe(true);
-    expect(store.isSorted(it({ kind: "issue" }))).toBe(false);
+    const doc: issues.Doc = { items: [] };
+    const spec = (fm: Record<string, unknown> = {}): issues.Issue => ({ ...it(fm), spec: "Do it." });
+    expect(store.isBuildable(doc, spec())).toBe(true);
+    expect(store.isBuildable(doc, spec({ ask: "input" }))).toBe(false);
+    expect(store.isBuildable(doc, spec({ closed_as: "done" }))).toBe(false);
+    expect(store.isBuildable(doc, spec({ plan: "true" }))).toBe(false);
+    expect(store.isBuildable(doc, spec({ tracker: "true" }))).toBe(false);
+    expect(store.isBuildable(doc, it({}))).toBe(false);
+    expect(store.isBuildable({ items: [{ ...it({}), sub: 1, spec: "x" }] }, spec())).toBe(false);
+    expect(store.isSorted(doc, spec())).toBe(true);
+    expect(store.isSorted({ items: [{ ...it({}), sub: 1 }] }, it({}))).toBe(true);
+    expect(store.isSorted(doc, it({ ask: "approval" }))).toBe(true);
+    expect(store.isSorted(doc, it({ plan: "true" }))).toBe(true);
+    expect(store.isSorted(doc, it({}))).toBe(false);
   });
 
   test("label adds what is missing and takes out what is named, once", () => {
@@ -147,7 +153,7 @@ describe("the writes", () => {
     expect(commits()).toBe(before + 1);
     expect(issues.status(item(r, 1))).toBe("done");
     expect(store.areasOf(item(r, 2))).toEqual(["check"]);
-    expect(item(r, 2).fm).toMatchObject({ kind: "issue", source: "chris" });
+    expect(item(r, 2).fm).toMatchObject({ source: "chris" });
     expect(item(r, 2).fm.labels).toBeUndefined();
   });
 
@@ -159,8 +165,8 @@ describe("the writes", () => {
 
   test("file adds issues with their bodies; nothing to file writes nothing", () => {
     const r = repo();
-    expect(store.file(r, "follow-ups", [{ title: "a", labels: ["followup"], body: "From job j." }, { title: "b", labels: ["followup"] }])).toEqual([1, 2]);
-    expect(item(r, 1).body).toBe("From job j.");
+    expect(store.file(r, "follow-ups", [{ title: "a", labels: ["followup"], request: "From job j." }, { title: "b", labels: ["followup"] }])).toEqual([1, 2]);
+    expect(item(r, 1).request).toBe("From job j.");
     const before = commits();
     expect(store.file(r, "none", [])).toEqual([]);
     expect(commits()).toBe(before);
@@ -171,12 +177,12 @@ describe("the writes", () => {
     store.writeList(r, "ask", (doc) => { store.setAsk(issues.find(doc, 2)!, { kind: "input", reason: "host-check", question: "Check it.", options: [], why: [] }); return true; });
     store.close(r, 3, "x");
     const before = commits();
-    expect(store.sort(r, 2, "triage", (i) => { i.fm.kind = "goal"; })).toBe(false);
-    expect(store.sort(r, 3, "triage", (i) => { i.fm.kind = "goal"; })).toBe(false);
-    expect(store.sort(r, 9, "triage", (i) => { i.fm.kind = "goal"; })).toBe(false);
+    expect(store.sort(r, 2, "triage", (i) => { })).toBe(false);
+    expect(store.sort(r, 3, "triage", (i) => { })).toBe(false);
+    expect(store.sort(r, 9, "triage", (i) => { })).toBe(false);
     expect(commits()).toBe(before);
-    expect(store.sort(r, 1, "triage", (i) => { i.fm.kind = "goal"; })).toBe(true);
-    expect(store.isGoal(item(r, 1))).toBe(true);
+    expect(store.sort(r, 1, "triage", (i) => { i.spec = "Do it."; })).toBe(true);
+    expect(item(r, 1).spec).toBe("Do it.");
   });
 });
 
@@ -189,12 +195,11 @@ describe("the flake tracker", () => {
     const t = item(r, 2);
     expect(t.title).toBe("Flaky tests seen by runs");
     expect(store.areasOf(t)).toEqual([store.FLAKES]);
-    expect(t.fm.route).toBe("triaged");
-    expect(store.isSorted(t)).toBe(true);
+    expect(t.fm.tracker).toBe("true");
+    expect(store.isSorted(store.readList(r)!, t)).toBe(true);
     expect(issues.status(t)).toBe("open");
     expect(t.fm.priority).toBe("low");
-    expect(t.fm.goal).toBeUndefined();
-    expect(t.body).toContain("Chris picks");
+    expect(t.request).toContain("Chris picks");
     expect(t.notes.at(-1)).toEndWith(": flaky A");
   });
 
@@ -221,12 +226,14 @@ describe("the flake tracker", () => {
   test("the tracker is sorted, so triage skips it", () => {
     const r = repo();
     store.noteFlake(r, "flaky A");
-    expect(store.isSorted(item(r, 1))).toBe(true);
-    expect(store.isGoal(item(r, 1))).toBe(false);
+    const doc = store.readList(r)!;
+    expect(store.isSorted(doc, item(r, 1))).toBe(true);
+    expect(store.isBuildable(doc, item(r, 1))).toBe(false);
   });
 
   test("flakeTracker picks the lowest open id", () => {
-    const r = repo([{ title: "a", labels: ["flakes"] }, { title: "b", labels: ["flakes"] }]);
+    const r = repo([{ title: "a" }, { title: "b" }]);
+    store.writeList(r, "trackers", (doc) => { for (const i of doc.items) i.fm.tracker = "true"; return true; });
     expect(store.flakeTracker(store.readList(r)!)?.id).toBe(1);
     store.close(r, 1, "x");
     expect(store.flakeTracker(store.readList(r)!)?.id).toBe(2);
@@ -239,40 +246,8 @@ describe("the flake tracker", () => {
 });
 
 describe("the work store file", () => {
-  const file = (created: string, updated = "updated: 2026-10-30") => `---\nid: st1-4\ntitle: Old\nstatus: open\n${created}\n${updated}\npriority: medium\nlabels: []\nrepo: st1\n---\n\nBody.\n`;
+  const file = (created: string, updated = "updated: 2026-10-30") => `---\nid: st1-4\ntitle: Old\n${created}\n${updated}\npriority: medium\nlabels: []\nrepo: st1\n---\n\nBody.\n`;
   const withItem = (text: string): issues.Item => ({ ...issues.parseItem(text), fm: issues.parseItem(text).fm });
-
-  test("renderItem writes created_date and no created key", () => {
-    const i = issues.parseItem(file("created: 2026-10-30"));
-    const text = issues.renderItem("st1", i);
-    expect(text).toContain("created_date: 2026-10-30\n");
-    expect(text).not.toMatch(/^created:/m);
-    expect(text).toContain("updated_date: 2026-10-30\n");
-    expect(text).not.toMatch(/^updated:/m);
-  });
-
-  test("parseItem reads updated_date and still accepts a file with only updated", () => {
-    expect(issues.parseItem(file("created: 2026-10-30", "updated_date: 2026-10-30")).fm.updated).toBe("2026-10-30");
-    expect(issues.parseItem(file("created: 2026-10-30", "updated: 2026-10-30")).fm.updated).toBe("2026-10-30");
-  });
-
-  test("a file with both update keys takes the updated_date value", () => {
-    expect(issues.parseItem(file("created: 2026-10-30", "updated: 2026-09-01\nupdated_date: 2026-10-30")).fm.updated).toBe("2026-10-30");
-  });
-
-  test("render, parse, render of a file with the old updated key gives the same text", () => {
-    const once = issues.renderItem("st1", issues.parseItem(file("created: 2026-10-30", "updated: 2026-09-01")));
-    expect(issues.renderItem("st1", issues.parseItem(once))).toBe(once);
-  });
-
-  test("parseItem reads created_date and still accepts a file with only created", () => {
-    expect(issues.parseItem(file("created_date: 2026-10-30")).fm.created).toBe("2026-10-30");
-    expect(issues.parseItem(file("created: 2026-10-30")).fm.created).toBe("2026-10-30");
-  });
-
-  test("a file with both keys takes the created_date value", () => {
-    expect(issues.parseItem(file("created: 2026-09-01\ncreated_date: 2026-10-30")).fm.created).toBe("2026-10-30");
-  });
 
   test("render, parse, render gives the same text", () => {
     const once = issues.renderItem("st1", issues.parseItem(file("created: 2026-10-30")));
@@ -376,7 +351,7 @@ describe("store fetches", () => {
 });
 
 describe("the writers of the new shape", () => {
-  test("add writes kind, source and areas, and never labels, waiting_on or a retired label", () => {
+  test("add writes source and areas, and never labels, waiting_on or a retired label", () => {
     const r = repo();
     store.writeList(r, "x", (doc) => {
       issues.add(doc, "plain", { labels: ["audio", "goal", "needs-chris", "triaged", "planned", "proposal", "live-check"] });
@@ -385,34 +360,34 @@ describe("the writers of the new shape", () => {
       return true;
     });
     const [a, b, c] = [item(r, 1), item(r, 2), item(r, 3)];
-    expect(a.fm).toMatchObject({ kind: "issue", source: "chris", areas: ["audio"], status: "open", priority: "medium" });
+    expect(a.fm).toMatchObject({ source: "chris", areas: ["audio"], priority: "medium" });
+    expect(issues.status(a)).toBe("open");
     for (const i of [a, b, c]) for (const k of ["labels", "waiting_on"]) expect(k in i.fm).toBe(false);
     expect(b.fm).toMatchObject({ source: "worker", areas: ["ui"] });
     expect(c.fm.source).toBe("deps");
-    expect(store.isSorted(a)).toBe(false);
+    expect(store.isSorted(store.readList(r)!, a)).toBe(false);
   });
 
-  test("addGoal allocates <n>.<k> under the issue, with the issue's priority, after and goals, in one commit", () => {
+  test("addPart allocates <n>.<k> under the issue, with the issue's priority and its after, in one commit", () => {
     const r = repo();
     const before = commits();
     store.writeList(r, "x", (doc) => {
       const issue = issues.add(doc, "big", { priority: "high" });
-      const g1 = issues.addGoal(doc, issue, { title: "part one", body: "Do one." });
-      const g2 = issues.addGoal(doc, issue, { title: "part two", body: "Do two.", after: [`${r.key}-1.1`] });
+      const g1 = issues.addPart(doc, issue, { title: "part one", spec: "Do one." });
+      const g2 = issues.addPart(doc, issue, { title: "part two", spec: "Do two.", after: [`${r.key}-1.1`] });
       issues.add(doc, "another issue");
       return [g1.sub, g2.sub];
     });
     expect(commits()).toBe(before + 1);
     const doc = store.readList(r)!;
-    expect(issues.find(doc, 1)!.fm.goals).toEqual([`${r.key}-1.1`, `${r.key}-1.2`]);
-    expect(item(r, "1.1" as any).fm).toMatchObject({ kind: "goal", issue: `${r.key}-1`, after: [], priority: "high", status: "open" });
+    expect(store.partsOf(doc, issues.find(doc, 1)!).map(issues.refOf)).toEqual(["1.1", "1.2"]);
+    expect(item(r, "1.1" as any).fm).toMatchObject({ after: [], priority: "high" });
     expect(item(r, "1.2" as any).fm.after).toEqual([`${r.key}-1.1`]);
-    expect(item(r, "1.2" as any).body).toBe("Do two.");
-    // The next issue number ignores goals.
+    expect(item(r, "1.2" as any).spec).toBe("Do two.");
+    // The next issue number ignores parts.
     expect(doc.items.find((i) => i.title === "another issue")!.id).toBe(2);
-    expect(store.isGoal(item(r, "1.1" as any))).toBe(true);
-    expect(store.isSorted(item(r, 1))).toBe(true);
-    expect(store.goalsOf(item(r, 1))).toEqual([`${r.key}-1.1`, `${r.key}-1.2`]);
+    expect(store.isBuildable(doc, item(r, "1.1" as any))).toBe(true);
+    expect(store.isSorted(doc, item(r, 1))).toBe(true);
     expect(store.afterOf(item(r, "1.2" as any))).toEqual([`${r.key}-1.1`]);
   });
 });

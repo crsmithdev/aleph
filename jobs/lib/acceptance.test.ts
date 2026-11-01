@@ -57,13 +57,13 @@ const notes = (id: number) => item(id).notes.join("\n");
 
 /** A goal whose land is on origin/main (a commit with the Item trailer), with the store saying done. */
 function doneGoal(oracle: string): number {
-  const id = writeList({ key: "fac" }, "add a goal", (doc) => { const i = issues.add(doc, "thing", { body: `## Goal\nx\n## Edit surface\na.ts\n## Oracle\n${oracle}\n## Time box\n40 minutes` }); i.fm.kind = "goal"; return i.id; }, true)!.value;
+  const id = writeList({ key: "fac" }, "add a goal", (doc) => { const i = issues.add(doc, "thing", { spec: `## Goal\nx\n## Edit surface\na.ts\n## Oracle\n${oracle}\n## Time box\n40 minutes` }); return i.id; }, true)!.value;
   land(id);
   writeList({ key: "fac" }, "close", (doc) => { issues.setStatus(issues.find(doc, id)!, "done"); return true; });
   return id;
 }
 function land(id: number): void {
-  sh(repoDir(), "git", "commit", "-q", "--allow-empty", "-m", `work\n\nItem: fac-${id}`);
+  sh(repoDir(), "git", "commit", "-q", "--allow-empty", "-m", `work\n\nIssue: fac-${id}`);
   sh(repoDir(), "git", "push", "-q", "origin", "main");
 }
 const closeAgain = (id: number) => writeList({ key: "fac" }, "close", (doc) => { issues.setStatus(issues.find(doc, id)!, "done"); return true; });
@@ -234,7 +234,7 @@ test("a done goal whose only command names a missing test file is skipped and ru
 });
 
 test("a goal closed with no landing on main is not accepted", async () => {
-  const id = writeList({ key: "fac" }, "add", (doc) => { const i = issues.add(doc, "by hand", { body: "## Oracle\n`bun run ok`" }); i.fm.kind = "goal"; return i.id; }, true)!.value;
+  const id = writeList({ key: "fac" }, "add", (doc) => { const i = issues.add(doc, "by hand", { spec: "## Oracle\n`bun run ok`" }); return i.id; }, true)!.value;
   closeAgain(id);
   expect(await acceptanceStep(runner(0))).toEqual([]);
 });
@@ -367,8 +367,8 @@ test("reacceptReopened leaves the goal open after an infra error, notes the tail
 });
 
 test("reacceptReopened skips goals not landed, not reopened by acceptance, or outside the window", async () => {
-  const unlanded = writeList({ key: "fac" }, "add", (doc) => { const i = issues.add(doc, "t", { body: "## Oracle\n`bun test x`" }); i.fm.kind = "goal"; issues.note(i, "acceptance: fail at abc1234: x"); return i.id; }, true)!.value;
-  const plain = writeList({ key: "fac" }, "add", (doc) => { const i = issues.add(doc, "t", { body: "## Oracle\n`bun test x`" }); i.fm.kind = "goal"; return i.id; })!.value;
+  const unlanded = writeList({ key: "fac" }, "add", (doc) => { const i = issues.add(doc, "t", { spec: "## Oracle\n`bun test x`" }); issues.note(i, "acceptance: fail at abc1234: x"); return i.id; }, true)!.value;
+  const plain = writeList({ key: "fac" }, "add", (doc) => { const i = issues.add(doc, "t", { spec: "## Oracle\n`bun test x`" }); return i.id; })!.value;
   land(plain);
   const old = reopened("`bun test x`");
   expect(await reacceptReopened("fac", { run: runner(0), since: "2999-01-01T00:00" })).toEqual([]);
@@ -391,7 +391,7 @@ beforeEach(() => { shas.length = 0; });
 function landFile(id: number, path: string): void {
   appendFileSync(join(repoDir(), path), `\n// ${Date.now()}\n`);
   sh(repoDir(), "git", "add", ".");
-  sh(repoDir(), "git", "commit", "-q", "-m", `work\n\nItem: fac-${id}`);
+  sh(repoDir(), "git", "commit", "-q", "-m", `work\n\nIssue: fac-${id}`);
   sh(repoDir(), "git", "push", "-q", "origin", "main");
 }
 
@@ -463,7 +463,7 @@ test("a repeat in a test the goal touched reopens; a repeat only in others goes 
   expect(notes(other)).toContain("on the flake list");
 });
 
-const parentOf = (id: number) => sh(repoDir(), "git", "rev-parse", `${sh(repoDir(), "git", "log", "origin/main", "--reverse", "--format=%H", `--grep=Item: fac-${id}`).split("\n")[0]}^`);
+const parentOf = (id: number) => sh(repoDir(), "git", "rev-parse", `${sh(repoDir(), "git", "log", "origin/main", "--reverse", "--format=%H", `--grep=Issue: fac-${id}`).split("\n")[0]}^`);
 const RERUN_FAIL = { code: 1, output: "jobs/lib/acceptance.test.ts:\n(fail) one\n 1 fail\n" };
 
 test("a repeat in an untouched file that passes at the goal's parent and fails at its newest commit reopens the goal", async () => {

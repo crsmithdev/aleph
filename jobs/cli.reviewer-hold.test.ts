@@ -14,10 +14,10 @@ describe("a factory run", () => {
     // No background review: it would rewrite the run's reason.
     const r = await aleph(["job", "fac", "rheldpath", "--spec", specFile("Goal: rheldpath\nACTION: commit held/rp.txt\n")], { ALEPH_REVIEW_CMD: "/bin/false" });
     const s = state(r.json.run);
-    expect(s).toMatchObject({ kind: "build", state: "awaiting", ask: { kind: "approval", reason: "held-path" } });
+    expect(s).toMatchObject({ kind: "build", condition: "awaiting", ask: { kind: "approval", reason: "held-path" } });
     expect(s.needs).toBeUndefined();
     const listed = (await aleph(["jobs"])).json.find((j: any) => j.name === "rheldpath");
-    expect(listed).toMatchObject({ state: "awaiting", needs: "held" });
+    expect(listed).toMatchObject({ condition: "awaiting", needs: "held" });
     await aleph(["drop", "rheldpath"]);
   });
   test("a stuck job holds the factory: no start, no land by itself; Chris's land works; pause is separate; a drop clears it", async () => {
@@ -39,17 +39,17 @@ describe("a factory run", () => {
     expect((await aleph(["report"])).stdout).toContain(`Held: fac-${stuckId} is stuck`);
     // a run that passes waits, and lands once the hold clears
     const r = await fjob("fheld", "commit fheld.txt", {}, ["--land"]);
-    expect(state(r.json.run).state).toBe("passed");
+    expect(state(r.json.run).condition).toBe("passed");
     expect(file(r.json.run, "next.log")).toContain("held:");
     expect((await aleph(["dispatch"])).json.landed).toBeUndefined();
-    expect(state(r.json.run).state).toBe("passed");
+    expect(state(r.json.run).condition).toBe("passed");
     // pause and the hold are independent
     await aleph(["pause"]);
     await aleph(["resume"]);
     expect((await aleph(["dispatch"])).json.held).toContain(`fac-${stuckId}`);
     // Chris's land still works while held
     const other2 = await fjob("fheld2", "commit fheld2.txt");
-    expect(state((await aleph(["land", "fheld2"])).json.run).state).toBe("landed");
+    expect(state((await aleph(["land", "fheld2"])).json.run).condition).toBe("landed");
     expect(other2.code).toBe(0);
     await aleph(["drop", `fac-${stuckId}`]);
     await aleph(["issue", "drop", "fac", String(stuckId), "test over"]);
@@ -74,8 +74,8 @@ describe("a factory run", () => {
     try {
       await (async () => {
     // The first test leaves a dropped run, a landed one and maybe a detached dispatch: let them end, so no run but ours is open.
-    await until(() => !dispatching() && readdirSync(jobsDir).every((r) => stateNow(r).state !== "running" && !unitAlive(join(jobsDir, r))));
-    const seen = async (label: string) => diagnose(`${label}: runs ${readdirSync(jobsDir).map((r) => `${r}=${stateNow(r).state}`).join(", ")}`, []);
+    await until(() => !dispatching() && readdirSync(jobsDir).every((r) => stateNow(r).condition !== "running" && !unitAlive(join(jobsDir, r))));
+    const seen = async (label: string) => diagnose(`${label}: runs ${readdirSync(jobsDir).map((r) => `${r}=${stateNow(r).condition}`).join(", ")}`, []);
     // Runs written as the ledger holds them: a conflicted land that goes back to its worker, and a stuck run.
     const made: string[] = [];
     const run = (name: string, extra: Record<string, unknown>) => {
@@ -85,7 +85,7 @@ describe("a factory run", () => {
       made.push(folder);
       return folder;
     };
-    const land = { kind: "land", state: "failed", reason: "merge conflict", conflicts: ["x.txt"] };
+    const land = { kind: "land", condition: "failed", reason: "merge conflict", conflicts: ["x.txt"] };
     const pending = run("fheldland", { ...land, next: "worker", ended: new Date().toISOString() });
     const d1 = await aleph(["dispatch"]);
     expect(d1.json.held, await seen(`line 76: ${d1.stdout}`)).toBeUndefined();
@@ -93,7 +93,7 @@ describe("a factory run", () => {
     const d2 = await aleph(["dispatch"]);
     expect(d2.json.held, await seen(`line 78: ${d2.stdout}`)).toContain("Held: fheldland is failed");
     // a stuck run whose unit is still live does not hold; once the unit ends, it does
-    const live = run("fstuck", { state: "stuck", reason: "tests" });
+    const live = run("fstuck", { condition: "stuck", reason: "tests" });
     const unit = Bun.spawn(["sh", "-c", "sleep 60; :", live], { stdout: "ignore", stderr: "ignore" });
     writeFileSync(join(live, "pid"), String(unit.pid));
     // Straight after the spawn, /proc/<pid>/cmdline can be empty: the child has not reached exec.

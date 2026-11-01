@@ -42,7 +42,7 @@ const at = (iso, now) => esc(when(iso, new Date(now)));
 export function compactCard({ kind, id = "", repo = "", href = "", title: ttl, badge: b, facts = [] }) {
   const f = facts.filter(([, v]) => v !== undefined && v !== null && v !== "")
     .map(([k, v]) => `<span class="k">${k ? `<span class="fk">${esc(k)}</span> ` : ""}${v}</span>`).join("");
-  return `<div class="card compact ${esc(kind)}"><div class="c1">${b.state ? badge(b.state) : outcomeBadge(b.text, b.tone)}${id ? repoIdLink(id, href || (kind === "issue" ? "#/issues" : `#/jobs/${encodeURIComponent(id)}`), repo) : ""}<span class="t" title="${esc(ttl)}">${esc(ttl)}</span></div>` +
+  return `<div class="card compact ${esc(kind)}"><div class="c1">${b.condition ? badge(b.condition) : outcomeBadge(b.text, b.tone)}${id ? repoIdLink(id, href || (kind === "issue" ? "#/issues" : `#/jobs/${encodeURIComponent(id)}`), repo) : ""}<span class="t" title="${esc(ttl)}">${esc(ttl)}</span></div>` +
     `<div class="c2">${f}</div></div>`;
 }
 
@@ -63,7 +63,7 @@ const acceptanceHtml = (j) => esc((j.acceptance || "").replace(/^acceptance: /, 
  * trailers, check, href? }) at `size` "full" or "compact"; `now` is the server's clock.
  */
 export function landCard(j, size = "full", now = new Date().toISOString()) {
-  const landed = j.state === "landed";
+  const landed = j.condition === "landed";
   if (size === "compact") {
     return compactCard({
       kind: "land", id: j.name, repo: j.repo, href: j.href, title: j.item?.title || j.name, badge: { state: landed ? "landed" : "landing" },
@@ -77,16 +77,16 @@ export function landCard(j, size = "full", now = new Date().toISOString()) {
     (j.check === "open" || actMessages.has(j.name) ? `<div class="actions">${j.check === "open" ? act("checked", j.name, "Checked", true) : ""}${actMsg(j.name)}</div>` : ""));
 }
 
-const TRIAGE = { goal: ["To factory", "done"], close: ["Closed", "done"], done: ["Done", "done"], ask: ["Asks you", "need"] };
+const TRIAGE = { build: ["To factory", "done"], plan: ["To planner", "done"], goal: ["To factory", "done"], close: ["Closed", "done"], done: ["Done", "done"], ask: ["Asks you", "need"] };
 /** A planner run's job name, `plan-<repo>-<n>`, or its kind when the state gives it. */
 const isPlan = (j) => j.run?.kind === "plan" || /^plan-/.test(j.name ?? "");
 
 /**
  * A triage or planner run: a job `j` as the state gives it, kind triage or plan, with `outcome`
- * (goal, close, done, ask) once it has a verdict. Same style as the land card.
+ * (build, plan, close, done, ask) once it has a verdict. Same style as the land card.
  */
 export function triageCard(j, size = "full", now = new Date().toISOString()) {
-  const running = j.state === "running";
+  const running = j.condition === "running";
   const plan = isPlan(j);
   const b = running ? { text: plan ? "Planning" : "Triaging", tone: "run" } : TRIAGE[j.outcome] ? { text: TRIAGE[j.outcome][0], tone: TRIAGE[j.outcome][1] } : { text: plan ? "No plan" : "No verdict", tone: "quiet" };
   const took = dur(j.started, j.ended || (running ? now : ""));
@@ -101,7 +101,7 @@ export function triageCard(j, size = "full", now = new Date().toISOString()) {
 
 /** A job: { name, item, state, phase, model, started, ended, cost, trailers, href? }. */
 export function jobCard(j, size = "full", now = new Date().toISOString()) {
-  const state = j.state || "running";
+  const state = j.condition || "running";
   const b = { state };
   const took = dur(j.started, j.ended || (state === "running" ? now : ""));
   if (size === "compact") {

@@ -62,8 +62,8 @@ afterEach(() => {
 
 const add = (title: string, o: { done?: boolean } = {}): number =>
   writeList({ key: "fac" }, "add", (doc) => {
-    const item = issues.add(doc, title, { body: "## Goal\nShip it." });
-    item.fm.kind = "goal";
+    const item = issues.add(doc, title, { spec: "## Goal\nShip it." });
+
     if (o.done) issues.setStatus(item, "done");
     return item.id;
   }, true)!.value;
@@ -72,7 +72,7 @@ const land = (id: number): string => {
   const repo = join(base, "repo");
   writeFileSync(join(repo, `f${id}.txt`), "x\n");
   sh(repo, "git", "add", ".");
-  sh(repo, "git", "commit", "-q", "-m", `ship thing ${id}`, "-m", `Item: fac-${id}`);
+  sh(repo, "git", "commit", "-q", "-m", `ship thing ${id}`, "-m", `Issue: fac-${id}`);
   sh(repo, "git", "push", "-q", "origin", "main");
   return sh(repo, "git", "rev-parse", "HEAD");
 };
@@ -80,7 +80,7 @@ const land = (id: number): string => {
 const run = (id: string, o: Partial<Run>): void => {
   const folder = join(base, "jobs", id);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: id, name: "fac-1", repo: "fac", state: "landed", told: true, started: "2026-10-28T10:00:00Z", ended: "2026-10-28T10:20:00Z", ...o });
+  writeRun(folder, { kind: "build", job: id, name: "fac-1", repo: "fac", condition: "landed", told: true, started: "2026-10-28T10:00:00Z", ended: "2026-10-28T10:20:00Z", ...o });
 };
 
 const pages = () => readdirSync(join(base, "vault", "wiki", "episodes")).filter((f) => f.endsWith(".md"));
@@ -90,9 +90,9 @@ test("a done goal gets one page built from git, the ledger and Langfuse", async 
   const one = add("ship it");
   const sha = land(one);
   const dropped = "20261028-100000-fac-1-agent", landed = "20261028-103000-fac-1-agent";
-  run(dropped, { state: "dropped", reason: "the last run made no commit", on: `fac-${one}`, cost: 1.5 });
+  run(dropped, { condition: "dropped", reason: "the last run made no commit", on: `fac-${one}`, cost: 1.5 });
   writeFileSync(join(base, "jobs", dropped, "result.md"), "also fixed the login bug\n");
-  run(landed, { state: "landed", commit: sha, on: `fac-${one}`, cost: 2, started: "2026-10-28T10:30:00Z", ended: "2026-10-28T10:50:00Z" });
+  run(landed, { condition: "landed", commit: sha, on: `fac-${one}`, cost: 2, started: "2026-10-28T10:30:00Z", ended: "2026-10-28T10:50:00Z" });
 
   const repo = loadRegistry().fac;
   const r = await writeEpisodes([repo]);

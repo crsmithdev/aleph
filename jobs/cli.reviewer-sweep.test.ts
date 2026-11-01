@@ -20,7 +20,7 @@ describe("a factory run", () => {
     const stale = () => rmSync(join(base, "factory", "probe.json"), { force: true });
     const proposals = async () => ((await aleph(["issue", "list", "fac", "--json"])).json as any[]).filter((r) => r.title.startsWith("Update "));
     // The sweep files into the fac list, and the store has no list until an item is added to it.
-    await aleph(["issue", "add", "fac", "the list the nightly sweep files into", "--body", "Added so that fac has a list on main."]);
+    await aleph(["issue", "add", "fac", "the list the nightly sweep files into", "--request", "Added so that fac has a list on main."]);
     give("5.9.2");
     stale();
     await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "fail" });
@@ -31,7 +31,7 @@ describe("a factory run", () => {
     expect(first.map((r) => r.title).sort()).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update typescript 5.8.3 to 5.9.2"]);
     for (const r of first) {
       const item = (await aleph(["issue", "show", "fac", String(r.id), "--json"])).json;
-      expect(item).toMatchObject({ source: "deps", kind: "issue", areas: ["deps"], ask: { kind: "approval", reason: "proposal" } });
+      expect(item).toMatchObject({ source: "deps", areas: ["deps"], ask: { kind: "approval", reason: "proposal" } });
     }
     const rep = (await aleph(["report"])).stdout;
     expect(rep).toContain("Update left-pad 1.0.0 to 1.2.0");

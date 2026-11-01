@@ -90,7 +90,7 @@ export function propose(repo: Repo, found: Proposal[]): string[] {
   const made = file(repo, "dependency proposals", missing.map((p) => ({
     title: titleOf(p), priority: "low", source: "deps", areas: ["deps"],
     ask: { kind: "approval", reason: "proposal", question: `Update ${p.name} from ${p.current} to ${p.latest}?`, options: [], why: [] },
-    body: `Proposed by the nightly dependency sweep: \`bun outdated\` shows ${p.name} at ${p.current} in the lockfile and ${p.latest} as the latest.\nApprove it to have the factory plan the update.\n`,
+    spec: `Proposed by the nightly dependency sweep: \`bun outdated\` shows ${p.name} at ${p.current} in the lockfile and ${p.latest} as the latest.\nApprove it to have the factory plan the update.\n`,
   })));
   if (made.length !== missing.length || made.some((id) => !id)) return [];
   missing.forEach((p, i) => had.set(titleOf(p), made[i]));
@@ -158,7 +158,7 @@ export function startProposals(repos: Repo[]): string[] {
           const [from, to] = [majorOf(m?.[2] ?? ""), majorOf(m?.[3] ?? "")];
           if (from === null || to === null || from !== to) continue;
           clearAsk(item);
-          item.fm.kind = "goal";
+          item.spec ||= item.request;
           issues.note(item, `standing: started; ${m![1]} stays in major version ${from}`);
           started.push(`${repo.key}-${issues.refOf(item)}`);
           changed = true;

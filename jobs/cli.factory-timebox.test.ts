@@ -13,7 +13,7 @@ describe("a factory run", () => {
 
   test("a worker past the time box ends stuck as \"time box\"", async () => {
     const r = await fjob("fslow", "sleep", { ALEPH_JOB_TIMEOUT: "1" });
-    expect(state(r.json.run)).toMatchObject({ state: "stuck", reason: "time box" });
+    expect(state(r.json.run)).toMatchObject({ condition: "stuck", reason: "time box" });
     expect(runsLeft()).toEqual([]);
     await aleph(["drop", "fslow"]);
   });

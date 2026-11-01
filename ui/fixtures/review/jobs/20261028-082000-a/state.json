@@ -6,7 +6,7 @@
   "told": true,
   "model": "claude-sonnet-5-5",
   "branch": "factory/demo-1",
-  "state": "dropped",
+  "condition": "dropped",
   "failed": "review",
   "reason": "reviewer: the duration column has no test",
   "started": "2026-10-28T08:20:00.000Z",

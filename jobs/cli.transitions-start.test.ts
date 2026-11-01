@@ -16,7 +16,7 @@ describe("every transition dispatches at once", () => {
   const runs = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`));
   // Settled: no start is in flight (its run folder may not be there yet), and every run has ended and its unit,
   // with its run-end dispatch, has exited.
-  const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).state !== "running" && !unitAlive(join(jobsDir, r)));
+  const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).condition !== "running" && !unitAlive(join(jobsDir, r)));
   const add = (title: string, action: string, extra: string[] = [], env: Record<string, string> = {}) => addOld(title, action, extra, on(env));
   const gates = new Set<string>();
   const open = (name: string) => { gates.add(name); return `hold ${gate(name)}`; };
@@ -64,18 +64,18 @@ describe("every transition dispatches at once", () => {
     const added = ((await res.json()) as any).added as number;
     track(added);
     await until(() => started().length === 1);
-    expect(started()).toEqual([`fac-${added}.1`]);
+    expect(started()).toEqual([`fac-${added}`]);
     writeFileSync(gate("form"), "");
-    await until(() => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${added}.1-`)).every((r) => state(r).state === "passed"));
+    await until(() => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${added}-`)).every((r) => state(r).condition === "passed"));
   }, 60_000);
 
   test("a triage run that ends with a goal starts it", async () => {
     const x = track(await add("vague", open("triage"), ["--labels", "followup"], { ALEPH_DISPATCH: "off" }));
     const cmd = join(base, "ttriage-cmd");
-    writeFileSync(cmd, `#!/bin/bash\ncat > /dev/null\necho '{"route":"goal","title":"Hold","body":"## Goal\\nx\\nACTION: hold ${gate("triage")}"}'\n`, { mode: 0o755 });
+    writeFileSync(cmd, `#!/bin/bash\ncat > /dev/null\necho '{"route":"build","spec":"## Goal\\nx\\nACTION: hold ${gate("triage")}"}'\n`, { mode: 0o755 });
     const t = await aleph(["triage", `fac-${x}`], on({ ALEPH_TRIAGE_CMD: cmd }));
-    expect(t.json.triaged).toEqual({ goal: 1 });
-    await until(() => started().includes(`fac-${x}.1`));
+    expect(t.json.triaged).toEqual({ build: 1 });
+    await until(() => started().includes(`fac-${x}`));
   }, 60_000);
 
 });

@@ -64,13 +64,13 @@ beforeAll(() => {
   Object.assign(process.env, gitEnv);
   writeList({ key: "fac" }, "seed", (doc) => { add(doc, "old title"); return true; }, true);
   // fac-9: a worker, a fix round with a reviewer, then a land.
-  run("20261027-000001-a", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", state: "failed", reason: "review held", started: ago(5), ended: ago(4), cost: 0.5, model: "claude-sonnet-5-5" },
+  run("20261027-000001-a", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", condition: "failed", reason: "review held", started: ago(5), ended: ago(4), cost: 0.5, model: "claude-sonnet-5-5" },
     { "result.md": "first\nFOLLOWUP: tidy\n", "checks.log": "## test: exit 1\n" + Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n") + "\n", "stderr.log": "warn\n" });
-  run("20261027-000002-a", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", state: "passed", started: ago(3.5), ended: ago(3), cost: 0.25, defaults: ["a? -> b"] },
+  run("20261027-000002-a", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", condition: "passed", started: ago(3.5), ended: ago(3), cost: 0.25, defaults: ["a? -> b"] },
     { "result.md": "fixed it\nFOLLOWUP: tidy\n", "review.md": "Looks right.\nVERDICT: pass\n" });
-  run("20261027-000003-a", { job: "fac-9", name: "fac-9", kind: "land", repo: "fac", branch: "factory/fac-9", state: "landed", started: ago(2.5), ended: ago(2), commit: "abc1234" });
-  run("20261027-000004-a", { job: "oth-1", name: "oth-1", repo: "oth", state: "stuck", started: ago(1) });
-  run("20261027-000005-a", { job: "fac-2", name: "fac-2", repo: "fac", branch: "factory/gone", state: "landed", started: ago(24 * 20), ended: ago(24 * 20 - 1) });
+  run("20261027-000003-a", { job: "fac-9", name: "fac-9", kind: "land", repo: "fac", branch: "factory/fac-9", condition: "landed", started: ago(2.5), ended: ago(2), commit: "abc1234" });
+  run("20261027-000004-a", { job: "oth-1", name: "oth-1", repo: "oth", condition: "stuck", started: ago(1) });
+  run("20261027-000005-a", { job: "fac-2", name: "fac-2", repo: "fac", branch: "factory/gone", condition: "landed", started: ago(24 * 20), ended: ago(24 * 20 - 1) });
 });
 afterAll(() => {
   for (const [k, val] of Object.entries(saved)) if (val === undefined) delete process.env[k]; else process.env[k] = val;
@@ -80,13 +80,13 @@ afterAll(() => {
 describe("a land that found the job lock busy", () => {
   test("the job's state is the run that counts; the run list keeps the land", async () => {
     const ids = ["20261027-000040-a", "20261027-000041-a"];
-    run(ids[0], { job: "fac-7", name: "fac-7", repo: "fac", state: "passed", started: ago(3) });
-    run(ids[1], { kind: "land", job: "fac-7", name: "fac-7", repo: "fac", state: "failed", reason: "job lock busy", started: ago(2) });
+    run(ids[0], { job: "fac-7", name: "fac-7", repo: "fac", condition: "passed", started: ago(3) });
+    run(ids[1], { kind: "land", job: "fac-7", name: "fac-7", repo: "fac", condition: "failed", reason: "job lock busy", started: ago(2) });
     try {
       const d = await (await get("/api/jobs/fac-7")).json();
-      expect(d.state).toBe("passed");
+      expect(d.condition).toBe("passed");
       expect(d.reason).toBeUndefined();
-      expect(d.runs.find((r: any) => r.id === ids[1])).toMatchObject({ state: "failed", reason: "job lock busy" });
+      expect(d.runs.find((r: any) => r.id === ids[1])).toMatchObject({ condition: "failed", reason: "job lock busy" });
       expect((await (await get("/api/jobs?state=failed")).json()).map((j: any) => j.name)).not.toContain("fac-7");
       expect((await (await get("/api/jobs?state=passed")).json()).map((j: any) => j.name)).toContain("fac-7");
     } finally {
@@ -100,7 +100,7 @@ describe("GET /api/jobs", () => {
     const jobs = await (await get("/api/jobs")).json();
     expect(jobs.map((j: any) => j.name)).toEqual(["oth-1", "fac-9"]);
     expect(jobs[1].cost).toBeCloseTo(0.75);
-    expect(jobs[1].state).toBe("landed");
+    expect(jobs[1].condition).toBe("landed");
     expect(jobs[1].followups).toEqual(["tidy"]);
   });
   test("filters by repo, state and days", async () => {
@@ -117,7 +117,7 @@ describe("GET /api/jobs", () => {
 
 describe("item titles", () => {
   test("a rename between two requests shows in the second", async () => {
-    run("20261027-000006-a", { job: "fac-7", name: "fac-7", repo: "fac", state: "running", on: "fac-1" });
+    run("20261027-000006-a", { job: "fac-7", name: "fac-7", repo: "fac", condition: "running", on: "fac-1" });
     const title = async () => (await (await get("/api/jobs")).json()).find((j: any) => j.name === "fac-7").item.title;
     expect(await title()).toBe("old title");
     writeList({ key: "fac" }, "rename", (doc) => { doc.items.find((i) => i.id === 1)!.title = "new title"; return true; });
@@ -129,7 +129,7 @@ describe("item titles", () => {
 
 describe("GET /api/jobs/:name", () => {
   test("a build run reads like an agent run: review row and result", async () => {
-    run("20261027-000006-a", { job: "oth-2", name: "oth-2", kind: "build", repo: "oth", state: "passed", started: ago(1), ended: ago(0.5) },
+    run("20261027-000006-a", { job: "oth-2", name: "oth-2", kind: "build", repo: "oth", condition: "passed", started: ago(1), ended: ago(0.5) },
       { "result.md": "built it\n", "review.md": "Fine.\nVERDICT: pass\n" });
     const j = await (await get("/api/jobs/oth-2")).json();
     rmSync(join(jobsDir, "20261027-000006-a"), { recursive: true, force: true });
@@ -140,7 +140,7 @@ describe("GET /api/jobs/:name", () => {
   test("returns runs in order, the review and the log tails", async () => {
     const j = await (await get("/api/jobs/fac-9")).json();
     expect(j.runs.map((r: any) => r.kind)).toEqual(["worker", "worker", "review", "land"]);
-    expect(j.runs[0]).toMatchObject({ state: "failed", cost: 0.5, model: "claude-sonnet-5-5" });
+    expect(j.runs[0]).toMatchObject({ condition: "failed", cost: 0.5, model: "claude-sonnet-5-5" });
     expect(j.result).toBe("fixed it\nFOLLOWUP: tidy\n");
     expect(j.review).toContain("VERDICT: pass");
     expect(j.checksLog.split("\n")).toHaveLength(80);
@@ -158,11 +158,11 @@ describe("GET /api/jobs/:name", () => {
 
 describe("a name reused by a dropped job and its rerun", () => {
   test("the job and its diff are the newest job's", async () => {
-    run("20261001-000001-a", { job: "dup-old", name: "fac-dup", repo: "fac", branch: "factory/gone", state: "dropped", started: ago(24 * 40), ended: ago(24 * 40 - 1) });
-    run("20261001-000002-a", { job: "dup-new", name: "fac-dup", repo: "fac", branch: "factory/fac-9", state: "landed", started: ago(24 * 39), ended: ago(24 * 39 - 1), commit: "def5678" });
+    run("20261001-000001-a", { job: "dup-old", name: "fac-dup", repo: "fac", branch: "factory/gone", condition: "dropped", started: ago(24 * 40), ended: ago(24 * 40 - 1) });
+    run("20261001-000002-a", { job: "dup-new", name: "fac-dup", repo: "fac", branch: "factory/fac-9", condition: "landed", started: ago(24 * 39), ended: ago(24 * 39 - 1), commit: "def5678" });
     const j = await (await get("/api/jobs/fac-dup?days=60")).json();
-    expect(j.state).toBe("landed");
-    expect(j.runs.map((r: any) => r.state)).toEqual(["landed"]);
+    expect(j.condition).toBe("landed");
+    expect(j.runs.map((r: any) => r.condition)).toEqual(["landed"]);
     const d = await get("/api/jobs/fac-dup/diff?days=60");
     expect(d.status).toBe(200);
     expect(await d.text()).toContain("+two");
@@ -187,12 +187,12 @@ describe("GET /api/jobs/:name/diff", () => {
 
 describe("render", () => {
   const job: any = {
-    name: "fac-9", repo: "fac", item: { id: 9, title: "Fix <it>" }, state: "landed", started: ago(5), cost: 0.75, defaults: ["a? -> b"], followups: ["tidy"],
+    name: "fac-9", repo: "fac", item: { id: 9, title: "Fix <it>" }, condition: "landed", started: ago(5), cost: 0.75, defaults: ["a? -> b"], followups: ["tidy"],
     runs: [
-      { id: "1", kind: "worker", state: "failed", started: ago(5), ended: ago(4), cost: 0.5, model: "m1" },
-      { id: "2", kind: "worker", state: "passed", started: ago(3.5), ended: ago(3), cost: 0.25 },
-      { id: "2-review", kind: "review", state: "passed", started: ago(3) },
-      { id: "3", kind: "land", state: "landed", started: ago(2.5), ended: ago(2) },
+      { id: "1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), cost: 0.5, model: "m1" },
+      { id: "2", kind: "worker", condition: "passed", started: ago(3.5), ended: ago(3), cost: 0.25 },
+      { id: "2-review", kind: "review", condition: "passed", started: ago(3) },
+      { id: "3", kind: "land", condition: "landed", started: ago(2.5), ended: ago(2) },
     ],
     result: "fixed it", review: "Looks right.", checksLog: "## test: exit 1", stderr: "warn", stat: " a.txt | 1 +", trace: "http://lf/sessions/s",
   };
@@ -236,7 +236,7 @@ describe("render", () => {
     expect(jobView.view).toBe(v.detail);
   });
   test("each run field is its own element in its row", () => {
-    const h = v.renderRuns([{ id: "1", kind: "worker", state: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed" }]);
+    const h = v.renderRuns([{ id: "1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed" }]);
     const row = h.match(/<tr class="run run-worker">.*?<\/tr>/)?.[0] ?? "";
     const cells = [...row.matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((m) => m[1]);
     expect(cells.slice(0, 5)).toEqual(["worker", "checks failed", '<span class="badge stuck">failed</span>', "opus", expect.stringMatching(/\d/)]);
@@ -255,10 +255,10 @@ test("the issue and job pages use pageHead, table.tbl, idLink and when", async (
   const { renderIssue } = require("./views/contents.js");
   // This year's date, so when() prints "Oct 01 10:00" whatever the clock says.
   const started = `${new Date().getFullYear()}-10-01T10:00:00`;
-  const issue = renderIssue({ repo: "fac", id: 9, title: "T", status: "open", frontmatter: { labels: ["ui"] }, body: "", notes: [], jobs: [{ name: "fac-9", state: "landed", started }], commits: [{ hash: "abcdef123", subject: "s", date: started, commitUrl: "http://x/c" }] });
+  const issue = renderIssue({ repo: "fac", id: 9, title: "T", status: "open", frontmatter: { labels: ["ui"] }, body: "", notes: [], jobs: [{ name: "fac-9", condition: "landed", started }], commits: [{ hash: "abcdef123", subject: "s", date: started, commitUrl: "http://x/c" }] });
   for (const t of ['<header class="ph">', '<table class="tbl">', 'class="idl"', 'class="chips"', "Oct 01 10:00"]) expect(issue).toContain(t);
   expect(issue).not.toContain('class="ih"');
-  const job = require("./views/jobs.js").renderJob({ name: "fac-9", repo: "fac", item: { title: "T" }, state: "landed", started, runs: [] });
+  const job = require("./views/jobs.js").renderJob({ name: "fac-9", repo: "fac", item: { title: "T" }, condition: "landed", started, runs: [] });
   for (const t of ['<header class="ph">', "Oct 01 10:00"]) expect(job).toContain(t);
   expect(job.match(/<style>/g)).toHaveLength(1);
   expect(job).toContain('<dl class="facts job-facts">');

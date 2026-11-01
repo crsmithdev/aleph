@@ -64,7 +64,7 @@ describe("propose", () => {
     expect(propose(repo, found)).toEqual(["dp1-1 Update left-pad 1.0.0 to 1.2.0", "dp1-2 Update a 1.9.0 to 1.10.0"]);
     expect(readList(repo)!.items.map((i) => i.title)).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update a 1.9.0 to 1.10.0"]);
     const filed = readList(repo)!.items[1];
-    expect(filed.fm).toMatchObject({ kind: "issue", source: "deps", areas: ["deps"], ask: "approval", reason: "proposal" });
+    expect(filed.fm).toMatchObject({ source: "deps", areas: ["deps"], ask: "approval", reason: "proposal" });
     expect(filed.fm.labels).toBeUndefined();
     const before = commits();
     expect(propose(repo, found)).toEqual([]);
@@ -126,16 +126,15 @@ describe("sweep", () => {
     const repo = { key: "dp2" } as Repo;
     writeList(repo, "start", (doc) => {
       const m = issues.add(doc, "Update a 1.9.0 to 1.10.0", {});
-      Object.assign(m.fm, { kind: "issue", source: "deps", ask: "approval", reason: "proposal", question: "Update a 1.9.0 to 1.10.0" });
+      Object.assign(m.fm, { source: "deps", ask: "approval", reason: "proposal", question: "Update a 1.9.0 to 1.10.0" });
       const j = issues.add(doc, "Update typescript 5.9.3 to 7.0.2", {});
-      Object.assign(j.fm, { kind: "issue", source: "deps", ask: "approval", reason: "proposal", question: "x" });
+      Object.assign(j.fm, { source: "deps", ask: "approval", reason: "proposal", question: "x" });
       return true;
     }, true);
     expect(startProposals([repo])).toEqual([]);
     expect(grant("proposal", "start")).toBeNull();
     expect(startProposals([repo])).toEqual(["dp2-1"]);
     const items = readList(repo)!.items;
-    expect(items[0].fm.kind).toBe("goal");
     expect(items[0].fm.ask).toBeUndefined();
     expect(items[1].fm.ask).toBe("approval");
     expect(startProposals([repo])).toEqual([]);

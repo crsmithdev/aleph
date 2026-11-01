@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeRun, type Run } from "./lib/ledger.ts";
 import { config as storeConfig } from "../todo/lib/store.ts";
-import { parseItem, renderItem } from "../todo/lib/todo.ts";
+import { parseItem, renderItem, setStatus, type Status } from "../todo/lib/todo.ts";
 
 export const CLI = join(import.meta.dir, "cli.ts");
 export let base: string, remote: string, repo: string, other: string, items: string, itemsRemote: string, jobsDir: string, fake: string, reviewer: string, fakeLog: string, setupLog: string;
@@ -111,6 +111,8 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
     ALEPH_SANDBOX_CMD: join(base, "pass"), ALEPH_SANDBOX_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_WORKER_TOKEN: join(base, "token"),
     // The tests start more factory runs than a day's cap; the cap has its own test.
     ALEPH_DAY_CAP: "100",
+    // No test reaches the live router: its tier for a seed varies, and `opus` sends the seed to a planner.
+    ALEPH_JUDGE: "haiku",
     // The nightly sweep finds nothing unless a test gives it a table; no test reaches the registry.
     ALEPH_OUTDATED_CMD: "true",
     // The live cap's test starts six runs against a cap of five.
@@ -151,7 +153,7 @@ export function moveMain(): void {
 }
 export const state = (run: string) => JSON.parse(readFileSync(join(jobsDir, run, "state.json"), "utf8"));
 /** `state` for a run that may be starting: its folder exists a moment before its state.json, so a missing file reads as no state yet. */
-export const stateNow = (run: string): { state: string } => { try { return state(run); } catch { return { state: "" }; } };
+export const stateNow = (run: string): { condition: string } => { try { return state(run); } catch { return { condition: "" }; } };
 export const file = (run: string, f: string) => readFileSync(join(jobsDir, run, f), "utf8");
 export const worktree = (name: string) => join(repo, ".worktrees", `job-${name}`);
 export const branchExists = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `job/${name}`]).exitCode === 0;
@@ -347,13 +349,21 @@ function pullItems(): void {
  * `labels` ...) beside the ones every item has, and returns its number. This is how a test seeds a new-shape item,
  * which no verb of `aleph issue` writes yet, or an old-shape one with a field the verbs do not set.
  */
+/** A seed's fields and text in the stored shape: `status` becomes `closed_as`, and `kind: "goal"` puts the text in the spec. */
+function seedShape(id: string, fm: Record<string, unknown>, body: string, spec: boolean) {
+  const { status, kind, issue: _issue, goals: _goals, ...rest } = fm as Record<string, any>;
+  const closed = status && status !== "open" ? { closed_as: status, closed_at: "2026-10-30" } : {};
+  const isSpec = spec || kind === "goal";
+  return { fm: { id, created: "2026-10-30", updated: "2026-10-30", priority: "medium", ...closed, ...rest }, request: isSpec ? "" : body, spec: isSpec ? body : "", notes: [] as string[] };
+}
+
 export function seedItem(repoKey: string, title: string, fm: Record<string, unknown> = {}, body = "Body."): number {
   pullItems();
   const dir = join(items, repoKey, "backlog", "tasks");
   mkdirSync(dir, { recursive: true });
   if (!existsSync(join(items, repoKey, "backlog", "config.yml"))) writeFileSync(join(items, repoKey, "backlog", "config.yml"), storeConfig(repoKey));
   const id = Math.max(0, ...readdirSync(dir).map((f) => Number(/^.+-(\d+)\.md$/.exec(f)?.[1] ?? 0))) + 1;
-  const item = { id, title, fm: { id: String(id), status: "open", created: "2026-10-30", updated: "2026-10-30", priority: "medium", ...fm }, body, notes: [], legacy: false };
+  const item = { id, title, ...seedShape(String(id), fm, body, false) };
   writeFileSync(join(dir, `${repoKey}-${id}.md`), renderItem(repoKey, item as any));
   sh(items, "git", "add", "-A");
   sh(items, "git", "commit", "-qm", `seed ${repoKey}-${id}`);
@@ -368,7 +378,7 @@ export function seedGoal(repoKey: string, n: number, k: number, fm: Record<strin
   mkdirSync(dir, { recursive: true });
   if (!existsSync(join(items, repoKey, "backlog", "config.yml"))) writeFileSync(join(items, repoKey, "backlog", "config.yml"), storeConfig(repoKey));
   const ref = `${n}.${k}`;
-  const item = { id: n, sub: k, title, fm: { id: ref, status: "open", created: "2026-10-30", updated: "2026-10-30", priority: "medium", kind: "goal", issue: `${repoKey}-${n}`, ...fm }, body, notes: [], legacy: false };
+  const item = { id: n, sub: k, title, ...seedShape(ref, fm, body, true) };
   writeFileSync(join(dir, `${repoKey}-${ref}.md`), renderItem(repoKey, item as any));
   sh(items, "git", "add", "-A");
   sh(items, "git", "commit", "-qm", `seed ${repoKey}-${ref}`);
@@ -378,7 +388,7 @@ export function seedGoal(repoKey: string, n: number, k: number, fm: Record<strin
 
 /** Writes a run folder into the test ledger: `run` holds the fields the test cares about. */
 let seeded = 0;
-export function seedRun(repoKey: string, run: Partial<Run> & Pick<Run, "kind" | "state">): string {
+export function seedRun(repoKey: string, run: Partial<Run> & Pick<Run, "kind" | "condition">): string {
   const id = `20261030-${String(++seeded).padStart(6, "0")}-${repoKey}-seed-${run.kind}`;
   const folder = join(jobsDir, id);
   mkdirSync(folder, { recursive: true });
@@ -395,7 +405,7 @@ export async function addOld(title: string, action: string, extra: string[] = []
   const flag = (n: string) => { const i = extra.indexOf(`--${n}`); return i >= 0 ? extra[i + 1] : undefined; };
   const labels = (flag("labels") ?? "").split(",").filter(Boolean);
   const isGoal = labels.includes("goal"), areas = labels.filter((l) => l !== "goal");
-  const id = seedItem("fac", title, { ...(isGoal ? { kind: "goal" } : {}), ...(areas.length ? { areas } : {}), ...(flag("due") ? { due: flag("due") } : {}), ...(flag("after") ? { after: flag("after")!.split(",").filter(Boolean) } : {}) }, action ? `ACTION: ${action}` : "");
+  const id = seedItem("fac", title, { ...(isGoal ? { kind: "goal" } : {}), ...(areas.length ? { areas } : {}), ...(flag("after") ? { after: flag("after")!.split(",").filter(Boolean) } : {}) }, action ? `ACTION: ${action}` : "");
   if (isGoal && env.ALEPH_DISPATCH !== "off") await aleph(["dispatch"], env);
   return id;
 }
@@ -405,7 +415,11 @@ export function patchItem(repoKey: string, id: number | string, fm: Record<strin
   pullItems();
   const path = join(items, repoKey, "backlog", "tasks", `${repoKey}-${id}.md`);
   const item = parseItem(readFileSync(path, "utf8"));
-  for (const [k, v] of Object.entries(fm)) { if (v === undefined) delete item.fm[k]; else item.fm[k] = v as any; }
+  for (const [k, v] of Object.entries(fm)) {
+    if (k === "status") setStatus(item, v as Status);
+    else if (v === undefined) delete item.fm[k];
+    else item.fm[k] = v as any;
+  }
   writeFileSync(path, renderItem(repoKey, item));
   sh(items, "git", "add", "-A");
   sh(items, "git", "commit", "-qm", `patch ${repoKey}-${id}`);

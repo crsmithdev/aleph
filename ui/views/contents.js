@@ -86,14 +86,14 @@ const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STA
 export function hashOptions(q = new URLSearchParams()) {
   return {
     limit: Math.max(PAGE, Number.parseInt(q.get("limit"), 10) || PAGE),
-    status: statusOf(q.get("status")), kind: q.get("kind") ?? "", project: q.get("project") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "",
+    status: statusOf(q.get("status")), project: q.get("project") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "",
     sort: { key: q.get("sort") || "updated", dir: q.get("dir") === "asc" ? 1 : -1 },
     psort: { key: q.get("psort") || "updated", dir: q.get("pdir") === "asc" ? 1 : -1 },
     ssort: { key: q.get("ssort") || "date", dir: q.get("sdir") === "asc" ? 1 : -1 },
   };
 }
 
-/** A row's own number: `910` for an issue, `910.1` for a goal. */
+/** A row's own number: `910` for an issue, `910.1` for a part. */
 const own = (r) => r.ref ?? r.id;
 export const ref = (r) => `${r.repo}-${own(r)}`;
 export const href = (r) => `#/issues/${encodeURIComponent(r.repo)}/${own(r)}`;
@@ -104,7 +104,7 @@ const ms = (s) => Date.parse(s) || 0;
 
 /** The issue rows from the API data. */
 export function issueRows(d) {
-  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, labels: r.labels ?? [], at: r.updated, href: href(r), repo: r.repo, n: own(r), kind: r.kind ?? "issue" }));
+  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, labels: r.labels ?? [], at: r.updated, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: String(own(r)).includes(".") }));
 }
 
 /** The project rows from the API data: every registered project, with its open issues (0 when none). */
@@ -121,7 +121,7 @@ export function specRows(d) {
 export function filterRows(rows, o = {}) {
   const q = (o.q ?? "").trim().toLowerCase();
   return rows.filter((r) =>
-    (!o.kind || r.kind === o.kind) && (!o.status || r.status === o.status) && (!o.project || r.project === o.project) && (!o.label || r.labels.includes(o.label)) &&
+    (!o.status || r.status === o.status) && (!o.project || r.project === o.project) && (!o.label || r.labels.includes(o.label)) &&
     (!q || r.title.toLowerCase().includes(q)));
 }
 
@@ -131,10 +131,10 @@ export const filterProjects = (rows, o = {}) => rows.filter((r) => !o.project ||
 // Column order: id or name, title, state badge, project, labels, numbers, time last. [key, label, { num }]
 export const SPEC_COLUMNS = [["title", "Title"], ["date", "Date"]];
 const SPEC_SORT = { date: (r) => r.date, title: (r) => r.title, project: (r) => r.project };
-export const COLUMNS = [["id", "Id"], ["kind", "Kind"], ["title", "Title"], ["status", "Status"], ["project", "Project"], ["labels", "Labels"], ["updated", "Updated"], ["act", ""]];
+export const COLUMNS = [["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["project", "Project"], ["labels", "Labels"], ["updated", "Updated"], ["act", ""]];
 export const PROJECT_COLUMNS = [["title", "Name"], ["open", "Open issues", { num: true }], ["updated", "Last activity"]];
 const SORT = {
-  project: (r) => r.project, status: (r) => r.status, id: (r) => String(r.n), kind: (r) => r.kind, title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => ms(r.at),
+  project: (r) => r.project, stage: (r) => r.stage, id: (r) => String(r.n), title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => ms(r.at),
 };
 const PROJECT_SORT = { title: (r) => r.project, open: (r) => r.open, updated: (r) => ms(r.at) };
 
@@ -160,16 +160,13 @@ export function dropTarget(r) {
   return r.status === "open" ? { url: `/api/issues/${encodeURIComponent(r.repo)}/${r.n}/drop`, body: { reason: "dropped from the Inventory page" } } : null;
 }
 
-/** The word that names a row or a page as an issue or a goal. */
-const kindTag = (kind) => `<span class="work-kind ${kind === "goal" ? "goal" : "issue"}">${kind === "goal" ? "Goal" : "Issue"}</span>`;
-
-/** One issue or goal row: id, kind, title, state, project, labels, time, and the X. */
+/** One issue row, a part indented under its parent: id, title, stage, project, labels, time, and the X. */
 export function renderRow(r) {
   const x = dropTarget(r)
     ? `<button type="button" class="cancel" data-cancel aria-label="Drop ${esc(r.id)}" title="Stop or drop">${X_ICON}</button>` : "";
-  return `<tr class="crow" data-repo="${esc(r.repo)}" data-n="${r.n}"><td>${idLink(r.n, r.href)}</td><td>${kindTag(r.kind)}</td>` +
+  return `<tr class="crow${r.part ? " part-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}"><td>${idLink(r.n, r.href)}</td>` +
     `<td class="wide"><a href="${esc(r.href)}">${esc(r.title)}</a></td>` +
-    `<td>${badge(r.status)}</td><td>${esc(r.project)}</td><td>${chips(r.labels)}</td>` +
+    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${esc(r.project)}</td><td>${chips(r.labels)}</td>` +
     `<td class="time">${esc(when(r.at))}</td><td class="drop">${x}<span class="cmsg" role="status"></span></td></tr>`;
 }
 
@@ -197,8 +194,7 @@ export function renderFilters(d, o = {}) {
   const labels = [...new Set(issues.flatMap((r) => r.labels))].sort();
   return `<div data-ui="contents-filter">${filterBar([
     { label: "Project", name: "project", value: o.project ?? "", options: [{ value: "", label: "All" }, ...projects] },
-    { label: "Kind", name: "kind", value: o.kind ?? "", options: [{ value: "", label: "Any" }, { value: "issue", label: "Issue" }, { value: "goal", label: "Goal" }] },
-    { label: "Status", name: "status", value: o.status || "any", options: [{ value: "any", label: "Any" }, "open", "done", "dropped"] },
+    { label: "Show", name: "status", value: o.status || "any", options: [{ value: "any", label: "Any" }, "open", "done", "dropped"] },
     { label: "Label", name: "label", value: o.label ?? "", options: [{ value: "", label: "Any" }, ...labels.map((l) => ({ value: l, label: labelName(l) }))] },
     { label: "Title", name: "q", search: true, value: o.q ?? "", placeholder: "text in the title" },
   ])}</div>`;
@@ -255,11 +251,10 @@ export function renderForm(rows, o = {}) {
     `<form data-ui="issue-form" class="stack">` +
     `<label>Project <select name="repo" required>${projectOptions(o.keys ?? repos, o.project)}</select></label>` +
     `<label>Title <input name="title" required></label>` +
-    `<label>Body <textarea name="body" rows="12">${esc(BODY_TEMPLATE)}</textarea></label>` +
+    `<label>Text <textarea name="body" rows="12">${esc(BODY_TEMPLATE)}</textarea></label>` +
     `<label>Labels <input name="labels" placeholder="comma separated"></label>` +
-    `<label><input type="checkbox" name="goal"> Build in the factory (adds the <code>factory</code> label)</label>` +
-    `<label>After <input name="after" placeholder="repo-n.k, repo-n.k"></label>` +
-    `<label>Due <input name="due" type="date"></label>` +
+    `<label><input type="checkbox" name="goal"> The text is a spec: build it in the factory</label>` +
+    `<label>After <input name="after" placeholder="repo-n, repo-n.k"></label>` +
     `<button type="submit" class="cmd primary">File issue</button> <span class="form-msg" role="status"></span></form></details>`;
 }
 
@@ -268,7 +263,7 @@ export function renderContents(d, o = {}) {
   const shownSpecs = filterProjects(specs, o).length;
   const shownProjects = filterProjects(projects, o).length, shownIssues = filterRows(issues, o).length;
   return `${STYLE_CONTENTS}<div class="page contents">${pageHead("Inventory")}${renderFilters(d, o)}` +
-    `<div class="cols"><div class="main-col">${section("Issues and goals", shownIssues)}<div id="issues-table">${renderTable(issues, o)}</div></div>` +
+    `<div class="cols"><div class="main-col">${section("Issues", shownIssues)}<div id="issues-table">${renderTable(issues, o)}</div></div>` +
     `<div class="side-col">${section("Projects", shownProjects)}<div id="projects-table">${renderProjectsTable(projects, o)}</div>` +
     `${section("Specs", shownSpecs)}<div id="specs-table">${renderSpecsTable(specs, o)}</div></div></div>` +
     renderForm(d?.issues ?? [], o) + `</div>`;
@@ -317,23 +312,23 @@ export const isMachineNote = (n) => {
 /** The Issue page: the `## Request`, then the goals each with its Job, then the notes, the issue's own runs and the commits. Shared with views/issue.js. */
 export function renderIssue(d) {
   const fm = d.frontmatter ?? {};
-  const HIDE = ["labels", "id", "status", "kind", "goals", "issue", "after", "created", "updated", "repo", "title"];
+  const HIDE = ["labels", "id", "closed_as", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "tracker", "after", "created", "updated", "title"];
   const fact = (name, dd) => `<div><dt>${esc(name)}</dt><dd>${dd}</dd></div>`;
   const areas = d.labels ?? [], priority = d.priority ?? "medium", source = fm.source ?? "chris";
   const facts = fact("Priority", editable(esc(priority), choose("priority", PRIORITIES, priority))) + fact("Source", editable(esc(source), choose("source", SOURCES, source))) +
     fact("Areas", editable(esc(areas.map(labelName).join(", ") || "-"), `<input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}">`)) +
     Object.entries(fm).filter(([k]) => !HIDE.includes(k) && !["priority", "source", "areas"].includes(k)).map(([k, v]) => fact(k[0].toUpperCase() + k.slice(1), esc(Array.isArray(v) ? v.map(labelName).join(", ") : v))).join("");
-  const tracker = (d.labels ?? []).includes("flakes");
+  const tracker = fm.tracker === "true";
   const noteLi = (n) => `<li>${esc(n.replace(/^- /, ""))}</li>`;
   const folded = tracker ? [] : d.notes.filter(isMachineNote), shown = tracker ? d.notes : d.notes.filter((n) => !isMachineNote(n));
   const fold = folded.length ? `<details class="notes-fold"><summary>${folded.length} machine ${folded.length === 1 ? "note" : "notes"}</summary><ul class="notes">${folded.map(noteLi).join("")}</ul></details>` : "";
   const notes = d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteLi).join("")}</ul>` : "") + fold : empty("No notes.");
   const goals = d.goals ?? [];
   const goalTable = goals.length
-    ? `<div class="tscroll"><table class="tbl" id="goals"><thead><tr><th>Goal</th><th>Title</th><th>Stage</th><th>State</th><th>Job</th></tr></thead><tbody>${goals.map((g) => `<tr><td>${idLink(localId(g.id, d.repo), g.href)}</td><td class="wide" title="${esc(localId(g.why, d.repo))}">${esc(g.title)}</td><td>${stateBadge(g.stage)}</td><td>${g.jobs.map((j) => stateBadge(j.state)).join("<br>")}</td><td>${goalJobs(g, d.repo)}</td></tr>`).join("")}</tbody></table></div>`
-    : empty("No goal is filed for this issue.");
+    ? `<div class="tscroll"><table class="tbl" id="goals"><thead><tr><th>Part</th><th>Title</th><th>Stage</th><th>Condition</th><th>Job</th></tr></thead><tbody>${goals.map((g) => `<tr><td>${idLink(localId(g.id, d.repo), g.href)}</td><td class="wide" title="${esc(localId(g.why, d.repo))}">${esc(g.title)}</td><td>${stateBadge(g.stage)}</td><td>${g.jobs.map((j) => stateBadge(j.condition)).join("<br>")}</td><td>${goalJobs(g, d.repo)}</td></tr>`).join("")}</tbody></table></div>`
+    : "";
   const jobs = d.jobs.length
-    ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Job</th><th>State</th><th>Started</th></tr></thead><tbody>${d.jobs.map((j) => `<tr><td>${idLink(localId(j.name, d.repo), `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${stateBadge(j.state)}</td><td class="time">${esc(when(j.started))}</td></tr>`).join("")}</tbody></table></div>`
+    ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Job</th><th>Condition</th><th>Started</th></tr></thead><tbody>${d.jobs.map((j) => `<tr><td>${idLink(localId(j.name, d.repo), `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${stateBadge(j.condition)}</td><td class="time">${esc(when(j.started))}</td></tr>`).join("")}</tbody></table></div>`
     : empty("No job has worked on this.");
   const commits = d.commits.length
     ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Commit</th><th>Subject</th><th>Date</th></tr></thead><tbody>${d.commits.map((c) => {
@@ -341,18 +336,14 @@ export function renderIssue(d) {
       return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td><td class="time">${esc(when(c.date))}</td></tr>`;
     }).join("")}</tbody></table></div>`
     : empty("No commit on main names this issue in its trailers.");
-  const isIssue = d.kind !== "goal";
-  // An issue shows its Request as written; a goal (or an old item with no Request) shows its body.
-  const request = isIssue && d.request ? d.request : description(d.body);
   const ref = String(d.ref ?? d.id), inventory = "#/inventory", project = [d.repo, `#/inventory?project=${encodeURIComponent(d.repo)}`];
-  const place = isIssue ? [project, ["issues", inventory], [ref]]
-    : d.issue ? [project, ["issues", inventory], [localId(d.issue.id, d.repo), d.issue.href], ["goals"], [ref]]
-    : [project, ["goals"], [ref]];
+  const place = d.issue ? [project, ["issues", inventory], [localId(d.issue.id, d.repo), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];
+  const part = (id, title, name, text) => (text || !goals.length ? `<div class="sh${text ? "" : " edit-only"}"><h2 id="h-${id}">${title}</h2></div><div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>` : "");
   return `<div class="page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) +
-    `<div class="status-row">${kindTag(d.kind)}${d.derived ? stateBadge(d.derived.stage) : badge(d.status)}${chips(fm.labels)}</div>` +
+    `<div class="status-row">${d.derived ? stateBadge(d.derived.stage) : badge(d.status)}${chips(fm.labels)}</div>` +
     `<dl class="facts">${facts}</dl>` +
-    `<div class="sh"><h2 id="h-request">${isIssue ? "Description" : "Goal"}</h2></div><div class="md view-only" id="request">${linkSpecs(md(request), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="body" ${FORM} rows="16" aria-label="${isIssue ? "Description" : "Goal"}">${esc(description(d.body))}</textarea>` +
-    (isIssue ? `<div class="sh"><h2 id="h-goals">Goals</h2><span class="count">${goals.length}</span></div>${goalTable}` : "") +
+    part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
+    (goals.length ? `<div class="sh"><h2 id="h-goals">Parts</h2><span class="count">${goals.length}</span></div>${goalTable}` : "") +
     `<div class="sh"><h2>Notes</h2></div>${notes}${renderNoteForm(d, ref)}<div class="sh"><h2>Runs</h2></div>${jobs}<div class="sh"><h2>Commits</h2></div>${commits}</div>`;
 }
 
@@ -402,7 +393,7 @@ if (typeof document !== "undefined") {
     e.preventDefault();
     const edit = form.dataset.ui === "issue-edit", el = form.elements;
     const body = edit
-      ? { title: el.title.value, priority: el.priority.value, source: el.source.value, areas: el.areas.value, description: el.body.value }
+      ? { title: el.title.value, priority: el.priority.value, source: el.source.value, areas: el.areas.value, description: el.request?.value ?? "", spec: el.spec?.value ?? "" }
       : { text: el.text.value };
     const msg = form.querySelector(".form-msg");
     try {
@@ -425,7 +416,7 @@ if (typeof document !== "undefined") {
     try {
       const res = await fetch("/api/issues", {
         method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" },
-        body: JSON.stringify({ repo: v("repo"), title: v("title"), body: form.elements.body.value, labels, after: v("after"), due: v("due") }),
+        body: JSON.stringify({ repo: v("repo"), title: v("title"), body: form.elements.body.value, labels, after: v("after") }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `answered ${res.status}`);
