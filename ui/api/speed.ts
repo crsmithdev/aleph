@@ -54,6 +54,8 @@ export interface Speed {
     fixRounds: number | null;
     /** Median over landed issues of the week share their agent runs took, 2 decimals; null with no fit or none landed. */
     week: number | null;
+    /** The landed issues that used the most of the weekly limit, largest first, at most 8: `week` is the share of the week their agent runs took (2 decimals), `runs` how many agent runs that sums. Empty with no fit or none landed. */
+    usage: { goal: string; title?: string; href?: string; week: number; runs: number }[];
   };
   classes: ClassStat[];
   notCounted: { runs: number; issues: number; hours: number };
@@ -416,11 +418,19 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     firstPass: issuesLanded ? round(fixes.filter((f) => f === 0).length / issuesLanded, 4) : null,
     fixRounds: issuesLanded ? pct(fixes, 0.5) : null,
     week: null,
+    usage: [],
   };
   if (fit) {
     const weekOf = new Map<string, number>();
     for (const r of all) if (isAgent(r) && issueOf(r) !== undefined) weekOf.set(`${r.repo}-${issueOf(r)}`, (weekOf.get(`${r.repo}-${issueOf(r)}`) ?? 0) + (share(fit, r.cost, r.model)?.pct ?? 0));
-    const per = [...new Set(landed.filter((r) => issueOf(r) !== undefined).map((r) => `${r.repo}-${issueOf(r)}`))].map((g) => weekOf.get(g) ?? 0);
+    const keys = [...new Set(landed.filter((r) => issueOf(r) !== undefined).map((r) => `${r.repo}-${issueOf(r)}`))];
+    const per = keys.map((g) => weekOf.get(g) ?? 0);
+    const nRuns = new Map<string, number>();
+    for (const r of all) if (isAgent(r) && issueOf(r) !== undefined) nRuns.set(`${r.repo}-${issueOf(r)}`, (nRuns.get(`${r.repo}-${issueOf(r)}`) ?? 0) + 1);
+    issues.usage = keys.map((g) => {
+      const m = g.lastIndexOf("-");
+      return { goal: g, href: `#/issues/${encodeURIComponent(g.slice(0, m))}/${g.slice(m + 1)}`, week: round(weekOf.get(g) ?? 0, 2), runs: nRuns.get(g) ?? 0 };
+    }).sort((a, b) => b.week - a.week).slice(0, 8);
     issues.week = per.length ? round(pct(per, 0.5), 2) : null;
   }
   const lists = reader({ fetch: false });
@@ -438,6 +448,12 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     t.title = item?.title;
     // The link would be a 404 for an issue that left the store.
     if (!item && lists.list(t.goal.slice(0, m))) delete t.href;
+  }
+  for (const u of issues.usage) {
+    const m = u.goal.lastIndexOf("-");
+    const item = lists.item(u.goal.slice(0, m), Number(u.goal.slice(m + 1)));
+    if (item) u.title = item.title;
+    else if (lists.list(u.goal.slice(0, m))) delete u.href;
   }
   const ended = phaseTimes(all, filed(), since.getTime(), now.getTime());
   const med = (xs: { at: number; secs: number }[], i: number) => {

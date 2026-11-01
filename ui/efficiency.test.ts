@@ -40,7 +40,7 @@ afterAll(() => {
 
 test("goal stats: first-pass share, median fix rounds", () => {
   const g = speed("day", now).issues;
-  expect(g).toEqual({ landed: 3, firstPass: 0.6667, fixRounds: 0, week: null });
+  expect(g).toEqual({ landed: 3, firstPass: 0.6667, fixRounds: 0, week: null, usage: [] });
   expect(g).not.toHaveProperty("cost");
 });
 

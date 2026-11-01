@@ -47,7 +47,7 @@ The mocks are in `2026-11-01-status-redesign-mocks/`. They are design files: rea
 | Causes | The `causes` of the Late, Restarted and Dropped classes, merged by name and sorted by hours |
 | Reruns | `flaky` |
 | Fix rounds | The `fixed` class: runs, hours, issues |
-| Usage per issue | `issues.week`, with `weekText` |
+| Usage per issue | `issues.week`, with `weekText`; the drill lists `issues.usage` |
 | Checks, models | `checks`, `models` |
 | Agents live, roles | `agents` |
 | Runs today, day cap | `factory.runsToday`, `factory.dayCap` |

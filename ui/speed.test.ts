@@ -262,8 +262,12 @@ test("runs read their issue from on: a goal run counts under its issue, an issue
   const fit = { pooled: 0.1, byModel: {} } as any;
   const w = speed("week", now, fit);
   expect(w.issues.week).toBe(0.2); // both runs under the one key ox-860
+  expect(w.issues.usage).toEqual([{ goal: "ox-860", href: "#/issues/ox/860", week: 0.2, runs: 2 }]);
+  expect(speed("week", now).issues.usage).toEqual([]);
   run({ ...a("r", { on: "ox-7" }), started: at(1, 9), ended: at(1, 10) }); run({ ...land("r", { on: "ox-7" }), started: at(1, 9), ended: at(1, 10) });
-  expect(speed("week", now, fit).issues.week).toBe(0.1); // ox-7 counts too: median of 0.2 and 0.1
+  const w2 = speed("week", now, fit);
+  expect(w2.issues.week).toBe(0.1); // ox-7 counts too: median of 0.2 and 0.1
+  expect(w2.issues.usage).toEqual([{ goal: "ox-860", href: "#/issues/ox/860", week: 0.2, runs: 2 }, { goal: "ox-7", href: "#/issues/ox/7", week: 0.1, runs: 1 }]);
 });
 
 test("phases: intake runs from the filing to the first triage end, queue from there to the first agent start, lead from the filing to the last land", () => {
