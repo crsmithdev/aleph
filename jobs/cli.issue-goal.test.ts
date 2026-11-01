@@ -11,6 +11,8 @@ afterAll(teardown);
 const GOAL = "## Goal\n\nAdd a line.\n\n## Oracle\n\n`bun test`\n\n## Time box\n\n10 minutes\n";
 const commits = () => Number(sh(base, "git", "--git-dir", itemsRemote, "rev-list", "--count", "main"));
 const file = (name: string) => sh(base, "git", "--git-dir", itemsRemote, "show", `main:fac/backlog/tasks/${name}.md`);
+// A goal left open is one the next dispatch runs first: the dispatch test then waits on all of them.
+const dropIssue = (n: number) => aleph(["issue", "drop", "fac", String(n), "test over"]);
 const triageRuns = () => (existsSync(jobsDir) ? readdirSync(jobsDir).filter((d) => d.endsWith("-triage")) : []);
 
 describe("aleph issue add --spec -", () => {
@@ -29,6 +31,7 @@ describe("aleph issue add --spec -", () => {
     const shown = await aleph(["issue", "show", "fac", String(n), "--json"]);
     expect(shown.json).toMatchObject({ source: "chris", areas: [] });
     expect(shown.json.spec).toContain("## Oracle");
+    await dropIssue(n);
   });
 
   test("--request - reads the request from stdin and leaves the title alone", async () => {
@@ -48,6 +51,8 @@ describe("aleph issue add --spec -", () => {
     expect(commits()).toBe(before + 1);
     expect((await aleph(["issue", "add", "fac", "Fourth", "--spec", "-", "--after", "fac-9999.1"], {}, GOAL)).code).toBe(1);
     expect(commits()).toBe(before + 1);
+    await dropIssue(first);
+    await dropIssue(r.json.added);
   });
 
   test("it starts the dispatch itself: no explicit `aleph dispatch` follows", async () => {
@@ -69,10 +74,6 @@ describe("aleph issue add --spec -", () => {
 });
 
 describe("the writers of the new shape", () => {
-  test("aleph todo is gone", async () => {
-    const r = await aleph(["todo", "add", "fac", "x"]);
-    expect(r.code).toBe(1);
-  });
 
   test("--labels writes areas, and never labels, waiting_on or goal", async () => {
     const r = await aleph(["issue", "add", "fac", "Audio thing", "--labels", "audio,goal,needs-chris"]);

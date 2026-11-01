@@ -65,8 +65,11 @@ describe("every transition dispatches at once", () => {
     const slow = join(base, "slowbase");
     writeFileSync(slow, "");
     try {
-      expect((await aleph(["recheck", `fac-${s}`], on())).code).toBe(1);
+      // The slow check keeps the recheck live until its dispatch has started the goal. A loaded dispatch that boots after the recheck ended meets the hold again.
+      const recheck = aleph(["recheck", `fac-${s}`], on());
       await until(() => started().includes(`fac-${b}`));
+      rmSync(slow, { force: true });
+      expect((await recheck).code).toBe(1);
     } finally {
       rmSync(slow, { force: true });
     }

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, jobsDir, startScript, stateNow, setup, teardown, seedItem, patchItem } from "./cli.helpers";
+import { aleph, base, jobsDir, passed, quiet, startScript, setup, teardown, seedItem, patchItem, until } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -15,16 +15,15 @@ describe("a factory run", () => {
     const gate = (n: string) => join(base, `gate-${n}`);
     const goal = async (n: string) =>
       seedItem("fac", `dispatch ${n}`, { kind: "goal" }, `ACTION: hold ${gate(n)}\n`.trim()) as number;
-    const until = async (f: () => boolean) => { for (let i = 0; i < 300 && !f(); i++) await Bun.sleep(100); expect(f()).toBe(true); };
-    const settled = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`)).every((r) => stateNow(r).condition === "passed");
-    const settledGoal = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`)).every((r) => stateNow(r).condition === "passed");
+    const settled = (id: number) => passed(startLog, id);
     const ids: number[] = [];
     beforeAll(() => {
       startLog = join(base, "start.log");
       startCmd = join(base, "start-cmd");
       startScript(startCmd, jobsDir);
     });
-    beforeEach(() => { rmSync(startLog, { force: true }); });
+    // A run writes its state before its run-end dispatch: the last test's dispatch may still start a goal of this one.
+    beforeEach(async () => { await until(() => quiet(startLog)); rmSync(startLog, { force: true }); });
     afterAll(async () => {
       for (const n of ["a", "b", "c"]) writeFileSync(gate(n), "");
       // The released holds finish their runs; wait for that, at most as long as the fixed wait it replaces.
@@ -59,16 +58,15 @@ describe("a factory run", () => {
       const d1 = await aleph(["dispatch"], on());
       expect(d1.json.started).toEqual([`fac-${m}`]);
       expect(d1.json.skipped).toContain(`fac-${n}: blocked: after fac-${m}`);
-      expect(d1.json.skipped.some((l: string) => l.includes(`after fac-${m}`))).toBe(true);
       writeFileSync(gate("g"), "");
-      await until(() => settledGoal(m));
+      await until(() => settled(m));
       patchItem("fac", `${m}`, { status: "done" });
       // A run's end dispatches too, so this dispatch and that one share the work: what counts is the end state.
       await aleph(["dispatch"], on());
       await until(() => started().includes(`fac-${n}`));
       const status = async (id: number) => (await aleph(["issue", "show", "fac", String(id), "--json"])).json.status;
       // The first issue's goals are all done, so a dispatch closes it; the second's goal is only started.
-      await until(() => settledGoal(n));
+      await until(() => settled(n));
       await aleph(["dispatch"], on());
       expect(await status(m)).toBe("done");
       expect(await status(n)).toBe("open");

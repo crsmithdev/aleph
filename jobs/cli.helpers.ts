@@ -74,6 +74,18 @@ export const dispatching = (): boolean => {
   });
 };
 
+/**
+ * Nothing of this test file's factory is moving: no start in flight, no dispatch, and no unit alive. A run writes its
+ * state before its run-end dispatch, so a state alone does not show this.
+ */
+export const quiet = (startLog: string): boolean => !starting(startLog) && !dispatching() && readdirSync(jobsDir).every((r) => !unitAlive(join(jobsDir, r)));
+
+/** Every run of the goal has passed, and at least one exists: the start log comes before the run folder, so an empty list is not settled. */
+export const passed = (startLog: string, id: string | number): boolean => {
+  const runs = readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`));
+  return !starting(startLog) && runs.length > 0 && runs.every((r) => stateNow(r).condition === "passed");
+};
+
 const tail = (f: string, n = 15) => (existsSync(f) ? readFileSync(f, "utf8").trimEnd().split("\n").slice(-n).join("\n") : "(none)");
 /** What a failed concurrency test needs to name its cause: the runs of the given goal ids with their pid and exit, and the factory logs. */
 export function diagnose(label: string, ids: number[], ...results: { code: number; stdout: string; stderr: string }[]): string {
@@ -89,10 +101,11 @@ const tail_ = (s: string) => s.trimEnd().split("\n").slice(-15).join("\n");
  * writes why it skipped a goal there) and dispatch.log, and of the run-end dispatch logs, so a flake names its cause.
  */
 export async function until(f: () => boolean): Promise<void> {
-  for (let i = 0; i < 300 && !f(); i++) await Bun.sleep(100);
+  // Under the 30 s test timeout, so that a timeout here reports the logs below.
+  for (let i = 0; i < 250 && !f(); i++) await Bun.sleep(100);
   if (f()) return;
   const runEnd = existsSync(jobsDir) ? readdirSync(jobsDir).sort().slice(-4).map((r) => `--- ${r}/dispatch.log\n${tail(join(jobsDir, r, "dispatch.log"), 5)}`) : [];
-  throw new Error([`until: not true after 30 s`, `--- factory/tick.log\n${tail(join(base, "factory", "tick.log"))}`,
+  throw new Error([`until: not true after 25 s`, `--- factory/tick.log\n${tail(join(base, "factory", "tick.log"))}`,
     `--- factory/dispatch.log\n${tail(join(base, "factory", "dispatch.log"))}`, ...runEnd].join("\n"));
 }
 
@@ -398,6 +411,13 @@ function pullItems(): void {
   }
 }
 
+/** Pushes the test store's commit. A detached dispatch can write the store first, so a refused push rebases and tries again, as the store's own writes do. */
+function pushItems(): void {
+  for (let attempt = 1; ; attempt++) {
+    try { sh(items, "git", "push", "-q", "origin", "main"); return; } catch (e) { if (attempt === 5) throw e; Bun.sleepSync(200 * attempt); pullItems(); }
+  }
+}
+
 /**
  * Files an item in the test store as one commit, with the given frontmatter fields (`kind`, `goals`, `after`, `ask`,
  * `labels` ...) beside the ones every item has, and returns its number. This is how a test seeds a new-shape item,
@@ -421,7 +441,7 @@ export function seedItem(repoKey: string, title: string, fm: Record<string, unkn
   writeFileSync(join(dir, `${repoKey}-${id}.md`), renderItem(repoKey, item as any));
   sh(items, "git", "add", "-A");
   sh(items, "git", "commit", "-qm", `seed ${repoKey}-${id}`);
-  sh(items, "git", "push", "-q", "origin", "main");
+  pushItems();
   return id;
 }
 
@@ -436,7 +456,7 @@ export function seedGoal(repoKey: string, n: number, k: number, fm: Record<strin
   writeFileSync(join(dir, `${repoKey}-${ref}.md`), renderItem(repoKey, item as any));
   sh(items, "git", "add", "-A");
   sh(items, "git", "commit", "-qm", `seed ${repoKey}-${ref}`);
-  sh(items, "git", "push", "-q", "origin", "main");
+  pushItems();
   return ref;
 }
 
@@ -477,5 +497,5 @@ export function patchItem(repoKey: string, id: number | string, fm: Record<strin
   writeFileSync(path, renderItem(repoKey, item));
   sh(items, "git", "add", "-A");
   sh(items, "git", "commit", "-qm", `patch ${repoKey}-${id}`);
-  sh(items, "git", "push", "-q", "origin", "main");
+  pushItems();
 }

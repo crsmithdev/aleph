@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, jobsDir, other, sh, startScript, stateNow, setup, teardown, until as untilHelper } from "./cli.helpers";
+import { aleph, base, dispatching, jobsDir, other, passed, sh, startScript, setup, teardown, until as untilHelper } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -21,7 +21,7 @@ describe("a factory run", () => {
     };
     const expectStarted = (check: () => void) => { try { check(); } catch (e) { throw withLog(e); } };
     const gate = (n: string) => join(base, `gate-${n}`);
-    const settled = (id: string | number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`)).every((r) => stateNow(r).condition === "passed");
+    const settled = (id: string | number) => passed(startLog, id);
     // Goal refs (`<n>.1`): `aleph issue add --goal -` files the issue `<n>` and its goal.
     const ids: string[] = [];
     const dropGoal = async (ref: string) => {
@@ -48,7 +48,8 @@ describe("a factory run", () => {
       await aleph(["pause"]);
       expect((await aleph(["dispatch"], on())).json).toMatchObject({ started: [], paused: true });
       const held = await aleph(["issue", "add", "fac", "added while paused", "--spec", "-"], on(), `ACTION: hold ${gate("f")}\n`);
-            await Bun.sleep(1500);
+      // The add's detached dispatch reads the pause when it boots: it must end before the resume.
+      await until(() => !dispatching());
       expectStarted(() => expect(started()).toEqual([]));
       await aleph(["resume"]);
       sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
@@ -67,20 +68,12 @@ describe("a factory run", () => {
       expectStarted(() => expect(started()).toEqual([`fac-${add.json.added}`]));
       writeFileSync(gate("f"), "");
       await until(() => settled(`${add.json.added}`));
-      // A slow dispatch does not hold the add: the start sleeps well past the bound, which leaves room for a loaded `todo add`.
-      const slowCmd = join(base, "slow-cmd");
-      writeFileSync(slowCmd, `#!/bin/bash\nsleep 20\nexec ${startCmd} "$@"\n`, { mode: 0o755 });
-      const t0 = Date.now();
+      // A slow dispatch does not hold the add: the start waits for a file written only after the add returns, so an add that waited would never return.
+      const slowCmd = join(base, "slow-cmd"), startGo = gate("start-go");
+      writeFileSync(slowCmd, `#!/bin/bash\nwhile [ ! -f ${startGo} ]; do sleep 0.05; done\nexec ${startCmd} "$@"\n`, { mode: 0o755 });
       const slow = await aleph(["issue", "add", "fac", "slow dispatch", "--spec", "-"], on({ ALEPH_START_CMD: slowCmd }), `ACTION: hold ${gate("f")}\n`);
-      const elapsed = Date.now() - t0;
-      if (elapsed >= 10_000) throw new Error([
-        `slow todo add took ${elapsed} ms (bound 10000 ms)`,
-        `exit code: ${slow.code}`,
-        `stdout:\n${slow.stdout}`,
-        `stderr tail:\n${slow.stderr.split("\n").slice(-20).join("\n")}`,
-        `--- start.log\n${startLogText()}`,
-      ].join("\n"));
       expect(slow.code).toBe(0);
+      writeFileSync(startGo, "");
       ids.push(`${slow.json.added}`);
       await until(() => started().length === 2);
       await until(() => settled(`${slow.json.added}`));
