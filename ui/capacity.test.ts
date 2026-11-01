@@ -28,7 +28,7 @@ test("role shares sum to 100% over the timed roles, and the reviewer row says no
   const rows = roleRows(agents);
   expect(rows.filter((r: any) => r.share !== null).reduce((a: number, r: any) => a + r.share, 0)).toBeCloseTo(100);
   expect(rows.at(-1).share).toBeNull();
-  expect(renderCapacity(S, D)).toMatch(/<th scope="row">Reviewer<\/th><td>3<\/td><td>not timed<\/td><td>–<\/td><td>–<\/td><td>–<\/td>/);
+  expect(renderCapacity(S, D)).toMatch(/<td>Reviewer<\/td><td class="num">3<\/td><td class="num">not timed<\/td><td class="num">–<\/td><td class="num">–<\/td><td class="wide">–<\/td>/);
 });
 
 test("the tiles come from the state and the agents", () => {
@@ -60,6 +60,6 @@ test("a stale usage shows the figure and its age; a fresh one shows no age", () 
 });
 
 test("the title is the sidebar name, whatever the data", () => {
-  expect(renderCapacity(S, D)).toContain('<header class="ph"><h1>Agents</h1></header>');
-  expect(renderCapacity({ ...S, usage: undefined }, null)).toContain('<header class="ph"><h1>Agents</h1></header>');
+  expect(renderCapacity(S, D)).toContain('<header class="ph"><h1>Agents</h1><div class="aside"><div class="fbar">');
+  expect(renderCapacity({ ...S, usage: undefined }, null)).toContain('<header class="ph"><h1>Agents</h1><div class="aside"><div class="fbar">');
 });

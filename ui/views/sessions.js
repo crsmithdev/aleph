@@ -1,9 +1,8 @@
 // Session and Turn: the conversations Langfuse recorded. One module holds the two
 // views; sessions-session.js and sessions-turn.js re-export them, because the page
 // reads one `view` per file. The list of sessions is in agents.js.
-import { chips, costHtml, error, esc, filterBar, idLink, md, pageHead, shortModel, systemParts, when } from "../lib.js";
+import { chips, costHtml, crumb, durMs as dur, error, esc, filterBar, idLink, md, pageHead, shortModel, systemParts, when } from "../lib.js";
 
-const dur = (ms) => (ms == null ? "" : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`);
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
 const langfuse = (base, traceId) => (base && traceId ? `<a href="${esc(base)}/trace/${esc(traceId)}">Open in Langfuse</a>` : "");
 const line = (s) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
@@ -92,7 +91,7 @@ export function chatTurn(id, t) {
 /** Under the chat: "20 of 73" and "Show 20 more", which fetches the next turns. */
 const chatPager = (shown, total) => {
   const more = Math.min(CHAT_PAGE, total - shown);
-  return `<div class="pager chat-pager">${more > 0 ? `<button type="button" data-chat-from="${shown + 1}">Show ${more} more</button>` : ""}<span class="of">${shown} of ${total}</span></div>`;
+  return `<div class="pager chat-pager">${more > 0 ? `<button type="button" class="act" data-chat-from="${shown + 1}">Show ${more} more</button>` : ""}<span class="of">${shown} of ${total}</span></div>`;
 };
 
 const chatBody = (d) => `<div class="chat">${d.turns.map((t) => chatTurn(d.id, t)).join("")}</div>${chatPager(d.from - 1 + d.turns.length, d.total)}`;
@@ -175,7 +174,7 @@ export function renderSession(d, _params, query = new URLSearchParams()) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
   const table = isTable(query), wf = isWaterfall(query);
   const aside = [sessionLink(d), langfuse(d.base, d.turns[0]?.traceId)].filter(Boolean).join(" ");
-  return `<div class="page"><p class="quiet"><a href="#/sessions">← Sessions</a></p>${pageHead(d.project, { count: table ? d.turns.length : d.total, aside })}` +
+  return `<div class="page">${crumb("#/sessions", [["sessions", "#/sessions"], [d.project], [d.id.slice(0, 8)]])}${pageHead(`Session ${d.id.slice(0, 8)}`, { count: table ? d.turns.length : d.total, aside })}` +
     `${d.taskTypes?.length ? `<p>${chips(d.taskTypes)}</p>` : ""}` +
     filterBar([{ label: "", name: "view", options: [{ value: "chat", label: "Chat" }, { value: "table", label: "Table" }, { value: "waterfall", label: "Waterfall" }], value: table ? "table" : wf ? "waterfall" : "chat" }]) +
     (table ? turnTable(d) : wf ? `<div class="wf-wrap">${wfBody(wfRows(d.turns), null)}</div>${chatPager(d.from - 1 + d.turns.length, d.total)}` : chatBody(d)) + `</div>`;
@@ -252,7 +251,7 @@ export function renderTurn(d) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
   const sid = encodeURIComponent(d.id);
   const nav = (n, label) => (n >= 1 && n <= d.total ? `<a href="${esc(href(`/sessions/${sid}/turns/${n}`))}">${label}</a>` : "");
-  return `<div class="page"><p class="quiet"><a href="#/sessions">← Sessions</a> / ${sessionLink(d)}</p>` +
+  return `<div class="page">${crumb(`#/sessions/${sid}`, [["sessions", "#/sessions"], [d.id.slice(0, 8), `#/sessions/${sid}`], [`turn ${d.n}`]])}` +
     pageHead(`Turn ${d.n} of ${d.total}`, { aside: [nav(d.n - 1, "Previous"), nav(d.n + 1, "Next"), langfuse(d.base, d.traceId)].filter(Boolean).join(" ") }) +
     `<dl class="facts"><div><dt>Started</dt><dd>${esc(when(d.start))}</dd></div><div><dt>Cost</dt><dd>${costHtml(d.cost, d.wk)}</dd></div><div><dt>Duration</dt><dd>${esc(dur(d.durationMs))}</dd></div></dl>` +
     `<h2>Prompt</h2><pre>${esc(d.prompt)}</pre><h2>Output</h2><pre>${esc(d.output)}</pre><h2>Observations</h2>` +

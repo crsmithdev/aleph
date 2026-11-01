@@ -1,8 +1,8 @@
 // The Issues view: a browser for the issues of every repo: tiles, two charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { badge, chart, chips, crumb, empty, esc, filterBar, idLink, labelName, localId, md, money, pageHead, pager, sortHead, when } from "../lib.js";
-import { LIFETIME_STYLE, renderLifetime } from "../timeline.js";
+import { barList, barRow, barsOption, badge, card, sectionHead, chart, chips, crumb, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, tile, tiles, when } from "../lib.js";
+import { renderLifetime } from "../timeline.js";
 
 export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 
@@ -50,56 +50,10 @@ export function redirect(hash) {
   return old === "/projects" || old === "/contents" ? "#/issues" : null;
 }
 
-// The tiles and cards follow board E of the Status redesign; the rest is what nothing shared covers: the whole-row link and the X button.
-const STYLE_CONTENTS = `<style>
-.contents { display: flex; flex-direction: column; gap: 16px; }
-.contents > .ph, .contents .fbar { margin-bottom: 0; }
-.contents .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
-.contents .tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 16px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; color: var(--ink-2); }
-.contents .tile .k { color: var(--muted); font: 600 var(--fs-xs) var(--sans); letter-spacing: .08em; text-transform: uppercase; }
-.contents .tile b { font: 700 44px/1 var(--metric); color: var(--ink); font-variant-numeric: lining-nums tabular-nums; }
-.contents .tile small { font-size: var(--fs-sm); }
-.contents .tile .up { font-size: var(--fs-sm); font-weight: 600; color: var(--need); }
-.contents .tile .down { font-size: var(--fs-sm); font-weight: 600; color: var(--done); }
-.contents .graphs { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
-.contents .card { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 16px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
-.contents .card h2 { margin: 0; font: 600 var(--fs-lg)/1.3 var(--sans); color: var(--ink); }
-.contents .card p { margin: 0; font-size: var(--fs-sm); color: var(--muted); }
-.contents .inv-chart { height: 180px; min-width: 0; }
-.contents .inv-q { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
-.contents .inv-q input[type="search"] { flex: 1 1 280px; box-sizing: border-box; min-height: 36px; padding: 0 12px; font: var(--fs-md) var(--sans); color: var(--ink); background: var(--sunk); border: 1px solid var(--rule); border-radius: 6px; }
-.contents .inv-q input[type="search"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.contents .inv-q .hint { color: var(--muted); font-size: var(--fs-xs); }
-#inv-filters { display: flex; flex-direction: column; gap: 10px; }
-.contents .pfilter { display: flex; flex-wrap: wrap; gap: 6px; }
-.contents .pfilter button { min-height: 28px; padding: 0 10px; font: var(--fs-sm) var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--rule); border-radius: 999px; cursor: pointer; }
-.contents .pfilter button:hover { border-color: var(--run); }
-.contents .pfilter button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.contents .pfilter button[aria-pressed="true"] { color: var(--ink); background: var(--run-bg); border-color: var(--run); font-weight: 600; }
-.contents .pfilter .n { margin-left: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.contents .sh { margin: 0; }
-.contents mark { color: inherit; background: var(--need-bg); border-radius: 2px; }
-.contents .tbl th button, .contents .tbl td.num, .contents .tbl td.time { white-space: nowrap; }
-.contents tr.crow { position: relative; }
-.contents td.wide a { color: inherit; text-decoration: none; }
-.contents td.wide a::after { content: ""; position: absolute; inset: 0; }
-.contents tr.crow:hover td.wide a, .contents td.wide a:focus-visible { text-decoration: underline; }
-.contents td a.idl, .contents td.drop { position: relative; z-index: 1; }
-.contents td.drop { width: 28px; padding: 0; text-align: right; }
-.contents .cancel { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 4px; color: var(--muted); cursor: pointer; }
-.contents .cancel svg { width: 14px; height: 14px; pointer-events: none; }
-.contents .cancel:hover { color: var(--stuck); background: var(--rule-2); }
-.contents .cancel:focus-visible { color: var(--stuck); outline: 2px solid currentColor; outline-offset: 1px; }
-.contents .cancel.arm { color: var(--stuck); background: var(--rule-2); }
-.contents .cancel[disabled] { opacity: .5; cursor: default; }
-.contents .cmsg { position: absolute; right: 30px; top: 50%; transform: translateY(-50%); font: var(--fs-xs) var(--sans); color: var(--muted); background: var(--bg); white-space: nowrap; }
-.contents .cmsg.err { color: var(--stuck); }
-</style>`;
-
 /** The Issues table shows this many rows, and this many more for each press of the pager's button. */
 export const PAGE = 50;
 
-/** The Status filter's default is Open; "any" (the Any option) shows every status. */
+/** The Status filter's default is Open; "any" (the All option) shows every status. */
 export const DEFAULT_STATUS = "open";
 const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STATUS : s === "any" ? "" : s);
 
@@ -107,7 +61,7 @@ const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STA
 export function hashOptions(q = new URLSearchParams()) {
   return {
     limit: Math.max(PAGE, Number.parseInt(q.get("limit"), 10) || PAGE),
-    status: statusOf(q.get("status")), project: q.get("project") ?? "", stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "",
+    status: statusOf(q.get("status")), project: q.get("project") ?? "", stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", tile: q.get("tile") || "open",
     sort: q.get("sort") ? { key: q.get("sort"), dir: q.get("dir") === "asc" ? 1 : -1 } : null,
   };
 }
@@ -207,8 +161,10 @@ export function markHits(title, hits = []) {
 /** The rows that pass every filter but the ones named in `skip`, each with its search `score` and `hits`. */
 export function filterRows(rows, o = {}, skip = []) {
   const want = (k, v) => skip.includes(k) || !o[k] || v === o[k];
-  const q = (o.q ?? "").trim();
+  const q = (o.q ?? "").trim(), now = new Date(), end = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() + DAY, from = end - 7 * DAY;
+  const inTile = (r) => skip.includes("tile") || (o.tile === "filed" ? inDays(r.created, from, end) : o.tile === "closed" ? r.status !== "open" && inDays(r.closed, from, end) : true);
   return rows.flatMap((r) => {
+    if (!inTile(r)) return [];
     if (!want("status", r.status) || !want("project", r.project) || !want("stage", r.stage) || !want("priority", r.priority)) return [];
     if (o.label && !skip.includes("label") && !r.labels.includes(o.label)) return [];
     if (!q) return [r];
@@ -247,8 +203,7 @@ const ordered = (rows, o) => (o.sort || !(o.q ?? "").trim() ? sortRows(rows, o.s
 export function dateText(s, now = new Date()) {
   const t = dayMs(s);
   if (!t) return "";
-  const d = new Date(t);
-  return d.getFullYear() === now.getFullYear() ? d.toLocaleDateString("en-US", { month: "short", day: "2-digit" }) : String(s).slice(0, 10);
+  return day(new Date(t), now);
 }
 
 /** The days since a store date, as "12 d"; a closed issue counts to its closing. "" for none. */
@@ -267,7 +222,7 @@ export function dropTarget(r) {
 export function renderRow(r) {
   const x = dropTarget(r)
     ? `<button type="button" class="cancel" data-cancel aria-label="Drop ${esc(r.id)}" title="Stop or drop">${X_ICON}</button>` : "";
-  return `<tr class="crow${r.part ? " part-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}"><td>${idLink(r.n, r.href)}</td>` +
+  return `<tr class="rowlink${r.part ? " part-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}"><td>${idLink(r.n, r.href)}</td>` +
     `<td class="wide"><a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
     `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${esc(r.project)}</td><td>${esc(r.priority)}</td><td>${chips(r.labels)}</td>` +
     `<td class="num">${r.notes}</td><td class="num">${r.runs}</td><td class="num">${r.cost ? esc(money(r.cost)) : ""}</td><td class="num">${esc(ageText(r))}</td>` +
@@ -311,19 +266,18 @@ export function stats(rows, now = new Date()) {
   };
 }
 
-const tile = (k, value, ...lines) => `<div class="tile"><span class="k">${esc(k)}</span><b>${esc(value)}</b>${lines.filter(Boolean).join("")}</div>`;
-const small = (s) => `<small>${esc(s)}</small>`;
 /** The change from the week before, with no good or bad colour on a count that can go either way. */
 const change = (now, before) => (now === before ? small("same as the week before") : `<small>${now > before ? "▲" : "▼"} ${Math.abs(now - before)} from the week before</small>`);
 
-export function renderTiles(s) {
+export function renderTiles(s, key = "open") {
   const stages = Object.entries(s.stages).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(", ");
-  return `<section class="tiles" aria-label="Issue numbers">` +
-    tile("Open", String(s.open), small(`of ${s.total} in the store`), stages && small(stages)) +
-    tile("Filed, 7 days", String(s.filed), change(s.filed, s.filedBefore)) +
-    tile("Closed, 7 days", String(s.closed), small(`${s.done} done, ${s.dropped} dropped`), change(s.closed, s.closedBefore)) +
-    tile("Median open age", s.medianAge === null ? "–" : `${Math.round(s.medianAge)} d`, s.oldest === null ? "" : small(`oldest ${Math.round(s.oldest)} d`)) +
-    tile("Runs", String(s.runs), small(`${money(s.cost)} recorded`)) + `</section>`;
+  const on = (k) => ({ key: k, on: key === k });
+  return tiles("Issue numbers",
+    tile({ k: "Open", v: String(s.open), body: small(`of ${s.total} in the store`) + (stages ? small(stages) : ""), ...on("open") }) +
+    tile({ k: "Filed, 7 days", v: String(s.filed), body: change(s.filed, s.filedBefore), ...on("filed") }) +
+    tile({ k: "Closed, 7 days", v: String(s.closed), body: small(`${s.done} done, ${s.dropped} dropped`) + change(s.closed, s.closedBefore), ...on("closed") }) +
+    tile({ k: "Median open age", v: s.medianAge === null ? "–" : `${Math.round(s.medianAge)} d`, body: s.oldest === null ? "" : small(`oldest ${Math.round(s.oldest)} d`), ...on("age") }) +
+    tile({ k: "Runs", v: String(s.runs), body: small(`${money(s.cost)} recorded`), ...on("runs") }));
 }
 
 /** The last `days` days: their labels and how many rows were filed and closed on each. */
@@ -332,7 +286,7 @@ export function flow(rows, days = 14, now = new Date()) {
   const out = { labels: [], filed: [], closed: [] };
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i), from = d.getTime(), to = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i + 1).getTime();
-    out.labels.push(d.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+    out.labels.push(day(d, now));
     out.filed.push(rows.filter((r) => inDays(r.created, from, to)).length);
     out.closed.push(rows.filter((r) => r.status !== "open" && inDays(r.closed, from, to)).length);
   }
@@ -352,50 +306,62 @@ export function ageBins(rows, now = new Date()) {
   return { labels: AGES.map(([k]) => k), counts };
 }
 
-const barsBase = (labels) => ({
-  animation: false,
-  grid: { left: 28, right: 4, top: 8, bottom: 20 },
-  xAxis: { type: "category", data: labels, axisTick: { show: false } },
-  yAxis: { type: "value", minInterval: 1, splitLine: { show: true } },
-  tooltip: { trigger: "axis", confine: true, axisPointer: { type: "shadow" } },
-});
-export const flowOption = (f) => ({ ...barsBase(f.labels), series: [{ name: "Filed", type: "bar", data: f.filed }, { name: "Closed", type: "bar", data: f.closed }] });
-export const ageOption = (b) => ({ ...barsBase(b.labels), series: [{ name: "Open issues", type: "bar", barCategoryGap: "30%", data: b.counts }] });
+export const flowOption = (f) => barsOption(f.labels, [{ name: "Filed", data: f.filed }, { name: "Closed", data: f.closed }]);
+export const ageOption = (b) => barsOption(b.labels, [{ name: "Open issues", data: b.counts }]);
 
-const renderGraphs = () => `<section class="graphs" aria-label="Issue charts">` +
-  `<div class="card"><h2>Filed and closed, 14 days</h2><p>Blue is filed; green is closed.</p><div class="inv-chart" data-chart="flow"></div></div>` +
-  `<div class="card"><h2>Open issues by age</h2><p>Days since the issue was filed.</p><div class="inv-chart" data-chart="age"></div></div></section>`;
+/** What the filters set when a tile is selected, so the table shows the issues behind the number. */
+export const TILE_FILTER = {
+  open: { tile: "", status: "", sort: "", dir: "", limit: "" },
+  filed: { tile: "filed", status: "any", sort: "", dir: "", limit: "" },
+  closed: { tile: "closed", status: "any", sort: "", dir: "", limit: "" },
+  age: { tile: "age", status: "", sort: "age", dir: "desc", limit: "" },
+  runs: { tile: "runs", status: "any", sort: "runs", dir: "desc", limit: "" },
+};
+
+const TOP_RUNS = 10;
+/** The one card under the tiles: what the selected tile counts. */
+function renderDetail(rows, o) {
+  if (o.tile === "runs") {
+    const top = [...rows].filter((r) => !r.part && r.runs > 0).sort((a, b) => b.runs - a.runs).slice(0, TOP_RUNS), max = top[0]?.runs ?? 1;
+    return card("Issues by runs", top.length ? barList(top.map((r) => barRow(`<a href="${esc(r.href)}">${esc(r.title)}</a>`, (r.runs / max) * 100, `${r.runs} · ${esc(money(r.cost))}`)).join("")) : empty("No issue has a run."));
+  }
+  const flowing = o.tile === "filed" || o.tile === "closed";
+  return card(flowing ? "Filed and closed, 14 days" : "Open issues by age", `<p>${flowing ? "Blue is filed; green is closed." : "Days since the issue was filed."}</p><div class="chartbox" data-chart="${flowing ? "flow" : "age"}"></div>`);
+}
 
 // ---- The filters ----
 
-const PRIORITY_OPTIONS = [{ value: "", label: "Any" }, "high", "medium", "low"];
+const PRIORITY_OPTIONS = [{ value: "", label: "All" }, "high", "medium", "low"];
 
-/** The project filter: a button per project with the count the other filters leave. */
+/** The project filter scopes the tiles too: a select in the page head, each option with the count the other filters leave. */
 export function renderProjects(projects, rows, o = {}) {
   const left = filterRows(rows, o, ["project"]);
-  const button = (value, label, n) => `<button type="button" data-project="${esc(value)}" aria-pressed="${(o.project ?? "") === value}">${esc(label)}<span class="n">${n}</span></button>`;
-  return `<div class="pfilter" role="group" aria-label="Project">${button("", "All", left.length)}${projects.map((p) => button(p, p, left.filter((r) => r.project === p).length)).join("")}</div>`;
+  return filterBar([{ label: "Project", name: "project", data: true, value: o.project ?? "", options: [{ value: "", label: `All ${left.length}` }, ...projects.map((p) => ({ value: p, label: `${p} ${left.filter((r) => r.project === p).length}` }))] }]);
 }
 
 export function renderFilters(rows, o = {}) {
   const stages = [...new Set(rows.map((r) => r.stage))].sort();
   const labels = [...new Set(rows.flatMap((r) => r.labels))].sort();
   return filterBar([
-    { label: "Show", name: "status", value: o.status || "any", options: [{ value: "any", label: "Any" }, "open", "done", "dropped"] },
-    { label: "Stage", name: "stage", value: o.stage ?? "", options: [{ value: "", label: "Any" }, ...stages] },
+    { label: "Status", name: "status", value: o.status || "any", options: [{ value: "any", label: "All" }, "open", "done", "dropped"] },
+    { label: "Stage", name: "stage", data: true, value: o.stage ?? "", options: [{ value: "", label: "All" }, ...stages] },
     { label: "Priority", name: "priority", value: o.priority ?? "", options: PRIORITY_OPTIONS },
-    { label: "Label", name: "label", value: o.label ?? "", options: [{ value: "", label: "Any" }, ...labels.map((l) => ({ value: l, label: labelName(l) }))] },
+    { label: "Label", name: "label", data: true, value: o.label ?? "", options: [{ value: "", label: "All" }, ...labels.map((l) => ({ value: l, label: labelName(l) }))] },
   ]);
 }
 
 /** The parts that change with the filters. The search box stays out of them, so it keeps the focus while the reader types. */
 function renderLive(projects, rows, o) {
   const shown = filterRows(rows, o).length;
-  // The tiles and charts follow project, label, priority and search, not status or stage.
+  // The tiles and charts follow project, label, priority and search, not status, stage or the selected tile.
+  const scoped = filterRows(rows, o, ["status", "stage", "tile"]);
   return {
-    filters: renderProjects(projects, rows, o) + renderFilters(rows, o),
-    numbers: renderTiles(stats(filterRows(rows, o, ["status", "stage"]))),
-    table: `<div class="sh"><h2>Issues</h2><span class="count">${shown}</span></div>${renderTable(rows, o)}`,
+    scope: renderProjects(projects, rows, o),
+    filters: renderFilters(rows, o),
+    numbers: renderTiles(stats(scoped), o.tile),
+    detail: renderDetail(scoped, o),
+    count: sectionHead("Issues", { count: shown }),
+    table: renderTable(rows, o),
   };
 }
 
@@ -409,12 +375,14 @@ export function projectOptions(keys, project) {
 }
 
 let drawn = [], live = null;
+/** Change the query in place: replaceState fires no hashchange, so the shell does not fetch and render again. */
+const setQuery = (changes) => { setHash(changes); refill(); };
 
 function draw(root) {
   for (const c of drawn) c.dispose();
   drawn = [];
-  const rows = filterRows(live.rows, live.o(), ["status", "stage"]);
-  const panel = (name, option) => { const el = root.querySelector(`.inv-chart[data-chart="${name}"]`); if (!el) return; try { drawn.push(chart(el, option)); } catch (e) { console.error("inventory chart failed", e); } };
+  const rows = filterRows(live.rows, live.o(), ["status", "stage", "tile"]);
+  const panel = (name, option) => { const el = root.querySelector(`.chartbox[data-chart="${name}"]`); if (!el) return; try { drawn.push(chart(el, option)); } catch (e) { console.error("inventory chart failed", e); } };
   panel("flow", flowOption(flow(rows)));
   panel("age", ageOption(ageBins(rows)));
 }
@@ -424,16 +392,18 @@ function refill() {
   const root = live?.root;
   if (!root?.isConnected) return;
   const parts = renderLive(live.projects, live.rows, live.o());
-  root.querySelector("#inv-filters").innerHTML = parts.filters;
-  root.querySelector("#inv-numbers").innerHTML = parts.numbers;
-  root.querySelector("#issues-table").innerHTML = parts.table;
+  for (const [id, html] of [["inv-scope", parts.scope], ["inv-filters", parts.filters], ["inv-numbers", parts.numbers], ["inv-detail", parts.detail], ["inv-count", parts.count], ["issues-table", parts.table]]) root.querySelector(`#${id}`).innerHTML = html;
   draw(root);
 }
 
 /** Draws the charts, keeps the data for the filters, and fills the form's Project select from the registry's keys. */
 export async function mount(root, d) {
   live = { root, rows: issueRows(d), projects: projectsOf(d), o: () => hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? "")) };
-  if (root.querySelector?.(".inv-chart")) draw(root);
+  if (root.querySelector?.(".chartbox")) draw(root);
+  onTile(root.querySelector?.("#inv-numbers"), (k) => {
+    setQuery(TILE_FILTER[k]);
+    root.querySelector(`button[data-tile="${k}"]`)?.focus();
+  });
   const table = root.querySelector?.("#issues-table");
   if (table) table.addEventListener("click", (ev) => {
     const btn = ev.target.closest?.("button[data-cancel]");
@@ -467,16 +437,16 @@ export function renderForm(rows, o = {}) {
     `<label>Labels <input name="labels" placeholder="comma separated"></label>` +
     `<label><input type="checkbox" name="spec"> The text is a spec: build it in the factory</label>` +
     `<label>After <input name="after" placeholder="repo-n, repo-n.k"></label>` +
-    `<button type="submit" class="cmd primary">File issue</button> <span class="form-msg" role="status"></span></form></details>`;
+    `<button type="submit" class="act primary">File issue</button> <span class="form-msg" role="status"></span></form></details>`;
 }
 
 export function renderContents(d, o = {}) {
   const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o);
-  return `${STYLE_CONTENTS}<div class="page contents">${pageHead("Issues")}` +
-    `<div id="inv-numbers">${parts.numbers}</div>${renderGraphs()}` +
-    `<div class="inv-q"><input type="search" name="q" value="${esc(o.q ?? "")}" placeholder="Search titles, ids, projects, labels" aria-label="Search the issues" data-ui="inv-search"></div>` +
+  return `<div class="page sp contents">${pageHead("Issues", { aside: `<div id="inv-scope">${parts.scope}</div>` })}` +
+    `<div id="inv-numbers">${parts.numbers}</div><div id="inv-detail">${parts.detail}</div>` +
+    `<section class="card" aria-label="Issues"><div id="inv-count">${parts.count}</div>${searchBox("inv-search", o.q, "Search titles, ids, projects, labels")}` +
     `<div id="inv-filters" data-ui="contents-filter">${parts.filters}</div>` +
-    `<div id="issues-table">${parts.table}</div>` +
+    `<div id="issues-table">${parts.table}</div></section>` +
     renderForm(d?.issues ?? [], o) + `</div>`;
 }
 
@@ -502,13 +472,13 @@ const FORM = 'form="issue-edit"';
 /** The head of the Issue page: the title and the Edit button, or the title's input and Save and Cancel. */
 const issueHead = (d, ref) => `<header class="ph"><h1 class="view-only">${esc(d.title)}</h1>` +
   `<input class="edit-only title-edit" name="title" ${FORM} required aria-label="Title" value="${esc(d.title)}">` +
-  `<div class="aside"><button type="button" class="cmd view-only" data-edit="start">Edit</button>` +
-  `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="form-msg" role="status"></span> <button type="button" class="cmd" data-edit="cancel">Cancel</button> <button type="submit" class="cmd primary">Save</button></form></div></header>`;
+  `<div class="aside"><button type="button" class="act view-only" data-edit="start">Edit</button>` +
+  `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="form-msg" role="status"></span> <button type="button" class="act" data-edit="cancel">Cancel</button> <button type="submit" class="act primary">Save</button></form></div></header>`;
 
 /** The form that appends a note. */
 const renderNoteForm = (d, ref) => `<form data-ui="issue-note" class="stack" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}">` +
   `<label>Add a note <textarea name="text" rows="3" required></textarea></label>` +
-  `<button type="submit" class="cmd">Add note</button> <span class="form-msg" role="status"></span></form>`;
+  `<button type="submit" class="act">Add note</button> <span class="form-msg" role="status"></span></form>`;
 
 /** Machine note prefixes, matched after the `- ` and the stamp are removed. */
 const MACHINE = /^(?:triage|acceptance|planner|standing|always|firefighter|sealed checks|its goals are all done):/;
@@ -551,7 +521,7 @@ export function renderIssue(d) {
   const place = d.issue ? [project, ["issues", inventory], [localId(d.issue.id, d.repo), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];
   const part = (id, title, name, text) => (text || !goals.length ? `<div class="sh${text ? "" : " edit-only"}"><h2 id="h-${id}">${title}</h2></div><div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>` : "");
   const life = renderLifetime(d);
-  return `${LIFETIME_STYLE}<div class="page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) +
+  return `<div class="page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) +
     `<div class="status-row">${d.derived ? stateBadge(d.derived.stage) : badge(d.status)}${chips(fm.labels)}</div>` +
     `<dl class="facts">${facts}</dl>` +
     part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
@@ -562,14 +532,6 @@ export function renderIssue(d) {
 // Interaction: the shell renders with innerHTML and has no hooks, so the view
 // listens on the document. Filters live in the route's query, the form posts.
 if (typeof document !== "undefined") {
-  /** Change the query in place: replaceState fires no hashchange, so the shell does not fetch and render again. */
-  const setQuery = (changes) => {
-    const [path, qs = ""] = location.hash.replace(/^#/, "").split("?");
-    const q = new URLSearchParams(qs);
-    for (const [name, value] of Object.entries(changes)) { if (value) q.set(name, value); else q.delete(name); }
-    history.replaceState(null, "", `#${path}${q.toString() ? `?${q}` : ""}`);
-    refill();
-  };
   const here = () => hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? ""));
   document.addEventListener("click", (e) => {
     const t = e.target.closest ? e.target : null;
@@ -579,15 +541,13 @@ if (typeof document !== "undefined") {
       const dir = cur?.key === key ? -cur.dir : DOWN_FIRST.has(key) ? -1 : 1;
       return setQuery({ sort: key, dir: dir > 0 ? "asc" : "desc" });
     }
-    const project = t?.closest("#inv-filters button[data-project]");
-    if (project) return setQuery({ project: project.dataset.project, limit: "" });
     const seg = t?.closest("#inv-filters .seg button");
     if (seg) return setQuery({ [seg.closest(".seg").dataset.name]: seg.dataset.value, limit: "" });
     const more = t?.closest("#issues-table button[data-more]");
     if (more) setQuery({ limit: String(here().limit + Number(more.dataset.more)) });
   });
   document.addEventListener("change", (e) => {
-    const f = e.target.closest?.("#inv-filters select[name]");
+    const f = e.target.closest?.("#inv-filters select[name], #inv-scope select[name]");
     if (f) setQuery({ [f.name]: f.value, limit: "" });
   });
   let typing = 0;

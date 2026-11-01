@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { empty, error, esc, filterBar, localId, md, pageHead, pager, sortHead, when } from "../lib.js";
+import { barList, barRow, card, crumb, dataTable, day, empty, error, esc, filterBar, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -18,7 +18,7 @@ const link = (title) => `<a href="#/memory/${encodeURIComponent(title)}">${esc(t
 const head = (id, title, n) => `<div class="sh"><h2 id="h-${id}">${esc(title)}</h2>${n === undefined ? "" : `<span class="count">${n}</span>`}</div>`;
 
 const table = (rows) => rows.length
-  ? `<table class="tbl"><tbody>${rows.map(([k, v]) => `<tr><td>${esc(k === "" ? "(none)" : k)}</td><td class="num">${v}</td></tr>`).join("")}</tbody></table>` : "";
+  ? dataTable("", rows.map(([k, v]) => `<tr><td>${esc(k === "" ? "(none)" : k)}</td><td class="num">${v}</td></tr>`).join("")) : "";
 
 export function renderHome(m) {
   const secs = m.home.map((s) =>
@@ -78,7 +78,7 @@ function renderSemantic(m, s) {
   }).join("");
   if (!m.exists) return mem + none("No vault yet.", "Run <code>vault init</code> to make one.");
   return mem + `<h3>Notes by kind <span class="count">${s.notes.length}</span></h3><div class="kinds">${lists}</div>` +
-    `<details><summary>Counts by kind and scope</summary><div class="two"><div>${table(Object.entries(m.byKind))}</div><div>${table(Object.entries(m.byScope)) || empty("No notes.")}</div></div></details>` +
+    `<details><summary>Counts by kind and scope</summary><div class="pair"><div>${table(Object.entries(m.byKind))}</div><div>${table(Object.entries(m.byScope)) || empty("No notes.")}</div></div></details>` +
     `<details><summary>Home</summary>${renderHome(m)}</details>`;
 }
 
@@ -95,7 +95,7 @@ function renderProcedural(p) {
   const skills = p.skills.length ? `<p class="chips">${p.skills.map((n) => `<a class="chip" href="#/skills/${encodeURIComponent(n)}">${esc(n)}</a>`).join("")}</p>` : none("No skills.", "Folders under <code>skills/</code> fill this.");
   const claude = p.claudeMd ? `<p><code>${esc(p.claudeMd.path)}</code> ${q(`${p.claudeMd.lines} lines, written ${ago(p.claudeMd.at)}`)}</p>` : none("No identity/CLAUDE.md.");
   const hooks = p.hooks.length
-    ? `<table class="tbl"><tbody>${p.hooks.map((h) => `<tr><td>${esc(h.event)}${h.matcher ? ` ${q(esc(h.matcher))}` : ""}</td><td class="wide"><code>${esc(h.command)}</code></td><td class="num">${h.calls === null ? "–" : h.calls}</td></tr>`).join("")}</tbody></table>`
+    ? dataTable("", p.hooks.map((h) => `<tr><td>${esc(h.event)}${h.matcher ? ` ${q(esc(h.matcher))}` : ""}</td><td class="wide" title="${esc(h.command)}"><code>${esc(h.command)}</code></td><td class="num">${h.calls === null ? "–" : h.calls}</td></tr>`).join(""))
     : none("No hooks in ~/.claude/settings.json.", "The hooks entry of that file fills this, with calls from Langfuse.");
   return `<div class="kinds">${sub("Skills", p.skills.length, skills + `<p class="hint"><a href="#/skills">Skill use</a></p>`)}${sub("Rules", undefined, claude)}${sub("Hooks, calls in 7 days", p.hooks.length, hooks)}</div>`;
 }
@@ -141,59 +141,11 @@ const EMPTY_TYPES = {
   gates: { corrections: [], proposals: [] },
 };
 
-const STYLE = `<style>
-.memory { display: flex; flex-direction: column; gap: 16px; }
-.memory .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
-.memory .tile { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 16px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; color: var(--ink-2); }
-.memory .tile:hover, .memory .tile[aria-pressed="true"] { border-color: var(--run); }
-.memory .tile:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.memory .tile .k { color: var(--muted); font: 600 var(--fs-xs) var(--sans); letter-spacing: .08em; text-transform: uppercase; }
-.memory .tile b { font: 700 36px/1 var(--metric); color: var(--ink); font-variant-numeric: lining-nums tabular-nums; }
-.memory .tile small { font-size: var(--fs-sm); }
-.memory .st { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
-.memory .st.good { color: var(--done); } .memory .st.warn { color: var(--need); }
-.memory .dates { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 0; font-size: var(--fs-xs); }
-.memory .dates dt { color: var(--muted); } .memory .dates dd { margin: 0; color: var(--ink); }
-.memory .card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 16px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
-.memory .card h2 { margin: 0; font: 600 var(--fs-lg)/1.3 var(--sans); color: var(--ink); }
-.memory .card h2 em { font-style: normal; font-weight: 500; color: var(--muted); }
-.memory .broad { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
-.memory .barrow { display: grid; grid-template-columns: 100px minmax(40px, 1fr) 150px; gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid var(--rule-2); font-size: var(--fs-sm); }
-.memory .barrow > span:first-child { color: var(--ink); }
-.memory .barrow > span:last-child { text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.memory .barrow i { display: block; height: 10px; background: var(--muted); border-radius: 0 3px 3px 0; }
-.memory .barrow.top i { background: var(--stuck); }
-.memory .stack { display: flex; height: 10px; overflow: hidden; border-radius: 3px; background: var(--sunk); }
-.memory .c-use { background: var(--run); } .memory .c-stale { background: var(--muted); } .memory .c-never { background: var(--rule); }
-.memory .key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--fs-xs); color: var(--muted); }
-.memory .key span { display: inline-flex; align-items: center; gap: 6px; } .memory .key i { width: 10px; height: 10px; border-radius: 2px; }
-.memory .nb-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
-.memory .nb-tools input[type="search"] { flex: 1 1 240px; box-sizing: border-box; min-height: 36px; padding: 0 12px; font: var(--fs-md) var(--sans); color: var(--ink); background: var(--sunk); border: 1px solid var(--rule); border-radius: 6px; }
-.memory .nb-tools .fbar { margin: 0; }
-.memory #mem-filters .seg { height: auto; flex-wrap: wrap; } .memory #mem-filters .seg button { min-height: 28px; white-space: nowrap; }
-.memory .browse { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; align-items: start; }
-.memory .ins { position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow: auto; }
-.memory .ins h3 { margin: 0; font: 400 18px/1.35 var(--display); color: var(--ink); overflow-wrap: anywhere; }
-.memory .ins h4 { margin: 4px 0 0; color: var(--muted); font: 600 var(--fs-xs) var(--sans); letter-spacing: .08em; text-transform: uppercase; }
-.memory .ins ul { margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
-.memory .ins li { padding: 4px 0; border-top: 1px solid var(--rule-2); overflow-wrap: anywhere; }
-.memory .ins .note { font-size: var(--fs-sm); overflow-wrap: anywhere; }
-.memory .ins .warnbox { padding: 8px 10px; font-size: var(--fs-sm); color: var(--ink); border: 1px solid var(--stuck); border-radius: 6px; }
-.memory .ins .pill { align-self: flex-start; }
-.memory .pill { font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; padding: 1px 6px; border: 1px solid var(--rule); border-radius: 4px; color: var(--muted); }
-.memory .pill.use { color: var(--done); border-color: var(--done); } .memory .pill.stale { color: var(--need); border-color: var(--need); } .memory .pill.lint { color: var(--stuck); border-color: var(--stuck); }
-.memory tr.nrow { cursor: pointer; } .memory tr.nrow[aria-selected="true"] { background: var(--sunk); box-shadow: inset 3px 0 0 var(--run); }
-.memory td.wide a { color: inherit; text-decoration: none; } .memory tr.nrow:hover td.wide a { text-decoration: underline; }
-@media (min-width: 1200px) { .memory .tiles { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; } .memory .tile { padding: 12px; } }
-@media (max-width: 1100px) { .memory .browse { grid-template-columns: minmax(0, 1fr); } .memory .ins { position: static; max-height: none; } }
-@media (max-width: 720px) { .memory .broad { grid-template-columns: minmax(0, 1fr); } .memory .barrow { grid-template-columns: 1fr 150px; } .memory .barrow > div { grid-column: 1 / -1; grid-row: 2; } }
-</style>`;
-
 const DAY = 86_400_000, STEP = 50;
 const KNOWLEDGE = ["decision", "gotcha", "project", "entity", "concept"];
 const STATUS = { use: "In use", stale: "Stale", never: "Never read", lint: "Lint problem" };
 const fmt = (n) => Number(n).toLocaleString("en-US");
-const shortDay = (s) => { const t = Date.parse(`${String(s).slice(0, 10)}T00:00`); return t ? new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""; };
+const shortDay = (s) => day(`${String(s).slice(0, 10)}T00:00`);
 
 /** A note's status: a refusal first; else in use when recall returned it in the last 7 days, stale when earlier, never when it never did. */
 export function noteStatus(n, now = Date.now()) {
@@ -236,9 +188,8 @@ export function typeTiles(m, rows) {
 }
 
 const dateOr = (s) => (s ? esc(shortDay(s) || s) : "–");
-const renderTiles = (m, rows, type) => `<section class="tiles" aria-label="Memory types">${typeTiles(m, rows).map((t) =>
-  `<button type="button" class="tile" data-type="${t.id}" aria-pressed="${t.id === type}"><span class="k">${t.name}</span><b>${typeof t.n === "number" ? fmt(t.n) : esc(t.n)}</b><small>${esc(t.unit)}</small><span class="st ${t.tone}">${esc(t.status)}</span>` +
-  `<dl class="dates"><dt>Write</dt><dd>${dateOr(t.write)}</dd><dt>Use</dt><dd>${dateOr(t.use)}</dd></dl></button>`).join("")}</section>`;
+const renderTiles = (m, rows, type) => tiles("Memory types", typeTiles(m, rows).map((t) => tile({ k: t.name, v: typeof t.n === "number" ? fmt(t.n) : t.n, key: t.id, on: t.id === type,
+  body: `${small(t.unit)}<span class="st ${t.tone}">${esc(t.status)}</span><dl class="dates"><dt>Write</dt><dd>${dateOr(t.write)}</dd><dt>Use</dt><dd>${dateOr(t.use)}</dd></dl>` })).join(""));
 
 /** Each knowledge kind's notes by when recall last returned them. */
 function readChart(rows) {
@@ -247,9 +198,9 @@ function readChart(rows) {
     if (!of.length) return "";
     const week = of.filter((n) => n.read && noteStatusRead(n) === "use").length, older = of.filter((n) => n.read).length - week, never = of.length - week - older;
     const w = (x) => ((x / of.length) * 100).toFixed(2);
-    return `<div class="barrow"><span>${esc(k)}</span><div class="stack" role="img" aria-label="${week} in the last 7 days, ${older} earlier, ${never} never"><div class="c-use" style="width:${w(week)}%"></div><div class="c-stale" style="width:${w(older)}%"></div><div class="c-never" style="width:${w(never)}%"></div></div><span>${week} · ${older} · ${never} never</span></div>`;
+    return barRow(esc(k), 0, `${week} · ${older} · ${never} never`, { bar: `<span class="stack" role="img" aria-label="${week} in the last 7 days, ${older} earlier, ${never} never"><span class="c-use" style="width:${w(week)}%"></span><span class="c-stale" style="width:${w(older)}%"></span><span class="c-never" style="width:${w(never)}%"></span></span>` });
   }).join("");
-  return `<h3>When recall last returned each note</h3><div class="key"><span><i class="c-use"></i>Last 7 days</span><span><i class="c-stale"></i>Earlier</span><span><i class="c-never"></i>Never</span></div><div>${lines}</div><p class="hint">The recall log keeps the last return date of each note. Its oldest date is ${esc(shortDay(oldest(rows)) || "none")}, so "never" means never since then.</p>`;
+  return `<h3>When recall last returned each note</h3><div class="key"><span><i class="c-use"></i>Last 7 days</span><span><i class="c-stale"></i>Earlier</span><span><i class="c-never"></i>Never</span></div>${barList(lines)}<p class="hint">The recall log keeps the last return date of each note. Its oldest date is ${esc(shortDay(oldest(rows)) || "none")}, so "never" means never since then.</p>`;
 }
 const oldest = (rows) => rows.map((n) => n.read).filter(Boolean).sort()[0] ?? "";
 /** The recency alone, for a note with a refusal too. */
@@ -267,7 +218,7 @@ function renderDetail(m, rows, type) {
     parametric: () => renderParametric(),
   };
   const name = typeTiles(m, rows).find((x) => x.id === type)?.name ?? "";
-  return `<section class="card" id="mem-detail" aria-label="${esc(name)}"><h2>${esc(name)}</h2>${(bodies[type] ?? bodies.semantic)()}</section>`;
+  return card(name, (bodies[type] ?? bodies.semantic)(), { id: "mem-detail" });
 }
 
 /** Lint by rule, largest first. */
@@ -281,17 +232,15 @@ export function lintRules(lint) {
 
 function renderBroad(m) {
   const lint = m.lint ?? { refuse: [], warn: [] }, rules = lintRules(lint), top = Math.max(1, ...rules.map((r) => r.refused + r.warned));
-  const lintCard = `<section class="card" aria-label="Lint"><h2>Lint <em>${lint.refuse.length} refusals, ${lint.warn.length} warnings</em></h2>` +
-    (rules.length ? `<div>${rules.map((r, i) => `<div class="barrow${i === 0 && r.refused ? " top" : ""}"><span>${esc(r.rule)}</span><div><i style="width:${(((r.refused + r.warned) / top) * 100).toFixed(1)}%"></i></div><span>${[r.refused && `${r.refused} refused`, r.warned && `${r.warned} warned`].filter(Boolean).join(", ")}</span></div>`).join("")}</div>` : empty("Lint finds nothing.")) +
-    `<details class="fold"><summary>Every finding</summary>${renderHealth(m)}</details></section>`;
+  const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${r.refused} refused`, r.warned && `${r.warned} warned`].filter(Boolean).join(", "), { top: i === 0 && r.refused > 0 })).join("")) : empty("Lint finds nothing.")) +
+    `<details class="fold"><summary>Every finding</summary>${renderHealth(m)}</details>`, { count: `${lint.refuse.length} refusals, ${lint.warn.length} warnings` });
   const t = { ...EMPTY_TYPES, ...(m.types ?? {}) }, week = m.factsWeek ?? { days: 7, kept: 0, rejected: 0 }, all = week.kept + week.rejected;
-  const gates = `<section class="card" aria-label="Factory memory gates"><h2>Factory memory gates <em>${week.days} days</em></h2>` +
-    `<div class="stack" role="img" aria-label="${week.kept} kept, ${week.rejected} rejected"><div class="c-use" style="width:${all ? ((week.kept / all) * 100).toFixed(1) : 0}%"></div></div>` +
+  const gates = card("Factory memory gates", `<div class="stack" role="img" aria-label="${week.kept} kept, ${week.rejected} rejected"><div class="c-use" style="width:${all ? ((week.kept / all) * 100).toFixed(1) : 0}%"></div></div>` +
     `<div class="key"><span><i class="c-use"></i>${week.kept} kept</span><span><i class="c-never"></i>${week.rejected} rejected</span><span>${t.gates.corrections.length} corrections</span><span>${t.gates.proposals.length} proposals</span></div>` +
-    `<details class="fold" id="gates"><summary>Facts runs, corrections and proposals</summary>${renderGates(t.gates, m.facts, m.factsWeek)}</details></section>`;
-  const writes = `<section class="card" aria-label="Recent writes"><h2>Recent writes <em>${(m.writes ?? []).length}</em></h2>${renderWrites({ writes: (m.writes ?? []).slice(0, 5) })}` +
-    ((m.writes ?? []).length > 5 ? `<details class="fold"><summary>${m.writes.length - 5} more</summary>${renderWrites({ writes: m.writes.slice(5) })}</details>` : "") + `</section>`;
-  return `<div class="broad">${lintCard}${gates}</div>${writes}`;
+    `<details class="fold" id="gates"><summary>Facts runs, corrections and proposals</summary>${renderGates(t.gates, m.facts, m.factsWeek)}</details>`, { count: `${week.days} days` });
+  const writes = card("Recent writes", renderWrites({ writes: (m.writes ?? []).slice(0, 5) }) +
+    ((m.writes ?? []).length > 5 ? `<details class="fold"><summary>${m.writes.length - 5} more</summary>${renderWrites({ writes: m.writes.slice(5) })}</details>` : ""), { count: (m.writes ?? []).length });
+  return `<div class="pair">${lintCard}${gates}</div>${writes}`;
 }
 
 /** The browser's state from the route's query: ?type=semantic&status=never&kind=gotcha&scope=aleph&q=text&sort=read&dir=desc&note=Title&limit=100. */
@@ -316,24 +265,24 @@ export function browseRows(rows, o, hits = []) {
   return out.sort((a, b) => b.updated.localeCompare(a.updated) || a.title.localeCompare(b.title));
 }
 
-const pill = (s) => `<span class="pill ${s}">${esc(STATUS[s])}</span>`;
+const TONE = { use: "done", stale: "need", never: "quiet", lint: "stuck" };
+const pill = (s) => `<span class="badge ${TONE[s]}">${esc(STATUS[s])}</span>`;
 
 function renderNoteTable(rows, o, hits) {
   const all = browseRows(rows, o, hits);
   if (!all.length) return empty("No note matches.", "Loosen the filters.");
   const shown = all.slice(0, o.limit), sort = o.sort ?? (o.q.trim() ? null : { key: "updated", dir: -1 });
   const h = (label, key) => sortHead(label, key, sort);
-  return `<div class="tscroll"><table class="tbl"><thead><tr>${h("Title", "title")}${h("Kind", "kind")}${h("Scope", "scope")}${h("Read", "read")}${h("Written", "updated")}${h("Status", "status")}</tr></thead><tbody>` +
-    shown.map((n) => `<tr class="nrow" data-note="${esc(n.title)}" aria-selected="${n.title === o.note}"><td class="wide" title="${esc(n.title)}"><a href="#/memory/${encodeURIComponent(n.title)}">${esc(n.title)}</a></td><td>${esc(n.kind)}</td><td>${esc(n.scope)}</td><td class="time">${n.read ? esc(shortDay(n.read)) : "never"}</td><td class="time">${esc(shortDay(n.updated))}</td><td>${pill(n.status)}</td></tr>`).join("") +
-    `</tbody></table></div>${pager(shown.length, all.length, STEP)}`;
+  return dataTable(`${h("Title", "title")}${h("Kind", "kind")}${h("Scope", "scope")}${h("Read", "read")}${h("Written", "updated")}${h("Status", "status")}`,
+    shown.map((n) => `<tr class="nrow" data-note="${esc(n.title)}" aria-selected="${n.title === o.note}"><td class="wide" title="${esc(n.title)}"><a href="#/memory/${encodeURIComponent(n.title)}">${esc(n.title)}</a></td><td>${esc(n.kind)}</td><td>${esc(n.scope)}</td><td class="time">${n.read ? esc(shortDay(n.read)) : "never"}</td><td class="time">${esc(shortDay(n.updated))}</td><td>${pill(n.status)}</td></tr>`).join("")) + pager(shown.length, all.length, STEP);
 }
 
 function renderNoteTools(rows, o) {
   const inKind = ofKind(rows, o.kind), c = statusCounts(inKind), scopes = [...new Set(rows.map((n) => n.scope).filter(Boolean))].sort(), kinds = [...new Set(rows.map((n) => n.kind))].filter((k) => !KNOWLEDGE.includes(k)).sort();
   return filterBar([
     { label: "", name: "status", value: o.status, options: [{ value: "", label: `All ${inKind.length}` }, ...Object.entries(STATUS).map(([k, v]) => ({ value: k, label: `${k === "lint" ? "Lint" : v} ${c[k]}` }))] },
-    { label: "Kind", name: "kind", value: o.kind, options: [{ value: "", label: "Knowledge" }, ...KNOWLEDGE, ...kinds] },
-    { label: "Scope", name: "scope", value: o.scope, options: [{ value: "", label: "All" }, ...scopes] },
+    { label: "Kind", name: "kind", data: true, value: o.kind, options: [{ value: "", label: "Knowledge" }, ...KNOWLEDGE, ...kinds] },
+    { label: "Scope", name: "scope", data: true, value: o.scope, options: [{ value: "", label: "All" }, ...scopes] },
   ]);
 }
 
@@ -353,20 +302,14 @@ export function renderInspector(n, row) {
 
 export function renderMemory(m, o = options()) {
   const rows = noteRows(m);
-  return `${STYLE}<div class="page memory">${pageHead("Memory")}` +
+  return `<div class="page sp memory">${pageHead("Memory")}` +
     `<div id="mem-board">${renderTiles(m, rows, o.type)}</div><div id="mem-detail-box">${renderDetail(m, rows, o.type)}</div>` + renderBroad(m) +
-    (m.exists ? `<section aria-label="Notes" class="memory" id="mem-notes"><div class="sh"><h2>Notes</h2></div><div class="nb-tools"><input type="search" name="q" data-ui="mem-search" value="${esc(o.q)}" placeholder="Search titles, aliases and bodies" aria-label="Search the vault"></div><div id="mem-filters" data-ui="mem-filter">${renderNoteTools(rows, o)}</div>` +
-      `<div class="browse"><div id="mem-table">${renderNoteTable(rows, o, [])}</div><aside class="card ins" id="mem-inspector" aria-label="Note inspector" aria-live="polite">${renderInspector(null)}</aside></div></section>` : "") + `</div>`;
+    (m.exists ? `<section aria-label="Notes" id="mem-notes">${sectionHead("Notes")}${searchBox("mem-search", o.q, "Search titles, aliases and bodies")}<div id="mem-filters" data-ui="mem-filter">${renderNoteTools(rows, o)}</div>` +
+      `<div class="browse"><div class="card" id="mem-table">${renderNoteTable(rows, o, [])}</div><aside class="card ins" id="mem-inspector" aria-label="Note inspector" aria-live="polite">${renderInspector(null)}</aside></div></section>` : "") + `</div>`;
 }
 
 let live = null;
 const here = () => options(new URLSearchParams(location.hash.split("?")[1] ?? ""));
-const setQuery = (changes) => {
-  const [path, qs = ""] = location.hash.replace(/^#/, "").split("?");
-  const q = new URLSearchParams(qs);
-  for (const [k, v] of Object.entries(changes)) { if (v) q.set(k, v); else q.delete(k); }
-  history.replaceState(null, "", `#${path}${q.toString() ? `?${q}` : ""}`);
-};
 
 function redrawNotes() {
   if (!live?.root.isConnected) return;
@@ -402,6 +345,12 @@ async function search(q) {
 
 function mount(root, m) {
   live = { root, m, rows: noteRows(m), hits: [] };
+  onTile(root.querySelector("#mem-board"), (type) => {
+    setQuery({ type });
+    root.querySelector("#mem-board .tiles").outerHTML = renderTiles(m, live.rows, type);
+    root.querySelector("#mem-detail-box").innerHTML = renderDetail(m, live.rows, type);
+    root.querySelector(`button[data-tile="${type}"]`)?.focus();
+  });
   const o = here();
   if (o.q) search(o.q);
   if (o.note) inspect(o.note);
@@ -411,15 +360,7 @@ if (typeof document !== "undefined") {
   document.addEventListener("click", (e) => {
     const t = e.target.closest ? e.target : null;
     if (!t?.closest(".page.memory") || !live) return;
-    const tile = t.closest("button[data-type]");
-    if (tile) {
-      setQuery({ type: tile.dataset.type });
-      const o = here();
-      live.root.querySelector("#mem-board").innerHTML = renderTiles(live.m, live.rows, o.type);
-      live.root.querySelector("#mem-detail-box").innerHTML = renderDetail(live.m, live.rows, o.type);
-      return;
-    }
-    const seg = t.closest("#mem-filters .seg button");
+        const seg = t.closest("#mem-filters .seg button");
     if (seg) { setQuery({ [seg.closest(".seg").dataset.name]: seg.dataset.value, limit: "" }); return redrawNotes(); }
     const sort = t.closest("#mem-table button[data-sort]");
     if (sort) {
@@ -457,7 +398,7 @@ const crumbs = (t) => (t.length ? `<ul>${t.map((n) => `<li>${link(n.title)} <spa
 /** One note: frontmatter, body (Markdown, [[links]] to notes), outgoing links and backlinks. */
 export function renderNote(n) {
   const fm = Object.entries(n.frontmatter).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(Array.isArray(v) ? v.join(", ") : v)}</dd></div>`).join("");
-  return `<div class="page"><p class="quiet"><a href="#/memory">← Memory</a></p>${pageHead(n.title, { count: n.frontmatter?.kind ?? "" })}` +
+  return `<div class="page">${crumb("#/memory", [["memory", "#/memory"], [n.title]])}${pageHead(n.title)}` +
     (n.archived ? `<p class="quiet">Archived.</p>` : "") +
     `<p class="hint"><code>${esc(n.path)}</code></p>` +
     (fm ? `<dl class="facts">${fm}</dl>` : "") +

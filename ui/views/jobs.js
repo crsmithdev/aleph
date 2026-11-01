@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (one job's runs, result, checks,
 // logs, and a diff loaded on demand). Render functions take the /api/jobs
 // objects and return HTML strings, with no DOM, so tests can call them.
-import { costHtml, STATES, badge, cmd, crumb, empty, esc, filterBar, idLink, localId, md, pageHead, pager, shortModel, span, when } from "../lib.js";
+import { costHtml, STATES, badge, card, cmd, crumb, dataTable, empty, esc, filterBar, goQuery, hashQuery, idLink, localId, md, pageHead, pager, searchBox, setQuery, shortModel, sortHead, span, when, wireScope } from "../lib.js";
 
 
 /** The list's data URL: the filters in the hash go to the API. */
@@ -21,7 +21,7 @@ export const view = {
   api: listUrl,
   refresh: 30,
   render: (jobs, _params, query) => renderJobs(jobs, Object.fromEntries(query ?? [])),
-  mount: (root, jobs, query) => mountJobs(root, jobs, Object.fromEntries(query ?? [])),
+  mount: (root, jobs) => mountJobs(root, jobs),
 };
 
 /** The Job view, routed at `#/jobs/<name>` through ui/views/job.js. */
@@ -41,51 +41,72 @@ const href = (path, params = {}) => {
 
 const PAGE = 50;
 
-export function renderFilters(jobs, f = {}) {
+const WINDOW = [{ value: "", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }];
+
+/** What scopes the page and goes to the API: the project and the window. */
+export function renderScope(jobs, f = {}) {
   const repos = [...new Set([...jobs.map((j) => j.repo), f.repo].filter(Boolean))].sort();
   return filterBar([
-    { label: "Project", name: "repo", value: f.repo || "", options: [{ value: "", label: "All" }, ...repos] },
-    { label: "Condition", name: "condition", value: f.condition || "", options: [{ value: "", label: "All" }, ...STATES] },
-    { label: "Window", name: "days", value: f.days || "", options: [{ value: "", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }] },
+    { label: "Project", name: "repo", data: true, value: f.repo || "", options: [{ value: "", label: "All" }, ...repos] },
+    { label: "Window", name: "days", value: f.days || "", options: WINDOW },
   ]);
 }
 
+export const renderFilters = (f = {}) => filterBar([{ label: "State", name: "condition", value: f.condition || "", options: [{ value: "", label: "All" }, ...STATES] }]);
+
+const titleOf = (j) => j.item?.title || j.name;
+const took = (j) => (j.ended ? Date.parse(j.ended) - Date.parse(j.started) : -1);
+const SORT = { name: (j) => j.name, title: titleOf, condition: (j) => j.condition, repo: (j) => j.repo, model: (j) => shortModel(j.model), took, cost: (j) => j.cost ?? -1, started: (j) => Date.parse(j.started) || 0 };
+/** The keys that start with the largest first. */
+const DOWN_FIRST = new Set(["took", "cost", "started"]);
+const sortOf = (f) => (f.sort && SORT[f.sort] ? { key: f.sort, dir: f.dir === "asc" ? 1 : -1 } : { key: "started", dir: -1 });
+
+/** The jobs the search keeps, in the sort's order. */
+export function shownJobs(jobs, f = {}) {
+  const q = (f.q ?? "").trim().toLowerCase(), sort = sortOf(f), by = SORT[sort.key];
+  return jobs.filter((j) => !q || `${j.name} ${titleOf(j)}`.toLowerCase().includes(q)).sort((a, b) => {
+    const x = by(a), y = by(b);
+    return (typeof x === "number" ? x - y : String(x).localeCompare(String(y))) * sort.dir;
+  });
+}
+
+export function renderJobsTable(jobs, f = {}) {
+  const all = shownJobs(jobs, f);
+  if (!all.length) return empty("No job matches.", "Widen the window or clear a filter.");
+  const shown = all.slice(0, Math.max(PAGE, Number.parseInt(f.limit, 10) || PAGE)), sort = sortOf(f);
+  const h = (label, key, c) => sortHead(label, key, sort, c);
+  // Columns: id, title, state, project, model, then took, cost, started.
+  const rows = shown.map((j) => {
+    const url = href(`/jobs/${encodeURIComponent(j.name)}`);
+    return `<tr class="rowlink"><td>${idLink(localId(j.name, j.repo), url)}</td><td class="wide" title="${esc(titleOf(j))}"><a href="${esc(url)}">${esc(titleOf(j))}</a></td><td>${badge(j.condition)}</td><td>${esc(j.repo)}</td><td>${esc(shortModel(j.model))}</td>` +
+      `<td class="num">${j.ended ? esc(span(j.started, j.ended)) : ""}</td><td class="num">${j.cost !== undefined ? costHtml(j.cost, j.wk) : ""}</td><td class="time">${esc(when(j.started))}</td></tr>`;
+  }).join("");
+  return dataTable(h("Job", "name") + h("Title", "title") + h("State", "condition") + h("Project", "repo") + h("Model", "model") + h("Took", "took", { num: true }) + h("Cost", "cost", { num: true }) + h("Started", "started"), rows) + pager(shown.length, all.length, PAGE);
+}
+
 export function renderJobs(jobs, f = {}) {
-  // Columns: id, title, state, project, then started, took, cost, model. Rows past the first page are hidden until the pager shows them.
-  const rows = jobs.map((j, i) =>
-    `<tr${i >= PAGE ? " hidden" : ""}><td>${idLink(localId(j.name, j.repo), href(`/jobs/${encodeURIComponent(j.name)}`))}</td>` +
-    `<td class="wide" title="${esc(j.item?.title || j.name)}">${esc(j.item?.title || j.name)}</td><td>${badge(j.condition)}</td><td>${esc(j.repo)}</td>` +
-    `<td class="time">${esc(when(j.started))}</td><td class="num">${j.ended ? esc(span(j.started, j.ended)) : ""}</td>` +
-    `<td class="num">${j.cost !== undefined ? costHtml(j.cost, j.wk) : ""}</td><td>${esc(shortModel(j.model))}</td></tr>`).join("");
-  return `<div class="page">${pageHead("All jobs", { count: jobs.length })}${renderFilters(jobs, f)}` + (rows
-    ? `<div class="tscroll" style="overflow-x:auto;max-width:100%"><table class="tbl"><thead><tr><th>Job</th><th>Title</th><th>State</th><th>Project</th><th>Started</th><th class="num">Took</th><th class="num">Cost</th><th>Model</th></tr></thead><tbody>${rows}</tbody></table></div>` +
-      (jobs.length > PAGE ? pager(PAGE, jobs.length, PAGE) : "")
-    : empty("No job in this window.", "Widen the window or clear a filter.")) + `</div>`;
+  return `<div class="page sp">${pageHead("All jobs", { count: jobs.length, aside: renderScope(jobs, f) })}` +
+    card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${renderJobsTable(jobs, f)}</div>`) + `</div>`;
 }
 
-/** Wire the filter bar (a change goes to the hash, keeping the other filters) and the pager's "Show more". */
-export function mountJobs(root, _jobs, f = {}) {
-  const go = (name, value) => { location.hash = href("/jobs", { repo: f.repo, condition: f.condition, days: f.days, [name]: value }); };
+/** Wire the scope (it fetches again), the state filter, the search, the sort and the pager; the last three redraw the table. */
+export function mountJobs(root, jobs) {
+  const redraw = () => { root.querySelector("#jobs-table").innerHTML = renderJobsTable(jobs, Object.fromEntries(hashQuery())); };
+  wireScope(root);
   root.onclick = (e) => {
-    const b = e.target.closest?.(".seg button");
-    if (b) return go(b.parentElement.dataset.name, b.dataset.value);
+    const seg = e.target.closest?.(".card .seg button");
+    if (seg) return goQuery({ [seg.parentElement.dataset.name]: seg.dataset.value });
+    const s = e.target.closest?.("button[data-sort]");
+    if (s) {
+      const key = s.dataset.sort, cur = sortOf(Object.fromEntries(hashQuery()));
+      setQuery({ sort: key, dir: (cur.key === key ? -cur.dir : DOWN_FIRST.has(key) ? -1 : 1) > 0 ? "asc" : "desc" });
+      return redraw();
+    }
     const m = e.target.closest?.("[data-more]");
-    if (!m) return;
-    const hidden = [...root.querySelectorAll("tbody tr[hidden]")];
-    const total = root.querySelectorAll("tbody tr").length;
-    hidden.slice(0, Number(m.dataset.more)).forEach((tr) => { tr.hidden = false; });
-    const shown = total - hidden.length + Math.min(hidden.length, Number(m.dataset.more));
-    m.closest(".pager").outerHTML = pager(shown, total, PAGE);
+    if (m) { setQuery({ limit: String(Math.max(PAGE, Number.parseInt(hashQuery().get("limit"), 10) || PAGE) + Number(m.dataset.more)) }); redraw(); }
   };
-  root.onchange = (e) => { if (e.target.matches?.(".fbar select")) go(e.target.name, e.target.value); };
+  root.oninput = (e) => { if (e.target.matches?.('[data-ui="jobs-search"]')) { setQuery({ q: e.target.value, limit: "" }); redraw(); } };
 }
-
-// The Job page's own CSS: each run's fields get a gap, and the facts line has space below it. Nothing shared changes.
-const JOB_STYLE = `<style>
-.job-runs table.tbl th, .job-runs table.tbl td { padding-right: 20px; }
-.job-runs table.tbl th:last-child, .job-runs table.tbl td:last-child { padding-right: 0; }
-dl.facts.job-facts { margin: 8px 0 18px; }
-</style>`;
 
 export function renderRuns(runs) {
   // Columns: kind (id), reason (title), state, model, then took, cost, started.
@@ -94,7 +115,7 @@ export function renderRuns(runs) {
     `<td class="num">${r.ended ? esc(span(r.started, r.ended)) : ""}</td><td class="num">${r.cost !== undefined ? costHtml(r.cost, r.wk) : ""}</td>` +
     `<td class="time">${esc(when(r.started))}</td></tr>`).join("");
   return `<div class="sh"><h2>Runs</h2><span class="count">${runs.length}</span></div>` +
-    `<div class="tscroll job-runs"><table class="tbl"><thead><tr><th>Run</th><th>Reason</th><th>State</th><th>Model</th><th class="num">Took</th><th class="num">Cost</th><th>Started</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    `<div class="tscroll"><table class="tbl"><thead><tr><th>Run</th><th>Reason</th><th>State</th><th>Model</th><th class="num">Took</th><th class="num">Cost</th><th>Started</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 const list = (title, items, open = false) => items.length
@@ -104,9 +125,9 @@ const log = (title, body) => body ? `<div class="sh"><h2>${esc(title)}</h2></div
 
 export function renderJob(j) {
   const checks = (j.checks ?? []).map((c) => `<li>${c.ok ? "✓" : "✗"} ${esc(c.name)} <span class="quiet">${esc(c.seconds)} s</span></li>`).join("");
-  return `${JOB_STYLE}<div class="page">${crumb("#/jobs", [[j.repo, `#/jobs?repo=${encodeURIComponent(j.repo)}`], ["jobs", "#/jobs"], [localId(j.name, j.repo)]])}` +
+  return `<div class="page">${crumb("#/jobs", [[j.repo, `#/jobs?repo=${encodeURIComponent(j.repo)}`], ["jobs", "#/jobs"], [localId(j.name, j.repo)]])}` +
     pageHead(j.item?.title || j.name) + `<div class="status-row">${badge(j.condition)}</div>` +
-    `<dl class="facts job-facts">${fact("Repo", esc(j.repo))}${fact("Started", esc(when(j.started)))}${j.cost !== undefined ? fact("Cost", costHtml(j.cost, j.wk)) : ""}` +
+    `<dl class="facts">${fact("Project", esc(j.repo))}${fact("Started", esc(when(j.started)))}${j.cost !== undefined ? fact("Cost", costHtml(j.cost, j.wk)) : ""}` +
     `${j.model ? fact("Model", esc(shortModel(j.model))) : ""}${j.commit ? fact("Commit", j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`) : ""}` +
     `${j.trace ? fact("Trace", `<a href="${esc(j.trace)}">Langfuse</a>`) : ""}${j.checkedBy?.length ? fact("Checked by", esc(j.checkedBy.join(", "))) : ""}${j.look ? fact("Look", `about ${esc(j.look)} min (estimate)`) : ""}</dl>` +
     (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
@@ -116,7 +137,7 @@ export function renderJob(j) {
     list("Defaults taken", j.defaults ?? [], true) + list("Follow-ups", j.followups ?? []) +
     (checks ? `<div class="sh"><h2>Checks</h2></div><ul class="checks">${checks}</ul>` : "") +
     log("Diff stat", j.stat) + log("checks.log, last 80 lines", j.checksLog) + log("Worker stderr, last 80 lines", j.stderr) +
-    `<div class="sh"><h2>Diff</h2></div><button class="cmd" type="button" data-diff="${esc(j.name)}"><span>Load the diff</span></button><pre class="diff" id="diff" hidden></pre>` +
+    `<div class="sh"><h2>Diff</h2></div><button class="act" type="button" data-diff="${esc(j.name)}">Load the diff</button><pre class="diff" id="diff" hidden></pre>` +
     (j.condition === "awaiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") + `</div>`;
 }
 

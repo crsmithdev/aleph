@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { localId, repoIdLink, repoOf, STATES, badge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, numCell, nameLink, shortModel, when, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone } from "./lib.js";
+import { localId, repoIdLink, repoOf, STATES, badge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, numCell, nameLink, shortModel, when, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
 
 test("esc escapes markup", () => {
   expect(esc("<script>alert('x')</script>")).toBe("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;");
@@ -36,7 +36,7 @@ test("formats and states", () => {
   expect(money(0.004)).toBe("<$0.01");
   expect(money(0)).toBe("$0.00");
   expect(money(undefined)).toBe("$0.00");
-  expect(span("2026-10-27T10:00:00Z", "2026-10-27T12:05:00Z")).toBe("2 h 5 min");
+  expect(span("2026-10-27T10:00:00Z", "2026-10-27T12:05:00Z")).toBe("2h 05m");
   expect(clock("nope")).toBe("");
   expect(clock12("nope")).toBe("");
   expect(clock12(new Date(2026, 9, 28, 2, 24).toISOString())).toBe("2:24 am");
@@ -234,28 +234,27 @@ test("idLink and pageHead", () => {
 test("filterBar gives a segmented control for six options or fewer, a select for more, and a search input", () => {
   const h = filterBar([
     { label: "State", name: "state", options: ["all", "running", { value: "done", label: "Done" }], value: "running" },
-    { label: "Project", name: "project", options: ["a", "b", "c", "d", "e", "f", "g"], value: "c" },
-    { label: "Search", name: "q", search: true, value: "x<" },
+    { label: "Project", name: "project", data: true, options: ["a", "b", "c", "d", "e", "f", "g"], value: "c" },
   ]);
   expect(h.startsWith('<div class="fbar">')).toBe(true);
-  expect(h).toContain('<div class="fg"><span class="k">State</span><div class="seg" role="group" aria-label="State" data-name="state">');
+  expect(h).toContain('<div class="fg"><span class="fl">State</span><div class="seg" role="group" aria-label="State" data-name="state">');
   expect(h).toContain('<button type="button" data-value="all" aria-pressed="false">all</button>');
   expect(h).toContain('<button type="button" data-value="running" aria-pressed="true">running</button>');
   expect(h).toContain('<button type="button" data-value="done" aria-pressed="false">Done</button>');
-  expect(h).toContain('<span class="k">Project</span><select name="project" aria-label="Project">');
+  expect(h).toContain('<span class="fl">Project</span><select name="project" aria-label="Project">');
   expect(h).toContain('<option value="c" selected>c</option>');
   expect(h.match(/<option/g)!.length).toBe(7);
-  expect(h).toContain('<input type="search" name="q" value="x&lt;" placeholder="Search" aria-label="Search">');
-  // Six options stay segmented; the first is pressed when no value is given.
-  const six = filterBar([{ name: "k", options: ["1", "2", "3", "4", "5", "6"] }]);
+  expect(searchBox("s", "x<", "Search")).toContain('<input type="search" name="q" data-ui="s" value="x&lt;" placeholder="Search" aria-label="Search">');
+  // A fixed set is segmented however long; the first is pressed when no value is given.
+  const six = filterBar([{ name: "k", options: ["1", "2", "3", "4", "5", "6", "7"] }]);
   expect(six).toContain('class="seg"');
   expect(six).not.toContain("<select");
   expect(six).toContain('data-value="1" aria-pressed="true"');
-  expect(six).not.toContain('class="k"');
+  expect(six).not.toContain('class="fl"');
 });
 
 test("pager shows how many of the total, and the next step while rows are left", () => {
-  expect(pager(50, 345)).toBe('<div class="pager"><button type="button" data-more="50">Show 50 more</button><span class="of">50 of 345</span></div>');
+  expect(pager(50, 345)).toBe('<div class="pager"><button type="button" class="act" data-more="50">Show 50 more</button><span class="of">50 of 345</span></div>');
   expect(pager(300, 345)).toContain("Show 45 more");
   expect(pager(345, 345)).toBe('<div class="pager"><span class="of">345 of 345</span></div>');
   expect(pager(50, 20)).toContain("20 of 20");

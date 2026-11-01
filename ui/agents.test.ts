@@ -42,16 +42,16 @@ describe("the Sessions page", () => {
 
   test("the page holds the old pages' content: tools, skills, unused, hooks, denials, sessions", () => {
     const h = v.renderAgents(data(), opts());
-    expect(h).toContain('<header class="ph"><h1>Sessions</h1></header>');
+    expect(h).toContain('<header class="ph"><h1>Sessions</h1><div class="aside"><div class="fbar">');
     for (const s of ["Bash", "aleph:handoff", 'href="#/skills/tidy"', "vault-recall", "no &lt;run&gt;", 'href="#/sessions/s1"', "dear one"]) expect(h).toContain(s);
     expect(h).not.toContain("no <run>");
-    expect(h).toContain('data-pick="tool:Bash"');
+    expect(h).toContain('data-tile="tool:Bash"');
   });
 
   test("a selection is pressed, titles the list, and offers the way back and the skill's page", () => {
     const h = v.renderAgents(data(), opts("pick=skill:aleph:handoff"));
     expect(h).toContain("Sessions that used aleph:handoff");
-    expect(h).toContain('data-pick="skill:aleph:handoff" aria-pressed="true"');
+    expect(h).toContain('data-tile="skill:aleph:handoff" aria-pressed="true"');
     expect(h).toContain("Show all sessions");
     expect(h).toContain('href="#/skills/aleph%3Ahandoff"');
   });

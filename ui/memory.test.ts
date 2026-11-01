@@ -87,7 +87,7 @@ test("every memory type has its block", async () => {
 test("the page shows all seven types, and an empty one says what fills it", () => {
   const h = v.renderMemory({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [] });
   for (const t of ["Working", "Semantic", "Episodic", "Procedural", "Retrieval", "Prospective", "Parametric", "Facts runs", "Proposals"]) expect(h).toContain(t);
-  for (const id of ["working", "semantic", "episodic", "procedural", "retrieval", "prospective", "parametric"]) expect(h).toContain(`data-type="${id}"`);
+  for (const id of ["working", "semantic", "episodic", "procedural", "retrieval", "prospective", "parametric"]) expect(h).toContain(`data-tile="${id}"`);
   expect(v.view.render({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [] }, {}, new URLSearchParams("type=working"))).toContain("No handoff yet.");
   expect(h).toContain("aleph-352");
   const many = v.renderMemory({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [], types: { episodic: { episodes: Array.from({ length: 12 }, (_, i) => ({ title: `E${i}`, scope: "a", updated: "" })), daily: { total: 0, latest: [] }, sessions: [], last: "" } } }, v.options(new URLSearchParams("type=episodic")));
@@ -133,7 +133,7 @@ test("the views render and the note route is wired", () => {
   expect(noteView.path).toBe("/memory/:title");
   expect(noteView.api({ title: "A b" })).toBe("/api/memory/note?title=A%20b");
   const h = v.renderMemory({ exists: true, total: 1, byKind: { decision: 1 }, byScope: { aleph: 1 }, home: [{ heading: "Decisions", entries: [{ title: "Use Bun", hook: "h" }] }], lint: { refuse: [], warn: [] }, writes: [], misses: { days: 7, recalls: 2, empty: 1, empty_share: 0.5, reformulated: 0, unoffered_reads: 0 } });
-  for (const t of ["Use Bun", "#/memory/Use%20Bun", "Counts by kind and scope", "50%", "Search the vault"]) expect(h).toContain(t);
+  for (const t of ["Use Bun", "#/memory/Use%20Bun", "Counts by kind and scope", "50%", "Search titles, aliases and bodies"]) expect(h).toContain(t);
   const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
   expect(nh).toContain('href="#/memory/U"');
   expect(nh).toContain("Linked from");
@@ -341,10 +341,10 @@ test("the page is the board, then broad health, then the note browser; the type 
   expect(h).toContain('<header class="ph"><h1>Memory</h1></header>');
   expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('aria-label="Lint"'));
   expect(h.indexOf('aria-label="Lint"')).toBeLessThan(h.indexOf('id="mem-table"'));
-  for (const id of ["working", "semantic", "episodic", "procedural", "retrieval", "prospective", "parametric"]) expect(h).toContain(`data-type="${id}"`);
-  expect(h).toContain('data-type="semantic" aria-pressed="true"');
+  for (const id of ["working", "semantic", "episodic", "procedural", "retrieval", "prospective", "parametric"]) expect(h).toContain(`data-tile="${id}"`);
+  expect(h).toContain('data-tile="semantic" aria-pressed="true"');
   const w = v.view.render(m, {}, new URLSearchParams("type=parametric"));
-  expect(w).toContain('data-type="parametric" aria-pressed="true"');
+  expect(w).toContain('data-tile="parametric" aria-pressed="true"');
   expect(w).toContain("The model weights");
   expect(v.lintRules(m.lint).map((r: any) => [r.rule, r.refused, r.warned])).toEqual([["schema", 1, 0], ["dangling", 1, 0], ["orphan", 0, 1]]);
 });

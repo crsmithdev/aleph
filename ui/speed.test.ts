@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agentStats, CLASSES, classify, clearCache, filed, pct, phases, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { dur, durShort, weekText, xLabel } from "./views/speed.js";
+import { durShort, weekText, xLabel } from "./views/speed.js";
+// @ts-ignore plain JS shared with the page
+import { dur } from "./lib.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -328,5 +330,5 @@ test("the shared formats", () => {
   expect([dur(43), dur(245), dur(null)]).toEqual(["43s", "4m 05s", "–"]);
   expect([durShort(59), durShort(1570), durShort(16560)]).toEqual(["59s", "26m", "4h 36m"]);
   expect([weekText(0.02), weekText(2.5)]).toEqual(["<0.1%", "2.5%"]);
-  expect([xLabel(new Date(2026, 9, 28, 13, 36).toISOString(), "hour"), xLabel(new Date(2026, 9, 28).toISOString(), "week")]).toEqual(["1:36p", "10/28"]);
+  expect([xLabel(new Date(2026, 9, 28, 13, 36).toISOString(), "hour"), xLabel(new Date(2026, 9, 28).toISOString(), "week")]).toEqual(["1:36p", "Oct 28"]);
 });

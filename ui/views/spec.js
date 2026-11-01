@@ -1,6 +1,6 @@
 // #/specs/<project>/<file>: one spec, rendered as Markdown with the renderer the Memory note view uses.
 // The page reads one `view` per file, so the spec route is its own file.
-import { esc, md, pageHead } from "../lib.js";
+import { crumb, esc, md, pageHead } from "../lib.js";
 
 export const view = {
   path: "/specs/:project/:file",
@@ -12,7 +12,7 @@ export const view = {
 };
 
 export function renderSpec(s) {
-  return `<div class="page"><p class="quiet"><a href="#/issues">← Issues</a></p>${pageHead(s.title, { count: s.file })}` +
+  return `<div class="page">${crumb("#/issues", [["issues", "#/issues"], [s.project, `#/issues?project=${encodeURIComponent(s.project)}`], [s.file]])}${pageHead(s.title)}` +
     `<p class="hint"><code>${esc(s.project)}/docs/specs/${esc(s.file)}</code></p>` +
     `<article class="note">${md(s.body)}</article></div>`;
 }

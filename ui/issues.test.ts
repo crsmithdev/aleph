@@ -204,10 +204,10 @@ describe("views", () => {
     expect(h).not.toContain("<h2>Projects");
     expect(h).not.toContain("<h2>Specs");
     expect(h).toContain('class="tiles"');
-    expect(h).toContain('data-chart="flow"');
     expect(h).toContain('data-chart="age"');
-    expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('data-chart="flow"'));
-    expect(h.indexOf('data-chart="flow"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
+    expect(v.view.render(d, {}, new URLSearchParams("tile=filed&status=any"))).toContain('data-chart="flow"');
+    expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('data-chart="age"'));
+    expect(h.indexOf('data-chart="age"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
     const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
     expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "stage", "project", "priority", "labels", "notes", "runs", "cost", "age", "updated", ""]);
     expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
@@ -218,7 +218,7 @@ describe("views", () => {
     const h = section(v.view.render(d, {}, new URLSearchParams("status=any")), "issues-table");
     expect(h).toContain('href="#/issues/fac/1"');
     expect(h).not.toContain('href="#/projects/');
-    const rows = h.split("<tr class=\"crow").slice(1);
+    const rows = h.split("<tr class=\"rowlink").slice(1);
     const closed = rows.filter((r: string) => r.includes("plain task"));
     expect(closed).toHaveLength(1);
     expect(closed[0]).not.toContain("data-cancel");
@@ -227,16 +227,16 @@ describe("views", () => {
     expect(v.view.render(d, {}, new URLSearchParams())).toContain("File an issue");
   });
 
-  test("the project filter is a button per project with what the other filters leave", async () => {
+  test("the project filter is a select with what the other filters leave", async () => {
     const d = await getJson("/api/contents");
     const h = v.view.render(d, {}, new URLSearchParams("project=oth&status=any"));
-    expect(h).toContain('data-project="oth" aria-pressed="true"');
-    expect(h).toContain('data-project="fac" aria-pressed="false"');
-    expect(h).toContain('data-project="" aria-pressed="false"');
+    expect(h).toMatch(/<option value="oth" selected>oth \d+<\/option>/);
+    expect(h).toMatch(/<option value="fac">fac \d+<\/option>/);
+    expect(h).toMatch(/<option value="">All \d+<\/option>/);
     const rows = v.issueRows(d);
     const counts = (o: object) => v.renderProjects(d.projects, rows, o);
     const n = rows.filter((r: any) => r.project === "oth" && r.status === "open").length;
-    expect(counts({ status: "open" })).toContain(`data-project="oth" aria-pressed="false">oth<span class="n">${n}</span>`);
+    expect(counts({ status: "open" })).toContain(`<option value="oth">oth ${n}</option>`);
     expect(v.hashOptions(new URLSearchParams("type=project"))).not.toHaveProperty("type");
     expect(v.filterRows(rows, { status: "done" }).every((r: any) => r.status === "done")).toBe(true);
     expect(v.filterRows(rows, { project: "oth" }).every((r: any) => r.project === "oth")).toBe(true);
@@ -283,7 +283,7 @@ describe("views", () => {
     expect(v.stats(rows, now)).toMatchObject({ total: 4, open: 2, stages: { new: 1, building: 1 }, filed: 2, filedBefore: 2, closed: 1, done: 1, dropped: 0, closedBefore: 1, medianAge: 6, oldest: 12, runs: 5, cost: 1.5 });
     const f = v.flow(rows, 14, now);
     expect(f.labels).toHaveLength(14);
-    expect(f.labels.at(-1)).toBe("Nov 1");
+    expect(f.labels.at(-1)).toBe("Nov 01");
     expect(f.filed.at(-1)).toBe(1);
     expect(f.closed.at(-3)).toBe(1);
     expect(v.ageBins(rows, now).counts).toEqual([1, 0, 0, 1, 0, 0]);
@@ -324,14 +324,13 @@ describe("views", () => {
   test("the filter bar is one filterBar; the row is the link, the title plain text", async () => {
     const d = await getJson("/api/contents");
     const h = v.view.render(d, {}, new URLSearchParams("project=oth&status=any"));
-    expect(h.match(/class="fbar"/g)).toHaveLength(1);
+    expect(h.match(/class="fbar"/g)).toHaveLength(3);
     for (const n of ["status", "priority"]) expect(h).toContain(`data-name="${n}"`);
-    expect(h).toContain('role="group" aria-label="Project"');
+    expect(h).toContain('<select name="project" aria-label="Project">');
     expect(h).toContain('name="q"');
     expect(section(h, "issues-table")).not.toContain("<td>fac</td>");
     expect(h).toContain("<td>oth</td>");
-    expect(h).toContain("tr.crow { position: relative; }");
-    expect(h).toContain('td.wide a::after { content: ""; position: absolute; inset: 0; }');
+    expect(h).toContain('<tr class="rowlink"');
     expect(h).toContain('<td class="wide"><a href="#/issues/oth/1">other thing</a></td>');
   });
 
@@ -347,12 +346,12 @@ describe("views", () => {
     const rows = Array.from({ length: 120 }, (_, i) => ({ id: 100 + i, repo: "fac", title: `t${i}`, status: "open", labels: [], updated: "2026-10-01T00:00:00Z" }));
     const d = { issues: rows, projects: [], specs: [] };
     const h = v.view.render(d, {}, new URLSearchParams());
-    expect(h.match(/<tr class="crow"/g)).toHaveLength(50);
+    expect(h.match(/<tr class="rowlink"/g)).toHaveLength(50);
     expect(h).toContain('<span class="of">50 of 120</span>');
     expect(h).toContain('data-more="50"');
     expect(v.hashOptions(new URLSearchParams("limit=100")).limit).toBe(100);
     const more = v.view.render(d, {}, new URLSearchParams("limit=100"));
-    expect(more.match(/<tr class="crow"/g)).toHaveLength(100);
+    expect(more.match(/<tr class="rowlink"/g)).toHaveLength(100);
     expect(more).toContain('data-more="20"');
   });
 

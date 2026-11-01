@@ -60,7 +60,7 @@ const DAY: any = { ...D, flaky: 1, lost: { hours: 1, share: 0.1 }, issues: { ...
 test("the tiles and the head come from the data", () => {
   const h = renderEfficiency(D, DAY, "all");
   expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "First pass", "Reruns", "Fix rounds", "Usage per issue"]);
-  expect(h).toContain('<header class="ph"><h1>Efficiency</h1></header>');
+  expect(h).toContain('<header class="ph"><h1>Efficiency</h1><div class="aside"><div class="fbar">');
   expect(h).toContain('<span class="good">▼ 10% in the last 24 h</span>');
   expect(h).toContain('<span class="good">▲ 75% in the last 24 h</span>');
   expect(h).toContain("&lt;0.1%");
@@ -68,28 +68,28 @@ test("the tiles and the head come from the data", () => {
   expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, null, "all")).toContain("needs 6 hours of usage snapshots");
 });
 
-test("All lost time: the causes sum to lost.hours, and the button says the same hours", () => {
+test("All lost time: the causes sum to lost.hours", () => {
   const s = selection(D, "all");
   expect(s.causes.map((x: any) => [x.name, x.hours, x.runs])).toEqual([["Issue had landed", 3, 7], ["No commit", 3, 2]]);
   expect(s.causes.reduce((a: number, x: any) => a + x.hours, 0)).toBe(D.lost.hours);
-  expect(renderEfficiency(D, null, "all")).toContain("All lost time, 6.0 h");
+  expect(renderEfficiency(D, null, "all")).toContain("<h2>Lost time, largest first</h2>");
   expect(s.text).toContain("Late and Restarted together.");
 });
 
-test("selecting a class shows its causes; selecting All lost time again restores the merged list", () => {
+test("selecting a class shows its causes; selecting Lost time again restores the merged list", () => {
   const all = renderEfficiency(D, null, "all");
   const one = renderEfficiency(D, null, "fixed");
   expect(one).toContain("<h2>Fixed, largest first</h2>");
-  expect(one).toContain('data-class="fixed" style="flex:4" aria-pressed="true"');
+  expect(one).toContain('data-tile="fixed" style="flex:4" aria-pressed="true"');
   expect(one).not.toContain("No commit");
   expect(renderEfficiency(D, null, "all")).toBe(all);
-  expect(all).toContain('data-class="all" aria-pressed="true"');
+  expect(all).toContain('data-tile="all" aria-pressed="true"');
 });
 
-test("Landed is no button, and a class with no hours has no segment", () => {
+test("the First pass tile and the Landed segment select the landed class, and a class with no hours has no segment", () => {
   const h = renderEfficiency(D, null, "all");
-  expect(h).not.toContain('data-class="landed"');
-  expect(h).not.toContain('data-class="dropped"');
+  expect(h.match(/data-tile="landed"/g)).toHaveLength(2);
+  expect(h).not.toContain('class="seg-dropped"');
 });
 
 test("an issue with no link shows its id as text, and a run with no reason says so", () => {

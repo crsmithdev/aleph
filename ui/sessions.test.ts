@@ -180,7 +180,7 @@ test("the waterfall at 390 px: the detail pane stacks under a grid that scrolls 
 test("the Session page's table uses pageHead, idLink and when, in the shared column order", async () => {
   const s: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
   const h = v.renderSession(s, {}, TABLE);
-  expect(h).toContain('<header class="ph"><h1>aleph</h1><span class="count">2</span>');
+  expect(h).toContain('<header class="ph"><h1>Session s1</h1><span class="count">2</span>');
   expect(h).toContain(idLink("s1", "#/sessions/s1").replace('class="idl"', 'class="idl" title="s1"'));
   const heads = [...h.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
   expect(heads).toEqual(["Turn", "Prompt", "Output", "Model", "Tools", "Duration", "Cost", "Started"]);
@@ -193,7 +193,7 @@ test("the Turn page uses pageHead, idLink and when", async () => {
   expect(t.start).toBe(TRACES[1].timestamp);
   const h = v.renderTurn(t);
   expect(h).toContain(pageHead("Turn 2 of 2").replace("</header>", ""));
-  expect(h).toContain(`/ ${idLink("s1", "#/sessions/s1").replace('class="idl"', 'class="idl" title="s1"')}`);
+  expect(h).toContain('<a href="#/sessions/s1">s1</a> / <span>turn 2</span>');
   expect(h).toContain(`<dt>Started</dt><dd>${when(t.start)}</dd>`);
   expect(h.match(/<h1/g)?.length).toBe(1);
 });
@@ -246,14 +246,14 @@ test("the chat is the default: messages in Markdown, folded tool calls, one turn
   d.turns[1].output = "**bold** and `code`";
   const h = v.renderSession(d, { id: "s1" }, new URLSearchParams());
   expect(h).toContain('<button type="button" data-value="chat" aria-pressed="true">Chat</button>');
-  expect(h).toContain('<header class="ph"><h1>aleph</h1><span class="count">2</span>');
+  expect(h).toContain('<header class="ph"><h1>Session s1</h1><span class="count">2</span>');
   expect(h).toContain('<details class="sysc"><summary><span class="chip">task-notification</span><span class="peek">Agent done</span>');
   expect(h).not.toContain('<div class="msg user md"><p>&lt;task');
   expect(h).toContain('<div class="msg user md"><p>prompt t2 second line</p></div>');
   expect(h).toContain("<strong>bold</strong> and <code>code</code>");
   expect(h).toContain('<details class="tool"><summary><span class="tn">Bash</span><code class="ta">ls</code>');
   expect(h).toContain('<details class="tool err"><summary><span class="tn">Read</span><span class="terr">Error</span>');
-  expect(h).toContain('<p class="tline"><a href="#/sessions/s1/turns/1">Turn 1</a><span class="dot">·</span>opus<span class="dot">·</span>12.0 s<span class="dot">·</span>$0.50');
+  expect(h).toContain('<p class="tline"><a href="#/sessions/s1/turns/1">Turn 1</a><span class="dot">·</span>opus<span class="dot">·</span>12.0s<span class="dot">·</span>$0.50');
   expect(h).toContain(`<span class="time">${when(d.turns[0].start)}</span>`);
   expect(h).toContain('<div class="clip cut">');
   expect(h).toContain('<span class="of">2 of 2</span>');
@@ -270,7 +270,7 @@ test("a long session shows 20 turns and a pager; a long turn folds its earlier t
   const turns = Array.from({ length: 20 }, (_, i) => ({ ...d.turns[0], n: i + 1, tools }));
   const h = v.renderSession({ ...d, total: 73, turns }, {}, new URLSearchParams());
   expect(h.match(/<section class="turn"/g)?.length).toBe(20);
-  expect(h).toContain('<button type="button" data-chat-from="21">Show 20 more</button><span class="of">20 of 73</span>');
+  expect(h).toContain('<button type="button" class="act" data-chat-from="21">Show 20 more</button><span class="of">20 of 73</span>');
   expect(h).toContain('<details class="tools-early"><summary>25 earlier tool calls <span class="terr">1 failed</span></summary>');
   const one = v.chatTurn("s1", { ...d.turns[0], tools });
   const shown = one.slice(one.indexOf("</details>", one.indexOf('class="ta">cmd 24<')) + "</details>".length);
@@ -350,7 +350,7 @@ test("generations: listed apart from tools with model, offsets, parent and cost;
     expect(rows.findIndex((r: any) => r.id === "p2")).toBeGreaterThan(g1);
     const h = v.waterfall(rows, "g1");
     expect(h).toContain("wf-row k-generation sel");
-    expect(h).toContain("Model time <strong>6.0 s</strong>");
+    expect(h).toContain("Model time <strong>6.0s</strong>");
     expect(h).not.toContain('data-select="g1"');
     const det = v.wfDetail(rows[g1]);
     expect(det).toContain("100 in, 20 out");

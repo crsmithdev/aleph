@@ -41,12 +41,22 @@ export function elapsed(from, to) {
   return `${Math.floor(t / 60)}:${pad(t % 60)}`;
 }
 
-/** "12 min", "2 h 5 min": the span from `from` to `to` (ISO strings). */
+/** Seconds as "43s", "4m 05s" or "1h 02m"; "–" for none. Every duration on the page has this form. */
+export function dur(s) {
+  if (s === null || s === undefined || Number.isNaN(s)) return "–";
+  s = Math.round(s);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m}m ${pad(s % 60)}s` : `${Math.floor(m / 60)}h ${pad(m % 60)}m`;
+}
+
+/** Milliseconds, for a span that can be under a second: "850 ms", "1.5s", then as `dur`; "" for none. */
+export const durMs = (ms) => (ms == null ? "" : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : dur(ms / 1000));
+
+/** The time from `from` to `to` (ISO strings) as `dur` writes it; "" for a bad pair. */
 export function span(from, to) {
   const ms = Date.parse(to) - Date.parse(from);
-  if (!(ms >= 0)) return "";
-  const m = Math.floor(ms / 60000);
-  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+  return ms >= 0 ? dur(ms / 1000) : "";
 }
 
 /** The empty state, after old aleph's EmptyState: one sentence, one hint. `hint` is HTML. */
@@ -161,7 +171,7 @@ export function chartTheme(t) {
   };
 }
 
-const TOKENS = ["bg", "surface", "ink", "rule", "run", "done", "need", "stuck", "muted", "focus", "sans", "mono", "chart", "chart-scale", "chart-weight", "series-1", "series-2", "series-3", "series-4", "series-5"];
+const TOKENS = ["bg", "surface", "ink", "rule", "run", "done", "need", "stuck", "hot", "muted", "focus", "sans", "mono", "chart", "chart-scale", "chart-weight", "series-1", "series-2", "series-3", "series-4", "series-5"];
 /** Read the page tokens off :root into a token map. */
 export const readTokens = (el = document.documentElement) => {
   const cs = getComputedStyle(el);
@@ -291,6 +301,13 @@ export function when(ts, now = new Date()) {
     : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** A day, for a chart's axis or a date with no time: "Oct 28" for this year, "2025-12-03" for another; "" for a bad date. */
+export function day(ts, now = new Date()) {
+  const d = new Date(ts);
+  if (ts == null || ts === "" || Number.isNaN(d.getTime())) return "";
+  return d.getFullYear() === now.getFullYear() ? `${MONTHS[d.getMonth()]} ${pad(d.getDate())}` : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 /** A model as its short name: "claude-opus-5-5" and "opus" are both "opus"; "" for none. */
 export const shortModel = (m) => String(m ?? "").replace(/^claude-/, "").replace(/(-\d+)+(\[.*\])?$/, "");
 
@@ -315,27 +332,121 @@ export const chips = (labels) => (labels?.length ? `<span class="chips">${labels
 
 const opt = (o) => (typeof o === "object" && o ? { value: String(o.value), label: String(o.label ?? o.value) } : { value: String(o), label: String(o) });
 /**
- * One row of filter controls, all 28px high. Each group is `{label, name, options, value}` (a choice: a
- * segmented control for six options or fewer, a `<select>` for more) or `{label, name, search: true,
- * value, placeholder}` (a search input). Options are strings or `{value, label}`. The view wires the events:
+ * One row of filter controls, all 28px high. Each group is `{label, name, options, value, data}`. A fixed set of
+ * options is a segmented control; `data: true` says the options come from the data, and they make a `<select>`.
+ * The first option of a filter says All. Options are strings or `{value, label}`. The view wires the events:
  * a segmented button carries `data-name` on its group and `data-value`, pressed is `aria-pressed="true"`.
  */
 export function filterBar(groups) {
   const control = (g) => {
     const name = esc(g.name ?? "");
-    if (g.search) return `<input type="search" name="${name}" value="${esc(g.value ?? "")}" placeholder="${esc(g.placeholder ?? "Search")}" aria-label="${esc(g.label ?? "Search")}">`;
     const opts = (g.options ?? []).map(opt);
     const cur = String(g.value ?? opts[0]?.value ?? "");
-    if (opts.length <= 6) return `<div class="seg" role="group" aria-label="${esc(g.label ?? "")}" data-name="${name}">${opts.map((o) => `<button type="button" data-value="${esc(o.value)}" aria-pressed="${o.value === cur}">${esc(o.label)}</button>`).join("")}</div>`;
+    if (!g.data) return `<div class="seg" role="group" aria-label="${esc(g.label ?? "")}" data-name="${name}">${opts.map((o) => `<button type="button" data-value="${esc(o.value)}" aria-pressed="${o.value === cur}">${esc(o.label)}</button>`).join("")}</div>`;
     return `<select name="${name}" aria-label="${esc(g.label ?? "")}">${opts.map((o) => `<option value="${esc(o.value)}"${o.value === cur ? " selected" : ""}>${esc(o.label)}</option>`).join("")}</select>`;
   };
-  return `<div class="fbar">${groups.map((g) => `<div class="fg">${g.label ? `<span class="k">${esc(g.label)}</span>` : ""}${control(g)}</div>`).join("")}</div>`;
+  return `<div class="fbar">${groups.map((g) => `<div class="fg">${g.label ? `<span class="fl">${esc(g.label)}</span>` : ""}${control(g)}</div>`).join("")}</div>`;
 }
+
+/** The search field over a table. It stays out of what the filters redraw, so it keeps the focus while the reader types. */
+export const searchBox = (ui, value, placeholder) =>
+  `<div class="fbar"><input type="search" name="q" data-ui="${esc(ui)}" value="${esc(value ?? "")}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}"></div>`;
+
+// ---------- the address: a selection or a filter lives in the hash ----------
+
+/** The hash's query. */
+export const hashQuery = () => new URLSearchParams(location.hash.split("?")[1] ?? "");
+const withQuery = (changes) => {
+  const [path] = location.hash.replace(/^#/, "").split("?");
+  const q = hashQuery();
+  for (const [k, v] of Object.entries(changes)) { if (v) q.set(k, v); else q.delete(k); }
+  return `#${path}${q.toString() ? `?${q}` : ""}`;
+};
+/** Change the hash's query with no reload: for a selection, a sort or a filter the view redraws itself. */
+export const setQuery = (changes) => history.replaceState(null, "", withQuery(changes));
+/** Change the hash's query and load the route again: for a filter that changes what the API returns. */
+export const goQuery = (changes) => { location.hash = withQuery(changes); };
+
+/** The `.fbar` in `.ph` holds what scopes the whole page; each change goes to the hash and loads the route again. */
+export function wireScope(root) {
+  const ph = root.querySelector?.(".ph");
+  if (!ph) return;
+  ph.addEventListener("click", (e) => {
+    const b = e.target.closest?.(".seg button");
+    if (b) goQuery({ [b.parentElement.dataset.name]: b.dataset.value });
+  });
+  ph.addEventListener("change", (e) => { if (e.target.matches?.("select")) goQuery({ [e.target.name]: e.target.value }); });
+}
+
+/** The period a /api/speed answer covers, in words. */
+export const WINDOWS = [{ value: "week", label: "7 days" }, { value: "month", label: "30 days" }];
+
+// ---------- the blocks of a page: tile, card, table, bar list ----------
+
+/**
+ * A metric tile. With `key` it selects the detail below it: a button with `data-tile` and `aria-pressed`.
+ * With `href` it goes to another page. With neither it has no detail, and it is a plain block. `v` is text, `vHtml` is HTML.
+ */
+export function tile({ k, v = "", vHtml, body = "", key, on = false, href }) {
+  const inner = `<span class="k">${esc(k)}</span><b>${vHtml ?? esc(v)}</b>${body}`;
+  if (key) return `<button type="button" class="tile" data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
+  return href ? `<a class="tile" href="${esc(href)}">${inner}</a>` : `<div class="tile">${inner}</div>`;
+}
+export const tiles = (label, html) => `<section class="tiles" aria-label="${esc(label)}">${html}</section>`;
+export const small = (t) => `<small>${esc(t)}</small>`;
+/** Call `fn(key)` when a tile or another selector with `data-tile` under `el` is clicked. */
+export function onTile(el, fn) {
+  el?.addEventListener("click", (e) => {
+    const b = e.target.closest?.("button[data-tile]");
+    if (b) fn(b.dataset.tile);
+  });
+}
+
+/** A block of a page: the section head (`sectionHead`'s options, plus `id`), then its body. */
+export const card = (title, body, { count, aside, id, cls = "" } = {}) =>
+  `<section class="card${cls ? ` ${cls}` : ""}"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(title)}">${sectionHead(title, { count, aside })}${body}</section>`;
+
+/** The one table: `head` is the cells of the header row, or "" for none; `rows` the rows. */
+export const dataTable = (head, rows, { fit = false, id = "" } = {}) =>
+  `<div class="tscroll"><table class="tbl${fit ? " fit" : ""}"${id ? ` id="${esc(id)}"` : ""}>${head ? `<thead><tr>${head}</tr></thead>` : ""}<tbody>${rows}</tbody></table></div>`;
+/** Plain header cells from labels; a label in `num` is right-aligned. */
+export const heads = (labels, num = []) => labels.map((l) => `<th${num.includes(l) ? ' class="num"' : ""}>${esc(l)}</th>`).join("");
+
+/**
+ * One row of a bar list: a label (HTML), a bar and a value (HTML). `pct` is the bar's width, or `bar` is HTML in its place.
+ * `top` marks the largest; with `key` the row is a selector, as a tile is.
+ */
+export function barRow(label, pct, value, { top = false, key, on = false, bar } = {}) {
+  const inner = `<span class="bl">${label}</span><span class="bb">${bar ?? `<i style="width:${Number(pct).toFixed(1)}%"></i>`}</span><span class="bv">${value}</span>`;
+  const cls = `barrow${top ? " top" : ""}`;
+  return key ? `<button type="button" class="${cls}" data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>` : `<div class="${cls}">${inner}</div>`;
+}
+/** The rows of a bar list on one grid, so their bars start and end together. */
+export const barList = (rows) => `<div class="bars">${rows}</div>`;
+
+/** The ECharts option for bars over categories. Each series is `{name, data, color?}`; a `color` function gives each bar its own. */
+export const barsOption = (labels, series, { labels: showValues = false } = {}) => ({
+  animation: false,
+  grid: { left: 32, right: 8, top: showValues ? 20 : 8, bottom: 20 },
+  xAxis: { type: "category", data: labels, axisTick: { show: false } },
+  yAxis: { type: "value", minInterval: 1, splitLine: { show: true } },
+  tooltip: { trigger: "axis", confine: true, axisPointer: { type: "shadow" } },
+  series: series.map((s) => ({ type: "bar", barMaxWidth: 64, name: s.name, data: s.data, ...(s.color ? { itemStyle: { color: s.color } } : {}), ...(showValues ? { label: { show: true, position: "top", textBorderWidth: 0 } } : {}) })),
+});
+/** The ECharts option for one line over categories, `area` filled. */
+export const lineOption = (labels, name, data, { interval = "auto", step = false, formatter, max } = {}) => ({
+  animation: false,
+  grid: { left: 32, right: 16, top: 8, bottom: 20 },
+  tooltip: { trigger: "axis", confine: true, ...(formatter ? { formatter } : {}) },
+  xAxis: { type: "category", boundaryGap: false, data: labels, axisTick: { show: false }, axisLabel: { interval, hideOverlap: true } },
+  yAxis: { type: "value", min: 0, ...(max ? { max } : {}), minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } },
+  series: [{ type: "line", name, step: step ? "end" : false, symbol: "none", lineStyle: { width: step ? 0 : 2 }, areaStyle: { opacity: step ? 0.85 : 0.15 }, data }],
+});
 
 /** Under a long table: "50 of 345" and a "Show 50 more" button (`data-more` holds the step) while rows are left. */
 export function pager(shown, total, step = 50) {
   const n = Math.min(shown, total), more = Math.min(step, total - n);
-  return `<div class="pager">${more > 0 ? `<button type="button" data-more="${more}">Show ${more} more</button>` : ""}<span class="of">${n} of ${total}</span></div>`;
+  return `<div class="pager">${more > 0 ? `<button type="button" class="act" data-more="${more}">Show ${more} more</button>` : ""}<span class="of">${n} of ${total}</span></div>`;
 }
 
 /** A sortable header cell; `sort` is `{key, dir}` (dir 1 up, -1 down). Every table shows the same arrow. */

@@ -129,33 +129,3 @@ export function renderLifetime(d, now = Date.now()) {
     `<div class="wf-grid" role="img" aria-label="${esc(`Lifetime of the issue: ${runs} runs and ${rows.length - runs} waits`)}"><div class="wf-axis"><div class="wf-l">Long spans are compressed</div><div class="wf-r">${ticks}</div></div>` +
     rows.map(row).join("") + dots("Notes", notes, x) + dots("Commits", commits, x) + `</div></div>`;
 }
-
-export const LIFETIME_STYLE = `<style>
-.itl { margin-bottom: 16px; }
-.itl-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 8px; padding: 0; list-style: none; font-size: var(--fs-xs); color: var(--muted); }
-.itl-key li { display: inline-flex; align-items: center; gap: 6px; }
-.itl-key i { width: 12px; height: 10px; border-radius: 2px; }
-.itl .wf-grid { overflow: visible; max-height: none; }
-.itl .wf-row { cursor: default; }
-.itl .wf-r { margin-left: 8px; }
-.itl .wf-row:hover { background: var(--sunk); }
-.itl .wf-axis .wf-l { font-weight: 400; visibility: visible; }
-.itl .wf-axis .wf-r span:nth-child(n) { display: inline; }
-.itl .wf-l .tn { font-weight: 500; }
-.itl .wf-l .tn a { color: inherit; text-decoration: none; }
-.itl .wf-l .tn a:hover { text-decoration: underline; }
-.itl .wf-l .ld { margin-left: auto; flex: none; color: var(--muted); font: 500 var(--fs-xs) var(--num); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.itl .t-agent .wf-bar, .itl-key .t-agent i { background: var(--run); }
-.itl .t-land .wf-bar, .itl-key .t-land i { background: var(--done); }
-.itl .t-bad .wf-bar, .itl-key .t-bad i { background: var(--stuck); }
-.itl .t-chris .wf-bar, .itl-key .t-chris i { background: var(--need); }
-.itl .t-wait .wf-bar, .itl-key .t-wait i { background: repeating-linear-gradient(135deg, var(--muted) 0 2px, transparent 2px 5px); }
-.itl .wf-bar { min-width: 3px; }
-.itl-dot { position: absolute; top: 8px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--muted); }
-a.itl-dot { background: var(--done); }
-a.itl-dot:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-@media (max-width: 720px) {
-  .itl .wf-axis .wf-l { visibility: hidden; }
-  .itl .wf-axis .wf-r span:nth-child(even) { display: none; }
-}
-</style>`;

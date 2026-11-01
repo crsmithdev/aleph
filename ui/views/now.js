@@ -1,8 +1,8 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { denyReasons, diffHtml, elapsed, costHtml, esc, idLink, localId, openDiffs, repoIdLink, repoOf, shortModel, when } from "../lib.js";
-import { causeRow, durShort, dur, firstPassTile, loadSpeed, lostTile, mergeCauses, pctText, small, speedOf, tile, trend, usable, usageAge, usageTile } from "./speed.js";
+import { barList, denyReasons, diffHtml, dur, elapsed, costHtml, esc, idLink, localId, openDiffs, repoIdLink, repoOf, shortModel, small, tile, when } from "../lib.js";
+import { causeRow, durShort, firstPassTile, loadSpeed, lostTile, mergeCauses, pctText, speedOf, trend, usable, usageAge, usageTile } from "./speed.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
 
 export const view = {
@@ -35,12 +35,12 @@ export function renderTiles(s, d, day) {
   const peak = lead ? Math.max(1, ...d.buckets.map((b) => b.lead ?? 0)) : 1;
   const spark = lead ? `<div class="spark" aria-hidden="true">${d.buckets.map((b) => `<i style="height:${((b.lead ?? 0) / peak) * 100}%"></i>`).join("")}</div>` : "";
   const leadTile = lead?.count
-    ? tile("Lead time p50", durShort(lead.p50), small(`p90 ${dur(lead.p90)}`) + spark + trend(lead.p50, dlead?.count ? dlead.p50 : null, dur), PERFORMANCE)
-    : tile("Lead time p50", "–", small(d ? "no issue landed" : "from filing to the last land"), PERFORMANCE);
+    ? tile({ k: "Lead time p50", v: durShort(lead.p50), body: small(`p90 ${dur(lead.p90)}`) + spark + trend(lead.p50, dlead?.count ? dlead.p50 : null, dur), href: PERFORMANCE })
+    : tile({ k: "Lead time p50", v: "–", body: small(d ? "no issue landed" : "from filing to the last land"), href: PERFORMANCE });
   const lands = d
-    ? tile("Lands", String(d.done), small(`issues landed, 7 days · ${d.kinds.land.count} land runs`) + small(`${day ? `${day.done} in the last 24 h, ` : ""}${Math.round(d.done / 7)} a day on average`), PERFORMANCE)
-    : tile("Lands", "–", small("issues landed, 7 days"), PERFORMANCE);
-  return lostTile(d, day, EFFICIENCY) + leadTile + firstPassTile(d, day, EFFICIENCY) + lands + usageTile(s, "#/factory/agents");
+    ? tile({ k: "Lands", v: String(d.done), body: small(`issues landed, 7 days · ${d.kinds.land.count} land runs`) + small(`${day ? `${day.done} in the last 24 h, ` : ""}${Math.round(d.done / 7)} a day on average`), href: PERFORMANCE })
+    : tile({ k: "Lands", v: "–", body: small("issues landed, 7 days"), href: PERFORMANCE });
+  return lostTile(d, day, { href: EFFICIENCY }) + leadTile + firstPassTile(d, day, { href: EFFICIENCY }) + lands + usageTile(s, { href: "#/factory/agents" });
 }
 
 /** The ranked causes of lost time, largest first. `d` is null while it loads, `{ error }` on a failed load. */
@@ -51,7 +51,7 @@ export function renderCauses(d) {
   const cs = mergeCauses(d);
   if (!cs.length) return `${title}<p>No agent time was lost in the last 7 days.</p>`;
   const sum = cs.reduce((a, x) => a + x.hours, 0), first = cs[0];
-  return `${title}<p>The first cause is ${pctText(first.hours / sum)} of the loss: ${esc(first.name)}, ${first.runs} ${first.runs === 1 ? "run" : "runs"}.</p><div>${cs.map((x, i) => causeRow(`<a href="${EFFICIENCY}">${esc(x.name)}</a>`, x, first.hours, i === 0)).join("")}</div>`;
+  return `${title}<p>The first cause is ${pctText(first.hours / sum)} of the loss: ${esc(first.name)}, ${first.runs} ${first.runs === 1 ? "run" : "runs"}.</p>${barList(cs.map((x, i) => causeRow(`<a href="${EFFICIENCY}">${esc(x.name)}</a>`, x, first.hours, i === 0)).join(""))}`;
 }
 
 /** Fetch the week and the last 24 h, then fill the scorecard and the causes. */

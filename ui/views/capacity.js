@@ -1,6 +1,6 @@
-// The Capacity page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the week.
-import { chart, esc, pageHead, readTokens } from "../lib.js";
-import { dur, hours, loadSpeed, pace, small, tile, usable, usageAge, usageTile, xLabel } from "./speed.js";
+// The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
+import { barsOption, card, chart, dataTable, dur, esc, filterBar, hashQuery, heads, lineOption, onTile, pageHead, setQuery, small, tile, tiles, when, WINDOWS, wireScope } from "../lib.js";
+import { hours, loadSpeed, usable, usageTile, xLabel } from "./speed.js";
 
 /** Each point's total live agents over the timed roles. */
 export const totals = (a) => a.points.map((p) => a.roles.reduce((n, r) => n + (p[r.key] ?? 0), 0));
@@ -12,47 +12,60 @@ export function roleRows(a) {
 }
 const shareText = (v) => (v === null ? "–" : `${v < 1 ? v.toFixed(1) : Math.round(v)}%`);
 
-function tiles(s, a) {
-  const f = s.factory, live = a && totals(a);
-  return usageTile(s) +
-    tile("Runs today", String(f.runsToday), small(`$${(f.costToday ?? 0).toFixed(2)} recorded cost`) + small(f.dayCap > 0 ? `day cap ${f.dayCap}` : "no day cap")) +
-    `<div class="tile"><span class="k">Worker slots</span><b>${f.liveRuns ?? 0} <em>of ${f.liveCap}</em></b>${small("in use now")}</div>` +
-    tile("Agents live", a ? a.mean.toFixed(1) : "–", a ? small(`mean, all roles, peak ${a.peak}`) + small(`${live.filter((v) => v === 0).length} of ${live.length} steps had no agent live`) : small("Loading…"));
+function scorecard(s, a, key) {
+  const f = s.factory, live = a && totals(a), on = (k) => ({ key: k, on: key === k });
+  return usageTile(s, on("usage")) +
+    tile({ k: "Runs today", v: String(f.runsToday), body: small(`$${(f.costToday ?? 0).toFixed(2)} recorded cost`) + small(f.dayCap > 0 ? `day cap ${f.dayCap}` : "no day cap"), ...on("runs") }) +
+    tile({ k: "Worker slots", vHtml: `${f.liveRuns ?? 0} <em>of ${f.liveCap}</em>`, body: small("in use now"), ...on("slots") }) +
+    tile({ k: "Agents live", v: a ? a.mean.toFixed(1) : "–", body: a ? small(`mean, all roles, peak ${a.peak}`) + small(`${live.filter((v) => v === 0).length} of ${live.length} steps had no agent live`) : small("Loading…"), ...on("live") });
 }
 
 function roles(a) {
-  const rows = roleRows(a).map((r) => `<tr><th scope="row">${esc(r.name)}</th><td>${r.runs}</td><td>${r.hours === null ? "not timed" : esc(hours(r.hours))}</td><td>${esc(shareText(r.share))}</td><td>${esc(dur(r.p50))}</td><td>${esc(r.models.join(", ")) || "–"}</td></tr>`).join("");
-  return `<div class="wrap"><table class="roles"><thead><tr><th scope="col">Role</th><th scope="col">Runs</th><th scope="col">Hours</th><th scope="col">Share of hours</th><th scope="col">p50</th><th scope="col">Models</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const num = ["Runs", "Hours", "Share of hours", "p50"];
+  const rows = roleRows(a).map((r) => `<tr><td>${esc(r.name)}</td><td class="num">${r.runs}</td><td class="num">${r.hours === null ? "not timed" : esc(hours(r.hours))}</td><td class="num">${esc(shareText(r.share))}</td><td class="num">${esc(dur(r.p50))}</td><td class="wide">${esc(r.models.join(", ")) || "–"}</td></tr>`).join("");
+  return dataTable(heads(["Role", ...num, "Models"], num), rows);
 }
 
-/** The page body. `d` is /api/speed for the week, or null while it loads. */
-export function renderCapacity(s, d) {
-  const a = d?.agents ?? null;
-  const wait = `<p role="status">${esc(speedError(d) ?? "Loading…")}</p>`;
-  return `<div class="page sp" id="capacity">${pageHead("Agents")}<section aria-label="Scorecard" class="tiles">${tiles(s, a)}</section>` +
-    `<section class="card" aria-label="Agents live"><h2>Agents live</h2>${a ? `<div class="livechart" role="img" aria-label="Agents live over the last 7 days"></div>` : wait}</section>` +
-    `<section class="card" aria-label="Agent roles"><h2>Roles</h2>${a ? roles(a) : wait}</section></div>`;
-}
-const speedError = (d) => d?.error ?? null;
+/** What each tile shows in the card below it: the title, and the chart's option from the two answers. Tokens come from the theme. */
+export const DETAILS = {
+  live: { title: "Agents live", option: (_s, d) => liveOption(d) },
+  slots: { title: "Worker slots in use", option: (s, d) => slotsOption(d, s.factory.liveCap) },
+  usage: { title: "Weekly usage since the last reset", option: (s) => usageOption(s.usage?.series ?? []) },
+  runs: { title: "Runs started", option: (_s, d) => barsOption(d.buckets.map((b) => xLabel(b.at, d.window)), [{ name: "Runs", data: d.buckets.map((b) => b.runs ?? 0) }]) },
+};
+
+const fixed = (v) => (v == null ? "–" : Number(v).toFixed(1));
+const stamp = (at) => new Date(at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
+const stepOption = (d, name, vals) => lineOption(d.agents.points.map((p) => xLabel(p.at, d.window)), name, vals, { step: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(stamp(d.agents.points[q.dataIndex].at))}<br>${esc(fixed(q.value))} ${esc(name.toLowerCase())}`; } });
 
 /** The chart option: one area of total agents live. */
-export function liveOption(d, color) {
-  const vals = totals(d.agents);
-  const stamp = (at) => new Date(at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
-  return {
-    animation: false,
-    color: [color],
-    grid: { left: 24, right: 16, top: 8, bottom: 20 },
-    tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(stamp(d.agents.points[q.dataIndex].at))}<br>${esc(q.value.toFixed(1))} live`; } },
-    xAxis: { type: "category", boundaryGap: false, data: d.agents.points.map((p) => xLabel(p.at, d.window)), axisTick: { show: false }, axisLabel: { interval: 23, hideOverlap: true } },
-    yAxis: { type: "value", min: 0, minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } },
-    series: [{ type: "line", step: "end", symbol: "none", lineStyle: { width: 0 }, areaStyle: { opacity: 0.85 }, data: vals }],
-  };
+export const liveOption = (d) => stepOption(d, "Live", totals(d.agents));
+
+/** One area of the worker agents, and a line at the cap. */
+export function slotsOption(d, cap) {
+  const o = stepOption(d, "Workers", d.agents.points.map((p) => p.worker ?? 0));
+  o.series[0].markLine = { silent: true, symbol: "none", label: { formatter: `cap ${cap}` }, data: [{ yAxis: cap }] };
+  return o;
 }
 
-let drawn = null;
+export const usageOption = (series) => lineOption(series.map((p) => when(p.at)), "Used, %", series.map((p) => Math.round(p.seven_day * 10) / 10), { max: 100 });
+
+/** The page body. `d` is /api/speed for the window, or null while it loads; `key` is the selected tile. */
+export function renderCapacity(s, d, key = "live") {
+  const a = d?.agents ?? null, cur = DETAILS[key] ? key : "live";
+  const wait = `<p role="status">${esc(d?.error ?? "Loading…")}</p>`;
+  const scope = filterBar([{ name: "window", value: d?.window ?? "week", options: WINDOWS }]);
+  return `<div class="page sp" id="capacity">${pageHead("Agents", { aside: scope })}${tiles("Scorecard", scorecard(s, a, cur))}` +
+    card(DETAILS[cur].title, a ? `<div class="chartbox" role="img" aria-label="${esc(DETAILS[cur].title)}"></div>` : wait) +
+    card("Roles", a ? roles(a) : wait) + `</div>`;
+}
+
 /** The old address. */
 export const redirect = (hash) => (String(hash ?? "").split("?")[0] === "#/status/capacity" ? "#/factory/agents" : null);
+
+const windowOf = () => hashQuery().get("window") || "week";
+const picked = () => hashQuery().get("tile") ?? "live";
+let drawn = null;
 
 export const view = {
   path: "/factory/agents",
@@ -62,18 +75,19 @@ export const view = {
   icon: "robot",
   api: "/api/state",
   refresh: 60,
-  render: (s) => renderCapacity(s, usable("week")),
+  render: (s, _params, q) => renderCapacity(s, usable(q?.get("window") || "week"), q?.get("tile") ?? "live"),
   mount: async (root, s) => {
     const draw = (d) => {
+      root.innerHTML = renderCapacity(s, d, picked());
+      wireScope(root);
+      onTile(root.querySelector("#capacity"), (k) => { setQuery({ tile: k === "live" ? "" : k }); draw(d); root.querySelector(`button[data-tile="${k}"]`)?.focus(); });
       drawn?.dispose();
       drawn = null;
-      const el = root.querySelector(".livechart");
-      if (el && d?.agents && globalThis.echarts) drawn = chart(el, liveOption(d, readTokens().run));
+      const el = root.querySelector(".chartbox"), detail = DETAILS[picked()] ?? DETAILS.live;
+      if (el && d?.agents && globalThis.echarts) drawn = chart(el, detail.option(s, d));
     };
-    draw(usable("week"));
-    const d = await loadSpeed("week");
-    if (!root.querySelector("#capacity")) return;
-    root.innerHTML = renderCapacity(s, d);
-    draw(d);
+    draw(usable(windowOf()));
+    const d = await loadSpeed(windowOf());
+    if (root.querySelector("#capacity")) draw(d);
   },
 };

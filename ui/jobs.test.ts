@@ -207,22 +207,22 @@ describe("render", () => {
     expect(h).toContain('href="#/jobs/fac-9"');
     expect(h).toContain('<table class="tbl">');
     expect(h.match(/<th[ >]/g)).toHaveLength(8);
-    expect(h).toContain('<select name="condition"');
-    expect(h).toContain('<option value="landed" selected>');
+    expect(h).toContain('data-name="condition"');
+    expect(h).toContain('data-value="landed" aria-pressed="true"');
     expect(h).toContain('aria-pressed="true"');
     expect(h).not.toContain("<style>");
     expect(h).not.toContain("data-more");
     const many = v.renderJobs(Array.from({ length: 51 }, (_, i) => ({ ...job, name: `fac-${i}` })), {});
-    expect(many.match(/<tr hidden>/g)).toHaveLength(1);
+    expect(many.match(/<tr class="rowlink"/g)).toHaveLength(50);
     expect(many).toContain('data-more="1"');
     expect(many).toContain("50 of 51");
-    expect(v.renderJobs([], {})).toContain("No job in this window.");
+    expect(v.renderJobs([], {})).toContain("No job matches.");
   });
   test("the list reads the route query from its argument", () => {
     expect(v.view.api({}, new URLSearchParams("condition=stuck&repo=fac"))).toBe("/api/jobs?repo=fac&condition=stuck");
     expect(v.view.api({}, new URLSearchParams())).toBe("/api/jobs");
     const h = v.view.render([job], {}, new URLSearchParams("condition=stuck"));
-    expect(h).toContain('<option value="stuck" selected>');
+    expect(h).toContain('data-value="stuck" aria-pressed="true"');
   });
   test("no render or api function reads location.hash", () => {
     expect(String(v.view.api)).not.toContain("location.hash");
@@ -242,7 +242,7 @@ describe("render", () => {
     expect(cells.slice(0, 5)).toEqual(["worker", "checks failed", '<span class="badge stuck">failed</span>', "opus", expect.stringMatching(/\d/)]);
     expect(cells[5]).toBe("$1.03");
     expect(h).toContain('<table class="tbl">');
-    expect(h).toContain('class="tscroll job-runs"');
+    expect(h).toContain('class="tscroll"');
   });
   test("diff lines are coloured and escaped", () => {
     const h = v.renderDiff("--- a\n+++ b\n+x<y\n-z");
@@ -260,6 +260,6 @@ test("the issue and job pages use pageHead, table.tbl, idLink and when", async (
   expect(issue).not.toContain('class="ih"');
   const job = require("./views/jobs.js").renderJob({ name: "fac-9", repo: "fac", item: { title: "T" }, condition: "landed", started, runs: [] });
   for (const t of ['<header class="ph">', "Oct 01 10:00"]) expect(job).toContain(t);
-  expect(job.match(/<style>/g)).toHaveLength(1);
-  expect(job).toContain('<dl class="facts job-facts">');
+  expect(job).not.toContain("<style>");
+  expect(job).toContain('<dl class="facts">');
 });

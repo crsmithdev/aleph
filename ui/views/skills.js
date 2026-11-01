@@ -1,11 +1,11 @@
 // One skill: how often it ran, from Langfuse. `renderSkill` takes /api/skills/:name and does not touch the DOM.
 // The shell takes one view per module, so the route is declared in skill.js. The list of skills is in agents.js.
-import { chart, empty, esc, idLink, pageHead, sectionHead, span, when } from "../lib.js";
+import { card, chart, crumb, dataTable, empty, esc, idLink, pageHead, span, when } from "../lib.js";
 
 const sessionHref = (id) => `#/sessions/${encodeURIComponent(id)}`;
 
 /** The mount point of a per-day chart; `mountPerDay` draws into it. `key` finds its data again. */
-export const bars = (key, label = "Uses per day") => `<div class="perday spark" role="img" aria-label="${esc(label)}" data-skill="${esc(key)}"></div>`;
+export const bars = (key, label = "Uses per day") => `<div class="perday chartbox" role="img" aria-label="${esc(label)}" data-skill="${esc(key)}"></div>`;
 
 /** The ECharts option for per-day counts: one bar per day, the days counted on from `since` (YYYY-MM-DD). */
 export function perDayOption(counts, since) {
@@ -34,15 +34,13 @@ export function mountPerDay(root, d) {
   }
 }
 
-const SCROLL = `class="tscroll"`;
-
 /** When the last reload failed, the page shows the last good rows and says how old they are. */
 export const staleNote = (d, now = new Date()) => d.failed
-  ? `<p class="quiet stale" role="status">Langfuse failed: ${esc(d.failed)}. Showing the data from ${esc(when(d.asOf, now))} (${esc(span(d.asOf, now.toISOString()) || "0 min")} ago).</p>`
+  ? `<p class="quiet stale" role="status">Langfuse failed: ${esc(d.failed)}. Showing the data from ${esc(when(d.asOf, now))} (${esc(span(d.asOf, now.toISOString()) || "0s")} ago).</p>`
   : "";
 
 const sessionCell = (id) => (id ? idLink(id.slice(0, 8), sessionHref(id)) : "");
-const table = (head, rows) => `<div ${SCROLL}><table class="tbl fit"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+const table = (head, rows) => dataTable(head, rows);
 
 export function renderSkill(d) {
   // Columns: session, title (prompt or message), project, numbers, time last.
@@ -53,12 +51,12 @@ export function renderSkill(d) {
     `<tr><td>${sessionCell(e.session)}</td><td class="wide" title="${esc(e.message)}">${esc(e.message)}</td><td>${esc(e.project)}</td><td class="time">${esc(when(e.time))}</td></tr>`).join("");
   const tools = d.tools.map((t) => `<tr><td><code>${esc(t.tool)}</code></td><td class="num">${t.count}</td></tr>`).join("");
   const projects = d.projects.map((p) => `<tr><td>${esc(p.project)}</td><td class="num">${p.uses}</td></tr>`).join("");
-  return `<div class="page skills"><p><a href="#/sessions">Sessions</a></p>` +
+  return `<div class="page sp skills">${crumb("#/sessions", [["sessions", "#/sessions"], ["skills"], [d.name]])}` +
     pageHead(d.name, { count: d.uses, aside: `uses in the last ${d.days} days` }) + staleNote(d) +
-    (d.uses ? `<p style="max-width:720px;height:120px">${bars(d.name).replace('class="perday spark"', 'class="perday" style="width:100%;height:120px"')}</p>` : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
-    (projects ? `${sectionHead("Projects")}${table("<th>Project</th><th class=\"num\">Uses</th>", projects)}` : "") +
-    (sessions ? `${sectionHead("Sessions")}${table("<th>Session</th><th>First prompt line</th><th>Project</th><th>Started by</th><th>Time</th>", sessions)}` : "") +
-    (tools ? `${sectionHead("Tools called after it, in the same turn")}${table("<th>Tool</th><th class=\"num\">Calls</th>", tools)}` : "") +
-    (errors ? `${sectionHead("Turns with errors", { count: d.errors.length })}${table("<th>Session</th><th>Error</th><th>Project</th><th>Time</th>", errors)}` : "") +
+    (d.uses ? card("Uses per day", bars(d.name)) : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
+    (projects ? card("Projects", table("<th>Project</th><th class=\"num\">Uses</th>", projects)) : "") +
+    (sessions ? card("Sessions", table("<th>Session</th><th>First prompt line</th><th>Project</th><th>Started by</th><th>Time</th>", sessions)) : "") +
+    (tools ? card("Tools called after it, in the same turn", table("<th>Tool</th><th class=\"num\">Calls</th>", tools)) : "") +
+    (errors ? card("Turns with errors", table("<th>Session</th><th>Error</th><th>Project</th><th>Time</th>", errors), { count: d.errors.length }) : "") +
     `</div>`;
 }

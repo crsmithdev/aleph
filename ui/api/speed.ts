@@ -39,10 +39,12 @@ export interface Speed {
   phases: Record<Phase, PhaseStat>;
   checks: { name: string; count: number; p50: number; p90: number }[];
   /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string. */
-  buckets: ({ label: string; at: string } & Record<Phase, number | null>)[];
+  buckets: ({ label: string; at: string; runs: number } & Record<Phase, number | null>)[];
   slowest: { name: string; condition: string; model: string; tests: number | null; cost: number; took: number }[];
   models: { model: string; count: number; p50: number }[];
   flaky: number;
+  /** The reruns by check, most first. */
+  flakes: { name: string; count: number }[];
   /** Landed issues (one per issue that landed in the window) and what they cost to get there. */
   issues: {
     landed: number;
@@ -442,6 +444,12 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     const inBucket = xs.filter((x) => Math.min(n - 1, Math.max(0, slot(x.at))) === i).map((x) => x.secs);
     return inBucket.length ? round(pct(inBucket, 0.5)) : null;
   };
+  const recent = flakes().filter((f) => Date.parse(f.at) >= since.getTime());
+  const started = Array.from({ length: n }, () => 0);
+  for (const e of entries) {
+    const t = Date.parse(e.run.started);
+    if (t >= since.getTime() && t < now.getTime()) started[Math.min(n - 1, Math.max(0, slot(t)))]++;
+  }
   return {
     window,
     done: issuesLanded,
@@ -450,7 +458,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
     buckets: Array.from({ length: n }, (_, i) => {
       const d = startOf(i);
-      return { label: daily ? `${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : `${pad(d.getHours())}:${pad(d.getMinutes())}`, at: d.toISOString(), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) } as Speed["buckets"][number];
+      return { label: daily ? `${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : `${pad(d.getHours())}:${pad(d.getMinutes())}`, at: d.toISOString(), runs: started[i], ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) } as Speed["buckets"][number];
     }),
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),
     models: [...models].map(([model, xs]) => ({ model, count: xs.length, p50: round(pct(xs, 0.5)) })).sort((a, b) => b.count - a.count || a.model.localeCompare(b.model)),
@@ -460,7 +468,8 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     lost: cls.lost,
     hasWeek: fit !== null,
     agents: agentStats(entries, since.getTime(), now.getTime(), AGENT_STEP[window], LIVE_CAP()),
-    flaky: flakes().filter((f) => Date.parse(f.at) >= since.getTime()).length,
+    flaky: recent.length,
+    flakes: [...Map.groupBy(recent, (f) => f.check)].map(([name, xs]) => ({ name, count: xs.length })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
   };
 }
 

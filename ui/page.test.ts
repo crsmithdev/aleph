@@ -30,7 +30,7 @@ test("the new rules sit at the top level, outside any @media block", () => {
   }
 });
 
-test("the Memory view's classes have top-level rules, and .two stacks at 720px", () => {
+test("the Memory view's classes have top-level rules, and .pair wraps by itself", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   const css = html.match(/<style>([\s\S]*?)<\/style>/)![1].replace(/\/\*[\s\S]*?\*\//g, "").replace(/"[^"\n]*"|'[^'\n]*'/g, "");
   // Selectors of the rules at brace depth 0; @media preludes are included, their inner rules are not.
@@ -47,8 +47,7 @@ test("the Memory view's classes have top-level rules, and .two stacks at 720px",
     }
   }
   const selectors = top.flatMap((p) => p.split(",").map((s) => s.trim()));
-  for (const cls of [".two", ".search", ".results", ".writes"]) expect(selectors).toContain(cls);
-  expect(css).toMatch(/@media \(max-width: 720px\) \{\s*\.two \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
+  for (const cls of [".pair", ".results", ".writes"]) expect(selectors).toContain(cls);
 });
 
 test("at 720px and below the top nav wraps its links and does not scroll sideways", () => {
@@ -137,7 +136,7 @@ test("the Status metric numbers use --metric, which has its own picker role apar
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   expect(html).toContain("--metric: 'Merriweather', Georgia, serif;");
   expect(html).toContain(".tile b { font: 700 var(--fs-metric)/1 var(--metric);");
-  expect(html).toContain(".tile b em { font: 400 22px/1 var(--metric);");
+  expect(html).toContain(".tile b em { font: 400 var(--fs-lg)/1 var(--metric);");
   expect(html).toContain('["metric", "Big numbers", [...SERIF, ...SANS], "Merriweather", "Georgia, serif"],');
   expect(html.indexOf('["display", "Titles"')).toBeLessThan(html.indexOf('["metric", "Big numbers"'));
 });
@@ -178,7 +177,7 @@ test("the Needs-you list and row parts have top-level rules", () => {
 test("the font picker is hidden at 720px and below, and keeps its top-level rule", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   expect(html).toMatch(/@media \(max-width: 720px\) \{\s*\.fontpick \{\s*display: none;?\s*\}\s*\}/);
-  expect(html).toMatch(/\.fontpick \{ position: fixed; right: 16px; bottom: 16px;/);
+  expect(html).toMatch(/\.fontpick \{ margin: 0; padding: 0; border: 0; position: fixed; right: 16px; bottom: 16px;/);
 });
 
 test("at 720px and below the shell's nav row is only as tall as the nav, and main takes the rest", () => {
@@ -222,4 +221,11 @@ test("every sidebar view has an icon, and a collapsed sidebar keeps the links an
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   expect(html).not.toContain(".shell.collapsed #nav, .shell.collapsed #logout { display: none; }");
   expect(html).toMatch(/\.shell\.collapsed #nav \.lbl/);
+});
+
+test("a route change clears the handlers a view set on #view", () => {
+  const page = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const fn = page.slice(page.indexOf("function route()"));
+  expect(fn).toContain('$("view").onclick = $("view").onchange = $("view").onkeydown = null;');
+  expect(fn.indexOf('$("view").onclick')).toBeLessThan(fn.indexOf("load(shown, true)"));
 });
