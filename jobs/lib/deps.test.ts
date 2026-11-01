@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
 import { parseOutdated, propose, startProposals, sweep } from "./deps.ts";
-import { grant } from "./always.ts";
+import { grant } from "./ask.ts";
 import { type Repo } from "./ledger.ts";
 
 const TABLE = `

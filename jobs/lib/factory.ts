@@ -9,12 +9,13 @@ import * as issues from "../../todo/lib/todo.ts";
 import { afterOf, askOf, flakeTracker, goal, goals, isSorted, note, partsOf, planSet, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { startProposals, takeFresh } from "./deps.ts";
-import { normalizeAsk, type Ask } from "./ask.ts";
+import { always, logAlways, needsOf, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
+import { factoryLog, layout } from "./layout.ts";
 import { itemOnMain, repoStages } from "./status.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
-import { allRuns, askOf as runAskOf, expand, isAwaiting, isBuild, needsOf, onOf, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, askOf as runAskOf, isAwaiting, isBuild, onOf, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, checkedBy, lookMinutes, isOpen, issue as issueOf, jobsNamed, asked, lastReal, markAsked, markRescued, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { smokeLine } from "./smoke.ts";
 import { accept, final, readRecord, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
@@ -26,13 +27,12 @@ import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
 import { alreadyMet } from "./gate.ts";
-import { always, logAlways } from "./always.ts";
 import { detached } from "./launch.ts";
 import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, section, type Rate } from "./plan.ts";
 import type { Tier } from "./route.ts";
 
-export const factoryDir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
+export const factoryDir = () => layout().factory;
 const pauseFile = () => join(factoryDir(), "paused");
 const probeFile = () => join(factoryDir(), "probe.json");
 
@@ -63,11 +63,6 @@ export function setPaused(on: boolean): void {
   mkdirSync(factoryDir(), { recursive: true });
   if (on) writeFileSync(pauseFile(), new Date().toISOString() + "\n");
   else rmSync(pauseFile(), { force: true });
-}
-
-export function factoryLog(line: string): void {
-  mkdirSync(factoryDir(), { recursive: true });
-  appendFileSync(join(factoryDir(), "tick.log"), `${new Date().toISOString()} ${line}\n`);
 }
 
 /** The most open jobs awaiting Chris before no new run starts. */
@@ -581,8 +576,6 @@ export async function reacceptReopened(repoKey: string, o: { since?: string; bef
   return lines;
 }
 
-/** An Ask of input with no options: the factory's own stop on a goal, with the sentence Chris reads. */
-export const plainAsk = (reason: string, question: string): Ask => ({ kind: "input", reason, question, options: [], why: [] });
 
 /** Runs of one goal in a row, newest last, that may end with no commit before dispatch stops starting it. */
 const NO_COMMIT_LIMIT = 3;

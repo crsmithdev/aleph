@@ -8,6 +8,7 @@
  * `runViewOf` read the store's and the ledger's accessors, which give an old-shape
  * item or run and a new-shape one alike.
  */
+import { waitOf } from "./ask.ts";
 import { askOf as runAsk, isAwaiting, type Run, type State } from "./ledger.ts";
 import type { Job } from "./job.ts";
 import { isOpen, lastReal } from "./job.ts";
@@ -62,8 +63,7 @@ export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Sub
 
 export function runViewOf(job: Job): RunView {
   const run = lastReal(job).run;
-  const a = isAwaiting(run.condition) ? runAsk(run) : undefined;
-  return { kind: run.kind, condition: run.condition, open: isOpen(job), ...(isAwaiting(run.condition) ? { ask: a ? { kind: a.kind, reason: a.reason } : { kind: "input", reason: "question" } } : {}) };
+    return { kind: run.kind, condition: run.condition, open: isOpen(job), ...(isAwaiting(run.condition) ? { ask: waitOf(runAsk(run)) } : {}) };
 }
 
 /** The ref's part after `<repo>-`, as `landedIndex` and `reverted` key it: `"910"` for an issue, `"910.1"` for a part. */

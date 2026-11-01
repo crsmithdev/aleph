@@ -7,12 +7,14 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { askOf, CALL_FILE, isAwaiting, isBuild, isLive, isStarting, runsDir, loadRegistry, lock, needsOf, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
+import { needsOf } from "./ask.ts";
+import { askOf, CALL_FILE, isAwaiting, isBuild, isLive, isStarting, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
 import { baselineChecks, git, removeBranch } from "./unit.ts";
 import { fetchOrigin } from "./git.ts";
 import { itemOnMain } from "./status.ts";
-import { dispatchDetached, dispatchIssues, factoryLog, gates, liveEntries } from "./factory.ts";
+import { dispatchDetached, dispatchIssues, gates, liveEntries } from "./factory.ts";
+import { factoryLog } from "./layout.ts";
 import { route, type Tier } from "./route.ts";
 import { startUnit, type Output } from "./launch.ts";
 import * as issues from "../../todo/lib/todo.ts";

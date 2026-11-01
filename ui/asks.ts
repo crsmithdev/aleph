@@ -3,8 +3,7 @@
  * the page only renders. One entry per run, issue or goal that waits for Chris, and per proposal.
  */
 import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/corrections.ts";
-import type { Ask } from "../jobs/lib/ask.ts";
-import { ASK_REASONS, type Granted } from "../jobs/lib/always.ts";
+import { actionsOn, ASK_REASONS, kindOf, reasonOf, type Ask, type Granted } from "../jobs/lib/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { oneSentence } from "./views/now.js";
 // @ts-ignore plain JS, shared with the page
@@ -27,33 +26,9 @@ export interface Details {
 }
 export type Always = Record<string, Granted>;
 
-/** Reasons whose answer is an approval; every other reason takes input. */
-const APPROVAL = ["held-path", "review", "proposal", "firefighter"];
-
-/** The kind of an Ask: the ask's own, else from its reason. */
-export function kindOf(reason: string, given?: string): "input" | "approval" {
-  if (given === "input" || given === "approval") return given;
-  return APPROVAL.includes(reason) || reason.startsWith("proposal-") ? "approval" : "input";
-}
-
 const STAMP = /^\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?:\s*/;
 /** A note without its optional leading timestamp. */
 const unlead = (s: string): string => s.replace(/^\s*-\s*/, "").replace(STAMP, "");
-
-/** The Ask reason of an issue or goal: its own `reason`, else read from the last note of an old item. */
-export function issueReason(i: Pick<NewIssue, "reason" | "question" | "decision">): string {
-  if (i.reason && ASK_REASONS[i.reason]) return i.reason;
-  if (i.reason === "triage-no-verdict") return "triage-failed";
-  if (i.reason === "held") return "held-path";
-  const n = unlead(i.question ?? "");
-  if (/^triage: no verdict in/.test(n)) return "triage-failed";
-  if (/^acceptance: fail again/.test(n)) return "acceptance-failed";
-  if (/ended with no commit, so the factory stopped/.test(n)) return "no-commit";
-  if (/times in the last hour; it stops starting it/.test(n)) return "run-cap";
-  if (/^triage: a live check/.test(n)) return "host-check";
-  if (/a held security path/.test(n)) return "firefighter";
-  return i.decision && i.reason === "rescue" ? "rescue" : "question";
-}
 
 /** A plain sentence from a raw note: no tags, no leads, no paths. */
 export function clean(text: unknown): string {
@@ -155,11 +130,7 @@ function actionsFor(reason: string, c: Ctx): Action[] {
       default: return [];
     }
   };
-  // One reason serves a worker's question (a run) and an issue's (a decision): the context picks the actions.
-  const names = reason === "question" ? (c.run ? ["answer", "drop"] : ["decide", "deny"])
-    : reason === "part-dropped" ? (c.issue?.decision ? ["decide", "close"] : ["rerun", "close"])
-    : ASK_REASONS[reason].actions;
-  const acts = [...new Set(names)].flatMap((n) => n === "answer" ? [a("answer", "Answer and rerun", "Takes your answer and starts the job again with it.", run)] : one(n));
+  const acts = actionsOn(reason, { run: !!c.run, decision: !!c.issue?.decision }).flatMap((n) => n === "answer" ? [a("answer", "Answer and rerun", "Takes your answer and starts the job again with it.", run)] : one(n));
   if (acts[0]) acts[0].primary = true;
   return acts;
 }
@@ -224,7 +195,7 @@ export function attend(s: { runs: Job[]; issues: NewIssue[] }, always: Always = 
   const rank: Record<string, number> = { "held-path": 0, review: 1 };
   const runs = s.runs.filter((j) => j.ask && ASK_REASONS[j.ask.reason]).sort((a, b) => (rank[a.ask!.reason] ?? 2) - (rank[b.ask!.reason] ?? 2));
   for (const j of runs) add(item(j.ask!.reason, { id: j.name, run: j }, `run:${j.name}`, `#/jobs/${encodeURIComponent(j.name)}`, j.item?.title ?? "", j.repo, j.ask!.kind));
-  for (const i of s.issues) add(item(issueReason(i), { id: i.id, issue: i }, `issue:${i.id}`, i.href, i.title, i.id.split(/-(?=\d+(?:\.\d+)?$)/)[0], i.askKind));
+  for (const i of s.issues) add(item(reasonOf(i.reason), { id: i.id, issue: i }, `issue:${i.id}`, i.href, i.title, i.id.split(/-(?=\d+(?:\.\d+)?$)/)[0], i.askKind));
   for (const l of lessons) {
     const reason = `proposal-${l.kind ?? "skill"}`;
     if (ASK_REASONS[reason]) add(item(reason, { id: l.id, lesson: l }, `proposal:${l.id}`, "", l.title || l.sentence));

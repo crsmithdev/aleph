@@ -10,9 +10,10 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { clearAsk, file, readList, sourceOf, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { always, logAlways } from "./always.ts";
+import { always, logAlways, plainAsk } from "./ask.ts";
 import { fetchOrigin, git } from "./git.ts";
-import { factoryDir, factoryLog } from "./factory.ts";
+import { factoryDir } from "./factory.ts";
+import { factoryLog } from "./layout.ts";
 import { type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 
@@ -89,7 +90,7 @@ export function propose(repo: Repo, found: Proposal[]): string[] {
   const missing = fresh.filter((p) => !had.has(titleOf(p)));
   const made = file(repo, "dependency proposals", missing.map((p) => ({
     title: titleOf(p), priority: "low", source: "deps", areas: ["deps"],
-    ask: { kind: "approval", reason: "proposal", question: `Update ${p.name} from ${p.current} to ${p.latest}?`, options: [], why: [] },
+    ask: plainAsk("proposal", `Update ${p.name} from ${p.current} to ${p.latest}?`),
     spec: `Proposed by the nightly dependency sweep: \`bun outdated\` shows ${p.name} at ${p.current} in the lockfile and ${p.latest} as the latest.\nApprove it to have the factory plan the update.\n`,
   })));
   if (made.length !== missing.length || made.some((id) => !id)) return [];

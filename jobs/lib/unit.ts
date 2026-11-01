@@ -11,7 +11,8 @@ import * as issues from "../../todo/lib/todo.ts";
 import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
 import { addWorktree, fetchOrigin, followMain, git } from "./git.ts";
 import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, tagged, verdict as reviewVerdict } from "./gate.ts";
-import { askOf, checkSlot, isAwaiting, isBuild, needsOf, onOf, readCall, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type Ask, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { needsOf, plainAsk } from "./ask.ts";
+import { askOf, checkSlot, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
@@ -712,8 +713,8 @@ export function removeBranch(repo: Repo, run: Run): void {
 type Outcome = Pick<Run, "condition" | "ask" | "reason" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat" | "checkedBase" | "checkedTip">;
 
 /** A verdict that waits for Chris: the condition `awaiting` and the Ask. */
-const awaiting = (kind: Ask["kind"], reason: string, question: string, why: string[] = []): Pick<Outcome, "condition" | "ask"> =>
-  ({ condition: "awaiting", ask: { kind, reason, question, options: [], why: why.filter(Boolean) } });
+const awaiting = (reason: string, question: string, why: string[] = []): Pick<Outcome, "condition" | "ask"> =>
+  ({ condition: "awaiting", ask: plainAsk(reason, question, why.filter(Boolean)) });
 
 export async function unit(folder: string): Promise<void> {
   // drop sends SIGTERM when no systemd unit is there to stop the cgroup.
@@ -923,7 +924,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   if (w.timedOut) return fail("timed out: worker");
   if (w.code !== 0) return { outcome: { condition: "failed", reason: `worker exited ${w.code}` }, code: w.code };
   const question = result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("QUESTION:")).at(-1);
-  if (question) return { outcome: { ...awaiting("input", "question", question.slice("QUESTION:".length).trim()), question: question.slice("QUESTION:".length).trim() }, code: 0 };
+  if (question) return { outcome: { ...awaiting("question", question.slice("QUESTION:".length).trim()), question: question.slice("QUESTION:".length).trim() }, code: 0 };
   const dirty = git(wt, "status", "--porcelain").out;
   if (dirty) return fail(`uncommitted: ${dirty.split("\n")[0].slice(3)}`);
   const refetched = fetchOrigin(wt);
@@ -1136,7 +1137,7 @@ const times = (n: number) => n === 1 ? "once" : n === 2 ? "twice" : `${n} times`
 async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, facts: Partial<Outcome>, earlier?: Run[]): Promise<{ outcome: Outcome; code: number }> {
   const phase = (p: string) => updateRun(folder, { phase: p });
   const stat = git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out;
-  const held = (rule: string) => ({ outcome: { ...awaiting("approval", "held-path", rule, [stat]), reason: rule, stat, ...facts }, code: 0 });
+  const held = (rule: string) => ({ outcome: { ...awaiting("held-path", rule, [stat]), reason: rule, stat, ...facts }, code: 0 });
   const security = securityChange(repo.path, base, `refs/heads/${branch}`);
   if (security) return held(`held path ${security}`);
   const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
@@ -1151,13 +1152,13 @@ async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, d
     if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
   }
   if (!rv.reason) return rule ? held(rule) : { outcome: { condition: "passed", ...facts }, code: 0 };
-  if (rv.none) return { outcome: { ...awaiting("approval", "review", rv.reason, [stat]), reason: rv.reason, stat, ...facts }, code: 0 };
+  if (rv.none) return { outcome: { ...awaiting("review", rv.reason, [stat]), reason: rv.reason, stat, ...facts }, code: 0 };
   if (earlier) {
     if (earlier.length < fixRounds()) return { outcome: { condition: "stuck", reason: rv.reason, stat, ...facts, failed: "review", round: earlier.length }, code: 1 };
     const back = earlier.filter((r) => r.failed === "review").length;
-    if (back) return { outcome: { ...awaiting("approval", "review", sentBack(back, rv.reason), [stat]), reason: sentBack(back, rv.reason), stat, ...facts }, code: 0 };
+    if (back) return { outcome: { ...awaiting("review", sentBack(back, rv.reason), [stat]), reason: sentBack(back, rv.reason), stat, ...facts }, code: 0 };
   }
-  return { outcome: { ...awaiting("approval", "review", rv.reason, [stat]), reason: rv.reason, stat, ...facts }, code: 0 };
+  return { outcome: { ...awaiting("review", rv.reason, [stat]), reason: rv.reason, stat, ...facts }, code: 0 };
 }
 
 /** The reason of a run that came back from the reviewer after the last fix round. */

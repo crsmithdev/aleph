@@ -253,17 +253,8 @@ export const areasOf = (item: Issue): string[] => list(item.fm.areas);
 
 export type { Ask };
 
-/** The item's ask: `ask: input|approval` with its flat fields; null for none. */
-export function askOf(item: Issue): Ask | null {
-  const kind = item.fm.ask;
-  if (kind !== "input" && kind !== "approval") return null;
-  const d = readAsk(item);
-  const recommended = d?.recommended || undefined;
-  return {
-    kind, reason: text(item.fm.reason) || "question",
-    question: d?.question ?? text(item.fm.question), options: d?.options ?? [], ...(recommended ? { recommended } : {}), why: list(item.fm.why),
-  };
-}
+/** The item's ask, or null for none. */
+export const askOf = (item: Issue): Ask | null => readAsk(item);
 
 /** An item triage leaves alone: asking, a part, the tracker, to plan, or with a spec or parts. */
 export const isSorted = (doc: Doc, item: Issue): boolean =>

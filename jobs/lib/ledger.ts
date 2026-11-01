@@ -5,19 +5,13 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { availableParallelism, homedir } from "node:os";
 import { join } from "node:path";
+import { needsOf, type Ask } from "./ask.ts";
 import { layout } from "./layout.ts";
 
 export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
 /** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. The hidden check adds its test counts. */
 export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number; rerun?: boolean }
-
-/** What a run waits for Chris on: the spec's Ask. */
-export interface Ask {
-  kind: "input" | "approval"; reason: string; question: string;
-  options: { label: string; line: string; after?: string }[];
-  recommended?: string; why: string[];
-}
 
 /** A review's call: what the reviewer decided, or `pending` while it runs and `error` when it ended without one. A `chris` VERDICT line reads as `ask`. */
 export type Review = { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string };
@@ -198,14 +192,6 @@ export function onOf(run: Run): number | string | undefined {
 
 /** The run's ask. Undefined when the run asks nothing. */
 export const askOf = (run: Run): Ask | undefined => run.ask;
-
-const NEEDS: Record<string, "manual" | "question" | "held" | "review"> = { "held-path": "held", review: "review", question: "question", manual: "manual" };
-
-/** The kind of wait an ask is, from its reason: manual, question, held or review; else none. */
-export function needsOf(ask: Ask | undefined): "manual" | "question" | "held" | "review" | undefined {
-  if (!ask) return undefined;
-  return NEEDS[ask.reason];
-}
 
 /** The run's review: `review` of its state.json, else its folder's call.md. */
 export function reviewOf(e: Entry): Review | undefined {

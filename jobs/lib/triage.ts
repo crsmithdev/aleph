@@ -7,14 +7,13 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { isSorted, noteFlake, reader, setAsk, sort } from "../../todo/lib/store.ts";
-import { askNote, normalizeAsk, type Ask } from "./ask.ts";
+import { always, askNote, logAlways, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
 import { allRuns, onOf, lock, type Repo, type Run } from "./ledger.ts";
 import { endLost, openRun } from "./agent-run.ts";
 
 export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
 import { factoryDir, gates } from "./factory.ts";
 import { git } from "./git.ts";
-import { always, logAlways } from "./always.ts";
 /** Triage runs that end with no verdict, for one item, before it gets an Ask (reason `triage-failed`); `ALEPH_TRIAGE_TRIES` changes it. */
 export const TRIAGE_TRIES = () => Number(process.env.ALEPH_TRIAGE_TRIES ?? 2);
 
@@ -63,7 +62,7 @@ export function parseRoute(output: string): Route | string {
       const question = field("question");
       if (!question) return "ask without a question";
       const ask = normalizeAsk(raw, { kind: "input", reason: "question" });
-      return { route: "ask", ask: ask ? { ...ask, kind: "input", reason: "question" } : { kind: "input", reason: "question", question, options: [], why: [] } };
+      return { route: "ask", ask: ask ? { ...ask, kind: "input", reason: "question" } : plainAsk("question", question) };
     }
     case "done": {
       const commit = field("commit"), reason = field("reason");
@@ -181,7 +180,7 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
       setAsk(item, v.ask);
       issues.note(item, `triage: for Chris: ${askNote(v.ask)}`);
     } else {
-      setAsk(item, { kind: "input", reason: "host-check", question: v.note, options: [], why: [] });
+      setAsk(item, plainAsk("host-check", v.note));
       issues.note(item, `triage: a live check: ${v.note}`);
     }
   });
@@ -219,7 +218,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
     return closed ? `${ref}: no verdict in ${n} triages; standing: closed` : null;
   }
   const written = sort(repo, id, `triage ${repo.key}-${id}: no verdict`, (item) => {
-    setAsk(item, { kind: "input", reason: "triage-failed", question: `Triage gave no route in ${n} runs: ${reason}`, options: [], why: [] });
+    setAsk(item, plainAsk("triage-failed", `Triage gave no route in ${n} runs: ${reason}`));
     issues.note(item, `triage: no verdict in ${n} runs: ${reason}`);
   });
   return written ? `${repo.key}-${id}: no verdict in ${n} triages; asked Chris` : null;

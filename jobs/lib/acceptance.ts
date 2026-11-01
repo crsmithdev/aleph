@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { availableParallelism, loadavg } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
+import { plainAsk } from "./ask.ts";
 import { note, noteFlake, reopen as storeReopen, setAsk, writeList, type Ask } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { checkSlot, expand, type Repo } from "./ledger.ts";
@@ -348,7 +349,7 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandb
       writeRecord(repo.key, ref, { result: "fail", sha, command, fails, since: full });
       return `${name}: acceptance failed at ${sha} (${command}); reopened for one more run`;
     }
-    const bad = reopen(repo, ref, `acceptance: fail again at ${sha}: ${out} | the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, { kind: "input", reason: "acceptance-failed", question: `The Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, options: [], why: [out] });
+    const bad = reopen(repo, ref, `acceptance: fail again at ${sha}: ${out} | the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, plainAsk("acceptance-failed", `The Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, [out]));
     writeRecord(repo.key, ref, { result: "fail", sha, command, fails, since: full });
     return `${name}: acceptance failed again at ${sha} (${command}); asks Chris${bad ? ` (no issue note: ${bad})` : ""}`;
   }

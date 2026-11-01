@@ -10,9 +10,10 @@ import { join } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
 import { decide } from "../../hooks/lib/jev.ts";
 import { fetchObservations } from "../../hooks/lib/otlp.ts";
-import { factoryLog, factoryDir } from "./factory.ts";
+import { factoryDir } from "./factory.ts";
+import { factoryLog } from "./layout.ts";
 import { allRuns, loadRegistry, type Repo } from "./ledger.ts";
-import { always, logAlways } from "./always.ts";
+import { always, logAlways } from "./ask.ts";
 import { file as fileIssues, type Place } from "../../todo/lib/store.ts";
 
 export const CORRECTION_AT = 0.7;

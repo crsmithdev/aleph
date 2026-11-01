@@ -16,10 +16,11 @@ import { endLost, openRun } from "./agent-run.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, openJob, readFile, type Job } from "./job.ts";
 import { SECURITY_PATHS, securityChange, verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
-import { factoryDir, factoryLog, factoryRepos, redBaselines, writeRerun } from "./factory.ts";
+import { factoryDir, factoryRepos, redBaselines, writeRerun } from "./factory.ts";
+import { factoryLog } from "./layout.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { drop as dropJob, land as landJob, refusal } from "./transitions.ts";
-import { always, handed, logAlways, readAlways } from "./always.ts";
+import { always, handed, logAlways, plainAsk, readAlways } from "./ask.ts";
 
 export const FIREFIGHTER_MODEL = "claude-opus-5-5";
 /** The most actions one run may take; the rest are refused. */
@@ -267,7 +268,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
         ? `${a.job} cannot be checked for held security paths, as its branch is gone, so it needs you to land or drop it.`
         : `${a.job} changes ${held}, a held security path, so it needs your review before it lands.`;
       markAsked(last, sentence);
-      if (issue !== undefined) store.note(repo, issue, `asks Chris: ${sentence}`, { ask: { kind: "approval", reason: "held-path", question: sentence, options: [], why: [] } });
+      if (issue !== undefined) store.note(repo, issue, `asks Chris: ${sentence}`, { ask: plainAsk("held-path", sentence) });
       await ports.tell(`${repo.key}/${a.job}: asks Chris: ${sentence}`);
       return { chris: sentence };
     }

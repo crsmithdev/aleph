@@ -197,7 +197,7 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
   const d = readAsk(item);
   let note: string;
   let after: string[] | undefined;
-  if (d) {
+  if (d?.options.length) {
     const o = d.options.find((x) => x.label === body?.label);
     if (!o) return Response.json({ error: `no option named ${JSON.stringify(body?.label ?? null)}` }, { status: 400 });
     note = `Chris decided: ${o.label}: ${o.line}`;

@@ -1,12 +1,13 @@
 /**
- * Where the store, the ledger and the sandbox folders live. One answer for every
+ * Where the store, the ledger, the sandbox folders and the factory folder live. One answer for every
  * reader (docs/specs/2026-10-30-work-model.md, "Migration rules"): the new layout
- * (issues, runs, sandbox) under ~/.aleph. The environment wins, variable by variable.
+ * (issues, runs, sandbox, factory) under ~/.aleph. The environment wins, variable by variable.
  */
+import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export interface Layout { store: string; ledger: string; sandbox: string }
+export interface Layout { store: string; ledger: string; sandbox: string; factory: string }
 
 const expand = (p: string): string => (p === "~" || p.startsWith("~/") ? join(homedir(), p.slice(1)) : p);
 
@@ -18,5 +19,13 @@ export function layout(): Layout {
     store: expand(e.ALEPH_ISSUES ?? join(home, "issues")),
     ledger: expand(e.ALEPH_JOBS_DIR ?? join(home, "runs")),
     sandbox: expand(e.ALEPH_SANDBOX_DIR ?? join(home, "sandbox")),
+    factory: expand(e.ALEPH_FACTORY_DIR ?? join(home, "factory")),
   };
+}
+
+/** One line in the factory's tick.log. */
+export function factoryLog(line: string): void {
+  const dir = layout().factory;
+  mkdirSync(dir, { recursive: true });
+  appendFileSync(join(dir, "tick.log"), `${new Date().toISOString()} ${line}\n`);
 }

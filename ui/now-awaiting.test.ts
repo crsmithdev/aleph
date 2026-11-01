@@ -145,7 +145,7 @@ test("an old prose note gets a Problem with no tag or lead, Approve recommendati
 });
 
 // ---- the ask rows ----
-import { ASK_REASONS } from "../jobs/lib/always.ts";
+import { ASK_REASONS } from "../jobs/lib/ask.ts";
 
 const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } => {
   const run = (why: string, o: object = {}) => ({ runs: [job({ name: "aleph-27", condition: "awaiting", ask: { kind: why === "held-path" || why === "review" ? "approval" : "input", reason: why }, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], issues: [] as any[], lessons: [] as any[] });
