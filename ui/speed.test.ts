@@ -170,8 +170,8 @@ test("phases: implement spans a job's fix rounds, land starts at the last finish
     // Finished before the window, landed in it: land only.
     r("e", "build", "passed", t(4), t(4, 30)), r("e", "land", "landed", t(5, 25), t(5, 30)),
   ], none, since, end);
-  expect(p.implement).toEqual({ count: 3, p50: 2400, p90: 3600 }); // 3600 (a), 1200 (b), 2400 (c)
-  expect(p.land).toEqual({ count: 3, p50: 1800, p90: 3600 }); // 600 (a), 1800 (b), 3600 (e)
+  expect(p.implement).toMatchObject({ count: 3, p50: 2400, p90: 3600 }); // 3600 (a), 1200 (b), 2400 (c)
+  expect(p.land).toMatchObject({ count: 3, p50: 1800, p90: 3600 }); // 600 (a), 1800 (b), 3600 (e)
 });
 
 test("filed: an issue's file is its filing; a part's file and a bulk commit's time do not count", () => {
@@ -318,8 +318,8 @@ test("phases: intake runs from the filing to the first triage end, queue from th
     r(3, "build", "passed", 1120_000, 1200_000), r(3, "land", "landed", 1300_000, 1400_000),
   ], f, 0, 9_999_000);
   expect(p.intake.count).toBe(1);
-  expect(p.queue).toEqual({ count: 3, p50: 120, p90: 600 }); // fx-1 600, fx-2 60, fx-3 120
-  expect(p.lead).toEqual({ count: 2, p50: 400, p90: 3600 }); // fx-1 3600, fx-3 400
+  expect(p.queue).toMatchObject({ count: 3, p50: 120, p90: 600 }); // fx-1 600, fx-2 60, fx-3 120
+  expect(p.lead).toMatchObject({ count: 2, p50: 400, p90: 3600 }); // fx-1 3600, fx-3 400
   const later = phases([r(1, "build", "passed", 1660_000, 1700_000)], f, 2000_000, 9_999_000);
   expect(later.queue.count).toBe(0);
 });
@@ -356,4 +356,18 @@ test("an unlanded run of an issue that left the store is Dropped", () => {
   const since = new Date(2026, 9, 27).getTime(), at = new Date(2026, 9, 28, 15).getTime();
   expect(classify([r], () => "gone", since, at, null).classes.find((c) => c.key === "dropped")!.runs).toBe(1);
   expect(classify([r], () => undefined, since, at, null).notCounted.runs).toBe(1);
+});
+
+test("phases: hist has 7 bins, an edge falls in the upper bin, counts sum to count, worst is the longest", () => {
+  const t = (h: number, m = 0, s = 0) => new Date(2026, 9, 28, h, m, s).toISOString();
+  const r = (job: string, a: string, b: string) => ({ kind: "build", job, name: job, condition: "passed", started: a, ended: b }) as any;
+  const since = new Date(2026, 9, 28, 0).getTime(), end = new Date(2026, 9, 28, 23).getTime();
+  // implement times: 30s, 60s (edge), 299s, 15m (edge), 45m, 2h, 3h
+  const runs = [r("a", t(1), t(1, 0, 30)), r("b", t(1), t(1, 1)), r("c", t(1), t(1, 4, 59)), r("d", t(1), t(1, 15)), r("e", t(1), t(1, 45)), r("f", t(1), t(3)), r("g", t(1), t(4))];
+  const p = phases(runs, { issue: new Map() }, since, end);
+  expect(p.implement.hist).toEqual([1, 2, 0, 1, 1, 2, 0]);
+  expect(p.implement.hist.reduce((a, b) => a + b, 0)).toBe(p.implement.count);
+  expect(p.implement.worst).toBe(10800);
+  expect(p.intake.hist).toEqual([0, 0, 0, 0, 0, 0, 0]);
+  expect(p.intake.worst).toBe(0);
 });

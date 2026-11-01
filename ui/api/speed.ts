@@ -26,6 +26,8 @@ export const MAX_RUN = 4 * HOUR;
 export const KINDS = ["agent", "land", "triage", "plan"] as const;
 
 export interface Pct { count: number; p50: number; p90: number }
+/** A phase's `hist` counts times in 7 bins: under 1m, 1-5m, 5-15m, 15-30m, 30m-1h, 1-4h, over 4h (an edge falls in the upper bin). `worst` is the longest time in seconds. */
+export interface PhaseStat extends Pct { hist: number[]; worst: number }
 export type Phase = "intake" | "queue" | "implement" | "land" | "lead";
 const PHASE_KEYS: Phase[] = ["intake", "queue", "implement", "land", "lead"];
 export interface Speed {
@@ -34,7 +36,7 @@ export interface Speed {
   done: number;
   kinds: Record<(typeof KINDS)[number], Pct>;
   /** Intake: issue created to its first triage end. Queue: that end, or the filing with no triage, to the issue's first agent start. Implement: job's first agent start to its last finish. Land: finish to landed. Lead: issue created to its last land. Each counts in the window where it ends. */
-  phases: Record<Phase, Pct>;
+  phases: Record<Phase, PhaseStat>;
   checks: { name: string; count: number; p50: number; p90: number }[];
   /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string. */
   buckets: ({ label: string; at: string } & Record<Phase, number | null>)[];
@@ -110,6 +112,13 @@ export function pct(xs: number[], p: number): number {
 }
 const round = (n: number, d = 0) => { const k = 10 ** d; return Math.round(n * k) / k; };
 const stat = (xs: number[]): Pct => ({ count: xs.length, p50: round(pct(xs, 0.5)), p90: round(pct(xs, 0.9)) });
+const HIST_EDGES = [60, 300, 900, 1800, 3600, 14400];
+export const histOf = (xs: number[]): number[] => {
+  const h = new Array(HIST_EDGES.length + 1).fill(0);
+  for (const x of xs) h[HIST_EDGES.filter((e) => x >= e).length]++;
+  return h;
+};
+const phaseStat = (xs: number[]): PhaseStat => ({ ...stat(xs), hist: histOf(xs), worst: xs.length ? round(Math.max(...xs)) : 0 });
 const pad = (n: number) => String(n).padStart(2, "0");
 const isTests = (name: string) => /^tests?$/.test(name);
 
@@ -291,7 +300,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
 /** Each phase's count, p50 and p90 over `phaseTimes`. */
 export function phases(runs: Run[], filings: Filed, since: number, now: number): Speed["phases"] {
   const t = phaseTimes(runs, filings, since, now);
-  return Object.fromEntries(PHASE_KEYS.map((k) => [k, stat(t[k].map((x) => x.secs))])) as Speed["phases"];
+  return Object.fromEntries(PHASE_KEYS.map((k) => [k, phaseStat(t[k].map((x) => x.secs))])) as Speed["phases"];
 }
 
 // The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
@@ -437,7 +446,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     window,
     done: issuesLanded,
     kinds: Object.fromEntries(KINDS.map((k) => [k, stat(times[k])])) as Speed["kinds"],
-    phases: Object.fromEntries(PHASE_KEYS.map((k) => [k, stat(ended[k].map((x) => x.secs))])) as Speed["phases"],
+    phases: Object.fromEntries(PHASE_KEYS.map((k) => [k, phaseStat(ended[k].map((x) => x.secs))])) as Speed["phases"],
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
     buckets: Array.from({ length: n }, (_, i) => {
       const d = startOf(i);
