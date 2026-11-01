@@ -68,12 +68,16 @@ export function startUnit(args: string[], o: UnitOpts): ReturnType<typeof Bun.sp
   return undefined;
 }
 
+/** Per-process count of detached launches: the unit name's own part, so two calls in one millisecond differ. */
+let detachedCount = 0;
+
 /** Start `aleph <args>` detached, its output appended to `log`; the caller never waits and never sees it fail. */
 export function detached(args: string[], log: string): void {
   try {
     mkdirSync(dirname(log), { recursive: true });
     // Its own transient unit: the caller's cgroup (a run's unit, or aleph-ui) stops its whole cgroup when it ends.
-    const unit = `aleph-${args.join("-")}-${Date.now()}-${process.pid}`.replace(/[^A-Za-z0-9:_.-]/g, "-");
+    // systemd-run refuses a name in use, so each call gets a name of its own: the count, not just the clock, tells them apart.
+    const unit = `aleph-${args.join("-")}-${Date.now()}-${process.pid}-${++detachedCount}`.replace(/[^A-Za-z0-9:_.-]/g, "-");
     startUnit(args, { unit, cwd: dirname(log), output: { file: log },
       props: [`--property=StandardOutput=append:${log}`, `--property=StandardError=append:${log}`] });
   } catch {}

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -45,8 +45,14 @@ async function withFakeSystemdRun(exit: number, body: (dir: string, argvLog: str
 test("detached starts its verb in a unit of its own, a different one per call", async () => {
   await withFakeSystemdRun(0, (dir, argvLog) => {
     const log = join(dir, "logs", "plan.log");
-    detached(["plan", "aleph-1"], log);
-    detached(["plan", "aleph-1"], log);
+    // Pin the clock: both calls land in the same millisecond, whatever the machine's speed.
+    const now = spyOn(Date, "now").mockReturnValue(1793565319597);
+    try {
+      detached(["plan", "aleph-1"], log);
+      detached(["plan", "aleph-1"], log);
+    } finally {
+      now.mockRestore();
+    }
     const lines = readFileSync(argvLog, "utf8").trim().split("\n");
     expect(lines.length).toBe(2);
     const units = lines.map((l) => l.split(" ").find((a) => a.startsWith("--unit="))!);
