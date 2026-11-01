@@ -420,3 +420,29 @@ describe("a goal that acceptance failed twice", () => {
     }
   });
 });
+
+describe("factory.nextTick and tickInProgress read systemctl show and is-active", () => {
+  function withSystemctl(script: string) {
+    const dir = mkdtempSync(join(tmpdir(), "aleph-ui-systemctl-"));
+    writeFileSync(join(dir, "systemctl"), `#!/bin/sh\n${script}\n`);
+    Bun.spawnSync(["chmod", "+x", join(dir, "systemctl")]);
+    const path = process.env.PATH;
+    process.env.PATH = `${dir}:${path}`;
+    try { const s = state(); return { nextTick: s.factory.nextTick, tickInProgress: s.factory.tickInProgress }; }
+    finally { process.env.PATH = path; rmSync(dir, { recursive: true, force: true }); }
+  }
+  const noNext = `if [ "$2" = show ]; then printf 'NextElapseUSecRealtime=\\nNextElapseUSecMonotonic=0\\n'; exit 0; fi`;
+  test("a next elapse is the next tick", () => {
+    expect(withSystemctl(`[ "$2" = show ] && echo 'NextElapseUSecRealtime=Fri 2026-10-30 18:00:00 UTC' && echo NextElapseUSecMonotonic=0 && exit 0\nexit 1`))
+      .toEqual({ nextTick: "2026-10-30T18:00:00.000Z", tickInProgress: false });
+  });
+  test("no next elapse and the service activating is a tick in progress", () => {
+    expect(withSystemctl(`${noNext}\necho activating; exit 3`)).toEqual({ nextTick: null, tickInProgress: true });
+  });
+  test("no next elapse and the service failed or inactive is a dead timer", () => {
+    for (const word of ["failed", "inactive"]) expect(withSystemctl(`${noNext}\necho ${word}; exit 3`)).toEqual({ nextTick: null, tickInProgress: false });
+  });
+  test("systemctl failing gives null and false", () => {
+    expect(withSystemctl("exit 1")).toEqual({ nextTick: null, tickInProgress: false });
+  });
+});

@@ -79,6 +79,8 @@ export interface State {
   factory: {
     paused: boolean; judge: "jev" | "haiku"; dayCap: number; liveCap: number; /** Live agent runs, the count the live cap checks. */ liveRuns: number; awaitingCap: number; runsToday: number; costToday: number;
     nextTick: string | null;
+    /** True when there is no next elapse and aleph-tick.service is activating or active: a tick is running, not a dead timer. */
+    tickInProgress: boolean;
     probe: { at: string; ok: boolean; failed: string[] } | null;
     health: string[];
     /** The factory's own hold (a stuck or failed run), or null. */
@@ -119,18 +121,32 @@ const DELIVERED = 10;
 /** So do the Issues and Triage sections. */
 const NEW_ISSUES = 10, TRIAGED = 10, DONE = 10;
 
-/** The next firing of aleph-tick.timer, or null when systemctl fails or lists no such timer. */
-export function nextTick(): string | null {
+function systemctlUser(...args: string[]): { ok: boolean; out: string } {
   try {
-    const p = Bun.spawnSync(["systemctl", "--user", "list-timers", "aleph-tick.timer", "--no-pager"], { stdout: "pipe", stderr: "ignore" });
-    if (p.exitCode !== 0) return null;
-    const line = p.stdout.toString().split("\n").find((l) => l.includes("aleph-tick.timer"));
-    const m = line?.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})(?: (UTC|GMT|Z))?/);
-    if (!m) return null;
-    const d = new Date(m[3] ? `${m[1]}T${m[2]}Z` : `${m[1]}T${m[2]}`);
-    return Number.isNaN(d.getTime()) ? null : d.toISOString();
-  } catch { return null; }
+    const p = Bun.spawnSync(["systemctl", "--user", ...args], { env: process.env, stdout: "pipe", stderr: "ignore" });
+    return { ok: p.exitCode === 0, out: p.stdout.toString() };
+  } catch { return { ok: false, out: "" }; }
 }
+
+/** The next firing of aleph-tick.timer and whether a tick is running, as jobs/lib/doctor.ts reads them: `systemctl show` for the next elapse, `is-active` for the oneshot service. */
+export function tickTimer(): { nextTick: string | null; tickInProgress: boolean } {
+  const t = systemctlUser("show", "aleph-tick.timer", "-p", "NextElapseUSecRealtime", "-p", "NextElapseUSecMonotonic");
+  if (!t.ok) return { nextTick: null, tickInProgress: false };
+  for (const l of t.out.split("\n")) {
+    const v = l.slice(l.indexOf("=") + 1).trim();
+    if (!l.includes("=") || !v || v === "0" || v === "n/a" || v === "infinity") continue;
+    const m = v.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})(?: (UTC|GMT|Z))?/);
+    if (!m) continue;
+    const d = new Date(m[3] ? `${m[1]}T${m[2]}Z` : `${m[1]}T${m[2]}`);
+    if (!Number.isNaN(d.getTime())) return { nextTick: d.toISOString(), tickInProgress: false };
+  }
+  // A oneshot service reports `activating` while it runs (exit 3): read the word, ignore the exit code.
+  const state = systemctlUser("is-active", "aleph-tick.service").out.split("\n")[0]?.trim();
+  return { nextTick: null, tickInProgress: state === "activating" || state === "active" };
+}
+
+/** The next firing of aleph-tick.timer, or null when there is none (a tick running, a dead timer, or systemctl failing). */
+export function nextTick(): string | null { return tickTimer().nextTick; }
 
 /** `https://github.com/<owner>/<name>` from an origin URL in https or git@github.com: form. */
 export function githubBase(url: string): string | null {
@@ -427,7 +443,7 @@ export function state(now = new Date()): State {
     factory: {
       paused: paused(), judge: judgeChoice(), dayCap: DAY_CAP(), liveCap: LIVE_CAP(), liveRuns: liveRuns(runs), awaitingCap: AWAITING_CAP(), runsToday: today.length,
       costToday: spentToday(now.getTime(), runs),
-      nextTick: nextTick(), probe, health: health(now.getTime(), { jobs, lists }), hold: hold(jobs)?.line ?? null,
+      ...tickTimer(), probe, health: health(now.getTime(), { jobs, lists }), hold: hold(jobs)?.line ?? null,
       firefighter: firefighterLines(now.getTime()),
     },
     asks: att.items, done, incoming: everyone.slice(0, NEW_ISSUES).map((e) => e.card), planner,
