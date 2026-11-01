@@ -17,6 +17,66 @@ test("writeAsk writes the flat fields and store.askOf reads them back", () => {
   expect(store.askOf(i)).toEqual(ask);
 });
 
+const cased: Ask = {
+  ...ask,
+  situation: "The path is held. Chris decides where it goes.",
+  effects: [
+    { action: "decide:A", text: "lands the path on A" },
+    { action: "decide:B", text: "lands the path on B" },
+    { action: "drop", text: "drops the path" },
+  ],
+  recommend: { action: "decide:B", why: "B keeps the path small" },
+};
+
+test("writeAsk writes situation, effects and recommend flat and readAsk and store.askOf read them back", () => {
+  const i = item();
+  writeAsk(i, cased);
+  expect(i.fm).toMatchObject({
+    situation: "The path is held. Chris decides where it goes.",
+    effects: ["decide:A :: lands the path on A", "decide:B :: lands the path on B", "drop :: drops the path"],
+    recommend: "decide:B :: B keeps the path small",
+  });
+  expect(readAsk(i)).toEqual(cased);
+  expect(store.askOf(i)).toEqual(cased);
+});
+
+test("clearAsk removes situation, effects and recommend with the rest", () => {
+  const i = item({ kind: "issue", priority: "low" });
+  writeAsk(i, cased);
+  clearAsk(i);
+  expect(i.fm).toEqual({ kind: "issue", priority: "low" });
+  expect(readAsk(i)).toBeNull();
+});
+
+test("an Ask without situation, effects or recommend writes no such key and reads without them", () => {
+  const i = item();
+  writeAsk(i, ask);
+  expect("situation" in i.fm).toBe(false);
+  expect("effects" in i.fm).toBe(false);
+  expect("recommend" in i.fm).toBe(false);
+  expect(Object.keys(readAsk(i)!).sort()).toEqual(["kind", "options", "question", "reason", "recommended", "why"]);
+  writeAsk(i, { ...ask, situation: " ", effects: [], recommend: undefined });
+  expect("situation" in i.fm || "effects" in i.fm || "recommend" in i.fm).toBe(false);
+});
+
+test("a case text with :: or a line break round-trips cleaned", () => {
+  const i = item();
+  writeAsk(i, {
+    ...ask,
+    situation: "Two lines:\nfirst :: second",
+    effects: [{ action: "decide:A :: B", text: "does\nthis \\ that :: now" }],
+    recommend: { action: "drop", why: "too\nlong :: a \"quote\"" },
+  });
+  expect(i.fm.situation).toBe("Two lines: first : second");
+  expect(i.fm.effects).toEqual(["decide:A : B :: does this / that : now"]);
+  expect(i.fm.recommend).toBe("drop :: too long : a 'quote'");
+  expect(readAsk(i)).toMatchObject({
+    situation: "Two lines: first : second",
+    effects: [{ action: "decide:A : B", text: "does this / that : now" }],
+    recommend: { action: "drop", why: "too long : a 'quote'" },
+  });
+});
+
 test("setAsk and clearAsk write and remove every ask field and keep the rest", () => {
   const i = item({ kind: "issue", priority: "low" });
   store.setAsk(i, ask);

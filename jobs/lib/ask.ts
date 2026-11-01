@@ -21,6 +21,12 @@ export interface Ask {
   options: { label: string; line: string; after?: string }[];
   recommended?: string;
   why: string[];
+  /** Plain sentences on what this item is about and why it waits for Chris. */
+  situation?: string;
+  /** One per action of the reason. For a decision with options, `action` may be `decide:<option label>`. */
+  effects?: { action: string; text: string }[];
+  /** The action the factory recommends, and why. */
+  recommend?: { action: string; why: string };
 }
 
 export interface Reason {
@@ -89,6 +95,8 @@ const REF = /^[\w.-]+-\d+(\.\d+)?$/;
 /** The words that introduce an option's goal on disk. */
 const WAITS = " :: after ";
 const clean = (v: unknown): string => (typeof v === "string" ? v.replace(/\s+/g, " ").replace(/"/g, "'").replace(/\\/g, "/").trim() : "");
+/** A flat value: cleaned, and with no `::` left, since `::` separates the parts of an effect and a recommendation. */
+const flat = (v: unknown): string => clean(v).replace(/:{2,}/g, ":");
 
 /** One option as the line stored in `options`. */
 export const encodeOption = (o: { label: string; line: string; after?: string }): string =>
@@ -127,19 +135,34 @@ export function normalizeAsk(raw: any, defaults: { kind?: Ask["kind"]; reason?: 
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 const lines = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
 
+/** A stored `action :: text` line, split at its first `::`. */
+function splitPair(s: string): { action: string; text: string } {
+  const at = s.indexOf("::");
+  return at < 0 ? { action: s.trim(), text: "" } : { action: s.slice(0, at).trim(), text: s.slice(at + 2).trim() };
+}
+
 /** The ask in an item's fields, or null when the item has no `ask`. A reason it does not state reads as `question`. */
 export function readAsk(item: issues.Issue): Ask | null {
   const kind = item.fm.ask;
   if (kind !== "input" && kind !== "approval") return null;
   const why = item.fm.why;
+  const situation = text(item.fm.situation);
+  const effects = lines(item.fm.effects).map(splitPair);
+  const recommend = text(item.fm.recommend) ? splitPair(text(item.fm.recommend)) : null;
   return {
     kind, reason: text(item.fm.reason) || "question", question: text(item.fm.question), options: lines(item.fm.options).map(decodeOption),
     ...(text(item.fm.recommended) ? { recommended: text(item.fm.recommended) } : {}),
     why: typeof why === "string" ? why.split(",").map((s) => s.trim()).filter(Boolean) : lines(why),
+    ...(situation ? { situation } : {}),
+    ...(effects.length ? { effects: effects.map((e) => ({ action: e.action, text: e.text })) } : {}),
+    ...(recommend ? { recommend: { action: recommend.action, why: recommend.text } } : {}),
   };
 }
 
-/** Put `ask` on the item: `ask`, `reason`, `question`, `options`, `recommended` and `why`, as `readAsk` and `store.askOf` read them. */
+/**
+ * Put `ask` on the item: `ask`, `reason`, `question`, `options`, `recommended` and `why`, and the case text when the ask
+ * has it: `situation` (one string), `effects` (lines `action :: text`) and `recommend` (`action :: why`), as `readAsk` reads them.
+ */
 export function writeAsk(item: issues.Issue, ask: Ask): void {
   clearAsk(item);
   item.fm.ask = ask.kind;
@@ -148,10 +171,15 @@ export function writeAsk(item: issues.Issue, ask: Ask): void {
   if (ask.options.length) item.fm.options = ask.options.map((o) => encodeOption(o));
   if (ask.recommended) item.fm.recommended = ask.recommended;
   item.fm.why = ask.why;
+  const situation = flat(ask.situation);
+  if (situation) item.fm.situation = situation;
+  const effects = (ask.effects ?? []).filter((e) => flat(e.action)).map((e) => `${flat(e.action)}${SEP}${flat(e.text)}`);
+  if (effects.length) item.fm.effects = effects;
+  if (ask.recommend && flat(ask.recommend.action)) item.fm.recommend = `${flat(ask.recommend.action)}${SEP}${flat(ask.recommend.why)}`;
 }
 
 export function clearAsk(item: issues.Issue): void {
-  for (const k of ["ask", "reason", "question", "options", "recommended", "why"]) delete item.fm[k];
+  for (const k of ["ask", "reason", "question", "options", "recommended", "why", "situation", "effects", "recommend"]) delete item.fm[k];
 }
 
 /** The prose note of an ask, for the CLI and the history. */
