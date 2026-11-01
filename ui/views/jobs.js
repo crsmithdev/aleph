@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (one job's runs, result, checks,
 // logs, and a diff loaded on demand). Render functions take the /api/jobs
 // objects and return HTML strings, with no DOM, so tests can call them.
-import { costHtml, STATES, badge, card, cmd, crumb, dataTable, empty, esc, filterBar, goQuery, hashQuery, idLink, localId, md, pageHead, pager, searchBox, setQuery, shortModel, sortHead, span, when, wireScope } from "../lib.js";
+import { costHtml, STATES, badge, card, cmd, crumb, dataTable, diffHtml, empty, esc, filterBar, goQuery, hashQuery, idLink, localId, md, pageHead, pager, searchBox, setQuery, shortModel, sortHead, span, when, wireScope } from "../lib.js";
 
 
 /** The list's data URL: the filters in the hash go to the API. */
@@ -137,17 +137,12 @@ export function renderJob(j) {
     list("Defaults taken", j.defaults ?? [], true) + list("Follow-ups", j.followups ?? []) +
     (checks ? `<div class="sh"><h2>Checks</h2></div><ul class="checks">${checks}</ul>` : "") +
     log("Diff stat", j.stat) + log("checks.log, last 80 lines", j.checksLog) + log("Worker stderr, last 80 lines", j.stderr) +
-    `<div class="sh"><h2>Diff</h2></div><button class="act" type="button" data-diff="${esc(j.name)}">Load the diff</button><pre class="diff" id="diff" hidden></pre>` +
+    `<div class="sh"><h2>Diff</h2></div><button class="act" type="button" data-diff="${esc(j.name)}">Load the diff</button><div class="diff-panel" id="diff" hidden></div>` +
     (j.condition === "awaiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") + `</div>`;
 }
 
-/** Colour a unified diff's lines. */
-export function renderDiff(text) {
-  return String(text).split("\n").map((l) => {
-    const c = l.startsWith("+") && !l.startsWith("+++") ? "add" : l.startsWith("-") && !l.startsWith("---") ? "del" : "";
-    return c ? `<span class="${c}">${esc(l)}</span>` : esc(l);
-  }).join("\n");
-}
+/** The Job page diff is the shared one, in the same `.diff-panel` markup as the Now page. */
+export const renderDiff = diffHtml;
 
 // Loads the diff when the button is clicked. The button is rebuilt on each render, so listen on the document.
 if (typeof document !== "undefined") {
@@ -158,11 +153,11 @@ if (typeof document !== "undefined") {
     b.disabled = true;
     try {
       const res = await fetch(`/api/jobs/${encodeURIComponent(b.dataset.diff)}/diff`);
-      out.innerHTML = res.ok ? renderDiff(await res.text()) : esc(res.status === 404 ? "The branch is gone, so there is no diff to show." : `The diff failed to load (${res.status}).`);
+      out.innerHTML = res.ok ? renderDiff(await res.text()) : `<p class="msg">${esc(res.status === 404 ? "The branch is gone, so there is no diff to show." : `The diff failed to load (${res.status}).`)}</p>`;
       out.hidden = false;
       b.remove();
     } catch (err) {
-      out.textContent = `The diff failed to load: ${err.message}`;
+      out.innerHTML = `<p class="msg">${esc(`The diff failed to load: ${err.message}`)}</p>`;
       out.hidden = false;
       b.disabled = false;
     }

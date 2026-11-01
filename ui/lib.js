@@ -211,8 +211,8 @@ export function chart(el, option) {
   };
 }
 
-// Now fills `.diff-panel[data-diff-for]`; Jobs fills `pre#diff` and removes its `[data-diff]` button once the diff is in.
-const PANELS = "[data-diff-for], pre.diff";
+// Now fills `.diff-panel[data-diff-for]`; Jobs fills `.diff-panel#diff` and removes its `[data-diff]` button once the diff is in.
+const PANELS = "[data-diff-for], .diff-panel#diff";
 const panelKey = (p) => p.getAttribute?.("data-diff-for") ?? "diff";
 const FIELDS = "input, textarea, select";
 
