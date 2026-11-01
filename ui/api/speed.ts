@@ -8,7 +8,7 @@
 import { existsSync } from "node:fs";
 import { flakes, LIVE_CAP } from "../../jobs/lib/factory.ts";
 import { git } from "../../jobs/lib/git.ts";
-import { allRuns, isBuild, onOf, type Run } from "../../jobs/lib/ledger.ts";
+import { allRuns, isBuild, isLive, isStarting, onOf, type Entry, type Run } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
 import { staleSync } from "../stale.ts";
 import { reader, storeDir, uiFetchTtl } from "../../todo/lib/store.ts";
@@ -55,20 +55,16 @@ export interface Speed {
   notCounted: { runs: number; issues: number; hours: number };
   lost: { hours: number; share: number };
   hasWeek: boolean;
-  openAge: OpenAge;
-  concurrency: Concurrency;
+  agents: Agents;
 }
 
-/** The open issues of aleph now, whatever the window. An issue that a bulk commit added takes its age from its `created` date. One with neither counts in `unknown` only. */
-export interface OpenAge {
-  count: number; p50: number; p90: number; unknown: number;
-  oldest: { goal: string; title: string; href: string; secs: number } | null;
-  bins: { label: string; count: number }[];
-}
-/** Agent runs live at once over the window. `cap` is the live cap now; an earlier cap is not recorded. `atCap` is the share of the window at or over it, 0 to 1. */
-export interface Concurrency {
-  cap: number; mean: number; peak: number; atCap: number;
-  points: { at: string; peak: number }[];
+/** One role of the factory's agents. `live` is the runs live now; `runs` started in the window; `hours` is their agent time inside it. A reviewer works inside a held run and records no times, so it has only `runs`: `live`, `hours` and `p50` are null. */
+export interface AgentRole { key: AgentKey | "reviewer"; name: string; live: number | null; runs: number; hours: number | null; p50: number | null; models: string[] }
+/** The agents over the window. `workers` and `cap` are the runs the live cap counts, now. `mean` and `peak` count all timed roles, and each point holds each role's mean live in its step. */
+export interface Agents {
+  live: number; workers: number; cap: number; mean: number; peak: number;
+  roles: AgentRole[];
+  points: ({ at: string } & Partial<Record<AgentKey, number>>)[];
 }
 
 export const CLASSES = ["landed", "fixed", "nothing", "restarted", "dropped"] as const;
@@ -296,55 +292,63 @@ export function phases(runs: Run[], filings: Filed, since: number, now: number):
   return Object.fromEntries(PHASE_KEYS.map((k) => [k, stat(t[k].map((x) => x.secs))])) as Speed["phases"];
 }
 
-const OPEN_AGE_REPO = "aleph";
-const AGE_BINS: [string, number][] = [["<1h", HOUR], ["1-6h", 6 * HOUR], ["6-24h", DAY], ["1-3d", 3 * DAY], ["3-7d", 7 * DAY], ["7-30d", 30 * DAY], [">30d", Infinity]];
+// The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
+export const AGENT_ROLES = [["worker", "Worker", "build"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["facts", "Fact checker", "facts"], ["firefighter", "Firefighter", "firefighter"]] as const;
+export type AgentKey = (typeof AGENT_ROLES)[number][0];
 
-/** The age of `open` issues from when each was filed, else from `created`, a date. */
-export function openAge(open: { repo: string; id: number; title: string; created?: unknown }[], { issue }: Filed, now: number): OpenAge {
-  const known: { goal: string; repo: string; id: number; title: string; secs: number }[] = [];
-  let unknown = 0;
-  for (const o of open) {
-    const goal = `${o.repo}-${o.id}`, at = issue.get(goal) ?? Date.parse(String(o.created));
-    if (!Number.isFinite(at)) { unknown++; continue; }
-    known.push({ ...o, goal, secs: Math.max(0, (now - at) / 1000) });
-  }
-  const secs = known.map((k) => k.secs), old = known.reduce<(typeof known)[number] | null>((a, b) => (!a || b.secs > a.secs ? b : a), null);
+/** "claude-opus-5-5" as "opus"; "sonnet" stays. */
+const modelName = (m: string) => /^claude-([a-z]+)-/.exec(m)?.[1] ?? m;
+
+/** The agents by role over `since`..`now`. A run with the condition running ends at `now` when `alive` says so, and does not count when not. `step` is the width of a point in ms. */
+export function agentStats(entries: Entry[], since: number, now: number, step: number, cap: number, alive: (e: Entry) => boolean = (e) => isLive(e.folder) || isStarting(e)): Agents {
+  const length = Math.ceil((now - since) / step);
+  const edges: [number, number][] = [];
+  const points: Agents["points"] = Array.from({ length }, (_, i) => ({ at: new Date(since + i * step).toISOString() }));
+  const roles: AgentRole[] = AGENT_ROLES.map(([key, name, kind]) => {
+    let live = 0, ms = 0;
+    const times: number[] = [], models = new Map<string, number>();
+    let runs = 0;
+    for (const e of entries) {
+      const r = e.run as Run;
+      // Older worker runs have the kind "agent".
+      if (r.kind !== kind && !(key === "worker" && (r.kind as string) === "agent")) continue;
+      const running = r.condition === "running" && alive(e);
+      if (running) live++;
+      const a = Date.parse(r.started), b = r.ended ? Date.parse(r.ended) : running ? now : NaN;
+      if (a >= since && a < now) {
+        runs++;
+        if (r.model) models.set(modelName(r.model), (models.get(modelName(r.model)) ?? 0) + 1);
+        if (r.ended && b >= a && b - a <= MAX_RUN) times.push((b - a) / 1000);
+      }
+      if (!(b >= a) || b - a > MAX_RUN || b <= since || a >= now) continue;
+      const from = Math.max(a, since), to = Math.min(b, now);
+      ms += to - from;
+      edges.push([from, 1], [to, -1]);
+      for (let i = Math.floor((from - since) / step); i < length && since + i * step < to; i++) {
+        const lo = since + i * step, part = Math.min(to, lo + step) - Math.max(from, lo);
+        points[i][key] = (points[i][key] ?? 0) + part / step;
+      }
+    }
+    return { key, name, live, runs, hours: round(ms / HOUR, 1), p50: times.length ? round(pct(times, 0.5)) : null, models: [...models].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])).map(([m]) => m) };
+  });
+  // An end before a start at the same moment: a run that follows another does not add one.
+  edges.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  let up = 0, peak = 0;
+  for (const [, d] of edges) { up += d; if (up > peak) peak = up; }
+  for (const p of points) for (const [key] of AGENT_ROLES) if (p[key] !== undefined) p[key] = round(p[key]!, 2);
+  const inWindow = entries.map((e) => e.run as Run).filter((r) => (isBuild(r.kind) || (r.kind as string) === "agent") && Date.parse(r.started) >= since && Date.parse(r.started) < now);
+  const reviews = inWindow.reduce((n, r) => n + (r.review ? 1 : 0), 0);
+  const span = now - since, hours = roles.reduce((n, r) => n + (r.hours ?? 0), 0);
   return {
-    count: known.length, ...(({ p50, p90 }) => ({ p50, p90 }))(stat(secs)), unknown,
-    oldest: old && { goal: old.goal, title: old.title, href: `#/issues/${encodeURIComponent(old.repo)}/${old.id}`, secs: round(old.secs) },
-    bins: AGE_BINS.map(([label, top], i) => ({ label, count: secs.filter((x) => x * 1000 >= (i ? AGE_BINS[i - 1][1] : 0) && x * 1000 < top).length })),
+    live: roles.reduce((n, r) => n + (r.live ?? 0), 0), workers: roles[0].live ?? 0, cap,
+    mean: span ? round((hours * HOUR) / span, 1) : 0, peak,
+    roles: [...roles, { key: "reviewer", name: "Reviewer", live: null, runs: reviews, hours: null, p50: null, models: [] }],
+    points,
   };
 }
 
-/** How many agent runs were live at once in `since`..`now`, the runs the live cap counts: a run still running ends at `now`. `step` is the width of a point in ms. */
-export function concurrency(runs: Run[], since: number, now: number, step: number, cap: number): Concurrency {
-  const edges: [number, number][] = [];
-  for (const r of runs) {
-    if (!isBuild(r.kind)) continue;
-    const a = Date.parse(r.started), b = r.ended ? Date.parse(r.ended) : r.condition === "running" ? now : NaN;
-    if (!(b >= a) || b - a > MAX_RUN || b <= since || a >= now) continue;
-    edges.push([Math.max(a, since), 1], [Math.min(b, now), -1]);
-  }
-  // An end before a start at the same moment: a run that follows another does not add one.
-  edges.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
-  const peaks = Array.from({ length: Math.ceil((now - since) / step) }, () => 0);
-  const slot = (t: number) => Math.min(peaks.length - 1, Math.floor((t - since) / step));
-  let live = 0, at = since, sum = 0, full = 0, peak = 0;
-  for (const [t, d] of edges) {
-    sum += live * (t - at);
-    if (live >= cap) full += t - at;
-    if (live > 0 && t > at) for (let i = slot(at); i <= slot(t - 1); i++) peaks[i] = Math.max(peaks[i], live);
-    live += d; at = t;
-    if (live > peak) peak = live;
-  }
-  const span = now - since;
-  if (live >= cap) full += now - at;
-  sum += live * (now - at);
-  return { cap, mean: span ? round(sum / span, 1) : 0, peak, atCap: span ? round(full / span, 4) : 0, points: peaks.map((p, i) => ({ at: new Date(since + i * step).toISOString(), peak: p })) };
-}
-
-// The width of a concurrency point: fine enough that a short burst shows.
-const CONC_STEP: Record<Window, number> = { hour: 60_000, day: 15 * 60_000, week: HOUR, month: 6 * HOUR };
+// The width of an agents point: fine enough that a short burst shows.
+const AGENT_STEP: Record<Window, number> = { hour: 60_000, day: 15 * 60_000, week: HOUR, month: 6 * HOUR };
 
 export function speed(window: Window, now = new Date(), fit: Fit | null = null): Speed {
   const n = COUNT[window];
@@ -360,7 +364,8 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
   const agents: { name: string; condition: string; model: string; tests: number | null; cost: number; took: number }[] = [];
   const models = new Map<string, number[]>();
 
-  const all = allRuns().map((x) => x.run as Run);
+  const entries = allRuns();
+  const all = entries.map((x) => x.run as Run);
   const landed: Run[] = [];
   for (const r of all) {
     const t0 = Date.parse(r.started), t1 = Date.parse(r.ended ?? "");
@@ -409,8 +414,6 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     const m = t.goal.lastIndexOf("-");
     t.title = lists.item(t.goal.slice(0, m), Number(t.goal.slice(m + 1)))?.title;
   }
-  // Chris, 31 Oct: only aleph's own issues for now; the other repos' backlogs are noise here.
-  const open = (lists.list(OPEN_AGE_REPO)?.items ?? []).filter((i) => i.sub === undefined && status(i) === "open").map((i) => ({ repo: OPEN_AGE_REPO, id: i.id, title: i.title, created: i.fm.created }));
   const ended = phaseTimes(all, filed(), since.getTime(), now.getTime());
   const med = (xs: { at: number; secs: number }[], i: number) => {
     const inBucket = xs.filter((x) => Math.min(n - 1, Math.max(0, slot(x.at))) === i).map((x) => x.secs);
@@ -433,8 +436,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     notCounted: cls.notCounted,
     lost: cls.lost,
     hasWeek: fit !== null,
-    openAge: openAge(open, filed(), now.getTime()),
-    concurrency: concurrency(all, since.getTime(), now.getTime(), CONC_STEP[window], LIVE_CAP()),
+    agents: agentStats(entries, since.getTime(), now.getTime(), AGENT_STEP[window], LIVE_CAP()),
     flaky: flakes().filter((f) => Date.parse(f.at) >= since.getTime()).length,
   };
 }

@@ -32,6 +32,7 @@
   --done: #437018;        /* delivered: green */
   --done-bg: #EDF2E8;
   --run: #3B5FC8;         /* running: blue */
+  --series-1: #2A78D6; --series-2: #EB6834; --series-3: #1BAF7A; --series-4: #EDA100; --series-5: #E87BA4;  /* agent roles in charts */
   --run-bg: #EBEFFA;
   --add: #437018;
   --del: #C0304C;
@@ -100,6 +101,7 @@
     --done: #A9C77D;
     --done-bg: #3B4347;
     --run: #82AAFF;
+    --series-1: #3987E5; --series-2: #D95926; --series-3: #199E70; --series-4: #C98500; --series-5: #D55181;
     --run-bg: #353E59;
     --add: #A9C77D;
     --del: #F07178;
@@ -123,6 +125,7 @@
     --done: #A9C77D;
     --done-bg: #3B4347;
     --run: #82AAFF;
+    --series-1: #3987E5; --series-2: #D95926; --series-3: #199E70; --series-4: #C98500; --series-5: #D55181;
     --run-bg: #353E59;
     --add: #A9C77D;
     --del: #F07178;
@@ -556,7 +559,13 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
 .flowpanel h3 { margin: 0 0 4px; color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
 .flowpanel .stats { margin: 0; font-size: var(--fs-md); font-weight: 600; font-variant-numeric: lining-nums tabular-nums; }
 .flowpanel .note { margin: 2px 0 6px; font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 720px) { .flowpanels { grid-template-columns: minmax(0, 1fr); } }
+.agentroles { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: var(--fs-sm); font-variant-numeric: lining-nums tabular-nums; }
+.agentroles th, .agentroles td { padding: 5px 8px; border-bottom: 1px solid var(--rule-2); text-align: right; font-weight: 400; white-space: nowrap; }
+.agentroles thead th { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; }
+.agentroles th:first-child { padding-left: 0; text-align: left; font-weight: 600; }
+.agentroles th:last-child, .agentroles td.models { padding-right: 0; text-align: left; white-space: normal; color: var(--muted); }
+.agentroles .sw { margin-right: 6px; }
+@media (max-width: 720px) { .flowpanels { grid-template-columns: minmax(0, 1fr); } .agentroles th, .agentroles td { padding-left: 4px; padding-right: 4px; } .agentroles .sw { margin-right: 4px; } }
 @media (max-width: 1020px) { .meds { grid-template-columns: repeat(3, minmax(0, 1fr)); } .meds > .med:nth-child(n) { border-left: 1px solid var(--rule); padding-left: 16px; } .meds > .med:nth-child(3n+1) { border-left: 0; padding-left: 0; } }
 @media (max-width: 1020px) { .meds.eff { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1020px) { .meds.phases { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

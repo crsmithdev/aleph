@@ -2,9 +2,9 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CLASSES, classify, clearCache, concurrency, filed, openAge, pct, phases, routes, speed } from "./api/speed.ts";
+import { agentStats, CLASSES, classify, clearCache, filed, pct, phases, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { ageOption, ageText, barOption, dur, liveOption, renderEfficiency, renderPhases, renderPicker, renderSpeedTop, windowOf, xLabel } from "./views/speed.js";
+import { agentsOption, barOption, dur, renderAgents, renderEfficiency, renderPhases, renderPicker, renderSpeedTop, windowOf, xLabel } from "./views/speed.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -293,30 +293,28 @@ test("phases: intake runs from the filing to the first triage end, queue from th
   expect(later.queue.count).toBe(0);
 });
 
-test("open work: age from the filing, with bulk-added issues apart and the oldest named", () => {
-  const H = 3600_000, t = 100 * 24 * H;
-  const issue = new Map<string, number | null>([["a-1", t - 30 * 60_000], ["a-2", t - 2 * H], ["a-3", t - 10 * 24 * H], ["a-4", null]]);
-  const a = openAge([1, 2, 3, 4, 5].map((id) => ({ repo: "a", id, title: `T${id}` })), { issue }, t);
-  expect([a.count, a.unknown, a.p50]).toEqual([3, 2, 7200]);
-  const dated = openAge([{ repo: "a", id: 4, title: "T4", created: new Date(t - 2 * 24 * H).toISOString() }], { issue }, t);
-  expect([dated.count, dated.unknown, dated.p50]).toEqual([1, 0, 172800]);
-  expect(a.oldest).toEqual({ goal: "a-3", title: "T3", href: "#/issues/a/3", secs: 864000 });
-  expect(a.bins.map((b) => b.count)).toEqual([1, 1, 0, 0, 0, 1, 0]);
-  expect(openAge([], { issue }, t).oldest).toBeNull();
-  expect([ageText(7200), ageText(3 * 86400)]).toEqual(["2h 00m", "3d"]);
-  expect(ageOption(a.bins, { color: "#000", labelColor: "#fff" }).series[0].data).toEqual([1, 1, null, null, null, 1, null]);
-  expect(ageOption(a.bins, { color: "#000", labelColor: "#fff" }).series[0].label).toMatchObject({ position: "inside", color: "#fff", textBorderWidth: 0 });
-});
-
-test("concurrency: mean over the window, peak, time at the cap, and only the runs the cap counts", () => {
+test("agents: each role's live, runs, hours and models, with a peak over all roles", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
-  const b = (a: number, e: number | null, kind = "build", condition = "passed") => ({ kind, condition, started: iso(a), ended: e === null ? undefined : iso(e) }) as any;
-  const runs = [b(1, 3), b(2, 4), b(4, 5), b(0, 8, "land"), b(1, 9.5), b(7, null, "build", "running"), b(6, null, "build", "failed")];
-  // 1-2: 1, 2-3: 2, 3-4: 1, 4-5: 1 (one ends as one starts), 7-8: 1; the 8.5 h run is a broken clock.
-  const c = concurrency(runs, 0, 8 * H, H, 2);
-  expect([c.peak, c.mean, c.atCap, c.cap]).toEqual([2, 0.8, 0.125, 2]);
-  expect(c.points.map((p) => p.peak)).toEqual([0, 1, 2, 1, 1, 0, 0, 1]);
-  const o = liveOption(c, { window: "day", color: "#000", capColor: "#111" });
-  expect(o.series[0].markLine.data).toEqual([{ yAxis: 2 }]);
-  expect(concurrency([], 0, 8 * H, H, 2)).toMatchObject({ peak: 0, mean: 0, atCap: 0 });
+  const e = (kind: string, a: number, b: number | null, extra: object = {}) => ({ folder: `f${a}`, id: `f${a}`, run: { kind, condition: b === null ? "running" : "passed", started: iso(a), ...(b === null ? {} : { ended: iso(b) }), ...extra } }) as any;
+  const runs = [
+    e("build", 1, 3, { model: "sonnet", review: { call: "land" } }), e("build", 2, 4, { model: "sonnet" }), e("agent", 3, 3.5, { model: "haiku" }),
+    e("build", 7, null), e("build", 6, null), e("build", 0, 9.5), // a live run, a lost one, and a broken clock
+    e("triage", 2, 2.5, { model: "claude-opus-5-5" }), e("land", 1, 8), e("recheck", 1, 2),
+  ];
+  const a = agentStats(runs, 0, 8 * H, H, 2, (x) => x.folder === "f7");
+  const r = Object.fromEntries(a.roles.map((x) => [x.key, x]));
+  expect([a.live, a.workers, a.cap, a.peak]).toEqual([1, 1, 2, 3]); // 2-2.5: two workers and triage
+  expect(r.worker).toMatchObject({ live: 1, runs: 6, hours: 5.5, p50: 7200, models: ["sonnet", "haiku"] });
+  expect(r.triage).toMatchObject({ live: 0, runs: 1, hours: 0.5, models: ["opus"] });
+  expect(r.reviewer).toMatchObject({ live: null, runs: 1, hours: null, p50: null });
+  expect(a.roles.map((x) => x.key)).toEqual(["worker", "triage", "planner", "facts", "firefighter", "reviewer"]);
+  expect(a.mean).toBe(0.8); // 6 agent hours over 8
+  expect(a.points.map((p) => p.worker ?? 0)).toEqual([0, 1, 2, 1.5, 0, 0, 0, 1]);
+  expect(a.points[2].triage).toBe(0.5);
+  const o = agentsOption(a, { window: "day", colors: { worker: "#111", triage: "#222" }, muted: "#333" });
+  expect(o.series.map((s: any) => s.name)).toEqual(["Worker", "Triage"]);
+  expect(o.series[0].stack).toBe("live");
+  const html = renderAgents({ window: "week", agents: a });
+  expect(html).toContain("1 live · 1 of 2 worker slots");
+  expect(html).toContain("sonnet, haiku");
 });

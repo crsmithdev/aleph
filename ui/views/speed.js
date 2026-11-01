@@ -15,8 +15,6 @@ export function dur(s) {
   const m = Math.floor(s / 60);
   return m < 60 ? `${m}m ${String(s % 60).padStart(2, "0")}s` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
 }
-/** An age: as `dur` under a day, then whole days. */
-export const ageText = (s) => (s < 86400 ? dur(s) : `${Math.floor(s / 86400)}d`);
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 const hours = (h) => `${h.toFixed(h < 10 ? 1 : 0)} h`;
 const pctText = (w) => `${Math.round((w || 0) * 100)}%`;
@@ -66,25 +64,36 @@ export function renderBar(d, { pinned = null } = {}) {
   return brackets + bar + not;
 }
 
-/** The two panels under the charts: how old the open work is, and how many agent runs were live at once. */
-export function renderFlowPanels(d) {
-  const a = d.openAge, c = d.concurrency;
-  const oldest = a.oldest ? `oldest ${esc(ageText(a.oldest.secs))}: ${repoIdLink(a.oldest.goal, a.oldest.href)} ${esc(a.oldest.title)}` : "no open issue";
-  const unknown = a.unknown ? `<p class="quiet">Not counted: ${plural(a.unknown, "issue")} with no filing time or created date</p>` : "";
-  const panel = (id, title, text, stats, note, label) => `<section class="flowpanel" title="${esc(text)}"><h3>${esc(title)}</h3><p class="stats">${stats}</p><p class="quiet note">${note}</p><div class="speedchart tall" data-panel="${id}" role="img" aria-label="${esc(label)}"></div>${id === "age" ? unknown : ""}</section>`;
+// What each role does, and the page token of its colour in the chart.
+const ROLE_TEXT = {
+  worker: "Builds an issue on a branch. The live cap counts these.",
+  triage: "Reads a new issue and routes it.",
+  planner: "Splits a large goal into parts.",
+  facts: "Checks what a landed run recorded.",
+  firefighter: "Looks at failed factory runs and repairs them.",
+  reviewer: "Reviews a held run before it lands. It works inside the run and records no times, so only its count shows.",
+};
+export const ROLE_TOKEN = { worker: "series-1", triage: "series-2", planner: "series-3", facts: "series-4", firefighter: "series-5" };
+
+/** The two panels under the charts: the agents by role, and how many were live over the window. */
+export function renderAgents(d) {
+  const a = d.agents;
+  const none = "–";
+  const rows = a.roles.map((r) => `<tr title="${esc(ROLE_TEXT[r.key] ?? "")}"><th scope="row">${ROLE_TOKEN[r.key] ? `<i class="sw" style="background:var(--${ROLE_TOKEN[r.key]})"></i>` : `<i class="sw"></i>`}${esc(r.name)}</th><td>${r.live ?? none}</td><td>${r.runs}</td><td>${r.hours === null ? none : esc(hours(r.hours))}</td><td>${esc(dur(r.p50))}</td><td class="models">${esc(r.models.join(", ")) || none}</td></tr>`).join("");
   return `<div class="flowpanels">` +
-    panel("age", "Age of open work", "How long each open aleph issue has been open, now. This does not change with the time window.", `${a.count} open · ${esc(ageText(a.p50))} p50 · ${esc(ageText(a.p90))} p90`, oldest, "Open issues by age") +
-    panel("live", "Concurrency", `Agent runs live at once, the runs the live cap counts. The line is the most live in each step. The cap is the cap now: time under an earlier cap is measured against it too.`, `${c.mean.toFixed(1)} mean · ${c.peak} peak · ${pctText(c.atCap)} of the time at the cap`, `cap ${c.cap}, ${esc(WINDOW_TEXT[d.window])}`, "Agent runs live at once over time") +
+    `<section class="flowpanel"><h3>Agents</h3><p class="stats">${a.live} live · ${a.workers} of ${a.cap} worker slots</p><p class="quiet note">runs and hours in ${esc(WINDOW_TEXT[d.window])}</p>` +
+    `<table class="agentroles"><thead><tr><th scope="col">Role</th><th scope="col">Live</th><th scope="col">Runs</th><th scope="col">Hours</th><th scope="col">p50</th><th scope="col">Models</th></tr></thead><tbody>${rows}</tbody></table></section>` +
+    `<section class="flowpanel" title="The mean number of agents live in each step, by role. Peak is the most live at one moment."><h3>Agents live</h3><p class="stats">${a.mean.toFixed(1)} mean · ${a.peak} peak</p><p class="quiet note">${esc(WINDOW_TEXT[d.window])}</p><div class="speedchart tall" data-panel="agents" role="img" aria-label="Agents live over time, by role"></div></section>` +
     `</div>`;
 }
 
 const loading = (what, d) => (!d ? `<p class="quiet loading" role="status">Loading ${what}…</p>` : `<div class="empty"><p class="hint">${esc(d.error)}</p></div>`);
 
-/** The Performance block: the phase cards and the two panels. `d` is null while loading, `{error}` on a failed load. */
+/** The Performance block: the phase cards and the agents. `d` is null while loading, `{error}` on a failed load. */
 export function renderSpeedTop(d) {
   const head = `<div class="sh sub"><h2 id="h-speed">Performance</h2></div>`;
   if (!d || d.error) return head + loading("performance", d);
-  return head + renderPhases(d) + renderFlowPanels(d);
+  return head + renderPhases(d) + renderAgents(d);
 }
 
 // Duplicated from ui/api/speed.ts: keep the texts identical.
@@ -174,31 +183,23 @@ export function barOption(buckets, key, { window, color, p50 = 0, lineColor = "#
   };
 }
 
-/** The bar-chart option of the open-work ages: one bar per age, with its count inside and no bar for none. */
-export function ageOption(bins, { color, labelColor }) {
-  return {
-    animation: false,
-    color: [color],
-    grid: { left: 8, right: 8, top: 4, bottom: 20 },
-    tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${esc(plural(q.value, "issue"))}`; } },
-    xAxis: { type: "category", data: bins.map((b) => b.label), axisTick: { show: false } },
-    yAxis: { type: "value", show: false, min: 0, splitLine: { show: false } },
-    series: [{ type: "bar", barMinHeight: 18, data: bins.map((b) => b.count || null), label: { show: true, position: "inside", color: labelColor, fontWeight: 600, textBorderWidth: 0 } }],
-  };
-}
+// How many agents points lie between date labels: a day in week and a week in month.
+const AGENT_LABEL_EVERY = { week: 24, month: 28 };
 
-/** The step-line option of the concurrency: the most live in each step, and the cap as a dotted line. */
-export function liveOption({ points, cap, peak }, { window, color, capColor }) {
+/** The stacked option of the agents live: each timed role's mean live per step, with a legend. */
+export function agentsOption({ points, roles }, { window, colors, muted }) {
   const n = points.length;
   const stamp = (at) => new Date(at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
+  const timed = roles.filter((r) => colors[r.key]);
   return {
     animation: false,
-    color: [color],
-    grid: { left: 24, right: 40, top: 12, bottom: 20 },
-    tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(stamp(points[q.dataIndex].at))}<br>${esc(String(q.value))} live`; } },
-    xAxis: { type: "category", boundaryGap: false, data: points.map((p) => xLabel(p.at, window)), axisTick: { show: false }, axisLabel: { interval: Math.max(0, Math.ceil(n / 4) - 1), hideOverlap: true } },
-    yAxis: { type: "value", min: 0, max: Math.max(cap, peak, 1), minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } },
-    series: [{ type: "line", step: "end", symbol: "none", lineStyle: { width: 2 }, areaStyle: { opacity: 0.15 }, data: points.map((p) => p.peak), markLine: { silent: true, symbol: "none", label: { position: "end", fontSize: 10, color: capColor, formatter: "cap" }, lineStyle: { type: "dotted", color: capColor, width: 2 }, data: [{ yAxis: cap }] } }],
+    color: timed.map((r) => colors[r.key]),
+    legend: { top: 0, left: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: muted, fontSize: 11 } },
+    grid: { left: 24, right: 16, top: 28, bottom: 20 },
+    tooltip: { trigger: "axis", confine: true, formatter: (p) => { const qs = [].concat(p); const lines = qs.filter((q) => q.value > 0).map((q) => `${esc(q.seriesName)} ${esc(q.value.toFixed(1))}`); return `${esc(stamp(points[qs[0].dataIndex].at))}<br>${lines.join("<br>") || "none live"}`; } },
+    xAxis: { type: "category", boundaryGap: false, data: points.map((p) => xLabel(p.at, window)), axisTick: { show: false }, axisLabel: { interval: (AGENT_LABEL_EVERY[window] ?? Math.ceil(n / 4)) - 1, hideOverlap: true } },
+    yAxis: { type: "value", min: 0, minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } },
+    series: timed.map((r) => ({ type: "line", name: r.name, stack: "live", step: "end", symbol: "none", lineStyle: { width: 0 }, areaStyle: { opacity: 0.85 }, data: points.map((p) => p[r.key] ?? 0) })),
   };
 }
 
@@ -229,8 +230,7 @@ function draw(box, d) {
   const t = readTokens();
   const colors = { intake: t.run, queue: t.muted, implement: t.need, land: t.done, lead: t.ink };
   const panel = (id, option) => { const el = box.querySelector(`.speedchart[data-panel="${id}"]`); if (!el) return; try { drawn.push(chart(el, option)); } catch (e) { console.error("speed chart failed", e); } };
-  panel("age", ageOption(d.openAge.bins, { color: t.run, labelColor: t.bg }));
-  panel("live", liveOption(d.concurrency, { window: d.window, color: t.run, capColor: t.muted }));
+  panel("agents", agentsOption(d.agents, { window: d.window, colors: Object.fromEntries(Object.entries(ROLE_TOKEN).map(([k, v]) => [k, t[v]])), muted: t.muted }));
   for (const el of box.querySelectorAll(".speedchart[data-chart]")) {
     const key = el.dataset.chart, c = d.phases[key];
     try { drawn.push(chart(el, barOption(d.buckets, key, { window: d.window, color: colors[key], p50: c.count ? c.p50 : 0, lineColor: t.ink }))); } catch (e) { console.error("speed chart failed", e); }
