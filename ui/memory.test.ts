@@ -338,7 +338,7 @@ test("the page is the board, then broad health, then the note browser; the type 
     lint: { refuse: [{ note: "B", rule: "schema", detail: "no confidence" }, { note: "B", rule: "dangling", detail: "x" }], warn: [{ note: "A", rule: "orphan", detail: "y" }] },
     notes: [row({ title: "A" }), row({ title: "B", read: "2026-10-01", problems: [{ rule: "schema", detail: "no confidence" }] })] };
   const h = v.renderMemory(m);
-  expect(h).toContain("Recall has never returned 1 of the 2 knowledge notes. Lint refuses 1 note.");
+  expect(h).toContain('<header class="ph"><h1>Memory</h1></header>');
   expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('aria-label="Lint"'));
   expect(h.indexOf('aria-label="Lint"')).toBeLessThan(h.indexOf('id="mem-table"'));
   for (const id of ["working", "semantic", "episodic", "procedural", "retrieval", "prospective", "parametric"]) expect(h).toContain(`data-type="${id}"`);

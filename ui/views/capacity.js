@@ -1,13 +1,6 @@
 // The Capacity page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the week.
-import { chart, esc, readTokens } from "../lib.js";
-import { dur, head, hours, loadSpeed, pace, small, tile, usable, usageAge, usageTile, xLabel } from "./speed.js";
-
-/** The sentence at the head. */
-export function headline(s) {
-  const p = pace(s);
-  const age = usageAge(s);
-  return p ? `Usage is ${p.word} pace: ${Math.round(p.used)}% used, ${p.gone.toFixed(1)}% of the week gone${age ? ` (${age})` : ""}.` : "Usage is unknown.";
-}
+import { chart, esc, pageHead, readTokens } from "../lib.js";
+import { dur, hours, loadSpeed, pace, small, tile, usable, usageAge, usageTile, xLabel } from "./speed.js";
 
 /** Each point's total live agents over the timed roles. */
 export const totals = (a) => a.points.map((p) => a.roles.reduce((n, r) => n + (p[r.key] ?? 0), 0));
@@ -36,7 +29,7 @@ function roles(a) {
 export function renderCapacity(s, d) {
   const a = d?.agents ?? null;
   const wait = `<p role="status">${esc(speedError(d) ?? "Loading…")}</p>`;
-  return `<div class="page sp" id="capacity">${head(headline(s))}<section aria-label="Scorecard" class="tiles">${tiles(s, a)}</section>` +
+  return `<div class="page sp" id="capacity">${pageHead("Capacity")}<section aria-label="Scorecard" class="tiles">${tiles(s, a)}</section>` +
     `<section class="card" aria-label="Agents live"><h2>Agents live</h2>${a ? `<div class="livechart" role="img" aria-label="Agents live over the last 7 days"></div>` : wait}</section>` +
     `<section class="card" aria-label="Agent roles"><h2>Roles</h2>${a ? roles(a) : wait}</section></div>`;
 }

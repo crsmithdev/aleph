@@ -1,6 +1,6 @@
 // The Efficiency page: where agent time went, in hours. `d` is /api/speed for the week.
-import { esc, repoIdLink } from "../lib.js";
-import { causeRow, firstPassTile, head, hours, loadSpeed, lostClasses, lostTile, mergeCauses, pctText, plural, small, tile, trend, usable, weekText } from "./speed.js";
+import { esc, pageHead, repoIdLink } from "../lib.js";
+import { causeRow, firstPassTile, hours, loadSpeed, lostClasses, lostTile, mergeCauses, pctText, plural, small, tile, trend, usable, weekText } from "./speed.js";
 
 const TOP_ISSUES = 5;
 const REPO = "aleph";
@@ -65,9 +65,7 @@ export async function fileIssue(d, key, fetcher = fetch) {
 export function renderEfficiency(d, day, key = pick) {
   const s = selection(d, key), total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted;
   const on = key === ALL, max = s.causes[0]?.hours ?? 0;
-  const line = `${d.lost.share >= 0 ? pctText(d.lost.share) : "–"} of agent time did not reach main.`;
-  const today = day ? ` The last 24 h: ${pctText(day.lost.share)}.` : "";
-  return `<div class="page sp" id="eff">${head(line + today)}<section aria-label="Quality" class="tiles">${tiles(d, day)}</section>` +
+  return `<div class="page sp" id="eff">${pageHead("Efficiency")}<section aria-label="Quality" class="tiles">${tiles(d, day)}</section>` +
     `<section aria-label="Agent time by outcome" class="card"><div class="cardhead"><h2>Agent time by outcome</h2><span>${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "run"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}</span></div>${bar(d, key)}` +
     `<div><button type="button" class="btn" data-class="${ALL}" aria-pressed="${on}">All lost time, ${esc(hours(d.lost.hours))}</button></div></section>` +
     `<section class="card" aria-label="Causes"><h2>${esc(s.title)}, largest first</h2><p>${esc(s.text)} ${esc(s.size)}</p><div>${s.causes.map((x, i) => causeRow(`<b>${esc(x.name)}</b>`, x, max, i === 0)).join("") || "<p>No cause to show.</p>"}</div></section>` +

@@ -143,9 +143,6 @@ const EMPTY_TYPES = {
 
 const STYLE = `<style>
 .memory { display: flex; flex-direction: column; gap: 16px; }
-.memory .mem-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
-.memory .mem-head span { font: 400 var(--fs-xl)/1.3 var(--display); color: var(--muted); }
-.memory .mem-head h1 { flex: 1 1 320px; margin: 0; font: 400 var(--fs-xl)/1.3 var(--display); color: var(--ink); }
 .memory .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
 .memory .tile { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 16px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; color: var(--ink-2); }
 .memory .tile:hover, .memory .tile[aria-pressed="true"] { border-color: var(--run); }
@@ -355,9 +352,8 @@ export function renderInspector(n, row) {
 }
 
 export function renderMemory(m, o = options()) {
-  const rows = noteRows(m), known = rows.filter(isKnown), never = known.filter((n) => !n.read).length, refused = new Set((m.lint?.refuse ?? []).map((f) => f.note)).size;
-  const line = !m.exists ? "No vault yet." : `Recall has never returned ${fmt(never)} of the ${fmt(known.length)} knowledge notes. Lint refuses ${fmt(refused)} ${refused === 1 ? "note" : "notes"}.`;
-  return `${STYLE}<div class="page memory"><header class="mem-head"><span>${fmt(m.exists ? m.total : 0)} notes</span><h1>${esc(line)}</h1></header>` +
+  const rows = noteRows(m);
+  return `${STYLE}<div class="page memory">${pageHead("Memory")}` +
     `<div id="mem-board">${renderTiles(m, rows, o.type)}</div><div id="mem-detail-box">${renderDetail(m, rows, o.type)}</div>` + renderBroad(m) +
     (m.exists ? `<section aria-label="Notes" class="memory" id="mem-notes"><div class="sh"><h2>Notes</h2></div><div class="nb-tools"><input type="search" name="q" data-ui="mem-search" value="${esc(o.q)}" placeholder="Search titles, aliases and bodies" aria-label="Search the vault"></div><div id="mem-filters" data-ui="mem-filter">${renderNoteTools(rows, o)}</div>` +
       `<div class="browse"><div id="mem-table">${renderNoteTable(rows, o, [])}</div><aside class="card ins" id="mem-inspector" aria-label="Note inspector" aria-live="polite">${renderInspector(null)}</aside></div></section>` : "") + `</div>`;

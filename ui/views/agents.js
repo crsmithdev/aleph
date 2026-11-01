@@ -1,7 +1,7 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/agents. The session and skill detail routes stay in their own views.
-import { chips, costHtml, empty, error, esc, filterBar, idLink, money, pager, sortHead, when } from "../lib.js";
+import { pageHead, chips, costHtml, empty, error, esc, filterBar, idLink, money, pager, sortHead, when } from "../lib.js";
 
 export const view = {
   path: "/agents",
@@ -29,9 +29,6 @@ export function redirect(hash) {
 
 const STYLE = `<style>
 .agents { display: flex; flex-direction: column; gap: 16px; }
-.agents .ag-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin: 0; }
-.agents .ag-head span { font: 400 var(--fs-xl)/1.3 var(--display); color: var(--muted); }
-.agents .ag-head h1 { flex: 1 1 320px; margin: 0; font: 400 var(--fs-xl)/1.3 var(--display); color: var(--ink); }
 .agents .fbar { margin: 0; }
 .agents .fails { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
 .agents .fail { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 16px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; color: var(--ink-2); }
@@ -168,17 +165,12 @@ function sessionsHead(d, o) {
   return `<h2>${esc(title)} <em>${fmt(n)}</em></h2><span class="aside">${open}${o.pick ? `<button type="button" class="cmd" data-pick="">Show all sessions</button>` : ""}</span>`;
 }
 
-const headline = (d, o) => {
-  const sessions = d?.sessions?.sessions?.length ?? 0, calls = sum(toolsOf(d), (t) => t.calls);
-  return `${fmt(sessions)} ${sessions === 1 ? "session" : "sessions"} made ${fmt(calls)} tool ${calls === 1 ? "call" : "calls"} in ${o.days} days.${failing(d).length ? " These fail most." : ""}`;
-};
-
 const DAYS = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }];
 
 export function renderAgents(d, o = options()) {
   const projects = d?.sessions?.projects ?? d?.activity?.projects ?? [];
   const total = sum(d?.sessions?.sessions ?? [], (s) => s.cost ?? 0);
-  return `${STYLE}<div class="page agents"><header class="ag-head"><span>Agents</span><h1>${esc(headline(d, o))}</h1></header>` +
+  return `${STYLE}<div class="page agents">${pageHead("Agents")}` +
     `<div data-ui="agents-filter">${filterBar([
       { label: "Project", name: "project", value: projects.includes(o.project) ? o.project : "", options: [{ value: "", label: "All" }, ...projects] },
       { label: "Window", name: "days", value: o.days, options: DAYS },

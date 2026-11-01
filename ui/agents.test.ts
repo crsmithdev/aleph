@@ -42,8 +42,7 @@ describe("the Agents page", () => {
 
   test("the page holds the old pages' content: tools, skills, unused, hooks, denials, sessions", () => {
     const h = v.renderAgents(data(), opts());
-    expect(h).toContain("2 sessions");
-    expect(h).toContain("162 tool calls in 7 days");
+    expect(h).toContain('<header class="ph"><h1>Agents</h1></header>');
     for (const s of ["Bash", "aleph:handoff", 'href="#/skills/tidy"', "vault-recall", "no &lt;run&gt;", 'href="#/sessions/s1"', "dear one"]) expect(h).toContain(s);
     expect(h).not.toContain("no <run>");
     expect(h).toContain('data-pick="tool:Bash"');

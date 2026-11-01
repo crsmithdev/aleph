@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { headline, renderPerformance } from "./views/performance.js";
+import { renderPerformance } from "./views/performance.js";
 
 const P = (count: number, p50: number, p90: number, hist: number[] = [0, 1, 0, 0, 0, 0, count ? 2 : 0], worst = 9000) => ({ count, p50, p90, hist, worst });
 const D: any = {
@@ -37,12 +37,11 @@ test("empty phases show dashes and no error", () => {
   const none = P(0, 0, 0, [0, 0, 0, 0, 0, 0, 0], 0);
   const d = { ...D, phases: { lead: none, intake: none, queue: none, implement: none, land: none }, buckets: [{ at: D.buckets[0].at, lead: null }], checks: [], models: [] };
   const h = renderPerformance(d, null, "lead");
-  expect(h).toContain("No issue landed in the last 7 days.");
   expect(h).toContain("<b>–</b><small>p90 –</small><small>none in the last 24 h</small>");
   expect(h).not.toMatch(/NaN|undefined|Infinity/);
 });
 
-test("the head names the slowest stage; models with no name say not recorded", () => {
-  expect(headline(D)).toBe("Typical issues land in 26m. The slowest stage is Queue.");
+test("the title is the sidebar name; models with no name say not recorded", () => {
+  expect(renderPerformance(D, null, "lead")).toContain('<header class="ph"><h1>Performance</h1></header>');
   expect(renderPerformance(D, null, "lead")).toContain("not recorded");
 });

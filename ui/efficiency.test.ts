@@ -60,7 +60,7 @@ const DAY: any = { ...D, flaky: 1, lost: { hours: 1, share: 0.1 }, issues: { ...
 test("the tiles and the head come from the data", () => {
   const h = renderEfficiency(D, DAY, "all");
   expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "First pass", "Reruns", "Fix rounds", "Usage per issue"]);
-  expect(h).toContain("30% of agent time did not reach main. The last 24 h: 10%.");
+  expect(h).toContain('<header class="ph"><h1>Efficiency</h1></header>');
   expect(h).toContain('<span class="good">▼ 10% in the last 24 h</span>');
   expect(h).toContain('<span class="good">▲ 75% in the last 24 h</span>');
   expect(h).toContain("&lt;0.1%");

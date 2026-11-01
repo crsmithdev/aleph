@@ -1,6 +1,6 @@
 // The Performance page: how long each stage of the work takes. `d` is /api/speed for the week.
-import { esc } from "../lib.js";
-import { dur, durShort, head, loadSpeed, usable, xLabel } from "./speed.js";
+import { esc, pageHead } from "../lib.js";
+import { dur, durShort, loadSpeed, usable, xLabel } from "./speed.js";
 
 export const STAGES = [
   ["lead", "Lead time", "From filing to the last land. The stages do not add up to it, because medians do not add."],
@@ -14,13 +14,6 @@ const SLOW_BINS = 5;
 
 let pick = "lead";
 export const resetPick = () => { pick = "lead"; };
-
-/** The sentence at the head: the typical lead time and the stage with the longest p90. */
-export function headline(d) {
-  if (!d.phases.lead.count) return "No issue landed in the last 7 days.";
-  const [, name] = STAGES.slice(1).reduce((a, s) => (d.phases[s[0]].p90 > d.phases[a[0]].p90 ? s : a));
-  return `Typical issues land in ${durShort(d.phases.lead.p50)}. The slowest stage is ${name}.`;
-}
 
 const stageTile = ([key, name], d, day, on) => {
   const c = d.phases[key], dc = day?.phases?.[key];
@@ -46,7 +39,7 @@ export function renderPerformance(d, day, stage = pick) {
   const cur = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
   const [key, name, text] = cur, c = d.phases[key];
   const over = (c.hist ?? [])[6] ?? 0;
-  return `<div class="page sp" id="perf">${head(headline(d))}` +
+  return `<div class="page sp" id="perf">${pageHead("Performance")}` +
     `<section aria-label="Stages" class="tiles">${STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")}</section>` +
     `<div class="split"><section class="card wide2" aria-label="Time distribution"><h2>${esc(name)}: how long it took</h2><p>${esc(text)} ${over} of ${c.count} took over 4 h.</p>${histogram(c, name)}</section>` +
     `<section class="card" aria-label="Median by day"><h2>Median by day</h2>${days(d, key)}<p class="foot">Longest: ${esc(c.count ? dur(c.worst) : "–")}.</p></section></div>` +

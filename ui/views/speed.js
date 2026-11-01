@@ -103,8 +103,6 @@ export function usageTile(s, href = "") {
   return tile("Weekly usage", `${Math.round(cur.seven_day)}%`, bar + notes, href);
 }
 
-/** The head of a detail page. */
-export const head = (title) => `<header class="head"><span>Last 7 days</span><h1>${esc(title)}</h1></header>`;
 /** The Lost time tile, on Status and on Efficiency. */
 export function lostTile(d, day, href = "") {
   if (!d) return tile("Lost time", "–", small("agent time that did not reach main"), href);

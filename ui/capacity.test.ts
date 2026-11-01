@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { headline, liveOption, renderCapacity, roleRows, totals } from "./views/capacity.js";
+import { liveOption, renderCapacity, roleRows, totals } from "./views/capacity.js";
 // @ts-ignore plain JS shared with the page
 import { pace, weekGone } from "./views/speed.js";
 
@@ -22,7 +22,6 @@ test("the share of the week gone comes from seven_day_resets_at", () => {
   expect(weekGone(undefined, S.now)).toBeNull();
   expect(pace(S).word).toBe("under");
   expect(pace({ ...S, usage: { now: { ...S.usage.now, seven_day: 50 } } }).word).toBe("over");
-  expect(headline(S)).toBe("Usage is under pace: 7% used, 14.3% of the week gone.");
 });
 
 test("role shares sum to 100% over the timed roles, and the reviewer row says not timed", () => {
@@ -41,7 +40,6 @@ test("the tiles come from the state and the agents", () => {
 test("no usage data says usage unknown; while the speed data loads the page says so", () => {
   const h = renderCapacity({ ...S, usage: undefined }, null);
   expect(h).toContain("usage unknown");
-  expect(h).toContain("Usage is unknown.");
   expect(h).toContain("Loading");
   expect(renderCapacity(S, { error: "no data" })).toContain("no data");
 });
@@ -56,9 +54,12 @@ test("the chart has one area of the total agents live", () => {
 test("a stale usage shows the figure and its age; a fresh one shows no age", () => {
   const at = "2026-11-01T07:20:00Z";
   const stale = { ...S, usage: { stale: true, now: { ...S.usage.now, at } } };
-  expect(headline(stale)).toBe("Usage is under pace: 7% used, 14.3% of the week gone (as of 40m ago).");
   expect(renderCapacity(stale, null)).toContain("as of 40m ago");
   const fresh = { ...S, usage: { stale: false, now: { ...S.usage.now, at } } };
-  expect(headline(fresh)).not.toContain("as of");
-  expect(headline({ ...S, usage: { stale: false, now: null } })).toBe("Usage is unknown.");
+  expect(renderCapacity(fresh, null)).not.toContain("as of");
+});
+
+test("the title is the sidebar name, whatever the data", () => {
+  expect(renderCapacity(S, D)).toContain('<header class="ph"><h1>Capacity</h1></header>');
+  expect(renderCapacity({ ...S, usage: undefined }, null)).toContain('<header class="ph"><h1>Capacity</h1></header>');
 });
