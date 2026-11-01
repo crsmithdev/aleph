@@ -22,7 +22,7 @@ function sh(cwd: string, ...args: string[]): string {
 
 const now = new Date();
 const ago = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();
-const HELD = { kind: "approval", reason: "held-path", question: "", options: [], why: [] };
+const HELD = { kind: "approval", reason: "held-path", question: "", options: [], why: [], situation: "The run changes hooks/x.ts.", effects: [{ action: "land", text: "Merges it." }, { action: "drop", text: "Throws it away." }], recommend: { action: "drop", why: "the path is held" } };
 function run(id: string, extra: Record<string, unknown>, files: Record<string, string> = {}) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
@@ -85,6 +85,13 @@ describe("state", () => {
     expect(s.factory.paused).toBe(false);
     expect(readFileSync(join(jobsDir, "20261027-000001-a", "state.json"), "utf8")).toBe(before);
     expect(JSON.parse(before).shown).toBe(false);
+  });
+
+  test("an awaiting run's whole Ask reaches the state and the entry", () => {
+    const j = state(now).asks[0];
+    expect(j.situation).toBe("The run changes hooks/x.ts.");
+    expect(j.explained).toBe(true);
+    expect(j.actions.map((a) => [a.act, a.hint, a.recommended])).toEqual([["land", "Merges it.", false], ["drop", "Throws it away. The path is held.", true]]);
   });
 
   test("asks lists the held run with its kind and reason, and always shows a rule with its handed count", () => {
@@ -451,5 +458,25 @@ describe("factory.nextTick and tickInProgress read systemctl show and is-active"
   });
   test("systemctl failing gives null and false", () => {
     expect(withSystemctl("exit 1")).toEqual({ nextTick: null, tickInProgress: false });
+  });
+});
+
+describe("an awaiting issue with the three flat fields", () => {
+  test("its entry carries the situation, the effect hints and the recommended action", () => {
+    let goalId = 0;
+    writeList({ key: "fac" }, "goal with a stored ask", (doc) => {
+      const goal = add(doc, "stored ask goal");
+      goal.fm.ask = "input";
+      goal.fm.reason = "no-commit";
+      goal.fm.situation = "Three runs ended with no commit.";
+      goal.fm.effects = ["rerun :: Starts the goal again.", "close :: Closes the goal."];
+      goal.fm.recommend = "rerun :: the goal is clear";
+      goalId = goal.id;
+      return true;
+    });
+    const a = state(now).asks.find((x) => x.id === `fac-${goalId}`)!;
+    expect(a.explained).toBe(true);
+    expect(a.situation).toBe("Three runs ended with no commit.");
+    expect(a.actions.map((x) => [x.act, x.hint, x.recommended])).toEqual([["rerun", "Starts the goal again. The goal is clear.", true], ["close", "Closes the goal.", false]]);
   });
 });

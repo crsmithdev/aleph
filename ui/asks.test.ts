@@ -1,15 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { attend, asks, clean, stuckBlocker } from "./asks.ts";
-import { ASK_REASONS, kindOf } from "../jobs/lib/ask.ts";
+import { ASK_REASONS, kindOf, type Ask } from "../jobs/lib/ask.ts";
 import type { Lesson } from "../jobs/lib/corrections.ts";
 import type { Job, NewIssue } from "./state.ts";
 
+/** Stored case text the fixtures put on their Ask while a test sets it. */
+let STORE: Partial<Ask> | undefined;
 const run = (reason: string, extra: Partial<Job> = {}): Job => ({
   name: "aleph-27", repo: "aleph", item: { id: 27, title: "a title" }, condition: "awaiting", started: "2026-10-28T00:00:00Z",
-  ask: { kind: reason === "held-path" || reason === "review" ? "approval" : "input", reason },
+  ask: { kind: reason === "held-path" || reason === "review" ? "approval" : "input", reason, ...STORE },
   run: { kind: "build", started: "2026-10-28T00:00:00Z" }, defaults: [], followups: [], ...extra,
 } as Job);
-const issue = (extra: Partial<NewIssue> = {}): NewIssue => ({ id: "aleph-387", title: "t", status: "open", href: "#/issues/aleph/387", labels: [], notes: 1, created: "", updated: "", ...extra });
+const issue = (extra: Partial<NewIssue> = {}): NewIssue => ({ id: "aleph-387", title: "t", status: "open", href: "#/issues/aleph/387", labels: [], notes: 1, created: "", updated: "", ...extra,
+  ...(STORE ? { ask: { kind: "input", reason: extra.reason ?? "question", question: "q", options: [], why: [], ...STORE } as Ask } : {}) });
 const TARGET = { check: "aleph checks", "claude-md": "identity/CLAUDE.md", skill: "skills/tdd/SKILL.md" } as const;
 const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", title: "Format first", target: TARGET[kind!], sentence: "Run the formatter before landing", state: "proposed", kind, count: 3, signals: [{ id: "s", source: "chris", at: "2026-10-27", quote: "format it", link: "" }] });
 const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", kind: "input" as const, reason: "question", why: ["w"] };
@@ -58,6 +61,39 @@ describe("asks", () => {
       expect(it.always!.action).toBe(ASK_REASONS[reason].always);
     });
   }
+
+  const key = (a: { act: string; args: Record<string, string> }) => (a.act === "decide" && a.args.option ? `decide:${a.args.option}` : a.act);
+  for (const reason of Object.keys(ASK_REASONS)) {
+    test(`${reason}: stored situation, effects and recommend reach the entry; none stored keeps the fixed text`, () => {
+      const [plain] = CASES[reason]();
+      expect(plain.explained).toBe(false);
+      expect(plain.situation).toBe(plain.problem);
+      expect(plain.actions.some((a) => a.recommended)).toBe(false);
+      if (reason.startsWith("proposal-")) return; // lessons hold no text
+      STORE = { situation: "Stored situation.", effects: plain.actions.map((a) => ({ action: key(a), text: `Effect of ${key(a)}.` })), recommend: { action: key(plain.actions[0]), why: "it is safest" } };
+      try {
+        const [it] = CASES[reason]();
+        expect(it.situation).toBe("Stored situation.");
+        expect(it.explained).toBe(true);
+        expect(it.actions.map((a) => a.act)).toEqual(plain.actions.map((a) => a.act));
+        expect(it.actions.filter((a) => a.recommended).length).toBe(1);
+        for (const a of it.actions) {
+          if (a.recommended) expect(a.hint).toBe(`Effect of ${key(a)}. It is safest.`);
+          else expect(a.hint).toBe(`Effect of ${key(a)}.`);
+        }
+        expect(it.always?.hint).toBe(plain.always?.hint);
+      } finally { STORE = undefined; }
+    });
+  }
+
+  test("the checked hint of host-check and manual says it runs nothing", () => {
+    for (const r of ["host-check", "manual"]) {
+      const h = CASES[r]().flatMap((i) => i.actions).find((a) => a.act === "checked")!.hint;
+      expect(h).toContain("runs nothing");
+      expect(h).toContain("Records that you ran this check yourself");
+    }
+    expect(CASES["host-check"]()[0].problem).toBe("A factory sandbox cannot run this check, so it must run on the host: On the host, run wsl.exe -l -q and put it in place of at.");
+  });
 
   test("the kind: approval for review, held-path, proposal and firefighter; input for the rest; an Ask's own kind wins", () => {
     for (const r of ["review", "held-path", "proposal", "firefighter", "proposal-skill"]) expect(kindOf(r), r).toBe("approval");
@@ -114,7 +150,7 @@ describe("asks", () => {
     expect(CASES.proposal()[0].problem).toBe("This work is a proposal, and it does not start until you approve it.");
     expect(CASES.proposal()[0].actions.map((a) => a.label)).toEqual(["Start the work", "Drop the proposal"]);
     expect(CASES.proposal()[0].actions[0].args).toEqual({ repo: "aleph", id: "387", approve: "true" });
-    expect(CASES["host-check"]()[0].problem).toBe("A factory sandbox cannot run this check, so it must run on the host.");
+    expect(CASES["host-check"]()[0].problem).toBe("A factory sandbox cannot run this check, so it must run on the host: On the host, run wsl.exe -l -q and put it in place of at.");
     expect(CASES.proposal()[0].always).toMatchObject({ label: "Start the work [auto-yes]", action: "start" });
     expect(CASES.proposal()[0].always?.hint).toContain("a major version jump still asks");
     expect(CASES["host-check"]()[0].kind).toBe("input");

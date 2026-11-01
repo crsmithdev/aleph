@@ -10,9 +10,10 @@ import { oneSentence } from "./views/now.js";
 import { proseDecision } from "./decision.js";
 import type { Job, NewIssue } from "./state.ts";
 
-export interface Action { act: string; label: string; hint: string; primary: boolean; args: Record<string, string> }
+export interface Action { act: string; label: string; hint: string; primary: boolean; args: Record<string, string>; /** The Ask's recommend names this action. */ recommended: boolean }
 export interface AskItem {
   key: string; reason: string; /** What the answer is: your input or your approval. */ kind: "input" | "approval"; id: string; href: string; title: string; problem: string;
+  /** The stored situation when the Ask holds one, else the fixed problem text. */ situation: string; /** True when `situation` and the hints are the stored text. */ explained: boolean;
   actions: Action[]; always?: { label: string; action: string; hint: string; reason?: string }; details: Details;
   /** The project key, for `?project=`. */
   repo?: string;
@@ -42,6 +43,12 @@ export function clean(text: unknown): string {
 const sentence = (s: string) => (/[.?!]$/.test(s) ? s : `${s}.`);
 
 type Ctx = { id: string; run?: Job; issue?: NewIssue; lesson?: Lesson };
+const askIn = (c: Ctx): Ask | undefined => c.run?.ask ?? c.issue?.ask;
+/** The first sentence of the note behind a check, cleaned. */
+const noteOf = (c: Ctx): string => {
+  const raw = String(c.run?.reason ?? c.run?.question ?? c.issue?.question ?? "");
+  return (/^(.*?[.!?])(\s|$)/s.exec(clean(raw))?.[1] ?? clean(raw)).replace(/[.!?]$/, "");
+};
 
 const failure = (note: string): string => {
   const m = /^triage: no verdict in \d+ runs?:\s*(.*)$/.exec(unlead(note));
@@ -69,7 +76,7 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
   "acceptance-failed": (c) => `The Oracle of ${c.id} still fails on main after a rerun.`,
   rescue: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your answer is needed"),
   proposal: () => "This work is a proposal, and it does not start until you approve it.",
-  "host-check": () => "A factory sandbox cannot run this check, so it must run on the host.",
+  "host-check": (c) => `A factory sandbox cannot run this check, so it must run on the host: ${noteOf(c) || "the check"}.`,
   firefighter: (c) => {
     const note = unlead(String(c.issue?.question ?? ""));
     const m = /^(\S+) changes (\S+?),? a held security path/.exec(note);
@@ -98,7 +105,7 @@ function actionsFor(reason: string, c: Ctx): Action[] {
   const run: Record<string, string> = c.run ? { name: c.run.name } : {};
   const [repo, n] = c.issue ? c.id.split(/-(?=\d+(?:\.\d+)?$)/) : ["", ""];
   const issue = { repo, id: n };
-  const a = (act: string, label: string, hint: string, args: Record<string, string>): Action => ({ act, label, hint, primary: false, args });
+  const a = (act: string, label: string, hint: string, args: Record<string, string>): Action => ({ act, label, hint, primary: false, args, recommended: false });
   const one = (act: string): Action[] => {
     switch (act) {
       case "land": return [a("land", "Land it", c.run ? "Merges the run's branch into main." : "Lands the held run's branch on main.", run)];
@@ -113,7 +120,10 @@ function actionsFor(reason: string, c: Ctx): Action[] {
         if (reason === "host-check") return [a("deny", "Drop the check", "Marks the issue dropped; no one runs the check.", issue)];
         return [a("deny", "Deny", "Records your refusal on the issue and closes the question.", issue)];
       case "start": return [a("decide", "Start the work", "Makes the issue a goal, and the factory starts it.", { ...issue, approve: "true" })];
-      case "checked": return [a("checked", "Mark it checked", "Closes the issue as done; use this after the check has run.", issue)];
+      case "checked":
+        return [a("checked", "Mark it checked", reason === "host-check" || reason === "manual"
+          ? `Records that you ran this check yourself: ${noteOf(c) || "the check"}. It runs nothing and tests nothing.`
+          : "Closes the issue as done; use this after the check has run.", issue)];
       case "approve":
         if (c.lesson) { const w = words(c.lesson); return [a("approve", w.approve, `Files the goal that ${w.hint}.`, { id: c.id })]; }
         return [a("approve", "File the goal", "Files the proposal as a goal for the factory.", { id: c.id })];
@@ -130,8 +140,27 @@ function actionsFor(reason: string, c: Ctx): Action[] {
       default: return [];
     }
   };
-  const acts = actionsOn(reason, { run: !!c.run, decision: !!c.issue?.decision }).flatMap((n) => n === "answer" ? [a("answer", "Answer and rerun", "Takes your answer and starts the job again with it.", run)] : one(n));
+  const names = new Map<Action, string>();
+  const acts = actionsOn(reason, { run: !!c.run, decision: !!c.issue?.decision }).flatMap((n) => {
+    const got = n === "answer" ? [a("answer", "Answer and rerun", "Takes your answer and starts the job again with it.", run)] : one(n);
+    for (const x of got) names.set(x, x.act === "decide" && x.args.option ? `decide:${x.args.option}` : n);
+    return got;
+  });
   if (acts[0]) acts[0].primary = true;
+  const ask = askIn(c);
+  if (ask?.situation) {
+    const is = (x: Action, name: string) => names.get(x) === name || x.act === name;
+    for (const x of acts) {
+      const e = ask.effects?.find((f) => is(x, f.action));
+      if (e?.text) x.hint = e.text;
+    }
+    const rec = ask.recommend && acts.find((x) => is(x, ask.recommend!.action));
+    if (rec && ask.recommend) {
+      rec.recommended = true;
+      const why = ask.recommend.why.trim().replace(/^./, (ch) => ch.toUpperCase());
+      if (why) rec.hint = `${rec.hint} ${sentence(why)}`.trim();
+    }
+  }
   return acts;
 }
 
@@ -173,8 +202,10 @@ function proposalAlways(l: Lesson): NonNullable<AskItem["always"]> {
 function item(reason: string, c: Ctx, key: string, href: string, title: string, repo?: string, kind?: string): AskItem {
   const actions = actionsFor(reason, c);
   const r = ASK_REASONS[reason];
+  const problem = PROBLEM[reason](c);
+  const stored = askIn(c)?.situation;
   return {
-    key, reason, kind: kindOf(reason, kind), id: c.id, href, title, problem: PROBLEM[reason](c), actions,
+    key, reason, kind: kindOf(reason, kind), id: c.id, href, title, problem, situation: stored || problem, explained: !!stored, actions,
     ...(c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label) } : {}),
     details: detailsFor(c), ...(repo ? { repo } : {}),
   };

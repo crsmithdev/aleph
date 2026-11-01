@@ -9,7 +9,7 @@ import { DAY_CAP, LIVE_CAP, liveRuns, AWAITING_CAP, baselines, firefighterLines,
 import { goalDecision, pendingWaits, refDone, type GoalDecision } from "../jobs/lib/goal-decision.ts";
 import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
-import { readAlways, waitOf, type Ask } from "../jobs/lib/ask.ts";
+import { plainAsk, readAlways, waitOf, type Ask } from "../jobs/lib/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, areasOf, askOf, partsOf, reader, isTracker } from "../todo/lib/store.ts";
 import { idOf, parseGoalRef, refOf, status } from "../todo/lib/todo.ts";
@@ -39,7 +39,7 @@ export interface Job {
   /** Running: the issue whose goals are nested in the Running lane, which shows this job under that goal. */
   issue?: string;
   /** Awaiting: what the run asks of Chris, an input or an approval, and why. */
-  ask?: { kind: "input" | "approval"; reason: string };
+  ask?: Ask;
   /** Awaiting: the reviewer's call on the held run. */
   reviewCall?: { call: string; reason?: string };
   /** A landed job whose manual check is still open. */
@@ -63,6 +63,8 @@ export interface NewIssue { id: string; title: string; status: string; href: str
   question?: string;
   /** Its Ask with options: the fields. */
   decision?: Ask;
+  /** The whole Ask: kind, reason and the stored case text. */
+  ask?: Ask;
   /** The Ask's reason (`fm.reason`). */
   reason?: string;
   /** The Ask's kind: `input` or `approval`. */
@@ -228,7 +230,8 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     }
     if (v.condition === "awaiting" && v.stat) job.stat = v.stat;
     // An awaiting run with no ask of its own asks a question, as stage() reads it.
-    const asked = isAwaiting(lastReal(runs).run.condition) ? waitOf(runAsk(lastReal(runs).run)) : undefined;
+    const stored = isAwaiting(lastReal(runs).run.condition) ? runAsk(lastReal(runs).run) : undefined;
+    const asked = isAwaiting(lastReal(runs).run.condition) ? (stored ?? plainAsk(waitOf(undefined).reason, "")) : undefined;
     if (asked) job.ask = asked;
     if (asked && v.review) job.reviewCall = v.review;
     if (v.checks) job.checks = v.checks;
@@ -399,6 +402,7 @@ export function state(now = new Date()): State {
         const q = ask.question || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
         if (q) c.question = q;
         if (ask.options.length) c.decision = ask;
+        c.ask = ask;
         c.reason = ask.reason;
         c.askKind = ask.kind;
         awaitingItems.push(c);
