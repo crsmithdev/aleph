@@ -35,7 +35,7 @@ export const renderPhases = (d) => `<div class="meds phases">${PHASES.map((p) =>
 const BAR_PX = 760;
 const weekText = (v) => `${v.toFixed(1)}%`;
 
-/** The agent-time bar: the lost sentence, the brackets, one segment per class in two sides, and the not-counted line. */
+/** The agent-time bar: the brackets with each side's share, one segment per class in two sides, and the not-counted line. */
 export function renderBar(d, { pinned = null } = {}) {
   const cs = d.classes ?? [];
   const f = hours;
@@ -44,13 +44,13 @@ export function renderBar(d, { pinned = null } = {}) {
   const sum = (xs) => xs.reduce((a, c) => a + c.hours, 0);
   const good = sum(cs.slice(0, 2)), lost = sum(cs.slice(2));
   const share = (v) => Math.round((v / total) * 100);
-  const sentence = `<p class="lost"><b>${esc(f(lost))}</b> of ${esc(f(total))} (${share(lost)}%) of agent time in ${WINDOW_TEXT[d.window]} went to runs whose work did not reach main.</p>`;
   const bracket = (v, side, t) => (v > 0 ? `<span class="bracket ${side}" style="flex:${v / total}">${t}</span>` : "");
-  const brackets = `<div class="brackets">${bracket(good, "reached", "Reached main")}${bracket(lost, "missed", "Did not reach main")}</div>`;
+  const brackets = `<div class="brackets">${bracket(good, "reached", `Reached main ${share(good)}%`)}${bracket(lost, "missed", `Did not reach main ${share(lost)}%`)}</div>`;
   const seg = (c, sideHours) => {
     const v = c.hours, w = (v / total) * BAR_PX;
     const title = [c.text, ...(c.causes ?? []).slice(0, 5).map((x) => `${x.name}: ${f(x.hours)} · ${x.runs} runs`)].join("\n");
-    const inside = w <= 70 ? "" : `<span class="nm">${esc(c.name)}</span>` + (w <= 8 + c.name.length * 7 + 90 ? "" : `<span class="val">${esc(f(v))} · ${share(v)}%</span>`);
+    // `.abar button` wraps or hides the value by the width the segment has.
+    const inside = w <= 70 ? "" : `<span class="nm">${esc(c.name)}</span><span class="val">${esc(f(v))} · ${share(v)}%</span>`;
     return `<button type="button" class="seg-${c.key}" data-class="${c.key}" style="flex:${v / sideHours}" aria-pressed="${c.key === pinned}" aria-label="${esc(`${c.name}: ${f(v)}, ${share(v)}%`)}" title="${esc(title)}">${inside}</button>`;
   };
   // Each side of the bar is a group of its own, sized by its share, and its segments share the group.
@@ -58,7 +58,7 @@ export function renderBar(d, { pinned = null } = {}) {
   const bar = `<div class="abar" role="group" aria-label="Agent time by what each run's work came to">${side(cs.slice(0, 2), good)}${side(cs.slice(2), lost)}</div>`;
   const nc = d.notCounted;
   const not = nc && nc.runs ? `<p class="quiet notcounted">Not counted: ${nc.runs} runs of ${nc.goals} open goals, ${hours(nc.hours)}</p>` : "";
-  return sentence + brackets + bar + not;
+  return brackets + bar + not;
 }
 
 const chartBox = (key, title, label) => `<figure class="chartbox"><figcaption>${esc(title)}</figcaption><div class="speedchart" data-chart="${key}" role="img" aria-label="${esc(label)}"></div></figure>`;
@@ -95,6 +95,7 @@ export function shownClass(d, pinned = null) {
   return best?.key ?? null;
 }
 
+const TOP_ISSUES = 5;
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 /** The breakdown of one class: its causes and the goals that took the most. "" when `key` is null. */
@@ -103,11 +104,11 @@ export function renderBreakdown(d, key) {
   if (!c) return "";
   const f = (v) => esc(hours(v));
   const alt = d.hasWeek ? `${esc(weekText(c.week))} of week · ` : "";
-  const causes = (c.causes ?? []).map((x) => `<div class="crow"><span class="cn">${esc(x.name)}</span><span class="cbar"><i style="width:${c.hours > 0 ? (x.hours / c.hours) * 100 : 0}%"></i></span><span class="cv">${f(x.hours)} · ${plural(x.runs, "run")}</span></div>`).join("");
-  const top = (c.top ?? []).map((x) => `<div class="grow">${repoIdLink(x.goal, x.href)} ${esc(x.title ?? "")} <b>${f(x.hours)}</b> <span class="quiet">${plural(x.runs, "run")}</span><div class="quiet reason">${esc(x.reason)}</div></div>`).join("");
+  const causes = (c.causes ?? []).map((x) => `<div class="crow"${x.text ? ` title="${esc(x.text)}"` : ""}><span class="cn">${esc(x.name)}</span><span class="cbar"><i style="width:${c.hours > 0 ? (x.hours / c.hours) * 100 : 0}%"></i></span><span class="cv">${f(x.hours)} · ${plural(x.runs, "run")}</span></div>`).join("");
+  const top = (c.top ?? []).slice(0, TOP_ISSUES).map((x) => `<div class="grow">${repoIdLink(x.goal, x.href)} ${esc(x.title ?? "")} <b>${f(x.hours)}</b> <span class="quiet">${plural(x.runs, "run")}</span><div class="quiet reason">${esc(x.reason)}</div></div>`).join("");
   return `<section class="brk" data-class="${key}"><h3><i class="sw seg-${key}"></i>${esc(CLASS_NAME[key] ?? c.name)} <b>${f(c.hours)}</b> <span class="quiet">${alt}${plural(c.runs, "run")} · ${plural(c.goals, "goal")}</span></h3>` +
     `<p class="def">${esc(CLASS_TEXT[key] ?? c.text)}</p>` +
-    `<div class="two"><div><h4>Causes</h4>${causes}</div><div><h4>Top Affected Issues</h4>${top}</div></div></section>`;
+    `<div class="two"><div><h4>Causes</h4><div class="causes">${causes}</div></div><div><h4>Top Affected Issues</h4>${top}</div></div></section>`;
 }
 
 /** The Efficiency block: reruns, the agent time by class and the breakdown of one class, for the picked window. */
@@ -134,11 +135,11 @@ export function renderEffCards(d) {
 }
 
 /** The dotted threshold lines of a chart: p50 thin, p90 heavier and in its own color. Equal thresholds share one line; a threshold of 0 lies on the axis and has none. */
-function thresholdLines({ p50, p90 }, { p50: p50Color, p90: p90Color }) {
+function thresholdLines({ p50, p90 }, { p50: p50Color, p90: p90Color }, max) {
   // The p90 label sits above its line and the p50 label below, so close thresholds stay readable.
   const line = (yAxis, name, color, width, up) => ({ yAxis, lineStyle: { type: "dotted", color, width }, label: { color, offset: [0, up], formatter: `${name} ${dur(yAxis)}` } });
   const lines = p50 === p90 ? [line(p90, "p50, p90", p90Color, 2, 0)] : [line(p50, "p50", p50Color, 1, 5), line(p90, "p90", p90Color, 2, -5)];
-  return { silent: true, symbol: "none", label: { position: "end", fontSize: 10 }, data: lines.filter((l) => l.yAxis > 0) };
+  return { silent: true, symbol: "none", label: { position: "end", fontSize: 10 }, data: lines.filter((l) => l.yAxis > 0 && l.yAxis <= max) };
 }
 
 // The seconds an axis step can be, so the axis marks read as round times.
@@ -155,19 +156,24 @@ export function xLabel(at, window) {
   return `${d.getHours() % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""}${d.getHours() < 12 ? "a" : "p"}`;
 }
 
+const OFF_SCALE = 4;
+
 /** The bar-chart option of one chart: one time per bucket (null leaves a gap), `lines` the p50 and the p90 to mark. */
 export function barOption(buckets, key, { window, color, lines = null, lineColors = { p50: "#888", p90: "#888" } }) {
   const n = buckets.length;
-  // A mark line does not grow the axis, so the top has to reach the p90.
-  const top = Math.max(...buckets.map((b) => b[key] ?? 0), lines?.p90 ?? 0) || 60;
+  // A mark line does not grow the axis, so the top has to reach the p90, unless that would flatten the bars: the phase card still gives a p90 this far above them.
+  const peak = Math.max(...buckets.map((b) => b[key] ?? 0));
+  const marks = [lines?.p50 ?? 0, lines?.p90 ?? 0].filter((v) => !peak || v <= peak * OFF_SCALE);
+  const top = Math.max(peak, ...marks) || 60;
   const step = AXIS_STEPS.find((s) => top / s <= 3) ?? top;
+  const max = Math.ceil(top / step) * step;
   return {
     color: [color],
     grid: { left: 48, right: lines ? 78 : 8, top: 8, bottom: 20 },
     tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${q.value == null ? "none" : esc(dur(q.value))}`; } },
     xAxis: { type: "category", data: buckets.map((b) => xLabel(b.at, window)), axisTick: { show: false }, axisLabel: { interval: Math.max(0, Math.ceil(n / 4) - 1), hideOverlap: true } },
-    yAxis: { type: "value", min: 0, max: Math.ceil(top / step) * step, interval: step, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false }, axisLabel: { formatter: axisTime } },
-    series: [{ type: "bar", data: buckets.map((b) => b[key]), ...(lines ? { markLine: thresholdLines(lines, lineColors) } : {}) }],
+    yAxis: { type: "value", min: 0, max, interval: step, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false }, axisLabel: { formatter: axisTime } },
+    series: [{ type: "bar", data: buckets.map((b) => b[key]), ...(lines ? { markLine: thresholdLines(lines, lineColors, max) } : {}) }],
   };
 }
 
@@ -199,7 +205,7 @@ function draw(box, d) {
   const colors = { intake: t.run, implement: t.need, land: t.done };
   for (const el of box.querySelectorAll(".speedchart[data-chart]")) {
     const key = el.dataset.chart, c = d.phases[key];
-    try { drawn.push(chart(el, barOption(d.buckets, key, { window: d.window, color: colors[key], lines: c.count ? c : null, lineColors: { p50: t.ink, p90: t.stuck } }))); } catch (e) { console.error("speed chart failed", e); }
+    try { drawn.push(chart(el, barOption(d.buckets, key, { window: d.window, color: colors[key], lines: c.count ? c : null, lineColors: { p50: t.ink, p90: t.muted } }))); } catch (e) { console.error("speed chart failed", e); }
   }
 }
 

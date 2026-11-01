@@ -66,10 +66,26 @@ export const CLASS_TEXT: Record<Class, string> = {
   restarted: "A run that a later start replaced: another job of the same goal landed, or the goal started 4 or more times inside an hour.",
   dropped: "A run of a goal that was then dropped or closed without landing.",
 };
+/** What each cause in the breakdown means. */
+const CAUSE_TEXT: Record<string, string> = {
+  "First run of the job": "The job's first run landed, with no fix round.",
+  "After fix rounds": "The job landed on a later run, after one or more fix rounds.",
+  "Goal had landed": "The run started after its goal had landed.",
+  "Work on main from other goal": "The run found the work already on main, from another goal.",
+  "Restart loop": "The goal started 4 or more times inside an hour.",
+  "Needed Chris": "The run waited for Chris, or Chris restarted or dropped it by hand.",
+  "Reviewer sent back": "The reviewer did not pass the run's work.",
+  "Checks failed": "The run's checks failed or timed out.",
+  "Stalled or timed out": "The run stalled, passed its time box or lost its process.",
+  "No commit": "The run ended with no commit.",
+  "Passed, not landed": "The run passed its checks, but its work did not land, for example after a land conflict.",
+  "Other": "Any other reason, or no reason recorded.",
+};
+
 export interface Measure { hours: number; week: number; runs: number }
 export interface ClassStat extends Measure {
   key: Class; name: string; text: string; goals: number;
-  causes: (Omit<Measure, "week"> & { name: string })[];
+  causes: (Omit<Measure, "week"> & { name: string; text: string })[];
   top: (Omit<Measure, "week"> & { goal: string; title?: string; href: string; reason: string })[];
 }
 
@@ -141,16 +157,14 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
     if (!cls) { skipped.push(row); continue; }
     if (cls === "landed") row.cause = mine.some((o) => o.job === r.job && t0(o) < a) ? "After fix rounds" : "First run of the job";
     else if (cls === "nothing") row.cause = afterLand ? "Goal had landed" : "Work on main from other goal";
-    else if (cls === "restarted" && startsBefore >= 3) row.cause = startsBefore + 1 >= 10 ? "10+ starts in an hour" : "4–9 starts in an hour";
-    else if (r.state === "awaiting") row.cause = "Waited on Chris";
+    else if (cls === "restarted" && startsBefore >= 3) row.cause = "Restart loop";
+    else if (r.state === "awaiting") row.cause = "Needed Chris";
     else if (r.failed === "review" || /reviewer/i.test(reason)) row.cause = "Reviewer sent back";
     else if (r.failed || / failed$|^timed out: check /.test(reason)) row.cause = "Checks failed";
     else if (/time box|stalled|timed out|lost/i.test(reason)) row.cause = "Stalled or timed out";
-    else if (/conflict/i.test(reason)) row.cause = "Land conflict";
     else if (r.noCommit || /no commit/i.test(reason)) row.cause = "No commit";
-    else if (/by hand|aleph drop/i.test(reason)) row.cause = "Restarted by hand";
-    else if (passedState(r.state)) row.cause = "Passed, not landed";
-    else if (!r.reason) row.cause = "No reason recorded";
+    else if (/by hand|aleph drop/i.test(reason)) row.cause = "Needed Chris";
+    else if (passedState(r.state) || /conflict/i.test(reason)) row.cause = "Passed, not landed";
     else row.cause = "Other";
     rows.get(cls)!.push(row);
   }
@@ -164,7 +178,7 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
       return m;
     };
     const noWeek = ({ week: _w, ...m }: Measure): Omit<Measure, "week"> => m;
-    const causes = [...group((r) => r.cause)].map(([name, x]) => ({ name, sum: sum(x) })).sort((a, b) => b.sum.hours - a.sum.hours).map((c) => ({ name: c.name, ...noWeek(rd(c.sum)) }));
+    const causes = [...group((r) => r.cause)].map(([name, x]) => ({ name, sum: sum(x) })).sort((a, b) => b.sum.hours - a.sum.hours).map((c) => ({ name: c.name, text: CAUSE_TEXT[c.name], ...noWeek(rd(c.sum)) }));
     const top = [...group((r) => r.goal)].map(([goal, x]) => {
       const last = x.reduce((p, q) => (t0(q.run) > t0(p.run) ? q : p));
       const m = goal.lastIndexOf("-");

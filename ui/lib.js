@@ -161,7 +161,7 @@ export function chartTheme(t) {
   };
 }
 
-const TOKENS = ["bg", "surface", "ink", "rule", "run", "done", "need", "stuck", "focus", "sans", "mono", "chart", "chart-scale", "chart-weight"];
+const TOKENS = ["bg", "surface", "ink", "rule", "run", "done", "need", "stuck", "muted", "focus", "sans", "mono", "chart", "chart-scale", "chart-weight"];
 /** Read the page tokens off :root into a token map. */
 export const readTokens = (el = document.documentElement) => {
   const cs = getComputedStyle(el);

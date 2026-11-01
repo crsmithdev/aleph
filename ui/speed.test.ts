@@ -124,7 +124,10 @@ test("the view: three phase cards; charts; efficiency with reruns and the wasted
   expect(marked.series[0].markLine.data.map((l: any) => [l.yAxis, l.label.formatter, l.lineStyle])).toEqual([[60, "p50 1m 00s", { type: "dotted", color: "#111", width: 1 }], [120, "p90 2m 00s", { type: "dotted", color: "#222", width: 2 }]]);
   expect(marked.yAxis).toMatchObject({ interval: 1800, max: 3600, splitLine: { lineStyle: { opacity: 0.5 } } });
   expect(marked.yAxis.axisLabel.formatter(1800)).toBe("30m");
-  expect(barOption([{ at: at(0, 4), implement: 90 }], "implement", { window: "day", color: "#000", lines: { p50: 60, p90: 400 } }).yAxis.max).toBe(600);
+  expect(barOption([{ at: at(0, 4), implement: 90 }], "implement", { window: "day", color: "#000", lines: { p50: 60, p90: 300 } }).yAxis.max).toBe(360);
+  const far = barOption([{ at: at(0, 4), intake: 248 }], "intake", { window: "day", color: "#000", lines: { p50: 248, p90: 21966 } });
+  expect(far.yAxis.max).toBe(360);
+  expect(far.series[0].markLine.data.map((l: any) => l.yAxis)).toEqual([248]);
   expect(marked.xAxis.axisTick.show).toBe(false);
   expect(marked.xAxis.data).toEqual(["4a", "1p"]);
   expect([xLabel(new Date(2026, 9, 28, 0).toISOString(), "day"), xLabel(new Date(2026, 9, 28, 12).toISOString(), "day"), xLabel(new Date(2026, 9, 28, 13, 36).toISOString(), "hour"), xLabel(new Date(2026, 9, 28).toISOString(), "week"), xLabel(new Date(2026, 9, 5).toISOString(), "month")]).toEqual(["12a", "12p", "1:36p", "Wed", "10/5"]);
@@ -210,7 +213,7 @@ test("classify: one run of each class, with its cause", () => {
   expect(out.classes.map((c) => c.key)).toEqual([...CLASSES]);
   expect(by("landed").causes.map((c) => c.name)).toEqual(["After fix rounds"]);
   expect(by("fixed").causes.map((c) => c.name)).toEqual(["Checks failed"]);
-  expect(by("restarted").causes.map((c) => c.name).sort()).toEqual(["4–9 starts in an hour", "Stalled or timed out"]);
+  expect(by("restarted").causes.map((c) => c.name).sort()).toEqual(["Restart loop", "Stalled or timed out"]);
   expect(by("nothing").causes.map((c) => c.name)).toEqual(["Goal had landed"]);
   expect(by("dropped").causes.map((c) => c.name)).toEqual(["No commit"]);
   expect(by("dropped").top[0]).toMatchObject({ goal: "fx-3", href: "#/issues/fx/3" });

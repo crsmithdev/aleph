@@ -78,7 +78,9 @@ test("the agent-time bar: sentence, brackets, two sides of segments, not counted
   const d = { ...D, classes: classes([60, 10, 20, 25, 1], [3, 0.5, 1, 1.3, 0.1]) };
   const h = renderBar(d);
   const bar = h.slice(h.indexOf('class="abar"'), h.indexOf("Not counted"));
-  expect(h).toContain("<b>46 h</b> of 116 h (40%) of agent time in the last 7 days went to runs whose work did not reach main.");
+  expect(h).not.toContain('class="lost"');
+  expect(h).toContain("Reached main 60%");
+  expect(h).toContain("Did not reach main 40%");
   const br = h.slice(h.indexOf('class="brackets"'), h.indexOf('class="abar"'));
   expect(br).toContain('class="bracket reached"');
   expect(br).toContain('class="bracket missed"');
@@ -105,7 +107,7 @@ test("the flex values share out each side, and the sides share out the total, al
 
 const withTop = () => {
   const cs = classes([60, 10, 20, 25, 1], [3, 0.5, 1, 1.3, 0.1]);
-  cs[3].causes = [{ name: "Land conflict", hours: 20, runs: 3 }, { name: "Other", hours: 4, runs: 1 }];
+  cs[3].causes = [{ name: "Land conflict", text: "Conflict text.", hours: 20, runs: 3 }, { name: "Other", hours: 4, runs: 1 }];
   (cs[3] as any).top = [{ goal: "fx-7", href: "#/issues/fx/7", title: "Fix the merge", reason: "merge conflict in ui/x.ts", hours: 20, runs: 3 }];
   return { ...D, hasWeek: true, classes: cs };
 };
@@ -150,4 +152,12 @@ test("renderEfficiency wraps the bar and the detail in one .effbody after the ca
 test("Efficiency at 1600px and wider: the bar spans the column, the detail sits below it", async () => {
   const css = await Bun.file(new URL("./index.html", import.meta.url)).text();
   expect(css).not.toContain(".effbody { display: grid");
+});
+
+test("the breakdown lists 5 issues at most and each cause has its text as a tooltip", () => {
+  const c = { key: "restarted", name: "Restarted", text: "t", hours: 9, week: 0, runs: 9, goals: 9, causes: [{ name: "Restart loop", text: "Four starts.", hours: 9, runs: 9 }],
+    top: Array.from({ length: 8 }, (_, i) => ({ goal: `fx-${i}`, href: `#/issues/fx/${i}`, reason: "", hours: 1, runs: 1 })) };
+  const h = renderBreakdown({ classes: [c], hasWeek: false } as any, "restarted");
+  expect(h.match(/class="grow"/g)).toHaveLength(5);
+  expect(h).toContain('<div class="crow" title="Four starts.">');
 });
