@@ -65,6 +65,14 @@ test("Week per issue and Lost time show their values and notes", () => {
   expect(n).toContain('<span class="v">–</span><span class="quiet">needs 6 hours of usage snapshots</span>');
 });
 
+test("a small nonzero Week per issue shows <0.1% rather than 0.0%", () => {
+  for (const week of [0.02, 0.01]) {
+    const h = renderEffCards({ window: "week", flaky: 0, issues: { landed: 1, firstPass: 1, fixRounds: 0, week }, lost: { hours: 0, share: 0 } });
+    expect(h).toContain('<span class="v">&lt;0.1%</span>');
+    expect(h).not.toContain('<span class="v">0.0%</span>');
+  }
+});
+
 test("with no landed goal the goal cards show a dash", () => {
   const h = renderEffCards({ window: "week", flaky: 0, wasted: 0, issues: { landed: 0, firstPass: null, fixRounds: null, week: null }, lost: { hours: 0, share: 0 } });
   expect(h.match(/<span class="v">–<\/span><span class="quiet">no issue landed<\/span>/g)?.length).toBe(3);

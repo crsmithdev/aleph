@@ -36,7 +36,8 @@ const phaseCard = ([key, title, text], c, step) => {
 export const renderPhases = (d) => `<div class="meds phases">${PHASES.map((p) => phaseCard(p, d.phases[p[0]], STEP_TEXT[d.window])).join("")}</div>`;
 
 const BAR_PX = 760;
-const weekText = (v) => `${v.toFixed(1)}%`;
+/** A percent of the weekly limit: one decimal, but a small nonzero value shows "<0.1%" rather than "0.0%". */
+const weekText = (v) => (v > 0 && v < 0.05 ? "<0.1%" : `${v.toFixed(1)}%`);
 
 /** The agent-time bar: the brackets with each side's share, one segment per class in two sides, and the not-counted line. */
 export function renderBar(d, { pinned = null } = {}) {
@@ -149,7 +150,7 @@ export function renderEffCards(d) {
     card("Reruns", String(d.flaky), `passed on rerun, ${w}`) +
     card("First pass", g.firstPass === null ? "–" : pctText(g.firstPass), none ?? "landed issues with 0 fix rounds") +
     card("Fix rounds", g.fixRounds === null ? "–" : String(g.fixRounds), none ?? "median per landed issue") +
-    card("Week per issue", week === null ? "–" : `${week.toFixed(1)}%`, none ?? (week === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median per landed issue")) +
+    card("Week per issue", week === null ? "–" : weekText(week), none ?? (week === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median per landed issue")) +
     card("Lost time", hours(lost.hours), `${Math.round(lost.share * 100)}% of agent hours on runs whose work did not reach main`) + `</div>`;
 }
 
