@@ -223,6 +223,23 @@ test("classify: one run of each class, with its cause", () => {
 });
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+test("classify: a reason over 140 characters ends at a word with an ellipsis; a short one is untouched", () => {
+  const t = (h: number) => new Date(2026, 9, 28, h).toISOString();
+  const long = "measure per file output of the slow suites before changing the runner so that every worker reports where its time goes " + "and ".repeat(20) + "end";
+  const r = (job: string, n: number, reason: string) =>
+    ({ kind: "build", job, name: job, repo: "fx", on: `fx-${n}`, condition: "stuck", noCommit: true, reason, started: t(1), ended: t(2) }) as any;
+  const out = classify([r("p", 5, "agent run p: " + long), r("q", 6, "Main no")], () => "dropped", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
+  const top = out.classes.find((c) => c.key === "dropped")!.top;
+  const a = top.find((e) => e.goal === "fx-5")!.reason, b = top.find((e) => e.goal === "fx-6")!.reason;
+  expect(long.length).toBeGreaterThan(140);
+  expect(a.length).toBeLessThanOrEqual(140);
+  expect(a.endsWith("…")).toBe(true);
+  const body = a.slice(0, -1);
+  expect(long.startsWith(body)).toBe(true);
+  expect(long[body.length]).toBe(" ");
+  expect(b).toBe("Main no");
+});
+
 test("a build run counts as an agent run", () => {
   const before = speed("week", now);
   run({ kind: "build", condition: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 20 }], ...secs(1, 11, 7000) });

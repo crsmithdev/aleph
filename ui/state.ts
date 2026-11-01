@@ -92,7 +92,7 @@ export interface State {
   /** Queued and blocked goals (and old items): the Queued lane. */
   queued: { repo: string; id: number | string; title: string; stage: string; why: string; kind: WaitReason["kind"];
     waits?: { id: string; href: string; state: string | null }[] }[];
-  /** Issues in Running: each with its goals nested and "n of m goals". */
+  /** Issues in Running: each with its goals nested and "n of m issues". */
   runningIssues: RunningIssue[];
   /** Land runs in progress. */
   landing: number;

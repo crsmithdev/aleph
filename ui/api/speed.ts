@@ -193,7 +193,7 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
     const top = [...group((r) => r.goal)].map(([goal, x]) => {
       const last = x.reduce((p, q) => (t0(q.run) > t0(p.run) ? q : p));
       const m = goal.lastIndexOf("-");
-      return { goal, sum: sum(x), reason: (last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").slice(0, 140), href: `#/issues/${encodeURIComponent(goal.slice(0, m))}/${goal.slice(m + 1)}` };
+      return { goal, sum: sum(x), reason: clip((last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").trim(), 140), href: `#/issues/${encodeURIComponent(goal.slice(0, m))}/${goal.slice(m + 1)}` };
     }).sort((a, b) => b.sum.hours - a.sum.hours).slice(0, 8).map((t) => ({ goal: t.goal, href: t.href, reason: t.reason, ...noWeek(rd(t.sum)) }));
     return { key, name: CLASS_NAME[key], text: CLASS_TEXT[key], ...rd(sum(rs)), issues: new Set(rs.map((r) => r.goal)).size, causes, top };
   });
@@ -453,3 +453,10 @@ export const routes: Routes = {
     return Response.json(cachedSpeed(w as Window, await currentFit().catch(() => null)));
   },
 };
+
+/** `s` cut to at most `max` characters at a word end, with "…" when anything was cut. */
+function clip(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max - 1), sp = cut.lastIndexOf(" ");
+  return (sp > max / 2 ? cut.slice(0, sp) : cut).replace(/[\s.,;:]+$/, "") + "…";
+}

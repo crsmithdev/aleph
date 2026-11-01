@@ -129,11 +129,11 @@ describe("/api/state on a work-model store", () => {
     expect(s.queued.map((q: any) => [q.id, q.stage])).toEqual([["1.3", "blocked"]]);
   });
 
-  test("Running shows the issue with 'n of m goals' and its goals nested, not the goal's job as a second card", () => {
+  test("Running shows the issue with 'n of m issues' and its goals nested, not the goal's job as a second card", () => {
     const s: any = state(now);
     const html = renderLanes(s);
     const running = html.match(/<section id="lane-running"[^]*?<\/section>/)![0];
-    expect(running).toContain("1 of 3 goals");
+    expect(running).toContain("1 of 3 issues");
     expect(running.match(/class="goal-row"/g)).toHaveLength(3);
     expect(running).toContain('href="#/jobs/fac-1.2"');
     expect(running.match(/<article /g)).toHaveLength(1);
