@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CLASSES, classify, clearCache, concurrency, filed, openAge, pct, phases, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { ageOption, ageText, barOption, dur, liveOption, renderCharts, renderEfficiency, renderPhases, renderPicker, renderSpeedTop, windowOf, xLabel } from "./views/speed.js";
+import { ageOption, ageText, barOption, dur, liveOption, renderEfficiency, renderPhases, renderPicker, renderSpeedTop, windowOf, xLabel } from "./views/speed.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -101,38 +101,33 @@ test("the view: five phase cards; charts; efficiency with reruns and the wasted 
   const d = speed("day", now);
   const h = renderSpeedTop(d);
   for (const k of ["intake", "queue", "implement", "land", "lead"]) expect(h).toContain(`data-chart="${k}"`);
-  expect(h.indexOf('class="meds phases"')).toBeLessThan(h.indexOf('class="charts3"'));
+  expect(h).not.toContain("charts3");
   expect(h.match(/class="med"/g)?.length).toBe(5);
   const one = renderPhases({ phases: { intake: { count: 0, p50: 0, p90: 0 }, queue: { count: 0, p50: 0, p90: 0 }, lead: { count: 0, p50: 0, p90: 0 }, implement: { count: 3, p50: 1200, p90: 1800 }, land: { count: 1, p50: 43, p90: 43 } } });
-  expect(one).toContain('<span class="k">Intake (0)</span><span class="v">– p50</span><span class="p90">– p90</span>');
+  expect(one).toContain('<span class="k">Intake (0)</span><span class="v">– p50</span><span class="p90">– p90</span><div class="speedchart spark" data-chart="intake"');
   expect(one).toContain('<span class="k">Implement (3)</span><span class="v">20m 00s p50</span><span class="p90">30m 00s p90</span>');
   expect(one).toContain('<span class="k">Land (1)</span><span class="v">43s p50</span><span class="p90">43s p90</span>');
   for (const t of ["Tests check", "Flaky", "24–27 s", "Today", "7 days"]) expect(h).not.toContain(t);
   const e = renderEfficiency(d);
   expect(e).toContain("Reruns");
-  for (const [w, step] of [["hour", "minute"], ["day", "hour"], ["week", "day"], ["month", "day"]] as const) {
-    const c = renderCharts({ ...d, window: w });
-    for (const t of ["Intake", "Implement", "Land"]) expect(c).toContain(`${t} by ${step} (median)`);
-  }
+  for (const [w, step] of [["hour", "minute"], ["day", "hour"], ["week", "day"], ["month", "day"]] as const) expect(renderPhases({ ...d, window: w })).toContain(`Median implement time per ${step}`);
   expect(renderSpeedTop(null)).toContain("Loading performance");
   expect(renderSpeedTop(null)).toContain(">Performance</h2>");
   const o = barOption(d.buckets, "implement", { window: "day", color: "#000" });
   expect(o.series[0].type).toBe("bar");
   expect(o.series[0].data.length).toBe(24);
-  expect(o.series[0].markLine).toBeUndefined();
-  const marked = barOption([{ at: at(0, 4), implement: 3100 }, { at: at(0, 13), implement: null }], "implement", { window: "day", color: "#000", lines: { p50: 60, p90: 120 }, lineColors: { p50: "#111", p90: "#222" } });
-  expect(marked.series[0].markLine.data.map((l: any) => [l.yAxis, l.label.formatter, l.lineStyle])).toEqual([[60, "p50 1m 00s", { type: "dotted", color: "#111", width: 1 }], [120, "p90 2m 00s", { type: "dotted", color: "#222", width: 2 }]]);
-  expect(marked.yAxis).toMatchObject({ interval: 1800, max: 3600, splitLine: { lineStyle: { opacity: 0.5 } } });
-  expect(marked.yAxis.axisLabel.formatter(1800)).toBe("30m");
-  expect(barOption([{ at: at(0, 4), implement: 90 }], "implement", { window: "day", color: "#000", lines: { p50: 60, p90: 300 } }).yAxis.max).toBe(360);
-  const far = barOption([{ at: at(0, 4), intake: 248 }], "intake", { window: "day", color: "#000", lines: { p50: 248, p90: 21966 } });
-  expect(far.yAxis.max).toBe(360);
-  expect(far.series[0].markLine.data.map((l: any) => l.yAxis)).toEqual([248]);
-  expect(marked.xAxis.axisTick.show).toBe(false);
+  expect(o.series[0].markLine.data).toEqual([]);
+  expect(o.xAxis.axisLabel.interval(0)).toBe(true);
+  expect(o.xAxis.axisLabel.interval(1)).toBe(false);
+  expect(o.xAxis.axisLabel.interval(23)).toBe(true);
+  const marked = barOption([{ at: at(0, 4), implement: 3100 }, { at: at(0, 13), implement: null }], "implement", { window: "day", color: "#000", p50: 60, lineColor: "#111" });
+  expect(marked.series[0].markLine.data).toEqual([{ yAxis: 60 }]);
+  expect(marked.series[0].markLine.lineStyle).toEqual({ type: "dotted", color: "#111", width: 1 });
+  expect(marked.yAxis).toMatchObject({ show: false, min: 0, max: 3100 });
   expect(marked.xAxis.data).toEqual(["4a", "1p"]);
+  // A p50 over the top bar would widen the axis: it has no line.
+  expect(barOption([{ at: at(0, 4), implement: 90 }], "implement", { window: "day", color: "#000", p50: 300 }).series[0].markLine.data).toEqual([]);
   expect([xLabel(new Date(2026, 9, 28, 0).toISOString(), "day"), xLabel(new Date(2026, 9, 28, 12).toISOString(), "day"), xLabel(new Date(2026, 9, 28, 13, 36).toISOString(), "hour"), xLabel(new Date(2026, 9, 28).toISOString(), "week"), xLabel(new Date(2026, 9, 5).toISOString(), "month")]).toEqual(["12a", "12p", "1:36p", "Wed", "10/5"]);
-  expect(barOption(d.buckets, "implement", { window: "day", color: "#000", lines: { p50: 60, p90: 60 } }).series[0].markLine.data.map((l: any) => l.label.formatter)).toEqual(["p50, p90 1m 00s"]);
-  expect(barOption(d.buckets, "implement", { window: "day", color: "#000", lines: { p50: 0, p90: 120 } }).series[0].markLine.data.map((l: any) => l.yAxis)).toEqual([120]);
   expect(renderPicker("hour")).toMatch(/aria-pressed="true">Hour<[^]*aria-pressed="false">Day/);
   expect(windowOf(new URLSearchParams("window=day"))).toBe("day");
   expect(windowOf(new URLSearchParams("window=x"))).toBe("week");

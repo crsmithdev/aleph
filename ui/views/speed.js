@@ -28,14 +28,14 @@ const PHASES = [
   ["lead", "Lead time", "An issue is created, then its last land. The whole span, including what the other phases leave out. Counted when it lands."],
 ];
 
-/** One phase card: the title and count, the p50, the p90. A phase with no count has no times. */
-const phaseCard = ([key, title, text], c) => {
+/** One phase card: the title and count, the p50, the p90, and a chart of its median per `step`, which `mountSpeed` fills. A phase with no count has no times. */
+const phaseCard = ([key, title, text], c, step) => {
   const f = (v) => (c.count ? dur(v) : dur(null));
-  return `<div class="med" title="${esc(text)}"><span class="k">${esc(title)} (${c.count})</span><span class="v">${esc(f(c.p50))} p50</span><span class="p90">${esc(f(c.p90))} p90</span></div>`;
+  return `<div class="med" title="${esc(text)}"><span class="k">${esc(title)} (${c.count})</span><span class="v">${esc(f(c.p50))} p50</span><span class="p90">${esc(f(c.p90))} p90</span><div class="speedchart spark" data-chart="${key}" role="img" aria-label="${esc(`Median ${title.toLowerCase()} time per ${step}`)}"></div></div>`;
 };
 
 /** The phase cards: intake, queue, implement, land, lead time. */
-export const renderPhases = (d) => `<div class="meds phases">${PHASES.map((p) => phaseCard(p, d.phases[p[0]])).join("")}</div>`;
+export const renderPhases = (d) => `<div class="meds phases">${PHASES.map((p) => phaseCard(p, d.phases[p[0]], STEP_TEXT[d.window])).join("")}</div>`;
 
 const BAR_PX = 760;
 const weekText = (v) => `${v.toFixed(1)}%`;
@@ -66,12 +66,6 @@ export function renderBar(d, { pinned = null } = {}) {
   return brackets + bar + not;
 }
 
-const chartBox = (key, title, label) => `<figure class="chartbox"><figcaption>${esc(title)}</figcaption><div class="speedchart" data-chart="${key}" role="img" aria-label="${esc(label)}"></div></figure>`;
-
-/** One chart box per phase; `mountSpeed` fills them. */
-export const renderCharts = (d) => `<div class="charts3">` +
-  PHASES.map(([key, title]) => chartBox(key, `${title} by ${STEP_TEXT[d.window]} (median)`, `Median ${title.toLowerCase()} time per bucket`)).join("") + `</div>`;
-
 /** The two panels under the charts: how old the open work is, and how many agent runs were live at once. */
 export function renderFlowPanels(d) {
   const a = d.openAge, c = d.concurrency;
@@ -86,11 +80,11 @@ export function renderFlowPanels(d) {
 
 const loading = (what, d) => (!d ? `<p class="quiet loading" role="status">Loading ${what}…</p>` : `<div class="empty"><p class="hint">${esc(d.error)}</p></div>`);
 
-/** The Performance block: the phase cards and the three charts. `d` is null while loading, `{error}` on a failed load. */
+/** The Performance block: the phase cards and the two panels. `d` is null while loading, `{error}` on a failed load. */
 export function renderSpeedTop(d) {
   const head = `<div class="sh sub"><h2 id="h-speed">Performance</h2></div>`;
   if (!d || d.error) return head + loading("performance", d);
-  return head + renderPhases(d) + renderCharts(d) + renderFlowPanels(d);
+  return head + renderPhases(d) + renderFlowPanels(d);
 }
 
 // Duplicated from ui/api/speed.ts: keep the texts identical.
@@ -150,19 +144,6 @@ export function renderEffCards(d) {
     card("Lost time", hours(lost.hours), `${Math.round(lost.share * 100)}% of agent hours on runs whose work did not reach main`) + `</div>`;
 }
 
-/** The dotted threshold lines of a chart: p50 thin, p90 heavier and in its own color. Equal thresholds share one line; a threshold of 0 lies on the axis and has none. */
-function thresholdLines({ p50, p90 }, { p50: p50Color, p90: p90Color }, max) {
-  // The p90 label sits above its line and the p50 label below, so close thresholds stay readable.
-  const line = (yAxis, name, color, width, up) => ({ yAxis, lineStyle: { type: "dotted", color, width }, label: { color, offset: [0, up], formatter: `${name} ${dur(yAxis)}` } });
-  const lines = p50 === p90 ? [line(p90, "p50, p90", p90Color, 2, 0)] : [line(p50, "p50", p50Color, 1, 5), line(p90, "p90", p90Color, 2, -5)];
-  return { silent: true, symbol: "none", label: { position: "end", fontSize: 10 }, data: lines.filter((l) => l.yAxis > 0 && l.yAxis <= max) };
-}
-
-// The seconds an axis step can be, so the axis marks read as round times.
-const AXIS_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 14400, 28800, 86400, 172800, 345600, 604800];
-/** An axis mark at a round time: "30s", "15m", "2h". */
-const axisTime = (v) => (v < 60 ? `${v}s` : v < 3600 ? `${v / 60}m` : `${v / 3600}h`);
-
 /** A bucket's x-axis label: "4a" or "1:36p" in the hour and day windows, "Sat" in week, "10/25" in month. */
 export function xLabel(at, window) {
   const d = new Date(at);
@@ -172,26 +153,20 @@ export function xLabel(at, window) {
   return `${d.getHours() % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""}${d.getHours() < 12 ? "a" : "p"}`;
 }
 
-const OFF_SCALE = 4;
-
-/** The bar-chart option of one chart: one time per bucket (null leaves a gap), `lines` the p50 and the p90 to mark. */
-export function barOption(buckets, key, { window, color, lines = null, lineColors = { p50: "#888", p90: "#888" } }) {
+/** The bar-chart option of one phase card: one time per bucket (null leaves a gap), no y axis, the first and last x labels, and `p50` as a dotted line when it lies under the top bar. */
+export function barOption(buckets, key, { window, color, p50 = 0, lineColor = "#888" }) {
   const n = buckets.length;
-  // A mark line does not grow the axis, so the top has to reach the p90, unless that would flatten the bars: the phase card still gives a p90 this far above them.
   const peak = Math.max(...buckets.map((b) => b[key] ?? 0));
-  const marks = [lines?.p50 ?? 0, lines?.p90 ?? 0].filter((v) => !peak || v <= peak * OFF_SCALE);
-  const top = Math.max(peak, ...marks) || 60;
-  const step = AXIS_STEPS.find((s) => top / s <= 3) ?? top;
-  const max = Math.ceil(top / step) * step;
+  const data = p50 > 0 && p50 <= peak ? [{ yAxis: p50 }] : [];
   return {
     // A push redraws the chart, and an entry animation on each redraw flashes the bars.
     animation: false,
     color: [color],
-    grid: { left: 48, right: lines ? 78 : 8, top: 8, bottom: 20 },
+    grid: { left: 0, right: 0, top: 2, bottom: 18 },
     tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${q.value == null ? "none" : esc(dur(q.value))}`; } },
-    xAxis: { type: "category", data: buckets.map((b) => xLabel(b.at, window)), axisTick: { show: false }, axisLabel: { interval: Math.max(0, Math.ceil(n / 3) - 1), hideOverlap: true } },
-    yAxis: { type: "value", min: 0, max, interval: step, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false }, axisLabel: { formatter: axisTime } },
-    series: [{ type: "bar", data: buckets.map((b) => b[key]), ...(lines ? { markLine: thresholdLines(lines, lineColors, max) } : {}) }],
+    xAxis: { type: "category", data: buckets.map((b) => xLabel(b.at, window)), axisTick: { show: false }, axisLabel: { interval: (i) => i === 0 || i === n - 1, alignMinLabel: "left", alignMaxLabel: "right" } },
+    yAxis: { type: "value", show: false, min: 0, max: peak || 1, splitLine: { show: false } },
+    series: [{ type: "bar", barCategoryGap: "20%", data: buckets.map((b) => b[key]), markLine: { silent: true, symbol: "none", label: { show: false }, lineStyle: { type: "dotted", color: lineColor, width: 1 }, data } }],
   };
 }
 
@@ -254,7 +229,7 @@ function draw(box, d) {
   panel("live", liveOption(d.concurrency, { window: d.window, color: t.run, capColor: t.muted }));
   for (const el of box.querySelectorAll(".speedchart[data-chart]")) {
     const key = el.dataset.chart, c = d.phases[key];
-    try { drawn.push(chart(el, barOption(d.buckets, key, { window: d.window, color: colors[key], lines: c.count ? c : null, lineColors: { p50: t.ink, p90: t.muted } }))); } catch (e) { console.error("speed chart failed", e); }
+    try { drawn.push(chart(el, barOption(d.buckets, key, { window: d.window, color: colors[key], p50: c.count ? c.p50 : 0, lineColor: t.ink }))); } catch (e) { console.error("speed chart failed", e); }
   }
 }
 
