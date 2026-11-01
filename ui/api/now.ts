@@ -1,7 +1,8 @@
 /** `GET /api/state`: the Now view's data, narrowed to one project by `?project=<key>`. */
 import type { Routes } from "../server.ts";
 import { proposals } from "../../jobs/lib/corrections.ts";
-import { state, type State } from "../state.ts";
+import type { State } from "../state.ts";
+import { loadState } from "../state-load.ts";
 import { cachedSpeed } from "./speed.ts";
 import { annotate, currentFit, summary } from "../usage.ts";
 
@@ -14,9 +15,12 @@ export function forProject(s: State, project: string | null): State {
 
 export const routes: Routes = {
   "GET /api/state": async (_req, _params, url) => {
-    const s = forProject(state(), url.searchParams.get("project"));
+    // Built in the worker, from a build that starts after this request: the server answers others meanwhile.
+    // The build is shared with the requests that came with this one, so this request annotates its own copy.
+    const { state, build } = await loadState();
+    const s = forProject(structuredClone(state), url.searchParams.get("project"));
     const fit = await currentFit().catch(() => null);
     annotate([...s.stuck, ...s.running, ...s.delivered, ...s.planner], fit);
-    return Response.json({ ...s, usage: summary(), speed: cachedSpeed("week", fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) });
+    return Response.json({ ...s, usage: summary(), speed: cachedSpeed("week", fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) }, { headers: { "x-aleph-state-build": String(build) } });
   },
 };

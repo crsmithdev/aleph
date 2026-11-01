@@ -6,7 +6,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { afterOf, askOf, flakeTracker, goal, goals, goalsOf, issueOf as issueRefOf, kindOf, note, readList, readLists, reader } from "../../todo/lib/store.ts";
+import { afterOf, askOf, flakeTracker, goal, goals, goalsOf, issueOf as issueRefOf, kindOf, note, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { startProposals, takeFresh } from "./deps.ts";
 import { normalizeAsk, type Ask } from "./ask.ts";
@@ -77,16 +77,17 @@ const sandboxRepos = () => Object.values(loadRegistry()).filter((r) => r.sandbox
 export const factoryRepos = sandboxRepos;
 
 /** Factory agent and triage runs started in the last 24 hours. */
-export function runsToday(now = Date.now()): Entry[] {
+/** `runs` is every run, when the caller has read them already. */
+export function runsToday(now = Date.now(), runs: Entry[] = allRuns()): Entry[] {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  return allRuns().filter((e) => (isBuild(e.run.kind) || e.run.kind === "triage" || e.run.kind === "plan") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
+  return runs.filter((e) => (isBuild(e.run.kind) || e.run.kind === "triage" || e.run.kind === "plan") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
 }
 
 /** The dollars of the runs started in the last 24 hours: `runsToday`, and the facts and firefighter runs, which the day cap does not count. */
-export function spentToday(now = Date.now()): number {
+export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  const others = allRuns().filter((e) => (e.run.kind === "firefighter" || (e.run.kind === "facts" && e.run.repo && keys.has(e.run.repo))) && now - Date.parse(e.run.started) < DAY);
-  return [...runsToday(now), ...others].reduce((a, e) => a + (e.run.cost ?? 0), 0);
+  const others = runs.filter((e) => (e.run.kind === "firefighter" || (e.run.kind === "facts" && e.run.repo && keys.has(e.run.repo))) && now - Date.parse(e.run.started) < DAY);
+  return [...runsToday(now, runs), ...others].reduce((a, e) => a + (e.run.cost ?? 0), 0);
 }
 
 /** Open jobs in factory repos whose last run awaits Chris (a stuck run needs no answer). */
@@ -165,7 +166,7 @@ async function factsStep(): Promise<void> {
 }
 
 /** The open items labelled `goal` in each factory repo. */
-export const openGoals = (): { repo: Repo; item: issues.Issue }[] => goals(sandboxRepos()).filter(({ item }) => kindOf(item) === "goal");
+export const openGoals = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => goals(sandboxRepos(), lists).filter(({ item }) => kindOf(item) === "goal");
 
 /**
  * Whether `<repo>-<n>` is done: the store says done, or the derived state
@@ -256,8 +257,8 @@ const issueNumber = (repo: Repo, item: issues.Issue): number | null => {
 export const goalJob = (repo: Repo, id: number | string) => `${repo.key}-${id}`;
 
 /** Agent runs live now, and those started whose unit has not written `pid` yet. */
-export const liveEntries = (): Entry[] => allRuns().filter((e) => isBuild(e.run.kind) && (isLive(e.folder) || isStarting(e)));
-export const liveRuns = (): number => liveEntries().length;
+export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.kind) && (isLive(e.folder) || isStarting(e)));
+export const liveRuns = (runs?: Entry[]): number => liveEntries(runs).length;
 
 /** The gates, in the order `gates` checks them. */
 export const GATES = ["pause", "hold", "probe", "live", "day", "awaiting"] as const;
@@ -281,11 +282,13 @@ export function gates(opts: { only?: readonly Gate[]; jobs?: Job[]; except?: str
     const p = lastProbe();
     if (p && !p.ok) return { gate: "probe", why: `the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}` };
   }
+  // The jobs, when given, hold every run: the live and day gates count from them and read no run again.
+  const runs = opts.jobs?.flat();
   if (on("live")) {
-    const live = liveRuns();
+    const live = liveRuns(runs);
     if (live >= LIVE_CAP()) return { gate: "live", why: `${live} agent runs are live` };
   }
-  if (on("day") && runsToday().length >= DAY_CAP()) return { gate: "day", why: `cap of ${DAY_CAP()} runs in 24 hours` };
+  if (on("day") && runsToday(Date.now(), runs).length >= DAY_CAP()) return { gate: "day", why: `cap of ${DAY_CAP()} runs in 24 hours` };
   if (on("awaiting")) {
     const waits = waiting(opts.jobs);
     if (waits >= AWAITING_CAP()) return { gate: "awaiting", why: `${waits} runs wait for Chris` };
@@ -1051,12 +1054,13 @@ export function saveProbe(p: Probe): void {
 }
 export const probeDue = (now = Date.now()) => { const p = lastProbe(); return !p || now - Date.parse(p.at) > 20 * 3600_000; };
 
-/** The factory's health line, or null: no run in 24 hours with a goal open, or a failed probe. */
-export function health(now = Date.now()): string[] {
+/** The factory's health line, or null: no run in 24 hours with a goal open, or a failed probe. `jobs` and `lists` are the caller's, when it has read them already. */
+export function health(now = Date.now(), o: { jobs?: Job[]; lists?: Reader } = {}): string[] {
   const lines: string[] = [];
-  const goals = openGoals();
-  if (goals.length && !paused() && !runsToday(now).length) lines.push(`health: no factory run started in 24 hours, with ${goals.length} open goal${goals.length > 1 ? "s" : ""}`);
-  const w = waiting();
+  const lists = o.lists ?? reader();
+  const goals = openGoals(lists);
+  if (goals.length && !paused() && !runsToday(now, o.jobs?.flat()).length) lines.push(`health: no factory run started in 24 hours, with ${goals.length} open goal${goals.length > 1 ? "s" : ""}`);
+  const w = waiting(o.jobs);
   if (w >= AWAITING_CAP()) lines.push(`health: ${w} runs wait for Chris; no new run starts`);
   const p = lastProbe();
   if (p && !p.ok) lines.push(`health: the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`);
@@ -1065,7 +1069,6 @@ export function health(now = Date.now()): string[] {
   const counts = new Map<string, number>();
   for (const f of flakes()) if (now - Date.parse(f.at) < 7 * DAY) counts.set(`${f.repo} check ${f.check}`, (counts.get(`${f.repo} check ${f.check}`) ?? 0) + 1);
   for (const [k, n] of counts) if (n >= 2) lines.push(`health: ${k} passed on rerun ${n} times in 7 days`);
-  const lists = reader();
   for (const repo of factoryRepos()) {
     const doc = lists.list(repo.key);
     const tracker = doc && flakeTracker(doc);

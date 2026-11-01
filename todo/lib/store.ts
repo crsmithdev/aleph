@@ -53,6 +53,8 @@ let reuse = 0;
 
 /** Reuse a fetch of the store for `seconds` in this process. Only the UI server turns it on; the CLI always fetches. */
 export function cacheFetches(seconds: number): void { reuse = seconds; }
+/** The seconds set by cacheFetches: the UI passes it on to the worker that builds its state. */
+export const fetchReuse = (): number => reuse;
 
 /**
  * Fetch origin/main, unless this process fetched the store less than `reuse` seconds ago.
@@ -99,13 +101,28 @@ function readFiles(dir: string, specs: string[]): string[] {
   return out;
 }
 
+/**
+ * The item files of a repo's list at the commit last loaded, by store and repo key: a commit never changes, so a
+ * later load of the same commit reads no blob. Only the latest commit is kept for each list.
+ */
+const texts = new Map<string, { sha: string; files: string[] | null }>();
+
 /** A repo's items at `rev`, in number order, or null when the store has no list for it. One ls-tree finds the config and the items. */
 function load(dir: string, rev: string, key: string): Doc | null {
-  const ls = git(dir, "ls-tree", "-r", "-z", "--name-only", rev, "--", configPath(key), `${tasksDir(key)}/`);
-  const paths = ls.ok ? ls.out.split("\0") : [];
-  if (!paths.includes(configPath(key))) return null;
-  const names = paths.filter((p) => p.startsWith(`${tasksDir(key)}/`) && p.endsWith(".md") && !p.slice(tasksDir(key).length + 1).includes("/"));
-  const items = readFiles(dir, names.map((p) => `${rev}:${p}`)).map(parseItem);
+  // The commit `rev` names: the files of a commit loaded before are reused, and they are parsed afresh, as the caller may change the items.
+  const sha = /^[0-9a-f]{40}$/.test(rev) ? rev : git(dir, "rev-parse", "--verify", "-q", `${rev}^{commit}`).out;
+  const id = `${dir}\0${key}`;
+  const known = /^[0-9a-f]{40}$/.test(sha), at = known ? sha : rev;
+  let hit = texts.get(id);
+  if (!hit || hit.sha !== sha || !known) {
+    const ls = git(dir, "ls-tree", "-r", "-z", "--name-only", at, "--", configPath(key), `${tasksDir(key)}/`);
+    const paths = ls.ok ? ls.out.split("\0") : [];
+    const names = paths.filter((p) => p.startsWith(`${tasksDir(key)}/`) && p.endsWith(".md") && !p.slice(tasksDir(key).length + 1).includes("/"));
+    hit = { sha, files: paths.includes(configPath(key)) ? readFiles(dir, names.map((p) => `${at}:${p}`)) : null };
+    if (known) texts.set(id, hit);
+  }
+  if (!hit.files) return null;
+  const items = hit.files.map(parseItem);
   return { head: "", repo: key, items: items.sort((a, b) => a.id - b.id || (a.sub ?? -1) - (b.sub ?? -1)) };
 }
 
@@ -316,8 +333,7 @@ export function reader(o: { fetch?: boolean } = {}): Reader {
 }
 
 /** The open goals of each repo, in repo then number order. A repo whose list cannot be read has none. */
-export function goals<R extends Place>(repos: R[]): { repo: R; item: Issue }[] {
-  const lists = reader();
+export function goals<R extends Place>(repos: R[], lists: Reader = reader()): { repo: R; item: Issue }[] {
   return repos.flatMap((repo) => (lists.list(repo.key)?.items ?? []).filter(isGoal).map((item) => ({ repo, item })));
 }
 

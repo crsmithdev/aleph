@@ -1,0 +1,93 @@
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { add } from "../todo/lib/todo.ts";
+import { writeList } from "../todo/lib/store.ts";
+import { serve } from "./server.ts";
+import { stateBuilds } from "./state-load.ts";
+
+// /api/state is built in a worker (ui/state-load.ts). ALEPH_STATE_SLOW_MS makes each build sleep that long first, so the
+// assertions on the timer, the shared builds and the fresh state hold whatever the machine's speed.
+const SLOW = 800;
+
+let base: string, jobs: string, server: Awaited<ReturnType<typeof serve>>;
+const saved: Record<string, string | undefined> = {};
+const ident = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+const sh = (cwd: string, ...a: string[]) => { const p = Bun.spawnSync(a, { cwd, env: { ...process.env, ...ident } }); if (p.exitCode) throw new Error(p.stderr.toString()); };
+const get = (p = "/api/state") => fetch(`http://127.0.0.1:${server.port}${p}`);
+const names = (body: any): string[] => body.running.map((j: any) => j.name).sort();
+
+let seq = 0;
+function writeRun(name: string): void {
+  const folder = join(jobs, `20261031-1000${String(seq++).padStart(2, "0")}-demo-${name}-agent`);
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", state: "running", started: new Date().toISOString(), name, job: name, repo: "demo", on: name }));
+}
+
+beforeAll(async () => {
+  base = mkdtempSync(join(tmpdir(), "aleph-ui-state-load-"));
+  jobs = join(base, "jobs");
+  const repo = join(base, "demo"), remote = join(base, "items.git"), items = join(base, "items");
+  sh(base, "git", "init", "-q", "-b", "main", repo);
+  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "start");
+  sh(repo, "git", "update-ref", "refs/remotes/origin/main", "HEAD");
+  sh(base, "git", "init", "-q", "--bare", "-b", "main", remote);
+  sh(base, "git", "clone", "-q", remote, items);
+  sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
+  sh(items, "git", "push", "-q", "origin", "main");
+  writeFileSync(join(base, "repos.json"), JSON.stringify({ demo: { path: repo, main: "main", sandbox: true, checks: [] } }));
+  for (const [k, v] of Object.entries({ ...ident, ALEPH_JOBS_DIR: jobs, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_STATE_SLOW_MS: String(SLOW) })) {
+    saved[k] = process.env[k];
+    process.env[k] = v;
+  }
+  writeList({ key: "demo" }, "fixture", (doc) => { add(doc, "a goal", { body: "## Goal\nx" }); return true; }, true);
+  writeRun("demo-1");
+  server = await serve(0, { warm: false });
+});
+
+afterAll(() => {
+  server.stop(true);
+  for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  rmSync(base, { recursive: true, force: true });
+});
+
+test("a timer in the server keeps firing while /api/state builds", async () => {
+  let last = performance.now(), gap = 0;
+  const timer = setInterval(() => { const t = performance.now(); gap = Math.max(gap, t - last); last = t; }, 10);
+  const t0 = performance.now();
+  const res = await get();
+  const took = performance.now() - t0;
+  clearInterval(timer);
+  expect(res.status).toBe(200);
+  expect(names(await res.json())).toContain("demo-1");
+  // The build slept SLOW ms, and no tick of the timer waited for it.
+  expect(took).toBeGreaterThanOrEqual(SLOW);
+  expect(gap).toBeLessThan(SLOW / 2);
+}, 20_000);
+
+test("requests that arrive during a build share the next one", async () => {
+  const before = stateBuilds();
+  const first = get();
+  await Bun.sleep(SLOW / 4);
+  const rest = await Promise.all(Array.from({ length: 5 }, () => get()));
+  const firstBuild = (await first).headers.get("x-aleph-state-build");
+  const restBuilds = new Set(rest.map((r) => r.headers.get("x-aleph-state-build")));
+  expect(rest.every((r) => r.status === 200)).toBe(true);
+  // The five came during the first build: they all got the one build after it.
+  expect(restBuilds.size).toBe(1);
+  expect([...restBuilds][0]).not.toBe(firstBuild);
+  expect(stateBuilds() - before).toBe(2);
+}, 20_000);
+
+test("a request that starts after a ledger write returns that write, even while an older build runs", async () => {
+  writeRun("demo-2");
+  expect(names(await (await get()).json())).toContain("demo-2");
+  // A build starts before the write; the request after the write does not get it.
+  const older = get();
+  await Bun.sleep(SLOW / 4);
+  writeRun("demo-3");
+  const after = await (await get()).json();
+  expect(names(after)).toContain("demo-3");
+  expect((await older).status).toBe(200);
+}, 20_000);

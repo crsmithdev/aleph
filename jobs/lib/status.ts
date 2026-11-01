@@ -10,7 +10,7 @@ import { afterReopen } from "./acceptance.ts";
 import { readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { fetchOrigin, git, gitWith } from "./git.ts";
-import { allRuns, type Repo, type State } from "./ledger.ts";
+import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";
 import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type Subject } from "./stage.ts";
 
@@ -29,14 +29,14 @@ export interface Facts {
   touched: number[];
 }
 
-/** `doc` is the repo's list when the caller has read it already. */
-export function facts(repo: Repo, doc: issues.Doc | null = readList(repo)): Facts {
+/** `doc` is the repo's list, and `jobs` every job, when the caller has read them already. */
+export function facts(repo: Repo, doc: issues.Doc | null = readList(repo), jobs: Entry[][] = allJobs()): Facts {
   const items: Record<string, Subject> = {};
   for (const i of doc?.items ?? []) items[issues.refOf(i)] = subjectOf(i, repo.key);
   const runs: Record<string, RunView[]> = {};
   const open: Record<string, State> = {};
   const touched = new Set<number>();
-  for (const job of allJobs()) {
+  for (const job of jobs) {
     const item = issue(job);
     if (item === undefined || job[0].run.repo !== repo.key) continue;
     // A triage run marks its item in the store, and a planner run files children and does not land:

@@ -5,8 +5,8 @@
  */
 import { resultLine } from "../jobs/lib/acceptance.ts";
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { DAY_CAP, LIVE_CAP, liveRuns, AWAITING_CAP, baselines, doneChecker, firefighterLines, gates, health, hold, lastProbe, paused, redLine, runsToday, spentToday, waitReason, type WaitReason } from "../jobs/lib/factory.ts";
-import { allRuns, askOf as runAsk, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
+import { DAY_CAP, LIVE_CAP, liveRuns, AWAITING_CAP, baselines, firefighterLines, gates, health, hold, lastProbe, paused, redLine, runsToday, spentToday, waitReason, type WaitReason } from "../jobs/lib/factory.ts";
+import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { readAsk, type Ask } from "../jobs/lib/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
@@ -151,14 +151,20 @@ function commitUrl(repo: Repo | undefined, commit: string | undefined, bases: Ma
 /** Each commit's trailers, by repo path and hash: a commit never changes, so one git call per commit per process. */
 const trailers = new Map<string, { key: string; value: string }[]>();
 
+/** A commit git could not read, by the same key, to the time it failed: it is tried again after MISS_MS, as a fetch may bring it. */
+const misses = new Map<string, number>();
+const MISS_MS = 10 * 60_000;
+
 /** The trailers of a commit, from `git log -1 --format=%(trailers:only,unfold)`; none when git fails. */
 function landedTrailers(repo: Repo | undefined, commit: string | undefined): { key: string; value: string }[] {
   if (!repo || !commit) return [];
   const id = `${repo.path}\0${commit}`;
   const hit = trailers.get(id);
   if (hit) return hit;
+  const missed = misses.get(id);
+  if (missed !== undefined && Date.now() - missed < MISS_MS) return [];
   const p = Bun.spawnSync(["git", "-C", repo.path, "log", "-1", "--format=%(trailers:only,unfold)", commit], { stdout: "pipe", stderr: "ignore" });
-  if (p.exitCode !== 0) return [];
+  if (p.exitCode !== 0) { misses.set(id, Date.now()); return []; }
   const out = p.stdout.toString().split("\n").flatMap((l) => {
     const i = l.indexOf(":");
     return i > 0 ? [{ key: l.slice(0, i).trim(), value: l.slice(i + 1).trim() }] : [];
@@ -172,7 +178,7 @@ function landedTrailers(repo: Repo | undefined, commit: string | undefined): { k
  * URL and the trailers. One projector per request: it reads each work list
  * and each origin URL once.
  */
-export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
+export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jobs?: Runs[]) {
   const lists = reader();
   const bases = new Map<string, string | null>();
 
@@ -228,7 +234,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
       const doc = lists.list(repo.key);
       if (doc) {
         try {
-          const f = facts(repo, doc), main = `refs/remotes/origin/${f.main}`;
+          const f = facts(repo, doc, jobs), main = `refs/remotes/origin/${f.main}`;
           for (const st of stages(repo.path, main, f, Object.keys(f.items), landedIndex(repo.path, main, repo.key))) m.set(st.id.slice(repo.key.length + 1), st);
         } catch {}
       }
@@ -241,8 +247,9 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry()) {
 
 export function state(now = new Date()): State {
   const registry = loadRegistry();
-  const jobs = allJobs();
-  const { lists, toJob, stagesOf } = jobProjector(registry);
+  // The ledger is read once: every part below takes these jobs (and their runs) instead of reading it again.
+  const jobs = allJobs(), runs = jobs.flat();
+  const { lists, toJob, stagesOf } = jobProjector(registry, jobs);
 
   let landing = 0;
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
@@ -304,7 +311,7 @@ export function state(now = new Date()): State {
     avg: times.filter((t) => t0 - t < 7 * DAY_MS).length / 7,
   });
   const landedAt = delivered.map((d) => d.at).filter((t) => t <= t0);
-  const triagedAt = allRuns().filter((e) => e.run.kind === "triage" && e.run.state === "done").map((e) => Date.parse(e.run.ended ?? e.run.started)).filter((t) => t <= t0);
+  const triagedAt = runs.filter((e) => e.run.kind === "triage" && e.run.state === "done").map((e) => Date.parse(e.run.ended ?? e.run.started)).filter((t) => t <= t0);
 
   // The jobs of each issue, by `repo-id`: the open ones give its status, all of them its Done package.
   const ofItem = new Map<string, Runs[]>();
@@ -385,10 +392,17 @@ export function state(now = new Date()): State {
   const planner = jobs.filter((r) => r.at(-1)!.run.kind === "plan").sort((a, b) => planAt(b) - planAt(a)).slice(0, TRIAGED).map((r) => toJob(r));
 
   fresh.sort((a, b) => b.created.localeCompare(a.created));
-  const today = runsToday(now.getTime());
+  const today = runsToday(now.getTime(), runs);
   const probe = lastProbe();
   const granted = readAlways();
-  const isDone = doneChecker(), gated = gates({ only: ["pause", "hold", "probe", "live", "day", "awaiting"], jobs });
+  // doneChecker's test, from this build's lists and stages: it fetches no project repo, as the stages above do not.
+  const isDone = (ref: string): boolean => {
+    const r = parseGoalRef(ref), repo = r ? registry[r.repo] : undefined;
+    if (!r || !repo) return false;
+    const item = lists.item(r.repo, r.id);
+    return (item !== undefined && status(item) === "done") || stagesOf(repo).get(String(r.id))?.stage === "done";
+  };
+  const gated = gates({ only: ["pause", "hold", "probe", "live", "day", "awaiting"], jobs });
   const att = attend({ runs: needs, issues: awaitingItems }, granted);
   // The run behind an ask: its live-run mark, its trailers and its notes.
   for (const a of att.items) {
@@ -398,12 +412,26 @@ export function state(now = new Date()): State {
     a.agent = j.agent ?? false; a.defaults = j.defaults; a.followups = j.followups;
     if (j.trailers) a.trailers = j.trailers;
   }
+  // A red baseline counts while origin/<main> is still the red commit: one rev-parse per repo, not per queued goal.
+  const base = baselines(), reds = new Map<string, string | null>();
+  const redOf = (repo: Repo): string | null => {
+    if (!reds.has(repo.key)) {
+      let red: string | null = null;
+      const b = base[repo.key];
+      if (b && !b.ok) {
+        const p = Bun.spawnSync(["git", "-C", repo.path, "rev-parse", `origin/${repo.main}`], { stdout: "pipe", stderr: "ignore" });
+        if (p.stdout.toString().trim() === b.commit) red = redLine(b);
+      }
+      reds.set(repo.key, red);
+    }
+    return reds.get(repo.key)!;
+  };
   return {
     now: now.toISOString(),
     factory: {
-      paused: paused(), judge: judgeChoice(), dayCap: DAY_CAP(), liveCap: LIVE_CAP(), liveRuns: liveRuns(), awaitingCap: AWAITING_CAP(), runsToday: today.length,
-      costToday: spentToday(now.getTime()),
-      nextTick: nextTick(), probe, health: health(now.getTime()), hold: hold(jobs)?.line ?? null,
+      paused: paused(), judge: judgeChoice(), dayCap: DAY_CAP(), liveCap: LIVE_CAP(), liveRuns: liveRuns(runs), awaitingCap: AWAITING_CAP(), runsToday: today.length,
+      costToday: spentToday(now.getTime(), runs),
+      nextTick: nextTick(), probe, health: health(now.getTime(), { jobs, lists }), hold: hold(jobs)?.line ?? null,
       firefighter: firefighterLines(now.getTime()),
     },
     asks: att.items, done, incoming: everyone.slice(0, NEW_ISSUES).map((e) => e.card), planner,
@@ -413,12 +441,7 @@ export function state(now = new Date()): State {
     // Lands: land runs in progress first, then the latest landed, DELIVERED in all.
     delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).slice(0, Math.max(0, DELIVERED - landRuns.length)).map((d) => toJob(d.runs))].slice(0, DELIVERED),
     queued: queued.map(({ repo, item, stage }) => {
-      let red: string | null = null;
-      const b = baselines()[repo.key];
-      if (b && !b.ok) {
-        const p = Bun.spawnSync(["git", "-C", repo.path, "rev-parse", `origin/${repo.main}`], { stdout: "pipe", stderr: "ignore" });
-        if (p.stdout.toString().trim() === b.commit) red = redLine(b);
-      }
+      const red = redOf(repo);
       const w = waitReason(repo, item, { done: isDone, jobs, gated, red, now });
       return {
         repo: repo.key, id: idOf(item), title: item.title, stage, why: w.text, kind: w.kind,
