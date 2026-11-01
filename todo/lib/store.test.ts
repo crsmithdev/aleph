@@ -44,7 +44,7 @@ afterAll(() => {
 });
 
 describe("labels", () => {
-  const it = (fm: Record<string, unknown>): issues.Item => ({ id: 1, title: "t", fm, request: "", spec: "", notes: [], legacy: false });
+  const it = (fm: issues.Issue["fm"]): issues.Issue => ({ id: 1, title: "t", fm, request: "", spec: "", notes: [], legacy: false });
 
   test("a list, a lone label, and none", () => {
     expect(store.labels(it({ labels: ["a", "b"] }))).toEqual(["a", "b"]);
@@ -177,9 +177,9 @@ describe("the writes", () => {
     store.writeList(r, "ask", (doc) => { store.setAsk(issues.find(doc, 2)!, { kind: "input", reason: "host-check", question: "Check it.", options: [], why: [] }); return true; });
     store.close(r, 3, "x");
     const before = commits();
-    expect(store.sort(r, 2, "triage", (i) => { })).toBe(false);
-    expect(store.sort(r, 3, "triage", (i) => { })).toBe(false);
-    expect(store.sort(r, 9, "triage", (i) => { })).toBe(false);
+    expect(store.sort(r, 2, "triage", () => { })).toBe(false);
+    expect(store.sort(r, 3, "triage", () => { })).toBe(false);
+    expect(store.sort(r, 9, "triage", () => { })).toBe(false);
     expect(commits()).toBe(before);
     expect(store.sort(r, 1, "triage", (i) => { i.spec = "Do it."; })).toBe(true);
     expect(item(r, 1).spec).toBe("Do it.");
@@ -247,7 +247,6 @@ describe("the flake tracker", () => {
 
 describe("the work store file", () => {
   const file = (created: string, updated = "updated: 2026-10-30") => `---\nid: st1-4\ntitle: Old\n${created}\n${updated}\npriority: medium\nlabels: []\nrepo: st1\n---\n\nBody.\n`;
-  const withItem = (text: string): issues.Item => ({ ...issues.parseItem(text), fm: issues.parseItem(text).fm });
 
   test("render, parse, render gives the same text", () => {
     const once = issues.renderItem("st1", issues.parseItem(file("created: 2026-10-30")));

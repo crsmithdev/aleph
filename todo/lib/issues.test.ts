@@ -76,7 +76,7 @@ describe("issue verbs without argv", () => {
     for (const n of [1, 2]) store.writeList(r, "ask", (doc) => { store.setAsk(issues.find(doc, n)!, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
     store.writeList(r, "ask", (doc) => { const i = issues.add(doc, "c"); store.setAsk(i, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
     expect(refusal(() => issueOps.decide(r, 99, "yes"))).toContain("has no issue");
-    const d = issueOps.decide(r, 2, "yes");
+    issueOps.decide(r, 2, "yes");
     expect(store.askOf(item(r, 2))).toBeNull();
     issueOps.decide(r, 1, "yes");
     expect(store.askOf(item(r, 1))).toBeNull();

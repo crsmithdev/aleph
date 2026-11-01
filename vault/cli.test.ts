@@ -281,6 +281,19 @@ describe("lint --fix", () => {
       .toEqual(["added updated: 2026-01-15, the date the note entered git"]);
     cli("archive", "Entered Long Ago", "--why", "test fixture");
   });
+  test("a re-added note keeps the date it first entered git", () => {
+    const at = (date: string, ...args: string[]) => Bun.spawnSync(["git", "-C", vault, "-c", "commit.gpgsign=false", ...args], { env: { ...process.env, ...testEnv, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } });
+    const first = "wiki/gotchas/Moved About Again.md";
+    const text = readFileSync(note("Entered Long Ago"), "utf8").replace(/^updated: .*\n/m, "").replaceAll("Entered Long Ago", "Moved About Again");
+    writeFileSync(join(vault, first), text);
+    at("2026-01-02T12:00:00", "add", "--", first); at("2026-01-02T12:00:00", "commit", "-q", "-m", "enter", "--", first);
+    at("2026-02-02T12:00:00", "rm", "-q", "--", first); at("2026-02-02T12:00:00", "commit", "-q", "-m", "gone", "--", first);
+    writeFileSync(join(vault, first), text);
+    at("2026-03-02T12:00:00", "add", "--", first); at("2026-03-02T12:00:00", "commit", "-q", "-m", "back", "--", first);
+    cli("lint", "--fix");
+    expect(readFileSync(join(vault, first), "utf8")).toContain("updated: 2026-01-02");
+    cli("archive", "Moved About Again", "--why", "test fixture");
+  });
   test("many template breaks collapse to a count; --template names them", () => {
     const thin = (t: string) => {
       const p = join(vault, `wiki/gotchas/${t}.md`);

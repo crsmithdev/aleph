@@ -23,14 +23,22 @@ function unquote(s: string): string {
 function flowList(inner: string): string[] {
   const out: string[] = [];
   let cur = "";
-  let quote: string | null = null;
-  for (const ch of inner) {
-    if (quote) { if (ch === quote) quote = null; else cur += ch; continue; }
-    if (ch === '"' || ch === "'") { quote = ch; continue; }
-    if (ch === ",") { if (cur.trim()) out.push(cur.trim()); cur = ""; continue; }
-    cur += ch;
+  let quoted = false; // A quoted item counts even when empty.
+  const end = () => { if (quoted || cur.trim()) out.push(quoted ? cur : cur.trim()); cur = ""; quoted = false; };
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < inner.length && inner[j] !== ch) j += ch === '"' && inner[j] === "\\" ? 2 : 1;
+      cur = unquote(inner.slice(i, j + 1));
+      quoted = true;
+      i = j;
+      continue;
+    }
+    if (ch === ",") { end(); continue; }
+    if (!quoted) cur += ch;
   }
-  if (cur.trim()) out.push(cur.trim());
+  end();
   return out;
 }
 
@@ -45,7 +53,7 @@ function stripComment(line: string): string {
   let depth = 0;
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
-    if (quote) { if (ch === quote) quote = null; continue; }
+    if (quote) { if (ch === "\\" && quote === '"') i++; else if (ch === quote) quote = null; continue; }
     if (ch === '"' || ch === "'") { quote = ch; continue; }
     if (ch === "[") depth++;
     else if (ch === "]") depth--;
@@ -74,9 +82,10 @@ export function parseFrontmatter(yaml: string): Frontmatter {
 }
 
 // Quoted: a value with a character YAML reads as syntax, one that starts with
-// an indicator (a title can start with a backtick), and one with edge spaces.
+// an indicator (a title can start with a backtick), one with edge spaces, a
+// line break, or nothing at all (a bare `key:` reads as an empty list).
 function quoteIfNeeded(s: string): string {
-  return /[,:#\[\]"'\\]/.test(s) || /^[`@&*!|>%{}?\-\s]/.test(s) || /\s$/.test(s) ? JSON.stringify(s) : s;
+  return s === "" || /[,:#\[\]"'\\\r\n]/.test(s) || /^[`@&*!|>%{}?\-\s]/.test(s) || /\s$/.test(s) ? JSON.stringify(s) : s;
 }
 
 export function serializeFrontmatter(fm: Frontmatter): string {

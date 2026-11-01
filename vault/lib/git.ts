@@ -25,8 +25,10 @@ export function tracked(dir: string, path: string): boolean {
  * that is not needed, where over-dating hides one that is.
  */
 export function addedDate(dir: string, path: string): string | null {
-  const r = git(dir, "log", "--diff-filter=A", "-1", "--format=%ad", "--date=short", "--", relative(dir, path));
-  return r.ok && /^\d{4}-\d{2}-\d{2}$/.test(r.out) ? r.out : null;
+  // Oldest last: a re-add is not when the note entered. No --follow: its copy detection takes a similar note for this one.
+  const r = git(dir, "log", "--diff-filter=A", "--format=%ad", "--date=short", "--", relative(dir, path));
+  const first = r.out.trim().split("\n").at(-1) ?? "";
+  return r.ok && /^\d{4}-\d{2}-\d{2}$/.test(first) ? first : null;
 }
 
 /**
